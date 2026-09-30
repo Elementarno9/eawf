@@ -522,13 +522,13 @@ def _heads(canvas: _Canvas, row: str, at: int) -> bool:
 _RAIL_CATEGORY = re.compile(r"^([A-Z][A-Z]+) +[│├]")
 _RAIL_SECTION = re.compile(rf"^{CARET} ([a-z][a-z0-9_]*) +[│├]")
 # A settings key row: after the rail, the cursor column, then the key's lens glyph.
-_KEY_GLYPH = re.compile(rf"│ [{CARET} ] ([=≠·–]) ")  # noqa: RUF001
+_KEY_GLYPH = re.compile(rf"│ [{CARET} ] ([=≠·–!]) ")  # noqa: RUF001
 # The layer the lens writes to, bracketed in the writable chain.
 _LENS = re.compile(r"\[(?:global|workspace|repo|branch|local)\]")
-# What each lens glyph says: set here and winning, set here and shadowed, inherited, and
-# stated by no layer but the defaults.
+# What each lens glyph says: set here and winning, set here and shadowed, inherited,
+# stated by no layer but the defaults, and stated in a file though no code reads it.
 _GLYPH_SURFACE: Mapping[str, str] = MappingProxyType(
-    {"=": "ok", "≠": "warn", "·": "dim", "–": "dim"}  # noqa: RUF001
+    {"=": "ok", "≠": "warn", "·": "dim", "–": "dim", "!": "warn"}  # noqa: RUF001
 )
 
 
@@ -549,8 +549,9 @@ def _settings(canvas: _Canvas) -> None:
         _lens_strip(canvas, row)
 
 
-# The lens strip: the layers a write may target, lowest precedence first.
-_LENS_STRIP = re.compile(r"global › workspace › repo › branch › local")  # noqa: RUF001
+# The lens strip: the layers a write may target, lowest precedence first; the workspace
+# layer is left out where it is the repo layer's file.
+_LENS_STRIP = re.compile(r"global › (?:workspace › )?repo › branch › local")  # noqa: RUF001
 _LAYER_WORD = re.compile(r"[a-z]+")
 
 

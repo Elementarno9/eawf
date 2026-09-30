@@ -300,24 +300,6 @@ def _disconnected_body(frame: PackFrame) -> list[str]:
     return rows
 
 
-_MORE = re.compile(r"^   \.\.\. \((?P<n>\d+) more\)\s*$")
-# The palette's first window row, right under its prompt and rule.
-_WINDOW_TOP = 3
-
-
-def _edge_markers(frame: PackFrame) -> list[str]:
-    """Rewrite the pack's ``... (N more)`` rows as the port's ``… N above`` and ``… N below``."""
-    out: list[str] = []
-    for i, row in enumerate(frame.rows):
-        found = _MORE.match(row)
-        if found is None:
-            out.append(row)
-            continue
-        edge = "above" if i == _WINDOW_TOP else "below"
-        out.append(pad(f"   … {int(found.group('n')):,} {edge}", frame.w))
-    return out
-
-
 def _renamed_pairs(frame: PackFrame, renames: Mapping[str, str]) -> list[str]:
     """Rename keybar tokens and recompose the bar; other rows are left alone."""
     rows = list(frame.rows)
@@ -487,6 +469,76 @@ def _backlog_open(frame: PackFrame) -> list[str]:
     return rows
 
 
+_PACK_CONSEQUENCE = " Eä ▸ consequence"
+# The draft card's route crumb in the pack: the scope, the Backlog and the draft's id.
+_PACK_DRAFT = re.compile(r"^ Eä ▸ \S+ ▸ Backlog ▸ (?P<id>\S+)")
+
+
+def _subject_crumbs(frame: PackFrame) -> list[str]:
+    """Crumb the consequence and draft cards as every overlay is: its name and its subject.
+
+    The consequence card's subject is the id its first body row names; the draft card's is
+    the draft id the pack's route crumb ended in.
+    """
+    rows = list(frame.rows)
+    if len(rows) < 2:
+        return rows
+    head = rows[0]
+    if head.startswith(f"{_PACK_CONSEQUENCE}  "):
+        parts = rows[1].split(" · ")
+        if len(parts) > 1:
+            rows[0] = _recrumb(head, _PACK_CONSEQUENCE, f"{_PACK_CONSEQUENCE} · {parts[1]}")
+        return rows
+    found = _PACK_DRAFT.match(head)
+    if found is not None:
+        # the overlay crumb is shorter than the route crumb, so pad it back to its cells
+        crumb = f" Eä ▸ draft · {found.group('id')}"
+        short = cell_len(found.group(0)) - cell_len(crumb)
+        rows[0] = crumb + " " * short + head[len(found.group(0)) :]
+    return rows
+
+
+_PACK_REMNANT = "142 · space includes"
+_PORT_SIZE = "142 decisions"
+
+
+def _without_remnant(frame: PackFrame) -> list[str]:
+    """State the sandbox part's size alone: no key toggles a part's inclusion."""
+    gap = " " * (cell_len(_PACK_REMNANT) - cell_len(_PORT_SIZE))
+    return [row.replace(_PACK_REMNANT, _PORT_SIZE + gap) for row in frame.rows]
+
+
+# A step card's progress row led by a percentage, before or after the quality prefix joins it.
+_STEP_FRACTION = re.compile(r"^(?P<head> PROGRESS    )~ ?\d+% · ")
+
+
+def _step_without_fraction(frame: PackFrame) -> list[str]:
+    """Drop a step's percentage: its spend is counts and units against the bound."""
+    return [
+        pad(_STEP_FRACTION.sub(r"\g<head>", row), frame.w) if _STEP_FRACTION.match(row) else row
+        for row in frame.rows
+    ]
+
+
+_PACK_ASSIGN = "@    assign"
+_PORT_ASSIGN = "s    assign"
+
+
+def _unshifted_assign(frame: PackFrame) -> list[str]:
+    """Letter the attention menu's assign row s: no verb is bound to a shifted key."""
+    return [row.replace(_PACK_ASSIGN, _PORT_ASSIGN) for row in frame.rows]
+
+
+def _drain_in_menu(frame: PackFrame) -> list[str]:
+    """Replace the Unattended bar's second write with the menu key that now reaches it."""
+    rows = list(frame.rows)
+    pieces = _pieces(rows[-1])
+    moved = [". actions" if piece == "d request drain" else piece for piece in pieces]
+    if moved != pieces:
+        rows[-1] = _rebar(rows[-1], moved)
+    return rows
+
+
 def _without_harness_rows(frame: PackFrame) -> list[str]:
     """Blank a decision overlay's review-harness rows: its stepped state and impossible legend.
 
@@ -651,7 +703,6 @@ REWRITES: tuple[Rewrite, ...] = (
     Rewrite(entry="entry simulator pair", rows=_entry_without_simulator, keys=frozenset("[]")),
     Rewrite(entry="help simulator row", rows=_help_without_simulator, keys=frozenset("w")),
     Rewrite(entry="disconnected body", rows=_disconnected_body),
-    Rewrite(entry="window indicator", rows=_edge_markers),
     Rewrite(entry="activity keybar and rail", rows=_full_page_keys),
     Rewrite(entry="attention keybar", rows=_advertised_open),
     Rewrite(entry="settings editor keybar", rows=_unslashed_keys),
@@ -671,6 +722,11 @@ REWRITES: tuple[Rewrite, ...] = (
     Rewrite(entry="cursor overlay foot", rows=_cursor_foot),
     Rewrite(entry="notifications matrix", rows=_matrix_body),
     Rewrite(entry="roadmap marker cursor", rows=_text_marker),
+    Rewrite(entry="export remnant", rows=_without_remnant),
+    Rewrite(entry="step fraction", rows=_step_without_fraction),
+    Rewrite(entry="unshifted assign", rows=_unshifted_assign),
+    Rewrite(entry="card subject crumb", rows=_subject_crumbs),
+    Rewrite(entry="unattended drain", rows=_drain_in_menu),
 )
 
 

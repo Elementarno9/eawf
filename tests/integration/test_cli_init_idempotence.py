@@ -33,23 +33,20 @@ def _invoke_init(target: Path, *extra: str) -> object:
 
 
 def test_cli_init_idempotent(tmp_path: Path) -> None:
-    """Re-running init with --force leaves AGENTS.md byte-stable."""
-    res1 = _invoke_init(tmp_path, "--profile", "core")
-    assert res1.exit_code == 0, res1.stdout
+    """Two inits from identical inputs render byte-identical AGENTS.md and CLAUDE.md.
 
-    agents_md = tmp_path / "AGENTS.md"
-    claude_md = tmp_path / "CLAUDE.md"
-    text_before = agents_md.read_text(encoding="utf-8")
-    claude_before = claude_md.read_text(encoding="utf-8")
-
-    res2 = _invoke_init(tmp_path, "--profile", "core", "--force")
-    assert res2.exit_code == 0, res2.stdout
-
-    text_after = agents_md.read_text(encoding="utf-8")
-    claude_after = claude_md.read_text(encoding="utf-8")
-
-    assert text_before == text_after, "AGENTS.md must be byte-stable on re-run"
-    assert claude_before == claude_after, "CLAUDE.md must be byte-stable on re-run"
+    REL-021: an initialised tree is born at epoch 2, whose epoch-1 document
+    is frozen, so ``--force`` over it refuses (see
+    ``test_rel_021_a_forced_reinit_of_an_epoch2_tree_refuses``); determinism
+    is proven across two fresh targets instead.
+    """
+    first, second = tmp_path / "a", tmp_path / "b"
+    for target in (first, second):
+        target.mkdir()
+        res = _invoke_init(target, "--profile", "core")
+        assert res.exit_code == 0, res.stdout
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        assert (first / name).read_bytes() == (second / name).read_bytes(), name
 
 
 def test_cli_init_second_run_no_force_fails(tmp_path: Path) -> None:

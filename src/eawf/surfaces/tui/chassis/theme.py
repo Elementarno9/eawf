@@ -3,7 +3,7 @@
 The runtime ``/theme`` swap rebinds the semantic colour vars
 (``$accent`` / ``$primary`` / ``$ok`` / ``$warn`` / ``$err`` / ``$muted``
 and the ``$status-*`` lifecycle tints) at the App level. Those vars used
-to live at global scope in ``theme.tcss``; a global definition cannot
+to live at global scope in a stylesheet; a global definition cannot
 change at runtime, so the swap would recolour nothing. Hosting the vars
 inside each :class:`~textual.theme.Theme`'s ``variables`` map instead
 lets :meth:`textual.app.App.get_css_variables` re-resolve every ``$var``
@@ -12,7 +12,7 @@ becomes a pure var rebind, exactly as the structural CSS was written to
 expect.
 
 Every theme the App can switch to MUST carry the full chrome and semantic
-var set, otherwise the structural CSS in ``theme.tcss`` references an
+var set, otherwise the structural CSS references an
 undefined var on that theme.
 
 The dark and light values are bound from the design packet's stylesheet,
@@ -45,7 +45,7 @@ names through :data:`LOGICAL_THEMES`:
 Two palette invariants hold on EVERY registered theme, because the
 structural CSS reads them as a pair rather than in isolation:
 
-* ``primary`` MUST differ from ``accent``. ``theme.tcss`` paints the
+* ``primary`` MUST differ from ``accent``. The structural CSS paints the
   unfocused ``.pane`` border ``$accent`` and the focused ``.pane.-focused``
   border ``$primary``; an equal pair renders the same border either way, so
   the focus ring is invisible by construction no matter how the class is
@@ -66,9 +66,12 @@ import select
 import sys
 import time
 from collections.abc import Callable
-from typing import IO, Final
+from typing import IO, TYPE_CHECKING, Final
 
 from textual.theme import Theme
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +97,7 @@ _LIGHT_LUMINANCE_THRESHOLD: Final[float] = 127.5
 #: sibling of ``accent`` so the focused pane border reads as a lift, and
 #: ``status-claimed`` keeps the cool teal so it reads apart from both
 #: greens. Public because the shared
-#: :mod:`eawf.surfaces.tui.widgets.status_tint` helper derives the Rich-context
+#: :mod:`eawf.surfaces.tui.chassis.status_tint` helper derives the Rich-context
 #: fallback tints (tree-label / DataTable-cell hexes) from this single
 #: palette rather than re-typing the hexes.
 WONG_VARIABLES: Final[dict[str, str]] = {
@@ -323,7 +326,7 @@ def resolve_theme_name(logical: str) -> str | None:
     """Resolve an operator-facing logical name to a registered theme name.
 
     Pure validator: no I/O. ``auto`` resolves to the dark baseline so a
-    persisted-config validation (``_persisted_theme`` calls this to decide
+    persisted-config validation (:func:`persisted_theme` calls this to decide
     whether a saved ``ui.theme`` value is recognised) never triggers a
     terminal query. The live terminal-background detection that refines
     ``auto`` into ``dark`` / ``light`` happens in :func:`detect_auto_theme`
@@ -340,6 +343,39 @@ def resolve_theme_name(logical: str) -> str | None:
     if logical == "auto":
         return LOGICAL_THEMES[DEFAULT_THEME]
     return LOGICAL_THEMES.get(logical)
+
+
+def persisted_theme(repo_root: Path | None = None) -> str:
+    """Read the persisted ``ui.theme`` logical name from layered config.
+
+    Reads through the same :func:`~eawf.kernel.config.layered.merge_config` path
+    the config window writes through, so a value the operator saved via
+    ``/config`` (or ``eawf config set ui.theme ...``) is honoured on the
+    next launch. A missing key, an unreadable layer, or a value that is
+    not a recognised logical name all degrade to :data:`DEFAULT_THEME` —
+    the swap is a cosmetic preference, never a launch-blocking read.
+
+    Args:
+        repo_root: Optional repository anchor. Canonical repo-scope launches
+            pass the root derived from ``.ea/state.json``; user/workspace
+            fallback launches intentionally resolve only global + env layers.
+
+    Returns:
+        The persisted logical theme name, or :data:`DEFAULT_THEME` when
+        none is persisted / the persisted value is unrecognised.
+    """
+    from eawf.kernel.config.layered import get_dotted, merge_config
+
+    try:
+        merged, _sources = merge_config(repo=repo_root)
+        value = get_dotted(merged, "ui.theme")
+    except (KeyError, OSError, ValueError) as exc:
+        logger.debug(f"persisted_theme fallback exc={exc!r}")
+        return DEFAULT_THEME
+    if isinstance(value, str) and resolve_theme_name(value) is not None:
+        return value
+    logger.debug(f"persisted_theme unrecognised value={value!r}")
+    return DEFAULT_THEME
 
 
 def resolve_auto_theme(rgb: tuple[int, int, int] | None) -> str:

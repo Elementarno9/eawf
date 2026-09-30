@@ -30,7 +30,6 @@ Run these from the root of any Git repository. Each command exits `0` on a clean
 
 ```bash
 eawf init --quick
-eawf phase open --auto --title "Bootstrap the first tracked delivery"
 eawf status
 ```
 

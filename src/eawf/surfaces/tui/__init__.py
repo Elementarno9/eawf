@@ -1,20 +1,8 @@
-"""Eä Textual TUI (tui) — operator-surface rebuild.
+"""Eä Textual TUI: the operator console and the chassis it draws on.
 
-The v0.3+ TUI is built on Textual (reversing the prior ``rich``
-pick); this package is the operator-surface rebuild that replaced the
-prior Rich-based TUI.
-
-Public re-exports:
-
-    EaApp(scope, state_path) -> App[None]
-    run_app(scope, state_path) -> int
+The package imports nothing on its own, so loading the console
+(:mod:`eawf.surfaces.tui.console`) or its launcher (:mod:`eawf.surfaces.tui.launch`)
+never loads the epoch-1 app beside it.
 """
 
 from __future__ import annotations
-
-from eawf.surfaces.tui.app import EaApp, run_app
-
-__all__ = [
-    "EaApp",
-    "run_app",
-]

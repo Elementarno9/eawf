@@ -1,4 +1,4 @@
-"""The transcript draws a Run's ordered event log, its holes, and a derived thinking state.
+"""The transcript draws a Run's ordered event log, its holes, and its thinking state.
 
 One route leaves the prototype registers here, and three claims about it are worth a test
 each.
@@ -12,10 +12,11 @@ retained as diagnostics and derived from by nothing -- never appear in the run a
 becomes a block of its own saying how many sequences are missing, in the position it
 occupies, so the transcript is never quietly shorter than the episode it claims to show.
 
-*The thinking state is derived and says so.* No event states that an agent is thinking:
-what exists is a reasoning turn that opened and has not been summarized. The transcript
-folds the state out of that pairing, carries it as a derived truth field, and prints the
-label beside it, so a frame never presents the inference as an observation.
+*The thinking state says how it is known.* What exists is a reasoning turn that opened
+and has not been summarized. A provider's own start marker states the turn, so the state
+is observed; where eawf inferred the opening for a provider with no marker, the state is
+a derived truth field and the frame prints the label beside it, so it never presents the
+inference as an observation.
 
 The last group is the one the coverage grid owes. ``transcript`` is out of the manifest's
 hole list in the same commit that binds it, and this suite checks the grid and the console
@@ -404,14 +405,26 @@ def test_an_unexplained_hole_is_refused_rather_than_folded_over() -> None:
         _view((_event(1), _event(3)))
 
 
-# ---------- the thinking state is derived and says so ----------
+# ---------- the thinking state says whether it was observed or derived ----------
+
+
+def _inferred(sequence: int) -> RunEventRecord:
+    """Return a reasoning start eawf inferred for a provider that marks none."""
+    return _event(sequence, provenance="eawf_derived")
 
 
 def test_an_open_reasoning_turn_makes_the_transcript_thinking() -> None:
-    """The state is folded out of a turn that opened and has not been summarized."""
+    """The state is folded out of a turn the provider's own start marker opened."""
     model = _view((_event(1),))
     assert model.is_thinking()
     assert model.thinking.value == THINKING
+    assert model.thinking.truth_kind is TruthKind.OBSERVED
+
+
+def test_an_inferred_reasoning_start_makes_the_thinking_state_derived() -> None:
+    """With no start marker from the provider, the open turn is an inference."""
+    model = _view((_inferred(1),))
+    assert model.is_thinking()
     assert model.thinking.truth_kind is TruthKind.DERIVED
 
 
@@ -443,10 +456,18 @@ def test_a_quarantined_open_turn_neither_opens_nor_closes_one() -> None:
     assert open_reasoning_turn([_event(1), _summarized(1), late]) is None
 
 
-def test_the_frame_labels_the_thinking_state_as_derived() -> None:
+def test_the_frame_labels_an_inferred_thinking_state_as_derived() -> None:
     """A frame that presented the inference as an observation would be lying about it."""
-    body = _frame(_view((_event(1),)))
+    body = _frame(_view((_inferred(1),)))
     assert f"{THINKING} · {transcript.DERIVED_LABEL}" in body
+
+
+def test_the_frame_states_an_observed_thinking_state_without_the_label() -> None:
+    """A turn the provider marked is not an inference, so it carries no derived label."""
+    body = _frame(_view((_event(1),)))
+    state = next(line for line in body.split("\n") if line.startswith(" STATE"))
+    assert THINKING in state
+    assert transcript.DERIVED_LABEL not in state
 
 
 def test_the_frame_draws_the_unknown_token_when_no_turn_is_open() -> None:

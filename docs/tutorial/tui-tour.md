@@ -1,101 +1,54 @@
 # TUI tour
 
-*Open the operator surface, read the dashboard, and use the keymap without changing project state.*
+*Open the operator console, move between its routes, and read a frame in plain text.*
 
-The TUI is the fastest way to inspect current Eä state while a phase is in flight. It is read-oriented: the dashboard shows project, phase, iter, wave, audit, and command-palette context; lifecycle mutations still go through the CLI or slash-command workflow.
+The console is the fastest way to watch Eä state while work is in flight. It draws the daemon's live projection of the tree: runs, attention items, tracks, milestones and releases, each on its own route.
 
-For implementation detail, see [TUI surface architecture](../architecture/tui.md). For the init path that creates the state the TUI reads, see the [`/init` pipeline](../architecture/workflow.md#init-pipeline-dag) and the [profile picker walkthrough](profile-picker.md).
+For implementation detail, see [TUI surface architecture](../architecture/tui.md). For the init path that creates the tree the console attaches to, see the [`/init` pipeline](../architecture/workflow.md#init-pipeline-dag) and the [profile picker walkthrough](profile-picker.md).
 
-## 1. Open the dashboard
+## 1. Open the console
 
-From a managed repository:
+From a registered repository:
 
 ```bash
 eawf ui
 ```
 
-In a non-TTY environment, `eawf ui` prints the deterministic status fallback instead of opening the interactive app:
+A folder the console cannot attach to lands in an entry state that names the next command instead. An unregistered folder, for example:
 
 ```text
-Eä  repo ❯ EAWF ❯ P28
-  project=EAWF phases_open=1 iters_open=2 iters_closed=33 waves_pending=24 audits=41
-keymap: ↑↓ move  ·  Enter open  ·  w/r/u scope  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit
+eawf ui: This folder is not a registered workspace root
+  eawf init
 ```
 
-Annotation:
+## 2. Move around
 
-- Header: scope breadcrumb, current project, and active phase.
-- Summary line: compact counters from `.ea/state.json`.
-- Footer: the active keymap. Arrows lead; single-key shortcuts follow.
+Every route shows its keys in the keybar on the last row, route keys first and the shared keys last. The shared keys mean the same thing on every route:
 
-Text screenshot: [`docs/_static/tutorial/tui-status-fallback.txt`](../_static/tutorial/tui-status-fallback.txt).
+| Key | Action |
+|---|---|
+| `↑` / `↓` | move the row cursor |
+| `PageUp` / `PageDown` | page a long list |
+| `Home` / `End` | jump to the first or last row |
+| `Enter` | drill into or open the row under the cursor |
+| `Escape` | go back |
+| `g` | go prefix: jump to another route |
+| `/` | command palette |
+| `.` | actions for the subject under the cursor |
+| `i` | inspect drawer |
+| `y` | copy |
+| `?` | help |
 
-## 2. Move through scopes
+Press `?` on any route for its help card.
 
-The scope keys switch the dashboard lens:
+## 3. Read a frame in plain text
 
-| Key | Scope | Use when |
-|---|---|---|
-| `w` | workspace | Compare registered repos and spot stale entries. |
-| `r` | repo | Inspect the current repo's phase, iter, waves, git, and backlog context. |
-| `u` | user | Review the portfolio view across the user registry. |
+With no interactive terminal, `eawf ui` draws no app: it writes the console's own frame in plain mode, the same rows in the ASCII glyph allocation with no colour or escape sequences. Ask for it explicitly with the global flag:
 
-Use `↑` / `↓` to move within the active view. Use `Enter` to open the focused item when the view supports a detail pane. Use `q` to quit.
-
-## 3. Read the repo dashboard
-
-The interactive repo view expands the status fallback into panels. A typical frame looks like this:
-
-```text
-┌──────────────────────────────────────────────────────────────┐
-│ Eä  repo ❯ DEMO ❯ P01                                       │
-├──────────────────────────────┬───────────────────────────────┤
-│ roadmap                      │ status                        │
-│ phase: P01 active            │ project: DEMO                 │
-│ iter:  P01-I01 active        │ waves pending: 2              │
-├──────────────────────────────┼───────────────────────────────┤
-│ git                          │ backlog                       │
-│ branch: feature/demo-v0.1    │ open: 3                       │
-│ status: clean                │ ready: 1                      │
-├──────────────────────────────┴───────────────────────────────┤
-│ ↑↓ move · Enter open · w/r/u scope · F5 refresh · / palette   │
-└──────────────────────────────────────────────────────────────┘
+```bash
+eawf --plain ui
 ```
 
-Annotation:
+A screen reader, a CI log or an export therefore reads exactly what the console shows.
 
-- `roadmap` locates the active phase / iter.
-- `status` shows state counters that answer "what needs attention?".
-- `git` keeps branch and cleanliness visible while waves are integrated.
-- `backlog` keeps planned follow-up pressure visible without leaving the dashboard.
-
-Text screenshot: [`docs/_static/tutorial/tui-repo-dashboard.txt`](../_static/tutorial/tui-repo-dashboard.txt).
-
-## 4. Open the command palette
-
-Press `/` to open the command palette. Use it when you know the verb but not the exact key path.
-
-```text
-┌─ command palette ────────────────────────────────────────────┐
-│ / wave next-ready                                            │
-│   roadmap show                                               │
-│   doctor                                                     │
-│   validate                                                   │
-│   config menu                                                │
-└──────────────────────────────────────────────────────────────┘
-```
-
-Annotation:
-
-- `/` focuses command search.
-- Typing filters the command list.
-- `Enter` runs or opens the selected command.
-- `Esc` closes the palette and returns to the previous view.
-
-Text screenshot: [`docs/_static/tutorial/tui-command-palette.txt`](../_static/tutorial/tui-command-palette.txt).
-
-## 5. Refresh and exit
-
-Use `F5` after another terminal changes state. The TUI reloads the current state and redraws the active view. Use `?` for in-app help and `q` to exit.
-
-If `eawf ui` prints the one-frame fallback instead of opening an interactive surface, check that the command is attached to a TTY and that the repository has a readable `.ea/state.json`.
+If `eawf ui` prints an entry state instead of opening the console, run the command it names; a tree whose migration is owed says so and names the migration command.

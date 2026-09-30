@@ -29,7 +29,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.surfaces.tui.widgets.cvd import render_status_legend_svg
+from eawf.surfaces.tui.chassis.cvd import render_status_legend_svg
 from eawf.workflow.audit_dsl.kinds.svg_pixel_diff import check_svg_pixel_diff
 from eawf.workflow.audit_dsl.models import CheckSpec
 

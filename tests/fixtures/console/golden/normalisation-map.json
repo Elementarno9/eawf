@@ -280,6 +280,41 @@
       "port": "the presentation matrix's three columns CLASS, TOAST and DECIDED BY, budget passed at once per revision, no settings owner, and the header as the frame's one NEEDS YOU",
       "golden_ids": ["route/notifications@*", "J3"],
       "rulings": ["UI-068", "UI-028"]
+    },
+    {
+      "entry": "unshifted assign",
+      "pack": "the attention action menu binds assign to @, a shifted symbol",
+      "port": "assign on the lowercase s; a frame shows no shifted key but ? and Y, and * only inside the menu",
+      "golden_ids": ["J4"],
+      "rulings": ["CON-033"]
+    },
+    {
+      "entry": "unattended drain",
+      "pack": "the Unattended keybar binds request pause and request drain as two direct writes",
+      "port": "request pause stays the route's one primary key; request drain is an action-menu row reached by . d, and the bar offers . actions",
+      "golden_ids": ["route/unattended@*", "J3", "J19"],
+      "rulings": ["CON-034", "CON-043"]
+    },
+    {
+      "entry": "card subject crumb",
+      "pack": "the consequence card crumbed Eä ▸ consequence with no subject, and the draft card crumbed under its route, Eä ▸ <scope> ▸ Backlog ▸ <draft id>",
+      "port": "both crumbed in the overlay form Eä ▸ <overlay> · <subject id>: the id the consequence card asks about, the draft's own id",
+      "golden_ids": ["overlay/consequence@*", "overlay/draft@*", "J5", "J12"],
+      "rulings": ["CON-129"]
+    },
+    {
+      "entry": "step fraction",
+      "pack": "the running step card's PROGRESS row opens on a percentage, ~ 62%",
+      "port": "the spend alone, as counts and units against the bound: 12 of 20 runs replayed, 1.3h of the ≤2h bound spent",
+      "golden_ids": ["card/step-running@*"],
+      "rulings": ["UI-056"]
+    },
+    {
+      "entry": "palette search row",
+      "pack": "search listed among the palette's routes, and an overflowing list ending in an edge count alone",
+      "port": "search is never a route row; an overflowing list ends in a real row opening the search route over the same query and stating how many hits there are. The nine frames are regenerated through harness.regenerate and J7, J8, J20 and J22 re-recorded by Harness.record; J20 presses ArrowDown 19 times, not 20, so its Enter still opens RUN-98c47577, the Run the pack's walk ended on",
+      "golden_ids": ["overlay/palette@*", "palette/top@*", "palette/scrolled@*", "J7", "J8", "J20", "J22"],
+      "rulings": ["CON-097"]
     }
   ]
 }

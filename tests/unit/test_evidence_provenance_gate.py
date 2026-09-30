@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.surfaces.tui.snapshot.asciinema import write_cast
+from eawf.surfaces.tui.chassis.asciinema import write_cast
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _GATE_PATH = _REPO_ROOT / "tools" / "evidence_provenance_gate.py"

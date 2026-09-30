@@ -47,7 +47,7 @@ from eawf.platform.registry import (
     resolve_workspace,
 )
 from eawf.surfaces.tui.console.chrome import ConsoleChrome, EntryState
-from eawf.surfaces.tui.console.format import clock_time, day
+from eawf.surfaces.tui.console.format import clock_time, day, group, span
 from eawf.surfaces.tui.console.registry import ENTRY_STATES, EntryStateSpec
 from eawf.surfaces.tui.console.tokens import TRUTH
 
@@ -775,13 +775,27 @@ def _resolve_workspace(
     return None, steps
 
 
+def _epoch1(chrome: ConsoleChrome, request: AttachRequest) -> EntryState:
+    """Return the state an undeclared tree lands in: migration owed, or no tree at all."""
+    if request.state_path.is_file():
+        return migration_state(chrome, request.authority.root)
+    reason = (
+        "No eawf tree is here: this folder holds no state file,",
+        "so there is nothing to attach to or migrate.",
+    )
+    init = EntryCommand(argv=("init",), purpose="create a tree in this folder")
+    return failed_state(chrome, reason, (init,))
+
+
 def resolve_attach(chrome: ConsoleChrome, request: AttachRequest) -> AttachResult:
     """Return where a launch lands, from the conditions it actually reads.
 
-    A plain epoch-1 tree, one that never declared the epoch-2 canary, is the classic
-    console's and is not resolved through the registry here; only a state schema newer
-    than this console stops it. A declared tree resolves its workspace (unless a flag
-    named the tree outright), then its migration evidence, then its state schema.
+    A plain epoch-1 tree, one that never declared the epoch-2 canary, is not resolved
+    through the registry: the console cannot attach to it, so it lands in the
+    migration-required state (or the schema state, for a state schema newer than this
+    console), and a folder holding no state at all lands in the failed state naming
+    ``eawf init``. A declared tree resolves its workspace (unless a flag named the tree
+    outright), then its migration evidence, then its state schema.
 
     Args:
         chrome: The packaged chrome the states are filled from.
@@ -814,6 +828,8 @@ def resolve_attach(chrome: ConsoleChrome, request: AttachRequest) -> AttachResul
             chrome, written=written, reads=reads, target_root=request.state_path.parent
         )
         return AttachResult(entry=state, trace=steps)
+    if not declared:
+        return AttachResult(entry=_epoch1(chrome, request), trace=steps)
     daemon = AttachStep(name="daemon", result="contacted · waiting on the first projection")
     return AttachResult(entry=None, trace=(*steps, daemon))
 
@@ -888,14 +904,21 @@ def offline_state(chrome: ConsoleChrome, snapshot: OfflineSnapshot | None) -> En
         snapshot: The last committed scope home; ``None`` when none could be read.
 
     Returns:
-        The offline state, one row per Track with the Runs filed under it and the time
-        the snapshot is as of. What needs you is not read without the daemon, so that
-        cell is the unknown token rather than a count.
+        The offline state, titled with the revision the snapshot holds and its age, one
+        row per Track with the Runs filed under it and the time the snapshot is as of.
+        What needs you is not read without the daemon, so that cell is the unknown token
+        rather than a count.
     """
     base = _base(chrome, OFFLINE)
     if snapshot is None:
         return base.model_copy(update={"rows": (), "tail": (NO_SNAPSHOT,)})
     at = clock_time(snapshot.committed_at)[:5]
+    header = snapshot.projection.header
+    age = span(max(0, int((header.generated_at - snapshot.committed_at).total_seconds())))
+    # the cursor is opaque by type; the offline read builds it from the document's sequence
+    cursor = header.source_cursor
+    revision = group(int(cursor)) if cursor.isdigit() else cursor
+    title = f"Scope home · attached to revision {revision} · {age} old"
     tracks = [row for row in snapshot.projection.rows if row.collection is Epoch2Collection.TRACK]
     rows = tuple(
         (
@@ -906,13 +929,15 @@ def offline_state(chrome: ConsoleChrome, snapshot: OfflineSnapshot | None) -> En
         )
         for row in tracks
     )
+    # what still works is the keybar's to say, so the body names only what is absent
     tail = (
         "Everything here is a snapshot. Nothing is arriving, and no count",
         f"can be called complete for the time since {at}.",
-        "Inspecting, moving around and copying all work.",
         "Controls are gone until the daemon answers again.",
     )
-    return base.model_copy(update={"rows": rows or None, "tail": tail if rows else (NO_SNAPSHOT,)})
+    return base.model_copy(
+        update={"title": title, "rows": rows or None, "tail": tail if rows else (NO_SNAPSHOT,)}
+    )
 
 
 def with_entry_state(chrome: ConsoleChrome, state: EntryState) -> ConsoleChrome:

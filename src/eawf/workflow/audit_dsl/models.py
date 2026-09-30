@@ -40,12 +40,8 @@ The check kinds frozen for v0.3:
   repo-relative JSON file path resolved against ``cwd``); a
   :class:`pydantic.ValidationError` fails the check rather than
   raising.
-* ``affordance_parity`` — ``args = {mode: str, state_path: str, size:
-  [int, int]}``. Mounts the operator TUI, switches to the named mode,
-  and drives each advertised footer-hint key through the real
-  key->Binding path; fails (naming each offending key) when an
-  advertised key does not resolve to a binding, else passes. A
-  malformed ``args`` degrades to ``status="fail"`` rather than raising.
+* ``affordance_parity`` — retired with the epoch-1 TUI it drove; every run
+  reports ``blocked`` (:mod:`~eawf.workflow.audit_dsl.kinds.retired_tui`).
 * ``transition_coverage`` — ``args = {table: str, covered_edges:
   list[list[str]] = <auto>}``. Compares the full edge set of a
   lifecycle FSM table (``wave`` / ``phase`` / ``iter`` / ``spec`` from
@@ -56,16 +52,8 @@ The check kinds frozen for v0.3:
   in-process to collect coverage; an explicit list (e.g. one missing a
   known edge) drives the deterministic error path. A malformed ``args``
   degrades to ``status="fail"`` rather than raising.
-* ``tui_flow`` — ``args = {flow: str, key_sequence: list[str],
-  terminal_state: dict, scope: str = "repo", state_path: str, size:
-  [int, int]}``. Mounts the operator TUI at the launch scope, drives the
-  named ``key_sequence`` through the real key->Binding path, and asserts the
-  terminal observable state (the seven signals the behaviour probe samples)
-  equals every field the ``terminal_state`` mapping declares (a partial
-  spec is allowed). Fails naming each divergent observable field when the
-  journey lands elsewhere; covers a multi-step operator journey the
-  per-key (``affordance_parity``) and per-surface (snapshot) gates cannot.
-  A malformed ``args`` degrades to ``status="fail"`` rather than raising.
+* ``tui_flow`` — retired with the epoch-1 TUI it drove; every run reports
+  ``blocked`` (:mod:`~eawf.workflow.audit_dsl.kinds.retired_tui`).
 * ``svg_well_formed`` — ``args = {path: str}`` or ``{svg: str}``. Shells
   ``xmllint --noout`` over an SVG file (or inline SVG string) and turns a
   clean parse into ``pass``, a parser error into ``fail`` (with the
@@ -84,19 +72,16 @@ The check kinds frozen for v0.3:
   "workspace" | "user" = "repo", state_path: str | None = None,
   mode: str | None = None, key_sequence: list[str] = [], size: [int, int]
   = [120, 40], mockup_png: str | None = None, tui_png: str | None =
-  None}``. The default ASCII-text mode mounts the Textual TUI through the
-  Pilot harness, captures the settled screen as normalised ASCII, and
-  byte-compares it against the approved pick-time mockup golden, failing
-  with a unified diff naming the first changed region. When ``mockup_png``
-  is set the kind runs the VIS-1 **image** falsifier instead: it
-  rasterises the reference mockup PNG and a screenshot of the live TUI
-  rendered to PNG and scores their divergence weighting layout shape
-  (border-corner round-vs-square, body column count) ABOVE token fidelity,
-  so a square-vs-round or one-vs-two-column divergence fails even when most
-  glyphs match. ASCII goldens normalise box-drawing glyphs and column
-  gutters into the same text, so the image mode catches the P30-I15
-  "faithful but actually square-vs-round / one-vs-two-column" miss the
-  text mode could not. Both modes sit at the golden tier (T5).
+  None}``. The default ASCII-text mode, and the image mode when ``tui_png``
+  asks for a live capture, mounted the retired epoch-1 TUI and now report
+  ``blocked`` (:mod:`~eawf.workflow.audit_dsl.kinds.retired_tui`). When
+  ``mockup_png`` and a committed ``tui_png`` are set the kind runs the VIS-1
+  **image** falsifier: it rasterises both PNGs and scores their divergence
+  weighting layout shape (border-corner round-vs-square, body column count)
+  ABOVE token fidelity, so a square-vs-round or one-vs-two-column divergence
+  fails even when most glyphs match. ASCII goldens normalise box-drawing
+  glyphs and column gutters into the same text, so the image mode catches
+  what the text mode could not. Both modes sit at the golden tier (T5).
 
 See ``docs/architecture/audit-checks.md`` for grammar + the
 sandbox-policy boundary that ``command_exit_zero`` leaves to the

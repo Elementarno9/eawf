@@ -11,7 +11,7 @@ seeds a wave-bearing ``state.json`` into the isolated temp repo, spawns a
 real detached daemon against it, sends the frame over the socket, and
 reads the resulting ``.ea/store/event.jsonl`` rows back. Isolation
 (``EAWF_RUNTIME_DIR`` + ``EA_STATE`` + temp cwd) is inherited from the
-``e2e_env`` fixture, so the test never touches the developer's live
+``epoch1_e2e_env`` fixture, so the test never touches the developer's live
 ``~/.eawfd`` nor this repo's real ``.ea/``.
 """
 
@@ -140,11 +140,11 @@ def _read_event_payloads(
     return payloads
 
 
-def _spawn_wave_daemon(e2e_env: E2EEnv) -> Path:
+def _spawn_wave_daemon(epoch1_e2e_env: E2EEnv) -> Path:
     """Seed a wave-bearing state, spawn a real daemon, return its event path.
 
     Args:
-        e2e_env: The isolated sandbox (state not yet wave-bearing).
+        epoch1_e2e_env: The isolated sandbox (state not yet wave-bearing).
 
     Returns:
         Path to the real ``event.jsonl`` the daemon writes through.
@@ -153,23 +153,23 @@ def _spawn_wave_daemon(e2e_env: E2EEnv) -> Path:
         AssertionError: When the daemon never exposes its socket within
             :data:`_DAEMON_READY_TIMEOUT_S`.
     """
-    shutil.copy(_WAVE_STATE, e2e_env.state_path)
-    e2e_env.spawn_daemon()
+    shutil.copy(_WAVE_STATE, epoch1_e2e_env.state_path)
+    epoch1_e2e_env.spawn_daemon()
     deadline = time.monotonic() + _DAEMON_READY_TIMEOUT_S
-    if not _wait_for_socket(e2e_env, deadline) or not e2e_env.pid_file.exists():
+    if not _wait_for_socket(epoch1_e2e_env, deadline) or not epoch1_e2e_env.pid_file.exists():
         log_tail = (
-            e2e_env.log_file.read_text(encoding="utf-8", errors="replace")
-            if e2e_env.log_file.exists()
+            epoch1_e2e_env.log_file.read_text(encoding="utf-8", errors="replace")
+            if epoch1_e2e_env.log_file.exists()
             else "(no log file written)"
         )
         raise AssertionError(
             f"daemon did not become ready within {_DAEMON_READY_TIMEOUT_S}s\n"
             f"--- eawfd.log ---\n{log_tail}"
         )
-    return e2e_env.state_path.parent / "store" / "event.jsonl"
+    return epoch1_e2e_env.state_path.parent / "store" / "event.jsonl"
 
 
-def test_real_dispatch_emits_runtime_switched_and_cost_to_live_log(e2e_env: E2EEnv) -> None:
+def test_real_dispatch_emits_runtime_switched_and_cost_to_live_log(epoch1_e2e_env: E2EEnv) -> None:
     """A real ``agent.dispatch`` V5 fallback persists both C09 events.
 
     Drives the *actual* daemon over its socket with an outcome carrying a
@@ -177,10 +177,10 @@ def test_real_dispatch_emits_runtime_switched_and_cost_to_live_log(e2e_env: E2EE
     ``event.jsonl`` and asserts the ``runtime_switched`` and
     ``dispatch_cost`` rows both landed in append order.
     """
-    event_path = _spawn_wave_daemon(e2e_env)
+    event_path = _spawn_wave_daemon(epoch1_e2e_env)
 
     reply = _rpc(
-        e2e_env.sock_file,
+        epoch1_e2e_env.sock_file,
         "agent.dispatch",
         {
             "wave_id": _WAVE_ID,
@@ -218,12 +218,12 @@ def test_real_dispatch_emits_runtime_switched_and_cost_to_live_log(e2e_env: E2EE
     assert switched["attempt_id_to"] == cost["attempt_id"]
 
 
-def test_real_dispatch_no_error_emits_only_dispatch_cost(e2e_env: E2EEnv) -> None:
+def test_real_dispatch_no_error_emits_only_dispatch_cost(epoch1_e2e_env: E2EEnv) -> None:
     """A real dispatch with no primary_error persists only ``dispatch_cost``."""
-    event_path = _spawn_wave_daemon(e2e_env)
+    event_path = _spawn_wave_daemon(epoch1_e2e_env)
 
     reply = _rpc(
-        e2e_env.sock_file,
+        epoch1_e2e_env.sock_file,
         "agent.dispatch",
         {
             "wave_id": _WAVE_ID,

@@ -46,8 +46,8 @@ The output :class:`ComposedProfile` records ``provenance``, ``override_audit``
 (field-path → ordered override chain), and ``conflict_warnings`` (non-fatal
 notes such as render_block id overlap between two non-overriding profiles).
 
-Strictest-wins keys for v0.1 are scoped to the profile-body domain only — the
-config-layer keys like ``security.*`` and ``hooks.fail_closed`` belong to the
+Strictest-wins keys for v0.1 are scoped to the profile-body domain only — a
+config-layer key such as ``acceptance.required_before_ship`` belongs to the
 layered-config merge in :mod:`eawf.kernel.config.layered`. The only profile-body
 strictest-wins rule shipped in W02 is ``instrument_requirements[].kind``:
 ``hard`` always overrides ``soft``.
@@ -87,10 +87,9 @@ ConflictResolution = Literal["fail", "first-wins"]
 
 # Field paths that opt into strictest-wins composition. Each entry is a
 # dotted path inside the composed profile body. v0.1 only ships the
-# ``instrument_requirements[].kind`` rule (``hard`` > ``soft``) — broader
-# safety policy keys (``security.*``, ``hooks.fail_closed``,
-# ``vcs.protected_branches``, ``acceptance.required_before_ship``) live on
-# the config layers, not on profile bodies, and are merged by
+# ``instrument_requirements[].kind`` rule (``hard`` > ``soft``) — safety
+# policy keys such as ``acceptance.required_before_ship`` live on the config
+# layers, not on profile bodies, and are merged by
 # :mod:`eawf.kernel.config.layered`.
 STRICTEST_KEYS: Final[tuple[str, ...]] = ("instrument_requirements[].kind",)
 

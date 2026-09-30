@@ -28,6 +28,7 @@ from typing import Any
 
 import pytest
 
+from eawf.kernel.config.schema import ToastVerbosity
 from eawf.kernel.projection.attention import delivered_revisions, deliveries
 from eawf.kernel.projection.compute import (
     RouteProjection,
@@ -46,6 +47,7 @@ from eawf.runtime.budget.notices import (
 )
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.chrome import load_chrome
+from eawf.surfaces.tui.console.clock import QUIT_PROMPT, prompt_quit
 from eawf.surfaces.tui.console.operations import Operator, binding_refusal
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 
@@ -109,7 +111,12 @@ def _patch(key: str, **kwargs: Any) -> Any:
     )
 
 
-def _console(held: RouteProjection, *, principal: str | None = PRINCIPAL) -> ConsoleApp:
+def _console(
+    held: RouteProjection,
+    *,
+    principal: str | None = PRINCIPAL,
+    toast_verbosity: ToastVerbosity = "important",
+) -> ConsoleApp:
     """Return a console, not running, whose seam holds ``held`` and acts as ``principal``."""
     seam = ProjectionSeam(
         route=ATTENTION_ROUTE,
@@ -119,7 +126,7 @@ def _console(held: RouteProjection, *, principal: str | None = PRINCIPAL) -> Con
         operator=Operator(principal=principal) if principal is not None else None,
     )
     seam._projection = held
-    app = ConsoleApp(chrome=load_chrome(), seam=seam)
+    app = ConsoleApp(chrome=load_chrome(), seam=seam, toast_verbosity=toast_verbosity)
     app.session.route = "activity"
     app.deliver_attention()
     return app
@@ -158,6 +165,24 @@ def test_ui_015_a_move_that_closes_an_item_raises_nothing() -> None:
     _apply(app, _patch("ACT-0001", sequence=11, status="SEALED", revision=2, assignee=None))
     assert _screen(app) == before
     assert app.session.toasts == []
+
+
+def test_ui_015_toasts_off_announces_no_arriving_item_but_still_records_it() -> None:
+    """Under ``ui.toasts: off`` an arrival raises no toast, and is not replayed later."""
+    app = _console(_projection({}, cursor=10), toast_verbosity="off")
+    patch = _patch("ACT-0001", sequence=11, status="WAITING", revision=1, assignee=None)
+    _apply(app, patch)
+    assert app.session.toasts == []
+    app.toast_verbosity = "all"
+    app.deliver_attention()
+    assert app.session.toasts == []
+
+
+def test_ui_015_toasts_off_keeps_the_quit_prompt() -> None:
+    """The level governs arrivals only; the answer to a key still toasts."""
+    app = _console(_projection({}, cursor=10), toast_verbosity="off")
+    prompt_quit(app.session, app.console_clock)
+    assert [t.text for t in app.session.toasts] == [QUIT_PROMPT]
 
 
 # ---------- UI-016: per principal, surviving restart and replay ----------

@@ -5,6 +5,8 @@ menu and its guards. Its route list is the registry's, alphabetical by route id 
 by route word; the entities a query matches follow, ranked by how they matched. The window
 never leaves the cursor off screen, marks each hidden edge with a ``… N above`` or
 ``… N below`` row, and shows the one row such a marker would hide instead of the marker.
+A list that overflows its window ends in a real row opening the search route over the
+same query, which states how many hits there are; search is never a row of the route list.
 """
 
 from __future__ import annotations
@@ -44,6 +46,7 @@ class HitKind(StrEnum):
 
     ROUTE = "route"
     ENTITY = "entity"
+    SEARCH = "search"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -226,6 +229,26 @@ def _marker(n: int, edge: str, w: int) -> str:
     return pad(f"{_INDENT}{ELLIPSIS} {group(n)} {edge}", w)
 
 
+def palette_list(
+    all_hits: Sequence[Hit], *, h: int, registry: RouteRegistry = REGISTRY
+) -> list[Hit]:
+    """Return the rows the cursor walks: the hits, then the search row when they overflow.
+
+    Args:
+        all_hits: The rows :func:`hits` returned.
+        h: The frame height in rows.
+        registry: The routes; its overflow route is what the search row opens.
+
+    Raises:
+        ValueError: ``h`` leaves no row for the window.
+    """
+    target = registry.overflow_route
+    if target is None or not window(all_hits, sel=0, scroll=0, body=h - CHROME_ROWS).below:
+        return list(all_hits)
+    what = f"all {group(len(all_hits))} hits"
+    return [*all_hits, Hit(kind=HitKind.SEARCH, name=target, route=target, subject=None, what=what)]
+
+
 def palette_rows(session: Session, all_hits: Sequence[Hit], *, w: int, h: int) -> list[str]:
     """Return the palette's rows between its header and its keybar, each ``w`` cells.
 
@@ -242,8 +265,14 @@ def palette_rows(session: Session, all_hits: Sequence[Hit], *, w: int, h: int) -
         ValueError: ``h`` leaves no row for the window, or ``w`` is negative.
     """
     total = len(all_hits)
-    session.sel = min(max(session.sel, 0), max(total - 1, 0))
-    view = window(all_hits, sel=session.sel, scroll=session.pscroll, body=h - CHROME_ROWS)
+    listed = palette_list(all_hits, h=h)
+    session.sel = min(max(session.sel, 0), max(len(listed) - 1, 0))
+    # the search row is pinned below the window, so the hits share one row fewer
+    search = listed[total] if len(listed) > total else None
+    room = h - CHROME_ROWS - (search is not None)
+    view = window(
+        all_hits, sel=min(session.sel, max(total - 1, 0)), scroll=session.pscroll, body=room
+    )
     session.pscroll = view.start
     rows = [pad(f" / {session.pq}{PROMPT_CURSOR}", w), rule(RULE_HEAVY, w)]
     if view.above:
@@ -257,6 +286,9 @@ def palette_rows(session: Session, all_hits: Sequence[Hit], *, w: int, h: int) -
         previous = hit
     if view.below:
         rows.append(_marker(total - view.start - view.count, "below", w))
+    if search is not None:
+        mark = f"{CARET} " if session.sel == total else "  "
+        rows.append(pad(f"{_INDENT}{mark}{pad(search.name, ID_COLUMN)}{search.what}", w))
     if not all_hits:
         rows.append(pad(f"{_INDENT}nothing matches", w))
     return rows

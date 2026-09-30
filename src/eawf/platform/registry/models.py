@@ -66,7 +66,6 @@ logger = logging.getLogger(__name__)
 EXPLICIT_GROWTH_SURFACES: tuple[str, ...] = (
     "eawf init",
     "eawf repo add <path>",
-    "eawf workspace add-repo <code>",
 )
 
 

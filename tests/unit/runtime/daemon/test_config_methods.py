@@ -572,17 +572,45 @@ def test_unset_layer_value_rejects_empty_key_path(tmp_path: Path) -> None:
     _run(body)
 
 
-def test_unset_layer_value_rejects_unknown_leaf(tmp_path: Path) -> None:
-    ctx, _repo = _build_ctx(tmp_path=tmp_path)
+def test_unset_layer_value_removes_an_off_catalog_key_but_set_still_refuses_it(
+    tmp_path: Path,
+) -> None:
+    """CON-123: a key no code reads is removed from a layer file; it is never written."""
+    ctx, repo = _build_ctx(tmp_path=tmp_path)
+    config_yaml = repo / ".ea" / "config.yaml"
+    config_yaml.write_text("mcp:\n  enabled: []\nflow:\n  advance_after:\n    audit: true\n")
 
     async def body() -> None:
+        result = await unset_layer_value(ctx, {"layer": "repo", "key_path": ["mcp", "enabled"]})
+        assert result["removed"] is True
+        absent = await unset_layer_value(ctx, {"layer": "repo", "key_path": ["not", "a", "leaf"]})
+        assert absent["removed"] is False
         with pytest.raises(ValueError, match="unknown config key"):
-            await unset_layer_value(
-                ctx,
-                {"layer": "repo", "key_path": ["not", "a", "leaf"]},
+            await set_layer_value(
+                ctx, {"layer": "repo", "key_path": ["mcp", "enabled"], "value": []}
             )
 
     _run(body)
+    assert yaml.safe_load(config_yaml.read_text()) == {"flow": {"advance_after": {"audit": True}}}
+
+
+def test_unset_layer_value_removes_a_deprecated_leaf_from_any_file_layer(tmp_path: Path) -> None:
+    """CON-123: a deprecated leaf is removed even from a layer it was never writable at."""
+    ctx, repo = _build_ctx(tmp_path=tmp_path)
+    local = repo / ".ea" / "local" / "config.yaml"
+    local.parent.mkdir(parents=True, exist_ok=True)
+    local.write_text("audit:\n  fix_safe: true\n")
+
+    async def body() -> None:
+        result = await unset_layer_value(ctx, {"layer": "local", "key_path": ["audit", "fix_safe"]})
+        assert result["removed"] is True
+        with pytest.raises(ValueError, match="is deprecated"):
+            await set_layer_value(
+                ctx, {"layer": "repo", "key_path": ["audit", "fix_safe"], "value": True}
+            )
+
+    _run(body)
+    assert (yaml.safe_load(local.read_text()) or {}) == {}
 
 
 def test_unset_layer_value_rejects_nonwritable_layer(tmp_path: Path) -> None:
@@ -635,7 +663,7 @@ def test_unset_layer_value_idempotency_replays_result(tmp_path: Path) -> None:
 def test_set_layer_value_branch_writes_subdir_file(tmp_path: Path) -> None:
     """Branch layer writes ``.ea/branches/<branch>.yaml`` (subdir form).
 
-    Uses ``project.goals`` because it is one of the few branch-writable leaves;
+    Uses ``profiles.enabled`` because it is one of the few branch-writable leaves;
     the writable-layers gate rejects a key whose allowlist
     excludes ``branch``.
     """
@@ -646,8 +674,8 @@ def test_set_layer_value_branch_writes_subdir_file(tmp_path: Path) -> None:
             ctx,
             {
                 "layer": "branch",
-                "key_path": ["project", "goals"],
-                "value": ["ship safely"],
+                "key_path": ["profiles", "enabled"],
+                "value": ["core"],
                 "branch": "feature/p25-w14",
             },
         )
@@ -655,7 +683,7 @@ def test_set_layer_value_branch_writes_subdir_file(tmp_path: Path) -> None:
         target = repo / ".ea" / "branches" / "feature" / "p25-w14.yaml"
         assert target.exists()
         body_disk = yaml.safe_load(target.read_text())
-        assert body_disk == {"project": {"goals": ["ship safely"]}}
+        assert body_disk == {"profiles": {"enabled": ["core"]}}
 
     _run(body)
 
@@ -664,15 +692,15 @@ def test_set_layer_value_branch_rejects_missing_branch_name(tmp_path: Path) -> N
     ctx, _ = _build_ctx(tmp_path=tmp_path)
 
     async def body() -> None:
-        # ``project.goals`` is branch-writable, so the missing-branch-name check
+        # ``profiles.enabled`` is branch-writable, so the missing-branch-name check
         # (not the writable-layers gate) is what fires here.
         with pytest.raises(ValueError, match="branch name required"):
             await set_layer_value(
                 ctx,
                 {
                     "layer": "branch",
-                    "key_path": ["project", "goals"],
-                    "value": ["ship safely"],
+                    "key_path": ["profiles", "enabled"],
+                    "value": ["core"],
                 },
             )
 

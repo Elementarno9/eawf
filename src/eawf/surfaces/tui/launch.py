@@ -1,15 +1,19 @@
-"""``eawf ui``'s launcher: resolve a tree's authority, then open the right app.
+"""``eawf ui``'s launcher: resolve a tree's authority, then open the console on it.
 
-A tree is in epoch 1 or epoch 2 (:func:`~eawf.kernel.state.epoch2.authority.resolve_authority`),
-and the launcher opens a different app for each: the epoch-2 console
-(:class:`~eawf.surfaces.tui.console.app.ConsoleApp`) reading the live daemon projection
-over one seam, or the epoch-1 :class:`~eawf.surfaces.tui.app.EaApp` every tree ran before
-it. A launch that cannot simply attach -- no registered root, an ambiguous one, a
-migration owed or stopped part-way, a schema this console cannot read -- is neither: the
-attach path (:func:`~eawf.surfaces.tui.console.attach.resolve_attach`) names the entry
-state it landed in, and the console opens on that pre-session frame so the operator reads
-the exact next command rather than a silent fallback to the epoch-1 view. A native
-console that did attach draws the resolving frame until its first projection arrives.
+Every launch opens the epoch-2 console (:class:`~eawf.surfaces.tui.console.app.ConsoleApp`)
+and nothing else. A tree the console can attach to, one whose authority
+(:func:`~eawf.kernel.state.epoch2.authority.resolve_authority`) is epoch 2, opens on the
+live daemon projection over one seam. A launch that cannot simply attach -- no registered
+root, an ambiguous one, an epoch-1 tree whose migration is owed, one stopped part-way, a
+schema this console cannot read -- lands in the entry state the attach path
+(:func:`~eawf.surfaces.tui.console.attach.resolve_attach`) names, so the operator reads
+the exact next command. A native console that did attach draws the resolving frame until
+its first projection arrives.
+
+A launch with no interactive terminal (``--plain``, ``--no-input`` or a stdout that is not
+a TTY) draws no app at all: it writes the console's own frame in plain mode
+(:mod:`~eawf.surfaces.tui.console.plain`), the offline snapshot for an attached tree or
+the entry state for one it could not attach to.
 
 This module is the library side of "CLI is dispatch": :func:`launch_tui` is the one
 entry point, and :mod:`eawf.surfaces.cli.app` only resolves flags and calls it.
@@ -18,13 +22,15 @@ entry point, and :mod:`eawf.surfaces.cli.app` only resolves flags and calls it.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast, get_args
 
+from eawf.kernel.config.schema import ToastVerbosity
 from eawf.kernel.state.epoch2.authority import RootAuthority, resolve_authority
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.platform.registry import default_registry_path
@@ -45,6 +51,8 @@ if TYPE_CHECKING:
     from eawf.surfaces.tui.console.operations import Operator
     from eawf.surfaces.tui.console.seam import ProjectionSeam
 
+logger = logging.getLogger(__name__)
+
 #: SURF-085: the exit code a terminal entry-layer state returns off a TTY. Nothing
 #: interactive can be shown there, and the deterministic status frame would misstate a
 #: tree the resolver could not attach to, so this stands in for both.
@@ -62,9 +70,60 @@ _HOME_ROUTE = "scope.home"
 #: The session-local workspace selection ``eawf workspace select`` exports.
 WORKSPACE_KEY_ENV = "EAWF_WORKSPACE_KEY"
 
-#: Printed before the epoch-1 app opens on an ordinary epoch-1 tree, so an operator who
-#: expected the native console knows why they did not get it.
-EPOCH1_NOTICE = "eawf ui: this tree is epoch-1; opening the classic console"
+
+def persisted_toast_verbosity(repo_root: Path) -> ToastVerbosity:
+    """Return the operator's ``ui.toasts`` level from the layered config.
+
+    A missing layer, an unreadable one or a value outside the levels keeps
+    ``important``, the level the built-in layer ships: a toast preference is cosmetic
+    and never blocks a launch.
+
+    Args:
+        repo_root: The repository whose layered config is read.
+    """
+    from eawf.kernel.config.layered import get_dotted, merge_config
+    from eawf.surfaces.cli.errors import ValidationError
+
+    try:
+        merged, _sources = merge_config(repo=repo_root)
+        value = get_dotted(merged, "ui.toasts")
+    except (KeyError, OSError, ValidationError) as exc:
+        logger.debug(f"persisted_toast_verbosity fallback exc={exc!r}")
+        return "important"
+    if value not in get_args(ToastVerbosity):
+        logger.debug(f"persisted_toast_verbosity unrecognised value={value!r}")
+        return "important"
+    return cast("ToastVerbosity", value)
+
+
+def persisted_glyphs(repo_root: Path | None = None) -> str:
+    """Return the glyph allocation ``ui.glyphs`` selects for the console.
+
+    ``unicode`` and ``ascii`` are taken as written. ``auto`` follows the terminal: a
+    stdout that declares an encoding other than UTF-8 gets the ASCII allocation,
+    because it cannot carry the console's glyphs; one that declares none keeps Unicode.
+    A missing layer, an unreadable one or a value outside the three reads as ``auto``:
+    the allocation is cosmetic and never blocks a launch.
+
+    Args:
+        repo_root: The repository whose layered config is read; ``None`` reads only the
+            global and environment layers.
+    """
+    from eawf.kernel.config.layered import get_dotted, merge_config
+    from eawf.surfaces.cli.errors import ValidationError
+
+    try:
+        merged, _sources = merge_config(repo=repo_root)
+        value = get_dotted(merged, "ui.glyphs")
+    except (KeyError, OSError, ValidationError) as exc:
+        logger.debug(f"persisted_glyphs fallback exc={exc!r}")
+        value = "auto"
+    if value in ("unicode", "ascii"):
+        return str(value)
+    encoding = getattr(sys.stdout, "encoding", None)
+    if encoding and encoding.lower().replace("-", "") != "utf8":
+        return "ascii"
+    return "unicode"
 
 
 def project_name(state_path: Path, repo_root: Path) -> str:
@@ -174,50 +233,41 @@ def launch_tui(
     verbose: bool = False,
     operator: Operator | None = None,
 ) -> int:
-    """Resolve the tree's authority and open the matching app, or fall back off a TTY.
+    """Resolve the tree's authority and open the console on it, or write its plain frame.
 
     Args:
         workspace: Optional workspace root from ``-w/--workspace``.
-        no_input: Fail-closed flag -- forces the deterministic status fallback.
-        plain: Plain-output flag -- forces the deterministic status fallback.
-        verbose: Whether the native console's ``--verbose`` key-trace row is shown
-            (SURF-173). Has no effect on the epoch-1 app, which carries no such row.
-        operator: Who the native console's writes are attributed to, from
+        no_input: Fail-closed flag -- writes the plain frame instead of opening the app.
+        plain: Plain-output flag -- writes the plain frame instead of opening the app.
+        verbose: Whether the console's ``--verbose`` key-trace row is shown (SURF-173).
+        operator: Who the console's writes are attributed to, from
             :func:`resolve_operator`; ``None`` leaves every writing verb refused with
-            that reason. Has no effect on the epoch-1 app.
+            that reason.
 
     Returns:
-        Process exit code (``0`` on a clean quit).
+        Process exit code: ``0`` on a clean quit or a written frame,
+        :data:`TERMINAL_ENTRY_EXIT_CODE` for a launch that lands in a terminal entry
+        state.
     """
     tty = sys.stdout.isatty()
-    explicit_state = workspace is not None or bool(os.environ.get("EA_STATE"))
-
-    if not tty and not explicit_state:
-        # Nobody chose a tree: no -w/--workspace and no EA_STATE. Resolving now
-        # would walk pwd-upward onto whatever tree happens to sit above cwd, so
-        # the ambient bare/headless invocation skips authority resolution
-        # entirely and prints the deterministic status frame, which does its
-        # own cheap cwd-relative read instead. An explicit override or an
-        # interactive TTY both mean the caller (or the operator) did pick a
-        # tree on purpose, so those still resolve below for epoch/SURF-085
-        # detection.
-        from eawf.surfaces.tui.chassis.offline import emit_status
-
-        return emit_status(workspace=workspace, no_input=no_input, plain=plain)
+    interactive = tty and not (no_input or plain)
+    env_state = os.environ.get("EA_STATE")
+    named_by = "EA_STATE" if env_state else ("--workspace" if workspace is not None else None)
+    # Off a TTY with no tree named, walking pwd-upward would land on whatever tree sits
+    # above cwd, so a scripted caller reads only the tree at cwd itself.
+    tree = workspace if tty or named_by is not None else Path.cwd()
 
     # An interactive launch reads the tree before the console takes the terminal. The
     # CLI's stderr log handler would print what that read logs beneath the console, where
     # it still stands once the console exits, so the terminal carries no log line from here
     # on; a scripted caller keeps its stderr log.
-    saved = swap_root_logging_to_textual() if tty else None
+    saved = swap_root_logging_to_textual() if interactive else None
     try:
         started = time.monotonic()
-        state_path, _reason = resolve_with_reason(workspace=workspace)
+        state_path, _reason = resolve_with_reason(workspace=tree)
         # A tree declares its epoch inside its ``.ea`` directory, beside the state file.
         authority = resolve_authority(state_path.parent)
         chrome = load_chrome()
-        env_state = os.environ.get("EA_STATE")
-        named_by = "EA_STATE" if env_state else ("--workspace" if workspace is not None else None)
         attached = resolve_attach(
             chrome,
             AttachRequest(
@@ -231,35 +281,61 @@ def launch_tui(
         )
         entry = attached.entry
 
-        if entry is not None and entry.exit == _TERMINAL_EXIT and not tty:
-            print(hand_over(entry), file=sys.stderr)
-            return TERMINAL_ENTRY_EXIT_CODE
-
-        if no_input or plain or not tty:
-            from eawf.surfaces.tui.chassis.offline import emit_status
-
-            return emit_status(workspace=workspace, no_input=no_input, plain=plain)
+        if not interactive:
+            return _emit_plain(chrome=chrome, authority=authority, entry=entry)
 
         if entry is not None:
             return _launch_entry(
                 chrome=with_entry_state(chrome, entry), state=entry, verbose=verbose
             )
 
-        if authority.epoch == 2:
-            resolving = resolving_state(chrome, attached.trace, elapsed=time.monotonic() - started)
-            return _launch_native(
-                authority=authority,
-                state_path=state_path,
-                chrome=with_entry_state(chrome, resolving),
-                verbose=verbose,
-                operator=operator,
-            )
-
-        print(EPOCH1_NOTICE, file=sys.stderr)
-        return _launch_epoch1(state_path=state_path)
+        resolving = resolving_state(chrome, attached.trace, elapsed=time.monotonic() - started)
+        return _launch_native(
+            authority=authority,
+            state_path=state_path,
+            chrome=with_entry_state(chrome, resolving),
+            verbose=verbose,
+            operator=operator,
+        )
     finally:
         if saved is not None:
             restore_root_logging(saved)
+
+
+def _emit_plain(
+    *, chrome: ConsoleChrome, authority: RootAuthority, entry: EntryState | None
+) -> int:
+    """Write the console's frame in plain mode for a launch with no interactive terminal.
+
+    A terminal entry state writes only its hand-over to stderr and exits 4 (SURF-085):
+    a frame would misstate a tree the resolver could not attach to. Any other entry state
+    is written as it stands; an attached tree is written as its offline snapshot, the
+    last state it committed, read from disk without asking the daemon.
+
+    Args:
+        chrome: The packaged chrome.
+        authority: The tree's resolved authority.
+        entry: The entry state the attach path landed in; ``None`` once it attached.
+
+    Returns:
+        ``0`` once the frame is written, else :data:`TERMINAL_ENTRY_EXIT_CODE`.
+    """
+    from eawf.runtime.daemon.epoch2_root import RootIdentity
+    from eawf.surfaces.tui.console.fixture import Fixture
+    from eawf.surfaces.tui.console.plain import plain_text, render_plain
+    from eawf.surfaces.tui.console.session import SessionSetup
+
+    if entry is not None and entry.exit == _TERMINAL_EXIT:
+        print(hand_over(entry), file=sys.stderr)
+        return TERMINAL_ENTRY_EXIT_CODE
+    if entry is None:
+        scope_id = RootIdentity.of(authority.root).root_id
+        snapshot = offline_snapshot(authority, scope_id=scope_id, now=datetime.now(UTC))
+        entry = offline_state(chrome, snapshot)
+    fixture = Fixture.from_chrome(with_entry_state(chrome, entry))
+    setup = SessionSetup(route=_ENTRY_ROUTE, entrySel=_entry_sel(chrome, entry.id))
+    print(plain_text(render_plain(fixture, setup)))
+    return 0
 
 
 def _launch_native(
@@ -272,7 +348,7 @@ def _launch_native(
 ) -> int:
     """Open the console over a live seam bound to the tree's epoch-2 authority."""
     from eawf.runtime.daemon.epoch2_root import RootIdentity
-    from eawf.surfaces.tui.app import _persisted_theme
+    from eawf.surfaces.tui.chassis.theme import persisted_theme
     from eawf.surfaces.tui.console.app import OUTER_GUTTER, ConsoleApp
     from eawf.surfaces.tui.console.clock import Clock
     from eawf.surfaces.tui.console.seam import ProjectionSeam
@@ -298,7 +374,9 @@ def _launch_native(
         clock=Clock(),
         verbose=verbose,
         gutter=OUTER_GUTTER,
-        theme=_persisted_theme(repo_root),
+        theme=persisted_theme(repo_root),
+        toast_verbosity=persisted_toast_verbosity(repo_root),
+        glyphs=persisted_glyphs(repo_root),
     )
     return _run_console(app, seam)
 
@@ -309,13 +387,18 @@ def _launch_entry(*, chrome: ConsoleChrome, state: EntryState, verbose: bool) ->
     A terminal state leaves its commands on stderr once the console closes and exits 4;
     any other state ends the process cleanly, not attached.
     """
-    from eawf.surfaces.tui.app import _persisted_theme
+    from eawf.surfaces.tui.chassis.theme import persisted_theme
     from eawf.surfaces.tui.console.app import OUTER_GUTTER, ConsoleApp
     from eawf.surfaces.tui.console.clock import Clock
     from eawf.surfaces.tui.console.session import SessionSetup
 
     app = ConsoleApp(
-        chrome=chrome, clock=Clock(), verbose=verbose, gutter=OUTER_GUTTER, theme=_persisted_theme()
+        chrome=chrome,
+        clock=Clock(),
+        verbose=verbose,
+        gutter=OUTER_GUTTER,
+        theme=persisted_theme(),
+        glyphs=persisted_glyphs(),
     )
     app.reset(SessionSetup(route=_ENTRY_ROUTE, entrySel=_entry_sel(chrome, state.id)))
     _run_console(app, None)
@@ -354,25 +437,7 @@ def _run_console(app: ConsoleApp, seam: ProjectionSeam | None) -> int:
     return 0
 
 
-def _launch_epoch1(*, state_path: Path) -> int:
-    """Open the epoch-1 :class:`~eawf.surfaces.tui.app.EaApp`, exactly as it always has."""
-    import orjson
-
-    from eawf.kernel.state.enums import ScopeKind
-    from eawf.surfaces.tui.app import resolve_scope, run_app
-
-    if state_path.is_file():
-        try:
-            payload = orjson.loads(state_path.read_bytes())
-            scope_kind = ScopeKind(payload["scope_kind"])
-        except orjson.JSONDecodeError, OSError, KeyError, ValueError:
-            return run_app("repo", state_path)
-        return run_app(resolve_scope(scope_kind), state_path)
-    return run_app("user", None)
-
-
 __all__ = [
-    "EPOCH1_NOTICE",
     "TERMINAL_ENTRY_EXIT_CODE",
     "WORKSPACE_KEY_ENV",
     "hand_over",

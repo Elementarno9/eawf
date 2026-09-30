@@ -775,7 +775,7 @@
     ""
    ],
    [
-    "@",
+    "s",
     "assign",
     "no",
     "you are the only principal",
@@ -1056,6 +1056,15 @@
     "the effective value may not change at all"
    ],
    [
+    "x",
+    "unset",
+    "yes",
+    "",
+    "control",
+    "the value stated at the lens layer is removed",
+    "the next layer's value applies; no other layer changes"
+   ],
+   [
     "c",
     "request capability",
     "no",
@@ -1063,6 +1072,26 @@
     "admin",
     "",
     ""
+   ]
+  ],
+  "unattended": [
+   [
+    "a",
+    "request pause",
+    "yes",
+    "",
+    "control",
+    "the daemon is asked to pause the queue at its next safe point",
+    "it does not stop a run that is already claimed"
+   ],
+   [
+    "d",
+    "request drain",
+    "yes",
+    "",
+    "control",
+    "the daemon is asked to stop claiming new work and finish what it holds",
+    "it does not cancel anything already running"
    ]
   ],
   "milestone": [

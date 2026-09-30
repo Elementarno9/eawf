@@ -127,12 +127,43 @@ def configured_juror_wall_clock(repo_root: Path) -> float | None:
     return float(raw)
 
 
+def configured_daemon_seconds(repo_root: Path | None, leaf: str) -> int | None:
+    """Return ``daemon.<leaf>`` from the layered config, when it is a usable number of seconds.
+
+    Read best-effort at boot: an unreadable config or a value that is not a
+    positive whole number leaves the daemon on its default rather than failing
+    the start.
+
+    Args:
+        repo_root: Repository whose layered config is consulted; ``None`` reads
+            the global layer alone.
+        leaf: The leaf under ``daemon``, such as ``idle_timeout_seconds``.
+
+    Returns:
+        The configured seconds, or ``None`` when the value cannot be used.
+    """
+    from eawf.kernel.config.layered import get_dotted, merge_config
+
+    key = f"daemon.{leaf}"
+    try:
+        merged, _sources = merge_config(repo=repo_root)
+        raw = get_dotted(merged, key)
+    except Exception as exc:
+        logger.warning(f"configured_daemon_seconds key={key} unreadable err={exc!r}; default")
+        return None
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
+        logger.warning(f"configured_daemon_seconds key={key} unusable raw={raw!r}; default")
+        return None
+    return raw
+
+
 __all__ = [
     "CLI_WIRE_MARGIN_SECONDS",
     "COMMIT_MARGIN_SECONDS",
     "MUTATION_HARD_LIMIT_SECONDS",
     "READINESS_BUDGET_SECONDS",
     "cli_mutation_timeout_for",
+    "configured_daemon_seconds",
     "configured_juror_wall_clock",
     "mutation_hard_limit_for",
 ]

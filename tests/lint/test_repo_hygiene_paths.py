@@ -1,6 +1,6 @@
 """Which paths the tree ignores, tracks, runs and scans.
 
-Four hygiene facts share one failure mode: each is a path pattern
+Three hygiene facts share one failure mode: each is a path pattern
 somebody has to keep in agreement with a second place, and nothing
 notices when they drift apart.
 
@@ -10,9 +10,6 @@ notices when they drift apart.
 * The release ledger is where a publication RPC's idempotency key lives,
   so a clone without it cannot tell a retry from a second publication.
   Being neither tracked nor ignored is the one state that helps nobody.
-* ``just test ci`` is only a CI mirror while it carries the same flags as
-  the workflow step it mirrors. A flag that lands in one and not the
-  other turns a green local run into an unrelated claim.
 * An exclusion written as a whole directory prefix stops scanning files
   nobody has written yet. A fixture directory is exactly where a
   hand-pasted credential lands, so each excluded file is named and the
@@ -27,7 +24,7 @@ from __future__ import annotations
 
 import re
 import subprocess
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -39,9 +36,7 @@ from eawf.kernel.store.tiers import StorageTier
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _GITIGNORE = _REPO_ROOT / ".gitignore"
-_JUSTFILE = _REPO_ROOT / "justfile"
 _PRE_COMMIT_CONFIG = _REPO_ROOT / ".pre-commit-config.yaml"
-_CI_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "ci.yaml"
 
 #: The ignore rule that has to cover a shard, not just the combined file.
 COVERAGE_SHARD_RULE = ".coverage.*"
@@ -51,15 +46,6 @@ COVERAGE_SHARD = ".coverage.host.1.2"
 
 #: The publication ledger a clone needs to resolve an idempotency key.
 RELEASE_LEDGER = ".ea/store/release.jsonl"
-
-#: The workflow step ``just test ci`` mirrors for the render snapshots.
-CI_SNAPSHOT_STEP = "Pytest (TUI render snapshots)"
-
-#: The snapshot tree both the step and the recipe name.
-SNAPSHOT_SUITE = "tests/snapshots/tui"
-
-#: The console goldens, owned by the dedicated single-process replay job.
-CONSOLE_SUITE = "tests/snapshots/tui/console"
 
 #: The two directory prefixes the exclusion used to carry wholesale. A
 #: prefix un-scans every file added under it later, which is the drift
@@ -94,93 +80,6 @@ _FAMILY_CHARACTERS = frozenset("[]()*+?{}")
 
 
 # --- extraction and comparison ----------------------------------------------
-
-
-def ignore_flags(command: str) -> tuple[str, ...]:
-    """Return the ``--ignore=`` targets of one pytest command line.
-
-    Args:
-        command: A shell command line; anything that is not a pytest run
-            simply carries no such flag.
-
-    Returns:
-        The ignored paths, in the order the command lists them.
-    """
-    return tuple(word.split("=", 1)[1] for word in command.split() if word.startswith("--ignore="))
-
-
-def snapshot_ignore_violations(*, ci_command: str, just_command: str) -> list[str]:
-    """Return each ignore target CI carries that the recipe drops.
-
-    The comparison is one-directional on purpose: the recipe may add a
-    local-only ignore, but dropping one CI carries means the recipe runs
-    a suite CI never ran and calls the result a mirror.
-
-    Args:
-        ci_command: The workflow step's ``run`` body.
-        just_command: The matching command line from the recipe.
-
-    Returns:
-        One finding per dropped target, in the CI command's order; empty
-        when the recipe carries all of them.
-    """
-    carried = ignore_flags(just_command)
-    return [
-        f"just test ci drops --ignore={target}"
-        for target in ignore_flags(ci_command)
-        if target not in carried
-    ]
-
-
-def pytest_commands(text: str) -> list[str]:
-    """Return every ``uv run pytest`` line in *text*, stripped."""
-    return [line.strip() for line in text.splitlines() if "uv run pytest" in line]
-
-
-def command_for_suite(commands: Sequence[str], suite: str) -> str:
-    """Return the one command line that names *suite* as a target.
-
-    Args:
-        commands: Candidate command lines.
-        suite: The path the command must pass as a bare argument, so a
-            longer path carrying it as a prefix does not match.
-
-    Returns:
-        The matching command line.
-
-    Raises:
-        LookupError: No command names the suite.
-    """
-    for command in commands:
-        if suite in command.split():
-            return command
-    raise LookupError(f"no command names {suite!r}")
-
-
-def just_case_arm(recipe: str, mode: str) -> str:
-    """Return the body of one ``case`` arm of a just recipe.
-
-    Args:
-        recipe: The recipe body.
-        mode: The arm's label, without the closing parenthesis.
-
-    Returns:
-        The arm's lines, up to but excluding its ``;;`` terminator.
-
-    Raises:
-        LookupError: The recipe has no such arm.
-    """
-    lines = recipe.splitlines()
-    opener = f"{mode})"
-    for index, line in enumerate(lines):
-        if line.strip() != opener:
-            continue
-        body: list[str] = []
-        for candidate in lines[index + 1 :]:
-            if candidate.strip() == ";;":
-                return "\n".join(body)
-            body.append(candidate)
-    raise LookupError(f"recipe has no {opener} arm")
 
 
 def secrets_exclude(config: Mapping[str, Any]) -> str:
@@ -261,35 +160,6 @@ def _live_exclude() -> str:
     return secrets_exclude(yaml.safe_load(_PRE_COMMIT_CONFIG.read_text(encoding="utf-8")))
 
 
-def _live_ci_snapshot_command() -> str:
-    """Return the ``run`` body of the workflow's render-snapshot step.
-
-    Returns:
-        The step's command line.
-
-    Raises:
-        LookupError: The test job declares no such step.
-    """
-    workflow = yaml.safe_load(_CI_WORKFLOW.read_text(encoding="utf-8"))
-    for step in workflow["jobs"]["test"]["steps"]:
-        if step.get("name") == CI_SNAPSHOT_STEP:
-            return str(step["run"])
-    raise LookupError(f"the test job has no {CI_SNAPSHOT_STEP!r} step")
-
-
-def _live_just_snapshot_command() -> str:
-    """Return the snapshot command line of the recipe's ``ci`` arm."""
-    lines = _JUSTFILE.read_text(encoding="utf-8").splitlines()
-    start = next(index for index, line in enumerate(lines) if line.startswith("test "))
-    body: list[str] = []
-    for line in lines[start + 1 :]:
-        if line and not line[0].isspace():
-            break
-        body.append(line)
-    arm = just_case_arm("\n".join(body), "ci")
-    return command_for_suite(pytest_commands(arm), SNAPSHOT_SUITE)
-
-
 # --- coverage shards are ignored --------------------------------------------
 
 
@@ -322,71 +192,6 @@ def test_release_ledger_is_tracked_and_committed() -> None:
 def test_release_ledger_sits_beside_the_other_typed_stores() -> None:
     """The ledger is one of the store family, not a special case."""
     assert classify_path(RELEASE_LEDGER) == classify_path(".ea/store/release_record.jsonl")
-
-
-# --- just test ci mirrors the workflow --------------------------------------
-
-
-def test_just_test_ci_ignores_the_console_goldens() -> None:
-    """The recipe skips the suite the dedicated replay job owns."""
-    assert CONSOLE_SUITE in ignore_flags(_live_just_snapshot_command())
-
-
-def test_just_test_ci_mirrors_the_ci_snapshot_ignores() -> None:
-    """The recipe drops no ignore flag the workflow step carries."""
-    violations = snapshot_ignore_violations(
-        ci_command=_live_ci_snapshot_command(),
-        just_command=_live_just_snapshot_command(),
-    )
-    assert violations == []
-
-
-def test_ci_snapshot_step_still_ignores_the_console_goldens() -> None:
-    """The mirror is only worth asserting while CI carries the flag."""
-    assert CONSOLE_SUITE in ignore_flags(_live_ci_snapshot_command())
-
-
-def test_snapshot_ignore_gate_reds_on_a_dropped_flag() -> None:
-    """The defect this gate exists for: the recipe runs what CI skipped."""
-    violations = snapshot_ignore_violations(
-        ci_command=f"uv run pytest -n 4 {SNAPSHOT_SUITE} --ignore={CONSOLE_SUITE}",
-        just_command=f"uv run pytest -n 4 {SNAPSHOT_SUITE}",
-    )
-    assert violations == [f"just test ci drops --ignore={CONSOLE_SUITE}"]
-
-
-def test_snapshot_ignore_gate_allows_a_recipe_only_flag() -> None:
-    """A local-only ignore is not drift; only a dropped one is."""
-    violations = snapshot_ignore_violations(
-        ci_command=f"uv run pytest {SNAPSHOT_SUITE}",
-        just_command=f"uv run pytest {SNAPSHOT_SUITE} --ignore={CONSOLE_SUITE}",
-    )
-    assert violations == []
-
-
-def test_ignore_flags_of_a_flagless_command_is_empty() -> None:
-    assert ignore_flags("uv run pytest -n 4 tests") == ()
-    assert ignore_flags("") == ()
-
-
-def test_ignore_flags_keeps_written_order() -> None:
-    assert ignore_flags("uv run pytest --ignore=b --ignore=a") == ("b", "a")
-
-
-def test_command_for_suite_ignores_a_longer_path() -> None:
-    """A prefix match would pick the console run for the snapshot suite."""
-    commands = [f"uv run pytest {CONSOLE_SUITE}", f"uv run pytest {SNAPSHOT_SUITE}"]
-    assert command_for_suite(commands, SNAPSHOT_SUITE) == commands[1]
-
-
-def test_command_for_suite_raises_when_nothing_names_it() -> None:
-    with pytest.raises(LookupError, match="no command names"):
-        command_for_suite(["uv run pytest tests/unit"], SNAPSHOT_SUITE)
-
-
-def test_just_case_arm_raises_on_an_absent_mode() -> None:
-    with pytest.raises(LookupError, match=re.escape("no fast) arm")):
-        just_case_arm("    ci)\n      run\n      ;;", "fast")
 
 
 # --- the secrets exclusion names its files ----------------------------------

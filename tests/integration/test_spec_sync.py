@@ -78,31 +78,8 @@ _RAW_WAIVER_YAML = _GOOD_YAML.replace(
     "    gate_ids: [G-01]\n    waiver_reason: historical raw waiver\n",
 )
 
-# A UI body whose single gate is an affordance_parity probe. A UI-scope wave
-# materialising these gates satisfies the require-gate check.
-_AFFORDANCE_PARITY_YAML = textwrap.dedent(
-    """\
-    criteria:
-      - id: CR-01
-        text: each advertised footer key triggers action; tui_pilot home mode
-        kind: behavioral
-        acceptance_style: binary
-        evidence_kind: deterministic
-        quality_dimension: interaction_capability
-        measurable_signal: the affordance-parity probe finds no dead advertised key
-        gate_ids: [G-01]
-    gates:
-      - id: G-01
-        criterion_id: CR-01
-        kind: affordance_parity
-        args: {mode: home}
-        policy: block
-        cadence: every-wave
-    """
-)
-
-# A UI transition response without transition_coverage. It still carries the
-# existing affordance_parity gate so the failure isolates the new require check.
+# A UI transition response without transition_coverage; its only gate is on
+# another kind, so the failure isolates the transition_coverage require check.
 _TRANSITION_WITHOUT_COVERAGE_YAML = textwrap.dedent(
     """\
     criteria:
@@ -264,7 +241,7 @@ def _state_payload(
     ``planned_steps`` is empty. Pass ``intent_present=False`` to model a legacy
     on-disk wave whose row carries no intent at all, which the coverage gate
     now rejects rather than silently passing. Pass ``file_scopes`` to drive
-    the UI-scope heuristic that gates the affordance_parity require check
+    the UI-scope heuristic that gates the transition_coverage require check
     (defaults to an empty list, which is non-UI).
     """
     intent: dict[str, Any] | None
@@ -782,109 +759,6 @@ def test_sync_idempotent_replay(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Affordance-parity require-gate — a UI-scope wave whose synced gates omit an
-# affordance_parity gate is rejected, naming the missing kind.
-# --------------------------------------------------------------------------- #
-def test_sync_rejects_ui_scope_wave_without_affordance_parity_gate(tmp_path: Path) -> None:
-    """A UI-scope wave whose gates omit affordance_parity trips the require check.
-
-    The wave's ``file_scopes`` hit the ``src/eawf/surfaces/tui/`` UI prefix, so
-    :func:`~eawf.kernel.spec.heuristics.is_ui_scope` is true; the ``_GOOD_YAML``
-    body carries only a ``schema_validate`` gate, so the require check rejects
-    the sync, naming ``affordance_parity``, and no state write lands.
-    """
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
-    state_path = repo_root / ".ea" / "state.json"
-    _write_state(
-        state_path,
-        _state_payload(
-            status="pending",
-            planned_steps=[],
-            file_scopes=["src/eawf/surfaces/tui/widgets/footer.py"],
-        ),
-    )
-    _write_spec_file(repo_root, _wrap_body(_GOOD_YAML))
-    ctx = _build_ctx(tmp_path, state_path)
-
-    async def body() -> None:
-        with pytest.raises(DaemonValidationError, match="affordance_parity"):
-            await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
-
-    _run(body)
-    # No state write: the wave row still carries empty criteria + gates.
-    wave = _load_wave(state_path)
-    assert wave.success_criteria == []
-    assert wave.gates == []
-
-
-def test_sync_passes_ui_scope_wave_with_affordance_parity_gate(tmp_path: Path) -> None:
-    """A UI-scope wave that carries an affordance_parity gate syncs cleanly.
-
-    Same UI ``file_scopes`` as the rejection case, but the ``_AFFORDANCE_PARITY_YAML``
-    body materialises an ``affordance_parity`` gate, so the require check is
-    satisfied and the typed rows land on the wave.
-    """
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
-    state_path = repo_root / ".ea" / "state.json"
-    _write_state(
-        state_path,
-        _state_payload(
-            status="pending",
-            planned_steps=[],
-            file_scopes=["src/eawf/surfaces/tui/widgets/footer.py"],
-        ),
-    )
-    _write_spec_file(repo_root, _wrap_body(_AFFORDANCE_PARITY_YAML))
-    ctx = _build_ctx(tmp_path, state_path)
-
-    async def body() -> None:
-        result = await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
-        assert result["criteria_count"] == 1
-        assert result["gates_count"] == 1
-
-    _run(body)
-    wave = _load_wave(state_path)
-    assert len(wave.gates) == 1
-    assert wave.gates[0].kind == "affordance_parity"
-
-
-def test_sync_passes_non_ui_scope_wave_without_affordance_parity_gate(tmp_path: Path) -> None:
-    """A non-UI wave syncs without an affordance_parity gate (band-conditional).
-
-    The wave's ``file_scopes`` name a non-UI path, so
-    :func:`~eawf.kernel.spec.heuristics.is_ui_scope` is false and the require
-    check is a no-op; the ``_GOOD_YAML`` body (a ``schema_validate`` gate, no
-    affordance_parity) syncs cleanly. Proves the check is band-conditional, not
-    global.
-    """
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
-    state_path = repo_root / ".ea" / "state.json"
-    _write_state(
-        state_path,
-        _state_payload(
-            status="pending",
-            planned_steps=[],
-            file_scopes=["src/eawf/kernel/spec/common.py"],
-        ),
-    )
-    _write_spec_file(repo_root, _wrap_body(_GOOD_YAML))
-    ctx = _build_ctx(tmp_path, state_path)
-
-    async def body() -> None:
-        result = await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
-        assert result["criteria_count"] == 1
-        assert result["gates_count"] == 1
-
-    _run(body)
-    wave = _load_wave(state_path)
-    assert len(wave.gates) == 1
-    assert wave.gates[0].kind == "schema_validate"
-
-
-# --------------------------------------------------------------------------- #
 # transition_coverage require-gate — a UI-scope TRANSITIONS_TO response must
 # carry a transition_coverage gate.
 # --------------------------------------------------------------------------- #
@@ -898,7 +772,7 @@ def test_sync_transition_criterion_requires_coverage_gate(tmp_path: Path) -> Non
         _state_payload(
             status="pending",
             planned_steps=[],
-            file_scopes=["src/eawf/surfaces/tui/screens/detail.py"],
+            file_scopes=["src/eawf/surfaces/tui/console/keybar.py"],
         ),
     )
     _write_spec_file(repo_root, _wrap_body(_TRANSITION_WITHOUT_COVERAGE_YAML))
@@ -926,7 +800,11 @@ def test_sync_transition_criterion_requires_coverage_gate(tmp_path: Path) -> Non
 
 
 def test_sync_no_transition_criterion_no_coverage_required(tmp_path: Path) -> None:
-    """A UI-scope wave without ``transitions_to`` syncs without coverage."""
+    """A UI-scope wave with neither ``transitions_to`` nor an affordance gate syncs.
+
+    Neither ``transition_coverage`` nor ``affordance_parity`` is required: the
+    latter drove the retired epoch-1 TUI and can only report ``blocked``.
+    """
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     state_path = repo_root / ".ea" / "state.json"
@@ -935,10 +813,10 @@ def test_sync_no_transition_criterion_no_coverage_required(tmp_path: Path) -> No
         _state_payload(
             status="pending",
             planned_steps=[],
-            file_scopes=["src/eawf/surfaces/tui/widgets/footer.py"],
+            file_scopes=["src/eawf/surfaces/tui/console/keybar.py"],
         ),
     )
-    _write_spec_file(repo_root, _wrap_body(_AFFORDANCE_PARITY_YAML))
+    _write_spec_file(repo_root, _wrap_body(_GOOD_YAML))
     ctx = _build_ctx(tmp_path, state_path)
 
     async def body() -> None:
@@ -947,6 +825,4 @@ def test_sync_no_transition_criterion_no_coverage_required(tmp_path: Path) -> No
         assert result["gates_count"] == 1
 
     _run(body)
-    wave = _load_wave(state_path)
-    assert len(wave.gates) == 1
-    assert wave.gates[0].kind == "affordance_parity"
+    assert [gate.kind for gate in _load_wave(state_path).gates] == ["schema_validate"]

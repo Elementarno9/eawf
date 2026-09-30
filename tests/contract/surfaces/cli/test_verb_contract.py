@@ -493,7 +493,7 @@ def test_surf_084_a_publication_answers_with_its_operation_reference_on_submissi
 #: daemon and exit with the daemon-unreachable code without one, never starting
 #: it; ``tests/integration/surfaces/cli/test_operation_cli.py`` pins that.
 _READ_VERBS: tuple[tuple[str, ...], ...] = (
-    ("config", "get", "project.code"),
+    ("config", "get", "ui.theme"),
     ("config", "validate"),
     ("decision", "graph"),
     ("decision", "list"),

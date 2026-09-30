@@ -90,74 +90,48 @@ def _resolve_anchors(flags: GlobalFlags) -> tuple[Path, Path | None]:
 class _ConfigSchema(BaseModel):
     """Minimal Pydantic schema for ``config validate``.
 
-    The minimal schema mirrors the section list in
-    ``docs/architecture/envelope.md`` "Config schema required sections".
-
-    The minimal contract is: every required top-level section listed in the
-    inventory is present and is a mapping (or, for the ``commands`` section,
-    a mapping). Deeper structure is left as ``dict[str, Any]``: this check
-    guards only that each required section is present and shaped.
+    Every section the built-in defaults ship is required and must be a
+    mapping; a section only a layer may state is optional. Deeper structure
+    is left as ``dict[str, Any]`` except where a strict section model
+    exists, so this check guards that each section is present and shaped.
     """
 
     # Pydantic v2 strict per AGENTS.md rule 2 — extra="forbid" on every model.
     model_config = ConfigDict(extra="forbid")
 
     schema_version: str = Field(pattern=r"^\d+\.\d+$")
-    # ``config`` top-level section currently holds ``layers_visible``;
-    # deeper per-key validation arrives in a later wave.
-    config: dict[str, Any] = Field(default_factory=dict)
-    cli: dict[str, Any]
-    project: dict[str, Any]
-    workspace: dict[str, Any]
     profiles: dict[str, Any]
     runtime: dict[str, Any]
     ui: dict[str, Any]
-    storage: dict[str, Any]
+    tui: dict[str, Any]
     research: dict[str, Any]
     planning: dict[str, Any]
     estimation: EstimationConfig
     audit: dict[str, Any]
     ship: dict[str, Any]
     review: dict[str, Any]
-    polish: dict[str, Any]
     flow: dict[str, Any]
-    memory: dict[str, Any]
     vcs: VcsConfig
-    worktrees: dict[str, Any]
     acceptance: dict[str, Any]
-    security: dict[str, Any]
-    hooks: dict[str, Any] = Field(default_factory=dict)
-    mcp: dict[str, Any]
-    statusline: dict[str, Any]
-    docs: dict[str, Any]
-    commands: dict[str, Any]
-    state_schema: dict[str, Any]
     # ``daemon`` section pairs with the ``state.mutate`` RPC. Treated as
     # ``dict[str, Any]`` until a later wave hardens the per-key contract
     # (see :mod:`eawf.kernel.config.defaults` for the shipped schema).
     daemon: dict[str, Any]
-    # New top-level sections. Each is a loose ``dict[str, Any]`` for
-    # now; per-key Pydantic contracts arrive in later waves (CLI
-    # surface + telemetry projector).
     telemetry: dict[str, Any] = Field(default_factory=dict)
     dispatch: dict[str, Any] = Field(default_factory=dict)
+    # ``economics`` has no shipped value: its consumer applies the shipped
+    # policy when no layer states one, and validates the table itself.
+    economics: dict[str, Any] = Field(default_factory=dict)
     # ``agents`` carries the per-role extra-tool grants the plugin renderers
     # merge into each subagent's declared allowlist. Validated by the strict
     # section model so a misspelled role fails here rather than at render.
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
-    language: dict[str, Any] = Field(default_factory=dict)
     verify: VerifyConfig = Field(default_factory=VerifyConfig)
     # ``preferences`` carries the operator-preference knob (auto_choose).
-    # Value-shape validation lives in the leaf
-    # catalog + PreferencesConfig; the composed schema only needs to accept
-    # the section so a default-bearing merge does not trip extra="forbid".
+    # Value-shape validation lives in the leaf catalog; the composed schema
+    # only needs to accept the section so a default-bearing merge does not
+    # trip extra="forbid".
     preferences: dict[str, Any] = Field(default_factory=dict)
-    # ``prose`` carries the doc-clarity prose-lint knobs (level,
-    # clarity_judge, block_on_lint). Value-shape validation + the
-    # tighten-only authority guard live in the leaf catalog + ProseConfig;
-    # the composed schema only needs to accept the section so a
-    # default-bearing merge does not trip extra="forbid".
-    prose: dict[str, Any] = Field(default_factory=dict)
     # ``prep`` carries the ``/prep`` runtime knobs (auto_resume). Value-shape
     # validation lives in the leaf catalog; the composed schema only needs to
     # accept the section so a default-bearing merge does not trip
@@ -315,7 +289,7 @@ def _save_value_to_layer(
 
     Args:
         target_path: Absolute path of the layer's ``config.yaml``.
-        key: Dotted config key (e.g. ``"vcs.auto_commit"``).
+        key: Dotted config key (e.g. ``"ui.theme"``).
         value: Typed value to write.
         repo_root: Absolute path of the repo root the layer belongs to
             (e.g. ``flags.workspace`` or ``Path.cwd()``). Forwarded to
@@ -434,7 +408,9 @@ def _unset_value_from_layer(
 @config_app.command("get")
 def config_get(
     ctx: typer.Context,
-    key: Annotated[str, typer.Argument(help="Dotted config key (e.g. 'planning.approval').")],
+    key: Annotated[
+        str, typer.Argument(help="Dotted config key (e.g. 'planning.max_parallel_waves').")
+    ],
     scope: Annotated[
         str | None,
         typer.Option("--scope", help="Restrict resolution to a single layer (debug)."),

@@ -6,9 +6,10 @@ feed is frozen and the blocks are exactly the authored history.
 Under a held read model the blocks are the Run's event lines in stream order rather than
 the prototype feed. Three things the native frame draws are things the prototype cannot:
 a range the daemon never received is a block of its own saying how many sequences are
-missing, the state row names the thinking state as derived because no event states it,
-and the sequence a contiguous read reaches is printed beside the block count. With no
-read model held the route draws its epoch-1 frame, which the golden contract replays.
+missing, the state row labels the thinking state derived when eawf inferred it for a
+provider with no start marker, and the sequence a contiguous read reaches is printed
+beside the block count. With no read model held the route draws its epoch-1 frame, which
+the golden contract replays.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from eawf.kernel.projection.transcript import (
     TranscriptBlock,
     TranscriptReadModel,
 )
+from eawf.kernel.projection.truth import TruthKind
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.derive import plural
@@ -305,8 +307,8 @@ NATIVE_GLYPH: Mapping[str, str] = MappingProxyType(
 #: drawn, with a mark saying the console does not recognise it.
 UNGLYPHED = "·"
 
-#: What the state row prints beside the thinking cell. No event states that an agent is
-#: thinking, so the frame never presents that inference as an observation.
+#: What the state row prints beside a thinking cell eawf inferred, so the frame never
+#: presents that inference as an observation.
 DERIVED_LABEL = "derived"
 
 #: What the block section says for a Run that has produced nothing.
@@ -476,8 +478,12 @@ def _state_rows(model: TranscriptReadModel, w: int) -> list[str]:
     cut, and without the state word the row above already printed.
     """
     thinking = value_cell(model.thinking)
+    state = f"{thinking.slot} {thinking.word}".rstrip()
+    # a turn a provider's own start marker opened is observed, and says nothing more
+    if model.thinking.truth_kind is TruthKind.DERIVED:
+        state += f" · {DERIVED_LABEL}"
     parts = [
-        f"{thinking.slot} {thinking.word}".rstrip() + f" · {DERIVED_LABEL}",
+        state,
         plural(len(model.blocks), "block"),
         plural(len(model.purged), "purged range"),
         f"contiguous through {group(model.last_contiguous_sequence)}",

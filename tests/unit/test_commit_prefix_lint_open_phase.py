@@ -283,7 +283,7 @@ def _model_prior_commit(mod: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     "staged",
     [
         ["tests/golden/state/closed_phase.json"],
-        ["tests/snapshots/tui/golden/modes_feed.svg", "tests/golden/agents_md/core_only.md"],
+        ["tests/snapshots/svg/golden/modes_feed.png", "tests/golden/agents_md/core_only.md"],
         ["tests/golden/surfaces/cli/scenarios/wave_close.txt"],
     ],
     ids=["one-golden", "two-surfaces", "nested-surface"],

@@ -103,6 +103,7 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     seed,
     seed_row,
 )
+from tests.tui.surfaces.tui.console import test_native_route_frames as native_frames
 from tests.tui.surfaces.tui.console.test_console_live_smoke import (
     _LoopbackClient as _StreamingClient,
 )
@@ -841,3 +842,46 @@ def test_ui_027_progress_is_counted_against_its_total_and_never_called_done(
         assert "%" not in row
         assert "complete" not in row.lower()
         assert "done" not in row.lower()
+
+
+# ---------- UI-025 / UI-026: a leg's progress is a labelled truth field ----------
+
+
+def test_ui_025_a_queued_leg_reads_not_started_and_an_executing_leg_is_labelled() -> None:
+    frame = native_frames._frame("unattended")
+    queued = next(row for row in frame if "RUN-00000002" in row)
+    running = next(row for row in frame if "RUN-00000001" in row)
+    assert "∅ not started" in queued
+    # an executing leg with no progress producer says unknown in words, never a bare mark
+    assert running.rstrip().endswith("? unknown")
+    assert "%" not in "\n".join(frame)
+
+
+def test_ui_026_progress_is_a_truth_field_that_carries_its_freshness() -> None:
+    model = native_frames._model("unattended")
+    running = next(row for row in model.rows if row.key == "RUN-00000001")
+    progress = running.field("progress")
+    assert isinstance(progress, TruthField)
+    assert isinstance(progress.freshness, Freshness)
+    assert progress.state is not TruthState.KNOWN
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="no producer states an executing leg's elapsed time, resolved timeout budget or "
+    "progress mode, so the queue row carries none of them and cannot say it is opaque",
+)
+def test_ui_025_an_executing_leg_renders_its_elapsed_budget_and_progress_mode() -> None:
+    running = next(row for row in native_frames._frame("unattended") if "RUN-00000001" in row)
+    assert "opaque" in running or " of " in running
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="no producer writes a stalled signal (the attention stalled bucket is a declared "
+    "hole) and progress freshness is never aged, so stale and stalled cannot be told apart",
+)
+def test_ui_026_a_stopped_read_is_stale_and_a_leg_that_stopped_advancing_is_stalled() -> None:
+    from eawf.kernel.projection.attention import BUCKET_SOURCES, AttentionBucket, BucketSource
+
+    assert BUCKET_SOURCES[AttentionBucket.STALLED] is not BucketSource.HOLE

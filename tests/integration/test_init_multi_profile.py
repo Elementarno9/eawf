@@ -6,7 +6,7 @@ Covers the C08 D7 surface contract:
   with the same composition order.
 - ``--template <name>`` reads the bundled YAML and deep-merges its keys
   into the canonical ``.ea/config.yaml`` (notably
-  ``dispatch.session_policy_default``).
+  ``planning.max_parallel_waves``).
 - ``--profile``, ``--profiles``, and ``--template`` are mutually
   exclusive — pass at most one.
 - ``--list-templates`` prints the bundled set and exits.
@@ -96,37 +96,37 @@ def test_profiles_csv_rejects_unknown_profile(tmp_path: Path) -> None:
 # ---- --template surface ----------------------------------------------------
 
 
-def test_template_research_writes_fresh_session_policy(tmp_path: Path) -> None:
-    """``--template research`` writes dispatch.session_policy_default: fresh."""
+def test_template_research_writes_its_profiles_and_parallelism(tmp_path: Path) -> None:
+    """``--template research`` writes its profiles and wave parallelism."""
     res = _invoke(tmp_path, "--template", "research")
     assert res.exit_code == 0, res.stdout
 
     cfg = yaml.safe_load((tmp_path / ".ea" / "config.yaml").read_text(encoding="utf-8"))
     assert cfg["profiles"]["enabled"] == ["core", "research"]
-    assert cfg["dispatch"]["session_policy_default"] == "fresh"
+    assert "dispatch" not in cfg
     assert cfg["planning"]["max_parallel_waves"] == 2
 
 
-def test_template_engineering_writes_fresh_session_policy(tmp_path: Path) -> None:
-    """``--template engineering`` writes dispatch.session_policy_default: fresh."""
+def test_template_engineering_writes_its_profiles_and_parallelism(tmp_path: Path) -> None:
+    """``--template engineering`` writes its profiles, parallelism and gate commands."""
     res = _invoke(tmp_path, "--template", "engineering")
     assert res.exit_code == 0, res.stdout
 
     cfg = yaml.safe_load((tmp_path / ".ea" / "config.yaml").read_text(encoding="utf-8"))
     assert cfg["profiles"]["enabled"] == ["core", "python"]
-    assert cfg["dispatch"]["session_policy_default"] == "fresh"
+    assert "dispatch" not in cfg
     assert cfg["planning"]["max_parallel_waves"] == 4
     assert cfg["acceptance"]["commands"]["tests"] == "uv run pytest"
 
 
-def test_template_reverse_engineering_writes_fresh_session_policy(tmp_path: Path) -> None:
-    """``--template reverse-engineering`` writes session_policy_default: fresh."""
+def test_template_reverse_engineering_writes_its_profiles_and_parallelism(tmp_path: Path) -> None:
+    """``--template reverse-engineering`` writes its profiles and wave parallelism."""
     res = _invoke(tmp_path, "--template", "reverse-engineering")
     assert res.exit_code == 0, res.stdout
 
     cfg = yaml.safe_load((tmp_path / ".ea" / "config.yaml").read_text(encoding="utf-8"))
     assert cfg["profiles"]["enabled"] == ["core", "research", "re"]
-    assert cfg["dispatch"]["session_policy_default"] == "fresh"
+    assert "dispatch" not in cfg
     assert cfg["planning"]["max_parallel_waves"] == 1
 
 

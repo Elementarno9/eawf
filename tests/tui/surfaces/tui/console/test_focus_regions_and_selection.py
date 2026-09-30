@@ -33,7 +33,13 @@ import pytest
 
 from eawf.kernel.projection.compute import KeyedPatch, RouteProjection, build_route_projection
 from eawf.kernel.projection.spine import ENTRY_ROUTE, SPINE_ROUTES, SpineView, build_spine_view
-from eawf.surfaces.tui.console.app import ConsoleApp, compose_frame
+from eawf.surfaces.tui.console.app import (
+    Body,
+    ConsoleApp,
+    KeybarRow,
+    ProjectionHeader,
+    compose_frame,
+)
 from eawf.surfaces.tui.console.attention import is_notice, open_actions
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch, siblings_of
@@ -50,6 +56,7 @@ from eawf.surfaces.tui.console.navigation import (
     regions_of,
     remember,
 )
+from eawf.surfaces.tui.console.overlays.resolution import ENDINGS, Ending
 from eawf.surfaces.tui.console.registry import (
     FOCUS_REGION_LIMIT,
     REGISTRY,
@@ -60,7 +67,7 @@ from eawf.surfaces.tui.console.registry import (
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.read_model import restore
 from eawf.surfaces.tui.console.seam import ProjectionSeam
-from eawf.surfaces.tui.console.session import BACK_CAP, BackEntry, Session
+from eawf.surfaces.tui.console.session import BACK_CAP, BackEntry, Session, SessionSetup
 from tests.tui.surfaces.tui.console import test_native_route_bodies as bodies
 from tests.tui.surfaces.tui.console import test_native_route_frames as frames
 
@@ -1101,3 +1108,91 @@ def test_con_152_the_row_cursor_is_a_text_caret(route: str) -> None:
     assert len(carets) <= 1
     if route != "run.detail":
         assert carets
+
+
+# ---------- CON-020: a target that no longer resolves opens its resolution card ----------
+
+
+def test_con_020_a_purged_target_opens_the_card_naming_its_ending_not_a_dead_route() -> None:
+    session = _session("history")
+    session.sel = 3
+    _press(session, "Enter")
+    assert session.route == "history"
+    assert session.overlay == "resolution"
+    assert session.resolution_ending == Ending.PURGED.value
+    rows = _draw(session)
+    assert rows[0].startswith(f" Eä ▸ resolution · {session.ov_subject}")
+    assert f" ENDING    {ENDINGS[Ending.PURGED].ending}" in "\n".join(rows)
+
+
+def test_con_020_escape_from_the_card_returns_to_the_row_it_was_opened_from() -> None:
+    session = _session("history")
+    session.sel = 3
+    _press(session, "Enter", "Escape")
+    assert (session.route, session.overlay, session.sel) == ("history", None, 3)
+
+
+# ---------- CON-025: three pointer bindings, each mirroring a key; the rest are no-ops ----------
+
+_POINTER_HANDLERS = re.compile(r"^_?on_(?:mouse|click|scroll|drag)")
+
+
+def _pointer_handlers(cls: type) -> set[str]:
+    return {name for name in vars(cls) if _POINTER_HANDLERS.match(name)}
+
+
+def test_con_025_the_breadcrumb_click_is_the_only_pointer_handler_the_console_binds() -> None:
+    assert _pointer_handlers(ConsoleApp) == set()
+    assert _pointer_handlers(ProjectionHeader) == {"on_click"}
+    for widget in (Body, KeybarRow):
+        assert _pointer_handlers(widget) == set(), widget
+
+
+def _driven(*gestures: tuple[str, tuple[int, int], int]) -> tuple[Any, Any, list[str], list[str]]:
+    async def body() -> tuple[Any, Any, list[str], list[str]]:
+        app = ConsoleApp(_fixture(), FakeClock())
+        async with app.run_test(size=(120, 30)) as pilot:
+            app.reset(SessionSetup(route="activity"))
+            await pilot.pause()
+            before, frame = app.session.projection(), list(app.frame_rows)
+            for gesture, offset, button in gestures:
+                if gesture == "double":
+                    await pilot.double_click("#body", offset=offset)
+                else:
+                    await pilot.click("#body", offset=offset, button=button)
+                await pilot.pause()
+            return before, app.session.projection(), frame, list(app.frame_rows)
+
+    return asyncio.run(body())
+
+
+def test_con_025_a_right_click_and_a_double_click_are_defined_no_ops() -> None:
+    before, after, frame, drawn = _driven(("click", (6, 4), 3), ("double", (6, 5), 1))
+    assert after == before
+    assert drawn == frame
+
+
+def test_con_025_the_breadcrumb_click_walks_to_the_step_as_escape_would() -> None:
+    async def body() -> tuple[str, str]:
+        app = ConsoleApp(_fixture(), FakeClock())
+        async with app.run_test(size=(120, 30)) as pilot:
+            app.reset(SessionSetup(route="activity"))
+            app.press_key("Enter")
+            await pilot.pause()
+            opened = app.session.route
+            row = app.frame_rows[0]
+            await pilot.click("#header", offset=(row.index("Activity") + 2, 0))
+            await pilot.pause()
+            return opened, app.session.route
+
+    assert asyncio.run(body()) == ("run.detail", "activity")
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="no pointer adapter maps a body click to a row or a bucket: only the breadcrumb "
+    "click is wired, so a row click selects nothing and a bucket click applies nothing",
+)
+def test_con_025_a_click_on_a_row_selects_it() -> None:
+    before, after, _frame, _drawn = _driven(("click", (6, 5), 1))
+    assert after["sel"] != before["sel"]

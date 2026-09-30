@@ -4,19 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from eawf.kernel.spec.common import OracleTier, _tier_for_gate_kind
 from eawf.workflow.audit_dsl import CHECK_REGISTRY, CheckResult, CheckSpec
-from eawf.workflow.verify.oracle import DETAIL_MAX_CHARS
+from eawf.workflow.audit_dsl.kinds.mockup_image_diff import LIVE_CAPTURE_SENTINEL
+from eawf.workflow.audit_dsl.kinds.retired_tui import RETIRED_TUI_DETAIL
 
 _GOLDEN_REL = "tests/snapshots/tui/golden/mockup_P30-I04-W08.txt"
-
-
-def _write_golden(root: Path, body: str) -> None:
-    target = root / _GOLDEN_REL
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(body + "\n", encoding="utf-8")
 
 
 def _run_mockup_check(args: dict[str, object], cwd: Path) -> CheckResult:
@@ -29,63 +22,26 @@ def test_mockup_golden_diff_registered_at_t5() -> None:
     assert _tier_for_gate_kind("mockup_golden_diff") is OracleTier.T5_GOLDEN
 
 
-def test_mockup_golden_diff_passes_when_capture_matches(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    expected = "+---+\n| built screen |\n+---+"
-    _write_golden(tmp_path, expected)
-    seen: dict[str, object] = {}
-
-    def _capture(**kwargs: object) -> str:
-        seen.update(kwargs)
-        return expected
-
-    monkeypatch.setattr(
-        "eawf.surfaces.tui.chassis.pilot_harness.capture_mockup_golden_screen_text_sync",
-        _capture,
-    )
-
+def test_mockup_golden_diff_text_mode_is_blocked_on_the_retired_tui(tmp_path: Path) -> None:
     result = _run_mockup_check(
-        {
-            "golden_path": _GOLDEN_REL,
-            "scope": "repo",
-            "mode": "home",
-            "key_sequence": ["question_mark", "escape"],
-            "size": [100, 30],
-        },
+        {"golden_path": _GOLDEN_REL, "scope": "repo", "mode": "home", "size": [100, 30]},
         tmp_path,
     )
-
-    assert result.status == "pass"
-    assert result.passed is True
-    assert result.details is not None
-    assert "screen matches mockup golden" in result.details
-    assert seen["scope"] == "repo"
-    assert seen["mode"] == "home"
-    assert seen["key_sequence"] == ["question_mark", "escape"]
-    assert seen["size"] == (100, 30)
+    assert (result.status, result.passed) == ("blocked", False)
+    assert result.details == RETIRED_TUI_DETAIL
 
 
-def test_mockup_golden_diff_fails_with_region_diff(
+def test_mockup_golden_diff_live_image_mode_is_blocked_on_the_retired_tui(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _write_golden(tmp_path, "+---+\n| expected |\n+---+")
-    monkeypatch.setattr(
-        "eawf.surfaces.tui.chassis.pilot_harness.capture_mockup_golden_screen_text_sync",
-        lambda **_kwargs: "+---+\n| actual |\n+---+",
+    mockup = tmp_path / "mockup.png"
+    mockup.write_bytes(b"not decoded: the live capture is refused first")
+    result = _run_mockup_check(
+        {"golden_path": _GOLDEN_REL, "mockup_png": "mockup.png", "tui_png": LIVE_CAPTURE_SENTINEL},
+        tmp_path,
     )
-
-    result = _run_mockup_check({"golden_path": _GOLDEN_REL}, tmp_path)
-
-    assert result.status == "fail"
-    assert result.passed is False
-    assert result.details is not None
-    assert "mockup golden mismatch" in result.details
-    assert "region=@@" in result.details
-    assert "-| expected |" in result.details
-    assert "+| actual |" in result.details
+    assert (result.status, result.passed) == ("blocked", False)
+    assert result.details == RETIRED_TUI_DETAIL
 
 
 def test_mockup_golden_diff_invalid_args_fail_not_raise(tmp_path: Path) -> None:
@@ -94,46 +50,12 @@ def test_mockup_golden_diff_invalid_args_fail_not_raise(tmp_path: Path) -> None:
     assert "invalid args" in (result.details or "")
 
 
-def test_mockup_golden_diff_detail_is_bounded_for_a_wholesale_divergence(
+def test_mockup_golden_diff_missing_mockup_png_fails_before_the_live_capture(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A full-width frame diverging wholesale yields a BOUNDED detail.
-
-    The line cap alone does not bound the payload -- a hundred-column frame
-    times the line cap is kilobytes -- and this detail travels on into the
-    close scorer's bounded ``detail`` field and a state-resident evidence
-    row. The header survives in full so the refusal still names the region.
-    """
-    _write_golden(tmp_path, "\n".join("e" * 100 for _ in range(60)))
-    monkeypatch.setattr(
-        "eawf.surfaces.tui.chassis.pilot_harness.capture_mockup_golden_screen_text_sync",
-        lambda **_kwargs: "\n".join("c" * 100 for _ in range(60)),
+    result = _run_mockup_check(
+        {"golden_path": _GOLDEN_REL, "mockup_png": "absent.png", "tui_png": LIVE_CAPTURE_SENTINEL},
+        tmp_path,
     )
-
-    result = _run_mockup_check({"golden_path": _GOLDEN_REL}, tmp_path)
-
     assert result.status == "fail"
-    assert result.details is not None
-    assert len(result.details) < DETAIL_MAX_CHARS
-    assert result.details.startswith("mockup golden mismatch")
-    assert "region=@@" in result.details
-    assert "diff truncated at" in result.details
-
-
-def test_mockup_golden_diff_detail_keeps_a_short_diff_whole(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A diff that fits the budget carries no truncation marker."""
-    _write_golden(tmp_path, "+---+\n| expected |\n+---+")
-    monkeypatch.setattr(
-        "eawf.surfaces.tui.chassis.pilot_harness.capture_mockup_golden_screen_text_sync",
-        lambda **_kwargs: "+---+\n| actual |\n+---+",
-    )
-
-    result = _run_mockup_check({"golden_path": _GOLDEN_REL}, tmp_path)
-
-    assert result.details is not None
-    assert "diff truncated" not in result.details
-    assert result.details.endswith("+---+")
+    assert "mockup_png=absent.png not found" in (result.details or "")

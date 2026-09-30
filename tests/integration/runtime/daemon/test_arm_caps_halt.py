@@ -1,14 +1,7 @@
-"""Tests: arm-form budget caps reach the DL-4 teeth + hard-halt.
+"""Tests: arm budget caps reach the DL-4 teeth + hard-halt.
 
-The W02 fix threads the arm form's derived EU / USD / waves caps + the hard-halt
-toggle into ``DriveParams`` rather than dropping them. These assertions bind the
-arm-form-derived figures to the daemon's existing DL-4 budget HALT so a
-budget-capped arm actually stops claiming at the cap, and a hard-halt arm reaps
-the in-flight lanes instead of draining them.
-
-The cap figures come from the arm form's own
-:func:`~eawf.surfaces.tui.screens.overlays.arm.build_arm_spec` budget tier, so
-the test proves the tier the operator picks reaches the daemon teeth end to end.
+A budget-capped arm stops claiming at the cap it was given, and a hard-halt arm
+reaps the in-flight lanes instead of draining them.
 """
 
 from __future__ import annotations
@@ -23,7 +16,6 @@ from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods import fleet as fleet_mod
 from eawf.runtime.daemon.methods.fleet import LaneDispatch, LaneSpend, arm_drive
 from eawf.runtime.runtimes.cancel import CancelResult
-from eawf.surfaces.tui.screens.overlays.arm import build_arm_spec
 from eawf.workflow.evidence._io import load_state
 
 pytestmark = pytest.mark.integration
@@ -152,22 +144,12 @@ class _PgidSpawner:
         return LaneDispatch(session_id=f"ses-{wave_id}", pgid=self._next_pgid)
 
 
-def test_strict_tier_waves_cap_halts_at_the_cap(tmp_path: Path) -> None:
-    """A strict-tier arm's waves cap reaches the DL-4 teeth and stops claiming.
+def test_waves_cap_halts_at_the_cap(tmp_path: Path) -> None:
+    """An arm's waves cap reaches the DL-4 teeth and stops claiming.
 
-    The arm form's ``strict`` budget tier derives ``waves_cap=4``; driving the
-    loop with that cap over a wider frontier HALTs once the claimed count hits
-    the cap, ending DONE/budget -- the cap the operator picked is load-bearing,
-    not dropped.
+    Driving the loop with ``waves_cap=4`` over a wider frontier HALTs once the
+    claimed count hits the cap, ending DONE/budget.
     """
-    spec = build_arm_spec(
-        scope="cross-repo",
-        budget="strict",
-        concurrency_option="1 lane",
-        risk_policy="auto-close, fork on fail",
-        convergence_option="drain to empty",
-    )
-    assert spec.waves_cap == 4
     state_path = _write_state(tmp_path)
     ctx = _ctx(state_path)
     spawner = _PgidSpawner()
@@ -176,7 +158,7 @@ def test_strict_tier_waves_cap_halts_at_the_cap(tmp_path: Path) -> None:
         ctx,
         frontier=list(_WAVE_IDS),  # 5 waves, wider than the strict cap of 4
         concurrency=1,
-        waves_cap=spec.waves_cap,
+        waves_cap=4,
         spawn=spawner,
         watch=lambda c, lane: "closed",
         spend=lambda c, wid: LaneSpend(eu=0.0, usd=0.0),
@@ -189,20 +171,12 @@ def test_strict_tier_waves_cap_halts_at_the_cap(tmp_path: Path) -> None:
     assert spawner.spawned == _WAVE_IDS[:4]
 
 
-def test_standard_tier_eu_cap_halts(tmp_path: Path) -> None:
-    """A standard-tier arm's EU cap reaches the DL-4 teeth.
+def test_eu_cap_halts(tmp_path: Path) -> None:
+    """An arm's EU cap reaches the DL-4 teeth.
 
-    The ``standard`` tier derives ``eu_cap=16.0``; with each lane spending 8.0
-    EU the cap fires after two lanes finish (16.0 >= 16.0), ending DONE/budget.
+    With ``eu_cap=16.0`` and each lane spending 8.0 EU the cap fires after two
+    lanes finish (16.0 >= 16.0), ending DONE/budget.
     """
-    spec = build_arm_spec(
-        scope="cross-repo",
-        budget="standard",
-        concurrency_option="2 lanes",
-        risk_policy="auto-close, fork on fail",
-        convergence_option="drain to empty",
-    )
-    assert spec.eu_cap == 16.0
     state_path = _write_state(tmp_path)
     ctx = _ctx(state_path)
     spawner = _PgidSpawner()
@@ -211,7 +185,7 @@ def test_standard_tier_eu_cap_halts(tmp_path: Path) -> None:
         ctx,
         frontier=list(_WAVE_IDS),
         concurrency=2,
-        eu_cap=spec.eu_cap,
+        eu_cap=16.0,
         spawn=spawner,
         watch=lambda c, lane: "closed",
         spend=lambda c, wid: LaneSpend(eu=8.0, usd=0.0),
@@ -227,19 +201,10 @@ def test_hard_halt_arm_reaps_in_flight_lanes_at_cap(
 ) -> None:
     """A hard-halt arm reaps the in-flight lanes at the cap instead of draining.
 
-    The ``hard-halt`` risk policy sets ``hard_halt=True``; with a budget cap that
-    fires mid-round the loop KILLS the still-in-flight lanes (DL-3) rather than
-    draining them. The group-signal seam is patched so no real signal lands.
+    With ``hard_halt=True`` and a budget cap that fires mid-round the loop KILLS
+    the still-in-flight lanes (DL-3) rather than draining them. The group-signal
+    seam is patched so no real signal lands.
     """
-    spec = build_arm_spec(
-        scope="cross-repo",
-        budget="strict",
-        concurrency_option="2 lanes",
-        risk_policy="auto-close, hard-halt on fail",
-        convergence_option="drain to empty",
-    )
-    assert spec.hard_halt is True
-    assert spec.eu_cap == 4.0
     state_path = _write_state(tmp_path)
     ctx = _ctx(state_path)
     spawner = _PgidSpawner()
@@ -262,8 +227,8 @@ def test_hard_halt_arm_reaps_in_flight_lanes_at_cap(
         ctx,
         frontier=list(_WAVE_IDS),
         concurrency=2,
-        eu_cap=spec.eu_cap,
-        hard_halt=spec.hard_halt,
+        eu_cap=4.0,
+        hard_halt=True,
         spawn=spawner,
         watch=lambda c, lane: "closed",
         spend=lambda c, wid: next(spends),

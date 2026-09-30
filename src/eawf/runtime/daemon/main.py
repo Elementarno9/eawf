@@ -47,6 +47,7 @@ from eawf.runtime.daemon.idle import IdleTimeoutWatchdog
 from eawf.runtime.daemon.limits import (
     MUTATION_HARD_LIMIT_SECONDS,
     READINESS_BUDGET_SECONDS,
+    configured_daemon_seconds,
     configured_juror_wall_clock,
     mutation_hard_limit_for,
 )
@@ -96,49 +97,57 @@ DEFAULT_DAEMON_LOG_BACKUP_COUNT: int = 5
 DAEMON_ERR_LOG_NAME: str = "eawfd.err"
 
 
-def _resolve_idle_timeout() -> float:
-    """Return the configured idle timeout in seconds.
+def _bound_repo(ctx: MethodContext) -> Path | None:
+    """Return the repository the daemon is bound to, or ``None`` when it holds no tree."""
+    return None if ctx.state_path is None else Path(ctx.state_path).parent.parent
 
-    The env var ``EAWF_DAEMON_IDLE_TIMEOUT`` lets the operator override
-    the default for testing + tuning; the canonical config surface
-    lands in a later layered-config wave. A non-positive override falls
-    back to the default and logs a warning.
+
+def _resolve_idle_timeout(ctx: MethodContext) -> float:
+    """Return the idle timeout in seconds: the env override, else ``daemon.idle_timeout_seconds``.
+
+    The env var ``EAWF_DAEMON_IDLE_TIMEOUT`` wins so a test or a tuning run
+    can override the layered config. A non-positive override falls back to
+    the configured value and logs a warning.
+
+    Args:
+        ctx: The server context whose bound repository's config is read.
     """
     raw = os.environ.get("EAWF_DAEMON_IDLE_TIMEOUT")
-    if not raw:
-        return DEFAULT_IDLE_TIMEOUT_SECONDS
-    try:
-        value = float(raw)
-    except ValueError:
-        logger.warning(f"_resolve_idle_timeout unparseable raw={raw!r}; using default")
-        return DEFAULT_IDLE_TIMEOUT_SECONDS
-    if value <= 0:
-        logger.warning(f"_resolve_idle_timeout non-positive raw={raw!r}; using default")
-        return DEFAULT_IDLE_TIMEOUT_SECONDS
-    return value
+    if raw:
+        try:
+            value = float(raw)
+        except ValueError:
+            logger.warning(f"_resolve_idle_timeout unparseable raw={raw!r}; using config")
+        else:
+            if value > 0:
+                return value
+            logger.warning(f"_resolve_idle_timeout non-positive raw={raw!r}; using config")
+    configured = configured_daemon_seconds(_bound_repo(ctx), "idle_timeout_seconds")
+    return DEFAULT_IDLE_TIMEOUT_SECONDS if configured is None else float(configured)
 
 
-def _resolve_session_ttl_seconds() -> int:
-    """Return the configured session-handle TTL in seconds.
+def _resolve_session_ttl_seconds(ctx: MethodContext) -> int:
+    """Return the session-handle TTL: the env override, else ``daemon.session_handle_ttl_seconds``.
 
-    The env var ``EAWF_DAEMON_SESSION_TTL`` lets the operator override
-    the default for testing + tuning; the canonical layered-config
-    surface (``config.daemon.session_handle_ttl_seconds``) lands when
-    the daemon main reads merged config. A non-positive override falls
-    back to the default and logs a warning.
+    The env var ``EAWF_DAEMON_SESSION_TTL`` wins so a test or a tuning run
+    can override the layered config. A non-positive override falls back to
+    the configured value and logs a warning.
+
+    Args:
+        ctx: The server context whose bound repository's config is read.
     """
     raw = os.environ.get("EAWF_DAEMON_SESSION_TTL")
-    if not raw:
-        return DEFAULT_TTL_SECONDS
-    try:
-        value = int(raw)
-    except ValueError:
-        logger.warning(f"_resolve_session_ttl_seconds unparseable raw={raw!r}; using default")
-        return DEFAULT_TTL_SECONDS
-    if value <= 0:
-        logger.warning(f"_resolve_session_ttl_seconds non-positive raw={raw!r}; using default")
-        return DEFAULT_TTL_SECONDS
-    return value
+    if raw:
+        try:
+            value = int(raw)
+        except ValueError:
+            logger.warning(f"_resolve_session_ttl_seconds unparseable raw={raw!r}; using config")
+        else:
+            if value > 0:
+                return value
+            logger.warning(f"_resolve_session_ttl_seconds non-positive raw={raw!r}; using config")
+    configured = configured_daemon_seconds(_bound_repo(ctx), "session_handle_ttl_seconds")
+    return DEFAULT_TTL_SECONDS if configured is None else configured
 
 
 def _resolve_log_max_bytes() -> int:
@@ -522,7 +531,7 @@ def _schedule_session_ttl_sweep(ctx: MethodContext) -> asyncio.Task[None] | None
     """
     if ctx.state_path is None or epoch_marker_present(Path(ctx.state_path).parent):
         return None
-    ttl_seconds = _resolve_session_ttl_seconds()
+    ttl_seconds = _resolve_session_ttl_seconds(ctx)
     publish = ctx.bus.publish if ctx.bus is not None else None
     assert isinstance(ctx.shutdown_event, asyncio.Event)
     return asyncio.create_task(
@@ -809,7 +818,7 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
             loop.add_signal_handler(sig, _request_shutdown)
 
     assert isinstance(ctx.shutdown_event, asyncio.Event)
-    idle_timeout = _resolve_idle_timeout()
+    idle_timeout = _resolve_idle_timeout(ctx)
     watchdog = _build_watchdog(ctx, idle_timeout)
     watchdog_task = asyncio.create_task(watchdog.run(ctx.shutdown_event))
     ttl_task = _schedule_session_ttl_sweep(ctx)
@@ -896,7 +905,7 @@ async def _run_windows_server(ctx: MethodContext) -> None:
     logger.info(f"_run_windows_server bound pipe={pipe_server.pipe_path!r}")
 
     assert isinstance(ctx.shutdown_event, asyncio.Event)
-    idle_timeout = _resolve_idle_timeout()
+    idle_timeout = _resolve_idle_timeout(ctx)
     watchdog = _build_watchdog(ctx, idle_timeout)
     watchdog_task = asyncio.create_task(watchdog.run(ctx.shutdown_event))
     ttl_task = _schedule_session_ttl_sweep(ctx)

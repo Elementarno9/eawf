@@ -55,7 +55,7 @@ BRANCH = "probe"
 PROBE_KEY = "probe.leaf"
 
 #: A catalog key the route files under a section, so the frames can put the cursor on it.
-CATALOG_KEY = "prose.level"
+CATALOG_KEY = "audit.default_level"
 
 #: A key the built-in defaults state, so its stack always carries that floor.
 FLOOR_KEY = "schema_version"
@@ -277,13 +277,13 @@ def test_a_layer_with_no_file_is_not_created_by_reading_it(tree: Path) -> None:
 
 def test_the_settings_frame_shows_each_key_with_the_layer_that_set_it(tree: Path) -> None:
     """The route answers both questions on one row: what is in force, and who set it."""
-    _write(tree / ".ea" / "config.yaml", "prose:\n  level: strict\n")
-    _write(tree / ".ea" / "local" / "config.yaml", "prose:\n  level: loose\n")
+    _write(tree / ".ea" / "config.yaml", "audit:\n  default_level: deep\n")
+    _write(tree / ".ea" / "local" / "config.yaml", "audit:\n  default_level: quick\n")
     view = _view(tree)
 
-    row = _leaf_row(_frame("settings", view, key=CATALOG_KEY), "level ")
+    row = _leaf_row(_frame("settings", view, key=CATALOG_KEY), "default_level ")
 
-    assert "loose" in row
+    assert "quick" in row
     assert "local" in row
 
 
@@ -299,16 +299,16 @@ def test_a_leaf_off_the_catalog_is_counted_rather_than_dropped(tree: Path) -> No
 
 def test_the_stack_card_draws_the_focused_keys_whole_ladder(tree: Path) -> None:
     """The card is the same read as the route, so the two cannot disagree."""
-    _write(tree / ".ea" / "config.yaml", "prose:\n  level: strict\n")
-    _write(tree / ".ea" / "local" / "config.yaml", "prose:\n  level: loose\n")
+    _write(tree / ".ea" / "config.yaml", "audit:\n  default_level: deep\n")
+    _write(tree / ".ea" / "local" / "config.yaml", "audit:\n  default_level: quick\n")
     view = _view(tree)
 
     body = "\n".join(_frame("settings.stack", view, key=CATALOG_KEY))
 
     assert CATALOG_KEY in body
     assert "in force from local" in body
-    assert "strict" in body
-    assert "repo sets strict, and the local layer above it wins." in body
+    assert "deep" in body
+    assert "repo sets deep, and the local layer above it wins." in body
 
 
 def test_both_settings_frames_read_one_view(tree: Path) -> None:

@@ -10,14 +10,18 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Final
 
 import click
 import pytest
 import typer
+from pydantic import ValidationError
 
+from eawf.surfaces.cli import flag_day_gate
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.flag_day import EPOCH1_REPLACEMENTS, replacement_guidance
+from eawf.surfaces.cli.verb_catalog import CLI_VERB_EFFECTS
 
 pytestmark = pytest.mark.contract
 
@@ -174,3 +178,109 @@ def test_rel_021_guidance_for_a_path_outside_the_census_points_at_the_native_nou
     assert replacement_guidance(path) == (
         "use the epoch-2 verbs instead (eawf milestone|batch|task|run --help)"
     )
+
+
+# ---- REL-021: the plain-epoch-1-tree gate ------------------------------------
+
+#: The unclassified verbs, read from the gate's typed list.
+UNCLASSIFIED_LEAVES: Final = frozenset(flag_day_gate.UNCLASSIFIED_VERBS)
+
+
+def test_rel_021_every_leaf_is_classified_for_the_epoch1_gate(
+    leaves: dict[str, click.Command],
+) -> None:
+    """A new verb must be classified (or pinned unclassified) before it ships."""
+    classified = set(CLI_VERB_EFFECTS) | set(EPOCH1_REPLACEMENTS)
+    epoch1 = {path for path, cmd in leaves.items() if _handler_module(cmd) in EPOCH1_MODULES}
+    unknown = sorted(set(leaves) - classified - epoch1 - UNCLASSIFIED_LEAVES)
+    stale = sorted(UNCLASSIFIED_LEAVES - set(leaves))
+    assert unknown == [], "leaves the epoch-1 gate cannot classify"
+    assert stale == []
+    assert len(flag_day_gate.UNCLASSIFIED_VERBS) == len(UNCLASSIFIED_LEAVES)
+    assert sorted(UNCLASSIFIED_LEAVES & classified) == []
+
+
+def test_rel_021_every_mutating_verb_is_refused_or_exempt() -> None:
+    mutating = {v for v, eff in CLI_VERB_EFFECTS.items() if eff.effect_class != "read"}
+    mutating |= set(EPOCH1_REPLACEMENTS)
+    assert mutating == set(flag_day_gate.mutating_verbs())
+    neither = sorted(mutating - flag_day_gate.refused_verbs() - flag_day_gate.exempt_verbs())
+    assert neither == []
+    assert flag_day_gate.refused_verbs() & flag_day_gate.exempt_verbs() == frozenset()
+
+
+def test_rel_021_every_exemption_is_a_live_path_with_a_reason() -> None:
+    root = typer.main.get_command(app)
+    assert isinstance(root, click.Group)
+    ctx = click.Context(root)
+    for row in flag_day_gate.FLAG_DAY_EXEMPTIONS:
+        assert row.reason.strip(), row.verb
+        assert flag_day_gate.command_path(root, ctx, row.verb.split()) == row.verb
+    verbs = [row.verb for row in flag_day_gate.FLAG_DAY_EXEMPTIONS]
+    assert len(verbs) == len(set(verbs))
+
+
+def test_rel_021_exemptions_are_the_migration_support_and_registry_verbs() -> None:
+    assert flag_day_gate.exempt_verbs() == {
+        "daemon replay-wal",
+        "daemon stop",
+        "migrate",
+        "migrate epoch2",
+        "session close",
+        "session recover",
+        "workspace add",
+        "workspace member add",
+        "workspace member remove",
+        "workspace select",
+        "worktree cleanup",
+        "worktree merge-back",
+        "worktree reconcile",
+    }
+
+
+def test_rel_021_only_workspace_registry_verbs_are_registry_only() -> None:
+    registry_only = {
+        row.verb for row in flag_day_gate.FLAG_DAY_EXEMPTIONS if row.kind == "registry_only"
+    }
+    assert registry_only == {
+        "workspace add",
+        "workspace member add",
+        "workspace member remove",
+        "workspace select",
+    }
+
+
+def test_rel_021_the_exemption_row_is_a_closed_model() -> None:
+    with pytest.raises(ValidationError):
+        flag_day_gate.FlagDayExemption.model_validate({"verb": "x", "reason": "y", "extra": 1})
+    with pytest.raises(ValidationError):
+        flag_day_gate.FlagDayExemption(verb="x", reason="")
+    with pytest.raises(ValidationError):
+        flag_day_gate.FlagDayExemption.model_validate({"verb": "x", "kind": "any", "reason": "y"})
+
+
+def test_auth_049_the_workspace_pointer_verbs_are_gone(leaves: dict[str, click.Command]) -> None:
+    retired = {
+        "repo link",
+        "repo link-workspace",
+        "workspace add-repo",
+        "workspace init",
+        "workspace remove-repo",
+        "workspace status",
+        "workspace validate",
+    }
+    assert sorted(retired & set(leaves)) == []
+    assert sorted(retired & set(CLI_VERB_EFFECTS)) == []
+
+
+#: How many modules may lift the gate today; the number only goes down.
+EPOCH1_CLI_SURFACE_CEILING: Final = 91
+
+
+def test_rel_021_the_epoch1_cli_surface_list_only_shrinks() -> None:
+    from tests._epoch1_cli_surface import EPOCH1_CLI_SURFACE_MODULES
+
+    root = Path(__file__).resolve().parents[4]
+    assert len(EPOCH1_CLI_SURFACE_MODULES) <= EPOCH1_CLI_SURFACE_CEILING
+    assert sorted(m for m in EPOCH1_CLI_SURFACE_MODULES if not (root / m).is_file()) == []
+    assert not any("rel_021" in m for m in EPOCH1_CLI_SURFACE_MODULES)

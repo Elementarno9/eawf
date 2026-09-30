@@ -8,13 +8,14 @@ hang together correctly.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from packaging.version import Version
 from typer.testing import CliRunner
 
 import eawf
 from eawf.surfaces.cli.app import app
-from eawf.surfaces.render.brand import ACCENT_HEX, accent_sgr
+from eawf.surfaces.tui.launch import TERMINAL_ENTRY_EXIT_CODE
 
 runner = CliRunner()
 
@@ -40,19 +41,17 @@ def test_unknown_command_exits_with_code_2() -> None:
     assert result.exit_code == 2
 
 
-def test_bare_invocation_prints_banner() -> None:
-    """``eawf`` with no subcommand routes to the TUI surface.
+def test_bare_invocation_routes_to_the_console_launch(tmp_path: Path) -> None:
+    """``eawf`` with no subcommand routes to the console's launch.
 
-    Off-TTY (CliRunner has no real terminal) the TUI falls back to the
-    deterministic status text. Per D-BRAND-MARK the brand mark leads the
-    header: the ``◉`` accent glyph, a space, then the two-tone ``Eä``
-    wordmark (the brand accent SGR sits between the ``E`` and the ``ä``).
-    The assert pins the exact ``◉ E<accent-sgr>ä`` byte run the brand
-    renderer emits.
+    Off-TTY (CliRunner has no real terminal) the launch writes the console's plain
+    frame; a folder holding no tree is a terminal entry state, so it exits 4 and
+    hands over the command that makes one.
     """
-    result = runner.invoke(app, [])
-    assert result.exit_code == 0
-    assert result.stdout.startswith(f"◉ E{accent_sgr(ACCENT_HEX)}ä")
+    result = runner.invoke(app, ["-w", str(tmp_path)])
+    assert result.exit_code == TERMINAL_ENTRY_EXIT_CODE
+    assert result.stderr.startswith("eawf ui: ")
+    assert "eawf init" in result.stderr
 
 
 def test_version_text_envelope() -> None:

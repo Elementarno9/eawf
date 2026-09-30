@@ -12,7 +12,7 @@ from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
-from eawf.surfaces.tui.console.overlays.chassis import cursor_foot
+from eawf.surfaces.tui.console.overlays.chassis import crumb, cursor_foot
 from eawf.surfaces.tui.console.reads import can_mutate
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import pad
@@ -89,7 +89,7 @@ def render(view: View) -> list[str]:
     )
     has = draft.has
     rows = [
-        header(view, f" Eä ▸ {fx.scope} ▸ Backlog ▸ {did}"),
+        header(view, crumb("draft", did)),
         " a draft is not work until it can be promoted",
         bar(w),
         " DRAFT     " + did,

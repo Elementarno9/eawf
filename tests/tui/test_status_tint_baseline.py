@@ -19,8 +19,8 @@ and the green ``status-closed``.
 
 from __future__ import annotations
 
+from eawf.surfaces.tui.chassis.status_tint import BAND_HEX, STATUS_COLOURS
 from eawf.surfaces.tui.chassis.theme import WONG_VARIABLES
-from eawf.surfaces.tui.widgets.status_tint import BAND_HEX, STATUS_COLOURS
 
 #: The documented Wong deuteranopia-safe lifecycle tints, with the pending
 #: grey bound to the packet oracle. Hardcoded (not derived) so a WONG

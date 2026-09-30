@@ -94,8 +94,7 @@ jobs:
         # Ubuntu-only: coverage + the T5 svg_pixel_diff pixel-diff leg run on
         # the ubuntu leg alone, so the pinned renderer is installed there. On
         # the macOS leg the ~8 resvg-oracle tests skip cleanly via their
-        # ``shutil.which("resvg")`` guards (tests/snapshots/svg/*.py and
-        # tests/integration/test_p30_i20_w17.py).
+        # ``shutil.which("resvg")`` guards (tests/snapshots/svg/*.py).
         if: startsWith(matrix.os, 'ubuntu-')
         # CI tool manifest pin for the svg_pixel_diff audit-DSL kind.
         # resvg renders bit-identically across hosts once fonts are
@@ -133,19 +132,6 @@ jobs:
         # clean whatever they did, so a known flake never reds the build.
         if: startsWith(matrix.os, 'ubuntu-')
         run: uv run pytest -n0 --quarantine-lane
-      - name: Pytest (TUI render snapshots)
-        # Four workers, not serial: each test builds its own event loop and
-        # offscreen driver inside app.run_test(), so there is no shared
-        # terminal to contend over. Measured 231s serial vs 90s at -n 4 over
-        # three consecutive green runs. Four rather than `auto` so a
-        # small-core runner does not thrash.
-        # Same ubuntu-only coverage gating; --cov-append extends the parallel
-        # leg's data file on ubuntu, macOS runs the suite without --cov.
-        # The console golden contract is ignored here and owned by
-        # console-replay.yaml: it must replay 25 journeys then 261 frames in one
-        # app instance, so sharding it over four workers would give each worker
-        # its own reset and prove less than the dedicated single-process job.
-        run: uv run pytest -n 4 tests/snapshots/tui --ignore=tests/snapshots/tui/console ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report=xml --cov-fail-under=0' || '' }}
       - name: Pytest (serial perf timing)
         # Stays serial on purpose: these assert p99 latency and a cold-import
         # wall-time ceiling, so a contended machine changes the number being

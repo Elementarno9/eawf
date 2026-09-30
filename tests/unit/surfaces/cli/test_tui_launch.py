@@ -1,9 +1,9 @@
-"""``eawf ui``'s authority switch: which app opens, ``--verbose``, and SURF-085's exit 4.
+"""``eawf ui``'s launch: where the console opens, ``--verbose``, and SURF-085's exit 4.
 
 Pins the launch contract at :func:`eawf.surfaces.tui.launch.launch_tui`, the library
 :func:`eawf.surfaces.cli.app._dispatch_tui` delegates to: an epoch-2 tree opens the
-native console over a live seam, an epoch-1 tree keeps the classic ``EaApp``, and a
-canary tree stuck mid-migration exits 4 off a TTY rather than opening either. No test
+console over a live seam, an epoch-1 tree opens it on the migration-required state, and
+a canary tree stuck mid-migration exits 4 off a TTY rather than opening it. No test
 here starts a live daemon or an interactive Textual run -- construction is verified by
 monkeypatching the one function (:func:`eawf.surfaces.tui.launch._run_console`) that
 would otherwise drive a real event loop.
@@ -84,12 +84,6 @@ def test_tui_opens_console_on_native_tree(monkeypatch: pytest.MonkeyPatch, tmp_p
     calls: list[tuple[object, object]] = []
     monkeypatch.setattr(launch, "_run_console", lambda app, seam: calls.append((app, seam)) or 0)
 
-    def _no_epoch1(**_kwargs: object) -> int:
-        # The epoch is declared inside ``.ea``; resolving it anywhere else reads epoch 1.
-        raise AssertionError("an epoch-2 tree opened the epoch-1 app")
-
-    monkeypatch.setattr(launch, "_launch_epoch1", _no_epoch1)
-
     rc = launch.launch_tui(workspace=None, no_input=False, plain=False, verbose=False)
 
     assert rc == 0
@@ -122,32 +116,29 @@ def test_tui_verbose_reserves_trace_row(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
 
 # --------------------------------------------------------------------------
-# CR-01: an epoch-1 tree keeps EaApp, with a one-line notice.
+# An epoch-1 tree opens the console on the migration-required state.
 # --------------------------------------------------------------------------
 
 
-def test_tui_epoch1_tree_keeps_epoch1_app(
+def test_tui_epoch1_tree_opens_the_console_on_migration_required(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    (tmp_path / ".ea").mkdir()
+    (tmp_path / ".ea" / "state.json").write_text("{}")
     monkeypatch.setenv("EA_STATE", str(tmp_path / ".ea" / "state.json"))
     _set_isatty(monkeypatch, value=True)
 
-    calls = {"epoch1": 0, "console": 0}
-    monkeypatch.setattr(
-        "eawf.surfaces.tui.app.run_app",
-        lambda scope, state_path: calls.__setitem__("epoch1", calls["epoch1"] + 1) or 0,
-    )
-    monkeypatch.setattr(
-        launch,
-        "_run_console",
-        lambda app, seam: calls.__setitem__("console", calls["console"] + 1) or 0,
-    )
+    from eawf.surfaces.tui.console.app import ConsoleApp
+
+    apps: list[ConsoleApp] = []
+    monkeypatch.setattr(launch, "_run_console", lambda app, seam: apps.append(app) or 0)
 
     rc = launch.launch_tui(workspace=None, no_input=False, plain=False)
 
-    assert rc == 0
-    assert calls == {"epoch1": 1, "console": 0}
-    assert launch.EPOCH1_NOTICE in capsys.readouterr().err
+    assert rc == launch.TERMINAL_ENTRY_EXIT_CODE
+    (app,) = apps
+    assert app.session.entry_sel == launch._entry_sel(load_chrome(), "migration")
+    assert "eawf migrate epoch2 --plan" in capsys.readouterr().err
 
 
 # --------------------------------------------------------------------------
@@ -183,10 +174,6 @@ def test_tui_migration_required_exits_4_off_tty(
 
     called = {"n": 0}
     monkeypatch.setattr(launch, "_run_console", lambda app, seam: called.__setitem__("n", 1) or 0)
-    monkeypatch.setattr(
-        "eawf.surfaces.tui.chassis.offline.emit_status",
-        lambda **_kwargs: called.__setitem__("n", 1) or 0,
-    )
 
     rc = launch.launch_tui(workspace=None, no_input=False, plain=False)
 
@@ -260,17 +247,19 @@ def test_an_epoch2_tree_named_outright_opens_on_the_resolving_layer(
 
 
 def test_an_undeclared_epoch1_tree_is_not_resolved_through_the_registry(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """An ordinary epoch-1 tree keeps the classic app, whatever the registry holds."""
+    """An ordinary epoch-1 tree lands on migration-required whatever the registry holds."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("EA_STATE", raising=False)
-    _set_isatty(monkeypatch, value=True)
-    monkeypatch.setattr(launch, "_launch_epoch1", lambda **_kwargs: 0)
-    monkeypatch.setattr(launch, "_run_console", lambda app, seam: 1 / 0)
+    (tmp_path / ".ea").mkdir()
+    (tmp_path / ".ea" / "state.json").write_text("{}")
+    _set_isatty(monkeypatch, value=False)
 
-    assert launch.launch_tui(workspace=None, no_input=False, plain=False) == 0
+    assert launch.launch_tui(workspace=None, no_input=False, plain=False) == 4
+    migration = next(state for state in load_chrome().entry if state.id == "migration")
+    assert capsys.readouterr().err.startswith(f"eawf ui: {migration.title}")
 
 
 def test_hand_over_names_the_title_and_skips_an_empty_command() -> None:

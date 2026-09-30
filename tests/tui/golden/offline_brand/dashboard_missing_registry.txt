@@ -17,5 +17,3 @@ git
 
 backlog
   repos tracked: 0
-
-keymap: ↑↓ select  ·  Enter open  ·  w/r/u scope  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit

@@ -1,9 +1,8 @@
 """A console route is one registry row, and the reachability audit is green.
 
 Adding a trivial route row changes no other console module (header, keybar and token
-modules included) and no epoch-1 ``theme.tcss`` rule, every derived index picks the row
-up, and every route has a door, with the pack's ``timeline`` keyed ``roadmap`` and
-``notifications`` a global route.
+modules included), every derived index picks the row up, and every route has a door,
+with the pack's ``timeline`` keyed ``roadmap`` and ``notifications`` a global route.
 """
 
 from __future__ import annotations
@@ -32,21 +31,9 @@ from eawf.surfaces.tui.console.registry import (
 )
 
 CONSOLE_DIR = Path(registry.__file__).resolve().parent
-THEME_TCSS = CONSOLE_DIR.parent / "theme.tcss"
 TESTS_ROOT = Path(__file__).resolve().parents[4]
 NORMALISATION_MAP = TESTS_ROOT / "fixtures" / "console" / "golden" / "normalisation-map.json"
 CHASSIS_REGISTRY = "tests.snapshots.tui.console.console_chassis.chassis.registry"
-
-# Epoch-1 UserScreen and placeholder rules that stay until the release candidate retires them.
-EPOCH1_SELECTORS = (
-    ".section {",
-    ".section-title {",
-    "#attention {",
-    "#effort {",
-    "#portfolio {",
-    ".placeholder-notice {",
-    ".feed-empty {",
-)
 
 HOME = Escape(route="scope.home")
 
@@ -72,14 +59,12 @@ def _row(route: str, group: RouteGroup, **columns: object) -> RouteSpec:
 
 
 def _shared_digest() -> dict[str, str]:
-    """Return the digest of every console module but the registry, plus the stylesheet."""
+    """Return the digest of every console module but the registry."""
     paths = [p for p in sorted(CONSOLE_DIR.rglob("*.py")) if p.name != "registry.py"]
-    digests = {
+    return {
         p.relative_to(CONSOLE_DIR).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
         for p in paths
     }
-    digests["theme.tcss"] = hashlib.sha256(THEME_TCSS.read_bytes()).hexdigest()
-    return digests
 
 
 Index = dict[str, object] | tuple[str, ...]
@@ -110,13 +95,11 @@ def _without(index: Index, route: str) -> Index:
 
 def test_route_registry_trivial_row_changes_no_shared_module() -> None:
     before = _shared_digest()
-    assert {"tokens.py", "width.py", "session.py", "theme.tcss"} <= set(before)
+    assert {"tokens.py", "width.py", "session.py"} <= set(before)
     extended = RouteRegistry((*ROUTES, TRIVIAL))
     assert extended.by_id["spike.trivial"] is TRIVIAL
     assert _shared_digest() == before
     assert REGISTRY.routes == ROUTES
-    tcss = THEME_TCSS.read_text(encoding="utf-8")
-    assert [s for s in EPOCH1_SELECTORS if s not in tcss] == []
 
 
 def test_route_registry_trivial_row_reaches_every_index() -> None:
@@ -148,7 +131,7 @@ def test_unreachable_routes_registry_is_green() -> None:
     assert unreachable_routes(ROUTES) == ()
     assert len(REGISTRY.routes) == 34
     assert "".join(sorted(REGISTRY.go_map)) == "abdhilnrstuy"
-    assert len(REGISTRY.route_list) == 14
+    assert len(REGISTRY.route_list) == 13
 
 
 @pytest.mark.parametrize("route", REGISTRY.ids)

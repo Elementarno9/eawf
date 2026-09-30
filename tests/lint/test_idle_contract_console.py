@@ -8,7 +8,7 @@ the exact gap that let the console (``ConsoleApp``) ship for a whole phase
 with no launcher: a hand-registered, one-off check would have caught only
 that one class, not a future screen shaped the same way.
 
-Three groups: the real tree (both ``ConsoleApp`` and ``EaApp`` are wired),
+Three groups: the real tree (``ConsoleApp`` is wired and the only App),
 a minimal synthetic fixture tree proving the rule fires on the exact seeded
 defect and clears once fixed, and the ``tools/idle_contract_gate.py``
 wrapper (``check_console_app_construction_wired``) that turns the finding
@@ -107,9 +107,9 @@ def test_real_tree_has_every_app_subclass_constructed() -> None:
     assert find_unconstructed_console_apps() == []
 
 
-def test_real_tree_discovers_both_console_and_epoch1_apps() -> None:
+def test_real_tree_discovers_only_the_console_app() -> None:
     apps = find_app_subclasses(_REPO_ROOT / TUI_SURFACE_ROOT)
-    assert {"ConsoleApp", "EaApp"} <= set(apps)
+    assert set(apps) == {"ConsoleApp"}
 
 
 # --------------------------------------------------------------------------- #

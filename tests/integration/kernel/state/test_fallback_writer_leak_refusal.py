@@ -7,7 +7,7 @@ chokepoint already run
 validating a mutated payload and persisting it. The fallback writer that
 runs when the daemon is unavailable --
 :func:`eawf.kernel.state.io.commit_mutation` -- did not, and neither did the
-scattered direct read-modify-write helpers (CLI project/workspace init,
+scattered direct read-modify-write helpers (CLI project init,
 ``config profile enable``, the migration chain's canonical write, a doctor
 repair, dispatch-runner token accrual, session-store reconcile/exit-stamp)
 that persist ``state.json`` without going through either chokepoint.

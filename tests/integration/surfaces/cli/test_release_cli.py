@@ -49,6 +49,7 @@ import eawf.runtime.daemon.server  # noqa: F401  -- importing it is what registe
 from eawf.runtime.daemon.methods import registered_methods
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands.release import RELEASE_RPC_METHODS, release_app
+from tests._epoch2_helpers import lay_epoch2_tree
 
 pytestmark = pytest.mark.integration
 
@@ -148,6 +149,12 @@ class _RecordingClient:
         """Record *method* and *params*, then answer the omni-reply."""
         self._calls.append({"method": method, "params": params})
         return FAKE_REPLY
+
+
+@pytest.fixture(autouse=True)
+def _epoch2_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run every release verb from an epoch-2 tree, as the flag day requires."""
+    monkeypatch.setenv("EA_STATE", str(lay_epoch2_tree(tmp_path / "repo")))
 
 
 @pytest.fixture

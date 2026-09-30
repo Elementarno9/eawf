@@ -4,7 +4,7 @@
 
 A research campaign is one topic fanned out across several research domains. The daemon owns the campaign store, the round store, and the operator-input channel; the CLI verbs below proxy through the daemon (falling back to a direct write when the daemon is unavailable) so every mutation lands through the single canonical writer.
 
-This page walks the operator surface end to end. The same actions are available in the TUI Research board (digit `3`); see the [TUI tour](tui-tour.md) for the keyboard surface.
+This page walks the operator surface end to end.
 
 ## 1. Start a campaign
 
@@ -14,7 +14,7 @@ Stage a campaign for the active scope. The topic fans out across the domains dec
 eawf campaign new "Survey the options-pricing landscape"
 ```
 
-The command stages the plan-only campaign and persists it; the staged record surfaces in the Research board's topic tree. Staging never spawns a subprocess — it is a plan-only hand-off.
+The command stages the plan-only campaign and persists it; the staged record appears in `eawf research status`. Staging never spawns a subprocess — it is a plan-only hand-off.
 
 ## 2. Track open questions
 
@@ -40,27 +40,7 @@ Each row renders its id, status (`open` / `blocked` / `answered` / `dropped`), a
 
 ## 3. Steer a running campaign
 
-The operator channels push typed inputs onto the daemon-owned blackboard while a campaign runs. They are append-only, so every later round sees the input.
-
-Steer a topic between rounds (narrow / widen / park — feedback, not a blocking interrupt):
-
-```bash
-# In the TUI Research board (digit 3): press t, type the steer note, Enter.
-```
-
-Broadcast a notice to every running round:
-
-```bash
-# In the TUI Research board: press b, type the notice, Enter.
-```
-
-Override a blocking fork with an operator verdict (a locked override persists across rounds until cleared):
-
-```bash
-# In the TUI Research board: press v, type the verdict, Enter.
-```
-
-The steer / broadcast / override channels target the campaign selected in the board's tree; a mid-run steer surfaces on the next round's recorded dispatch set.
+The operator channels push typed inputs onto the daemon-owned blackboard while a campaign runs. They are append-only, so every later round sees the input: a steer narrows, widens or parks a topic between rounds, a broadcast posts a notice to every running round, and an override settles a blocking fork with an operator verdict that persists across rounds until cleared. The daemon serves them as the `research.steer`, `research.broadcast` and `research.override` methods; no `eawf` command issues them yet.
 
 ## 4. Inspect the run
 
@@ -85,10 +65,10 @@ The line also reports `rounds` (how many rounds the run executed), `checkpoints`
 Cancelling tombstones the campaign — the append-only store keeps the record (with a cancel time + reason) rather than deleting it, so the history stays traceable:
 
 ```bash
-# In the TUI Research board: select the campaign node, press x.
+eawf campaign cancel <campaign-id> --reason "superseded by a narrower topic"
 ```
 
-A cancelled campaign no longer counts as live research signal on the board and is dropped from the topic tree.
+A cancelled campaign no longer counts as live research signal and drops out of `eawf research status`.
 
 ## 6. Delete a draft / promote a synthesis
 
@@ -103,5 +83,5 @@ To remove a local draft before promotion, delete the file under `.ea/local/resea
 ## See also
 
 - [Quickstart](quickstart.md) — the command-only bootstrap path.
-- [TUI tour](tui-tour.md) — the Research board keyboard surface.
+- [TUI tour](tui-tour.md) — the operator console.
 - [Workflow](../architecture/workflow.md) — the research / plan / execute lifecycle.

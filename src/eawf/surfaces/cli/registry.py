@@ -152,7 +152,7 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("pr", "eawf.surfaces.cli.commands.pr", "pr_app"),
     GroupRow("release", "eawf.surfaces.cli.commands.release", "release_app"),
     GroupRow("wiki", "eawf.surfaces.cli.commands.wiki", "wiki_app"),
-    # Workspace init.
+    # Repository init (born at epoch 2).
     CommandRow(
         "init",
         "eawf.surfaces.cli.commands.init",

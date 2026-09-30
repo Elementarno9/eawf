@@ -1,4 +1,4 @@
-"""Unit tests for the shared ``widgets/status_tint.py`` rendering helper.
+"""Unit tests for the shared ``chassis/status_tint.py`` rendering helper.
 
 Covers the status-tint map (every lifecycle status across the three enums
 maps to a concrete hex), the canonical-palette-sourced invariant (the
@@ -12,13 +12,13 @@ from __future__ import annotations
 import pytest
 
 from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
-from eawf.surfaces.tui.chassis.theme import WONG_VARIABLES
-from eawf.surfaces.tui.widgets.status_tint import (
+from eawf.surfaces.tui.chassis.status_tint import (
     BAND_HEX,
     SELECTION_TINT,
     STATUS_COLOURS,
     status_colour,
 )
+from eawf.surfaces.tui.chassis.theme import WONG_VARIABLES
 
 _HEX_RE = "#0123456789abcdefABCDEF"
 

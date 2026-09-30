@@ -339,10 +339,6 @@ def test_con033_no_action_menu_letter_is_a_capital_but_copy_urn() -> None:
     assert all(verb.key in ADMITTED_SHIFTED and not verb.mutates for verb in capitals)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the pack's attention menu binds assign to @, a shifted symbol; needs a ruling",
-)
 def test_con033_menu_shifted_keys_are_only_copy_urn_and_select_all() -> None:
     """CON-033: inside the action menu only ``Y`` and the menu-local ``*`` are shifted."""
     keys = {verb.key for route in REGISTRY.ids for verb in FIXTURE.menus.verbs(route)}

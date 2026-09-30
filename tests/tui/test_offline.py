@@ -1,12 +1,8 @@
-"""Tests for the ``tui`` non-interactive text renderers.
+"""Tests for the ``workspace registry-status`` text frame.
 
-Covers the two deterministic surfaces in :mod:`eawf.surfaces.tui.chassis.offline`:
-
-* :func:`build_status_text` + :func:`emit_status` — the non-TTY status
-  frame contract (``Eä`` brand + ``keymap:`` line + lifecycle counts);
-* :func:`offline_render` — the ``workspace registry-status`` text frame
-  contract (``Eä`` / ``roadmap`` / ``backlog`` titles, ``--width`` wrap,
-  ``registry unavailable`` placeholder).
+Covers :func:`~eawf.surfaces.tui.chassis.offline.offline_render`: the ``Eä`` /
+``roadmap`` / ``backlog`` titles, the ``--width`` wrap and the ``registry
+unavailable`` placeholder.
 """
 
 from __future__ import annotations
@@ -16,9 +12,8 @@ from pathlib import Path
 
 import orjson
 
-from eawf.kernel.state.models import State
 from eawf.surfaces.render.brand import render_wordmark_ansi
-from eawf.surfaces.tui.chassis.offline import build_status_text, emit_status, offline_render
+from eawf.surfaces.tui.chassis.offline import offline_render
 from eawf.surfaces.tui.chassis.sigils import chrome
 
 #: The two-tone green brand head every offline frame now leads with. Asserting
@@ -31,72 +26,6 @@ _WORDMARK = render_wordmark_ansi()
 #: mark the live header leads with, a single space before the wordmark. The
 #: frame heads ``◉ E<accent>ä<reset>  <breadcrumb>``.
 _BRAND_HEAD = f"{chrome('brand', mode='unicode')} {_WORDMARK}"
-
-_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
-_PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
-
-
-def _load(path: Path) -> State:
-    return State.model_validate(orjson.loads(path.read_bytes()))
-
-
-# --------------------------------------------------------------------------
-# build_status_text
-# --------------------------------------------------------------------------
-
-
-def test_build_status_text_none_state_carries_brand_and_keymap() -> None:
-    text = build_status_text(None)
-    assert text.startswith(_BRAND_HEAD)
-    assert "keymap:" in text
-    # Fresh-workspace placeholder code + all-zero counts.
-    assert "project=EAWF" in text
-    assert "phases_open=0" in text
-    assert "waves_pending=0" in text
-
-
-def test_build_status_text_active_fixture_counts() -> None:
-    text = build_status_text(_load(_PHASE_ITER_WAVE))
-    assert text.startswith(_BRAND_HEAD)
-    assert "project=QR" in text
-    assert "phases_open=1" in text
-    assert "iters_open=1" in text
-    assert "iters_closed=0" in text
-    # The fixture's single wave is in_progress, so pending is zero.
-    assert "waves_pending=0" in text
-    assert "audits=0" in text
-
-
-def test_build_status_text_has_three_lines() -> None:
-    lines = build_status_text(None).split("\n")
-    assert len(lines) == 3
-    assert lines[0].startswith(_BRAND_HEAD)
-    assert lines[2].startswith("keymap:")
-
-
-# --------------------------------------------------------------------------
-# emit_status
-# --------------------------------------------------------------------------
-
-
-def test_emit_status_missing_state_returns_zero(tmp_path: Path, capsys: object) -> None:
-    rc = emit_status(workspace=tmp_path, no_input=False, plain=True)
-    assert rc == 0
-    captured = capsys.readouterr()  # type: ignore[attr-defined]
-    assert _WORDMARK in captured.out
-    assert "keymap:" in captured.out
-
-
-def test_emit_status_reads_workspace_state(tmp_path: Path, capsys: object) -> None:
-    ea = tmp_path / ".ea"
-    ea.mkdir()
-    (ea / "state.json").write_bytes(_PHASE_ITER_WAVE.read_bytes())
-    rc = emit_status(workspace=tmp_path)
-    assert rc == 0
-    captured = capsys.readouterr()  # type: ignore[attr-defined]
-    assert "project=QR" in captured.out
-    assert "phases_open=1" in captured.out
-
 
 # --------------------------------------------------------------------------
 # offline_render — registry dashboard text frame
@@ -156,14 +85,6 @@ def test_offline_render_ends_with_newline(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 # UX-19: the offline frame GAINS the header brand glyph
 # --------------------------------------------------------------------------
-
-
-def test_status_frame_gains_header_brand_glyph() -> None:
-    # UX-19: the headless status frame leads with the ◉ brand glyph the live
-    # header carries, a space before the wordmark -- glyph parity with the app.
-    text = build_status_text(None)
-    assert text.startswith(_BRAND_HEAD)
-    assert text.startswith(chrome("brand", mode="unicode"))
 
 
 def test_dashboard_frame_gains_header_brand_glyph(tmp_path: Path) -> None:

@@ -158,7 +158,7 @@ def test_action_menus_verb_resolves_only_its_routes_letter() -> None:
     steer = MENUS.verb("run.detail", "s")
     assert steer is not None and steer.verb == "steer"
     assert MENUS.verb("run.detail", "@") is None
-    assert MENUS.verb("attention", "@") is not None
+    assert MENUS.verb("attention", "s") is not None
 
 
 def test_menu_order_puts_light_verbs_first_in_declared_order() -> None:
@@ -422,19 +422,24 @@ def test_palette_rows_mark_hidden_edges_and_clamp_the_cursor(w: int) -> None:
     all_hits = _entity_hits(200)
     session = Session(sel=500)
     rows = palette_rows(session, all_hits, w=w, h=24)
-    assert session.sel == len(all_hits) - 1
+    # the list overflows, so it ends in the search row and the cursor clamps onto it
+    assert session.sel == len(all_hits)
     assert all(cell_len(row) == w for row in rows)
     assert len(rows) <= 24 - CHROME_ROWS + 2
     assert rows[2].rstrip().startswith("   … ")
     assert rows[2].rstrip().endswith(" above")
-    assert rows[-1].lstrip().startswith(f"{CARET} RUN-0199")
+    assert rows[-2].lstrip().startswith("RUN-0199")
+    assert rows[-1].lstrip().startswith(f"{CARET} search")
 
 
 def test_palette_rows_group_large_hidden_counts() -> None:
     session = Session()
-    rows = palette_rows(session, _entity_hits(2000), w=80, h=24)
-    assert rows[-1].rstrip().endswith("below")
-    assert "1,9" in rows[-1]
+    all_hits = _entity_hits(2000)
+    rows = palette_rows(session, all_hits, w=80, h=24)
+    assert rows[-2].rstrip().endswith("below")
+    assert "1,9" in rows[-2]
+    # the search row counts every hit, the route rows as well as the entities
+    assert rows[-1].rstrip().endswith(f"all {len(all_hits):,} hits")
 
 
 def test_palette_rows_height_without_a_window_raises_value_error() -> None:
@@ -621,19 +626,7 @@ def _keys(session: Session, *keys: str) -> None:
         compose_frame(View(session=session, fixture=FIXTURE, w=120, h=30))
 
 
-_NO_MENU_ROW = pytest.mark.xfail(
-    strict=True,
-    reason="the pack binds these writes to letters with no action-menu row; needs a ruling",
-)
-
-
-@pytest.mark.parametrize(
-    "route",
-    [
-        pytest.param(r, marks=_NO_MENU_ROW) if r in ("unattended", "settings") else r
-        for r in sorted(ROUTE_KEYS)
-    ],
-)
+@pytest.mark.parametrize("route", sorted(ROUTE_KEYS))
 def test_con034_every_lettered_write_has_a_menu_row(route: str) -> None:
     """CON-034: a letter is a shortcut over the menu, never a verb's sole binding."""
     menu = {verb.key for verb in FIXTURE.menus.verbs(route)}

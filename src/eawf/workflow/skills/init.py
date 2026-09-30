@@ -34,9 +34,11 @@ Honoured ``ctx.args`` keys:
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from eawf.platform.install.epoch2_birth import bear_epoch2_tree
 from eawf.platform.install.wizard import WizardAnswers, run_wizard_no_input
 from eawf.surfaces.cli.errors import UserError
 from eawf.surfaces.render.envelope import SkillName
@@ -224,6 +226,9 @@ class InitSkill(Skill):
         persisted_records.append(evt_id)
 
         result = run_wizard_no_input(answers, target_dir, force=force)
+        generation_id = bear_epoch2_tree(
+            result.state_path, project_code=result.project_code, born_at=datetime.now(UTC)
+        )
 
         # Wizard succeeded — translate the WizardResult into an InitBody.
         steps: list[InitStep] = [
@@ -232,6 +237,7 @@ class InitSkill(Skill):
             InitStep(name="agents_md", status="ok", detail=str(result.agents_md_path)),
             InitStep(name="manifest", status="ok", detail=str(result.manifest_path)),
             InitStep(name="claude_md", status="ok", detail=str(result.claude_md_path)),
+            InitStep(name="epoch2_generation", status="ok", detail=generation_id),
         ]
         if result.materialised_state_keys:
             steps.append(

@@ -226,9 +226,9 @@ line = 50
 branch = 0
 
 [tool.eawf.coverage.tui_behavioural]
-golden_glob = "tests/snapshots/tui/golden/*.txt"
+golden_glob = "tests/fixtures/console/golden/sequences/*frames*.json"
 min_goldens = 0
-flow_glob = "tests/snapshots/tui/test_tui_flow.py"
+flow_glob = "tests/fixtures/console/golden/sequences/journeys.json"
 min_flows = 0
 """.lstrip()
 

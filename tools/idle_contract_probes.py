@@ -14,7 +14,6 @@ import pydantic
 from idle_contract_common import (
     _NON_UI_SCOPE,
     _PROBE_OPENED_AT,
-    _UI_SCOPE,
     GateFailure,
     GateResult,
 )
@@ -26,10 +25,6 @@ from eawf.kernel.state.enums import (
     ScopeKind,
 )
 from eawf.kernel.state.models import CurrentPointers, Project, State
-from eawf.runtime.daemon.methods import DaemonValidationError
-from eawf.runtime.daemon.methods.spec_sync_lints import (
-    require_affordance_parity_for_ui_scope as _require_affordance_parity_for_ui_scope,
-)
 from eawf.surfaces.render.envelope import OutputEnvelope
 from eawf.workflow.audit_dsl.models import CheckKind
 from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY
@@ -160,7 +155,7 @@ def check_skill_body_binding(
 
 
 # =========================================================================== #
-# I03 contract probes: intent guard, UI require-gate, mockup golden tier.
+# I03 contract probes: intent guard, mockup golden tier.
 # =========================================================================== #
 
 #: A ``plan_wave``-shaped callable. ``Callable[..., object]`` is intentional:
@@ -168,17 +163,12 @@ def check_skill_body_binding(
 #: no-op stand-in to prove the gate fails when the guard stops rejecting.
 type PlanWaveFn = Callable[..., object]
 
-#: A ``require_affordance_parity_for_ui_scope``-shaped callable. Kept injectable
-#: for the same reason as :data:`PlanWaveFn`.
-type UiRequireGateFn = Callable[..., None]
-
 #: A ``_tier_for_gate_kind``-shaped callable.
 type TierForGateKindFn = Callable[[str], OracleTier]
 
 _I03_PHASE_ID = "P00"
 _I03_ITER_ID = "P00-I01"
 _I03_INTENT_PROBE_WAVE_ID = "P00-I01-W01"
-_I03_UI_PROBE_WAVE_ID = "P00-I01-W02"
 _MOCKUP_GOLDEN_DIFF_KIND = "mockup_golden_diff"
 
 
@@ -256,36 +246,6 @@ def _probe_required_intent_guard(plan_wave_fn: PlanWaveFn) -> GateResult | None:
     )
 
 
-def _probe_ui_require_contract(ui_require_gate_fn: UiRequireGateFn) -> GateResult | None:
-    """Return a failure when the UI affordance-parity require-gate is idle."""
-    try:
-        ui_require_gate_fn(
-            wave_id=_I03_UI_PROBE_WAVE_ID,
-            file_scopes=[_UI_SCOPE],
-            gates=[],
-        )
-    except DaemonValidationError as exc:
-        if "affordance_parity" in str(exc):
-            return None
-        return GateResult(
-            passed=False,
-            failure=GateFailure.UI_REQUIRE_GATE_IDLE,
-            message=(
-                "UI-scope require-gate did not fire cleanly: expected the "
-                f"ungated probe wave {_I03_UI_PROBE_WAVE_ID!r} to name "
-                f"'affordance_parity', got {exc!r}"
-            ),
-        )
-    return GateResult(
-        passed=False,
-        failure=GateFailure.UI_REQUIRE_GATE_IDLE,
-        message=(
-            "UI-scope require-gate is idle: a UI probe wave with no "
-            "affordance_parity gate was accepted"
-        ),
-    )
-
-
 def _probe_mockup_golden_diff_registration(
     *,
     registry: Mapping[str, object],
@@ -338,7 +298,6 @@ def _probe_mockup_golden_diff_registration(
 def check_i03_contracts(
     *,
     plan_wave_fn: PlanWaveFn = _plan_wave,
-    ui_require_gate_fn: UiRequireGateFn = _require_affordance_parity_for_ui_scope,
     registry: Mapping[str, object] = CHECK_REGISTRY,
     tier_for_gate_kind_fn: TierForGateKindFn = _tier_for_gate_kind,
 ) -> GateResult:
@@ -348,17 +307,14 @@ def check_i03_contracts(
         plan_wave_fn: Authored-wave planner under test. Defaults to the live
             :func:`eawf.workflow.lifecycle.wave.plan_wave`; tests inject a
             no-op to prove the required-intent guard is not idle.
-        ui_require_gate_fn: UI-scope require-gate under test. Defaults to the
-            live affordance-parity sync lint.
         registry: Audit-DSL check registry under test.
         tier_for_gate_kind_fn: Gate-kind to oracle-tier mapper under test.
 
     Returns:
-        A passing :class:`GateResult` only when all three I03 probes fire.
+        A passing :class:`GateResult` only when both I03 probes fire.
     """
     for failure in (
         _probe_required_intent_guard(plan_wave_fn),
-        _probe_ui_require_contract(ui_require_gate_fn),
         _probe_mockup_golden_diff_registration(
             registry=registry,
             tier_for_gate_kind_fn=tier_for_gate_kind_fn,
@@ -370,7 +326,7 @@ def check_i03_contracts(
         passed=True,
         failure=None,
         message=(
-            "idle-contract gate: ok (I03 required-intent guard, UI "
-            "affordance-parity require-gate, and mockup_golden_diff tier mapping fired)"
+            "idle-contract gate: ok (I03 required-intent guard and "
+            "mockup_golden_diff tier mapping fired)"
         ),
     )

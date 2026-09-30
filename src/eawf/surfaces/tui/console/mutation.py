@@ -229,6 +229,8 @@ class Item:
         request: What is sent for it on confirmation; ``None`` when refused.
         stale_token: What the card compares at confirmation to tell a moved target.
         clock_fields: The fields stamped with the wall clock at confirmation.
+        changes: The per-member difference a whole-value write makes, for a settings
+            list or mapping; empty for every other write.
     """
 
     key: str
@@ -242,6 +244,7 @@ class Item:
     request: VerbRequest | None
     stale_token: str
     clock_fields: tuple[str, ...] = ()
+    changes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         """Refuse a target that is neither sent nor refused, or both.
@@ -491,7 +494,14 @@ def lifecycle_card(
     )
 
 
-def setting_card(request: SettingRequest, *, effect: str, token: str, now: float) -> Card:
+def setting_card(
+    request: SettingRequest,
+    *,
+    effect: str,
+    token: str,
+    now: float,
+    changes: tuple[str, ...] = (),
+) -> Card:
     """Return the card previewing one settings write or unset.
 
     Args:
@@ -499,13 +509,18 @@ def setting_card(request: SettingRequest, *, effect: str, token: str, now: float
         effect: What the effective value becomes, as the settings model words it.
         token: The effective value the card was built against.
         now: The console clock.
+        changes: The per-member difference of a whole list or mapping written at once;
+            the card then states the difference rather than the whole value.
     """
     verb = "unset" if request.unset else "set"
-    change = (
-        f"{request.target} is removed from the {request.layer} layer file"
-        if request.unset
-        else f"{request.target} = {request.value!r} is written to the {request.layer} layer file"
-    )
+    if request.unset:
+        change = f"{request.target} is removed from the {request.layer} layer file"
+    elif changes:
+        change = f"{request.target} is written whole to the {request.layer} layer file"
+    else:
+        change = (
+            f"{request.target} = {request.value!r} is written to the {request.layer} layer file"
+        )
     item = Item(
         key=request.target,
         title=f"{request.layer} layer · no revision · the file is written under the daemon's lock",
@@ -520,6 +535,7 @@ def setting_card(request: SettingRequest, *, effect: str, token: str, now: float
         unknown="",
         request=request,
         stale_token=token,
+        changes=changes,
     )
     return Card(
         kind="setting",
@@ -893,8 +909,19 @@ def open_lifecycle(ctx: Ctx, mutation: CanonicalMutation) -> None:
     ctx.log(".", f"{mutation.action} · {len(targets)} {mutation.entity.value} → consequence")
 
 
-def open_setting(ctx: Ctx, request: SettingRequest, *, effect: str, token: str) -> None:
-    """Open the card previewing one settings edit, or say why no request can leave."""
+def open_setting(
+    ctx: Ctx,
+    request: SettingRequest,
+    *,
+    effect: str,
+    token: str,
+    changes: tuple[str, ...] = (),
+) -> None:
+    """Open the card previewing one settings edit, or say why no request can leave.
+
+    ``changes`` is the per-member difference of a whole list or mapping written at once,
+    drawn on the card in place of the value.
+    """
     key = "x" if request.unset else "Enter"
     decided = _gate(ctx, f"set {request.target}", needs_principal=False)
     if decided.kind is GateKind.TRANSPORT:
@@ -903,7 +930,9 @@ def open_setting(ctx: Ctx, request: SettingRequest, *, effect: str, token: str) 
     if decided.kind is GateKind.REFUSED:
         ctx.log(key, f"refused: {decided.reason}")
         return
-    ctx.s.mutation = setting_card(request, effect=effect, token=token, now=ctx.clock.now())
+    ctx.s.mutation = setting_card(
+        request, effect=effect, token=token, now=ctx.clock.now(), changes=changes
+    )
     open_overlay(ctx.s, CARD, subject=request.target)
     ctx.log(key, f"{request.target} · {effect} → consequence preview")
 

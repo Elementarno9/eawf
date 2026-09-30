@@ -18,7 +18,9 @@ from typing import Any
 
 import pytest
 
+from eawf.kernel.projection.attention import attention_mine
 from eawf.kernel.projection.compute import ProjectionRow, build_route_projection
+from eawf.kernel.projection.registers import build_register_view
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.state.epoch2.consequence import (
     CANONICAL_MUTATIONS,
@@ -54,8 +56,10 @@ from eawf.surfaces.tui.console.operations import (
     VerbRequest,
 )
 from eawf.surfaces.tui.console.paint import Part, paint
+from eawf.surfaces.tui.console.renderers.attention import eligibility_line
 from eawf.surfaces.tui.console.session import SIZES, Session
 
+from . import test_native_route_bodies as bodies
 from .overlay_support import Host, chrome, prototype
 
 AT = datetime(2026, 9, 27, 12, 0, tzinfo=UTC)
@@ -611,3 +615,59 @@ def test_item_why_names_the_refusal_and_is_empty_when_sent() -> None:
     assert _item(refusal=refusal, request=None).why == "no status"
     request = AnswerRequest(target="EAWF-0001", option_id="approve")
     assert _item(refusal=None, request=request).why == ""
+
+
+# ---------- CON-062: eligibility is stated beside the action, never counted ----------
+
+
+def _attention_rows() -> dict[str, ProjectionRow]:
+    rows = bodies._projection("attention").rows
+    return {row.key: row for row in rows}
+
+
+def test_con_062_an_action_several_principals_may_answer_says_so_on_its_row() -> None:
+    row = _attention_rows()["ACT-0001"]
+    assert eligibility_line(row, bodies.ME, 2) == "you may answer"
+
+
+def test_con_062_a_sole_eligible_principal_is_told_it_is_the_only_answer() -> None:
+    row = _attention_rows()["ACT-0001"]
+    assert eligibility_line(row, bodies.ME, 1) == "you are the only eligible answer"
+    assert eligibility_line(row, bodies.ME, 0) == "you are the only eligible answer"
+
+
+def test_con_062_an_action_addressed_to_another_principal_names_them_not_a_count() -> None:
+    row = _attention_rows()["ACT-0002"]
+    line = eligibility_line(row, bodies.ME, 2)
+    assert line.startswith(f"{bodies.OTHER} only")
+
+
+def test_con_062_with_no_principal_the_row_says_how_to_become_one() -> None:
+    row = _attention_rows()["ACT-0001"]
+    assert eligibility_line(row, None, 2).startswith("no principal is named")
+
+
+def test_con_062_eligibility_moves_no_attention_count() -> None:
+    alone = build_register_view(bodies._projection("attention"))
+    shared = build_register_view(bodies._projection("attention", _second_eligible()))
+    mine = attention_mine(alone, principal=bodies.ME)
+    assert attention_mine(shared, principal=bodies.ME).value == mine.value
+
+
+def _second_eligible() -> dict[str, Any]:
+    document = {**bodies.DOCUMENT, "pending_action": dict(bodies.DOCUMENT["pending_action"])}
+    document["pending_action"]["ACT-0004"] = bodies._action(
+        "ACT-0004", "WAITING", "run/RUN-00000003", assignee_ref=bodies.OTHER
+    )
+    return document
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="no producer states per-principal eligibility: the attention row carries no "
+    "authority class, last-seen time or per-principal state, so no eligible pane is drawn "
+    "and no card says that the first answer wins",
+)
+def test_con_062_the_eligible_pane_names_each_principal_and_that_the_first_answer_wins() -> None:
+    card = answer_card(_attention_rows()["ACT-0001"], "a", principal=bodies.ME, now=1000.0)
+    assert "first answer wins" in repr(card)

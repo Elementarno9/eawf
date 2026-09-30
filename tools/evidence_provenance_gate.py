@@ -11,7 +11,7 @@ evidence is expected to have been rendered from, the gate asserts two
 independent contracts:
 
 - **provenance** — the ``source_commit`` embedded in the cast header
-  (read via :func:`eawf.surfaces.tui.snapshot.asciinema.read_cast_provenance`)
+  (read via :func:`eawf.surfaces.tui.chassis.asciinema.read_cast_provenance`)
   equals the expected commit. A forged or stale stamp fails here.
 - **no-drift** — the evidence bytes equal the committed golden bytes. A
   stale or hand-edited frame fails here even if the stamp is forged to
@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from eawf.surfaces.tui.snapshot.asciinema import read_cast_provenance
+from eawf.surfaces.tui.chassis.asciinema import read_cast_provenance
 
 
 class GateFailure(StrEnum):

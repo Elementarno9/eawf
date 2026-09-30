@@ -22,8 +22,9 @@ from typing import TYPE_CHECKING, Annotated
 import typer
 
 from eawf.surfaces.cli._version_display import compose_display_version
+from eawf.surfaces.cli.flag_day_gate import FlagDayTyperGroup
 from eawf.surfaces.cli.flags import GlobalFlags
-from eawf.surfaces.cli.help_panels import RegistryOrderedTyperGroup, panel_for
+from eawf.surfaces.cli.help_panels import panel_for
 from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.registry import register_commands
 
@@ -35,7 +36,7 @@ app = typer.Typer(
     help="Eä Workflow — agent-driven development framework.",
     no_args_is_help=False,
     add_completion=False,
-    cls=RegistryOrderedTyperGroup,
+    cls=FlagDayTyperGroup,
 )
 
 
@@ -108,11 +109,9 @@ def _root(
 
     set_daemonless_flag(daemonless)
     if ctx.invoked_subcommand is None:
-        # Bare ``eawf`` on a TTY routes to the Textual TUI
-        # (config.ui.bare_command default: "tui") via the scope-dispatch
-        # ladder; plain / no-input / non-TTY falls back to the
-        # deterministic status emission so headless callers stay
-        # script-stable.
+        # Bare ``eawf`` on a TTY opens the console; plain / no-input /
+        # non-TTY writes the console's plain frame so headless callers
+        # stay script-stable.
         rc = _dispatch_tui(workspace=workspace, no_input=no_input, plain=plain_output)
         raise typer.Exit(code=rc)
 
@@ -125,32 +124,24 @@ def _dispatch_tui(
     verbose: bool = False,
     operator: Operator | None = None,
 ) -> int:
-    """Resolve the launch scope and open the TUI.
+    """Resolve the launch scope and open the console.
 
     On an interactive TTY this resolves the tree's authority epoch
-    (:func:`eawf.kernel.state.epoch2.authority.resolve_authority`) and opens one of
-    two Textual apps: an epoch-2 tree opens the native console over a live
-    projection seam, and an epoch-1 tree keeps the classic
-    :class:`~eawf.surfaces.tui.app.EaApp`. A tree declared for the epoch-2 canary
-    but stuck mid-migration opens the console on its pre-session entry layer
-    instead of either, so the operator reads the exact repair command rather than
-    a silent fallback. When ``--plain`` / ``--no-input`` is set or stdout is not a
-    TTY this falls back to the deterministic single-frame status emission
-    (:func:`eawf.surfaces.tui.chassis.offline.emit_status`) so headless callers stay
-    script-stable, except a terminal entry-layer state off a TTY, which exits
-    ``4`` instead (SURF-085) rather than misstating a tree the resolver could not
-    attach to. See :mod:`eawf.surfaces.tui.launch` for the full decision.
-
-    ``ui`` is the only TUI surface, so both the interactive launch and
-    the non-TTY fallback route through it.
+    (:func:`eawf.kernel.state.epoch2.authority.resolve_authority`) and opens the
+    epoch-2 console: over a live projection seam for a tree it attaches to, else on
+    the pre-session entry state the attach path landed in (an epoch-1 tree lands in
+    migration-required), so the operator reads the exact next command. When
+    ``--plain`` / ``--no-input`` is set or stdout is not a TTY it writes the
+    console's own frame in plain mode instead, except a terminal entry state, which
+    exits ``4`` (SURF-085) with its commands on stderr. See
+    :mod:`eawf.surfaces.tui.launch` for the full decision.
 
     Args:
         workspace: Optional workspace root from ``-w/--workspace``.
-        no_input: Fail-closed flag — forces the deterministic fallback.
-        plain: Plain-output flag — forces the deterministic fallback.
-        verbose: Whether the native console's key-trace row is shown (SURF-173).
-            Has no effect on the epoch-1 app, which carries no such row.
-        operator: Who the native console's writes are attributed to; ``None``
+        no_input: Fail-closed flag — writes the plain frame instead of the app.
+        plain: Plain-output flag — writes the plain frame instead of the app.
+        verbose: Whether the console's key-trace row is shown (SURF-173).
+        operator: Who the console's writes are attributed to; ``None``
             leaves every writing verb refused with that reason.
 
     Returns:
@@ -193,7 +184,7 @@ def scope_debug(ctx: typer.Context) -> None:
 # --- ui command (inline: wraps the shared _dispatch_tui resolver) ---
 @app.command(
     name="ui",
-    help="Open the Eä Textual TUI (or deterministic status fallback off-TTY).",
+    help="Open the Eä console (or its plain frame off-TTY).",
     rich_help_panel=panel_for("ui"),
 )
 def _ui_cmd(
@@ -202,7 +193,7 @@ def _ui_cmd(
         bool,
         typer.Option(
             "--verbose",
-            help="Show the native console's key-trace row (SURF-173). No effect on epoch-1.",
+            help="Show the console's key-trace row (SURF-173).",
         ),
     ] = False,
     actor: Annotated[

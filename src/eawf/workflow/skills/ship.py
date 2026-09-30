@@ -256,6 +256,13 @@ class _AcceptanceCommands(BaseModel):
     build: str | None = None
 
 
+#: Every gate ``acceptance.required_before_ship`` may name: the lifecycle ``state`` gate,
+#: which runs no command, then each gate a built-in or configured command runs.
+SHIP_GATES: tuple[str, ...] = tuple(
+    dict.fromkeys(("state", *_DEFAULT_GATE_COMMANDS, *_AcceptanceCommands.model_fields))
+)
+
+
 class AcceptanceConfig(BaseModel):
     """Validated ``acceptance`` config surface.
 
@@ -1103,4 +1110,4 @@ class ShipSkill(SkillAction):
         )
 
 
-__all__ = ["ShipSkill", "validate_release_subject"]
+__all__ = ["SHIP_GATES", "ShipSkill", "validate_release_subject"]

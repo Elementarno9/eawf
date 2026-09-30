@@ -57,7 +57,7 @@ A malformed ``args`` (non-str ``table``, unknown table, bad
 ``covered_edges`` shape) yields ``status="fail"`` with a ``details`` note
 rather than propagating an exception, so one bad criterion cannot abort
 the audit run -- the same degrade-not-raise contract
-:func:`~eawf.workflow.audit_dsl.kinds.affordance_parity.check_affordance_parity`
+:func:`~eawf.workflow.audit_dsl.kinds.schema_validate.check_schema_validate`
 follows.
 """
 

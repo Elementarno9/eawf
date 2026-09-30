@@ -23,7 +23,10 @@ import pytest
 from click.testing import Result
 from typer.testing import CliRunner
 
-from eawf.kernel.migration.epoch2.canary import CANARY_DECLARATION_FILENAME
+from eawf.kernel.migration.epoch2.canary import (
+    CANARY_DECLARATION_FILENAME,
+    OPT_IN_DECLARATION_FILENAME,
+)
 from eawf.kernel.migration.epoch2.generation import tree_digests
 from eawf.kernel.state.epoch2.authority import CanaryRepositoryRef, resolve_authority
 from eawf.kernel.store.commit_policy import CommitPolicy, classify_path
@@ -185,7 +188,8 @@ def test_init_epoch2_canary_teardown_keeps_unrelated_rows(tmp_path: Path, home: 
     assert payload["removed_registry_codes"] == ["CANARY2"]
 
 
-def test_init_epoch2_canary_default_init_is_unchanged(tmp_path: Path, home: Path) -> None:
+def test_init_epoch2_canary_default_init_is_no_canary(tmp_path: Path, home: Path) -> None:
+    """REL-021: a plain init is born at epoch 2 as an opted-in tree, never a canary."""
     target = tmp_path / "plain"
 
     result = runner.invoke(
@@ -194,8 +198,8 @@ def test_init_epoch2_canary_default_init_is_unchanged(tmp_path: Path, home: Path
 
     assert result.exit_code == 0, result.output
     assert not (target / ".ea" / CANARY_DECLARATION_FILENAME).exists()
-    assert not (target / ".ea" / "generations").exists()
-    assert resolve_authority(target / ".ea").epoch == 1
+    assert (target / ".ea" / OPT_IN_DECLARATION_FILENAME).is_file()
+    assert resolve_authority(target / ".ea").epoch == 2
     assert not _registry_file(home).exists()
 
 

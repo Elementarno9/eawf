@@ -4,12 +4,8 @@ Per C08 D7 (revised 2026-05-18 per Q24): v0.3 ships exactly three init
 templates — ``research``, ``engineering``, ``reverse-engineering``.
 ``spike`` and ``hybrid`` are deferred to v0.4+.
 
-Per C08 D10: each template encodes ``dispatch.session_policy_default``
-matching the profile's evidence-vs-PR character:
-
-- ``research`` → ``continue``
-- ``engineering`` → ``fresh``
-- ``reverse-engineering`` → ``continue``
+Each template seeds only leaves some code reads: the profiles it enables,
+its wave parallelism and, for engineering, the acceptance commands.
 """
 
 from __future__ import annotations
@@ -20,6 +16,8 @@ from typing import Any
 import pytest
 import yaml
 
+from eawf.kernel.config.layered import get_dotted
+from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS
 from eawf.platform.profiles.discovery import list_init_templates, load_init_template
 from eawf.surfaces.cli.errors import UserError, ValidationError
 
@@ -71,24 +69,6 @@ def test_init_template_loads_and_validates(template_name: str) -> None:
     assert payload["profiles"]["enabled"], f"{template_name}: profiles.enabled must be non-empty"
 
 
-def test_research_template_dispatch_session_policy_is_fresh() -> None:
-    """research → fresh: session resume is unimplemented (deferred to P31)."""
-    payload = load_init_template("research")
-    assert payload["dispatch"]["session_policy_default"] == "fresh"
-
-
-def test_engineering_template_dispatch_session_policy_is_fresh() -> None:
-    """C08 D10: engineering → fresh (PR-driven clean slate per wave)."""
-    payload = load_init_template("engineering")
-    assert payload["dispatch"]["session_policy_default"] == "fresh"
-
-
-def test_reverse_engineering_template_dispatch_session_policy_is_fresh() -> None:
-    """reverse-engineering → fresh: session resume is unimplemented (deferred to P31)."""
-    payload = load_init_template("reverse-engineering")
-    assert payload["dispatch"]["session_policy_default"] == "fresh"
-
-
 def test_research_template_enables_core_and_research_profiles() -> None:
     """Per §5.7.1: research bundle is [core, research]."""
     payload = load_init_template("research")
@@ -135,11 +115,17 @@ def test_engineering_template_max_parallel_waves_is_four() -> None:
 
 
 @pytest.mark.parametrize("template_name", SHIPPED_TEMPLATES)
-def test_init_templates_include_project_goals_scaffold(template_name: str) -> None:
-    """Every template carries the empty project.goals + success_metrics scaffolding."""
+def test_init_templates_seed_no_retired_leaf(template_name: str) -> None:
+    """A template never writes a leaf the migration would strip on the next read."""
     payload = load_init_template(template_name)
-    assert payload["project"]["goals"] == []
-    assert payload["project"]["success_metrics"] == {}
+    stated = []
+    for key in sorted(DEPRECATED_LEAF_KEYS):
+        try:
+            get_dotted(payload, key)
+        except KeyError:
+            continue
+        stated.append(key)
+    assert stated == []
 
 
 def test_load_init_template_rejects_unknown_name() -> None:

@@ -31,6 +31,7 @@ from textual.events import Click, Key, Resize
 from textual.strip import Strip
 from textual.widget import Widget
 
+from eawf.kernel.config.schema import ToastVerbosity
 from eawf.kernel.delivery.integration import IntegrationConflict, IntegrationGeneration
 from eawf.kernel.delivery.receipts import ProofReceipt
 from eawf.kernel.projection.attention import delivered_revisions, deliveries
@@ -113,6 +114,8 @@ TICK_SECONDS = 0.25
 # The blank cells an operator's console keeps clear at each side of every row, so the
 # bands and rules stop short of the window edge the way the packet's canvas padding does.
 OUTER_GUTTER = 1
+#: The two glyph allocations a frame can be drawn in; ``ui.glyphs`` picks one.
+GLYPH_ALLOCATIONS: tuple[str, ...] = ("unicode", "ascii")
 GO_DRAWER = "go"
 # The worker group the seam's route reads run in.
 SEAM_WORKERS = "seam"
@@ -166,6 +169,8 @@ TOOLKIT_KEYS: Mapping[str, str] = MappingProxyType(
     }
 )
 _SHIFT = "shift+"
+# The Shift-held arrows the dispatcher tells apart from the bare ones.
+_SHIFTED_ARROWS = frozenset({f"{_SHIFT}up", f"{_SHIFT}down"})
 # How far past the toolkit's escape delay a second Escape's stamp may land and still be
 # the pair the parser held back together: the scheduling jitter of emitting it.
 ESCAPE_SLACK = 0.02
@@ -187,6 +192,9 @@ def dispatcher_key(toolkit_key: str, character: str | None) -> tuple[str, bool] 
     """
     if toolkit_key == f"{_SHIFT}tab":
         return ("Tab", True)
+    if toolkit_key in _SHIFTED_ARROWS:
+        # an ordered list moves its entry with Shift and an arrow
+        return (TOOLKIT_KEYS[toolkit_key.removeprefix(_SHIFT)], True)
     if toolkit_key in TOOLKIT_KEYS:
         return (TOOLKIT_KEYS[toolkit_key], False)
     if len(toolkit_key) == 1:
@@ -431,10 +439,17 @@ class ConsoleApp(App[None]):
         theme: The logical theme: ``dark``, ``light``, ``cb`` or ``auto``. ``auto`` reads
             the terminal's background here, before the toolkit takes the terminal, and
             is refined from the system appearance once the console runs.
+        toast_verbosity: The operator's ``ui.toasts`` level. Under ``off`` arriving
+            attention raises no toast; the answer to a key or a sent write, and the quit
+            prompt, always do.
+        glyphs: The glyph allocation the frame is drawn in. Under ``ascii`` every row
+            is drawn through the plain-mode twins, so no glyph outside ASCII reaches
+            the terminal.
 
     Raises:
         ValueError: both a fixture and a chrome were given, ``gutter`` is negative, or
-            ``theme`` is not a logical theme name.
+            ``theme`` is not a logical theme name, or ``glyphs`` is not ``unicode``
+            or ``ascii``.
     """
 
     # The whole stylesheet is the token map rendered: no colour is chosen in this file.
@@ -455,6 +470,8 @@ class ConsoleApp(App[None]):
         proof_receipts: Sequence[ProofReceipt] = (),
         gutter: int = 0,
         theme: str = DEFAULT_THEME,
+        toast_verbosity: ToastVerbosity = "important",
+        glyphs: str = "unicode",
     ) -> None:
         if fixture is not None and chrome is not None:
             raise ValueError("a fixture carries its own chrome; pass a fixture or a chrome")
@@ -462,6 +479,8 @@ class ConsoleApp(App[None]):
             raise ValueError(f"an outer gutter cannot be negative, got {gutter}")
         if resolve_theme_name(theme) is None:
             raise ValueError(f"{theme!r} is not a logical theme name")
+        if glyphs not in GLYPH_ALLOCATIONS:
+            raise ValueError(f"{glyphs!r} is not a glyph allocation")
         super().__init__()
         self.gutter = gutter
         for registered in EA_THEMES:
@@ -472,6 +491,8 @@ class ConsoleApp(App[None]):
         self.fixture = fixture or Fixture.from_chrome(chrome or load_chrome())
         self.console_clock: Clock = clock or Clock()
         self.verbose = verbose
+        self.toast_verbosity = toast_verbosity
+        self.glyphs = glyphs
         self.seam = seam
         if seam is not None:
             seam.watch(self._on_seam_patched)
@@ -615,6 +636,8 @@ class ConsoleApp(App[None]):
             return
         for item in deliveries(register, principal=self.principal(), delivered=self._delivered):
             self._delivered.add((item.source_ref, item.revision))
+            if self.toast_verbosity == "off":
+                continue
             self.raise_toast(
                 f"{item.key} {item.notification_class.value.replace('_', ' ')}",
                 title="needs you",
@@ -834,6 +857,11 @@ class ConsoleApp(App[None]):
         sweep_toasts(self.session, self.console_clock)
         view = self.view()
         rows = compose_frame(view)
+        if self.glyphs == "ascii":
+            # plain mode renders through compose_frame, so it can only be imported here
+            from eawf.surfaces.tui.console.plain import plain_rows
+
+            rows = plain_rows(rows)
         self.frame_rows = rows
         self.render_count += 1
         self.query_one("#header", ProjectionHeader).set_rows(rows[:1])

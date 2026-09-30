@@ -330,7 +330,9 @@ ROUTE_KEYS: Mapping[str, tuple[KeyEntry, ...]] = MappingProxyType(
             _K["up"],
             _k("run", "Enter"),
             _k("request pause", "a", kind=KeyKind.PRIMARY),
-            _k("request drain", "d", kind=KeyKind.PRIMARY),
+            # drain is the route's second write, so it lives in the action menu: a route
+            # binds one direct mutation key
+            _K["actions"],
             _K["esc"],
         ),
         "search": (

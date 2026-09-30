@@ -243,7 +243,50 @@ def _build_answers(
     )
 
 
-def _result_to_payload(result: WizardResult) -> dict[str, object]:
+def _bear_epoch2(result: WizardResult, *, flags: GlobalFlags) -> str:
+    """Bear the tree the wizard just wrote at epoch 2, or emit why it could not be.
+
+    Returns:
+        The generation the tree reads from.
+    """
+    from eawf.platform.backup import BackupError
+    from eawf.platform.install.epoch2_birth import bear_epoch2_tree
+
+    try:
+        return bear_epoch2_tree(
+            result.state_path, project_code=result.project_code, born_at=datetime.now(UTC)
+        )
+    except (BackupError, OSError, RuntimeError, ValueError) as exc:
+        cli_errors.emit_error(
+            cli_errors.InternalError(f"init could not bear the tree at epoch 2: {exc}"),
+            flags=flags,
+        )
+        raise  # never reached — emit_error raises typer.Exit
+
+
+def _refuse_epoch2_reinit(target_dir: Path, state_path: Path, *, flags: GlobalFlags) -> None:
+    """Refuse ``--force`` over a tree that is already at epoch 2.
+
+    The wizard writes the epoch-1 document, which an epoch-2 tree keeps
+    frozen, so even ``--force`` cannot re-initialise one. Without
+    ``--force`` the wizard's own pre-existing-tree refusal answers first.
+    """
+    from eawf.kernel.state.epoch2.authority import resolve_authority
+
+    resolved = state_path if state_path.is_absolute() else target_dir / state_path
+    if resolve_authority(resolved.parent).epoch != 2:
+        return
+    cli_errors.emit_error(
+        cli_errors.ValidationError(
+            f"{resolved.parent.name} is already an epoch-2 tree, so init will not rewrite "
+            "its frozen epoch-1 document; change it with the epoch-2 verbs instead",
+            kind=cli_errors.LEGACY_OPERATION_REMOVED_KIND,
+        ),
+        flags=flags,
+    )
+
+
+def _result_to_payload(result: WizardResult, generation_id: str) -> dict[str, object]:
     """Render a :class:`WizardResult` as a JSON-serialisable envelope payload.
 
     Paths are stringified deterministically; lists pass through. Used by
@@ -263,6 +306,8 @@ def _result_to_payload(result: WizardResult) -> dict[str, object]:
         "gitignore_patterns": list(result.gitignore_patterns),
         "auto_installed_plugins": list(result.auto_installed_plugins),
         "subagent_spec_preview": result.subagent_spec_preview,
+        "epoch": 2,
+        "generation_id": generation_id,
     }
 
 
@@ -667,6 +712,9 @@ def init_cmd(
         cli_errors.emit_error(exc, flags=flags)
         return
 
+    if force:
+        _refuse_epoch2_reinit(target_dir, state_path, flags=flags)
+
     if quick and resolved_profiles is None:
         resolved_profiles = list(detect_profiles_for_target(target_dir))
 
@@ -716,11 +764,13 @@ def init_cmd(
                 cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags
             )
             return
-        payload = _result_to_payload(result)
+        generation_id = _bear_epoch2(result, flags=flags)
+        payload = _result_to_payload(result, generation_id)
         text = (
             f"eawf init: project={result.project_code} "
             f"profiles={list(result.profiles_enabled)} "
-            f"state={result.state_path} agents_md={result.agents_md_path}"
+            f"state={result.state_path} agents_md={result.agents_md_path} "
+            f"epoch=2 generation={generation_id}"
         )
         emit_json_or_text(payload, text, flags=flags)
         return
@@ -743,9 +793,11 @@ def init_cmd(
     except portalock.LockTimeout as exc:
         cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
-    payload = _result_to_payload(result)
+    generation_id = _bear_epoch2(result, flags=flags)
+    payload = _result_to_payload(result, generation_id)
     text = (
         f"eawf init: project={result.project_code} "
-        f"profiles={list(result.profiles_enabled)} state={result.state_path}"
+        f"profiles={list(result.profiles_enabled)} state={result.state_path} "
+        f"epoch=2 generation={generation_id}"
     )
     emit_json_or_text(payload, text, flags=flags)

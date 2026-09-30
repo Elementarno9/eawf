@@ -278,11 +278,10 @@ def campaign_cancel(
     """Cancel an ACTIVE research campaign, tombstoning it in the store.
 
     Issues the daemon ``research.cancel_campaign`` RPC, which stamps a cancelled
-    tombstone row so the campaign drops out of ``research status`` and the TUI
-    Research board's topic tree. Like ``campaign run`` this has NO offline
-    fallback: the cancel is a daemon-owned state mutation, so an unavailable
-    daemon -- or a campaign that is not ACTIVE / unknown to the store -- is a
-    hard error rather than a silent no-op.
+    tombstone row so the campaign drops out of ``research status``. Like
+    ``campaign run`` this has NO offline fallback: the cancel is a daemon-owned
+    state mutation, so an unavailable daemon -- or a campaign that is not
+    ACTIVE / unknown to the store -- is a hard error rather than a silent no-op.
     """
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 

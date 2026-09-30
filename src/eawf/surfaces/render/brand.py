@@ -73,9 +73,9 @@ _FG_DEFAULT: str = "\x1b[39m"
 # ``currentColor`` SVG with the evenodd-knockout disc + radiant star). It
 # is resolved relative to this module so a consumer reads the asset without
 # a hardcoded literal path -- the SVG ships inside the package tree under
-# ``assets/`` and travels with the wheel like ``theme.tcss`` and the bundled
-# schema JSON. Resolve to an absolute path so the constant is stable
-# regardless of the caller's working directory.
+# ``assets/`` and travels with the wheel like the bundled schema JSON.
+# Resolve to an absolute path so the constant is stable regardless of the
+# caller's working directory.
 SEAL_ASSET_PATH: Path = (Path(__file__).parent / "assets" / "ea-seal.svg").resolve()
 
 

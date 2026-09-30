@@ -1,33 +1,15 @@
-"""Deterministic, non-interactive text renderers for the ``tui`` surface.
+"""Deterministic, non-interactive workspace dashboard for ``workspace registry-status``.
 
-The interactive Textual app (:mod:`eawf.surfaces.tui.app`) only runs at a TTY.
-Headless callers — piped ``eawf`` / ``eawf ui``, ``--plain`` /
-``--no-input``, CI scrapes, and ``eawf workspace registry-status`` — need a
-deterministic single-frame text emission that never opens a Textual screen.
-This module owns both:
+:func:`offline_render` renders the workspace registry dashboard to a plain-text
+frame for ``workspace registry-status`` (and its JSON envelope's ``rendered``
+field). It is strictly read-only over the registry and never opens a Textual
+screen, so it runs piped, in CI and with no daemon.
 
-* :func:`build_status_text` + :func:`emit_status` — the repo/workspace
-  *status frame* the bare-``eawf`` / ``eawf ui`` non-TTY fallback prints
-  (``Eä  <breadcrumb>`` header + a one-line lifecycle-count summary +
-  a ``keymap:`` line). Exit code is always ``0``; no Textual paint.
-* :func:`offline_render` — the *workspace registry dashboard* rendered to a
-  plain-text frame for ``workspace registry-status`` (and its JSON
-  envelope's ``rendered`` field). Strictly read-only over the registry.
-
-Both renderers head their daemon-down brand frame with the SAME brand mark the
-interactive header paints -- the leading ``◉`` brand glyph (UX-19) then the
-two-tone green ``Eä`` wordmark, emitted via the shared
-:func:`eawf.surfaces.render.brand.render_wordmark_ansi` ANSI channel (the
-``E`` plain, the ``ä`` carrying the reskin-green accent) and threaded through
-:func:`~eawf.surfaces.tui.widgets.header.build_breadcrumb` for the trailing
-scope breadcrumb -- so the headless splash stays visually identical to the
-live header rather than the old glyph-less / colourless / teal head. ``width``
-is honoured via :func:`textwrap.fill` so narrow callers wrap the body lines.
-
-This module replaces the two live consumers of the deleted legacy
-``src/eawf/surfaces/tui/`` tree (its ``run_tui`` offline mode + its workspace
-``offline_render``); the legacy Rich-Layout renderers are gone and
-``tui`` owns these paths.
+The frame heads with the brand mark the console header paints: the leading
+``◉`` brand glyph then the two-tone green ``Eä`` wordmark, emitted via the
+shared :func:`eawf.surfaces.render.brand.render_wordmark_ansi` ANSI channel (the
+``E`` plain, the ``ä`` carrying the green accent). ``width`` is honoured via
+:func:`textwrap.fill` so narrow callers wrap the body lines.
 """
 
 from __future__ import annotations
@@ -36,16 +18,13 @@ import logging
 import textwrap
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from eawf.platform.registry.staleness import read_repo_state
 from eawf.surfaces.render.brand import render_wordmark_ansi
 from eawf.surfaces.tui.chassis.sigils import chrome
-from eawf.surfaces.tui.chassis.state_binding import load_state
-from eawf.surfaces.tui.widgets.footer import DEFAULT_HINTS, format_hints
-from eawf.surfaces.tui.widgets.header import DEFAULT_PROJECT_CODE, build_breadcrumb
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.models import State
     from eawf.platform.registry import Registry
 
 logger = logging.getLogger(__name__)
@@ -71,12 +50,18 @@ _BRAND_GLYPH: str = chrome("brand", mode="unicode")
 #: part of the ``workspace registry-status`` text contract.
 _REGISTRY_UNAVAILABLE: str = "registry unavailable (read failed)"
 
+#: The breadcrumb head a registry with no repo to name falls back to.
+DEFAULT_PROJECT_CODE: str = "EAWF"
+
+#: The sigma that opens the portfolio totals line.
+TOTALS_ROW_LABEL: str = "Σ"
+
 
 def _brand_head(breadcrumb: str) -> str:
     """Render the offline daemon-down brand head ``◉ Eä  <breadcrumb>``.
 
-    The headless brand frame paints the SAME brand mark the interactive header
-    (:func:`eawf.surfaces.tui.widgets.header.render_header`) renders: the leading
+    The headless brand frame paints the SAME brand mark the console header
+    renders: the leading
     ``◉`` brand glyph (the terminal stand-in for the Seal image, UX-19) then the
     two-tone green ``Eä`` wordmark -- the ``E`` plain, the ``ä`` carrying the
     reskin-green accent -- so the daemon-down splash and the live app are visually
@@ -96,109 +81,6 @@ def _brand_head(breadcrumb: str) -> str:
         green wordmark, the canonical gap, then the breadcrumb.
     """
     return f"{_BRAND_GLYPH}{_GLYPH_GAP}{render_wordmark_ansi()}{_BRAND_GAP}{breadcrumb}"
-
-
-def _status_counts(state: State | None) -> dict[str, int]:
-    """Count active phases, active/closed iters, pending waves, and audits.
-
-    All counts are zero for ``None`` state (fresh workspace / daemon
-    cold-spawn) so the frame stays deterministic before any roadmap
-    activity.
-
-    Args:
-        state: The loaded typed state, or ``None``.
-
-    Returns:
-        A mapping of count name to value.
-    """
-    if state is None:
-        return {
-            "phases_open": 0,
-            "iters_open": 0,
-            "iters_closed": 0,
-            "waves_pending": 0,
-            "audits": 0,
-        }
-    from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
-
-    phases_open = sum(1 for p in state.phases.values() if p.status is PhaseStatus.ACTIVE)
-    iters_open = sum(1 for it in state.iters.values() if it.status is IterStatus.ACTIVE)
-    iters_closed = sum(1 for it in state.iters.values() if it.status is IterStatus.CLOSED)
-    waves_pending = sum(1 for w in state.waves.values() if w.status is WaveStatus.PENDING)
-    audits = len(state.audits or {})
-    return {
-        "phases_open": phases_open,
-        "iters_open": iters_open,
-        "iters_closed": iters_closed,
-        "waves_pending": waves_pending,
-        "audits": audits,
-    }
-
-
-def build_status_text(state: State | None) -> str:
-    """Build the deterministic single-frame status text from typed *state*.
-
-    The three-line frame is the non-TTY fallback contract for bare
-    ``eawf`` / ``eawf ui``:
-
-    1. ``◉ Eä  <breadcrumb>`` — the leading brand glyph then the two-tone
-       green brand wordmark (the ``ä`` carries the reskin accent) outside-left
-       of the scope breadcrumb.
-    2. ``  project=<code> phases_open=N iters_open=N ...`` — a one-line
-       lifecycle-count summary.
-    3. ``keymap: <hints>`` — the shared footer key hints.
-
-    Args:
-        state: The loaded typed state, or ``None`` for a fresh workspace.
-
-    Returns:
-        The rendered status frame (no trailing newline).
-    """
-    breadcrumb = build_breadcrumb(state)
-    counts = _status_counts(state)
-    code = DEFAULT_PROJECT_CODE
-    if state is not None and state.project is not None:
-        code = state.project.code
-    return (
-        f"{_brand_head(breadcrumb)}\n"
-        f"  project={code} "
-        f"phases_open={counts['phases_open']} "
-        f"iters_open={counts['iters_open']} "
-        f"iters_closed={counts['iters_closed']} "
-        f"waves_pending={counts['waves_pending']} "
-        f"audits={counts['audits']}\n"
-        f"keymap: {format_hints(DEFAULT_HINTS)}"
-    )
-
-
-def emit_status(
-    *,
-    workspace: Path | None = None,
-    no_input: bool = False,
-    plain: bool = False,
-) -> int:
-    """Print the deterministic status frame and return a clean exit code.
-
-    The non-TTY / ``--plain`` / ``--no-input`` fallback for the bare
-    ``eawf`` / ``eawf ui`` dispatch. Loads ``<workspace>/.ea/state.json``
-    read-only (best effort — a missing or corrupt file degrades to the
-    fresh-workspace placeholder frame) and prints :func:`build_status_text`.
-
-    Args:
-        workspace: Workspace root containing ``.ea/state.json``; defaults
-            to the current working directory.
-        no_input: Accepted for call-site parity with the interactive
-            launcher; the status frame is identical regardless.
-        plain: Accepted for call-site parity; the status frame carries no
-            colour or markup, so plain mode is the only mode here.
-
-    Returns:
-        ``0`` — the status emission never fails.
-    """
-    base = workspace if workspace is not None else Path.cwd()
-    state = load_state(base / ".ea" / "state.json")
-    print(build_status_text(state))
-    return 0
 
 
 def _workspace_breadcrumb(registry: Registry | None) -> str:
@@ -223,17 +105,61 @@ def _workspace_breadcrumb(registry: Registry | None) -> str:
     return DEFAULT_PROJECT_CODE
 
 
-def _totals_line(registry: Registry | None) -> str:
-    """Build the offline portfolio-totals line for the workspace strip.
+def _active_phase_completion(repo_state: dict[str, Any] | None) -> tuple[int, int]:
+    """Return ``(closed, total)`` wave counts for a repo's active phase.
 
-    Folds every registered repo's off-disk state into the same
-    :class:`~eawf.surfaces.tui.widgets.workspace_table.PortfolioTotals` the live
-    workspace table sums, then formats it through the shared
-    :func:`~eawf.surfaces.tui.widgets.workspace_table.format_totals_line`, so the
-    headless ``workspace registry-status`` frame emits the same totals-row
-    layout as the live render when no daemon is reachable. An unavailable /
-    empty registry folds to a zero-valued totals (``Σ 0 repos ...``) rather
-    than omitting the line, so the totals row is present on every frame.
+    The ``current.phase_id`` pointer wins when it names a phase whose status
+    is ``"active"``; otherwise the single active phase is used. A ``None``,
+    malformed or phase-less state yields ``(0, 0)`` so the totals never carry a
+    fabricated ratio.
+
+    Args:
+        repo_state: A decoded per-repo ``state.json`` dict, or ``None``.
+
+    Returns:
+        The ``(closed_waves, total_waves)`` pair for the active phase.
+    """
+    if not repo_state or not isinstance(phases := repo_state.get("phases"), dict):
+        return (0, 0)
+    current = repo_state.get("current")
+    pointer = current.get("phase_id") if isinstance(current, dict) else None
+    active = [
+        pid
+        for pid, phase in phases.items()
+        if isinstance(phase, dict) and phase.get("status") == "active"
+    ]
+    phase_id = pointer if pointer in active else next(iter(active), None)
+    iters, waves = repo_state.get("iters"), repo_state.get("waves")
+    if phase_id is None or not isinstance(iters, dict) or not isinstance(waves, dict):
+        return (0, 0)
+    iter_ids = {
+        iid for iid, it in iters.items() if isinstance(it, dict) and it.get("phase_id") == phase_id
+    }
+    phase_waves = [
+        w for w in waves.values() if isinstance(w, dict) and w.get("iter_id") in iter_ids
+    ]
+    return (sum(1 for w in phase_waves if w.get("status") == "closed"), len(phase_waves))
+
+
+def _sum_field(summaries: object, field: str) -> float:
+    """Sum a numeric *field* across a mapping of summary dicts, zero when absent."""
+    if not isinstance(summaries, dict):
+        return 0.0
+    return sum(
+        float(row[field])
+        for row in summaries.values()
+        if isinstance(row, dict) and isinstance(row.get(field), int | float)
+    )
+
+
+def _totals_line(registry: Registry | None) -> str:
+    """Build the portfolio-totals line for the workspace strip.
+
+    Folds every registered repo's off-disk state into one line: the repo count,
+    the active-phase ``closed/total`` waves summed across repos, and the summed
+    EU ``consumed/estimated``. An unavailable or empty registry folds to
+    ``Σ 0 repos ...`` rather than omitting the line. EU and PR degrade to a dash
+    when nothing was reported; no offline source counts open pull requests.
 
     Args:
         registry: The loaded registry, or ``None`` when unavailable.
@@ -241,17 +167,18 @@ def _totals_line(registry: Registry | None) -> str:
     Returns:
         The one-line totals summary.
     """
-    from eawf.surfaces.tui.widgets.workspace_table import (
-        format_totals_line,
-        portfolio_totals,
-        repo_row_from_path,
-    )
-
-    rows = []
-    if registry is not None:
-        for code in sorted(registry.repos):
-            rows.append(repo_row_from_path(code, registry.repos[code].path))
-    return format_totals_line(portfolio_totals(rows))
+    done = total = 0
+    consumed = estimated = 0.0
+    repos = registry.repos if registry is not None else {}
+    for entry in repos.values():
+        repo_state = read_repo_state(Path(entry.path))
+        closed, count = _active_phase_completion(repo_state)
+        done, total = done + closed, total + count
+        if repo_state:
+            consumed += _sum_field(repo_state.get("actuals"), "elapsed_eu")
+            estimated += _sum_field(repo_state.get("estimates"), "expected_eu")
+    eu = f"{consumed:g}/{estimated:g}" if estimated > 0 else "—"
+    return f"{TOTALS_ROW_LABEL} {len(repos)} repos  waves {done}/{total}  EU {eu}  PR —"
 
 
 def _strip_line(registry: Registry | None, *, is_stale_at: dict[str, bool]) -> str:
@@ -363,8 +290,6 @@ def offline_render(
         "",
         "backlog",
         f"  repos tracked: {repo_count}",
-        "",
-        f"keymap: {format_hints(DEFAULT_HINTS)}",
     ]
 
     wrapped: list[str] = [_brand_head(breadcrumb), ""]
@@ -385,7 +310,5 @@ def offline_render(
 
 
 __all__ = [
-    "build_status_text",
-    "emit_status",
     "offline_render",
 ]

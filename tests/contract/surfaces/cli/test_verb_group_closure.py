@@ -35,6 +35,7 @@ from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import domain_integration as integration_cmd
 from eawf.surfaces.cli.commands import domain_legacy as legacy_cmd
 from eawf.surfaces.cli.commands import release as release_cmd
+from tests._epoch2_helpers import lay_epoch2_tree
 from tests.contract.surfaces.cli.conftest import FakeDaemon
 
 runner = CliRunner()
@@ -196,8 +197,11 @@ def test_surf_081_a_stale_delivery_anchor_is_a_revision_conflict_envelope(
 
 
 @pytest.fixture
-def release_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, dict[str, Any]]]:
-    """Route the release verbs into a recorder answering with a moved record."""
+def release_calls(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> list[tuple[str, dict[str, Any]]]:
+    """Route the release verbs, run from an epoch-2 tree, into a recorder."""
+    monkeypatch.setenv("EA_STATE", str(lay_epoch2_tree(tmp_path / "repo")))
     sent: list[tuple[str, dict[str, Any]]] = []
 
     def dispatch(method: str, params: dict[str, Any], **_kwargs: object) -> dict[str, Any]:
@@ -269,8 +273,7 @@ def research_daemon(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeDaem
     fake = FakeDaemon()
     fake.result = {"question_id": "OQ-1", "status": "blocked", "scope_id": "CANARY"}
     monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", fake)
-    (tmp_path / ".ea").mkdir()
-    (tmp_path / ".ea" / "state.json").write_bytes(b"{}")
+    lay_epoch2_tree(tmp_path)
     return fake
 
 
@@ -452,8 +455,10 @@ def test_surf_083_a_legacy_verb_prints_through_the_shared_renderer(
 
 
 def test_surf_083_a_release_refusal_is_an_envelope_with_the_refusal_status(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monkeypatch.setenv("EA_STATE", str(lay_epoch2_tree(tmp_path)))
+
     def refuse(method: str, _params: dict[str, Any], **_kwargs: object) -> dict[str, Any]:
         raise DaemonRpcError(-32002, "validation_failed: stale_release_revision: moved to 5")
 
@@ -466,9 +471,10 @@ def test_surf_083_a_release_refusal_is_an_envelope_with_the_refusal_status(
 
 
 def test_surf_083_an_advance_links_the_command_that_opens_the_next_rung(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """The next step is a machine fact in the links, so both modes carry it."""
+    monkeypatch.setenv("EA_STATE", str(lay_epoch2_tree(tmp_path)))
     answer = {"train": {"checkpoints": [{"version": "0.7.0.dev10", "status": "open"}]}}
     monkeypatch.setattr(release_cmd, "_dispatch", lambda *_a, **_k: answer)
     machine = runner.invoke(app, ["--json", "release", "advance", _RELEASE_KEY])

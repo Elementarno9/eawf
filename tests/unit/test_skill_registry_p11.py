@@ -44,12 +44,6 @@ def _spec(name: str):
     return next(s for s in SKILL_REGISTRY if s.skill_name == name)
 
 
-def test_planning_auto_plan_defaults_false() -> None:
-    planning = BUILT_IN_DEFAULTS["planning"]
-    assert "auto_plan" in planning
-    assert planning["auto_plan"] is False
-
-
 def test_flow_advance_after_covers_every_transition_default_false() -> None:
     flow = BUILT_IN_DEFAULTS["flow"]
     assert "advance_after" in flow

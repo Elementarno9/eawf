@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -485,3 +486,60 @@ def test_meas_043_a_bare_unknown_token_is_refused(token: str) -> None:
 
     with pytest.raises(ValueError, match="bare unknown token"):
         StatuslineSegment(module="probe", text=f"probe:{token}", truth=truth)
+
+
+# ---- UI-024 / PRX-043: the statusline is a projection under the truth contract ----
+
+
+def test_ui_024_every_segment_carries_producer_freshness_and_quality(tmp_path: Path) -> None:
+    run = run_row(
+        "RUN-00000010",
+        session_id=SESSION_ID,
+        task_key="EAWF-0001",
+        updated_at="2026-09-08T03:00:00Z",
+    )
+    state_path = canary_state_path(tmp_path, {"RUN-00000010": run})
+
+    for segment in orchestrator._build_segments({**HOST_PAYLOAD, "cwd": str(tmp_path)}, state_path):
+        assert_truthful(segment)
+
+
+def test_ui_024_an_absent_value_renders_its_marker_with_a_reachable_reason(tmp_path: Path) -> None:
+    segments = orchestrator._build_segments({"cwd": str(tmp_path / "gone")}, None)
+
+    absent = [segment for segment in segments if segment.truth.state is not TruthState.KNOWN]
+    assert absent
+    for segment in absent:
+        reason = segment.truth.missing_reason
+        assert reason and " " not in reason
+        assert f"n/a({reason})" in segment.text
+
+
+def test_prx_043_every_segment_renders_from_a_producer_with_a_freshness(tmp_path: Path) -> None:
+    state_path = canary_state_path(tmp_path, {})
+
+    segments = orchestrator._build_segments({"cwd": str(tmp_path)}, state_path)
+
+    assert len(segments) == len(orchestrator._MODULE_ORDER)
+    for segment in segments:
+        assert_truthful(segment)
+        tokens = segment.text.replace(":", " ").split()
+        assert not BARE_UNKNOWN_TOKENS & set(tokens)
+
+
+#: The epoch-1 nouns a statusline built only on epoch-2 sources never names.
+_EPOCH1_NOUNS: Final = re.compile(r"\b(?:active_wave\w*|waves?|phases?|iters?)\b")
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="the budget segment still reads the epoch-1 waves.token_budget fields on an "
+    "epoch-1 tree, and the budget, mcp, memory and plugin segments have no epoch-2 producer",
+)
+def test_prx_043_a_census_of_the_statusline_bundle_finds_no_epoch1_noun() -> None:
+    package = Path(context_tokens.__file__).parent
+    found = {
+        path.name: sorted(set(_EPOCH1_NOUNS.findall(path.read_text("utf-8"))))
+        for path in sorted(package.glob("*.py"))
+    }
+    assert {name: nouns for name, nouns in found.items() if nouns} == {}

@@ -1,7 +1,7 @@
 """REL-021: on an epoch-2 tree every epoch-1 mutation refuses with typed migration guidance.
 
-The repository is laid down as an epoch-1 tree through the CLI, then marked the
-way a cutover leaves it. Each refused verb must move nothing, exit in the
+The repository is laid down as an epoch-1 tree from a committed state, then
+marked the way a cutover leaves it. Each refused verb must move nothing, exit in the
 validation bucket with the stable ``legacy_operation_removed`` code and the
 ``LegacyOperationRemoved`` kind, and name what to run instead: the epoch-2 verb
 that replaces it, or the fact that it retired. Epoch-1 reads keep working.
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from pathlib import Path
 from typing import Final
 
@@ -21,14 +22,12 @@ from typer.testing import CliRunner
 from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
 from eawf.kernel.state.io import LEGACY_OPERATION_REMOVED
 from eawf.surfaces.cli import errors as cli_errors
-from eawf.surfaces.cli import exit_codes
+from eawf.surfaces.cli import exit_codes, flag_day_gate
 from eawf.surfaces.cli.app import app
 
 pytestmark = pytest.mark.integration
 
 runner = CliRunner()
-
-WAVE_ID: Final = "P01-I01-W01"
 
 
 def _invoke(*argv: str) -> tuple[int, str]:
@@ -36,33 +35,29 @@ def _invoke(*argv: str) -> tuple[int, str]:
     return result.exit_code, result.output
 
 
+#: A committed epoch-1 state holding one phase, one iter and one wave.
+EPOCH1_STATE: Final = (
+    Path(__file__).resolve().parents[3]
+    / "fixtures"
+    / "states"
+    / "valid"
+    / "03-phase-iter-wave-active.json"
+)
+
+
 @pytest.fixture
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """An epoch-1 repository holding one planned wave."""
+    """An epoch-1 repository holding one wave, laid down from a committed state.
+
+    The flag day refuses every epoch-1 verb on a plain epoch-1 tree, so the
+    tree is copied into place rather than built through the CLI.
+    """
     root = tmp_path / "repo"
-    root.mkdir()
-    monkeypatch.setenv("EA_STATE", str(root / ".ea" / "state.json"))
+    state_path = root / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True)
+    shutil.copyfile(EPOCH1_STATE, state_path)
+    monkeypatch.setenv("EA_STATE", str(state_path))
     monkeypatch.setenv("EAWF_REGISTRY_PATH", str(tmp_path / "registry.json"))
-    for argv in (
-        ("project", "init", "QR", "--title", "Q", "--domains", "x"),
-        ("phase", "open", "--auto", "--title", "x"),
-        ("iter", "open", "--phase", "P01", "--title", "I1"),
-        (
-            "wave",
-            "plan",
-            "P01-I01",
-            "--id",
-            WAVE_ID,
-            "--title",
-            "one",
-            "--files",
-            "src/",
-            "--effort-bucket",
-            "M",
-        ),
-    ):
-        code, output = _invoke(*argv)
-        assert code == exit_codes.OK, output
     return root
 
 
@@ -150,7 +145,8 @@ def test_rel_021_epoch1_reads_keep_working_on_an_epoch2_tree(
     assert LEGACY_OPERATION_REMOVED not in output
 
 
-def test_rel_021_an_unmarked_tree_still_takes_the_epoch1_write(repo: Path) -> None:
+def test_rel_021_an_unmarked_tree_refuses_the_epoch1_write_too(repo: Path) -> None:
+    """After the flag day a plain epoch-1 tree is read-only until it migrates."""
     before = _state_digest(repo)
     code, output = _invoke(
         "wave",
@@ -165,8 +161,10 @@ def test_rel_021_an_unmarked_tree_still_takes_the_epoch1_write(repo: Path) -> No
         "--effort-bucket",
         "M",
     )
-    assert code == exit_codes.OK, output
-    assert _state_digest(repo) != before
+    assert code == exit_codes.ATTACH_FAILURE, output
+    assert f"kind: {flag_day_gate.MIGRATION_REQUIRED_KIND}" in output
+    assert "eawf migrate epoch2" in output
+    assert _state_digest(repo) == before
 
 
 def _rendered(message: str, command_path: str | None) -> cli_errors.ErrorEnvelope:

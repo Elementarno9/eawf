@@ -2,9 +2,8 @@
 
 The headless brand frame (the full-screen daemon-down splash rendered by
 :mod:`eawf.surfaces.tui.chassis.offline` when no daemon is reachable) used to head
-with a colourless / old-teal ``Eä`` while the live interactive header
-(:func:`eawf.surfaces.tui.widgets.header.render_header`) was reskinned to the
-two-tone cosmic-terminal green. This suite proves the offline frame now paints
+with a colourless / old-teal ``Eä`` while the interactive header was reskinned
+to the two-tone cosmic-terminal green. This suite proves the offline frame now paints
 the SAME two-tone green ``Eä`` wordmark the header does:
 
 1. **Token parity** -- the offline frame's brand head embeds the exact accent
@@ -16,14 +15,13 @@ the SAME two-tone green ``Eä`` wordmark the header does:
    :func:`~eawf.surfaces.render.brand.render_wordmark_ansi` at the canonical
    :data:`~eawf.surfaces.render.brand.ACCENT_HEX`, the same accent the header
    threads through :func:`~eawf.surfaces.render.brand.render_wordmark_markup`.
-4. **Snapshot golden** -- the deterministic missing-registry offline frame and
-   the ``None``-state status frame are pinned to committed ``.txt`` goldens so
-   a future brand-head regression (colour drop, teal regression, layout churn)
-   trips a byte diff. Regenerate daemonless with
+4. **Snapshot golden** -- the deterministic missing-registry offline frame is
+   pinned to a committed ``.txt`` golden so a future brand-head regression
+   (colour drop, teal regression, layout churn) trips a byte diff. Regenerate daemonless with
    ``EAWF_OFFLINE_BRAND_REGEN=1 uv run pytest tests/tui/test_offline_brand.py``.
 
-The frames asserted here are pure functions of fixed input (a ``None`` state /
-an absent registry path), so the goldens carry no volatile clock or daemon
+The frame asserted here is a pure function of fixed input (an absent registry
+path), so the golden carries no volatile clock or daemon
 banner -- the brand head and section chrome are fully deterministic.
 """
 
@@ -37,7 +35,7 @@ from eawf.surfaces.render.brand import (
     accent_sgr,
     render_wordmark_ansi,
 )
-from eawf.surfaces.tui.chassis.offline import build_status_text, offline_render
+from eawf.surfaces.tui.chassis.offline import offline_render
 from eawf.surfaces.tui.chassis.sigils import chrome
 
 #: The leading brand glyph (UX-19) + single space the offline frame now heads
@@ -55,7 +53,6 @@ _OLD_TEAL_HEX = "#0d9488"
 _REGEN_ENV = "EAWF_OFFLINE_BRAND_REGEN"
 
 _GOLDEN_DIR = Path(__file__).resolve().parent / "golden" / "offline_brand"
-_STATUS_GOLDEN = _GOLDEN_DIR / "status_frame_none.txt"
 _DASHBOARD_GOLDEN = _GOLDEN_DIR / "dashboard_missing_registry.txt"
 
 
@@ -74,8 +71,7 @@ def _absent_registry_frame() -> str:
 def _assert_text_golden(captured: str, golden_path: Path) -> None:
     """Assert *captured* equals *golden_path*, or regen under the regen env.
 
-    Mirrors the :func:`eawf.surfaces.tui.snapshot.assert_screen_snapshot`
-    contract for plain-text frames: byte equality against a committed golden,
+    Byte equality against a committed golden,
     with an env-gated regeneration escape hatch. Both sides are normalized to
     exactly one trailing newline because the committed golden always ends with
     one (the pre-commit end-of-file fixer guarantees it) while a rendered
@@ -106,34 +102,10 @@ def _assert_text_golden(captured: str, golden_path: Path) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_offline_status_frame_carries_brand_accent_token() -> None:
-    """The status frame's brand head embeds the exact brand.py accent token.
-
-    The accent token is the single canonical ANSI 24-bit SGR
-    (:func:`~eawf.surfaces.render.brand.accent_sgr`) brand.py emits at the
-    reskin green; the offline frame must carry it verbatim so the two surfaces
-    cannot drift to different greens.
-    """
-    frame = build_status_text(None)
-    assert accent_sgr(ACCENT_HEX) in frame
-
-
 def test_offline_dashboard_frame_carries_brand_accent_token() -> None:
     """The dashboard frame's brand head embeds the exact brand.py accent token."""
     frame = _absent_registry_frame()
     assert accent_sgr(ACCENT_HEX) in frame
-
-
-def test_offline_status_frame_rejects_old_teal_accent() -> None:
-    """The old-teal frame fails the token-parity assert -- the regression bar.
-
-    The pre-reskin teal accent's SGR must be ABSENT from the green-reskinned
-    frame; were the offline frame still teal-headed this assert would trip,
-    which is exactly the close-gate guarantee.
-    """
-    frame = build_status_text(None)
-    assert accent_sgr(_OLD_TEAL_HEX) not in frame
-    assert _OLD_TEAL_HEX not in frame
 
 
 def test_offline_dashboard_frame_rejects_old_teal_accent() -> None:
@@ -157,7 +129,7 @@ def test_offline_brand_head_is_two_tone_umlaut_accented_e_plain() -> None:
     the ``◉`` brand glyph + a space before the wordmark, so the two-tone span
     begins right after that glyph head rather than at byte 0.
     """
-    frame = build_status_text(None)
+    frame = _absent_registry_frame()
     sgr = accent_sgr(ACCENT_HEX)
     # The brand glyph leads, then the wordmark: ◉ space E accent-open umlaut.
     assert frame.startswith(_GLYPH_HEAD)
@@ -180,33 +152,12 @@ def test_offline_brand_head_equals_header_wordmark_channel() -> None:
     glyph (UX-19) then the canonical ANSI wordmark verbatim.
     """
     head = f"{_GLYPH_HEAD}{render_wordmark_ansi(ACCENT_HEX)}"
-    assert build_status_text(None).startswith(head)
     assert _absent_registry_frame().startswith(head)
-
-
-def test_offline_status_and_dashboard_share_one_brand_head() -> None:
-    """Both offline renderers head with the identical glyph + two-tone wordmark.
-
-    Neither path re-derives the brand head independently, so a future reskin
-    cannot leave one frame green and the other teal.
-    """
-    head = f"{_GLYPH_HEAD}{render_wordmark_ansi(ACCENT_HEX)}"
-    status_head = build_status_text(None).split("\n", 1)[0]
-    dashboard_head = _absent_registry_frame().split("\n", 1)[0]
-    assert status_head.startswith(head)
-    assert dashboard_head.startswith(head)
-    # Both heads carry byte-identical glyph + wordmark + gap before the breadcrumb.
-    assert status_head[: len(head)] == dashboard_head[: len(head)]
 
 
 # --------------------------------------------------------------------------
 # Snapshot goldens -- deterministic text frames
 # --------------------------------------------------------------------------
-
-
-def test_offline_status_frame_matches_golden() -> None:
-    """The ``None``-state status frame is byte-equal to its committed golden."""
-    _assert_text_golden(build_status_text(None), _STATUS_GOLDEN)
 
 
 def test_offline_dashboard_frame_matches_golden() -> None:

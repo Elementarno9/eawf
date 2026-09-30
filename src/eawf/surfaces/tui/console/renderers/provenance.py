@@ -52,6 +52,7 @@ from eawf.surfaces.tui.console.keybar import keybar, pick, route_pairs
 from eawf.surfaces.tui.console.mutation import open_setting, setting_token
 from eawf.surfaces.tui.console.navigation import Ctx, go
 from eawf.surfaces.tui.console.operations import SettingRequest
+from eawf.surfaces.tui.console.renderers import setting_editors as editors
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import BRAND, CRUMB_SEP, TRUTH
 from eawf.surfaces.tui.console.width import cell_len, pad
@@ -73,6 +74,7 @@ _EDIT_KEYS: Mapping[str, tuple[tuple[str, str], ...]] = MappingProxyType(
         "pick": (("↑↓", "choose"), ("Enter", "write"), ("Esc", "cancel")),
         "num": (("↑↓", "step"), ("Enter", "write"), ("Esc", "cancel")),
         "text": (("type", "value"), ("Enter", "write"), ("Esc", "cancel")),
+        "offer": (("↑↓", "layer"), ("Enter", "edit there"), ("Esc", "cancel")),
     }
 )
 
@@ -89,11 +91,13 @@ RAIL_NARROW = 14
 RAIL_WIDE = 17
 
 #: The gutter glyph per lens relation: set at the lens and in force, set at the lens and
-#: shadowed, inherited from another layer, and stated by no layer but the defaults.
+#: shadowed, inherited from another layer, and stated by no layer but the defaults. A key
+#: no code reads, listed only while a file still states it, is marked apart from all four.
 GLYPH_WINS = "="
 GLYPH_SHADOWED = "≠"
 GLYPH_INHERITS = "·"
 GLYPH_DEFAULT = "–"  # noqa: RUF001
+GLYPH_UNREAD = "!"
 
 #: How a layer that states nothing for a key reads in the stack card.
 NOT_STATED = "–"  # noqa: RUF001
@@ -149,6 +153,8 @@ def _rank(layer: Layer | None) -> int:
 
 def glyph(leaf: SettingsLeaf, at: Layer) -> str:
     """Return the key's gutter glyph as the lens layer ``at`` sees it."""
+    if leaf.unread:
+        return GLYPH_UNREAD
     if leaf.stated_at(at) is not None:
         return GLYPH_WINS if leaf.source_layer is at else GLYPH_SHADOWED
     if leaf.source_layer not in (None, Layer.BUILT_IN):
@@ -182,17 +188,35 @@ def why(leaf: SettingsLeaf, at: Layer) -> str:
     return f"not set at {at} · inherits {value_text(leaf)} from the {leaf.source_layer} layer"
 
 
+def _unwritable(leaf: SettingsLeaf) -> str:
+    """Return why no layer may write ``leaf``, in the words its catalog standing calls for."""
+    match leaf.consumer_kind:
+        case None:
+            return f"{leaf.key} is off the catalog · no eawf code reads it · x removes it"
+        case "deprecated":
+            return f"{leaf.key} is deprecated · no longer read · x removes it from this layer"
+        case "reserved":
+            return f"{leaf.key} is reserved · not read yet · kept for a planned feature"
+        case _:
+            return f"{leaf.key} is locked · it is set by code and no layer may write it"
+
+
 def refusal(leaf: SettingsLeaf, at: Layer) -> str:
     """Return why the key cannot be edited at ``at``; empty when it can."""
     if not leaf.editable_at:
-        return f"{leaf.key} is locked · no layer may write it"
-    if leaf.value_type not in _PICKED | _TYPED:
+        return _unwritable(leaf)
+    if leaf.value_type not in _PICKED | _TYPED and leaf.editor is None:
         where = LAYER_PLACES[at][1]
         return f"{leaf.key} is a {leaf.value_type or 'free-form'} value · edit it in {where}"
     if at not in leaf.editable_at:
         allowed = ", ".join(layer.value for layer in leaf.editable_at)
         return f"{leaf.key} is not editable at {at} · it is editable at {allowed}"
     return ""
+
+
+def offered(leaf: SettingsLeaf, lens_layers: Sequence[Layer]) -> tuple[Layer, ...]:
+    """Return the file layers that may hold ``leaf``, the highest precedence first."""
+    return tuple(layer for layer in reversed(lens_layers) if layer in leaf.editable_at)
 
 
 def after_write(leaf: SettingsLeaf, at: Layer, shown: str) -> str:
@@ -248,8 +272,8 @@ def rail_width(settings: EffectiveSettingsView, *, wide: bool) -> int:
     return max(floor, max((cell_len(name) for name in names), default=0) + 2)
 
 
-def _chain() -> str:
-    return _CHAIN_SEP.join(layer.value for layer in LENS_LAYERS)
+def _chain(layers: Sequence[Layer]) -> str:
+    return _CHAIN_SEP.join(layer.value for layer in layers)
 
 
 def _setters(leaf: SettingsLeaf | None) -> dict[str, str]:
@@ -305,30 +329,95 @@ def _readout(
     if leaf is None:
         hint = f" nothing matches \\{session.set_filter}" if session.set_filter else ""
         return [hint or " this section holds no keys"]
-    at = lens(session)
-    shape = leaf.value_type or "outside the catalog"
-    allowed = f" · one of {' | '.join(leaf.allowed)}" if leaf.allowed else ""
-    head = f" {_name(leaf, section)} · {shape}{allowed}"
     wrapped = textwrap.wrap(
         leaf.meaning or "the catalog states no meaning for this key", max(8, col - 4)
     )
     meaning = [f"{' ' if i == 0 else '   '}{line}" for i, line in enumerate(wrapped)]
     held = session.edit
     edit = held if held is not None and held.get("key") == leaf.key else None
-    tail = _chooser(leaf, at, edit)
-    if edit is not None:
-        if edit["kind"] == "pick":
-            shown = edit["vals"][edit["idx"]]
-        else:
-            step = "      ↑↓ steps" if edit["kind"] == "num" else ""
-            tail.append(f" typing   {edit['text']}▏{step}")
-            shown = edit["text"] or '""'
-        tail.append(f" WRITES   {leaf.key} at {at} · {LAYER_PLACES[at][1]}")
-        tail.append(f" AFTER    {after_write(leaf, at, shown)}")
-    else:
-        tail.append(f" {why(leaf, at)}")
-    lines = [head, *meaning[: max(0, cap - 1 - len(tail))], *tail]
+    tail = _tail(leaf, session, edit, col, max(1, cap - 3))
+    lines = [_head(leaf, section), *meaning[: max(0, cap - 1 - len(tail))], *tail]
     return [_clip(line, col) for line in lines[: max(1, cap)]]
+
+
+def span(value_range: tuple[float | None, float | None]) -> str:
+    """Return a catalog range as the readout states it: both ends, or the one that is set."""
+    low, high = value_range
+    if low is not None and high is not None:
+        return f"{low:g} to {high:g}"
+    return f"at least {low:g}" if low is not None else f"at most {high:g}"
+
+
+def _head(leaf: SettingsLeaf, section: str) -> str:
+    """Return the readout's first line: the key, its shape, and what it may hold."""
+    shape = leaf.value_type or "outside the catalog"
+    if leaf.editor is not None:
+        detail = f" · {editors.head(leaf)}"
+    elif leaf.value_range is not None:
+        detail = f" · {span(leaf.value_range)}"
+    else:
+        detail = f" · one of {' | '.join(leaf.allowed)}" if leaf.allowed else ""
+    return f" {_name(leaf, section)} · {shape}{detail}"
+
+
+def edit_layer(session: Session, edit: Mapping[str, Any]) -> Layer:
+    """Return the layer an open edit writes to: the one it was opened at, else the lens."""
+    return Layer(edit["at"]) if "at" in edit else lens(session)
+
+
+def _offer_lines(leaf: SettingsLeaf, edit: Mapping[str, Any], at: Layer) -> list[str]:
+    """Return the layer offer: the layers that can hold the key, the pointed one first."""
+    layers = [Layer(layer) for layer in edit["layers"]]
+    names = ", ".join(layer.value for layer in layers)
+    rows = [f" {at} cannot hold {leaf.key.rsplit('.', 1)[-1]} · only {names} can"]
+    for i, layer in enumerate(layers):
+        caret = "▸" if i == edit["idx"] else " "
+        rows.append(f" {caret} write it at {layer} · {LAYER_PLACES[layer][1]}")
+    rows.append(f"   Esc keeps the lens at {at} and writes nothing")
+    return rows
+
+
+def _composite_tail(
+    leaf: SettingsLeaf, edit: dict[str, Any], to: Layer, col: int, room: int
+) -> list[str]:
+    """Return an open list or mapping editor's rows, then where it writes and what follows."""
+    write = editors.written(edit)
+    if write.reason:
+        after = f"nothing yet · {write.reason}"
+    elif write.unset:
+        stated = leaf.stated_at(to) is not None
+        after = after_unset(leaf, to) if stated else f"nothing to unset · {to} states no ladder"
+    else:
+        after = after_write(leaf, to, editors.shown(edit, write))
+    return [
+        *editors.lines(edit, col, room),
+        f" WRITES   {leaf.key} at {to} · {LAYER_PLACES[to][1]}",
+        f" AFTER    {after}",
+    ]
+
+
+def _tail(
+    leaf: SettingsLeaf, session: Session, edit: dict[str, Any] | None, col: int, room: int
+) -> list[str]:
+    """Return the readout under the meaning: the value chooser or editor, or why it stands."""
+    at = lens(session)
+    if edit is None:
+        return [*_chooser(leaf, at, None), f" {why(leaf, at)}"]
+    if edit["kind"] == "offer":
+        return _offer_lines(leaf, edit, at)
+    to = edit_layer(session, edit)
+    if edit["kind"] in editors.COMPOSITE:
+        return _composite_tail(leaf, edit, to, col, room)
+    tail = _chooser(leaf, to, edit)
+    if edit["kind"] == "pick":
+        shown = edit["vals"][edit["idx"]]
+    else:
+        step = "      ↑↓ steps" if edit["kind"] == "num" else ""
+        tail.append(f" typing   {edit['text']}▏{step}")
+        shown = edit["text"] or '""'
+    tail.append(f" WRITES   {leaf.key} at {to} · {LAYER_PLACES[to][1]}")
+    tail.append(f" AFTER    {after_write(leaf, to, shown)}")
+    return tail
 
 
 def _key_width(col: int) -> int:
@@ -384,7 +473,7 @@ def _body(
     total = len(settings.keys_of(section))
     count = "" if len(keys) == total else f"   {len(keys)} of {total}"
     head = f" {section.upper()}{count}{_filter_hint(session)}"
-    chain = _chain()
+    chain = _chain(settings.lens_layers)
     setters = _setters(leaf)
     body: list[str] = (
         [
@@ -457,7 +546,7 @@ def _keys(view: View) -> tuple[tuple[str, str], ...]:
     session = view.session
     edit = session.edit
     if edit is not None:
-        return _EDIT_KEYS[edit["kind"]]
+        return editors.keys(edit) if edit["kind"] in editors.COMPOSITE else _EDIT_KEYS[edit["kind"]]
     if session.set_typing:
         return _FILTER_KEYS
     return ROUTE_KEYS + (WIDE_KEYS if view.wide else ())
@@ -502,6 +591,9 @@ def settings_frame(view: View, settings: EffectiveSettingsView) -> list[str]:
     if session.edit is None and (leaf is None or leaf.stated_at(lens(session)) is None):
         # unset removes the lens layer's own value, so with none there it has nothing to do
         keys = tuple(pair for pair in keys if pair[0] != "x")
+    if session.edit is None and len(section_keys(settings, session, section)) < 2:
+        # a section showing one key has no other field for the arrows to step to
+        keys = tuple(pair for pair in keys if pair[1] != "field")
     return build(view, rows, keybar(keys, w))
 
 
@@ -557,7 +649,7 @@ def _stack_lines(
     source = leaf.source_layer.value if leaf.source_layer is not None else "no layer"
     reading = [
         f"WINNING    {source} {value_text(leaf) if leaf.source_layer else ''}".rstrip(),
-        f"LENS       {at} · l on the Settings route cycles the five file layers",
+        f"LENS       {at} · l on the Settings route cycles the file layers",
         f"LENS SETS  {_on_lens(leaf, at)}",
         *_tier_two(leaf),
     ]
@@ -626,28 +718,48 @@ def stack_frame(view: View, settings: EffectiveSettingsView) -> list[str]:
 # ---------- the route's keys: the lens, the sections, the filter, the edit ----------
 
 
-def _open_edit(ctx: Ctx, leaf: SettingsLeaf) -> None:
-    """Open the chooser for ``leaf`` under the lens, or refuse with the reason named."""
+def _start_edit(ctx: Ctx, leaf: SettingsLeaf, at: Layer) -> None:
+    """Open the editor ``leaf`` takes, writing to ``at`` and seeded from what ``at`` holds."""
     s = ctx.s
-    at = lens(s)
-    refused = refusal(leaf, at)
-    if refused:
-        ctx.log("Enter", refused)
-        return
     seed = _held(leaf, at) or ""
     values = list(pick_values(leaf))
-    if values:
+    if leaf.editor is not None:
+        s.edit = editors.open_editor(leaf, at, _held(leaf, at))
+    elif values:
         s.edit = {
             "kind": "pick",
             "key": leaf.key,
+            "at": at.value,
             "vals": values,
             "idx": values.index(seed) if seed in values else 0,
         }
     else:
         text = seed.strip("[]") if leaf.value_type == "list_str" else seed
         kind = "num" if leaf.value_type in _NUMERIC else "text"
-        s.edit = {"kind": kind, "key": leaf.key, "text": "" if text == '""' else text}
+        text = "" if text == '""' else text
+        s.edit = {"kind": kind, "key": leaf.key, "at": at.value, "text": text}
     ctx.log("Enter", f"editing {leaf.key} · writes to {at} · Esc writes nothing")
+
+
+def _open_edit(ctx: Ctx, settings: EffectiveSettingsView, leaf: SettingsLeaf) -> None:
+    """Open the editor for ``leaf`` under the lens, offer the layers that hold it, or refuse.
+
+    A key the lens layer cannot hold is offered at the file layers that can, highest
+    precedence first; choosing one writes there, and the lens itself does not move.
+    """
+    s = ctx.s
+    at = lens(s)
+    layers = offered(leaf, settings.lens_layers)
+    if at not in leaf.editable_at and layers and not refusal(leaf, layers[0]):
+        names = [layer.value for layer in layers]
+        s.edit = {"kind": "offer", "key": leaf.key, "layers": names, "idx": 0}
+        ctx.log("Enter", f"{at} cannot hold {leaf.key} · choose the layer to write it at")
+        return
+    refused = refusal(leaf, at)
+    if refused:
+        ctx.log("Enter", refused)
+        return
+    _start_edit(ctx, leaf, at)
 
 
 def coerce(leaf: SettingsLeaf, text: str) -> tuple[Any, str]:
@@ -680,10 +792,11 @@ def coerce(leaf: SettingsLeaf, text: str) -> tuple[Any, str]:
 
 
 def step(leaf: SettingsLeaf, text: str, up: bool) -> str:
-    """Return ``text`` moved one step up or down: a whole one for an int, a twentieth else.
+    """Return ``text`` moved one step up or down, held inside the key's catalog range.
 
-    The catalog states no range for any number, so a step is never clamped; a text that
-    is not a number yet steps from zero.
+    An int moves by one and a float by a twentieth; a text that is not a number yet steps
+    from zero. A step that would leave the catalog's ``value_range`` stops at its end, so
+    the arrows never offer a value the daemon refuses.
     """
     whole = leaf.value_type == "int"
     try:
@@ -691,36 +804,113 @@ def step(leaf: SettingsLeaf, text: str, up: bool) -> str:
     except ValueError:
         current = 0.0
     moved = current + (1 if up else -1) * (1 if whole else _FLOAT_STEP)
+    low, high = leaf.value_range or (None, None)
+    if low is not None:
+        moved = max(moved, low)
+    if high is not None:
+        moved = min(moved, high)
     return str(round(moved)) if whole else f"{round(moved, 2):g}"
 
 
+def _request(
+    settings: EffectiveSettingsView,
+    leaf: SettingsLeaf,
+    at: Layer,
+    *,
+    value: Any = None,
+    unset: bool = False,
+) -> SettingRequest:
+    """Return the request writing ``value`` for ``leaf`` at ``at``, or removing it there."""
+    return SettingRequest(
+        target=leaf.key,
+        layer=at.value,
+        value=value,
+        unset=unset,
+        branch=settings.branch if at is Layer.BRANCH else None,
+    )
+
+
+def _commit_whole(
+    ctx: Ctx, settings: EffectiveSettingsView, leaf: SettingsLeaf, edit: dict[str, Any]
+) -> None:
+    """Send a list or mapping editor's whole value with its difference, or say why not."""
+    at = edit_layer(ctx.s, edit)
+    write = editors.written(edit)
+    key = "w" if edit["kind"] in ("rows", "pin") else "Enter"
+    if write.reason:
+        ctx.log(key, write.reason)
+        return
+    if write.unset and leaf.stated_at(at) is None:
+        ctx.log(key, f"{leaf.key} is not set at {at} · nothing to unset")
+        return
+    ctx.s.edit = None
+    token = setting_token(leaf)
+    changes = editors.changes(edit, write)
+    if write.unset:
+        request = _request(settings, leaf, at, unset=True)
+        open_setting(ctx, request, effect=after_unset(leaf, at), token=token, changes=changes)
+        return
+    effect = after_write(leaf, at, editors.shown(edit, write))
+    request = _request(settings, leaf, at, value=write.value)
+    open_setting(ctx, request, effect=effect, token=token, changes=changes)
+
+
 def _commit(ctx: Ctx, settings: EffectiveSettingsView, edit: dict[str, Any]) -> None:
-    """Write the chosen value at the lens through the daemon, or say why it was not sent."""
+    """Write the chosen value at the edit's layer through the daemon, or say why not."""
     s = ctx.s
     leaf = settings.leaf(edit["key"])
+    if edit["kind"] in editors.COMPOSITE:
+        _commit_whole(ctx, settings, leaf, edit)
+        return
     text = edit["vals"][edit["idx"]] if edit["kind"] == "pick" else edit["text"]
     value, why_not = coerce(leaf, text)
     if why_not:
         ctx.log("Enter", why_not)
         return
     s.edit = None
-    at = lens(s)
-    request = SettingRequest(
-        target=leaf.key,
-        layer=at.value,
-        value=value,
-        branch=settings.branch if at is Layer.BRANCH else None,
-    )
+    at = edit_layer(s, edit)
+    request = _request(settings, leaf, at, value=value)
     open_setting(ctx, request, effect=after_write(leaf, at, text), token=setting_token(leaf))
 
 
-def _edit_key(ctx: Ctx, settings: EffectiveSettingsView, key: str) -> bool:
-    """Route a key to the open chooser; Escape leaves the edit before it leaves the route."""
+def _offer_key(ctx: Ctx, settings: EffectiveSettingsView, edit: dict[str, Any], key: str) -> None:
+    """Move over the offered layers; Enter opens the key's editor writing to the one chosen."""
+    s = ctx.s
+    if key == "Escape":
+        s.edit = None
+        ctx.log("Esc", f"the lens stays at {lens(s)} · nothing written")
+    elif key in ("ArrowDown", "ArrowUp"):
+        edit["idx"] = (edit["idx"] + (1 if key == "ArrowDown" else -1)) % len(edit["layers"])
+    elif key == "Enter":
+        s.edit = None
+        _start_edit(ctx, settings.leaf(edit["key"]), Layer(edit["layers"][edit["idx"]]))
+
+
+def _composite_key(
+    ctx: Ctx, settings: EffectiveSettingsView, edit: dict[str, Any], key: str, shift: bool
+) -> None:
+    """Hand a key to the open list or mapping editor, then act on what it asked for."""
+    verdict, note = editors.press(edit, key, shift)
+    if verdict == "cancel":
+        ctx.s.edit = None
+        ctx.log("Esc", "edit cancelled · nothing written")
+    elif verdict == "write":
+        _commit(ctx, settings, edit)
+    elif note:
+        ctx.log(key, note)
+
+
+def _edit_key(ctx: Ctx, settings: EffectiveSettingsView, key: str, shift: bool) -> bool:
+    """Route a key to the open editor; Escape leaves the edit before it leaves the route."""
     s = ctx.s
     edit = s.edit
     assert edit is not None, "only called with an edit open"
     kind = edit["kind"]
-    if key == "Escape":
+    if kind == "offer":
+        _offer_key(ctx, settings, edit, key)
+    elif kind in editors.COMPOSITE:
+        _composite_key(ctx, settings, edit, key, shift)
+    elif key == "Escape":
         s.edit = None
         ctx.log("Esc", "edit cancelled · nothing written")
     elif key == "Enter":
@@ -737,21 +927,20 @@ def _edit_key(ctx: Ctx, settings: EffectiveSettingsView, key: str) -> bool:
 
 
 def _unset(ctx: Ctx, settings: EffectiveSettingsView, leaf: SettingsLeaf) -> None:
-    """Remove the lens layer's value, or say there is nothing there to remove."""
+    """Remove the lens layer's value, or say there is nothing there to remove.
+
+    A key no code reads is removed from whichever file layer states it, since that
+    removal is the one edit left for it; any other key only where it may be written.
+    """
     at = lens(ctx.s)
     if leaf.stated_at(at) is None:
         ctx.log("x", f"{leaf.key} is not set at {at} · nothing to unset")
         return
-    refused = refusal(leaf, at)
+    refused = "" if leaf.unread else refusal(leaf, at)
     if refused:
         ctx.log("x", refused)
         return
-    request = SettingRequest(
-        target=leaf.key,
-        layer=at.value,
-        unset=True,
-        branch=settings.branch if at is Layer.BRANCH else None,
-    )
+    request = _request(settings, leaf, at, unset=True)
     open_setting(ctx, request, effect=after_unset(leaf, at), token=setting_token(leaf))
 
 
@@ -785,9 +974,11 @@ def _browse_key(ctx: Ctx, settings: EffectiveSettingsView, key: str, shift: bool
     s = ctx.s
     section, _offset, _leaf = placement(s, settings)
     if key in ("l", "L"):
+        layers = settings.lens_layers
         at = lens(s)
         step_by = -1 if key == "L" or shift else 1
-        s.lens = LENS_LAYERS[(LENS_LAYERS.index(at) + step_by) % len(LENS_LAYERS)].value
+        here = layers.index(at) if at in layers else 0
+        s.lens = layers[(here + step_by) % len(layers)].value
         ctx.log(key, f"lens → {s.lens} · {LAYER_PLACES[Layer(s.lens)][1]}")
         return True
     if key == "Tab":
@@ -822,7 +1013,7 @@ def native_seam(ctx: Ctx, settings: EffectiveSettingsView, key: str, shift: bool
     if s.overlay:
         return False
     if s.edit is not None:
-        return _edit_key(ctx, settings, key)
+        return _edit_key(ctx, settings, key, shift)
     if s.set_typing:
         return _filter_key(ctx, settings, key)
     if key == "\\":
@@ -836,7 +1027,7 @@ def native_seam(ctx: Ctx, settings: EffectiveSettingsView, key: str, shift: bool
     if leaf is None:
         return False
     if key == "Enter":
-        _open_edit(ctx, leaf)
+        _open_edit(ctx, settings, leaf)
     elif key == "x":
         _unset(ctx, settings, leaf)
     elif key == "i":

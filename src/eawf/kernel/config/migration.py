@@ -8,11 +8,12 @@ the canonical ``"1.0"`` marker; earlier markers ``"1.1"`` (P14-W03
 shipped to durable releases) are accepted on input and upgraded to
 ``"1.0"`` in place.
 
-The migration is *additive* — every new C08 section (``telemetry``,
-``dispatch``, ``language``, ``runtime.fallback``, ``profiles.trusted``,
-``project.goals``, ``project.success_metrics``, ``config.layers_visible``)
-gets a defaulted value when absent, but the operator's existing values
-are NEVER overwritten. Re-running on an already-``"1.0"`` body is a
+The legacy upgrade is *additive* — the C08 sections a consumer reads
+(``telemetry``, ``profiles.trusted``) get a defaulted value when absent,
+but the operator's existing values are NEVER overwritten. Every body, on
+any marker, also loses the keys no code reads any more
+(:data:`~eawf.kernel.config.registry.leaf_catalog.DEPRECATED_LEAF_KEYS`
+outside the catalog). Re-running on a canonical ``"1.0"`` body is a
 no-op.
 
 Public API:
@@ -33,6 +34,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import secrets
 import time
 from collections.abc import Mapping
@@ -42,6 +44,8 @@ from typing import Any, Final, Literal
 import yaml
 
 from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
+from eawf.kernel.config.layered import unset_dotted
+from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS, LEAF_KEY_REGISTRY
 from eawf.kernel.fsync import fsync_parent_dir
 from eawf.runtime.lock import portalock
 from eawf.surfaces.cli.errors import ValidationError
@@ -59,6 +63,9 @@ ACCEPTED_MARKERS: Final[frozenset[str]] = LEGACY_MARKERS | {CURRENT_MARKER}
 
 
 SchemaMarker = Literal["1.0", "1.1", "2"]
+
+# a co-author written as one string, the way a trailer names it: ``Name <email>``
+_COAUTHOR_LINE: Final = re.compile(r"(?P<name>[^<>]+)<(?P<email>[^<>\s]+@[^<>\s]+)>")
 
 
 def migrate_config_payload(
@@ -108,49 +115,8 @@ def migrate_config_payload(
     upgraded["schema_version"] = CURRENT_MARKER
     _cleanup_legacy_keys(upgraded)
     _shim_runtime_preference(upgraded)
-    _ensure_section(upgraded, "config", {"layers_visible": True})
-    _ensure_section(
-        upgraded,
-        "telemetry",
-        {
-            "enabled": False,
-            "export": {"format": "prom"},
-            "window_default": "7d",
-            "aggregate_window": "24h",
-            "db_kind": "sqlite",
-        },
-    )
-    _ensure_section(
-        upgraded,
-        "dispatch",
-        {
-            "session_policy_default": "hybrid",
-            "session_handle_ttl_seconds": 86400,
-        },
-    )
-    _ensure_section(
-        upgraded,
-        "language",
-        {"runtime": "python", "fast_extras": []},
-    )
-    _ensure_subsection(
-        upgraded,
-        parent="runtime",
-        child="fallback",
-        default={
-            "on_errors": [
-                "RUNTIME_RATE_LIMIT",
-                "RUNTIME_SERVER_ERROR",
-                "RUNTIME_TIMEOUT",
-                "RUNTIME_API_ERROR",
-            ],
-            "retry_policy": "hybrid",
-            "max_backoff_seconds": 90,
-        },
-    )
+    _ensure_section(upgraded, "telemetry", {"enabled": False, "db_kind": "sqlite"})
     _ensure_subkey(upgraded, parent="profiles", key="trusted", default={})
-    _ensure_subkey(upgraded, parent="project", key="goals", default=[])
-    _ensure_subkey(upgraded, parent="project", key="success_metrics", default={})
 
     logger.info(f"migrate_config_payload upgraded from={marker!r} to={CURRENT_MARKER!r}")
     return upgraded, True
@@ -271,29 +237,6 @@ def _ensure_section(
             existing[key] = _deep_copy(value)
 
 
-def _ensure_subsection(
-    payload: dict[str, Any],
-    *,
-    parent: str,
-    child: str,
-    default: dict[str, Any],
-) -> None:
-    """Insert ``payload[parent][child] = default`` when absent.
-
-    Creates ``payload[parent]`` first if needed so the operation is
-    safe on payloads that omitted the entire parent block.
-    """
-    if not isinstance(payload.get(parent), dict):
-        payload[parent] = {}
-    parent_block = payload[parent]
-    if not isinstance(parent_block.get(child), dict):
-        parent_block[child] = _deep_copy(default)
-        return
-    for key, value in default.items():
-        if key not in parent_block[child]:
-            parent_block[child][key] = _deep_copy(value)
-
-
 def _ensure_subkey(
     payload: dict[str, Any],
     *,
@@ -306,44 +249,6 @@ def _ensure_subkey(
         payload[parent] = {}
     if key not in payload[parent]:
         payload[parent][key] = _deep_copy(default)
-
-
-def _rename_project_default_track(payload: dict[str, Any]) -> bool:
-    """Rename ``project.default_subproject`` to ``project.default_track``."""
-    project = payload.get("project")
-    if not isinstance(project, dict) or "default_subproject" not in project:
-        return False
-    default_track = project.pop("default_subproject")
-    if "default_track" not in project:
-        project["default_track"] = default_track
-    return True
-
-
-def _rename_memory_store_names(payload: dict[str, Any]) -> bool:
-    """Rename legacy ``memory.stores`` value ``subproject`` to ``track``."""
-    memory = payload.get("memory")
-    if not isinstance(memory, dict) or not isinstance(memory.get("stores"), list):
-        return False
-    migrated_stores: list[Any] = []
-    for store in memory["stores"]:
-        migrated = "track" if store == "subproject" else store
-        if migrated not in migrated_stores:
-            migrated_stores.append(migrated)
-    if migrated_stores == memory["stores"]:
-        return False
-    memory["stores"] = migrated_stores
-    return True
-
-
-def _pop_leaf(payload: dict[str, Any], section: str, key: str) -> bool:
-    """Remove one obsolete nested leaf and prune an empty section."""
-    body = payload.get(section)
-    if not isinstance(body, dict) or key not in body:
-        return False
-    del body[key]
-    if not body:
-        del payload[section]
-    return True
 
 
 def _migrate_flow_transitions(payload: dict[str, Any]) -> bool:
@@ -405,9 +310,6 @@ def _normalize_runtime_ids(payload: dict[str, Any]) -> bool:
     if not isinstance(runtime, dict):
         return False
     changed = False
-    if runtime.get("default") == "claude":
-        runtime["default"] = "claude-code"
-        changed = True
     for key in ("adapters", "preference"):
         values = runtime.get(key)
         if not isinstance(values, list):
@@ -421,6 +323,26 @@ def _normalize_runtime_ids(payload: dict[str, Any]) -> bool:
             runtime[key] = normalized
             changed = True
     return changed
+
+
+def _split_coauthor_project(payload: dict[str, Any]) -> bool:
+    """Rewrite a one-string ``vcs.coauthor.project`` as its ``name`` and ``email`` leaves.
+
+    The project identity is a ``{name, email}`` record, but it was catalogued as one
+    string, so an editor could write ``Name <email>`` where the record belongs. That
+    string is split into the two leaves; a string that names no email cannot become an
+    identity and is removed, as it never validated.
+    """
+    vcs = payload.get("vcs")
+    coauthor = vcs.get("coauthor") if isinstance(vcs, dict) else None
+    if not isinstance(coauthor, dict) or not isinstance(coauthor.get("project"), str):
+        return False
+    written = _COAUTHOR_LINE.fullmatch(coauthor["project"].strip())
+    if written is None:
+        del coauthor["project"]
+    else:
+        coauthor["project"] = {"name": written["name"].strip(), "email": written["email"]}
+    return True
 
 
 def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
@@ -437,10 +359,11 @@ def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
        (list) + ``runtime.preference`` (ordered fallback). The shim in
        :mod:`eawf.kernel.config.layered` warns on every CLI invocation until
        the on-disk file drops the legacy key.
-    4. ``project.default_subproject`` — renamed to
-       ``project.default_track`` with the Track model rename.
-    5. ``memory.stores`` entries named ``subproject`` — renamed to
-       ``track`` in place.
+    4. Every key of :data:`~eawf.kernel.config.registry.leaf_catalog.DEPRECATED_LEAF_KEYS`
+       the catalog no longer declares — no code reads its value.
+    5. The whole ``hooks`` section, which was reserved and never read.
+    6. A one-string ``vcs.coauthor.project``, split into its ``name`` and
+       ``email`` leaves by :func:`_split_coauthor_project`.
 
     The cleanup is idempotent: a body that already passes all cleanup
     checks returns ``False`` and the input is untouched.
@@ -459,41 +382,17 @@ def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
         del payload["plugins"]
         changed = True
 
-    changed = _rename_project_default_track(payload) or changed
-    changed = _rename_memory_store_names(payload) or changed
     changed = _migrate_flow_transitions(payload) or changed
     changed = _migrate_adapter_catalog(payload) or changed
     changed = _normalize_runtime_ids(payload) or changed
+    changed = _split_coauthor_project(payload) or changed
 
-    for section, key in (
-        ("audit", "fix_safe"),
-        ("ship", "require_audit_pass"),
-        ("ship", "require_memory_review"),
-        ("polish", "auto_apply_safe"),
-        ("polish", "deletion_policy"),
-        ("vcs", "auto_push"),
-        ("vcs", "pr_open"),
-        # Behaviourally dead leaves, deleted rather than wired to a consumer.
-        ("preferences", "solution_bias"),
-        ("preferences", "scope_size"),
-        # The effort-ladder calibration retired with the ladder itself.
-        ("estimation", "buckets"),
-    ):
-        changed = _pop_leaf(payload, section, key) or changed
+    for key in sorted(DEPRECATED_LEAF_KEYS - LEAF_KEY_REGISTRY.keys()):
+        changed = unset_dotted(payload, key.split(".")) or changed
 
     if "hooks" in payload:
         del payload["hooks"]
         changed = True
-
-    # ``telemetry.export.endpoint`` was dropped when telemetry became
-    # strict-local (no external export target); strip the orphan leaf so
-    # the daemon's unknown-config-key gate does not reject the migrated body.
-    telemetry = payload.get("telemetry")
-    if isinstance(telemetry, dict):
-        export = telemetry.get("export")
-        if isinstance(export, dict) and "endpoint" in export:
-            del export["endpoint"]
-            changed = True
 
     runtime = payload.get("runtime")
     if isinstance(runtime, dict) and "kind" in runtime:

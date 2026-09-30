@@ -24,9 +24,8 @@ from eawf.observability.telemetry.models import RuntimeName
 
 #: Narrow Literal of supported leaf-key value shapes. Mirrors the YAML
 #: scalars the loader writes; ``mapping`` covers dict-typed leaves
-#: (e.g. ``workspace.repos``, ``profiles.trusted``); ``any`` is the
-#: escape hatch for irregular shapes (e.g. ``project.success_metrics``
-#: whose value type can vary).
+#: (e.g. ``profiles.trusted``, ``agents.extra_tools``); ``any`` is the
+#: escape hatch for irregular shapes.
 LeafKeyType = Literal[
     "bool",
     "int",
@@ -39,6 +38,15 @@ LeafKeyType = Literal[
     "literal",
 ]
 ConsumerKind = Literal["engine", "skill", "declarative", "deprecated", "reserved"]
+#: The console editor a leaf whose value is not one scalar is edited with: ``check`` ticks
+#: members of a known set, ``order`` also orders them, ``tiers`` fills a fixed three-slot
+#: ladder, ``rows`` edits a record keyed by a known set, and ``pin`` records digests the
+#: console computes.
+EditorKind = Literal["check", "order", "tiers", "rows", "pin"]
+#: A value set that cannot be stated in the catalog because it is read per settings read:
+#: the discoverable profiles, the ship gates, and the digests a profile is trusted or
+#: certified under.
+ChoicesFrom = Literal["profiles", "ship_gates", "profile_trust", "profile_certification"]
 
 
 class LeafDeny(BaseModel):
@@ -71,7 +79,7 @@ class LeafKey(BaseModel):
         default: Default value the built-in layer ships with.
         writable_layers: Tuple of layer labels that may write this
             leaf. ``()`` marks a code-only / locked leaf (e.g.
-            ``schema_version``, ``language.runtime``).
+            ``schema_version``).
         description: One-line human-readable summary.
         choices: Allowed values for ``literal``-typed leaves; ``None``
             for other shapes.
@@ -90,6 +98,10 @@ class LeafKey(BaseModel):
             it therefore needs; ``None`` for a runtime-neutral leaf.
         secret_refs: Whether the leaf's value names credentials, which it
             may do only by ``${ENV:NAME}`` reference.
+        editor: The console editor for a list or mapping leaf; ``None`` for a
+            leaf edited as one value, or left to its file.
+        choices_from: The value set read per settings read in place of
+            ``choices``; ``None`` when the set is static or there is none.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -108,6 +120,8 @@ class LeafKey(BaseModel):
     value_range: tuple[float | None, float | None] | None = None
     runtime: RuntimeName | None = None
     secret_refs: bool = False
+    editor: EditorKind | None = None
+    choices_from: ChoicesFrom | None = None
 
     @field_validator("writable_layers")
     @classmethod
@@ -156,8 +170,6 @@ _WRITABLE_ALL_DURABLE: tuple[str, ...] = (
     "local",
 )
 _WRITABLE_GWR: tuple[str, ...] = ("global", "workspace", "repo")
-_WRITABLE_REPO_ONLY: tuple[str, ...] = ("repo",)
-_WRITABLE_PROJECT_GOALS: tuple[str, ...] = ("repo", "branch", "local")
 _WRITABLE_RUNTIME_PREFERENCE: tuple[str, ...] = (
     "global",
     "workspace",
@@ -171,4 +183,4 @@ _WRITABLE_RUNTIME_PREFERENCE: tuple[str, ...] = (
 _WRITABLE_NONE: tuple[str, ...] = ()  # locked / code-only
 
 
-__all__ = ["ConsumerKind", "LeafDeny", "LeafKey", "LeafKeyType"]
+__all__ = ["ChoicesFrom", "ConsumerKind", "EditorKind", "LeafDeny", "LeafKey", "LeafKeyType"]

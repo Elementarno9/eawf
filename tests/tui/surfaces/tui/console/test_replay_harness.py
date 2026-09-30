@@ -9,9 +9,8 @@ mounted for the whole run, so the frames replayed after the journeys still match
 session the journeys left deep in state; every frame goes through the harness' single
 render entry point rather than a second private path; and each frame and each journey
 step settles in one cycle, which is what a held clock buys. It also holds the port's
-inheritance of the contract: the test-only chassis is gone, nothing under the snapshot
-package imports it any more, and the epoch-1 stylesheet rules the port keeps until the
-release candidate are still in ``theme.tcss``.
+inheritance of the contract: the test-only chassis is gone and nothing under the snapshot
+package imports it any more.
 """
 
 from __future__ import annotations
@@ -40,8 +39,6 @@ from eawf.surfaces.tui.console.harness import (
     visible,
 )
 from eawf.surfaces.tui.console.session import SIZES, SessionSetup
-
-from .test_chassis_route_addition import EPOCH1_SELECTORS, THEME_TCSS
 
 TESTS_ROOT = Path(__file__).resolve().parents[4]
 GOLDEN_ROOT = TESTS_ROOT / "fixtures" / "console" / "golden"
@@ -255,8 +252,3 @@ def test_no_snapshot_module_names_the_removed_chassis_at_all() -> None:
         if CHASSIS_NAME in path.read_text(encoding="utf-8")
     ]
     assert offenders == []
-
-
-def test_the_epoch_one_stylesheet_rules_stay() -> None:
-    tcss = THEME_TCSS.read_text(encoding="utf-8")
-    assert [rule for rule in EPOCH1_SELECTORS if rule not in tcss] == []

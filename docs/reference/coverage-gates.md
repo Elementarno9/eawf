@@ -2,7 +2,7 @@
 
 Per-package coverage gates for the eawf load-bearing package set, plus an overall floor. Implements the C09 §5.2 nine-layer grouping (decision F-008 / G-19, Q16 "9-layer", impl deferred to C09-IMPL W02).
 
-## How it works
+## Enforcement
 
 pytest-cov has no native per-package threshold, so coverage enforcement is split across two CI steps in `.github/workflows/ci.yaml`:
 
@@ -41,7 +41,7 @@ Measured on 2026-05-22 (full suite, 5139 passed). Headroom = measured − gate.
 
 ## Waivers
 
-- **`tui/` line + branch — waived.** Textual widgets render asynchronously; line/branch coverage misreports them. Screen coverage is enforced by the snapshot pairing gate (C09 §5.2), not by this ratchet.
+- **`tui/` line + branch — waived.** Textual widgets render asynchronously; line/branch coverage misreports them. The TUI's quality number is the `[tool.eawf.coverage.tui_behavioural]` floor instead: the count of the console's recorded golden frames and journeys, which fails the gate when one is deleted without a replacement.
 
 ## Adding or tightening a gate
 

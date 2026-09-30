@@ -1,7 +1,7 @@
 """C08 leaf-key catalog data table + lookup accessors (P25-W14 / C08 §5.2).
 
-This module hosts :data:`LEAF_KEY_REGISTRY` — the full ~150-key catalog
-covering every leaf in the layered config. Each entry is a
+This module hosts :data:`LEAF_KEY_REGISTRY` — the catalog of every leaf in
+the layered config that some code reads. Each entry is a
 :class:`~eawf.kernel.config.registry.leaf_keys.LeafKey` record naming its declared
 type, default, and the list of layers that may write it. The catalog is
 what the daemon uses to reject ``unknown config key: <key!r>`` writes; the
@@ -20,6 +20,8 @@ Public API:
 - :func:`is_known_leaf_key` — ``True`` when the dotted path resolves to a
   :data:`LEAF_KEY_REGISTRY` entry.
 - :func:`leaf_keys_by_domain` — every :class:`LeafKey` under one domain.
+- :data:`DEPRECATED_LEAF_KEYS` — keys no code reads any more, which the config
+  migration strips and doctor reports.
 """
 
 from __future__ import annotations
@@ -31,17 +33,18 @@ from eawf.kernel.config.registry.leaf_keys import (
     _WRITABLE_ALL_DURABLE,
     _WRITABLE_GWR,
     _WRITABLE_NONE,
-    _WRITABLE_PROJECT_GOALS,
-    _WRITABLE_REPO_ONLY,
     _WRITABLE_RUNTIME_PREFERENCE,
     LeafDeny,
     LeafKey,
 )
 from eawf.kernel.config.schema import (
+    ALL_ROLES,
     DEFAULT_PERMISSION_WAIT_SECONDS,
     DEFAULT_STALL_INTERVAL_SECONDS,
+    RUNTIME_ADAPTER_IDS,
 )
 from eawf.kernel.spec.research import DEFAULT_RESEARCH_DEPTH, RESEARCH_DEPTH_VALUES
+from eawf.kernel.state.enums import AgentSessionRole
 
 # Catalog data table — declaration-ordered by domain section for review.
 _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
@@ -54,124 +57,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_NONE,
         description="Marker for the on-disk layered-config schema shape.",
         choices=("1.0",),
-    ),
-    LeafKey(
-        key="config.layers_visible",
-        domain="config",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-        description="When false, eawf config get hides the layer-source column.",
-    ),
-    # --- cli ---------------------------------------------------------------
-    LeafKey(
-        key="cli.canonical_command",
-        domain="cli",
-        type="str",
-        default="eawf",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="cli.preferred_command",
-        domain="cli",
-        type="str",
-        default="eawf",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="cli.install_aliases",
-        domain="cli",
-        type="list_str",
-        default=("ea",),
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="cli.omit_ea_alias",
-        domain="cli",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    # --- project -----------------------------------------------------------
-    LeafKey(
-        key="project.code",
-        domain="project",
-        type="str",
-        default=None,
-        writable_layers=_WRITABLE_REPO_ONLY,
-    ),
-    LeafKey(
-        key="project.title",
-        domain="project",
-        type="str",
-        default=None,
-        writable_layers=_WRITABLE_REPO_ONLY,
-    ),
-    LeafKey(
-        key="project.slug",
-        domain="project",
-        type="str",
-        default=None,
-        writable_layers=_WRITABLE_REPO_ONLY,
-    ),
-    LeafKey(
-        key="project.domains",
-        domain="project",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_REPO_ONLY,
-    ),
-    LeafKey(
-        key="project.default_track",
-        domain="project",
-        type="str",
-        default=None,
-        writable_layers=_WRITABLE_REPO_ONLY,
-    ),
-    LeafKey(
-        key="project.goals",
-        domain="project",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_PROJECT_GOALS,
-        description="Free-form project-level goal strings.",
-    ),
-    LeafKey(
-        key="project.success_metrics",
-        domain="project",
-        type="mapping",
-        default={},
-        writable_layers=_WRITABLE_PROJECT_GOALS,
-        description="Per-metric target value (float).",
-    ),
-    # --- workspace ---------------------------------------------------------
-    LeafKey(
-        key="workspace.enabled",
-        domain="workspace",
-        type="bool",
-        default=False,
-        writable_layers=("workspace", "global"),
-    ),
-    LeafKey(
-        key="workspace.code",
-        domain="workspace",
-        type="str",
-        default=None,
-        writable_layers=("workspace",),
-    ),
-    LeafKey(
-        key="workspace.state_path",
-        domain="workspace",
-        type="str",
-        default=".ea/state.json",
-        writable_layers=("workspace",),
-    ),
-    LeafKey(
-        key="workspace.repos",
-        domain="workspace",
-        type="mapping",
-        default={},
-        writable_layers=("workspace",),
+        consumer="eawf.kernel.config.migration.migrate_config_payload",
     ),
     # --- profiles ----------------------------------------------------------
     LeafKey(
@@ -180,29 +66,8 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="list_str",
         default=("core",),
         writable_layers=_WRITABLE_ALL_DURABLE,
-    ),
-    LeafKey(
-        key="profiles.catalog",
-        domain="profiles",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_NONE,
-    ),
-    LeafKey(
-        key="profiles.conflict_resolution",
-        domain="profiles",
-        type="literal",
-        default="prompt",
-        writable_layers=_WRITABLE_GWR,
-        choices=("prompt", "fail", "first-wins"),
-    ),
-    LeafKey(
-        key="profiles.safety_policy",
-        domain="profiles",
-        type="literal",
-        default="strictest_wins",
-        writable_layers=_WRITABLE_NONE,
-        choices=("strictest_wins",),
+        editor="check",
+        choices_from="profiles",
     ),
     LeafKey(
         key="profiles.trusted",
@@ -211,6 +76,8 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default={},
         writable_layers=("repo", "branch"),
         description="Profile id → sha256 of last-trusted body.",
+        editor="pin",
+        choices_from="profile_trust",
     ),
     LeafKey(
         key="profiles.certified",
@@ -219,16 +86,10 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default={},
         writable_layers=("repo", "branch"),
         description="Profile id → digest an enriched profile is certified as managed under.",
+        editor="pin",
+        choices_from="profile_certification",
     ),
     # --- runtime -----------------------------------------------------------
-    LeafKey(
-        key="runtime.default",
-        domain="runtime",
-        type="str",
-        default="claude-code",
-        writable_layers=_WRITABLE_GWR,
-        description="Deprecated alias of runtime.preference[0].",
-    ),
     LeafKey(
         key="runtime.adapters",
         domain="runtime",
@@ -236,6 +97,8 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=("claude-code",),
         writable_layers=_WRITABLE_GWR,
         description="Legacy v1.1 selector; superseded by runtime.preference.",
+        editor="check",
+        choices=RUNTIME_ADAPTER_IDS,
     ),
     LeafKey(
         key="runtime.preference",
@@ -244,67 +107,38 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=("claude-code",),
         writable_layers=_WRITABLE_RUNTIME_PREFERENCE,
         description="C08-canonical fallback ladder; first entry is primary.",
-    ),
-    LeafKey(
-        key="runtime.fallback.on_errors",
-        domain="runtime",
-        type="list_str",
-        default=(
-            "RUNTIME_RATE_LIMIT",
-            "RUNTIME_SERVER_ERROR",
-            "RUNTIME_TIMEOUT",
-            "RUNTIME_API_ERROR",
-        ),
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="runtime.fallback.retry_policy",
-        domain="runtime",
-        type="literal",
-        default="hybrid",
-        writable_layers=_WRITABLE_GWR,
-        choices=("hybrid", "backoff", "immediate"),
-    ),
-    LeafKey(
-        key="runtime.fallback.max_backoff_seconds",
-        domain="runtime",
-        type="int",
-        default=90,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="runtime.slash_commands",
-        domain="runtime",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_GWR,
+        editor="order",
+        choices=RUNTIME_ADAPTER_IDS,
     ),
     LeafKey(
         key="runtime.models.claude",
         domain="runtime",
         type="list_str",
-        default=(),
+        default=None,
         writable_layers=_WRITABLE_GWR,
         description="Optional cheap/mid/top model ladder for the Claude runtime.",
         runtime="claude",
+        editor="tiers",
     ),
     LeafKey(
         key="runtime.models.codex",
         domain="runtime",
         type="list_str",
-        default=(),
+        default=None,
         writable_layers=_WRITABLE_GWR,
         description="Optional cheap/mid/top model ladder for the Codex runtime.",
         runtime="codex",
+        editor="tiers",
     ),
     LeafKey(
         key="runtime.models.opencode",
         domain="runtime",
         type="list_str",
-        default=(),
+        default=None,
         writable_layers=_WRITABLE_GWR,
         description="Optional cheap/mid/top model ladder for the opencode runtime.",
         runtime="opencode",
+        editor="tiers",
     ),
     LeafKey(
         key="runtime.claude.stall_interval_s",
@@ -401,22 +235,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
     ),
     # --- ui ----------------------------------------------------------------
     LeafKey(
-        key="ui.bare_command",
-        domain="ui",
-        type="literal",
-        default="tui",
-        writable_layers=_WRITABLE_GWR,
-        choices=("tui", "help", "status"),
-    ),
-    LeafKey(
-        key="ui.color",
-        domain="ui",
-        type="literal",
-        default="auto",
-        writable_layers=("global", "workspace", "repo", "env"),
-        choices=("auto", "always", "never"),
-    ),
-    LeafKey(
         key="ui.theme",
         domain="ui",
         type="literal",
@@ -434,31 +252,38 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         choices=("auto", "ascii", "unicode"),
     ),
     LeafKey(
-        key="ui.refresh_ms", domain="ui", type="int", default=1000, writable_layers=_WRITABLE_GWR
-    ),
-    LeafKey(
-        key="ui.dashboard_panes",
-        domain="ui",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
         key="ui.toasts",
         domain="ui",
         type="literal",
         default="important",
         writable_layers=("global", "workspace", "repo", "env"),
         choices=("off", "important", "all"),
-        description="Ambient state-change toast verbosity: off / important / all.",
+        description=(
+            "Toasts for state changes nobody keyed: off raises none; important and all raise "
+            "them. Answers to a key and the quit prompt always show."
+        ),
+        consumer="eawf.surfaces.tui.launch.persisted_toast_verbosity",
+    ),
+    # --- tui ---------------------------------------------------------------
+    LeafKey(
+        key="tui.eu_view.density",
+        domain="tui",
+        type="literal",
+        default="full",
+        writable_layers=_WRITABLE_GWR,
+        choices=("full", "compact"),
+        description="Roadmap EU/hour rollup table: full adds a detail column; compact omits it.",
+        consumer="eawf.surfaces.render.plan_view._eu_view_config",
     ),
     LeafKey(
-        key="ui.tour_completed",
-        domain="ui",
-        type="bool",
-        default=False,
+        key="tui.eu_view.fields",
+        domain="tui",
+        type="list_str",
+        default=("work_sum", "critical_path", "queue", "realistic"),
         writable_layers=_WRITABLE_GWR,
-        description="True once the first-run onboarding tour has been dismissed.",
+        choices=("work_sum", "critical_path", "queue", "realistic"),
+        description="Roadmap EU/hour rollup metrics, in row order; at least one.",
+        consumer="eawf.surfaces.render.plan_view._eu_view_config",
     ),
     # --- telemetry (C09 surface) ------------------------------------------
     LeafKey(
@@ -466,28 +291,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         domain="telemetry",
         type="bool",
         default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="telemetry.export.format",
-        domain="telemetry",
-        type="literal",
-        default="prom",
-        writable_layers=("global",),
-        choices=("prom", "json", "csv"),
-    ),
-    LeafKey(
-        key="telemetry.window_default",
-        domain="telemetry",
-        type="str",
-        default="7d",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="telemetry.aggregate_window",
-        domain="telemetry",
-        type="str",
-        default="24h",
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
@@ -500,41 +303,12 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
     ),
     # --- dispatch ----------------------------------------------------------
     LeafKey(
-        key="dispatch.session_policy_default",
-        domain="dispatch",
-        type="literal",
-        default="fresh",
-        writable_layers=_WRITABLE_GWR,
-        # ``continue`` / ``hybrid`` require session resume, which no
-        # runtime adapter implements yet (deferred to P31); only
-        # ``fresh`` runs today, so the choice set is narrowed to it.
-        choices=("fresh",),
-    ),
-    LeafKey(
-        key="dispatch.session_handle_ttl_seconds",
-        domain="dispatch",
-        type="int",
-        default=86400,
-        writable_layers=("global",),
-    ),
-    LeafKey(
         key="dispatch.role_tier_token_cap",
         domain="dispatch",
         type="int",
         default=2400,
         writable_layers=_WRITABLE_GWR,
         description="Token ceiling per injected role-tier dispatch block (raise, never truncate).",
-    ),
-    LeafKey(
-        key="dispatch.routing",
-        domain="dispatch",
-        type="mapping",
-        default={},
-        writable_layers=_WRITABLE_GWR,
-        description=(
-            "Per (agent_role, effort_bucket) model/runtime overrides; "
-            "empty map uses the built-in DEFAULT_ROUTING_TABLE."
-        ),
     ),
     # --- agents ------------------------------------------------------------
     LeafKey(
@@ -549,95 +323,40 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
             "the built-in allowlists unchanged."
         ),
         consumer="eawf.kernel.config.layered.resolve_agent_extra_tools",
+        editor="rows",
+        choices=(ALL_ROLES, *(role.value for role in AgentSessionRole)),
     ),
-    # --- language ----------------------------------------------------------
+    # --- economics ---------------------------------------------------------
+    # Each leaf is one whole policy record; unset keeps the shipped policy, which
+    # the economics module owns rather than the built-in layer.
     LeafKey(
-        key="language.runtime",
-        domain="language",
-        type="literal",
-        default="python",
-        writable_layers=_WRITABLE_NONE,
-        choices=("python",),
-    ),
-    LeafKey(
-        key="language.fast_extras",
-        domain="language",
-        type="list_str",
-        default=(),
-        writable_layers=("global",),
-    ),
-    # --- storage -----------------------------------------------------------
-    LeafKey(
-        key="storage.state_path",
-        domain="storage",
-        type="str",
-        default=".ea/state.json",
+        key="economics.prompt_budget",
+        domain="economics",
+        type="mapping",
+        default=None,
         writable_layers=_WRITABLE_GWR,
+        description="Prompt budget: the input window, reserved output and per-class ceilings.",
+        consumer="eawf.kernel.economics.governor.economics_policy_from",
     ),
     LeafKey(
-        key="storage.stores_dir",
-        domain="storage",
-        type="str",
-        default=".ea/stores",
+        key="economics.governor",
+        domain="economics",
+        type="mapping",
+        default=None,
         writable_layers=_WRITABLE_GWR,
+        description="In-flight governor: concurrent Runs, in-flight tokens and cost, admission.",
+        consumer="eawf.kernel.economics.governor.economics_policy_from",
     ),
     LeafKey(
-        key="storage.artifacts_dir",
-        domain="storage",
-        type="str",
-        default=".ea/artifacts",
+        key="economics.notice_policy",
+        domain="economics",
+        type="mapping",
+        default=None,
         writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="storage.rendered_dir",
-        domain="storage",
-        type="str",
-        default=".ea/artifacts/rendered",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="storage.generated_index",
-        domain="storage",
-        type="str",
-        default=".ea/indexes/generated.json",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="storage.content_addressed_blobs",
-        domain="storage",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="storage.commit_jsonl",
-        domain="storage",
-        type="str",
-        default="all_nonlocal",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="storage.max_inline_chars",
-        domain="storage",
-        type="int",
-        default=2000,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="storage.lock_strategy",
-        domain="storage",
-        type="str",
-        default="sibling_lockfiles",
-        writable_layers=_WRITABLE_GWR,
+        description="When a Run's budget notice fires, as a fraction of its estimate.",
+        consumer="eawf.kernel.economics.governor.economics_policy_from",
     ),
     # --- research ----------------------------------------------------------
-    LeafKey(
-        key="research.folder",
-        domain="research",
-        type="str",
-        default=".ea/artifacts/rendered/research",
-        writable_layers=_WRITABLE_GWR,
-    ),
     LeafKey(
         key="research.auto_save",
         domain="research",
@@ -654,14 +373,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         choices=RESEARCH_DEPTH_VALUES,
     ),
     LeafKey(
-        key="research.default_sources",
-        domain="research",
-        type="literal",
-        default="both",
-        writable_layers=_WRITABLE_GWR,
-        choices=("docs", "web", "both"),
-    ),
-    LeafKey(
         key="research.agent_count",
         domain="research",
         type="int",
@@ -669,15 +380,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
     ),
     # --- planning ----------------------------------------------------------
-    LeafKey(
-        key="planning.approval",
-        domain="planning",
-        type="literal",
-        default="ask",
-        writable_layers=_WRITABLE_GWR,
-        description="Reserved for compatibility; roadmap approval remains explicit.",
-        choices=("ask", "auto", "never"),
-    ),
     LeafKey(
         key="planning.max_parallel_waves",
         domain="planning",
@@ -732,21 +434,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         description="Wall-clock ceiling for close-time auditor and juror runs.",
         consumer="eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
     ),
-    LeafKey(
-        key="planning.require_research_for_unknowns",
-        domain="planning",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="planning.auto_plan",
-        domain="planning",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-        description="Reserved for compatibility; /prep always presents the plan gate.",
-    ),
     # --- preferences -------------------------------------------------------
     LeafKey(
         key="preferences.auto_choose",
@@ -757,44 +444,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         description="Whether AskUserQuestion auto-picks the recommended option.",
         choices=("off", "recommended", "always"),
     ),
-    # --- prose (doc-clarity) -----------------------------------------------
-    # A durable local layer may write these (the authority guard enforces
-    # tighten-only against the profile baseline at validation time, not the
-    # writability gate). ``clarity_judge`` / ``block_on_lint`` are tri-state
-    # (true / false / null-defers-to-level) so they use the ``any`` shape.
-    LeafKey(
-        key="prose.level",
-        domain="prose",
-        type="literal",
-        default="standard",
-        writable_layers=_WRITABLE_ALL_DURABLE,
-        description="Doc-clarity prose-lint strictness floor (local may only tighten).",
-        choices=("loose", "standard", "strict"),
-    ),
-    LeafKey(
-        key="prose.clarity_judge",
-        domain="prose",
-        type="any",
-        default=None,
-        writable_layers=_WRITABLE_ALL_DURABLE,
-        description="Run the LLM clarity-judge gate; null defers to prose.level.",
-    ),
-    LeafKey(
-        key="prose.block_on_lint",
-        domain="prose",
-        type="any",
-        default=None,
-        writable_layers=_WRITABLE_ALL_DURABLE,
-        description="Block on deterministic prose lints; null defers to prose.level.",
-    ),
     # --- estimation --------------------------------------------------------
-    LeafKey(
-        key="estimation.enabled",
-        domain="estimation",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
     LeafKey(
         key="estimation.eu_minutes",
         domain="estimation",
@@ -811,84 +461,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         description="Captured quantity used to convert runtime counters into elapsed EU.",
         choices=("api_duration", "tokens", "wall_clock"),
     ),
-    LeafKey(
-        key="estimation.realtime_recalibration",
-        domain="estimation",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="estimation.calibration_profile",
-        domain="estimation",
-        type="str",
-        default="eawf_v0_lockbox_2026_05",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="estimation.idle_policy",
-        domain="estimation",
-        type="str",
-        default="D30_non_agent_gap",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="estimation.display.show_category",
-        domain="estimation",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="estimation.display.show_raw_eu",
-        domain="estimation",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="estimation.display.show_expected_time",
-        domain="estimation",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="estimation.display.show_pessimistic_time",
-        domain="estimation",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="estimation.display.eu_quantum",
-        domain="estimation",
-        type="float",
-        default=0.25,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="estimation.display.time_quantum_under_2h_minutes",
-        domain="estimation",
-        type="int",
-        default=15,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="estimation.display.time_quantum_over_2h_minutes",
-        domain="estimation",
-        type="int",
-        default=30,
-        writable_layers=_WRITABLE_GWR,
-    ),
     # --- audit -------------------------------------------------------------
-    LeafKey(
-        key="audit.default_checks",
-        domain="audit",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_GWR,
-    ),
     LeafKey(
         key="audit.default_level",
         domain="audit",
@@ -905,13 +478,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=False,
         writable_layers=_WRITABLE_GWR,
         description="Reserved for compatibility; /audit never mutates source automatically.",
-    ),
-    LeafKey(
-        key="audit.flaky_retry_count",
-        domain="audit",
-        type="int",
-        default=1,
-        writable_layers=_WRITABLE_GWR,
     ),
     # --- ship --------------------------------------------------------------
     LeafKey(
@@ -938,21 +504,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=True,
         writable_layers=_WRITABLE_GWR,
     ),
-    LeafKey(
-        key="ship.use_vcs_policy",
-        domain="ship",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
     # --- review ------------------------------------------------------------
-    LeafKey(
-        key="review.post_default",
-        domain="review",
-        type="str",
-        default="ask",
-        writable_layers=_WRITABLE_GWR,
-    ),
     LeafKey(
         key="review.default_level",
         domain="review",
@@ -961,35 +513,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
         choices=("low", "medium", "high"),
         description="Default /review finding-confidence threshold.",
-    ),
-    LeafKey(
-        key="review.template",
-        domain="review",
-        type="str",
-        default="default",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="review.require_checks_before_approve",
-        domain="review",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    # --- polish ------------------------------------------------------------
-    LeafKey(
-        key="polish.include_memory",
-        domain="polish",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="polish.include_agent_memory",
-        domain="polish",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
     ),
     # --- flow --------------------------------------------------------------
     LeafKey(
@@ -1061,90 +584,12 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
         description="When True, /prep leads its claim actions with an `eawf dispatch resume`.",
     ),
-    # --- memory ------------------------------------------------------------
-    LeafKey(
-        key="memory.stores",
-        domain="memory",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="memory.review_on_ship",
-        domain="memory",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="memory.review_on_polish",
-        domain="memory",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="memory.auto_promote",
-        domain="memory",
-        type="str",
-        default="ask",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="memory.prune",
-        domain="memory",
-        type="str",
-        default="ask",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="memory.max_injected_tokens",
-        domain="memory",
-        type="int",
-        default=2000,
-        writable_layers=_WRITABLE_GWR,
-    ),
     # --- vcs ---------------------------------------------------------------
-    LeafKey(
-        key="vcs.commit_template",
-        domain="vcs",
-        type="str",
-        default="state_scoped",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="vcs.pr_template",
-        domain="vcs",
-        type="str",
-        default="iter",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="vcs.branch_pattern",
-        domain="vcs",
-        type="str",
-        default="eawf/{project}/{scope}-{slug}",
-        writable_layers=_WRITABLE_GWR,
-    ),
     LeafKey(
         key="vcs.checkpoint_requires_commit",
         domain="vcs",
         type="bool",
         default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="vcs.protected_branches",
-        domain="vcs",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="vcs.auto_commit",
-        domain="vcs",
-        type="str",
-        default="ask",
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
@@ -1161,34 +606,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         domain="vcs",
         type="bool",
         default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="vcs.delete_branch_after_merge",
-        domain="vcs",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="vcs.require_ci_green",
-        domain="vcs",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="vcs.require_review_before_merge",
-        domain="vcs",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="vcs.force_push",
-        domain="vcs",
-        type="str",
-        default="forbidden_protected",
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
@@ -1229,14 +646,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         ),
     ),
     LeafKey(
-        key="vcs.conventions.release.agent_driven",
-        domain="vcs",
-        type="literal",
-        default="per-phase",
-        writable_layers=_WRITABLE_GWR,
-        choices=("manual", "per-phase"),
-    ),
-    LeafKey(
         key="vcs.conventions.release.cadence",
         domain="vcs",
         type="literal",
@@ -1259,11 +668,20 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
-        key="vcs.coauthor.project",
+        key="vcs.coauthor.project.name",
         domain="vcs",
         type="str",
         default=None,
         writable_layers=_WRITABLE_GWR,
+        description="The co-author name a project-mode trailer names.",
+    ),
+    LeafKey(
+        key="vcs.coauthor.project.email",
+        domain="vcs",
+        type="str",
+        default=None,
+        writable_layers=_WRITABLE_GWR,
+        description="The co-author email a project-mode trailer names.",
     ),
     LeafKey(
         key="vcs.coauthor.trailers.claude.name",
@@ -1296,64 +714,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
     LeafKey(
         key="vcs.coauthor.require_trailer",
         domain="vcs",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    # --- worktrees ---------------------------------------------------------
-    LeafKey(
-        key="worktrees.enabled",
-        domain="worktrees",
-        type="literal",
-        default="auto",
-        writable_layers=_WRITABLE_GWR,
-        choices=("auto", "always", "never"),
-    ),
-    LeafKey(
-        key="worktrees.root",
-        domain="worktrees",
-        type="str",
-        default=".worktrees",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="worktrees.merge_mode",
-        domain="worktrees",
-        type="str",
-        default="cherry_pick",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="worktrees.use_for_parallel_writers",
-        domain="worktrees",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="worktrees.use_for_risky_changes",
-        domain="worktrees",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="worktrees.use_for_readonly_research",
-        domain="worktrees",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="worktrees.preserve_on_conflict",
-        domain="worktrees",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="worktrees.remove_when_clean",
-        domain="worktrees",
         type="bool",
         default=True,
         writable_layers=_WRITABLE_GWR,
@@ -1391,223 +751,10 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         key="acceptance.required_before_ship",
         domain="acceptance",
         type="list_str",
-        default=(),
+        default=("state",),
         writable_layers=_WRITABLE_GWR,
-    ),
-    # --- security ----------------------------------------------------------
-    LeafKey(
-        key="security.secrets_policy",
-        domain="security",
-        type="str",
-        default="env_refs_only",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="security.env_ref_syntax",
-        domain="security",
-        type="str",
-        default="${ENV:NAME}",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="security.permission_mode",
-        domain="security",
-        type="str",
-        default="ask_first",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="security.secret_scan",
-        domain="security",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="security.store_scan_before_checkpoint",
-        domain="security",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="security.store_scan_on_finding",
-        domain="security",
-        type="str",
-        default="block",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="security.allow_destructive",
-        domain="security",
-        type="str",
-        default="ask",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    # --- hooks -------------------------------------------------------------
-    LeafKey(
-        key="hooks.policy",
-        domain="hooks",
-        type="str",
-        default="mixed_strict",
-        writable_layers=_WRITABLE_GWR,
-        description="Reserved hook policy; accepted for compatibility but not enforced.",
-    ),
-    LeafKey(
-        key="hooks.timeout_seconds",
-        domain="hooks",
-        type="int",
-        default=30,
-        writable_layers=_WRITABLE_GWR,
-        description="Reserved hook policy; accepted for compatibility but not enforced.",
-    ),
-    LeafKey(
-        key="hooks.enabled",
-        domain="hooks",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_GWR,
-        description="Reserved hook policy; accepted for compatibility but not enforced.",
-    ),
-    LeafKey(
-        key="hooks.fail_closed",
-        domain="hooks",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_GWR,
-        description="Reserved hook policy; accepted for compatibility but not enforced.",
-    ),
-    LeafKey(
-        key="hooks.fail_open",
-        domain="hooks",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_GWR,
-        description="Reserved hook policy; accepted for compatibility but not enforced.",
-    ),
-    LeafKey(
-        key="hooks.ask_on_fail",
-        domain="hooks",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_GWR,
-        description="Reserved hook policy; accepted for compatibility but not enforced.",
-    ),
-    # --- mcp ---------------------------------------------------------------
-    LeafKey(
-        key="mcp.default_policy",
-        domain="mcp",
-        type="str",
-        default="ask_install",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="mcp.manage_only_owner",
-        domain="mcp",
-        type="str",
-        default="eawf",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="mcp.env_ref_syntax",
-        domain="mcp",
-        type="str",
-        default="${ENV:NAME}",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="mcp.servers",
-        domain="mcp",
-        type="mapping",
-        default={},
-        writable_layers=_WRITABLE_GWR,
-        secret_refs=True,
-    ),
-    # --- statusline --------------------------------------------------------
-    LeafKey(
-        key="statusline.modules_default",
-        domain="statusline",
-        type="str",
-        default="ask_per_module",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="statusline.modules_available",
-        domain="statusline",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="statusline.glyph_mode",
-        domain="statusline",
-        type="literal",
-        default="auto",
-        writable_layers=("global", "workspace", "repo", "env"),
-        choices=("auto", "ascii", "unicode"),
-        description="Statusline glyph set: auto (downgrade on a no-color term) / ascii / unicode.",
-    ),
-    LeafKey(
-        key="statusline.color_mode",
-        domain="statusline",
-        type="literal",
-        default="auto",
-        writable_layers=("global", "workspace", "repo", "env"),
-        choices=("auto", "always", "never"),
-        description="Statusline ANSI colour: auto (off on a no-color term) / always / never.",
-    ),
-    LeafKey(
-        key="statusline.rows",
-        domain="statusline",
-        type="int",
-        default=1,
-        writable_layers=("global", "workspace", "repo", "env"),
-        description="Number of statusline rows the renderer emits (1..3).",
-    ),
-    # --- docs --------------------------------------------------------------
-    LeafKey(
-        key="docs.generated_default_dir",
-        domain="docs",
-        type="str",
-        default=".ea/artifacts/rendered",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="docs.generation_policy",
-        domain="docs",
-        type="str",
-        default="ask_per_category",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="docs.categories",
-        domain="docs",
-        type="list_str",
-        default=(),
-        writable_layers=_WRITABLE_GWR,
-    ),
-    # --- commands ----------------------------------------------------------
-    LeafKey(
-        key="commands.inventory_policy",
-        domain="commands",
-        type="str",
-        default="full_io_spec_before_code",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    # --- state_schema ------------------------------------------------------
-    LeafKey(
-        key="state_schema.strictness",
-        domain="state_schema",
-        type="str",
-        default="full_strict_schema_before_code",
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="state_schema.id_padding",
-        domain="state_schema",
-        type="int",
-        default=2,
-        writable_layers=_WRITABLE_GWR,
+        editor="check",
+        choices_from="ship_gates",
     ),
     # --- daemon ------------------------------------------------------------
     LeafKey(
@@ -1635,53 +782,75 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
 )
 
 
+# The callable that reads each leaf's resolved value, for leaves not naming it inline.
 _CONSUMER_BY_KEY: dict[str, str] = {
+    "acceptance.commands.build": "eawf.workflow.skills.ship._resolve_gate_command",
+    "acceptance.commands.lint": "eawf.workflow.skills.ship._resolve_gate_command",
+    "acceptance.commands.tests": "eawf.workflow.skills.ship._resolve_gate_command",
+    "acceptance.commands.typecheck": "eawf.workflow.skills.ship._resolve_gate_command",
+    "acceptance.required_before_ship": "eawf.workflow.skills.ship._ordered_gauntlet_gates",
     "audit.default_level": "eawf.workflow.skills.audit._resolve_level",
+    "daemon.idle_timeout_seconds": "eawf.runtime.daemon.main._resolve_idle_timeout",
     "daemon.proxy_enabled": "eawf.surfaces.cli._mutation._proxy_enabled",
+    "daemon.session_handle_ttl_seconds": "eawf.runtime.daemon.main._resolve_session_ttl_seconds",
     "dispatch.role_tier_token_cap": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
-    "profiles.certified": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
-    "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
     "flow.advance_after.audit": "eawf.workflow.skills.flow.FlowSkill._run_steps",
     "flow.advance_after.polish": "eawf.workflow.skills.flow.FlowSkill._run_steps",
     "flow.advance_after.prep": "eawf.workflow.skills.flow.FlowSkill._run_steps",
     "flow.advance_after.research": "eawf.workflow.skills.flow.FlowSkill._run_steps",
+    "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
+    "flow.budget.multiplier": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
     "flow.max_repair_cycles": "eawf.workflow.skills.flow._config_max_repair_cycles",
-    "planning.max_parallel_waves": ("eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves"),
+    "planning.max_parallel_waves": "eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves",
+    "preferences.auto_choose": "eawf.runtime.daemon.methods.question_decision.resolved_preferences",
     "prep.auto_resume": "eawf.workflow.skills.prep.PrepSkill._resolve_auto_resume",
+    "profiles.certified": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
+    "profiles.enabled": "eawf.platform.profiles.selection.resolve_enabled_profiles",
+    "profiles.trusted": "eawf.platform.profiles.trust.load_trust_ledger",
     "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
     "research.auto_save": "eawf.workflow.skills.research.ResearchSkill._gather",
     "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
     "review.default_level": "eawf.workflow.skills.review.ReviewSkill.action",
-    "runtime.models.claude": "eawf.kernel.config.layered.resolve_runtime_tier_models",
-    "runtime.models.codex": "eawf.kernel.config.layered.resolve_runtime_tier_models",
-    "runtime.models.opencode": "eawf.kernel.config.layered.resolve_runtime_tier_models",
+    "runtime.adapters": "eawf.kernel.config.layered.resolve_dispatch_provider_tuple",
     "runtime.claude.permission_wait_s": (
         "eawf.kernel.config.layered.resolve_permission_wait_seconds"
     ),
     "runtime.claude.stall_interval_s": "eawf.kernel.config.layered.resolve_stall_interval_seconds",
     "runtime.codex.stall_interval_s": "eawf.kernel.config.layered.resolve_stall_interval_seconds",
+    "runtime.models.claude": "eawf.kernel.config.layered.resolve_runtime_tier_models",
+    "runtime.models.codex": "eawf.kernel.config.layered.resolve_runtime_tier_models",
+    "runtime.models.opencode": "eawf.kernel.config.layered.resolve_runtime_tier_models",
     "runtime.opencode.stall_interval_s": (
         "eawf.kernel.config.layered.resolve_stall_interval_seconds"
     ),
+    "runtime.preference": "eawf.kernel.config.layered.resolve_dispatch_provider_tuple",
     "ship.gauntlet": "eawf.workflow.skills.ship._resolve_gauntlet",
     "telemetry.db_kind": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
     "telemetry.enabled": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
-    "ui.glyphs": "eawf.surfaces.tui.app._persisted_glyphs",
-    "ui.theme": "eawf.surfaces.tui.app._persisted_theme",
-    "vcs.checkpoint_requires_commit": ("eawf.runtime.vcs.checkpoint.resolve_checkpoint_cadence"),
-    "vcs.conventions.release.cadence": (
-        "eawf.runtime.vcs.coauthor.requires_phase_release_preflight"
-    ),
+    "ui.glyphs": "eawf.surfaces.tui.launch.persisted_glyphs",
+    "ui.theme": "eawf.surfaces.tui.chassis.theme.persisted_theme",
+    "vcs.checkpoint_requires_commit": "eawf.runtime.vcs.checkpoint.resolve_checkpoint_cadence",
+    "vcs.coauthor.default_runtime": "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer",
+    "vcs.coauthor.mode": "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer",
+    "vcs.coauthor.project.email": "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer",
+    "vcs.coauthor.project.name": "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer",
+    "vcs.coauthor.require_trailer": "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer",
+    "vcs.coauthor.trailers.claude.email": "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer",
+    "vcs.coauthor.trailers.claude.name": "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer",
+    "vcs.coauthor.trailers.codex.email": "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer",
+    "vcs.coauthor.trailers.codex.name": "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer",
+    "vcs.conventions.release.cadence": "eawf.runtime.vcs.coauthor.requires_phase_release_preflight",
+    "vcs.conventions.subject_style": "tools.commit_prefix_lint._configured_subject_style",
+    "vcs.integration_commit_unit": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
+    "vcs.pr_merge_method": "eawf.workflow.skills.ship.ShipSkill._gate_merge_method",
+    "vcs.squash_allowed": "eawf.workflow.skills.ship.ShipSkill._gate_merge_method",
+    "vcs.task_reference": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
     "verify.require_iter_audit_accepted": "eawf.workflow.lifecycle.iter_.close_iter",
-    "verify.waiver_mode": "eawf.workflow.lifecycle.waivers.resolve_waiver_mode",
+    "verify.waiver_mode": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
 }
 
-_INTERACTIVE_KEYS = {entry.key for entry in CONFIG_REGISTRY}
-_HOOK_POLICY_KEYS = {entry.key for entry in _DECLARED_LEAF_KEYS if entry.key.startswith("hooks.")}
-_BEHAVIOR_KEYS = _INTERACTIVE_KEYS | _HOOK_POLICY_KEYS
-_DECLARATIVE_CONSUMER = "eawf.kernel.config.layered.merge_config"
 _DEPRECATED_KEYS: frozenset[str] = frozenset(
     {
         "audit.fix_safe",
@@ -1707,40 +876,158 @@ _DEPRECATED_KEYS: frozenset[str] = frozenset(
         "vcs.pr_open",
     }
 )
-DEPRECATED_LEAF_KEYS: frozenset[str] = _DEPRECATED_KEYS
-_RESERVED_BEHAVIOR_KEYS: frozenset[str] = frozenset(
-    (_BEHAVIOR_KEYS - _CONSUMER_BY_KEY.keys()) | _DEPRECATED_KEYS
+# Leaves removed from the catalog because no code read their value. The config
+# migration strips them from layer files and doctor names any a layer still sets.
+_RETIRED_KEYS: frozenset[str] = frozenset(
+    {
+        # retired before this catalog tracked them: renamed or never consumed
+        "estimation.buckets",
+        "mcp.enabled",
+        "preferences.scope_size",
+        "preferences.solution_bias",
+        "project.default_subproject",
+        "telemetry.export.endpoint",
+        "audit.default_checks",
+        "audit.flaky_retry_count",
+        "cli.canonical_command",
+        "cli.install_aliases",
+        "cli.omit_ea_alias",
+        "cli.preferred_command",
+        "commands.inventory_policy",
+        "config.layers_visible",
+        "dispatch.routing",
+        "dispatch.session_handle_ttl_seconds",
+        "dispatch.session_policy_default",
+        "docs.categories",
+        "docs.generated_default_dir",
+        "docs.generation_policy",
+        "estimation.calibration_profile",
+        "estimation.display.eu_quantum",
+        "estimation.display.show_category",
+        "estimation.display.show_expected_time",
+        "estimation.display.show_pessimistic_time",
+        "estimation.display.show_raw_eu",
+        "estimation.display.time_quantum_over_2h_minutes",
+        "estimation.display.time_quantum_under_2h_minutes",
+        "estimation.enabled",
+        "estimation.idle_policy",
+        "estimation.realtime_recalibration",
+        "hooks.ask_on_fail",
+        "hooks.enabled",
+        "hooks.fail_closed",
+        "hooks.fail_open",
+        "hooks.policy",
+        "hooks.timeout_seconds",
+        "language.fast_extras",
+        "language.runtime",
+        "mcp.default_policy",
+        "mcp.env_ref_syntax",
+        "mcp.manage_only_owner",
+        "mcp.servers",
+        "memory.auto_promote",
+        "memory.max_injected_tokens",
+        "memory.prune",
+        "memory.review_on_polish",
+        "memory.review_on_ship",
+        "memory.stores",
+        "planning.approval",
+        "planning.auto_plan",
+        "planning.require_research_for_unknowns",
+        "polish.include_agent_memory",
+        "polish.include_memory",
+        "profiles.catalog",
+        "profiles.conflict_resolution",
+        "profiles.safety_policy",
+        "project.code",
+        "project.default_track",
+        "project.domains",
+        "project.goals",
+        "project.slug",
+        "project.success_metrics",
+        "project.title",
+        "prose.block_on_lint",
+        "prose.clarity_judge",
+        "prose.level",
+        "research.default_sources",
+        "research.folder",
+        "review.post_default",
+        "review.require_checks_before_approve",
+        "review.template",
+        "runtime.default",
+        "runtime.fallback.max_backoff_seconds",
+        "runtime.fallback.on_errors",
+        "runtime.fallback.retry_policy",
+        "runtime.slash_commands",
+        "security.allow_destructive",
+        "security.env_ref_syntax",
+        "security.permission_mode",
+        "security.secret_scan",
+        "security.secrets_policy",
+        "security.store_scan_before_checkpoint",
+        "security.store_scan_on_finding",
+        "ship.use_vcs_policy",
+        "state_schema.id_padding",
+        "state_schema.strictness",
+        "statusline.color_mode",
+        "statusline.glyph_mode",
+        "statusline.modules_available",
+        "statusline.modules_default",
+        "statusline.rows",
+        "storage.artifacts_dir",
+        "storage.commit_jsonl",
+        "storage.content_addressed_blobs",
+        "storage.generated_index",
+        "storage.lock_strategy",
+        "storage.max_inline_chars",
+        "storage.rendered_dir",
+        "storage.state_path",
+        "storage.stores_dir",
+        "telemetry.aggregate_window",
+        "telemetry.export.format",
+        "telemetry.window_default",
+        "ui.bare_command",
+        "ui.color",
+        "ui.dashboard_panes",
+        "ui.refresh_ms",
+        "ui.tour_completed",
+        "vcs.auto_commit",
+        "vcs.branch_pattern",
+        "vcs.commit_template",
+        "vcs.conventions.release.agent_driven",
+        "vcs.delete_branch_after_merge",
+        "vcs.force_push",
+        "vcs.pr_template",
+        "vcs.protected_branches",
+        "vcs.require_ci_green",
+        "vcs.require_review_before_merge",
+        "workspace.code",
+        "workspace.enabled",
+        "workspace.repos",
+        "workspace.state_path",
+        "worktrees.enabled",
+        "worktrees.merge_mode",
+        "worktrees.preserve_on_conflict",
+        "worktrees.remove_when_clean",
+        "worktrees.root",
+        "worktrees.use_for_parallel_writers",
+        "worktrees.use_for_readonly_research",
+        "worktrees.use_for_risky_changes",
+    }
 )
+DEPRECATED_LEAF_KEYS: frozenset[str] = _DEPRECATED_KEYS | _RETIRED_KEYS
 
 
 def _bind_behavior_metadata(entry: LeafKey) -> LeafKey:
-    """Attach the audited consumer-or-reserved classification to *entry*."""
-    if entry.consumer is not None:
-        consumer_kind = "skill" if entry.consumer.startswith("eawf.workflow.skills.") else "engine"
-        return entry.model_copy(update={"consumer_kind": consumer_kind, "reserved": False})
+    """Attach the audited consumer-or-deprecated classification to *entry*."""
     if entry.key in _DEPRECATED_KEYS:
         return entry.model_copy(
             update={"consumer": None, "consumer_kind": "deprecated", "reserved": True}
         )
-    consumer = _CONSUMER_BY_KEY.get(entry.key)
-    if consumer is not None:
-        consumer_kind = "skill" if consumer.startswith("eawf.workflow.skills.") else "engine"
-        return entry.model_copy(
-            update={"consumer": consumer, "consumer_kind": consumer_kind, "reserved": False}
-        )
-    if entry.key in _INTERACTIVE_KEYS:
-        return entry.model_copy(
-            update={
-                "consumer": _DECLARATIVE_CONSUMER,
-                "consumer_kind": "declarative",
-                "reserved": False,
-            }
-        )
-    if entry.key in _RESERVED_BEHAVIOR_KEYS:
-        return entry.model_copy(
-            update={"consumer": None, "consumer_kind": "reserved", "reserved": True}
-        )
-    return entry
+    consumer = entry.consumer or _CONSUMER_BY_KEY[entry.key]
+    consumer_kind = "skill" if consumer.startswith("eawf.workflow.skills.") else "engine"
+    return entry.model_copy(
+        update={"consumer": consumer, "consumer_kind": consumer_kind, "reserved": False}
+    )
 
 
 _RANGE_BY_KEY: dict[str, tuple[float | None, float | None]] = {
@@ -1761,17 +1048,12 @@ _LEAF_KEYS: tuple[LeafKey, ...] = tuple(
 )
 
 _DECLARED_KEYS = {entry.key for entry in _LEAF_KEYS}
-assert not (_BEHAVIOR_KEYS - _DECLARED_KEYS), (
-    f"interactive config keys missing from leaf catalog: {sorted(_BEHAVIOR_KEYS - _DECLARED_KEYS)}"
-)
 assert not (_CONSUMER_BY_KEY.keys() - _DECLARED_KEYS), (
     f"consumer binding targets undeclared leaf: {sorted(_CONSUMER_BY_KEY.keys() - _DECLARED_KEYS)}"
 )
-assert all(
-    (entry.consumer is not None) ^ entry.reserved
-    for entry in _LEAF_KEYS
-    if entry.key in _BEHAVIOR_KEYS
-), "every interactive and hooks.* leaf must declare exactly one consumer or reserved=true"
+assert not (_RETIRED_KEYS & _DECLARED_KEYS), (
+    f"retired leaf still declared: {sorted(_RETIRED_KEYS & _DECLARED_KEYS)}"
+)
 
 
 # Public read-only mapping. The dict shape is convenient for dotted-key

@@ -139,8 +139,10 @@ def test_con_078_no_expected_frame_renders_a_bare_percentage(
 ) -> None:
     bare = [fid for fid, rows in expected.items() if any(BARE_PERCENT.search(r) for r in rows)]
     assert bare == []
-    named = [row for rows in expected.values() for row in rows if "%" in row]
-    assert named  # the card still shows its percentage, beside the numerator it names
+    # the running step card states its spend as the numerator it names, with no percentage
+    named = [row for rows in expected.values() for row in rows if "12 of 20 runs replayed" in row]
+    assert named
+    assert not [row for row in named if "%" in row]
 
 
 def test_con_078_the_numerator_wears_its_quality_marker(fixture: Fixture) -> None:

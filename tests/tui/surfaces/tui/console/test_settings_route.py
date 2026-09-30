@@ -82,19 +82,19 @@ BRANCH = "probe"
 SIZES = ((80, 24), (120, 30), (160, 40))
 
 #: A bool the catalog lets global, workspace and repo write, and no other layer.
-BOOL_KEY = "config.layers_visible"
-#: A literal with three allowed values, writable at all five file layers.
-LITERAL_KEY = "prose.level"
-#: An int writable at global, workspace and repo.
-INT_KEY = "runtime.fallback.max_backoff_seconds"
+BOOL_KEY = "research.auto_save"
+#: A literal with three allowed values, writable at global, workspace and repo.
+LITERAL_KEY = "audit.default_level"
+#: An int writable at global, workspace and repo, whose default has two digits.
+INT_KEY = "estimation.eu_minutes"
 #: A list writable at all five file layers.
 LIST_KEY = "profiles.enabled"
-#: An int the config registry holds to [100, 10000], writable at repo.
-RANGED_KEY = "ui.refresh_ms"
+#: An int the config registry holds to [1, 16], writable at repo.
+RANGED_KEY = "planning.max_parallel_waves"
 #: A key no layer may write.
 LOCKED_KEY = "schema_version"
-#: A mapping, which the console leaves to its file.
-MAPPING_KEY = "project.success_metrics"
+#: A mapping no console editor rebuilds, which the console leaves to its file.
+MAPPING_KEY = "economics.governor"
 
 ROUTE_KEYBAR = "↑↓ field   Tab section   Enter edit   l layer   x unset   Esc back"
 STACK_KEYBAR = "↑↓ layer   Esc close"
@@ -334,14 +334,15 @@ def test_ui057_the_route_draws_at_every_size_with_the_packet_keybar(
 ) -> None:
     """The keybar reads as the packet states it, and the chain sits above the table."""
     # unset removes the lens layer's own value, so the key is set at repo to offer it
-    _write(tree / ".ea" / "config.yaml", "config:\n  layers_visible: true\n")
+    _write(tree / ".ea" / "config.yaml", "research:\n  auto_save: true\n")
     view = _view(tree)
     rows = _frame(fixture, view, _on(_session(), view, BOOL_KEY), w=w, h=h)
 
     assert len(rows) == h
     wide = "   i stack   \\ filter" if w >= 120 else ""
     assert rows[-1].strip() == ROUTE_KEYBAR + wide
-    assert "global › workspace › repo › branch › local" in "\n".join(rows)  # noqa: RUF001
+    # the tree's workspace root is its repo root, so the workspace layer is no other place
+    assert "global › repo › branch › local" in "\n".join(rows)  # noqa: RUF001
     assert f"{len(view.rail)} categories" in rows[1]
 
 
@@ -361,7 +362,7 @@ def test_ui057_the_readout_names_type_meaning_and_allowed_values(
     view = _view(tree)
     body = "\n".join(_frame(fixture, view, _on(_session(), view, LITERAL_KEY), w=120, h=30))
 
-    assert "level · literal · one of loose | standard | strict" in body
+    assert "default_level · literal · one of quick | standard | deep" in body
     assert LEAF_KEY_REGISTRY[LITERAL_KEY].description[:40] in body
 
 
@@ -411,7 +412,7 @@ def test_ui057_escape_leaves_an_edit_before_it_leaves_the_route(
 
 
 def test_ui057_l_cycles_the_lens_over_the_five_file_layers(tree: Path, fixture: Fixture) -> None:
-    """Five presses return the lens to where it started; L steps it back."""
+    """One press per lens layer returns the lens to where it started; L steps it back."""
     view = _view(tree)
     session = _session()
 
@@ -419,7 +420,7 @@ def test_ui057_l_cycles_the_lens_over_the_five_file_layers(tree: Path, fixture: 
     assert session.lens == "branch"
     _press(fixture, view, session, ["L"])
     assert session.lens == "repo"
-    _press(fixture, view, session, ["l"] * 5)
+    _press(fixture, view, session, ["l"] * len(view.lens_layers))
     assert session.lens == "repo"
 
 
@@ -483,7 +484,7 @@ def test_ui053_a_denied_degraded_secret_key_draws_the_whole_tuple_at_80(
     assert "CONSTRAINED BY  workspace profile" in body
     assert "NEEDS      network.egress · ? certification unknown" in body
     assert "SECRET     ref://vault/deploy · the value never renders" in body
-    assert "⊘ true" in body
+    assert "⊘ false" in body
     route = "\n".join(_frame(fixture, denied, _on(_session(), denied, BOOL_KEY)))
     assert "⊘ denied" in route
 
@@ -514,18 +515,23 @@ def test_edit_a_locked_key_is_refused_with_its_reason(tree: Path, fixture: Fixtu
     assert "locked" in session.log[0].note
 
 
-def test_edit_a_lens_the_key_is_not_writable_at_names_the_allowed_layers(
+def test_edit_a_lens_the_key_is_not_writable_at_offers_the_layers_that_are(
     tree: Path, fixture: Fixture
 ) -> None:
-    """The refusal names the owning layers rather than offering an edit that fails."""
+    """UI-053: the lens cannot hold the key, so Enter offers the layers that can instead."""
     view = _view(tree)
     session = _on(_session(), view, BOOL_KEY)
     session.lens = "local"
 
     _press(fixture, view, session, ["Enter"])
 
-    assert session.edit is None
-    assert "editable at global, workspace, repo" in session.log[0].note
+    assert session.edit == {
+        "kind": "offer",
+        "key": BOOL_KEY,
+        "layers": ["repo", "global"],
+        "idx": 0,
+    }
+    assert "local cannot hold research.auto_save" in session.log[0].note
 
 
 def test_edit_a_mapping_is_left_to_its_file(tree: Path, fixture: Fixture) -> None:
@@ -550,8 +556,8 @@ def test_edit_the_chooser_previews_the_write_before_it_is_sent(
     body = "\n".join(_frame(fixture, view, session, w=120, h=30))
 
     assert f"WRITES   {LITERAL_KEY} at repo · <repo>/.ea/config.yaml" in body
-    assert "AFTER    strict from repo becomes the value in force" in body
-    assert "▸ ○ strict" in body
+    assert "AFTER    deep from repo becomes the value in force" in body
+    assert "▸ ○ deep" in body
     assert "● standard" in body
     assert _frame(fixture, view, session, w=120, h=30)[-1].strip().startswith("↑↓ choose")
 
@@ -560,14 +566,14 @@ def test_edit_a_shadowed_write_says_it_changes_nothing_in_force(
     tree: Path, fixture: Fixture
 ) -> None:
     """A write under a higher layer is previewed as inert, not as a change."""
-    _write(tree / ".ea" / "local" / "config.yaml", "prose:\n  level: loose\n")
+    _write(tree / ".ea" / "local" / "config.yaml", "audit:\n  default_level: quick\n")
     view = _view(tree)
     session = _on(_session(), view, LITERAL_KEY)
 
     _press(fixture, view, session, ["Enter"])
     body = "\n".join(_frame(fixture, view, session, w=120, h=30))
 
-    assert "changes nothing in force · the local layer above repo holds loose" in body
+    assert "changes nothing in force · the local layer above repo holds quick" in body
 
 
 def test_edit_enter_sends_a_typed_request_and_holds_no_optimistic_value(
@@ -588,8 +594,8 @@ def test_edit_enter_sends_a_typed_request_and_holds_no_optimistic_value(
 
     assert link.sent == [SettingRequest(target=INT_KEY, layer="repo", value=45)]
     assert session.edit is None
-    row = next(r for r in _frame(fixture, view, session) if "max_backoff" in r)
-    assert "90" in row
+    row = next(r for r in _frame(fixture, view, session) if "eu_minutes" in r)
+    assert "30" in row
 
 
 def test_edit_a_value_the_type_refuses_is_not_sent(tree: Path, fixture: Fixture) -> None:
@@ -607,7 +613,7 @@ def test_edit_a_value_the_type_refuses_is_not_sent(tree: Path, fixture: Fixture)
 
 def test_edit_x_unsets_only_what_the_lens_layer_states(tree: Path, fixture: Fixture) -> None:
     """Nothing at the lens is nothing to unset; a stated value is sent as an unset."""
-    _write(tree / ".ea" / "config.yaml", "prose:\n  level: strict\n")
+    _write(tree / ".ea" / "config.yaml", "audit:\n  default_level: deep\n")
     view = _view(tree)
     link = _Link()
     session = _on(_session(), view, LITERAL_KEY)
@@ -640,13 +646,13 @@ def test_edit_a_branch_write_names_the_branch_the_view_read(tree: Path, fixture:
     """The branch layer is addressed by the branch whose file the view read."""
     view = _view(tree)
     link = _Link()
-    session = _on(_session(), view, LITERAL_KEY)
+    session = _on(_session(), view, LIST_KEY)
     session.lens = "branch"
 
     _press(fixture, view, session, ["Enter", "Enter", "Enter"], send=link)
 
     assert link.sent == [
-        SettingRequest(target=LITERAL_KEY, layer="branch", value="standard", branch=BRANCH)
+        SettingRequest(target=LIST_KEY, layer="branch", value=["core"], branch=BRANCH)
     ]
 
 
@@ -686,7 +692,7 @@ def test_edit_the_request_is_addressed_to_the_layered_config_verbs() -> None:
     assert written.method == SETTING_SET_METHOD
     assert dict(written.params) == {
         "layer": "repo",
-        "key_path": ["config", "layers_visible"],
+        "key_path": ["research", "auto_save"],
         "idempotency_key": written.operation_id,
         "value": False,
     }
@@ -736,21 +742,21 @@ def test_edit_end_to_end_the_daemon_writes_the_layer_and_the_frame_shows_its_rer
 
     assert result.status is OperationStatus.APPLIED
     assert yaml.safe_load((tree / ".ea" / "config.yaml").read_text()) == {
-        "prose": {"level": "strict"}
+        "audit": {"default_level": "deep"}
     }
     assert asked == [SETTINGS_READ_METHOD, SETTING_SET_METHOD, SETTINGS_READ_METHOD]
     held = seam.settings
     assert held is not None
     assert held.leaf(LITERAL_KEY).source_layer is Layer.REPO
-    row = next(r for r in _frame(fixture, held, session) if "level" in r)
-    assert "strict" in row
+    row = next(r for r in _frame(fixture, held, session) if "default_level" in r)
+    assert "deep" in row
     assert "repo" in row
 
     _press(fixture, held, session, ["Escape", "x", "Enter"], send=link)
     removed = asyncio.run(seam.request(link.sent[1]))
 
     assert removed.status is OperationStatus.APPLIED
-    assert "prose" not in (yaml.safe_load((tree / ".ea" / "config.yaml").read_text()) or {})
+    assert "audit" not in (yaml.safe_load((tree / ".ea" / "config.yaml").read_text()) or {})
     assert seam.settings is not None
     assert seam.settings.leaf(LITERAL_KEY).source_layer is Layer.BUILT_IN
 
@@ -783,7 +789,7 @@ def test_edit_a_refused_write_changes_no_file_and_keeps_the_view(tree: Path) -> 
 
 @pytest.mark.parametrize(
     ("value", "reason"),
-    [(20000, "above maximum 10000"), (99, "below minimum 100"), ("fast", "cannot coerce")],
+    [(17, "above maximum 16"), (0, "below minimum 1"), ("fast", "cannot coerce")],
 )
 def test_ui_053_the_console_shows_the_daemon_refusing_a_value_the_stack_rules_out(
     tree: Path, value: object, reason: str
@@ -802,9 +808,7 @@ def test_ui_053_the_console_shows_the_daemon_refusing_a_value_the_stack_rules_ou
     seam = ProjectionSeam(route="settings", scope_id=SCOPE, state_path=None, repo_root=tree)
     seam.binding.call = _call  # type: ignore[method-assign]
     before = asyncio.run(seam.load_settings())
-    assert before.leaf(RANGED_KEY).constraint_chain == (
-        "config registry range 100 to 10000 · built-in",
-    )
+    assert before.leaf(RANGED_KEY).constraint_chain == ("config registry range 1 to 16 · built-in",)
 
     result = asyncio.run(seam.request(SettingRequest(target=RANGED_KEY, layer="repo", value=value)))
 

@@ -164,26 +164,21 @@ def render(view: View) -> list[str]:
 
 
 def seam(ctx: Ctx, key: str, shift: bool) -> bool:
-    """Preview a pause or drain request, or open the Run under the cursor."""
+    """Preview a pause request, or open the Run under the cursor; drain is a menu verb."""
     s = ctx.s
     if busy(s):
         return False
-    if key in ("a", "d"):
-        pause = key == "a"
+    if key == "a":
         s.c_target = {
-            "verb": "request pause" if pause else "request drain",
+            "verb": "request pause",
             "state": None,
             "id": pt.QUEUE_TARGET,
             "kind": "dispatch queue",
-            "effects": "the daemon is asked to pause the queue at its next safe point"
-            if pause
-            else "the daemon is asked to stop claiming new work and finish what it holds",
-            "not": "it does not stop a run that is already claimed"
-            if pause
-            else "it does not cancel anything already running",
+            "effects": "the daemon is asked to pause the queue at its next safe point",
+            "not": "it does not stop a run that is already claimed",
         }
         s.overlay = "consequence"
-        ctx.log(key, f"{s.c_target['verb']} → consequence preview")
+        ctx.log(key, "request pause → consequence preview")
         return True
     if key == "Enter":
         go(ctx, "run.detail", "the run this dispatch row is about", run_under_cursor(s.sel))

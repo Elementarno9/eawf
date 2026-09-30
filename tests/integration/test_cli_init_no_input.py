@@ -27,6 +27,7 @@ from click.testing import Result
 from typer.testing import CliRunner
 
 from eawf.kernel.migrations import current_target_version
+from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.models import State
 from eawf.surfaces.cli.app import app
 
@@ -136,11 +137,9 @@ def test_cli_init_writes_correct_config_yaml(tmp_path: Path) -> None:
     config_text = (tmp_path / ".ea" / "config.yaml").read_text(encoding="utf-8")
     parsed = yaml.safe_load(config_text)
     assert parsed["profiles"]["enabled"] == ["core", "python"]
-    assert parsed["project"]["code"] == "DEMO"
-    assert parsed["project"]["title"] == "DEMO"
-    assert parsed["project"]["slug"] == "demo"
-    assert parsed["project"]["domains"] == ["general"]
-    assert parsed["project"]["goals"] == ["Establish DEMO project intent"]
+    # the project record lives in state.json; the config states no project or MCP section
+    assert "project" not in parsed
+    assert "mcp" not in parsed
     assert parsed["runtime"]["adapters"] == ["claude-code"]
     assert parsed["runtime"]["preference"] == ["claude-code"]
     assert "estimation" not in parsed
@@ -373,8 +372,8 @@ def test_readme_quickstart_commands_each_exit_zero_in_a_fresh_repo(
 
     Runs the README quick-start commands in order, from a fresh empty
     directory, with no arguments injected — exactly what an operator pastes.
-    Each must exit 0, and the end state must carry the ledger plus the phase
-    the block opens.
+    Each must exit 0, and the end state must be a tree born at epoch 2
+    (REL-021), the only epoch that takes writes after the flag day.
     """
     commands = _quickstart_commands(_README.read_text(encoding="utf-8"))
     assert commands, "the README quick-start block must carry at least one command"
@@ -393,8 +392,7 @@ def test_readme_quickstart_commands_each_exit_zero_in_a_fresh_repo(
     assert state_path.is_file(), "the quick-start block must leave a committed ledger"
     state = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
     assert state.project is not None and state.project.code == "DEMO-REPO"
-    assert state.current.phase_id is not None, "the block must leave a current phase open"
-    assert state.phases[state.current.phase_id].status == "active"
+    assert resolve_authority(state_path.parent).epoch == 2
 
 
 def test_quickstart_extractor_rejects_markdown_without_the_marker() -> None:

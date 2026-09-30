@@ -19,7 +19,7 @@ from typing import Any
 from eawf.surfaces.tui.console.chrome import SettingsCatalog
 from eawf.surfaces.tui.console.frame import Fixed, View, g_frame, g_pad, rule_n
 from eawf.surfaces.tui.console.keybar import pick
-from eawf.surfaces.tui.console.navigation import Ctx, go
+from eawf.surfaces.tui.console.navigation import Ctx, go, open_overlay
 from eawf.surfaces.tui.console.renderers.provenance import native_seam, settings_frame
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import cell_len
@@ -877,9 +877,20 @@ def _seam_value(ctx: Ctx, key: str) -> bool:
         fell = fallback(cfg, name, k[0], at(k, 2), lens(s))
         if not fell:
             ctx.log("x", f"not set at {lens(s)} — nothing to unset")
-        else:
-            unset_value(cfg, s, name, k[0])
-            ctx.log("x", f"unset {name}.{k[0]} · falls back to {fell[0]} {show(cfg, fell[1])}")
+            return True
+        # unset is the route's one direct write, so it previews before anything changes
+        target = f"{name}.{k[0]}"
+        s.c_target = {
+            "verb": "unset",
+            "state": None,
+            "id": target,
+            "kind": "setting",
+            "effects": f"the value stated at {lens(s)} is removed · "
+            f"falls back to {fell[0]} {show(cfg, fell[1])}",
+            "not": "no other layer's value changes",
+        }
+        open_overlay(s, "consequence", subject=target)
+        ctx.log("x", f"unset {target} → consequence preview")
         return True
     if key == "i":
         go(ctx, "settings.stack", "stack")

@@ -15,7 +15,7 @@ operator hunting for a replacement that does not exist.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Final
 
 #: Every epoch-1 verb that writes epoch-1 state, mapped to the path of the
@@ -130,6 +130,37 @@ EPOCH1_REPLACEMENTS: Final[Mapping[str, str | None]] = {
 }
 
 
+#: Verbs the flag day removed from the command tree, mapped to the verb that
+#: replaces each. Unlike :data:`EPOCH1_REPLACEMENTS` these are no longer on
+#: the tree, so the root group answers them before click reports an unknown
+#: command.
+RETIRED_VERBS: Final[Mapping[str, str]] = {
+    "repo link": "workspace member add",
+    "repo link-workspace": "workspace member add",
+    "workspace add-repo": "workspace member add",
+    "workspace init": "workspace add",
+    "workspace remove-repo": "workspace member remove",
+    "workspace status": "workspace show",
+    "workspace validate": "workspace show",
+}
+
+
+def retired_verb(args: Sequence[str]) -> str | None:
+    """Return the retired verb ``args`` begins with, or ``None``.
+
+    Args:
+        args: The tokens after the root's own options.
+
+    Returns:
+        The retired command path, or ``None`` when ``args`` names none.
+    """
+    for length in (2, 1):
+        path = " ".join(args[:length])
+        if path in RETIRED_VERBS:
+            return path
+    return None
+
+
 def replacement_guidance(command_path: str) -> str:
     """Return what to run instead of the refused epoch-1 verb at ``command_path``.
 
@@ -142,6 +173,11 @@ def replacement_guidance(command_path: str) -> str:
         retired without one, or -- for a path the table does not carry --
         pointing at the four epoch-2 lifecycle nouns.
     """
+    if command_path in RETIRED_VERBS:
+        return (
+            f"run `eawf {RETIRED_VERBS[command_path]}` instead, the verb that replaces "
+            f"`eawf {command_path}`"
+        )
     if command_path not in EPOCH1_REPLACEMENTS:
         return "use the epoch-2 verbs instead (eawf milestone|batch|task|run --help)"
     replacement = EPOCH1_REPLACEMENTS[command_path]
@@ -150,4 +186,4 @@ def replacement_guidance(command_path: str) -> str:
     return f"run `eawf {replacement}` instead, the epoch-2 verb that replaces `eawf {command_path}`"
 
 
-__all__ = ["EPOCH1_REPLACEMENTS", "replacement_guidance"]
+__all__ = ["EPOCH1_REPLACEMENTS", "RETIRED_VERBS", "replacement_guidance", "retired_verb"]

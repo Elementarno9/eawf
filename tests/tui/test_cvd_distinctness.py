@@ -26,14 +26,14 @@ from itertools import combinations
 
 import pytest
 
-from eawf.surfaces.tui.chassis.theme import _IBM_VARIABLES
-from eawf.surfaces.tui.widgets.cvd import (
+from eawf.surfaces.tui.chassis.cvd import (
     CVD_TYPES,
     EA_CB_BANDS,
     colour_distance,
     render_status_legend_svg,
     simulate_cvd,
 )
+from eawf.surfaces.tui.chassis.theme import _IBM_VARIABLES
 
 #: Collapse epsilon in 8-bit RGB Euclidean distance. Two simulated swatches
 #: within this distance are treated as collapsed. Set well below the current

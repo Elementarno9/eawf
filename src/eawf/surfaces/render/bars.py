@@ -15,8 +15,7 @@ multi-cell :func:`render_block_bar` composes that primitive into a
 fixed-width run.
 
 This module is the pure render core; it carries no colour and no widget
-state. The :mod:`~eawf.surfaces.tui.chassis.progress` widget and the
-status-pane / roadmap-tree / workspace-table bars consume it, and
+state. The status line consumes it, and
 :mod:`~eawf.surfaces.render.mode` flips it to an ASCII fallback when the
 render mode demands a Braille-free / block-free glyph set.
 """

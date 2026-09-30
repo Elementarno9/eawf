@@ -17,12 +17,14 @@ block of its own in the position it occupies, carrying a value in the
 sequences are missing. A transcript that silently renumbered around the hole would be
 shorter than the episode it claims to show, and nothing on the frame would say so.
 
-*The thinking state is derived and says it is.* No event states "the agent is thinking":
-what exists is a reasoning turn that opened and has not been summarized. The state is
-folded out of that pairing and carried as a
+*The thinking state says whether it was observed or derived.* What exists is a
+reasoning turn that opened and has not been summarized. When the provider marked the
+opening itself, the turn is carried as a
 :class:`~eawf.kernel.projection.truth.TruthField` whose kind is
-:attr:`~eawf.kernel.projection.truth.TruthKind.DERIVED`, so a frame drawing it is
-drawing an inference the read model owns rather than a fact a provider reported.
+:attr:`~eawf.kernel.projection.truth.TruthKind.OBSERVED`; when eawf inferred the opening
+for a provider with no start marker, the kind is
+:attr:`~eawf.kernel.projection.truth.TruthKind.DERIVED`, so a frame drawing it is drawing
+an inference the read model owns rather than a fact a provider reported.
 
 Nothing here reads a ledger or a lock. The inputs are one validated
 :class:`~eawf.kernel.projection.compute.RouteProjection` and the already-validated event
@@ -185,7 +187,7 @@ class TranscriptReadModel(RouteReadModel):
     Attributes:
         blocks: The Run's blocks in stream order, purged ranges in their own positions.
         purged: Every range the console does not hold, in stream order.
-        thinking: Whether a reasoning turn is open, derived and labelled derived.
+        thinking: Whether a reasoning turn is open; derived only when eawf inferred it.
         last_contiguous_sequence: The highest sequence with nothing missing in front of
             it; zero for a Run that has produced nothing.
         derivation_stopped: Whether a hole sits between the start of the stream and its
@@ -330,11 +332,19 @@ def _ordered(events: Sequence[RunEventRecord]) -> tuple[RunEventRecord, ...]:
 
 
 def _thinking_field(events: Sequence[RunEventRecord], *, scope_id: str) -> TruthField[str]:
-    """Return whether a reasoning turn is open, as a derived cell that says so."""
+    """Return whether a reasoning turn is open, observed or derived as its opener says.
+
+    A provider that marks the start of its reasoning states the turn in a typed event, so
+    the open turn is observed. A provider with no start marker leaves eawf to infer the
+    opening line, and only then is the state derived.
+    """
     opened = open_reasoning_turn(events)
     if opened is None:
         return unknown_field(urn=scope_id, revision=BLOCK_REVISION, reason=NO_OPEN_TURN_REASON)
-    return _derived(THINKING, urn=opened.event_ref)
+    field = _derived(THINKING, urn=opened.event_ref)
+    if opened.provenance == "eawf_derived":
+        return field
+    return field.model_validate(field.model_dump() | {"truth_kind": TruthKind.OBSERVED})
 
 
 #: What sort of work each event kind records, as the transcript's kind column names it.
@@ -377,14 +387,22 @@ def _median(values: Sequence[int]) -> int:
 def _in_flight(events: tuple[RunEventRecord, ...]) -> tuple[set[str], dict[str, int]]:
     """Return the events whose work is still going, and each command family's typical time.
 
-    A command is in flight from its start until a result names the same execution, and a
+    A command is in flight from its start until a result names the same execution, a
+    child Run from its start until its terminal line names the same delegation, and a
     reasoning turn until it is summarized. The typical time of a family is the median of
     its finished executions in the stream.
     """
     started: dict[str, RunEventRecord] = {}
+    children: dict[str, RunEventRecord] = {}
     durations: dict[str, list[int]] = {}
     for event in events:
         payload = event.payload
+        if isinstance(payload, ChildRunPayload):
+            if payload.phase == "started":
+                children[payload.delegation_request_ref] = event
+            elif payload.phase == "terminal":
+                children.pop(payload.delegation_request_ref, None)
+            continue
         if not isinstance(payload, CommandPayload):
             continue
         if payload.phase == "started":
@@ -393,7 +411,7 @@ def _in_flight(events: tuple[RunEventRecord, ...]) -> tuple[set[str], dict[str, 
             begun = started.pop(payload.command_ref)
             seconds = int((event.recorded_at - begun.recorded_at).total_seconds())
             durations.setdefault(payload.command_family_ref, []).append(max(0, seconds))
-    going = {event.event_ref for event in started.values()}
+    going = {event.event_ref for event in (*started.values(), *children.values())}
     turn = open_reasoning_turn(events)
     if turn is not None:
         going.add(turn.event_ref)

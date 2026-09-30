@@ -28,7 +28,6 @@ import dataclasses
 
 import pytest
 
-from eawf.kernel.config.registry import LEAF_KEY_REGISTRY, leaf_key_lookup
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 from eawf.observability.telemetry.pricing import lookup_pricing
 from eawf.workflow.dispatch import (
@@ -329,19 +328,3 @@ def test_model_for_runtime_runtime_models_override_wins() -> None:
         )
         == "claude-haiku-4-5"
     )
-
-
-# --- dispatch.routing config leaf --------------------------------------------
-
-
-def test_dispatch_routing_leaf_registered() -> None:
-    """The dispatch.routing leaf is in the catalog registry."""
-    assert "dispatch.routing" in LEAF_KEY_REGISTRY
-
-
-def test_dispatch_routing_leaf_resolves_with_default() -> None:
-    """leaf_key_lookup resolves dispatch.routing with its empty-mapping default."""
-    entry = leaf_key_lookup("dispatch.routing")
-    assert entry.domain == "dispatch"
-    assert entry.type == "mapping"
-    assert entry.default == {}

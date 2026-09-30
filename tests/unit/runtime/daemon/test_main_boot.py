@@ -482,34 +482,45 @@ def test_schedule_stale_wave_sweep_publishes_the_estimate_crossing(tmp_path: Pat
     _run(body)
 
 
-def test_resolve_session_ttl_seconds_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Missing env var → DEFAULT_TTL_SECONDS (86_400, one day)."""
+@pytest.fixture
+def unbound_ctx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MethodContext:
+    """Return a context bound to no tree, the global layer redirected to an empty home."""
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    return _build_ctx(state_path=None, bus=None)
+
+
+def test_resolve_session_ttl_seconds_default(
+    monkeypatch: pytest.MonkeyPatch, unbound_ctx: MethodContext
+) -> None:
+    """Missing env var and no layer → the built-in DEFAULT_TTL_SECONDS (one day)."""
     monkeypatch.delenv("EAWF_DAEMON_SESSION_TTL", raising=False)
-    assert daemon_main._resolve_session_ttl_seconds() == DEFAULT_TTL_SECONDS
+    assert daemon_main._resolve_session_ttl_seconds(unbound_ctx) == DEFAULT_TTL_SECONDS
 
 
-def test_resolve_session_ttl_seconds_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_session_ttl_seconds_env_override(
+    monkeypatch: pytest.MonkeyPatch, unbound_ctx: MethodContext
+) -> None:
     """Positive integer env var overrides the default."""
     monkeypatch.setenv("EAWF_DAEMON_SESSION_TTL", "120")
-    assert daemon_main._resolve_session_ttl_seconds() == 120
+    assert daemon_main._resolve_session_ttl_seconds(unbound_ctx) == 120
 
 
 def test_resolve_session_ttl_seconds_unparseable_falls_back(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, unbound_ctx: MethodContext
 ) -> None:
-    """Garbage env value → default + warning (verified by return value)."""
+    """Garbage env value → the configured value, here the built-in default."""
     monkeypatch.setenv("EAWF_DAEMON_SESSION_TTL", "not-a-number")
-    assert daemon_main._resolve_session_ttl_seconds() == DEFAULT_TTL_SECONDS
+    assert daemon_main._resolve_session_ttl_seconds(unbound_ctx) == DEFAULT_TTL_SECONDS
 
 
 def test_resolve_session_ttl_seconds_non_positive_falls_back(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, unbound_ctx: MethodContext
 ) -> None:
-    """Zero / negative → default."""
+    """Zero / negative → the configured value, here the built-in default."""
     monkeypatch.setenv("EAWF_DAEMON_SESSION_TTL", "0")
-    assert daemon_main._resolve_session_ttl_seconds() == DEFAULT_TTL_SECONDS
+    assert daemon_main._resolve_session_ttl_seconds(unbound_ctx) == DEFAULT_TTL_SECONDS
     monkeypatch.setenv("EAWF_DAEMON_SESSION_TTL", "-5")
-    assert daemon_main._resolve_session_ttl_seconds() == DEFAULT_TTL_SECONDS
+    assert daemon_main._resolve_session_ttl_seconds(unbound_ctx) == DEFAULT_TTL_SECONDS
 
 
 # ---------------------------------------------------------------------------

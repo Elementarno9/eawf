@@ -11,8 +11,8 @@ The TUI is the deliberate omission from the line/branch ratchet -- Textual
 widgets render asynchronously and line-cov misreports them, so the ``tui`` gate
 waives both dimensions. Its quality number is the behavioural floor in
 ``[tool.eawf.coverage.tui_behavioural]``: a counts-based ratchet over the
-screen-level golden snapshots + the operator-journey ``tui_flow`` specs, which
-fires the moment a screen snapshot or a flow is deleted without replacement.
+console's recorded golden frames and journeys, which fires the moment a frame or
+a journey is deleted without replacement.
 
 The gate logic lives here as importable functions (``aggregate``,
 ``evaluate_package_gates``, ``evaluate_tui_behavioural``) so the negative-control
@@ -47,17 +47,34 @@ import tomllib
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 from xml.etree.ElementTree import Element
+
+from pydantic import BaseModel, ConfigDict
 
 #: ``condition-coverage="50% (1/2)"`` -> the ``(covered/total)`` branch tally.
 _CONDITION = re.compile(r"\((\d+)/(\d+)\)")
 
-#: A canonical ``"flow": "G<N>-..."`` row inside ``FLOW_SPECS`` -- the per-flow
-#: countable signal the behavioural gate ratchets on. Scoped to the ``G<digit>``
-#: operator-journey names so incidental ``"flow":`` keys in per-test GateSpec
-#: args are not double-counted.
-_FLOW_ROW = re.compile(r'^\s*"flow":\s*"G\d')
+
+class _FrameFile(BaseModel):
+    """One console frame-sequence file; the replay harness validates each state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str
+    size: list[int] | None = None
+    states: list[dict[str, Any]]
+    count: int
+
+
+class _JourneyFile(BaseModel):
+    """The console journey-sequence file; the replay harness validates each journey."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    meta: dict[str, Any]
+    count: int
+    journeys: list[dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -201,37 +218,41 @@ def evaluate_package_gates(
 
 
 def count_goldens(repo_root: Path, golden_glob: str) -> int:
-    """Count the screen-level golden snapshots under *repo_root*.
+    """Count the console's recorded golden frames under *repo_root*.
 
     Args:
         repo_root: The repository root the glob is resolved against.
-        golden_glob: A repo-relative glob (e.g. ``tests/.../golden/*.txt``).
+        golden_glob: A repo-relative glob naming the frame-sequence files.
 
     Returns:
-        The number of files matching *golden_glob*.
+        The number of frame states across the matched files.
+
+    Raises:
+        pydantic.ValidationError: When a matched file is not a frame-sequence file.
     """
-    return len(list(repo_root.glob(golden_glob)))
+    return sum(
+        len(_FrameFile.model_validate_json(path.read_bytes()).states)
+        for path in repo_root.glob(golden_glob)
+    )
 
 
 def count_flows(repo_root: Path, flow_glob: str) -> int:
-    """Count the operator-journey ``tui_flow`` specs under *repo_root*.
-
-    Each flow is one ``"flow": "G<N>-..."`` row in the ``FLOW_SPECS`` table; the
-    count is the number of such rows across the file(s) the glob resolves to.
+    """Count the console's recorded operator journeys under *repo_root*.
 
     Args:
         repo_root: The repository root the glob is resolved against.
-        flow_glob: A repo-relative glob naming the flow-spec test file(s).
+        flow_glob: A repo-relative glob naming the journey-sequence file(s).
 
     Returns:
-        The total number of ``"flow":`` rows across the matched files.
+        The number of journeys across the matched files.
+
+    Raises:
+        pydantic.ValidationError: When a matched file is not a journey-sequence file.
     """
-    total = 0
-    for path in repo_root.glob(flow_glob):
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if _FLOW_ROW.match(line):
-                total += 1
-    return total
+    return sum(
+        len(_JourneyFile.model_validate_json(path.read_bytes()).journeys)
+        for path in repo_root.glob(flow_glob)
+    )
 
 
 def evaluate_tui_behavioural(
@@ -255,13 +276,13 @@ def evaluate_tui_behavioural(
     golden_status = "ok" if goldens >= min_goldens else "FAIL"
     report.append(f"{'tui.goldens':16s} {goldens:8d} {min_goldens:>6d}  {golden_status}")
     if goldens < min_goldens:
-        failures.append(f"tui.goldens: {goldens} screen snapshots < floor {min_goldens}")
+        failures.append(f"tui.goldens: {goldens} golden frames < floor {min_goldens}")
     flows = count_flows(repo_root, str(spec["flow_glob"]))
     min_flows = int(str(spec["min_flows"]))
     flow_status = "ok" if flows >= min_flows else "FAIL"
     report.append(f"{'tui.flows':16s} {flows:8d} {min_flows:>6d}  {flow_status}")
     if flows < min_flows:
-        failures.append(f"tui.flows: {flows} operator-journey flows < floor {min_flows}")
+        failures.append(f"tui.flows: {flows} operator journeys < floor {min_flows}")
     return report, failures
 
 

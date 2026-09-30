@@ -1,11 +1,7 @@
 """Unit tests for the M26 estimate-actual variance.
 
-Covers two deliverables:
-
-1. :func:`eawf.workflow.estimation.metrics.compute_estimate_actual_variance` — the
-   C09 §5.9.6 M26 ``eawf_estimate_actual_variance_pct`` gauge.
-2. :class:`eawf.surfaces.tui.widgets.variance_tile.VarianceTile` — the colour-
-   banded M26 tile render.
+Covers :func:`eawf.workflow.estimation.metrics.compute_estimate_actual_variance`,
+the C09 §5.9.6 M26 ``eawf_estimate_actual_variance_pct`` gauge.
 
 Plus CLI dispatch smoke for ``eawf metrics variance``. Per AGENTS test
 discipline: boundary (empty / single / off-by-one) AND error-path coverage;
@@ -25,13 +21,6 @@ import eawf.kernel.config.layered as layered
 from eawf.kernel.state.enums import ActualStatus, Confidence, EffortBucket, WaveStatus
 from eawf.kernel.state.models import ActualSummary, EstimateSummary, State, Wave
 from eawf.surfaces.cli.app import app
-from eawf.surfaces.tui.widgets.variance_tile import (
-    EMPTY_STATE,
-    VarianceTile,
-    band_var,
-    render_variance_markup,
-    render_variance_plain,
-)
 from eawf.workflow.estimation.metrics import (
     EstimateActualVarianceMetric,
     compute_estimate_actual_variance,
@@ -267,38 +256,6 @@ def test_compute_estimate_actual_variance_excludes_non_closed_and_missing() -> N
     # Only "counted" contributes: (2-1)/1 * 100 = 100 %.
     assert result.sample_count == 1
     assert result.variance_pct == pytest.approx(100.0)
-
-
-# ---- VarianceTile render ----------------------------------------------------
-
-
-def test_variance_tile_render_none_is_empty_state() -> None:
-    """A None variance renders the muted empty-state sentinel."""
-    assert render_variance_plain(None) == EMPTY_STATE
-    assert EMPTY_STATE in render_variance_markup(None)
-
-
-def test_variance_tile_render_signed_value() -> None:
-    """A positive variance renders a signed percentage; negative keeps its sign."""
-    assert render_variance_plain(12.5) == "+12.5%"
-    assert render_variance_plain(-3.0) == "-3.0%"
-
-
-@pytest.mark.parametrize(
-    ("variance_pct", "expected_var"),
-    [(10.0, "$ok"), (-20.0, "$ok"), (40.0, "$warn"), (-49.9, "$warn"), (75.0, "$err")],
-)
-def test_variance_tile_band_var(variance_pct: float, expected_var: str) -> None:
-    """The colour band keys off the absolute variance magnitude."""
-    assert band_var(variance_pct) == expected_var
-
-
-def test_variance_tile_set_variance_updates_reactive() -> None:
-    """``set_variance`` drives the reactive value the watcher repaints from."""
-    tile = VarianceTile()
-    tile.set_variance(42.0)
-    assert tile.variance_pct == pytest.approx(42.0)
-    assert "+42.0%" in render_variance_markup(tile.variance_pct)
 
 
 # ---- CLI dispatch smoke -----------------------------------------------------

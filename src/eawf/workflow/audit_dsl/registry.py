@@ -87,16 +87,15 @@ from eawf.runtime.sandbox.env_scrub import (
     build_child_env,
     resolve_binary_dir,
 )
-from eawf.workflow.audit_dsl.kinds.affordance_parity import check_affordance_parity
 from eawf.workflow.audit_dsl.kinds.backlog_resolution import BACKLOG_RESOLUTION_KIND
 from eawf.workflow.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
 from eawf.workflow.audit_dsl.kinds.journal_chain import check_journal_chain
 from eawf.workflow.audit_dsl.kinds.jury_calibrated import JURY_CALIBRATED_KIND
+from eawf.workflow.audit_dsl.kinds.retired_tui import check_retired_tui
 from eawf.workflow.audit_dsl.kinds.schema_validate import check_schema_validate
 from eawf.workflow.audit_dsl.kinds.svg_pixel_diff import check_svg_pixel_diff
 from eawf.workflow.audit_dsl.kinds.svg_well_formed import check_svg_well_formed
 from eawf.workflow.audit_dsl.kinds.transition_coverage import check_transition_coverage
-from eawf.workflow.audit_dsl.kinds.tui_flow import check_tui_flow
 from eawf.workflow.audit_dsl.kinds.verify_implements import check_verify_implements
 from eawf.workflow.audit_dsl.models import (
     OUTPUT_TAIL_MAX_CHARS,
@@ -906,63 +905,6 @@ def _resolve_optional_file(
     return target, None
 
 
-def _live_capture_tui_png(
-    spec: CheckSpec,
-    cwd: Path,
-    args: MockupGoldenDiffArgs,
-) -> tuple[bytes | None, CheckResult | None]:
-    """Capture a live Pilot render as PNG bytes for image-mode live diffing.
-
-    Mounts the surface named by the reused text-mode selectors (``scope`` /
-    ``state_path`` / ``mode`` / ``key_sequence`` / ``size``) under Pilot,
-    exports the screen SVG, and rasterises it through the pinned ``resvg``
-    chain. Returns ``(png_bytes, None)`` on success, or ``(None, result)``
-    with an early ``CheckResult`` -- ``status="blocked"`` when ``resvg`` is
-    absent (CI portability) and ``status="fail"`` on a bad state path or a
-    capture/render error. Never raises.
-    """
-    from eawf.surfaces.tui.chassis import pilot_harness
-
-    state_path_abs: Path | None = None
-    if args.state_path is not None:
-        resolved, state_err = _resolve_optional_file(
-            args.state_path, cwd=cwd, arg_name="state_path"
-        )
-        if state_err is not None:
-            return None, CheckResult(
-                name=spec.name, kind=spec.kind, passed=False, status="fail", details=state_err
-            )
-        state_path_abs = resolved
-
-    try:
-        png = pilot_harness.capture_mockup_golden_screen_png_sync(
-            scope=args.scope,
-            state_path=state_path_abs,
-            mode=args.mode,
-            key_sequence=list(args.key_sequence),
-            size=(args.size[0], args.size[1]),
-        )
-    except FileNotFoundError:
-        logger.info(f"_live_capture_tui_png blocked name={spec.name!r} reason=no-resvg")
-        return None, CheckResult(
-            name=spec.name,
-            kind=spec.kind,
-            passed=False,
-            status="blocked",
-            details="resvg not installed",
-        )
-    except Exception as exc:  # capture/render failure degrades, never raises
-        logger.debug(f"_live_capture_tui_png capture-fail name={spec.name!r} reason={exc!r}")
-        return None, CheckResult(
-            name=spec.name,
-            kind=spec.kind,
-            passed=False,
-            status="fail",
-            details=f"live capture failed: {exc}",
-        )
-    return png, None
-
-
 def _check_mockup_image_diff(
     spec: CheckSpec,
     cwd: Path,
@@ -975,9 +917,9 @@ def _check_mockup_image_diff(
     round-vs-square, body column count) above the broadened secondary
     falsifiers (right-edge alignment, selected-row contrast) and token
     fidelity. A layout-shape mismatch FAILS the gate; a faithful pair PASSES.
-    When ``tui_png`` is the :data:`LIVE_CAPTURE_SENTINEL` the TUI side is a
-    fresh Pilot render captured + rasterised on the spot instead of a committed
-    PNG. Never raises -- a malformed fixture degrades to ``status="fail"``.
+    A ``tui_png`` of :data:`LIVE_CAPTURE_SENTINEL` asked for a live render of the
+    retired epoch-1 TUI and reports ``blocked``. Never raises -- a malformed
+    fixture degrades to ``status="fail"``.
     """
     from eawf.workflow.audit_dsl.kinds.mockup_image_diff import (
         LIVE_CAPTURE_SENTINEL,
@@ -999,27 +941,21 @@ def _check_mockup_image_diff(
         )
 
     if args.tui_png == LIVE_CAPTURE_SENTINEL:
-        # Live mode: capture a fresh Pilot render instead of a committed PNG.
-        tui_bytes, early = _live_capture_tui_png(spec, cwd, args)
-        if early is not None:
-            return early
-        assert tui_bytes is not None
-        tui_label = LIVE_CAPTURE_SENTINEL
-    else:
-        # In image mode ``tui_png`` is the render side; the fixture-pair tests
-        # pass it directly, falling back to ``golden_path`` as the reference TUI render.
-        tui_arg = args.tui_png if args.tui_png is not None else args.golden_path
-        tui_path, tui_err = _resolve_optional_file(tui_arg, cwd=cwd, arg_name="tui_png")
-        if tui_err is not None or tui_path is None:
-            return CheckResult(
-                name=spec.name,
-                kind=spec.kind,
-                passed=False,
-                status="fail",
-                details=tui_err or "tui_png not found",
-            )
-        tui_bytes = tui_path.read_bytes()
-        tui_label = str(tui_arg)
+        return check_retired_tui(spec, cwd)
+    # ``tui_png`` is the render side, falling back to ``golden_path`` as the
+    # reference TUI render.
+    tui_arg = args.tui_png if args.tui_png is not None else args.golden_path
+    tui_path, tui_err = _resolve_optional_file(tui_arg, cwd=cwd, arg_name="tui_png")
+    if tui_err is not None or tui_path is None:
+        return CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            status="fail",
+            details=tui_err or "tui_png not found",
+        )
+    tui_bytes = tui_path.read_bytes()
+    tui_label = str(tui_arg)
 
     try:
         diff = compare_mockup_png_to_tui_png(mockup_path.read_bytes(), tui_bytes)
@@ -1052,12 +988,12 @@ def _check_mockup_image_diff(
 
 
 def _check_mockup_golden_diff(spec: CheckSpec, cwd: Path) -> CheckResult:
-    """Capture a TUI screen via Pilot and compare it to a mockup golden.
+    """Compare a mockup against a TUI render.
 
-    Default ASCII-text mode byte-compares the normalised live screen to a text
-    golden. When ``mockup_png`` is set the kind dispatches to the VIS-1 image
-    falsifier (:func:`_check_mockup_image_diff`), which weights layout shape
-    above token fidelity.
+    With ``mockup_png`` set the kind runs the VIS-1 image falsifier
+    (:func:`_check_mockup_image_diff`), which weights layout shape above token
+    fidelity. The ASCII-text mode captured the retired epoch-1 TUI and reports
+    ``blocked``.
     """
     try:
         args = MockupGoldenDiffArgs.model_validate(spec.args)
@@ -1069,80 +1005,9 @@ def _check_mockup_golden_diff(spec: CheckSpec, cwd: Path) -> CheckResult:
             status="fail",
             details=f"invalid args: {exc.errors()[0]['msg']}",
         )
-
     if args.mockup_png is not None:
         return _check_mockup_image_diff(spec, cwd, args)
-
-    golden_path, golden_error = _resolve_optional_file(
-        args.golden_path,
-        cwd=cwd,
-        arg_name="golden_path",
-    )
-    if golden_error is not None or golden_path is None:
-        return CheckResult(
-            name=spec.name,
-            kind=spec.kind,
-            passed=False,
-            status="fail",
-            details=golden_error or "golden_path not found",
-        )
-    state_path, state_error = _resolve_optional_file(
-        args.state_path,
-        cwd=cwd,
-        arg_name="state_path",
-    )
-    if state_error is not None:
-        return CheckResult(
-            name=spec.name,
-            kind=spec.kind,
-            passed=False,
-            status="fail",
-            details=state_error,
-        )
-
-    from eawf.surfaces.tui.chassis import pilot_harness
-
-    try:
-        expected = golden_path.read_text(encoding="utf-8").rstrip("\n")
-        captured = pilot_harness.capture_mockup_golden_screen_text_sync(
-            scope=args.scope,
-            state_path=state_path,
-            mode=args.mode,
-            key_sequence=list(args.key_sequence),
-            size=(args.size[0], args.size[1]),
-        )
-    except Exception as exc:
-        logger.debug(f"_check_mockup_golden_diff capture-fail name={spec.name!r} reason={exc!r}")
-        return CheckResult(
-            name=spec.name,
-            kind=spec.kind,
-            passed=False,
-            status="fail",
-            details=f"mockup golden capture failed: {exc}",
-        )
-
-    if captured == expected:
-        byte_count = len(expected.encode("utf-8"))
-        logger.debug(f"_check_mockup_golden_diff ok name={spec.name!r} golden={args.golden_path!r}")
-        return CheckResult(
-            name=spec.name,
-            kind=spec.kind,
-            passed=True,
-            status="pass",
-            details=f"screen matches mockup golden path={args.golden_path} bytes={byte_count}",
-        )
-
-    details = pilot_harness.mockup_golden_diff_detail(golden_path, expected, captured)
-    logger.debug(
-        f"_check_mockup_golden_diff mismatch name={spec.name!r} golden={args.golden_path!r}"
-    )
-    return CheckResult(
-        name=spec.name,
-        kind=spec.kind,
-        passed=False,
-        status="fail",
-        details=details,
-    )
+    return check_retired_tui(spec, cwd)
 
 
 CHECK_REGISTRY: dict[str, CheckFn] = {
@@ -1155,9 +1020,9 @@ CHECK_REGISTRY: dict[str, CheckFn] = {
     "criterion_in_diff": check_criterion_in_diff,
     "citation_resolves": _check_citation_resolves,
     "schema_validate": check_schema_validate,
-    "affordance_parity": check_affordance_parity,
+    "affordance_parity": check_retired_tui,
     "transition_coverage": check_transition_coverage,
-    "tui_flow": check_tui_flow,
+    "tui_flow": check_retired_tui,
     "svg_well_formed": check_svg_well_formed,
     "svg_pixel_diff": check_svg_pixel_diff,
     "mockup_golden_diff": _check_mockup_golden_diff,

@@ -13,8 +13,7 @@ inventory the CLI drives (:data:`eawf.surfaces.cli.commands.snapshot.SNAPSHOT_SU
 so the gate and ``eawf snapshot update --kind`` cannot drift. Most
 surfaces live under ``tests/golden/<kind>/`` but the watch set follows
 each surface's declared ``golden_dir`` verbatim, so a surface whose
-bytes live elsewhere (e.g. the Textual ``tui`` surface under
-``tests/snapshots/tui/golden/``) is guarded too. Golden trees *not*
+bytes live elsewhere (e.g. ``tests/snapshots/svg/golden/``) is guarded too. Golden trees *not*
 in the inventory (e.g. ``tests/golden/cli/`` help-panel snapshots,
 which refresh as a side-effect of any wave that adds a CLI command)
 are deliberately out of scope — they have their own per-wave refresh

@@ -15,8 +15,7 @@ The decision keys on the two canonical wave fields:
 
 :func:`resolve_routing` is a pure function: same inputs, same
 :class:`RoutingDecision`, no hidden state and no I/O. It accepts an
-optional ``table`` so an operator-supplied ``dispatch.routing`` config
-override (the leaf this wave registers) can layer over
+optional ``table`` so a caller-supplied override can layer over
 :data:`DEFAULT_ROUTING_TABLE` without the resolver re-reading config.
 
 Model tiers follow the cost gradient: heavier effort routes to the more
@@ -181,8 +180,7 @@ def _build_default_table() -> dict[tuple[AgentSessionRole, EffortBucket], Routin
 
 #: Built-in routing table — every ``(agent_role, effort_bucket)`` pair
 #: mapped to its :class:`RoutingDecision`. Built once at import so the
-#: resolver stays a flat lookup. The ``dispatch.routing`` config leaf
-#: layers operator overrides on top of this baseline.
+#: resolver stays a flat lookup; a caller's override table layers on top.
 DEFAULT_ROUTING_TABLE: dict[tuple[AgentSessionRole, EffortBucket], RoutingDecision] = (
     _build_default_table()
 )
@@ -221,8 +219,7 @@ def resolve_routing(
         agent_role: The wave's :class:`~eawf.kernel.state.enums.AgentSessionRole`.
         effort_bucket: The wave's
             :class:`~eawf.kernel.state.enums.EffortBucket`.
-        table: Optional operator-supplied override map (e.g. projected
-            from the ``dispatch.routing`` config leaf). Entries shadow the
+        table: Optional caller-supplied override map. Entries shadow the
             built-in table; absent pairs fall through to the built-in.
 
     Returns:

@@ -18,8 +18,14 @@ from eawf.kernel.projection.compute import ProjectionRow, build_route_projection
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.keymap import GLOBAL_KEYS
-from eawf.surfaces.tui.console.overlays.palette import entities
-from eawf.surfaces.tui.console.palette import HitKind, PaletteEntity, hits, palette_rows
+from eawf.surfaces.tui.console.overlays.palette import entities, palette_hits
+from eawf.surfaces.tui.console.palette import (
+    HitKind,
+    PaletteEntity,
+    hits,
+    palette_list,
+    palette_rows,
+)
 from eawf.surfaces.tui.console.registry import REGISTRY, route_for_id
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import RULE_PALETTE
@@ -115,7 +121,8 @@ def test_con_097_enter_on_an_entity_opens_its_detail_with_its_id(fixture: Fixtur
 
 
 def test_con_097_verbs_are_not_a_palette_kind(fixture: Fixture) -> None:
-    assert set(HitKind) == {HitKind.ROUTE, HitKind.ENTITY}
+    # the search row opens a route over the same query; it is no verb
+    assert set(HitKind) == {HitKind.ROUTE, HitKind.ENTITY, HitKind.SEARCH}
     verbs = {verb.verb for verb in fixture.menus.verbs("run.detail")}
     assert verbs
     names = {hit.name for hit in hits("", [])}
@@ -140,16 +147,39 @@ def test_con_097_escape_leaves_the_palette_and_returns_focus(fixture: Fixture) -
     assert (session.overlay, session.route, session.sel, session.pq) == (None, "activity", 3, "")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the golden contract lists search among the palette's routes and ends an "
-    "overflowing list in an edge count; the search row is not yet drawn",
-)
 def test_con_097_search_is_never_a_route_row_and_an_overflow_ends_in_a_search_row() -> None:
     found = hits("", [_entity(f"RUN-{i:04d}") for i in range(80)])
     assert "search" not in {hit.route for hit in found if hit.kind is HitKind.ROUTE}
     rows = palette_rows(Session(), found, w=W, h=H)
     assert "search" in rows[-1]
+
+
+def test_con_097_the_search_row_is_the_last_row_the_cursor_reaches(fixture: Fixture) -> None:
+    session = session_on("scope.home", overlay="palette")
+    found = palette_list(palette_hits("", fixture), h=H)
+    assert found[-1].kind is HitKind.SEARCH
+    press(session, fixture, *["ArrowDown"] * (len(found) + 3))
+    rows = palette_rows(session, palette_hits("", fixture), w=W, h=H)
+    assert session.sel == len(found) - 1
+    assert rows[-1].lstrip().startswith("▸ search")
+
+
+def test_con_097_enter_on_the_search_row_opens_search_over_the_same_query(
+    fixture: Fixture,
+) -> None:
+    session = session_on("scope.home", overlay="palette")
+    press(session, fixture, "r", "u", "n")
+    found = palette_list(palette_hits("run", fixture), h=H)
+    if found[-1].kind is not HitKind.SEARCH:
+        pytest.skip("the query does not overflow the window at this size")
+    session.sel = len(found) - 1
+    press(session, fixture, "Enter")
+    assert (session.route, session.overlay, session.pq) == ("search", None, "run")
+
+
+def test_con_097_a_list_that_fits_ends_in_no_search_row(fixture: Fixture) -> None:
+    found = palette_list(palette_hits("run-5384", fixture), h=H)
+    assert found and all(hit.kind is not HitKind.SEARCH for hit in found)
 
 
 # ---------- an untitled record is described, never by a route id ----------

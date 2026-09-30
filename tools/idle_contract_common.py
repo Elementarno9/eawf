@@ -15,7 +15,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 #: Probe file scope that IS UI surface (per
 #: :func:`eawf.kernel.spec.heuristics.is_ui_scope`). A band profile MUST resolve
 #: to ``enforce=True`` for a wave touching this scope.
-_UI_SCOPE = "src/eawf/surfaces/tui/app.py"
+_UI_SCOPE = "src/eawf/surfaces/tui/console/app.py"
 
 #: Probe file scope that is NOT UI surface. A band-scoped (not global) profile
 #: MUST resolve to ``enforce=False`` for a wave touching this scope.
@@ -36,7 +36,6 @@ class GateFailure(StrEnum):
     BAND_ENFORCES_GLOBALLY = "band_enforces_globally"
     BODY_VALIDATION_IDLE = "body_validation_idle"
     REQUIRED_INTENT_IDLE = "required_intent_idle"
-    UI_REQUIRE_GATE_IDLE = "ui_require_gate_idle"
     MOCKUP_GOLDEN_DIFF_IDLE = "mockup_golden_diff_idle"
     RESOLVE_ROUTING_IDLE = "resolve_routing_idle"
     RUNTIME_GATE_IDLE = "runtime_gate_idle"

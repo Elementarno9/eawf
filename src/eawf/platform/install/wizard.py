@@ -175,7 +175,7 @@ class WizardAnswers(BaseModel):
     # when ``eawf init --template <name>`` is used. The wizard
     # deep-merges these keys into the canonical ``.ea/config.yaml`` after
     # the structured-answer-derived sections, so template-declared
-    # ``dispatch.session_policy_default`` etc. land on disk verbatim.
+    # ``planning.max_parallel_waves`` etc. land on disk verbatim.
     # ``None`` for the legacy ``--profile`` only path.
     template_extras: dict[str, Any] | None = None
 
@@ -465,22 +465,6 @@ def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]
     return base
 
 
-def _ensure_bootstrap_config_defaults(
-    payload: dict[str, Any],
-    *,
-    answers: WizardAnswers,
-) -> None:
-    """Restore mandatory bootstrap defaults after template merge."""
-    project = payload.get("project")
-    if isinstance(project, dict) and not project.get("goals"):
-        project["goals"] = [
-            _bootstrap_goal_title(
-                project_code=answers.project_code,
-                project_title=answers.project_title,
-            )
-        ]
-
-
 def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
     """Serialise ``answers`` into the canonical ``.ea/config.yaml`` shape.
 
@@ -489,10 +473,8 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
         {
           "schema_version": "1.0",
           "profiles":   {"enabled": [...]},
-          "project":    {"code": "...", "title": "...", "goals": [...]},
           "runtime":    {"adapters": [...], "preference": [...]},
           "acceptance": {"tests": True, "lint": True, "typecheck": True},
-          "mcp":        {"enabled": [...]},
         }
 
     Sorting (by ``yaml.safe_dump(sort_keys=True)``) keeps the file
@@ -513,21 +495,8 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
       of the canonical config-yaml shape.
     """
     runtime_id = answers.runtime
-    project_title = answers.project_title or answers.project_code
     base: dict[str, Any] = {
         "schema_version": CONFIG_SCHEMA_VERSION,
-        "project": {
-            "code": answers.project_code,
-            "title": project_title,
-            "slug": answers.project_code.lower(),
-            "domains": ["general"],
-            "goals": [
-                _bootstrap_goal_title(
-                    project_code=answers.project_code,
-                    project_title=answers.project_title,
-                )
-            ],
-        },
         "profiles": {"enabled": list(answers.profiles)},
         "runtime": {
             "adapters": [runtime_id],
@@ -538,17 +507,14 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
             "lint": answers.acceptance_lint,
             "typecheck": answers.acceptance_typecheck,
         },
-        "mcp": {"enabled": list(answers.mcp)},
     }
     # P25-W16: when ``eawf init --template <name>`` is used, the parsed
     # template payload deep-merges into the base. The template's own
     # ``profiles.enabled`` already populated ``answers.profiles`` at the
     # CLI boundary, so re-applying it through the merge is a noop on that
-    # key; new keys (``dispatch``, ``planning``, ``audit``, ``ship``,
-    # ``project``) land verbatim.
+    # key; its other keys (``runtime``, ``planning``) land verbatim.
     if answers.template_extras:
         _deep_merge(base, answers.template_extras)
-    _ensure_bootstrap_config_defaults(base, answers=answers)
     return base
 
 

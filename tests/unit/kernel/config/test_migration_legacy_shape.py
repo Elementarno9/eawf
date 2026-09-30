@@ -116,39 +116,16 @@ def test_cleanup_promotes_adapter_catalog_with_canonical_runtime_ids() -> None:
     assert upgraded["runtime"]["preference"] == ["claude-code", "codex"]
 
 
-def test_cleanup_renames_default_subproject_to_default_track() -> None:
-    """A ``1.0`` body with the legacy project key lands on ``default_track``."""
-    payload = {
-        "schema_version": "1.0",
-        "project": {"default_subproject": "COLLAR"},
-    }
-    upgraded, changed = migrate_config_payload(payload)
-    assert changed is True
-    assert "default_subproject" not in upgraded["project"]
-    assert upgraded["project"]["default_track"] == "COLLAR"
-
-
-def test_cleanup_preserves_existing_default_track_when_dropping_legacy_key() -> None:
-    """When both names exist, ``default_track`` is authoritative."""
+def test_cleanup_drops_the_retired_project_and_memory_sections() -> None:
+    """The Subproject-era names now sit in sections no code reads, so they go whole."""
     payload = {
         "schema_version": "1.0",
         "project": {"default_subproject": "OLD", "default_track": "NEW"},
-    }
-    upgraded, changed = migrate_config_payload(payload)
-    assert changed is True
-    assert "default_subproject" not in upgraded["project"]
-    assert upgraded["project"]["default_track"] == "NEW"
-
-
-def test_cleanup_renames_memory_subproject_store_to_track() -> None:
-    """Legacy memory store names are rewritten to Track vocabulary."""
-    payload = {
-        "schema_version": "1.0",
         "memory": {"stores": ["project", "subproject", "track", "agent"]},
     }
     upgraded, changed = migrate_config_payload(payload)
     assert changed is True
-    assert upgraded["memory"]["stores"] == ["project", "track", "agent"]
+    assert upgraded == {"schema_version": "1.0"}
 
 
 def test_cleanup_all_three_signals_in_one_pass() -> None:
@@ -168,9 +145,8 @@ def test_cleanup_all_three_signals_in_one_pass() -> None:
     assert "lifecycle" not in upgraded
     assert "plugins" not in upgraded
     assert "kind" not in upgraded["runtime"]
-    assert "default_subproject" not in upgraded["project"]
-    assert upgraded["project"]["default_track"] == "COLLAR"
-    assert upgraded["memory"]["stores"] == ["project", "track", "user"]
+    assert "project" not in upgraded
+    assert "memory" not in upgraded
     assert upgraded["runtime"]["adapters"] == ["claude-code"]
     assert upgraded["runtime"]["preference"] == ["claude-code"]
     # Operator-curated sections survive.

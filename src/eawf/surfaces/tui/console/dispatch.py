@@ -39,6 +39,7 @@ from eawf.surfaces.tui.console.navigation import (
     busy,
     close_overlay,
     copied,
+    enters_text,
     focus_target,
     go,
     has_renderer,
@@ -60,6 +61,7 @@ from eawf.surfaces.tui.console.overlays.palette import palette_hits
 from eawf.surfaces.tui.console.overlays.pause import RUN as _PAUSE_RUN
 from eawf.surfaces.tui.console.overlays.pause import TARGETS as _PAUSE_TARGETS
 from eawf.surfaces.tui.console.overlays.question import ANSWERS
+from eawf.surfaces.tui.console.palette import HitKind, palette_list
 from eawf.surfaces.tui.console.registry import (
     DRILL_PREFIXES,
     OVERLAY_ARROWS,
@@ -144,7 +146,7 @@ def _frame_keys(ctx: Ctx, key: str, shift: bool) -> bool:
     s = ctx.s
     if key == "Tab" and shift and s.route != "settings" and not drill.is_native(ctx):
         return False
-    k = km.ALIASES.get(key, key)
+    k = key if enters_text(s) else km.ALIASES.get(key, key)
     if s.absent_frame and not s.overlay and _ABSENT_KEYS.match(k):
         ctx.log(k, "nothing is recorded here — Esc goes back")
         return True
@@ -334,7 +336,7 @@ def _palette_key(ctx: Ctx, k: str) -> bool:
         return True
     if k != "Enter":
         return False
-    found = palette_hits(s.pq, ctx.fixture, ctx.rows)
+    found = palette_list(palette_hits(s.pq, ctx.fixture, ctx.rows), h=ctx.h)
     hit = found[min(s.sel, len(found) - 1)] if found else None
     if hit is None or not has_renderer(hit.route):
         close_overlay(s)
@@ -350,7 +352,8 @@ def _palette_key(ctx: Ctx, k: str) -> bool:
     # a palette pick is a jump: it arrives fresh, not back on the row it was opened from
     s.focus_return = None
     leave_overlay(s)
-    s.pq = ""
+    # the search row carries the query on to the route that searches it in full
+    s.pq = s.pq if hit.kind is HitKind.SEARCH else ""
     s.pscroll = 0
     s.subj_id = hit.subject
     ctx.log("Enter", f"palette → {s.route}" + (f" · {hit.subject}" if hit.subject else ""))

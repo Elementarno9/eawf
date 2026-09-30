@@ -15,8 +15,6 @@ Pins:
   type) is rejected with exit 1 and persists nothing.
 - An unknown session id is rejected with exit 1 (``NotFound``).
 - Forwarded text with no renderable line is a no-op, not an empty row.
-- The watch reader returns the forwarded chunk for the externally created
-  session where it previously returned empty.
 """
 
 from __future__ import annotations
@@ -33,19 +31,16 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.events import AgentOutputChunkPayload
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon.dispatch_runner import (
-    persist_agent_output_chunk,
     persist_forwarded_output_chunk,
 )
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.render.envelope import OutputEnvelope
-from eawf.surfaces.tui.modes.agent_watch import load_output_chunk_lines
 
 runner = CliRunner()
 
 _SESSION_ID = "SES-EXT-01"
 _RUNTIME_SESSION_ID = "runtime-sess-ext-01"
 _SCOPE_ID = "P32-I01-W29"
-_OTHER_SCOPE_ID = "P32-I01-W28"
 
 
 @pytest.fixture(autouse=True)
@@ -219,44 +214,6 @@ def test_hook_agent_output_blank_text_persists_no_row(tmp_path: Path) -> None:
     assert env.body["event_id"] is None
     assert env.footer.persisted_store_records == []
     assert _chunk_payloads(workspace) == []
-
-
-def test_forwarded_chunk_reaches_watch_reader(tmp_path: Path) -> None:
-    """The watch reader returns a forwarded chunk where it previously read empty."""
-    workspace = _workspace_with_external_session(tmp_path)
-    event_path = _event_path(workspace)
-
-    # A populated store that holds only another lane's chunk: the externally
-    # created session's pane is honest empty because nothing produced its stream.
-    persist_agent_output_chunk(
-        event_path,
-        scope_id=_OTHER_SCOPE_ID,
-        session_id="runtime-sess-other",
-        seq=0,
-        text="another lane's output",
-    )
-    before = load_output_chunk_lines(event_path, _SCOPE_ID, runtime_session_id=_RUNTIME_SESSION_ID)
-    assert before == []
-
-    assert (
-        _forward(
-            workspace, {"session_id": _SESSION_ID, "seq": 0, "text": "forwarded line one"}
-        ).exit_code
-        == 0
-    )
-    assert (
-        _forward(
-            workspace, {"session_id": _SESSION_ID, "seq": 1, "text": "forwarded line two"}
-        ).exit_code
-        == 0
-    )
-
-    after = load_output_chunk_lines(event_path, _SCOPE_ID, runtime_session_id=_RUNTIME_SESSION_ID)
-    assert after == ["forwarded line one", "forwarded line two"]
-    # The other lane's chunk stays out of this session's stream.
-    assert load_output_chunk_lines(
-        event_path, _OTHER_SCOPE_ID, runtime_session_id="runtime-sess-other"
-    ) == ["another lane's output"]
 
 
 def test_persist_forwarded_output_chunk_unknown_session_raises(tmp_path: Path) -> None:

@@ -209,10 +209,10 @@ def test_a_rewrite_runs_only_on_the_ids_its_entry_selects(
     tracked: NormalisationMap, frames: dict[str, str]
 ) -> None:
     normaliser = Normaliser(tracked, frames)
-    entry = tracked.by_name("window indicator")
+    entry = tracked.by_name("attention keybar")
     touched = next(cid for cid in frames if entry.selects(cid))
     untouched = next(cid for cid in frames if not normaliser.applied(cid))
-    assert "window indicator" in normaliser.applied(touched)
+    assert "attention keybar" in normaliser.applied(touched)
     assert normaliser.expected(touched, frames[touched]) != frames[touched]
     assert normaliser.expected(untouched, frames[untouched]) == frames[untouched]
 

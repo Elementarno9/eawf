@@ -30,6 +30,7 @@ from eawf.surfaces.tui.console.keybar import (
 )
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import ANSWER_OPTIONS, RUN_CONTROLS, VerbRequest
+from eawf.surfaces.tui.console.renderers.settings import section_keys
 from eawf.surfaces.tui.console.session import Session
 
 ROUTES = sorted(ROUTE_KEYS)
@@ -72,6 +73,18 @@ def _press(session: Session, *keys: str) -> None:
     for key in keys:
         dispatch(Ctx(session=session, fixture=FIXTURE, host=_Host(), w=120, h=30), key, False)
         compose_frame(View(session=session, fixture=FIXTURE, w=120, h=30))
+
+
+# A key the fixture states at the repo layer, the lens a settings session opens on.
+_SET_KEY = "dispatch.role_tier_token_cap"
+
+
+def _settings_on_a_set_key() -> Session:
+    session = _session("settings")
+    section, key = _SET_KEY.split(".", 1)
+    session.set_sec = FIXTURE.settings.section_order.index(section)
+    session.set_key = [row[0] for row in section_keys(session, FIXTURE.settings)].index(key)
+    return session
 
 
 def _recorder(sent: list[VerbRequest]) -> Callable[[VerbRequest], bool]:
@@ -162,27 +175,10 @@ def _primaries(route: str) -> list[KeyEntry]:
     return [entry for entry in ROUTE_KEYS[route] if entry.kind is KeyKind.PRIMARY]
 
 
-_TWO_PRIMARIES = pytest.mark.xfail(
-    strict=True,
-    reason="the pack's unattended frame binds request pause and request drain directly; "
-    "one of them belongs in the action menu and needs a ruling",
-)
-
-
-@pytest.mark.parametrize(
-    "route",
-    [pytest.param(r, marks=_TWO_PRIMARIES) if r == "unattended" else r for r in ROUTES],
-)
+@pytest.mark.parametrize("route", ROUTES)
 def test_con043_a_route_binds_at_most_one_primary_mutation_key(route: str) -> None:
     """CON-043: each route has at most one direct mutation key."""
     assert len(_primaries(route)) <= 1
-
-
-_NO_PREVIEW = pytest.mark.xfail(
-    strict=True,
-    reason="settings x unsets at once in the prototype registers and the native view; "
-    "its preview card needs a ruling",
-)
 
 
 @pytest.mark.parametrize(
@@ -190,8 +186,7 @@ _NO_PREVIEW = pytest.mark.xfail(
     [
         ("attention", None, "v"),
         ("unattended", None, "a"),
-        ("unattended", None, "d"),
-        pytest.param("settings", None, "x", marks=_NO_PREVIEW),
+        ("settings", None, "x"),
     ],
 )
 def test_con043_the_primary_key_previews_or_refuses_and_never_writes(
@@ -199,7 +194,7 @@ def test_con043_the_primary_key_previews_or_refuses_and_never_writes(
 ) -> None:
     """CON-043: a primary key opens the preview, or refuses with its reason; it never writes."""
     assert key in {k for entry in _primaries(route) for k in entry.keys}
-    session = _session(route, subj)
+    session = _settings_on_a_set_key() if route == "settings" else _session(route, subj)
     if route == "attention":
         session.sel = 1
     sent: list[VerbRequest] = []
@@ -207,6 +202,43 @@ def test_con043_the_primary_key_previews_or_refuses_and_never_writes(
     dispatch(ctx, key, False)
     assert sent == []
     assert session.overlay == "consequence" or "unavailable" in (session.trace or "")
+
+
+def test_con043_unattended_drain_is_a_menu_verb_and_its_letter_alone_does_nothing() -> None:
+    """CON-043: drain, the route's second write, is a menu row; its bare letter binds nothing."""
+    direct = _session("unattended")
+    _press(direct, "d")
+    assert direct.overlay is None
+    assert direct.trace == "d → unclaimed"
+    menu = _session("unattended")
+    _press(menu, ".")
+    assert FIXTURE.menus.verb("unattended", "d") is not None
+    _press(menu, "d")
+    # the prototype carries no daemon verb for a drain, so the menu refuses it by name
+    assert menu.overlay == "consequence" or "refused: " in (menu.trace or "")
+
+
+def test_con043_settings_unset_previews_the_fallback_before_anything_changes() -> None:
+    """CON-043: x on a set key opens the card naming what the key falls back to."""
+    session = _settings_on_a_set_key()
+    stored = dict(FIXTURE.settings.stored[_SET_KEY])
+    sent: list[VerbRequest] = []
+    ctx = Ctx(session=session, fixture=FIXTURE, host=_Host(), w=120, h=30, send=_recorder(sent))
+    dispatch(ctx, "x", False)
+    assert sent == []
+    assert session.overlay == "consequence"
+    assert session.c_target is not None and session.c_target["verb"] == "unset"
+    assert session.c_target["id"] == _SET_KEY
+    assert "falls back to" in session.c_target["effects"]
+    assert FIXTURE.settings.stored[_SET_KEY] == stored
+
+
+def test_con043_settings_unset_on_a_key_the_lens_does_not_hold_says_so() -> None:
+    """CON-043: x where the lens holds nothing opens no card and names why."""
+    session = _session("settings")
+    _press(session, "x")
+    assert session.overlay is None
+    assert session.trace is not None and "nothing to unset" in session.trace
 
 
 # ---------- CON-044: answers resolve a question or disposition, no lifecycle ----------

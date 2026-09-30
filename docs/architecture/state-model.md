@@ -54,7 +54,7 @@ Workspace state SHOULD link to repo states; repos do not link back.
 2. explicit --workspace / -w: nearest parent .ea/state.json with scope_kind: workspace
 3. current repo .ea/state.json with scope_kind: repo
 4. nearest parent .ea/state.json only when current dir is not inside a repo with repo-owned state
-5. error with suggestion: `eawf init` or `eawf workspace init`
+5. error with suggestion: `eawf init`
 ```
 
 Invariants:
@@ -65,7 +65,6 @@ Invariants:
 - Workspace cannot mutate repo-owned entities unless the command explicitly targets the repo and takes the repo lock.
 - Repo cannot mutate workspace-owned entities unless `-w` / `--workspace` is explicit.
 - `eawf validate --strict` validates the active state only.
-- `eawf workspace validate --strict` validates workspace + linked repos.
 
 ## Hierarchy and orthogonal entities
 

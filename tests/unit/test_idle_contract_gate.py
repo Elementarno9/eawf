@@ -203,11 +203,6 @@ def _no_intent_guard_plan_wave(*args, **kwargs):
     return None
 
 
-def _no_ui_require_gate(*args, **kwargs) -> None:
-    """A UI require-gate stand-in that accepts an ungated UI wave."""
-    del args, kwargs
-
-
 def test_i03_contracts_pass_on_current_tree(mod) -> None:
     result = mod.check_i03_contracts()
     assert result.passed is True
@@ -229,13 +224,6 @@ def test_main_returns_nonzero_when_required_intent_guard_idle(mod, monkeypatch, 
     captured = capsys.readouterr()
     assert code != 0
     assert "required-intent guard is idle" in captured.err
-
-
-def test_i03_contracts_fail_when_ui_require_gate_idle(mod) -> None:
-    result = mod.check_i03_contracts(ui_require_gate_fn=_no_ui_require_gate)
-    assert result.passed is False
-    assert result.failure is mod.GateFailure.UI_REQUIRE_GATE_IDLE
-    assert "UI-scope require-gate is idle" in result.message
 
 
 def test_i03_contracts_fail_when_mockup_golden_diff_tier_missing(mod) -> None:

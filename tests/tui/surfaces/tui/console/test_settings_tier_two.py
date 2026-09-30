@@ -113,8 +113,8 @@ def test_con_123_a_value_other_than_the_refused_one_is_not_denied(tree: Path, me
     ("key", "stated"),
     [
         ("planning.max_parallel_waves", "config registry range 1 to 16 · built-in"),
-        ("statusline.rows", "config registry range 1 to 3 · built-in"),
-        ("daemon.idle_timeout_seconds", "config registry range at least 0 · built-in"),
+        ("estimation.eu_minutes", "config registry range 5 to 240 · built-in"),
+        ("daemon.idle_timeout_seconds", "config registry range at least 1 · built-in"),
     ],
 )
 def test_ui_053_a_ranged_key_is_constrained_by_its_registry_range(
@@ -151,40 +151,69 @@ def test_ui_053_a_runtime_key_needs_its_runtime_in_its_certified_state(
 
 # ---------- SECRET: a reference, never a value ----------
 
+#: A leaf whose value names credentials. No catalogued leaf does today, so the probe
+#: files one for the duration of a test.
+SECRET_KEY = "agents.credentials"  # pragma: allowlist secret
 
-def test_ui_053_a_credential_is_named_by_its_reference_and_never_its_value(tree: Path) -> None:
+
+@pytest.fixture
+def secret_leaf(monkeypatch: pytest.MonkeyPatch) -> str:
+    """File a credential-naming mapping leaf in the catalog and return its key."""
+    monkeypatch.setitem(
+        LEAF_KEY_REGISTRY,
+        SECRET_KEY,
+        LeafKey(
+            key=SECRET_KEY,
+            domain="agents",
+            type="mapping",
+            default={},
+            writable_layers=("repo",),
+            consumer="probe.read",
+            consumer_kind="engine",
+            secret_refs=True,
+        ),
+    )
+    return SECRET_KEY
+
+
+def test_ui_053_a_credential_is_named_by_its_reference_and_never_its_value(
+    tree: Path, secret_leaf: str
+) -> None:
     _repo(
         tree,
-        "mcp:\n  servers:\n    gh:\n      env_refs: ['${ENV:GITHUB_TOKEN}']\n"
+        "agents:\n  credentials:\n    gh:\n      env_refs: ['${ENV:GITHUB_TOKEN}']\n"
         "      token: plain-credential-text\n",
     )
-    leaf = provenance._view(tree).leaf("mcp.servers")
+    leaf = provenance._view(tree).leaf(secret_leaf)
     assert leaf.secret_ref == "${ENV:GITHUB_TOKEN}"
-    frame = _stack(tree, "mcp.servers")
+    frame = _stack(tree, secret_leaf)
     assert "${ENV:GITHUB_TOKEN}" in _row(frame, " SECRET")
     assert not any("plain-credential-text" in row for row in frame)
 
 
-def test_ui_053_several_references_are_named_once_each_in_order(tree: Path) -> None:
+def test_ui_053_several_references_are_named_once_each_in_order(
+    tree: Path, secret_leaf: str
+) -> None:
     _repo(
         tree,
-        "mcp:\n  servers:\n    b:\n      env_refs: ['${ENV:B_KEY}', '${ENV:A_KEY}']\n"
+        "agents:\n  credentials:\n    b:\n      env_refs: ['${ENV:B_KEY}', '${ENV:A_KEY}']\n"
         "    a:\n      env_refs: ['${ENV:A_KEY}']\n",
     )
-    assert provenance._view(tree).leaf("mcp.servers").secret_ref == "${ENV:A_KEY}, ${ENV:B_KEY}"
+    assert provenance._view(tree).leaf(secret_leaf).secret_ref == "${ENV:A_KEY}, ${ENV:B_KEY}"
 
 
-def test_ui_053_a_secret_leaf_with_no_reference_draws_no_secret_row(tree: Path) -> None:
-    _repo(tree, "mcp:\n  servers:\n    gh:\n      env_refs: ['${env:lower}', 'ENV:X']\n")
-    assert provenance._view(tree).leaf("mcp.servers").secret_ref is None
-    assert provenance._view(tree).leaf("mcp.env_ref_syntax").secret_ref is None
+def test_ui_053_a_secret_leaf_with_no_reference_draws_no_secret_row(
+    tree: Path, secret_leaf: str
+) -> None:
+    _repo(tree, "agents:\n  credentials:\n    gh:\n      env_refs: ['${env:lower}', 'ENV:X']\n")
+    assert provenance._view(tree).leaf(secret_leaf).secret_ref is None
 
 
 # ---------- drawn only when stated ----------
 
 
 def test_ui_053_a_key_with_no_policy_draws_no_second_tier(tree: Path) -> None:
-    frame = _stack(tree, "prose.level")
+    frame = _stack(tree, "audit.default_level")
     for label in TIER_TWO:
         assert not any(row.startswith(f"│{label}") for row in frame), label
 
@@ -204,17 +233,19 @@ def test_ui_053_only_a_catalog_key_with_metadata_carries_a_second_tier(tree: Pat
             assert leaf.secret_ref is None, key
 
 
-def test_con_123_every_stated_second_tier_row_fits_an_80_column_card(tree: Path) -> None:
+def test_con_123_every_stated_second_tier_row_fits_an_80_column_card(
+    tree: Path, secret_leaf: str
+) -> None:
     _repo(
         tree,
         "vcs:\n  pr_merge_method: squash\n"
-        "mcp:\n  servers:\n    gh:\n      env_refs: ['${ENV:GITHUB_TOKEN}']\n",
+        "agents:\n  credentials:\n    gh:\n      env_refs: ['${ENV:GITHUB_TOKEN}']\n",
     )
     for key, label in (
         ("vcs.pr_merge_method", " DENIED BY"),
         ("planning.max_parallel_waves", " CONSTRAINED BY"),
         ("runtime.opencode.stall_interval_s", " NEEDS"),
-        ("mcp.servers", " SECRET"),
+        (secret_leaf, " SECRET"),
     ):
         frame = _stack(tree, key)
         assert len(frame) == 24 and all(len(row) <= 80 for row in frame), key

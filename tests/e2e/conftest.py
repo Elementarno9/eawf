@@ -28,6 +28,7 @@ daemon at ``~/.eawfd`` nor this repo's real ``.ea/``):
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import shutil
 import signal
@@ -40,8 +41,11 @@ import uuid
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 import pytest
+
+from tests._epoch2_helpers import lay_epoch2_tree
 
 #: The committed empty-repo state fixture, seeded into each E2E temp repo
 #: so the daemon's state resolver + session-TTL sweep have a schema-valid
@@ -211,11 +215,11 @@ def _short_runtime_dir() -> Path:
     return base / f"eawf-e2e-{uuid.uuid4().hex[:8]}"
 
 
-@pytest.fixture
-def e2e_env() -> Iterator[E2EEnv]:
-    """Yield an isolated repo + runtime sandbox; reap daemons on teardown.
+@contextlib.contextmanager
+def _sandbox(*, epoch: Literal[1, 2]) -> Iterator[E2EEnv]:
+    """Yield an isolated repo + runtime sandbox whose tree is at ``epoch``; reap on exit.
 
-    The temp repo gets a schema-valid ``.ea/state.json`` (the committed
+    The tree holds a schema-valid ``.ea/state.json`` (the committed
     empty-repo fixture). ``EAWF_RUNTIME_DIR`` + ``EA_STATE`` redirect the
     daemon entirely into the sandbox so neither the developer's live
     ``~/.eawfd`` nor this repo's real ``.ea/`` is touched.
@@ -223,10 +227,12 @@ def e2e_env() -> Iterator[E2EEnv]:
     repo = Path(tempfile.mkdtemp(prefix="eawf-e2e-repo-"))
     runtime_dir = _short_runtime_dir()
     runtime_dir.mkdir(parents=True, exist_ok=True)
-    ea = repo / ".ea"
-    ea.mkdir(parents=True, exist_ok=True)
-    state_path = ea / "state.json"
-    shutil.copy(_EMPTY_REPO_STATE, state_path)
+    if epoch == 2:
+        state_path = lay_epoch2_tree(repo, state=json.loads(_EMPTY_REPO_STATE.read_bytes()))
+    else:
+        state_path = repo / ".ea" / "state.json"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(_EMPTY_REPO_STATE, state_path)
 
     env = dict(os.environ)
     env["EAWF_RUNTIME_DIR"] = str(runtime_dir)
@@ -245,6 +251,25 @@ def e2e_env() -> Iterator[E2EEnv]:
         sandbox.reap_all()
         shutil.rmtree(repo, ignore_errors=True)
         shutil.rmtree(runtime_dir, ignore_errors=True)
+
+
+@pytest.fixture
+def e2e_env() -> Iterator[E2EEnv]:
+    """Yield a sandbox born at epoch 2, as ``eawf init`` leaves a tree after the flag day."""
+    with _sandbox(epoch=2) as sandbox:
+        yield sandbox
+
+
+@pytest.fixture
+def epoch1_e2e_env() -> Iterator[E2EEnv]:
+    """Yield a sandbox on a plain epoch-1 tree.
+
+    Only for the daemon's epoch-1 RPC write paths, which the flag day's CLI
+    gate does not reach and the ``state.json`` chokepoint refuses on an
+    epoch-2 tree.
+    """
+    with _sandbox(epoch=1) as sandbox:
+        yield sandbox
 
 
 def _wait_for_socket(sandbox: E2EEnv, deadline: float) -> bool:

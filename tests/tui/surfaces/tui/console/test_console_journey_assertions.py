@@ -38,7 +38,7 @@ from eawf.kernel.projection.connection import (
 from eawf.kernel.projection.registers import ATTENTION_ROUTE, build_register_view
 from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE
 from eawf.kernel.runtime.control import ControlDisposition
-from eawf.kernel.runtime.events import RunEventKind
+from eawf.kernel.runtime.events import ChildRunPayload, RunEventKind
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import TOAST_DWELL, FakeClock
@@ -988,25 +988,60 @@ def test_prx_065_thinking_and_background_are_told_apart_at_every_width() -> None
         assert "⋯ running" in shot
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=ValueError,
-    reason="no child_run payload is modelled, so a subagent child Run cannot be stated by a "
-    "typed child_run_started event and the transcript has no subagent block to draw",
-)
+#: The child Run a subagent delegation started, and the delegation it answers.
+_CHILD_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000011"
+_DELEGATION = "delegation://claude/0a1b2c3d"
+
+
+def _child_started(sequence: int) -> Any:
+    """Return the typed line stating a subagent's child Run started."""
+    payload = ChildRunPayload.model_validate(
+        {"child_run_ref": _CHILD_URN, "delegation_request_ref": _DELEGATION, "phase": "started"}
+    )
+    return tb._event(sequence, event_kind=RunEventKind.CHILD_RUN_STARTED, payload=payload)
+
+
+def _with_a_subagent() -> tuple[Any, ...]:
+    """Return the background command and open reasoning turn, then a child Run started."""
+    child = _child_started(4).model_copy(update={"recorded_at": tb._at(60)})
+    return (*_transcript_events(), child)
+
+
 def test_prx_065_a_subagent_child_run_is_stated_by_a_typed_event() -> None:
-    tb._event(4, event_kind=RunEventKind.CHILD_RUN_STARTED)
+    for shot in _transcript_frames(_with_a_subagent()):
+        context = shot.split("\n")[1]
+        assert "» subagent" in shot
+        assert "child_run_started · RUN-00000011 · started" in shot
+        # the child works elsewhere, so it counts with the background command
+        assert "· 2 running in the background ·" in context
 
 
 @pytest.mark.xfail(
     strict=True,
-    reason="the transcript labels the thinking state derived even when reasoning_started "
-    "states it; only a provider with no start marker may render it derived",
+    reason="ChildRunPayload carries no now, found or reports-to fields, and no producer "
+    "emits child_run_started: the host transcript bridge emits the requested phase only",
 )
+def test_prx_065_the_subagent_block_carries_its_now_found_and_reports_to_line() -> None:
+    for shot in _transcript_frames(_with_a_subagent()):
+        assert "reports to" in shot
+
+
 def test_prx_065_a_typed_reasoning_start_is_not_labelled_derived() -> None:
     for shot in _transcript_frames(_transcript_events()):
         state = next(row for row in shot.split("\n") if row.startswith(" STATE "))
         assert "derived" not in state
+
+
+def test_prx_065_a_provider_with_no_start_marker_renders_thinking_labelled_derived() -> None:
+    inferred = tuple(
+        line.model_copy(update={"provenance": "eawf_derived"})
+        if line.event_kind is RunEventKind.REASONING_STARTED
+        else line
+        for line in _transcript_events()
+    )
+    for shot in _transcript_frames(inferred):
+        state = next(row for row in shot.split("\n") if row.startswith(" STATE "))
+        assert "thinking · derived" in state
 
 
 # ---------- PRX-066: a replaying Campaign shows nothing past its cursor ----------
@@ -1044,8 +1079,9 @@ def test_prx_066_a_replayed_campaign_draws_no_finding_it_was_not_shown_promoted(
 
 @pytest.mark.xfail(
     strict=True,
-    reason="a replay is adopted inside the reconnect call, so no frame is ever drawn under "
-    "REPLAYING, and no producer counts the findings promoted past the replay cursor",
+    reason="no producer counts the findings promoted past the replay cursor (replay_note "
+    "never sets ReplayNote.findings_promoted_after_cursor), and ProjectionSeam.reconnect "
+    "adopts the replay inside the call, so no frame is drawn under REPLAYING",
 )
 def test_prx_066_the_replaying_frame_names_the_findings_promoted_after_the_cursor() -> None:
     outcome, _closed = _replayed_campaign()

@@ -272,10 +272,10 @@ def test_every_chooser_row_keeps_the_caret_slot(tree: Path, fixture: Fixture) ->
 
 
 def test_the_lens_is_bold_without_brackets(tree: Path, fixture: Fixture) -> None:
-    sr._write(tree / ".ea" / "config.yaml", "config:\n  layers_visible: true\n")
+    sr._write(tree / ".ea" / "config.yaml", "research:\n  auto_save: true\n")
     view = sr._view(tree)
     rows = sr._frame(fixture, view, sr._on(sr._session(), view, sr.BOOL_KEY), w=120, h=30)
-    chain = next(row for row in rows if "global › workspace" in row)  # noqa: RUF001
+    chain = next(row for row in rows if "global › repo" in row)  # noqa: RUF001
     assert "[repo]" not in chain
     strokes = paint(chain, Part.BODY)
     repo = next(stroke for stroke in strokes if stroke.text == "repo")

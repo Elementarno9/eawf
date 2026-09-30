@@ -1,18 +1,11 @@
-"""Unit tests: the offline workspace render emits the live totals layout.
+"""Unit tests: the offline workspace render emits the portfolio totals line.
 
-The headless ``workspace registry-status`` frame (``offline_render``) must
-emit the same totals-row layout as the live workspace table when no daemon
-is reachable. Both surfaces fold every registered repo's off-disk state
-through the shared
-:func:`~eawf.surfaces.tui.widgets.workspace_table.portfolio_totals` reducer and
-the shared
-:func:`~eawf.surfaces.tui.widgets.workspace_table.format_totals_line` formatter,
-so the offline frame's totals line is byte-identical to the formatter the
-live render uses. These tests pin that contract: the offline frame carries
-the totals line, the line matches the shared formatter over the same
-registry, and an empty / unavailable registry still emits an honest
-``Σ 0 repos`` totals line. Repo codes are abstract placeholders (``ABC`` /
-``DEF``), never real-looking project names.
+The headless ``workspace registry-status`` frame (``offline_render``) folds
+every registered repo's off-disk state into one totals line: the repo count,
+the active-phase waves closed over total, the summed EU and the open-PR count.
+An empty or unavailable registry still emits an honest ``Σ 0 repos`` line. Repo
+codes are abstract placeholders (``ABC`` / ``DEF``), never real-looking project
+names.
 """
 
 from __future__ import annotations
@@ -20,15 +13,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import orjson
-import pytest
 
-from eawf.surfaces.tui.chassis.offline import offline_render
-from eawf.surfaces.tui.widgets.workspace_table import (
-    TOTALS_ROW_LABEL,
-    format_totals_line,
-    portfolio_totals,
-    repo_row_from_path,
-)
+from eawf.surfaces.tui.chassis.offline import TOTALS_ROW_LABEL, offline_render
+
+#: The totals line of a registry whose repos report nothing.
+EMPTY_TOTALS = "Σ 0 repos  waves 0/0  EU —  PR —"
 
 
 def _write_registry(home: Path, repos: dict[str, str]) -> Path:
@@ -89,12 +78,12 @@ def _totals_line_in(frame: str) -> str:
 
 
 # --------------------------------------------------------------------------
-# The offline frame carries the live totals layout
+# The offline frame carries the portfolio totals
 # --------------------------------------------------------------------------
 
 
-def test_offline_render_emits_totals_line(tmp_path: Path) -> None:
-    """A populated registry's offline frame carries the shared totals line."""
+def test_offline_render_sums_every_repo_into_one_totals_line(tmp_path: Path) -> None:
+    """Two repos fold their active-phase waves and EU into one line."""
     repo_a = tmp_path / "abc"
     repo_b = tmp_path / "def"
     _write_repo_state(repo_a, done=3, total=6, eu=4.0)
@@ -103,29 +92,24 @@ def test_offline_render_emits_totals_line(tmp_path: Path) -> None:
 
     frame = offline_render(registry_path=registry_path, width=200)
 
-    expected_rows = [
-        repo_row_from_path("ABC", str(repo_a)),
-        repo_row_from_path("DEF", str(repo_b)),
-    ]
-    expected_line = format_totals_line(portfolio_totals(expected_rows))
-    assert _totals_line_in(frame) == expected_line
+    assert _totals_line_in(frame) == "Σ 2 repos  waves 4/10  EU 6/6  PR —"
 
 
-def test_offline_totals_sums_match_live_reducer(tmp_path: Path) -> None:
-    """The offline totals line reports the same sums the live reducer folds."""
-    repo_a = tmp_path / "abc"
-    repo_b = tmp_path / "def"
-    _write_repo_state(repo_a, done=3, total=6, eu=4.0)
-    _write_repo_state(repo_b, done=1, total=4, eu=2.0)
-    registry_path = _write_registry(tmp_path, {"ABC": str(repo_a), "DEF": str(repo_b)})
+def test_offline_render_counts_only_the_active_phase(tmp_path: Path) -> None:
+    """A wave under a closed phase stays out of the active-phase totals."""
+    repo = tmp_path / "abc"
+    _write_repo_state(repo, done=1, total=2, eu=1.5)
+    state_path = repo / ".ea" / "state.json"
+    payload = orjson.loads(state_path.read_bytes())
+    payload["phases"]["P00"] = {"id": "P00", "status": "closed"}
+    payload["iters"]["P00-I01"] = {"id": "P00-I01", "phase_id": "P00", "status": "closed"}
+    payload["waves"]["old"] = {"iter_id": "P00-I01", "status": "closed"}
+    state_path.write_bytes(orjson.dumps(payload))
+    registry_path = _write_registry(tmp_path, {"ABC": str(repo)})
 
     frame = offline_render(registry_path=registry_path, width=200)
-    line = _totals_line_in(frame)
 
-    assert "2 repos" in line
-    assert "waves 4/10" in line
-    assert "EU 6/6" in line
-    assert "PR —" in line
+    assert _totals_line_in(frame) == "Σ 1 repos  waves 1/2  EU 1.5/1.5  PR —"
 
 
 # --------------------------------------------------------------------------
@@ -137,18 +121,14 @@ def test_offline_render_empty_registry_zero_totals(tmp_path: Path) -> None:
     """An empty registry still emits an honest ``Σ 0 repos`` totals line."""
     registry_path = _write_registry(tmp_path, {})
     frame = offline_render(registry_path=registry_path, width=200)
-    line = _totals_line_in(frame)
-    assert line == format_totals_line(portfolio_totals([]))
-    assert "0 repos" in line
+    assert _totals_line_in(frame) == EMPTY_TOTALS
 
 
 def test_offline_render_missing_registry_zero_totals(tmp_path: Path) -> None:
     """A missing registry file degrades to the zero-valued totals line."""
     missing = tmp_path / "absent" / "registry.json"
     frame = offline_render(registry_path=missing, width=200)
-    line = _totals_line_in(frame)
-    assert line == format_totals_line(portfolio_totals([]))
-    assert "0 repos" in line
+    assert _totals_line_in(frame) == EMPTY_TOTALS
 
 
 def test_offline_render_repo_without_state_counts_zero(tmp_path: Path) -> None:
@@ -157,7 +137,20 @@ def test_offline_render_repo_without_state_counts_zero(tmp_path: Path) -> None:
     repo_a.mkdir()  # no .ea/state.json
     registry_path = _write_registry(tmp_path, {"ABC": str(repo_a)})
     frame = offline_render(registry_path=registry_path, width=200)
-    line = _totals_line_in(frame)
-    assert "1 repos" in line
-    assert "waves 0/0" in line
-    assert pytest.approx(0.0) == portfolio_totals([repo_row_from_path("ABC", str(repo_a))]).eu_total
+    assert _totals_line_in(frame) == "Σ 1 repos  waves 0/0  EU —  PR —"
+
+
+def test_offline_render_repo_with_malformed_state_counts_zero(tmp_path: Path) -> None:
+    """A repo whose state carries no phase table folds to zero, never raises."""
+    repo_a = tmp_path / "abc"
+    (repo_a / ".ea").mkdir(parents=True)
+    (repo_a / ".ea" / "state.json").write_bytes(orjson.dumps({"phases": [], "estimates": 3}))
+    registry_path = _write_registry(tmp_path, {"ABC": str(repo_a)})
+    frame = offline_render(registry_path=registry_path, width=200)
+    assert _totals_line_in(frame) == "Σ 1 repos  waves 0/0  EU —  PR —"
+
+
+def test_offline_render_has_no_keymap_line(tmp_path: Path) -> None:
+    """The headless frame advertises no keys: nothing reads a keypress there."""
+    frame = offline_render(registry_path=_write_registry(tmp_path, {}), width=200)
+    assert "keymap" not in frame

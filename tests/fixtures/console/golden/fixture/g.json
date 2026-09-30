@@ -1035,7 +1035,7 @@
    "state": "running",
    "started": "13:44",
    "ended": "–",
-   "sum": "~62% · 12 of 20 runs replayed, 1.3h of the ≤2h bound spent.",
+   "sum": "12 of 20 runs replayed, 1.3h of the ≤2h bound spent.",
    "acts": [
     [
      "13:44",

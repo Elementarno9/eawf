@@ -24,9 +24,8 @@ exits non-zero:
   binding regress to idle, the drifted body would emit silently and this probe
   stops raising -- failing the gate. This is the meta-binding that keeps the
   emit-validation binding from silently going dead.
-- :func:`check_i03_contracts` -- three in-process probes for the I03 contracts:
-  the authored-wave intent guard must reject ``intent=None``, the UI-scope
-  require-gate must reject a UI wave with no ``affordance_parity`` gate, and
+- :func:`check_i03_contracts` -- two in-process probes for the I03 contracts:
+  the authored-wave intent guard must reject ``intent=None``, and
   ``mockup_golden_diff`` must be a registered ``CheckKind`` with a mapped
   ``OracleTier``.
 - :func:`check_resolve_routing_wired` -- a source-scan probe asserting the live
@@ -162,9 +161,6 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.models import Wave
 from eawf.platform.profiles.loader import list_profiles, load_profile
 from eawf.platform.profiles.models import ProfileBody, VerifyBlock
-from eawf.runtime.daemon.methods.spec_sync_lints import (
-    require_affordance_parity_for_ui_scope as _require_affordance_parity_for_ui_scope,
-)
 from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY, registered_audit_dsl_kinds
 from eawf.workflow.dispatch.spec_jury import (
     SPEC_JURY_FINDINGSET_EVENT_TYPE,
@@ -772,7 +768,6 @@ def main(argv: list[str]) -> int:
     failed |= _report_result(
         check_i03_contracts(
             plan_wave_fn=_plan_wave,
-            ui_require_gate_fn=_require_affordance_parity_for_ui_scope,
             registry=CHECK_REGISTRY,
             tier_for_gate_kind_fn=_tier_for_gate_kind,
         )

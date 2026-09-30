@@ -48,7 +48,7 @@ class ConfigKey(BaseModel):
         tab: Tab grouping the key belongs to (one of the high-level config
             sections — ``runtime``, ``vcs``, ``ui``, etc.). Tabs are sorted
             alphabetically when surfaced.
-        key: Dotted config key path (e.g. ``"runtime.default"``). Matches
+        key: Dotted config key path (e.g. ``"ui.theme"``). Matches
             the form accepted by :func:`eawf.surfaces.cli.commands.config.config_get`.
         label: Short one-line human-readable label rendered as the prompt
             in the menu and as the field title in the TUI surface.
@@ -110,23 +110,13 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         choices=("quick", "standard", "deep"),
     ),
     ConfigKey(
-        tab="audit",
-        key="audit.flaky_retry_count",
-        label="Retries for flaky audit checks",
-        type="int",
-        default=1,
-        description="Number of times to retry a check before recording it as failed.",
-        min_value=0,
-        max_value=5,
-    ),
-    ConfigKey(
         tab="daemon",
         key="daemon.idle_timeout_seconds",
         label="Daemon idle shutdown timeout (seconds)",
         type="int",
         default=300,
         description="Seconds the daemon stays alive after the last request before idle shutdown.",
-        min_value=0,
+        min_value=1,
     ),
     ConfigKey(
         tab="daemon",
@@ -143,7 +133,7 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         type="int",
         default=86400,
         description="Seconds a daemon session handle remains valid before it expires.",
-        min_value=0,
+        min_value=1,
     ),
     ConfigKey(
         tab="planning",
@@ -153,68 +143,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         default=2400,
         description="Token ceiling per injected role-tier block; over-cap raises, never truncates.",
         min_value=1,
-    ),
-    ConfigKey(
-        tab="estimation",
-        key="estimation.display.eu_quantum",
-        label="EU rounding quantum for display",
-        type="float",
-        default=0.25,
-        description="Estimation units are rounded to this quantum when rendered.",
-        min_value=0.0,
-    ),
-    ConfigKey(
-        tab="estimation",
-        key="estimation.display.show_category",
-        label="Show estimation category in displays",
-        type="bool",
-        default=False,
-    ),
-    ConfigKey(
-        tab="estimation",
-        key="estimation.display.show_expected_time",
-        label="Show expected time in displays",
-        type="bool",
-        default=True,
-    ),
-    ConfigKey(
-        tab="estimation",
-        key="estimation.display.show_pessimistic_time",
-        label="Show pessimistic time in displays",
-        type="bool",
-        default=True,
-    ),
-    ConfigKey(
-        tab="estimation",
-        key="estimation.display.show_raw_eu",
-        label="Show raw EU values in displays",
-        type="bool",
-        default=True,
-    ),
-    ConfigKey(
-        tab="estimation",
-        key="estimation.display.time_quantum_over_2h_minutes",
-        label="Time rounding quantum over 2h (minutes)",
-        type="int",
-        default=30,
-        description="Rendered times above 2 hours are rounded to this many minutes.",
-        min_value=1,
-    ),
-    ConfigKey(
-        tab="estimation",
-        key="estimation.display.time_quantum_under_2h_minutes",
-        label="Time rounding quantum under 2h (minutes)",
-        type="int",
-        default=15,
-        description="Rendered times up to 2 hours are rounded to this many minutes.",
-        min_value=1,
-    ),
-    ConfigKey(
-        tab="estimation",
-        key="estimation.enabled",
-        label="Enable estimation calibration",
-        type="bool",
-        default=True,
     ),
     ConfigKey(
         tab="estimation",
@@ -296,23 +224,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ),
     ConfigKey(
         tab="planning",
-        key="planning.approval",
-        label="Reserved: approval mode for plan apply",
-        type="choice",
-        default="ask",
-        description="Reserved for compatibility; roadmap approval remains explicit.",
-        choices=("ask", "auto", "never"),
-    ),
-    ConfigKey(
-        tab="planning",
-        key="planning.auto_plan",
-        label="Reserved: skip plan-mode proposal on /prep",
-        type="bool",
-        default=False,
-        description="Reserved for compatibility; /prep always presents the plan gate.",
-    ),
-    ConfigKey(
-        tab="planning",
         key="planning.max_parallel_waves",
         label="Maximum parallel waves",
         type="int",
@@ -320,13 +231,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         description="Repo-wide hard cap for waves in claimed or in-progress status.",
         min_value=1,
         max_value=16,
-    ),
-    ConfigKey(
-        tab="planning",
-        key="planning.require_research_for_unknowns",
-        label="Require /research for residual unknowns",
-        type="bool",
-        default=True,
     ),
     ConfigKey(
         tab="preferences",
@@ -347,19 +251,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         type="bool",
         default=True,
         description="When True, /prep leads its claim actions with a dispatch-resume command.",
-    ),
-    ConfigKey(
-        tab="prose",
-        key="prose.level",
-        label="Doc-clarity prose-lint strictness",
-        type="choice",
-        default="standard",
-        description=(
-            "loose = advisory only (managed default); standard = deterministic "
-            "lints block; strict = every lint blocks + clarity judge on "
-            "(agent-driven default). A local layer may only tighten this."
-        ),
-        choices=("loose", "standard", "strict"),
     ),
     ConfigKey(
         tab="research",
@@ -386,29 +277,12 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         choices=RESEARCH_DEPTH_VALUES,
     ),
     ConfigKey(
-        tab="research",
-        key="research.default_sources",
-        label="Default source mix",
-        type="choice",
-        default="both",
-        choices=("docs", "web", "both"),
-    ),
-    ConfigKey(
         tab="review",
         key="review.default_level",
         label="Default review confidence threshold",
         type="choice",
         default="medium",
         choices=("low", "medium", "high"),
-    ),
-    ConfigKey(
-        tab="runtime",
-        key="runtime.default",
-        label="Default runtime adapter",
-        type="choice",
-        default="claude-code",
-        description="Selected when no per-command override is supplied.",
-        choices=("claude-code", "codex", "opencode"),
     ),
     ConfigKey(
         tab="ship",
@@ -419,42 +293,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         description="full (default, mandatory for migration/iter-close) runs all gates; "
         "scoped is for re-runs only.",
         choices=("full", "scoped"),
-    ),
-    ConfigKey(
-        tab="statusline",
-        key="statusline.color_mode",
-        label="Statusline colour policy",
-        type="choice",
-        default="auto",
-        description="auto = off on a no-color terminal; always = force ANSI; never = plain.",
-        choices=("auto", "always", "never"),
-    ),
-    ConfigKey(
-        tab="statusline",
-        key="statusline.glyph_mode",
-        label="Statusline glyph mode",
-        type="choice",
-        default="auto",
-        description="auto = downgrade to ascii on a no-color terminal; ascii = plain; unicode.",
-        choices=("auto", "ascii", "unicode"),
-    ),
-    ConfigKey(
-        tab="statusline",
-        key="statusline.rows",
-        label="Statusline row count",
-        type="int",
-        default=1,
-        description="Number of rows the multi-line statusline renderer emits (1..3).",
-        min_value=1,
-        max_value=3,
-    ),
-    ConfigKey(
-        tab="telemetry",
-        key="telemetry.aggregate_window",
-        label="Default aggregation window",
-        type="str",
-        default="24h",
-        description="Rolling window used when aggregating telemetry counters.",
     ),
     ConfigKey(
         tab="telemetry",
@@ -474,49 +312,22 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         description="Telemetry is on by default and strict-local; no data leaves the machine.",
     ),
     ConfigKey(
-        tab="telemetry",
-        key="telemetry.export.format",
-        label="Telemetry export format",
+        tab="tui",
+        key="tui.eu_view.density",
+        label="Roadmap EU/hour rollup density",
         type="choice",
-        default="prom",
-        choices=("prom", "json", "csv"),
+        default="full",
+        description="full = with a detail column (default); compact = EU and hours only.",
+        choices=("full", "compact"),
     ),
     ConfigKey(
-        tab="telemetry",
-        key="telemetry.window_default",
-        label="Default reporting window",
-        type="str",
-        default="7d",
-        description="Default look-back window for telemetry reports.",
-    ),
-    ConfigKey(
-        tab="ui",
-        key="ui.bare_command",
-        label="Behaviour of bare `eawf` invocation",
-        type="choice",
-        default="tui",
-        description=(
-            "tui = launch interactive dashboard (default); status = print "
-            "non-interactive status line."
-        ),
-        choices=("tui", "status"),
-    ),
-    ConfigKey(
-        tab="ui",
-        key="ui.color",
-        label="Color output policy",
-        type="choice",
-        default="auto",
-        choices=("auto", "always", "never"),
-    ),
-    ConfigKey(
-        tab="ui",
-        key="ui.dashboard_panes",
-        label="Dashboard panes shown on the repo screen",
+        tab="tui",
+        key="tui.eu_view.fields",
+        label="Roadmap EU/hour rollup metrics",
         type="multichoice",
-        default=(),
-        description="Subset of dashboard panes to render; empty falls back to the built-in set.",
-        choices=("state", "roadmap", "hypotheses", "audits", "ship", "memory", "config"),
+        default=("work_sum", "critical_path", "queue", "realistic"),
+        description="The metrics the rollup lists per phase, in this order.",
+        choices=("work_sum", "critical_path", "queue", "realistic"),
     ),
     ConfigKey(
         tab="ui",
@@ -526,15 +337,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         default="auto",
         description="auto = detect glyph coverage; ascii = plain fallback; unicode = force.",
         choices=("auto", "ascii", "unicode"),
-    ),
-    ConfigKey(
-        tab="ui",
-        key="ui.refresh_ms",
-        label="Refresh interval for the TUI (ms)",
-        type="int",
-        default=1000,
-        min_value=100,
-        max_value=10000,
     ),
     ConfigKey(
         tab="ui",
@@ -555,39 +357,10 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         type="choice",
         default="important",
         description=(
-            "off = no toasts; important = wave close / audit verdict / "
-            "needs-user only (default); all = more verbose."
+            "off = no ambient toasts; important = wave close / audit verdict / "
+            "needs-user (default); all = more verbose. Answers to a key always show."
         ),
         choices=("off", "important", "all"),
-    ),
-    ConfigKey(
-        tab="ui",
-        key="ui.tour_completed",
-        label="First-run onboarding tour completed",
-        type="bool",
-        default=False,
-        description=(
-            "True once the operator has dismissed the first-run tour; the "
-            "tour modal sets this on dismissal so it does not re-open."
-        ),
-    ),
-    ConfigKey(
-        tab="vcs",
-        key="vcs.auto_commit",
-        label="Auto-commit policy",
-        type="choice",
-        default="ask",
-        description="ask = prompt; auto = commit without prompting; never = require manual.",
-        choices=("ask", "auto", "never"),
-    ),
-    ConfigKey(
-        tab="vcs",
-        key="vcs.conventions.release.agent_driven",
-        label="Agent-driven release cadence",
-        type="choice",
-        default="per-phase",
-        description="Cadence used when the agent-driven profile owns release policy.",
-        choices=("manual", "per-phase"),
     ),
     ConfigKey(
         tab="vcs",
@@ -612,13 +385,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
             "at integration; task = one delivery commit per Task."
         ),
         choices=("batch", "task"),
-    ),
-    ConfigKey(
-        tab="vcs",
-        key="vcs.require_ci_green",
-        label="Require CI green before merge",
-        type="bool",
-        default=True,
     ),
     ConfigKey(
         tab="vcs",
@@ -648,22 +414,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         default="B",
         description="A/B/C preserve existing policies; disabled is absorbing across profiles.",
         choices=("A", "B", "C", "disabled"),
-    ),
-    ConfigKey(
-        tab="worktrees",
-        key="worktrees.enabled",
-        label="Worktree dispatch policy",
-        type="choice",
-        default="auto",
-        description="auto = enable when wave dep DAG permits; always | never.",
-        choices=("auto", "always", "never"),
-    ),
-    ConfigKey(
-        tab="worktrees",
-        key="worktrees.use_for_parallel_writers",
-        label="Use worktrees for parallel writers",
-        type="bool",
-        default=True,
     ),
 )
 
@@ -713,7 +463,7 @@ def registry_lookup(key: str) -> ConfigKey | None:
     """Return the :class:`ConfigKey` whose ``key`` matches *key*, or ``None``.
 
     Args:
-        key: Dotted config key (e.g. ``"vcs.auto_commit"``).
+        key: Dotted config key (e.g. ``"ui.theme"``).
     """
     for entry in CONFIG_REGISTRY:
         if entry.key == key:

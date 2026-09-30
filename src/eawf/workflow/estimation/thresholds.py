@@ -45,11 +45,8 @@ OverBudgetBand = Literal["ok", "warn", "err"]
 def classify_band(fraction: float) -> OverBudgetBand:
     """Return the over-budget band for a consumed *fraction*.
 
-    Shares the exact ``<=`` boundary semantics the gauge colour uses
-    (:func:`eawf.surfaces.tui.widgets.eu_bar.band_var`), so a fraction that
-    paints the gauge amber classifies ``warn`` here and a fraction that
-    paints it red classifies ``err`` -- the gauge hue and the advisory band
-    are the same decision.
+    Uses ``<=`` boundaries: a fraction exactly on a band's upper edge stays in
+    that band.
 
     Args:
         fraction: Consumed / budget ratio (``>= 0``; may exceed ``1.0``

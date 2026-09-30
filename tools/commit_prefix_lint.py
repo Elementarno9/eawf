@@ -383,9 +383,7 @@ _MANAGED_GOLDEN_DIRS = (
     "tests/golden/surfaces/cli/scenarios/",
     "tests/golden/surfaces/render/plan_view/",
     "tests/golden/telemetry/",
-    "tests/golden/tui_config_modal/",
     "tests/snapshots/svg/golden/",
-    "tests/snapshots/tui/golden/",
 )
 _WAVE_LOG_TIMEOUT_SECONDS = 20.0
 

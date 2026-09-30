@@ -116,9 +116,9 @@ def test_the_catalog_order_is_the_order_a_built_view_draws(tree: Path) -> None:
 def test_the_rail_selection_and_categories_take_the_accent(tree: Path, fixture: Fixture) -> None:
     rows = _settings(fixture, _view(tree), sr.LITERAL_KEY, w=120, h=30)
     category = next(row for row in rows if row.startswith("QUALITY"))
-    selected = next(row for row in rows if row.startswith("▸ prose"))
+    selected = next(row for row in rows if row.startswith("▸ audit"))
     assert _spans(category)["QUALITY"] == ("brand", True)
-    assert _spans(selected)["prose"] == ("brand", True)
+    assert _spans(selected)["audit"] == ("brand", True)
 
 
 @pytest.mark.parametrize(
@@ -158,9 +158,9 @@ def test_the_rail_closes_on_its_own_row(tree: Path, fixture: Fixture, w: int, h:
 
 def test_the_chooser_is_a_vertical_list_at_rest(tree: Path, fixture: Fixture) -> None:
     body = "\n".join(_settings(fixture, _view(tree), sr.LITERAL_KEY, w=120, h=30))
-    assert "│    ○ loose" in body
+    assert "│    ○ quick" in body
     assert "│    ● standard" in body
-    assert "│    ○ strict" in body
+    assert "│    ○ deep" in body
 
 
 def test_pointing_at_a_value_keeps_the_stored_one_dotted(tree: Path, fixture: Fixture) -> None:
@@ -168,7 +168,7 @@ def test_pointing_at_a_value_keeps_the_stored_one_dotted(tree: Path, fixture: Fi
     session = sr._on(sr._session(), view, sr.LITERAL_KEY)
     sr._press(fixture, view, session, ["Enter", "ArrowDown"])
     body = "\n".join(sr._frame(fixture, view, session, w=120, h=30))
-    assert "│  ▸ ○ strict" in body
+    assert "│  ▸ ○ deep" in body
     assert "│    ● standard" in body
     assert "VALUE    ●" not in body
 
@@ -254,7 +254,7 @@ def test_arrows_step_a_whole_number(tree: Path, fixture: Fixture) -> None:
     sr._press(fixture, view, session, ["Enter", "ArrowUp", "ArrowUp", "ArrowDown"])
     assert session.edit is not None
     assert session.edit["kind"] == "num"
-    assert session.edit["text"] == "91"
+    assert session.edit["text"] == "31"
 
 
 @pytest.mark.parametrize(
@@ -268,7 +268,11 @@ def test_arrows_step_a_whole_number(tree: Path, fixture: Fixture) -> None:
     ],
 )
 def test_step_boundaries(tree: Path, value_type: str, text: str, up: bool, out: str) -> None:
-    leaf = _view(tree).leaf(sr.INT_KEY).model_copy(update={"value_type": value_type})
+    leaf = (
+        _view(tree)
+        .leaf(sr.INT_KEY)
+        .model_copy(update={"value_type": value_type, "value_range": None})
+    )
     assert step(leaf, text, up) == out
 
 
@@ -284,7 +288,7 @@ def test_the_rail_is_the_packet_width_at_least(tree: Path, w: int, floor: int) -
 
 def test_the_context_row_reads_in_category_section(tree: Path, fixture: Fixture) -> None:
     rows = _settings(fixture, _view(tree), sr.LITERAL_KEY)
-    assert " · in QUALITY ▸ prose" in rows[1]
+    assert " · in QUALITY ▸ audit" in rows[1]
 
 
 # ---------- the lens is bold in the chain ----------
@@ -303,8 +307,8 @@ def test_the_notes_head_is_section_relative_and_the_meaning_wraps(
 ) -> None:
     rows = _settings(fixture, _view(tree), sr.LITERAL_KEY, w=80, h=30)
     body = "\n".join(rows)
-    assert "│  level · literal" in body
-    assert "│  prose.level · literal" not in body
+    assert "│  default_level · literal" in body
+    assert "│  audit.default_level · literal" not in body
     meaning = sr.LEAF_KEY_REGISTRY[sr.LITERAL_KEY].description
     assert meaning.split()[-1] in body
 

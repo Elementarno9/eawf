@@ -630,6 +630,7 @@ def target_id(session: Session, fixture: Fixture) -> str:
         "run.detail": pt.OWN_RUN,
         "batch.detail": "BAT-0001",
         "milestone": pt.OWN_MILESTONE,
+        "unattended": pt.QUEUE_TARGET,
     }.get(session.route, session.route)
 
 

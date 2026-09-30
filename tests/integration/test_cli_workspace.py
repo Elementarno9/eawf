@@ -280,7 +280,7 @@ def test_registry_status_width_flag_overrides_console_width(tmp_path: Path) -> N
             "--registry-path",
             str(target),
             "--width",
-            "40",
+            "20",
         ],
     )
     wide = runner.invoke(

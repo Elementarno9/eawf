@@ -1,9 +1,8 @@
 """Built-in (read-only) configuration defaults.
 
-The contents mirror ``docs/architecture/envelope.md`` "Config schema
-required sections". Every required section listed there appears here so
-the merged config has every key resolvable to ``built-in`` when no later
-layer overrides.
+Every catalogued leaf that has a shipped value appears here, so the merged
+config resolves each such key to ``built-in`` when no later layer
+overrides it.
 
 This module exposes a single read-only constant: :data:`BUILT_IN_DEFAULTS`.
 Callers that need to mutate the structure (loaders, mergers) MUST deep-copy
@@ -15,6 +14,10 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from eawf.kernel.config.schema import (
+    DEFAULT_PERMISSION_WAIT_SECONDS,
+    DEFAULT_STALL_INTERVAL_SECONDS,
+)
 from eawf.kernel.spec.research import DEFAULT_RESEARCH_DEPTH
 
 # The literal name "built-in" is the canonical layer label everywhere — keep
@@ -32,55 +35,8 @@ CONFIG_SCHEMA_VERSION: str = "1.0"
 
 _BUILT_IN_DEFAULTS: dict[str, Any] = {
     "schema_version": CONFIG_SCHEMA_VERSION,
-    "config": {
-        # When ``false``, ``eawf config get`` hides the layer-source column
-        # in default output (operators that prefer terse listings).
-        "layers_visible": True,
-    },
-    "cli": {
-        "canonical_command": "eawf",
-        "preferred_command": "eawf",
-        "install_aliases": ["ea"],
-        "omit_ea_alias": False,
-    },
-    "project": {
-        "code": None,
-        "title": None,
-        "slug": None,
-        "domains": [],
-        "default_track": None,
-        # Free-form project-level goal strings (one per list item). Surfaced
-        # in dispatch envelopes + research/audit briefs so subagents see
-        # project intent without re-deriving from state.
-        "goals": [],
-        # Quantitative goal targets keyed by metric name (e.g. p99 latency,
-        # contributor count). Values are floats so the same registry entry
-        # can carry rates / ratios / counts.
-        "success_metrics": {},
-    },
-    "workspace": {
-        "enabled": False,
-        "code": None,
-        "state_path": ".ea/state.json",
-        "repos": {},
-    },
     "profiles": {
         "enabled": ["core"],
-        "catalog": [
-            "core",
-            "research",
-            "python",
-            "docs",
-            "apps",
-            "infra",
-            "ml",
-            "quant",
-            "re",
-            "game",
-            "robotics",
-        ],
-        "conflict_resolution": "prompt",
-        "safety_policy": "strictest_wins",
         # Content-hash trust ledger; key = profile id, value = sha256 of
         # the body the operator last accepted. The composition loader
         # cross-references this map when a profile body changes between
@@ -92,7 +48,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "certified": {},
     },
     "runtime": {
-        "default": "claude-code",
         # ``adapters`` is the user-facing selector list. Built-in default
         # opts the project into the Claude adapter only; the wizard /
         # workspace overlay extends or replaces it.
@@ -102,45 +57,27 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # synthesises ``preference`` from ``adapters`` when only the
         # latter is present.
         "preference": ["claude-code"],
-        # Fallback policy applied when the primary runtime rejects a
-        # dispatch (rate-limit / server error / timeout / API error).
-        "fallback": {
-            "on_errors": [
-                "RUNTIME_RATE_LIMIT",
-                "RUNTIME_SERVER_ERROR",
-                "RUNTIME_TIMEOUT",
-                "RUNTIME_API_ERROR",
-            ],
-            "retry_policy": "hybrid",
-            "max_backoff_seconds": 90,
+        # Liveness per runtime: the silence a Run may keep before it is flagged
+        # stalled, and how long Claude's permission hook waits for a decision.
+        "claude": {
+            "stall_interval_s": DEFAULT_STALL_INTERVAL_SECONDS,
+            "permission_wait_s": DEFAULT_PERMISSION_WAIT_SECONDS,
         },
-        "slash_commands": [
-            "init",
-            "roadmap",
-            "differentiate",
-            "research",
-            "prep",
-            "audit",
-            "ship",
-            "review",
-            "polish",
-        ],
+        "codex": {"stall_interval_s": DEFAULT_STALL_INTERVAL_SECONDS},
+        "opencode": {"stall_interval_s": DEFAULT_STALL_INTERVAL_SECONDS},
     },
     "ui": {
-        "bare_command": "tui",
-        "color": "auto",
+        "theme": "dark",
         "glyphs": "auto",
-        "refresh_ms": 1000,
-        "tour_completed": False,
-        "dashboard_panes": [
-            "state",
-            "roadmap",
-            "hypotheses",
-            "audits",
-            "ship",
-            "memory",
-            "config",
-        ],
+        "toasts": "important",
+    },
+    # Roadmap EU/hour rollup view; mirrors the defaults of
+    # :class:`eawf.surfaces.render.plan_view.EuViewConfig`.
+    "tui": {
+        "eu_view": {
+            "density": "full",
+            "fields": ["work_sum", "critical_path", "queue", "realistic"],
+        },
     },
     # C09 (telemetry) projector reads these keys. Ingestion is ON by
     # default because an off-by-default projector never runs in CI or
@@ -152,18 +89,9 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     # stdlib sqlite backend; ``duckdb`` is the opt-in analytics upgrade.
     "telemetry": {
         "enabled": True,
-        "export": {
-            "format": "prom",
-        },
-        "window_default": "7d",
-        "aggregate_window": "24h",
         "db_kind": "sqlite",
     },
-    # Dispatch defaults — the per-skill or per-profile manifest still
-    # wins; these are the bottom-of-stack values.
     "dispatch": {
-        "session_policy_default": "fresh",
-        "session_handle_ttl_seconds": 86400,
         # Per-block token ceiling for injected role-tier dispatch blocks.
         # The renderer raises (never truncates) over the cap; the code
         # fallback is DEFAULT_ROLE_TIER_TOKEN_CAP when the leaf is unset.
@@ -176,52 +104,19 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     "agents": {
         "extra_tools": {},
     },
-    # Language-fit knobs. ``runtime`` is locked at ``python`` for
-    # v0.3-v0.5 (D6); ``fast_extras`` opts in to PyO3 hot paths.
-    "language": {
-        "runtime": "python",
-        "fast_extras": [],
-    },
-    "storage": {
-        "state_path": ".ea/state.json",
-        "stores_dir": ".ea/stores",
-        "artifacts_dir": ".ea/artifacts",
-        "rendered_dir": ".ea/artifacts/rendered",
-        "generated_index": ".ea/indexes/generated.json",
-        "content_addressed_blobs": True,
-        "commit_jsonl": "all_nonlocal",
-        "max_inline_chars": 2000,
-        "lock_strategy": "sibling_lockfiles",
-    },
     "research": {
-        "folder": ".ea/artifacts/rendered/research",
         "auto_save": False,
         "default_depth": DEFAULT_RESEARCH_DEPTH.value,
-        "default_sources": "both",
         "agent_count": 4,
     },
     "planning": {
-        "approval": "ask",
         "max_parallel_waves": 4,
-        "require_research_for_unknowns": True,
-        # When False (default), ``/prep`` enters Claude Code plan mode and
-        # presents the proposed wave DAG to the operator before any state
-        # mutation. Set to True (or pass ``--auto-plan`` on the slash
-        # invocation) to skip the proposal and dispatch the plan inline.
-        "auto_plan": False,
     },
     # AskUserQuestion auto-pick default; a closed enum (see
     # :mod:`eawf.kernel.config.schema`).
     "preferences": {
         "auto_choose": "off",
     },
-    # Doc-clarity prose-lint stack knobs (see ``ProseConfig`` in
-    # :mod:`eawf.kernel.config.schema`). ``level`` is the strictness floor a
-    # local layer may only tighten, never loosen, below the baseline the
-    # active profile sets (agent-driven = strict, managed = loose); the
-    # built-in baseline is ``standard``. ``clarity_judge`` / ``block_on_lint``
-    # default ``null`` so each defers to the level until a layer opts a single
-    # gate on or off within the level's floor.
     # Verify-spine repo-layer knobs. ``odr_blocking`` lets a repo opt into
     # the Oracle-Determinism-Ratio floor REFUSING an iter close (the profile
     # default keeps the floor advisory); a layer can only tighten -- the
@@ -235,34 +130,14 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "retyped_rule_threshold": 3,
         "waiver_mode": "B",
     },
-    "prose": {
-        "level": "standard",
-        "clarity_judge": None,
-        "block_on_lint": None,
-    },
     "estimation": {
-        "enabled": True,
         "eu_minutes": 30,
         "eu_basis": "api_duration",
-        "realtime_recalibration": False,
-        "calibration_profile": "eawf_v0_lockbox_2026_05",
-        "idle_policy": "D30_non_agent_gap",
-        "display": {
-            "show_category": False,
-            "show_raw_eu": True,
-            "show_expected_time": True,
-            "show_pessimistic_time": True,
-            "eu_quantum": 0.25,
-            "time_quantum_under_2h_minutes": 15,
-            "time_quantum_over_2h_minutes": 30,
-        },
     },
     "audit": {
-        "default_checks": ["state", "tests", "lint", "typecheck", "docs"],
         # Default /audit check-plan breadth: quick narrows to a smoke set,
         # standard is the full default set, deep is the widest.
         "default_level": "standard",
-        "flaky_retry_count": 1,
     },
     # ``/prep`` runtime knobs. ``auto_resume`` leads /prep's emitted claim
     # actions with an ``eawf dispatch resume`` so a leaked ``dispatch_paused``
@@ -274,17 +149,9 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # Ship gauntlet breadth: full (default, mandatory for migration waves
         # + iter close) runs every gate; scoped is legal only for re-runs.
         "gauntlet": "full",
-        "use_vcs_policy": True,
     },
     "review": {
         "default_level": "medium",
-        "post_default": "ask",
-        "template": "default",
-        "require_checks_before_approve": True,
-    },
-    "polish": {
-        "include_memory": True,
-        "include_agent_memory": True,
     },
     "flow": {
         # Per-transition gates. A true value authorises advancing after the
@@ -307,35 +174,17 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # Stop re-entering a failing flow stage past this many repair cycles.
         "max_repair_cycles": 3,
     },
-    "memory": {
-        "stores": ["project", "track", "agent", "user"],
-        "review_on_ship": True,
-        "review_on_polish": True,
-        "auto_promote": "ask",
-        "prune": "ask",
-        "max_injected_tokens": 2000,
-    },
     "vcs": {
         "conventions": {
             "subject_style": "trailer",
             "wave_trailer": "Eawf-Wave",
             "release": {
                 "cadence": "manual",
-                "agent_driven": "per-phase",
             },
         },
-        "commit_template": "state_scoped",
-        "pr_template": "iter",
-        "branch_pattern": "eawf/{project}/{scope}-{slug}",
         "checkpoint_requires_commit": True,
-        "protected_branches": ["main", "master"],
-        "auto_commit": "ask",
         "pr_merge_method": "merge",
         "squash_allowed": False,
-        "delete_branch_after_merge": False,
-        "require_ci_green": True,
-        "require_review_before_merge": True,
-        "force_push": "forbidden_protected",
         "integration_commit_unit": "batch",
         "task_reference": "trailer",
         "coauthor": {
@@ -355,16 +204,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             "require_trailer": True,
         },
     },
-    "worktrees": {
-        "enabled": "auto",
-        "root": ".worktrees",
-        "merge_mode": "cherry_pick",
-        "use_for_parallel_writers": True,
-        "use_for_risky_changes": True,
-        "use_for_readonly_research": False,
-        "preserve_on_conflict": True,
-        "remove_when_clean": True,
-    },
     "acceptance": {
         "commands": {
             "tests": None,
@@ -373,60 +212,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             "build": None,
         },
         "required_before_ship": ["state"],
-    },
-    "security": {
-        "secrets_policy": "env_refs_only",  # pragma: allowlist secret
-        "env_ref_syntax": "${ENV:NAME}",
-        "permission_mode": "ask_first",
-        "secret_scan": True,
-        "store_scan_before_checkpoint": True,
-        "store_scan_on_finding": "block",
-        "allow_destructive": "ask",
-    },
-    # Reserved hook settings were removed in v0.6.5. Keep the required
-    # top-level section so layered config retains a stable schema shape.
-    "hooks": {},
-    "mcp": {
-        "default_policy": "ask_install",
-        "manage_only_owner": "eawf",
-        "env_ref_syntax": "${ENV:NAME}",
-        "servers": {},
-    },
-    "statusline": {
-        "modules_default": "ask_per_module",
-        "modules_available": [
-            "state",
-            "git",
-            "model_session_cwd",
-            "context_tokens",
-            "mcp_health",
-            "hooks_plugins",
-            "memory",
-            "token_saving",
-        ],
-        "glyph_mode": "auto",
-        "color_mode": "auto",
-        "rows": 1,
-    },
-    "docs": {
-        "generated_default_dir": ".ea/artifacts/rendered",
-        "generation_policy": "ask_per_category",
-        "categories": [
-            "roadmap",
-            "research",
-            "audit",
-            "decisions",
-            "incidents",
-            "memory",
-            "status",
-        ],
-    },
-    "commands": {
-        "inventory_policy": "full_io_spec_before_code",
-    },
-    "state_schema": {
-        "strictness": "full_strict_schema_before_code",
-        "id_padding": 2,
     },
     "daemon": {
         # When True (default since P24-W10), state + config + registry
@@ -443,8 +228,8 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # subscriber reconnect after a cache window does not racing-
         # spawn the daemon mid-warmup.
         "idle_timeout_seconds": 300,
-        # Per-handle TTL for the session table sweep (seconds);
-        # W07 wires the sweep.
+        # Seconds an ended attempt's session handle is kept before the
+        # daemon's sweep prunes it.
         "session_handle_ttl_seconds": 86400,
     },
 }

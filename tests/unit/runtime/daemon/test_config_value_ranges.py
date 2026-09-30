@@ -28,18 +28,16 @@ from eawf.surfaces.cli.errors import UserError
 
 pytestmark = pytest.mark.unit
 
-#: An int the registry holds to [100, 10000].
-RANGED_INT = "ui.refresh_ms"
+#: An int the registry holds to [1, 16].
+RANGED_INT = "planning.max_parallel_waves"
 #: A float the registry holds to at least 1.0.
 RANGED_FLOAT = "flow.budget.multiplier"
-#: A choice among loose, standard and strict.
-CHOICE = "prose.level"
+#: A choice among quick, standard and deep.
+CHOICE = "audit.default_level"
 #: A list whose items must be declared choices.
-MULTICHOICE = "ui.dashboard_panes"
+MULTICHOICE = "tui.eu_view.fields"
 #: A bool.
-BOOL = "estimation.enabled"
-#: A free-text scalar.
-TEXT = "telemetry.window_default"
+BOOL = "research.auto_save"
 #: A leaf the interactive registry does not describe, so no range or choices apply.
 UNREGISTERED = "profiles.enabled"
 
@@ -79,16 +77,15 @@ def _written(repo: Path) -> dict[str, Any]:
 @pytest.mark.parametrize(
     ("key", "value"),
     [
-        (RANGED_INT, 1000),
-        (RANGED_INT, 100),
-        (RANGED_INT, 10000),
+        (RANGED_INT, 8),
+        (RANGED_INT, 1),
+        (RANGED_INT, 16),
         (RANGED_FLOAT, 1.0),
         (RANGED_FLOAT, 2.5),
-        (CHOICE, "strict"),
+        (CHOICE, "deep"),
         (MULTICHOICE, []),
-        (MULTICHOICE, ["state"]),
+        (MULTICHOICE, ["queue"]),
         (BOOL, False),
-        (TEXT, "30d"),
     ],
 )
 def test_ui_053_an_in_range_value_is_written(tmp_path: Path, key: str, value: Any) -> None:
@@ -107,9 +104,9 @@ def test_ui_053_an_in_range_value_is_written(tmp_path: Path, key: str, value: An
 @pytest.mark.parametrize(
     ("value", "reason"),
     [
-        (99, "below minimum 100"),
-        (10001, "above maximum 10000"),
-        (-1, "below minimum 100"),
+        (0, "below minimum 1"),
+        (17, "above maximum 16"),
+        (-1, "below minimum 1"),
     ],
 )
 def test_ui_053_an_out_of_range_int_is_refused_and_nothing_is_written(
@@ -133,15 +130,13 @@ def test_ui_053_a_float_just_below_its_minimum_is_refused(tmp_path: Path) -> Non
     ("key", "value", "reason"),
     [
         (CHOICE, "lax", "not in choices"),
-        (MULTICHOICE, ["state", "nope"], "not in choices"),
+        (MULTICHOICE, ["queue", "nope"], "not in choices"),
         (RANGED_INT, "fast", "cannot coerce 'fast' to int"),
-        (RANGED_INT, 150.5, "cannot coerce 150.5 to int"),
+        (RANGED_INT, 2.5, "cannot coerce 2.5 to int"),
         (RANGED_INT, True, "cannot coerce True to int"),
         (RANGED_INT, None, "cannot coerce None to int"),
         (BOOL, 1, "cannot coerce 1 to bool"),
         (BOOL, "maybe", "cannot coerce 'maybe' to bool"),
-        (TEXT, {"days": 7}, "cannot coerce"),
-        (TEXT, None, "cannot coerce None to str"),
     ],
 )
 def test_ui_053_a_wrong_type_or_undeclared_choice_is_refused(
@@ -158,19 +153,19 @@ def test_ui_053_a_value_is_written_in_its_declared_type(tmp_path: Path) -> None:
     """A string a caller sent for an int is stored as the int the registry declares."""
     ctx, repo = _ctx(tmp_path)
 
-    result = _set(ctx, RANGED_INT, "250")
+    result = _set(ctx, RANGED_INT, "8")
 
-    assert _written(repo) == {"ui": {"refresh_ms": 250}}
-    assert result["value"] == 250
+    assert _written(repo) == {"planning": {"max_parallel_waves": 8}}
+    assert result["value"] == 8
 
 
 def test_ui_053_a_refused_value_leaves_the_layer_as_it_was(tmp_path: Path) -> None:
     ctx, repo = _ctx(tmp_path)
-    _set(ctx, RANGED_INT, 500)
+    _set(ctx, RANGED_INT, 5)
 
     with pytest.raises(ValueError, match="above maximum"):
         _set(ctx, RANGED_INT, 20000)
-    assert _written(repo) == {"ui": {"refresh_ms": 500}}
+    assert _written(repo) == {"planning": {"max_parallel_waves": 5}}
 
 
 def test_ui_053_a_leaf_the_registry_does_not_describe_is_written_as_sent(tmp_path: Path) -> None:
@@ -204,9 +199,9 @@ def test_ui_053_the_daemonless_write_holds_the_same_range(
     monkeypatch.setenv("EAWF_DAEMONLESS", "1")
     target = tmp_path / "config.yaml"
 
-    with pytest.raises(UserError, match="above maximum 10000"):
-        _save_value_to_layer(target_path=target, key=RANGED_INT, value=10001)
+    with pytest.raises(UserError, match="above maximum 16"):
+        _save_value_to_layer(target_path=target, key=RANGED_INT, value=17)
     assert not target.exists()
 
-    _save_value_to_layer(target_path=target, key=RANGED_INT, value=10000)
-    assert yaml.safe_load(target.read_text()) == {"ui": {"refresh_ms": 10000}}
+    _save_value_to_layer(target_path=target, key=RANGED_INT, value=16)
+    assert yaml.safe_load(target.read_text()) == {"planning": {"max_parallel_waves": 16}}

@@ -13,8 +13,9 @@ import orjson
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.config.layered import global_config_path
+from eawf.kernel.config.layered import get_dotted, global_config_path
 from eawf.kernel.config.migration import migrate_config_payload
+from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS, LEAF_KEY_REGISTRY
 from eawf.kernel.state.enums import AuditKind, IterStatus, StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
@@ -134,6 +135,18 @@ def _config_paths(workspace: Path) -> list[tuple[str, Path]]:
     return result
 
 
+def _stated_retired_keys(layer: dict[str, object]) -> list[str]:
+    """Return the retired keys *layer* still states, sorted, so the repair names them."""
+    stated: list[str] = []
+    for key in sorted(DEPRECATED_LEAF_KEYS - LEAF_KEY_REGISTRY.keys()):
+        try:
+            get_dotted(layer, key)
+        except KeyError:
+            continue
+        stated.append(key)
+    return stated
+
+
 def _config_actions(workspace: Path) -> list[DoctorRepairAction]:
     actions: list[DoctorRepairAction] = []
     for index, (scope, path) in enumerate(_config_paths(workspace), start=1):
@@ -144,6 +157,7 @@ def _config_actions(workspace: Path) -> list[DoctorRepairAction]:
         _upgraded, changed = migrate_config_payload(parsed)
         if not changed:
             continue
+        stragglers = ", ".join(_stated_retired_keys(parsed))
         actions.append(
             DoctorRepairAction(
                 action_id=f"config.normalize.{index}",
@@ -151,7 +165,10 @@ def _config_actions(workspace: Path) -> list[DoctorRepairAction]:
                 preview_digest=_digest_bytes(raw),
                 mutation_class="committed_config",
                 record_count=1,
-                detail=f"normalize deprecated configuration leaves in {scope} layer",
+                detail=(
+                    f"normalize deprecated configuration leaves in {scope} layer"
+                    + (f": {stragglers}" if stragglers else "")
+                ),
                 target=str(path),
             )
         )

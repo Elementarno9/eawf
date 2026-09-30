@@ -1,7 +1,6 @@
 """Tests for ``/theme auto`` OSC 11 terminal-background detection.
 
-Covers the three detection units added to :mod:`eawf.surfaces.tui.chassis.theme` and the
-``apply_theme("auto")`` wiring in :mod:`eawf.surfaces.tui.app`:
+Covers the detection units in :mod:`eawf.surfaces.tui.chassis.theme`:
 
 * :func:`resolve_auto_theme` — the pure luminance classifier (no I/O):
   light vs dark vs ``None`` plus the threshold boundary.
@@ -11,30 +10,22 @@ Covers the three detection units added to :mod:`eawf.surfaces.tui.chassis.theme`
   ``None`` (no write, no hang) for a non-TTY stream and when ``CI`` is set,
   and parses + classifies a canned reply when ``_read_osc_reply`` is
   monkeypatched (so no real terminal is required).
-* :meth:`EaApp.apply_theme` — with ``_auto_logical`` monkeypatched to
-  ``light`` / ``dark``, ``apply_theme("auto")`` sets the matching theme and
-  returns ``True``.
+* the OS-appearance classifiers and :func:`detect_os_appearance`.
 
-Every wait is bounded and no test touches a real terminal: detection runs at
-App construction under ``run_test()`` (non-TTY → ``None`` → dark baseline),
-and the probe tests use fake streams / a monkeypatched reader.
+Every wait is bounded and no test touches a real terminal: the probe tests use
+fake streams / a monkeypatched reader.
 """
 
 from __future__ import annotations
 
-import asyncio
 import io
 import termios
 import tty
-from pathlib import Path
 
 import pytest
 
-from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.chassis import theme as theme_mod
 from eawf.surfaces.tui.chassis.theme import (
-    EA_DARK,
-    EA_LIGHT,
     OSC11_QUERY,
     classify_linux_appearance,
     classify_macos_appearance,
@@ -47,10 +38,6 @@ from eawf.surfaces.tui.chassis.theme import (
 from eawf.surfaces.tui.chassis.theme import (
     _parse_osc11 as parse_osc11,
 )
-
-_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
-_PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
-
 
 # --------------------------------------------------------------------------
 # resolve_auto_theme — pure luminance classifier
@@ -262,60 +249,6 @@ def test_detect_auto_theme_light_when_query_is_light(
 
 
 # --------------------------------------------------------------------------
-# apply_theme("auto") — uses the cached _auto_logical verdict
-# --------------------------------------------------------------------------
-
-
-def test_apply_theme_auto_uses_cached_light_logical() -> None:
-    """With the cached verdict forced to light, /theme auto sets the light theme."""
-
-    async def body() -> None:
-        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
-        app._auto_logical = "light"
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause()
-            await app.workers.wait_for_complete()
-            assert app.apply_theme("auto") is True
-            await pilot.pause()
-            assert app.theme == EA_LIGHT.name
-
-    asyncio.run(body())
-
-
-def test_apply_theme_auto_uses_cached_dark_logical() -> None:
-    """With the cached verdict forced to dark, /theme auto sets the dark theme."""
-
-    async def body() -> None:
-        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
-        app._auto_logical = "dark"
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause()
-            await app.workers.wait_for_complete()
-            assert app.apply_theme("auto") is True
-            await pilot.pause()
-            assert app.theme == EA_DARK.name
-
-    asyncio.run(body())
-
-
-def test_apply_theme_auto_returns_true_under_default_construction() -> None:
-    """Default (non-TTY) construction caches dark; apply_theme("auto") still True."""
-
-    async def body() -> None:
-        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
-        # run_test()/non-TTY construction → detect_auto_theme() → dark.
-        assert app._auto_logical == "dark"
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause()
-            await app.workers.wait_for_complete()
-            assert app.apply_theme("auto") is True
-            await pilot.pause()
-            assert app.theme == EA_DARK.name
-
-    asyncio.run(body())
-
-
-# --------------------------------------------------------------------------
 # OS-appearance classifiers — pure (no subprocess)
 # --------------------------------------------------------------------------
 
@@ -392,102 +325,3 @@ def test_detect_os_appearance_unsupported_platform_returns_none(
     monkeypatch.delenv("CI", raising=False)
     monkeypatch.setattr(theme_mod.sys, "platform", "sunos5")
     assert detect_os_appearance(runner=lambda cmd: ("anything", 0)) is None
-
-
-# --------------------------------------------------------------------------
-# _poll_os_appearance — live /theme auto follow (baseline + delta)
-# --------------------------------------------------------------------------
-
-
-def test_theme_poll_seeds_baseline_then_follows_flip(monkeypatch: pytest.MonkeyPatch) -> None:
-    """First poll seeds the baseline (no change); a later flip re-applies auto."""
-
-    async def body() -> None:
-        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
-        app._auto_logical = "dark"
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause()
-            await app.workers.wait_for_complete()
-            assert app.apply_theme("auto") is True
-            await pilot.pause()
-            assert app.theme == EA_DARK.name
-            # First poll: baseline seeded to dark, theme unchanged.
-            monkeypatch.setattr("eawf.surfaces.tui.app.detect_os_appearance", lambda: "dark")
-            await app._poll_os_appearance()
-            assert app._os_appearance == "dark"
-            assert app.theme == EA_DARK.name
-            # System flips to light: auto re-resolves and the light theme applies.
-            monkeypatch.setattr("eawf.surfaces.tui.app.detect_os_appearance", lambda: "light")
-            await app._poll_os_appearance()
-            await pilot.pause()
-            assert app._os_appearance == "light"
-            assert app.theme == EA_LIGHT.name
-
-    asyncio.run(body())
-
-
-def test_theme_poll_corrects_disagreeing_startup(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A startup OSC 11 verdict that disagrees with the OS is corrected on first poll.
-
-    If the terminal did not answer OSC 11 (startup fell back to dark) but the
-    OS is actually light, the first appearance poll re-applies ``auto`` to the
-    real appearance rather than waiting for the operator to flip the system.
-    """
-
-    async def body() -> None:
-        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
-        app._auto_logical = "dark"  # simulate the dark fallback of a failed probe
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause()
-            await app.workers.wait_for_complete()
-            app.apply_theme("auto")
-            await pilot.pause()
-            assert app.theme == EA_DARK.name
-            # The OS is actually light — the first poll disagrees and corrects.
-            monkeypatch.setattr("eawf.surfaces.tui.app.detect_os_appearance", lambda: "light")
-            await app._poll_os_appearance()
-            await pilot.pause()
-            assert app.theme == EA_LIGHT.name
-
-    asyncio.run(body())
-
-
-def test_theme_poll_ignored_when_theme_not_auto(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An OS flip does not override an explicit (non-auto) theme pick."""
-
-    async def body() -> None:
-        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause()
-            await app.workers.wait_for_complete()
-            assert app.apply_theme("dark") is True  # explicit, not auto
-            await pilot.pause()
-            monkeypatch.setattr("eawf.surfaces.tui.app.detect_os_appearance", lambda: "dark")
-            await app._poll_os_appearance()  # seed baseline
-            monkeypatch.setattr("eawf.surfaces.tui.app.detect_os_appearance", lambda: "light")
-            await app._poll_os_appearance()  # flip — but theme is explicit dark
-            await pilot.pause()
-            assert app._os_appearance == "light"
-            assert app.theme == EA_DARK.name  # unchanged
-
-    asyncio.run(body())
-
-
-def test_theme_poll_none_appearance_is_noop(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An undetermined appearance read leaves the theme + baseline untouched."""
-
-    async def body() -> None:
-        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
-        app._auto_logical = "dark"
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause()
-            await app.workers.wait_for_complete()
-            app.apply_theme("auto")
-            await pilot.pause()
-            before = app.theme
-            monkeypatch.setattr("eawf.surfaces.tui.app.detect_os_appearance", lambda: None)
-            await app._poll_os_appearance()
-            assert app._os_appearance is None
-            assert app.theme == before
-
-    asyncio.run(body())

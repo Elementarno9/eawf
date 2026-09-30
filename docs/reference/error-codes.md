@@ -54,6 +54,10 @@ with the migration name and the postcondition that failed.
 The requested migration target version is not a known migration step.
 Bucket: `USER_ERROR (1)`. Run `eawf migrate --list` to see available targets.
 
+### MIGRATION_REQUIRED
+
+A mutating verb was aimed at a plain epoch-1 tree after the flag day, or an epoch-1 verb was run where no tree exists. The envelope names its own `MigrationRequired` bucket with exit name `ATTACH_FAILURE (4)`, the code a tree in the migration-required state exits with; it shares the value with an unreachable daemon but never presents as one. Migrate the tree with `eawf migrate epoch2 --plan` then `--apply`, or create an epoch-2 tree with `eawf init`.
+
 ## Daemon / IPC
 
 ### DAEMON_PROTOCOL_MAJOR_SKEW

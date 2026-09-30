@@ -51,7 +51,6 @@ _STEER_FILES: tuple[tuple[str, str], ...] = (
     ("kernel/state/models.py", "steer_notes"),
     ("kernel/store/kinds/research_round.py", "steer_notes"),
     ("runtime/daemon/methods/research.py", "broadcast"),
-    ("surfaces/tui/modes/research_board.py", "broadcast"),
 )
 
 #: The function that would start the UDS egress proxy. A production caller

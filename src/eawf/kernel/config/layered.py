@@ -313,7 +313,6 @@ _RESERVED_ENV_VARS: frozenset[str] = frozenset(
         "EAWF_CONSOLE_COLD_PAINT_T0",
         "EAWF_STATUSLINE_THEME",
         "EAWF_STATUSLINE_CACHE",
-        "EAWF_POC_DEFECTS",
         "EAWF_EGRESS_SOCKET",
         "EAWF_SNAPSHOT_OUT",
         "EAWF_SNAPSHOT_REGEN",
@@ -346,8 +345,7 @@ _RESERVED_ENV_VARS: frozenset[str] = frozenset(
 #: verified against the real ``daemon`` section in
 #: :mod:`eawf.kernel.config.defaults` before adding either entry. Do not
 #: add a prefix for a family whose section name alone would collide (e.g.
-#: no bare ``EAWF_STATUSLINE_`` — ``statusline`` is itself a real
-#: top-level config section, so its members stay exact literals above).
+#: no bare ``EAWF_STATUSLINE_`` — its members stay exact literals above).
 _RESERVED_ENV_PREFIXES: tuple[str, ...] = (
     "EAWF_DAEMON_LOG_",
     "EAWF_DAEMON_WAL_",

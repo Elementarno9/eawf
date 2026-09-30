@@ -11,7 +11,7 @@ contract under test:
 4. ``EAWF_*`` env vars become dotted overrides; double-underscore is the
    key separator.
 5. CLI overrides win over everything else.
-6. Source map keys are dotted-path-of-leaf (``planning.approval``), not
+6. Source map keys are dotted-path-of-leaf (``review.default_level``), not
    nested-section keys.
 7. Layered merge is idempotent: calling :func:`merge_config` with the same
    inputs twice yields equal outputs.
@@ -60,62 +60,50 @@ def test_layer_order_canonical() -> None:
     )
 
 
-def test_built_in_defaults_have_every_required_top_level_section() -> None:
-    """Every section in docs/architecture/envelope.md 'Config schema required sections'."""
+def test_built_in_defaults_hold_a_section_for_every_catalogued_leaf_with_a_value() -> None:
+    """Every section a catalogued leaf with a shipped value lives under is built in."""
     required = {
-        "cli",
-        "project",
-        "workspace",
         "profiles",
         "runtime",
         "ui",
-        "storage",
+        "tui",
+        "telemetry",
+        "dispatch",
+        "agents",
         "research",
         "planning",
+        "preferences",
+        "verify",
         "estimation",
         "audit",
+        "prep",
         "ship",
         "review",
-        "polish",
         "flow",
-        "memory",
         "vcs",
-        "worktrees",
         "acceptance",
-        "security",
-        "hooks",
-        "mcp",
-        "statusline",
-        "docs",
-        "commands",
-        "state_schema",
+        "daemon",
     }
-    assert required.issubset(BUILT_IN_DEFAULTS)
+    assert required == set(BUILT_IN_DEFAULTS) - {"schema_version"}
 
 
 def test_only_builtin_layer_contributes_for_empty_stack() -> None:
     merged, sources = merge_config(workspace=None, repo=None, env={}, cli_overrides={})
     # Sample several keys.
     for dotted in (
-        "cli.canonical_command",
         "estimation.eu_minutes",
-        "planning.approval",
+        "review.default_level",
         "vcs.conventions.subject_style",
         "vcs.conventions.release.cadence",
-        "vcs.conventions.release.agent_driven",
     ):
         assert sources[dotted] == "built-in"
     # Default values match.
     assert merged["estimation"]["eu_minutes"] == 30
-    assert merged["planning"]["approval"] == "ask"
-    assert merged["project"]["default_track"] is None
-    assert "default_subproject" not in merged["project"]
-    assert merged["memory"]["stores"] == ["project", "track", "agent", "user"]
+    assert merged["review"]["default_level"] == "medium"
+    assert "project" not in merged
+    assert "memory" not in merged
     assert merged["vcs"]["conventions"]["subject_style"] == "trailer"
-    assert merged["vcs"]["conventions"]["release"] == {
-        "cadence": "manual",
-        "agent_driven": "per-phase",
-    }
+    assert merged["vcs"]["conventions"]["release"] == {"cadence": "manual"}
     assert merged["verify"] == {
         "juror_wall_clock_seconds": 600.0,
         "odr_blocking": False,
@@ -141,31 +129,31 @@ def _write_yaml(path: Path, body: str) -> None:
 def test_global_layer_overrides_builtin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fake_global = tmp_path / "g.yaml"
     monkeypatch.setattr(layered, "global_config_path", lambda: fake_global)
-    _write_yaml(fake_global, "planning:\n  approval: auto\n")
+    _write_yaml(fake_global, "review:\n  default_level: auto\n")
     merged, sources = merge_config(workspace=None, repo=None, env={}, cli_overrides={})
-    assert merged["planning"]["approval"] == "auto"
-    assert sources["planning.approval"] == "global"
+    assert merged["review"]["default_level"] == "auto"
+    assert sources["review.default_level"] == "global"
 
 
 def test_workspace_overrides_global(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fake_global = tmp_path / "g.yaml"
     monkeypatch.setattr(layered, "global_config_path", lambda: fake_global)
-    _write_yaml(fake_global, "planning:\n  approval: global_val\n")
+    _write_yaml(fake_global, "review:\n  default_level: global_val\n")
     workspace = tmp_path / "ws"
-    _write_yaml(workspace / ".ea" / "config.yaml", "planning:\n  approval: ws_val\n")
+    _write_yaml(workspace / ".ea" / "config.yaml", "review:\n  default_level: ws_val\n")
     merged, sources = merge_config(workspace=workspace, repo=None, env={}, cli_overrides={})
-    assert merged["planning"]["approval"] == "ws_val"
-    assert sources["planning.approval"] == "workspace"
+    assert merged["review"]["default_level"] == "ws_val"
+    assert sources["review.default_level"] == "workspace"
 
 
 def test_repo_overrides_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     workspace = tmp_path / "ws"
-    _write_yaml(workspace / ".ea" / "config.yaml", "planning:\n  approval: ws\n")
+    _write_yaml(workspace / ".ea" / "config.yaml", "review:\n  default_level: ws\n")
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "planning:\n  approval: repo\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: repo\n")
     merged, sources = merge_config(workspace=workspace, repo=repo, env={}, cli_overrides={})
-    assert merged["planning"]["approval"] == "repo"
-    assert sources["planning.approval"] == "repo"
+    assert merged["review"]["default_level"] == "repo"
+    assert sources["review.default_level"] == "repo"
 
 
 def test_verify_strict_leaves_report_source_layer(tmp_path: Path) -> None:
@@ -207,11 +195,11 @@ def test_verify_config_rejects_unknown_field() -> None:
 
 def test_local_overrides_repo(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "planning:\n  approval: repo\n")
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "planning:\n  approval: local\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: repo\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "review:\n  default_level: local\n")
     merged, sources = merge_config(workspace=None, repo=repo, env={}, cli_overrides={})
-    assert merged["planning"]["approval"] == "local"
-    assert sources["planning.approval"] == "local"
+    assert merged["review"]["default_level"] == "local"
+    assert sources["review.default_level"] == "local"
 
 
 def test_vcs_conventions_subject_style_overlays_across_repo_and_local(tmp_path: Path) -> None:
@@ -231,71 +219,71 @@ def test_vcs_conventions_subject_style_overlays_across_repo_and_local(tmp_path: 
 
 def test_env_overrides_local(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "planning:\n  approval: local\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "review:\n  default_level: local\n")
     merged, sources = merge_config(
         workspace=None,
         repo=repo,
-        env={"EAWF_PLANNING__APPROVAL": "env_val"},
+        env={"EAWF_REVIEW__DEFAULT_LEVEL": "env_val"},
         cli_overrides={},
     )
-    assert merged["planning"]["approval"] == "env_val"
-    assert sources["planning.approval"] == "env"
+    assert merged["review"]["default_level"] == "env_val"
+    assert sources["review.default_level"] == "env"
 
 
 def test_cli_overrides_env() -> None:
     merged, sources = merge_config(
         workspace=None,
         repo=None,
-        env={"EAWF_PLANNING__APPROVAL": "from_env"},
-        cli_overrides={"planning": {"approval": "from_cli"}},
+        env={"EAWF_REVIEW__DEFAULT_LEVEL": "from_env"},
+        cli_overrides={"review": {"default_level": "from_cli"}},
     )
-    assert merged["planning"]["approval"] == "from_cli"
-    assert sources["planning.approval"] == "cli"
+    assert merged["review"]["default_level"] == "from_cli"
+    assert sources["review.default_level"] == "cli"
 
 
 def test_full_stack_ordering(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """All seven layers active simultaneously — CLI wins, env loses, etc."""
     fake_global = tmp_path / "g.yaml"
     monkeypatch.setattr(layered, "global_config_path", lambda: fake_global)
-    _write_yaml(fake_global, "planning:\n  approval: g\n")
+    _write_yaml(fake_global, "review:\n  default_level: g\n")
     workspace = tmp_path / "ws"
-    _write_yaml(workspace / ".ea" / "config.yaml", "planning:\n  approval: ws\n")
+    _write_yaml(workspace / ".ea" / "config.yaml", "review:\n  default_level: ws\n")
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "planning:\n  approval: r\n")
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "planning:\n  approval: l\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: r\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "review:\n  default_level: l\n")
     merged, sources = merge_config(
         workspace=workspace,
         repo=repo,
-        env={"EAWF_PLANNING__APPROVAL": "e"},
-        cli_overrides={"planning": {"approval": "c"}},
+        env={"EAWF_REVIEW__DEFAULT_LEVEL": "e"},
+        cli_overrides={"review": {"default_level": "c"}},
     )
-    assert merged["planning"]["approval"] == "c"
-    assert sources["planning.approval"] == "cli"
+    assert merged["review"]["default_level"] == "c"
+    assert sources["review.default_level"] == "cli"
 
 
 # --- Deep-merge of maps -----------------------------------------------------
 
 
 def test_deep_merge_preserves_sibling_keys(tmp_path: Path) -> None:
-    """A repo override of ``estimation.eu_minutes`` keeps ``estimation.idle_policy``."""
+    """A repo override of ``estimation.eu_minutes`` keeps ``estimation.eu_basis``."""
     repo = tmp_path / "repo"
     _write_yaml(repo / ".ea" / "config.yaml", "estimation:\n  eu_minutes: 45\n")
     merged, sources = merge_config(workspace=None, repo=repo, env={}, cli_overrides={})
     assert merged["estimation"]["eu_minutes"] == 45
     assert sources["estimation.eu_minutes"] == "repo"
-    # idle_policy was NOT overridden — it stays from built-in.
-    assert merged["estimation"]["idle_policy"] == "D30_non_agent_gap"
-    assert sources["estimation.idle_policy"] == "built-in"
+    # eu_basis was NOT overridden — it stays from built-in.
+    assert merged["estimation"]["eu_basis"] == "api_duration"
+    assert sources["estimation.eu_basis"] == "built-in"
 
 
 def test_lists_replace_not_concat(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _write_yaml(
         repo / ".ea" / "config.yaml",
-        "audit:\n  default_checks: [tests]\n",
+        "acceptance:\n  required_before_ship: [tests]\n",
     )
     merged, _ = merge_config(workspace=None, repo=repo, env={}, cli_overrides={})
-    assert merged["audit"]["default_checks"] == ["tests"]
+    assert merged["acceptance"]["required_before_ship"] == ["tests"]
 
 
 # --- Env coercion -----------------------------------------------------------
@@ -316,21 +304,21 @@ def test_env_boolean_coercion() -> None:
     merged, _ = merge_config(
         workspace=None,
         repo=None,
-        env={"EAWF_ESTIMATION__ENABLED": "false"},
+        env={"EAWF_RESEARCH__AUTO_SAVE": "true"},
         cli_overrides={},
     )
-    assert merged["estimation"]["enabled"] is False
+    assert merged["research"]["auto_save"] is True
 
 
 def test_env_unknown_prefix_ignored() -> None:
     merged, sources = merge_config(
         workspace=None,
         repo=None,
-        env={"NOT_EAWF_PLANNING__APPROVAL": "ignored"},
+        env={"NOT_EAWF_REVIEW__DEFAULT_LEVEL": "ignored"},
         cli_overrides={},
     )
-    assert merged["planning"]["approval"] == "ask"
-    assert sources["planning.approval"] == "built-in"
+    assert merged["review"]["default_level"] == "medium"
+    assert sources["review.default_level"] == "built-in"
 
 
 def test_env_strips_prefix_only_no_value_segment() -> None:
@@ -342,7 +330,7 @@ def test_env_strips_prefix_only_no_value_segment() -> None:
         cli_overrides={},
     )
     # Built-ins still reachable.
-    assert sources["planning.approval"] == "built-in"
+    assert sources["review.default_level"] == "built-in"
 
 
 def test_env_blitz_recursion_knobs_are_reserved() -> None:
@@ -364,7 +352,7 @@ def test_env_blitz_recursion_knobs_are_reserved() -> None:
     assert "blitz_depth_counter" not in merged
     assert "blitz_depth_counter" not in sources
     # Built-ins remain reachable — the reserved knobs did not poison the merge.
-    assert sources["planning.approval"] == "built-in"
+    assert sources["review.default_level"] == "built-in"
 
 
 # --- Idempotence ------------------------------------------------------------
@@ -372,7 +360,7 @@ def test_env_blitz_recursion_knobs_are_reserved() -> None:
 
 def test_merge_is_idempotent_on_same_inputs(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "planning:\n  approval: x\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: x\n")
     a = merge_config(workspace=None, repo=repo, env={}, cli_overrides={})
     b = merge_config(workspace=None, repo=repo, env={}, cli_overrides={})
     assert a == b
@@ -384,8 +372,8 @@ def test_merge_does_not_mutate_built_in_defaults() -> None:
     merge_config(
         workspace=None,
         repo=None,
-        env={"EAWF_PLANNING__APPROVAL": "from_env"},
-        cli_overrides={"planning": {"approval": "from_cli"}},
+        env={"EAWF_REVIEW__DEFAULT_LEVEL": "from_env"},
+        cli_overrides={"review": {"default_level": "from_cli"}},
     )
     assert repr(BUILT_IN_DEFAULTS) == snapshot
 

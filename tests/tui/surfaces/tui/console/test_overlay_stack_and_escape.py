@@ -148,11 +148,6 @@ def test_con_129_an_overlay_opened_over_a_drawer_replaces_it(fixture: Fixture) -
     assert (session.overlay, session.sel) == (None, 1)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the golden contract records the consequence card crumbed without its subject and "
-    "the draft card under the route crumb; the cards' rework owns the crumb form",
-)
 @pytest.mark.parametrize("name", ["consequence", "draft"])
 def test_con_129_the_consequence_and_draft_cards_name_overlay_and_subject(
     name: str, fixture: Fixture

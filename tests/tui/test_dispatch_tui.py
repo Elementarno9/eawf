@@ -1,155 +1,144 @@
-"""Tests for the bare-``eawf`` / ``eawf ui`` dispatch after legacy removal.
+"""Tests for the bare-``eawf`` / ``eawf ui`` dispatch: the console is the only app.
 
-The prior Rich-based TUI (and its ``EAWF_TUI_LEGACY=1`` escape hatch)
-has been removed — ``tui`` is the only TUI surface. These tests pin
-the dispatch contract at the boundary
+These pin the dispatch contract at the boundary
 (:func:`eawf.surfaces.cli.app._dispatch_tui`):
 
-* an interactive TTY launches the Textual :class:`~eawf.surfaces.tui.app.EaApp`;
-* the non-TTY / ``--plain`` / ``--no-input`` path emits the deterministic
-  ``tui`` status frame (:func:`eawf.surfaces.tui.chassis.offline.emit_status`).
+* an interactive TTY constructs the console
+  (:class:`~eawf.surfaces.tui.console.app.ConsoleApp`);
+* the non-TTY / ``--plain`` / ``--no-input`` path writes the console's own frame in
+  plain mode and opens no app at all.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 from typer.testing import CliRunner
 
 import eawf.surfaces.cli.app as cli_app
+import eawf.surfaces.tui.launch as launch
+from eawf.kernel.migration.epoch2.canary import (
+    CANARY_DECLARATION_FILENAME,
+    GENERATIONS_DIRNAME,
+    MARKER_FILENAME,
+)
 from eawf.surfaces.cli.app import app
-from eawf.surfaces.render.brand import render_wordmark_ansi
-
-if TYPE_CHECKING:
-    pass
-
-#: The two-tone green brand wordmark the non-TTY status frame now heads with.
-#: Asserting the full wordmark (not the bare ``Eä`` literal) keeps the dispatch
-#: contract in lockstep with the W32 offline reskin -- the bare literal is no
-#: longer contiguous because the ANSI accent escape sits between the ``E`` and
-#: the ``ä``.
-_WORDMARK = render_wordmark_ansi()
+from eawf.surfaces.tui.console.plain import OFFLINE_SNAPSHOT
 
 
-def _stub_dispatch(
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    isatty: bool,
-    state_root: Path,
-) -> dict[str, int]:
-    """Stub the interactive launch + status emitter; return a call counter.
+def _activate_epoch2(repo: Path) -> None:
+    """Declare and activate ``repo``'s tree, so it resolves to epoch 2."""
+    ea = repo / ".ea"
+    (ea / GENERATIONS_DIRNAME).mkdir(parents=True)
+    (ea / CANARY_DECLARATION_FILENAME).write_text(
+        json.dumps({"disposable": True, "declared_by": "test", "purpose": "dispatch test"})
+    )
+    (ea / GENERATIONS_DIRNAME / MARKER_FILENAME).write_text(
+        json.dumps(
+            {
+                "schema_version": "1",
+                "epoch": 2,
+                "generation_id": "gen-" + "ab" * 8,
+                "manifest_digest": "cd" * 32,
+                "generation_digest": "cd" * 32,
+                "written_at": "2026-09-24T00:00:00Z",
+            }
+        )
+    )
 
-    ``_dispatch_tui(workspace=None)`` resolves the active state by
-    pwd-upward walk, which from the repo root lands on the project's own
-    ``.ea/state.json``. ``state_root`` points the resolver at an empty tmp
-    tree so the dispatch contract is exercised against no state at all.
+
+def _stub_dispatch(monkeypatch: pytest.MonkeyPatch, *, isatty: bool, repo: Path) -> list[object]:
+    """Point the launch at ``repo``'s epoch-2 tree and catch any console it would run.
+
+    Returns:
+        The apps the launch handed to the event loop, in order.
     """
-    calls = {"tui": 0, "status": 0}
-    monkeypatch.setenv("EA_STATE", str(state_root / ".ea" / "state.json"))
-
-    def fake_run_app(scope: str, state_path: object) -> int:
-        calls["tui"] += 1
-        return 0
-
-    def fake_emit_status(**_kwargs: object) -> int:
-        calls["status"] += 1
-        return 0
-
-    monkeypatch.setattr("eawf.surfaces.tui.app.run_app", fake_run_app)
-    monkeypatch.setattr("eawf.surfaces.tui.chassis.offline.emit_status", fake_emit_status)
+    _activate_epoch2(repo)
+    monkeypatch.setenv("EA_STATE", str(repo / ".ea" / "state.json"))
+    runs: list[object] = []
+    monkeypatch.setattr(launch, "_run_console", lambda app, seam: runs.append(app) or 0)
 
     class _Stdout:
         @staticmethod
         def isatty() -> bool:
             return isatty
 
+        @staticmethod
+        def write(text: str) -> int:
+            return len(text)
+
+        @staticmethod
+        def flush() -> None:
+            return None
+
     monkeypatch.setattr("sys.stdout", _Stdout())
-    return calls
+    return runs
 
 
-# --------------------------------------------------------------------------
-# Interactive TTY launches tui (no escape hatch remains).
-# --------------------------------------------------------------------------
+def test_interactive_launches_the_console(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from eawf.surfaces.tui.console.app import ConsoleApp
 
-
-def test_interactive_launches_tui(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    calls = _stub_dispatch(monkeypatch, isatty=True, state_root=tmp_path)
+    runs = _stub_dispatch(monkeypatch, isatty=True, repo=tmp_path)
     rc = cli_app._dispatch_tui(workspace=None, no_input=False, plain=False)
     assert rc == 0
-    assert calls["tui"] == 1
-    assert calls["status"] == 0
+    assert [type(run) for run in runs] == [ConsoleApp]
 
 
 def test_legacy_env_no_longer_routes_anywhere(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """``EAWF_TUI_LEGACY=1`` is dead — the TTY path still launches tui."""
+    """``EAWF_TUI_LEGACY=1`` is dead — the TTY path still opens the console."""
     monkeypatch.setenv("EAWF_TUI_LEGACY", "1")
-    calls = _stub_dispatch(monkeypatch, isatty=True, state_root=tmp_path)
-    rc = cli_app._dispatch_tui(workspace=None, no_input=False, plain=False)
-    assert rc == 0
-    assert calls["tui"] == 1
-    assert calls["status"] == 0
+    runs = _stub_dispatch(monkeypatch, isatty=True, repo=tmp_path)
+    assert cli_app._dispatch_tui(workspace=None, no_input=False, plain=False) == 0
+    assert len(runs) == 1
+
+
+@pytest.mark.parametrize(
+    ("isatty", "no_input", "plain"),
+    [(False, False, False), (True, False, True), (True, True, False)],
+    ids=["non-tty", "plain", "no-input"],
+)
+def test_headless_paths_open_no_app(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    isatty: bool,
+    no_input: bool,
+    plain: bool,
+) -> None:
+    runs = _stub_dispatch(monkeypatch, isatty=isatty, repo=tmp_path)
+    assert cli_app._dispatch_tui(workspace=None, no_input=no_input, plain=plain) == 0
+    assert runs == []
 
 
 # --------------------------------------------------------------------------
-# Non-TTY / plain / no-input fall back to the tui status emitter.
+# CLI-level non-TTY contract: bare eawf / eawf ui write the console's plain frame.
 # --------------------------------------------------------------------------
 
 
-def test_non_tty_falls_back_to_status_emitter(
+@pytest.mark.parametrize(
+    "argv",
+    [["--plain"], ["--plain", "ui"], ["--no-input"]],
+    ids=["bare-plain", "ui-plain", "bare-no-input"],
+)
+def test_cli_headless_writes_the_console_frame(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, argv: list[str]
+) -> None:
+    monkeypatch.delenv("EA_STATE", raising=False)
+    _activate_epoch2(tmp_path)
+    result = CliRunner().invoke(app, ["-w", str(tmp_path), *argv])
+    assert result.exit_code == 0
+    assert OFFLINE_SNAPSHOT in result.stdout
+    assert result.stdout.isascii()
+
+
+def test_cli_headless_on_a_folder_with_no_tree_exits_4(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    calls = _stub_dispatch(monkeypatch, isatty=False, state_root=tmp_path)
-    cli_app._dispatch_tui(workspace=None, no_input=False, plain=False)
-    assert calls["status"] == 1
-    assert calls["tui"] == 0
-
-
-def test_plain_flag_falls_back_to_status_emitter(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    calls = _stub_dispatch(monkeypatch, isatty=True, state_root=tmp_path)
-    cli_app._dispatch_tui(workspace=None, no_input=False, plain=True)
-    assert calls["status"] == 1
-    assert calls["tui"] == 0
-
-
-def test_no_input_flag_falls_back_to_status_emitter(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    calls = _stub_dispatch(monkeypatch, isatty=True, state_root=tmp_path)
-    cli_app._dispatch_tui(workspace=None, no_input=True, plain=False)
-    assert calls["status"] == 1
-    assert calls["tui"] == 0
-
-
-# --------------------------------------------------------------------------
-# CLI-level non-TTY contract (carried over from the removed legacy tests):
-# bare eawf / eawf ui emit the deterministic status frame, exit 0.
-# --------------------------------------------------------------------------
-
-
-def test_bare_cli_non_tty_emits_status(tmp_path: Path) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["--plain", "-w", str(tmp_path)])
-    assert result.exit_code == 0
-    assert _WORDMARK in result.stdout
-    assert "keymap:" in result.stdout
-
-
-def test_ui_subcommand_non_tty_emits_status(tmp_path: Path) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["-w", str(tmp_path), "--plain", "ui"])
-    assert result.exit_code == 0
-    assert _WORDMARK in result.stdout
-    assert "keymap:" in result.stdout
-
-
-def test_bare_cli_no_input_emits_status(tmp_path: Path) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["--no-input", "-w", str(tmp_path)])
-    assert result.exit_code == 0
-    assert _WORDMARK in result.stdout
+    monkeypatch.delenv("EA_STATE", raising=False)
+    result = CliRunner().invoke(app, ["--plain", "-w", str(tmp_path)])
+    assert result.exit_code == launch.TERMINAL_ENTRY_EXIT_CODE
+    assert "eawf init" in result.stderr

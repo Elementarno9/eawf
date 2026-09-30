@@ -80,7 +80,6 @@ from eawf.runtime.daemon.methods.spec_sync_lints import (
     find_coverage_gaps,
     measure_criteria,
     render_lint_findings,
-    require_affordance_parity_for_ui_scope,
     require_resolvable_eawf_verbs,
     require_transition_coverage_for_ui_transitions,
 )
@@ -917,8 +916,7 @@ async def sync(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     Raises:
         DaemonValidationError: When the spec body fails to parse, a lint
             finding rejects the criteria, the target wave is not PENDING,
-            the criterion / gate cross-references do not resolve, the wave
-            is UI-scope but its gates omit an ``affordance_parity`` gate, a
+            the criterion / gate cross-references do not resolve, a
             UI-scope ``transitions_to`` response omits a
             ``transition_coverage`` gate, or
             the post-mutation state fails schema / invariant validation
@@ -1052,8 +1050,7 @@ def _apply_sync_locked(
         DaemonValidationError: When the wave is not PENDING, a lint finding
             rejects the criteria, a gate argv or a ``measurable_signal`` names
             an eawf verb the command tree does not resolve, the
-            cross-references do not resolve, the
-            wave is UI-scope but its gates omit an ``affordance_parity`` gate,
+            cross-references do not resolve,
             a UI-scope ``transitions_to`` response omits a
             ``transition_coverage`` gate, or the post-mutation state fails
             validation (mapped to ``-32002``).
@@ -1095,14 +1092,6 @@ def _apply_sync_locked(
     # pair leaves the wave row untouched.
     validate_criterion_gate_refs(criteria, gates)
 
-    # A UI-scope wave must carry an affordance-parity gate (band-conditional
-    # on the file_scopes heuristic) so its footer-affordance criteria do not
-    # fall through every cheaper oracle tier to the jury.
-    require_affordance_parity_for_ui_scope(
-        wave_id=args.wave_id,
-        file_scopes=wave.file_scopes,
-        gates=gates,
-    )
     require_transition_coverage_for_ui_transitions(
         wave_id=args.wave_id,
         file_scopes=wave.file_scopes,

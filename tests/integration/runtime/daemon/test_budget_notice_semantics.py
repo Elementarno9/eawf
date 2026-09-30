@@ -64,7 +64,6 @@ from eawf.runtime.daemon.stale_wave import (
     import_legacy_pauses,
     sweep_once,
 )
-from eawf.surfaces.tui.widgets.eu_bar import render_eu_bar_plain
 from eawf.workflow.estimation.thresholds import wave_budget_minutes
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.needs_user import (
@@ -323,15 +322,7 @@ def test_prx_032_the_former_progress_fraction_is_silent_on_every_channel(
     assert state_path.read_bytes() == before  # no lifecycle effect
 
 
-# ---- PRX-033: the gauge still reads it, and no sub-unity band can load ------
-
-
-def test_prx_033_the_gauge_still_renders_the_observed_fraction(tmp_path: Path) -> None:
-    state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
-    estimate_minutes = _estimate_seconds(state_path) / 60
-
-    assert _sweep(state_path, now=_at_fraction(state_path, 0.8))[0] == []
-    assert render_eu_bar_plain(estimate_minutes * 0.8, estimate_minutes).endswith(" 80%")
+# ---- PRX-033: no sub-unity band can load ------------------------------------
 
 
 @pytest.mark.parametrize(

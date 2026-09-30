@@ -61,11 +61,11 @@ def test_config_yaml_drops_legacy_lifecycle_and_plugins() -> None:
     assert "plugins" not in body
 
 
-def test_config_yaml_seeds_project_goals_after_template_merge() -> None:
-    """Empty template goals cannot wipe the bootstrap project intent."""
-    answers = _answers().model_copy(update={"template_extras": {"project": {"goals": []}}})
-    body = _build_config_yaml(answers)
-    assert body["project"]["goals"] == ["Establish Demo project intent"]
+def test_config_yaml_writes_no_retired_section() -> None:
+    """The bootstrap config states no project or MCP section: nothing reads either."""
+    body = _build_config_yaml(_answers())
+    assert "project" not in body
+    assert "mcp" not in body
 
 
 def test_config_yaml_seeds_no_effort_calibration_table() -> None:

@@ -21,11 +21,6 @@ from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, di
 from eawf.runtime.daemon.methods.state import codex_lifecycle, runtime_capture
 from eawf.runtime.daemon.session import resolve_session_log
 from eawf.runtime.session.vendor_id import hash_vendor_session_id
-from eawf.surfaces.tui.screens.overlays.detail_cost import (
-    NO_METERED_SESSIONS,
-    cost_tab_rows,
-    wave_cost_rollup_for_wave,
-)
 from eawf.workflow.lifecycle.wave import compute_runtime_delta
 
 pytestmark = pytest.mark.unit
@@ -612,7 +607,7 @@ def test_codex_lifecycle_stop_without_start_does_not_invent_attempt(
 # The headless spawn stamps ``SessionAttempt.cost_usd`` directly; the
 # interactive-claude lifecycle (claude CLI claim/close + the Stop hook) mints
 # its attempt HERE, off the Stop-hook ``runtime.capture``. All three wave
-# flavours must surface a per-attempt cost row through the same cost-tab rollup.
+# flavours must carry a priced per-attempt cost.
 # --------------------------------------------------------------------------- #
 
 
@@ -653,13 +648,10 @@ def test_per_attempt_cost_parity_headless_codex_claude_and_interactive(
     tmp_path: Path,
 ) -> None:
     """Parity: codex-headless, claude-headless, and interactive-claude waves each
-    surface a per-attempt cost row.
+    carry a priced per-attempt cost.
 
     The headless half stamps ``SessionAttempt.cost_usd`` in the spawn path; the
     interactive-claude half mints it here off the Stop-hook ``runtime.capture``.
-    All three flow through the SAME cost-tab rollup entry point
-    (``wave_cost_rollup_for_wave`` -> ``cost_tab_rows``), so each renders a
-    per-attempt row carrying its priced cost rather than the honest-absence line.
     """
     iter_id = "P30-I05"
     interactive_id = "P30-I05-W04"
@@ -689,22 +681,15 @@ def test_per_attempt_cost_parity_headless_codex_claude_and_interactive(
         assert interactive.sessions[1].cost_usd == pytest.approx(interactive_cost)
         assert interactive.sessions[1].runtime == "claude-code"
 
-        # Every flavour surfaces >=1 per-attempt cost row through the shared
-        # rollup + cost-tab entry points -- identical shape, honest figure.
+        # Every flavour carries its priced cost on its first attempt row.
         expected = {
             codex_id: codex_cost,
             claude_id: claude_cost,
             interactive_id: interactive_cost,
         }
         for wave_id, cost in expected.items():
-            rollup = wave_cost_rollup_for_wave(state, wave_id, state_path)
-            assert rollup is not None
-            assert len(rollup.attempts) >= 1
-            assert float(rollup.attempts[0].cost_usd) == pytest.approx(cost)
-            rows = cost_tab_rows(rollup)
-            labels = [label for label, _ in rows]
-            assert "attempts" in labels
-            assert all(str(value) != NO_METERED_SESSIONS for _label, value in rows)
+            attempts = state.waves[wave_id].sessions
+            assert attempts[min(attempts)].cost_usd == pytest.approx(cost)
 
     _run(body)
 

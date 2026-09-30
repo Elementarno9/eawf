@@ -1,13 +1,11 @@
-"""``eawf repo`` — repo-scoped init + workspace linkage + registry mutators.
+"""``eawf repo`` — repo-scoped init + registry mutators.
 
 This module is the facade for the ``repo`` command group.
 It owns the :data:`repo_app` Typer group, the shared registry-persist
 core (``_persist_registry`` + its diff / read / daemon-proxy helpers),
 the recognised-parent allowlist, and the thin ``repo init`` alias. The
-concrete verb bodies live in two sibling modules:
+concrete verb bodies live in a sibling module:
 
-- :mod:`eawf.surfaces.cli.commands.repo_link` — ``repo link`` cross-link of a
-  repo state and a workspace state.
 - :mod:`eawf.surfaces.cli.commands.repo_registry` — ``repo add`` / ``repo
   remove`` / ``repo prune`` user-scope registry mutators.
 
@@ -38,10 +36,6 @@ Subcommands:
   identical so existing callers can opt into the noun-based UX without
   behaviour change. ``--refresh-gitignore`` remains the same non-destructive
   managed-block-only path on both aliases.
-- ``repo link <workspace-code> <repo-code>`` — append the current (or
-  ``--target``) repo to a workspace state document, optionally recording
-  the workspace code on the repo's ``state.indexes.workspace_code`` so a
-  future ``workspace validate`` can cross-check.
 - ``repo add <path>`` — explicitly add a repo to the
   user-scope registry (``~/.eawf/registry.json``). Idempotent on the
   ``(code, path)`` pair; TOFU prompt when the operator passes a path
@@ -63,13 +57,6 @@ writes. There is no scan, no walk, no import-from-discovery. Each
 mutator below validates the path argument was supplied explicitly by
 the operator (Typer enforces this — no defaults expand from cwd) and
 the body never enumerates parent dirs to bulk-register.
-
-Workspace pointer attachment (legacy from ``repo link``): rather than
-introduce a new ``workspace_code`` field on the :class:`Project` model
-(which would alter the schema for every repo-scoped state, including
-ones that are not part of any workspace), the link is recorded under
-``state.indexes['workspace_code']`` — the model already declares
-``indexes: dict[str, Any]`` for exactly this kind of "soft" linkage.
 """
 
 from __future__ import annotations
@@ -506,7 +493,6 @@ def _persist_registry_or_exit(updated: Registry, target: Path, *, flags: GlobalF
 # at the bottom, after every shared symbol is defined, so the siblings
 # can import the app and helpers from this module without a circular-
 # import failure.
-from eawf.surfaces.cli.commands import repo_link as _repo_link  # noqa: E402, F401
 from eawf.surfaces.cli.commands import repo_registry as _repo_registry  # noqa: E402, F401
 
 __all__ = [

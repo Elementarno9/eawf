@@ -35,9 +35,10 @@ from __future__ import annotations
 import logging
 import shutil
 import tempfile
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Final, Literal
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -204,20 +205,22 @@ def require_fresh_root(repo_root: Path) -> None:
         )
 
 
-def _write_born_generation(
-    target: DisposableTarget, *, ref: CanaryRepositoryRef
-) -> tuple[str, str]:
-    """Write the canary's empty generation.
+def write_born_generation(target: DisposableTarget, *, birth: Mapping[str, Any]) -> tuple[str, str]:
+    """Write an empty generation into a tree born at epoch 2.
 
     The generation is named by a digest over what it was born from, the
     same way a migrated generation is named by its manifest digest, so
-    two canaries under one code are born into the same identifier.
+    two trees born from the same facts are born into the same identifier.
+
+    Args:
+        target: The fence-cleared tree.
+        birth: What the tree was born from; it reaches only the digest.
 
     Returns:
         ``(generation_id, birth_digest)``.
     """
     document = {DOCUMENT_SCHEMA_KEY: MANIFEST_SCHEMA_VERSION}
-    birth_digest = rule_digest({"canary": ref.model_dump(mode="json"), "document": document})
+    birth_digest = rule_digest({**birth, "document": document})
     generation_id = generation_id_for(birth_digest)
     state_path = target.generation_path(generation_id) / GENERATION_DOCUMENT
     state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -225,14 +228,20 @@ def _write_born_generation(
     return generation_id, birth_digest
 
 
-def _activate(
+def activate_born_generation(
     target: DisposableTarget, *, generation_id: str, birth_digest: str, activated_at: datetime
 ) -> None:
     """Select the born generation, then write the marker, in that order.
 
     Nothing was planned, so the birth digest stands in both the manifest
-    and the approval slot: the provisioning invocation approved exactly
-    this generation and nothing else.
+    and the approval slot: the invocation that bore the tree approved
+    exactly this generation and nothing else.
+
+    Args:
+        target: The fence-cleared tree.
+        generation_id: The generation :func:`write_born_generation` wrote.
+        birth_digest: Its birth digest.
+        activated_at: When the tree is activated.
     """
     state_path = target.generation_path(generation_id) / GENERATION_DOCUMENT
     placement = TierPlacement.of(
@@ -295,8 +304,10 @@ def provision_canary(
     )
     atomic_write_json(declaration_path(tree_root), declaration)
     target = DisposableTarget.require(tree_root)
-    generation_id, birth_digest = _write_born_generation(target, ref=ref)
-    _activate(
+    generation_id, birth_digest = write_born_generation(
+        target, birth={"canary": ref.model_dump(mode="json")}
+    )
+    activate_born_generation(
         target,
         generation_id=generation_id,
         birth_digest=birth_digest,
@@ -338,16 +349,21 @@ def read_provision(repo_root: Path) -> CanaryProvision:
         The record.
 
     Raises:
-        CanaryProvisionError: The tree is not a declared canary, carries
-            no readable record, or carries a record naming another root.
+        CanaryProvisionError: The tree is not a declared canary (an
+            opted-in live tree is not one), carries no readable record, or
+            carries a record naming another root.
             Each is a tree teardown must not remove.
     """
     root = repo_root.resolve()
     tree_root = root / EA_DIRNAME
     try:
-        DisposableTarget.require(tree_root)
+        target = DisposableTarget.require(tree_root)
     except MigrationTargetNotDisposableError as error:
         raise CanaryProvisionError(f"{root.name} is not a disposable canary: {error}") from error
+    if not isinstance(target.declaration, CanaryDeclaration):
+        raise CanaryProvisionError(
+            f"{root.name} is not a disposable canary: it opted into epoch 2 as a live repository"
+        )
     record_path = tree_root / PROVISION_RECORD_LOCATOR
     try:
         provision = CanaryProvision.model_validate_json(record_path.read_bytes())
@@ -501,6 +517,7 @@ __all__ = [
     "CanaryProvision",
     "CanaryProvisionError",
     "CanaryTeardown",
+    "activate_born_generation",
     "canary_ref",
     "discard_canary",
     "provision_canary",
@@ -510,4 +527,5 @@ __all__ = [
     "require_fresh_root",
     "require_no_live_daemon",
     "unregister_canary",
+    "write_born_generation",
 ]

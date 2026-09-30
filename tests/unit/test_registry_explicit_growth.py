@@ -1,8 +1,7 @@
 """Tests for the explicit-growth guard + staleness boundaries.
 
 The user-scope registry at ``~/.eawf/registry.json`` grows ONLY via
-explicit operator commands (``eawf init`` / ``eawf repo add`` /
-``eawf workspace add-repo``). Per the project memory note
+explicit operator commands (``eawf init`` / ``eawf repo add``). Per the project memory note
 ``feedback_explicit_registry_only`` any other growth path (scan,
 walk, import-from-discovery, auto-discovery) is refused with a
 directive error pointing at the supported bootstrap surfaces.
@@ -209,11 +208,11 @@ def test_stale_after_is_14_days() -> None:
 
 
 def test_explicit_growth_surfaces_include_init_and_add_repo() -> None:
-    """The supported bootstrap path covers init + add-repo + workspace add-repo."""
+    """AUTH-049: the bootstrap path is init + repo add; workspace add-repo retired."""
     joined = " ".join(EXPLICIT_GROWTH_SURFACES)
     assert "eawf init" in joined
     assert "eawf repo add" in joined
-    assert "eawf workspace add-repo" in joined
+    assert "eawf workspace add-repo" not in joined
 
 
 def test_forbidden_growth_paths_include_scan_walk_import() -> None:

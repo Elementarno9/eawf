@@ -1,18 +1,8 @@
-acceptance:
-  commands:
-    build: null
-    lint: null
-    tests: just test
-    typecheck: null
-  required_before_ship:
-  - state
 flow:
   advance_after:
     audit: true
     polish: false
     research: true
-mcp:
-  enabled: []
 planning:
   max_parallel_waves: 10
 profiles:
@@ -26,8 +16,6 @@ research:
   agent_count: 10
   default_depth: deep
 runtime:
-  adapters:
-  - claude-code
   preference:
   - claude-code
 schema_version: '1.0'
@@ -35,4 +23,3 @@ verify:
   juror_wall_clock_seconds: 1800.0
   odr_blocking: true
   require_iter_audit_accepted: true
-  waiver_mode: B

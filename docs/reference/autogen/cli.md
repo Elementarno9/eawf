@@ -14,7 +14,7 @@ Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and sub
 | `render-output` | Convert between JSON and markdown forms of the output envelope (reads JSON or markdown from stdin). At a TTY with no piped data the command exits 2 with a hint instead of hanging. |
 | `status` | Show active pointers, blockers, and git head. |
 | `sync` | Re-render managed assets and report drift. |
-| `ui` | Open the Eä Textual TUI (or deterministic status fallback off-TTY). |
+| `ui` | Open the Eä console (or its plain frame off-TTY). |
 | `validate` | Validate a state or envelope document. |
 | `verbs` | List every verb with its entity, parameters, typed errors and effect class. |
 | `version` | Show the eawf version (text or JSON envelope). |
@@ -574,8 +574,6 @@ Repo-scoped init + workspace linkage.
 |---|---|
 | `add` | Explicitly add/register a repo to the user-scope registry. |
 | `init` | Initialise a repo-scoped workspace at *target*. |
-| `link` | Cross-link a repo state and a workspace state. |
-| `link-workspace` | Cross-link a repo state and a workspace state. |
 | `prune` | Drop registry entries whose on-disk paths no longer exist. |
 | `register` | Explicitly add/register a repo to the user-scope registry. |
 | `remove` | Drop the entry whose ``code == <code>`` from the registry. |
@@ -810,16 +808,11 @@ Workspace-scoped state and repo linkage.
 | Verb | Summary |
 |---|---|
 | `add` | Register a workspace record with an explicit membership. |
-| `add-repo` | Append a :class:`WorkspaceRepoRef` to the workspace index. |
-| `init` | Create a workspace state document at the resolved state path. |
 | `list` | List every registered workspace, ordered by key. Read-only. |
 | `registry-list` | Enumerate repos in ``~/.eawf/registry.json``. |
 | `registry-status` | Render the workspace dashboard as text (top strip + W02 quadrant). |
-| `remove-repo` | Drop a :class:`WorkspaceRepoRef` from the workspace index. |
 | `select` | Select a workspace for the current session only. |
 | `show` | Show one workspace record, resolving it when no key is given. |
-| `status` | Print the workspace metadata + linked-repos summary. |
-| `validate` | Check that every linked repo path exists and contains ``.ea/state.json``. |
 
 ### `eawf worktree`
 

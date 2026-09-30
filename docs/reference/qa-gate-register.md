@@ -49,14 +49,13 @@ The lifecycle-discipline domain: the legacy-to-typed gate conversion, the wired-
 
 ## TUI
 
-The operator-surface domain: the reskin render, per-key affordance parity, multi-step operator journeys, the crash-frame error boundary, and the SVG / mockup goldens.
+The operator-surface domain: the console's keys and journeys, the lifecycle FSM coverage, and the SVG / mockup goldens.
 
 | Scenario | Gate kind | Notes |
 |---|---|---|
-| Every advertised footer-hint key resolves to a live `Binding` in its mode | `affordance_parity` | The kind mounts the mode and drives each footer key through the real key->Binding path; an advertised dead key fails. |
-| An operator journey reaches its terminal observable screen state | `tui_flow` | The kind drives a key sequence via the behaviour probe and asserts the terminal observable state; a divergent journey fails naming the field. |
-| Every reskinned surface byte-matches its approved pick-time mockup golden | `mockup_golden_diff` | The Pilot harness captures the settled screen as normalised ASCII and byte-compares the mockup golden; a drifted surface fails with a region diff. |
+| Every advertised footer-hint key resolves to a live `Binding` in its mode | `affordance_parity` | Retired with the epoch-1 TUI it mounted: every run reports `blocked`. The console's keys are proven by its replay harness under `tests/snapshots/tui/console/`. |
+| An operator journey reaches its terminal observable screen state | `tui_flow` | Retired with the epoch-1 TUI it mounted: every run reports `blocked`. The console's recorded journeys replay under `tests/snapshots/tui/console/`. |
+| A rendered surface keeps the layout shape of its approved mockup | `mockup_golden_diff` | The image mode compares a mockup PNG with a committed TUI PNG, weighting layout shape above token fidelity; the ASCII-text and live-capture modes mounted the epoch-1 TUI and report `blocked`. |
 | The lifecycle status FSM has every table edge covered by the stateful exploration | `transition_coverage` | The kind compares the full FSM edge set against the explored set; an uncovered edge fails naming it. |
 | The committed seal SVG asset is well-formed | `svg_well_formed` | The kind shells `xmllint --noout` over the asset; a malformed SVG fails with the `line:col` diagnostic. |
 | The seal SVG renders byte-identical to its committed golden PNG | `svg_pixel_diff` | The kind renders via the pinned `resvg` CLI with vendored fonts and byte-compares the golden; a drifted render fails. |
-| A pane render exception is contained by the crash-frame error boundary, neighbours survive | `tui_flow` | A Pilot test injects a render exception into one pane and drives the `r` / `l` / `Esc` boundary keys; the App does not panic and the frame mounts. |

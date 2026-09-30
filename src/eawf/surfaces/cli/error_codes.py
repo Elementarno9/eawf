@@ -41,6 +41,7 @@ class ErrorCode(StrEnum):
     MIGRATION_STEP_FAILED = "MIGRATION_STEP_FAILED"
     MIGRATION_POSTCONDITION_FAILED = "MIGRATION_POSTCONDITION_FAILED"
     MIGRATION_TARGET_UNKNOWN = "MIGRATION_TARGET_UNKNOWN"
+    MIGRATION_REQUIRED = "MIGRATION_REQUIRED"
 
     # --- Daemon / IPC ----------------------------------------------------
     DAEMON_PROTOCOL_MAJOR_SKEW = "DAEMON_PROTOCOL_MAJOR_SKEW"
@@ -136,6 +137,8 @@ _EXIT_CODE_FOR: dict[ErrorCode, int] = {
     ErrorCode.DAEMON_PROTOCOL_MINOR_SKEW: exit_codes.DAEMON_UNREACHABLE,
     ErrorCode.DAEMON_SPAWN_FAILED: exit_codes.DAEMON_UNREACHABLE,
     ErrorCode.DAEMON_SOCKET_UNREACHABLE: exit_codes.DAEMON_UNREACHABLE,
+    # A tree in the migration-required state is an attach failure.
+    ErrorCode.MIGRATION_REQUIRED: exit_codes.ATTACH_FAILURE,
     # INTERNAL_ERROR (5) — backup write / migration step / runtime / external.
     ErrorCode.BACKUP_WRITE_FAILED: exit_codes.INTERNAL_ERROR,
     ErrorCode.MIGRATION_STEP_FAILED: exit_codes.INTERNAL_ERROR,

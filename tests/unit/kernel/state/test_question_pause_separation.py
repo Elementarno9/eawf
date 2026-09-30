@@ -3,9 +3,8 @@
 Covers three separate defects:
 
 * :class:`~eawf.kernel.state.enums.OpenQuestionStatus` gains ``AUTO_RESOLVED``
-  and ``SEALED`` members distinct from ``ANSWERED``, so a real answered-count
-  projection (:func:`~eawf.surfaces.tui.modes.research_board.compute_round_progress`)
-  never folds a defaulted question into the answered tally.
+  and ``SEALED`` members distinct from ``ANSWERED``, and a round reconcile that
+  pairs a claim by elimination lands ``AUTO_RESOLVED``, never ``ANSWERED``.
 * :class:`~eawf.kernel.state.models.OpenQuestion` carries an acyclic
   ``superseded_by_question_ref`` alongside a paired ``drop_reason``; a State
   holding a supersession cycle across two questions fails validation.
@@ -36,7 +35,6 @@ from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.needs_user import PauseFabricationError, raise_needs_user
 from eawf.runtime.daemon.methods.research import reconcile_round_claims
-from eawf.surfaces.tui.modes.research_board import compute_round_progress
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 
 pytestmark = pytest.mark.unit
@@ -97,25 +95,7 @@ def _state_with_questions(*questions: OpenQuestion) -> dict[str, Any]:
     return _state_document(open_questions={q.id: q.model_dump(mode="json") for q in questions})
 
 
-# --- OpenQuestionStatus / answered-count separation (CR-01) -----------------
-
-
-def test_answered_count_excludes_an_auto_resolved_question() -> None:
-    defaulted = _question("QST-1", status=OpenQuestionStatus.AUTO_RESOLVED)
-    progress = compute_round_progress(campaigns=(), claims=(), questions=(defaulted,))
-    assert progress.answered_count == 0
-
-
-def test_answered_count_excludes_a_sealed_question() -> None:
-    sealed = _question("QST-1", status=OpenQuestionStatus.SEALED)
-    progress = compute_round_progress(campaigns=(), claims=(), questions=(sealed,))
-    assert progress.answered_count == 0
-
-
-def test_answered_count_still_counts_a_genuinely_answered_question() -> None:
-    answered = _question("QST-1", status=OpenQuestionStatus.ANSWERED, resolved_at=_NOW)
-    progress = compute_round_progress(campaigns=(), claims=(), questions=(answered,))
-    assert progress.answered_count == 1
+# --- Round reconcile marks a policy pairing auto-resolved (CR-01) ----------
 
 
 def _round_findings(*lines: str) -> RoundFindings:
@@ -147,11 +127,6 @@ def test_round_reconcile_auto_resolves_the_sole_candidate_not_answers_it() -> No
     resolved = state.open_questions["QST-1"]
     assert resolved.status is OpenQuestionStatus.AUTO_RESOLVED
     assert resolved.answered_by_claim_id == written[0]
-
-    # The real answered-count projection excludes the auto-resolved pairing.
-    progress = compute_round_progress(campaigns=(), claims=(), questions=(resolved,))
-    assert progress.answered_count == 0
-    assert progress.auto_resolved_count == 1
 
 
 # --- OpenQuestion drop_reason / supersession invariants ---------------------

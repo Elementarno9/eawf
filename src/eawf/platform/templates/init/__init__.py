@@ -6,12 +6,8 @@ operator Q24): ``research.yaml``, ``engineering.yaml``,
 seed that ``eawf init --template <name>`` merges with operator answers
 (project_code, project_title) to bootstrap a workspace.
 
-Per C08 D10 the templates encode per-profile defaults for
-``dispatch.session_policy_default``:
-
-- ``research.yaml`` → ``continue`` (evidence-driven session reuse)
-- ``engineering.yaml`` → ``fresh`` (PR-driven clean slate)
-- ``reverse-engineering.yaml`` → ``continue`` (decompilation context)
+The templates differ in the profiles they enable, the wave parallelism
+they allow and, for engineering, the acceptance commands ship runs.
 
 ``spike.yaml`` and ``hybrid.yaml`` are deferred to v0.4+ (Q24 — YAGNI
 trim; demand-signal unclear). Discovery + load lives in

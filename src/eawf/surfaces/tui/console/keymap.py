@@ -167,7 +167,7 @@ NATIVE_UNSERVED: Mapping[str, frozenset[str]] = MappingProxyType(
         "sandbox.log": frozenset({"\\", "Enter"}),
         "crash.recovery": frozenset({"Enter"}),
         "task.detail": frozenset({"Tab"}),
-        "unattended": frozenset({"a", "d"}),
+        "unattended": frozenset({"a", "."}),
     }
 )
 #: The routes whose Tab walks the groups or sections of the one record the frame is about,

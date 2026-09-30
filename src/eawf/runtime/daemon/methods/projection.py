@@ -362,9 +362,10 @@ def _project(*, route: str, authority: RootAuthority) -> RouteProjection:
 def _read_settings(*, authority: RootAuthority) -> EffectiveSettingsView:
     """Build the effective-settings read model for a fence-cleared tree.
 
-    The tree's root is both the workspace and the repo anchor, which is the call shape
-    every other layered-config consumer uses. Nothing is written: the layers are read,
-    merged in memory and handed back.
+    The authority's root is the tree's ``.ea`` directory, so the repository holding it is
+    both the workspace and the repo anchor, which is the call shape every other
+    layered-config consumer uses and the root the config verbs write under. Nothing is
+    written: the layers are read, merged in memory and handed back.
 
     Raises:
         DaemonValidationError: The document states its high-water mark as something
@@ -375,8 +376,8 @@ def _read_settings(*, authority: RootAuthority) -> EffectiveSettingsView:
     root = authority.root
     cursor = _document_cursor(read_document(document_path(authority)))
     return build_settings_view(
-        workspace=root,
-        repo=root,
+        workspace=root.parent,
+        repo=root.parent,
         scope_id=RootIdentity.of(root).root_id,
         cursor=cursor,
         generated_at=datetime.now(UTC),

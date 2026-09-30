@@ -347,32 +347,6 @@ def test_a_negative_cursor_is_refused() -> None:
         _projection("campaign", cursor=-1)
 
 
-# ---------- the epoch-1 surfaces this wave did not touch ----------
-
-
-def test_the_research_board_mode_resolves_every_key_its_footer_advertises() -> None:
-    """The epoch-1 mode keeps working: each advertised token is a key something binds."""
-    from eawf.surfaces.tui.app import EaApp
-    from eawf.surfaces.tui.modes.research_board import ResearchBoardModeScreen
-
-    bound: set[str] = set()
-    for klass in (*ResearchBoardModeScreen.__mro__, EaApp):
-        for binding in klass.__dict__.get("BINDINGS", ()):
-            key = binding.key if hasattr(binding, "key") else binding[0]
-            bound.update(key.split(","))
-    spelled = {"↑": "up", "↓": "down", "Enter": "enter", "/": "slash", "?": "question_mark"}
-
-    advertised = [hint.split(" ", 1)[0] for hint in ResearchBoardModeScreen.FOOTER_HINTS]
-    tokens = [part for token in advertised for part in token.split("/")]
-
-    assert tokens
-    for token in tokens:
-        # an arrow run advertises two keys in one token; every other token is one key
-        glyphs = list(token) if all(glyph in spelled for glyph in token) else [token]
-        for glyph in glyphs:
-            assert spelled.get(glyph, glyph.lower()) in bound, f"{token} resolves to nothing"
-
-
 # ---------- CON-123: the settings stack renders the whole field tuple in two tiers ----------
 
 
@@ -388,8 +362,8 @@ def tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _stack(tree: Path, **leaf: Any) -> list[str]:
-    """Return the stack card of ``prose.level`` with ``leaf``'s tuple fields stated."""
-    provenance._write(tree / ".ea" / "config.yaml", "prose:\n  level: strict\n")
+    """Return the stack card of ``audit.default_level`` with ``leaf``'s tuple fields stated."""
+    provenance._write(tree / ".ea" / "config.yaml", "audit:\n  default_level: deep\n")
     view = provenance._view(tree)
     changed = view.leaf(provenance.CATALOG_KEY).model_copy(update=leaf)
     view = view.model_copy(
@@ -424,7 +398,7 @@ def test_con_123_an_authority_denied_key_keeps_the_denied_token_in_its_value(tre
     frame = _stack(tree, deny_chain=("org.policy",))
     assert any(row.startswith("│ DENIED BY  org.policy") for row in frame)
     repo = next(row for row in frame if re.match(r"^│\s+.?\s*repo\s", row))
-    assert "⊘ strict" in repo
+    assert "⊘ deep" in repo
 
 
 def test_con_123_a_capability_degraded_key_names_its_requirement_and_state(tree: Path) -> None:

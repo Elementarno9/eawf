@@ -90,7 +90,7 @@ class ConfigAxis(BaseModel):
     """The configuration leaf a decision is about, and the value each option stands for.
 
     Attributes:
-        key: The dotted leaf, such as ``vcs.auto_commit``.
+        key: The dotted leaf, such as ``vcs.pr_merge_method``.
         values: The configured value each option stands for, by option id.
             An option left out stands for no configured value.
     """

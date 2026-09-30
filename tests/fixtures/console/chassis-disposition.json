@@ -1,0 +1,522 @@
+{
+  "epoch1_app_retired_by": "EAWF-0121",
+  "surfaces": [
+    {
+      "surface": "modes/registry.py",
+      "verdict": "chassis",
+      "function": "The one place the set of destinations is declared.",
+      "served_by": [
+        "eawf.surfaces.tui.console.registry:RouteRegistry",
+        "eawf.surfaces.tui.console.registry:REGISTRY"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_route_registry_closure.py::test_ui_058_route_groups_are_the_eight_the_packet_names"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/modes/registry.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "modes/nav.py",
+      "verdict": "chassis",
+      "function": "The route-graph guard: every move lands on a legal place and Escape climbs a real parent.",
+      "served_by": [
+        "eawf.surfaces.tui.console.navigation:go",
+        "eawf.surfaces.tui.console.registry:unreachable_routes"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_route_registry_closure.py::test_ui_058_escape_on_an_empty_back_stack_climbs_the_registry_parent"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/modes/nav.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "overlays/confirm.py",
+      "verdict": "chassis",
+      "function": "The consequence modal: target, revision, effects and non-effects, read before a verb is confirmed.",
+      "served_by": [
+        "eawf.surfaces.tui.console.overlays.consequence:render",
+        "eawf.surfaces.tui.console.mutation:confirm"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_consequence_preview.py::test_con_051_every_lifecycle_verb_previews_before_anything_is_sent"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/screens/overlays/confirm.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "overlays/arm.py",
+      "verdict": "chassis",
+      "function": "Two-step arming of a dangerous action, folded into the consequence card's preview then confirm.",
+      "served_by": [
+        "eawf.surfaces.tui.console.mutation:Card",
+        "eawf.surfaces.tui.console.overlays.mutation_card:preview_frame"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_consequence_live.py::test_con_051_a_live_claim_previews_then_shows_the_committed_outcome"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/screens/overlays/arm.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "overlays/detail.py",
+      "verdict": "chassis",
+      "function": "The reusable detail chassis: an overlay's crumb and held frame, and the inspect and raw drawers.",
+      "served_by": [
+        "eawf.surfaces.tui.console.overlays.chassis:unheld_frame",
+        "eawf.surfaces.tui.console.drawers:inspect_rows",
+        "eawf.surfaces.tui.console.drawers:raw_rows"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_drawers.py::test_con_100_inspect_states_producer_revision_cursor_freshness_and_raw_code"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/screens/overlays/detail.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "overlays/reference.py",
+      "verdict": "chassis",
+      "function": "Reference routing with a back stack, and a card for a target that no longer resolves.",
+      "served_by": [
+        "eawf.surfaces.tui.console.session:BackStack",
+        "eawf.surfaces.tui.console.overlays.resolution:render"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_guarded_quit.py::test_con040_a_back_stack_turns_escape_into_back",
+        "tests/tui/surfaces/tui/console/test_overlay_chassis.py::test_con_091_the_overlay_set_is_closed_at_the_eleven_it_names"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/screens/overlays/reference.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "overlays/config_modal_logic.py",
+      "verdict": "chassis",
+      "function": "Pure setting value logic: the current-value ladder, the writable layers and the save path.",
+      "served_by": [
+        "eawf.surfaces.tui.console.renderers.settings:resolve",
+        "eawf.surfaces.tui.console.renderers.settings:write_value",
+        "eawf.surfaces.tui.console.operations:SettingRequest"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_settings_route.py::test_ui052_editable_at_is_the_catalog_allowlist_in_precedence"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/screens/overlays/config_modal_logic.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "overlays/edit_field.py",
+      "verdict": "chassis",
+      "function": "The single-field editor Settings opens for one key.",
+      "served_by": [
+        "eawf.surfaces.tui.console.renderers.settings:editor_kind",
+        "eawf.surfaces.tui.console.renderers.settings:choices"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_layout_breakpoints.py::test_every_chooser_row_keeps_the_caret_slot"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/screens/overlays/edit_field.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "overlays/multichoice_checklist.py",
+      "verdict": "chassis",
+      "function": "Multi-select for bulk operations: one consequence card and a result per item.",
+      "served_by": [
+        "eawf.surfaces.tui.console.mutation:select",
+        "eawf.surfaces.tui.console.bulk:BulkRequest"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_bulk_per_item_results.py::test_con_148_space_marks_two_runs_in_text_and_the_menu_counts_them"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/screens/overlays/multichoice_checklist.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "overlays/init_wizard_render.py",
+      "verdict": "chassis",
+      "function": "The register-this-root flow a launch with no session lands in, never auto-applied.",
+      "served_by": [
+        "eawf.surfaces.tui.console.attach:onboarding_state",
+        "eawf.surfaces.tui.console.renderers.entry:render_state"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_entry_states.py::test_con_124_the_first_run_lists_its_four_steps_under_step_state_why"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/screens/overlays/init_wizard_render.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "widgets/empty_state.py",
+      "verdict": "chassis",
+      "function": "The honest-empty render: an empty or absent read says so instead of drawing a blank.",
+      "served_by": [
+        "eawf.surfaces.tui.console.derive:absent",
+        "eawf.surfaces.tui.console.overlays.cards:absent_card"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_native_windowing.py::test_an_empty_table_states_a_zero_window"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/widgets/empty_state.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "widgets/header.py",
+      "verdict": "chassis",
+      "function": "The header row: breadcrumb, connection state and completeness.",
+      "served_by": [
+        "eawf.surfaces.tui.console.header:header_row"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_header_invariants.py::test_header_row_state_slot_is_identical_at_every_size"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/widgets/header.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "widgets/footer.py",
+      "verdict": "chassis",
+      "function": "The keybar: bold key, dim label, only keys that work.",
+      "served_by": [
+        "eawf.surfaces.tui.console.keybar:keybar",
+        "eawf.surfaces.tui.console.keybar:route_bar"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_keybar_width_budget.py::test_budget_leaves_one_margin_cell_at_each_size"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/widgets/footer.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "widgets/sigils.py",
+      "verdict": "chassis",
+      "function": "The glyph vocabulary, reconciled with the truth and connection tokens and their ASCII twins.",
+      "served_by": [
+        "eawf.surfaces.tui.console.tokens:GlyphRow",
+        "eawf.surfaces.tui.console.tokens:all_glyphs"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_glyph_allocation_and_ascii_twins.py::test_con_167_the_console_table_equals_the_fixture"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/chassis/sigils.py"
+      ],
+      "fate": "kept-in-chassis",
+      "note": "The resolver stays in the chassis for the sigil-totality lint; the console draws from its own token tables."
+    },
+    {
+      "surface": "widgets/status_tint.py",
+      "verdict": "chassis",
+      "function": "Colour mapping bound to the token set, never the only carrier of a fact.",
+      "served_by": [
+        "eawf.surfaces.tui.console.token_map:render_css",
+        "eawf.surfaces.tui.console.token_map:TOKEN_MAP"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_colour_oracle_binding.py::test_token_map_tokens_resolve_on_every_theme"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/chassis/status_tint.py"
+      ],
+      "fate": "kept-in-chassis",
+      "note": "Moved out of the epoch-1 widgets so the chassis glyph resolver no longer imports the epoch-1 tree."
+    },
+    {
+      "surface": "widgets/markup.py",
+      "verdict": "chassis",
+      "function": "Content markup: which run of a row is drawn in which style, without changing its text.",
+      "served_by": [
+        "eawf.surfaces.tui.console.paint:paint",
+        "eawf.surfaces.tui.console.cells:spans"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_truth_tokens_and_quality_markers.py::test_con_073_spans_rebuild_every_expected_row_exactly"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/widgets/markup.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "widgets/seal.py",
+      "verdict": "chassis",
+      "function": "The brand mark: the literal Eä, bold accent, outside-left of the breadcrumb.",
+      "served_by": [
+        "eawf.surfaces.tui.console.header:header_row"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_header_invariants.py::test_header_row_brand_leads_once_with_the_ratified_separator"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/widgets/seal.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "widgets/cvd.py",
+      "verdict": "chassis",
+      "function": "Colour-vision-deficiency simulation that keeps the severity colours apart for a dichromat.",
+      "served_by": [
+        "eawf.surfaces.tui.chassis.cvd:simulate_cvd",
+        "eawf.surfaces.tui.chassis.cvd:colour_distance"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_chassis_disposition.py::test_cr_024_the_console_severity_colours_stay_apart_for_a_dichromat"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/chassis/cvd.py"
+      ],
+      "fate": "kept-in-chassis"
+    },
+    {
+      "surface": "scopes/_zoom.py",
+      "verdict": "chassis",
+      "function": "Drill into a row and come back to where the drill started.",
+      "served_by": [
+        "eawf.surfaces.tui.console.drill:drill_to"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_native_drills.py::test_home_enter_drills_the_leaf_with_it_as_subject"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/scopes/_zoom.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "palette/command_palette.py",
+      "verdict": "chassis",
+      "function": "The command palette on /: routes first, then the entities the query matches.",
+      "served_by": [
+        "eawf.surfaces.tui.console.palette:hits",
+        "eawf.surfaces.tui.console.overlays.palette:render"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_palette.py::test_con_097_routes_come_first_then_entities_ranked_by_how_they_matched"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/palette/command_palette.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "app.py",
+      "verdict": "chassis",
+      "function": "The application shell and routing.",
+      "served_by": [
+        "eawf.surfaces.tui.console.app:ConsoleApp",
+        "eawf.surfaces.tui.console.dispatch:dispatch"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_chassis_disposition.py::test_cr_024_the_console_entry_reaches_no_epoch1_module"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/app.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "state_binding.py",
+      "verdict": "chassis",
+      "function": "The daemon seam, now revision-bound projections rather than a state file read.",
+      "served_by": [
+        "eawf.surfaces.tui.console.seam:ProjectionSeam",
+        "eawf.surfaces.tui.chassis.state_binding:StateBinding"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_seam_transport_reuse.py::test_the_seam_holds_exactly_one_transport"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/chassis/state_binding.py"
+      ],
+      "fate": "kept-in-chassis"
+    },
+    {
+      "surface": "toast_emitter.py",
+      "verdict": "chassis",
+      "function": "Ambient toasts: at most one per notice revision, never focus-stealing, never auto-opening.",
+      "served_by": [
+        "eawf.surfaces.tui.console.clock:notify",
+        "eawf.surfaces.tui.console.clock:sweep_toasts",
+        "eawf.surfaces.tui.console.frame:toast_box"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_notification_policy_projection.py::test_ui_068_budget_passed_toasts_once_per_revision_and_run_finished_never",
+        "tests/tui/surfaces/tui/console/test_no_auto_open.py::test_con023_a_quiet_arrival_repaints_and_counts_nothing"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/toast_emitter.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "theme.py · theme.tcss",
+      "verdict": "chassis",
+      "function": "The token set: the palettes, the auto theme and the operator's persisted theme.",
+      "served_by": [
+        "eawf.surfaces.tui.chassis.theme:EA_THEMES",
+        "eawf.surfaces.tui.chassis.theme:detect_auto_theme",
+        "eawf.surfaces.tui.chassis.theme:persisted_theme",
+        "eawf.surfaces.tui.console.token_map:render_css"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_console_theme.py::test_auto_opens_on_the_terminal_background",
+        "tests/tui/surfaces/tui/console/test_chassis_disposition.py::test_cr_024_the_persisted_theme_is_read_by_the_chassis"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/chassis/theme.py"
+      ],
+      "fate": "kept-in-chassis",
+      "note": "theme.tcss was the epoch-1 app's stylesheet and went with it; the console renders its CSS from the token map."
+    },
+    {
+      "surface": "snapshot/pilot_harness.py",
+      "verdict": "chassis",
+      "function": "Deterministic text capture of a mounted console, replayed against recorded frames.",
+      "served_by": [
+        "eawf.surfaces.tui.console.harness:Harness",
+        "eawf.surfaces.tui.console.harness:capture"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_replay_harness.py::test_bounded_replay_matches_every_selected_record"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/chassis/pilot_harness.py"
+      ],
+      "fate": "kept-in-chassis"
+    },
+    {
+      "surface": "snapshot/asciinema.py",
+      "verdict": "chassis",
+      "function": "A deterministic cast of a scripted session, byte-stable across machines.",
+      "served_by": [
+        "eawf.surfaces.tui.chassis.asciinema:record_cast",
+        "eawf.surfaces.tui.chassis.asciinema:write_cast"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_chassis_disposition.py::test_cr_024_a_cast_records_the_console"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/chassis/asciinema.py"
+      ],
+      "fate": "kept-in-chassis"
+    },
+    {
+      "surface": "snapshot/behaviour_probe.py",
+      "verdict": "chassis",
+      "function": "Evidence of what the running console did per key, and the channel for its performance budgets.",
+      "served_by": [
+        "eawf.surfaces.tui.console.perf:PerformanceHarness",
+        "eawf.surfaces.tui.console.harness:SentKey"
+      ],
+      "proofs": [
+        "tests/tui/surfaces/tui/console/test_performance_harness.py::test_every_recorded_distribution_holds_every_sample"
+      ],
+      "paths": [
+        "src/eawf/surfaces/tui/snapshot/behaviour_probe.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "modes/autopilot.py",
+      "verdict": "delete",
+      "function": "Ready-wave frontier and dispatch controls keyed on wave ids.",
+      "paths": [
+        "src/eawf/surfaces/tui/modes/autopilot.py"
+      ],
+      "fate": "removed",
+      "note": "Registered as an epoch-1 mode; it goes with the mode registry that mounts it."
+    },
+    {
+      "surface": "modes/placeholder.py",
+      "verdict": "delete",
+      "function": "A coming-soon screen for panes that had not landed.",
+      "paths": [
+        "src/eawf/surfaces/tui/modes/placeholder.py"
+      ],
+      "fate": "removed",
+      "note": "Exported by the epoch-1 modes package."
+    },
+    {
+      "surface": "overlays/plan_preview.py",
+      "verdict": "delete",
+      "function": "A plan preview keyed on the Phase, Iter and Wave plan object.",
+      "paths": [
+        "src/eawf/surfaces/tui/screens/overlays/plan_preview.py"
+      ],
+      "fate": "removed",
+      "note": "Opened by the epoch-1 palette's /roadmap verb."
+    },
+    {
+      "surface": "modals/tour.py",
+      "verdict": "delete",
+      "function": "A guided tour.",
+      "paths": [
+        "src/eawf/surfaces/tui/modals/tour.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "modals/tour_cards.py",
+      "verdict": "delete",
+      "function": "Content for the tour.",
+      "paths": [
+        "src/eawf/surfaces/tui/modals/tour_cards.py"
+      ],
+      "fate": "removed"
+    },
+    {
+      "surface": "widgets/eu_bar.py",
+      "verdict": "delete",
+      "function": "Effort-unit estimation bar.",
+      "paths": [
+        "src/eawf/surfaces/tui/widgets/eu_bar.py"
+      ],
+      "fate": "removed",
+      "note": "Drawn by epoch-1 widgets and the epoch-1 completion bar."
+    },
+    {
+      "surface": "widgets/variance_tile.py",
+      "verdict": "delete",
+      "function": "Variance against effort-unit estimates.",
+      "paths": [
+        "src/eawf/surfaces/tui/widgets/variance_tile.py"
+      ],
+      "fate": "removed",
+      "note": "Drawn by the epoch-1 status pane and metrics overlay."
+    },
+    {
+      "surface": "poc_defects.py",
+      "verdict": "delete",
+      "function": "Build-flag gate for planted proof-of-concept defects.",
+      "paths": [
+        "src/eawf/surfaces/tui/poc_defects.py"
+      ],
+      "fate": "removed"
+    }
+  ]
+}

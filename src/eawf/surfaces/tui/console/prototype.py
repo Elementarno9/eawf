@@ -56,12 +56,7 @@ EXPORT_PARTS: tuple[tuple[str, str, str, str], ...] = (
     ("usage and cost", "yes", "~4.62 · derived", "Derived from the events, not from a bill."),
     ("transcript", "yes", "6,102 lines known", "What the runner said, quoted exactly."),
     ("secrets", "never", "∅ redacted by policy", "Policy redacts these; no export can carry them."),
-    (
-        "sandbox decisions",
-        "no",
-        "142 · space includes",
-        "Left out — including them adds 142 lines.",
-    ),
+    ("sandbox decisions", "no", "142 decisions", "Left out — including them adds 142 lines."),
 )
 
 #: Unattended: the queue's Runs with their Task, state chip and progress, then the Run a

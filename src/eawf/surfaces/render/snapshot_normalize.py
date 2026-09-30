@@ -1,18 +1,10 @@
 """Pure snapshot-text normalisation, free of any Textual dependency.
 
-The TUI snapshot harness
-(:mod:`eawf.surfaces.tui.chassis.pilot_harness`) captures a live
-Textual screen and normalises two volatile cells before comparing
-against a golden ``.txt`` fixture: the header wall-clock and the
-environment-dependent daemon-degraded banner.
-
-That normalisation is a pure string transform with no Textual coupling,
-so it lives here -- in the textual-free ``render`` layer -- rather than
-inside the Pilot harness. A second caller, the ``/mockup`` golden-capture
-seam, needs the same transform at plan time but must NOT pull Textual
-(it runs in a CI / non-TUI authoring context). Hosting the pure function
-here keeps a single implementation: :mod:`pilot_harness` re-imports
-:func:`normalize_snapshot` from this module instead of duplicating it.
+A captured screen (:mod:`eawf.surfaces.tui.chassis.pilot_harness`) carries two
+volatile cells a golden ``.txt`` fixture must not pin: the header wall-clock
+and the environment-dependent daemon-degraded banner. The transform is a pure
+string function, so it lives in the Textual-free ``render`` layer where the
+``/mockup`` golden-capture seam, which runs without Textual, can call it too.
 """
 
 from __future__ import annotations

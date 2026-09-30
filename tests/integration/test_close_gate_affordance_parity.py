@@ -1,4 +1,8 @@
-"""Tests: required UI affordance gates fire at wave close."""
+"""Tests: a required affordance_parity gate blocks wave close.
+
+The kind drove the retired epoch-1 TUI, so it reports ``blocked`` and a wave
+that still requires it cannot close on it.
+"""
 
 from __future__ import annotations
 
@@ -14,19 +18,14 @@ from typing import Any
 import orjson
 import pytest
 
-from eawf import __version__
 from eawf.kernel.spec.common import CriterionSpec, GateSpec, QualityDimension
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.kernel.store.paths import store_path
-from eawf.runtime.daemon import PROTOCOL_VERSION
-from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.state import _enforce_wave_close_gate, mutate
+from eawf.runtime.daemon.methods.state import _enforce_wave_close_gate
 from eawf.workflow.lifecycle.transitions import LifecycleError
-from tests._gate_child_helpers import GateChildDouble, install_gate_child_double
 
 pytestmark = pytest.mark.integration
 
@@ -122,7 +121,7 @@ def _state_payload() -> dict[str, Any]:
                 "title": "tui close affordance parity",
                 "status": "claimed",
                 "claim_session_id": "session-abc",
-                "file_scopes": ["src/eawf/surfaces/tui/app.py"],
+                "file_scopes": ["src/eawf/surfaces/tui/console/keybar.py"],
                 "success_criteria": [_affordance_criterion()],
                 "gates": [_affordance_gate()],
                 "effort_bucket": "S",
@@ -195,24 +194,6 @@ def _write_state(state_path: Path) -> State:
     return state
 
 
-def _build_ctx(tmp_path: Path, state_path: Path) -> MethodContext:
-    event_path = store_path(state_path, StoreKind.EVENT)
-    wal_dir = tmp_path / "wal"
-    wal_dir.mkdir(parents=True, exist_ok=True)
-    return MethodContext(
-        started_at="2026-06-10T00:00:00+00:00",
-        pid=os.getpid(),
-        protocol_version=PROTOCOL_VERSION,
-        version=__version__,
-        shutdown_event=asyncio.Event(),
-        bus=EventBus(),
-        event_path=event_path,
-        state_path=state_path,
-        wal_dir=wal_dir,
-        idempotency_cache={},
-    )
-
-
 def _close_mutation() -> Mutation:
     return Mutation(
         kind=MutationKind.WAVE_CLOSE,
@@ -239,11 +220,6 @@ def _read_evidence_rows(state_path: Path) -> list[EvidenceRecord]:
     return rows
 
 
-def _gate_receipts(rows: list[EvidenceRecord]) -> list[EvidenceRecord]:
-    """Return the per-gate execution receipts among *rows*."""
-    return [row for row in rows if (row.metrics or {}).get("receipt") is not None]
-
-
 def _criterion_rows(rows: list[EvidenceRecord]) -> list[EvidenceRecord]:
     """Return the criterion-level evidence rows among *rows*.
 
@@ -253,93 +229,17 @@ def _criterion_rows(rows: list[EvidenceRecord]) -> list[EvidenceRecord]:
     return [row for row in rows if (row.metrics or {}).get("receipt") is None]
 
 
-def _assert_probe_ran_in_child(double: GateChildDouble, state_path: Path) -> None:
-    """Assert the probe ran in the gate child on the close-resolved arguments.
-
-    The close scores the gate twice -- once for the readiness projection and
-    once for the blocking close gate -- so the call COUNT is an artefact of
-    that pipeline; what the test pins is that every call the child made
-    carried the arguments the close path resolved, and that at least one call
-    happened at all (an uninstalled double would leave an empty log and turn
-    every other assertion here vacuous).
-    """
-    expected = {
-        "args": [],
-        "kwargs": {
-            "mode": "home",
-            "state_path": str(state_path.resolve()),
-            "size": [100, 30],
-        },
-    }
-    calls = double.calls()
-    assert calls, "the affordance probe double never ran in the gate child"
-    assert calls == [expected] * len(calls)
-
-
-def _setup(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    offending_keys: list[str],
-) -> tuple[Path, MethodContext, GateChildDouble]:
-    """Build the enforcing fixture repo and fabricate the probe's verdict.
-
-    The close scorer runs the gate in a child interpreter, so the probe double
-    is installed THERE rather than in this process; everything else about the
-    close -- the spawn, the sandbox, the compiled check, the receipt -- stays
-    real.
-    """
+def _setup(tmp_path: Path) -> Path:
+    """Build the enforcing fixture repo and return its state path."""
     _write_enforcing_profile(tmp_path)
     _init_git_repo(tmp_path)
     state_path = tmp_path / ".ea" / "state.json"
     _write_state(state_path)
-    ctx = _build_ctx(tmp_path, state_path)
-    double = install_gate_child_double(
-        monkeypatch,
-        workdir=tmp_path,
-        target_module="eawf.workflow.audit_dsl.kinds.affordance_parity",
-        attribute="_collect_offending_keys",
-        returns=list(offending_keys),
-    )
-    return state_path, ctx, double
+    return state_path
 
 
-def test_close_gate_passes_when_parity_holds(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    state_path, ctx, double = _setup(tmp_path, monkeypatch, offending_keys=[])
-
-    async def body() -> None:
-        await mutate(ctx, {"mutation": _close_mutation().model_dump(mode="json")})
-
-        payload = orjson.loads(state_path.read_bytes())
-        assert payload["waves"][_WAVE]["status"] == "closed"
-        _assert_probe_ran_in_child(double, state_path)
-
-        rows = _read_evidence_rows(state_path)
-        deterministic_pass = [
-            row
-            for row in _criterion_rows(rows)
-            if row.evidence_kind == "deterministic" and row.status == "pass"
-        ]
-        assert len(deterministic_pass) == 1
-        row = deterministic_pass[0]
-        assert row.scope_id == _WAVE
-        assert row.produced_by == "tool"
-        assert row.metrics is not None
-        assert row.metrics["oracle_tier"] == 2
-        assert row.metrics["gate_id"] == _GATE
-        assert row.refs == [_GATE, _CRITERION]
-        assert "tier T2" in row.summary
-        assert [receipt.status for receipt in _gate_receipts(rows)] == ["pass"]
-
-    _run(body)
-
-
-def test_close_gate_blocks_on_dead_affordance(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    state_path, _ctx, double = _setup(tmp_path, monkeypatch, offending_keys=["z"])
+def test_close_gate_blocks_on_the_retired_affordance_gate(tmp_path: Path) -> None:
+    state_path = _setup(tmp_path)
     state = State.model_validate_json(state_path.read_text(encoding="utf-8"))
 
     async def body() -> None:
@@ -354,17 +254,8 @@ def test_close_gate_blocks_on_dead_affordance(
         message = str(excinfo.value)
         assert "oracle blocked close" in message
         assert f"criterion='{_CRITERION}'" in message
-        assert "tier=2" in message
-        assert "status=fail" in message
-        assert "unresolved advertised keys: z" in message
-        # Without this the refusal could be any other fault reaching the
-        # same blocked status.
-        _assert_probe_ran_in_child(double, state_path)
-        rows = _read_evidence_rows(state_path)
-        # A refused close mints no criterion evidence, but it still owes a
-        # receipt for the gate it ran: a required blocking gate that leaves
-        # none is what the receipt floor refuses.
-        assert _criterion_rows(rows) == []
-        assert [receipt.status for receipt in _gate_receipts(rows)] == ["fail"]
+        assert "status=blocked" in message
+        assert "epoch-1 TUI app this gate drove is retired" in message
+        assert _criterion_rows(_read_evidence_rows(state_path)) == []
 
     _run(body)

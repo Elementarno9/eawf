@@ -130,6 +130,22 @@ class InternalError(CliError):
     exit_code = exit_codes.INTERNAL_ERROR
 
 
+class MigrationRequired(CliError):  # noqa: N818 — canonical bucket name
+    """A mutating verb was aimed at a tree still on authority epoch 1.
+
+    Exits with the attach-failure code the console's migration-required
+    state already exits with, but renders as its own bucket rather than as
+    an unreachable daemon: nothing is wrong with the daemon, the tree has
+    to be migrated first.
+    """
+
+    exit_code = exit_codes.ATTACH_FAILURE
+
+
+#: Envelope exit names for a bucket whose exit code another bucket shares.
+_EXIT_NAMES: Final[dict[str, str]] = {"MigrationRequired": "ATTACH_FAILURE"}
+
+
 class DaemonMutationIndeterminate(DaemonUnreachable):
     """Daemon connection lost mid-mutation; the write may or may not have applied.
 
@@ -244,6 +260,10 @@ _DEFAULT_HINTS: dict[str, str] = {
     ),
     "InternalError": (
         "file an issue with the error envelope; include `eawf daemon logs --lines 200`"
+    ),
+    "MigrationRequired": (
+        "this tree is still on epoch 1 and refuses writes; run `eawf migrate epoch2 --plan` "
+        "then `--apply` (or `eawf ui` for the guided path), and `eawf init` for a new tree"
     ),
 }
 
@@ -402,7 +422,7 @@ def build_envelope(
         error=canonical,
         message=message,
         exit_code=err.exit_code,
-        exit_name=exit_codes.name_for(err.exit_code),
+        exit_name=_EXIT_NAMES.get(canonical, exit_codes.name_for(err.exit_code)),
         suggested_next_step=_resolve_hint(canonical, kind),
         error_code=error_code.value if error_code is not None else None,
         data=merged_data,

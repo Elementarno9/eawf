@@ -41,8 +41,8 @@ _VALID_BUCKETS = {
 
 
 def test_error_code_member_count_matches_spec() -> None:
-    """The C10 cause-level vocabulary is 33 closed members."""
-    assert len(ErrorCode) == 33
+    """The C10 cause-level vocabulary is 34 closed members."""
+    assert len(ErrorCode) == 34
 
 
 def test_error_code_is_strenum_value_identity() -> None:

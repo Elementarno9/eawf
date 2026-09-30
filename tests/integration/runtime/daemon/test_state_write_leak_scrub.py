@@ -41,7 +41,6 @@ from eawf.runtime.daemon.methods import state as daemon_state
 from eawf.runtime.daemon.methods.state import mutate
 from eawf.surfaces.cli import _mutation
 from eawf.surfaces.cli import errors as cli_errors
-from eawf.surfaces.cli.commands.workspace import _empty_workspace_state
 from eawf.workflow.evidence.backlog import add_backlog
 from eawf.workflow.lifecycle.wave import fail_wave
 from eawf.workflow.verify.preflight import ClosePreflight
@@ -352,10 +351,37 @@ def test_state_transaction_clean_write_is_byte_identical(
     assert orjson.loads(seen[0])["backlog"]["B901"]["title"] == "triage the flaky heartbeat test"
 
 
+def _workspace_state(*, code: str, title: str) -> dict[str, object]:
+    """Return a minimal workspace-scoped state document."""
+    return {
+        "schema_version": "1.0",
+        "scope_kind": "workspace",
+        "urn": f"urn:eawf:v1:workspace:{code}",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "project": None,
+        "current": {
+            "project_code": None,
+            "track_id": None,
+            "phase_id": None,
+            "iter_id": None,
+            "active_wave_ids": [],
+            "active_session_ids": [],
+        },
+        "workspace": {"code": code, "title": title, "repos": {}, "current_repo_code": None},
+        "phases": {},
+        "iters": {},
+        "waves": {},
+        "artifacts": {},
+        "agent_sessions": {},
+        "plugins": {},
+        "indexes": {},
+    }
+
+
 def test_state_transaction_accepts_workspace_repo_checkout_under_home(tmp_path: Path) -> None:
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True)
-    state_path.write_bytes(orjson.dumps(_empty_workspace_state(code="WSP", title="workspace")))
+    state_path.write_bytes(orjson.dumps(_workspace_state(code="WSP", title="workspace")))
     checkout = f"{MACOS_HOME}/work/abc"
     _mutation.set_daemonless_flag(False)
 

@@ -15,9 +15,10 @@ from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.overlays import mutation_card
+from eawf.surfaces.tui.console.overlays.chassis import crumb
 from eawf.surfaces.tui.console.registry import kind_of
 
-CRUMB = " Eä ▸ consequence"
+NAME = "consequence"
 _KEYS: tuple[tuple[str, str], ...] = (("Enter", "confirm"), ("Esc", "cancel"))
 _STALE = " IF STALE  This card reloads at the current revision and never overwrites."
 # What each attention verb other than answer does, and does not do, beyond its action's text.
@@ -59,7 +60,7 @@ def render(view: View) -> list[str]:
     target = s.c_target
     if target:
         rows = [
-            header(view, CRUMB),
+            header(view, crumb(NAME, target["id"])),
             f" {target['verb']} · {target['id']} · {kind_of(target['id'])}",
             bar(w),
             f" ASKING    {target['verb']} {target['id']}",
@@ -76,7 +77,7 @@ def render(view: View) -> list[str]:
     key = s.verb or "a"
     verb = VERB[key]
     rows = [
-        header(view, CRUMB),
+        header(view, crumb(NAME, action.id)),
         f" {verb.name} · {action.id} · {kind_of(action.id)}",
         bar(w),
         f" ASKING    {verb.name} {action.id} → {verb.state}",

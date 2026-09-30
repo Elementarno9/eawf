@@ -20,15 +20,22 @@ import sys
 import textwrap
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
 import eawf
+from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS
 from eawf.kernel.projection.compute import RouteProjection, build_route_projection
 from eawf.surfaces.tui.console import chrome as chrome_module
 from eawf.surfaces.tui.console.app import ConsoleApp, compose_frame
-from eawf.surfaces.tui.console.chrome import CHROME_RESOURCE, ConsoleChrome, load_chrome
+from eawf.surfaces.tui.console.chrome import (
+    CHROME_RESOURCE,
+    ConsoleChrome,
+    SettingsCatalog,
+    load_chrome,
+)
 from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.fixture import UNKNOWN_SCOPE, Fixture, Proto, load_fixture
 from eawf.surfaces.tui.console.overlays import OVERLAY_RENDERERS
@@ -273,6 +280,35 @@ def test_packaged_chrome_holds_no_prototype_record(prototype_literals: frozenset
     assert sorted(literal for literal in prototype_literals if literal in text) == []
 
 
+def _without_retired(settings: SettingsCatalog) -> dict[str, Any]:
+    """Return the prototype's settings tables less every leaf the product retired.
+
+    The prototype keeps the design pack's catalog; the packaged chrome is that catalog
+    with each retired leaf, and each key beneath one, removed, and with every section
+    left empty removed too.
+    """
+
+    def retired(key: str) -> bool:
+        return any(key == gone or key.startswith(f"{gone}.") for gone in DEPRECATED_LEAF_KEYS)
+
+    sections = {
+        name: [row for row in rows if not retired(f"{name}.{row[0]}")]
+        for name, rows in settings.sections.items()
+    }
+    kept = {name: rows for name, rows in sections.items() if rows}
+    return {
+        "layers": settings.layers,
+        "writable": settings.writable,
+        "sections": kept,
+        "types": settings.types,
+        "doc": {k: v for k, v in settings.doc.items() if not retired(k)},
+        "choices": {k: v for k, v in settings.choices.items() if not retired(k)},
+        "cats": tuple([c, [s for s in secs if s in kept]] for c, secs in settings.cats),
+        "rail": tuple(r for r in settings.rail if r.get("section", next(iter(kept))) in kept),
+        "section_order": tuple(s for s in settings.section_order if s in kept),
+    }
+
+
 def test_packaged_chrome_keeps_the_shape_of_the_fixture_chrome(
     prototype_fixture: Fixture,
 ) -> None:
@@ -286,9 +322,9 @@ def test_packaged_chrome_keeps_the_shape_of_the_fixture_chrome(
     assert [(e.id, e.state, e.glyph, e.keys, e.paths) for e in packaged.entry] == [
         (e.id, e.state, e.glyph, e.keys, e.paths) for e in replayed.entry
     ]
-    for field in ("layers", "writable", "sections", "types", "doc", "choices", "cats", "rail"):
-        assert getattr(packaged.settings, field) == getattr(replayed.settings, field), field
-    assert packaged.settings.section_order == replayed.settings.section_order
+    expected = _without_retired(replayed.settings)
+    for field, value in expected.items():
+        assert getattr(packaged.settings, field) == value, field
     assert packaged.settings.stored == {}
 
 

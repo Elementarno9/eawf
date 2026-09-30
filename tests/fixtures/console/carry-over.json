@@ -1,0 +1,883 @@
+{
+  "surfaces": [
+    {
+      "surface": "modes/registry.py → home",
+      "function": "Where should I look?",
+      "target": "Scope home",
+      "places": [
+        {
+          "route": "scope.home",
+          "anchors": [
+            "MILESTONES",
+            "ATTENTION"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "modes/research_board.py",
+      "function": "What question, bounds, evidence, conflicts, checkpoint?",
+      "target": "Campaign",
+      "places": [
+        {
+          "route": "campaign",
+          "anchors": [
+            "QUESTION",
+            "BOUNDS",
+            "STOP RULE",
+            "EVIDENCE",
+            "CONFLICT"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "modes/trust.py",
+      "function": "Which proof makes this claim true?",
+      "target": "Milestone → Evidence",
+      "places": [
+        {
+          "route": "milestone",
+          "subject": "MLS-0004",
+          "anchors": [
+            "CRITERIA",
+            "PROOF"
+          ]
+        },
+        {
+          "route": "trust",
+          "anchors": [
+            "JURY",
+            "VERDICT",
+            "TRACK RECORD"
+          ]
+        }
+      ],
+      "note": "the scorecard is drawn by the Milestone's trust sub-surface, whose Enter opens the evidence"
+    },
+    {
+      "surface": "modes/doctor.py",
+      "function": "What is effective, and why?",
+      "target": "Settings + DEGRADED",
+      "places": [
+        {
+          "route": "health",
+          "anchors": [
+            "CHECKS",
+            "RESULT",
+            "REPAIR"
+          ]
+        },
+        {
+          "route": "settings",
+          "conn": "DEGRADED",
+          "anchors": [
+            "DEGRADED"
+          ]
+        }
+      ],
+      "note": "the findings are drawn by the Health route beside Settings; DEGRADED is the connection state every route's header carries"
+    },
+    {
+      "surface": "modes/evidence.py",
+      "function": "Which proof makes this claim true?",
+      "target": "Milestone + Release",
+      "places": [
+        {
+          "route": "milestone",
+          "subject": "MLS-0007",
+          "anchors": [
+            "VERDICT",
+            "CRITERIA"
+          ]
+        },
+        {
+          "route": "release",
+          "anchors": [
+            "READINESS",
+            "APPROVAL"
+          ]
+        },
+        {
+          "route": "run.detail",
+          "overlay": "readiness",
+          "anchors": [
+            "READINESS SIGNAL"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "modes/feed.py",
+      "function": "What happened in this attempt?",
+      "target": "Run → diagnostics",
+      "places": [
+        {
+          "route": "run.detail",
+          "overlay": "raw",
+          "anchors": [
+            "RAW",
+            "kind=tool.completed"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "modes/agent_watch.py",
+      "function": "Which Runs need orientation or recovery?",
+      "target": "Activity",
+      "places": [
+        {
+          "route": "activity",
+          "anchors": [
+            "RUN",
+            "TASK",
+            "STATE",
+            "REASON",
+            "stopped responding"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "modes/sandbox_events.py",
+      "function": "What exact decision blocks progress?",
+      "target": "Attention + Run diagnostics",
+      "places": [
+        {
+          "route": "attention",
+          "anchors": [
+            "↳ permission",
+            "wants to write outside its batch"
+          ]
+        },
+        {
+          "route": "sandbox.log",
+          "anchors": [
+            "DECISION",
+            "denied"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "modes/brief_viewer.py",
+      "function": "What was learned?",
+      "target": "Campaign → findings",
+      "places": [
+        {
+          "route": "campaign.artifact",
+          "anchors": [
+            "SOURCE",
+            "WHAT WE FOUND"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "screens/help.py",
+      "function": "What can I press here?",
+      "target": "all routes → help overlay",
+      "places": [
+        {
+          "route": "activity",
+          "overlay": "help",
+          "anchors": [
+            "THIS ROUTE",
+            "EVERYWHERE"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "overlays/needs_user.py",
+      "function": "What exact decision blocks progress?",
+      "target": "Attention → action detail",
+      "places": [
+        {
+          "route": "attention",
+          "overlay": "question",
+          "anchors": [
+            "QUESTION",
+            "ANSWERS",
+            "DEADLINE"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "overlays/needs_user_inbox.py",
+      "function": "Which decisions are waiting?",
+      "target": "Attention",
+      "places": [
+        {
+          "route": "attention",
+          "anchors": [
+            "BUCKETS",
+            "NEEDS OPERATOR",
+            "OPEN"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "overlays/detail_attempts.py",
+      "function": "What result, criteria, candidates, Runs?",
+      "target": "Task → lineage",
+      "places": [
+        {
+          "route": "task.detail",
+          "anchors": [
+            "RUNS",
+            "LINEAGE",
+            "attempt 1 of 1"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "overlays/detail_cost.py",
+      "function": "What did this attempt cost?",
+      "target": "Run → usage",
+      "places": [
+        {
+          "route": "run.detail",
+          "anchors": [
+            "USAGE",
+            "cost ~4.62 of 20.00"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "overlays/detail_incident.py",
+      "function": "What happened in this attempt?",
+      "target": "Run → timeline",
+      "places": [
+        {
+          "route": "run.detail",
+          "anchors": [
+            "TIMELINE",
+            "EVENT",
+            "? question · opened"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "overlays/events.py",
+      "function": "What exactly did the producer say?",
+      "target": "Run → diagnostics",
+      "places": [
+        {
+          "route": "run.detail",
+          "overlay": "raw",
+          "anchors": [
+            "RAW",
+            "bounded · scrubbed · retention-governed"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "overlays/run_summary.py",
+      "function": "What happened in this attempt?",
+      "target": "Run",
+      "places": [
+        {
+          "route": "run.detail",
+          "subject": "RUN-98c47577",
+          "anchors": [
+            "PROVIDER",
+            "REPORT",
+            "CONTROLS",
+            "LINEAGE"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "overlays/config_modal.py",
+      "function": "What was requested, what is effective, and why?",
+      "target": "Settings",
+      "places": [
+        {
+          "route": "settings",
+          "anchors": [
+            "PLANNING",
+            "max_parallel_waves"
+          ]
+        },
+        {
+          "route": "settings.stack",
+          "anchors": [
+            "LAYER",
+            "WINNING",
+            "LENS"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "overlays/init_wizard.py",
+      "function": "How do I attach?",
+      "target": "Entry (WP0)",
+      "places": [
+        {
+          "route": "entry",
+          "entry_state": "onboarding",
+          "anchors": [
+            "First run",
+            "STEP",
+            "WHY IT IS NEEDED"
+          ]
+        },
+        {
+          "route": "entry",
+          "entry_state": "failed",
+          "anchors": [
+            "not a registered workspace root",
+            "copy the register command"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "overlays/pr_list.py",
+      "function": "What is integrated, checked, reviewed, mergeable?",
+      "target": "Delivery Batch",
+      "places": [
+        {
+          "route": "git.pr",
+          "anchors": [
+            "COMMIT",
+            "REVIEW",
+            "CHECKS"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "overlays/cross_repo_pr.py",
+      "function": "What is integrated across repositories?",
+      "target": "Delivery Batch",
+      "places": [
+        {
+          "route": "milestone",
+          "subject": "MLS-0007",
+          "anchors": [
+            "BATCHES"
+          ]
+        },
+        {
+          "route": "batch.detail",
+          "anchors": [
+            "HEAD",
+            "authorized at"
+          ]
+        }
+      ],
+      "note": "a Delivery Batch is one repository's integration unit, so the multi-repository case is the Milestone's Batches, each with its own exact head"
+    },
+    {
+      "surface": "overlays/audit_running.py",
+      "function": "Is this checked and reviewed?",
+      "target": "Batch → verification",
+      "places": [
+        {
+          "route": "batch.detail",
+          "anchors": [
+            "VERIFICATION CYCLE",
+            "audit review",
+            "checking"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "overlays/audit_failed.py",
+      "function": "What must be repaired?",
+      "target": "Batch → changes required",
+      "places": [
+        {
+          "route": "batch.detail",
+          "anchors": [
+            "VERIFICATION CYCLE",
+            "changes",
+            "repair"
+          ]
+        },
+        {
+          "route": "batch.detail",
+          "subject": "BAT-0003",
+          "anchors": [
+            "NEEDS",
+            "A fresh merge authority"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "overlays/fork_inbox.py",
+      "function": "Which candidate wins?",
+      "target": "Task → candidates",
+      "places": [
+        {
+          "route": "task.detail",
+          "anchors": [
+            "CANDIDATES",
+            "accepted",
+            "rejected",
+            "waiting"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "metrics.py",
+      "function": "How well calibrated are our estimates?",
+      "target": "Campaign → evidence",
+      "places": [
+        {
+          "route": "trust",
+          "anchors": [
+            "CALIBRATION",
+            "Brier"
+          ]
+        },
+        {
+          "route": "run.detail",
+          "anchors": [
+            "USAGE",
+            "typical ~22m"
+          ]
+        },
+        {
+          "route": "cost.ceiling",
+          "anchors": [
+            "CEILING",
+            "SPEND"
+          ]
+        }
+      ],
+      "note": "the pack's frames draw calibration on the Milestone's trust sub-surface; estimate against actual shows per Run in USAGE, and spend on the cost ceiling"
+    },
+    {
+      "surface": "modals/evidence_drill.py",
+      "function": "Which proof makes this claim true?",
+      "target": "Evidence viewer",
+      "places": [
+        {
+          "route": "evidence",
+          "anchors": [
+            "RUNG",
+            "LADDER",
+            "GRAPH"
+          ]
+        },
+        {
+          "route": "activity",
+          "overlay": "evidence",
+          "anchors": [
+            "CLAIM",
+            "SUPPORT",
+            "RECEIPTS"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "modals/evidence_reader.py",
+      "function": "What does this receipt actually say?",
+      "target": "Evidence viewer",
+      "places": [
+        {
+          "route": "receipt",
+          "anchors": [
+            "RECORDS",
+            "CHECKED",
+            "VERDICT"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "modals/report_detail.py",
+      "function": "Why was the report rejected?",
+      "target": "Run → final report",
+      "places": [
+        {
+          "route": "run.detail",
+          "subject": "RUN-98c47577",
+          "anchors": [
+            "REPORT",
+            "final report rejected"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "modals/verifier_drill.py",
+      "function": "Which check failed, and on what?",
+      "target": "Batch → verification",
+      "places": [
+        {
+          "route": "batch.detail",
+          "subject": "BAT-0003",
+          "anchors": [
+            "CHECKS",
+            "conformance ? unknown"
+          ]
+        },
+        {
+          "route": "health",
+          "anchors": [
+            "CHECK",
+            "FAILED",
+            "cannot read revision"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "modals/calibration_drill.py",
+      "function": "What does this calibration claim rest on?",
+      "target": "Campaign → evidence",
+      "places": [
+        {
+          "route": "trust",
+          "anchors": [
+            "CALIBRATION",
+            "over 41 resolved",
+            "Enter evidence"
+          ]
+        }
+      ],
+      "note": "the pack's frames draw calibration on the Milestone's trust sub-surface, whose Enter opens the evidence it rests on"
+    },
+    {
+      "surface": "widgets/attention_feed.py",
+      "function": "Which decisions are waiting?",
+      "target": "Attention",
+      "places": [
+        {
+          "route": "attention",
+          "anchors": [
+            "LOST",
+            "NEEDS OPERATOR",
+            "OVER BUDGET"
+          ]
+        },
+        {
+          "route": "scope.home",
+          "anchors": [
+            "ATTENTION",
+            "due 4m"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "widgets/backlog_table.py",
+      "function": "What is queued, and when must it be defined?",
+      "target": "Backlog",
+      "places": [
+        {
+          "route": "backlog",
+          "anchors": [
+            "DRAFTS",
+            "DUE",
+            "DEFERRED"
+          ]
+        },
+        {
+          "route": "backlog",
+          "overlay": "draft",
+          "anchors": [
+            "PROMOTION",
+            "criteria · owner"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "widgets/roadmap_tree.py",
+      "function": "When do things land? / Where should I look?",
+      "target": "Roadmap + Scope home",
+      "places": [
+        {
+          "route": "timeline",
+          "anchors": [
+            "now W29",
+            "UNDATED",
+            "RELEASES"
+          ]
+        },
+        {
+          "route": "scope.home",
+          "anchors": [
+            "MILESTONES",
+            "MLS-0001 Replay-safe activity"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "widgets/workspace_table.py",
+      "function": "Which workspace am I in?",
+      "target": "Scope home + Entry",
+      "places": [
+        {
+          "route": "scope.home",
+          "anchors": [
+            "Eä ▸ eawf-core"
+          ]
+        },
+        {
+          "route": "entry",
+          "entry_state": "ambiguous",
+          "anchors": [
+            "CANDIDATES",
+            "REGISTERED",
+            "LAST SESSION"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "widgets/git_pane.py",
+      "function": "Is the authority still exact?",
+      "target": "Delivery Batch → HEAD",
+      "places": [
+        {
+          "route": "batch.detail",
+          "anchors": [
+            "HEAD",
+            "authorized at",
+            "still exact"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "widgets/registry_pane.py",
+      "function": "What is effective?",
+      "target": "Settings",
+      "places": [
+        {
+          "route": "settings.stack",
+          "anchors": [
+            "STACK",
+            "LAYER",
+            "VALUE",
+            "WHERE",
+            "WINNING"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "widgets/status_pane.py",
+      "function": "What state is this in?",
+      "target": "Run + Task",
+      "places": [
+        {
+          "route": "run.detail",
+          "subject": "RUN-538453eb",
+          "anchors": [
+            "WAIT-PERM",
+            "needs permission"
+          ]
+        },
+        {
+          "route": "task.detail",
+          "subject": "EAWF-0047",
+          "anchors": [
+            "SUSPENDED",
+            "STANDING"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "widgets/heartbeat.py",
+      "function": "Is it still alive?",
+      "target": "Run → timeline",
+      "places": [
+        {
+          "route": "run.detail",
+          "anchors": [
+            "TIMELINE",
+            "~ heartbeat"
+          ]
+        },
+        {
+          "route": "run.detail",
+          "subject": "RUN-be1e085a",
+          "anchors": [
+            "LAST HEARD",
+            "heartbeat expired"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "widgets/output_tail.py",
+      "function": "What exactly did it output?",
+      "target": "Run → diagnostics",
+      "places": [
+        {
+          "route": "run.detail",
+          "overlay": "raw",
+          "anchors": [
+            "RAW",
+            "the runner’s own words"
+          ]
+        },
+        {
+          "route": "transcript",
+          "anchors": [
+            "Transcript",
+            "› tool"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "widgets/progress.py",
+      "function": "How far along is this?",
+      "target": "everywhere",
+      "places": [
+        {
+          "route": "scope.home",
+          "anchors": [
+            "PROGRESS",
+            "~14 of 18 tasks"
+          ]
+        },
+        {
+          "route": "campaign",
+          "anchors": [
+            "14 of 20 runs"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "widgets/calibration_table.py",
+      "function": "How well calibrated are our estimates?",
+      "target": "Campaign → evidence",
+      "places": [
+        {
+          "route": "trust",
+          "anchors": [
+            "CALIBRATION",
+            "TRACK RECORD",
+            "ACCEPTED",
+            "REJECTED",
+            "RATE"
+          ]
+        }
+      ],
+      "note": "the pack's frames draw calibration on the Milestone's trust sub-surface, a rate over nothing judged reading unavailable, never zero"
+    },
+    {
+      "surface": "scopes/workspace.py",
+      "function": "Where should I look?",
+      "target": "Scope home",
+      "places": [
+        {
+          "route": "scope.home",
+          "anchors": [
+            "Eä ▸ eawf-core",
+            "3 tracks"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "scopes/repo.py",
+      "function": "Which project?",
+      "target": "Scope home",
+      "places": [
+        {
+          "route": "scope.home",
+          "anchors": [
+            "Eä ▸ eawf-core"
+          ]
+        },
+        {
+          "route": "entry",
+          "entry_state": "ambiguous",
+          "anchors": [
+            "PROJECT",
+            "runtime"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "scopes/user.py",
+      "function": "What is mine?",
+      "target": "Attention (audience)",
+      "places": [
+        {
+          "route": "attention",
+          "anchors": [
+            "4 mine",
+            "4 fleet-wide"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "palette/verbs.py",
+      "function": "What can I do here?",
+      "target": "all routes",
+      "places": [
+        {
+          "route": "run.detail",
+          "subject": "RUN-538453eb",
+          "overlay": "actions",
+          "anchors": [
+            "ACTIONS",
+            "VERB",
+            "REASON",
+            "not certified for your class"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "attention.py",
+      "function": "What needs me?",
+      "target": "Attention",
+      "places": [
+        {
+          "route": "attention",
+          "anchors": [
+            "BUCKETS",
+            "needs operator",
+            "over budget",
+            "nothing here opened itself"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "offline.py",
+      "function": "What is true right now, without a session?",
+      "target": "OFFLINE SNAPSHOT + CLI parity",
+      "places": [
+        {
+          "route": "entry",
+          "entry_state": "offline",
+          "anchors": [
+            "attached to the last known revision",
+            "Everything here is a snapshot"
+          ]
+        }
+      ]
+    }
+  ]
+}

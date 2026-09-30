@@ -18,8 +18,9 @@ _CONTRACT = load_contract(LAYOUT.sequences)
 #: Every journey id of the tracked contract.
 JOURNEY_IDS: tuple[str, ...] = tuple(journey.id for journey in _CONTRACT.journeys)
 
-#: Steps summed over the 25 journeys, asserted rather than read from a stale count field.
-EXPECTED_STEPS = 188
+#: Steps summed over the 25 journeys, asserted rather than read from a stale count field;
+#: J20 reaches its Run one ArrowDown sooner now the palette lists no search route row.
+EXPECTED_STEPS = 187
 
 
 def test_tracked_journeys_carry_every_step() -> None:

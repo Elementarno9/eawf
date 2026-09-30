@@ -26,7 +26,6 @@ from eawf.platform.lint.eawf022_propose_coverage import (
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.workflow.propose.coverage import coverage_gaps, source_brief_coverage_gaps
 
-_AFFORDANCE_PARITY_KIND: Final[str] = "affordance_parity"
 _TRANSITION_COVERAGE_KIND: Final[str] = "transition_coverage"
 
 #: Console-script head of the project's own CLI.
@@ -74,23 +73,6 @@ def render_lint_findings(
     """Render a combined ``validation_failed`` message for lint findings."""
     bodies = [v.render() for v in measurability] + [v.render() for v in coverage]
     return "validation_failed: spec sync lint findings: " + "; ".join(bodies)
-
-
-def require_affordance_parity_for_ui_scope(
-    *,
-    wave_id: str,
-    file_scopes: list[str],
-    gates: list[GateSpec],
-) -> None:
-    """Reject a UI-scope wave whose synced gates omit an affordance_parity gate."""
-    if not is_ui_scope(file_scopes):
-        return
-    if any(gate.kind == _AFFORDANCE_PARITY_KIND for gate in gates):
-        return
-    raise DaemonValidationError(
-        f"validation_failed: ui-scope wave {wave_id!r} requires an "
-        f"{_AFFORDANCE_PARITY_KIND} gate; none found in synced gates"
-    )
 
 
 def require_transition_coverage_for_ui_transitions(

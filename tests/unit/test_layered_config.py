@@ -30,7 +30,6 @@ from eawf.kernel.config.layered import (
     unset_dotted,
 )
 from eawf.kernel.config.registry import (
-    CONFIG_REGISTRY,
     LEAF_KEY_REGISTRY,
     LeafKey,
     is_known_leaf_key,
@@ -115,10 +114,10 @@ def test_branch_config_path_rejects_slash_only_branch() -> None:
 
 def test_branch_layer_overrides_repo(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "planning:\n  approval: repo_val\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: repo_val\n")
     _write_yaml(
         repo / ".ea" / "branches" / "main.yaml",
-        "planning:\n  approval: branch_val\n",
+        "review:\n  default_level: branch_val\n",
     )
     merged, sources = merge_config(
         workspace=None,
@@ -127,17 +126,17 @@ def test_branch_layer_overrides_repo(tmp_path: Path) -> None:
         cli_overrides={},
         branch="main",
     )
-    assert merged["planning"]["approval"] == "branch_val"
-    assert sources["planning.approval"] == "branch"
+    assert merged["review"]["default_level"] == "branch_val"
+    assert sources["review.default_level"] == "branch"
 
 
 def test_branch_layer_subdir_form_loaded(tmp_path: Path) -> None:
     """Branch names containing ``/`` resolve to nested files."""
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "planning:\n  approval: repo_val\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: repo_val\n")
     _write_yaml(
         repo / ".ea" / "branches" / "feature" / "x.yaml",
-        "planning:\n  approval: feature_x\n",
+        "review:\n  default_level: feature_x\n",
     )
     merged, sources = merge_config(
         workspace=None,
@@ -146,14 +145,14 @@ def test_branch_layer_subdir_form_loaded(tmp_path: Path) -> None:
         cli_overrides={},
         branch="feature/x",
     )
-    assert merged["planning"]["approval"] == "feature_x"
-    assert sources["planning.approval"] == "branch"
+    assert merged["review"]["default_level"] == "feature_x"
+    assert sources["review.default_level"] == "branch"
 
 
 def test_branch_layer_missing_file_silently_skipped(tmp_path: Path) -> None:
     """Branch file absent → loader skips it, lower layer wins."""
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "planning:\n  approval: repo_val\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: repo_val\n")
     merged, sources = merge_config(
         workspace=None,
         repo=repo,
@@ -161,16 +160,16 @@ def test_branch_layer_missing_file_silently_skipped(tmp_path: Path) -> None:
         cli_overrides={},
         branch="some-branch-with-no-file",
     )
-    assert merged["planning"]["approval"] == "repo_val"
-    assert sources["planning.approval"] == "repo"
+    assert merged["review"]["default_level"] == "repo_val"
+    assert sources["review.default_level"] == "repo"
 
 
 def test_branch_layer_loses_to_local(tmp_path: Path) -> None:
     """Local layer is higher precedence than branch."""
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "planning:\n  approval: r\n")
-    _write_yaml(repo / ".ea" / "branches" / "main.yaml", "planning:\n  approval: b\n")
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "planning:\n  approval: l\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: r\n")
+    _write_yaml(repo / ".ea" / "branches" / "main.yaml", "review:\n  default_level: b\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "review:\n  default_level: l\n")
     merged, sources = merge_config(
         workspace=None,
         repo=repo,
@@ -178,8 +177,8 @@ def test_branch_layer_loses_to_local(tmp_path: Path) -> None:
         cli_overrides={},
         branch="main",
     )
-    assert merged["planning"]["approval"] == "l"
-    assert sources["planning.approval"] == "local"
+    assert merged["review"]["default_level"] == "l"
+    assert sources["review.default_level"] == "local"
 
 
 # --- Wave overlay -----------------------------------------------------------
@@ -188,16 +187,16 @@ def test_branch_layer_loses_to_local(tmp_path: Path) -> None:
 def test_wave_overlay_overrides_local(tmp_path: Path) -> None:
     """Wave layer sits above local; daemon RAM wins."""
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "planning:\n  approval: local\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "review:\n  default_level: local\n")
     merged, sources = merge_config(
         workspace=None,
         repo=repo,
         env={},
         cli_overrides={},
-        wave_overlay={"planning": {"approval": "wave_val"}},
+        wave_overlay={"review": {"default_level": "wave_val"}},
     )
-    assert merged["planning"]["approval"] == "wave_val"
-    assert sources["planning.approval"] == "wave"
+    assert merged["review"]["default_level"] == "wave_val"
+    assert sources["review.default_level"] == "wave"
 
 
 def test_wave_overlay_loses_to_env() -> None:
@@ -205,12 +204,12 @@ def test_wave_overlay_loses_to_env() -> None:
     merged, sources = merge_config(
         workspace=None,
         repo=None,
-        env={"EAWF_PLANNING__APPROVAL": "env_val"},
+        env={"EAWF_REVIEW__DEFAULT_LEVEL": "env_val"},
         cli_overrides={},
-        wave_overlay={"planning": {"approval": "wave_val"}},
+        wave_overlay={"review": {"default_level": "wave_val"}},
     )
-    assert merged["planning"]["approval"] == "env_val"
-    assert sources["planning.approval"] == "env"
+    assert merged["review"]["default_level"] == "env_val"
+    assert sources["review.default_level"] == "env"
 
 
 def test_wave_overlay_loses_to_cli() -> None:
@@ -218,17 +217,17 @@ def test_wave_overlay_loses_to_cli() -> None:
         workspace=None,
         repo=None,
         env={},
-        cli_overrides={"planning": {"approval": "cli_val"}},
-        wave_overlay={"planning": {"approval": "wave_val"}},
+        cli_overrides={"review": {"default_level": "cli_val"}},
+        wave_overlay={"review": {"default_level": "wave_val"}},
     )
-    assert merged["planning"]["approval"] == "cli_val"
-    assert sources["planning.approval"] == "cli"
+    assert merged["review"]["default_level"] == "cli_val"
+    assert sources["review.default_level"] == "cli"
 
 
 def test_empty_wave_overlay_noop(tmp_path: Path) -> None:
     """Falsy / empty wave_overlay is a no-op (no source map entry)."""
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "planning:\n  approval: r\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: r\n")
     merged, sources = merge_config(
         workspace=None,
         repo=repo,
@@ -236,8 +235,8 @@ def test_empty_wave_overlay_noop(tmp_path: Path) -> None:
         cli_overrides={},
         wave_overlay={},
     )
-    assert merged["planning"]["approval"] == "r"
-    assert sources["planning.approval"] == "repo"
+    assert merged["review"]["default_level"] == "r"
+    assert sources["review.default_level"] == "repo"
 
 
 @pytest.mark.parametrize(
@@ -288,23 +287,23 @@ def test_full_stack_ordering_with_branch_and_wave(
     """All nine layers active; CLI wins, branch/wave correctly placed."""
     fake_global = tmp_path / "g.yaml"
     monkeypatch.setattr(layered, "global_config_path", lambda: fake_global)
-    _write_yaml(fake_global, "planning:\n  approval: g\n")
+    _write_yaml(fake_global, "review:\n  default_level: g\n")
     workspace = tmp_path / "ws"
-    _write_yaml(workspace / ".ea" / "config.yaml", "planning:\n  approval: w\n")
+    _write_yaml(workspace / ".ea" / "config.yaml", "review:\n  default_level: w\n")
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "planning:\n  approval: r\n")
-    _write_yaml(repo / ".ea" / "branches" / "main.yaml", "planning:\n  approval: b\n")
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "planning:\n  approval: l\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: r\n")
+    _write_yaml(repo / ".ea" / "branches" / "main.yaml", "review:\n  default_level: b\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "review:\n  default_level: l\n")
     merged, sources = merge_config(
         workspace=workspace,
         repo=repo,
-        env={"EAWF_PLANNING__APPROVAL": "e"},
-        cli_overrides={"planning": {"approval": "c"}},
+        env={"EAWF_REVIEW__DEFAULT_LEVEL": "e"},
+        cli_overrides={"review": {"default_level": "c"}},
         branch="main",
-        wave_overlay={"planning": {"approval": "wv"}},
+        wave_overlay={"review": {"default_level": "wv"}},
     )
-    assert merged["planning"]["approval"] == "c"
-    assert sources["planning.approval"] == "cli"
+    assert merged["review"]["default_level"] == "c"
+    assert sources["review.default_level"] == "cli"
 
 
 # --- Layer-path helper ------------------------------------------------------
@@ -343,36 +342,40 @@ def test_detect_current_branch_none_for_non_git_dir(tmp_path: Path) -> None:
 # --- LEAF_KEY_REGISTRY ------------------------------------------------------
 
 
-def test_leaf_key_registry_has_full_catalog() -> None:
-    """The catalog covers ~140+ keys (success criterion 3)."""
-    # ~140 is the brief's nominal target; the canonical defaults already
-    # carry more, so a floor check is the right contract.
-    assert len(LEAF_KEY_REGISTRY) >= 140
+def test_leaf_key_registry_holds_no_retired_leaf() -> None:
+    """A leaf no code reads is retired: absent from the catalog, named for migration."""
+    retired = DEPRECATED_LEAF_KEYS - set(LEAF_KEY_REGISTRY)
+    assert {
+        "config.layers_visible",
+        "project.success_metrics",
+        "workspace.repos",
+        "runtime.fallback.retry_policy",
+        "dispatch.session_handle_ttl_seconds",
+        "dispatch.routing",
+        "mcp.servers",
+        "hooks.policy",
+        "prose.level",
+        "ui.bare_command",
+        "estimation.display.eu_quantum",
+    } <= retired
+    assert not retired & set(LEAF_KEY_REGISTRY)
 
 
 def test_leaf_key_registry_includes_canonical_c08_keys() -> None:
-    """The C08-new keys named in brief §5.2 are present."""
+    """The consumed C08 keys and the policy tables catalogued since are present."""
     must_have = {
-        "config.layers_visible",
-        "project.default_track",
-        "project.goals",
-        "project.success_metrics",
         "profiles.trusted",
         "runtime.preference",
-        "runtime.fallback.on_errors",
-        "runtime.fallback.retry_policy",
-        "runtime.fallback.max_backoff_seconds",
         "telemetry.enabled",
-        "telemetry.export.format",
-        "telemetry.window_default",
-        "telemetry.aggregate_window",
         "telemetry.db_kind",
-        "dispatch.session_policy_default",
-        "dispatch.session_handle_ttl_seconds",
-        "language.runtime",
-        "language.fast_extras",
-        "vcs.conventions.release.agent_driven",
         "vcs.conventions.release.cadence",
+        "daemon.idle_timeout_seconds",
+        "daemon.session_handle_ttl_seconds",
+        "economics.prompt_budget",
+        "economics.governor",
+        "economics.notice_policy",
+        "tui.eu_view.density",
+        "tui.eu_view.fields",
     }
     missing = must_have - set(LEAF_KEY_REGISTRY)
     assert not missing, f"missing canonical C08 leaf keys: {sorted(missing)}"
@@ -380,19 +383,36 @@ def test_leaf_key_registry_includes_canonical_c08_keys() -> None:
 
 
 def test_behavioral_config_leaves_have_exactly_one_binding() -> None:
-    """Every interactive and hooks policy leaf is consumed or explicitly reserved."""
-    behavior_keys = {entry.key for entry in CONFIG_REGISTRY} | {
-        key for key in LEAF_KEY_REGISTRY if key.startswith("hooks.")
-    }
-    for key in behavior_keys:
-        entry = leaf_key_lookup(key)
+    """Every catalogued leaf is consumed or explicitly deprecated, never both."""
+    for key, entry in LEAF_KEY_REGISTRY.items():
         assert (entry.consumer is not None) ^ entry.reserved, key
 
 
-_EXPECTED_CONFIG_CONSUMERS: dict[str, str] = {
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_SHIP = "eawf.workflow.skills.ship"
+_COAUTHOR = "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer"
+_LAYERED = "eawf.kernel.config.layered"
+_ECONOMICS = "eawf.kernel.economics.governor.economics_policy_from"
+_EU_VIEW = "eawf.surfaces.render.plan_view._eu_view_config"
+
+#: The callable that reads each catalogued leaf's resolved value; the census every
+#: leaf must appear in, so a leaf with no production reader fails here.
+_EXPECTED_CONSUMERS: dict[str, str] = {
+    "schema_version": "eawf.kernel.config.migration.migrate_config_payload",
+    "acceptance.commands.build": f"{_SHIP}._resolve_gate_command",
+    "acceptance.commands.lint": f"{_SHIP}._resolve_gate_command",
+    "acceptance.commands.tests": f"{_SHIP}._resolve_gate_command",
+    "acceptance.commands.typecheck": f"{_SHIP}._resolve_gate_command",
+    "acceptance.required_before_ship": f"{_SHIP}._ordered_gauntlet_gates",
+    "agents.extra_tools": f"{_LAYERED}.resolve_agent_extra_tools",
     "audit.default_level": "eawf.workflow.skills.audit._resolve_level",
+    "daemon.idle_timeout_seconds": "eawf.runtime.daemon.main._resolve_idle_timeout",
     "daemon.proxy_enabled": "eawf.surfaces.cli._mutation._proxy_enabled",
+    "daemon.session_handle_ttl_seconds": "eawf.runtime.daemon.main._resolve_session_ttl_seconds",
     "dispatch.role_tier_token_cap": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
+    "economics.governor": _ECONOMICS,
+    "economics.notice_policy": _ECONOMICS,
+    "economics.prompt_budget": _ECONOMICS,
     "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "flow.advance_after.audit": "eawf.workflow.skills.flow.FlowSkill._run_steps",
@@ -400,75 +420,84 @@ _EXPECTED_CONFIG_CONSUMERS: dict[str, str] = {
     "flow.advance_after.prep": "eawf.workflow.skills.flow.FlowSkill._run_steps",
     "flow.advance_after.research": "eawf.workflow.skills.flow.FlowSkill._run_steps",
     "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
+    "flow.budget.multiplier": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
     "flow.max_repair_cycles": "eawf.workflow.skills.flow._config_max_repair_cycles",
-    "planning.max_parallel_waves": ("eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves"),
+    "planning.max_parallel_waves": "eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves",
+    "preferences.auto_choose": (
+        "eawf.runtime.daemon.methods.question_decision.resolved_preferences"
+    ),
     "prep.auto_resume": "eawf.workflow.skills.prep.PrepSkill._resolve_auto_resume",
+    "profiles.certified": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
+    "profiles.enabled": "eawf.platform.profiles.selection.resolve_enabled_profiles",
+    "profiles.trusted": "eawf.platform.profiles.trust.load_trust_ledger",
     "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
     "research.auto_save": "eawf.workflow.skills.research.ResearchSkill._gather",
     "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
     "review.default_level": "eawf.workflow.skills.review.ReviewSkill.action",
-    "ship.gauntlet": "eawf.workflow.skills.ship._resolve_gauntlet",
+    "runtime.adapters": f"{_LAYERED}.resolve_dispatch_provider_tuple",
+    "runtime.claude.permission_wait_s": f"{_LAYERED}.resolve_permission_wait_seconds",
+    "runtime.claude.stall_interval_s": f"{_LAYERED}.resolve_stall_interval_seconds",
+    "runtime.codex.stall_interval_s": f"{_LAYERED}.resolve_stall_interval_seconds",
+    "runtime.models.claude": f"{_LAYERED}.resolve_runtime_tier_models",
+    "runtime.models.codex": f"{_LAYERED}.resolve_runtime_tier_models",
+    "runtime.models.opencode": f"{_LAYERED}.resolve_runtime_tier_models",
+    "runtime.opencode.stall_interval_s": f"{_LAYERED}.resolve_stall_interval_seconds",
+    "runtime.preference": f"{_LAYERED}.resolve_dispatch_provider_tuple",
+    "ship.gauntlet": f"{_SHIP}._resolve_gauntlet",
     "telemetry.db_kind": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
     "telemetry.enabled": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
-    "ui.glyphs": "eawf.surfaces.tui.app._persisted_glyphs",
-    "ui.theme": "eawf.surfaces.tui.app._persisted_theme",
-    "vcs.conventions.release.cadence": (
-        "eawf.runtime.vcs.coauthor.requires_phase_release_preflight"
-    ),
-    "verify.require_iter_audit_accepted": "eawf.workflow.lifecycle.iter_.close_iter",
-    "verify.waiver_mode": "eawf.workflow.lifecycle.waivers.resolve_waiver_mode",
-}
-
-_EXPECTED_CATALOG_ONLY_CONSUMERS: dict[str, str] = {
-    "agents.extra_tools": "eawf.kernel.config.layered.resolve_agent_extra_tools",
-    "profiles.certified": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
-    "runtime.models.claude": "eawf.kernel.config.layered.resolve_runtime_tier_models",
-    "runtime.models.codex": "eawf.kernel.config.layered.resolve_runtime_tier_models",
-    "runtime.models.opencode": "eawf.kernel.config.layered.resolve_runtime_tier_models",
-    "runtime.claude.permission_wait_s": (
-        "eawf.kernel.config.layered.resolve_permission_wait_seconds"
-    ),
-    "runtime.claude.stall_interval_s": "eawf.kernel.config.layered.resolve_stall_interval_seconds",
-    "runtime.codex.stall_interval_s": "eawf.kernel.config.layered.resolve_stall_interval_seconds",
-    "runtime.opencode.stall_interval_s": (
-        "eawf.kernel.config.layered.resolve_stall_interval_seconds"
-    ),
+    "tui.eu_view.density": _EU_VIEW,
+    "tui.eu_view.fields": _EU_VIEW,
+    "ui.glyphs": "eawf.surfaces.tui.launch.persisted_glyphs",
+    "ui.theme": "eawf.surfaces.tui.chassis.theme.persisted_theme",
+    "ui.toasts": "eawf.surfaces.tui.launch.persisted_toast_verbosity",
     "vcs.checkpoint_requires_commit": "eawf.runtime.vcs.checkpoint.resolve_checkpoint_cadence",
-    "verify.juror_wall_clock_seconds": (
-        "eawf.workflow.verify.readiness._overlay_repo_verify_leaves"
-    ),
+    "vcs.coauthor.default_runtime": _COAUTHOR,
+    "vcs.coauthor.mode": _COAUTHOR,
+    "vcs.coauthor.project.email": _COAUTHOR,
+    "vcs.coauthor.project.name": _COAUTHOR,
+    "vcs.coauthor.require_trailer": _COAUTHOR,
+    "vcs.coauthor.trailers.claude.email": _COAUTHOR,
+    "vcs.coauthor.trailers.claude.name": _COAUTHOR,
+    "vcs.coauthor.trailers.codex.email": _COAUTHOR,
+    "vcs.coauthor.trailers.codex.name": _COAUTHOR,
+    "vcs.conventions.release.cadence": "eawf.runtime.vcs.coauthor.requires_phase_release_preflight",
+    "vcs.conventions.subject_style": "tools.commit_prefix_lint._configured_subject_style",
+    "vcs.integration_commit_unit": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
+    "vcs.pr_merge_method": f"{_SHIP}.ShipSkill._gate_merge_method",
+    "vcs.squash_allowed": f"{_SHIP}.ShipSkill._gate_merge_method",
+    "vcs.task_reference": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
+    "verify.juror_wall_clock_seconds": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
     "verify.odr_blocking": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
+    "verify.require_iter_audit_accepted": "eawf.workflow.lifecycle.iter_.close_iter",
     "verify.retyped_rule_threshold": (
         "eawf.observability.reflect.retyped.resolve_retyped_rule_threshold"
     ),
-}
-
-_DECLARATIVE_CONSUMER = "eawf.kernel.config.layered.merge_config"
-_EXPECTED_DECLARATIVE_CONSUMERS: dict[str, str] = {
-    entry.key: _DECLARATIVE_CONSUMER
-    for entry in CONFIG_REGISTRY
-    if entry.key not in _EXPECTED_CONFIG_CONSUMERS and entry.key not in DEPRECATED_LEAF_KEYS
+    "verify.waiver_mode": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
 }
 
 
 def test_config_consumer_set_is_exact_and_importable() -> None:
-    """Every claimed consumer names the exact callable that reads or applies the leaf."""
+    """Every live leaf names the production callable that reads it, and that callable exists.
+
+    The merger is never a consumer: naming ``merge_config`` would claim a reader for a
+    leaf nothing reads. A repository tool runs as a script beside its sibling modules, so
+    its consumer is found by its definition rather than imported.
+    """
     actual = {
         key: entry.consumer
         for key, entry in LEAF_KEY_REGISTRY.items()
         if entry.consumer is not None
     }
 
-    expected = (
-        _EXPECTED_CONFIG_CONSUMERS
-        | _EXPECTED_CATALOG_ONLY_CONSUMERS
-        | _EXPECTED_DECLARATIVE_CONSUMERS
-    )
-    assert actual == expected
-    assert {
-        key: value for key, value in actual.items() if key in {row.key for row in CONFIG_REGISTRY}
-    } == _EXPECTED_CONFIG_CONSUMERS | _EXPECTED_DECLARATIVE_CONSUMERS
+    assert actual == _EXPECTED_CONSUMERS
+    assert "eawf.kernel.config.layered.merge_config" not in actual.values()
     for key, consumer in actual.items():
+        if consumer.startswith("tools."):
+            module, _, name = consumer.rpartition(".")
+            source = _REPO_ROOT.joinpath(*module.split(".")).with_suffix(".py")
+            assert f"def {name}(" in source.read_text(encoding="utf-8"), (key, consumer)
+            continue
         resolved = pydoc.locate(consumer)
         assert resolved is not None, (key, consumer)
         assert callable(resolved), (key, consumer, resolved)
@@ -476,11 +505,16 @@ def test_config_consumer_set_is_exact_and_importable() -> None:
 
 def test_every_config_leaf_has_exact_consumer_classification() -> None:
     kinds = {entry.consumer_kind for entry in LEAF_KEY_REGISTRY.values()}
-    assert kinds == {"engine", "skill", "declarative", "deprecated", "reserved"}
+    assert kinds == {"engine", "skill", "deprecated"}
     assert {
         key for key, entry in LEAF_KEY_REGISTRY.items() if entry.consumer_kind == "deprecated"
     } == DEPRECATED_LEAF_KEYS & set(LEAF_KEY_REGISTRY)
     assert {key for key, entry in LEAF_KEY_REGISTRY.items() if entry.consumer_kind == "skill"} == {
+        "acceptance.commands.build",
+        "acceptance.commands.lint",
+        "acceptance.commands.tests",
+        "acceptance.commands.typecheck",
+        "acceptance.required_before_ship",
         "audit.default_level",
         "flow.advance_after.audit",
         "flow.advance_after.polish",
@@ -493,38 +527,28 @@ def test_every_config_leaf_has_exact_consumer_classification() -> None:
         "research.default_depth",
         "review.default_level",
         "ship.gauntlet",
+        "vcs.pr_merge_method",
+        "vcs.squash_allowed",
     }
     for key, entry in LEAF_KEY_REGISTRY.items():
         if entry.consumer_kind in {"engine", "skill"}:
             assert entry.consumer is not None, key
             assert entry.reserved is False, key
-        elif entry.consumer_kind in {"deprecated", "reserved"}:
+        else:
             assert entry.consumer is None, key
             assert entry.reserved is True, key
-        else:
-            assert entry.consumer_kind == "declarative", key
-            assert entry.reserved is False, key
-            expected_consumer = _EXPECTED_DECLARATIVE_CONSUMERS.get(key)
-            assert entry.consumer == expected_consumer, key
 
 
 def test_reserved_config_leaf_set_is_exact() -> None:
-    hook_keys = {key for key in LEAF_KEY_REGISTRY if key.startswith("hooks.")}
-    expected = hook_keys | (DEPRECATED_LEAF_KEYS & set(LEAF_KEY_REGISTRY))
     reserved = {key for key, entry in LEAF_KEY_REGISTRY.items() if entry.reserved}
 
-    assert reserved == expected
+    assert reserved == DEPRECATED_LEAF_KEYS & set(LEAF_KEY_REGISTRY)
     assert {
         "audit.fix_safe",
-        "hooks.enabled",
         "runtime.adapter_catalog.claude.enabled",
         "runtime.adapter_catalog.codex.enabled",
         "runtime.adapter_catalog.opencode.enabled",
     } <= reserved
-    for key in ("planning.approval", "planning.auto_plan"):
-        entry = leaf_key_lookup(key)
-        assert entry.consumer == _DECLARATIVE_CONSUMER
-        assert entry.reserved is False
     repair_cycles = leaf_key_lookup("flow.max_repair_cycles")
     assert repair_cycles.consumer == "eawf.workflow.skills.flow._config_max_repair_cycles"
     assert repair_cycles.reserved is False
@@ -548,7 +572,8 @@ def test_leaf_key_lookup_unknown_key_raises_canonical_message() -> None:
 
 
 def test_is_known_leaf_key_smoke() -> None:
-    assert is_known_leaf_key("planning.approval") is True
+    assert is_known_leaf_key("planning.max_parallel_waves") is True
+    assert is_known_leaf_key("planning.approval") is False
     assert is_known_leaf_key("planning.does_not_exist") is False
 
 
@@ -557,7 +582,7 @@ def test_leaf_keys_by_domain_groups_runtime() -> None:
     runtime_keys = leaf_keys_by_domain("runtime")
     runtime_names = {entry.key for entry in runtime_keys}
     assert "runtime.preference" in runtime_names
-    assert "runtime.fallback.retry_policy" in runtime_names
+    assert "runtime.claude.stall_interval_s" in runtime_names
     # Telemetry must NOT appear under the runtime domain.
     assert all("telemetry" not in k.key for k in runtime_keys)
 
@@ -647,20 +672,13 @@ def test_schema_version_is_locked() -> None:
     assert entry.choices == ("1.0",)
 
 
-def test_language_runtime_is_locked() -> None:
-    """``language.runtime`` is locked at python per D6."""
-    entry = leaf_key_lookup("language.runtime")
-    assert entry.writable_layers == ()
-    assert entry.choices == ("python",)
-
-
 # --- runtime.models tier-ladder override ------------------------------------
 
 
 def test_resolve_runtime_tier_models_none_when_unconfigured(tmp_path: Path) -> None:
     """No ``runtime.models`` block resolves to ``None`` (built-in ladder wins)."""
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "planning:\n  approval: repo_val\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: high\n")
     assert resolve_runtime_tier_models(repo) is None
 
 

@@ -68,11 +68,13 @@ def test_get_json_envelope_shape(repo_root: Path) -> None:
 
 
 def test_set_to_repo_writes_to_repo_layer(repo_root: Path) -> None:
-    result = runner.invoke(app, ["config", "set", "planning.approval", "auto", "--scope", "repo"])
+    result = runner.invoke(
+        app, ["config", "set", "review.default_level", "high", "--scope", "repo"]
+    )
     assert result.exit_code == 0, result.output
     contents = (repo_root / ".ea" / "config.yaml").read_text(encoding="utf-8")
     parsed = yaml.safe_load(contents)
-    assert parsed["planning"]["approval"] == "auto"
+    assert parsed["review"]["default_level"] == "high"
 
 
 def test_set_to_local_writes_to_local_layer(repo_root: Path) -> None:
@@ -260,7 +262,7 @@ def test_validate_ok_json_envelope(repo_root: Path) -> None:
 
 def test_validate_exits_4_on_malformed_yaml(repo_root: Path) -> None:
     (repo_root / ".ea" / "config.yaml").write_text(
-        "planning:\n  approval: [unclosed\n", encoding="utf-8"
+        "planning:\n  max_parallel_waves: [unclosed\n", encoding="utf-8"
     )
     result = runner.invoke(app, ["config", "validate"])
     assert result.exit_code == 2, result.output
@@ -310,20 +312,16 @@ def test_profile_enable_python_writes_to_repo_layer(repo_root: Path) -> None:
     assert "python" in contents["profiles"]["enabled"]
 
 
-def test_profile_enable_research_materialises_state_keys(repo_root: Path) -> None:
+def test_profile_enable_research_refuses_on_a_plain_epoch1_tree(repo_root: Path) -> None:
+    """REL-021: materialising state keys writes epoch-1 state, so the flag day refuses it."""
     state_path = repo_root / ".ea" / "state.json"
     state_path.write_bytes(orjson.dumps({"schema_version": "1.0"}))
+    before = state_path.read_bytes()
 
     result = runner.invoke(app, ["--json", "config", "profile", "enable", "research"])
-    assert result.exit_code == 0, result.output
-    body = json.loads(result.output)
-    assert body["profile"] == "research"
-    assert body["layer"] == "repo"
-    assert set(body["state_keys_materialised"]) == {"hypotheses", "audits"}
-
-    state_body = json.loads(state_path.read_text(encoding="utf-8"))
-    assert state_body["hypotheses"] == {}
-    assert state_body["audits"] == {}
+    assert result.exit_code == 4, result.output
+    assert json.loads(result.output)["data"]["kind"] == "MigrationRequired"
+    assert state_path.read_bytes() == before
 
 
 def test_profile_enable_unknown_id_exits_3(repo_root: Path) -> None:

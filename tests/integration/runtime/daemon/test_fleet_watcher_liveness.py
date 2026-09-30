@@ -559,14 +559,12 @@ def test_close_on_behalf_finalizes_executor_session(tmp_path: Path) -> None:
 
     Close-on-behalf flips the WAVE to closed, but the sandboxed agent never ran
     its own session teardown, so its executor ``AgentSession`` would stay ACTIVE
-    and the Watch parity grid would keep surfacing the closed wave as a live
-    lane. The close-on-disk path must move the session to CLOSED so the watch
-    surface drops it.
+    and keep surfacing the closed wave as a live lane. The close-on-disk path
+    must move the session to CLOSED.
     """
     from eawf.kernel.state.enums import AgentSessionStatus
     from eawf.kernel.state.models import FleetRun, FleetRunState
     from eawf.runtime.daemon.methods.fleet import _Loop
-    from eawf.surfaces.tui.modes.agent_watch import active_watchable_sessions
 
     state_path = _write_state(tmp_path)  # wave IN_PROGRESS, ses-x ACTIVE executor
     (state_path.parent / "store").mkdir(parents=True, exist_ok=True)
@@ -586,9 +584,6 @@ def test_close_on_behalf_finalizes_executor_session(tmp_path: Path) -> None:
     state = load_state(state_path)
     assert state.waves[_WAVE_ID].status is WaveStatus.CLOSED
     assert state.agent_sessions["ses-x"].status is AgentSessionStatus.CLOSED
-    # The Watch parity grid lays out one tile per ACTIVE watchable session, so a
-    # finalized session drops the closed wave off the live-lane surface.
-    assert active_watchable_sessions(state) == []
 
 
 def test_close_on_behalf_records_actuals_from_runtime_delta(tmp_path: Path) -> None:

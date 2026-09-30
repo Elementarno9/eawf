@@ -35,7 +35,8 @@ from eawf.kernel.state.enums import (
     PhaseStatus,
     WaveStatus,
 )
-from eawf.surfaces.tui.app import resolve_render_mode
+from eawf.surfaces.render.mode import ASCII_EMPTY as GLYPH_EMPTY
+from eawf.surfaces.render.mode import ASCII_FULL as GLYPH_FULL
 from eawf.surfaces.tui.chassis.sigils import (
     _CHROME,
     FOLLOWUP_BADGE,
@@ -45,10 +46,8 @@ from eawf.surfaces.tui.chassis.sigils import (
     status_sigil,
     tint,
 )
+from eawf.surfaces.tui.chassis.status_tint import BAND_HEX
 from eawf.surfaces.tui.chassis.theme import WONG_VARIABLES
-from eawf.surfaces.tui.widgets.eu_bar import GLYPH_EMPTY, GLYPH_FULL
-from eawf.surfaces.tui.widgets.header import render_header
-from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 
 # The expected rendered glyphs, written as the actual code points so the
 # test pins the real marks (the source uses \uXXXX escapes to stay ASCII).
@@ -241,22 +240,6 @@ def test_glyph_unrecognised_label_falls_to_unicode() -> None:
     # There is no third state: any label that is not exactly "ascii" maps to
     # the unicode column (binary selection).
     assert glyph(Sigil.CLOSED, mode="garbage") == "\u25cf"
-
-
-def test_non_tty_harness_resolves_ascii_column() -> None:
-    # When the app resolves "ascii" (the non-TTY / CI / Braille-less path:
-    # resolve_render_mode("ascii", ...) or a failed coverage probe), the
-    # helper gives the ascii column.
-    mode = resolve_render_mode("ascii", braille_ok=False)
-    assert mode == "ascii"
-    assert glyph(Sigil.CLOSED, mode=mode) == "@"
-    assert chrome("gate", mode=mode) == "[]"
-
-    # The auto policy with a failed coverage probe (a non-TTY / Braille-less
-    # terminal) also resolves ascii, and the helper honours it.
-    auto_mode = resolve_render_mode("auto", braille_ok=False)
-    assert auto_mode == "ascii"
-    assert glyph(Sigil.PENDING, mode=auto_mode) == "o"
 
 
 # --------------------------------------------------------------------------
@@ -476,19 +459,3 @@ def test_brand_chrome_ascii_fallback_is_star() -> None:
     # The terminal stand-in for the Seal SVG when graphics are unavailable.
     assert chrome("brand", mode="ascii") == "*"
     assert chrome("brand", mode="unicode") == "◉"
-
-
-def test_header_ascii_mark_is_star_leading_the_wordmark() -> None:
-    # Per D-BRAND-MARK: a non-graphics terminal leads the header with the ``*``
-    # ASCII brand mark immediately before the two-tone ``Eä`` wordmark; the
-    # unicode fisheye never leaks into the ASCII column.
-    ascii_line = render_header(None, render_mode="ascii")
-    star = ascii_line.index("*")
-    wordmark = ascii_line.index("E")
-    assert star < wordmark, "the * brand mark must lead the Eä wordmark"
-    assert "◉" not in ascii_line
-
-
-def test_header_unicode_mark_is_the_fisheye() -> None:
-    # The graphics-capable / unicode path leads with the ◉ fisheye stand-in.
-    assert "◉" in render_header(None, render_mode="unicode")

@@ -277,6 +277,24 @@ def return_focus(session: Session) -> bool:
     return True
 
 
+#: The editor kinds whose keys are typed into a field: every letter is text, never a motion.
+_TYPED_EDITS = frozenset({"num", "text", "tiers"})
+
+
+def enters_text(session: Session) -> bool:
+    """Return whether a field takes typed letters now: the filter, or an editor's text.
+
+    A letter the motion aliases claim, ``j`` or ``k``, is then typed as itself, so an id
+    such as ``gpt-5.3-codex-spark`` can be entered whole.
+    """
+    edit = session.edit
+    if session.typing:
+        return True
+    if edit is None:
+        return False
+    return edit.get("kind") in _TYPED_EDITS or edit.get("typing") is not None
+
+
 def busy(session: Session) -> bool:
     """Return whether an overlay, the filter, the go prefix or an editor owns the keys."""
     return bool(session.overlay or session.typing or session.prefix or session.edit)

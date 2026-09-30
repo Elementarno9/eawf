@@ -43,9 +43,12 @@ from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
 from eawf.surfaces.cli.app import app as cli_app
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.attach import (
+    OFFLINE,
     AttachStep,
+    OfflineSnapshot,
     ambiguous_state,
     failed_state,
+    offline_state,
     resolving_state,
 )
 from eawf.surfaces.tui.console.chrome import EntryState, load_chrome
@@ -53,8 +56,11 @@ from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.registry import ENTRY_STATE_IDS, ENTRY_STATES
 from eawf.surfaces.tui.console.renderers import render_route
-from eawf.surfaces.tui.console.session import SIZES
-from eawf.surfaces.tui.console.tokens import CONNECTION
+from eawf.surfaces.tui.console.renderers.entry import render_state
+from eawf.surfaces.tui.console.session import SIZES, Session
+from eawf.surfaces.tui.console.tokens import CONNECTION, TRUTH
+
+from .overlay_support import chrome
 
 CODE = "ABC"
 AT = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
@@ -79,6 +85,9 @@ _SAFE_KEY_LABELS = frozenset(
     }
 )
 
+
+#: The offline frame's keys: movement, a read-only drill and inspect, attaching read-only.
+_OFFLINE_KEY_LABELS = frozenset({"outcome", "drill", "inspect", "attach read-only"})
 
 # ---------- the real conditions ----------
 
@@ -649,15 +658,8 @@ def test_con_009_a_newer_state_schema_on_an_epoch1_tree_is_refused(
 ) -> None:
     world.ea.mkdir()
     (world.ea / "state.json").write_text(json.dumps({"schema_version": "99.0"}))
-    called: list[object] = []
-
-    def _epoch1(**kwargs: object) -> int:
-        called.append(kwargs)
-        return 0
-
-    monkeypatch.setattr(launch, "_launch_epoch1", _epoch1)
     _rc, app = _launch(monkeypatch)
-    assert called == [] and app is not None
+    assert app is not None
     assert _state(app).id == "schema"
     assert "state schema v99.0" in _text(_frame(app, 0))
 
@@ -666,11 +668,100 @@ def test_con_009_a_newer_state_schema_on_an_epoch1_tree_is_refused(
 def test_con_009_a_readable_or_unparseable_state_schema_is_not_refused(
     world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch, version: str
 ) -> None:
+    """An epoch-1 state the console can read is owed a migration, not a schema refusal."""
     world.ea.mkdir()
     (world.ea / "state.json").write_text(json.dumps({"schema_version": version}))
-    monkeypatch.setattr(launch, "_launch_epoch1", lambda **_kw: 0)
     rc, app = _launch(monkeypatch)
-    assert rc == 0 and app is None
+    assert rc == launch.TERMINAL_ENTRY_EXIT_CODE and app is not None
+    assert _state(app).id == "migration"
+
+
+# ---------- CON-010: the offline snapshot is scope home, dated, with its controls gone ----------
+
+_ROOT = f"eawf://WSP-MAIN/PRJ-{CODE}/REP-{CODE}"
+
+
+def _snapshot(*, tracks: int = 2, cursor: int = 41208, age_seconds: int = 372) -> OfflineSnapshot:
+    """Return a committed scope home ``age_seconds`` old with ``tracks`` Tracks in it."""
+    document = {
+        "track": {
+            f"TRK-{i:04d}": {
+                "urn": f"{_ROOT}/track/TRK-{i:04d}",
+                "revision": 1,
+                "status": "ACTIVE",
+                "title": f"Outcome {i}",
+            }
+            for i in range(tracks)
+        }
+    }
+    projection = build_route_projection(
+        route="scope.home", document=document, cursor=cursor, scope_id=CODE, generated_at=AT
+    )
+    return OfflineSnapshot(
+        projection=projection,
+        committed_at=datetime.fromtimestamp(AT.timestamp() - age_seconds, UTC),
+    )
+
+
+def _offline_text(state: EntryState, size: int = 0) -> str:
+    w, h = SIZES[size]
+    return "\n".join(render_state(View(session=Session(), fixture=chrome(), w=w, h=h), state))
+
+
+def test_con_010_offline_is_scope_home_under_the_offline_value() -> None:
+    state = offline_state(load_chrome(), _snapshot())
+    assert state.id == OFFLINE
+    assert state.state == "OFFLINE SNAPSHOT"
+    assert state.title.startswith("Scope home · ")
+    for size in range(len(SIZES)):
+        assert _offline_text(state, size).split("\n")[0].rstrip().endswith("OFFLINE SNAPSHOT")
+
+
+def test_con_010_offline_carries_the_attached_revision_and_its_age() -> None:
+    state = offline_state(load_chrome(), _snapshot(cursor=41208, age_seconds=372))
+    assert state.title == "Scope home · attached to revision 41,208 · 6m 12s old"
+
+
+def test_con_010_a_snapshot_committed_this_instant_is_zero_seconds_old() -> None:
+    state = offline_state(load_chrome(), _snapshot(age_seconds=0))
+    assert state.title.endswith("· 0s old")
+
+
+def test_con_010_the_body_says_nothing_arrives_and_no_count_is_complete_since_the_stamp() -> None:
+    state = offline_state(load_chrome(), _snapshot())
+    tail = " ".join(state.tail or ())
+    assert "Nothing is arriving" in tail
+    assert "no count can be called complete for the time since 11:53." in tail
+
+
+def test_con_010_the_body_names_the_absent_controls_and_why_and_not_what_still_works() -> None:
+    state = offline_state(load_chrome(), _snapshot())
+    tail = " ".join(state.tail or ())
+    assert "Controls are gone until the daemon answers again." in tail
+    # the keybar advertises the reads, navigation and copy that still work
+    for word in ("Inspecting", "moving around", "copying"):
+        assert word not in tail
+    assert {label for _key, label in state.keys} <= _SAFE_KEY_LABELS | _OFFLINE_KEY_LABELS
+
+
+def test_con_010_attention_missing_from_the_snapshot_is_the_unavailable_token() -> None:
+    state = offline_state(load_chrome(), _snapshot(tracks=3))
+    assert state.rows is not None and len(state.rows) == 3
+    for row in state.rows:
+        assert row[2] == TRUTH["unknown"].unicode
+        assert row[2] != "0"
+
+
+def test_con_010_a_single_track_snapshot_draws_one_outcome_row() -> None:
+    state = offline_state(load_chrome(), _snapshot(tracks=1))
+    assert state.rows is not None and len(state.rows) == 1
+
+
+def test_con_010_an_empty_or_missing_snapshot_says_none_is_held() -> None:
+    empty = offline_state(load_chrome(), _snapshot(tracks=0))
+    missing = offline_state(load_chrome(), None)
+    assert empty.tail == missing.tail
+    assert not empty.rows and not missing.rows
 
 
 # ---------- CON-011: no claim of completeness, no control that mutates ----------

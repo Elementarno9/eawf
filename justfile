@@ -58,7 +58,6 @@ test mode="fast" base="origin/main":
           cov_serial=""
         fi
         uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --junitxml=pytest-junit.xml $cov_parallel
-        uv run pytest -n 4 tests/snapshots/tui --ignore=tests/snapshots/tui/console $cov_serial
         uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli $cov_serial
         ;;
       changed)

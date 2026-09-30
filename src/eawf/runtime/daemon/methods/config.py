@@ -56,6 +56,7 @@ from eawf.kernel.config.layered import (
 )
 from eawf.kernel.config.loader import load_yaml_layer
 from eawf.kernel.config.registry import leaf_key_lookup, validate_config_value
+from eawf.kernel.config.registry.leaf_catalog import LEAF_KEY_REGISTRY
 from eawf.kernel.fsync import fsync_parent_dir
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
@@ -635,8 +636,12 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
 async def unset_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Remove one dotted-key value from a YAML layer.
 
-    Unknown or non-writable leaves reject before the file lock. Removing an
-    absent leaf is an idempotent no-op: no write and no update envelope.
+    A catalog leaf is removed only from a layer it is writable at and a
+    reserved leaf not at all, both refused before the file lock. A key no
+    code reads -- a deprecated leaf, or one off the catalog -- is removed
+    from any file layer that states it, which is how a stale file is cleaned;
+    writing one stays refused. Removing an absent leaf is an idempotent
+    no-op: no write and no update envelope.
     """
     try:
         args = UnsetLayerValueParams.model_validate(params)
@@ -649,12 +654,16 @@ async def unset_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[
         raise ValueError("validation_failed: layer 'wave' is daemon-RAM-only")
 
     dotted = ".".join(args.key_path)
-    entry = leaf_key_lookup(dotted)
-    if entry.reserved:
-        raise ValueError(f"validation_failed: config leaf {dotted!r} is deprecated")
+    entry = LEAF_KEY_REGISTRY.get(dotted)
+    # a key nothing reads, deprecated or off the catalog, may still sit in a file; removing
+    # it from any file layer is how that file is cleaned without editing it by hand, while
+    # set_layer_value keeps refusing to write one
+    unread = entry is None or entry.consumer_kind == "deprecated"
+    if entry is not None and entry.reserved and not unread:
+        raise ValueError(f"validation_failed: config leaf {dotted!r} is reserved")
     state_path = _resolve_state_anchor(repo_root=args.repo_root, ctx=ctx)
     target = _resolve_layer_path(args.layer, state_path=state_path, branch=args.branch)
-    if args.layer not in entry.writable_layers:
+    if entry is not None and not unread and args.layer not in entry.writable_layers:
         raise ValueError(
             f"validation_failed: leaf {dotted!r} is not writable from the {args.layer} layer"
         )

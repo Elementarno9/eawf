@@ -1,7 +1,8 @@
 """The linked consequence card's frame: six panes before confirmation, one row per target after.
 
 Before confirmation a single target draws ACTION, TARGET, EFFECTS, NOT, IF STALE and
-AUTHORITY in that order, every time, whatever the verb. A bulk card lists the selection
+AUTHORITY in that order, every time, whatever the verb; a settings write of a whole list
+or mapping adds CHANGES, its per-member difference, before EFFECTS. A bulk card lists the selection
 by identifier above the six panes and adds the UNKNOWN pane below them, which names in
 advance the targets that may not confirm. A card refused before sending keeps its six
 panes: EFFECTS says nothing will change and why, and the keybar offers only the way back.
@@ -134,6 +135,11 @@ def preview_frame(view: View, card: Card) -> list[str]:
             *_pane("ACTION", [card.action], w),
             *_pane("TARGET", _target(first), w),
             thin(w),
+            *(
+                [*_pane("CHANGES", list(first.changes), w), thin(w)]
+                if first.changes and first.refusal is None
+                else []
+            ),
             *_pane("EFFECTS", _effects(first), w),
             thin(w),
             *_pane("NOT", list(first.not_effects), w),

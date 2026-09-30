@@ -8,8 +8,8 @@ Covers the standalone gate in ``tools/coverage_gate.py``:
   package when measured < gate (the not-idle negative control), honours
   ``waive_line`` / ``waive_branch``, and FAILS when a gate matches no source
   files (a typo'd path);
-- ``evaluate_tui_behavioural`` counts golden snapshots + ``"flow":`` rows and
-  fires when either count falls below its floor;
+- ``evaluate_tui_behavioural`` counts the console's recorded golden frames and
+  journeys and fires when either count falls below its floor;
 - the seven previously-ungated packages named by P30-I10-W06 are all present in
   ``[tool.eawf.coverage.gates]`` and the TUI carries a behavioural floor instead
   of a line/branch ratchet;
@@ -32,6 +32,7 @@ fixture trees so the negative controls never touch the real coverage report.
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sys
 import tomllib
@@ -40,6 +41,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _GATE_PATH = _REPO_ROOT / "tools" / "coverage_gate.py"
@@ -198,9 +200,9 @@ line = 90
 branch = 0
 
 [tool.eawf.coverage.tui_behavioural]
-golden_glob = "tests/snapshots/tui/golden/*.txt"
+golden_glob = "tests/fixtures/console/golden/sequences/*frames*.json"
 min_goldens = 1
-flow_glob = "tests/snapshots/tui/test_tui_flow.py"
+flow_glob = "tests/fixtures/console/golden/sequences/journeys.json"
 min_flows = 1
 """.lstrip(),
         encoding="utf-8",
@@ -220,58 +222,60 @@ min_flows = 1
     assert any(entry.startswith("tui.flows") for entry in outcome.failures)
 
 
+_SEQUENCES = Path("tests/fixtures/console/golden/sequences")
+_BEHAVIOURAL_SPEC = {
+    "golden_glob": str(_SEQUENCES / "frames-*.json"),
+    "flow_glob": str(_SEQUENCES / "journeys.json"),
+}
+
+
+def _seed_sequences(root: Path, *, frames: tuple[int, ...], journeys: int) -> None:
+    """Write frame files holding ``frames`` states each and a journey file of ``journeys``."""
+    sequences = root / _SEQUENCES
+    sequences.mkdir(parents=True)
+    for index, count in enumerate(frames):
+        states = [{"id": f"f{index}-{n}"} for n in range(count)]
+        body = {"kind": "frames", "states": states, "count": count}
+        (sequences / f"frames-{index}.json").write_text(json.dumps(body), encoding="utf-8")
+    body = {"meta": {}, "count": journeys, "journeys": [{"id": f"j{n}"} for n in range(journeys)]}
+    (sequences / "journeys.json").write_text(json.dumps(body), encoding="utf-8")
+
+
 def test_tui_behavioural_passes_when_counts_meet_floor(tmp_path: Path) -> None:
-    golden_dir = tmp_path / "tests" / "snapshots" / "tui" / "golden"
-    golden_dir.mkdir(parents=True)
-    for i in range(3):
-        (golden_dir / f"screen_{i}.txt").write_text("snap", encoding="utf-8")
-    flow_file = tmp_path / "tests" / "snapshots" / "tui" / "test_tui_flow.py"
-    flow_file.parent.mkdir(parents=True, exist_ok=True)
-    flow_file.write_text('    "flow": "G1",\n    "flow": "G2",\n', encoding="utf-8")
-    spec = {
-        "golden_glob": "tests/snapshots/tui/golden/*.txt",
-        "min_goldens": 3,
-        "flow_glob": "tests/snapshots/tui/test_tui_flow.py",
-        "min_flows": 2,
-    }
+    _seed_sequences(tmp_path, frames=(2, 1), journeys=2)
+    spec = {**_BEHAVIOURAL_SPEC, "min_goldens": 3, "min_flows": 2}
     _report, failures = _GATE.evaluate_tui_behavioural(spec, tmp_path)
     assert failures == []
 
 
 def test_tui_behavioural_fires_on_deleted_golden(tmp_path: Path) -> None:
-    # Negative control: only 1 golden but floor is 3 -> FAIL + cite the count.
-    golden_dir = tmp_path / "tests" / "snapshots" / "tui" / "golden"
-    golden_dir.mkdir(parents=True)
-    (golden_dir / "only.txt").write_text("snap", encoding="utf-8")
-    flow_file = tmp_path / "tests" / "snapshots" / "tui" / "test_tui_flow.py"
-    flow_file.parent.mkdir(parents=True, exist_ok=True)
-    flow_file.write_text('    "flow": "G1",\n', encoding="utf-8")
-    spec = {
-        "golden_glob": "tests/snapshots/tui/golden/*.txt",
-        "min_goldens": 3,
-        "flow_glob": "tests/snapshots/tui/test_tui_flow.py",
-        "min_flows": 1,
-    }
+    # Negative control: 2 frames but floor is 3 -> FAIL + cite the count.
+    _seed_sequences(tmp_path, frames=(2,), journeys=1)
+    spec = {**_BEHAVIOURAL_SPEC, "min_goldens": 3, "min_flows": 1}
     _report, failures = _GATE.evaluate_tui_behavioural(spec, tmp_path)
-    assert any(entry.startswith("tui.goldens") and "< floor 3" in entry for entry in failures)
+    assert failures == ["tui.goldens: 2 golden frames < floor 3"]
 
 
 def test_tui_behavioural_fires_on_deleted_flow(tmp_path: Path) -> None:
-    golden_dir = tmp_path / "tests" / "snapshots" / "tui" / "golden"
-    golden_dir.mkdir(parents=True)
-    (golden_dir / "s.txt").write_text("snap", encoding="utf-8")
-    flow_file = tmp_path / "tests" / "snapshots" / "tui" / "test_tui_flow.py"
-    flow_file.parent.mkdir(parents=True, exist_ok=True)
-    # Only one flow row but floor is 7.
-    flow_file.write_text('    "flow": "G1-only",\n', encoding="utf-8")
-    spec = {
-        "golden_glob": "tests/snapshots/tui/golden/*.txt",
-        "min_goldens": 1,
-        "flow_glob": "tests/snapshots/tui/test_tui_flow.py",
-        "min_flows": 7,
-    }
+    _seed_sequences(tmp_path, frames=(1,), journeys=1)
+    spec = {**_BEHAVIOURAL_SPEC, "min_goldens": 1, "min_flows": 7}
     _report, failures = _GATE.evaluate_tui_behavioural(spec, tmp_path)
-    assert any(entry.startswith("tui.flows") and "< floor 7" in entry for entry in failures)
+    assert failures == ["tui.flows: 1 operator journeys < floor 7"]
+
+
+def test_tui_behavioural_counts_zero_when_no_sequence_exists(tmp_path: Path) -> None:
+    spec = {**_BEHAVIOURAL_SPEC, "min_goldens": 0, "min_flows": 0}
+    report, failures = _GATE.evaluate_tui_behavioural(spec, tmp_path)
+    assert failures == []
+    assert [row.split()[1] for row in report] == ["0", "0"]
+
+
+def test_tui_behavioural_refuses_a_file_that_is_not_a_sequence(tmp_path: Path) -> None:
+    _seed_sequences(tmp_path, frames=(1,), journeys=1)
+    (tmp_path / _SEQUENCES / "frames-0.json").write_text('{"states": [], "extra": 1}')
+    spec = {**_BEHAVIOURAL_SPEC, "min_goldens": 0, "min_flows": 0}
+    with pytest.raises(ValidationError):
+        _GATE.evaluate_tui_behavioural(spec, tmp_path)
 
 
 def test_load_gates_missing_section_raises(tmp_path: Path) -> None:
@@ -397,7 +401,6 @@ def test_real_floors_are_green_against_real_coverage() -> None:
     assert failures == [], f"W06 floors red against real coverage: {failures}"
 
 
-@pytest.mark.skipif(not _COVERAGE_XML.exists(), reason="no coverage.xml on this tree")
 def test_real_tui_behavioural_floor_is_green() -> None:
     with _PYPROJECT.open("rb") as handle:
         behavioural = tomllib.load(handle)["tool"]["eawf"]["coverage"]["tui_behavioural"]
@@ -422,9 +425,9 @@ line = 50
 branch = 0
 
 [tool.eawf.coverage.tui_behavioural]
-golden_glob = "tests/snapshots/tui/golden/*.txt"
+golden_glob = "tests/fixtures/console/golden/sequences/*frames*.json"
 min_goldens = 0
-flow_glob = "tests/snapshots/tui/test_tui_flow.py"
+flow_glob = "tests/fixtures/console/golden/sequences/journeys.json"
 min_flows = 0
 """.lstrip()
 

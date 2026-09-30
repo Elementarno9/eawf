@@ -35,7 +35,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Final, Literal
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, JsonValue
 
 from eawf.kernel.config.defaults import built_in_defaults
 from eawf.kernel.config.layered import (
@@ -52,7 +52,13 @@ from eawf.kernel.config.layered import (
 )
 from eawf.kernel.config.loader import load_yaml_layer
 from eawf.kernel.config.registry.leaf_catalog import LEAF_KEY_REGISTRY
-from eawf.kernel.config.registry.leaf_keys import LeafKey, LeafKeyType
+from eawf.kernel.config.registry.leaf_keys import (
+    ChoicesFrom,
+    ConsumerKind,
+    EditorKind,
+    LeafKey,
+    LeafKeyType,
+)
 from eawf.kernel.projection.compute import (
     PROJECTION_POLICY_REVISION,
     PROJECTION_SCHEMA_VERSION,
@@ -110,29 +116,27 @@ LENS_LAYERS: Final[tuple[Layer, ...]] = tuple(Layer(layer) for layer in WRITABLE
 #: holds. Nothing is configured at the category level; the table only files every
 #: catalog section under exactly one heading, alphabetical at both levels.
 SETTINGS_CATEGORIES: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
-    # agents configures who performs work, so it is filed with execution
+    # agents configures who performs work and economics what work may cost, so both
+    # are filed with execution
     (
         "execution",
         (
             "agents",
             "dispatch",
+            "economics",
             "flow",
             "planning",
             "prep",
             "research",
             "runtime",
             "ship",
-            "worktrees",
         ),
     ),
-    ("identity", ("preferences", "profiles", "project", "workspace")),
-    ("interface", ("cli", "commands", "docs", "statusline", "ui")),
-    ("quality", ("audit", "estimation", "polish", "prose", "review", "verify")),
-    ("safety", ("acceptance", "hooks", "mcp", "security")),
-    (
-        "system",
-        ("config", "daemon", "language", "memory", "state_schema", "storage", "telemetry", "vcs"),
-    ),
+    ("identity", ("preferences", "profiles")),
+    ("interface", ("tui", "ui")),
+    ("quality", ("audit", "estimation", "review", "verify")),
+    ("safety", ("acceptance",)),
+    ("system", ("config", "daemon", "telemetry", "vcs")),
 )
 
 
@@ -177,11 +181,15 @@ class SettingsLayerEntry(_SettingsModel):
         value: What the layer states for the key, as the console prints it.
         wins: Whether this is the layer whose value is in force. Exactly one entry of a
             key's stack wins; every other entry is a layer the winner overrode.
+        data: What the layer itself states, as structured data, for a key whose console
+            editor rebuilds the whole value from it; ``None`` for every other key, whose
+            printed ``value`` is all an edit starts from.
     """
 
     layer: Layer
     value: NonEmptyStr
     wins: bool
+    data: JsonValue = None
 
 
 class SettingsLeaf(_SettingsModel):
@@ -210,6 +218,13 @@ class SettingsLeaf(_SettingsModel):
         certification_state: Whether that capability is certified on this runtime.
         secret_ref: The typed reference of a secret value; the value itself never
             reaches a read model.
+        consumer_kind: How the catalog says the value is read; ``None`` outside the
+            catalog, where nothing reads it.
+        value_range: The inclusive range the catalog holds a number to, either end open;
+            ``None`` when it states none.
+        editor: The console editor for a list or mapping key; ``None`` otherwise.
+        candidates: For a ``pin`` key, each member that may be pinned and the digest the
+            console would pin for it now, read with the view.
     """
 
     key: NonEmptyStr
@@ -227,10 +242,36 @@ class SettingsLeaf(_SettingsModel):
     capability_requirement: NonEmptyStr | None = None
     certification_state: NonEmptyStr | None = None
     secret_ref: NonEmptyStr | None = None
+    consumer_kind: ConsumerKind | None = None
+    value_range: tuple[float | None, float | None] | None = None
+    editor: EditorKind | None = None
+    candidates: tuple[tuple[NonEmptyStr, NonEmptyStr], ...] = ()
 
     def stated_at(self, layer: Layer) -> str | None:
         """Return what ``layer`` states for the key, or ``None`` when it states nothing."""
         return next((entry.value for entry in self.stack if entry.layer is layer), None)
+
+    def data_at(self, layer: Layer) -> JsonValue:
+        """Return the structured value ``layer`` states, or ``None`` when it states none."""
+        return next((entry.data for entry in self.stack if entry.layer is layer), None)
+
+    @property
+    def unread(self) -> bool:
+        """Return whether no code reads the key: it is off the catalog or deprecated."""
+        return self.consumer_kind in (None, "deprecated")
+
+    def drawn_in(self) -> str | None:
+        """Return the rail section the key is listed under, or ``None`` when it is not listed.
+
+        A deprecated, reserved or uncatalogued key is listed only while a file layer still
+        states it, since that statement is then the one thing left to remove; an
+        uncatalogued key is listed under its first segment.
+        """
+        if self.consumer_kind not in (None, "deprecated", "reserved"):
+            return self.section
+        if not any(entry.layer in LENS_LAYERS for entry in self.stack):
+            return None
+        return self.section or self.key.split(".", 1)[0]
 
 
 class SettingsCategory(_SettingsModel):
@@ -258,6 +299,9 @@ class EffectiveSettingsView(_SettingsModel):
             and deliberately not the cursor, because config changes without the tree.
         branch: The branch whose layer was read, which is the one a ``branch`` edit
             writes; ``None`` when the tree has no current branch.
+        lens_layers: The file layers the lens cycles, in precedence order: every one of
+            them unless the workspace file is the repo file, when the workspace layer is
+            not a separate place to write.
         rail: The six categories and the sections each holds, in rail order.
         leaves: Every catalog key, then every merged leaf outside the catalog, by key.
     """
@@ -267,6 +311,7 @@ class EffectiveSettingsView(_SettingsModel):
     header: ProjectionHeader
     digest: Sha256DigestStr
     branch: NonEmptyStr | None
+    lens_layers: tuple[Layer, ...] = LENS_LAYERS
     rail: tuple[SettingsCategory, ...]
     leaves: tuple[SettingsLeaf, ...]
 
@@ -287,8 +332,8 @@ class EffectiveSettingsView(_SettingsModel):
         return tuple(section for category in self.rail for section in category.sections)
 
     def keys_of(self, section: str) -> tuple[SettingsLeaf, ...]:
-        """Return the leaves filed under ``section``, by key; empty for an unknown one."""
-        return tuple(leaf for leaf in self.leaves if leaf.section == section)
+        """Return the leaves listed under ``section``, by key; empty for an unknown one."""
+        return tuple(leaf for leaf in self.leaves if leaf.drawn_in() == section)
 
     def category_of(self, section: str) -> str:
         """Return the category ``section`` is filed under; empty for an unknown one."""
@@ -417,23 +462,39 @@ def _stack_for(
     winner: Layer,
     winning_value: Any,
     overlays: Mapping[str, Mapping[str, Any]],
+    structured: bool,
 ) -> tuple[SettingsLayerEntry, ...]:
     """Return one key's stack: every layer that states it, lowest precedence first.
 
     A layer above the winner is never in the stack, because a layer that stated the key
-    and sits above the winner would be the winner.
+    and sits above the winner would be the winner. With ``structured`` each entry also
+    carries what its own layer states, which for the winner is its overlay rather than
+    the merged value, because a mapping merges with the layers below it.
     """
     entries: list[SettingsLayerEntry] = []
     for layer in LAYER_ORDER:
-        if layer == winner:
-            break
         overlay = overlays.get(layer)
         stated = _ABSENT if overlay is None else _value_at(overlay, key)
+        if layer == winner:
+            own = winning_value if stated is _ABSENT else stated
+            entries.append(
+                SettingsLayerEntry(
+                    layer=winner,
+                    value=render_value(winning_value),
+                    wins=True,
+                    data=own if structured else None,
+                )
+            )
+            break
         if stated is not _ABSENT:
             entries.append(
-                SettingsLayerEntry(layer=Layer(layer), value=render_value(stated), wins=False)
+                SettingsLayerEntry(
+                    layer=Layer(layer),
+                    value=render_value(stated),
+                    wins=False,
+                    data=stated if structured else None,
+                )
             )
-    entries.append(SettingsLayerEntry(layer=winner, value=render_value(winning_value), wins=True))
     return tuple(entries)
 
 
@@ -525,17 +586,33 @@ def _leaf(
     merged: Mapping[str, Any],
     sources: Mapping[str, str],
     overlays: Mapping[str, Mapping[str, Any]],
+    resolved: Mapping[str, tuple[tuple[str, str], ...]],
 ) -> SettingsLeaf:
-    """Return one key's leaf: its value in force, its stack and what the catalog says of it."""
+    """Return one key's leaf: its value in force, its stack and what the catalog says of it.
+
+    ``resolved`` holds, per :data:`~eawf.kernel.config.registry.leaf_keys.ChoicesFrom`
+    source, the members read for this view and the digest each would be pinned under.
+    """
     value = _value_at(merged, key)
     winner = _winner(key, sources) if value is not _ABSENT else None
+    editor = entry.editor if entry is not None else None
     stack = (
-        _stack_for(key=key, winner=winner, winning_value=value, overlays=overlays)
+        _stack_for(
+            key=key,
+            winner=winner,
+            winning_value=value,
+            overlays=overlays,
+            structured=editor in ("rows", "pin"),
+        )
         if winner is not None
         else ()
     )
     writable = () if entry is None or entry.reserved else entry.writable_layers
     runtime = entry.runtime if entry is not None else None
+    members = resolved.get(entry.choices_from, ()) if entry and entry.choices_from else ()
+    allowed = tuple(member for member, _digest in members) or (
+        (entry.choices or ()) if entry is not None else ()
+    )
     return SettingsLeaf(
         key=key,
         section=entry.domain if entry is not None else None,
@@ -546,22 +623,112 @@ def _leaf(
         stack=stack,
         value_type=entry.type if entry is not None else None,
         meaning=entry.description if entry is not None else "",
-        allowed=(entry.choices or ()) if entry is not None else (),
+        allowed=() if editor == "pin" else allowed,
         deny_chain=_deny_chain(entry, value, merged, sources) if entry is not None else (),
         constraint_chain=_constraint_chain(entry) if entry is not None else (),
         capability_requirement=f"{runtime} runtime" if runtime is not None else None,
         certification_state=_certification_state(runtime) if runtime is not None else None,
         secret_ref=_secret_ref(entry, value) if entry is not None else None,
+        consumer_kind=entry.consumer_kind if entry is not None else None,
+        value_range=entry.value_range if entry is not None else None,
+        editor=editor,
+        candidates=tuple(pair for pair in members if pair[1]) if editor == "pin" else (),
     )
+
+
+#: The category an uncatalogued key's first segment is filed under when the table names
+#: no category for it: such a key is listed only so a file's stale statement can be
+#: removed, which is housekeeping of the system.
+_STRAY_CATEGORY: Final = "system"
 
 
 def _rail(sections: Iterable[str]) -> tuple[SettingsCategory, ...]:
-    """Return the six categories, each holding the table's sections the view has keys for."""
+    """Return the six categories, each holding the table's sections the view has keys for.
+
+    A section the table does not file, the first segment of a listed uncatalogued key,
+    goes under :data:`_STRAY_CATEGORY`.
+    """
     held = set(sections)
+    filed = {section for _name, members in SETTINGS_CATEGORIES for section in members}
+    stray = held - filed
     return tuple(
-        SettingsCategory(name=name, sections=tuple(s for s in sorted(members) if s in held))
+        SettingsCategory(
+            name=name,
+            sections=tuple(
+                s
+                for s in sorted(set(members) | (stray if name == _STRAY_CATEGORY else set()))
+                if s in held
+            ),
+        )
         for name, members in SETTINGS_CATEGORIES
     )
+
+
+def _profile_members(
+    source: ChoicesFrom, *, workspace: Path | None, repo: Path | None
+) -> tuple[tuple[str, str], ...]:
+    """Return the profiles ``source`` ranges over, each with the digest it would be pinned by.
+
+    The profiles are those discoverable from the tree now. ``profile_trust`` pins the file
+    digest of every profile outside the bundled set, which is what the trust ledger holds;
+    ``profile_certification`` pins the content digest of every enriched profile, which is
+    what certification compares. A profile whose file does not validate has no digest to
+    pin and is left out; ``profiles`` lists every id with no digest.
+    """
+    from eawf.platform.profiles.certification import profile_digest
+    from eawf.platform.profiles.discovery import discover_profile
+    from eawf.platform.profiles.loader import list_profiles, load_profile
+    from eawf.platform.profiles.trust import is_bundled, profile_sha256
+    from eawf.surfaces.cli.errors import UserError, ValidationError
+
+    ids = list_profiles(repo=repo, workspace=workspace)
+    if source == "profiles":
+        return tuple((pid, "") for pid in ids)
+    members: list[tuple[str, str]] = []
+    for pid in ids:
+        if source == "profile_trust":
+            path = discover_profile(pid, repo=repo, workspace=workspace).path
+            if path is not None and not is_bundled(pid):
+                members.append((pid, profile_sha256(path)))
+            continue
+        try:
+            body = load_profile(pid, repo=repo, workspace=workspace)
+        except (UserError, ValidationError) as error:
+            logger.debug(f"_profile_members skipped={pid!r} reason={error}")
+            continue
+        if body.is_enriched:
+            members.append((pid, profile_digest(body)))
+    return tuple(members)
+
+
+def _resolve_members(
+    sources: Iterable[ChoicesFrom], *, workspace: Path | None, repo: Path | None
+) -> dict[str, tuple[tuple[str, str], ...]]:
+    """Return the members of every value set the catalog reads per view, keyed by source."""
+    resolved: dict[str, tuple[tuple[str, str], ...]] = {}
+    for source in set(sources):
+        if source == "ship_gates":
+            from eawf.workflow.skills.ship import SHIP_GATES
+
+            resolved[source] = tuple((gate, "") for gate in SHIP_GATES)
+        else:
+            resolved[source] = _profile_members(source, workspace=workspace, repo=repo)
+    return resolved
+
+
+def _lens_layers(*, workspace: Path | None, repo: Path | None) -> tuple[Layer, ...]:
+    """Return the lens's layers: every file layer, less the workspace when it is the repo file.
+
+    The workspace and repo layers name one file when the workspace root is the repo root,
+    and the daemon then writes both to it; cycling through both would offer one place
+    twice under two names.
+    """
+    same = (
+        workspace is not None
+        and repo is not None
+        and workspace_config_path(workspace).resolve() == repo_config_path(repo).resolve()
+    )
+    return tuple(layer for layer in LENS_LAYERS if not (same and layer is Layer.WORKSPACE))
 
 
 def catalog_section_order() -> tuple[str, ...]:
@@ -614,9 +781,19 @@ def build_settings_view(
         **layer_overlays(workspace=workspace, repo=repo, branch=named),
     }
     catalog = sorted(LEAF_KEY_REGISTRY)
+    resolved = _resolve_members(
+        (entry.choices_from for entry in LEAF_KEY_REGISTRY.values() if entry.choices_from),
+        workspace=workspace,
+        repo=repo,
+    )
     leaves = [
         _leaf(
-            key=key, entry=LEAF_KEY_REGISTRY[key], merged=merged, sources=sources, overlays=overlays
+            key=key,
+            entry=LEAF_KEY_REGISTRY[key],
+            merged=merged,
+            sources=sources,
+            overlays=overlays,
+            resolved=resolved,
         )
         for key in catalog
     ]
@@ -631,7 +808,14 @@ def build_settings_view(
         )
     ]
     leaves += [
-        _leaf(key=dotted, entry=None, merged=merged, sources=sources, overlays=overlays)
+        _leaf(
+            key=dotted,
+            entry=None,
+            merged=merged,
+            sources=sources,
+            overlays=overlays,
+            resolved=resolved,
+        )
         for dotted in covered
     ]
     logger.debug(f"build_settings_view leaves={len(leaves)} uncatalogued={len(covered)}")
@@ -654,7 +838,8 @@ def build_settings_view(
         ),
         digest=_digest(leaves),
         branch=named or None,
-        rail=_rail(leaf.section for leaf in leaves if leaf.section is not None),
+        lens_layers=_lens_layers(workspace=workspace, repo=repo),
+        rail=_rail(section for leaf in leaves if (section := leaf.drawn_in()) is not None),
         leaves=tuple(leaves),
     )
 

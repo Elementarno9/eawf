@@ -374,10 +374,6 @@ exclude = [
     { path = "src/eawf/surfaces/cli/commands/roadmap.py", expires = "2027-01-31", reason = "roadmap CLI command group grown past the cap while preserving behavior; extract-module split follow-up" },
     { path = "src/eawf/surfaces/render/plan_view.py", expires = "2027-01-31", reason = "plan-view renderer grown past the cap while preserving behavior; extract-module split follow-up" },
     { path = "src/eawf/surfaces/render/skills/registry.py", expires = "2027-01-31", reason = "data-heavy SkillSpec/AgentSpec declaration table whose body constants carry the length; drops off when a wave extracts the bodies" },
-    { path = "src/eawf/surfaces/tui/app.py", expires = "2027-01-31", reason = "TUI app shell, already past the cap when the live-view waves touched it; extract-module split follow-up" },
-    { path = "src/eawf/surfaces/tui/modes/agent_watch.py", expires = "2027-04-30", reason = "cohesive agent-watch session-zoom surface; the output-tail wiring and zoom render helpers split into a sibling module once the cockpit settles" },
-    { path = "src/eawf/surfaces/tui/modes/autopilot.py", expires = "2027-04-30", reason = "cohesive autopilot cockpit surface; the pure frontier-render helpers split into a sibling module once the surface settles" },
-    { path = "src/eawf/surfaces/tui/modes/research_board.py", expires = "2027-01-31", reason = "cohesive research-mode surface mid-build; the pure render helpers split into a sibling module once the live multi-round runner lands" },
 ]
 
 [tool.eawf.lint.eawf011]
@@ -580,18 +576,15 @@ branch = 87
 [tool.eawf.coverage.tui_behavioural]
 # The TUI quality number is NOT line-cov (waived above): Textual widgets
 # render asynchronously and line/branch coverage misreports them. The
-# behavioural surface is enforced by counting the screen-level golden
-# snapshots + the operator-journey ``tui_flow`` specs the suite exercises,
-# a counts-based ratchet that fires the moment a screen snapshot or a flow
-# is deleted without replacement. Floors sit just below the counts measured
-# on 2026-06-10 (69 goldens, 7 G1-G7 flows) so the gate is GREEN today and
-# ratchets up as screens / flows are added. ``affordance_parity`` coverage
-# (every advertised footer key resolves across MODES) is enforced by the
-# affordance-matrix snapshot test, not a count here.
-golden_glob = "tests/snapshots/tui/golden/*.txt"
-min_goldens = 67
-flow_glob = "tests/snapshots/tui/test_tui_flow.py"
-min_flows = 7
+# behavioural surface is enforced by counting the console's recorded golden
+# frames and operator journeys, the contract its replay harness checks, a
+# counts-based ratchet that fires the moment a frame or a journey is deleted
+# without replacement. Floors sit at the counts recorded when the epoch-1 TUI
+# was deleted (261 frames, 25 journeys) and ratchet up as the console grows.
+golden_glob = "tests/fixtures/console/golden/sequences/*frames*.json"
+min_goldens = 261
+flow_glob = "tests/fixtures/console/golden/sequences/journeys.json"
+min_flows = 25
 
 [build-system]
 requires = ["hatchling"]

@@ -192,6 +192,8 @@ class RouteSpec:
         subject_required: Whether the route opens only onto one entity; such a route is
             never a ``g`` or palette destination.
         palette_visible: Whether the palette's route list offers it.
+        palette_overflow: Whether the row an overflowing palette list ends in opens it;
+            such a route is reached from the palette but is never a row of its route list.
         go_letter: The ``g``-prefix letter that opens it.
         step_leaf: The crumb label with no subject. ``None`` means the route word, and
             ``""`` means the root itself.
@@ -222,6 +224,7 @@ class RouteSpec:
     sub_surface_of: str | None = None
     subject_required: bool = False
     palette_visible: bool = False
+    palette_overflow: bool = False
     go_letter: str | None = None
     step_leaf: str | None = None
     tab_owner: str | None = None
@@ -402,7 +405,7 @@ def doors_of(spec: RouteSpec) -> tuple[Door, ...]:
     doors: list[Door] = []
     if spec.go_letter:
         doors.append(Door(kind=DoorKind.GO, key=spec.go_letter))
-    if spec.palette_visible:
+    if spec.palette_visible or spec.palette_overflow:
         doors.append(Door(kind=DoorKind.PALETTE))
     doors.extend(Door(kind=DoorKind.DRILL, key=p) for p in DRILL_PREFIXES.get(spec.id, ()))
     doors.extend(spec.doors)
@@ -496,7 +499,7 @@ def _validate_subjects(routes: tuple[RouteSpec, ...]) -> None:
         spec.id
         for spec in routes
         if (spec.subject_required or spec.sub_surface_of)
-        and (spec.go_letter or spec.palette_visible)
+        and (spec.go_letter or spec.palette_visible or spec.palette_overflow)
     ]
     if listed:
         raise ValueError(
@@ -574,6 +577,7 @@ class RouteRegistry:
         by_key: Row per canonical port key.
         go_map: Route id per ``g`` letter.
         route_list: The palette's route list, alphabetical.
+        overflow_route: The route an overflowing palette list's last row opens, if any.
         step_leaves: Crumb leaf per route that declares one.
         via_leaves: Drilled-from crumb leaf per list route that declares one.
         escapes: Escape parent per route; the root has none.
@@ -603,6 +607,10 @@ class RouteRegistry:
         self.route_list: tuple[str, ...] = tuple(
             sorted(s.id for s in self.routes if s.palette_visible)
         )
+        overflow = [s.id for s in self.routes if s.palette_overflow]
+        if len(overflow) > 1:
+            raise ValueError(f"more than one palette overflow route: {', '.join(overflow)}")
+        self.overflow_route: str | None = overflow[0] if overflow else None
         self.step_leaves: Mapping[str, str] = MappingProxyType(
             {s.id: s.step_leaf for s in self.routes if s.step_leaf is not None}
         )
@@ -933,7 +941,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         question="What are all the hits of this palette query over the entity registers?",
         needs="exact counts by kind and typed-id hits, cursor-paged",
         escape=_HOME,
-        palette_visible=True,
+        palette_overflow=True,
         step_leaf="Search",
         via_leaf="Search",
         read_model=_RM.SEARCH_PAGE,

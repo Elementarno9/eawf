@@ -63,10 +63,6 @@ import pytest
 
 from eawf.kernel.state.enums import EffortBucket, WaveStatus
 from eawf.kernel.state.models import SessionAttempt, State, Wave
-from eawf.surfaces.tui.screens.overlays.detail_cost import (
-    attempt_is_priced,
-    wave_cost_rollup_for_wave,
-)
 from tests.e2e.conftest import E2EEnv
 
 # AF_UNIX + fork-based detach are POSIX-only; the Part-C live drive speaks to
@@ -257,39 +253,27 @@ def assert_orphan_claim_failed(state: State, wave_id: str) -> None:
     )
 
 
-def assert_per_attempt_cost_present(
-    state: State, wave_id: str, *, state_path: Path | None = None
-) -> None:
-    """Assert *wave_id* surfaces a priced per-attempt ``cost_usd``.
+def assert_per_attempt_cost_present(state: State, wave_id: str) -> None:
+    """Assert every attempt of *wave_id* carries its own priced ``cost_usd``.
 
-    Reuses the detail-cost rollup entry point
-    (:func:`~eawf.surfaces.tui.screens.overlays.detail_cost.wave_cost_rollup_for_wave`),
-    the same join the wave-detail ``$`` tab reads, and asserts every joined
-    attempt row is priced. ``state_path`` points the join at a telemetry DB;
-    the default (a path with no DB) forces the runtime-snapshot fallback that
-    reads each attempt's OWN :attr:`SessionAttempt.cost_usd` -- so a wave whose
-    attempts carry no per-attempt cost yields an empty / un-priced rollup and
-    trips this check.
+    A genuine dispatch stamps :attr:`SessionAttempt.cost_usd` on its attempt, so a
+    wave whose attempts carry no positive per-attempt cost trips this check.
 
     Args:
         state: The post-drive bound state.
         wave_id: The wave to check.
-        state_path: Path the telemetry DB is resolved from; defaults to a path
-            with no DB so the check exercises the stored per-attempt cost.
 
     Raises:
-        AssertionError: When the wave is unknown, surfaces no attempt rollup, or
-            any joined attempt row is un-priced.
+        AssertionError: When the wave is unknown, carries no priced attempt, or
+            any attempt is un-priced.
     """
     wave = state.waves.get(wave_id)
     assert wave is not None, f"wave {wave_id!r} is not present in state"
-    resolved_path = state_path if state_path is not None else Path("/nonexistent/.ea/state.json")
-    rollup = wave_cost_rollup_for_wave(state, wave_id, resolved_path)
-    assert rollup is not None and rollup.attempts, (
-        f"wave {wave_id!r} surfaces no per-attempt cost rollup -- no attempt "
-        f"carried a priced cost_usd"
+    costs = {no: attempt.cost_usd for no, attempt in wave.sessions.items()}
+    assert any(cost is not None for cost in costs.values()), (
+        f"wave {wave_id!r} surfaces no per-attempt cost -- no attempt carried a priced cost_usd"
     )
-    unpriced = [row.attempt for row in rollup.attempts if not attempt_is_priced(row)]
+    unpriced = sorted(no for no, cost in costs.items() if cost is None or cost <= 0)
     assert not unpriced, (
         f"wave {wave_id!r} has un-priced attempt(s) {unpriced} -- a genuine "
         f"execution surfaced no per-attempt cost_usd"
@@ -808,7 +792,7 @@ def test_live_cross_runtime_drive_holds_all_invariants(e2e_env: E2EEnv) -> None:
         wave_events = drive_events_for_wave(state.waves[wave_id])
         wave_store_events = [event for event in store_events if event.wave_id == wave_id]
         assert_no_post_close_dispatch([*wave_events, *wave_store_events], wave_id)
-        assert_per_attempt_cost_present(state, wave_id, state_path=sandbox.state_path)
+        assert_per_attempt_cost_present(state, wave_id)
 
     # The wedged lane: reaped to FAILED at the drained-run seam.
     assert_orphan_claim_failed(state, _LIVE_ORPHAN_WAVE)

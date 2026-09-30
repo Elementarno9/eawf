@@ -28,13 +28,7 @@ code (see `docs/reference/exit-codes.md`).
 | `eawf status` | `--scope`, `--workspace`, `--json` | active scope, blockers, git, checks | no | no state found | `cli/commands/status.py` |
 | `eawf init` | `--repo`, `--workspace`, `--minimal`, `--no-input`, project fields | `.ea/`, AGENTS / CLAUDE, optional plugin plan | yes | dirty / unmanaged overwrite, invalid answers | `cli/commands/init.py` |
 | `eawf global install` | alias / statusline / plugin / MCP choices | user config + Claude user assets | yes | alias collision, settings conflict | `install/global_install.py` |
-| `eawf workspace init` | `--code`, `--title`, path | workspace `.ea/state.json` | yes | existing non-workspace state | `cli/commands/workspace.py` |
-| `eawf workspace add-repo` | code, path, state URN | repo entry | yes | path missing, duplicate code | `cli/commands/workspace.py` |
-| `eawf workspace remove-repo` | code | removed repo entry | yes | unknown code | `cli/commands/workspace.py` |
-| `eawf workspace validate` | `--strict` | validation report | no | linked repo invalid / missing | `cli/commands/workspace.py` |
-| `eawf workspace status` | `--json` | multi-repo status table | no | no workspace state | `cli/commands/workspace.py` |
 | `eawf repo init` | project fields, profiles | repo `.ea` files | yes | existing conflict | `cli/commands/repo.py` |
-| `eawf repo link` | workspace code / path | workspace index link | yes | no workspace, duplicate | `cli/commands/repo.py` |
 | `eawf clone-repo` | git URL, code, workspace, path | cloned + initialized repo | yes | clone / auth / path exists | `cli/commands/clone_repo.py` |
 | `eawf state resolve` | cwd, `-w`, env | active state path / reason | no | ambiguous / missing state | `cli/commands/state.py` |
 | `eawf validate` | `--strict`, `--workspace` | schema / ref / invariant report | no | schema / ref errors | `cli/commands/validate.py` |

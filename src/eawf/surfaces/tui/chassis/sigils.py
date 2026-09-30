@@ -2,10 +2,10 @@
 
 This module is the SHAPE layer of the two-axis visual vocabulary the
 reskin panes share. Its sibling
-:mod:`~eawf.surfaces.tui.widgets.status_tint` is the COLOUR layer: it maps
+:mod:`~eawf.surfaces.tui.chassis.status_tint` is the COLOUR layer: it maps
 a lifecycle-status string to a Wong deuteranopia-safe ``#rrggbb`` hex via
-:data:`~eawf.surfaces.tui.widgets.status_tint.STATUS_COLOURS` /
-:func:`~eawf.surfaces.tui.widgets.status_tint.status_colour`. Shape comes
+:data:`~eawf.surfaces.tui.chassis.status_tint.STATUS_COLOURS` /
+:func:`~eawf.surfaces.tui.chassis.status_tint.status_colour`. Shape comes
 from here; colour comes from there. No pane invents a glyph or a hex of
 its own -- they call :func:`glyph` / :func:`chrome` for the mark and
 :func:`tint` for the hue so a retune of either axis lands in one home.
@@ -23,9 +23,7 @@ alias a sibling wave renames) selects the unicode column, so the helper
 stays decoupled from the not-yet-landed render-mode rename.
 
 The ASCII lifecycle alphabet is deliberately DECONFLICTED off the EU /
-burn bar glyphs (the bar fills with ``#`` and pads with ``-``; see
-:data:`~eawf.surfaces.tui.widgets.eu_bar.GLYPH_FULL` /
-:data:`~eawf.surfaces.tui.widgets.eu_bar.GLYPH_EMPTY`). That is why the
+burn bar glyphs (the bar fills with ``#`` and pads with ``-``). That is why the
 closed sigil is ``@`` rather than the bar's ``#`` and the pending sigil
 is ``o`` rather than the bar's ``-``: a row that renders a sigil beside
 an inline bar would otherwise read ambiguously in ASCII mode. The
@@ -49,7 +47,7 @@ from eawf.kernel.state.enums import (
     PhaseStatus,
     WaveStatus,
 )
-from eawf.surfaces.tui.widgets.status_tint import BAND_HEX, status_colour
+from eawf.surfaces.tui.chassis.status_tint import BAND_HEX, status_colour
 
 #: The render-mode label that selects the ASCII glyph column. Any other
 #: label selects the unicode column (see :func:`glyph` / :func:`chrome`),
@@ -122,8 +120,8 @@ _LIFECYCLE: dict[Sigil, tuple[str, str]] = {
 #: ascii fallback ``*`` per ``brand-and-sigils.md`` Decision A).
 #:
 #: The ``criteria`` / ``cost`` / ``metrics`` / ``history`` roles are the
-#: detail-card tab markers folded in from their former
-#: :mod:`~eawf.surfaces.tui.screens.overlays.detail` locals so the tab chassis
+#: detail-card tab markers folded in from the former detail overlay's locals
+#: so the tab chassis
 #: resolves EVERY tab glyph through this single chrome home (no pane invents a
 #: glyph): criteria=black-right-pointing-small-triangle (no lifecycle / bar
 #: collision), cost=dollar (its natural mark -- the detail cost tab owns ``$``
@@ -149,7 +147,7 @@ _CHROME: dict[str, tuple[str, str]] = {
     "history": ("\u21ba", "<"),  # anticlockwise open circle arrow (tab marker)
 }
 
-#: :class:`Sigil` -> the :data:`~eawf.surfaces.tui.widgets.status_tint.STATUS_COLOURS`
+#: :class:`Sigil` -> the :data:`~eawf.surfaces.tui.chassis.status_tint.STATUS_COLOURS`
 #: key its tint resolves against. Every member maps to its own value
 #: EXCEPT :attr:`Sigil.RUNNING`, whose lifecycle-status string is
 #: ``"in_progress"`` while its human-facing enum value is ``"running"``.
@@ -231,7 +229,7 @@ def tint(sigil: Sigil) -> str | None:
     """Return the Wong status tint for *sigil*, or ``None`` when unmapped.
 
     Delegates to
-    :func:`~eawf.surfaces.tui.widgets.status_tint.status_colour` so colour
+    :func:`~eawf.surfaces.tui.chassis.status_tint.status_colour` so colour
     stays single-homed in the COLOUR layer. The :class:`Sigil` member is
     first mapped to its lifecycle-status string (via :data:`_TINT_KEY`,
     which resolves :attr:`Sigil.RUNNING` to the ``"in_progress"`` status
@@ -256,7 +254,7 @@ def tint(sigil: Sigil) -> str | None:
 class _StatusValue:
     """A minimal ``.value``-bearing shim for :func:`status_colour`.
 
-    :func:`~eawf.surfaces.tui.widgets.status_tint.status_colour` reads its
+    :func:`~eawf.surfaces.tui.chassis.status_tint.status_colour` reads its
     argument's ``.value`` attribute (it expects a lifecycle-status enum
     member). Wrapping the bare status key in this shim lets :func:`tint`
     delegate to the COLOUR layer without changing its public API to accept
