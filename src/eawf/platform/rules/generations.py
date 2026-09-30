@@ -47,6 +47,9 @@ RETAINED_GENERATIONS: Final[int] = 8
 _VIEW_COMMAND: Final[re.Pattern[str]] = re.compile(
     rf"`{re.escape(MODULE_VIEW_COMMAND)} (?P<reference>[^`\s]+)`"
 )
+_INDEX_ENTRY: Final[re.Pattern[str]] = re.compile(
+    r"^- `(?P<reference>[^`\s]+)`(?: \[[^\]]*\])? \d+ rules?; load when: ", re.MULTILINE
+)
 _IMPORT_LINE: Final[re.Pattern[str]] = re.compile(r"^@(?P<path>\S+)$")
 
 
@@ -148,6 +151,12 @@ def _loading_failures(plan: ProjectionPlan) -> list[str]:
             f"{projection.record.target} names `{MODULE_VIEW_COMMAND} {match['reference']}` "
             f"but the generation renders no such view"
             for match in _VIEW_COMMAND.finditer(projection.text)
+            if view_target(match["reference"]) not in generated
+        )
+        failures.extend(
+            f"{projection.record.target} lists module `{match['reference']}` "
+            f"but the generation renders no such view"
+            for match in _INDEX_ENTRY.finditer(projection.text)
             if view_target(match["reference"]) not in generated
         )
     return failures

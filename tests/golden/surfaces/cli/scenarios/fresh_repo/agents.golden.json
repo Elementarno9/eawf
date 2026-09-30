@@ -12,7 +12,7 @@
     "commit-granularity": 229,
     "commit-prefix": 276,
     "deletion-rule": 681,
-    "ea-directory-commit-policy": 216,
+    "ea-directory-commit-policy": 360,
     "engineering-practice": 265,
     "engineering-principles": 292,
     "entity-title-naming": 261,

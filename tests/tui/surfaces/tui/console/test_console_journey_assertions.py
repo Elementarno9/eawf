@@ -39,10 +39,10 @@ from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.runtime.events import ChildRunPayload, MessageSummaryPayload, RunEventKind
 from eawf.surfaces.tui.console.app import ConsoleApp
+from eawf.surfaces.tui.console.cards import Card
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import TOAST_DWELL, FakeClock
 from eawf.surfaces.tui.console.harness import Harness, Journey, load_contract, settle
-from eawf.surfaces.tui.console.mutation import Card
 from eawf.surfaces.tui.console.operations import OperationResult, OperationStatus, Operator
 from eawf.surfaces.tui.console.registry import ROUTES
 from eawf.surfaces.tui.console.seam import ProjectionSeam
@@ -801,8 +801,9 @@ def test_prx_060_the_attention_strip_rail_summary_and_home_list_sum_alike() -> N
     others = re.search(r"^\s+(\d+) actions? open to other principals", home, re.MULTILINE)
     assert listed is not None and others is not None
     assert int(listed.group(1)) + int(others.group(1)) == total
-    for producerless in ("stalled", "rejected", "active"):
+    for producerless in ("rejected", "active"):
         assert rail[producerless] == "0", producerless
+    assert rail["stalled"] == "0", "the document stands over no stalled Run"
 
 
 def test_prx_060_a_bucket_filter_changes_no_rail_count() -> None:

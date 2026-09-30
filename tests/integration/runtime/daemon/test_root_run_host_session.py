@@ -35,6 +35,7 @@ from eawf.kernel.state.epoch2.measurement import (
     Unobserved,
     VendorSessionRef,
 )
+from eawf.kernel.store.compaction import read_document
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
 from eawf.runtime.runtimes.claude.statusline_modules import scope
@@ -208,7 +209,7 @@ def test_meas_000_run_start_presents_the_host_session_it_runs_inside(
     assert run.vendor_session == VendorSessionRef(
         harness="claude-code", session_digest=hash_vendor_session_id(SESSION)
     )
-    assert SESSION not in document_path(canary).read_text(encoding="utf-8")
+    assert SESSION not in json.dumps(read_document(document_path(canary)))
 
 
 def test_meas_000_a_session_the_request_names_is_kept_over_the_host_session(

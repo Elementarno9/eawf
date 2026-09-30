@@ -232,8 +232,8 @@ def test_close_wave_upserts_actual_with_token_tally() -> None:
     actual = state.actuals["P01-I01-W01"]
     assert actual.scope_id == "P01-I01-W01"
     assert actual.actual_tokens == 4242
-    # Cost stays at 0.0 until the per-model rate table lands.
-    assert actual.actual_cost_usd == pytest.approx(0.0)
+    # Nothing priced the wave, so its cost is unknown rather than zero.
+    assert actual.actual_cost_usd is None
     # Token-only auto-actual leaves elapsed_eu at 0.0 (W28 invariant).
     assert actual.elapsed_eu == pytest.approx(0.0)
 
@@ -445,6 +445,19 @@ def test_compute_runtime_delta_equal_counters_yields_zero_eu() -> None:
     assert delta.actual_cost_usd == pytest.approx(0.0)
 
 
+def test_meas_041_compute_runtime_delta_leaves_an_unread_cost_unpriced() -> None:
+    """A capture with no cost counter yields a null cost, never a zero one."""
+    captured_at = datetime.now(UTC)
+    baseline = RuntimeBaseline(api_duration_ms=5000, input_tokens=10, captured_at=captured_at)
+    latest = RuntimeLatest(api_duration_ms=9000, input_tokens=30, captured_at=captured_at)
+
+    delta = compute_runtime_delta(baseline, latest, eu_minutes=30.0)
+
+    assert delta is not None
+    assert delta.actual_tokens == 20
+    assert delta.actual_cost_usd is None
+
+
 def test_eu_basis_api_duration_default() -> None:
     captured_at = datetime.now(UTC)
     baseline = RuntimeBaseline(
@@ -567,13 +580,27 @@ def test_close_wave_negative_tokens_consumed_rejects_without_mutation() -> None:
     assert state.actuals is None
 
 
-def test_close_wave_upserts_actual_zero_tokens_when_unaccrued() -> None:
-    """A wave that never accrued tokens still upserts (zero token tally)."""
+def test_close_wave_upserts_actual_unknown_tokens_when_unaccrued() -> None:
+    """MEAS-041: a wave nothing counted still upserts, its tally and cost unknown, not zero."""
     state = _empty_state()
     _seed_wave(state)
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
 
     close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+
+    assert state.actuals is not None
+    actual = state.actuals["P01-I01-W01"]
+    assert actual.actual_tokens is None
+    assert actual.actual_cost_usd is None
+
+
+def test_close_wave_keeps_a_supplied_zero_as_a_measured_zero() -> None:
+    """MEAS-041: a tally and a cost the close was handed as zero were measured."""
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok", tokens_consumed=0, actual_cost_usd=0.0)
 
     assert state.actuals is not None
     actual = state.actuals["P01-I01-W01"]

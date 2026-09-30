@@ -19,7 +19,16 @@ import logging
 import subprocess
 from pathlib import Path
 
-from eawf.kernel.store.commit_policy import CensusFinding, census_findings, probe_paths
+from eawf.kernel.store.commit_policy import (
+    REVIEW_CHECKPOINT_TRAILER_KEY,
+    AncestryFinding,
+    CensusFinding,
+    HistoryCommit,
+    ancestry_findings,
+    census_findings,
+    probe_paths,
+)
+from eawf.runtime.integration.commit_policy import PROVENANCE_TRAILER_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +136,74 @@ def run_census(repo_root: Path) -> tuple[CensusFinding, ...]:
     return findings
 
 
+#: The format one commit is read in: object name, parents, subject, the
+#: provenance trailer and the review-checkpoint trailers, NUL-separated so
+#: no subject can split a field.
+_COMMIT_FORMAT = (
+    "%H%x00%P%x00%s%x00"
+    f"%(trailers:key={PROVENANCE_TRAILER_KEY},valueonly,separator=)%x00"
+    f"%(trailers:key={REVIEW_CHECKPOINT_TRAILER_KEY},valueonly,separator=%x20)%x00"
+)
+
+
+def _commits(repo_root: Path, *args: str) -> tuple[HistoryCommit, ...]:
+    """Return the commits one ``git log`` invocation lists, in its order.
+
+    Raises:
+        GitUnavailableError: git exited with an error status.
+    """
+    result = _git(repo_root, "log", f"--format={_COMMIT_FORMAT}", *args)
+    if result.returncode != 0:
+        raise GitUnavailableError(f"git log failed in {repo_root}: {result.stderr.strip()}")
+    commits: list[HistoryCommit] = []
+    for record in result.stdout.splitlines():
+        if not record:
+            continue
+        sha, parents, subject, provenance, cites, _ = record.split("\0")
+        commits.append(
+            HistoryCommit(
+                sha=sha,
+                parents=tuple(parents.split()),
+                subject=subject,
+                provenance=provenance or None,
+                cites=tuple(cites.split()),
+            )
+        )
+    return tuple(commits)
+
+
+def run_ancestry_census(
+    repo_root: Path, *, branch: str, checkpoint: str
+) -> tuple[AncestryFinding, ...]:
+    """Return every way *branch* disagrees with the permanent-commit policy.
+
+    Args:
+        repo_root: The product repository.
+        branch: The default branch whose first-parent history is judged.
+        checkpoint: The disposable review checkpoint, as any revision git
+            resolves.
+
+    Returns:
+        The findings; empty when the branch carries exactly the three
+        permanent commits and the checkpoint stays out of its ancestry.
+
+    Raises:
+        GitUnavailableError: git could not be consulted, or a revision
+            does not resolve.
+    """
+    history = _commits(repo_root, "--first-parent", "--reverse", branch)
+    (probe,) = _commits(repo_root, "-1", checkpoint)
+    findings = ancestry_findings(history=history, checkpoint=probe)
+    logger.info(
+        f"run_ancestry_census repo_root={repo_root} branch={branch!r} "
+        f"commits={len(history)} findings={len(findings)}"
+    )
+    return findings
+
+
 __all__ = [
     "GIT_TIMEOUT_SECONDS",
     "GitUnavailableError",
+    "run_ancestry_census",
     "run_census",
 ]

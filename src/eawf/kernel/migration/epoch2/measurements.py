@@ -6,6 +6,13 @@ field that names the subject, so it is what the re-point resolves against:
 keying on the row id instead would compare a measurement identifier to a
 Task identifier and resolve nothing.
 
+Epoch 1 defaulted an actual's cost and token tally to zero, so a row no
+runtime capture ever touched reads as a measured zero spend. Epoch 2 makes
+every priced field nullable, and the import carries such a default zero as
+null: a row that names neither the harness nor the model it ran on was
+never captured, so its zero was the schema default, not a reading. A zero
+on a row that does name its harness or model was captured and stays zero.
+
 Two fields travel verbatim. The quality marker says how good the number
 is -- the confidence an estimate was made under, the state the measured
 work stopped in -- and the calibration-exclusion flag says the row is an
@@ -75,6 +82,14 @@ TASK_REF_FIELD = "task_ref"
 #: preserved and never used as the subject key.
 MEASUREMENT_ID_FIELD = "id"
 
+#: The priced fields of an epoch-1 actual whose zero may be the schema
+#: default rather than a reading.
+PRICED_ACTUAL_FIELDS: tuple[str, ...] = ("actual_cost_usd", "actual_tokens")
+
+#: The attribution fields an epoch-1 capture stamps. A row carrying neither
+#: was never captured.
+CAPTURE_ATTRIBUTION_FIELDS: tuple[str, ...] = ("harness", "model")
+
 
 class ImportedMeasurement(StrictMigrationModel):
     """One epoch-1 measurement row as the importer will write it.
@@ -95,7 +110,10 @@ class ImportedMeasurement(StrictMigrationModel):
             says nobody marked the row, the other says somebody marked it
             eligible.
         origin: The legacy origin the record carries.
-        payload: The source row, preserved.
+        payload: The source row, preserved except that a default zero
+            in an uncaptured actual's priced field is carried as null.
+        nulled_fields: The priced fields carried as null for that reason,
+            so the rewrite is stated on the record rather than inferred.
     """
 
     kind: MeasurementKind
@@ -107,6 +125,7 @@ class ImportedMeasurement(StrictMigrationModel):
     calibration_excluded: bool | None
     origin: EntityOrigin
     payload: dict[str, Any]
+    nulled_fields: tuple[str, ...] = ()
 
     @property
     def is_immutable_legacy_record(self) -> bool:
@@ -125,6 +144,38 @@ def _quality_marker(*, kind: MeasurementKind, row: Mapping[str, Any]) -> str | N
     if isinstance(value, str) and value:
         return value
     return None
+
+
+def unpriced_default_fields(*, kind: MeasurementKind, row: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return the priced fields of *row* whose zero is the epoch-1 default.
+
+    Args:
+        kind: Which measurement collection the row came from.
+        row: The source measurement row.
+
+    Returns:
+        The fields, in :data:`PRICED_ACTUAL_FIELDS` order; empty for an
+        estimate or for a row a runtime capture attributed.
+    """
+    if kind is not MeasurementKind.ACTUAL:
+        return ()
+    if any(row.get(name) is not None for name in CAPTURE_ATTRIBUTION_FIELDS):
+        return ()
+    return tuple(name for name in PRICED_ACTUAL_FIELDS if row.get(name) == 0)
+
+
+def imported_payload(*, kind: MeasurementKind, row: Mapping[str, Any]) -> dict[str, Any]:
+    """Return *row* as the import writes it, its default zeros carried as null.
+
+    Args:
+        kind: Which measurement collection the row came from.
+        row: The source measurement row.
+
+    Returns:
+        A copy of the row.
+    """
+    nulled = unpriced_default_fields(kind=kind, row=row)
+    return {name: None if name in nulled else value for name, value in row.items()}
 
 
 def _calibration_excluded(row: Mapping[str, Any]) -> bool | None:
@@ -179,7 +230,8 @@ def map_measurement_row(
             source_schema_version=source_schema_version,
             confidence=confidence,
         ),
-        payload=dict(row),
+        payload=imported_payload(kind=kind, row=row),
+        nulled_fields=unpriced_default_fields(kind=kind, row=row),
     )
 
 
@@ -300,10 +352,11 @@ class MeasurementImportPlan(StrictMigrationModel):
 
         Each estimate and actual row of ``document`` must come out as
         exactly one imported record whose preserved row equals the source
-        row. Counting alone would pass a plan that dropped one row and
-        duplicated another; comparing the rows is what keeps a null cost
-        null, a zero a zero, and the quality marker and exclusion flag
-        what the source recorded.
+        row, with only its default zeros carried as null
+        (:func:`imported_payload`). Counting alone would pass a plan that
+        dropped one row and duplicated another; comparing the rows is what
+        keeps a null cost null, a measured zero a zero, and the quality
+        marker and exclusion flag what the source recorded.
 
         Args:
             document: The decoded epoch-1 state document the plan was
@@ -326,7 +379,11 @@ class MeasurementImportPlan(StrictMigrationModel):
                     f"{name} holds {len(source)} rows but the import carries {len(rows)}; "
                     f"not carried: {', '.join(missing) or '-'}"
                 )
-            rewritten = [row.map_key for row in rows if row.payload != source[row.map_key]]
+            rewritten = [
+                row.map_key
+                for row in rows
+                if row.payload != imported_payload(kind=kind, row=source[row.map_key])
+            ]
             if rewritten:
                 raise MigrationFabricationDetectedError(
                     f"{len(rewritten)} {name} rows would import rewritten: {', '.join(rewritten)}"
@@ -343,4 +400,8 @@ def measurement_rule_payload() -> dict[str, Any]:
         "exclusion_flag": CALIBRATION_EXCLUSION_FIELD,
         "target_reference": TASK_REF_FIELD,
         "unbacked_subject_imports_as": "immutable_legacy_record",
+        "default_zero_imports_as_null": {
+            "fields": list(PRICED_ACTUAL_FIELDS),
+            "when_all_null": list(CAPTURE_ATTRIBUTION_FIELDS),
+        },
     }

@@ -33,6 +33,7 @@ from eawf.kernel.projection.settings import (
     EffectiveSettingsView,
     SettingsLeaf,
 )
+from eawf.surfaces.tui.console.cards import setting_token
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.derive import plural
 from eawf.surfaces.tui.console.format import group
@@ -50,7 +51,7 @@ from eawf.surfaces.tui.console.frame import (
 )
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import keybar, pick, route_pairs
-from eawf.surfaces.tui.console.mutation import open_setting, setting_token
+from eawf.surfaces.tui.console.mutation import open_setting
 from eawf.surfaces.tui.console.navigation import Ctx, go
 from eawf.surfaces.tui.console.operations import SettingRequest
 from eawf.surfaces.tui.console.renderers import setting_editors as editors

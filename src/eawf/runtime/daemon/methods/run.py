@@ -133,6 +133,7 @@ from eawf.runtime.daemon.run_events import (
     runtime_of,
     stall_facts_of,
 )
+from eawf.runtime.hooks.event import HOST_HARNESSES
 
 logger = logging.getLogger(__name__)
 
@@ -1001,7 +1002,7 @@ def _read_events(
         stalls = stall_facts_of(records, args.urn)
     interval = args.stall_interval_seconds
     if interval is None:
-        interval = run_stall_interval(context, hellos)
+        interval = run_stall_interval(context, hellos, run)
     state = reduce_run_events(events)
     stall = assess_stall(state=state, now=now, interval_seconds=interval)
     stalled = stall.verdict is RunLiveness.STALLED
@@ -1034,11 +1035,21 @@ def _read_events(
     )
 
 
-def run_stall_interval(context: Epoch2RootContext, hellos: tuple[WorkerHelloFact, ...]) -> int:
-    """Return the stall interval of the runtime the Run's accepted hello named."""
+def run_stall_interval(
+    context: Epoch2RootContext, hellos: tuple[WorkerHelloFact, ...], run: Run
+) -> int:
+    """Return the stall interval of the runtime the Run runs under.
+
+    A worker names its runtime in its accepted hello. A Run started or adopted inside a
+    host session sends none, so its runtime is the one whose harness owns that session.
+    """
+    runtime = runtime_of(hellos)
+    if runtime is None and run.vendor_session is not None:
+        harness = run.vendor_session.harness
+        runtime = next((name for name, owned in HOST_HARNESSES.items() if owned == harness), None)
     # The context is the fenced ``.ea`` tree; the layered config is read
     # against the repository that holds it.
-    return resolve_stall_interval_seconds(context.identity.tree_root.parent, runtime_of(hellos))
+    return resolve_stall_interval_seconds(context.identity.tree_root.parent, runtime)
 
 
 def _contract(context: Epoch2RootContext, args: _RunParams) -> RunContract:

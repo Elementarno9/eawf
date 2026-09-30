@@ -114,7 +114,8 @@ def test_meas_012_an_unresolved_actual_is_never_reattributed() -> None:
 
     assert row.task_ref is None
     assert row.origin.confidence == "supported"
-    assert row.payload == document["actuals"][UNRESOLVED_SUBJECT]
+    source = document["actuals"][UNRESOLVED_SUBJECT]
+    assert row.payload == {**source, "actual_cost_usd": None, "actual_tokens": None}
 
 
 def test_meas_012_corpus_import_refuses_to_drop_an_unreadable_actuals_row(
@@ -201,12 +202,63 @@ def test_meas_036_a_null_stays_null_and_an_unpriced_row_gains_no_price() -> None
 
     for field in ("agent_runtime_eu", "attention_eu", "harness", "model"):
         assert written[field] is None
-    assert written["actual_cost_usd"] == pytest.approx(0.0)
-    assert written["actual_tokens"] == 0
+    assert written["actual_cost_usd"] is None
+    assert written["actual_tokens"] is None
+    assert unpriced.nulled_fields == ("actual_cost_usd", "actual_tokens")
     assert "price_source" not in written
     assert priced.model_dump(mode="json")["payload"]["actual_cost_usd"] == pytest.approx(
         document["actuals"][PRICED_SUBJECT]["actual_cost_usd"]
     )
+
+
+def test_meas_041_an_uncaptured_default_zero_imports_as_null() -> None:
+    """Every real-shape actual that names no harness or model was never priced."""
+    document, task_ids = _real_shape()
+    plan = _build(document, task_ids)
+
+    for row in plan.for_kind(MeasurementKind.ACTUAL):
+        source = document["actuals"][row.map_key]
+        captured = source["harness"] is not None or source["model"] is not None
+        for field in ("actual_cost_usd", "actual_tokens"):
+            if captured or source[field] != 0:
+                assert row.payload[field] == source[field]
+            else:
+                assert row.payload[field] is None
+    assert (
+        plan.measurement_for(kind=MeasurementKind.ACTUAL, map_key=UNPRICED_SUBJECT).payload[
+            "actual_cost_usd"
+        ]
+        is None
+    )
+
+
+def test_meas_041_a_captured_zero_stays_a_measured_zero() -> None:
+    """A row that names its harness and model was captured; its zero is a reading."""
+    document, task_ids = _real_shape()
+
+    excluded = _build(document, task_ids).measurement_for(
+        kind=MeasurementKind.ACTUAL, map_key=EXCLUDED_SUBJECT
+    )
+
+    assert excluded.payload["actual_cost_usd"] == pytest.approx(0.0)
+    assert excluded.payload["actual_tokens"] == 0
+    assert excluded.nulled_fields == ()
+
+
+def test_meas_041_require_reconciled_refuses_a_zero_restored_on_an_unpriced_row() -> None:
+    """Writing the default zero back is a fabricated measurement, not a round-trip."""
+    document, task_ids = _real_shape()
+    plan = _build(document, task_ids)
+    target = plan.measurement_for(kind=MeasurementKind.ACTUAL, map_key=UNPRICED_SUBJECT)
+    zeroed = target.model_copy(update={"payload": {**target.payload, "actual_cost_usd": 0.0}})
+    tampered = plan.model_copy(
+        update={
+            "measurements": tuple(zeroed if row is target else row for row in plan.measurements)
+        }
+    )
+
+    with pytest.raises(MigrationFabricationDetectedError, match=UNPRICED_SUBJECT):
+        tampered.require_reconciled(document)
 
 
 def test_meas_036_require_reconciled_refuses_a_rewritten_row() -> None:

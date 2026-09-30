@@ -29,7 +29,7 @@ from eawf.runtime.budget.notices import LOCAL_OPERATOR, load_notice_ledger, noti
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.pause import latest_pauses
+from eawf.runtime.daemon.methods.pause import latest_pauses, stall_of
 from eawf.runtime.daemon.methods.run import RUN_EVENT_APPEND_METHOD
 from eawf.runtime.daemon.methods.run_liveness import detect_estimate_crossings
 from eawf.runtime.daemon.stall_sweep import sweep_once
@@ -115,8 +115,9 @@ def _act(ctx: MethodContext, canary: CanaryProvision, sequence: int) -> None:
 
 
 def _pauses(canary: CanaryProvision) -> dict[str, Any]:
+    """Return every pause but the stall's: the silent Run's own stall holds one of its own."""
     records = read_ledger_records(ledger_path(document_path(canary), Epoch2Collection.RUN))
-    return dict(latest_pauses(records))
+    return {key: pause for key, pause in latest_pauses(records).items() if stall_of(pause) is None}
 
 
 def test_prx_034_an_epoch2_run_past_its_estimate_with_no_progress_opens_one_notice(

@@ -16,7 +16,6 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from eawf.kernel.state.enums import MeasurementQuality
 from eawf.kernel.state.epoch2.measurement import (
     UNKNOWN_ATTRIBUTION,
     CaptureSource,
@@ -356,7 +355,8 @@ def test_meas_006_mid_turn_start_banks_only_the_share_after_it(roots: tuple[Path
     assert _observed(baseline, CounterName.DURATION_MS) == 0
     assert isinstance(captured, MeasuredRuntime)
     assert captured.derived is True
-    assert captured.measurement_quality is MeasurementQuality.ESTIMATED
+    assert captured.measurement_quality == "estimated"
+    assert captured.reconstruction_basis == "recorded_in_transcript"
     assert _observed(captured, CounterName.DURATION_MS) < 10_000
     assert _observed(captured, CounterName.DURATION_MS) == 8000
 
@@ -371,7 +371,8 @@ def test_meas_006_start_between_turns_is_read_not_derived(roots: tuple[Path, Pat
 
     assert isinstance(captured, MeasuredRuntime)
     assert captured.derived is False
-    assert captured.measurement_quality is MeasurementQuality.EXACT
+    assert captured.measurement_quality == "measured"
+    assert captured.reconstruction_basis is None
 
 
 # ---- MEAS-008: the divisor is recorded when the interval is shared -----------
@@ -389,7 +390,8 @@ def test_meas_008_shared_session_divides_by_the_start_time_divisor(
 
     assert isinstance(captured, MeasuredRuntime)
     assert captured.divisor == 3
-    assert captured.measurement_quality is MeasurementQuality.RECONSTRUCTED
+    assert captured.measurement_quality == "derived"
+    assert captured.reconstruction_basis == "recorded_in_transcript"
     assert _observed(captured, CounterName.OUTPUT_TOKENS) == 10
     assert _observed(captured, CounterName.DURATION_MS) == 1000
 

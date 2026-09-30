@@ -599,6 +599,7 @@ def test_plugin_doctor_drift_skip_json(tmp_path: Path) -> None:
         "eawf024-test-tier-contract",
         "eawf026-settings-categories",
         "eawf027-citation-scope",
+        "eawf028-brief-immutable",
         "plugin-doctor-drift",
     ],
 )

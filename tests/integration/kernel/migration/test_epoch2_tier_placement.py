@@ -57,6 +57,7 @@ from eawf.kernel.migration.epoch2.plan_mode import (
     plan_cutover,
 )
 from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot
+from eawf.kernel.store.compaction import read_document
 from eawf.kernel.store.index import regenerate_indexes
 from eawf.kernel.store.ledger import read_ledger_records
 from eawf.kernel.store.paths import index_dir, ledger_path
@@ -138,7 +139,7 @@ def test_no_terminal_task_survives_in_the_staged_document(
 ) -> None:
     """Every Task the source finished is in the ledger, not the document."""
     state_path, _ = staged
-    document = json.loads(state_path.read_text("utf-8"))
+    document = read_document(state_path)
     statuses = {
         key: row[ROW_STATUS_FIELD] for key, row in document[Epoch2Collection.TASK.value].items()
     }
@@ -389,7 +390,7 @@ def test_document_record_count_counts_document_resident_rows(
 ) -> None:
     """The writer's count includes the project and sandbox-policy rows."""
     state_path, _ = staged
-    document = json.loads(state_path.read_text("utf-8"))
+    document = read_document(state_path)
 
     assert document_record_count(document) == EXPECTED_DOCUMENT_RECORDS
     assert len(document[Epoch2Collection.PROJECT.value]) == 1

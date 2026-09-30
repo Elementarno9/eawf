@@ -41,7 +41,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.runtime.hooks.event import HookEventType
-from eawf.runtime.hooks.runner import _normalise_claude_hook_payload
+from eawf.runtime.hooks.lifecycle_capture import _normalise_claude_hook_payload
 from eawf.runtime.runtimes.claude.runtime_counters import parse_runtime_counters
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.render.hooks import render_hook_sh

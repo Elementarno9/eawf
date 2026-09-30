@@ -130,9 +130,12 @@ def in_flight_reservations(
         if status_of(receipt.run_ref) in TERMINAL_RUN_STATUSES:
             continue
         accrued = aggregate_usage(
-            event.payload
-            for event in run_events_of(records, receipt.run_ref)
-            if event.quarantine is None and isinstance(event.payload, UsagePayload)
+            (
+                event.payload
+                for event in run_events_of(records, receipt.run_ref)
+                if event.quarantine is None and isinstance(event.payload, UsagePayload)
+            ),
+            for_enforcement=True,
         )
         held.append(
             receipt.reservation.model_copy(

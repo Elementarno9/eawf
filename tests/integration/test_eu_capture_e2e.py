@@ -34,7 +34,7 @@ from eawf.kernel.state.models import RuntimeBaseline, RuntimeLatest, Wave
 from eawf.observability.telemetry.join import DEFAULT_EU_MINUTES
 from eawf.runtime.daemon.methods.state import _rebase_for_session
 from eawf.runtime.hooks.event import HookEvent, HookEventType
-from eawf.runtime.hooks.runner import capture_runtime_on_session_end
+from eawf.runtime.hooks.lifecycle_capture import capture_runtime_on_session_end
 from eawf.workflow.lifecycle.wave import compute_runtime_delta
 
 _FIXTURES = Path(__file__).resolve().parent / "runtime" / "hooks" / "fixtures"

@@ -98,10 +98,10 @@ Iter close is gated on **audit + polish + ship CI + PR review pass**. Do not clo
 The CLI layer parses arguments and formats output. All domain logic lives in the library. CLI handlers must accept typed config / state objects, never raw ``dict``.
 
 <!-- END EAWF:managed id=architecture-cli-dispatch -->
-<!-- BEGIN EAWF:managed id=ea-directory-commit-policy version=1.0 hash=5c10976f2c665b91 -->
+<!-- BEGIN EAWF:managed id=ea-directory-commit-policy version=1.0 hash=576350ef948e7c4d -->
 ### `.ea/` directory: commit policy
 
-``.ea/state.json`` and ``.ea/profile.yaml`` are committed to version control — they are the source of truth for project state. ``.ea/locks/`` and ``.ea/local/`` are gitignored.
+``.ea/state.json``, ``.ea/profile.yaml`` and each generation's ``state.json`` and ledgers are committed to version control — they are the source of truth for what was released, delivered and decided. Per-Task and per-Run status (each generation's ``local/`` projection), ``.ea/locks/`` and ``.ea/local/`` are gitignored.
 
 <!-- END EAWF:managed id=ea-directory-commit-policy -->
 <!-- BEGIN EAWF:managed id=symbol-conventions version=1.1 hash=aa4eba138c4bd39e -->

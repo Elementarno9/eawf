@@ -217,6 +217,16 @@ LEDGER_COLLECTIONS: Final[tuple[Epoch2Collection, ...]] = tuple(
 )
 
 
+#: The collections whose rows and ledger lines are per-Task and per-Run
+#: status. Every claim, start, report and completion moves one of them, so
+#: they live in the machine-local status projection rather than beside the
+#: committed release, delivery and decision facts, and a status change
+#: leaves no tracked file behind to commit.
+STATUS_PROJECTION_COLLECTIONS: Final[frozenset[Epoch2Collection]] = frozenset(
+    {Epoch2Collection.TASK, Epoch2Collection.RUN}
+)
+
+
 def _compile_entity_collections(
     mapping: Mapping[EntityKind, Epoch2Collection],
 ) -> Mapping[EntityKind, Epoch2Collection]:
@@ -282,6 +292,7 @@ def tier_for(collection: Epoch2Collection) -> StorageTier:
 __all__ = [
     "ENTITY_COLLECTIONS",
     "LEDGER_COLLECTIONS",
+    "STATUS_PROJECTION_COLLECTIONS",
     "TIER_ASSIGNMENTS",
     "TIER_TABLE",
     "Epoch2Collection",

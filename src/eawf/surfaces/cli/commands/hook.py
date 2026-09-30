@@ -837,7 +837,7 @@ def _emit_permission_decision(results: list[HookResult]) -> None:
     Args:
         results: The permission-request hook results.
     """
-    from eawf.runtime.hooks.runner import HOST_PERMISSION_BEHAVIOR, host_permission_decision
+    from eawf.runtime.hooks.host_calls import HOST_PERMISSION_BEHAVIOR, host_permission_decision
 
     decision = host_permission_decision(results)
     if decision is None:
@@ -1867,6 +1867,34 @@ def eawf027_citation_scope(
         hook_name="eawf027-citation-scope",
         rows=[f"  {finding.render()}" for finding in findings],
         scanned=len(paths) + (pr_body is not None),
+        flags=flags,
+        blocking=True,
+    )
+
+
+@hook_app.command(name="eawf028-brief-immutable")
+def eawf028_brief_immutable(ctx: typer.Context) -> None:
+    """Reject a staged wording edit to a committed research brief.
+
+    Runs the EAWF028 brief-immutability rule over every staged modified
+    or renamed brief, compared with its ``HEAD`` version. Exits 1 naming
+    each brief whose wording changed, the first changed words and the
+    superseding-brief remediation, 0 when every edit repairs format only.
+    """
+    from eawf.platform.lint import eawf028_brief_immutable as eawf028
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    edits = eawf028.staged_edits(cwd)
+    findings = [
+        finding
+        for old, new in edits
+        if (finding := eawf028.check_brief(new, *eawf028.staged_texts(cwd, old, new))) is not None
+    ]
+    _emit_static_lint_result(
+        hook_name="eawf028-brief-immutable",
+        rows=[f"  {finding.render()}" for finding in findings],
+        scanned=len(edits),
         flags=flags,
         blocking=True,
     )

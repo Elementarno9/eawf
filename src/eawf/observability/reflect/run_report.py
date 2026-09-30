@@ -220,9 +220,11 @@ def _own_usage_lines(reading: RunReading) -> tuple[str, ...]:
     if isinstance(captured, ExcludedRuntime):
         return (f"usage_and_cost excluded: {captured.reason.value} ({captured.detail})",)
     lines = [
-        f"usage_and_cost quality {captured.measurement_quality.value}"
+        f"usage_and_cost quality {captured.measurement_quality}"
         f" · source {captured.source.value} · model {captured.model}"
     ]
+    if captured.reconstruction_basis is not None:
+        lines.append(f"usage_and_cost basis {captured.reconstruction_basis}")
     for name in CounterName:
         reading_ = captured.counters[name]
         lines.append(

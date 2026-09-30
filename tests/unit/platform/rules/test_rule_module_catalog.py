@@ -111,9 +111,7 @@ def test_render_module_index_adding_reference_adds_its_row(tmp_path: Path) -> No
     assert f"`{_TEST}`" not in before and f"`{_TEST}`" in after
 
 
-def test_render_module_index_entry_carries_topic_scope_count_trigger_and_command(
-    tmp_path: Path,
-) -> None:
+def test_render_module_index_entry_carries_scope_count_and_trigger(tmp_path: Path) -> None:
     selection = select_rule_modules(
         load_rule_source(_write_rules(tmp_path, {"modules": [_PYTHON]}))
     )
@@ -123,8 +121,8 @@ def test_render_module_index_entry_carries_topic_scope_count_trigger_and_command
     assert f"{len(module.records)} rules" in row
     assert f"[{', '.join(module.scope)}]" in row
     assert f"load when: {module.document.when_to_use}" in row
-    assert f"`{MODULE_VIEW_COMMAND} {_PYTHON}`" in row
-    assert f" {module.document.topic} " in row
+    assert row.startswith(f"- `{_PYTHON}` [")
+    assert f"`{MODULE_VIEW_COMMAND}`" in MODULE_BINDING_NOTICE
 
 
 def test_render_module_index_states_that_loaded_modules_bind() -> None:

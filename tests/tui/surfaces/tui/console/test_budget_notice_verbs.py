@@ -22,10 +22,10 @@ from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
 from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD
 from eawf.surfaces.tui.console.action_menu import Disabled
 from eawf.surfaces.tui.console.app import compose_frame
+from eawf.surfaces.tui.console.cards import Card, notice_card
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.drawers import action_rows
 from eawf.surfaces.tui.console.frame import View
-from eawf.surfaces.tui.console.mutation import Card, notice_card
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.notices import notice_cells, notice_of, short_key
 from eawf.surfaces.tui.console.operations import (

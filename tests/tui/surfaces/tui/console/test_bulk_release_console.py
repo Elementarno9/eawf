@@ -37,8 +37,9 @@ from eawf.surfaces.tui.console.bulk import (
     refused_bulk,
     unanswered_bulk,
 )
+from eawf.surfaces.tui.console.cards import Card, lifecycle_card, settle
 from eawf.surfaces.tui.console.dispatch import dispatch
-from eawf.surfaces.tui.console.mutation import NATIVE_KEYS, Card, lifecycle_card, settle
+from eawf.surfaces.tui.console.mutation import NATIVE_KEYS
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
     LifecycleRequest,

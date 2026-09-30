@@ -365,3 +365,34 @@ def test_metrics_rebuild_reports_session_history_funnel(tmp_path: Path) -> None:
     funnel = json.loads(result.stdout)["session_history"]
     assert [funnel[k] for k in ("seen", "parsed", "attributed", "projected")] == [2, 1, 1, 1]
     assert funnel["drops"] == [{"file": "bad.jsonl", "stage": "parsed", "reason": "corrupt_record"}]
+
+
+def test_meas_061_metrics_rebuild_reports_token_weighted_pricing_coverage(
+    tmp_path: Path,
+) -> None:
+    """The sweep's pricing coverage is weighed by tokens and names each unpriced cause."""
+    workspace = _make_workspace(tmp_path, telemetry_enabled=True)
+    history = claude_history_root(workspace.resolve())
+    history.mkdir(parents=True)
+    for name, model, tokens in (("a", "claude-opus-4-7", 10), ("b", "vendor-unlisted", 90)):
+        record = {
+            "type": "assistant",
+            "sessionId": name,
+            "timestamp": "2026-09-01T10:00:00Z",
+            "message": {"id": f"m-{name}", "model": model, "usage": {"input_tokens": tokens}},
+        }
+        (history / f"{name}.jsonl").write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["--json", "-w", str(workspace), "metrics", "rebuild", "--full"])
+
+    assert result.exit_code == 0, result.output
+    pricing = json.loads(result.stdout)["session_history"]["pricing"]
+    assert pricing["total_tokens"] == 100
+    assert pricing["share_by_source"]["unpriced"] == pytest.approx(0.9)
+    assert pricing["share_by_source"]["list-reconstructed"] == pytest.approx(0.1)
+    assert pricing["unpriced_tokens_by_cause"] == {"model_not_in_rate_table": 90}
+    assert pricing["coverage"]["subjects_total"] == 2
+
+    text = runner.invoke(app, ["-w", str(workspace), "metrics", "rebuild", "--full"])
+    assert "unpriced=90.0%" in text.stdout
+    assert "model_not_in_rate_table 90" in text.stdout

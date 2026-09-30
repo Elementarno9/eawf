@@ -33,9 +33,9 @@ from eawf.platform.profiles.trust import profile_sha256
 from eawf.platform.render_block import DISPATCH_SYSTEM_PROMPT_TARGET
 from eawf.runtime.daemon.methods.config import set_layer_values, unset_layer_value
 from eawf.surfaces.tui.console.app import dispatcher_key
+from eawf.surfaces.tui.console.cards import Card
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
-from eawf.surfaces.tui.console.mutation import Card
 from eawf.surfaces.tui.console.operations import SettingRequest, address_setting
 from eawf.surfaces.tui.console.overlays.mutation_card import preview_frame
 from eawf.surfaces.tui.console.renderers.provenance import refusal, step

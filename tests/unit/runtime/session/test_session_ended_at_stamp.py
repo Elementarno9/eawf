@@ -29,7 +29,7 @@ from eawf.kernel.state.models import AgentSession, State
 from eawf.kernel.store.kinds.events.session_closed import SessionClosedPayload
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.hooks.event import HookEvent, HookEventType
-from eawf.runtime.hooks.runner import stamp_session_end_on_exit
+from eawf.runtime.hooks.lifecycle_capture import stamp_session_end_on_exit
 from eawf.runtime.session.store import reconcile_orphaned_sessions, stamp_session_end_at_exit
 
 pytestmark = pytest.mark.unit

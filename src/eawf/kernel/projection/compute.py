@@ -234,6 +234,10 @@ ROUTE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingPr
 #: ledger files it. It is a notice: it records an overrun nobody can answer.
 CEILING_BREACH_KIND: Final = "child_ceiling_breach"
 
+#: The payload kind of a stall fact, as the run ledger files it: a running Run went quiet
+#: past its interval. Attention lists each one still standing as a stalled item.
+STALL_KIND: Final = "run_stall"
+
 #: The kind of a verdict observation: one independent audit verdict a Batch's
 #: verification cycle holds, read off the Batch ledger with the producer that reached it.
 #: It is derived at read time and never stored beside the Milestone it is listed under.
@@ -250,12 +254,18 @@ CALIBRATION_KEY: Final = "jury-calibration"
 #: The kinds a notice row may be. Each is a line of a ledger a route lists from without
 #: binding the collection: a row of any other kind is a record of that collection.
 NOTICE_KINDS: Final = frozenset(
-    {CEILING_BREACH_KIND, SANDBOX_DECISION_KIND, VERDICT_OBSERVATION_KIND, JURY_CALIBRATION_KIND}
+    {
+        CEILING_BREACH_KIND,
+        STALL_KIND,
+        SANDBOX_DECISION_KIND,
+        VERDICT_OBSERVATION_KIND,
+        JURY_CALIBRATION_KIND,
+    }
 )
 
 #: The collections a route lists notices from without binding the collection itself.
-#: Attention lists a ceiling breach beside the calls waiting on a principal, but the
-#: breach is a line on the run ledger, and listing the Runs it sits among would turn
+#: Attention lists a ceiling breach and a standing stall beside the calls waiting on a
+#: principal, but each is a line on the run ledger, and listing the Runs it sits among would turn
 #: the register of what needs a principal into a list of work. The sandbox log lists the
 #: decisions filed on the receipt ledger, and Trust the audit verdicts a Batch's
 #: verification cycles hold on the Batch ledger, for the same reason.
@@ -984,6 +994,30 @@ def _breach_facts(fields: Mapping[str, Any]) -> dict[str, str]:
     return {name: value for name, value in facts.items() if value}
 
 
+def _stall_facts(fields: Mapping[str, Any]) -> dict[str, str]:
+    """Return what a stall states: which Run went quiet, since when, and against what interval.
+
+    The subject is the Run; a Run that never produced anything was silent since it started.
+    """
+    since = _text(fields.get("last_activity_at"))
+    elapsed, interval = fields.get("elapsed_seconds"), fields.get("interval_seconds")
+    stated = isinstance(elapsed, int | float) and isinstance(interval, int) and since is not None
+    what = _text(fields.get("last_activity_kind"))
+    facts = {
+        "kind": STALL_KIND,
+        "subject": _key_of(fields.get("run_ref")),
+        "question": (
+            f"stopped responding · silent {int(elapsed)}s past its {interval}s interval"
+            if stated
+            else None
+        ),
+        "last_activity_at": since,
+        "last_activity": what.replace("_", " ") if what else "nothing since it started",
+        "raised_at": _text(fields.get("raised_at")),
+    }
+    return {name: value for name, value in facts.items() if value}
+
+
 def _decision_facts(fields: Mapping[str, Any]) -> dict[str, str]:
     """Return what a sandbox decision states: its Run, its outcome and the rule that decided.
 
@@ -1047,6 +1081,7 @@ _NOTICE_FACTS: Final[Mapping[str, Callable[[Mapping[str, Any]], dict[str, str]]]
     MappingProxyType(
         {
             CEILING_BREACH_KIND: _breach_facts,
+            STALL_KIND: _stall_facts,
             SANDBOX_DECISION_KIND: _decision_facts,
             VERDICT_OBSERVATION_KIND: _verdict_facts,
             JURY_CALIBRATION_KIND: _calibration_facts,
@@ -1292,6 +1327,7 @@ __all__ = [
     "ROUTE_NOTICE_COLLECTIONS",
     "ROUTE_READ_MODELS",
     "SNOOZED_FACT",
+    "STALL_KIND",
     "VERDICT_OBSERVATION_KIND",
     "ControlMark",
     "KeyedPatch",

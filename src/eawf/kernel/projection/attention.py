@@ -9,10 +9,12 @@ Three questions are answered here, once, for every surface that asks them.
 
 Which bucket. Eight exception buckets in a fixed severity-first order partition the
 register totally and disjointly: an open item lands in exactly one, and under ``needs
-operator`` in exactly one :class:`AttentionNeedKind`. A bucket the Attention register
-cannot see into states no count and says why -- a Run's failure and a budget notice are
-filed on records this projection does not carry -- and a bucket nothing produces yet is a
-declared hole whose zero is the absence of a producer, not a count that was taken.
+operator`` in exactly one :class:`AttentionNeedKind`. A Run that stopped responding lands
+under ``stalled`` for as long as the stall the daemon raised over it stands. A bucket the
+Attention register cannot see into states no count and says why -- a Run's failure and a
+budget notice are filed on records this projection does not carry -- and a bucket nothing
+produces yet is a declared hole whose zero is the absence of a producer, not a count that
+was taken.
 
 Whose. An item is *mine* when the console acts as a principal the item is addressed to:
 the one principal its record names, or every principal when it names none. A provider
@@ -42,7 +44,7 @@ from typing import Final
 
 from pydantic import ConfigDict
 
-from eawf.kernel.projection.compute import SNOOZED_FACT, ProjectionRow
+from eawf.kernel.projection.compute import SNOOZED_FACT, STALL_KIND, ProjectionRow
 from eawf.kernel.projection.registers import (
     ATTENTION_ROUTE,
     BUDGET_UNSTATED_REASON,
@@ -122,7 +124,6 @@ _BUCKET_REASONS: Final[Mapping[AttentionBucket, str]] = MappingProxyType(
         AttentionBucket.FAILED: _RUN_UNSTATED_REASON,
         AttentionBucket.LOST: _RUN_UNSTATED_REASON,
         AttentionBucket.OVER_BUDGET: BUDGET_UNSTATED_REASON,
-        AttentionBucket.STALLED: "no producer files a stalled Run as an attention item yet",
         AttentionBucket.REJECTED: "no producer writes a rejected control awaiting re-issue yet",
         AttentionBucket.ACTIVE: "no producer writes an answered-but-unconfirmed item yet",
     }
@@ -134,7 +135,7 @@ BUCKET_SOURCES: Final[Mapping[AttentionBucket, BucketSource]] = MappingProxyType
         AttentionBucket.FAILED: BucketSource.UNSTATED,
         AttentionBucket.LOST: BucketSource.UNSTATED,
         AttentionBucket.NEEDS_OPERATOR: BucketSource.DERIVED,
-        AttentionBucket.STALLED: BucketSource.HOLE,
+        AttentionBucket.STALLED: BucketSource.DERIVED,
         AttentionBucket.OVER_BUDGET: BucketSource.UNSTATED,
         AttentionBucket.REJECTED: BucketSource.HOLE,
         AttentionBucket.ACTIVE: BucketSource.HOLE,
@@ -481,23 +482,27 @@ def _question_item(row: ProjectionRow) -> AttentionItem | None:
     )
 
 
-def _breach_item(row: ProjectionRow) -> AttentionItem:
-    """Return the notice a child-ceiling breach row is.
+def _run_item(row: ProjectionRow) -> AttentionItem:
+    """Return the item a run-ledger row is: a stalled Run, or the notice of a ceiling breach.
 
-    The register lists a Run row only as a breach. A Run carries no owner of its own,
-    and the only admission past a ceiling is the adoption of a subagent the host already
-    spawned, whose tree belongs to the operator running that host, so the notice is
-    addressed to every principal.
+    The register lists a Run row only as one of these. A Run carries no owner of its own,
+    so both are addressed to every principal. A stall is a Run that stopped responding,
+    which a principal resumes or lets go, so it is counted and announced. The only
+    admission past a ceiling is the adoption of a subagent the host already spawned,
+    whose tree belongs to the operator running that host, so a breach is only listed.
     """
+    stalled = row.facts.get("kind") == STALL_KIND
     return AttentionItem(
         key=row.key,
         source_ref=row.urn,
         revision=row.revision,
-        bucket=AttentionBucket.OVER_BUDGET,
+        bucket=AttentionBucket.STALLED if stalled else AttentionBucket.OVER_BUDGET,
         need=None,
         assignee_ref=None,
-        notification_class=NotificationClass.BUDGET_PASSED,
-        read_only=True,
+        notification_class=(
+            NotificationClass.STOPPED_RESPONDING if stalled else NotificationClass.BUDGET_PASSED
+        ),
+        read_only=not stalled,
     )
 
 
@@ -528,7 +533,7 @@ def build_attention_view(register: RegisterView) -> AttentionView:
         elif row.collection is Epoch2Collection.OPEN_QUESTION:
             item = _question_item(row)
         elif row.collection is Epoch2Collection.RUN:
-            item = _breach_item(row)
+            item = _run_item(row)
         else:
             continue
         if item is not None:

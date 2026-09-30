@@ -8,13 +8,13 @@ when_to_use: creating a branch or worktree, committing, cherry-picking, opening 
 rules:
   - rule_id: eawf.core.vcs.worktree-discipline
     obligation_id: vcs.worktree-discipline
-    revision: 2
+    revision: 3
     title: Branch worktrees from the feature branch and cherry-pick back
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Branch every worktree from the current feature branch HEAD, never from main, and bring its commits back by cherry-pick in order, never by merge; tear the worktree down only after the cherry-pick lands. Claim parallel sibling waves with `--out-of-order`.
+      Branch each worktree from the feature branch HEAD, never from main; bring its commits back by in-order cherry-pick, never by merge, and remove the worktree only after they land. Claim parallel sibling waves with `--out-of-order`.
     rationale: >-
       A worktree cut from main misses the phase's earlier waves, and a merge buries per-wave commits under a merge node that bisect and wave pins cannot follow.
     verification:
@@ -74,13 +74,13 @@ rules:
       method: review
   - rule_id: eawf.core.vcs.commit-granularity
     obligation_id: vcs.commit-granularity
-    revision: 1
+    revision: 2
     title: Land one commit per wave and per deliverable
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Land one commit per wave and per deliverable, carrying the code with its tests; fold follow-ups and wave-close bookkeeping into it by amend, and put a golden refresh in a test commit named for its cause.
+      Land one commit per wave and per deliverable, code with its tests; amend follow-ups and wave-close bookkeeping into it, and put a golden refresh in a test commit named for its cause.
     rationale: >-
       A deliverable split across commits cannot be reviewed or reverted as a unit, and bisect lands on trees that never worked.
     verification:

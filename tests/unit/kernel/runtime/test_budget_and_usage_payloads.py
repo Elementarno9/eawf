@@ -205,7 +205,7 @@ def test_run_050_running_totals_contribute_their_maximum_and_deltas_their_sum() 
             usage(True, input_tokens=300, output_tokens=10),
             usage(True, input_tokens=600, output_tokens=20),
             usage(False, input_tokens=100),
-            usage(False, input_tokens=50, cost_microusd=7),
+            usage(False, input_tokens=50, cost_microusd=7, price_source="billed"),
         ]
     )
     assert totals.input_tokens == 600 + 150
@@ -265,3 +265,41 @@ def test_run_050_coverage_belongs_to_an_estimated_reading_alone() -> None:
         coverage_fraction=0.5,
     )
     assert estimated.coverage_fraction == pytest.approx(0.5)
+
+
+# ---- MEAS-077: no enforcement consumer accepts a list-reconstructed price ---
+
+
+def test_meas_077_a_cost_without_its_price_source_fails_validation() -> None:
+    with pytest.raises(ValidationError, match="price_source"):
+        usage(False, cost_microusd=5)
+    with pytest.raises(ValidationError, match="price_source"):
+        usage(False, input_tokens=5, price_source="billed")
+
+
+def test_meas_077_a_reconstructed_price_offered_to_a_cap_is_refused() -> None:
+    """The enforcement fold drops a list price; the display fold still shows it."""
+    readings = [
+        usage(True, input_tokens=100, cost_microusd=900, price_source="list-reconstructed"),
+        usage(False, input_tokens=10, cost_microusd=40, price_source="billed"),
+    ]
+
+    enforced = aggregate_usage(readings, for_enforcement=True)
+    shown = aggregate_usage(readings)
+
+    assert enforced.cost_microusd == 40
+    assert enforced.input_tokens == shown.input_tokens == 110
+    assert shown.cost_microusd == 940
+
+
+def test_meas_077_only_reconstructed_prices_leave_the_enforced_cost_unknown() -> None:
+    """Boundary: nothing billed is an unknown cost to a cap, never a zero one."""
+    readings = [usage(False, output_tokens=3, cost_microusd=12, price_source="list-reconstructed")]
+
+    assert aggregate_usage(readings, for_enforcement=True).cost_microusd is None
+    assert aggregate_usage([], for_enforcement=True).cost_microusd is None
+
+
+def test_meas_077_a_price_source_outside_the_closed_set_fails_validation() -> None:
+    with pytest.raises(ValidationError, match="price_source"):
+        usage(False, cost_microusd=5, price_source="unpriced")

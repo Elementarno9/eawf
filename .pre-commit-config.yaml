@@ -407,6 +407,18 @@ repos:
         files: \.(md|txt|json|ya?ml)$
         pass_filenames: false
         stages: [pre-commit]
+      - id: eawf028-brief-immutable
+        name: eawf028-brief-immutable
+        entry: uv run eawf hook eawf028-brief-immutable
+        language: system
+        # EAWF028: a staged edit to a committed research brief may repair its
+        # format (rewrap, whitespace, line endings, fence tags, table pipes)
+        # but not its wording; a wording change is refused as brief_immutable
+        # with the superseding-brief remediation. Reads the index against
+        # HEAD, so it runs only when a brief is staged. BLOCKS.
+        files: ^\.ea/artifacts/research/.*\.md$
+        pass_filenames: false
+        stages: [pre-commit]
       - id: emitted-page-execution
         name: emitted-page-execution
         entry: uv run pytest -q -p no:randomly tests/integration/observability/reflect/test_emitted_page_execution.py

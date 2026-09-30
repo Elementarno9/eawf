@@ -18,6 +18,7 @@ from typing import Final
 from eawf.kernel.state.epoch2.consequence import Refusal
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console.attention import selected_open_row
+from eawf.surfaces.tui.console.cards import Card, Item, Kind
 from eawf.surfaces.tui.console.decisions import (
     ArtifactRecord,
     ClaimRecord,
@@ -28,7 +29,6 @@ from eawf.surfaces.tui.console.decisions import (
     StepRecord,
 )
 from eawf.surfaces.tui.console.keymap import DISMISS, allowlist
-from eawf.surfaces.tui.console.mutation import Card, Item, Kind
 from eawf.surfaces.tui.console.navigation import Ctx, close_overlay, copied, open_overlay
 from eawf.surfaces.tui.console.operations import QuestionAnswer, binding_refusal
 from eawf.surfaces.tui.console.overlays.bound import (
@@ -418,8 +418,9 @@ def open_held_row(ctx: Ctx) -> bool:
     it is an operator decision whose options are held: that opens the question detail, the
     card that draws a decision's own options, where approve and decline would not be among
     them. A provider permission is a two-option action, approve or deny, so it opens the
-    action detail too, and a question opens its question detail. The row is the one the
-    frame drew from the held projection, never a prototype register.
+    action detail too, and a question opens its question detail. A stalled Run opens the
+    pause the stall sweep opened over it, where it is resumed or let go. The row is the one
+    the frame drew from the held projection, never a prototype register.
     """
     held = ctx.attention
     if held is None:
@@ -431,6 +432,16 @@ def open_held_row(ctx: Ctx) -> bool:
         ctx.log("Enter", "no open attention row is selected — nothing to open")
         return True
     s.sel_id = row.key
+    if row.collection is Epoch2Collection.RUN:
+        # a stalled Run is resumed or let go from the pause the sweep opened over it
+        run = row.facts.get("subject")
+        pause = ctx.decisions.pause(run) if ctx.decisions is not None and run else None
+        if pause is None:
+            ctx.log("Enter", f"{row.key} · the pause over {run} is not read yet — nothing opened")
+            return True
+        open_overlay(s, "pause", subject=pause.id)
+        ctx.log("Enter", f"pause detail · {pause.id}")
+        return True
     if (
         row.collection in (Epoch2Collection.PENDING_ACTION, Epoch2Collection.OPEN_QUESTION)
         and ctx.decisions is not None

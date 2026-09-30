@@ -17,7 +17,7 @@ import pytest
 from eawf.kernel.economics.governor import DEFAULT_GOVERNOR
 from eawf.kernel.identity import EntityKind, parse_qualified_urn
 from eawf.kernel.runtime.budget_notice import BudgetNotice
-from eawf.kernel.state.enums import MeasurementQuality
+from eawf.kernel.runtime.usage import UsageQuality
 from eawf.kernel.state.epoch2.measurement import (
     CaptureSource,
     CounterName,
@@ -63,7 +63,7 @@ def _notice() -> LedgerRecord:
     )
 
 
-def _measured(quality: MeasurementQuality, **values: Decimal | None) -> MeasuredRuntime:
+def _measured(quality: UsageQuality, **values: Decimal | None) -> MeasuredRuntime:
     counters = {
         name: Observed(value=values[name.value])
         if values.get(name.value) is not None
@@ -76,8 +76,9 @@ def _measured(quality: MeasurementQuality, **values: Decimal | None) -> Measured
         model="claude-opus-4-1",
         measurement_version=1,
         divisor=1,
-        derived=quality is MeasurementQuality.ESTIMATED,
+        derived=quality == "estimated",
         measurement_quality=quality,
+        reconstruction_basis=None if quality == "measured" else "recorded_in_transcript",
         counters=counters,
         spans=Unobserved(reason="none"),
     )
@@ -127,7 +128,7 @@ def test_con_077_a_run_the_tree_does_not_hold_is_refused() -> None:
 def test_prx_041_a_measured_share_is_a_running_total_in_micro_dollars() -> None:
     reading = captured_usage(
         _measured(
-            MeasurementQuality.EXACT,
+            "measured",
             input_tokens=Decimal(5),
             output_tokens=Decimal(30),
             cache_read_input_tokens=Decimal(7),
@@ -143,11 +144,11 @@ def test_prx_041_a_measured_share_is_a_running_total_in_micro_dollars() -> None:
 
 
 def test_prx_041_a_share_with_nothing_observed_states_no_reading() -> None:
-    assert captured_usage(_measured(MeasurementQuality.EXACT)) is None
+    assert captured_usage(_measured("measured")) is None
 
 
 def test_prx_041_an_estimated_share_still_covers_the_whole_run() -> None:
-    reading = captured_usage(_measured(MeasurementQuality.ESTIMATED, output_tokens=Decimal(9)))
+    reading = captured_usage(_measured("estimated", output_tokens=Decimal(9)))
 
     assert reading is not None
     assert (reading.measurement_quality, reading.coverage_fraction) == ("estimated", 1.0)

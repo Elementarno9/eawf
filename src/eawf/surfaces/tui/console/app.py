@@ -72,6 +72,7 @@ from eawf.surfaces.tui.chassis.theme import (
 )
 from eawf.surfaces.tui.console.attach import OFFLINE, ONBOARDING, with_entry_state
 from eawf.surfaces.tui.console.bulk import BulkRequest
+from eawf.surfaces.tui.console.cards import settle
 from eawf.surfaces.tui.console.chrome import ConsoleChrome, load_chrome
 from eawf.surfaces.tui.console.clock import (
     Clock,
@@ -91,7 +92,6 @@ from eawf.surfaces.tui.console.frame import View, paint_rack, thin, unheld
 from eawf.surfaces.tui.console.header import CrumbRun, crumb_at
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS, ENTRY_ROUTE
-from eawf.surfaces.tui.console.mutation import settle
 from eawf.surfaces.tui.console.navigation import Ctx, open_overlay
 from eawf.surfaces.tui.console.onboarding import FirstRun, register_workspace, registered_state
 from eawf.surfaces.tui.console.operations import (
@@ -940,15 +940,29 @@ class ConsoleApp(App[None]):
         if seam is None or now - self._live_read_at < LIVE_REFRESH_SECONDS:
             return
         names = seam.live_on_screen()
-        if names:
+        if names or self.route_key == ATTENTION_ROUTE:
             self._live_read_at = now
             self.run_worker(self._reload_live(names), group=LIVE_WORKERS, exclusive=True)
 
     async def _reload_live(self, names: tuple[str, ...]) -> None:
-        """Read *names* again and repaint when any answer changed."""
+        """Read *names* again and repaint when any answer changed.
+
+        On the Attention route the register is read again too: a stall the sweep raises
+        or a Run's answer that clears it is a run-ledger line, which no patch carries.
+        """
         seam = self.seam
         assert seam is not None, "only started with a seam"
         moved = False
+        if self.route_key == ATTENTION_ROUTE:
+            before = seam.projection_for(ATTENTION_ROUTE)
+            try:
+                after = await seam.load(ATTENTION_ROUTE)
+            except Exception as exc:
+                logger.warning(f"attention re-read failed cause={exc!r}")
+            else:
+                if before is None or after.digest != before.digest:
+                    moved = True
+                    self.deliver_attention()
         for name in names:
             before = seam.live(name)
             try:

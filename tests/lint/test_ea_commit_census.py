@@ -176,6 +176,20 @@ def test_classify_path_generation_ignored_rows(path: str) -> None:
     assert classify_path(path).policy is CommitPolicy.NOT_COMMITTED
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".ea/generations/gen-0123456789abcdef/local/status.json",
+        ".ea/generations/gen-0123456789abcdef/local/ledger/task.jsonl",
+        ".ea/generations/gen-0123456789abcdef/local/ledger/run.jsonl",
+    ],
+)
+def test_classify_path_generation_status_projection_is_local(path: str) -> None:
+    row = classify_path(path)
+    assert row.policy is CommitPolicy.NOT_COMMITTED
+    assert row.tier is StorageTier.LOCAL_STORE
+
+
 def test_classify_path_generation_index_is_derived() -> None:
     row = classify_path(".ea/generations/gen-0123456789abcdef/indexes/task.index.json")
     assert row.tier is StorageTier.DERIVED

@@ -57,7 +57,32 @@ def _render_why(result: Any) -> str:
             lines.append(f"- {ref.kind} {ref.tier}: {ref.summary} ({ref.urn})")
     else:
         lines.append("refs: none")
+    if result.scorecard is not None:
+        lines.extend(_render_scorecard(result.scorecard))
     return "\n".join(lines)
+
+
+def _render_value(label: str, value: Any) -> str:
+    """Render one scorecard rate with its sample, an undefined rate as unavailable."""
+    if value.value is None:
+        return f"- {label}: unavailable ({value.sample_size} {value.sample})"
+    return (
+        f"- {label}: {value.value:.0%} over {value.sample_size} {value.sample} "
+        f"({value.measurement_quality})"
+    )
+
+
+def _render_scorecard(scorecard: Any) -> list[str]:
+    """Render the advisory scorecard with its coverage."""
+    coverage = scorecard.coverage
+    scope = "sampled window" if coverage.sampled else "all waves"
+    return [
+        "scorecard (advisory, gates nothing):",
+        _render_value("verified", scorecard.verified_share),
+        _render_value("verifier pass rate", scorecard.verifier_reliability.pass_rate),
+        f"- coverage: {coverage.subjects_contributing} of {coverage.subjects_total} "
+        f"waves carry evidence ({scope})",
+    ]
 
 
 __all__ = ["why_cmd"]

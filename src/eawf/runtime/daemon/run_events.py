@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Final, Literal
@@ -62,7 +62,7 @@ from eawf.kernel.runtime.events import (
 )
 from eawf.kernel.runtime.handshake import HandshakeDisposition, WorkerHelloFact
 from eawf.kernel.runtime.provider import ControlKind
-from eawf.kernel.runtime.stall import RunStallFact, standing_stall
+from eawf.kernel.runtime.stall import SILENT_SINCE_START, RunStallFact, standing_stall
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.state.types import UtcDatetime
@@ -465,8 +465,12 @@ def plan_stall(
     now: datetime,
     interval_seconds: int,
     resume_method: str,
+    started_at: datetime,
 ) -> RunStallFact | None:
     """Return the stall fact a sweep raises for one running Run, or ``None``.
+
+    A Run that has recorded no activity at all is measured from its start: it is silent
+    all the same, and the sweep is the only thing that would notice it.
 
     Args:
         urn: The Run swept.
@@ -475,22 +479,24 @@ def plan_stall(
         now: The daemon's recording clock.
         interval_seconds: The silence the Run is allowed.
         resume_method: The verb the fact offers as the way to resume the Run.
+        started_at: When the Run started, which a Run with no activity is measured from.
 
     Returns:
         A new fact when the Run has been silent past its interval and no fact stands
-        for this quiet episode yet; ``None`` when it is live, has recorded nothing to
-        measure silence against, or the episode already carries its fact.
+        for this quiet episode yet; ``None`` when it is live or the episode already
+        carries its fact.
     """
+    if state.last_activity_at is None:
+        state = replace(state, last_activity_at=started_at)
     stall = assess_stall(state=state, now=now, interval_seconds=interval_seconds)
-    anchor = state.last_activity_sequence
-    if stall.verdict is not RunLiveness.STALLED or anchor is None:
+    if stall.verdict is not RunLiveness.STALLED:
         return None
-    if standing_stall(facts, anchor) is not None:
+    if standing_stall(facts, state.last_activity_sequence) is not None:
         return None
-    assert stall.last_activity_at is not None and stall.last_activity_kind is not None
+    assert stall.last_activity_at is not None, "a stalled verdict is measured from an instant"
     return RunStallFact(
         run_ref=urn,
-        anchor_sequence=anchor,
+        anchor_sequence=state.last_activity_sequence or SILENT_SINCE_START,
         last_activity_at=stall.last_activity_at,
         last_activity_kind=stall.last_activity_kind,
         elapsed_seconds=stall.elapsed_seconds,

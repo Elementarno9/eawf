@@ -30,10 +30,10 @@ from eawf.runtime.daemon.epoch2_root import RootIdentity
 from eawf.runtime.daemon.runtime_dir import ensure_runtime_dir
 from eawf.runtime.daemon.server import handle_connection
 from eawf.surfaces.tui.console.app import ConsoleApp
+from eawf.surfaces.tui.console.cards import Card
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.harness import settle
-from eawf.surfaces.tui.console.mutation import Card
 from eawf.surfaces.tui.console.operations import Operator
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import SessionSetup

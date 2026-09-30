@@ -87,7 +87,7 @@ render_blocks:
     body_template: |
       ### `.ea/` directory: commit policy
 
-      ``.ea/state.json`` and ``.ea/profile.yaml`` are committed to version control — they are the source of truth for project state. ``.ea/locks/`` and ``.ea/local/`` are gitignored.
+      ``.ea/state.json``, ``.ea/profile.yaml`` and each generation's ``state.json`` and ledgers are committed to version control — they are the source of truth for what was released, delivered and decided. Per-Task and per-Run status (each generation's ``local/`` projection), ``.ea/locks/`` and ``.ea/local/`` are gitignored.
 
   - id: symbol-conventions
     target: AGENTS.md

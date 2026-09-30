@@ -182,6 +182,7 @@ Dispatch hook events through the Eä hook runner.
 | `eawf025-test-placement` | Reject a newly added test filed outside its taxonomy address. |
 | `eawf026-settings-categories` | Reject a configuration catalog section the settings rail cannot reach. |
 | `eawf027-citation-scope` | Reject committed text quoting a reflection row it may not. |
+| `eawf028-brief-immutable` | Reject a staged wording edit to a committed research brief. |
 | `email-leak-lint` | Reject email addresses outside the canonical author/no-reply allowlist. |
 | `log-format-lint` | Run the EAWF001 log-format rule over changed library modules. |
 | `path-leak-lint` | Reject home-directory path literals (macOS, Windows, and Linux home roots). |

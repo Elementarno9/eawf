@@ -25,10 +25,10 @@ from types import MappingProxyType
 
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console.cards import NO_STAMP, RECONCILABLE, Card, Item, Result
 from eawf.surfaces.tui.console.cells import NO_VALUE
 from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import Pair, keybar
-from eawf.surfaces.tui.console.mutation import NO_STAMP, RECONCILABLE, Card, Item, Result
 from eawf.surfaces.tui.console.operations import OUTCOME_SENTENCES
 from eawf.surfaces.tui.console.overlays.chassis import crumb
 from eawf.surfaces.tui.console.width import pad

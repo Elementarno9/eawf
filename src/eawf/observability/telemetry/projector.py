@@ -559,6 +559,8 @@ class SweepFunnel:
         projected: Sessions whose rows were written.
         durations: Per-kind duration rows written.
         drops: One entry per file that left the funnel.
+        sessions: The observed session rows written, which the pricing
+            coverage is weighed over.
     """
 
     seen: int = 0
@@ -567,6 +569,7 @@ class SweepFunnel:
     projected: int = 0
     durations: int = 0
     drops: list[SweepDrop] = field(default_factory=list)
+    sessions: list[ObservedSession] = field(default_factory=list)
 
     def stages(self) -> tuple[int, int, int, int]:
         """Return ``(seen, parsed, attributed, projected)``."""
@@ -622,6 +625,7 @@ def sweep_session_history(
             )
             continue
         _write_observed(store, session, durations)
+        funnel.sessions.append(session)
         funnel.projected += 1
         funnel.durations += len(durations)
     store.commit()

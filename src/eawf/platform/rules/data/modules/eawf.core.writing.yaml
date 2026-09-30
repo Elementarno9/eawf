@@ -92,13 +92,13 @@ rules:
     procedure_ref: docs/rules/entity-title-naming.md
   - rule_id: eawf.core.writing.newcomer-clarity
     obligation_id: writing.newcomer-clarity
-    revision: 1
+    revision: 2
     title: Write artifacts a newcomer understands without the state file
     zone: steering
     force: should
     effectiveness: guarded
     instruction: >-
-      Write every newcomer-facing artifact so a reader who joined today understands it without opening state.json: gloss internal codes on first use, state the motivation, keep it scannable, and move references into a numbered table.
+      Write each newcomer-facing artifact so a reader who joined today needs no state.json: gloss internal codes on first use, state the motivation, keep it scannable, and put references in a numbered table.
     rationale: >-
       Commit bodies, briefs and titles outlive the session that wrote them and are read by people who never saw its context.
     verification:

@@ -32,8 +32,7 @@ from pydantic import TypeAdapter, ValidationError
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.runtime.control import TERMINAL_RUN_STATUSES
 from eawf.kernel.runtime.events import RunEventKind
-from eawf.kernel.runtime.usage import UsagePayload, UsageQuality
-from eawf.kernel.state.enums import MeasurementQuality
+from eawf.kernel.runtime.usage import UsagePayload
 from eawf.kernel.state.epoch2.base import PrincipalKey
 from eawf.kernel.state.epoch2.measurement import (
     CaptureSource,
@@ -54,14 +53,6 @@ from eawf.runtime.daemon.run_events import RunEventAppend
 logger = logging.getLogger(__name__)
 
 _INSTANT: TypeAdapter[datetime] = TypeAdapter(UtcDatetime)
-
-#: How a captured row's quality reads as a usage reading's.
-_QUALITY: Final[Mapping[MeasurementQuality, UsageQuality]] = {
-    MeasurementQuality.EXACT: "measured",
-    MeasurementQuality.RECONSTRUCTED: "derived",
-    MeasurementQuality.ESTIMATED: "estimated",
-    MeasurementQuality.UNAVAILABLE: "unavailable",
-}
 
 _MICROUSD_PER_USD: Final = Decimal(1_000_000)
 
@@ -155,7 +146,7 @@ def captured_usage(captured: MeasuredRuntime) -> UsagePayload | None:
     Returns:
         The reading, or ``None`` when no counter it carries was observed.
     """
-    quality = _QUALITY[captured.measurement_quality]
+    quality = captured.measurement_quality
     input_tokens = _whole(captured, CounterName.INPUT_TOKENS)
     output_tokens = _whole(captured, CounterName.OUTPUT_TOKENS)
     cache_tokens = _whole(
@@ -170,6 +161,8 @@ def captured_usage(captured: MeasuredRuntime) -> UsagePayload | None:
         output_tokens=output_tokens,
         cache_tokens=cache_tokens,
         cost_microusd=cost_microusd,
+        # The cost counter is the charge the runtime itself reported.
+        price_source="billed" if cost_microusd is not None else None,
         usage_source=(
             "counter_sidecar" if captured.source is CaptureSource.SIDECAR else "provider_transcript"
         ),

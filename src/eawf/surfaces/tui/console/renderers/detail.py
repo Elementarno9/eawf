@@ -16,7 +16,9 @@ known to have failed -- exactly what these two states deny.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from types import MappingProxyType
+from typing import Final
 
 from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.projection.truth import TruthState
@@ -46,10 +48,16 @@ from eawf.surfaces.tui.console.renderers.read_model import (
 )
 from eawf.surfaces.tui.console.width import cell_len, clip_words
 
-#: The sentence both unknown frames close on.
-UNKNOWN_CLOSE: tuple[str, str] = (
-    "This state means we do not know. It is not success and not failure,",
-    "and it raises a pause rather than resolving itself.",
+#: The sentence both unknown frames open their close with.
+UNKNOWN_CLOSE = "This state means we do not know. It is not success and not failure,"
+
+#: What each unknown state waits on. A merging Batch waits for a reconcile; over a lost Run
+#: the stall sweep opens a pause citing the stall, which ends when the Run answers again.
+UNKNOWN_WAITS: Final[Mapping[Family, str]] = MappingProxyType(
+    {
+        Family.BATCH: "and it waits for a reconcile rather than resolving itself.",
+        Family.RUN: "and a pause holds it on its stall until it answers or is let go.",
+    }
 )
 
 #: Why a merging Batch is offered no retry.
@@ -243,7 +251,8 @@ def unknown_frame(
         label("RECOVERY", recovery[0]),
         *(more(line) for line in recovery[1:]),
         thin(w),
-        *(f"   {line}" for line in UNKNOWN_CLOSE),
+        f"   {UNKNOWN_CLOSE}",
+        f"   {UNKNOWN_WAITS[family]}",
         thin(w),
     ]
     return build(view, rows, route_keys_bar(view, keys))
@@ -253,6 +262,7 @@ __all__ = [
     "NO_MERGE_RETRY",
     "NO_RUN_RETRY",
     "UNKNOWN_CLOSE",
+    "UNKNOWN_WAITS",
     "at",
     "family_of",
     "state_of",

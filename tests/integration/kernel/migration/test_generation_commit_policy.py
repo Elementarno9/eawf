@@ -42,7 +42,12 @@ from eawf.kernel.migration.epoch2.generation import (
 )
 from eawf.kernel.store.commit_census import run_census
 from eawf.kernel.store.commit_policy import CensusFindingKind, CommitPolicy, classify_path
-from eawf.kernel.store.paths import index_path, ledger_path
+from eawf.kernel.store.paths import (
+    index_path,
+    ledger_path,
+    seed_ledger_path,
+    status_projection_path,
+)
 from eawf.kernel.store.tiers import Epoch2Collection
 from tests.integration.kernel.migration._cutover_harness import (
     applied_tree,
@@ -70,6 +75,7 @@ _ROWS_BY_TREE: dict[str, frozenset[str]] = {
             ".ea/generations/gen-*/state.json",
             ".ea/generations/gen-*/ledger/*.jsonl",
             ".ea/generations/gen-*/indexes/**",
+            ".ea/generations/gen-*/local/**",
             ".ea/generations/restore/**",
             ".ea/generations/journal.jsonl",
             ".ea/epoch2-disposable-canary.json",
@@ -90,6 +96,7 @@ _ROWS_BY_TREE: dict[str, frozenset[str]] = {
 #: elsewhere from passing for a missing generation entry.
 _IGNORE_ENTRY_BY_ROW: dict[str, str] = {
     ".ea/generations/gen-*/indexes/**": ".ea/generations/gen-*/indexes/",
+    ".ea/generations/gen-*/local/**": ".ea/generations/gen-*/local/",
     ".ea/generations/.staging-*/**": ".ea/generations/.staging-*/",
     ".ea/generations/restore/**": ".ea/generations/restore/",
     ".ea/generations/journal.jsonl": ".ea/generations/journal.jsonl",
@@ -249,7 +256,10 @@ def test_generation_tree_file_constants_resolve_to_declared_rows() -> None:
         generations / SELECTION_FILENAME: CommitPolicy.COMMITTED,
         generations / MARKER_FILENAME: CommitPolicy.COMMITTED,
         document: CommitPolicy.COMMITTED,
-        ledger_path(document, Epoch2Collection.TASK): CommitPolicy.COMMITTED,
+        ledger_path(document, Epoch2Collection.TASK): CommitPolicy.NOT_COMMITTED,
+        seed_ledger_path(document, Epoch2Collection.TASK): CommitPolicy.COMMITTED,
+        ledger_path(document, Epoch2Collection.BATCH): CommitPolicy.COMMITTED,
+        status_projection_path(document): CommitPolicy.NOT_COMMITTED,
         index_path(document, Epoch2Collection.TASK): CommitPolicy.NOT_COMMITTED,
         generations / f"{STAGING_PREFIX}-a" / GENERATION_DOCUMENT: CommitPolicy.NOT_COMMITTED,
         generations / RESTORE_DIRNAME / RESTORE_MANIFEST_FILENAME: CommitPolicy.NOT_COMMITTED,

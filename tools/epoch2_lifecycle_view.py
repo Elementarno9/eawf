@@ -19,12 +19,17 @@ the two halves of that job are restated here rather than imported:
   their epoch-1 id as the record key, which is what an ``Eawf-Wave``
   trailer names; rows keyed any other way are native work, so the
   projection leaves them out.
+- the status projection mirrors ``eawf.kernel.store.compaction``: the
+  Task and Run rows and the canonical sequence sit in the generation's
+  ``local/status.json`` and win over the committed document, and those
+  collections' ledgers sit under ``local/ledger/``, the committed ledger
+  being only the seed a local ledger starts from.
 - the native Task key grammar mirrors the task family of
   ``eawf.kernel.identity.keys``: ``<PROJECT>-####``, which is what an
   ``Task`` trailer names. :func:`native_task_status` reads such a row
   in its native spelling, since it has no epoch-1 counterpart.
 
-All three copies are pinned against the package by
+All four copies are pinned against the package by
 ``tests/unit/test_commit_prefix_lint_epoch2.py``.
 """
 
@@ -42,6 +47,10 @@ CANARY_DECLARATION_FILENAME = "epoch2-disposable-canary.json"
 GENERATION_DOCUMENT = "state.json"
 LEDGER_DIRNAME = "ledger"
 LEDGER_SUFFIX = ".jsonl"
+LOCAL_DIRNAME = "local"
+STATUS_PROJECTION_FILENAME = "status.json"
+STATUS_PROJECTION_COLLECTIONS = frozenset({"task", "run"})
+STATUS_DOCUMENT_KEYS = frozenset({*STATUS_PROJECTION_COLLECTIONS, "canonical_sequence"})
 
 _GENERATION_ID_RE = re.compile(r"^gen-[0-9a-f]{16}$")
 _PHASE_KEY_RE = re.compile(r"^P\d{2,}$")
@@ -112,6 +121,36 @@ def epoch2_generation(ea_dir: Path) -> Path | None:
     return ea_dir / GENERATIONS_DIRNAME / generation_id
 
 
+def _ledger_file(generation: Path, collection: str) -> Path:
+    """Return the ledger file that holds *collection*'s history.
+
+    A status collection's ledger is the local one once it exists; before
+    that, the committed seed it would be rebuilt from.
+    """
+    committed = generation / LEDGER_DIRNAME / f"{collection}{LEDGER_SUFFIX}"
+    if collection not in STATUS_PROJECTION_COLLECTIONS:
+        return committed
+    local = generation / LOCAL_DIRNAME / LEDGER_DIRNAME / committed.name
+    return local if local.is_file() else committed
+
+
+def _document(generation: Path) -> Any:
+    """Return the generation document with its status projection merged in.
+
+    Raises:
+        ValueError: The projection is not a JSON object.
+    """
+    document = json.loads((generation / GENERATION_DOCUMENT).read_text(encoding="utf-8"))
+    projection = generation / LOCAL_DIRNAME / STATUS_PROJECTION_FILENAME
+    if not projection.is_file() or not isinstance(document, dict):
+        return document
+    status = json.loads(projection.read_text(encoding="utf-8"))
+    if not isinstance(status, dict):
+        raise ValueError(f"{STATUS_PROJECTION_FILENAME}: must be an object")
+    committed = {key: value for key, value in document.items() if key not in STATUS_DOCUMENT_KEYS}
+    return committed | status
+
+
 def _collection_rows(generation: Path, collection: str) -> dict[str, dict[str, Any]]:
     """Return one collection's current rows, keyed by record key.
 
@@ -124,7 +163,7 @@ def _collection_rows(generation: Path, collection: str) -> dict[str, dict[str, A
             collection is not an object.
     """
     rows: dict[str, dict[str, Any]] = {}
-    ledger = generation / LEDGER_DIRNAME / f"{collection}{LEDGER_SUFFIX}"
+    ledger = _ledger_file(generation, collection)
     if ledger.is_file():
         for line in ledger.read_text(encoding="utf-8").splitlines():
             if not line.strip():
@@ -133,7 +172,7 @@ def _collection_rows(generation: Path, collection: str) -> dict[str, dict[str, A
             if not isinstance(row, dict) or not isinstance(row.get("record_key"), str):
                 raise ValueError(f"{ledger.name}: every line must be an object with a record_key")
             rows[row["record_key"]] = row
-    document = json.loads((generation / GENERATION_DOCUMENT).read_text(encoding="utf-8"))
+    document = _document(generation)
     in_flight = document.get(collection, {}) if isinstance(document, dict) else None
     if not isinstance(in_flight, dict):
         raise ValueError(f"{GENERATION_DOCUMENT}: {collection!r} must be an object")

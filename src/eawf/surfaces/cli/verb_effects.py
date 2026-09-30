@@ -202,6 +202,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "hook eawf023-artifact-placement": _read(),
     "hook eawf026-settings-categories": _read(),
     "hook eawf027-citation-scope": _read(),
+    "hook eawf028-brief-immutable": _read(),
     "hook eawf024-test-tier-contract": _read(),
     "hook eawf025-test-placement": _read(),
     "hook eawf016-title-clarity": _read(),

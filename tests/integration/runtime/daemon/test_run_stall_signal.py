@@ -2,7 +2,10 @@
 
 RUN-029: the sweep the daemon schedules raises one ``run_stall`` fact per quiet episode on
 the run ledger, carrying the last activity, the elapsed silence, the interval and the
-resume path, and ``runtime.run.stalls.read`` lists every stall still standing. RUN-030:
+resume path, and ``runtime.run.stalls.read`` lists every stall still standing. A Run that
+has produced nothing is measured from its start, and a Run started inside a host session
+sends no hello, so it is measured against the runtime whose harness owns that session.
+RUN-030:
 the fact moves no status, so a stalled Run stays running -- lost, not failed -- until a
 principal's control ends it. UI-008: the events read answers with the Run's timeline
 groups, so a surface draws the daemon's grouping instead of making its own.
@@ -20,7 +23,8 @@ from typing import Any, Final
 
 import pytest
 
-from eawf.kernel.runtime.stall import RunStallFact
+from eawf.kernel.config.schema import DEFAULT_STALL_INTERVAL_SECONDS
+from eawf.kernel.runtime.stall import SILENT_SINCE_START, RunStallFact
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import main as daemon_main
 from eawf.runtime.daemon import methods
@@ -52,6 +56,9 @@ pytestmark = pytest.mark.integration
 
 #: A Run of the tree that is not running, which the sweep must pass over.
 DONE_KEY: Final = "RUN-00000011"
+
+#: When the seeded running Run started, which a Run with no activity is measured from.
+STARTED_AT: Final = datetime.fromisoformat(seed_row("run", "RUNNING")["started_at"])
 
 
 @pytest.fixture
@@ -164,13 +171,67 @@ def test_run_029_the_default_interval_is_crossed_by_a_later_clock_alone(
     assert sweep_once(ctx, now=datetime.now(UTC) + timedelta(hours=1)) == (RUN_KEY,)
 
 
-def test_run_029_a_run_with_no_activity_has_nothing_to_measure_and_no_stall(
+def test_run_029_a_run_with_no_activity_is_measured_from_its_start(
     canary: CanaryProvision, ctx: MethodContext
 ) -> None:
     configure(canary, {"codex": {"stall_interval_s": 0}})
     announce_as(ctx, canary, "codex")
+    now = datetime.now(UTC)
 
-    assert sweep_once(ctx, now=datetime.now(UTC) + timedelta(hours=1)) == ()
+    assert sweep_once(ctx, now=now) == (RUN_KEY,)
+    assert sweep_once(ctx, now=now + timedelta(seconds=30)) == ()
+    (fact,) = stalls(ctx, canary).stalls
+    assert fact.anchor_sequence == SILENT_SINCE_START
+    assert fact.last_activity_kind is None
+    assert fact.last_activity_at == STARTED_AT
+    assert fact.elapsed_seconds == pytest.approx((now - STARTED_AT).total_seconds())
+
+    act(ctx, canary, 1)
+    assert stalls(ctx, canary).stalls == ()
+
+
+def test_run_029_a_run_with_no_activity_inside_its_interval_is_not_stalled(
+    canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    announce_as(ctx, canary, "codex")
+    inside = STARTED_AT + timedelta(seconds=DEFAULT_STALL_INTERVAL_SECONDS - 1)
+
+    assert sweep_once(ctx, now=inside) == ()
+    assert sweep_once(ctx, now=inside + timedelta(seconds=1)) == (RUN_KEY,)
+
+
+def _hosted(tmp_path: Path, harness: str) -> CanaryProvision:
+    """A canary whose one running Run carries a *harness* session and sends no hello."""
+    provisioned = provision(tmp_path / "repo")
+    row = seed_row("run", "RUNNING")
+    row["vendor_session"] = {"harness": harness, "session_digest": "host-session-1"}
+    seed(provisioned, {"run": {RUN_KEY: row}})
+    return provisioned
+
+
+@pytest.mark.parametrize(("harness", "runtime"), [("claude-code", "claude"), ("codex", "codex")])
+def test_run_029_a_host_session_run_is_measured_against_its_harness_runtime(
+    tmp_path: Path, ctx: MethodContext, harness: str, runtime: str
+) -> None:
+    hosted = _hosted(tmp_path, harness)
+    configure(hosted, {runtime: {"stall_interval_s": 1}})
+    assert stalls(ctx, hosted).stalls == ()  # the read attaches the tree to the sweep
+
+    assert sweep_once(ctx, now=STARTED_AT + timedelta(seconds=1)) == (RUN_KEY,)
+    (fact,) = stalls(ctx, hosted).stalls
+    assert fact.interval_seconds == 1
+
+
+def test_run_029_a_host_session_run_takes_no_other_runtime_s_interval(
+    tmp_path: Path, ctx: MethodContext
+) -> None:
+    hosted = _hosted(tmp_path, "claude-code")
+    configure(hosted, {"codex": {"stall_interval_s": 1}})
+    assert stalls(ctx, hosted).stalls == ()  # the read attaches the tree to the sweep
+
+    assert sweep_once(ctx, now=STARTED_AT + timedelta(seconds=1)) == ()
+    after = STARTED_AT + timedelta(seconds=DEFAULT_STALL_INTERVAL_SECONDS)
+    assert sweep_once(ctx, now=after) == (RUN_KEY,)
 
 
 def test_run_029_a_broken_tree_is_passed_over_and_the_sweep_goes_on(

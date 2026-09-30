@@ -925,14 +925,17 @@ def compute_wave_close_extras(  # noqa: C901
     }
     # P28-I02-W03: surface the close-time token + cost rollup on the
     # event envelope. The wave_close apply (close_wave -> upsert
-    # ActualSummary) populated these from Wave.tokens_consumed; cost
-    # stays 0.0 until the per-model rate table lands.
+    # ActualSummary) populated these from Wave.tokens_consumed and the
+    # runtime delta; either is null when it was never counted or priced.
     actuals = state.actuals or {}
     actual = actuals.get(wave_id)
     if actual is not None:
         extras["actual_written_auto"] = actual_written_auto
-        extras["actual_tokens"] = actual.actual_tokens
-        extras["actual_cost_usd"] = actual.actual_cost_usd
+        # An uncounted or unpriced figure is left out, never published as zero.
+        if actual.actual_tokens is not None:
+            extras["actual_tokens"] = actual.actual_tokens
+        if actual.actual_cost_usd is not None:
+            extras["actual_cost_usd"] = actual.actual_cost_usd
         if actual.attention_eu is not None:
             extras["actual_attention_eu"] = actual.attention_eu
         if actual.agent_runtime_eu is not None:

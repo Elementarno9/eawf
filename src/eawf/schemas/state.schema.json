@@ -16,19 +16,33 @@
     },
     "ActualSummary": {
       "additionalProperties": false,
-      "description": "Latest actual (segments in store).\n\n``attention_eu`` may be auto-derived at wave close from telemetry\nsession ``duration_ms`` when no operator-authored actual already\nexists. ``actual_tokens`` mirrors :attr:`Wave.tokens_consumed` so the\nM26 variance / cost view has the close-time token tally without\nre-reading the wave record. ``actual_cost_usd`` is the per-token cost\nrollup; v0.4 leaves it at ``0.0`` until a per-model rate table wires\nin (see :func:`eawf.workflow.lifecycle.wave.close_wave`).\nBoth fields default to ``0`` / ``0.0`` so existing on-disk rows\nstay valid without a schema bump.\n\n``harness`` and ``model`` carry the attribution that makes the recorded\nactual calibratable by harness+model: the agent harness id (e.g.\n``\"claude-code\"``) and the model id the runtime billed against. Both are\noptional because not every recorded actual knows them, and a state written\nbefore the v1.11 bump re-validates with both defaulted to ``None``.\n\n``calibration_excluded`` marks a row that was MEASURED but does not calibrate\nanything, so a consumer can skip it from state alone rather than from a human\nreading a document. The close path sets it when the wave's runtime was\nre-originated by a counter reset (:attr:`RuntimeCarry.counter_resets`, which\nmeans the runtime before the reset is gone and the figure is a floor, not a\nmeasure) or shared across concurrent waves\n(:attr:`RuntimeBaseline.shared_wave_count`, where the split among sharers is\nan approximation whenever the concurrency moved mid-span). Both are honest\nrecords of what was captured; neither is a reference class. It defaults to\n``False`` so an unmarked row means \"nothing known to disqualify it\", and a\nstate written before the v1.19 bump re-validates unchanged.",
+      "description": "Latest actual (segments in store).\n\n``attention_eu`` may be auto-derived at wave close from telemetry\nsession ``duration_ms`` when no operator-authored actual already\nexists. ``actual_tokens`` mirrors :attr:`Wave.tokens_consumed` so the\nM26 variance / cost view has the close-time token tally without\nre-reading the wave record. ``actual_cost_usd`` is the per-token cost\nrollup (see :func:`eawf.workflow.lifecycle.wave.close_wave`). Both are\nnullable and default to ``None``: an unpriced or uncounted row reads\nunknown, never a zero that would join every sum it meets. A zero on\neither field is a measured zero. Rows written before the fields became\nnullable still validate unchanged.\n\n``harness`` and ``model`` carry the attribution that makes the recorded\nactual calibratable by harness+model: the agent harness id (e.g.\n``\"claude-code\"``) and the model id the runtime billed against. Both are\noptional because not every recorded actual knows them, and a state written\nbefore the v1.11 bump re-validates with both defaulted to ``None``.\n\n``calibration_excluded`` marks a row that was MEASURED but does not calibrate\nanything, so a consumer can skip it from state alone rather than from a human\nreading a document. The close path sets it when the wave's runtime was\nre-originated by a counter reset (:attr:`RuntimeCarry.counter_resets`, which\nmeans the runtime before the reset is gone and the figure is a floor, not a\nmeasure) or shared across concurrent waves\n(:attr:`RuntimeBaseline.shared_wave_count`, where the split among sharers is\nan approximation whenever the concurrency moved mid-span). Both are honest\nrecords of what was captured; neither is a reference class. It defaults to\n``False`` so an unmarked row means \"nothing known to disqualify it\", and a\nstate written before the v1.19 bump re-validates unchanged.",
       "properties": {
         "actual_cost_usd": {
-          "default": 0.0,
-          "minimum": 0.0,
-          "title": "Actual Cost Usd",
-          "type": "number"
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Cost Usd"
         },
         "actual_tokens": {
-          "default": 0,
-          "minimum": 0,
-          "title": "Actual Tokens",
-          "type": "integer"
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Tokens"
         },
         "agent_runtime_eu": {
           "anyOf": [
@@ -2800,7 +2814,7 @@
       "type": "string"
     },
     "MeasurementQuality": {
-      "description": "Evidence quality of a persisted runtime measurement.",
+      "description": "Evidence quality of a persisted epoch-1 runtime measurement.",
       "enum": [
         "exact",
         "reconstructed",

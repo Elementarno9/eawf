@@ -8,6 +8,12 @@ totals inflates every figure built on them, so :func:`aggregate_usage`
 is the one fold: deltas are summed and running totals contribute their
 maximum.
 
+A cost names where its price came from: ``billed`` when the runtime
+reported the charge, ``list-reconstructed`` when eawf multiplied tokens by a
+published rate table. Only a billed price may enforce anything, so the
+enforcement fold refuses a reconstructed one rather than letting a list
+price trip -- or fail to trip -- a budget cap.
+
 A budget event reports that a ceiling was approached or reached, on one
 axis, against one compiled contract and one policy revision. Two things
 it can never say are refused at the boundary: that a prediction was
@@ -22,13 +28,18 @@ from typing import Annotated, Final, Literal, Self
 from pydantic import Field, StrictBool, StrictFloat, StrictInt, model_validator
 
 from eawf.kernel.runtime.provider import Digest, RuntimeRecord
+from eawf.kernel.state.enums import QualityLadder
 from eawf.kernel.state.types import UtcDatetime
 
 #: Where a usage reading came from.
 UsageSource = Literal["provider_receipt", "provider_transcript", "counter_sidecar", "eawf_derived"]
 
 #: How much a reading can be trusted, from a direct measurement down to none.
-UsageQuality = Literal["measured", "derived", "estimated", "unavailable"]
+UsageQuality = QualityLadder
+
+#: Where a reading's cost came from. An unpriced reading carries no cost
+#: and so no source.
+UsagePriceSource = Literal["billed", "list-reconstructed"]
 
 #: A resource dimension a Run's compiled ceiling bounds.
 BudgetAxis = Literal[
@@ -66,6 +77,8 @@ class UsagePayload(RuntimeRecord):
         cache_tokens: Prompt-cache tokens, or ``None`` when unreported.
         cost_microusd: Cost, or ``None`` when unpriced -- never zero for
             unpriced.
+        price_source: Where the cost came from; present exactly when a
+            cost is.
         usage_source: Where the reading came from.
         is_cumulative: ``True`` when the counters are running session
             totals, ``False`` when they are the delta since the previous
@@ -81,6 +94,7 @@ class UsagePayload(RuntimeRecord):
     output_tokens: _Count | None = None
     cache_tokens: _Count | None = None
     cost_microusd: _Count | None = None
+    price_source: UsagePriceSource | None = None
     usage_source: UsageSource
     is_cumulative: StrictBool
     measurement_quality: UsageQuality
@@ -93,9 +107,12 @@ class UsagePayload(RuntimeRecord):
 
         Raises:
             ValueError: A reading of available quality carries no counter,
-                an unavailable one carries some, or coverage is stated
-                exactly where the quality is not ``estimated``.
+                an unavailable one carries some, coverage is stated
+                exactly where the quality is not ``estimated``, or a cost
+                and its price source are not stated together.
         """
+        if (self.cost_microusd is None) != (self.price_source is None):
+            raise ValueError("a cost names its price_source, and only a cost does")
         present = [name for name in _COUNTERS if getattr(self, name) is not None]
         unavailable = self.measurement_quality == "unavailable"
         if unavailable and present:
@@ -127,7 +144,9 @@ class UsageTotals(RuntimeRecord):
         return sum(reported) if reported else None
 
 
-def aggregate_usage(payloads: Iterable[UsagePayload]) -> UsageTotals:
+def aggregate_usage(
+    payloads: Iterable[UsagePayload], *, for_enforcement: bool = False
+) -> UsageTotals:
     """Fold usage readings into totals without double counting a running total.
 
     Per counter, the deltas are summed and the running totals contribute
@@ -136,6 +155,9 @@ def aggregate_usage(payloads: Iterable[UsagePayload]) -> UsageTotals:
 
     Args:
         payloads: The readings, in any order.
+        for_enforcement: Whether the totals feed a cap or a ceiling. Such a
+            fold refuses every ``list-reconstructed`` cost, so the cost it
+            reports is billed spend only, or ``None`` when none was billed.
 
     Returns:
         The totals, with ``None`` for a counter no reading reported.
@@ -143,14 +165,23 @@ def aggregate_usage(payloads: Iterable[UsagePayload]) -> UsageTotals:
     readings = tuple(payloads)
     totals: dict[str, int | None] = {}
     for name in _COUNTERS:
+        counted = [
+            reading
+            for reading in readings
+            if not (
+                for_enforcement
+                and name == "cost_microusd"
+                and reading.price_source == "list-reconstructed"
+            )
+        ]
         deltas = [
             value
-            for reading in readings
+            for reading in counted
             if not reading.is_cumulative and (value := getattr(reading, name)) is not None
         ]
         running = [
             value
-            for reading in readings
+            for reading in counted
             if reading.is_cumulative and (value := getattr(reading, name)) is not None
         ]
         reported = bool(deltas) or bool(running)
@@ -230,6 +261,7 @@ __all__ = [
     "BudgetAxis",
     "BudgetPayload",
     "UsagePayload",
+    "UsagePriceSource",
     "UsageQuality",
     "UsageSource",
     "UsageTotals",

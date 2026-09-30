@@ -27,12 +27,24 @@ collects from git -- which paths are tracked, and which probe paths the
 ignore rules match -- and reports every way the tree disagrees with the
 declaration. Keeping the git calls out of this module keeps the
 classification a pure function that a test can drive with a fixture.
+
+The same holds one level up, for commits rather than paths. A delivered
+product's default branch carries exactly three permanent commits --
+bootstrap, verified delivery, observed publication -- each the only
+parent of the next, and no commit per Run, per Task transition or per
+receipt. One disposable review checkpoint freezes the reviewed tree: the
+delivery commit cites it by provenance and never descends from it, so
+discarding the checkpoint rewrites nothing permanent.
+:func:`ancestry_findings` reports every way a history disagrees with that
+policy, again over facts the caller collected from git.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Sequence
 from enum import StrEnum
+from itertools import pairwise
 from pathlib import PurePosixPath
 from typing import Annotated, Final, Self
 
@@ -236,6 +248,13 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
         _NO,
         "one generation's offset indexes; they regenerate from its ledgers",
         tier=StorageTier.DERIVED,
+    ),
+    _row(
+        ".ea/generations/gen-*/local/**",
+        _NO,
+        "one generation's Task and Run status projection; only release, delivery "
+        "and decision facts are committed",
+        tier=StorageTier.LOCAL_STORE,
     ),
     _row(
         ".ea/generations/.staging-*/**",
@@ -481,17 +500,212 @@ def census_findings(
     return tuple(findings)
 
 
+class PermanentCommitKind(StrEnum):
+    """The three commits a delivered product's default branch keeps, in order."""
+
+    BOOTSTRAP = "bootstrap"
+    DELIVERY = "delivery"
+    PUBLICATION = "publication"
+
+
+#: The order the permanent commits descend in, each the only parent of the next.
+PERMANENT_COMMIT_ORDER: Final[tuple[PermanentCommitKind, ...]] = tuple(PermanentCommitKind)
+
+#: The scheme a delivery commit's provenance trailer addresses its manifest by.
+DELIVERY_PROVENANCE_SCHEME: Final = "manifest://"
+
+#: The trailer a delivery commit cites its disposable review checkpoint by.
+REVIEW_CHECKPOINT_TRAILER_KEY: Final = "Eawf-Review-Checkpoint"
+
+#: The subject of the commit that records an observed, or a partial, publication.
+PUBLICATION_SUBJECT: Final = re.compile(r"chore: record (observed|partial) \S+ publication")
+
+
+class HistoryCommit(BaseModel):
+    """One commit as the ancestry check reads it.
+
+    Attributes:
+        sha: The commit's object name.
+        parents: Its parents' object names, first parent first.
+        subject: The first line of its message.
+        provenance: Its ``Eawf-Provenance`` trailer, when it carries one.
+        cites: The commits its provenance cites -- its
+            ``Eawf-Review-Checkpoint`` trailers -- which is how a delivery
+            names the review checkpoint it did not descend from.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    sha: Annotated[str, Field(pattern=r"^[0-9a-f]{7,64}$")]
+    parents: tuple[Annotated[str, Field(pattern=r"^[0-9a-f]{7,64}$")], ...] = ()
+    subject: Annotated[str, Field(min_length=1, max_length=200)]
+    provenance: str | None = None
+    cites: tuple[str, ...] = ()
+
+
+def classify_commit(commit: HistoryCommit) -> PermanentCommitKind | None:
+    """Return which permanent commit *commit* is, or ``None`` for any other.
+
+    Args:
+        commit: The commit to classify.
+
+    Returns:
+        ``BOOTSTRAP`` for a root commit, ``PUBLICATION`` for a commit
+        whose subject records a publication, ``DELIVERY`` for a commit
+        whose provenance names a delivery manifest, and ``None`` for
+        everything else -- status, event and receipt chatter included.
+    """
+    if not commit.parents:
+        return PermanentCommitKind.BOOTSTRAP
+    if PUBLICATION_SUBJECT.fullmatch(commit.subject):
+        return PermanentCommitKind.PUBLICATION
+    if commit.provenance is not None and commit.provenance.startswith(DELIVERY_PROVENANCE_SCHEME):
+        return PermanentCommitKind.DELIVERY
+    return None
+
+
+class AncestryFindingKind(StrEnum):
+    """The ways a default branch can disagree with the permanent-commit policy."""
+
+    CHATTER_COMMIT = "chatter_commit"
+    PERMANENT_ORDER = "permanent_order"
+    BROKEN_ANCESTRY = "broken_ancestry"
+    CHECKPOINT_IN_ANCESTRY = "checkpoint_in_ancestry"
+    CHECKPOINT_UNCITED = "checkpoint_uncited"
+
+
+class AncestryFinding(BaseModel):
+    """One disagreement between a history and the permanent-commit policy."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: AncestryFindingKind
+    sha: Annotated[str, Field(min_length=1, max_length=64)]
+    reason: Annotated[str, Field(min_length=1, max_length=240)]
+
+    def render(self) -> str:
+        """Return a ``kind sha: reason`` one-liner for the console."""
+        return f"{self.kind.value} {self.sha}: {self.reason}"
+
+
+def ancestry_findings(
+    *,
+    history: Sequence[HistoryCommit],
+    checkpoint: HistoryCommit,
+) -> tuple[AncestryFinding, ...]:
+    """Return every way *history* disagrees with the permanent-commit policy.
+
+    Args:
+        history: The default branch's commits, oldest first, as its
+            first-parent walk lists them.
+        checkpoint: The one disposable review checkpoint.
+
+    Returns:
+        The findings in history order: a commit that is none of the three
+        permanent kinds, permanent commits out of order or not three, a
+        permanent commit whose only parent is not its predecessor, a
+        checkpoint the branch descends from, and a delivery that does not
+        cite the checkpoint.
+    """
+    findings: list[AncestryFinding] = []
+    permanent: list[tuple[PermanentCommitKind, HistoryCommit]] = []
+    for commit in history:
+        kind = classify_commit(commit)
+        if kind is None:
+            findings.append(
+                AncestryFinding(
+                    kind=AncestryFindingKind.CHATTER_COMMIT,
+                    sha=commit.sha,
+                    reason=f"{commit.subject!r} is not one of the three permanent commits",
+                )
+            )
+            continue
+        permanent.append((kind, commit))
+    kinds = tuple(kind for kind, _ in permanent)
+    if kinds != PERMANENT_COMMIT_ORDER:
+        findings.append(
+            AncestryFinding(
+                kind=AncestryFindingKind.PERMANENT_ORDER,
+                sha=history[-1].sha if history else checkpoint.sha,
+                reason=f"permanent commits are {[kind.value for kind in kinds]}, not "
+                f"{[kind.value for kind in PERMANENT_COMMIT_ORDER]}",
+            )
+        )
+    findings.extend(_parent_findings(permanent))
+    findings.extend(_checkpoint_findings(history, permanent, checkpoint))
+    return tuple(findings)
+
+
+def _parent_findings(
+    permanent: Sequence[tuple[PermanentCommitKind, HistoryCommit]],
+) -> list[AncestryFinding]:
+    """Return a finding for each permanent commit not parented only on its predecessor."""
+    findings: list[AncestryFinding] = []
+    for previous, (_, commit) in pairwise(permanent):
+        expected = (previous[1].sha,)
+        if commit.parents != expected:
+            findings.append(
+                AncestryFinding(
+                    kind=AncestryFindingKind.BROKEN_ANCESTRY,
+                    sha=commit.sha,
+                    reason=f"parents {list(commit.parents)} are not exactly the "
+                    f"{previous[0].value} commit {previous[1].sha}",
+                )
+            )
+    return findings
+
+
+def _checkpoint_findings(
+    history: Sequence[HistoryCommit],
+    permanent: Sequence[tuple[PermanentCommitKind, HistoryCommit]],
+    checkpoint: HistoryCommit,
+) -> list[AncestryFinding]:
+    """Return the findings about the disposable review checkpoint."""
+    findings: list[AncestryFinding] = []
+    ancestry = {commit.sha for commit in history}
+    ancestry.update(parent for commit in history for parent in commit.parents)
+    if checkpoint.sha in ancestry:
+        findings.append(
+            AncestryFinding(
+                kind=AncestryFindingKind.CHECKPOINT_IN_ANCESTRY,
+                sha=checkpoint.sha,
+                reason="the disposable review checkpoint is an ancestor of the default branch",
+            )
+        )
+    deliveries = [commit for kind, commit in permanent if kind is PermanentCommitKind.DELIVERY]
+    for delivery in deliveries:
+        if checkpoint.sha not in delivery.cites:
+            findings.append(
+                AncestryFinding(
+                    kind=AncestryFindingKind.CHECKPOINT_UNCITED,
+                    sha=delivery.sha,
+                    reason=f"the delivery's provenance does not cite checkpoint {checkpoint.sha}",
+                )
+            )
+    return findings
+
+
 __all__ = [
     "CENSUS_SURFACE_PREFIX",
+    "DELIVERY_PROVENANCE_SCHEME",
     "EA_PATH_CLASSES",
+    "PERMANENT_COMMIT_ORDER",
     "PROBE_SEGMENT",
+    "PUBLICATION_SUBJECT",
+    "REVIEW_CHECKPOINT_TRAILER_KEY",
+    "AncestryFinding",
+    "AncestryFindingKind",
     "CensusFinding",
     "CensusFindingKind",
     "CommitPolicy",
     "CommitPolicyError",
+    "HistoryCommit",
     "PathClass",
+    "PermanentCommitKind",
     "UndeclaredPathError",
+    "ancestry_findings",
     "census_findings",
+    "classify_commit",
     "classify_path",
     "probe_paths",
 ]

@@ -65,6 +65,7 @@ from eawf.surfaces.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
     from eawf.observability.eval.jury_validation import JuryValidationReport
+    from eawf.observability.measurement.coverage import PricingCoverage
 
 logger = logging.getLogger(__name__)
 
@@ -535,6 +536,7 @@ def _telemetry_export(flags: GlobalFlags, *, fmt: str, out: Path | None) -> None
 
 def _telemetry_rebuild(flags: GlobalFlags, *, full: bool, incremental: bool) -> None:
     """Drive the projector over the discovered sources into the local cache."""
+    from eawf.observability.measurement.coverage import pricing_coverage
     from eawf.observability.telemetry.projector import (
         RebuildMode,
         SourceSpec,
@@ -572,6 +574,7 @@ def _telemetry_rebuild(flags: GlobalFlags, *, full: bool, incremental: bool) -> 
     finally:
         store.close()
 
+    pricing = pricing_coverage(funnel.sessions)
     payload = {
         "mode": mode.value,
         "sessions": report.sessions,
@@ -588,6 +591,7 @@ def _telemetry_rebuild(flags: GlobalFlags, *, full: bool, incremental: bool) -> 
                 {"file": drop.file_name, "stage": drop.stage.value, "reason": drop.reason.value}
                 for drop in funnel.drops
             ],
+            "pricing": pricing.model_dump(mode="json"),
         },
     }
     text = (
@@ -598,7 +602,24 @@ def _telemetry_rebuild(flags: GlobalFlags, *, full: bool, incremental: bool) -> 
     )
     for drop in funnel.drops:
         text += f"\n  dropped {drop.file_name} before {drop.stage.value}: {drop.reason.value}"
+    text += "\n" + _render_pricing(pricing)
     emit_json_or_text(payload, text, flags=flags)
+
+
+def _render_pricing(pricing: PricingCoverage) -> str:
+    """Render token-weighted pricing coverage, an undefined share as unavailable."""
+    if not pricing.total_tokens:
+        return "pricing coverage: unavailable (no tokens swept)"
+    shares = " ".join(
+        f"{source}={share:.1%}"
+        for source, share in pricing.share_by_source.items()
+        if share is not None
+    )
+    causes = ", ".join(
+        f"{cause} {tokens}" for cause, tokens in sorted(pricing.unpriced_tokens_by_cause.items())
+    )
+    line = f"pricing coverage over {pricing.total_tokens} tokens: {shares}"
+    return f"{line}; unpriced by cause: {causes}" if causes else line
 
 
 def _telemetry_info(flags: GlobalFlags) -> None:

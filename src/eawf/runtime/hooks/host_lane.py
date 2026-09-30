@@ -14,9 +14,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
-from eawf.runtime.hooks.event import HookEvent, HookEventType
+from eawf.runtime.hooks.event import HOST_HARNESSES, HookEvent, HookEventType
 from eawf.runtime.hooks.runner import (
-    _HOST_HARNESSES,
     DaemonClientFactory,
     HookResult,
     HookRunner,
@@ -64,7 +63,7 @@ def record_host_context_boundary(
         drift found, followed by the restatement; or why no boundary was stated.
     """
     name = HOST_CONTEXT_HOOK
-    harness = _HOST_HARNESSES.get(event.runtime)
+    harness = HOST_HARNESSES.get(event.runtime)
     payload = _session_end_payload(event)
     session = payload.get("session_id")
     if harness is None or not isinstance(session, str) or not session:

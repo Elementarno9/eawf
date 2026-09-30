@@ -19,8 +19,8 @@ import os
 from pathlib import Path
 from typing import Any, Final
 
-from eawf.runtime.hooks import runner
-from eawf.runtime.hooks.event import HookEvent
+from eawf.runtime.hooks import host_calls, runner
+from eawf.runtime.hooks.event import HOST_HARNESSES, HookEvent
 from eawf.runtime.sandbox.data_loss import DataLossDenial, judge_tool_call
 
 logger = logging.getLogger(__name__)
@@ -105,15 +105,15 @@ def _record(
     daemon_client_factory: Any,
 ) -> str:
     """File the denial with the daemon; return what happened, never raise."""
-    harness = runner._HOST_HARNESSES.get(event.runtime)
-    session = runner._host_session_of(payload)
+    harness = HOST_HARNESSES.get(event.runtime)
+    session = host_calls._host_session_of(payload)
     if harness is None or session is None:
         return "skipped: no host session"
     params = {
         "harness": harness,
         "host_session_id": session[:256],
         "tool_name": tool_name[:256],
-        "host_call_key": runner._host_call_key(payload, tool_name),
+        "host_call_key": host_calls._host_call_key(payload, tool_name),
         "rule": denial.rule,
         "repo_root": str(repo_root),
     }

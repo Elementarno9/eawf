@@ -321,7 +321,9 @@ def _default_lane_spend(ctx: MethodContext, wave_id: str) -> LaneSpend:
     )
     if delta is None:
         return LaneSpend()
-    return LaneSpend(eu=delta.elapsed_eu, usd=delta.actual_cost_usd)
+    # An unpriced lane accrues no USD toward the cap, exactly like an uncaptured one.
+    usd = delta.actual_cost_usd if delta.actual_cost_usd is not None else 0.0
+    return LaneSpend(eu=delta.elapsed_eu, usd=usd)
 
 
 #: Read the evidence ref backing one lane's blocking fork (DL-6). Given the

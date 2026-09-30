@@ -19,7 +19,6 @@ from typing import Any, Final
 
 import pytest
 
-from eawf.kernel.state.enums import MeasurementQuality
 from eawf.kernel.state.epoch2.measurement import (
     CaptureSource,
     CounterName,
@@ -196,7 +195,8 @@ def _run(
         "measurement_version": 1,
         "divisor": divisor,
         "derived": False,
-        "measurement_quality": MeasurementQuality.EXACT.value,
+        "measurement_quality": "measured" if divisor == 1 else "derived",
+        "reconstruction_basis": None if divisor == 1 else "recorded_in_transcript",
         "counters": _counters(share),
         "spans": {"state": "unobserved", "reason": "no spans"},
     }

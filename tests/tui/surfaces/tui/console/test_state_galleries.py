@@ -71,18 +71,19 @@ from eawf.runtime.daemon.methods.projection import ROUTE_READ_METHODS, ROUTE_REC
 from eawf.surfaces.tui.console import lifecycle
 from eawf.surfaces.tui.console.action_menu import VerbWeight
 from eawf.surfaces.tui.console.app import ConsoleApp
+from eawf.surfaces.tui.console.cards import Card, Item, Result
 from eawf.surfaces.tui.console.cells import NO_VALUE as N
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.decisions import DecisionRecords
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.lifecycle import Elapsed, Family, Layout
-from eawf.surfaces.tui.console.mutation import Card, Item, Result
 from eawf.surfaces.tui.console.operations import AnswerRequest
 from eawf.surfaces.tui.console.overlays.mutation_card import ledger_cell, results_frame
 from eawf.surfaces.tui.console.paint import Part, paint
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route
+from eawf.surfaces.tui.console.renderers.detail import UNKNOWN_CLOSE, UNKNOWN_WAITS
 from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup
 from tests.tui.surfaces.tui.console import test_settings_provenance as provenance
 from tests.tui.surfaces.tui.console.test_console_live_smoke import (
@@ -792,7 +793,8 @@ def test_con_106_the_two_unknown_states_are_facts_with_timestamps_and_refused_qu
         assert line.strip().startswith("whether "), f"not a question: {line!r}"
     text = [line.strip() for line in frame]
     assert "This state means we do not know. It is not success and not failure," in text
-    assert "and it raises a pause rather than resolving itself." in text
+    assert UNKNOWN_CLOSE in text
+    assert UNKNOWN_WAITS[family] in text
     for word in ("COMPLETED", "FAILED", "SUCCEEDED", "success ·"):
         assert word not in frame[1], "the unknown state reads as an outcome"
 

@@ -31,12 +31,13 @@ from eawf.kernel.runtime.dispatch_queue import (
     QueueEdge,
     VerificationLeg,
 )
+from eawf.surfaces.tui.console.cards import Card
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.live_reads import DISPATCH_QUEUE_READ
-from eawf.surfaces.tui.console.mutation import Card, adopt, confirm
+from eawf.surfaces.tui.console.mutation import adopt, confirm
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
     DISPATCH_CONTROL_METHOD,
@@ -268,6 +269,41 @@ def test_ui_023_a_held_queue_previews_a_resume() -> None:
     assert session.c_target is not None and session.c_target["verb"] == "request resume"
     confirm(ctx)
     assert sent == [DispatchRequest(verb="resume")]
+
+
+def test_ui_023_a_control_moved_under_the_open_card_reloads_it_and_sends_nothing() -> None:
+    """The card is bound to the control it opened on; a move underneath withdraws it."""
+    session, sent = _linked(), []
+    ctx = _ctx(session, queue_view(), sent)
+    dispatch(ctx, "a", False)
+    adopt(ctx)
+    opened = session.mutation
+    assert (
+        isinstance(opened, Card) and opened.items[0].stale_token == "dispatching before any request"
+    )
+    assert "reloads against it" in opened.if_stale
+    paused = DispatchControlFact(
+        request_ref="DSP-0003",
+        verb=DispatchVerb.PAUSE,
+        actor="ABC",
+        requested_at=READ_AT,
+        outcome=DispatchOutcome.CONFIRMED,
+    )
+    moved = _ctx(session, queue_view(held=DispatchVerb.PAUSE, last=paused), sent)
+
+    confirm(moved)
+
+    reloaded = session.mutation
+    assert sent == []
+    assert isinstance(reloaded, Card) and not reloaded.results
+    assert reloaded.items[0].stale_token == "pause after DSP-0003"
+    assert reloaded.items[0].status == "held by pause"
+    assert reloaded.note == (
+        f"reloaded · {DISPATCH_QUEUE_TARGET} dispatching before any request → pause after "
+        "DSP-0003 · the authorization was withdrawn"
+    )
+    confirm(moved)
+    assert sent == [DispatchRequest(verb="pause")]
 
 
 def test_ui_023_offline_the_request_verbs_are_refused_before_any_card() -> None:

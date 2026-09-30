@@ -148,16 +148,13 @@ rules:
       method: review
   - rule_id: eawf.conduct.deviation-record
     obligation_id: conduct.deviation-record
-    revision: 1
+    revision: 2
     title: Record each conduct deviation as a typed local row
     zone: steering
     force: must
     effectiveness: behavioral
     instruction: >-
-      Record every conduct deviation as a typed row bound to the run that
-      produced it and the obligation it breached, with how it was detected,
-      its severity, an evidence reference and its disposition, in the
-      machine-local store and never in the committed surface.
+      Record every conduct deviation as a typed row in the machine-local store, never the committed surface, bound to its run and breached obligation, with detection method, severity, evidence reference and disposition.
     rationale: >-
       A deviation is an observation about one machine's runs, not a fact about
       the repository, so committing it would push local noise into every clone.
@@ -387,16 +384,13 @@ rules:
       method: review
   - rule_id: eawf.conduct.blocking-question-cases
     obligation_id: conduct.blocking-question-cases
-    revision: 1
+    revision: 2
     title: Block on a question only when proceeding is unsafe
     zone: steering
     force: must
     effectiveness: behavioral
     instruction: >-
-      Raise a blocking question only when proceeding under any available
-      assumption would be unsafe or would make the completed work useless if
-      the assumption proved wrong; resolve every other uncertainty by
-      assumption plus disclosure.
+      Raise a blocking question only when proceeding under any available assumption would be unsafe or would make the work useless if wrong; resolve every other uncertainty by assumption plus disclosure.
     scope:
       activities: [plan, design, implement]
     verification:
@@ -481,16 +475,13 @@ rules:
   # Rule reachability
   - rule_id: eawf.conduct.root-projection-delivered
     obligation_id: conduct.root-projection-delivered
-    revision: 1
+    revision: 2
     title: Deliver the root projection in full to every runtime
     zone: steering
     force: must
     effectiveness: behavioral
     instruction: >-
-      Deliver the root projection in full to every certified runtime. A
-      runtime whose project-document cap is below the rendered size is a
-      packaging failure, never the fault of the agent that then breaches an
-      unreceived rule.
+      Deliver the root projection in full to every certified runtime; a runtime whose project-document cap is below the rendered size is a packaging failure, not the fault of an agent that then breaches an unreceived rule.
     scope:
       activities: [release, deploy]
     verification:

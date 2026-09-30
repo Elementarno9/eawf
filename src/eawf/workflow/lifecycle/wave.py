@@ -114,7 +114,8 @@ class RuntimeDelta:
             note in :func:`compute_runtime_delta`).
         actual_tokens: New tokens the wave burned -- input + output + cache
             writes, excluding cache reads.
-        actual_cost_usd: Priced spend for the wave, cache reads included.
+        actual_cost_usd: Priced spend for the wave, cache reads included, or
+            ``None`` when no cost counter was captured -- unpriced, never zero.
         api_duration_ms: Measured agent runtime in milliseconds.
         input_tokens: Non-cached input-token delta.
         output_tokens: Output-token delta.
@@ -130,7 +131,7 @@ class RuntimeDelta:
     elapsed_eu: float
     agent_runtime_eu: float
     actual_tokens: int
-    actual_cost_usd: float
+    actual_cost_usd: float | None
     api_duration_ms: int
     input_tokens: int = 0
     output_tokens: int = 0
@@ -344,7 +345,7 @@ def compute_runtime_delta(
         elapsed_eu=elapsed_eu,
         agent_runtime_eu=elapsed_eu,
         actual_tokens=token_delta,
-        actual_cost_usd=float(cost_usd_delta) if cost_usd_delta is not None else 0.0,
+        actual_cost_usd=float(cost_usd_delta) if cost_usd_delta is not None else None,
         api_duration_ms=int(api_duration_ms) if api_duration_ms is not None else 0,
         input_tokens=tokens.get("input_tokens", 0),
         output_tokens=tokens.get("output_tokens", 0),
@@ -1128,9 +1129,10 @@ def close_wave(
     bounded effort — distinct from the open->close wall-clock span, which is
     NOT agent effort (it counts overnight, cross-session, and other-wave idle
     time, inflating consumed EU roughly tenfold) and is never substituted here.
-    When the caller supplies no measured value the auto-created actual keeps the
-    honest zero (``elapsed_eu=0.0``, ``actual_cost_usd=0.0``) rather than
-    inventing one.
+    When the caller supplies no measured value the auto-created actual keeps
+    ``elapsed_eu=0.0`` and leaves ``actual_cost_usd`` null -- unpriced, never a
+    zero -- and ``actual_tokens`` is null when neither a tally was supplied nor
+    the wave accumulated one.
     The auto-created actual also carries the ``harness`` + ``model``
     attribution off the wave's latest runtime snapshot
     (:attr:`Wave.runtime_latest`, stamped by the daemon runtime-capture writer)
@@ -1159,9 +1161,9 @@ def close_wave(
             :class:`ActualSummary`. ``None`` leaves the auto-created
             ``elapsed_eu`` at ``0.0``.
         actual_cost_usd: Optional captured cost delta for an auto-created or
-            refreshed :class:`ActualSummary`. ``None`` leaves the cost at the
-            historical ``0.0`` default for new records and preserves existing
-            cost on operator-authored records.
+            refreshed :class:`ActualSummary`. ``None`` leaves a new record's
+            cost null (unpriced) and preserves existing cost on
+            operator-authored records.
 
     Raises:
         LifecycleError: when *wave_id* is unknown, the wave is not
@@ -1212,7 +1214,11 @@ def close_wave(
         state.actuals = {}
     existing = state.actuals.get(wave_id)
     auto_elapsed_eu = actual_elapsed_eu if actual_elapsed_eu is not None else 0.0
-    auto_cost_usd = actual_cost_usd if actual_cost_usd is not None else 0.0
+    # A tally nobody supplied and the wave never accumulated is unknown, not a
+    # counted zero; a supplied zero is a measured one.
+    actual_tokens = (
+        wave.tokens_consumed if tokens_consumed is not None or wave.tokens_consumed else None
+    )
     # Thread the captured harness+model attribution off the wave's latest
     # runtime snapshot (stamped by the daemon runtime-capture writer) onto the
     # auto-created actual so a recorded actual is calibratable by harness+model.
@@ -1231,8 +1237,8 @@ def close_wave(
             elapsed_eu=auto_elapsed_eu,
             attention_eu=actual_attention_eu,
             agent_runtime_eu=actual_agent_runtime_eu,
-            actual_tokens=wave.tokens_consumed,
-            actual_cost_usd=auto_cost_usd,
+            actual_tokens=actual_tokens,
+            actual_cost_usd=actual_cost_usd,
             harness=actual_harness,
             model=actual_model,
             calibration_excluded=calibration_excluded,
@@ -1241,7 +1247,8 @@ def close_wave(
         )
     else:
         existing.status = ActualStatus.DONE
-        existing.actual_tokens = wave.tokens_consumed
+        if actual_tokens is not None:
+            existing.actual_tokens = actual_tokens
         if actual_cost_usd is not None:
             existing.actual_cost_usd = actual_cost_usd
         if actual_harness is not None:
@@ -1257,7 +1264,7 @@ def close_wave(
         existing.updated_at = now
     logger.info(
         f"close_wave id={wave_id} outcome={outcome!r} "
-        f"actual_tokens={wave.tokens_consumed} actual_cost_usd={auto_cost_usd} "
+        f"actual_tokens={actual_tokens} actual_cost_usd={actual_cost_usd} "
         f"actual_attention_eu={actual_attention_eu} elapsed_eu={auto_elapsed_eu} "
         f"calibration_excluded={calibration_excluded}"
     )

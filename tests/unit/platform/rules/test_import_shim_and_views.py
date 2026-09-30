@@ -244,7 +244,8 @@ def test_render_rule_projections_views_are_never_in_the_card(repo: Path) -> None
     render_rule_projections(repo)
     card = (repo / CARD_TARGET).read_text(encoding="utf-8")
     assert VIEW_DIRECTORY not in card
-    assert f"read via: `eawf rules view {_TEST}`" in card
+    assert "`eawf rules view` and its id" in card
+    assert f"- `{_TEST}`" in card
 
 
 def test_render_rule_projections_second_render_changes_no_view(repo: Path) -> None:

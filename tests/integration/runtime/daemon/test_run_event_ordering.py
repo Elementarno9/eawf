@@ -43,6 +43,7 @@ from eawf.kernel.runtime.events import (
     RunEventRecord,
 )
 from eawf.kernel.state.epoch2.run import RunStatus
+from eawf.kernel.store.compaction import read_document
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -193,7 +194,7 @@ def stored_status(canary: CanaryProvision) -> str:
     ledger carries. The Run's own line is the one with no payload
     discriminator, which is how the daemon's own reader tells it apart.
     """
-    rows = json.loads(document_path(canary).read_text(encoding="utf-8")).get("run", {})
+    rows = read_document(document_path(canary)).get("run", {})
     if RUN_KEY in rows:
         return str(rows[RUN_KEY]["status"])
     ledger = ledger_path(document_path(canary), Epoch2Collection.RUN)

@@ -606,15 +606,25 @@ def test_metrics_summary_rejects_extra_keys() -> None:
 # ---- ActualSummary v0.4 fields --------------------------------
 
 
-def test_actual_summary_defaults_zero_tokens_and_cost() -> None:
-    """ActualSummary defaults ``actual_tokens=0`` and ``actual_cost_usd=0.0``.
+def test_meas_041_actual_summary_defaults_unknown_tokens_and_cost() -> None:
+    """ActualSummary defaults both priced fields to ``None``, never to a zero.
 
-    Existing on-disk rows (pre-P28-I02-W03) omit these fields; the
-    defaults keep the model additive / replay-safe with no schema bump.
+    Rows that omit the fields, and rows that recorded a zero, both still
+    validate: the first reads unknown, the second a measured zero.
     """
     actual = _actual(wave_id="P01-I01-W01", elapsed_eu=1.5)
-    assert actual.actual_tokens == 0
-    assert actual.actual_cost_usd == 0.0
+    assert actual.actual_tokens is None
+    assert actual.actual_cost_usd is None
+    zeroed = ActualSummary.model_validate({**actual.model_dump(), "actual_tokens": 0})
+    assert zeroed.actual_tokens == 0
+
+
+def test_meas_041_every_priced_field_is_nullable_at_the_type_level() -> None:
+    """The type admits ``None`` on every priced field of an actual."""
+    for name in ("actual_tokens", "actual_cost_usd"):
+        field = ActualSummary.model_fields[name]
+        assert field.default is None
+        assert not field.is_required()
 
 
 def test_actual_summary_accepts_token_and_cost_overrides() -> None:

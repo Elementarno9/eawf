@@ -28,14 +28,8 @@ from eawf.kernel.state.epoch2.consequence import (
     Refusal,
 )
 from eawf.surfaces.tui.console.app import compose_frame
-from eawf.surfaces.tui.console.dispatch import dispatch
-from eawf.surfaces.tui.console.eligibility import FIRST_ANSWER_WINS, eligible_pane
-from eawf.surfaces.tui.console.fixture import Fixture
-from eawf.surfaces.tui.console.frame import View
-from eawf.surfaces.tui.console.mutation import (
+from eawf.surfaces.tui.console.cards import (
     CARD,
-    ENTITY_ROUTES,
-    NATIVE_KEYS,
     Card,
     GateKind,
     Item,
@@ -44,8 +38,12 @@ from eawf.surfaces.tui.console.mutation import (
     lifecycle_card,
     setting_card,
     settle,
-    verbs_for,
 )
+from eawf.surfaces.tui.console.dispatch import dispatch
+from eawf.surfaces.tui.console.eligibility import FIRST_ANSWER_WINS, eligible_pane
+from eawf.surfaces.tui.console.fixture import Fixture
+from eawf.surfaces.tui.console.frame import View
+from eawf.surfaces.tui.console.mutation import ENTITY_ROUTES, NATIVE_KEYS, verbs_for
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
     SAME_VERB,

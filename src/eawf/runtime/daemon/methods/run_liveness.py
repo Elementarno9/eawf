@@ -112,6 +112,11 @@ class RunStallsAnswer(BaseModel):
     read_at: UtcDatetime
 
 
+def stall_key(fact: RunStallFact) -> str:
+    """Return the run-ledger key ``fact`` is filed under: its Run and its episode."""
+    return f"{_STALL_KEY_PREFIX}{fact.run_ref.entity_key}-{fact.anchor_sequence}"
+
+
 def _document_path(authority: RootAuthority) -> Path:
     """Return the selected generation's document of a fence-cleared tree."""
     target, generation_id = authority.target, authority.generation_id
@@ -158,17 +163,19 @@ def detect_stalls(context: Epoch2RootContext, *, now: datetime) -> tuple[str, ..
             run = stored_run(session, records, urn)
             if not _still_running(records, run.status, urn):
                 continue
+            assert run.started_at is not None, "a running Run always carries its start stamp"
             fact = plan_stall(
                 urn=run.urn,
                 state=reduce_run_events(run_events_of(records, urn)),
                 facts=stall_facts_of(records, urn),
                 now=now,
-                interval_seconds=run_stall_interval(context, hello_facts_of(records, urn)),
+                interval_seconds=run_stall_interval(context, hello_facts_of(records, urn), run),
                 resume_method=RUN_CONTROL_REQUEST_METHOD,
+                started_at=run.started_at,
             )
             if fact is None:
                 continue
-            key = f"{_STALL_KEY_PREFIX}{run.key}-{fact.anchor_sequence}"
+            key = stall_key(fact)
             commit_ledger_append(
                 session,
                 LedgerRecord(
@@ -226,9 +233,7 @@ def settle_stall_pauses(context: Epoch2RootContext, *, now: datetime) -> tuple[s
                 if status.status is RunStatus.RUNNING
                 else None
             )
-            stands = (
-                f"{_STALL_KEY_PREFIX}{run.key}-{standing.anchor_sequence}" if standing else None
-            )
+            stands = stall_key(standing) if standing else None
             for pause in latest_pauses(records).values():
                 key = stall_of(pause)
                 if pause.status is not PauseStatus.OPEN or pause.scope_ref != urn or key is None:
@@ -314,14 +319,15 @@ def detect_estimate_crossings(context: Epoch2RootContext, *, now: datetime) -> t
     return tuple(opened)
 
 
-def standing_stalls(context: Epoch2RootContext, *, now: datetime) -> RunStallsAnswer:
-    """Return every stall standing over a Run the tree still stores as running.
+def standing_stall_facts(document: Path) -> tuple[RunStallFact, ...]:
+    """Return every stall standing over a Run the document stores as running, in key order.
 
     A stall stands while its Run is running and has produced nothing since the activity
     the stall was measured from; a Run that answered afterwards has moved past it.
+
+    Args:
+        document: The selected generation's document; the run ledger beside it is read.
     """
-    authority = context.require_selected_generation()
-    document = _document_path(authority)
     running = _running(document)
     records = read_ledger_records(ledger_path(document, Epoch2Collection.RUN)) if running else ()
     stalls: list[RunStallFact] = []
@@ -332,7 +338,13 @@ def standing_stalls(context: Epoch2RootContext, *, now: datetime) -> RunStallsAn
         fact = standing_stall(stall_facts_of(records, urn), state.last_activity_sequence)
         if fact is not None:
             stalls.append(fact)
-    return RunStallsAnswer(stalls=tuple(stalls), read_at=now)
+    return tuple(stalls)
+
+
+def standing_stalls(context: Epoch2RootContext, *, now: datetime) -> RunStallsAnswer:
+    """Return every stall standing over a Run the tree still stores as running."""
+    document = _document_path(context.require_selected_generation())
+    return RunStallsAnswer(stalls=standing_stall_facts(document), read_at=now)
 
 
 @register(RUN_STALLS_READ_METHOD)
@@ -352,5 +364,7 @@ __all__ = [
     "detect_estimate_crossings",
     "detect_stalls",
     "settle_stall_pauses",
+    "stall_key",
+    "standing_stall_facts",
     "standing_stalls",
 ]

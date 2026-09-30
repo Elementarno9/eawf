@@ -30,6 +30,9 @@ from eawf.kernel.migration.epoch2.canary import (
 )
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.ids import RE_PROJECT_CODE
+from eawf.kernel.store.compaction import STATUS_DOCUMENT_KEYS, read_document, write_document
+from eawf.kernel.store.paths import ledger_path, status_projection_path
+from eawf.kernel.store.tiers import STATUS_PROJECTION_COLLECTIONS, Epoch2Collection
 from eawf.runtime.integration.commit_policy import TASK_TRAILER_KEY
 from tests.integration.kernel.migration._cutover_harness import (
     APPLIED_AT,
@@ -329,12 +332,12 @@ def native(marked: Path) -> Path:
     """
     generation = next(p for p in (marked / GENERATIONS_DIRNAME).iterdir() if p.name[:4] == "gen-")
     document_path = generation / "state.json"
-    document = json.loads(document_path.read_text(encoding="utf-8"))
+    document = read_document(document_path)
     for key, status in _NATIVE_STATUSES.items():
         document.setdefault("task", {})[key] = {"key": key, "status": status}
-    document_path.write_text(json.dumps(document), encoding="utf-8")
-    ledger = generation / "ledger" / "task.jsonl"
-    ledger.parent.mkdir(exist_ok=True)
+    write_document(document_path, document)
+    ledger = ledger_path(document_path, Epoch2Collection.TASK)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
     with ledger.open("a", encoding="utf-8") as handle:
         for status in ("RUNNING", "COMPLETED"):
             handle.write(json.dumps({"record_key": _COMPACTED, "status": status}) + "\n")
@@ -440,6 +443,18 @@ def test_a_second_commit_for_a_task_is_capped_and_its_amend_is_not(
 
 def test_the_task_trailer_name_mirrors_the_package(mod: Any) -> None:
     assert mod._TASK_TRAILER_NAME == TASK_TRAILER_KEY
+
+
+def test_the_status_projection_mirrors_the_package(view_mod: Any) -> None:
+    generation = Path("gen-0123456789abcdef")
+    document = generation / view_mod.GENERATION_DOCUMENT
+    assert view_mod.STATUS_DOCUMENT_KEYS == STATUS_DOCUMENT_KEYS
+    assert {
+        collection.value for collection in STATUS_PROJECTION_COLLECTIONS
+    } == view_mod.STATUS_PROJECTION_COLLECTIONS
+    assert generation / view_mod.LOCAL_DIRNAME / view_mod.STATUS_PROJECTION_FILENAME == (
+        status_projection_path(document)
+    )
 
 
 def test_the_native_task_key_grammar_mirrors_the_package(view_mod: Any) -> None:

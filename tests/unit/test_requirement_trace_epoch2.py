@@ -21,6 +21,8 @@ import pytest
 from eawf.kernel.migration.epoch2.lifecycle import LifecycleSourceIndex, map_wave_row
 from eawf.kernel.migration.epoch2.plan import _wave_criteria
 from eawf.kernel.store.compaction import read_document, write_document
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from tests.integration.kernel.migration._cutover_harness import (
     APPLIED_AT,
     apply_once,
@@ -232,7 +234,7 @@ def test_check_is_fresh_on_a_marked_repository_and_reds_when_an_owner_is_dropped
     (repo / CATALOG_PATH).write_text(render(stored), encoding="utf-8")
     assert main(["--repo-root", str(repo), "check"]) == 0
 
-    ledger = _generation_document(repo).parent / "ledger" / "task.jsonl"
+    ledger = ledger_path(_generation_document(repo), Epoch2Collection.TASK)
     kept = [
         line
         for line in ledger.read_text(encoding="utf-8").splitlines()

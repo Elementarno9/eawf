@@ -75,6 +75,7 @@ from eawf.kernel.projection.connection import (
     ReconnectDisposition,
     negotiate_reconnect,
 )
+from eawf.kernel.projection.liveness import STALLED
 from eawf.kernel.projection.settings import (
     SETTINGS_ROUTE,
     EffectiveSettingsView,
@@ -98,6 +99,7 @@ from eawf.runtime.daemon.methods import DaemonValidationError, Handler, MethodCo
 from eawf.runtime.daemon.methods.delivery_acceptance import BUNDLE_KEY_PREFIX
 from eawf.runtime.daemon.methods.host_question import open_question_rows
 from eawf.runtime.daemon.methods.permission import open_permission_rows
+from eawf.runtime.daemon.methods.run_liveness import stall_key, standing_stall_facts
 from eawf.runtime.daemon.native_guard import require_native_call
 from eawf.runtime.daemon.verdict_observations import (
     jury_calibration_row,
@@ -323,6 +325,26 @@ def _live_breach_rows(
     return tuple(rows)
 
 
+def _standing_stall_rows(authority: RootAuthority) -> tuple[dict[str, Any], ...]:
+    """Return every stall standing over a running Run, as a row keyed by its ledger line.
+
+    A stall is raised once per quiet episode and never revised. Its row addresses the Run,
+    so it is revised by the episode instead: a later silence of the same Run is a later
+    revision, announced again, where the one already announced is not. Once the Run
+    answers or stops running the stall no longer stands, and its row is gone.
+    """
+    return tuple(
+        {
+            **fact.model_dump(mode="json"),
+            "key": stall_key(fact),
+            "urn": str(fact.run_ref),
+            "revision": fact.anchor_sequence + 1,
+            "status": STALLED,
+        }
+        for fact in standing_stall_facts(document_path(authority))
+    )
+
+
 def _decision_rows(authority: RootAuthority) -> tuple[dict[str, Any], ...]:
     """Return every sandbox decision on the receipt ledger, as a notice row, oldest first.
 
@@ -370,9 +392,9 @@ def _ledger_rows_for(
     own, so a route that renders permissions reads the open ones from there, as a
     route that renders questions reads the open questions a host asked. A route
     that lists notices reads them from the ledger they are filed on: the live ceiling
-    breaches from the run ledger, the sandbox decisions from the receipt ledger and
-    the audit verdicts of the Batches' current cycles, with the jury's calibration over
-    every verdict, from the Batch ledger.
+    breaches and the standing stalls from the run ledger, the sandbox decisions from the
+    receipt ledger and the audit verdicts of the Batches' current cycles, with the jury's
+    calibration over every verdict, from the Batch ledger.
     """
     rows: dict[Epoch2Collection, tuple[dict[str, Any], ...]] = {
         collection: _terminal_ledger_rows(authority=authority, collection=collection)
@@ -385,7 +407,10 @@ def _ledger_rows_for(
         rows[Epoch2Collection.OPEN_QUESTION] = open_question_rows(authority)
     notices = ROUTE_NOTICE_COLLECTIONS.get(route, ())
     if Epoch2Collection.RUN in notices:
-        rows[Epoch2Collection.RUN] = _live_breach_rows(authority, document)
+        rows[Epoch2Collection.RUN] = (
+            *_live_breach_rows(authority, document),
+            *_standing_stall_rows(authority),
+        )
     if Epoch2Collection.RECEIPT in notices:
         rows[Epoch2Collection.RECEIPT] = _decision_rows(authority)
     if Epoch2Collection.BATCH in notices:

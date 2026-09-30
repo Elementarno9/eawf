@@ -8,15 +8,15 @@ when_to_use: reading or changing phase, iter, wave or decision records, or any f
 rules:
   - rule_id: eawf.core.state.ea-directory-committed
     obligation_id: state.ea-directory-commit-policy
-    revision: 1
+    revision: 2
     title: Commit the project state and profile files
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Commit .ea/state.json and .ea/profile.yaml with the change that produced them, and keep .ea/locks/ and .ea/local/ out of version control.
+      Commit .ea/state.json, .ea/profile.yaml and each generation's state.json and ledgers with the release, delivery or decision change behind them; keep Task and Run status (each generation's local/), .ea/locks/ and .ea/local/ out of version control.
     rationale: >-
-      The state and profile files are the source of truth for where the project stands, so a clone without them has no history; locks and local drafts are machine-specific and would only churn.
+      The committed files are the source of truth for what was released, delivered and decided, so a clone without them has no history; Task and Run status is a local projection rebuilt from the ledger, and committing it, like locks and local drafts, would only add a commit per status change.
     verification:
       method: review
   - rule_id: eawf.core.state.daemon-mutator

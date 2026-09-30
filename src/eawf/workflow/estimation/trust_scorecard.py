@@ -1,16 +1,29 @@
-"""Trust scorecard metrics for estimation provenance."""
+"""Trust scorecard metrics for estimation provenance.
+
+The scorecard is advisory: its one consumer is ``eawf why``, which renders
+it beside the provenance of a phase, iter or wave. No dispatch, admission,
+integration or acceptance gate reads it, and none may until a calibration
+threshold is ratified against a labelled dataset.
+
+Every rate it states is a :class:`ScorecardValue` that names its input
+sample and measurement quality, and a rate over an empty sample is
+unavailable, never zero. The scorecard also declares its
+:class:`~eawf.observability.measurement.coverage.Coverage`: how many waves
+it labelled, how many had evidence, and whether the window was a bounded
+sample.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
 import orjson
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from eawf.kernel.state.enums import StoreKind, WaveStatus
+from eawf.kernel.state.enums import QualityLadder, StoreKind, WaveStatus
 from eawf.kernel.state.ids import (
     RE_HYPOTHESIS,
     RE_HYPOTHESIS_SCOPED,
@@ -29,8 +42,12 @@ from eawf.kernel.store.kinds.audit import AuditPayload
 from eawf.kernel.store.kinds.estimate import EstimatePayload
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.kernel.store.paths import store_path
+from eawf.observability.measurement.coverage import Coverage
 
-SCORECARD_SCHEMA_VERSION: Literal[1] = 1
+SCORECARD_SCHEMA_VERSION: Literal[2] = 2
+
+#: The one surface that reads the scorecard. It renders; it never gates.
+SCORECARD_CONSUMER: Literal["eawf why"] = "eawf why"
 TrustTier = Literal["verified", "attested", "deferred_outcome", "unavailable"]
 WindowKind = Literal["all", "30d", "waves"]
 ReliabilityStatus = Literal["computed", "deferred_v0.4.1"]
@@ -122,35 +139,85 @@ class TrustTierCounts(BaseModel):
     unavailable: int = 0
 
 
+class ScorecardValue(BaseModel):
+    """One scorecard rate, with the sample it was taken over and its quality.
+
+    Attributes:
+        value: The rate, or ``None`` when it is undefined.
+        sample_size: How many rows the rate was taken over.
+        sample: What those rows are, in words.
+        measurement_quality: How far the rate can be trusted;
+            ``unavailable`` exactly when it is undefined.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    value: float | None = Field(default=None, ge=0.0, le=1.0)
+    sample_size: int = Field(ge=0)
+    sample: str = Field(min_length=1)
+    measurement_quality: QualityLadder
+
+    @model_validator(mode="after")
+    def _undefined_is_never_zero(self) -> Self:
+        """Tie an undefined rate to an empty sample and unavailable quality.
+
+        Raises:
+            ValueError: A rate is stated over no rows, a sample yields no
+                rate, or the quality disagrees with whether there is one.
+        """
+        if (self.value is None) != (self.sample_size == 0):
+            raise ValueError("a rate is undefined exactly when its sample is empty")
+        if (self.value is None) != (self.measurement_quality == "unavailable"):
+            raise ValueError("an undefined rate is unavailable, and only an undefined one")
+        return self
+
+
+def _rate(part: int, sample_size: int, *, sample: str) -> ScorecardValue:
+    """Return ``part / sample_size`` as a measured value, unavailable over nothing."""
+    if not sample_size:
+        return ScorecardValue(sample_size=0, sample=sample, measurement_quality="unavailable")
+    return ScorecardValue(
+        value=part / sample_size,
+        sample_size=sample_size,
+        sample=sample,
+        measurement_quality="measured",
+    )
+
+
 class VerifierReliabilityMetric(BaseModel):
     """Verifier reliability projection."""
 
     model_config = ConfigDict(extra="forbid")
 
     status: ReliabilityStatus
-    sample_count: int = Field(ge=0)
-    pass_rate: float | None = None
+    pass_rate: ScorecardValue
     note: str
 
 
 class TrustScorecard(BaseModel):
-    """Top-level trust scorecard payload."""
+    """Top-level trust scorecard payload.
+
+    Attributes:
+        advisory: Always ``True``: nothing gates on the scorecard.
+        consumer: The one surface that reads it.
+        verified_share: The share of closed labelled waves whose tier is
+            ``verified``.
+        coverage: The labelled waves, those with evidence, and whether the
+            window is a bounded sample.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1] = SCORECARD_SCHEMA_VERSION
+    schema_version: Literal[2] = SCORECARD_SCHEMA_VERSION
+    advisory: Literal[True] = True
+    consumer: Literal["eawf why"] = SCORECARD_CONSUMER
     window: str = "all"
     store_record_counts: dict[str, int] = Field(default_factory=dict)
     output_labels: list[OutputTrustLabel] = Field(default_factory=list)
     tier_counts: TrustTierCounts = Field(default_factory=TrustTierCounts)
-    verifier_reliability: VerifierReliabilityMetric = Field(
-        default_factory=lambda: VerifierReliabilityMetric(
-            status="deferred_v0.4.1",
-            sample_count=0,
-            pass_rate=None,
-            note="verifier reliability needs outcome-linked verifier rows",
-        )
-    )
+    verified_share: ScorecardValue
+    verifier_reliability: VerifierReliabilityMetric
+    coverage: Coverage
 
 
 class WhyReference(BaseModel):
@@ -176,6 +243,7 @@ class WhyResult(BaseModel):
     tier: TrustTier
     summary: str
     refs: list[WhyReference] = Field(default_factory=list)
+    scorecard: TrustScorecard | None = None
 
 
 def read_store_projection(state_path: Path) -> StoreProjection:
@@ -371,19 +439,34 @@ def _compute_verifier_reliability(projection: StoreProjection) -> VerifierReliab
         for row in projection.evidence
         if isinstance(row.payload, EvidenceRecord) and row.payload.evidence_kind == "deterministic"
     ]
+    passed = sum(1 for record in deterministic if record.status == "pass")
+    pass_rate = _rate(passed, len(deterministic), sample="deterministic evidence rows in window")
     if not deterministic:
         return VerifierReliabilityMetric(
             status="deferred_v0.4.1",
-            sample_count=0,
-            pass_rate=None,
+            pass_rate=pass_rate,
             note="no deterministic verifier evidence in window",
         )
-    passed = sum(1 for record in deterministic if record.status == "pass")
     return VerifierReliabilityMetric(
         status="computed",
-        sample_count=len(deterministic),
-        pass_rate=passed / len(deterministic),
+        pass_rate=pass_rate,
         note="pass-rate over deterministic evidence rows; outcome correlation deferred to v0.4.1",
+    )
+
+
+def _verified_share(labels: Iterable[OutputTrustLabel]) -> ScorecardValue:
+    """Return the verified share of labelled waves whose outcome is in."""
+    settled = [label for label in labels if label.tier != "deferred_outcome"]
+    verified = sum(1 for label in settled if label.tier == "verified")
+    return _rate(verified, len(settled), sample="closed waves labelled in window")
+
+
+def _coverage(labels: list[OutputTrustLabel], *, window: TrustWindow) -> Coverage:
+    """Return what the labels covered: every wave, those with evidence, the window."""
+    return Coverage(
+        subjects_total=len(labels),
+        subjects_contributing=sum(1 for label in labels if label.evidence_refs),
+        sampled=window.kind != "all",
     )
 
 
@@ -394,8 +477,22 @@ def compute_trust_scorecard(
     state_path: Path | None = None,
     window: TrustWindow | str = "all",
     now: datetime | None = None,
+    scope_wave_ids: frozenset[str] | None = None,
 ) -> TrustScorecard:
-    """Compute the estimation trust scorecard from state plus append-only stores."""
+    """Compute the estimation trust scorecard from state plus append-only stores.
+
+    Args:
+        state: The state whose waves are labelled.
+        store_projection: The append-only stores, already read.
+        state_path: Where to read the stores from when no projection is given.
+        window: The window the stores and waves are restricted to.
+        now: The instant a time window is anchored at.
+        scope_wave_ids: The waves of the entity ``eawf why`` explains, or
+            ``None`` for every wave.
+
+    Returns:
+        The scorecard.
+    """
     anchor = now or datetime.now(UTC)
     parsed_window = TrustWindow.parse(window) if isinstance(window, str) else window
     projection = store_projection
@@ -413,7 +510,8 @@ def compute_trust_scorecard(
     labels = [
         _label_wave(state, wave, scoped_projection)
         for wave_id, wave in sorted(state.waves.items())
-        if parsed_window.kind == "all" or wave_id in wave_ids
+        if (parsed_window.kind == "all" or wave_id in wave_ids)
+        and (scope_wave_ids is None or wave_id in scope_wave_ids)
     ]
     return TrustScorecard(
         schema_version=SCORECARD_SCHEMA_VERSION,
@@ -426,7 +524,9 @@ def compute_trust_scorecard(
         },
         output_labels=labels,
         tier_counts=_tier_counts(labels),
+        verified_share=_verified_share(labels),
         verifier_reliability=_compute_verifier_reliability(scoped_projection),
+        coverage=_coverage(labels, window=parsed_window),
     )
 
 
@@ -689,6 +789,24 @@ def _hypothesis_result(
     )
 
 
+def _phase_wave_ids(state: State, phase: Phase) -> frozenset[str]:
+    """Return every wave id under *phase*'s iters."""
+    return frozenset(
+        wave_id
+        for iter_id in phase.iter_ids
+        if iter_id in state.iters
+        for wave_id in state.iters[iter_id].wave_ids
+    )
+
+
+def _with_scorecard(
+    state: State, result: WhyResult, projection: StoreProjection, wave_ids: frozenset[str]
+) -> WhyResult:
+    """Attach the advisory scorecard over *wave_ids* to a why result."""
+    scorecard = compute_trust_scorecard(state, store_projection=projection, scope_wave_ids=wave_ids)
+    return result.model_copy(update={"scorecard": scorecard})
+
+
 def _kind_from_bare_id(entity_id: str) -> str | None:
     """Map a bare entity id to its why URN kind by id-shape, or ``None``.
 
@@ -754,11 +872,16 @@ def assemble_why(
     if projection is None:
         projection = StoreProjection()
     if kind == "phase" and entity_id in state.phases:
-        return _phase_result(state, state.phases[entity_id], resolved_urn, projection)
+        phase = state.phases[entity_id]
+        result = _phase_result(state, phase, resolved_urn, projection)
+        return _with_scorecard(state, result, projection, _phase_wave_ids(state, phase))
     if kind == "iter" and entity_id in state.iters:
-        return _iter_result(state, state.iters[entity_id], resolved_urn, projection)
+        it = state.iters[entity_id]
+        result = _iter_result(state, it, resolved_urn, projection)
+        return _with_scorecard(state, result, projection, frozenset(it.wave_ids))
     if kind == "wave" and entity_id in state.waves:
-        return _wave_result(state, state.waves[entity_id], resolved_urn, projection)
+        result = _wave_result(state, state.waves[entity_id], resolved_urn, projection)
+        return _with_scorecard(state, result, projection, frozenset({entity_id}))
     if kind == "hypothesis" and entity_id in (state.hypotheses or {}):
         return _hypothesis_result(
             state, (state.hypotheses or {})[entity_id], resolved_urn, projection
@@ -771,8 +894,10 @@ def assemble_why(
 
 
 __all__ = [
+    "SCORECARD_CONSUMER",
     "SCORECARD_SCHEMA_VERSION",
     "OutputTrustLabel",
+    "ScorecardValue",
     "StoreProjection",
     "TrustScorecard",
     "TrustTierCounts",

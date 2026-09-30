@@ -1366,10 +1366,11 @@ class ActualSummary(_StrictModel):
     exists. ``actual_tokens`` mirrors :attr:`Wave.tokens_consumed` so the
     M26 variance / cost view has the close-time token tally without
     re-reading the wave record. ``actual_cost_usd`` is the per-token cost
-    rollup; v0.4 leaves it at ``0.0`` until a per-model rate table wires
-    in (see :func:`eawf.workflow.lifecycle.wave.close_wave`).
-    Both fields default to ``0`` / ``0.0`` so existing on-disk rows
-    stay valid without a schema bump.
+    rollup (see :func:`eawf.workflow.lifecycle.wave.close_wave`). Both are
+    nullable and default to ``None``: an unpriced or uncounted row reads
+    unknown, never a zero that would join every sum it meets. A zero on
+    either field is a measured zero. Rows written before the fields became
+    nullable still validate unchanged.
 
     ``harness`` and ``model`` carry the attribution that makes the recorded
     actual calibratable by harness+model: the agent harness id (e.g.
@@ -1396,8 +1397,8 @@ class ActualSummary(_StrictModel):
     elapsed_eu: float
     attention_eu: float | None = None
     agent_runtime_eu: float | None = None
-    actual_tokens: Annotated[int, Field(ge=0)] = 0
-    actual_cost_usd: Annotated[float, Field(ge=0.0)] = 0.0
+    actual_tokens: Annotated[int, Field(ge=0)] | None = None
+    actual_cost_usd: Annotated[float, Field(ge=0.0)] | None = None
     harness: str | None = None
     model: str | None = None
     calibration_excluded: bool = False

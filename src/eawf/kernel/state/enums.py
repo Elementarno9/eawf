@@ -7,6 +7,7 @@ Canonical reference: docs/enums.md.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Literal
 
 
 class ProjectStatus(StrEnum):
@@ -208,8 +209,14 @@ class GateReceiptResult(StrEnum):
     CANCELLED = "cancelled"
 
 
+#: The four-value measurement quality ladder, from a direct reading down to
+#: none. A reconstruction is ``derived`` and names its basis beside the
+#: quality; no producer adds a fifth value.
+QualityLadder = Literal["measured", "derived", "estimated", "unavailable"]
+
+
 class MeasurementQuality(StrEnum):
-    """Evidence quality of a persisted runtime measurement."""
+    """Evidence quality of a persisted epoch-1 runtime measurement."""
 
     EXACT = "exact"
     RECONSTRUCTED = "reconstructed"

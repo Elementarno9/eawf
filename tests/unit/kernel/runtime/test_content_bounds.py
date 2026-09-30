@@ -18,7 +18,7 @@ from eawf.kernel.runtime.content import (
     bound_content,
 )
 from eawf.runtime.hooks.event import HookEvent, HookEventType
-from eawf.runtime.hooks.runner import observe_host_tool
+from eawf.runtime.hooks.host_calls import observe_host_tool
 
 RUN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000010"
 

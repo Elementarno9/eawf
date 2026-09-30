@@ -18,10 +18,11 @@ from typing import Any
 
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.surfaces.tui.console.app import compose_frame
+from eawf.surfaces.tui.console.cards import CARD, RECONCILABLE, Card, settle
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.drawers import action_rows
 from eawf.surfaces.tui.console.frame import MARKED, paint_marks
-from eawf.surfaces.tui.console.mutation import CARD, NOTHING_TO_MARK, RECONCILABLE, Card, settle
+from eawf.surfaces.tui.console.mutation import NOTHING_TO_MARK
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
     OperationResult,

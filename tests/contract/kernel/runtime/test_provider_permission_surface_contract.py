@@ -20,10 +20,10 @@ import pytest
 from eawf.kernel.projection.registers import ATTENTION_ROUTE, RegisterView
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.surfaces.tui.console.attention import VERB
+from eawf.surfaces.tui.console.cards import answer_card
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View
-from eawf.surfaces.tui.console.mutation import answer_card
 from eawf.surfaces.tui.console.operations import (
     PERMISSION_DECIDE_METHOD,
     PERMISSION_VERBS,

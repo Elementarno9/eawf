@@ -275,10 +275,14 @@ def test_ui_062_holes_state_zero_and_unstated_buckets_state_no_count() -> None:
     counts = {
         c.bucket: c for c in build_attention_view(_attention()).bucket_counts() if c.need is None
     }
-    for hole in (AttentionBucket.STALLED, AttentionBucket.REJECTED, AttentionBucket.ACTIVE):
+    for hole in (AttentionBucket.REJECTED, AttentionBucket.ACTIVE):
         assert BUCKET_SOURCES[hole] is BucketSource.HOLE
         assert counts[hole].count == 0
         assert counts[hole].reason
+    # the stall sweep produces the stalled bucket, so its zero is a count that was taken
+    assert BUCKET_SOURCES[AttentionBucket.STALLED] is BucketSource.DERIVED
+    assert counts[AttentionBucket.STALLED].count == 0
+    assert counts[AttentionBucket.STALLED].reason is None
     for unstated in (AttentionBucket.FAILED, AttentionBucket.LOST, AttentionBucket.OVER_BUDGET):
         assert counts[unstated].count is None
         assert counts[unstated].reason

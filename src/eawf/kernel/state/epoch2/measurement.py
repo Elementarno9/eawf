@@ -21,6 +21,13 @@ one level up: a Run whose session yielded no reading records
 :class:`UncapturedRuntime`, and a Run whose two readings cannot be
 differenced records :class:`ExcludedRuntime` with the reason, so a
 consumer can count what it did not get instead of never learning of it.
+
+A measured share states its quality on the four-value ladder every usage
+reading uses -- ``measured``, ``derived``, ``estimated``, ``unavailable``
+-- and never as ``reconstructed``: a share computed from recorded counters
+is ``derived``, and how it was obtained rides beside the quality as a
+:data:`ReconstructionBasis`, so a producer cannot assert its own accuracy
+through the quality label.
 """
 
 from __future__ import annotations
@@ -32,7 +39,7 @@ from typing import Annotated, Final, Literal, Self
 
 from pydantic import Field, StringConstraints, field_validator, model_validator
 
-from eawf.kernel.state.enums import MeasurementQuality
+from eawf.kernel.state.enums import QualityLadder
 from eawf.kernel.state.epoch2.base import (
     Epoch2Model,
     NonEmptyStr,
@@ -52,6 +59,12 @@ UNKNOWN_ATTRIBUTION: Final = "unknown"
 #: rather than taking from the caller. A retry reads them again and gets
 #: different numbers, so they never identify the request they ride on.
 DAEMON_READ_RUN_FIELDS: Final = frozenset({"counter_baseline", "captured_runtime"})
+
+#: How a quantity not read from the record was obtained: computed from
+#: counters the runtime's transcript recorded, matched against a
+#: per-version table, or read from disk at report time (and so possibly
+#: not what the session saw). A quantity read from the record has none.
+ReconstructionBasis = Literal["recorded_in_transcript", "version_table", "read_from_disk_now"]
 
 #: A harness or model name as a counter row records it: the runtime's own
 #: id, or :data:`UNKNOWN_ATTRIBUTION`.
@@ -98,6 +111,15 @@ class CaptureSource(StrEnum):
 
     TRANSCRIPT = "transcript"
     SIDECAR = "sidecar"
+
+
+#: The basis a derived share takes from the surface its counters came from:
+#: the transcript is the runtime's own record, while the sidecar is a file
+#: read off disk when the reading was taken.
+_BASIS_BY_SOURCE: Final[Mapping[CaptureSource, ReconstructionBasis]] = {
+    CaptureSource.TRANSCRIPT: "recorded_in_transcript",
+    CaptureSource.SIDECAR: "read_from_disk_now",
+}
 
 
 class CounterName(StrEnum):
@@ -350,9 +372,13 @@ class MeasuredRuntime(Epoch2Model):
             taken. Every counter is already divided by it, so no share of
             a shared interval is handed whole to more than one Run.
         derived: Whether the baseline was bounded rather than read.
-        measurement_quality: ``exact`` for a sole, read baseline;
-            ``reconstructed`` for a share of a shared session; ``estimated``
-            when the baseline was derived.
+        measurement_quality: ``measured`` for a sole, read baseline;
+            ``derived`` for a share of a shared session; ``estimated`` when
+            the baseline was bounded. Never ``unavailable``: a Run with no
+            reading is :class:`UncapturedRuntime`.
+        reconstruction_basis: How a share not read whole from the record
+            was obtained; present exactly when the quality is not
+            ``measured``.
         counters: The Run's share of each counter.
         spans: The span aggregate, or why there is none.
     """
@@ -364,7 +390,8 @@ class MeasuredRuntime(Epoch2Model):
     measurement_version: StrictPositiveInt
     divisor: StrictPositiveInt
     derived: bool
-    measurement_quality: MeasurementQuality
+    measurement_quality: QualityLadder
+    reconstruction_basis: ReconstructionBasis | None = None
     counters: Mapping[CounterName, CounterReading]
     spans: SpanSummary | Unobserved
 
@@ -375,6 +402,26 @@ class MeasuredRuntime(Epoch2Model):
     ) -> Mapping[CounterName, CounterReading]:
         return _require_every_counter(value)
 
+    @model_validator(mode="after")
+    def _basis_names_every_reconstruction(self) -> Self:
+        """Bind the basis to the quality, and the quality to the divisor.
+
+        Raises:
+            ValueError: The quality is not the one the divisor and the
+                bounded baseline stamp, or a basis is missing on a
+                reconstructed share or present on a measured one.
+        """
+        expected = _quality(divisor=self.divisor, derived=self.derived)
+        if self.measurement_quality != expected:
+            raise ValueError(
+                f"a share with divisor {self.divisor} and derived={self.derived} is "
+                f"{expected}, not {self.measurement_quality}"
+            )
+        reconstructed = self.measurement_quality != "measured"
+        if reconstructed != (self.reconstruction_basis is not None):
+            raise ValueError("a reconstruction_basis is stated exactly on a share not measured")
+        return self
+
 
 #: What a Run's capture came to once it stopped.
 CapturedRuntime = Annotated[
@@ -382,13 +429,13 @@ CapturedRuntime = Annotated[
 ]
 
 
-def _quality(*, divisor: int, derived: bool) -> MeasurementQuality:
+def _quality(*, divisor: int, derived: bool) -> QualityLadder:
     """Return the quality a divisor and a derived baseline stamp on a row."""
     if derived:
-        return MeasurementQuality.ESTIMATED
+        return "estimated"
     if divisor > 1:
-        return MeasurementQuality.RECONSTRUCTED
-    return MeasurementQuality.EXACT
+        return "derived"
+    return "measured"
 
 
 def _counter_delta(
@@ -457,6 +504,7 @@ def measure_run(
     harness = terminal.harness
     if baseline.harness != terminal.harness:
         harness = UNKNOWN_ATTRIBUTION
+    quality = _quality(divisor=divisor, derived=baseline.derived)
     return MeasuredRuntime(
         source=terminal.source,
         harness=harness,
@@ -464,7 +512,8 @@ def measure_run(
         measurement_version=terminal.measurement_version,
         divisor=divisor,
         derived=baseline.derived,
-        measurement_quality=_quality(divisor=divisor, derived=baseline.derived),
+        measurement_quality=quality,
+        reconstruction_basis=None if quality == "measured" else _BASIS_BY_SOURCE[terminal.source],
         counters=counters,
         spans=spans,
     )
@@ -484,6 +533,7 @@ __all__ = [
     "MeasuredRuntime",
     "MeasuredSpan",
     "Observed",
+    "ReconstructionBasis",
     "SpanPhase",
     "SpanSummary",
     "UncapturedReason",

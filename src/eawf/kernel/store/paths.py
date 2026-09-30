@@ -25,7 +25,16 @@ The epoch-2 tiers are siblings of ``store/`` rather than members of it::
     <state_dir>/ledger/<collection>.jsonl         ledger
     <state_dir>/indexes/<collection>.index.json   derived
     <state_dir>/local/<collection>                local store
+    <state_dir>/local/status.json                 status projection
+    <state_dir>/local/ledger/<collection>.jsonl   status ledger
     <state_dir>/store/event.jsonl                 firehose
+
+Task and Run status is the machine-local projection: those collections'
+document rows sit in ``local/status.json`` and their ledgers under
+``local/ledger/``, so a claim, a start or a completion rewrites nothing
+version control carries. A ledger either collection once kept at
+``ledger/`` stays there as the committed seed a clone rebuilds its
+status ledger from (:func:`seed_ledger_path`).
 
 The ledger, its derived index and the local store have resolvers; a
 store kind whose rows are machine-local resolves under ``local/`` through
@@ -45,7 +54,12 @@ from pathlib import Path
 from typing import Final
 
 from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.store.tiers import Epoch2Collection, StorageTier, tier_for
+from eawf.kernel.store.tiers import (
+    STATUS_PROJECTION_COLLECTIONS,
+    Epoch2Collection,
+    StorageTier,
+    tier_for,
+)
 
 #: The reserved directory name that fences append-only ledgers off from
 #: any writer that rewrites a file in place.
@@ -56,6 +70,9 @@ INDEX_DIRNAME: Final = "indexes"
 
 #: The directory holding the machine-local store tier; a clone starts empty.
 LOCAL_DIRNAME: Final = "local"
+
+#: The file holding the document rows of the status projection collections.
+STATUS_PROJECTION_FILENAME: Final = "status.json"
 
 
 def store_dir(state_path: Path) -> Path:
@@ -99,17 +116,46 @@ def ledger_path(state_path: Path, collection: Epoch2Collection) -> Path:
         collection: The collection to locate.
 
     Returns:
-        ``<state_dir>/ledger/<collection>.jsonl``.
+        ``<state_dir>/ledger/<collection>.jsonl``, or
+        ``<state_dir>/local/ledger/<collection>.jsonl`` for a status
+        projection collection.
 
     Raises:
         ValueError: The collection is not declared at the ledger tier, so
             it has no append-only file.
+    """
+    seed = seed_ledger_path(state_path, collection)
+    if collection in STATUS_PROJECTION_COLLECTIONS:
+        return state_path.parent / LOCAL_DIRNAME / LEDGER_DIRNAME / seed.name
+    return seed
+
+
+def seed_ledger_path(state_path: Path, collection: Epoch2Collection) -> Path:
+    """Return where *collection*'s ledger sits in the committed tier.
+
+    For a status projection collection this is the frozen seed its local
+    ledger is rebuilt from; for every other collection it is the ledger.
+
+    Args:
+        state_path: Path to the tree's ``state.json``.
+        collection: The collection to locate.
+
+    Returns:
+        ``<state_dir>/ledger/<collection>.jsonl``.
+
+    Raises:
+        ValueError: The collection is not declared at the ledger tier.
     """
     if tier_for(collection) is not StorageTier.LEDGER:
         raise ValueError(
             f"{collection.value!r} is declared at the {tier_for(collection).value} tier, not ledger"
         )
     return ledger_dir(state_path) / f"{collection.value}.jsonl"
+
+
+def status_projection_path(state_path: Path) -> Path:
+    """Return ``<state_dir>/local/status.json``, the status projection's rows."""
+    return state_path.parent / LOCAL_DIRNAME / STATUS_PROJECTION_FILENAME
 
 
 def index_dir(state_path: Path) -> Path:

@@ -8,6 +8,7 @@ from typing import Any
 
 import orjson
 import pytest
+from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from eawf.kernel.state.enums import (
@@ -48,6 +49,7 @@ from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.cli.app import app
 from eawf.workflow.estimation.trust_scorecard import (
+    ScorecardValue,
     TrustWindow,
     assemble_why,
     compute_trust_scorecard,
@@ -639,3 +641,91 @@ def test_why_cli_rejects_unknown_target(tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "unrecognised why target" in result.output
+
+
+def test_meas_025_why_renders_the_advisory_scorecard_for_its_waves(tmp_path: Path) -> None:
+    """``eawf why`` is the scorecard's named consumer and surface."""
+    state = _state_with_entities()
+    state_path = _write_repo(tmp_path, state)
+    _seed_stores(state_path)
+    runner = CliRunner()
+    workspace = str(state_path.parent.parent)
+
+    as_json = runner.invoke(app, ["--json", "-w", workspace, "why", "P01-I01"])
+    as_text = runner.invoke(app, ["-w", workspace, "why", "P01-I01"])
+
+    assert as_json.exit_code == 0, as_json.output
+    scorecard = orjson.loads(as_json.stdout)["scorecard"]
+    assert scorecard["advisory"] is True
+    assert scorecard["consumer"] == "eawf why"
+    assert {label["scope_id"] for label in scorecard["output_labels"]} == {
+        "P01-I01-W01",
+        "P01-I01-W02",
+        "P01-I01-W03",
+    }
+    assert as_text.exit_code == 0, as_text.output
+    assert "scorecard (advisory, gates nothing):" in as_text.stdout
+    assert "- verified: 50% over 2 closed waves labelled in window (measured)" in as_text.stdout
+    assert "- coverage: 2 of 3 waves carry evidence (all waves)" in as_text.stdout
+
+
+def test_meas_026_every_scorecard_rate_declares_its_sample_and_quality(tmp_path: Path) -> None:
+    state = _state_with_entities()
+    state_path = _write_repo(tmp_path, state)
+    _seed_stores(state_path)
+
+    scorecard = compute_trust_scorecard(
+        state, store_projection=read_store_projection(state_path), now=_T0
+    )
+
+    for value in (scorecard.verified_share, scorecard.verifier_reliability.pass_rate):
+        assert value.sample
+        assert value.sample_size > 0
+        assert value.measurement_quality == "measured"
+    assert scorecard.verified_share.value == pytest.approx(0.5)
+    assert scorecard.coverage.subjects_total == 3
+    assert scorecard.coverage.sampled is False
+
+
+def test_meas_026_an_undefined_rate_is_unavailable_never_zero() -> None:
+    """Boundary: no waves and no evidence leave every rate undefined, not zero."""
+    scorecard = compute_trust_scorecard(_empty_state(), store_projection=None, now=_T0)
+
+    for value in (scorecard.verified_share, scorecard.verifier_reliability.pass_rate):
+        assert value.value is None
+        assert value.sample_size == 0
+        assert value.measurement_quality == "unavailable"
+    assert scorecard.coverage.contributing_share is None
+    dumped = scorecard.model_dump(mode="json")
+    assert dumped["verified_share"]["value"] is None
+    assert dumped["verifier_reliability"]["pass_rate"]["value"] is None
+
+
+def test_meas_052_a_bounded_window_declares_itself_a_sample(tmp_path: Path) -> None:
+    state = _state_with_entities()
+    state_path = _write_repo(tmp_path, state)
+    _seed_stores(state_path)
+
+    last_wave = compute_trust_scorecard(
+        state, store_projection=read_store_projection(state_path), window="1-waves", now=_T0
+    )
+
+    assert last_wave.coverage.sampled is True
+    assert last_wave.coverage.subjects_total == 1
+
+
+@pytest.mark.parametrize(
+    ("fields", "match"),
+    [
+        ({"value": 0.0, "sample_size": 0, "measurement_quality": "measured"}, "sample is empty"),
+        ({"sample_size": 3, "measurement_quality": "unavailable"}, "sample is empty"),
+        ({"sample_size": 0, "measurement_quality": "measured"}, "unavailable"),
+        ({"value": 0.5, "sample_size": 2, "measurement_quality": "unavailable"}, "unavailable"),
+        ({"value": 0.5, "sample_size": 2, "measurement_quality": "reconstructed"}, "quality"),
+    ],
+)
+def test_meas_026_a_scorecard_value_refuses_an_unsupported_rate(
+    fields: dict[str, Any], match: str
+) -> None:
+    with pytest.raises(ValidationError, match=match):
+        ScorecardValue(sample="rows", **fields)

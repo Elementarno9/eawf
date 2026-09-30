@@ -18,9 +18,9 @@ from typing import Any, Final
 import pytest
 
 from eawf.runtime.hooks.event import HookEvent, HookEventType
+from eawf.runtime.hooks.lifecycle_capture import adopt_host_subagent
 from eawf.runtime.hooks.runner import (
     HookRunner,
-    adopt_host_subagent,
     register_runtime_capture_hooks,
     registered_handler_event_types,
 )

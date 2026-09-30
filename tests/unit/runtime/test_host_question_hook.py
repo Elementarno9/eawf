@@ -16,12 +16,8 @@ from typing import Any, Final
 import pytest
 
 from eawf.runtime.hooks.event import HookEvent, HookEventType, HookRuntime
-from eawf.runtime.hooks.runner import (
-    HookRunner,
-    record_host_question,
-    record_host_tool_error,
-    register_runtime_capture_hooks,
-)
+from eawf.runtime.hooks.host_calls import record_host_question, record_host_tool_error
+from eawf.runtime.hooks.runner import HookRunner, register_runtime_capture_hooks
 from eawf.runtime.runtimes.claude.hook_map import build_plugin_hooks_json
 from eawf.runtime.runtimes.host_transcript import WITHHELD_TEXT, scrubbed_words
 

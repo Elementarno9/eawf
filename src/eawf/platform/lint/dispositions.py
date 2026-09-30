@@ -107,6 +107,7 @@ RULE_DISPOSITIONS: Final[tuple[RuleDisposition, ...]] = (
         "EAWF026", "every settings section filed under one category", Disposition.CARRY
     ),
     RuleDisposition("EAWF027", "committed text quotes only quotable rows", Disposition.CARRY),
+    RuleDisposition("EAWF028", "a committed research brief keeps its wording", Disposition.CARRY),
     RuleDisposition(
         "commit-prefix",
         "commit subject and trailer grammar",

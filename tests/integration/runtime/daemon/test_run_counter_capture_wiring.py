@@ -30,7 +30,7 @@ from eawf.kernel.state.epoch2.measurement import (
     VendorSessionRef,
 )
 from eawf.kernel.state.epoch2.run import Run
-from eawf.kernel.store.compaction import document_rows
+from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.ledger import read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -116,7 +116,7 @@ def _drive(
 
 def _stored_run(canary: CanaryProvision) -> Run:
     path = document_path(canary)
-    row = document_rows(json.loads(path.read_text()), Epoch2Collection.RUN).get("RUN-00000010")
+    row = document_rows(read_document(path), Epoch2Collection.RUN).get("RUN-00000010")
     if row is not None:
         return Run.model_validate(row)
     lines = read_ledger_records(ledger_path(path, Epoch2Collection.RUN))
@@ -162,7 +162,7 @@ def test_meas_001_start_verb_records_the_baseline_through_the_vendor_session(
     assert run.vendor_session.session_digest == hash_vendor_session_id(SESSION)
     assert isinstance(run.counter_baseline, CounterSnapshot)
     assert run.counter_baseline.concurrent_run_count == 1
-    assert SESSION not in document_path(canary).read_text()
+    assert SESSION not in json.dumps(read_document(document_path(canary)))
 
 
 def test_meas_005_start_counts_runs_already_sharing_the_session(

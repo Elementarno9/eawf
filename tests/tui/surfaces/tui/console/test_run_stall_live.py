@@ -7,8 +7,10 @@ a Claude Code session, a real ``eawf hook run`` recording its last activity, the
 own stall sweep raising the stall fact (handed a later clock rather than waited on), and the
 console opened by ``eawf ui``'s own launch function, whose seam fills the Run's state from
 ``runtime.run.stalls.read``. The same live read draws the Run under ``lost or stale`` on
-Activity (UI-030) and as ``stalled`` on Unattended (UI-026). CON-076 and UI-008 are held on
-the Run frame's timeline, drawn from the groups the daemon's events read answers with.
+Activity (UI-030) and as ``stalled`` on Unattended (UI-026). The Attention register lists
+the standing stall as one ``stalled`` item, which the route's own re-read drops once the Run
+answers (UI-062). CON-076 and UI-008 are held on the Run frame's timeline, drawn from the
+groups the daemon's events read answers with.
 
 Nothing reaches the operator's daemon: the harness is the live transcript suite's.
 """
@@ -126,6 +128,29 @@ def test_ui_030_ui_026_a_stalled_run_is_lost_on_activity_and_stalled_on_unattend
         assert "stalled · nothing since" in next(
             line for line in queue.split("\n") if PARENT in line
         )
+
+    _launch(repo, monkeypatch, scenario, (160, 40))
+
+
+def test_ui_062_a_stalled_run_is_one_stalled_attention_item_until_it_answers_live(
+    live_tree: tuple[Path, _Daemon], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """UI-062: the standing stall is one item under ``stalled``, gone once the Run answers."""
+    repo, daemon = live_tree
+    _fail(repo)
+    _stall(daemon)
+
+    async def scenario(app: ConsoleApp, seam: ProjectionSeam, pilot: Any) -> None:
+        await _route(app, pilot, "attention")
+        frame = await _until(app, pilot, lambda f: " STALLED  1" in f)
+        row = next(line for line in frame.split("\n") if f"{PARENT} stopped responding" in line)
+        assert row.lstrip(" ▸>").startswith(f"STL-{PARENT}-")
+        assert re.search(r"stalled +1", frame), frame
+        assert "1 all principals" in frame, "a stalled Run is counted, not a notice"
+        _outputs(repo, daemon, 1)  # the Run answers; no patch says so, the re-read does
+        cleared = await _until(app, pilot, lambda f: " STALLED  " not in f)
+        assert re.search(r"stalled +0", cleared), cleared
+        assert f"STL-{PARENT}-" not in cleared
 
     _launch(repo, monkeypatch, scenario, (160, 40))
 

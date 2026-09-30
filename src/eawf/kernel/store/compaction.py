@@ -16,6 +16,18 @@ rebuilt costs a regeneration and nothing else.
 Nothing here writes a live tree implicitly: the caller passes the
 ``state.json`` it means, so a staging tree and the real one are the same
 code path with different arguments.
+
+The document is one object to every reader and two files on disk. The
+Task and Run rows and the ``canonical_sequence`` high-water mark are
+per-Task and per-Run status, which every claim, start and completion
+rewrites, so :func:`write_document` keeps them in the machine-local
+status projection beside the document and leaves the committed
+``state.json`` holding only what is not status. The committed file is
+rewritten only when that part of it changed, which is what lets a Task
+run from claim to completion without touching a tracked file.
+:func:`read_document` merges the two back, the projection winning; a
+tree written before the split carries its status in the committed file
+and reads the same until its first write moves it.
 """
 
 from __future__ import annotations
@@ -24,9 +36,10 @@ import json
 import logging
 import os
 import secrets
+import shutil
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -43,9 +56,10 @@ from eawf.kernel.store.ledger import (
     render_ledger_line,
     truncate_torn_tail,
 )
-from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.paths import ledger_path, seed_ledger_path, status_projection_path
 from eawf.kernel.store.tiers import (
     LEDGER_COLLECTIONS,
+    STATUS_PROJECTION_COLLECTIONS,
     Epoch2Collection,
     StorageTier,
     tier_for,
@@ -106,28 +120,44 @@ class RecoveryReport(BaseModel):
     regenerated_indexes: tuple[Epoch2Collection, ...] = ()
 
 
+#: The document keys that belong to the status projection: the status
+#: collections' rows, and the high-water mark every mutation advances.
+STATUS_DOCUMENT_KEYS: Final[frozenset[str]] = frozenset(
+    {*(collection.value for collection in STATUS_PROJECTION_COLLECTIONS), "canonical_sequence"}
+)
+
+
 def read_document(state_path: Path) -> dict[str, Any]:
-    """Read the tree's document.
+    """Read the tree's document, its status projection merged in.
 
     Args:
         state_path: Path to the tree's ``state.json``.
 
     Returns:
-        The decoded document.
+        The decoded document. When the status projection exists its keys
+        replace the committed file's; when it does not, the committed
+        file is the whole document.
 
     Raises:
         FileNotFoundError: The document does not exist.
-        ValueError: The document is not a JSON object, so it holds no
-            collections to compact out of.
+        ValueError: The document or the projection is not a JSON object,
+            so it holds no collections to compact out of.
     """
-    decoded = json.loads(state_path.read_text("utf-8"))
-    if not isinstance(decoded, dict):
-        raise ValueError(f"{state_path} holds a {type(decoded).__name__}, not a JSON object")
-    return decoded
+    decoded = _read_object(state_path)
+    projection = status_projection_path(state_path)
+    if not projection.is_file():
+        return decoded
+    committed = {key: value for key, value in decoded.items() if key not in STATUS_DOCUMENT_KEYS}
+    return committed | _read_object(projection)
 
 
 def write_document(state_path: Path, document: dict[str, Any]) -> None:
-    """Replace the tree's document atomically.
+    """Replace the tree's document atomically, status and committed parts apart.
+
+    The status projection is written first, so a crash before the
+    committed file is rewritten leaves status in both files and the
+    projection, which :func:`read_document` prefers, already current.
+    The committed file is left untouched when its bytes would not change.
 
     Args:
         state_path: Path to the tree's ``state.json``.
@@ -136,14 +166,92 @@ def write_document(state_path: Path, document: dict[str, Any]) -> None:
     Raises:
         TypeError: The document holds a value ``json`` cannot encode.
     """
-    payload = json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True)
-    tmp = state_path.with_name(f"{state_path.name}.tmp.{secrets.token_hex(4)}")
+    status = {key: value for key, value in document.items() if key in STATUS_DOCUMENT_KEYS}
+    committed = {key: value for key, value in document.items() if key not in STATUS_DOCUMENT_KEYS}
+    projection = status_projection_path(state_path)
+    projection.parent.mkdir(parents=True, exist_ok=True)
+    seed_status_ledgers(state_path)
+    _write_object(projection, _render(status))
+    payload = _render(committed)
+    if not state_path.is_file() or state_path.read_bytes() != payload:
+        _write_object(state_path, payload)
+
+
+def seed_status_ledgers(state_path: Path) -> tuple[Epoch2Collection, ...]:
+    """Rebuild each missing status ledger from its committed seed.
+
+    A status collection's ledger lives in the machine-local tier. A ledger
+    the tree committed before the split, or a clone's checkout of one, is
+    the history that local ledger starts from, so it is copied once and
+    never written again.
+
+    Args:
+        state_path: Path to the tree's ``state.json``.
+
+    Returns:
+        The collections whose local ledger was seeded, in name order.
+    """
+    seeded: list[Epoch2Collection] = []
+    for collection in sorted(STATUS_PROJECTION_COLLECTIONS):
+        local, seed = ledger_path(state_path, collection), seed_ledger_path(state_path, collection)
+        if local.exists() or not seed.is_file():
+            continue
+        local.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(seed, local)
+        seeded.append(collection)
+    if seeded:
+        logger.info(f"seed_status_ledgers state_path={state_path} seeded={len(seeded)}")
+    return tuple(seeded)
+
+
+def split_status_projection(state_path: Path) -> bool:
+    """Move a pre-split document's status out of the committed file.
+
+    Args:
+        state_path: Path to the tree's ``state.json``.
+
+    Returns:
+        ``True`` when the committed file still carried status keys and
+        was rewritten without them, ``False`` when it was already split.
+
+    Raises:
+        FileNotFoundError: The document does not exist.
+    """
+    seed_status_ledgers(state_path)
+    if STATUS_DOCUMENT_KEYS.isdisjoint(_read_object(state_path)):
+        return False
+    write_document(state_path, read_document(state_path))
+    logger.info(f"split_status_projection state_path={state_path}")
+    return True
+
+
+def _read_object(path: Path) -> dict[str, Any]:
+    """Return the JSON object *path* holds.
+
+    Raises:
+        FileNotFoundError: The file does not exist.
+        ValueError: The file holds something other than a JSON object.
+    """
+    decoded = json.loads(path.read_text("utf-8"))
+    if not isinstance(decoded, dict):
+        raise ValueError(f"{path} holds a {type(decoded).__name__}, not a JSON object")
+    return decoded
+
+
+def _render(document: dict[str, Any]) -> bytes:
+    """Return the canonical bytes of *document*."""
+    return f"{json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True)}\n".encode()
+
+
+def _write_object(path: Path, payload: bytes) -> None:
+    """Replace *path* with *payload* atomically."""
+    tmp = path.with_name(f"{path.name}.tmp.{secrets.token_hex(4)}")
     try:
         with tmp.open("wb") as fh:
-            fh.write(f"{payload}\n".encode())
+            fh.write(payload)
             fh.flush()
             os.fsync(fh.fileno())
-        os.replace(tmp, state_path)
+        os.replace(tmp, path)
     finally:
         tmp.unlink(missing_ok=True)
 
@@ -331,7 +439,9 @@ def compact_terminal_task(
 def recover_store_tree(state_path: Path) -> RecoveryReport:
     """Finish every interrupted compaction the tree carries.
 
-    Repairs a torn ledger tail, drops each document row whose record the
+    Moves a pre-split document's status into the status projection first,
+    so the rest of the pass and every later write see the split tree. Then
+    repairs a torn ledger tail, drops each document row whose record the
     ledger already committed, and regenerates the derived indexes.
 
     Args:
@@ -343,6 +453,7 @@ def recover_store_tree(state_path: Path) -> RecoveryReport:
     Raises:
         FileNotFoundError: The document does not exist.
     """
+    split_status_projection(state_path)
     document = read_document(state_path)
     repaired: list[Epoch2Collection] = []
     dropped: list[str] = []
@@ -401,6 +512,7 @@ def _drop_committed_rows(
 
 
 __all__ = [
+    "STATUS_DOCUMENT_KEYS",
     "CompactionCrashError",
     "CompactionCrashPoint",
     "CompactionResult",
@@ -413,5 +525,7 @@ __all__ = [
     "locate_record",
     "read_document",
     "recover_store_tree",
+    "seed_status_ledgers",
+    "split_status_projection",
     "write_document",
 ]

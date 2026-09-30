@@ -49,6 +49,7 @@ from eawf.surfaces.tui.console.action_menu import (
 from eawf.surfaces.tui.console.action_menu import PAIRS as MENU_PAIRS
 from eawf.surfaces.tui.console.app import compose_frame
 from eawf.surfaces.tui.console.attention import attn_list, gated, is_notice, verbs_for
+from eawf.surfaces.tui.console.cards import Card, answer_card
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch
@@ -58,7 +59,6 @@ from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS, KeyKind, keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_KEYS, DRAWER_PAIRS, OVERLAY_KEYS
-from eawf.surfaces.tui.console.mutation import Card, answer_card
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
     ACTION_SNOOZE_METHOD,

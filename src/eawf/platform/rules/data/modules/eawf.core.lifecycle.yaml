@@ -33,13 +33,13 @@ rules:
       method: review
   - rule_id: eawf.core.lifecycle.spike
     obligation_id: lifecycle.spike
-    revision: 1
+    revision: 2
     title: Keep spikes read-only and local until they ratify a verdict
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      Run a spike as a time-boxed read-only investigation whose brief lands under .ea/local/ as <date>-<slug>.md; promote the brief to .ea/artifacts/ only in the commit that lands the decision it ratifies.
+      Run a spike as a time-boxed read-only investigation with its brief at .ea/local/<date>-<slug>.md; promote the brief to .ea/artifacts/ only in the commit landing the decision it ratifies.
     rationale: >-
       A spike exists to make the next wave's criteria writable; keeping briefs local until they back a decision keeps the committed record to evidence that was acted on.
     verification:
@@ -73,13 +73,13 @@ rules:
       method: review
   - rule_id: eawf.core.lifecycle.release-process
     obligation_id: lifecycle.release-process
-    revision: 1
+    revision: 2
     title: Release on the cadence the repository configures
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Follow the repository's configured release cadence; under the per-phase cadence, close a phase only with a passing release pre-flight covering the changelog section, the version bump, any migration note and the release annotation.
+      Follow the configured release cadence; under the per-phase cadence, close a phase only after a passing release pre-flight covering the changelog section, version bump, any migration note and release annotation.
     rationale: >-
       A release gate that runs at phase close catches a missing changelog or version bump while the phase is still open to fix it.
     verification:
@@ -101,13 +101,13 @@ rules:
     procedure_ref: docs/rules/ship-process.md
   - rule_id: eawf.core.lifecycle.wave-verification-scope
     obligation_id: lifecycle.wave-verification-scope
-    revision: 1
+    revision: 2
     title: Verify waves with targeted tests and iters with the full suite
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      Name only targeted tests that finish inside 60 seconds in wave criteria, and run the full suite plus one fresh-context audit once per iter at close; schema-migration and security-scoped waves keep the full run.
+      Name only targeted tests finishing within 60 seconds in wave criteria; run the full suite and one fresh-context audit once per iter at close. Schema-migration and security-scoped waves keep the full run.
     rationale: >-
       A full suite and audit on every wave serialises the iter for little extra assurance; the iter close is where the whole change is judged once.
     verification:

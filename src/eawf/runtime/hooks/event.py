@@ -21,8 +21,10 @@ The optional ``payloads`` mapping carries per-event extension shapes;
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
-from typing import Any, Literal
+from types import MappingProxyType
+from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -68,6 +70,12 @@ class HookEventType(StrEnum):
 # was identified.
 HookRuntime = Literal["claude", "codex", "opencode", "generic"]
 
+#: The harness each hook runtime reports its subagents and sessions under. A runtime not
+#: listed has no subagent mechanism Eawf adopts.
+HOST_HARNESSES: Final[Mapping[str, str]] = MappingProxyType(
+    {"claude": "claude-code", "codex": "codex"}
+)
+
 
 class HookEvent(BaseModel):
     """Typed canonical hook event.
@@ -105,6 +113,7 @@ class HookEvent(BaseModel):
 
 
 __all__ = [
+    "HOST_HARNESSES",
     "HookEvent",
     "HookEventType",
     "HookRuntime",

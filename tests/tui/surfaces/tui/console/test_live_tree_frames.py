@@ -20,6 +20,7 @@ from eawf.kernel.identity.urn import parse_qualified_urn
 from eawf.kernel.projection.compute import build_route_projection
 from eawf.surfaces.tui.console.action_menu import VerbWeight
 from eawf.surfaces.tui.console.app import ConsoleApp, compose_frame
+from eawf.surfaces.tui.console.cards import CARD, Card
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import FakeClock, notify
 from eawf.surfaces.tui.console.dispatch import dispatch
@@ -29,7 +30,6 @@ from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.harness import settle
 from eawf.surfaces.tui.console.keybar import KEY, keybar
 from eawf.surfaces.tui.console.keymap import native_keys
-from eawf.surfaces.tui.console.mutation import CARD, Card
 from eawf.surfaces.tui.console.operations import (
     SAME_VERB,
     UNBOUND_REASON,

@@ -24,19 +24,13 @@ from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb, menu_rows
 from eawf.surfaces.tui.console.attention import ATTENTION_ROUTE, verb_available
 from eawf.surfaces.tui.console.attention_verbs import ONLY_PRINCIPAL
+from eawf.surfaces.tui.console.cards import GateKind, gate
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.eligibility import principals_of
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import View, entry_state
-from eawf.surfaces.tui.console.mutation import (
-    GateKind,
-    chrome_kept,
-    gate,
-    lifecycle_verbs,
-    menu_entity,
-    verb_check,
-)
+from eawf.surfaces.tui.console.mutation import chrome_kept, lifecycle_verbs, menu_entity, verb_check
 from eawf.surfaces.tui.console.notices import NOTICE_VERBS, notice_of
 from eawf.surfaces.tui.console.renderers import copy_target
 from eawf.surfaces.tui.console.renderers.spine import offered_verbs

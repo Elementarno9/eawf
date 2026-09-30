@@ -196,6 +196,9 @@ NOT_A_WORK_LIST = "an all-principals count is not a work list"
 #: What a notice's second line says in place of who may answer it.
 NOTICE_LINE = "a notice · nothing answers it, and it counts toward no one"
 
+#: What a stalled Run's second line says in place of who may answer it.
+STALL_LINE = "Enter opens the pause over this Run: resume or let go"
+
 #: What an absent deadline renders as: the register states none, which is not a zero.
 NO_DEADLINE = "due –"  # noqa: RUF001
 
@@ -206,6 +209,7 @@ _KIND_WORDS: Mapping[str, str] = MappingProxyType(
         "operator_decision": "decision",
         "provider_permission": "permission",
         "child_ceiling_breach": "ceiling breach",
+        "run_stall": "stall",
     }
 )
 
@@ -320,6 +324,8 @@ def _selected_lines(
     """Return the selected row's second lines: its kind and who may act, then any authority."""
     if item.read_only:
         return [_KIND_INDENT + f"{kind_word(row)} · {NOTICE_LINE}"]
+    if item.bucket is AttentionBucket.STALLED:
+        return [_KIND_INDENT + f"{kind_word(row)} · {STALL_LINE}"]
     lines = [_KIND_INDENT + f"{kind_word(row)} · {eligibility_line(row, principal, holders)}"]
     if item.need is AttentionNeedKind.PERMISSION:
         lines.extend(_KIND_INDENT + line for line in permission_lines(row))
@@ -474,12 +480,14 @@ def _verb_row(
     """Return the row the caret is on when the Attention verbs may act on it.
 
     A ceiling breach is read-only: it is listed, but no verb is offered on it. A question
-    is answered from its own detail, where its options are, so none is offered on it either.
+    is answered from its own detail, where its options are, and a stalled Run from the pause
+    over it, so none is offered on either.
     """
     if cursor >= len(listed) or listed[cursor].read_only:
         return None
     row = by_key[listed[cursor].key]
-    return None if row.collection is Epoch2Collection.OPEN_QUESTION else row
+    answered_elsewhere = (Epoch2Collection.OPEN_QUESTION, Epoch2Collection.RUN)
+    return None if row.collection in answered_elsewhere else row
 
 
 def _pause_lines(

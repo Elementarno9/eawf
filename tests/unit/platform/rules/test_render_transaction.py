@@ -237,7 +237,8 @@ def test_render_rule_projections_uses_the_module_index(repo: Path) -> None:
     render_rule_projections(repo)
     card = (repo / CARD_TARGET).read_text(encoding="utf-8")
     assert "## Rule modules" in card
-    assert "read via: `eawf rules view eawf.craft.python`" in card
+    assert "`eawf rules view` and its id" in card
+    assert "- `eawf.craft.python` [" in card
 
 
 def test_render_rule_projections_manifest_records_digests_spans_and_headroom(repo: Path) -> None:

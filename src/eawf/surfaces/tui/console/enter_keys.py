@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from types import MappingProxyType
 
-from eawf.kernel.projection.compute import ProjectionRow
+from eawf.kernel.projection.compute import STALL_KIND, ProjectionRow
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import attention as att
 from eawf.surfaces.tui.console import derive as dv
@@ -97,9 +97,13 @@ def confirm(ctx: Ctx) -> None:
         ctx.log("Enter", "no attention row is held here — nothing was sent")
         return
     action_id = row.key
-    # the register lists a Run only as a ceiling breach, a notice nothing answers
+    # the register lists a Run only as a ceiling breach, a notice nothing answers, or as a
+    # stall, which is resumed or let go from the pause over its Run
     if row.collection is Epoch2Collection.RUN:
-        ctx.log("Enter", f"{action_id} is a notice — nothing answers it, nothing was sent")
+        if row.facts.get("kind") == STALL_KIND:
+            ctx.log("Enter", f"{action_id} — {att.STALL_REFUSAL} · nothing was sent")
+        else:
+            ctx.log("Enter", f"{action_id} is a notice — nothing answers it, nothing was sent")
         return
     if row.collection is Epoch2Collection.OPEN_QUESTION:
         ctx.log("Enter", f"{action_id} is a question — answer it from its detail, nothing was sent")

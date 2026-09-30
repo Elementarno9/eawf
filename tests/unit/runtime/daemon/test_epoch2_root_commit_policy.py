@@ -29,7 +29,12 @@ from eawf.kernel.store.commit_policy import (
     UndeclaredPathError,
     classify_path,
 )
-from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, Epoch2Collection, StorageTier
+from eawf.kernel.store.tiers import (
+    LEDGER_COLLECTIONS,
+    STATUS_PROJECTION_COLLECTIONS,
+    Epoch2Collection,
+    StorageTier,
+)
 from eawf.platform.install.canary import canary_ref, provision_canary
 from eawf.runtime.daemon import epoch2_root
 from eawf.runtime.daemon.epoch2_root import (
@@ -89,7 +94,11 @@ def test_session_document_path_classifies_as_committed_document(
     )
 
 
-@pytest.mark.parametrize("collection", LEDGER_COLLECTIONS, ids=str)
+@pytest.mark.parametrize(
+    "collection",
+    [item for item in LEDGER_COLLECTIONS if item not in STATUS_PROJECTION_COLLECTIONS],
+    ids=str,
+)
 def test_session_ledger_path_classifies_as_committed_ledger(
     context: Epoch2RootContext, collection: Epoch2Collection
 ) -> None:
@@ -102,6 +111,22 @@ def test_session_ledger_path_classifies_as_committed_ledger(
         ".ea/generations/gen-*/ledger/*.jsonl",
         CommitPolicy.COMMITTED,
         StorageTier.LEDGER,
+    )
+
+
+@pytest.mark.parametrize("collection", sorted(STATUS_PROJECTION_COLLECTIONS), ids=str)
+def test_session_status_ledger_path_classifies_as_local_projection(
+    context: Epoch2RootContext, collection: Epoch2Collection
+) -> None:
+    with context.session([MILESTONE]) as session:
+        path = session.ledger_path(collection)
+        generation_dir = session.document_path.parent
+    row = context.classify(path)
+    assert path.parent.parent.parent == generation_dir
+    assert (row.pattern, row.policy, row.tier) == (
+        ".ea/generations/gen-*/local/**",
+        CommitPolicy.NOT_COMMITTED,
+        StorageTier.LOCAL_STORE,
     )
 
 

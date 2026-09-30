@@ -67,8 +67,9 @@ MODULE_VIEW_COMMAND: Final[str] = "eawf rules view"
 #: Stated once above the index, because loading a module is a retrieval and
 #: not an opt-in: its rules carry the same force as any other rule once read.
 MODULE_BINDING_NOTICE: Final[str] = (
-    "Read a module when its trigger applies. Once read, its rules bind for the rest of "
-    "the activity with the same force as any other rule; they are not advisory."
+    f"Read a module with `{MODULE_VIEW_COMMAND}` and its id when its trigger applies. Once "
+    "read, its rules bind for the rest of the activity with the same force as any other "
+    "rule; they are not advisory."
 )
 
 # Package-data location of the registered module files, one per reference.
@@ -400,10 +401,9 @@ def render_module_index(selection: RuleModuleSelection) -> str:
         document = entry.module.document
         count = len(entry.module.records)
         noun = "rule" if count == 1 else "rules"
+        scope = f" [{', '.join(entry.module.scope)}]" if entry.module.scope else ""
         lines.append(
-            f"- `{entry.reference}` {document.topic} [{', '.join(entry.module.scope)}] "
-            f"{count} {noun}; load when: {document.when_to_use}; "
-            f"read via: `{MODULE_VIEW_COMMAND} {entry.reference}`"
+            f"- `{entry.reference}`{scope} {count} {noun}; load when: {document.when_to_use}"
         )
     return "\n".join(lines) + "\n"
 

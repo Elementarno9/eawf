@@ -39,13 +39,13 @@ rules:
       method: review
   - rule_id: repo.naming-conventions
     obligation_id: naming.canonical-names
-    revision: 1
+    revision: 2
     title: Use one canonical name per cross-cutting concept
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Give each cross-cutting concept one canonical field, parameter and log-key name, such as agent_role, effort_bucket, evidence_kind, scope_id and output_dir, and rename an outlier to the dominant form before merging instead of adding an adapter.
+      Give each cross-cutting concept one canonical field, parameter and log-key name (agent_role, effort_bucket, evidence_kind, scope_id, output_dir), and rename an outlier to the dominant form before merging instead of adding an adapter.
     rationale: >-
       Parallel names for one concept drift across state models, envelopes and logs until a search for one misses the others.
     verification:
@@ -53,13 +53,13 @@ rules:
     procedure_ref: docs/rules/naming-conventions.md
   - rule_id: repo.phase-equals-release
     obligation_id: release.phase-cadence
-    revision: 1
+    revision: 2
     title: Ship every closed phase as at least a minor release
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Close every phase as at least a minor release: the phase-close commit bumps src/eawf/_version.py while pyproject.toml stays dynamically versioned, and the merge of the phase pull request tags that release.
+      Close every phase as at least a minor release: the phase-close commit bumps src/eawf/_version.py (pyproject.toml stays dynamically versioned), and merging the phase pull request tags it.
     rationale: >-
       A phase is this repository's unit of shipped value, so a tag per phase keeps the published version honest about what landed.
     verification:
@@ -67,13 +67,13 @@ rules:
     procedure_ref: docs/rules/agent-driven-phase-equals-release.md
   - rule_id: repo.large-phase-pr
     obligation_id: delivery.phase-pr-size
-    revision: 1
+    revision: 2
     title: Keep one pull request per phase regardless of size
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      Deliver each phase as one pull request however large it grows, and keep every wave commit individually buildable so bisect stays sharp inside it; do not split a phase to chase a line count.
+      Deliver each phase as one pull request however large it grows, keeping every wave commit buildable so bisect stays sharp; never split a phase to chase a line count.
     rationale: >-
       The review bottleneck here is coherent deliveries rather than line count, and per-wave commits already give per-change history inside the pull request.
     verification:
@@ -81,13 +81,13 @@ rules:
     procedure_ref: docs/rules/agent-driven-large-phase-pr.md
   - rule_id: repo.cadence-decisions
     obligation_id: delivery.cadence-provenance
-    revision: 1
+    revision: 2
     title: Cite the ratifying decisions when the cadence is questioned
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      When a review questions the release-per-phase or one-pull-request-per-phase cadence, cite decisions D10 and D07 in state.json, and reverse the cadence only by superseding D10 with a new decision.
+      When a review questions the release-per-phase or one-pull-request-per-phase cadence, cite decisions D10 and D07 in state.json; reverse it only by superseding D10 with a new decision.
     rationale: >-
       The cadence departs from small-change practice on purpose; without the decision trail it reads as an oversight and gets reverted.
     verification:
@@ -95,13 +95,13 @@ rules:
     procedure_ref: docs/rules/agent-driven-cadence-adr-pointer.md
   - rule_id: repo.research-evidence-chain
     obligation_id: research.evidence-chain
-    revision: 1
+    revision: 2
     title: Back every research claim with an audit-recorded artifact
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Back every claim about behaviour, performance or correctness with an audit-recorded artifact such as a notebook, log or dataset; link each audit to its hypothesis, claim and artifact id, and have each decision cite the audit that justifies it.
+      Back every behaviour, performance or correctness claim with an audit-recorded artifact such as a notebook, log or dataset; link each audit to its hypothesis, claim and artifact id, and have each decision cite its justifying audit.
     rationale: >-
       Hypotheses, audits and decisions are state-resident records, so the evidence chain behind a decision stays reconstructible from state.json alone.
     verification:

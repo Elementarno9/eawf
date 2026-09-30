@@ -17,7 +17,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from eawf.kernel.projection.attention import build_attention_view, top_item
-from eawf.kernel.projection.compute import ProjectionRow, RouteProjection
+from eawf.kernel.projection.compute import STALL_KIND, ProjectionRow, RouteProjection
 from eawf.kernel.projection.registers import build_register_view
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb, VerbWeight
@@ -150,6 +150,10 @@ def audience_refusal(assignee_ref: str | None, principal: str | None) -> str:
     return f"{assignee_ref} only · {who} · relaunch with --actor {assignee_ref} to act on it"
 
 
+#: Why a verb key is refused on a stalled Run's row: its controls are on the pause over it.
+STALL_REFUSAL = "a stalled Run is resumed or let go from the pause over it; Enter opens it"
+
+
 def held_refusal(ctx: Ctx, k: str) -> bool:
     """Refuse ``k`` on the held Attention row the cursor names when it is another's or read-only.
 
@@ -162,9 +166,13 @@ def held_refusal(ctx: Ctx, k: str) -> bool:
     if held is not None and ctx.s.sel_id is not None:
         row = next((r for r in held.rows if r.key == ctx.s.sel_id), None)
     refusal = audience_refusal(row.assignee_ref, ctx.principal) if row is not None else ""
-    # the register lists a Run only as a ceiling breach, a notice nothing answers
+    # the register lists a Run only as a ceiling breach, a notice nothing answers, or as a
+    # stall, which opens the pause over its Run and is answered by nothing on this row
     if row is not None and row.collection is Epoch2Collection.RUN:
-        refusal = "read-only: a ceiling breach is a notice, and nothing answers it"
+        if row.facts.get("kind") != STALL_KIND:
+            refusal = "read-only: a ceiling breach is a notice, and nothing answers it"
+        elif k != "Enter":
+            refusal = STALL_REFUSAL
     if refusal and row is not None:
         ctx.log(k, f"{row.key} refused — {refusal}")
     return bool(refusal)

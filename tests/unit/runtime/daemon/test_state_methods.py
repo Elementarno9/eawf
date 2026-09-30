@@ -638,7 +638,8 @@ def test_mutate_wave_close_publishes_wave_closed_event_kind(tmp_path: Path) -> N
         assert envelope_payload["event_kind"] == "wave_closed"
         assert envelope_payload["extras"]["actual_written_auto"] is True
         assert envelope_payload["extras"]["actual_tokens"] == 7777
-        assert envelope_payload["extras"]["actual_cost_usd"] == 0.0
+        # Nothing priced the close, so the cost is left out rather than stated as zero.
+        assert "actual_cost_usd" not in envelope_payload["extras"]
         # The on-disk JSONL row carries the same typed discriminator + extras.
         rows = event_path.read_text().strip().splitlines()
         assert len(rows) == 1

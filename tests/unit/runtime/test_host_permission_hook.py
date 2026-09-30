@@ -19,9 +19,9 @@ import pytest
 import yaml
 
 from eawf.runtime.hooks.event import HookEvent, HookEventType
+from eawf.runtime.hooks.host_calls import record_host_permission
 from eawf.runtime.hooks.runner import (
     HookRunner,
-    record_host_permission,
     register_runtime_capture_hooks,
     registered_handler_event_types,
 )

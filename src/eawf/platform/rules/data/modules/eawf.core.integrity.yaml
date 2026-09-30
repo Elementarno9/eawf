@@ -8,26 +8,26 @@ when_to_use: stating a result, deleting content, staging a commit, dispatching a
 rules:
   - rule_id: eawf.core.integrity.deletion
     obligation_id: integrity.deletion
-    revision: 2
+    revision: 3
     title: Delete content only when it is recoverable and justified
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Delete code, config or docs only when it is committed on this branch, a verdict in state.json motivates it, and the commit or PR body lists each removed path and why; when in doubt, propose the list and wait for confirmation. Never delete schemas, golden fixtures, LICENSE, CHANGELOG.md or uncommitted files.
+      Delete code, config or docs only when committed on this branch, motivated by a verdict in state.json, and listed path by path with reasons in the commit or PR body; when in doubt, propose the list and wait. Never delete schemas, golden fixtures, LICENSE, CHANGELOG.md or uncommitted files.
     rationale: >-
       Committed content stays recoverable, a recorded verdict makes the reason auditable, and a listed removal gives the reviewer a chance to object before merge.
     verification:
       method: review
   - rule_id: eawf.core.integrity.verify-before-claim
     obligation_id: integrity.verify-before-claim
-    revision: 1
+    revision: 2
     title: Verify a behavioural claim against the code before stating it
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Check every claim about command output, schema fields, exit codes or rendered output against the code path before stating it: resolve the symbol, read the source, find the call sites, inspect the fixtures. When design docs and source disagree, quote the source.
+      Check every claim about command output, schema fields, exit codes or rendered output against the code path first: resolve the symbol, read the source, find the call sites, inspect the fixtures. Where design docs and source disagree, quote the source.
     rationale: >-
       Design documents and memories describe intent and drift from the implementation; a claim quoted from them is a hypothesis until the source confirms it.
     verification:
@@ -60,13 +60,13 @@ rules:
       method: review
   - rule_id: eawf.core.integrity.decision-surface
     obligation_id: integrity.decision-surface
-    revision: 1
+    revision: 2
     title: Surface consequential choices to the operator as options
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      When two paths would produce materially different work, stop and ask the operator with one option per path, each showing a preview, its cost and what it gives up, and one marked recommended. Settle a choice that changes nothing and state the assumption.
+      When two paths would produce materially different work, ask the operator with one option per path, each with a preview, its cost and what it gives up, one marked recommended. Settle a choice that changes nothing and state the assumption.
     rationale: >-
       A silent pick spends the operator's budget on a decision they never saw, and prose-only options are answered on impressions rather than trade-offs.
     verification:

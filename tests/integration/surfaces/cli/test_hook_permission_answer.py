@@ -27,8 +27,10 @@ from typer.testing import CliRunner
 
 from eawf.kernel.config.layered import resolve_permission_wait_seconds
 from eawf.kernel.config.schema import DEFAULT_PERMISSION_WAIT_SECONDS, MAX_PERMISSION_WAIT_SECONDS
+from eawf.runtime.hooks import host_calls
 from eawf.runtime.hooks import runner as hook_runner
-from eawf.runtime.hooks.runner import HookResult, host_permission_decision
+from eawf.runtime.hooks.host_calls import host_permission_decision
+from eawf.runtime.hooks.runner import HookResult
 from eawf.surfaces.cli.app import app
 
 pytestmark = pytest.mark.integration
@@ -95,7 +97,7 @@ class _Daemon:
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A repository whose Claude hook waits ``WAIT_S`` and re-reads every 50 ms."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    monkeypatch.setattr(hook_runner, "_DECISION_POLL_S", 0.05)
+    monkeypatch.setattr(host_calls, "_DECISION_POLL_S", 0.05)
     root = tmp_path / "demo"
     configure(root, WAIT_S)
     return root

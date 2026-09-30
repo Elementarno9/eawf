@@ -1,6 +1,6 @@
 """A Run the stall sweep finds quiet is held under a provider pause citing its stall.
 
-CON-106 says a lost Run raises a pause, and PLAN-047 says a provider pause over a lost Run
+CON-106 says a lost Run waits on a principal, and PLAN-047 says a provider pause over a lost Run
 projects as waiting on a check whose control outcome is unknown, offering reconcile and let
 go and never retry. The sweep that raises the stall fact opens that pause, one per quiet
 episode, citing the fact; the next sweep ends it once the Run answers or stops running. A
