@@ -1,7 +1,7 @@
 """Native conversion for the epoch-1 rows epoch 2 keeps under their own key.
 
-Decisions, incidents, sandbox policies and the project block each have an
-epoch-2 collection of the same meaning, so none of them is an immutable
+Decisions, incidents, sandbox policies, MCP servers and grants and the
+project block each have an epoch-2 collection of the same meaning, so none of them is an immutable
 legacy envelope: the row lands in its native collection, keyed by the id
 it already had. That key is the point. Rules, waivers and accepted-risk
 criteria cite a Decision by its ``D-*`` id and by the ``urn:eawf:v1``
@@ -9,7 +9,8 @@ URN built from it; re-keying the record under a minted ordinal would
 leave every one of those citations naming nothing.
 
 None of these collections is addressed by the epoch-2 identity grammar --
-a Decision, an Incident and a SandboxPolicy have no entity kind, and a
+a Decision, an Incident, a SandboxPolicy, a capability and a tool
+authority have no entity kind, and a
 Project's key is the supplied project slot rather than a minted one -- so
 their records are planned beside the identity traversal rather than
 minted through it.
@@ -18,7 +19,7 @@ minted through it.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Annotated, Any
@@ -26,6 +27,11 @@ from typing import Annotated, Any
 from pydantic import Field
 
 from eawf.kernel.migration.epoch2.errors import MigrationFabricationDetectedError
+from eawf.kernel.migration.epoch2.mcp import (
+    McpImportCensus,
+    check_mcp_import,
+    mcp_import_rule_payload,
+)
 from eawf.kernel.migration.epoch2.origins import build_legacy_origin, source_digest
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel
 from eawf.kernel.state.epoch2.values import EntityOrigin
@@ -41,6 +47,8 @@ class NativeRecordCollection(StrEnum):
     DECISIONS = "decisions"
     INCIDENTS = "incidents"
     SANDBOX_POLICIES = "sandbox_policies"
+    MCP_SERVERS = "mcp_servers"
+    MCP_GRANTS = "mcp_grants"
     PROJECT = "project"
 
 
@@ -50,6 +58,8 @@ NATIVE_RECORD_TARGETS: Mapping[NativeRecordCollection, Epoch2Collection] = Mappi
         NativeRecordCollection.DECISIONS: Epoch2Collection.DECISION,
         NativeRecordCollection.INCIDENTS: Epoch2Collection.INCIDENT,
         NativeRecordCollection.SANDBOX_POLICIES: Epoch2Collection.SANDBOX_POLICY,
+        NativeRecordCollection.MCP_SERVERS: Epoch2Collection.CAPABILITY,
+        NativeRecordCollection.MCP_GRANTS: Epoch2Collection.TOOL_AUTHORITY,
         NativeRecordCollection.PROJECT: Epoch2Collection.PROJECT,
     }
 )
@@ -172,9 +182,11 @@ class NativeRecordImportPlan(StrictMigrationModel):
     Attributes:
         records: The converted records, collection by collection and each
             in source-key order.
+        mcp: The MCP server and grant counts, reconciled.
     """
 
     records: tuple[ImportedNativeRecord, ...]
+    mcp: McpImportCensus
 
     @classmethod
     def build(
@@ -193,12 +205,14 @@ class NativeRecordImportPlan(StrictMigrationModel):
         Raises:
             MigrationFabricationDetectedError: When the document records no
                 project code.
+            MigrationCountMismatchError: When the MCP counts do not
+                reconcile.
             ValueError: When a key cannot be spelled as a URN id.
             ValidationError: When a record violates its contract.
         """
         project = document.get(NativeRecordCollection.PROJECT.value)
         if not isinstance(project, Mapping) or not project:
-            return cls(records=())
+            return cls(records=(), mcp=_mcp_census(document, ()))
         code = recorded_project_code(document)
         records: list[ImportedNativeRecord] = []
         for collection in NativeRecordCollection:
@@ -216,7 +230,24 @@ class NativeRecordImportPlan(StrictMigrationModel):
                 )
                 for key in sorted(rows)
             )
-        return cls(records=tuple(records))
+        mcp = _mcp_census(document, records)
+        check_mcp_import(mcp)
+        return cls(records=tuple(records), mcp=mcp)
+
+
+def _mcp_census(
+    document: Mapping[str, Any], records: Iterable[ImportedNativeRecord]
+) -> McpImportCensus:
+    """Count the MCP source rows beside the records converted from them."""
+    written = tuple(records)
+    return McpImportCensus.build(
+        server_ids=_keyed_rows(document, NativeRecordCollection.MCP_SERVERS.value),
+        grants=_keyed_rows(document, NativeRecordCollection.MCP_GRANTS.value),
+        capability_keys=(r.record_key for r in written if r.target is Epoch2Collection.CAPABILITY),
+        tool_authority_keys=(
+            r.record_key for r in written if r.target is Epoch2Collection.TOOL_AUTHORITY
+        ),
+    )
 
 
 def native_record_rule_payload() -> dict[str, Any]:
@@ -228,6 +259,7 @@ def native_record_rule_payload() -> dict[str, Any]:
         "urn_kinds": {collection.value: kind for collection, kind in NATIVE_URN_KINDS.items()},
         "project_key_field": PROJECT_CODE_FIELD,
         "record_key": "source_key",
+        "mcp_import": mcp_import_rule_payload(),
     }
 
 

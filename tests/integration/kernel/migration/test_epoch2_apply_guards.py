@@ -610,7 +610,7 @@ def test_epoch2_apply_resolves_the_workspace_registered_through_the_workspace_co
     applied = runner.invoke(app, argv)
 
     assert applied.exit_code == 0, applied.output
-    assert json.loads(applied.output)["status"] == "applied"
+    assert json.loads(applied.output)["result"]["status"] == "applied"
     rows = read_journal(DisposableTarget.require(target_root).journal_path)
     resolved = [row for row in rows if row.stage is CutoverStage.WORKSPACE_RESOLVED]
     assert len(resolved) == 1
@@ -767,7 +767,7 @@ def test_the_export_verb_through_the_cli_writes_nothing(
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = json.loads(result.output)["result"]
     assert payload["collection_count"] == len(COLLECTION_DISPOSITION_INDEX)
     assert tree_digests(corpus) == before
 

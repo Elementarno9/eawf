@@ -23,6 +23,7 @@ is refused with ``question_kind_mismatch``.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Annotated, Final, Literal, Self
@@ -421,6 +422,66 @@ def answer_with_reply(target: OpenQuestion | PendingAction, reply: QuestionReply
             f"the reply names {render_qualified_urn(reply.question_ref)}, not {target.key}",
             remediation=f"submit the reply against {render_qualified_urn(target.urn)}",
         )
+    _require_answerable(target, reply.submitted_at)
+    return target.model_validate(
+        {
+            **target.model_dump(),
+            "status": OpenQuestionStatus.ANSWERED,
+            "reply": reply,
+            "resolution_actor": reply.principal,
+            "chosen_option_key": None,
+            "escalated_by_deadline": None,
+            "resolved_at": reply.submitted_at,
+        }
+    )
+
+
+def answer_with_option(
+    target: OpenQuestion, option_key: str, *, principal: str, submitted_at: datetime
+) -> OpenQuestion:
+    """Return *target* answered by one of its own options, or refuse the answer.
+
+    Args:
+        target: The question answered.
+        option_key: The option chosen.
+        principal: Who chose it.
+        submitted_at: When they chose it.
+
+    Returns:
+        The answered question, the principal its resolution actor.
+
+    Raises:
+        QuestionRefusedError: ``question_option_unknown`` when the question offers no
+            such option, or any refusal :func:`answer_with_reply` names for a question
+            that can no longer be answered.
+    """
+    if option_key not in target.option_keys:
+        offered = ", ".join(target.option_keys) or "none; answer with a reply"
+        raise QuestionRefusedError(
+            "question_option_unknown",
+            f"{target.key} offers no option {option_key!r}",
+            remediation=f"answer with one of: {offered}",
+        )
+    _require_answerable(target, submitted_at)
+    return target.model_validate(
+        {
+            **target.model_dump(),
+            "status": OpenQuestionStatus.ANSWERED,
+            "reply": None,
+            "resolution_actor": principal,
+            "chosen_option_key": option_key,
+            "escalated_by_deadline": None,
+            "resolved_at": submitted_at,
+        }
+    )
+
+
+def _require_answerable(target: OpenQuestion, at: datetime) -> None:
+    """Refuse an answer to a replaced, resolved or no longer overridable question.
+
+    Raises:
+        QuestionRefusedError: One of the codes :func:`answer_with_reply` names.
+    """
     successor = target.superseded_by_question_ref
     if successor is not None:
         rendered = render_qualified_urn(successor)
@@ -437,24 +498,13 @@ def answer_with_reply(target: OpenQuestion | PendingAction, reply: QuestionReply
             remediation="read the existing answer; a changed answer is a new question",
         )
     if target.status is OpenQuestionStatus.AUTO_RESOLVED and (
-        target.override_until is None or reply.submitted_at > target.override_until
+        target.override_until is None or at > target.override_until
     ):
         raise QuestionRefusedError(
             "override_window_closed",
             f"{target.key}'s override window closed at {target.override_until}",
             remediation="the default stands; a changed answer is a new question",
         )
-    return target.model_validate(
-        {
-            **target.model_dump(),
-            "status": OpenQuestionStatus.ANSWERED,
-            "reply": reply,
-            "resolution_actor": reply.principal,
-            "chosen_option_key": None,
-            "escalated_by_deadline": None,
-            "resolved_at": reply.submitted_at,
-        }
-    )
 
 
 __all__ = [
@@ -468,6 +518,7 @@ __all__ = [
     "QuestionRefusedError",
     "QuestionReply",
     "QuestionSituation",
+    "answer_with_option",
     "answer_with_reply",
     "project_question",
 ]

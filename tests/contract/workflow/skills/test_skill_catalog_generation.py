@@ -38,6 +38,7 @@ from eawf.surfaces.cli.verb_catalog import (
     build_verb_catalog,
     verb_catalog,
 )
+from eawf.surfaces.cli.verb_closure import ROOT_ENTRY_EXCEPTIONS
 from eawf.workflow.skills import integrate as integrate_skill
 from eawf.workflow.skills.arguments import (
     InvocationRefusedError,
@@ -122,7 +123,7 @@ def test_surf_087_verbs_emits_every_verb_with_entity_parameters_errors_and_effec
     result = runner.invoke(app, ["--json", "verbs"])
     assert result.exit_code == 0, result.stdout
     payload = orjson.loads(result.stdout)
-    groups = {*verb_contract.ENTITY_GROUPS, *verb_contract.CROSS_CUTTING_GROUPS}
+    groups = {*verb_contract.ENTITY_GROUPS, *(row.name for row in ROOT_ENTRY_EXCEPTIONS)}
     by_verb = {row["verb"]: row for row in payload["entries"]}
     assert set(CLI_VERB_EFFECTS) <= set(by_verb)
     for row in payload["entries"]:

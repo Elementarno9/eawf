@@ -3,7 +3,7 @@
 A memory entry is considered ``stale`` when:
 
 - its ``status`` is currently ``ACTIVE``,
-- its ``review_due`` (or fallback ``created_at`` from the JSONL envelope) is
+- its ``review_due`` (or fallback ``created_at``) is
   more than ``age_days`` old, and
 - its ``confidence`` is **below** :class:`Confidence.HIGH` (i.e. ``medium`` or
   ``low``).
@@ -11,35 +11,19 @@ A memory entry is considered ``stale`` when:
 High-confidence entries are exempt — they age out of the auto-stale list and
 must be retired explicitly via ``memory compact`` or supersession.
 
-This module is purely read-only — :func:`find_stale` never mutates
-:class:`State`. The downstream surfaces that act on the staleness report
-publish their state changes via the
-:class:`~eawf.kernel.state.mutations.MutationKind` taxonomy:
-
-- :func:`eawf.platform.memory.gc.gc_memory` flips ``tier`` to
-  :attr:`~eawf.kernel.state.enums.MemoryTier.ARCHIVAL` via
-  :attr:`~eawf.kernel.state.mutations.MutationKind.MEMORY_UPDATE`.
-- :func:`eawf.platform.memory.prune.prune_memory` flips ``status`` to
-  :attr:`~eawf.kernel.state.enums.MemoryStatus.PRUNED` via
-  :attr:`~eawf.kernel.state.mutations.MutationKind.MEMORY_PRUNE`.
-- An operator-supplied ``review`` call (``eawf memory review``) bumps
-  ``review_due`` via
-  :attr:`~eawf.kernel.state.mutations.MutationKind.MEMORY_REVIEW`.
-
-Adding a mutation surface to this module would be a YAGNI violation —
-there is no caller today that needs typed staleness-mutation rows.
+This module is purely read-only: :func:`stale_notes` recommends; the
+``memory prune`` and ``memory gc`` verbs act, through the daemon.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 from eawf.kernel.state.enums import Confidence, MemoryStatus
-from eawf.kernel.state.models import State
-from eawf.platform.memory.store import find_envelope
+from eawf.kernel.store.kinds.memory import MemoryNote
 
 logger = logging.getLogger(__name__)
 
@@ -54,54 +38,45 @@ class StaleEntry:
     age_days: float
 
 
-def _entry_anchor(memory_path: Path, mem_id: str, fallback: datetime) -> datetime:
-    """Return ``review_due`` if set, else the envelope's ``created_at``."""
-    env = find_envelope(memory_path, mem_id)
-    if env is None:
-        return fallback
-    return env.created_at
-
-
-def find_stale(
+def stale_notes(
+    notes: Iterable[MemoryNote],
     *,
-    state: State,
-    memory_path: Path,
     age_days: int,
     now: datetime | None = None,
     scope_id: str | None = None,
 ) -> list[StaleEntry]:
-    """Return memory IDs whose age exceeds *age_days* and confidence < high.
+    """Return the active, below-high-confidence notes older than *age_days*.
 
     Args:
-        state: Loaded :class:`State`.
-        memory_path: Path to ``memory.jsonl`` for envelope lookup.
+        notes: The notes to judge.
         age_days: Threshold in days.
         now: Override for the current time.
-        scope_id: Optional filter — when set, only entries with matching scope
-            are considered.
+        scope_id: Only notes of this scope are judged, when given.
+
+    Returns:
+        The stale entries, oldest first. A note with no age anchor is
+        taken as written now, so it is never stale.
     """
     moment = now if now is not None else datetime.now(UTC)
     threshold = timedelta(days=age_days)
     out: list[StaleEntry] = []
-    index = state.memory_index or {}
-    for mid, summary in index.items():
-        if summary.status != MemoryStatus.ACTIVE:
+    for note in notes:
+        if note.status != MemoryStatus.ACTIVE:
             continue
-        if summary.confidence == Confidence.HIGH:
+        if note.confidence == Confidence.HIGH:
             continue
-        if scope_id is not None and summary.scope_id != scope_id:
+        if scope_id is not None and note.scope_id != scope_id:
             continue
-        anchor = summary.review_due or _entry_anchor(memory_path, mid, moment)
-        age = moment - anchor
+        age = moment - (note.age_anchor or moment)
         if age >= threshold:
             out.append(
                 StaleEntry(
-                    id=mid,
-                    scope_id=summary.scope_id,
-                    confidence=summary.confidence,
+                    id=note.id,
+                    scope_id=note.scope_id,
+                    confidence=note.confidence,
                     age_days=age.total_seconds() / 86400.0,
                 )
             )
     out.sort(key=lambda e: (-e.age_days, e.id))
-    logger.info(f"find_stale age_days={age_days} count={len(out)}")
+    logger.info(f"stale_notes age_days={age_days} count={len(out)}")
     return out

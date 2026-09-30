@@ -30,7 +30,7 @@ from eawf.surfaces.tui.console.decisions import (
 from eawf.surfaces.tui.console.keymap import DISMISS, allowlist
 from eawf.surfaces.tui.console.mutation import Card, Item, Kind
 from eawf.surfaces.tui.console.navigation import Ctx, close_overlay, copied, open_overlay
-from eawf.surfaces.tui.console.operations import binding_refusal
+from eawf.surfaces.tui.console.operations import QuestionAnswer, binding_refusal
 from eawf.surfaces.tui.console.overlays.bound import (
     CARD_ROUTES,
     Bound,
@@ -64,6 +64,9 @@ from eawf.surfaces.tui.console.reads import can_mutate, write_refusal
 from eawf.surfaces.tui.console.tokens import Severity
 from eawf.workflow.projection.acceptance import AcceptanceBundleView, ReleaseReadinessView
 
+#: The key prefix of a question the daemon's answer verb records an answer to; an
+#: operator decision is a pending action, answered through its own seal.
+QUESTION_PREFIX: Final = "QST-"
 _UP: Final = frozenset({"ArrowUp", "k"})
 _DOWN: Final = frozenset({"ArrowDown", "j"})
 #: The keys a card on a sub-surface claims; every other key acts as it does on any route.
@@ -234,6 +237,12 @@ def _question_key(ctx: Ctx, q: QuestionRecord, decisions: DecisionRecords, k: st
     live = answerable(q, run_state) and can_mutate(s)
     if live and k.isdigit() and 1 <= int(k) <= len(q.options):
         option = q.options[int(k) - 1]
+        if q.id.startswith(QUESTION_PREFIX):
+            # imported here: the Enter table imports this module to open a held row
+            from eawf.surfaces.tui.console.enter_keys import send_verb
+
+            send_verb(ctx, k, QuestionAnswer(target=q.id, option_key=option.key), "answer")
+            return
         refusal = binding_refusal("question", "answer")
         ctx.log(k, f"answer {q.id} · {option.label} — nothing was written · {refusal}")
     elif live and k == "w" and reply_legal(q, run_state):
@@ -408,8 +417,9 @@ def open_held_row(ctx: Ctx) -> bool:
     A pending action opens its action detail, which the consequence card realises, unless
     it is an operator decision whose options are held: that opens the question detail, the
     card that draws a decision's own options, where approve and decline would not be among
-    them. The row is the one the frame drew from the held projection, never a prototype
-    register.
+    them. A provider permission is a two-option action, approve or deny, so it opens the
+    action detail too, and a question opens its question detail. The row is the one the
+    frame drew from the held projection, never a prototype register.
     """
     held = ctx.attention
     if held is None:
@@ -420,12 +430,17 @@ def open_held_row(ctx: Ctx) -> bool:
         # nothing listed, or a sealed row: an answered action has nothing left to confirm
         ctx.log("Enter", "no open attention row is selected — nothing to open")
         return True
-    if row.collection is not Epoch2Collection.PENDING_ACTION:
-        return False
     s.sel_id = row.key
-    if ctx.decisions is not None and ctx.decisions.question(row.key) is not None:
+    if (
+        row.collection in (Epoch2Collection.PENDING_ACTION, Epoch2Collection.OPEN_QUESTION)
+        and ctx.decisions is not None
+        and ctx.decisions.question(row.key) is not None
+    ):
         open_overlay(s, "question", subject=row.key)
         ctx.log("Enter", f"question detail · {row.key}")
+        return True
+    if row.collection is Epoch2Collection.OPEN_QUESTION:
+        ctx.log("Enter", f"{row.key} · its question is not read yet — nothing opened")
         return True
     open_overlay(s, "consequence", subject=row.key)
     ctx.log("Enter", f"action detail · {row.key}")

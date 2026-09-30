@@ -10,6 +10,9 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.surfaces.cli.app import app
+from tests.integration._upkeep_daemon import upkeep_daemon  # noqa: F401
+
+pytestmark = pytest.mark.usefixtures("upkeep_daemon")
 
 runner = CliRunner()
 

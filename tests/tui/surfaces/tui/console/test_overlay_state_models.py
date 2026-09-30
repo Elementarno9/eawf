@@ -37,6 +37,7 @@ from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.navigation import open_overlay
 from eawf.surfaces.tui.console.normalisation import REWRITES, PackFrame
+from eawf.surfaces.tui.console.operations import QuestionAnswer
 from eawf.surfaces.tui.console.overlays.chassis import cursor_foot
 from eawf.surfaces.tui.console.overlays.situations import (
     claim_standing,
@@ -350,13 +351,19 @@ def test_con_131_a_reply_is_advertised_and_opens_only_where_it_is_legal() -> Non
     assert session.reply == {"text": ""}
 
 
-def test_con_131_a_digit_answers_its_row_and_nothing_is_written_without_a_verb() -> None:
+def test_con_131_plan_046_a_typed_reply_is_sent_verbatim_through_the_answer_verb() -> None:
+    link = Link()
+    session = ds.opened("attention", "question", "QST-0011")
+    ds.press(session, "w", "n", "o", "Enter", decisions=QUESTIONS, link=link)
+    assert link.sent == [QuestionAnswer(target="QST-0011", reply="no")]
+    assert session.reply is None
+
+
+def test_con_131_plan_046_a_digit_answers_its_row_through_the_answer_verb() -> None:
     link = Link()
     session = ds.opened("attention", "question", "QST-0001")
     ds.press(session, "2", decisions=QUESTIONS, link=link)
-    assert link.sent == []
-    assert "the alias table only" in session.log[0].note
-    assert "no daemon verb" in session.log[0].note
+    assert link.sent == [QuestionAnswer(target="QST-0001", option_key="alias_table")]
     assert session.overlay == "question"
 
 
@@ -708,7 +715,7 @@ def _acceptance_model() -> Any:
 def test_con_134_the_bundle_at_its_digest(size: int) -> None:
     model = _acceptance_model()
     rows = ds.frame(ds.opened("milestone", "acceptance", "MLS-0030"), projection=model, size=size)
-    assert rows[0].startswith(" Eä ▸ acceptance evidence · MLS-0030")
+    assert rows[0].startswith(" Eä ▸ evidence · MLS-0030")
     assert re.fullmatch(r" at digest \w{4}…\w{3} · quotable at this exact revision\s*", rows[1])
     head = next(r for r in rows if "EVIDENCE" in r and "CRITERION" in r)
     first = next(r for r in rows if "EVD-2201" in r)

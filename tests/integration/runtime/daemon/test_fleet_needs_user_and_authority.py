@@ -1,10 +1,5 @@
-"""Tests: needs_user fork, fleet jury authority, non-lane kill.
+"""Tests: fleet jury authority, non-lane kill.
 
-Three idle contracts go live in W09:
-
-- C1: the needs_user fork outcome is reachable from a real lane -- the live
-  watcher detects an open needs_user pause for the lane's wave and reports
-  ``"needs_user"``, so the loop produces a ``NEEDS_USER_SPLIT`` blocking fork.
 - C2: the drive resolves jury block authority through the SAME resolver the
   wave-close gate uses, so a high / ui lane auto-closes exactly when the close
   gate would (default-advisory until the jury is calibrated).
@@ -21,24 +16,17 @@ from typing import Any
 import pytest
 
 from eawf.kernel.state.models import (
-    FleetForkReason,
     FleetLane,
-    FleetRunState,
     State,
 )
 from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.fleet import (
-    _has_open_pause,
     _resolve_run_block_authority,
-    arm_drive,
-    build_liveness_watcher,
     kill_lane,
 )
 from eawf.runtime.runtimes.cancel import CancelResult
 from eawf.workflow.evidence._io import load_state
-from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
-from eawf.workflow.skills.needs_user import record_pause
 
 pytestmark = pytest.mark.integration
 
@@ -161,18 +149,6 @@ def _ctx(state_path: Path) -> MethodContext:
     )
 
 
-def _record_pause(state_path: Path, wave_id: str) -> None:
-    record_pause(
-        state_path,
-        scope_id=wave_id,
-        session="urn:eawf:v1:session:ses-x",
-        question=UserQuestion(
-            question="which approach?",
-            options=[UserQuestionOption(label="A"), UserQuestionOption(label="B")],
-        ),
-    )
-
-
 def _lane(*, pgid: int | None = 9001) -> FleetLane:
     return FleetLane(
         wave_id=_WAVE_ID,
@@ -181,58 +157,6 @@ def _lane(*, pgid: int | None = 9001) -> FleetLane:
         pgid=pgid,
         dispatched_at=datetime(2026, 6, 11, tzinfo=UTC),
     )
-
-
-# ---- C1: a lane that paused needs_user produces the NEEDS_USER fork ----------
-
-
-def test_open_pause_detected(tmp_path: Path) -> None:
-    """C1: _has_open_pause reads an unresolved needs_user pause for the wave."""
-    state_path = _write_state(tmp_path)
-    assert _has_open_pause(state_path, _WAVE_ID) is False
-    _record_pause(state_path, _WAVE_ID)
-    assert _has_open_pause(state_path, _WAVE_ID) is True
-
-
-def test_live_watcher_reports_needs_user_on_open_pause(tmp_path: Path) -> None:
-    """C1: the live watcher reports needs_user when the lane's wave has an open pause."""
-    state_path = _write_state(tmp_path)
-    _record_pause(state_path, _WAVE_ID)
-    ctx = _ctx(state_path)
-    watcher = build_liveness_watcher(
-        is_alive=lambda pgid: True, poll_seconds=0.0, sleep=lambda _s: None
-    )
-    assert watcher(ctx, _lane()) == "needs_user"
-
-
-def test_needs_user_lane_produces_needs_user_split_fork(tmp_path: Path) -> None:
-    """C1: a needs_user lane forks NEEDS_USER_SPLIT (a DL-6 blocking fork).
-
-    The loop drives the live watcher over a wave with an open pause; the watcher
-    reports needs_user, so the lane is enqueued as a NEEDS_USER_SPLIT fork rather
-    than wedging or failing -- the operator-input fork outcome is reachable live.
-    """
-    state_path = _write_state(tmp_path)
-    _record_pause(state_path, _WAVE_ID)
-    ctx = _ctx(state_path)
-    watcher = build_liveness_watcher(
-        is_alive=lambda pgid: True, poll_seconds=0.0, sleep=lambda _s: None
-    )
-
-    run = arm_drive(
-        ctx,
-        frontier=[_WAVE_ID],
-        concurrency=1,
-        spawn=lambda c, wid: f"ses-{wid}",
-        watch=watcher,
-        recompute_frontier=False,
-    )
-    assert run.run_state is FleetRunState.DONE
-    reasons = {fork.reason for fork in run.forks}
-    assert FleetForkReason.NEEDS_USER_SPLIT in reasons
-    # A needs_user pause lands on the blocked safety tally, not a hard failure.
-    assert run.counters.blocked >= 1
-    assert run.counters.failed == 0
 
 
 # ---- C2: drive resolves jury block authority via the close-gate resolver -----

@@ -28,6 +28,8 @@ from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, negotiate_re
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.runtime.provider import ControlKind
 from eawf.runtime.daemon.methods.delivery_approval import DELIVERY_SEAL_APPROVAL_METHOD
+from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
+from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD
 from eawf.runtime.daemon.methods.run import RUN_CONTROL_REQUEST_METHOD
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.tui.console import prototype as pt
@@ -496,6 +498,8 @@ class _Daemon:
             return {"negotiation": negotiation.model_dump(mode="json"), "patches": []}
         if method == QUESTION_DECISIONS_METHOD:
             return {"decisions": []}
+        if method in (QUESTION_READ_METHOD, PAUSE_READ_METHOD):
+            return {}
         self.writes.append((method, params))
         if self.fail_with is not None:
             error, self.fail_with = self.fail_with, None

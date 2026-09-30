@@ -184,7 +184,7 @@ def test_status_json_emits_parseable_object(running_daemon: E2EEnv) -> None:
 
     result = running_daemon.run_eawf("--json", "daemon", "status")
     assert result.returncode == 0, result.stderr
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stdout)["result"]
     assert payload["pid"] == _read_pidfile_pid(running_daemon.pid_file)
     assert payload["active_subscriptions"] == 0
     assert payload["in_flight_mutations"] == 0

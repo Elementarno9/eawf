@@ -15,15 +15,23 @@ renderers derive it at render time from these fields.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Final, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
+from eawf.kernel.projection.campaign import ArtifactCardView, CampaignStepView, CampaignView
+from eawf.kernel.projection.transcript import block_text
+from eawf.kernel.projection.truth import TruthState
+from eawf.kernel.runtime.events import RunEventRecord
+from eawf.kernel.state.epoch2.artifact_revision import MediaKind
 from eawf.kernel.state.epoch2.evidence_rung import ClaimLadder, EvidenceRungRecord, RungBasis
 from eawf.kernel.state.epoch2.evidence_rung import RungOutcome as LadderOutcome
+from eawf.kernel.state.epoch2.pause import OpenPause, PauseSituation
 from eawf.kernel.state.epoch2.pending_action import AgentPrincipal, PendingAction
+from eawf.kernel.state.epoch2.question import OpenQuestion, QuestionSituation
 from eawf.kernel.state.epoch2.urns import render_qualified_urn
 
 #: An open question's ``QST-####`` key, or the ``ACT-####`` key of an operator decision,
@@ -119,6 +127,8 @@ class QuestionRecord(_Record):
         superseded_by: The question that replaced it.
         disclosed: Whether this principal's authority class may see the winning answer.
         late_answers: Each principal's answer that arrived after the winning one.
+        situation: The situation the daemon projected the question to for this principal;
+            ``None`` for a record the console derives it for.
 
     Raises:
         pydantic.ValidationError: a drop without a reason, a replacement drop naming no
@@ -144,6 +154,7 @@ class QuestionRecord(_Record):
     superseded_by: QuestionKey | None = None
     disclosed: bool = True
     late_answers: tuple[LateAnswer, ...] = ()
+    situation: QuestionSituation | None = None
 
     @model_validator(mode="after")
     def _dispositions_agree(self) -> Self:
@@ -196,6 +207,54 @@ class QuestionRecord(_Record):
             default_option=action.default_on_timeout,
             override_until=action.override_until,
             status=QuestionStatus.OPEN,
+        )
+
+    @classmethod
+    def of_question(
+        cls, question: OpenQuestion, *, asked_by_run: str | None, situation: QuestionSituation
+    ) -> Self:
+        """Return the question detail's record of a question the tree holds.
+
+        Args:
+            question: The question, as the daemon read it.
+            asked_by_run: The key of the Run that asked it; ``None`` when no Run did.
+            situation: The situation the daemon projected it to for this principal.
+
+        Returns:
+            The record, drawing the question's own options, answer and disposition.
+        """
+        successor = question.superseded_by_question_ref
+        return cls(
+            id=question.key,
+            run=asked_by_run,
+            scope=question.scope_ref.entity_key,
+            asked_at=question.created_at,
+            question=question.question,
+            rationale=question.rationale,
+            options=tuple(
+                QuestionOption(key=o.key, label=o.label, recommended=o.recommended)
+                for o in question.options
+            ),
+            default_option=question.default_key,
+            override_until=question.override_until,
+            status=QuestionStatus[question.status.name],
+            blocking=question.blocking,
+            escalated_by=(
+                None
+                if question.escalated_by_deadline is None
+                else f"{question.escalated_by_deadline:%H:%M}"
+            ),
+            resolution_actor=question.resolution_actor,
+            chosen_option=question.chosen_option_key,
+            reply=question.reply.text if question.reply is not None else None,
+            drop_reason=DropReason(question.drop_reason.value) if question.drop_reason else None,
+            superseded_by=successor.entity_key if successor is not None else None,
+            late_answers=tuple(
+                LateAnswer(principal=a.principal, option=a.chosen_option_key)
+                for a in question.late_answers
+                if a.chosen_option_key is not None
+            ),
+            situation=situation,
         )
 
 
@@ -289,6 +348,8 @@ class PauseRecord(_Record):
         escalation: Why an escalated pause escalated.
         resolved_at: When the predicate was observed.
         enclosing: The work whose cancellation cancelled it.
+        situation: The situation the daemon projected the pause to; ``None`` for a record
+            the console derives it for.
 
     Raises:
         pydantic.ValidationError: a person-wait pause names no record or another pause
@@ -312,6 +373,7 @@ class PauseRecord(_Record):
     escalation: Escalation | None = None
     resolved_at: AwareDatetime | None = None
     enclosing: str | None = None
+    situation: PauseSituation | None = None
 
     @model_validator(mode="after")
     def _situation_fields_agree(self) -> Self:
@@ -323,6 +385,48 @@ class PauseRecord(_Record):
         if (self.status is PauseStatus.ESCALATED) != (self.escalation is not None):
             raise ValueError("an escalation is carried exactly by an escalated pause")
         return self
+
+    @classmethod
+    def of_pause(cls, pause: OpenPause, *, situation: PauseSituation) -> Self:
+        """Return the pause detail's record of a pause the daemon observed.
+
+        Args:
+            pause: The pause, as the daemon read it.
+            situation: The situation the daemon projected it to.
+
+        Returns:
+            The record, naming what would resume the work and who it waits on.
+        """
+        predicate, escalation = pause.resume_predicate, pause.escalation
+        return cls(
+            id=pause.key,
+            scope=pause.scope_ref.entity_key,
+            reason=PauseReason(pause.reason.value),
+            status=PauseStatus(pause.status.value),
+            resume_predicate=predicate.description,
+            evaluator=predicate.evaluator,
+            last_evaluated=predicate.last_evaluated_at,
+            waiting_on=pause.waiting_on_ref.entity_key if pause.waiting_on_ref else None,
+            retry_used=pause.retry_budget.used if pause.retry_budget else None,
+            retry_allowed=pause.retry_budget.allowed if pause.retry_budget else None,
+            held_by=pause.held_by,
+            hold_id=pause.hold_id,
+            escalation=(
+                None
+                if escalation is None
+                else Escalation(
+                    cause=EscalationCause(escalation.cause.value),
+                    raised_at=escalation.raised_at,
+                    raised_ref=(
+                        escalation.raised_ref
+                        if isinstance(escalation.raised_ref, str)
+                        else escalation.raised_ref.entity_key
+                    ),
+                )
+            ),
+            resolved_at=pause.resolved_at,
+            situation=situation,
+        )
 
 
 # ---------- the claim and its rung ladder ----------
@@ -599,7 +703,8 @@ class ArtifactRecord(_Record):
         media: The media kind in words.
         size: The size in words.
         written_at: When it was written.
-        step: The step that wrote it.
+        step: The step that wrote it; ``None`` when a Run outside the plan did.
+        run: The Run that wrote it, which the card names when no step did.
         digest: Its sha256, as the record keeps it.
         binary: Whether it is a binary file, which opens externally.
         lines: The file's text, one line each, never rewritten.
@@ -614,11 +719,37 @@ class ArtifactRecord(_Record):
     media: Text
     size: Text
     written_at: AwareDatetime
-    step: int = Field(ge=1)
+    step: int | None = Field(default=None, ge=1)
+    run: str | None = None
     digest: Text
     binary: bool = False
     lines: tuple[str, ...] = ()
     as_of: AwareDatetime
+
+    @classmethod
+    def of_card(cls, card: ArtifactCardView, *, as_of: datetime) -> Self:
+        """Return the artifact as its card draws it, from the card the daemon served.
+
+        Args:
+            card: The revision's card, its lines taken at its digest.
+            as_of: When the card was read.
+        """
+        return cls(
+            key=card.artifact_ref,
+            campaign=card.kept_with.entity_key,
+            index=card.ordinal_of_total.ordinal,
+            total=card.ordinal_of_total.total,
+            file=card.file_name,
+            media=card.media_kind.value,
+            size=size_words(card.size_bytes),
+            written_at=card.written_at,
+            step=card.written_by.step_ordinal,
+            run=card.written_by.run_ref.entity_key,
+            digest=card.digest.removeprefix("sha256:"),
+            binary=card.media_kind is MediaKind.BINARY,
+            lines=card.lines,
+            as_of=as_of,
+        )
 
 
 class StepState(StrEnum):
@@ -685,6 +816,57 @@ class StepRecord(_Record):
         """Return whether it is blocked: pending on something it names."""
         return self.state is StepState.PENDING and bool(self.waits_on)
 
+    @classmethod
+    def of_step(
+        cls,
+        campaign: CampaignView,
+        at: CampaignStepView,
+        *,
+        events: Sequence[RunEventRecord],
+        as_of: datetime,
+    ) -> Self:
+        """Return one plan step as its card draws it, from the Campaign the daemon served.
+
+        The step's first bounded axis is its spend. The runner's provider and session are
+        facts no Campaign record states, so the card leaves them out rather than guessing.
+
+        Args:
+            campaign: The Campaign the step belongs to, whose cards name its artifacts.
+            at: The step, its blocked state and blockers already derived.
+            events: The runner Run's event lines, in sequence order.
+            as_of: When the Campaign was read.
+        """
+        step = at.step
+        axis = step.bound.axes[0]
+        files = {card.artifact_ref: card.file_name for card in campaign.artifacts}
+        progress = step.progress
+        running = step.state.value == StepState.RUNNING
+        return cls(
+            campaign=campaign.key,
+            ordinal=step.ordinal,
+            total=at.ordinal_of_total.total,
+            title=step.title,
+            state=StepState(step.state.value),
+            started_at=step.started_at,
+            ended_at=step.ended_at,
+            waits_on=at.waits_on,
+            runner=at.runner_ref.entity_key if at.runner_ref else None,
+            spent=axis.spent,
+            limit=axis.limit,
+            unit=axis.unit,
+            done_units=progress.done if progress else None,
+            total_units=progress.total if progress else None,
+            progress_unit=progress.unit if progress else "",
+            outcome=step.outcome,
+            events=tuple((short_time(line.recorded_at), event_words(line)) for line in events),
+            produced=tuple(
+                ref.entity_key if not isinstance(ref, str) else files.get(ref, ref)
+                for ref in step.produced
+            ),
+            why_none="it is still running." if running else "it has not started.",
+            as_of=as_of,
+        )
+
 
 # ---------- what the console holds ----------
 
@@ -704,6 +886,7 @@ class DecisionRecords(_Record):
         markers: The roadmap markers' records.
         artifacts: The campaign artifacts.
         steps: The campaign plan steps.
+        campaigns: The Campaigns the Campaign route draws its sections from, as read.
     """
 
     principal: str | None = None
@@ -715,6 +898,7 @@ class DecisionRecords(_Record):
     markers: tuple[MarkerRecord, ...] = ()
     artifacts: tuple[ArtifactRecord, ...] = ()
     steps: tuple[StepRecord, ...] = ()
+    campaigns: tuple[CampaignView, ...] = ()
 
     def question(self, key: str | None) -> QuestionRecord | None:
         """Return the question ``key`` names, or ``None`` when none is held."""
@@ -740,11 +924,54 @@ class DecisionRecords(_Record):
         """Return the artifact ``key`` names, or ``None`` when none is held."""
         return next((a for a in self.artifacts if a.key == key), None)
 
+    def campaign(self, key: str | None) -> CampaignView | None:
+        """Return the Campaign ``key`` names, or ``None`` when none is held."""
+        return next((c for c in self.campaigns if c.key == key), None)
+
     def step(self, campaign: str | None, ordinal: int) -> StepRecord | None:
         """Return step ``ordinal`` of ``campaign``, or ``None`` when none is held."""
         return next(
             (s for s in self.steps if s.campaign == campaign and s.ordinal == ordinal), None
         )
+
+
+def campaign_records(
+    campaign: CampaignView, events: Mapping[str, Sequence[RunEventRecord]], *, as_of: datetime
+) -> DecisionRecords:
+    """Return the records one read Campaign binds: itself, its step cards and artifact cards.
+
+    Args:
+        campaign: The Campaign as the daemon served it.
+        events: Each runner Run's event lines, by Run URN.
+        as_of: When it was read.
+    """
+    return DecisionRecords(
+        campaigns=(campaign,),
+        steps=tuple(
+            StepRecord.of_step(campaign, at, events=events.get(str(at.runner_ref), ()), as_of=as_of)
+            for at in campaign.steps
+        ),
+        artifacts=tuple(ArtifactRecord.of_card(card, as_of=as_of) for card in campaign.artifacts),
+    )
+
+
+def event_words(line: RunEventRecord) -> str:
+    """Return one event line as the step card's history prints it: its kind, then what it says."""
+    kind = line.event_kind.value.replace("_", " ")
+    said = block_text(line)
+    return f"{kind} · {said.value}" if said.state is TruthState.KNOWN and said.value else kind
+
+
+def size_words(size: int) -> str:
+    """Return a byte count as the artifact card prints it, in the largest unit under 1024."""
+    if size < 1024:
+        return f"{size} B"
+    value, unit = size / 1024, "KB"
+    for bigger in ("MB", "GB"):
+        if value < 1024:
+            break
+        value, unit = value / 1024, bigger
+    return f"{value:.1f} {unit}"
 
 
 def short_time(at: datetime | None) -> str:

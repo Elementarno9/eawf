@@ -4,6 +4,8 @@ A key holding one scalar is picked or typed on the route itself; the keys here h
 set, an ordering, a fixed ladder, a record keyed by role, or a ledger of digests, and a
 comma-separated text field would let an operator write a value the reader then refuses:
 a profile that does not exist, a two-model ladder, a misspelled role, a hand-typed hash.
+A pair of scalars only valid together, such as a co-author's name and email, is typed
+here too, so both are written in one write that the daemon checks as a whole.
 Each editor offers only what its reader accepts, taken from the code that reads it
 through the settings view, and rebuilds the whole value, which the daemon then writes as
 one value under its lock.
@@ -22,6 +24,7 @@ from types import MappingProxyType
 from typing import Any
 
 from eawf.kernel.config.layered import Layer
+from eawf.kernel.config.registry.leaf_catalog import LEAF_KEY_REGISTRY
 from eawf.kernel.projection.settings import SettingsLeaf
 from eawf.surfaces.tui.console.width import cell_len, pad
 
@@ -29,7 +32,7 @@ Edit = dict[str, Any]
 Pairs = tuple[tuple[str, str], ...]
 
 #: The editor kinds this module owns: every catalog ``editor`` value.
-COMPOSITE = frozenset({"check", "order", "tiers", "rows", "pin"})
+COMPOSITE = frozenset({"check", "order", "tiers", "rows", "pin", "pair"})
 
 #: The slots of a model ladder, cheapest first.
 TIERS = ("cheap", "mid", "top")
@@ -55,6 +58,7 @@ KEYS: Mapping[str, Pairs] = MappingProxyType(
         ),
         "rows.typing": (("type", "tools"), ("Enter", "keep"), ("Esc", "back")),
         "pin": (("↑↓", "profile"), ("p", "pin"), ("x", "drop"), ("w", "write"), ("Esc", "cancel")),
+        "pair": (("↑↓", "field"), ("type", "value"), ("Enter", "write"), ("Esc", "cancel")),
     }
 )
 
@@ -137,7 +141,30 @@ def _open_pin(leaf: SettingsLeaf, edit: Edit, at: Layer) -> None:
     edit["was"] = pins
 
 
-def open_editor(leaf: SettingsLeaf, at: Layer, held: str | None) -> Edit:
+def _open_pair(
+    leaf: SettingsLeaf, edit: Edit, held: str | None, partners: Mapping[str, str | None]
+) -> None:
+    seeded = {leaf.key: held, **partners}
+    order = list(LEAF_KEY_REGISTRY)
+    edit["fields"] = sorted(
+        seeded, key=lambda key: order.index(key) if key in order else len(order)
+    )
+    edit["slots"] = {key: _unquoted(seeded[key]) for key in edit["fields"]}
+    edit["was"] = dict(edit["slots"])
+    edit["idx"] = edit["fields"].index(leaf.key)
+
+
+def _unquoted(text: str | None) -> str:
+    """Return a scalar as the settings view prints it, with no value as empty."""
+    return "" if text in (None, "null", '""') else str(text)
+
+
+def open_editor(
+    leaf: SettingsLeaf,
+    at: Layer,
+    held: str | None,
+    partners: Mapping[str, str | None] | None = None,
+) -> Edit:
     """Return the edit state for ``leaf`` written at ``at``, seeded from what it holds.
 
     Args:
@@ -146,6 +173,8 @@ def open_editor(leaf: SettingsLeaf, at: Layer, held: str | None) -> Edit:
         held: The value the layer sees as the settings view prints it: its own, else
             the one it inherits. A mapping is seeded from the layer's own statement
             instead, since the layers below still contribute theirs to the merge.
+        partners: For a ``pair`` key, what the layer sees for each of the keys written
+            with it, by key; unused for any other editor.
     """
     edit: Edit = {"kind": leaf.editor, "key": leaf.key, "at": at.value, "idx": 0}
     match leaf.editor:
@@ -155,6 +184,8 @@ def open_editor(leaf: SettingsLeaf, at: Layer, held: str | None) -> Edit:
             _open_tiers(edit, held)
         case "rows":
             _open_rows(leaf, edit, at)
+        case "pair":
+            _open_pair(leaf, edit, held, partners or {})
         case _:
             _open_pin(leaf, edit, at)
     return edit
@@ -258,6 +289,17 @@ def _press_pin(edit: Edit, key: str, shift: bool) -> tuple[str, str]:
     return "", ""
 
 
+def _press_pair(edit: Edit, key: str, shift: bool) -> tuple[str, str]:
+    field = edit["fields"][edit["idx"]]
+    if key in ("ArrowUp", "ArrowDown"):
+        _move(edit, 1 if key == "ArrowDown" else -1, len(edit["fields"]))
+    elif key == "Backspace":
+        edit["slots"][field] = edit["slots"][field][:-1]
+    elif len(key) == 1:
+        edit["slots"][field] += key
+    return "", ""
+
+
 _PRESS: Mapping[str, Callable[[Edit, str, bool], tuple[str, str]]] = MappingProxyType(
     {
         "check": _press_check,
@@ -265,6 +307,7 @@ _PRESS: Mapping[str, Callable[[Edit, str, bool], tuple[str, str]]] = MappingProx
         "tiers": _press_tiers,
         "rows": _press_rows,
         "pin": _press_pin,
+        "pair": _press_pair,
     }
 )
 
@@ -285,7 +328,7 @@ def press(edit: Edit, key: str, shift: bool) -> tuple[str, str]:
         return _type_tools(edit, key)
     if key == "Escape":
         return "cancel", ""
-    if key == "Enter" and edit["kind"] in ("check", "order", "tiers"):
+    if key == "Enter" and edit["kind"] in ("check", "order", "tiers", "pair"):
         return "write", ""
     return _PRESS[edit["kind"]](edit, key, shift)
 
@@ -311,6 +354,8 @@ def written(edit: Edit) -> Written:
         case "rows":
             tools = edit["tools"]
             return Written({role: list(tools[role]) for role in edit["roles"] if tools.get(role)})
+        case "pair":
+            return _pair(edit["slots"])
         case _:
             pins = edit["pins"]
             return Written({name: pins[name] for name in edit["names"] if name in pins})
@@ -327,6 +372,24 @@ def _ladder(slots: Sequence[str]) -> Written:
             "nothing written"
         )
     return Written(filled)
+
+
+def _pair(slots: Mapping[str, str]) -> Written:
+    """Return a pair's write: every key's value, or none of them, which removes them all."""
+    filled = {key: text.strip() for key, text in slots.items() if text.strip()}
+    if not filled:
+        return Written(unset=True)
+    empty = [_leaf_name(key) for key in slots if key not in filled]
+    if empty:
+        return Written(
+            reason=f"{' and '.join(empty)} empty · the pair is written whole or removed whole · "
+            "nothing written"
+        )
+    return Written(filled)
+
+
+def _leaf_name(key: str) -> str:
+    return key.rsplit(".", 1)[-1]
 
 
 def _list_changes(was: Sequence[str], now: Sequence[str]) -> list[str]:
@@ -383,6 +446,13 @@ def changes(edit: Edit, write: Written) -> tuple[str, ...]:
             )
         case "rows":
             return tuple(_record_changes(was, write.value))
+        case "pair":
+            now = {} if write.unset else write.value
+            return tuple(
+                f"{_leaf_name(key)}  {was[key] or _NONE} → {now.get(key) or _NONE}"
+                for key in was
+                if was[key] != now.get(key, "")
+            )
         case _:
             return tuple(_pin_changes(was, write.value))
 
@@ -390,8 +460,10 @@ def changes(edit: Edit, write: Written) -> tuple[str, ...]:
 def shown(edit: Edit, write: Written) -> str:
     """Return the write as one short phrase for the readout's AFTER line."""
     if write.unset:
-        return "the built-in ladder"
+        return "unset" if edit["kind"] == "pair" else "the built-in ladder"
     members = write.value
+    if edit["kind"] == "pair":
+        return " · ".join(members[key] for key in edit["fields"])
     if isinstance(members, list):
         sep = " › " if edit["kind"] in ("order", "tiers") else ", "  # noqa: RUF001
         return sep.join(members) or "[]"
@@ -413,6 +485,8 @@ def head(leaf: SettingsLeaf) -> str:
             return "three model ids, cheapest first"
         case "rows":
             return f"tools keyed by * for every role, or by one of {len(leaf.allowed) - 1} roles"
+        case "pair":
+            return "written in one write with the other fields of its block"
         case _:
             return "digests the console computes; you never type one"
 
@@ -462,6 +536,16 @@ def _tier_lines(edit: Edit) -> list[str]:
         text = edit["slots"][i] + ("▏" if pointed else "")
         rows.append(f" {'▸' if pointed else ' '} {pad(tier, 7)} {text or _NONE}")
     return [*rows, " empty all three and Enter to fall back to the built-in ladder"]
+
+
+def _pair_lines(edit: Edit) -> list[str]:
+    width = max(cell_len(_leaf_name(key)) for key in edit["fields"]) + 2
+    rows = []
+    for i, key in enumerate(edit["fields"]):
+        pointed = i == edit["idx"]
+        text = edit["slots"][key] + ("▏" if pointed else "")
+        rows.append(f" {'▸' if pointed else ' '} {pad(_leaf_name(key), width)} {text or _NONE}")
+    return [*rows, " both are written in one write · empty both and Enter to remove them"]
 
 
 def _tools_cell(tools: Sequence[str]) -> str:
@@ -527,6 +611,8 @@ def lines(edit: Edit, col: int, room: int) -> list[str]:
             drawn = _tier_lines(edit)
         case "rows":
             drawn = _row_lines(edit, room)
+        case "pair":
+            drawn = _pair_lines(edit)
         case _:
             drawn = _pin_lines(edit, room)
     return drawn[: max(1, room)]

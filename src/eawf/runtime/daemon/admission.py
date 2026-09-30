@@ -109,14 +109,15 @@ def in_flight_reservations(
     records: Sequence[LedgerRecord],
     *,
     status_of: Callable[[RunUrn], RunStatus],
-    excluding: RunUrn,
+    excluding: RunUrn | None,
 ) -> tuple[RunReservation, ...]:
     """Return what every other live, admitted Run holds, accrual included.
 
     Args:
         records: Every line the run ledger holds.
         status_of: The control-reduced status of a Run.
-        excluding: The Run being admitted, which holds nothing yet.
+        excluding: The Run being admitted, which holds nothing yet; ``None``
+            when no Run is being admitted and every live one is read.
 
     Returns:
         One reservation per live admitted Run, carrying what its usage

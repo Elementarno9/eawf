@@ -143,3 +143,54 @@ def test_ui053_every_editor_writes_its_value_through_the_live_daemon_at_80x30(
     assert written["runtime"]["models"]["codex"] == ["gpt-5.3-codex-spark", "gpt-5.5", "gpt-5.5"]
     assert written["agents"]["extra_tools"] == {"executor": ["LSP"]}
     assert written["profiles"]["trusted"] == {"house": profile_sha256(profile)}
+
+
+#: The co-author identity: a pair of keys only valid together.
+NAME = "vcs.coauthor.project.name"
+EMAIL = "vcs.coauthor.project.email"
+
+
+def test_a_coauthor_name_alone_is_refused_and_the_refusal_shows_on_the_live_card(
+    tmp_path: Path,
+) -> None:
+    walk, runtime_root = walk_canary_isolated(tmp_path)
+    root = walk.canary.root
+    layer_file = root / ".ea" / "config.yaml"
+
+    async def body() -> tuple[str, str, str]:
+        async with (
+            live_console(root, runtime_root) as (app, seam),
+            app.run_test(size=(120, 40)) as pilot,
+        ):
+            for route in ("scope.home", "settings"):
+                app.reset(SessionSetup(route=route))
+                app.render_frame()
+                await settle(pilot)
+            view = seam.settings
+            assert view is not None
+            _place(app, view, NAME)
+            await _press(app, pilot, _keys("Enter", *"Jane Doe", "Enter"))
+            alone = app.session.log[0].note
+            await _press(app, pilot, _keys("ArrowDown", *"jane@example.com", "Enter", "Enter"))
+            await _press(app, pilot, _keys("Escape", DISMISS))
+            written = layer_file.read_text(encoding="utf-8")
+            view = seam.settings
+            assert view is not None
+            _place(app, view, EMAIL)
+            refused = await _press(app, pilot, _keys("x", "Enter"))
+        return alone, written, refused
+
+    alone, written, refused = asyncio.run(body())
+
+    # the editor sends nothing for a name without its email
+    assert "email empty · the pair is written whole or removed whole" in alone
+    assert yaml.safe_load(written)["vcs"]["coauthor"]["project"] == {
+        "name": "Jane Doe",
+        "email": "jane@example.com",
+    }
+    # removing the email alone would leave the name without it: the daemon refuses, and
+    # the confirm card says why
+    assert "config_section_invalid" in refused, refused
+    assert "Field required" in refused, refused
+    project = yaml.safe_load(layer_file.read_text(encoding="utf-8"))["vcs"]["coauthor"]["project"]
+    assert project == {"name": "Jane Doe", "email": "jane@example.com"}

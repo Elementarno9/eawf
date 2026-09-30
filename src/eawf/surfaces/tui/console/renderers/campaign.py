@@ -17,11 +17,13 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from eawf.kernel.projection.campaign import CampaignView
 from eawf.kernel.projection.connection import ReplayNote
 from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.cells import value_cell
+from eawf.surfaces.tui.console.decisions import DecisionRecords
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import (
@@ -36,7 +38,7 @@ from eawf.surfaces.tui.console.frame import (
     strip_chips,
     thin,
 )
-from eawf.surfaces.tui.console.keybar import route_pairs
+from eawf.surfaces.tui.console.keybar import KEY, route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNAVAILABLE,
@@ -54,11 +56,13 @@ from eawf.surfaces.tui.console.width import pad
 PLAN = "PLAN"
 EVIDENCE = "EVIDENCE"
 ARTIFACTS = "ARTIFACTS"
+FINDINGS = "FINDINGS"
 CLAIM = "CLM-0004"
 #: The one campaign the prototype plan records.
 OWN = "CAM-0001"
 _GUTTER = 13
 _KEYS = route_pairs("campaign")
+_TAB = KEY["tab_section"].pair()
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,10 +85,10 @@ def section_list(session: Session, fixture: Fixture) -> tuple[Any, ...]:
 def caps(breadth: Breadth) -> dict[str, int]:
     """Return each section's row cap; the smallest windowable section is three rows."""
     if breadth is Breadth.XWIDE:
-        return {PLAN: 6, EVIDENCE: 5, ARTIFACTS: 5}
+        return {PLAN: 6, EVIDENCE: 5, ARTIFACTS: 5, FINDINGS: 5}
     if breadth is Breadth.WIDE:
-        return {PLAN: 6, EVIDENCE: 4, ARTIFACTS: 3}
-    return {PLAN: 3, EVIDENCE: 3, ARTIFACTS: 3}
+        return {PLAN: 6, EVIDENCE: 4, ARTIFACTS: 3, FINDINGS: 3}
+    return {PLAN: 3, EVIDENCE: 3, ARTIFACTS: 3, FINDINGS: 3}
 
 
 def window(total: int, cap: int, sel: int, focused: bool) -> Win:
@@ -188,16 +192,27 @@ def _receded(text: str, w: int) -> Fixed:
     return Fixed(pad(strip_chips(text), w))
 
 
-def _section_rows(view: View, section: Section, rows: Sequence[Any], summary: str) -> list[str]:
-    """Return one section: its summary row, head, window and edge markers."""
+def _section_rows(
+    view: View, section: Section, rows: Sequence[Any], summary: str, *, graph: bool = True
+) -> list[str]:
+    """Return one section: its summary row, head, window and edge markers.
+
+    Args:
+        view: The render being built.
+        section: The section's name, grid, heads and cells.
+        rows: The section's list.
+        summary: The line beside the section's name.
+        graph: Whether the plan draws the prototype's step graph; a read Campaign
+            states no graph layout, so its plan draws none.
+    """
     s, w = view.session, view.w
     on = (s.cam_sec or PLAN) == section.name
     out: list[str] = [Fixed(g_pad(g_pad(" " + section.name, _GUTTER) + summary, w))]
-    if section.name == PLAN and view.xwide:
+    if graph and section.name == PLAN and view.xwide:
         span = "─ ✓ 3 ───"
         out.append(g_pad(" GRAPH", _GUTTER) + "✓ 1 ─┐" + " " * len(span) + "┌─ ✓ 4 ─┐")
         out.append(g_pad("", _GUTTER) + "✓ 2 ─┴" + span + "┴" + "───────" + "┴─ ⋯ 5 ─── ○ 6")
-    elif section.name == PLAN and view.wide:
+    elif graph and section.name == PLAN and view.wide:
         out.append(g_pad(" GRAPH", _GUTTER) + "✓ 1 · ✓ 2 → ✓ 3 → ✓ 4 → ⋯ 5 → ○ 6")
     out.append(section.grid.head(["", *section.heads]))
     win = window(len(rows), caps(view.breadth)[section.name], s.sel, on)
@@ -228,13 +243,17 @@ def _absent(view: View, campaign: str) -> list[str]:
 #: The connection value under which the frame is drawn as of the replayed sequence.
 REPLAYING = "REPLAYING"
 
-#: Each section and what it says while no producer states its rows. With no row to stand
-#: over, a section draws no column heads: its label line already states the absence.
+#: Each section and what it says while the Campaign has not been read. With no row to
+#: stand over, a section draws no column heads: its label line already states the absence.
 _NATIVE_SECTIONS: tuple[tuple[str, str], ...] = (
-    (PLAN, "no producer states the campaign plan yet"),
+    (PLAN, "the campaign plan has not been read yet"),
     (EVIDENCE, "no receipt is recorded against it yet"),
     (ARTIFACTS, "no artifact is recorded against it yet"),
 )
+#: The sections a read Campaign walks with Tab, in order; Enter opens a plan step or an
+#: artifact, and a finding is read where it is listed.
+_WALKED: tuple[str, ...] = (PLAN, ARTIFACTS, FINDINGS)
+_STEP_GLYPHS: dict[str, str] = {"done": "✓", "running": "⋯", "blocked": "○", "pending": "○"}
 
 
 def replay_line(note: ReplayNote | None) -> str:
@@ -258,11 +277,115 @@ def replay_line(note: ReplayNote | None) -> str:
     )
 
 
-def _campaign(view: View, spine: SpineView) -> SpineRow | None:
+def _campaign(session: Session, spine: SpineView) -> SpineRow | None:
     """Return the Campaign the frame is about: the session's subject, else the first held."""
     rows = [row for row in spine.rows if row.collection is Epoch2Collection.CAMPAIGN]
-    subject = view.session.subj_id
+    subject = session.subj_id
     return next((row for row in rows if row.key == subject), rows[0] if rows else None)
+
+
+def read_campaign(
+    session: Session, spine: SpineView, decisions: DecisionRecords | None
+) -> CampaignView | None:
+    """Return the read Campaign the frame draws its sections from; ``None`` before its read."""
+    row = _campaign(session, spine)
+    return decisions.campaign(row.key) if row is not None and decisions is not None else None
+
+
+def shown_findings(campaign: CampaignView, replay: ReplayNote | None) -> tuple[Any, ...]:
+    """Return the findings the frame may draw promoted: under a replay, only those at or
+    before its cursor, since a later promoting event is a fact the replay has not reached.
+    """
+    if replay is None:
+        return campaign.findings
+    later = {f.key for f in campaign.promoted_after(replay.replaying_from_sequence)}
+    return tuple(f for f in campaign.findings if f.key not in later)
+
+
+def section_rows(campaign: CampaignView, replay: ReplayNote | None) -> dict[str, list[list[str]]]:
+    """Return each walked section's rows as the cells the frame draws, in plan order."""
+    steps = [
+        [
+            f"{at.step.ordinal} {at.step.title}",
+            f"{_STEP_GLYPHS[at.state]} {at.state}",
+            " · ".join(at.waits_on) or "–",  # noqa: RUF001
+            str(len(at.step.produced)) if at.step.produced else "–",  # noqa: RUF001
+        ]
+        for at in campaign.steps
+    ]
+    files = [
+        [
+            card.file_name,
+            f"{card.written_at:%H:%M}"
+            + (f" by step {card.written_by.step_ordinal}" if card.written_by.step_ordinal else ""),
+        ]
+        for card in campaign.artifacts
+    ]
+    promoted = [
+        [
+            f.key,
+            f.statement,
+            f.disposition.value
+            + (
+                f" · promoted at {group(campaign.promoted_at[f.key])}"
+                if f.key in campaign.promoted_at
+                else ""
+            ),
+        ]
+        for f in shown_findings(campaign, replay)
+    ]
+    return {PLAN: steps, ARTIFACTS: files, FINDINGS: promoted}
+
+
+def walked_section(session: Session, rows: dict[str, list[list[str]]]) -> str:
+    """Return the section the cursor walks: the held one while it has rows, else the first."""
+    held = session.cam_sec if rows.get(session.cam_sec) else None
+    return held or next((name for name in _WALKED if rows[name]), PLAN)
+
+
+#: Each walked section's grid and heads, wide then narrow; a narrow plan drops PRODUCED.
+_NATIVE_GRIDS: dict[str, tuple[tuple[Grid, list[str]], tuple[Grid, list[str]]]] = {
+    PLAN: (
+        (Grid([12, 44, 14, 24, 0]), ["STEP", "STATE", "WAITS ON", "PRODUCED"]),
+        (Grid([12, 34, 14, 0]), ["STEP", "STATE", "WAITS ON"]),
+    ),
+    ARTIFACTS: ((Grid([12, 34, 0]), ["ARTIFACT", "WRITTEN"]),) * 2,
+    FINDINGS: (
+        (Grid([12, 10, 60, 0]), ["FINDING", "WHAT IT LEARNED", "STANDING"]),
+        (Grid([12, 10, 34, 0]), ["FINDING", "WHAT IT LEARNED", "STANDING"]),
+    ),
+}
+
+
+def _native_sections(view: View, campaign: CampaignView) -> list[str]:
+    """Return the plan, artifact and finding sections of a read Campaign."""
+    s = view.session
+    rows = section_rows(campaign, view.replay if s.conn == REPLAYING else None)
+    on = walked_section(s, rows)
+    s.cam_sec = on
+    dv.sel_in(s, len(rows[on]))
+    held = len(campaign.findings)
+    summaries = {
+        PLAN: campaign.plan_line,
+        ARTIFACTS: f"{len(rows[ARTIFACTS])} files kept with {campaign.key}",
+        FINDINGS: f"{len(rows[FINDINGS])} promoted"
+        + (
+            f" · {held - len(rows[FINDINGS])} past the replay cursor"
+            if held > len(rows[FINDINGS])
+            else ""
+        ),
+    }
+    body: list[str] = []
+    for name in _WALKED:
+        body.append(thin(view.w))
+        if not rows[name]:
+            body.append(label(name, f"∅ none yet · {summaries[name]}"))
+            continue
+        grid, heads = _NATIVE_GRIDS[name][0 if view.wide else 1]
+        shown = [row[: len(heads)] for row in rows[name]]
+        section = Section(name, grid, heads, list)
+        body += _section_rows(view, section, shown, summaries[name], graph=False)
+    return body
 
 
 def native_frame(view: View, spine: SpineView) -> list[str]:
@@ -276,7 +399,8 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         The full frame, keybar last.
     """
     s, w = view.session, view.w
-    campaign = _campaign(view, spine)
+    campaign = _campaign(s, spine)
+    read = read_campaign(s, spine, view.decisions)
     key = campaign.key if campaign is not None else "no campaign"
     status = value_cell(campaign.field("status")).slot if campaign is not None else UNAVAILABLE
     top = native_head(
@@ -286,15 +410,20 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         summary=(f"Campaign {key} · {status}" if campaign else "No Campaign held")
         + f" · {counts(spine)}",
     )
-    dv.sel_in(s, 0)
     body: list[str] = []
     if s.conn == REPLAYING:
         body += [label("REPLAYING", replay_line(view.replay)), thin(w)]
     question = (campaign.title if campaign else None) or f"{UNAVAILABLE} · no question is stated"
     body += [label("QUESTION", question), label("BOUNDS", f"{UNKNOWN_WORD} · no bound is stated")]
+    if read is not None:
+        body += _native_sections(view, read)
+        walked = sum(1 for rows in section_rows(read, None).values() if rows)
+        keys = [p for p in _KEYS if walked > 1 or p != _TAB]
+        return finish(view, top, body, keys)
+    dv.sel_in(s, 0)
     for name, absent in _NATIVE_SECTIONS:
         body += [thin(w), label(name, f"{UNKNOWN_WORD} · {absent}")]
-    return finish(view, top, body, _KEYS)
+    return finish(view, top, body, [p for p in _KEYS if p != _TAB])
 
 
 def render(view: View) -> list[str]:
@@ -344,6 +473,39 @@ def render(view: View) -> list[str]:
     )
 
 
+def _native_key(ctx: Ctx, key: str, shift: bool) -> bool:
+    """Walk a read Campaign's sections on Tab and open its step or artifact on Enter."""
+    s = ctx.s
+    spine = ctx.projection
+    read = read_campaign(s, spine, ctx.decisions) if isinstance(spine, SpineView) else None
+    if read is None:
+        held_any = bool(spine.rows) if spine is not None else False
+        why = "the campaign has not been read yet" if held_any else "no campaign is held"
+        ctx.log(key, f"nothing to open · {why}")
+        return True
+    rows = section_rows(read, None)
+    on = walked_section(s, rows)
+    if key == "Tab":
+        walked = [name for name in _WALKED if rows[name]]
+        at = walked.index(on)
+        s.cam_sec = walked[(at + (len(walked) - 1 if shift else 1)) % len(walked)]
+        s.sel = 0
+        ctx.log("Tab", f"section → {s.cam_sec}")
+        return True
+    i = min(s.sel, len(rows[on]) - 1)
+    if on == PLAN:
+        s.cam_step = i
+        go(ctx, "campaign.step", f"step {read.steps[i].step.ordinal}", read.key)
+        return True
+    if on == ARTIFACTS:
+        card = read.artifacts[i]
+        s.art_scroll = 0
+        go(ctx, "campaign.artifact", f"artifact {card.file_name}", card.artifact_ref)
+        return True
+    ctx.log("Enter", f"{rows[on][i][0]} is read where it is listed · nothing to open")
+    return True
+
+
 def seam(ctx: Ctx, key: str, shift: bool) -> bool:
     """Cycle the sections on Tab and open what the focused section holds on Enter."""
     s = ctx.s
@@ -351,14 +513,7 @@ def seam(ctx: Ctx, key: str, shift: bool) -> bool:
     if s.route != "campaign" or busy(s):
         return False
     if ctx.projection is not None:
-        # the sections below walk the prototype registers; a held campaign draws only what
-        # its producers state, and none states a step, receipt or artifact row yet
-        if key in ("Tab", "Enter"):
-            held_any = bool(ctx.projection.rows)
-            why = "no producer states a campaign row yet" if held_any else "no campaign is held"
-            ctx.log(key, f"nothing to open · {why}")
-            return True
-        return False
+        return key in ("Tab", "Enter") and _native_key(ctx, key, shift)
     if key == "Tab":
         sections = list(reg.cam_sects)
         at = sections.index(s.cam_sec or PLAN)

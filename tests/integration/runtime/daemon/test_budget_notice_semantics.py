@@ -33,7 +33,13 @@ from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
-from eawf.runtime.budget.legacy_notices import import_legacy_advisories, import_legacy_notices
+from eawf.runtime.budget.legacy_notices import (
+    AUTO_RESOLVED_CHOICE,
+    PAUSE_EVENT_TYPE,
+    RESUME_EVENT_TYPE,
+    import_legacy_advisories,
+    import_legacy_notices,
+)
 from eawf.runtime.budget.notice_inbox import (
     NoticeDispositionError,
     StaleNoticeRevisionError,
@@ -58,6 +64,7 @@ from eawf.runtime.daemon.methods.budget_notice import (
     dispose_budget_notice,
     list_budget_notices,
 )
+from eawf.runtime.daemon.pause_migration import open_legacy_pauses
 from eawf.runtime.daemon.stale_wave import (
     ESTIMATE_PASSED_EVENT_TYPE,
     NOTICE_OPENED_EVENT_TYPE,
@@ -66,12 +73,6 @@ from eawf.runtime.daemon.stale_wave import (
 )
 from eawf.workflow.estimation.thresholds import wave_budget_minutes
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
-from eawf.workflow.skills.needs_user import (
-    AUTO_RESOLVED_CHOICE,
-    PAUSE_EVENT_TYPE,
-    RESUME_EVENT_TYPE,
-    list_open_pauses,
-)
 from tests.integration.runtime.daemon.test_native_dispatch import RUN_URN
 
 pytestmark = pytest.mark.integration
@@ -318,7 +319,7 @@ def test_prx_032_the_former_progress_fraction_is_silent_on_every_channel(
         load_notice_ledger(notices_path(state_path)), principal=LOCAL_OPERATOR, now=now
     )
     assert inbox.active == inbox.acknowledged == inbox.history == ()  # no badge, no attention
-    assert list_open_pauses(state_path) == []  # nothing a modal can open
+    assert open_legacy_pauses(state_path) == []  # nothing a modal can open
     assert state_path.read_bytes() == before  # no lifecycle effect
 
 
@@ -379,7 +380,7 @@ def test_prx_033_a_crossing_with_recent_progress_is_recorded_but_opens_nothing(
     assert "execution continues" in published[0].payload["message"]
     assert "stale" not in published[0].payload["message"]
     assert not notices_path(state_path).exists()
-    assert list_open_pauses(state_path) == []
+    assert open_legacy_pauses(state_path) == []
 
 
 # ---- PRX-034: one notice past the grace, stable across restarts -------------
@@ -427,7 +428,7 @@ def test_prx_034_three_restarts_keep_one_row_one_delivery_and_no_modal(tmp_path:
     assert len(load_notice_ledger(ledger_file).notices) == 1
     assert _event_types(state_path).count(NOTICE_OPENED_EVENT_TYPE) == 1
     assert PAUSE_EVENT_TYPE not in _event_types(state_path)
-    assert list_open_pauses(state_path) == []
+    assert open_legacy_pauses(state_path) == []
 
 
 # ---- PRX-035: escalation over the legacy-import path ----------------------
@@ -913,7 +914,7 @@ def _legacy_corpus(tmp_path: Path) -> Path:
 
 def test_prx_040_legacy_bands_collapse_with_no_fabricated_disposition(tmp_path: Path) -> None:
     state_path = _legacy_corpus(tmp_path)
-    assert len(list_open_pauses(state_path)) == 2  # the modal's source before the import
+    assert len(open_legacy_pauses(state_path)) == 2  # the modal's source before the import
 
     assert import_legacy_pauses(state_path) == 4
 
@@ -939,7 +940,7 @@ def test_prx_040_legacy_bands_collapse_with_no_fabricated_disposition(tmp_path: 
     assert by_wave[OTHER_WAVE].history[0].action == "cleared"
     assert by_wave[OTHER_WAVE].budget_value is None  # a backstop row recorded no estimate
     assert deliver_pending(notices_path(state_path), principal=LOCAL_OPERATOR, now=CLAIMED) == ()
-    assert list_open_pauses(state_path) == []  # never a pause and a notice at once
+    assert open_legacy_pauses(state_path) == []  # never a pause and a notice at once
 
 
 def test_prx_040_the_import_is_deterministic_over_row_order(tmp_path: Path) -> None:
@@ -1011,7 +1012,7 @@ def test_prx_040_a_legacy_row_with_no_elapsed_time_stays_a_pause(tmp_path: Path)
     )
 
     assert import_legacy_pauses(state_path) == 0
-    assert [p.pause_urn for p in list_open_pauses(state_path)] == ["urn:d:1"]
+    assert [p.pause_urn for p in open_legacy_pauses(state_path)] == ["urn:d:1"]
 
 
 def test_prx_040_a_corrupt_ledger_leaves_the_pauses_listed(tmp_path: Path) -> None:
@@ -1019,7 +1020,7 @@ def test_prx_040_a_corrupt_ledger_leaves_the_pauses_listed(tmp_path: Path) -> No
     notices_path(state_path).parent.mkdir(parents=True, exist_ok=True)
     notices_path(state_path).write_text("{not json")
 
-    assert len(list_open_pauses(state_path)) == 2
+    assert len(open_legacy_pauses(state_path)) == 2
 
 
 def test_prx_040_the_daemon_verbs_deliver_imported_rows_nothing(tmp_path: Path) -> None:

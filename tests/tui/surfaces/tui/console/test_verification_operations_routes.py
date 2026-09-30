@@ -13,10 +13,11 @@ tuple section with no verdict in it says so rather than drawing a healthy tuple 
 observed. A quarantined tuple names its trigger through the failure code its record was
 filed under, and where two triggers share one code the row names both rather than guessing.
 
-The sandbox decision and the dispatch-queue projection have no producer at this
-checkpoint, so every column that would come from them renders the unknown truth token
-naming the item it waits on. That is the point of declaring them: a blank cell and a cell
-waiting on a named producer are different answers to an operator.
+The dispatch-queue projection has no producer at this checkpoint, so every column that
+would come from it renders the unknown truth token naming the item it waits on. That is
+the point of declaring them: a blank cell and a cell waiting on a named producer are
+different answers to an operator. The sandbox log and Trust state their columns from the
+facts their decision and verdict rows carry, and a row that does not state one says why.
 """
 
 from __future__ import annotations
@@ -38,13 +39,12 @@ from eawf.kernel.projection.compute import (
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, RECONNECT_METHOD_TEMPLATE
 from eawf.kernel.projection.operations import (
     DISPATCH_QUEUE_PRODUCER,
+    NOT_A_DECISION,
     OPERATIONS_FIELDS,
     OPERATIONS_ROUTES,
-    SANDBOX_DECISION_PRODUCER,
     build_operations_view,
 )
 from eawf.kernel.projection.route_view import (
-    MISSING_PRODUCER_REASON,
     RouteFieldSpec,
     RouteReadModel,
     build_route_read_model,
@@ -78,6 +78,7 @@ from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.fixture import load_fixture
 from eawf.surfaces.tui.console.frame import View
+from eawf.surfaces.tui.console.live_reads import HEALTH_VERDICTS_READ, LIVE_READS
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.read_model import NO_VERDICT, native, noun
 from eawf.surfaces.tui.console.seam import ProjectionSeam
@@ -96,6 +97,9 @@ REQUIREMENT_ID = re.compile(r"\b[A-Z]{2,4}-\d{3}\b")
 
 #: The seven routes this wave binds, verification first.
 BOUND_ROUTES: tuple[str, ...] = (*VERIFICATION_ROUTES, *OPERATIONS_ROUTES)
+
+#: The routes whose every declared column a producer states, read off the row's facts.
+STATED_ROUTES: frozenset[str] = frozenset({"trust", "sandbox.log"})
 
 #: The artifact a probe stage record filed its evidence under.
 EVIDENCE_REF = "artifact://conformance/rollback-0001"
@@ -207,7 +211,11 @@ def _app(route: str, *, verdicts: Any = ()) -> ConsoleApp:
         load_fixture(Path(__file__).resolve().parents[4] / "fixtures/console/golden/fixture"),
         FakeClock(),
         seam=seam,
-        health_verdicts=verdicts,
+    )
+    seam.retarget(route)
+    seam._live[HEALTH_VERDICTS_READ] = (
+        LIVE_READS[HEALTH_VERDICTS_READ].address(seam),
+        tuple(verdicts),
     )
     app.session.route = route
     return app
@@ -347,7 +355,7 @@ def test_a_row_stating_no_status_is_unknown_rather_than_blank() -> None:
     assert status.missing_reason
 
 
-@pytest.mark.parametrize("route", BOUND_ROUTES)
+@pytest.mark.parametrize("route", [r for r in BOUND_ROUTES if r not in STATED_ROUTES])
 def test_unproduced_columns_are_unknown_truth_fields_naming_why(route: str) -> None:
     """A column with no producer is declared and comes back unknown, never silently absent."""
     model = _view(route)
@@ -378,16 +386,23 @@ def test_a_row_names_no_field_the_route_did_not_declare() -> None:
 # ---------- the two producers that have not shipped ----------
 
 
-def test_the_sandbox_log_names_the_decision_producer_it_waits_on() -> None:
-    """A cell waiting on a named producer is a different answer from a blank cell."""
-    model = _view("sandbox.log")
-    waiting = {spec.name: spec.missing_producer for spec in model.unproduced()}
-    assert waiting == dict.fromkeys(
-        ("decision", "reason", "policy_revision"), SANDBOX_DECISION_PRODUCER
-    )
-    reason = model.rows[0].field("decision").missing_reason
-    assert reason == MISSING_PRODUCER_REASON.format(item=SANDBOX_DECISION_PRODUCER)
-    assert not REQUIREMENT_ID.search(str(reason))
+@pytest.mark.parametrize("route", sorted(STATED_ROUTES))
+def test_a_stated_column_a_row_does_not_state_is_unknown_saying_why(route: str) -> None:
+    """A policy row states no decision and a claim no verdict; each cell says so."""
+    model = _view(route)
+    assert model.unproduced() == ()
+    for row in model.rows:
+        for spec in model.specs[1:]:
+            field = row.field(spec.name)
+            assert field.state is TruthState.UNKNOWN
+            assert field.missing_reason == spec.absent
+            assert not REQUIREMENT_ID.search(str(field.missing_reason))
+
+
+def test_a_policy_row_states_no_decision() -> None:
+    """The decision columns of a policy row name why they are blank, never a producer."""
+    row = _view("sandbox.log").rows[0]
+    assert row.field("decision").missing_reason == NOT_A_DECISION
 
 
 def test_the_queue_names_the_dispatch_projection_it_waits_on() -> None:
@@ -407,7 +422,7 @@ def test_a_column_with_no_named_producer_falls_back_to_the_generic_reason() -> N
 
 @pytest.mark.parametrize(
     ("route", "item"),
-    [("sandbox.log", SANDBOX_DECISION_PRODUCER), ("unattended", DISPATCH_QUEUE_PRODUCER)],
+    [("unattended", DISPATCH_QUEUE_PRODUCER)],
 )
 def test_the_frame_names_the_producer_each_silent_column_waits_on(route: str, item: str) -> None:
     """The frame prints the item beside the unknown token, not only the token."""
@@ -430,7 +445,7 @@ def test_the_frame_names_every_unstated_column(route: str) -> None:
 #: The routes whose packet frame lists the read model's rows as its cursor list. Evidence
 #: draws one Claim, Health lists checks, and Recovery lists its three doors and counts the
 #: Runs; ``test_native_route_frames`` holds each of those.
-LISTING_ROUTES: tuple[str, ...] = ("trust", "evidence.digest", "sandbox.log", "unattended")
+LISTING_ROUTES: tuple[str, ...] = ("trust", "evidence.digest", "unattended")
 
 
 @pytest.mark.parametrize("route", LISTING_ROUTES)
@@ -443,6 +458,14 @@ def test_the_frame_draws_one_line_per_read_model_row(route: str) -> None:
         assert row.key in body
         assert row.collection.value[:11].replace("_", " ") in body
     assert session.sel_id == (model.rows[0].key if model.rows else None)
+
+
+def test_the_sandbox_log_lists_its_policies_and_rests_the_cursor_on_decisions() -> None:
+    """A policy is listed by key; the cursor walks decisions, and there are none here."""
+    model = _view("sandbox.log")
+    rows, session = _frame(model)
+    assert all(row.key in "\n".join(rows) for row in model.rows)
+    assert session.sel_id is None
 
 
 #: The routes whose line under the header states their own subject rather than a count of

@@ -263,7 +263,7 @@
     {
       "entry": "acceptance evidence overlay",
       "pack": "the milestone's receipts recorded as setup.overlay = evidence, crumbed evidence and drawn with a Claim's ladder state rows",
-      "port": "the acceptance evidence overlay, a second overlay over the sealed bundle: setup.overlay = acceptance, crumbed acceptance evidence, with no ladder rows",
+      "port": "the acceptance evidence overlay, a second overlay over the sealed bundle: setup.overlay = acceptance, crumbed evidence as the pack draws it, with no ladder rows",
       "golden_ids": ["overlay/evidence@*"],
       "rulings": ["CON-091"]
     },

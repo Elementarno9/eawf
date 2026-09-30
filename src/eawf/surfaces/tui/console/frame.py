@@ -23,8 +23,10 @@ from types import MappingProxyType
 from eawf.kernel.projection.attention import attention_mine
 from eawf.kernel.projection.compute import ProjectionRow
 from eawf.kernel.projection.connection import ReplayNote
+from eawf.kernel.projection.liveness import HeldLiveness
 from eawf.kernel.projection.registers import RegisterView
 from eawf.kernel.projection.route_view import RouteReadModel
+from eawf.kernel.projection.run_timeline import RunTimeline
 from eawf.kernel.projection.settings import EffectiveSettingsView
 from eawf.kernel.projection.spine import SpineView
 from eawf.kernel.projection.truth import TruthState
@@ -117,6 +119,10 @@ class View:
             arrive beside the projection; ``None`` when none are held.
         notices: The budget notices active in the operator's inbox, which the Attention
             route lists after its actions; empty before their read or with no link.
+        liveness: The daemon's stall read, which says which running Runs went quiet and
+            how old that answer is; ``None`` before it arrives or with no link.
+        timeline: The Run frame's event rows as the daemon grouped them, for the Run the
+            frame is about; ``None`` before their read or off the Run frame.
         principal: Who the console acts as, whose own attention items the header counts;
             ``None`` when it acts as nobody, which has no ``mine`` to count.
         now: The wall-clock instant the frame is drawn at, which an age or a running
@@ -126,6 +132,8 @@ class View:
         gutter: The blank cells the app keeps clear at each side of the frame. The frame
             is ``w`` cells inside them, but a layout steps on the terminal's width, so a
             120-column terminal takes the wide layout although its frame is 118 wide.
+        live: The answers of the route's live reads, by read name, for what the route
+            is about now; empty before they arrive or with no link.
     """
 
     session: Session
@@ -144,10 +152,13 @@ class View:
     rows: tuple[ProjectionRow, ...] = ()
     decisions: DecisionRecords | None = None
     notices: tuple[BudgetThresholdNotice, ...] = ()
+    liveness: HeldLiveness | None = None
+    timeline: RunTimeline | None = None
     principal: str | None = None
     now: datetime | None = None
     scope_name: str = ""
     gutter: int = 0
+    live: Mapping[str, object] = MappingProxyType({})
 
     @property
     def columns(self) -> int:

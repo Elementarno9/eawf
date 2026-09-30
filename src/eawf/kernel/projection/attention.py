@@ -53,6 +53,7 @@ from eawf.kernel.projection.truth import (
     TruthField,
     TruthState,
 )
+from eawf.kernel.state.enums import OpenQuestionStatus
 from eawf.kernel.state.epoch2.base import Epoch2Model
 from eawf.kernel.state.epoch2.pending_action import PendingActionStatus
 from eawf.kernel.state.epoch2.run import SuspensionReason
@@ -120,7 +121,7 @@ _BUCKET_REASONS: Final[Mapping[AttentionBucket, str]] = MappingProxyType(
         AttentionBucket.FAILED: _RUN_UNSTATED_REASON,
         AttentionBucket.LOST: _RUN_UNSTATED_REASON,
         AttentionBucket.OVER_BUDGET: BUDGET_UNSTATED_REASON,
-        AttentionBucket.STALLED: "no producer writes a stalled signal yet",
+        AttentionBucket.STALLED: "no producer files a stalled Run as an attention item yet",
         AttentionBucket.REJECTED: "no producer writes a rejected control awaiting re-issue yet",
         AttentionBucket.ACTIVE: "no producer writes an answered-but-unconfirmed item yet",
     }
@@ -151,6 +152,9 @@ _NOT_YET_ASKED: Final = frozenset({PendingActionStatus.CREATED.value})
 
 #: The status the register states an unresolved provider permission under.
 _PERMISSION_OPEN: Final = "open"
+
+#: The statuses of a question still waiting on an answer.
+_QUESTION_LIVE: Final = frozenset({OpenQuestionStatus.OPEN.value, OpenQuestionStatus.BLOCKED.value})
 
 #: The principal class a named principal acts as on a console: a person answering.
 CONSOLE_PRINCIPAL_CLASS: Final = "operator"
@@ -428,6 +432,24 @@ def _permission_item(row: ProjectionRow) -> AttentionItem | None:
     )
 
 
+def _question_item(row: ProjectionRow) -> AttentionItem | None:
+    """Return the open item a question row is, or ``None`` once it is resolved.
+
+    A question names no principal it is addressed to, so it is every principal's.
+    """
+    if row.status.state is not TruthState.KNOWN or row.status.value not in _QUESTION_LIVE:
+        return None
+    return AttentionItem(
+        key=row.key,
+        source_ref=row.urn,
+        revision=row.revision,
+        bucket=AttentionBucket.NEEDS_OPERATOR,
+        need=AttentionNeedKind.ANSWER,
+        assignee_ref=None,
+        notification_class=NotificationClass.NEEDS_ANSWER,
+    )
+
+
 def _breach_item(row: ProjectionRow) -> AttentionItem:
     """Return the notice a child-ceiling breach row is.
 
@@ -472,6 +494,8 @@ def build_attention_view(register: RegisterView) -> AttentionView:
             item = _permission_item(row)
         elif row.collection is Epoch2Collection.PENDING_ACTION:
             item = _item(row)
+        elif row.collection is Epoch2Collection.OPEN_QUESTION:
+            item = _question_item(row)
         elif row.collection is Epoch2Collection.RUN:
             item = _breach_item(row)
         else:

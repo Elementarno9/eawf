@@ -16,14 +16,18 @@ from typer.testing import CliRunner
 
 from eawf.surfaces.cli.app import app
 from tests._worktree_helpers import seed_repo_with_state as _seed_repo_with_state
+from tests.integration._upkeep_daemon import upkeep_daemon  # noqa: F401
 from tests.integration.test_worktree_cli_merge_back import _create_worktree_and_commit
 
 runner = CliRunner()
 
-pytestmark = pytest.mark.skipif(
-    shutil.which("git") is None,
-    reason="git is required for worktree CLI integration tests",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        shutil.which("git") is None,
+        reason="git is required for worktree CLI integration tests",
+    ),
+    pytest.mark.usefixtures("upkeep_daemon"),
+]
 
 
 def test_cli_cleanup_refuses_dirty_no_force(tmp_path: Path) -> None:

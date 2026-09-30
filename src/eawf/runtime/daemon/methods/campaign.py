@@ -38,11 +38,12 @@ import asyncio
 import hashlib
 import logging
 import uuid
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, NoReturn
 
+import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.delivery.receipts import canonical_digest
@@ -52,6 +53,7 @@ from eawf.kernel.projection.campaign import (
     CampaignView,
     build_campaign_view,
     promoted_findings,
+    promoting_sequences,
     stored_revisions,
 )
 from eawf.kernel.state.enums import CampaignStatus, OpenQuestionStatus
@@ -108,7 +110,8 @@ from eawf.runtime.daemon.epoch2_transaction import (
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 from eawf.runtime.daemon.methods.delivery_approval import publish_commits
-from eawf.runtime.daemon.methods.projection import document_path
+from eawf.runtime.daemon.methods.host_question import held_questions
+from eawf.runtime.daemon.methods.projection import document_path, firehose_path
 from eawf.runtime.daemon.native_guard import native_mutator, native_params, require_native_call
 
 logger = logging.getLogger(__name__)
@@ -379,20 +382,19 @@ def _require_revision(campaign: Campaign, expected: int, urn: object) -> None:
 
 
 def _unresolved_questions(
-    document: dict[str, Any], steps: tuple[CampaignPlanStep, ...], filed: Iterable[str]
+    session: RootSession, steps: tuple[CampaignPlanStep, ...], filed: Iterable[str]
 ) -> tuple[str, ...]:
-    """Return each step question that names no question row the tree holds.
+    """Return each step question that names no question the tree holds.
 
     Args:
-        document: The tree's document.
+        session: The session the write is decided under, whose questions are read.
         steps: The plan's steps.
         filed: The question URNs the same write files.
 
     Returns:
         ``step <n>: <urn>`` for each unresolved question, in plan order.
     """
-    rows = document_rows(document, Epoch2Collection.OPEN_QUESTION)
-    held = {str(row.get("urn")) for row in rows.values()} | set(filed)
+    held = {str(question.urn) for question in _held_questions(session).values()} | set(filed)
     return tuple(
         f"step {step.ordinal}: {step.question_ref}"
         for step in steps
@@ -436,6 +438,12 @@ def _bumped(campaign: Campaign, now: datetime, **changes: Any) -> Campaign:
             "updated_at": now.isoformat(),
         }
     )
+
+
+def _held_questions(session: RootSession) -> dict[str, OpenQuestion]:
+    """Return every question of the tree, whichever store holds it, by key."""
+    records = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
+    return held_questions(session.read_document(), records)
 
 
 def _ledger(session: RootSession, collection: Epoch2Collection) -> tuple[LedgerRecord, ...]:
@@ -494,7 +502,7 @@ def approve_plan(
                 return CampaignCommit(record=standing.model_dump(mode="json"), committed=False), ()
         key = _next_key("CAM", rows)
         urn = _sibling(args.track_ref, EntityKind.CAMPAIGN, key)
-        unresolved = _unresolved_questions(document, args.plan_steps, seeds)
+        unresolved = _unresolved_questions(session, args.plan_steps, seeds)
         if unresolved:
             _refused(
                 TransactionRefusalCode.IDENTITY_NOT_FOUND,
@@ -502,7 +510,7 @@ def approve_plan(
                 urn=args.track_ref,
                 fix="File each step's question as a seed question of the plan.",
             )
-        questions = _new_questions(document, seeds, urn, now)
+        questions = _new_questions(session, seeds, urn, now)
         try:
             campaign = Campaign.model_validate(
                 {
@@ -558,7 +566,7 @@ def approve_plan(
 
 
 def _new_questions(
-    document: dict[str, Any],
+    session: RootSession,
     seeds: Mapping[str, SeedQuestion],
     campaign_urn: QualifiedUrn,
     now: datetime,
@@ -566,14 +574,15 @@ def _new_questions(
     """Return the seed questions the tree does not hold yet, as open question rows.
 
     Raises:
-        TransactionRefusedError: A seed's address holds another question.
+        TransactionRefusedError: A seed's address holds another question, which a host
+            may have asked.
     """
-    rows = document_rows(document, Epoch2Collection.OPEN_QUESTION)
+    held = _held_questions(session)
     fresh: list[OpenQuestion] = []
     for ref, seed in seeds.items():
-        standing = rows.get(seed.urn.entity_key)
+        standing = held.get(seed.urn.entity_key)
         if standing is not None:
-            if standing.get("question") != seed.question:
+            if standing.question != seed.question:
                 _refused(
                     TransactionRefusalCode.IDEMPOTENCY_CONFLICT,
                     f"{seed.urn.entity_key} already asks another question",
@@ -660,7 +669,7 @@ def revise_plan(
             started = standing is not None and standing.state is not StepState.PENDING
             kept = standing if started and standing is not None else _fresh(step)
             steps.append(kept.model_dump(mode="json"))
-        unresolved = _unresolved_questions(document, args.plan_steps, ())
+        unresolved = _unresolved_questions(session, args.plan_steps, ())
         if unresolved:
             _refused(
                 TransactionRefusalCode.IDENTITY_NOT_FOUND,
@@ -1174,7 +1183,27 @@ def campaign_view(authority: RootAuthority, key: str) -> CampaignView:
         row,
         revisions=stored_revisions(payloads(Epoch2Collection.ARTIFACT)),
         findings=promoted_findings(payloads(Epoch2Collection.CAMPAIGN_FINDING)),
+        promoted_at=promoting_sequences(_firehose_payloads(firehose_path(authority))),
     )
+
+
+def _firehose_payloads(path: Path) -> Iterator[Mapping[str, Any]]:
+    """Yield the payload of each readable firehose row, in the order it was written.
+
+    A row that does not parse is skipped: it states no sequence a finding could be
+    drawn at, and the finding it would have dated reads as promoted before the cursor.
+    """
+    if not path.exists():
+        return
+    with path.open("rb") as handle:
+        for raw in handle:
+            try:
+                row = orjson.loads(raw)
+            except orjson.JSONDecodeError:
+                logger.warning(f"campaign_view skipped an unreadable firehose row path={path}")
+                continue
+            if isinstance(row, dict) and isinstance(row.get("payload"), dict):
+                yield row["payload"]
 
 
 def _read_params[T: BaseModel](model: type[T], params: dict[str, Any], method: str) -> T:

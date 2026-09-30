@@ -21,20 +21,23 @@ from this module unchanged.
 
 Sub-commands:
 
-- ``add``            — write a new memory entry (JSONL + state cache).
-- ``promote``        — promote a JSONL store record to a memory entry, or a
-  memory entry up into a durable artifact (``--to artifact``).
-- ``prune``          — soft-delete: flip matched entries' status to ``PRUNED``.
-- ``list``           — list memory entries from the cache (optionally filtered).
+- ``add``            — file a new memory note.
+- ``promote``        — copy a store record into a new note, or retire a note
+  into a decision the decision ledger holds (``--to artifact``).
+- ``prune``          — soft-delete: flip matched notes' status to ``PRUNED``.
+- ``gc`` / ``tier``  — move notes between the working and archival tiers.
+- ``list``           — list memory notes (optionally filtered).
 - ``compact``        — wrap :func:`eawf.kernel.store.compact.compact_store` for ``memory.jsonl``.
 - ``render-context`` — produce a token-budgeted context block.
-- ``view``           — show one memory entry (cache + envelope body).
+- ``view``           — show one memory note with its body.
 - ``stale``          — list stale candidates (low-confidence + over-age).
 
-Mutation handlers follow the canonical sequence: load → mutate → validate →
-atomic_write (sibling-locked) → append store record → append event. The
-atomic-write helper acquires its own sibling lock; appends use sibling locks on
-the store files.
+On an epoch-2 tree the notes live on the selected generation's memory
+ledger. The mutating verbs send the daemon's native ``memory.*`` verbs,
+which commit each revision as a ledger line; the reads read the ledger
+directly, since reading needs no daemon. On an epoch-1 tree the reads
+still answer from ``state.memory_index`` and ``memory.jsonl``; the
+flag-day gate refuses the mutating verbs there before they dispatch.
 """
 
 from __future__ import annotations
@@ -49,9 +52,11 @@ import typer
 
 from eawf.kernel.state.enums import Confidence, MemoryStatus, StoreKind
 from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.cli.flags import GlobalFlags
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
+    from eawf.kernel.store.kinds.memory import MemoryNote
 
 #: Mirrors :data:`eawf.platform.memory.render_context.DEFAULT_BUDGET`; inlined as a
 #: literal so the ``memory render-context --budget`` default does not import
@@ -108,6 +113,43 @@ def _load_state(state_path: Path) -> State:
             f"state invariant violations: {[v.code for v in report.violations]}"
         )
     return report.state
+
+
+def _load_notes(state_path: Path) -> dict[str, MemoryNote]:
+    """Return the notes the tree holding *state_path* stands at, from its epoch's store."""
+    from eawf.platform.memory.book import generation_memory_ledger, notes_from_state, read_book
+
+    ledger = generation_memory_ledger(state_path.parent)
+    if ledger is None:
+        return notes_from_state(_load_state(state_path), _memory_path_for(state_path))
+    return {mid: standing.note for mid, standing in read_book(ledger).items()}
+
+
+def _memory_rpc(
+    method: str, params: dict[str, object], *, state_path: Path, flags: GlobalFlags, verb_text: str
+) -> dict[str, object]:
+    """Send one native ``memory.*`` verb for the tree holding *state_path*.
+
+    Raises:
+        UserError: The daemon refused the request; a missing note, source
+            or decision is ``NotFound`` and every other refusal is
+            ``InvalidInput``, with the daemon's own message.
+        CliError: The daemon was unreachable or failed outside the
+            refusal vocabulary.
+    """
+    from eawf.surfaces.cli._daemon_client import DaemonRpcError
+    from eawf.surfaces.cli.commands.domain import _native_answer
+
+    wire = {"repo_root": str(state_path.parent.parent), **params}
+    try:
+        return _native_answer(method, wire, flags=flags, verb_text=verb_text)
+    except DaemonRpcError as exc:
+        if exc.code != cli_errors.RPC_VALIDATION_FAILED:
+            raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
+        message = exc.message.removeprefix("validation_failed: ")
+        code = message.split(":", 1)[0]
+        kind = "NotFound" if code.endswith("_not_found") else "InvalidInput"
+        raise cli_errors.UserError(message, kind=kind) from exc
 
 
 def _resolve_confidence(raw: str | None) -> Confidence:

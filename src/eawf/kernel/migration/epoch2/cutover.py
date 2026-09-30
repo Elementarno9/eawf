@@ -128,12 +128,18 @@ HISTORY_COLLECTIONS: Final[frozenset[Epoch2Collection]] = frozenset(
     }
 )
 
-#: The document-tier collections the importer writes. Neither ever
+#: The document-tier collections the importer writes. None ever
 #: terminates -- a tree has one Project for its whole life, and a sandbox
-#: policy is consulted before every dispatch -- so every record of them
-#: stays in the document and none has a ledger form to compact into.
+#: policy, a registered MCP server and its grants are consulted before
+#: every dispatch -- so every record of them stays in the document and none
+#: has a ledger form to compact into.
 DOCUMENT_RESIDENT_COLLECTIONS: Final[frozenset[Epoch2Collection]] = frozenset(
-    {Epoch2Collection.PROJECT, Epoch2Collection.SANDBOX_POLICY}
+    {
+        Epoch2Collection.PROJECT,
+        Epoch2Collection.SANDBOX_POLICY,
+        Epoch2Collection.CAPABILITY,
+        Epoch2Collection.TOOL_AUTHORITY,
+    }
 )
 
 #: Every collection whose document rows count as imported records, in a

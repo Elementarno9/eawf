@@ -89,7 +89,8 @@ def _preflight(repo: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[int, dict[s
     result = CliRunner().invoke(
         app, ["--json", "release", "preflight", DEV3_VERSION, "--source", head]
     )
-    return result.exit_code, json.loads(result.output)
+    payload = json.loads(result.output)
+    return result.exit_code, payload["result"] if "operation" in payload else payload
 
 
 def test_preflight_resolves_membership_from_the_committed_export(

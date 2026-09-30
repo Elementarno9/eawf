@@ -43,6 +43,7 @@ from eawf.kernel.migration.epoch2.lifecycle import (
     map_wave_row,
 )
 from eawf.kernel.migration.epoch2.measurements import MeasurementImportPlan
+from eawf.kernel.migration.epoch2.memory import MEMORY_LEDGER
 from eawf.kernel.migration.epoch2.native_records import NativeRecordImportPlan
 from eawf.kernel.migration.epoch2.rules import MappingRuleVersion, StrictMigrationModel
 from eawf.kernel.migration.epoch2.runs import MintedRun, report_ledger_rows
@@ -479,6 +480,9 @@ class CorpusImportPlan(StrictMigrationModel):
         envelopes = EnvelopeImportPlan.build(
             document=snapshot.document,
             audit_ledger_rows=snapshot.ledger(AUDIT_LEDGER),
+            # The memory store is written on a tree's first note, so a tree
+            # without one never held a body to lose.
+            memory_store_rows=snapshot.ledgers.get(MEMORY_LEDGER, ()),
             source_schema_version=lifecycle.source_index.source_schema_version,
         )
         native = NativeRecordImportPlan.build(

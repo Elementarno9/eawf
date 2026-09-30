@@ -26,10 +26,20 @@ from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict
 
+from eawf.kernel.economics.spend import CostCeilingView, RunUsageView
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, RECONNECT_METHOD_TEMPLATE
+from eawf.kernel.projection.run_timeline import reduce_timeline
 from eawf.kernel.runtime.events import RunEventRecord
+from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
+from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD
 from eawf.runtime.daemon.methods.run import RUN_EVENTS_READ_METHOD
+from eawf.runtime.daemon.methods.run_liveness import RUN_STALLS_READ_METHOD
+from eawf.runtime.daemon.methods.spend import (
+    RUN_USAGE_READ_METHOD,
+    SPEND_CEILING_READ_METHOD,
+    RunUsageReadParams,
+)
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import FakeClock
@@ -175,7 +185,49 @@ class DocumentDaemon:
                 "resume_method": "runtime.run.control.request",
                 "resume_control": "resume",
             },
+            "timeline": reduce_timeline(events).model_dump(mode="json"),
         }
+
+    def _live_read(self, method: str, params: Mapping[str, Any]) -> dict[str, Any] | None:
+        """Answer a console live read the document settles, or ``None`` for any other call."""
+        if method == RUN_STALLS_READ_METHOD:
+            return {"stalls": [], "read_at": bodies.AT.isoformat()}
+        if method in (QUESTION_READ_METHOD, PAUSE_READ_METHOD):
+            # the document holds no question or pause these journeys walk
+            return {}
+        if method == RUN_USAGE_READ_METHOD:
+            return self._run_usage(RunUsageReadParams.model_validate(params).urn.entity_key)
+        if method == SPEND_CEILING_READ_METHOD:
+            return self._ceiling()
+        return None
+
+    def _run_usage(self, run_key: str) -> dict[str, Any]:
+        """Answer a Run's usage read as the daemon does for a Run no meter has read yet."""
+        if run_key not in self.document.get("run", {}):
+            raise ConnectionError(f"the tree holds no {run_key}")
+        return RunUsageView(
+            run_key=run_key,
+            tokens=None,
+            cost_microusd=None,
+            quality=None,
+            cap_tokens=None,
+            cap_cost_microusd=None,
+            wall_seconds=None,
+            typical_seconds=None,
+            typical_runs=0,
+        ).model_dump(mode="json")
+
+    def _ceiling(self) -> dict[str, Any]:
+        """Answer the ceiling read as the daemon does for an unbounded, unmetered tree."""
+        return CostCeilingView(
+            ceiling_tokens=None,
+            ceiling_cost_microusd=None,
+            live_runs=0,
+            spent_tokens=0,
+            held_tokens=0,
+            spent_cost_microusd=0,
+            held_cost_microusd=0,
+        ).model_dump(mode="json")
 
     def client(self) -> _Client:
         """Return one client over this daemon, as the binding's factory does."""
@@ -200,6 +252,9 @@ class DocumentDaemon:
             return self.reconnect_answer
         if method == RUN_EVENTS_READ_METHOD:
             return self._run_events(str(params["urn"]))
+        read = self._live_read(method, params)
+        if read is not None:
+            return read
         if method.startswith("projection."):
             raise ConnectionError(f"{method} is not served")
         self.writes.append((method, dict(params)))

@@ -36,7 +36,7 @@ import os
 import tempfile
 import uuid
 from collections.abc import AsyncIterator, Callable, Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +45,7 @@ from pydantic import ValidationError
 
 from eawf.kernel.projection.compute import build_route_projection
 from eawf.kernel.projection.connection import ConnectionValue, ReconnectDisposition
+from eawf.kernel.projection.liveness import STALE_AFTER_SECONDS, HeldLiveness, run_liveness
 from eawf.kernel.projection.spine import build_spine_view
 from eawf.kernel.projection.truth import (
     ConnectionState,
@@ -56,7 +57,9 @@ from eawf.kernel.projection.truth import (
     TruthState,
 )
 from eawf.kernel.runtime.control import ControlDisposition
+from eawf.kernel.runtime.events import RunEventKind
 from eawf.kernel.runtime.provider import ControlKind
+from eawf.kernel.runtime.stall import RunStallFact
 from eawf.kernel.state.enums import MeasurementQuality
 from eawf.kernel.state.epoch2.run import ActivityBucket
 from eawf.platform.install.canary import CanaryProvision
@@ -876,12 +879,53 @@ def test_ui_025_an_executing_leg_renders_its_elapsed_budget_and_progress_mode() 
     assert "opaque" in running or " of " in running
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="no producer writes a stalled signal (the attention stalled bucket is a declared "
-    "hole) and progress freshness is never aged, so stale and stalled cannot be told apart",
-)
-def test_ui_026_a_stopped_read_is_stale_and_a_leg_that_stopped_advancing_is_stalled() -> None:
-    from eawf.kernel.projection.attention import BUCKET_SOURCES, AttentionBucket, BucketSource
+def _unattended_with(liveness: HeldLiveness | None, now: datetime) -> str:
+    """Return the Unattended row of the running Run, drawn with ``liveness`` held at ``now``."""
+    session = Session()
+    session.route = "unattended"
+    view = View(
+        session=session,
+        fixture=Fixture.from_chrome(load_chrome()),
+        w=120,
+        h=30,
+        linked=True,
+        projection=native_frames._model("unattended"),
+        liveness=liveness,
+        now=now,
+    )
+    return next(row for row in render_route(view) if "RUN-00000001" in row)
 
-    assert BUCKET_SOURCES[AttentionBucket.STALLED] is not BucketSource.HOLE
+
+def _stall_over(run_key: str, raised_at: datetime) -> RunStallFact:
+    return RunStallFact(
+        run_ref=f"eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/{run_key}",
+        anchor_sequence=3,
+        last_activity_at=raised_at,
+        last_activity_kind=RunEventKind.TOOL_RESULT,
+        elapsed_seconds=600.0,
+        interval_seconds=600,
+        resume_method="runtime.run.control.request",
+        resume_control=ControlKind.RESUME,
+        raised_at=raised_at,
+    )
+
+
+def test_ui_026_a_stopped_read_is_stale_and_a_leg_that_stopped_advancing_is_stalled() -> None:
+    """The reader losing its source and the work stopping render as two different words."""
+    read_at = datetime(2026, 9, 30, 10, 0, tzinfo=UTC)
+    stalled = HeldLiveness(stalls=(_stall_over("RUN-00000001", read_at),), read_at=read_at)
+    fresh = read_at + timedelta(seconds=5)
+    old = read_at + timedelta(seconds=STALE_AFTER_SECONDS + 1)
+
+    assert "stalled · nothing since 10:00" in _unattended_with(stalled, fresh)
+    assert "stale · liveness last read 10:00" in _unattended_with(stalled, old)
+    quiet = HeldLiveness(stalls=(), read_at=read_at)
+    assert "stale" in _unattended_with(quiet, old)
+    assert _unattended_with(quiet, fresh).rstrip().endswith("? unknown")
+    for fields in (run_liveness("RUN-00000001", stalled, now=fresh),):
+        assert fields.value == "stalled"
+        assert fields.freshness is Freshness.LIVE
+    aged = run_liveness("RUN-00000001", stalled, now=old)
+    assert aged.freshness is Freshness.STALE
+    unread = run_liveness("RUN-00000001", None, now=fresh)
+    assert unread.state is TruthState.UNKNOWN

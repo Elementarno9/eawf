@@ -52,6 +52,7 @@ nav:
       - Doctor: reference/doctor.md
       - Enums: reference/enums.md
       - Exit codes: reference/exit-codes.md
+      - Machine envelope: reference/machine-envelope.md
       - Error codes: reference/error-codes.md
       - Hook events: reference/hook-events.md
       - Lockfile semantics: reference/lockfile-semantics.md

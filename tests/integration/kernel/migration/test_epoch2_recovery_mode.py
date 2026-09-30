@@ -402,7 +402,7 @@ def test_recover_through_the_cli_completes_the_activation(
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = json.loads(result.output)["result"]
     assert payload["status"] == "activation_completed"
     assert payload["authority"]["generation_id"] == crashed.generation_id
     assert read_marker(target) is not None

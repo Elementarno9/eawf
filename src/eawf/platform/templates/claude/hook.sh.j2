@@ -4,7 +4,8 @@
    `eawf.surfaces.render.hooks.HOOK_REGISTRY`), runtime (the `--runtime`
    value baked into the `eawf hook run` call — "claude" or "codex"),
    target_epoch (the engine schema epoch the bundle targets; a repository
-   at another epoch refuses the hook with migration guidance). The
+   at another epoch refuses the hook with migration guidance),
+   judged_tools (the `|`-joined tool names the data-loss guard judges). The
    host delivers hook input as a JSON document on stdin, so the wrapper
    forwards that stdin verbatim to `uv run eawf hook run <event_type>
    --runtime <runtime>`. When stdin is empty (or a TTY, for interactive
@@ -78,10 +79,22 @@ else
         "${_eawf_arg4}")
 fi
 
-{# Codex parses a hook's stdout, so every event but session start discards
-   the result envelope; session start prints the context document Codex
-   injects into the session. -#}
-{% if runtime == "codex" and event_type != "session_start" -%}
+{# Codex parses a hook's stdout, so every event but session start and the
+   pre-tool guard discards the result envelope; session start prints the context
+   document Codex injects into the session. The pre-tool hook fails closed: when
+   eawf itself cannot run, a call to a tool the data-loss guard judges is refused
+   with exit 2, which both hosts honour as a deny. -#}
+{% if event_type == "pre_tool_use" -%}
+set +e
+_eawf_out="$(printf '%s' "${_eawf_payload}" | "${_eawf_uv}" run eawf hook run pre_tool_use --runtime {{ runtime }} --target-epoch {{ target_epoch }})"
+_eawf_status=$?
+set -e
+if [ "${_eawf_status}" -ne 0 ] && printf '%s' "${_eawf_payload}" | grep -Eq '"tool_name"[[:space:]]*:[[:space:]]*"({{ judged_tools }})"'; then
+    printf 'Eä data-loss guard could not run (exit %s), so the call is refused\n' "${_eawf_status}" >&2
+    exit 2
+fi
+printf '%s' "${_eawf_out}"
+{% elif runtime == "codex" and event_type != "session_start" -%}
 printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run {{ event_type }} --runtime codex --target-epoch {{ target_epoch }} >/dev/null
 {% else -%}
 printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run {{ event_type }} --runtime {{ runtime }} --target-epoch {{ target_epoch }}

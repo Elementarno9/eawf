@@ -93,7 +93,7 @@ def test_con_060_a_json_dry_run_answers_the_block_and_sent_false(
     ]
     result = runner.invoke(app, args)
     assert result.exit_code == exit_codes.OK, result.output
-    payload = orjson.loads(result.stdout)
+    payload = orjson.loads(result.stdout)["result"]
     assert payload["sent"] is False
     assert payload["consequence"]["target"] == _TASK_URN
     assert payload["consequence"]["revision"] == 3

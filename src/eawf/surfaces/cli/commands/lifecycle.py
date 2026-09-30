@@ -103,7 +103,7 @@ project_app = typer.Typer(
 )
 track_app = typer.Typer(
     name="track",
-    help="Track lifecycle (add, switch).",
+    help="Track lifecycle (create, retire).",
     no_args_is_help=True,
 )
 phase_app = typer.Typer(
@@ -400,7 +400,6 @@ from eawf.surfaces.cli.commands import (  # noqa: E402
     domain_integration as _domain_integration,  # noqa: F401
 )
 from eawf.surfaces.cli.commands import domain_legacy as _domain_legacy  # noqa: E402, F401
-from eawf.surfaces.cli.commands import track as _track  # noqa: E402, F401
 
 # ---- Re-exports -------------------------------------------------------------
 

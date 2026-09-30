@@ -356,17 +356,21 @@ def _diff_registries_to_ops(
     return ops
 
 
-def _persist_registry_via_daemon(validated: Registry, registry_path: Path) -> bool:
+def _persist_registry_via_daemon(
+    validated: Registry, registry_path: Path, *, idempotency_key: str | None = None
+) -> None:
     """Dispatch the registry diff to the daemon's ``registry.update`` RPC.
 
     Loads the on-disk before-image, diffs *validated* against it, and
-    dispatches one RPC per add/remove op. Returns ``True`` when the
-    daemon handled the write (the caller skips the in-process arm) and
-    ``False`` when the daemon reported method-not-found (a pre-W10
-    daemon — the caller falls through to the in-process write).
+    dispatches one RPC per add/remove op. The caller's retry key names a
+    lone op as given and each op of several by its position, so a retry of
+    the same verb replays op for op. A daemon that does not serve the route
+    is refused rather than written around: the registry has one writer, and
+    a write the daemon never saw is one its bus never told anyone about.
 
     Raises:
-        StateConflict: Daemon required but unreachable
+        StateConflict: Daemon required but unreachable, or the running
+            daemon does not serve ``registry.update``
             (``kind="IntegrityViolation"``).
         UserError: On-disk registry exists but cannot be read
             (``kind="InvalidInput"``).
@@ -399,24 +403,28 @@ def _persist_registry_via_daemon(validated: Registry, registry_path: Path) -> bo
     os.environ["EAWF_REGISTRY_PATH"] = str(registry_path)
     try:
         with DaemonClient() as client:
-            for operation, repo_id, fields in ops:
+            for index, (operation, repo_id, fields) in enumerate(ops):
+                key = idempotency_key
+                if key is not None and len(ops) > 1:
+                    key = f"{key}:{index}"
                 try:
                     client.registry_update(
                         operation=operation,
                         repo_id=repo_id,
                         fields=fields,
+                        idempotency_key=key,
                         registry_path=str(registry_path),
                     )
                 except DaemonRpcError as exc:
                     if exc.code == -32601:
-                        # Pre-W10 daemon — drop through to in-process arm.
-                        logger.debug(
-                            "_persist_registry daemon-rpc method-not-found; "
-                            "falling back to in-process write"
-                        )
-                        return False
+                        logger.info(f"_persist_registry refused op={operation} route_missing")
+                        raise cli_errors.StateConflict(
+                            "daemon_required: the running daemon does not serve "
+                            "registry.update; run `eawf daemon stop` then "
+                            "`eawf daemon start` to load the current daemon",
+                            kind="IntegrityViolation",
+                        ) from exc
                     raise
-        return True
     finally:
         if previous is None:
             os.environ.pop("EAWF_REGISTRY_PATH", None)
@@ -424,7 +432,9 @@ def _persist_registry_via_daemon(validated: Registry, registry_path: Path) -> bo
             os.environ["EAWF_REGISTRY_PATH"] = previous
 
 
-def _persist_registry(registry: Registry, registry_path: Path) -> None:
+def _persist_registry(
+    registry: Registry, registry_path: Path, *, idempotency_key: str | None = None
+) -> None:
     """Write *registry* to *registry_path*.
 
     Since P24-W10 this helper is a thin dispatcher:
@@ -435,20 +445,23 @@ def _persist_registry(registry: Registry, registry_path: Path) -> None:
       ``registry.update`` RPCs (one per add/remove) via
       :func:`_persist_registry_via_daemon`. The daemon owns the
       portalock + atomic-rename + bus publish.
-    * **In-process fallback arm.** Reached when ``proxy_enabled`` is
-      ``False`` (V1 carve-out), ``EAWF_DAEMONLESS=1`` is set, OR the
-      daemon is unreachable. The legacy validate + lock + atomic-
-      write loop runs.
+    * **In-process arm.** Reached only when the operator asked for it:
+      ``proxy_enabled`` is ``False`` (V1 carve-out) or
+      ``EAWF_DAEMONLESS=1`` is set. The validate + lock + atomic-write
+      loop runs. An unreachable daemon, or one that does not serve the
+      route, is refused and never written around.
 
     Args:
         registry: Candidate registry to persist (already mutated).
         registry_path: Absolute path to ``~/.eawf/registry.json``
             (or a test override).
+        idempotency_key: The caller's retry key, sent with each
+            ``registry.update``; ``None`` sends none.
 
     Raises:
-        StateConflict: Daemon required but unreachable
-            (``kind="IntegrityViolation"``); or in-process arm could not
-            acquire the lock (``kind="LockConflict"``).
+        StateConflict: Daemon required but unreachable or not serving
+            the route (``kind="IntegrityViolation"``); or the in-process
+            arm could not acquire the lock (``kind="LockConflict"``).
         ValidationError: Candidate payload fails schema validation.
     """
     from pydantic import ValidationError as PydValidationError
@@ -462,12 +475,11 @@ def _persist_registry(registry: Registry, registry_path: Path) -> None:
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     payload = validated.model_dump(mode="json")
 
-    if _daemon_proxy_enabled_for_registry() and _persist_registry_via_daemon(
-        validated, registry_path
-    ):
+    if _daemon_proxy_enabled_for_registry():
+        _persist_registry_via_daemon(validated, registry_path, idempotency_key=idempotency_key)
         return
 
-    # In-process fallback arm (V1 carve-out / EAWF_DAEMONLESS=1 / pre-W10 daemon).
+    # In-process arm (V1 carve-out / EAWF_DAEMONLESS=1).
     try:
         with portalock.acquire(registry_path, timeout=5.0):
             atomic_write_json_locked(registry_path, payload)
@@ -475,14 +487,20 @@ def _persist_registry(registry: Registry, registry_path: Path) -> None:
         raise cli_errors.StateConflict(str(exc), kind="LockConflict") from exc
 
 
-def _persist_registry_or_exit(updated: Registry, target: Path, *, flags: GlobalFlags) -> None:
+def _persist_registry_or_exit(
+    updated: Registry,
+    target: Path,
+    *,
+    flags: GlobalFlags,
+    idempotency_key: str | None = None,
+) -> None:
     """Persist *updated* to *target*, exiting on a CLI error.
 
     Raises:
         typer.Exit: via :func:`emit_error` when the persist fails.
     """
     try:
-        _persist_registry(updated, target)
+        _persist_registry(updated, target, idempotency_key=idempotency_key)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
 

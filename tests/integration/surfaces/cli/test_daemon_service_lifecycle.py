@@ -299,7 +299,7 @@ def test_service_status_carries_agent_and_size_rows(
 
     res = runner.invoke(app, ["--json", "daemon", "service-status"])
     assert res.exit_code == 0, res.output
-    payload = orjson.loads(res.output.strip())
+    payload = orjson.loads(res.output.strip())["result"]
     assert payload["status"] == "not-installed"
     assert payload["launchd_agent"]["status"] in {"ok", "warn"}
     assert payload["runtime_dir_size"]["status"] in {"ok", "warn"}

@@ -2,14 +2,16 @@
 
 Split out of :mod:`eawf.surfaces.cli.commands.memory`. The
 :data:`memory_app` Typer group and the shared helpers (store-path
-resolvers, the confidence parser, the args-hash helper, the read-only
-state loader) live in the parent module; this module attaches the
-mutating command bodies via ``@memory_app.command(...)`` and owns the
+resolvers, the confidence parser, the args-hash helper, the native RPC
+helper, the note loader) live in the parent module; this module attaches
+the mutating command bodies via ``@memory_app.command(...)`` and owns the
 ``--older-than`` ISO-8601 duration parser.
 
-Each mutation handler follows the canonical sequence: load → mutate →
-validate → atomic_write (sibling-locked) → append store record →
-append event.
+Each note-writing handler is dispatch only: it parses its flags, sends one
+native ``memory.*`` verb, and renders the answer. The daemon reads the
+generation's memory ledger under its locks, decides the revisions, and
+commits each as a ledger line. A ``--dry-run`` reads the ledger here and
+writes nothing.
 """
 
 from __future__ import annotations
@@ -17,17 +19,20 @@ from __future__ import annotations
 import logging
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated
 
 import typer
+from pydantic import TypeAdapter
 
 from eawf.kernel.state.enums import MemoryStatus, StoreKind
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.commands.memory import (
     _args_hash,
     _events_path_for,
-    _load_state,
+    _load_notes,
     _memory_path_for,
+    _memory_rpc,
     _resolve_confidence,
     memory_app,
 )
@@ -36,6 +41,18 @@ from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
 
 logger = logging.getLogger(__name__)
+
+#: The daemon verbs the handlers send. Spelled here so the Typer tree
+#: builds without the daemon method registry on the path.
+MEMORY_ADD: str = "memory.add"
+MEMORY_PROMOTE: str = "memory.promote"
+MEMORY_LINK: str = "memory.link"
+MEMORY_PRUNE: str = "memory.prune"
+MEMORY_GC: str = "memory.gc"
+MEMORY_TIER: str = "memory.tier"
+
+#: The id lists a prune or gc answer carries, validated where they enter.
+_IDS: TypeAdapter[list[str]] = TypeAdapter(list[str])
 
 
 @memory_app.command("add")
@@ -49,52 +66,20 @@ def memory_add(
         typer.Option("--confidence", help="One of h/m/l (default medium)."),
     ] = None,
 ) -> None:
-    """Write a new memory entry to ``memory.jsonl`` + ``state.memory_index``."""
-    from eawf.platform.memory.store import add_memory
-    from eawf.runtime.session.store import append_event
-    from eawf.surfaces.cli._mutation import state_transaction
-
+    """File a new memory note on the generation's memory ledger."""
     flags: GlobalFlags = ctx.obj
     try:
         conf = _resolve_confidence(confidence)
-        state_path = resolve_state_path(flags.workspace)
-        memory_path = _memory_path_for(state_path)
-        events_path = _events_path_for(state_path)
-        with state_transaction(state_path) as state:
-            record = add_memory(
-                state=state,
-                memory_path=memory_path,
-                scope_id=scope,
-                title=title,
-                body=body,
-                confidence=conf,
-            )
-        append_event(
-            events_path=events_path,
-            event_id=f"{record.summary.id}-event",
-            event_type="memory.add",
-            actor="cli",
-            command="memory add",
-            args_hash=_args_hash({"scope": scope, "title": title, "confidence": conf.value}),
-            status="ok",
-            message=f"memory added: {record.summary.id}",
-            scope_id=scope,
-            occurred_at=datetime.now(UTC),
-        )
-        emit_json_or_text(
-            payload={
-                "id": record.summary.id,
-                "scope_id": scope,
-                "confidence": conf.value,
-                "summary": record.summary.summary,
-            },
-            text=f"memory added: {record.summary.id}",
+        answer = _memory_rpc(
+            MEMORY_ADD,
+            {"scope_id": scope, "title": title, "body": body, "confidence": conf.value},
+            state_path=resolve_state_path(flags.workspace),
             flags=flags,
+            verb_text="memory add",
         )
+        emit_json_or_text(payload=answer, text=f"memory added: {answer['id']}", flags=flags)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @memory_app.command("promote")
@@ -120,111 +105,79 @@ def memory_promote(
         str,
         typer.Option(
             "--to",
-            help="Promotion target. 'memory' (default) = source record -> memory entry; "
-            "'artifact' = memory entry -> durable artifact (Decision in v0.1).",
+            help="Promotion target. 'memory' (default) = source record -> memory note; "
+            "'artifact' = memory note -> a decision the decision ledger holds.",
         ),
     ] = "memory",
     artifact_kind: Annotated[
         str,
         typer.Option(
             "--artifact-kind",
-            help="Artifact target kind (only 'decision' is supported in v0.1).",
+            help="Artifact target kind (only 'decision' is supported).",
         ),
     ] = "decision",
     artifact_id: Annotated[
         str | None,
         typer.Option(
             "--artifact-id",
-            help="Optional pre-allocated artifact ID; auto-allocated when omitted.",
+            help="The key of the decision the note is retired into; required with --to artifact.",
         ),
     ] = None,
 ) -> None:
     """Promote a record. ``--to memory`` (default) or ``--to artifact``."""
-    from eawf.kernel.store.paths import store_path
-    from eawf.platform.memory.promotion import PromotionError, promote_record
-    from eawf.runtime.session.store import append_event
-    from eawf.surfaces.cli._mutation import state_transaction
-
     flags: GlobalFlags = ctx.obj
-    target = to.strip().lower()
-    if target not in {"memory", "artifact"}:
-        cli_errors.emit_error(
-            cli_errors.UserError(
-                f"--to must be one of memory|artifact; got {to!r}", kind="InvalidInput"
-            ),
-            flags=flags,
-        )
-        return
-    if target == "artifact":
-        _memory_promote_to_artifact(
-            ctx=ctx,
-            session=session,
-            source=source,
-            source_kind=source_kind,
-            artifact_kind=artifact_kind,
-            artifact_id=artifact_id,
-        )
-        return
     try:
-        conf = _resolve_confidence(confidence)
+        target = to.strip().lower()
+        if target not in {"memory", "artifact"}:
+            raise cli_errors.UserError(
+                f"--to must be one of memory|artifact; got {to!r}", kind="InvalidInput"
+            )
         state_path = resolve_state_path(flags.workspace)
-        memory_path = _memory_path_for(state_path)
-        events_path = _events_path_for(state_path)
+        if target == "artifact":
+            _promote_to_artifact(
+                flags=flags,
+                state_path=state_path,
+                session=session,
+                source=source,
+                source_kind=source_kind,
+                artifact_kind=artifact_kind,
+                artifact_id=artifact_id,
+            )
+            return
+        conf = _resolve_confidence(confidence)
         try:
-            source_kind_enum = StoreKind(source_kind)
+            kind = StoreKind(source_kind)
         except ValueError as exc:
             raise cli_errors.UserError(
                 f"--source-kind must be one of {[k.value for k in StoreKind]}; got {source_kind!r}",
                 kind="InvalidInput",
             ) from exc
-        source_path = store_path(state_path, source_kind_enum)
-        with state_transaction(state_path) as state:
-            if session not in state.agent_sessions:
-                raise cli_errors.UserError(
-                    f"session {session!r} not in agent_sessions", kind="NotFound"
-                )
-            try:
-                result = promote_record(
-                    state=state,
-                    source_store_path=source_path,
-                    source_id=source,
-                    memory_path=memory_path,
-                    scope_id=scope,
-                    confidence=conf,
-                )
-            except PromotionError as exc:
-                raise cli_errors.UserError(str(exc), kind="NotFound") from exc
-        append_event(
-            events_path=events_path,
-            event_id=f"{result.record.summary.id}-promote",
-            event_type="memory.promote",
-            actor=session,
-            command="memory promote",
-            args_hash=_args_hash({"session": session, "source": source, "kind": source_kind}),
-            status="ok",
-            message=(f"promoted source={source} to memory={result.record.summary.id}"),
-            scope_id=result.record.summary.scope_id,
-            occurred_at=datetime.now(UTC),
+        answer = _memory_rpc(
+            MEMORY_PROMOTE,
+            {
+                "session": session,
+                "source": source,
+                "source_kind": kind.value,
+                "scope_id": scope,
+                "confidence": conf.value,
+            },
+            state_path=state_path,
+            flags=flags,
+            verb_text="memory promote",
         )
         emit_json_or_text(
-            payload={
-                "id": result.record.summary.id,
-                "scope_id": result.record.summary.scope_id,
-                "source_id": source,
-                "session": session,
-            },
-            text=f"memory promoted: {result.record.summary.id} (from {source})",
+            payload={**answer, "session": session},
+            text=f"memory promoted: {answer['id']} (from {source})",
             flags=flags,
         )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
-def _memory_promote_to_artifact(
+def _promote_to_artifact(
     *,
-    ctx: typer.Context,
+    flags: GlobalFlags,
+    state_path: Path,
     session: str,
     source: str,
     source_kind: str,
@@ -233,95 +186,42 @@ def _memory_promote_to_artifact(
 ) -> None:
     """Handle ``eawf memory promote --to artifact``.
 
-    Memory entries (``MEM-…`` IDs) are canonised into a durable
-    :class:`~eawf.kernel.state.models.Decision` row. The implementation lives in
-    :func:`eawf.platform.memory.promotion.promote_to_artifact`; this CLI shim:
+    The note is retired into a decision the decision ledger already holds:
+    a decision carries the options it weighed and the evidence it stands
+    on, which a note never recorded, so the decision is filed on its own
+    and named here by its key.
 
-    1. Validates that ``--source-kind memory`` is set (the inverse direction
-       requires the source to be a memory entry, not a store record).
-    2. Routes errors to the canonical exit codes (3 INVALID_INPUT / 4
-       VALIDATION_FAILED / 2 NOT_FOUND).
-    3. Emits a ``memory.promote`` event with the artifact ID linked.
+    Raises:
+        UserError: ``--source-kind`` is not ``memory``, ``--artifact-kind``
+            is not ``decision``, or ``--artifact-id`` is missing.
     """
-    from eawf.kernel.store.paths import store_path
-    from eawf.platform.memory.promotion import PromotionError, promote_to_artifact
-    from eawf.runtime.session.store import append_event
-    from eawf.surfaces.cli._mutation import state_transaction
-
-    flags: GlobalFlags = ctx.obj
-    try:
-        if source_kind.strip().lower() != StoreKind.MEMORY.value:
-            raise cli_errors.UserError(
-                f"--to artifact requires --source-kind memory; got {source_kind!r}",
-                kind="InvalidInput",
-            )
-        if artifact_kind.strip().lower() != "decision":
-            raise cli_errors.UserError(
-                f"--artifact-kind must be 'decision' in v0.1; got {artifact_kind!r}",
-                kind="InvalidInput",
-            )
-        state_path = resolve_state_path(flags.workspace)
-        memory_path = _memory_path_for(state_path)
-        decisions_path = store_path(state_path, StoreKind.DECISION)
-        events_path = _events_path_for(state_path)
-        with state_transaction(state_path) as state:
-            if session not in state.agent_sessions:
-                raise cli_errors.UserError(
-                    f"session {session!r} not in agent_sessions", kind="NotFound"
-                )
-            try:
-                result = promote_to_artifact(
-                    state=state,
-                    memory_path=memory_path,
-                    decisions_path=decisions_path,
-                    source_id=source,
-                    artifact_kind=artifact_kind,
-                    artifact_id=artifact_id,
-                )
-            except PromotionError as exc:
-                msg = str(exc)
-                if "not in state.memory_index" in msg or "not found" in msg:
-                    raise cli_errors.UserError(msg, kind="NotFound") from exc
-                raise cli_errors.UserError(msg, kind="InvalidInput") from exc
-        append_event(
-            events_path=events_path,
-            event_id=f"{result.artifact_id}-from-{source}",
-            event_type="memory.promote",
-            actor=session,
-            command="memory promote --to artifact",
-            args_hash=_args_hash(
-                {
-                    "session": session,
-                    "source": source,
-                    "to": "artifact",
-                    "artifact_kind": artifact_kind,
-                }
-            ),
-            status="ok",
-            message=(
-                f"promoted memory={source} to artifact={result.artifact_id} ({artifact_kind})"
-            ),
-            scope_id=result.scope_id,
-            occurred_at=datetime.now(UTC),
+    if source_kind.strip().lower() != StoreKind.MEMORY.value:
+        raise cli_errors.UserError(
+            f"--to artifact requires --source-kind memory; got {source_kind!r}",
+            kind="InvalidInput",
         )
-        emit_json_or_text(
-            payload={
-                "id": result.memory_id,
-                "scope_id": result.scope_id,
-                "promoted_to_artifact_id": result.artifact_id,
-                "artifact_kind": result.artifact_kind,
-                "session": session,
-            },
-            text=(
-                f"memory promoted to artifact: {result.memory_id} -> "
-                f"{result.artifact_id} ({result.artifact_kind})"
-            ),
-            flags=flags,
+    if artifact_kind.strip().lower() != "decision":
+        raise cli_errors.UserError(
+            f"--artifact-kind must be 'decision'; got {artifact_kind!r}", kind="InvalidInput"
         )
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
+    if artifact_id is None:
+        raise cli_errors.UserError(
+            "--to artifact needs --artifact-id: file the decision with `eawf record append` "
+            "first, then name its key here",
+            kind="InvalidInput",
+        )
+    answer = _memory_rpc(
+        MEMORY_LINK,
+        {"session": session, "source": source, "artifact_id": artifact_id},
+        state_path=state_path,
+        flags=flags,
+        verb_text="memory promote",
+    )
+    emit_json_or_text(
+        payload={**answer, "artifact_kind": "decision", "session": session},
+        text=f"memory promoted to artifact: {answer['id']} -> {artifact_id} (decision)",
+        flags=flags,
+    )
 
 
 @memory_app.command("compact")
@@ -449,21 +349,16 @@ def memory_prune(
         bool,
         typer.Option(
             "--dry-run",
-            help="Report which IDs would flip without mutating state or jsonl.",
+            help="Report which IDs would flip without writing anything.",
         ),
     ] = False,
 ) -> None:
-    """Soft-delete prune. Flips status to PRUNED; preserves the prior record."""
-    from eawf.platform.memory.prune import PruneError, prune_memory
-    from eawf.runtime.session.store import append_event
-    from eawf.surfaces.cli._mutation import state_transaction
+    """Soft-delete prune. Flips status to PRUNED; the prior revision stays on the ledger."""
+    from eawf.platform.memory.book import select_prunable
 
     flags: GlobalFlags = ctx.obj
     try:
-        try:
-            age_days = _parse_age_days(older_than)
-        except cli_errors.CliError:
-            raise
+        age_days = _parse_age_days(older_than)
         try:
             status_filter = MemoryStatus(status.strip().lower())
         except ValueError as exc:
@@ -474,93 +369,47 @@ def memory_prune(
         if status_filter == MemoryStatus.ACTIVE and not flags.no_input:
             raise cli_errors.UserError(
                 "--status active requires --no-input (or an explicit confirm) — "
-                "pruning live entries is irreversible without compaction.",
+                "pruning live entries retires them from every read.",
                 kind="UserDeclined",
             )
         state_path = resolve_state_path(flags.workspace)
-        memory_path = _memory_path_for(state_path)
-        events_path = _events_path_for(state_path)
-
         if dry_run:
-            # Read-only path: load state, run prune in dry-run mode, emit
-            # report. No state-transaction needed because nothing is written.
-            state_ro = _load_state(state_path)
-            try:
-                result = prune_memory(
-                    state=state_ro,
-                    memory_path=memory_path,
-                    age_days=age_days,
-                    status_filter=status_filter,
-                    scope_id=scope,
-                    dry_run=True,
-                )
-            except PruneError as exc:
-                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-            payload = {
-                "pruned_ids": result.pruned_ids,
-                "skipped_ids": result.skipped_ids,
-                "dry_run": True,
-                "older_than_days": result.older_than_days,
-                "scope_id": result.scope_id,
-                "status_filter": status_filter.value,
-            }
-            text = (
-                f"would prune: {len(result.pruned_ids)} entries "
-                f"(scope={scope}, older_than_days={age_days}, status={status_filter.value})"
+            selection = select_prunable(
+                _load_notes(state_path),
+                age_days=age_days,
+                status_filter=status_filter,
+                scope_id=scope,
+                now=datetime.now(UTC),
             )
-            emit_json_or_text(payload=payload, text=text, flags=flags)
-            return
-
-        with state_transaction(state_path) as state:
-            try:
-                result = prune_memory(
-                    state=state,
-                    memory_path=memory_path,
-                    age_days=age_days,
-                    status_filter=status_filter,
-                    scope_id=scope,
-                    dry_run=False,
-                )
-            except PruneError as exc:
-                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-        append_event(
-            events_path=events_path,
-            event_id=f"memory-prune-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
-            event_type="memory.prune",
-            actor="cli",
-            command="memory prune",
-            args_hash=_args_hash(
-                {
-                    "scope": scope,
-                    "older_than_days": age_days,
-                    "status": status_filter.value,
-                }
-            ),
-            status="ok",
-            message=(
-                f"pruned {len(result.pruned_ids)} entries "
-                f"(scope={scope}, older_than_days={age_days})"
-            ),
-            scope_id=scope,
-            occurred_at=datetime.now(UTC),
-        )
+            pruned_ids, skipped_ids = selection.selected, selection.skipped
+        else:
+            answer = _memory_rpc(
+                MEMORY_PRUNE,
+                {"age_days": age_days, "status": status_filter.value, "scope_id": scope},
+                state_path=state_path,
+                flags=flags,
+                verb_text="memory prune",
+            )
+            pruned_ids, skipped_ids = (
+                _IDS.validate_python(answer["pruned_ids"]),
+                _IDS.validate_python(answer["skipped_ids"]),
+            )
         payload = {
-            "pruned_ids": result.pruned_ids,
-            "skipped_ids": result.skipped_ids,
-            "dry_run": False,
-            "older_than_days": result.older_than_days,
-            "scope_id": result.scope_id,
+            "pruned_ids": pruned_ids,
+            "skipped_ids": skipped_ids,
+            "dry_run": dry_run,
+            "older_than_days": age_days,
+            "scope_id": scope,
             "status_filter": status_filter.value,
         }
+        verb = "would prune" if dry_run else "pruned"
         text = (
-            f"pruned {len(result.pruned_ids)} entries "
+            f"{verb} {len(pruned_ids)} entries "
             f"(scope={scope}, older_than_days={age_days}, status={status_filter.value})"
         )
         emit_json_or_text(payload=payload, text=text, flags=flags)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @memory_app.command("gc")
@@ -577,14 +426,12 @@ def memory_gc(
         bool,
         typer.Option(
             "--dry-run",
-            help="Report which IDs would archive without mutating state.",
+            help="Report which IDs would archive without writing anything.",
         ),
     ] = False,
 ) -> None:
-    """Archive matched memory entries by flipping their ``tier`` to ARCHIVAL."""
-    from eawf.platform.memory.gc import GcError, gc_memory
-    from eawf.runtime.session.store import append_event
-    from eawf.surfaces.cli._mutation import state_transaction
+    """Archive matched memory notes by moving them to the ARCHIVAL tier."""
+    from eawf.platform.memory.book import select_archivable
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -593,69 +440,34 @@ def memory_gc(
                 f"--threshold-days must be >= 0; got {threshold_days}", kind="InvalidInput"
             )
         state_path = resolve_state_path(flags.workspace)
-        memory_path = _memory_path_for(state_path)
-        events_path = _events_path_for(state_path)
-
         if dry_run:
-            state_ro = _load_state(state_path)
-            try:
-                report = gc_memory(
-                    state=state_ro,
-                    memory_path=memory_path,
-                    threshold_days=threshold_days,
-                    dry_run=True,
-                )
-            except GcError as exc:
-                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-            payload = {
-                "archived_ids": report.archived_ids,
-                "skipped_ids": report.skipped_ids,
-                "dry_run": True,
-                "threshold_days": report.threshold_days,
-            }
-            text = (
-                f"would archive {len(report.archived_ids)} entries "
-                f"(threshold_days={threshold_days})"
+            selection = select_archivable(
+                _load_notes(state_path), threshold_days=threshold_days, now=datetime.now(UTC)
             )
-            emit_json_or_text(payload=payload, text=text, flags=flags)
-            return
-
-        with state_transaction(state_path) as state:
-            try:
-                report = gc_memory(
-                    state=state,
-                    memory_path=memory_path,
-                    threshold_days=threshold_days,
-                    dry_run=False,
-                )
-            except GcError as exc:
-                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-        append_event(
-            events_path=events_path,
-            event_id=f"memory-gc-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
-            event_type="memory.gc",
-            actor="cli",
-            command="memory gc",
-            args_hash=_args_hash({"threshold_days": threshold_days}),
-            status="ok",
-            message=(
-                f"archived {len(report.archived_ids)} entries (threshold_days={threshold_days})"
-            ),
-            scope_id=None,
-            occurred_at=datetime.now(UTC),
-        )
+            archived_ids, skipped_ids = selection.selected, selection.skipped
+        else:
+            answer = _memory_rpc(
+                MEMORY_GC,
+                {"threshold_days": threshold_days},
+                state_path=state_path,
+                flags=flags,
+                verb_text="memory gc",
+            )
+            archived_ids, skipped_ids = (
+                _IDS.validate_python(answer["archived_ids"]),
+                _IDS.validate_python(answer["skipped_ids"]),
+            )
         payload = {
-            "archived_ids": report.archived_ids,
-            "skipped_ids": report.skipped_ids,
-            "dry_run": False,
-            "threshold_days": report.threshold_days,
+            "archived_ids": archived_ids,
+            "skipped_ids": skipped_ids,
+            "dry_run": dry_run,
+            "threshold_days": threshold_days,
         }
-        text = f"archived {len(report.archived_ids)} entries (threshold_days={threshold_days})"
+        verb = "would archive" if dry_run else "archived"
+        text = f"{verb} {len(archived_ids)} entries (threshold_days={threshold_days})"
         emit_json_or_text(payload=payload, text=text, flags=flags)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @memory_app.command("tier")
@@ -670,10 +482,8 @@ def memory_tier(
         ),
     ],
 ) -> None:
-    """Set the tier on a single memory entry."""
+    """Set the tier on a single memory note."""
     from eawf.kernel.state.enums import MemoryTier
-    from eawf.runtime.session.store import append_event
-    from eawf.surfaces.cli._mutation import state_transaction
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -684,38 +494,17 @@ def memory_tier(
                 f"--tier must be one of {[t.value for t in MemoryTier]}; got {tier!r}",
                 kind="InvalidInput",
             ) from exc
-        state_path = resolve_state_path(flags.workspace)
-        events_path = _events_path_for(state_path)
-        with state_transaction(state_path) as state:
-            index = state.memory_index or {}
-            summary = index.get(mem_id)
-            if summary is None:
-                raise cli_errors.UserError(f"memory entry not found: {mem_id}", kind="NotFound")
-            prior = summary.tier
-            index[mem_id] = summary.model_copy(update={"tier": target_tier})
-            state.memory_index = index
-        append_event(
-            events_path=events_path,
-            event_id=f"memory-tier-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
-            event_type="memory.tier",
-            actor="cli",
-            command="memory tier",
-            args_hash=_args_hash({"id": mem_id, "tier": target_tier.value}),
-            status="ok",
-            message=f"tier {prior.value} -> {target_tier.value} for {mem_id}",
-            scope_id=summary.scope_id,
-            occurred_at=datetime.now(UTC),
+        answer = _memory_rpc(
+            MEMORY_TIER,
+            {"id": mem_id, "tier": target_tier.value},
+            state_path=resolve_state_path(flags.workspace),
+            flags=flags,
+            verb_text="memory tier",
         )
         emit_json_or_text(
-            payload={
-                "id": mem_id,
-                "tier": target_tier.value,
-                "prior_tier": prior.value,
-            },
-            text=f"memory {mem_id} tier: {prior.value} -> {target_tier.value}",
+            payload={"id": mem_id, "tier": answer["tier"], "prior_tier": answer["prior_tier"]},
+            text=f"memory {mem_id} tier: {answer['prior_tier']} -> {answer['tier']}",
             flags=flags,
         )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)

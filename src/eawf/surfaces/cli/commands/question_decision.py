@@ -66,8 +66,9 @@ def question_open_decision(
 def question_answer(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help="The pending action the numbered prompt names.")],
-    revision: Annotated[
-        int, typer.Option("--revision", help="The revision the numbered prompt names.")
+    expected_revision: Annotated[
+        int,
+        typer.Option("--expected-revision", help="The revision the numbered prompt names."),
     ],
     reply: Annotated[str, typer.Option("--reply", help="The option number the operator typed.")],
     actor: Annotated[str, typer.Option("--actor", help="Principal key of the person answering.")],
@@ -89,7 +90,7 @@ def question_answer(
         QUESTION_ANSWER_NUMBERED,
         {
             "urn": urn,
-            "expected_revision": revision,
+            "expected_revision": expected_revision,
             "idempotency_key": idempotency_key,
             "actor": actor,
             "resolver": {"principal_kind": "human", "principal_id": actor},

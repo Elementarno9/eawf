@@ -25,7 +25,9 @@ from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
+from eawf.runtime.budget.legacy_notices import PAUSE_EVENT_TYPE
 from eawf.runtime.budget.notices import load_notice_ledger, notices_path
+from eawf.runtime.daemon.pause_migration import open_legacy_pauses
 from eawf.runtime.daemon.stale_wave import (
     ESTIMATE_PASSED_EVENT_TYPE,
     NOTICE_OPENED_EVENT_TYPE,
@@ -36,12 +38,6 @@ from eawf.runtime.daemon.stale_wave import (
 )
 from eawf.workflow.estimation.buckets import EFFORT_DISPERSION_MINUTES
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
-from eawf.workflow.skills.needs_user import (
-    AUTO_RESOLVED_CHOICE,
-    PAUSE_EVENT_TYPE,
-    list_open_pauses,
-    retract_wave_pauses,
-)
 
 pytestmark = pytest.mark.unit
 
@@ -327,7 +323,7 @@ def test_sweep_records_a_crossing_once_per_claim_and_no_pause(tmp_path: Path) ->
     assert first[0].payload["extras"]["claim_ref"] == "SES-test"
     assert again == []
     assert PAUSE_EVENT_TYPE not in _event_types(state_path)
-    assert list_open_pauses(state_path) == []
+    assert open_legacy_pauses(state_path) == []
     assert state_path.read_bytes() == before
 
 
@@ -391,10 +387,10 @@ def test_run_sweep_loop_imports_legacy_pauses_before_sweeping(tmp_path: Path) ->
 
     (notice,) = load_notice_ledger(notices_path(state_path)).notices.values()
     assert notice.provenance == ("urn:legacy:1",)
-    assert list_open_pauses(state_path) == []
+    assert open_legacy_pauses(state_path) == []
 
 
-# ---- legacy pauses: still listed and retracted until imported ----------------
+# ---- legacy pauses: imported as notices, never listed as pauses --------------
 
 
 def _append_legacy_pause(state_path: Path, *, wave_id: str = _WAVE_ID) -> None:
@@ -439,35 +435,3 @@ def _append_legacy_pause(state_path: Path, *, wave_id: str = _WAVE_ID) -> None:
             artifact_ids=[],
         ),
     )
-
-
-def test_list_open_pauses_exposes_subject_wave_id(tmp_path: Path) -> None:
-    state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path, _state_payload(claimed_at=_claimed_at(0.5)))
-    _append_legacy_pause(state_path)
-
-    pauses = list_open_pauses(state_path)
-
-    assert [p.wave_id for p in pauses] == [_WAVE_ID]
-
-
-def test_retract_wave_pauses_clears_the_open_advisory(tmp_path: Path) -> None:
-    state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path, _state_payload(claimed_at=_claimed_at(0.5)))
-    _append_legacy_pause(state_path)
-    published: list[Envelope] = []
-
-    resolved = retract_wave_pauses(state_path, wave_id=_WAVE_ID, publish=published.append)
-
-    assert resolved == ["urn:legacy:1"]
-    assert list_open_pauses(state_path) == []
-    assert published[0].payload["extras"]["choice"] == AUTO_RESOLVED_CHOICE
-
-
-def test_retract_wave_pauses_leaves_other_waves_advisories(tmp_path: Path) -> None:
-    state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path, _state_payload(claimed_at=_claimed_at(0.5)))
-    _append_legacy_pause(state_path)
-
-    assert retract_wave_pauses(state_path, wave_id="P28-I02-W99") == []
-    assert len(list_open_pauses(state_path)) == 1

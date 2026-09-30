@@ -64,6 +64,8 @@ Claude Code emits hook payloads with a stable `hook_event_name` field. The trans
 
 Two handlers share the tool-use events and each filters by `tool_name`: `runtime.host_tool` states every call on its Run's transcript, and `runtime.host_file_edit` brackets `Edit`, `Write` and `MultiEdit` so each edit lands as a file change carrying the trees on either side and its diff.
 
+Before any of them, `pre_tool_use` runs the data-loss guard (`runtime/sandbox/data_loss.py`) on Claude Code and Codex. It refuses exactly four patterns, fail-closed: a managed worktree removed, moved or reset by a non-Eawf route; a worktree created outside `.ea/worktrees` (host-native worktrees included); a `git commit` or `git push` naming no directory from a working directory that drifted out of the session's work tree; and a direct write to `.ea/state.json`, `.ea/store`, `.ea/ledger`, `.ea/telemetry.db` or `.ea/local/epoch2`. A refusal is printed as the host's `permissionDecision: deny` and filed through `runtime.host.tool.deny` as a sandbox decision; an unreachable daemon loses only the record. OpenCode's bridge has no pre-tool event and cannot enforce the guard.
+
 Unrecognised payloads (missing `hook_event_name`, unknown event, non-Bash tools without a v1 mapping) → `route_claude_payload` returns `None` and emits a `logging.warning(...)`. The router never raises.
 
 ## CLI surface

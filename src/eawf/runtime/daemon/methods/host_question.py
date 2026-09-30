@@ -15,9 +15,13 @@ that is one of the offered options chooses it; any other answer is the operator'
 words, recorded as a reply.
 
 A question lives on the run ledger beside the Run it holds, one line per revision
-under its own ``QST-####`` key, as a provider permission does. Both verbs are
-idempotent on the host's call: a retried hook finds the questions that call raised,
-and an answer to a question already answered writes nothing.
+under its own ``QST-####`` key, as a provider permission does. Its key is taken from the
+one key space every question of the tree shares, the questions a Campaign files in the
+document included, so two questions never answer to one address. While it waits, the
+Run waits on a person: ``raise`` opens a pause over the Run naming the question, and the
+answer resolves that pause in the same transaction. Both verbs are idempotent on the
+host's call: a retried hook finds the questions that call raised, and an answer to a
+question already answered writes nothing.
 """
 
 from __future__ import annotations
@@ -37,6 +41,7 @@ from eawf.kernel.identity import (
     format_qualified_urn,
     parse_qualified_urn,
 )
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.runtime.events import QuestionActionPayload, RunEventKind
 from eawf.kernel.state.enums import OpenQuestionStatus
 from eawf.kernel.state.epoch2.authority import RootAuthority
@@ -48,12 +53,15 @@ from eawf.kernel.state.epoch2.question import (
     QuestionReply,
 )
 from eawf.kernel.state.epoch2.values import EntityOrigin
+from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
+from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.host_subagent import HARNESS_ACTORS
+from eawf.runtime.daemon.methods.pause import open_person_pause, resolve_person_pauses
 from eawf.runtime.daemon.methods.permission import host_run
 from eawf.runtime.daemon.methods.run import append_run_event
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
@@ -165,7 +173,7 @@ def _event_ref(asked_by: str, position: int, phase: str) -> str:
     return f"EVT-{hashlib.sha256(body.encode()).hexdigest()[:32]}"
 
 
-def _latest(records: tuple[LedgerRecord, ...]) -> dict[str, HostQuestionLine]:
+def host_question_lines(records: tuple[LedgerRecord, ...]) -> dict[str, HostQuestionLine]:
     """Return the latest revision of every host question on the run ledger, by key."""
     latest: dict[str, HostQuestionLine] = {}
     for item in records:
@@ -176,6 +184,55 @@ def _latest(records: tuple[LedgerRecord, ...]) -> dict[str, HostQuestionLine]:
         if standing is None or line.question.revision > standing.question.revision:
             latest[line.question.key] = line
     return latest
+
+
+def held_questions(
+    document: dict[str, Any], records: tuple[LedgerRecord, ...]
+) -> dict[str, OpenQuestion]:
+    """Return every question of the tree at its latest revision, by key.
+
+    A question a Campaign files is a row of the document; one a host asks is a line of
+    the run ledger. Both are the one record, so a reader that asks what questions the
+    tree holds reads them here rather than one store. A row the cutover imported from
+    epoch 1 is no native question and is left out.
+
+    Args:
+        document: The tree's document.
+        records: The run ledger's lines.
+    """
+    held = {
+        key: OpenQuestion.model_validate(row)
+        for key, row in document_rows(document, Epoch2Collection.OPEN_QUESTION).items()
+        if "urn" in row
+    }
+    held.update({key: line.question for key, line in host_question_lines(records).items()})
+    return held
+
+
+def open_question_rows(authority: RootAuthority) -> tuple[dict[str, Any], ...]:
+    """Return every question a host asked that still waits on an answer, as register rows.
+
+    Args:
+        authority: The fence-cleared tree whose run ledger is read.
+
+    Returns:
+        Each question's latest revision in key order; empty when the tree has no run
+        ledger yet.
+    """
+    assert authority.target is not None and authority.generation_id is not None
+    document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    lines = host_question_lines(read_ledger_records(ledger_path(document, Epoch2Collection.RUN)))
+    live = (OpenQuestionStatus.OPEN, OpenQuestionStatus.BLOCKED)
+    return tuple(
+        lines[key].question.model_dump(mode="json")
+        for key in sorted(lines)
+        if lines[key].question.status in live
+    )
+
+
+def question_keys(document: dict[str, Any], records: tuple[LedgerRecord, ...]) -> set[str]:
+    """Return every ``QST`` key the tree has given out, whichever store holds its question."""
+    return {*document_rows(document, Epoch2Collection.OPEN_QUESTION), *host_question_lines(records)}
 
 
 def _question_urn(run: QualifiedUrn, key: str) -> QualifiedUrn:
@@ -203,7 +260,9 @@ def _options(asked: HostAskedQuestion) -> tuple[QuestionOption, ...]:
     )
 
 
-def _append(session: RootSession, line: HostQuestionLine, *, now: datetime) -> LedgerRecord:
+def append_host_question(
+    session: RootSession, line: HostQuestionLine, *, now: datetime
+) -> LedgerRecord:
     """Append one revision of a host question as a line of the run ledger, and return it."""
     record = LedgerRecord(
         collection=Epoch2Collection.RUN,
@@ -221,9 +280,11 @@ def _raise_questions(
 ) -> tuple[HostQuestionLine, ...]:
     """Record every question of the call not already recorded, and return them all."""
     asked_by = _call_digest(args)
-    latest = _latest(read_ledger_records(session.ledger_path(Epoch2Collection.RUN)))
+    records = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
+    latest = host_question_lines(records)
     standing = {line.position: line for line in latest.values() if line.asked_by == asked_by}
-    ordinal = max((int(key.split("-", 1)[1]) for key in latest), default=0)
+    taken = question_keys(session.read_document(), records)
+    ordinal = max((int(key.split("-", 1)[1]) for key in taken), default=0)
     lines: list[HostQuestionLine] = []
     for position, asked in enumerate(args.questions):
         line = standing.get(position)
@@ -248,7 +309,8 @@ def _raise_questions(
                     status=OpenQuestionStatus.BLOCKED,
                 ),
             )
-            _append(session, line, now=now)
+            append_host_question(session, line, now=now)
+            open_person_pause(session, scope_ref=run, waiting_on_ref=line.question.urn, now=now)
         lines.append(line)
     return tuple(lines)
 
@@ -363,7 +425,8 @@ def answer_host_questions(
                 update={"question": _answered(line, words, actor=actor, now=now)}
             )
             raised.append(line)
-            answered.append((moved, _append(session, moved, now=now)))
+            answered.append((moved, append_host_question(session, moved, now=now)))
+        resolve_person_pauses(session, (line.question.urn for line, _ in answered), now=now)
     for line in raised:
         _state(context, run, line, actor=actor, receipt=None, now=now)
     for line, record in answered:
@@ -410,5 +473,10 @@ __all__ = [
     "HostQuestionCall",
     "HostQuestionLine",
     "answer_host_questions",
+    "append_host_question",
+    "held_questions",
+    "host_question_lines",
+    "open_question_rows",
+    "question_keys",
     "raise_host_questions",
 ]

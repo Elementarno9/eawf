@@ -19,7 +19,9 @@ path.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner
@@ -28,57 +30,39 @@ from eawf.kernel.state.enums import McpRisk, McpStatus
 from eawf.kernel.state.models import McpServer
 from eawf.runtime.mcp.installer import install_runtime_entry, remove_runtime_entry
 from eawf.surfaces.cli.app import app
+from tests.integration._memory_native import native_memory_tree
 
 pytestmark = pytest.mark.integration
 
 runner = CliRunner()
 
 
-def _seed_state(tmp_path: Path) -> Path:
-    state_dir = tmp_path / ".ea"
-    state_dir.mkdir(parents=True, exist_ok=True)
-    state_path = state_dir / "state.json"
-    body = {
-        "schema_version": "1.0",
-        "scope_kind": "repo",
-        "urn": "urn:eawf:v1:state:QR",
-        "updated_at": "2026-05-08T00:00:00Z",
-        "project": {
-            "code": "QR",
-            "slug": "quant",
-            "title": "Quant",
-            "domains": ["quant"],
-            "default_branch": "main",
-            "status": "active",
-            "repo_urn": "urn:eawf:v1:repo:QR",
-        },
-        "current": {
-            "project_code": "QR",
-            "track_id": None,
-            "phase_id": None,
-            "iter_id": None,
-            "active_wave_ids": [],
-            "active_session_ids": [],
-        },
-        "workspace": None,
-        "phases": {},
-        "iters": {},
-        "waves": {},
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {},
-    }
-    state_path.write_text(json.dumps(body, indent=2), encoding="utf-8")
-    return state_path
-
-
 @pytest.fixture
-def tmp_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    state_path = _seed_state(tmp_path)
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    monkeypatch.delenv("EA_LOCK_TIMEOUT", raising=False)
-    return state_path
+def tmp_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+    yield from native_memory_tree(tmp_path, monkeypatch)
+
+
+def _add_and_install(tmp_path: Path, *extra: str) -> Any:
+    added = runner.invoke(
+        app, ["mcp", "add", "dup-id", "--command", "eawf-mcp", "--idempotency-key", "add"]
+    )
+    assert added.exit_code == 0, added.output
+    return runner.invoke(
+        app,
+        [
+            "--no-input",
+            "-w",
+            str(tmp_path),
+            "mcp",
+            "install",
+            "dup-id",
+            "--expected-revision",
+            "1",
+            "--idempotency-key",
+            "install",
+            *extra,
+        ],
+    )
 
 
 def _make_server(server_id: str, command: str = "eawf-mcp-demo") -> McpServer:
@@ -149,18 +133,7 @@ def test_user_dup_id_blocks_install_without_force(tmp_path: Path, tmp_state: Pat
         + "\n",
         encoding="utf-8",
     )
-    runner.invoke(app, ["mcp", "add", "dup-id", "--command", "eawf-mcp"])
-    result = runner.invoke(
-        app,
-        [
-            "--no-input",
-            "-w",
-            str(tmp_path),
-            "mcp",
-            "install",
-            "dup-id",
-        ],
-    )
+    result = _add_and_install(tmp_path)
     assert result.exit_code == 3, result.output  # INTEGRITY_VIOLATION
 
 
@@ -176,19 +149,7 @@ def test_user_dup_id_force_overrides_install(tmp_path: Path, tmp_state: Path) ->
         + "\n",
         encoding="utf-8",
     )
-    runner.invoke(app, ["mcp", "add", "dup-id", "--command", "eawf-mcp"])
-    result = runner.invoke(
-        app,
-        [
-            "--no-input",
-            "-w",
-            str(tmp_path),
-            "mcp",
-            "install",
-            "dup-id",
-            "--force",
-        ],
-    )
+    result = _add_and_install(tmp_path, "--force")
     assert result.exit_code == 0, result.output
     parsed = json.loads(settings_path.read_text(encoding="utf-8"))
     entry = parsed["mcpServers"]["dup-id"]

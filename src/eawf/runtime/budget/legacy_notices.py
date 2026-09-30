@@ -40,13 +40,17 @@ from eawf.runtime.budget.notices import (
     budget_window_digest,
     rewrite_ledger,
 )
-from eawf.workflow.skills.needs_user import (
-    AUTO_RESOLVED_CHOICE,
-    PAUSE_EVENT_TYPE,
-    RESUME_EVENT_TYPE,
-)
 
 logger = logging.getLogger(__name__)
+
+#: ``event_type`` of a legacy pause row in the epoch-1 event store.
+PAUSE_EVENT_TYPE: Final = "needs_user_pause"
+
+#: ``event_type`` of a legacy resume row, which answers the pause it names.
+RESUME_EVENT_TYPE: Final = "needs_user_resume"
+
+#: The resume choice the wave-close path stamped when it retracted a wave's advisories.
+AUTO_RESOLVED_CHOICE: Final = "auto-resolved"
 
 #: The event kind every legacy over-budget pause row carries.
 LEGACY_ADVISORY_KIND: Final = "stale_wave_detected"

@@ -11,30 +11,59 @@ readings land in the same commit as the edge they describe.
 The reads happen before the transaction opens, never under its locks: a
 transcript can be large, and the transaction re-validates the record the
 updates land on anyway.
+
+A measured stop is also stated on the Run's own stream as ``usage_observed``,
+before the stop commits, so the Run's usage events fold to the same tokens and
+cost its captured row banks: a line written after the terminal edge would be
+quarantined and derived from by nothing.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from collections.abc import Mapping
-from datetime import datetime
-from typing import Any
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Any, Final
 
 from pydantic import TypeAdapter, ValidationError
 
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.runtime.control import TERMINAL_RUN_STATUSES
-from eawf.kernel.state.epoch2.measurement import VendorSessionRef
+from eawf.kernel.runtime.events import RunEventKind
+from eawf.kernel.runtime.usage import UsagePayload, UsageQuality
+from eawf.kernel.state.enums import MeasurementQuality
+from eawf.kernel.state.epoch2.base import PrincipalKey
+from eawf.kernel.state.epoch2.measurement import (
+    CaptureSource,
+    CounterName,
+    MeasuredRuntime,
+    Observed,
+    VendorSessionRef,
+)
 from eawf.kernel.state.epoch2.run import Run, RunStatus
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.measurement.capture import capture_run_start, capture_run_terminal
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
+from eawf.runtime.daemon.methods import DaemonValidationError
+from eawf.runtime.daemon.run_events import RunEventAppend
 
 logger = logging.getLogger(__name__)
 
 _INSTANT: TypeAdapter[datetime] = TypeAdapter(UtcDatetime)
+
+#: How a captured row's quality reads as a usage reading's.
+_QUALITY: Final[Mapping[MeasurementQuality, UsageQuality]] = {
+    MeasurementQuality.EXACT: "measured",
+    MeasurementQuality.RECONSTRUCTED: "derived",
+    MeasurementQuality.ESTIMATED: "estimated",
+    MeasurementQuality.UNAVAILABLE: "unavailable",
+}
+
+_MICROUSD_PER_USD: Final = Decimal(1_000_000)
 
 
 def _sharing_runs(document: dict[str, Any], *, run: Run, ref: VendorSessionRef) -> int:
@@ -101,24 +130,119 @@ def terminal_capture_updates(run: Run, *, ended_at: object) -> dict[str, Any]:
     return {"captured_runtime": captured.model_dump(mode="json")}
 
 
+def _whole(
+    captured: MeasuredRuntime, *names: CounterName, scale: Decimal = Decimal(1)
+) -> int | None:
+    """Return the observed counters *names* summed and scaled to a whole number, if any."""
+    readings = [captured.counters[name] for name in names]
+    observed = [reading.value for reading in readings if isinstance(reading, Observed)]
+    if not observed:
+        return None
+    return int((sum(observed, Decimal(0)) * scale).to_integral_value())
+
+
+def captured_usage(captured: MeasuredRuntime) -> UsagePayload | None:
+    """Return the usage reading a Run's measured share states, or ``None`` when it has none.
+
+    The share is the Run's whole spend from start to stop, so it is a running total: the
+    fold over the stream takes it as the Run's maximum and never adds it to a reading of
+    the same turn. Both prompt-cache classes are cache tokens. A share whose baseline was
+    bounded is an estimate that still covers the whole Run.
+
+    Args:
+        captured: The Run's measured share of its vendor session.
+
+    Returns:
+        The reading, or ``None`` when no counter it carries was observed.
+    """
+    quality = _QUALITY[captured.measurement_quality]
+    input_tokens = _whole(captured, CounterName.INPUT_TOKENS)
+    output_tokens = _whole(captured, CounterName.OUTPUT_TOKENS)
+    cache_tokens = _whole(
+        captured, CounterName.CACHE_CREATION_INPUT_TOKENS, CounterName.CACHE_READ_INPUT_TOKENS
+    )
+    cost_microusd = _whole(captured, CounterName.COST_USD, scale=_MICROUSD_PER_USD)
+    counted = (input_tokens, output_tokens, cache_tokens, cost_microusd)
+    if quality == "unavailable" or all(value is None for value in counted):
+        return None
+    return UsagePayload(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_tokens=cache_tokens,
+        cost_microusd=cost_microusd,
+        usage_source=(
+            "counter_sidecar" if captured.source is CaptureSource.SIDECAR else "provider_transcript"
+        ),
+        is_cumulative=True,
+        measurement_quality=quality,
+        coverage_fraction=1.0 if quality == "estimated" else None,
+    )
+
+
+def _state_captured_usage(
+    context: Epoch2RootContext,
+    *,
+    urn: QualifiedUrn,
+    actor: PrincipalKey,
+    captured: Mapping[str, Any],
+) -> None:
+    """State a measured stop's share on the Run's stream, ahead of the stop itself.
+
+    The line is named by its content, so a retried stop with the same reading repeats it
+    and a stop re-read with another states a second running total the fold keeps the
+    larger of. A line the stream refuses is logged and dropped: the stop still commits.
+    """
+    # the run verbs import this module, so the append is reached at call time
+    from eawf.runtime.daemon.methods.run import append_run_event
+
+    row = (
+        MeasuredRuntime.model_validate(captured) if captured.get("outcome") == "measured" else None
+    )
+    payload = None if row is None else captured_usage(row)
+    if payload is None:
+        return
+    body = f"{urn.entity_key}:captured:{payload.model_dump_json()}"
+    try:
+        append_run_event(
+            context,
+            RunEventAppend(
+                urn=urn,
+                event_ref=f"EVT-{hashlib.sha256(body.encode('utf-8')).hexdigest()[:32]}",
+                run_sequence=1,
+                event_kind=RunEventKind.USAGE_OBSERVED,
+                provenance="daemon_observed",
+                payload=payload,
+                actor=actor,
+            ),
+            now=datetime.now(UTC),
+            at_tail=True,
+        )
+    except DaemonValidationError as error:
+        logger.warning(f"_state_captured_usage refused run={urn.entity_key!r} cause={error}")
+
+
 def bind_run_capture(
     context: Epoch2RootContext,
     *,
     urn: QualifiedUrn,
     to_status: RunStatus,
     updates: Mapping[str, Any],
+    actor: PrincipalKey,
 ) -> dict[str, Any]:
     """Return *updates* carrying the counter readings a Run edge records.
 
     Only a start out of the queue and a stop from a started Run take a
     reading. A Run the document does not hold, or an edge missing the
-    stamp it requires, is left to the transaction to refuse.
+    stamp it requires, is left to the transaction to refuse. A measured
+    stop is stated on the Run's stream before it is returned.
 
     Args:
         context: The native context of the Run's root.
         urn: The Run being moved.
         to_status: Where the edge takes it.
         updates: The edge's caller-supplied updates.
+        actor: The principal moving the Run, whom the stated reading is
+            attributed to.
 
     Returns:
         The updates, joined by the readings the edge records.
@@ -147,8 +271,15 @@ def bind_run_capture(
             return normalized
         return {**normalized, **start_capture_updates(document, run=run, updates=normalized)}
     if to_status in TERMINAL_RUN_STATUSES and "ended_at" in normalized:
-        return {**normalized, **terminal_capture_updates(run, ended_at=normalized["ended_at"])}
+        stop = terminal_capture_updates(run, ended_at=normalized["ended_at"])
+        _state_captured_usage(context, urn=urn, actor=actor, captured=stop["captured_runtime"])
+        return {**normalized, **stop}
     return normalized
 
 
-__all__ = ["bind_run_capture", "start_capture_updates", "terminal_capture_updates"]
+__all__ = [
+    "bind_run_capture",
+    "captured_usage",
+    "start_capture_updates",
+    "terminal_capture_updates",
+]

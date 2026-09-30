@@ -26,6 +26,7 @@ from types import MappingProxyType
 from typing import Any
 
 from eawf.kernel.config.layered import LAYER_ORDER, Layer
+from eawf.kernel.config.registry.leaf_catalog import pair_siblings
 from eawf.kernel.projection.settings import (
     LAYER_PLACES,
     LENS_LAYERS,
@@ -720,13 +721,14 @@ def stack_frame(view: View, settings: EffectiveSettingsView) -> list[str]:
 # ---------- the route's keys: the lens, the sections, the filter, the edit ----------
 
 
-def _start_edit(ctx: Ctx, leaf: SettingsLeaf, at: Layer) -> None:
+def _start_edit(ctx: Ctx, settings: EffectiveSettingsView, leaf: SettingsLeaf, at: Layer) -> None:
     """Open the editor ``leaf`` takes, writing to ``at`` and seeded from what ``at`` holds."""
     s = ctx.s
     seed = _held(leaf, at) or ""
     values = list(pick_values(leaf))
     if leaf.editor is not None:
-        s.edit = editors.open_editor(leaf, at, _held(leaf, at))
+        partners = {key: _held(settings.leaf(key), at) for key in pair_siblings(leaf.key)}
+        s.edit = editors.open_editor(leaf, at, _held(leaf, at), partners)
     elif values:
         s.edit = {
             "kind": "pick",
@@ -761,7 +763,7 @@ def _open_edit(ctx: Ctx, settings: EffectiveSettingsView, leaf: SettingsLeaf) ->
     if refused:
         ctx.log("Enter", refused)
         return
-    _start_edit(ctx, leaf, at)
+    _start_edit(ctx, settings, leaf, at)
 
 
 def coerce(leaf: SettingsLeaf, text: str) -> tuple[Any, str]:
@@ -821,6 +823,7 @@ def _request(
     *,
     value: Any = None,
     unset: bool = False,
+    together: tuple[tuple[str, Any], ...] = (),
 ) -> SettingRequest:
     """Return the request writing ``value`` for ``leaf`` at ``at``, or removing it there."""
     return SettingRequest(
@@ -829,6 +832,7 @@ def _request(
         value=value,
         unset=unset,
         branch=settings.branch if at is Layer.BRANCH else None,
+        together=together,
     )
 
 
@@ -842,18 +846,24 @@ def _commit_whole(
     if write.reason:
         ctx.log(key, write.reason)
         return
-    if write.unset and leaf.stated_at(at) is None:
+    others = [settings.leaf(other) for other in pair_siblings(leaf.key)]
+    if write.unset and all(one.stated_at(at) is None for one in (leaf, *others)):
         ctx.log(key, f"{leaf.key} is not set at {at} · nothing to unset")
         return
     ctx.s.edit = None
     token = setting_token(leaf)
     changes = editors.changes(edit, write)
     if write.unset:
-        request = _request(settings, leaf, at, unset=True)
+        together = tuple((one.key, None) for one in others)
+        request = _request(settings, leaf, at, unset=True, together=together)
         open_setting(ctx, request, effect=after_unset(leaf, at), token=token, changes=changes)
         return
     effect = after_write(leaf, at, editors.shown(edit, write))
-    request = _request(settings, leaf, at, value=write.value)
+    if others:
+        together = tuple((one.key, write.value[one.key]) for one in others)
+        request = _request(settings, leaf, at, value=write.value[leaf.key], together=together)
+    else:
+        request = _request(settings, leaf, at, value=write.value)
     open_setting(ctx, request, effect=effect, token=token, changes=changes)
 
 
@@ -885,7 +895,7 @@ def _offer_key(ctx: Ctx, settings: EffectiveSettingsView, edit: dict[str, Any], 
         edit["idx"] = (edit["idx"] + (1 if key == "ArrowDown" else -1)) % len(edit["layers"])
     elif key == "Enter":
         s.edit = None
-        _start_edit(ctx, settings.leaf(edit["key"]), Layer(edit["layers"][edit["idx"]]))
+        _start_edit(ctx, settings, settings.leaf(edit["key"]), Layer(edit["layers"][edit["idx"]]))
 
 
 def _composite_key(

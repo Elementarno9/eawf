@@ -312,7 +312,8 @@ def test_plan_names_every_row_a_missing_converter_leaves_behind(
                 row
                 for row in built.records
                 if row.source_collection is not NativeRecordCollection.DECISIONS
-            )
+            ),
+            mcp=built.mcp,
         )
 
     monkeypatch.setattr(
@@ -463,7 +464,7 @@ def test_cli_plan_verb_agrees_with_the_library(
         ],
     )
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = json.loads(result.output)["result"]
     assert payload["manifest_digest"] == full_plan.manifest.manifest_digest
     assert payload["idempotence_digest"] == full_plan.manifest.idempotence_digest
     assert payload["applicable"] is False
@@ -758,7 +759,7 @@ def test_cli_plan_verb_records_the_declared_track(
     monkeypatch.setenv("EAWF_DAEMONLESS", "1")
     result = runner.invoke(app, _cli_plan_args("--default-track-key", DECLARED_TRACK))
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = json.loads(result.output)["result"]
     assert payload["manifest_digest"] == declared_plan.manifest.manifest_digest
     assert payload["required_operator_assignment_count"] == 0
     assert payload["declared_track_assignment_count"] == 4

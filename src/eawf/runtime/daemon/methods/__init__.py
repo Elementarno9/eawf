@@ -202,11 +202,21 @@ class MethodContext:
         """
         # Imported here: every daemon method module imports this package,
         # and only a native request needs the epoch-2 migration stack.
-        from eawf.runtime.daemon.epoch2_root import attach_root_context
+        from eawf.runtime.daemon.epoch2_root import RootIdentity, attach_root_context
+        from eawf.runtime.daemon.pause_migration import migrate_needs_user_pauses
 
-        return attach_root_context(
+        attached = RootIdentity.of(tree_root).root_id in self.native_roots
+        context = attach_root_context(
             self.native_roots, tree_root=tree_root, daemon_wal_dir=self.wal_dir
         )
+        if not attached:
+            # the first attach since the daemon started moves the tree's epoch-1 pauses;
+            # a move that fails is logged and retried at the next start, never the request's
+            try:
+                migrate_needs_user_pauses(context)
+            except Exception as exc:
+                logger.warning(f"native_root_context pause migration failed error={exc!r}")
+        return context
 
     def mutation_started(self, mutation_id: str, kind: str) -> None:
         """Register an in-flight mutation for telemetry + the watchdog."""
@@ -385,6 +395,7 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "close_hosted",
     "config",
     "conformance",
+    "console_records",
     "delivery",
     "delivery_acceptance",
     "delivery_approval",
@@ -399,6 +410,7 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "event",
     "evidence_ladder",
     "fleet",
+    "host_deny",
     "host_error",
     "host_file_edit",
     "host_question",
@@ -406,12 +418,15 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "host_tool",
     "integration",
     "jury",
+    "mcp",
+    "memory",
     "migration",
-    "needs_user",
     "operation",
+    "pause",
     "permission",
     "planning",
     "projection",
+    "question",
     "question_decision",
     "regime",
     "registry",
@@ -424,10 +439,13 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "run",
     "run_budget",
     "run_content",
+    "run_liveness",
     "semantic",
     "spec",
+    "spend",
     "state",
     "state_subscribe",
+    "state_upkeep",
     "wal_admin",
     "workspace_lease",
 )

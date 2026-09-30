@@ -53,6 +53,7 @@ from eawf.surfaces.tui.console.notices import notice_verb
 from eawf.surfaces.tui.console.operations import (
     QUESTION_OPTIONS,
     AnswerRequest,
+    QuestionAnswer,
 )
 from eawf.surfaces.tui.console.overlays import help_card, is_overlay
 from eawf.surfaces.tui.console.overlays.bound_keys import bound_key
@@ -202,8 +203,11 @@ def _reply_key(ctx: Ctx, k: str) -> bool:
         s.reply = None
         ctx.log("Esc", "reply discarded · the question is still open")
     elif k == "Enter":
-        ctx.log("Enter", f"reply sent verbatim · immutable · {len(reply['text'])} chars")
-        s.reply = None
+        subject, s.reply = s.ov_subject, None
+        if subject and reply["text"]:
+            send_verb(ctx, k, QuestionAnswer(target=subject, reply=reply["text"]), "reply")
+        else:
+            ctx.log("Enter", "an empty reply answers nothing · nothing was sent")
     elif k == "Backspace":
         reply["text"] = reply["text"][:-1]
     elif len(k) == 1 and len(reply["text"]) < REPLY_LIMIT:

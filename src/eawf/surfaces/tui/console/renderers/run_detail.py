@@ -5,21 +5,28 @@ absence.
 
 The native frame draws one Run -- the session's subject, else the Run under the cursor --
 timeline first, then the packet's labelled facts: its state, the Task it runs, its
-provider, its usage, its controls and its lineage. No producer records a Run's semantic
-events where this frame reads, so the timeline pane says that and points at the
-transcript, which Enter opens. The register states the Run's status and its Task; every
-other fact belongs to a producer the console does not read yet, so it wears the unknown
-token with the reason rather than a blank. A Run whose lifecycle has ended says so, and
-offers no lifecycle verb.
+provider, its usage, its controls and its lineage. The timeline pane draws the Run's latest
+rows as the daemon grouped them: each event as its token and its whole word, a repeated
+low-priority run of events as its kind, a count and a span. Before that read arrives the
+pane points at the transcript, which Enter opens. The register states the Run's status and
+its Task; its usage is the Run's own usage read -- spent against the sealed caps with an
+estimated remainder, and the elapsed time against its limit and the typical time of its
+kind, never a remaining time. Every other fact belongs to a producer the console does not
+read yet, so it wears the unknown token with the reason rather than a blank. A Run whose
+lifecycle has ended says so, and offers no lifecycle verb.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 
+from eawf.kernel.economics.spend import RunUsageView
 from eawf.kernel.projection.attention import build_attention_view
 from eawf.kernel.projection.registers import UNWRITTEN_REASON
+from eawf.kernel.projection.run_timeline import RunTimeline, TimelineGroup
 from eawf.kernel.projection.spine import SpineRow, SpineView
+from eawf.kernel.projection.transcript import LANES
 from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
@@ -39,6 +46,7 @@ from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
 from eawf.surfaces.tui.console.lifecycle import ELAPSED_WORDS
 from eawf.surfaces.tui.console.navigation import Ctx, go
 from eawf.surfaces.tui.console.overlays.situations import LOST
+from eawf.surfaces.tui.console.renderers.budget_lines import cost_line, time_line, tokens_line
 from eawf.surfaces.tui.console.renderers.detail import state_of, subject_line, unknown_frame
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
@@ -55,7 +63,8 @@ from eawf.surfaces.tui.console.renderers.spine import (
     finished_subject,
     held,
 )
-from eawf.surfaces.tui.console.width import cell_len, pad
+from eawf.surfaces.tui.console.renderers.transcript import NATIVE_GLYPH, UNGLYPHED
+from eawf.surfaces.tui.console.width import cell_len, clip_words, pad
 
 OWN = pt.OWN_RUN
 # Cells the timeline's first two columns and their gutter take.
@@ -64,8 +73,60 @@ TL_PREFIX = 38
 #: The priority legend the timeline's glyph lane is read by.
 TIMELINE_LEGEND = "P0  P1  P2"
 
-#: What the timeline pane says: the Run's events are drawn by its transcript, not here.
+#: What the timeline pane says before its rows arrive: the transcript draws the events.
 NO_EVENTS = "events are drawn in the transcript · Enter opens it"
+
+#: How many of a Run's latest timeline rows the pane draws; the transcript holds them all.
+TIMELINE_ROWS = 6
+
+
+def event_cell(group: TimelineGroup) -> str:
+    """Return a timeline row's kind cell: the token and whole word, or the coalesced run.
+
+    One event reads as its glyph, its lane word and the phase its kind names. A coalesced
+    run reads as its word, the multiplication sign and a count, then its span in one unit,
+    never as a range of stamps.
+    """
+    kind = group.event_kind.value
+    lane = LANES.get(group.event_kind)
+    word = lane or kind.split("_")[0]
+    if group.coalesced:
+        return f"{word} ×{group.count} · {_span_word(group.span_seconds)}"  # noqa: RUF001
+    if lane is None:
+        return f"{UNGLYPHED} {kind.replace('_', ' ')}"
+    phase = kind.rsplit("_", 1)[1] if "_" in kind else ""
+    return f"{NATIVE_GLYPH.get(lane, UNGLYPHED)} {lane}" + (f" · {phase}" if phase else "")
+
+
+def _span_word(seconds: int) -> str:
+    """Return a span as one number and one unit, as a coalesced row states it."""
+    if seconds < 60:
+        return f"{seconds}s"
+    return f"{seconds // 60}m" if seconds < 3600 else f"{seconds // 3600}h"
+
+
+def timeline_rows(view: View, timeline: RunTimeline) -> list[str]:
+    """Return the timeline pane: its head and the Run's latest rows as the daemon grouped them."""
+    w, wide = view.w, view.wide
+    text_w = tl_text(w, wide)
+    table = Table([10, 23, text_w + 1, 0], 2)
+    shown = timeline.groups[-TIMELINE_ROWS:]
+    rows = [timeline_head(w), tl_header(w, wide)]
+    earlier = len(timeline.groups) - len(shown)
+    if earlier:
+        rows.append(f"   … {earlier} earlier rows · Enter opens the transcript")
+    for item in shown:
+        detail = (
+            f"sequences {item.first_sequence}–{item.last_sequence}"  # noqa: RUF001
+            if item.coalesced
+            else f"sequence {item.first_sequence}"
+        )
+        when = "" if item.coalesced else clock_time(item.first_at)
+        cells = [when, event_cell(item), clip_words(detail, text_w), item.priority.value]
+        rows.append(table.row(cells))
+    if not shown:
+        rows.append("   ∅ this Run has produced no event yet")
+    return rows
 
 
 def timeline_head(w: int) -> Titled:
@@ -185,6 +246,35 @@ def lost(view: View, run: SpineRow) -> bool:
     )
 
 
+def usage_rows(view: View, spine: SpineView, run: SpineRow) -> list[str]:
+    """Return the usage pane: time, tokens and cost, each a budget line, never a countdown.
+
+    Until the Run's usage read arrives the pane states its elapsed time and says the rest
+    was not read, rather than drawing a zero.
+    """
+    usage = _held_usage(view.live, run.key)
+    took = elapsed(view, spine, run)
+    if usage is None:
+        return [
+            label("USAGE", f"{took} · cost {UNKNOWN_WORD}"),
+            more("the Run's usage read has not arrived"),
+        ]
+    estimated = usage.quality not in (None, "measured")
+    return [
+        label("USAGE", time_line(took, usage.wall_seconds, usage.typical_seconds)),
+        more(tokens_line(usage.tokens, usage.cap_tokens, estimated=estimated)),
+        more(cost_line(usage.cost_microusd, usage.cap_cost_microusd)),
+    ]
+
+
+def _held_usage(live: Mapping[str, object], key: str) -> RunUsageView | None:
+    """Return the usage read's answer for Run *key*, or ``None`` before it arrives."""
+    return next(
+        (item for item in live.values() if isinstance(item, RunUsageView) and item.run_key == key),
+        None,
+    )
+
+
 def native_frame(view: View, spine: SpineView) -> list[str]:
     """Return the Run frame drawn from the read model the daemon served.
 
@@ -218,8 +308,11 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     rows = list(top)
     if finished is not None:
         rows += [*finished_rows(s.route, finished, label), thin(w)]
-    pane = NO_EVENTS if run is not None else "no events · no Run is held to record them"
-    rows += [timeline_head(w), f"   {pane}", thin(w)]
+    if run is not None and view.timeline is not None:
+        rows += [*timeline_rows(view, view.timeline), thin(w)]
+    else:
+        pane = NO_EVENTS if run is not None else "no events · no Run is held to record them"
+        rows += [timeline_head(w), f"   {pane}", thin(w)]
     if run is None:
         missing = f"∅ {s.subj_id} is not held in this scope" if s.subj_id else ""
         rows.append(label("RUN", missing or "∅ this scope holds no Run"))
@@ -258,8 +351,7 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
             label("ENDED", clock_time(ended) if ended else "still running"),
             label("ASKED", asked(view, run)),
             thin(w),
-            label("USAGE", f"{elapsed(view, spine, run)} · cost {UNKNOWN_WORD}"),
-            more("no metering producer states tokens or cost yet"),
+            *usage_rows(view, spine, run),
             thin(w),
             label("CONTROLS", "no control sent from this console"),
             label("LINEAGE", f"{attempt} · forks are not read yet"),

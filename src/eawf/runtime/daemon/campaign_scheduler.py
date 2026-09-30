@@ -207,7 +207,7 @@ def _next_ordinal(prefix: str, keys: Iterable[str]) -> int:
 
 
 def plan_campaign(
-    document: dict[str, Any],
+    taken_keys: Iterable[str],
     *,
     actor: str,
     track_ref: TrackUrn,
@@ -223,7 +223,7 @@ def plan_campaign(
     every other step and works the first question, the Campaign's own.
 
     Args:
-        document: The tree's document, read for free question keys.
+        taken_keys: Every question key the tree has given out, in whichever store.
         actor: Who approves the plan.
         track_ref: The Track that owns the Campaign.
         title: What the Campaign researches.
@@ -240,7 +240,7 @@ def plan_campaign(
     """
     if not questions:
         raise ValueError("a research brief states at least one question")
-    first = _next_ordinal("QST", document_rows(document, Epoch2Collection.OPEN_QUESTION))
+    first = _next_ordinal("QST", taken_keys)
     seeds = [{"key": f"QST-{first + i:04d}", "question": text} for i, text in enumerate(questions)]
     for seed in seeds:
         seed["urn"] = _slot(track_ref, EntityKind.QUESTION, seed["key"], repository=False)

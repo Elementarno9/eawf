@@ -357,8 +357,61 @@ def _mutate_via_daemon[FallbackT](
         client.__exit__(None, None, None)
 
 
+def call_upkeep(
+    method: str,
+    params: dict[str, Any],
+    *,
+    flags: GlobalFlags,
+    verb: str,
+    local: Callable[[], dict[str, Any]],
+) -> dict[str, Any]:
+    """Send one epoch-1 upkeep verb to the daemon, or run it locally when asked.
+
+    Session close and recover and worktree merge-back and cleanup settle an
+    epoch-1 tree before its cutover. The daemon writes them; *local* runs
+    only under the explicit daemonless carve-out, never because a daemon
+    was unreachable or did not serve the route.
+
+    Args:
+        method: The daemon route.
+        params: The route's params, ``repo_root`` included.
+        flags: Resolved global flags.
+        verb: The command spelling, for the escalation envelope.
+        local: The in-process writer the carve-out runs.
+
+    Returns:
+        The verb's answer.
+
+    Raises:
+        CliError: The daemon refused the verb, with the refusal's own
+            class and kind; or answered an RPC error, mapped by code.
+        DaemonUnreachable: The daemon could not be reached.
+    """
+    from eawf.runtime.daemon.methods.state_upkeep import REFUSAL_CLASSES
+    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    if daemonless_requested(flags):
+        return local()
+    try:
+        escalate_mutation(verb, flags=flags)
+        with DaemonClient() as client:
+            answer: dict[str, Any] = client.call(method, params)
+    except DaemonRpcError as exc:
+        if exc.code == cli_errors.RPC_VALIDATION_FAILED:
+            raise cli_errors.ValidationError(exc.message) from exc
+        raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
+    except (OSError, RuntimeError, TimeoutError) as exc:
+        raise cli_errors.DaemonUnreachable(f"daemon unavailable for {method}: {exc}") from exc
+    refusal = answer.get("refusal")
+    if isinstance(refusal, dict):
+        error_class = REFUSAL_CLASSES[str(refusal["error_class"])]
+        raise error_class(str(refusal["message"]), kind=refusal.get("kind"))
+    return answer
+
+
 __all__ = [
     "_mutate_via_daemon",
+    "call_upkeep",
     "daemonless_requested",
     "dev_mode_enabled",
     "ensure_daemon",

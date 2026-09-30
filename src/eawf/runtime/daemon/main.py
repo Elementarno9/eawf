@@ -68,6 +68,7 @@ from eawf.runtime.daemon.singleton import DaemonAlreadyRunningError, acquire_dae
 from eawf.runtime.daemon.stale_wave import (
     run_sweep_loop as run_stale_wave_loop,
 )
+from eawf.runtime.daemon.stall_sweep import run_stall_loop
 from eawf.runtime.daemon.wal import (
     resolve_wal_gc_interval_seconds,
     resolve_wal_retention_seconds,
@@ -566,10 +567,29 @@ def _schedule_stale_wave_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
     )
 
 
+async def _attach_bound_tree(ctx: MethodContext) -> None:
+    """Attach the epoch-2 tree the daemon was started for, moving its epoch-1 pauses.
+
+    A daemon started over an epoch-1 tree, or over none, attaches nothing here.
+    """
+    if ctx.state_path is None or not epoch_marker_present(Path(ctx.state_path).parent):
+        return
+    try:
+        await asyncio.to_thread(ctx.native_root_context, Path(ctx.state_path).parent)
+    except Exception as exc:
+        logger.warning(f"_attach_bound_tree skipped error={exc!r}")
+
+
 def _schedule_permission_expiry_sweep(ctx: MethodContext) -> asyncio.Task[None]:
     """Schedule the sweep that records every lapsed provider permission as expired."""
     assert isinstance(ctx.shutdown_event, asyncio.Event)
     return asyncio.create_task(run_permission_expiry_loop(ctx, stop_event=ctx.shutdown_event))
+
+
+def _schedule_stall_sweep(ctx: MethodContext) -> asyncio.Task[None]:
+    """Schedule the sweep that raises a stall fact for every Run that went quiet."""
+    assert isinstance(ctx.shutdown_event, asyncio.Event)
+    return asyncio.create_task(run_stall_loop(ctx, stop_event=ctx.shutdown_event))
 
 
 def _schedule_wal_gc_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
@@ -825,6 +845,8 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
     ttl_task = _schedule_session_ttl_sweep(ctx)
     stale_wave_task = _schedule_stale_wave_sweep(ctx)
     permission_expiry_task = _schedule_permission_expiry_sweep(ctx)
+    stall_task = _schedule_stall_sweep(ctx)
+    await _attach_bound_tree(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
     loop_lag_task = _schedule_loop_lag_monitor(ctx)
@@ -852,6 +874,9 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
         permission_expiry_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await permission_expiry_task
+        stall_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await stall_task
         if wal_gc_task is not None:
             wal_gc_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -912,6 +937,8 @@ async def _run_windows_server(ctx: MethodContext) -> None:
     ttl_task = _schedule_session_ttl_sweep(ctx)
     stale_wave_task = _schedule_stale_wave_sweep(ctx)
     permission_expiry_task = _schedule_permission_expiry_sweep(ctx)
+    stall_task = _schedule_stall_sweep(ctx)
+    await _attach_bound_tree(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
     loop_lag_task = _schedule_loop_lag_monitor(ctx)
@@ -939,6 +966,9 @@ async def _run_windows_server(ctx: MethodContext) -> None:
         permission_expiry_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await permission_expiry_task
+        stall_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await stall_task
         if wal_gc_task is not None:
             wal_gc_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

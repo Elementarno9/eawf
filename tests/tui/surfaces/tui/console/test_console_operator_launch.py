@@ -31,6 +31,10 @@ from eawf.kernel.migration.epoch2.canary import (
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
 from eawf.kernel.runtime.provider import ControlKind
+from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
+from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD
+from eawf.runtime.daemon.methods.run import RUN_EVENTS_READ_METHOD
+from eawf.runtime.daemon.methods.run_liveness import RUN_STALLS_READ_METHOD
 from eawf.surfaces.cli.app import app as cli
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.operations import (
@@ -126,6 +130,12 @@ class _Daemon:
             return {"active": []}
         if method == QUESTION_DECISIONS_METHOD:
             return {"decisions": []}
+        if method == RUN_STALLS_READ_METHOD:
+            return {"stalls": [], "read_at": AT.isoformat()}
+        if method == RUN_EVENTS_READ_METHOD:
+            raise ConnectionError(f"{method} is not served")
+        if method in (QUESTION_READ_METHOD, PAUSE_READ_METHOD):
+            return {}
         WRITES.append((method, dict(params or {})))
         if method == SEAL_METHOD:
             return {"outcome": "sealed", "reason": f"{ACTION} was answered"}

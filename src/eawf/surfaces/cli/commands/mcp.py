@@ -2,60 +2,51 @@
 
 Surface:
 
-- ``add <id>`` — register an Eä-owned MCP entry in
-  ``state.mcp_servers`` (Phase 5 W04).
-- ``install <id>`` — write the entry into the runtime config
-  (Claude only in v0.1). Prompts unless ``--no-input`` is set
-  (Phase 5 W04).
-- ``update <id>`` — patch an existing Eä-owned entry. Warns when
-  re-install is required (Phase 5 W04).
-- ``remove <id>`` — delete from state and (unless
-  ``--keep-runtime-entry``) from the runtime config (Phase 5 W04).
-- ``list`` — read-only enumeration with owner annotation
-  (Phase 5 W04).
-- ``grant <scope_kind> <scope_id> <server_id>`` — bind an MCP
-  server to a scope so dispatch can project allowed-tools
-  (Phase 10 W02).
-- ``revoke <grant_id>`` — drop a grant from ``state.mcp_grants``
-  (Phase 10 W02).
+- ``add <id>`` — register an Eä-owned MCP server.
+- ``install <id>`` — write the server into a runtime's MCP configuration
+  and record the install. Prompts unless ``--no-input`` is set.
+- ``update <id>`` — replace fields of a registered server. Warns when a
+  re-install is required.
+- ``remove <id>`` — retire a server and (unless ``--keep-runtime-entry``)
+  drop it from the runtime configurations it was installed into.
+- ``list`` — read-only enumeration with owner annotation.
+- ``grant <scope_kind> <scope_id> <server_id>`` — bind a server to a scope
+  so dispatch can project allowed-tools.
+- ``revoke <grant_id>`` — drop a grant.
+- ``serve`` / ``run-config`` — the per-Run semantic tool server.
 
 Discipline checklist:
 
-- Every mutator uses :func:`state_transaction`. Direct ``state.json``
-  writes from this file would violate AGENTS.md rule 4.
-- Env-ref tokens stay literal end-to-end (rule 16). The installer
-  never reads ``os.environ`` for env-ref names.
-- User-owned ``mcpServers[*]`` entries in settings.json are byte-equal
-  across the whole add/install/update/remove sequence (verified by
-  ``tests/integration/test_mcp_install_existing_user_entry.py``).
-- Grants reference :class:`McpServer` rows by id; a dangling
-  ``server_id`` is caught by
-  :func:`eawf.kernel.validate.invariants.check_mcp_grant_server_ref` and
-  rolled back as :class:`cli_errors.ValidationError` inside ``grant_cmd``.
+- The registry is the selected generation's ``capability`` and
+  ``tool_authority`` rows; every mutator sends one native ``mcp.*`` verb
+  and the daemon writes the row. Nothing here writes a tree record.
+- A verb that changes a standing row takes the ``--expected-revision``
+  the operator read from ``mcp list`` (or a grant's answer) and an
+  ``--idempotency-key``; a create takes the key alone.
+- Env-ref tokens stay literal end-to-end. The installer never reads
+  ``os.environ`` for env-ref names.
+- User-owned ``mcpServers[*]`` entries in the runtime configuration are
+  byte-equal across the whole add/install/update/remove sequence.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Final
 
 import typer
-from pydantic import ValidationError
 
-from eawf.kernel.state.enums import McpRisk, McpStatus
+from eawf.kernel.state.enums import McpRisk
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.models import McpGrant, McpServer
-    from eawf.runtime.mcp.semantic_stdio import RunServerBinding
-    from eawf.surfaces.cli._daemon_client import DaemonClient
+    from eawf.kernel.state.models import McpServer
+    from eawf.runtime.mcp.book import StandingGrant, StandingServer
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +57,22 @@ mcp_app = typer.Typer(
     no_args_is_help=True,
 )
 
+#: The daemon verbs the handlers send. Spelled here so the Typer tree
+#: builds without the daemon method registry on the path.
+MCP_ADD: Final = "mcp.add"
+MCP_INSTALL: Final = "mcp.install"
+MCP_UPDATE: Final = "mcp.update"
+MCP_REMOVE: Final = "mcp.remove"
+MCP_GRANT: Final = "mcp.grant"
+MCP_REVOKE: Final = "mcp.revoke"
 
 _SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude", "codex", "opencode")
 _OWNER_FILTERS: tuple[str, ...] = ("eawf", "user", "all")
+_REVISION_HELP: Final = "Revision of the row as last read (see `eawf mcp list --json`)."
+_KEY_HELP: Final = "Caller's name for this request; a retry replays its receipt."
+
+ExpectedRevision = Annotated[int, typer.Option("--expected-revision", help=_REVISION_HELP)]
+IdempotencyKey = Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)]
 
 
 def _escape_tsv_field(value: str) -> str:
@@ -104,8 +108,8 @@ def _resolve_risk(raw: str) -> McpRisk:
         ) from exc
 
 
-def _server_payload(server: McpServer) -> dict[str, object]:
-    """Render *server* as a JSON-friendly dict for envelopes."""
+def _server_payload(server: McpServer, revision: int) -> dict[str, object]:
+    """Render *server* at *revision* as a JSON-friendly dict for envelopes."""
     return {
         "id": server.id,
         "owner": server.owner,
@@ -116,18 +120,98 @@ def _server_payload(server: McpServer) -> dict[str, object]:
         "write_capable": server.write_capable,
         "status": server.status.value,
         "installed_targets": list(server.installed_targets),
+        "revision": revision,
     }
 
 
-def _grant_payload(grant: McpGrant) -> dict[str, object]:
-    """Render *grant* as a JSON-friendly dict for envelopes."""
-    return {
-        "id": grant.id,
-        "scope_kind": grant.scope_kind,
-        "scope_id": grant.scope_id,
-        "server_id": grant.server_id,
-        "granted_at": grant.granted_at.isoformat(),
-    }
+def _mcp_rpc(
+    method: str, params: dict[str, object], *, flags: GlobalFlags, verb_text: str
+) -> dict[str, object]:
+    """Send one native ``mcp.*`` verb for the addressed tree.
+
+    Raises:
+        UserError: The daemon refused the request; a missing server or
+            grant is ``NotFound``, a stale revision ``StateConflict`` and
+            every other refusal ``InvalidInput``, with the daemon's message.
+        CliError: The daemon was unreachable or failed outside the
+            refusal vocabulary.
+    """
+    from eawf.surfaces.cli._daemon_client import DaemonRpcError
+    from eawf.surfaces.cli.commands.domain import _native_answer
+
+    repo_root = resolve_state_path(flags.workspace).parent.parent
+    wire = {"repo_root": str(repo_root), **params}
+    try:
+        return _native_answer(method, wire, flags=flags, verb_text=verb_text)
+    except DaemonRpcError as exc:
+        if exc.code != cli_errors.RPC_VALIDATION_FAILED:
+            raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
+        message = exc.message.removeprefix("validation_failed: ")
+        code = message.split(":", 1)[0]
+        if code == "revision_conflict":
+            raise cli_errors.StateConflict(message, kind="RevisionConflict") from exc
+        kind = "NotFound" if code.endswith("_not_found") else "InvalidInput"
+        raise cli_errors.UserError(message, kind=kind) from exc
+
+
+def _generation_document(flags: GlobalFlags) -> Path | None:
+    """Return the selected generation's document, or ``None`` on an epoch-1 tree."""
+    from eawf.runtime.mcp.book import generation_document
+
+    return generation_document(resolve_state_path(flags.workspace).parent)
+
+
+def _book(flags: GlobalFlags) -> tuple[dict[str, StandingServer], dict[str, StandingGrant]]:
+    """Return the tree's server and grant rows.
+
+    Raises:
+        UserError: The tree answers in epoch 1, whose MCP registry is
+            frozen until the cutover imports it.
+    """
+    from eawf.kernel.store.compaction import read_document
+    from eawf.runtime.mcp.book import read_grants, read_servers
+
+    document_path = _generation_document(flags)
+    if document_path is None:
+        raise cli_errors.UserError(
+            "this tree answers in epoch 1, whose MCP registry is frozen; run "
+            "`eawf migrate` to import it before changing it",
+            kind="InvalidInput",
+        )
+    document = read_document(document_path)
+    return read_servers(document), read_grants(document)
+
+
+def _anchored(flags: GlobalFlags, server_id: str, expected_revision: int) -> McpServer:
+    """Return the registered server *server_id* at the revision the operator read.
+
+    The daemon re-checks the anchor under its lock; this read only keeps a
+    stale request from touching a runtime configuration first.
+
+    Raises:
+        UserError: No server is registered under the id.
+        StateConflict: The row stands at another revision.
+    """
+    servers, _ = _book(flags)
+    standing = servers.get(server_id)
+    if standing is None or standing.server is None:
+        raise cli_errors.UserError(f"mcp id {server_id!r} is not registered", kind="NotFound")
+    if standing.revision != expected_revision:
+        raise cli_errors.StateConflict(
+            f"mcp id {server_id!r} is at revision {standing.revision}; "
+            f"--expected-revision {expected_revision} is stale",
+            kind="RevisionConflict",
+        )
+    return standing.server
+
+
+def _answered_server(answer: dict[str, object]) -> tuple[McpServer, int]:
+    """Return the server and revision one ``mcp.*`` server answer carries."""
+    from eawf.kernel.state.models import McpServer
+
+    revision = answer["revision"]
+    assert isinstance(revision, int)
+    return McpServer.model_validate(answer["server"]), revision
 
 
 def _confirm_install(
@@ -177,12 +261,13 @@ def add_cmd(
     ctx: typer.Context,
     server_id: Annotated[
         str,
-        typer.Argument(help="MCP server identifier (state.mcp_servers map key).", metavar="ID"),
+        typer.Argument(help="MCP server identifier.", metavar="ID"),
     ],
     command: Annotated[
         str,
         typer.Option("--command", help="argv[0] for the MCP launcher."),
     ],
+    idempotency_key: IdempotencyKey,
     arg: Annotated[
         list[str] | None,
         typer.Option(
@@ -212,65 +297,44 @@ def add_cmd(
         bool,
         typer.Option(
             "--force",
-            help="Overwrite an existing owner=eawf entry with the same id.",
+            help="Redefine a registered entry with the same id.",
         ),
     ] = False,
 ) -> None:
-    """Register a new Eä-owned MCP entry in ``state.mcp_servers``."""
-    from pydantic import ValidationError
-
-    from eawf.kernel.state.models import McpServer
-    from eawf.surfaces.cli._mutation import state_transaction
-
+    """Register a new Eä-owned MCP server."""
     flags: GlobalFlags = ctx.obj
     try:
-        risk_enum = _resolve_risk(risk)
-        state_path = resolve_state_path(flags.workspace)
-        with state_transaction(state_path) as state:
-            servers = state.mcp_servers if state.mcp_servers is not None else {}
-            existing = servers.get(server_id)
-            if existing is not None and existing.owner != "eawf":
-                raise cli_errors.UserError(
-                    f"mcp id {server_id!r} exists with owner={existing.owner!r}; "
-                    "refusing to overwrite",
-                    kind="InvalidInput",
-                )
-            if existing is not None and not force:
-                raise cli_errors.UserError(
-                    f"mcp id {server_id!r} exists; pass --force to redefine", kind="InvalidInput"
-                )
-            try:
-                server = McpServer(
-                    id=server_id,
-                    owner="eawf",
-                    command=command,
-                    args=list(arg or []),
-                    env_refs=list(env_ref or []),
-                    risk=risk_enum,
-                    write_capable=write_capable,
-                    status=McpStatus.CONFIGURED,
-                    installed_targets=[],
-                )
-            except ValidationError as exc:
-                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-            servers[server_id] = server
-            state.mcp_servers = servers
-            state.updated_at = datetime.now(UTC)
+        answer = _mcp_rpc(
+            MCP_ADD,
+            {
+                "id": server_id,
+                "command": command,
+                "args": list(arg or []),
+                "env_refs": list(env_ref or []),
+                "risk": _resolve_risk(risk).value,
+                "write_capable": write_capable,
+                "force": force,
+                "idempotency_key": idempotency_key,
+            },
+            flags=flags,
+            verb_text="mcp add",
+        )
+        server, revision = _answered_server(answer)
         emit_json_or_text(
-            payload=_server_payload(server),
-            text=(f"mcp added: {server.id} (owner=eawf, command={server.command})"),
+            payload=_server_payload(server, revision),
+            text=f"mcp added: {server.id} (owner=eawf, command={server.command})",
             flags=flags,
         )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @mcp_app.command(name="install")
 def install_cmd(
     ctx: typer.Context,
     server_id: Annotated[str, typer.Argument(help="MCP id to install.", metavar="ID")],
+    expected_revision: ExpectedRevision,
+    idempotency_key: IdempotencyKey,
     runtime: Annotated[
         str,
         typer.Option("--runtime", help="Target runtime: claude | codex | opencode."),
@@ -287,73 +351,51 @@ def install_cmd(
         ),
     ] = False,
 ) -> None:
-    """Materialise an Eä-owned MCP entry into the runtime config."""
+    """Write a registered MCP server into a runtime config and record the install."""
+    from datetime import UTC, datetime
+
     from eawf.runtime.mcp.installer import (
-        InstallEntryResult,
         IntegrityViolation,
         VerifyFailure,
         install_runtime_entry,
         runtime_config_path,
     )
-    from eawf.surfaces.cli._mutation import state_transaction
 
     flags: GlobalFlags = ctx.obj
     try:
         _validate_runtime(runtime)
-        state_path = resolve_state_path(flags.workspace)
         target = (target_dir or _resolve_target(flags)).resolve()
-        timestamp = datetime.now(UTC).isoformat()
-        result: InstallEntryResult | None = None
-        with state_transaction(state_path) as state:
-            servers = state.mcp_servers or {}
-            server = servers.get(server_id)
-            if server is None:
-                raise cli_errors.UserError(
-                    f"mcp id {server_id!r} not registered; run `eawf mcp add` first",
-                    kind="NotFound",
-                )
-            if server.owner != "eawf":
-                raise cli_errors.UserError(
-                    f"mcp id {server_id!r} is owner={server.owner!r}; "
-                    "install only manages owner=eawf entries",
-                    kind="InvalidInput",
-                )
-            settings_path = runtime_config_path(runtime, target).resolve()
-            _confirm_install(
+        server = _anchored(flags, server_id, expected_revision)
+        settings_path = runtime_config_path(runtime, target).resolve()
+        _confirm_install(
+            server=server, runtime=runtime, settings_path=settings_path, no_input=flags.no_input
+        )
+        try:
+            result = install_runtime_entry(
                 server=server,
                 runtime=runtime,
-                settings_path=settings_path,
-                no_input=flags.no_input,
+                target_dir=target,
+                force=force,
+                timestamp=datetime.now(UTC).isoformat(),
             )
-            try:
-                result = install_runtime_entry(
-                    server=server,
-                    runtime=runtime,
-                    target_dir=target,
-                    force=force,
-                    timestamp=timestamp,
-                )
-            except IntegrityViolation as exc:
-                raise cli_errors.StateConflict(str(exc), kind="IntegrityViolation") from exc
-            except VerifyFailure as exc:
-                raise cli_errors.StateConflict(str(exc), kind="VerifyFailure") from exc
-            except ValueError as exc:
-                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-
-            updated = server.model_copy(
-                update={
-                    "status": McpStatus.INSTALLED,
-                    "installed_targets": (
-                        [*server.installed_targets, runtime]
-                        if runtime not in server.installed_targets
-                        else list(server.installed_targets)
-                    ),
-                }
-            )
-            servers[server_id] = updated
-            state.mcp_servers = servers
-            state.updated_at = datetime.now(UTC)
-        assert result is not None
+        except IntegrityViolation as exc:
+            raise cli_errors.StateConflict(str(exc), kind="IntegrityViolation") from exc
+        except VerifyFailure as exc:
+            raise cli_errors.StateConflict(str(exc), kind="VerifyFailure") from exc
+        except ValueError as exc:
+            raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
+        answer = _mcp_rpc(
+            MCP_INSTALL,
+            {
+                "id": server_id,
+                "runtime": runtime,
+                "expected_revision": expected_revision,
+                "idempotency_key": idempotency_key,
+            },
+            flags=flags,
+            verb_text="mcp install",
+        )
+        installed, revision = _answered_server(answer)
         emit_json_or_text(
             payload={
                 "id": server_id,
@@ -362,7 +404,8 @@ def install_cmd(
                 "action": "installed",
                 "fs_action": result.action,
                 "user_entries_preserved": result.user_entries_preserved,
-                "status": McpStatus.INSTALLED.value,
+                "status": installed.status.value,
+                "revision": revision,
             },
             text=(
                 f"mcp installed: {server_id} → {result.target_path} "
@@ -372,14 +415,14 @@ def install_cmd(
         )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @mcp_app.command(name="update")
 def update_cmd(
     ctx: typer.Context,
     server_id: Annotated[str, typer.Argument(help="MCP id to update.", metavar="ID")],
+    expected_revision: ExpectedRevision,
+    idempotency_key: IdempotencyKey,
     command: Annotated[
         str | None,
         typer.Option("--command", help="Replace argv[0] for the MCP launcher."),
@@ -407,79 +450,46 @@ def update_cmd(
         ),
     ] = None,
 ) -> None:
-    """Patch an existing Eä-owned MCP entry in ``state.mcp_servers``."""
-    from pydantic import ValidationError
-
-    from eawf.kernel.state.models import McpServer
-    from eawf.surfaces.cli._mutation import state_transaction
-
+    """Replace fields of a registered Eä-owned MCP server."""
     flags: GlobalFlags = ctx.obj
     try:
-        state_path = resolve_state_path(flags.workspace)
-        risk_enum = _resolve_risk(risk) if risk is not None else None
-        with state_transaction(state_path) as state:
-            servers = state.mcp_servers or {}
-            server = servers.get(server_id)
-            if server is None:
-                raise cli_errors.UserError(
-                    f"mcp id {server_id!r} not registered; nothing to update", kind="NotFound"
-                )
-            if server.owner != "eawf":
-                raise cli_errors.UserError(
-                    f"mcp id {server_id!r} is owner={server.owner!r}; "
-                    "update only manages owner=eawf entries",
-                    kind="InvalidInput",
-                )
-            updates: dict[str, object] = {}
-            if command is not None:
-                updates["command"] = command
-            if arg is not None:
-                updates["args"] = list(arg)
-            if env_ref is not None:
-                updates["env_refs"] = list(env_ref)
-            if risk_enum is not None:
-                updates["risk"] = risk_enum
-            if write_capable is not None:
-                updates["write_capable"] = write_capable
-            if not updates:
-                raise cli_errors.UserError(
-                    "update requires at least one of --command, --arg, --env-ref, "
-                    "--risk, --write-capable",
-                    kind="InvalidInput",
-                )
-            try:
-                updated = server.model_copy(update=updates)
-                # model_copy bypasses validators; round-trip through
-                # model_validate so a malformed env-ref gets caught
-                # before the transaction commits.
-                updated = McpServer.model_validate(updated.model_dump())
-            except ValidationError as exc:
-                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-            servers[server_id] = updated
-            state.mcp_servers = servers
-            state.updated_at = datetime.now(UTC)
-            installed_targets = list(updated.installed_targets)
-
-        reinstall_required = bool(installed_targets)
+        params: dict[str, object] = {
+            "id": server_id,
+            "expected_revision": expected_revision,
+            "idempotency_key": idempotency_key,
+        }
+        if command is not None:
+            params["command"] = command
+        if arg is not None:
+            params["args"] = list(arg)
+        if env_ref is not None:
+            params["env_refs"] = list(env_ref)
+        if risk is not None:
+            params["risk"] = _resolve_risk(risk).value
+        if write_capable is not None:
+            params["write_capable"] = write_capable
+        answer = _mcp_rpc(MCP_UPDATE, params, flags=flags, verb_text="mcp update")
+        updated, revision = _answered_server(answer)
+        installed_targets = list(updated.installed_targets)
         text_lines = [f"mcp updated: {server_id}"]
-        if reinstall_required:
+        if installed_targets:
             text_lines.append(
                 f"note: run `eawf mcp install {server_id}` to apply the change to "
                 f"{', '.join(installed_targets)}"
             )
-        payload = _server_payload(updated)
-        payload["reinstall_required"] = reinstall_required
+        payload = _server_payload(updated, revision)
+        payload["reinstall_required"] = bool(installed_targets)
         emit_json_or_text(payload=payload, text="\n".join(text_lines), flags=flags)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @mcp_app.command(name="remove")
 def remove_cmd(
     ctx: typer.Context,
     server_id: Annotated[str, typer.Argument(help="MCP id to remove.", metavar="ID")],
+    expected_revision: ExpectedRevision,
+    idempotency_key: IdempotencyKey,
     runtime: Annotated[
         str | None,
         typer.Option(
@@ -495,485 +505,72 @@ def remove_cmd(
         bool,
         typer.Option(
             "--keep-runtime-entry",
-            help="Drop only the state row; leave the runtime config unchanged.",
+            help="Retire only the registry row; leave the runtime config unchanged.",
         ),
     ] = False,
 ) -> None:
-    """Delete an Eä-owned MCP entry from state (and optionally runtime configs)."""
-    from eawf.runtime.mcp.installer import (
-        IntegrityViolation,
-        RemoveEntryResult,
-        remove_runtime_entry,
-    )
-    from eawf.surfaces.cli._mutation import state_transaction
+    """Retire an Eä-owned MCP server (and optionally its runtime config entries)."""
+    from eawf.runtime.mcp.installer import IntegrityViolation, remove_runtime_entry
 
     flags: GlobalFlags = ctx.obj
     try:
-        state_path = resolve_state_path(flags.workspace)
         target = (target_dir or _resolve_target(flags)).resolve()
         if runtime is not None:
             _validate_runtime(runtime)
-        runtime_results: list[RemoveEntryResult] = []
-        with state_transaction(state_path) as state:
-            servers = state.mcp_servers or {}
-            server = servers.get(server_id)
-            if server is None:
-                raise cli_errors.UserError(
-                    f"mcp id {server_id!r} not registered; nothing to remove", kind="NotFound"
+        server = _anchored(flags, server_id, expected_revision)
+        runtime_actions: list[dict[str, object]] = []
+        if not keep_runtime_entry:
+            targets = [runtime] if runtime is not None else list(server.installed_targets)
+            for rt in targets:
+                try:
+                    result = remove_runtime_entry(
+                        server_id=server_id, runtime=rt, target_dir=target, force=False
+                    )
+                except IntegrityViolation as exc:
+                    raise cli_errors.StateConflict(str(exc), kind="IntegrityViolation") from exc
+                except ValueError as exc:
+                    raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
+                runtime_actions.append(
+                    {
+                        "target_path": str(result.target_path),
+                        "action": result.action,
+                        "user_entries_preserved": result.user_entries_preserved,
+                    }
                 )
-            if server.owner != "eawf":
-                raise cli_errors.UserError(
-                    f"mcp id {server_id!r} is owner={server.owner!r}; "
-                    "remove only manages owner=eawf entries",
-                    kind="InvalidInput",
-                )
-            if not keep_runtime_entry:
-                targets = [runtime] if runtime is not None else list(server.installed_targets)
-                for rt in targets:
-                    try:
-                        result = remove_runtime_entry(
-                            server_id=server_id,
-                            runtime=rt,
-                            target_dir=target,
-                            force=False,
-                        )
-                    except IntegrityViolation as exc:
-                        raise cli_errors.StateConflict(str(exc), kind="IntegrityViolation") from exc
-                    except ValueError as exc:
-                        raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-                    runtime_results.append(result)
-            del servers[server_id]
-            state.mcp_servers = servers if servers else None
-            state.updated_at = datetime.now(UTC)
-
+        answer = _mcp_rpc(
+            MCP_REMOVE,
+            {
+                "id": server_id,
+                "expected_revision": expected_revision,
+                "idempotency_key": idempotency_key,
+            },
+            flags=flags,
+            verb_text="mcp remove",
+        )
         emit_json_or_text(
             payload={
                 "id": server_id,
                 "removed_from_state": True,
-                "runtime_actions": [
-                    {
-                        "target_path": str(r.target_path),
-                        "action": r.action,
-                        "user_entries_preserved": r.user_entries_preserved,
-                    }
-                    for r in runtime_results
-                ],
+                "revision": answer["revision"],
+                "runtime_actions": runtime_actions,
                 "kept_runtime_entry": keep_runtime_entry,
             },
             text=(
                 f"mcp removed: {server_id} "
-                f"(runtime updates={len(runtime_results)}; kept_runtime={keep_runtime_entry})"
+                f"(runtime updates={len(runtime_actions)}; kept_runtime={keep_runtime_entry})"
             ),
             flags=flags,
         )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
-@mcp_app.command(name="list")
-def list_cmd(
-    ctx: typer.Context,
-    owner: Annotated[
-        str,
-        typer.Option(
-            "--owner",
-            help="Filter by ownership: eawf | user | all.",
-        ),
-    ] = "eawf",
-    runtime: Annotated[
-        str,
-        typer.Option(
-            "--runtime",
-            help="Runtime to inspect for user entries: claude | codex.",
-        ),
-    ] = "claude",
-    target_dir: Annotated[
-        Path | None,
-        typer.Option("--target-dir", help="Workspace root for the runtime config."),
-    ] = None,
-) -> None:
-    """List MCP entries from state and/or runtime config."""
-    from eawf.runtime.mcp.installer import list_runtime_entries, runtime_config_path
-
-    flags: GlobalFlags = ctx.obj
-    try:
-        if owner not in _OWNER_FILTERS:
-            raise cli_errors.UserError(
-                f"--owner must be one of {list(_OWNER_FILTERS)}; got {owner!r}", kind="InvalidInput"
-            )
-        _validate_runtime(runtime)
-        target = (target_dir or _resolve_target(flags)).resolve()
-
-        rows: list[dict[str, object]] = []
-        notes: list[str] = []
-
-        if owner in {"eawf", "all"}:
-            try:
-                state_path = resolve_state_path(flags.workspace)
-                if state_path.exists():
-                    payload = json.loads(state_path.read_text(encoding="utf-8"))
-                    state_servers = payload.get("mcp_servers") or {}
-                    for sid, body in sorted(state_servers.items()):
-                        if not isinstance(body, dict):
-                            continue
-                        if body.get("owner") != "eawf":
-                            continue
-                        rows.append(
-                            {
-                                "id": sid,
-                                "owner": "eawf",
-                                "command": body.get("command", ""),
-                                "risk": body.get("risk", ""),
-                                "status": body.get("status", ""),
-                                "installed_targets": list(body.get("installed_targets", [])),
-                            }
-                        )
-            except FileNotFoundError:
-                # No state.json yet — treat as empty for the list.
-                pass
-
-        if owner in {"user", "all"}:
-            try:
-                runtime_rows = list_runtime_entries(runtime=runtime, target_dir=target)
-            except ValueError as exc:
-                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-            settings_path = runtime_config_path(runtime, target)
-            if not settings_path.exists():
-                notes.append(f"runtime config absent at {settings_path}")
-            for row in runtime_rows:
-                if row.owner != "user":
-                    continue
-                rows.append(
-                    {
-                        "id": row.id,
-                        "owner": "user",
-                        "command": row.command,
-                        "risk": "",
-                        "status": "",
-                        "installed_targets": [runtime],
-                    }
-                )
-
-        text_lines: list[str] = []
-        if rows:
-            text_lines.append("ID\tOWNER\tCOMMAND\tRISK\tSTATUS\tTARGETS")
-            for entry in rows:
-                targets_raw = entry.get("installed_targets", [])
-                targets = list(targets_raw) if isinstance(targets_raw, (list, tuple)) else []
-                command_field = _escape_tsv_field(str(entry.get("command", "")))
-                text_lines.append(
-                    f"{entry['id']}\t{entry['owner']}\t{command_field}\t{entry['risk']}"
-                    f"\t{entry['status']}\t{','.join(str(t) for t in targets)}"
-                )
-        else:
-            text_lines.append("(no entries)")
-        text_lines.extend(notes)
-        emit_json_or_text(
-            payload={"servers": rows, "count": len(rows), "notes": notes},
-            text="\n".join(text_lines),
-            flags=flags,
-        )
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-
-
-@mcp_app.command(name="grant")
-def grant_cmd(
-    ctx: typer.Context,
-    scope_kind: Annotated[
-        str,
-        typer.Argument(
-            help="Scope shape: wave | profile | global.",
-            metavar="SCOPE_KIND",
-        ),
-    ],
-    scope_id: Annotated[
-        str,
-        typer.Argument(
-            help=(
-                "Scope identifier (e.g. wave id `P10-I01-W04`, profile name, or "
-                "the literal `global`)."
-            ),
-            metavar="SCOPE_ID",
-        ),
-    ],
-    server_id: Annotated[
-        str,
-        typer.Argument(help="MCP server id from state.mcp_servers.", metavar="SERVER_ID"),
-    ],
-    grant_id: Annotated[
-        str | None,
-        typer.Option(
-            "--grant-id",
-            help=(
-                "Override the auto-generated grant id (default: `GRANT-<n>` "
-                "with n = max existing + 1)."
-            ),
-        ),
-    ] = None,
-) -> None:
-    """Bind an MCP server to a scope so dispatch can project allowed-tools.
-
-    The grant body is persisted under ``state.mcp_grants[grant_id]``;
-    ``state.updated_at`` is bumped by :func:`state_transaction`.
-
-    The transaction validates referential integrity after mutation: if
-    *server_id* is not registered in ``state.mcp_servers``, the
-    ``INV.REF.MCP_GRANT_SERVER_MISSING`` invariant fires and the write is
-    rolled back as :class:`cli_errors.ValidationError`.
-    """
-    from pydantic import ValidationError
-
-    from eawf.kernel.state.models import GRANT_SCOPE_KINDS, McpGrant
-    from eawf.surfaces.cli._mutation import state_transaction
-    from eawf.workflow.lifecycle.allocator import allocate_grant_id
-
-    flags: GlobalFlags = ctx.obj
-    try:
-        if scope_kind not in GRANT_SCOPE_KINDS:
-            raise cli_errors.UserError(
-                f"unknown scope_kind {scope_kind!r}; expected one of {list(GRANT_SCOPE_KINDS)}",
-                kind="InvalidInput",
-            )
-        state_path = resolve_state_path(flags.workspace)
-        with state_transaction(state_path) as state:
-            grants = state.mcp_grants if state.mcp_grants is not None else {}
-            resolved_grant_id = grant_id if grant_id is not None else allocate_grant_id(state)
-            if resolved_grant_id in grants:
-                raise cli_errors.UserError(
-                    f"mcp grant id {resolved_grant_id!r} already exists; "
-                    "pick another or run `eawf mcp revoke` first",
-                    kind="InvalidInput",
-                )
-            try:
-                grant = McpGrant(
-                    id=resolved_grant_id,
-                    scope_kind=scope_kind,
-                    scope_id=scope_id,
-                    server_id=server_id,
-                    granted_at=datetime.now(UTC),
-                )
-            except ValidationError as exc:
-                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-            grants[resolved_grant_id] = grant
-            state.mcp_grants = grants
-            state.updated_at = datetime.now(UTC)
-        emit_json_or_text(
-            payload=_grant_payload(grant),
-            text=(
-                f"mcp granted: {grant.id} ({grant.scope_kind}={grant.scope_id} → {grant.server_id})"
-            ),
-            flags=flags,
-        )
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
-
-
-@mcp_app.command(name="revoke")
-def revoke_cmd(
-    ctx: typer.Context,
-    grant_id: Annotated[
-        str,
-        typer.Argument(help="Grant id from state.mcp_grants.", metavar="GRANT_ID"),
-    ],
-) -> None:
-    """Remove an MCP grant from ``state.mcp_grants``.
-
-    Bumps ``state.updated_at`` and clears the map slot. When the last
-    grant is removed, ``mcp_grants`` is reset to ``None`` so the
-    nullable-vs-empty distinction stays parallel to the ``mcp_servers``
-    handling in :func:`remove_cmd`.
-    """
-    from eawf.surfaces.cli._mutation import state_transaction
-
-    flags: GlobalFlags = ctx.obj
-    try:
-        state_path = resolve_state_path(flags.workspace)
-        removed: McpGrant | None = None
-        with state_transaction(state_path) as state:
-            grants = state.mcp_grants or {}
-            grant = grants.get(grant_id)
-            if grant is None:
-                raise cli_errors.UserError(
-                    f"mcp grant id {grant_id!r} not registered; nothing to revoke", kind="NotFound"
-                )
-            del grants[grant_id]
-            state.mcp_grants = grants if grants else None
-            state.updated_at = datetime.now(UTC)
-            removed = grant
-        assert removed is not None
-        emit_json_or_text(
-            payload={
-                "id": removed.id,
-                "removed_from_state": True,
-                "scope_kind": removed.scope_kind,
-                "scope_id": removed.scope_id,
-                "server_id": removed.server_id,
-            },
-            text=(
-                f"mcp revoked: {removed.id} "
-                f"({removed.scope_kind}={removed.scope_id} → {removed.server_id})"
-            ),
-            flags=flags,
-        )
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
-
-
-#: The canonical lane ids ``run-config`` renders a per-Run server for.
-#: These are the adapter ids, not the short installer names above: the
-#: per-Run server is configured for a dispatch lane, and the lane is what
-#: :func:`eawf.runtime.runtimes.selector.adapter_for` is keyed by.
-_RUN_SERVER_RUNTIMES: tuple[str, ...] = ("claude-code", "codex", "opencode")
-
-
-class _DaemonTransport:
-    """The per-Run server's one way of reaching the daemon.
-
-    A thin binding rather than a class with behaviour: the server owns
-    what a call means and this owns only how it travels, which is what
-    lets a test drive the same server over an in-process dispatcher.
-    """
-
-    def __init__(self, client: DaemonClient) -> None:
-        """Bind the transport to an already-connected client."""
-        self._client = client
-
-    def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
-        """Forward one request and return the daemon's result."""
-        return self._client.call(method, dict(params))
-
-
-def _run_server_binding(path: Path) -> RunServerBinding:
-    """Return the validated per-Run server binding filed at *path*.
-
-    Raises:
-        cli_errors.UserError: The file is absent or is not a binding.
-    """
-    from eawf.runtime.mcp.semantic_stdio import RunServerBinding
-
-    try:
-        body = json.loads(path.read_text(encoding="utf-8"))
-    except OSError as error:
-        raise cli_errors.UserError(str(error), kind="NotFound") from error
-    except json.JSONDecodeError as error:
-        raise cli_errors.UserError(f"{path} is not JSON: {error}") from error
-    try:
-        return RunServerBinding.model_validate(body)
-    except ValidationError as error:
-        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
-        raise cli_errors.UserError(
-            f"{path} is not a run server binding; check {', '.join(fields)}"
-        ) from error
-
-
-@mcp_app.command(name="serve")
-def serve_cmd(
-    ctx: typer.Context,
-    binding_path: Annotated[
-        Path,
-        typer.Option("--binding", help="Per-Run server binding written by the dispatcher."),
-    ],
-) -> None:
-    """Serve one Run's granted semantic tools over MCP stdio.
-
-    The provider process starts this command; it publishes exactly the
-    tools the Run's sealed capsule grants and forwards every call to the
-    daemon. Nothing but MCP frames is written to stdout, because stdout
-    is the protocol channel.
-    """
-    from eawf.runtime.mcp.semantic_stdio import SemanticStdioServer, serve_semantic_stdio
-    from eawf.surfaces.cli._daemon_client import DaemonClient
-
-    flags: GlobalFlags = ctx.obj
-    try:
-        binding = _run_server_binding(binding_path)
-        capsule = binding.capsule()
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-        return
-    except (OSError, ValidationError) as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err)), flags=flags)
-        return
-    runtime_dir = Path(binding.runtime_dir) if binding.runtime_dir else None
-    with DaemonClient(runtime_dir=runtime_dir) as client:
-        server = SemanticStdioServer(
-            binding=binding, capsule=capsule, transport=_DaemonTransport(client)
-        )
-        serve_semantic_stdio(server, stdin=sys.stdin, stdout=sys.stdout)
-
-
-@mcp_app.command(name="run-config")
-def run_config_cmd(
-    ctx: typer.Context,
-    runtime: Annotated[
-        str,
-        typer.Option("--runtime", help="Dispatch lane: claude-code | codex | opencode."),
-    ],
-    binding_path: Annotated[
-        Path,
-        typer.Option("--binding", help="Per-Run server binding written by the dispatcher."),
-    ],
-    config_dir: Annotated[
-        Path,
-        typer.Option("--config-dir", help="Directory the lane's config files are written to."),
-    ],
-    write: Annotated[
-        bool,
-        typer.Option("--write/--no-write", help="Write the lane's config files to --config-dir."),
-    ] = True,
-) -> None:
-    """Render how one lane is told about a Run's semantic tool server.
-
-    The dispatcher runs this before spawning a provider: the rendered
-    flags and environment go onto the spawn, and the written files carry
-    the server registration. The exposed tool names are the Run's grant
-    as the lane will see it, so a reviewer reads the grant off the spawn.
-    """
-    from eawf.runtime.mcp.semantic_stdio import (
-        ServerTableError,
-        materialize_run_server_config,
-        run_server_config_for,
-    )
-
-    flags: GlobalFlags = ctx.obj
-    try:
-        if runtime not in _RUN_SERVER_RUNTIMES:
-            raise cli_errors.UserError(
-                f"unknown lane {runtime!r}; expected one of {list(_RUN_SERVER_RUNTIMES)}"
-            )
-        binding = _run_server_binding(binding_path)
-        config = run_server_config_for(
-            runtime,
-            binding=binding,
-            config_dir=config_dir.resolve(),
-            server_command=("eawf", "mcp", "serve", "--binding", str(binding_path.resolve())),
-        )
-        written = materialize_run_server_config(config) if write else ()
-        emit_json_or_text(
-            payload={
-                "runtime_id": config.runtime_id,
-                "argv_flags": list(config.argv_flags),
-                "env": dict(config.env),
-                "exposed_tools": list(config.exposed_tools),
-                "files_written": list(written),
-            },
-            text=(
-                f"mcp run-config: {config.runtime_id} "
-                f"tools={len(config.exposed_tools)} files={len(written)}"
-            ),
-            flags=flags,
-        )
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-    except (OSError, ValidationError, ServerTableError) as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err)), flags=flags)
-
+# ---- command registration ---------------------------------------------------
+# Importing the sibling modules runs their ``@mcp_app.command(...)``
+# decorators so the app above carries its full verb set. The imports sit
+# at the bottom, after every shared symbol is defined, so the siblings can
+# import the app and helpers from this module without a circular import.
+from eawf.surfaces.cli.commands import mcp_grants as _mcp_grants  # noqa: E402, F401
+from eawf.surfaces.cli.commands import mcp_run as _mcp_run  # noqa: E402, F401
 
 __all__ = ["mcp_app"]

@@ -1,5 +1,5 @@
-"""``config.*`` JSON-RPC methods: read / set_layer_value / unset_layer_value / list_layers
-plus wave-layer overlay management (set_wave_value /
+"""``config.*`` JSON-RPC methods: read / set_layer_value / unset_layer_value /
+set_layer_values / list_layers plus wave-layer overlay management (set_wave_value /
 clear_wave_overlay / get_wave_overlay).
 
 Daemon-side canonical writer for layered config YAML (authority map
@@ -22,6 +22,9 @@ one locking and replay story:
 2. ``portalock(target_path, timeout=5)`` — defense-in-depth (rule 4
    V1 retains portalocker inside the daemon mutator path).
 3. Read + parse the YAML layer; deep-set or remove the dotted key.
+3a. Compose the config as it would stand after the write and hold every
+    section a written key belongs to against its strict model, refusing
+    the write before the file changes.
 4. Atomic-rename changed YAML (tempfile → fsync → rename + parent dir fsync).
 5. Build a canonical ``StoreKind.CONFIG_UPDATED`` envelope + publish on
    the subscription bus so TUI / watchers see the change.
@@ -50,6 +53,7 @@ from eawf.kernel.config.layered import (
     branch_config_path,
     global_config_path,
     local_config_path,
+    merge_config,
     repo_config_path,
     unset_dotted,
     workspace_config_path,
@@ -57,6 +61,7 @@ from eawf.kernel.config.layered import (
 from eawf.kernel.config.loader import load_yaml_layer
 from eawf.kernel.config.registry import leaf_key_lookup, validate_config_value
 from eawf.kernel.config.registry.leaf_catalog import LEAF_KEY_REGISTRY
+from eawf.kernel.config.sections import ConfigSectionError, check_sections
 from eawf.kernel.fsync import fsync_parent_dir
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
@@ -159,6 +164,41 @@ class UnsetLayerValueParams(BaseModel):
     repo_root: str | None = None
 
 
+class LeafWrite(BaseModel):
+    """One leaf of a :func:`set_layer_values` write: a value to set, or a removal.
+
+    Attributes:
+        key_path: Dotted-key as a list.
+        value: Value to set; ignored when ``unset``.
+        unset: Whether the leaf is removed from the layer instead.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    key_path: list[str] = Field(min_length=1)
+    value: Any = None
+    unset: bool = False
+
+
+class SetLayerValuesParams(BaseModel):
+    """Params for :func:`set_layer_values`.
+
+    Attributes:
+        layer: Canonical writable-layer label, as for :class:`SetLayerValueParams`.
+        writes: The leaves written together; the section check sees all of them, so a
+            pair of leaves no single write could leave valid is written at once.
+        branch: Branch name (required when ``layer == "branch"``).
+        idempotency_key: Optional caller-supplied retry key.
+        repo_root: Optional absolute path of the repo whose layer is written.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    layer: str
+    writes: list[LeafWrite] = Field(min_length=1)
+    branch: str | None = None
+    idempotency_key: str | None = None
+    repo_root: str | None = None
+
+
 class SetWaveValueParams(BaseModel):
     """Params for :func:`set_wave_value`.
 
@@ -230,6 +270,26 @@ class UnsetLayerValueResult(BaseModel):
     key_path: list[str]
     removed: bool
     envelope: dict[str, Any] | None = None
+    idempotent_replay: bool = False
+
+
+class SetLayerValuesResult(BaseModel):
+    """Result of :func:`set_layer_values`.
+
+    Attributes:
+        layer: The layer written.
+        layer_path: The layer file.
+        writes: Each leaf as written: its key path, typed value and whether it was a
+            removal, in the order asked.
+        envelopes: One update envelope per leaf the write changed.
+        idempotent_replay: Whether the result is a cached replay.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    layer: str
+    layer_path: str
+    writes: list[LeafWrite]
+    envelopes: list[dict[str, Any]]
     idempotent_replay: bool = False
 
 
@@ -482,6 +542,99 @@ def _build_envelope(
     )
 
 
+# ---- Admission + section check ----------------------------------------------
+
+
+def _refuse_file_layer(layer: str) -> None:
+    """Refuse a layer label no file write may target.
+
+    Raises:
+        ValueError: ``layer`` is the read-only built-in layer or the RAM wave layer.
+    """
+    if layer == "built-in":
+        raise ValueError("validation_failed: layer 'built-in' is read-only")
+    if layer == "wave":
+        raise ValueError(
+            "validation_failed: layer 'wave' is daemon-RAM-only; "
+            "use 'config.set_wave_value' instead"
+        )
+
+
+def _admit_set(dotted: str, layer: str, value: Any) -> Any:
+    """Return ``value`` typed for ``dotted`` once the leaf may be written at ``layer``.
+
+    Raises:
+        ValueError: The key is off the catalog or deprecated, the layer may not write
+            it, or the value is not the type, range or choice the registry declares.
+    """
+    entry = leaf_key_lookup(dotted)  # raises ValueError on unknown.
+    if entry.reserved:
+        raise ValueError(f"validation_failed: config leaf {dotted!r} is deprecated")
+    # An empty allowlist marks a locked, code-only leaf, so this also refuses
+    # persisting a locked key such as schema_version.
+    if layer not in entry.writable_layers:
+        raise ValueError(
+            f"validation_failed: leaf {dotted!r} is not writable from the {layer} layer"
+        )
+    try:
+        return validate_config_value(dotted, value)
+    except UserError as exc:
+        raise ValueError(f"validation_failed: {exc}") from exc
+
+
+def _admit_unset(dotted: str, layer: str) -> None:
+    """Refuse removing ``dotted`` from ``layer`` where the catalog forbids it.
+
+    A key no code reads, deprecated or off the catalog, may still sit in a file;
+    removing it from any file layer is how that file is cleaned without editing it by
+    hand, while a set keeps refusing to write one.
+
+    Raises:
+        ValueError: The leaf is reserved, or read and not writable at ``layer``.
+    """
+    entry = LEAF_KEY_REGISTRY.get(dotted)
+    unread = entry is None or entry.consumer_kind == "deprecated"
+    if entry is not None and entry.reserved and not unread:
+        raise ValueError(f"validation_failed: config leaf {dotted!r} is reserved")
+    if entry is not None and not unread and layer not in entry.writable_layers:
+        raise ValueError(
+            f"validation_failed: leaf {dotted!r} is not writable from the {layer} layer"
+        )
+
+
+def _check_staged(
+    *,
+    target: Path,
+    body: dict[str, Any],
+    state_path: Path | None,
+    layer: str,
+    branch: str | None,
+    keys: list[str],
+) -> None:
+    """Refuse a layer body that leaves a written key's section invalid.
+
+    The config is composed as the readers compose it, anchored on the repo, with
+    ``body`` standing in for the target file and no environment overrides, which
+    belong to the reading process rather than to any file.
+
+    Raises:
+        ValueError: A touched section fails its model; the message carries the
+            model's field and reason.
+    """
+    repo = state_path.parent.parent if state_path is not None else None
+    merged, _sources = merge_config(
+        workspace=repo,
+        repo=repo,
+        env={},
+        branch=branch if layer == "branch" else None,
+        staged={target: body},
+    )
+    try:
+        check_sections(merged, keys)
+    except ConfigSectionError as exc:
+        raise ValueError(f"validation_failed: {exc}") from exc
+
+
 # ---- Handlers ---------------------------------------------------------------
 
 
@@ -528,51 +681,26 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
         RuntimeError: When the daemon context is missing fields the
             mutator depends on.
         ValueError: When the layer is unknown, the layer is read-only,
-            the params payload fails validation, or the value is not the
-            type, range or choice the config registry declares for the key.
+            the params payload fails validation, the value is not the
+            type, range or choice the config registry declares for the key,
+            or the write leaves the key's config section invalid.
     """
     try:
         args = SetLayerValueParams.model_validate(params)
     except ValidationError as exc:
         raise ValueError(f"validation_failed: {exc}") from exc
 
-    if args.layer == "built-in":
-        raise ValueError("validation_failed: layer 'built-in' is read-only")
-    if args.layer == "wave":
-        raise ValueError(
-            "validation_failed: layer 'wave' is daemon-RAM-only; "
-            "use 'config.set_wave_value' instead"
-        )
-
-    # Leaf-key gate: refuse unknown keys with the canonical error
-    # message. The catalog is the source of truth for which dotted
-    # paths the daemon may persist; an unknown key is almost always a
-    # typo or a stale CLI build.
+    _refuse_file_layer(args.layer)
+    # An unknown key fails first: the catalog is the source of truth for which dotted
+    # paths the daemon may persist, and an unknown key is almost always a typo.
     dotted = ".".join(args.key_path)
-    entry = leaf_key_lookup(dotted)  # raises ValueError on unknown.
-    if entry.reserved:
+    if leaf_key_lookup(dotted).reserved:
         raise ValueError(f"validation_failed: config leaf {dotted!r} is deprecated")
-
     state_path = _resolve_state_anchor(repo_root=args.repo_root, ctx=ctx)
-    # Resolve (and so validate) the target layer first: a bogus layer name
-    # or a missing branch name fails here with its own canonical error
-    # before the authority check below.
+    # A bogus layer name or a missing branch name fails with its own error before
+    # the authority check.
     target = _resolve_layer_path(args.layer, state_path=state_path, branch=args.branch)
-
-    # Writable-layers gate: a leaf may only be written from a layer in
-    # its allowlist. An empty allowlist marks a locked / code-only leaf,
-    # so this also refuses persisting a locked key (e.g. schema_version)
-    # through the layer RPC. Mirrors the wave-layer check in
-    # set_wave_value so the two mutator surfaces enforce the same
-    # authority.
-    if args.layer not in entry.writable_layers:
-        raise ValueError(
-            f"validation_failed: leaf {dotted!r} is not writable from the {args.layer} layer"
-        )
-    try:
-        value = validate_config_value(dotted, args.value)
-    except UserError as exc:
-        raise ValueError(f"validation_failed: {exc}") from exc
+    value = _admit_set(dotted, args.layer, args.value)
 
     cache = _idempotency_cache(ctx)
     now_mono = time.monotonic()
@@ -596,6 +724,14 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
         with portalock.acquire(target, timeout=5.0):
             existing = load_yaml_layer(target)
             _set_dotted(existing, list(args.key_path), value)
+            _check_staged(
+                target=target,
+                body=existing,
+                state_path=state_path,
+                layer=args.layer,
+                branch=args.branch,
+                keys=[dotted],
+            )
             _atomic_write_yaml(target, existing)
 
             envelope = _build_envelope(
@@ -641,32 +777,19 @@ async def unset_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[
     code reads -- a deprecated leaf, or one off the catalog -- is removed
     from any file layer that states it, which is how a stale file is cleaned;
     writing one stays refused. Removing an absent leaf is an idempotent
-    no-op: no write and no update envelope.
+    no-op: no write and no update envelope. A removal that leaves the key's config
+    section invalid is refused.
     """
     try:
         args = UnsetLayerValueParams.model_validate(params)
     except ValidationError as exc:
         raise ValueError(f"validation_failed: {exc}") from exc
 
-    if args.layer == "built-in":
-        raise ValueError("validation_failed: layer 'built-in' is read-only")
-    if args.layer == "wave":
-        raise ValueError("validation_failed: layer 'wave' is daemon-RAM-only")
-
+    _refuse_file_layer(args.layer)
     dotted = ".".join(args.key_path)
-    entry = LEAF_KEY_REGISTRY.get(dotted)
-    # a key nothing reads, deprecated or off the catalog, may still sit in a file; removing
-    # it from any file layer is how that file is cleaned without editing it by hand, while
-    # set_layer_value keeps refusing to write one
-    unread = entry is None or entry.consumer_kind == "deprecated"
-    if entry is not None and entry.reserved and not unread:
-        raise ValueError(f"validation_failed: config leaf {dotted!r} is reserved")
     state_path = _resolve_state_anchor(repo_root=args.repo_root, ctx=ctx)
     target = _resolve_layer_path(args.layer, state_path=state_path, branch=args.branch)
-    if entry is not None and not unread and args.layer not in entry.writable_layers:
-        raise ValueError(
-            f"validation_failed: leaf {dotted!r} is not writable from the {args.layer} layer"
-        )
+    _admit_unset(dotted, args.layer)
 
     cache = _idempotency_cache(ctx)
     now_mono = time.monotonic()
@@ -690,6 +813,14 @@ async def unset_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[
             removed = unset_dotted(existing, list(args.key_path))
             envelope: Envelope | None = None
             if removed:
+                _check_staged(
+                    target=target,
+                    body=existing,
+                    state_path=state_path,
+                    layer=args.layer,
+                    branch=args.branch,
+                    keys=[dotted],
+                )
                 _atomic_write_yaml(target, existing)
                 envelope = _build_envelope(
                     layer=args.layer,
@@ -712,6 +843,118 @@ async def unset_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[
                 key_path=list(args.key_path),
                 removed=removed,
                 envelope=envelope.model_dump(mode="json") if envelope is not None else None,
+                idempotent_replay=False,
+            ).model_dump(mode="json")
+            if args.idempotency_key is not None:
+                cache[args.idempotency_key] = _CachedConfigMutation(
+                    result=result,
+                    cached_at=time.monotonic(),
+                )
+            return result
+    finally:
+        ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
+
+
+def _admit_write(write: LeafWrite, layer: str) -> LeafWrite:
+    """Return ``write`` with its value typed, once its leaf may be written at ``layer``."""
+    dotted = ".".join(write.key_path)
+    if write.unset:
+        _admit_unset(dotted, layer)
+        return write
+    return LeafWrite(key_path=write.key_path, value=_admit_set(dotted, layer, write.value))
+
+
+def _apply_write(body: dict[str, Any], write: LeafWrite) -> bool:
+    """Apply ``write`` to a layer body in place; return whether the body changed."""
+    if write.unset:
+        return unset_dotted(body, list(write.key_path))
+    _set_dotted(body, list(write.key_path), write.value)
+    return True
+
+
+@register("config.set_layer_values")
+async def set_layer_values(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Set or remove several leaves of one YAML layer in one write.
+
+    Each leaf is admitted as :func:`set_layer_value` or :func:`unset_layer_value`
+    admits it, then the section check runs once over the layer as it stands after all
+    of them. This is how two leaves that are only valid together, such as a co-author's
+    name and email, are written: neither alone would pass the check.
+
+    Args:
+        ctx: Server context.
+        params: JSON-RPC params per :class:`SetLayerValuesParams`.
+
+    Returns:
+        Dict matching :class:`SetLayerValuesResult`.
+
+    Raises:
+        ValueError: The params fail validation, a leaf is refused as its single write
+            would be, or the writes leave a touched config section invalid; nothing is
+            written.
+    """
+    try:
+        args = SetLayerValuesParams.model_validate(params)
+    except ValidationError as exc:
+        raise ValueError(f"validation_failed: {exc}") from exc
+
+    _refuse_file_layer(args.layer)
+    state_path = _resolve_state_anchor(repo_root=args.repo_root, ctx=ctx)
+    target = _resolve_layer_path(args.layer, state_path=state_path, branch=args.branch)
+    admitted = [_admit_write(write, args.layer) for write in args.writes]
+
+    cache = _idempotency_cache(ctx)
+    _evict_expired(cache, now=time.monotonic())
+    replay = _cached_replay(
+        cache,
+        idempotency_key=args.idempotency_key,
+        operation="set_layer_values",
+        layer=args.layer,
+        key_path=admitted[0].key_path,
+    )
+    if replay is not None:
+        return replay
+
+    from eawf.runtime.lock import portalock
+
+    ctx.in_flight_mutations += 1
+    try:
+        with portalock.acquire(target, timeout=5.0):
+            existing = load_yaml_layer(target)
+            changed = [write for write in admitted if _apply_write(existing, write)]
+            envelopes: list[dict[str, Any]] = []
+            if changed:
+                _check_staged(
+                    target=target,
+                    body=existing,
+                    state_path=state_path,
+                    layer=args.layer,
+                    branch=args.branch,
+                    keys=[".".join(write.key_path) for write in admitted],
+                )
+                _atomic_write_yaml(target, existing)
+                for write in changed:
+                    envelope = _build_envelope(
+                        layer=args.layer,
+                        layer_path=target,
+                        key_path=list(write.key_path),
+                        value=None if write.unset else write.value,
+                        operation="unset" if write.unset else "set",
+                    )
+                    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+                        ctx.bus.publish(envelope)
+                    ctx.last_event_id = envelope.id
+                    envelopes.append(envelope.model_dump(mode="json"))
+
+            logger.info(
+                f"set_layer_values ok layer={args.layer} writes={len(admitted)} "
+                f"changed={len(changed)}"
+            )
+            result = SetLayerValuesResult(
+                layer=args.layer,
+                layer_path=str(target),
+                writes=admitted,
+                envelopes=envelopes,
                 idempotent_replay=False,
             ).model_dump(mode="json")
             if args.idempotency_key is not None:
@@ -896,6 +1139,7 @@ __all__ = [
     "list_layers",
     "read",
     "set_layer_value",
+    "set_layer_values",
     "set_wave_value",
     "unset_layer_value",
 ]

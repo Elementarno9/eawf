@@ -48,7 +48,7 @@ from typing import Literal
 import orjson
 
 from eawf.kernel.state.io import LegacyOperationRemovedError, refuse_legacy_write
-from eawf.kernel.state.models import State, Wave
+from eawf.kernel.state.models import State
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.validate.strict import validate_state
 from eawf.observability.logging.state_leak import state_leak_refusal
@@ -319,26 +319,6 @@ def _daemonless_env_set() -> bool:
     return os.environ.get("EAWF_DAEMONLESS", "") == "1"
 
 
-def wave_is_gate_bearing(wave: Wave) -> bool:
-    """Return whether *wave* carries a typed close gate.
-
-    A wave is *gate-bearing* when it attaches at least one typed
-    :class:`~eawf.kernel.spec.common.GateSpec` (:attr:`Wave.gates`). Those
-    gates ARE the wave's falsifiers -- the deterministic floor / jury / oracle
-    the daemon close gate runs. A gate-bearing wave's close therefore needs the
-    gate to have run (or an explicit operator waiver); a wave with no gate has
-    nothing to falsify, so the daemonless env hatch keeps working for it with
-    no waiver required.
-
-    Args:
-        wave: The wave being closed. Read-only.
-
-    Returns:
-        ``True`` when the wave attaches one or more typed gates.
-    """
-    return bool(wave.gates)
-
-
 def resolve_close_mechanism(
     *, gate_bearing: bool, waived: bool, transport_fallback: bool = False
 ) -> CloseMechanism:
@@ -358,8 +338,7 @@ def resolve_close_mechanism(
       apply) -> ``"daemonless"`` -- the V1 carve-out fallback.
 
     Args:
-        gate_bearing: Whether the closing wave attaches typed gates
-            (:func:`wave_is_gate_bearing`).
+        gate_bearing: Whether the closing wave attaches typed gates.
         waived: Whether the operator passed the per-invocation daemonless
             close waiver this call.
         transport_fallback: Whether the close proxied to the daemon and then

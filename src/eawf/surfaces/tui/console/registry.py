@@ -361,7 +361,7 @@ OVERLAY_SPECS: tuple[SurfaceSpec, ...] = (
     SurfaceSpec(name="question", title="question", cursor=False, authority=True),
     SurfaceSpec(name="pause", title="pause", cursor=False, authority=True),
     SurfaceSpec(name="evidence", title="evidence", cursor=True, authority=False),
-    SurfaceSpec(name="acceptance", title="acceptance evidence", cursor=True, authority=False),
+    SurfaceSpec(name="acceptance", title="evidence", cursor=True, authority=False),
     SurfaceSpec(name="readiness", title="readiness", cursor=True, authority=False),
     SurfaceSpec(name="resolution", title="resolution", cursor=False, authority=False),
     SurfaceSpec(name="draft", title="draft", cursor=True, authority=True),

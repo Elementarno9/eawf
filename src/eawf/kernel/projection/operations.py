@@ -1,17 +1,19 @@
 """The operations read models: what the sandbox log, the queue and recovery draw.
 
 Three routes answer what the machine is doing on the operator's behalf. ``sandbox.log``
-renders the policies every authorisation decision was read against, ``unattended`` the
+renders every authorisation decision the gateway made, allowed and denied, beside the
+policies the document holds, ``unattended`` the
 Runs the dispatch queue holds, and ``crash.recovery`` the Runs that kept going while the
 console was away, at the cursor the console has to come back to.
 
-The columns these routes want most are the ones no producer states yet, and they are
-declared rather than dropped. The decision, its reason and the policy revision it cites
-come from the sandbox-decision record; the queue state and the progress of a queued Run
-come from the dispatch-queue projection. Neither producer has shipped, so every one of
-those columns renders the unknown truth token naming the item it is waiting on -- which
-is a different and more useful answer than a blank cell, and a very different answer from
-a zero.
+A decision's columns are the facts its sandbox-decision record states: the outcome, the
+Run, the reason, the rule that decided with its value in force, and the policy revision it
+cites. A fact a row does not state -- a decision whose revision cannot be read, or any
+decision column on a policy row -- renders the unknown truth token saying so, never a
+guess. The queue state and the progress of a queued Run come from the dispatch-queue
+projection, which has not shipped, so those columns render the unknown token naming the
+item they wait on -- a different and more useful answer than a blank cell, and a very
+different answer from a zero.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from eawf.kernel.projection.route_view import (
     RouteReadModel,
     build_route_read_model,
     check_field_tables,
+    stated,
     status_and,
     unstated,
 )
@@ -41,8 +44,14 @@ FAMILY: Final = "operations"
 #: ``projection.<route>.read`` and by ``projection.<route>.reconnect``.
 OPERATIONS_ROUTES: Final[tuple[str, ...]] = ("sandbox.log", "unattended", "crash.recovery")
 
-#: The item whose producer would state an authorisation decision.
+#: The record every authorisation decision is read from.
 SANDBOX_DECISION_PRODUCER: Final = "the sandbox-decision record"
+
+#: Why a decision's policy revision reads unknown: the row states none that can be read.
+UNREADABLE_REVISION: Final = "the policy revision this decision cites cannot be read"
+
+#: Why a decision column reads unknown on a row that is not a decision.
+NOT_A_DECISION: Final = "this row is a policy, not a decision"
 
 #: The item whose producer would state the dispatch queue.
 DISPATCH_QUEUE_PRODUCER: Final = "the dispatch-queue projection"
@@ -53,9 +62,13 @@ DISPATCH_QUEUE_PRODUCER: Final = "the dispatch-queue projection"
 OPERATIONS_FIELDS: Final[Mapping[str, tuple[RouteFieldSpec, ...]]] = MappingProxyType(
     {
         "sandbox.log": status_and(
-            unstated("decision", missing_producer=SANDBOX_DECISION_PRODUCER),
-            unstated("reason", missing_producer=SANDBOX_DECISION_PRODUCER),
-            unstated("policy_revision", missing_producer=SANDBOX_DECISION_PRODUCER),
+            stated("decision", absent=NOT_A_DECISION),
+            stated("run", absent=NOT_A_DECISION),
+            stated("reason", absent=NOT_A_DECISION),
+            stated("rule", absent=NOT_A_DECISION),
+            stated("rule_value", absent=NOT_A_DECISION),
+            stated("policy_revision", absent=UNREADABLE_REVISION),
+            stated("decided_at", absent=NOT_A_DECISION),
         ),
         "unattended": status_and(
             unstated("queue_state", missing_producer=DISPATCH_QUEUE_PRODUCER),
@@ -90,8 +103,10 @@ def build_operations_view(projection: RouteProjection) -> RouteReadModel:
 __all__ = [
     "DISPATCH_QUEUE_PRODUCER",
     "FAMILY",
+    "NOT_A_DECISION",
     "OPERATIONS_FIELDS",
     "OPERATIONS_ROUTES",
     "SANDBOX_DECISION_PRODUCER",
+    "UNREADABLE_REVISION",
     "build_operations_view",
 ]

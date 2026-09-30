@@ -41,13 +41,11 @@ from eawf.workflow.estimation.metrics import (
     EuVarianceMetric,
     MetricsSummary,
     PlannedVsReactiveMetric,
-    RealisticWallClockMetric,
     WaveElapsedMetric,
     compute_audit_pass_rate,
     compute_eu_variance,
     compute_metrics,
     compute_planned_vs_reactive,
-    compute_realistic_wall_clock,
     compute_wave_elapsed,
 )
 
@@ -289,92 +287,6 @@ def test_compute_eu_variance_outside_pessimistic_share_drops() -> None:
     assert result.mean_delta_eu == pytest.approx(1.25)
     # Population stdev around 1.25 with values [0.5, 2.0] = sqrt(((0.75)^2 + (0.75)^2)/2) = 0.75.
     assert result.stdev_delta_eu == pytest.approx(0.75)
-
-
-# ---- compute_realistic_wall_clock ------------------------------------------
-
-
-def test_compute_realistic_wall_clock_empty_waves_zeroes() -> None:
-    """Boundary: empty DAG returns a zero rollup with the configured units."""
-    result = compute_realistic_wall_clock([], max_parallel_waves=2, eu_minutes=60.0)
-    assert result == RealisticWallClockMetric(
-        work_sum_eu=0.0,
-        critical_path_eu=0.0,
-        queue_wall_clock_eu=0.0,
-        inside_pessimistic_share=None,
-        pessimism_multiplier=1.0,
-        realistic_wall_clock_eu=0.0,
-        realistic_wall_clock_hours=0.0,
-        max_parallel_waves=2,
-        eu_minutes=60.0,
-    )
-
-
-def test_compute_realistic_wall_clock_uses_critical_path_queue_and_pessimism() -> None:
-    """DAG schedule respects deps, finite queue, and inside-pess calibration."""
-    waves = [
-        _wave(wave_id="P01-I01-W01", effort_bucket=EffortBucket.M),
-        _wave(wave_id="P01-I01-W02", effort_bucket=EffortBucket.M),
-        _wave(wave_id="P01-I01-W03", effort_bucket=EffortBucket.M),
-        _wave(wave_id="P01-I01-W04", effort_bucket=EffortBucket.M),
-        _wave(wave_id="P01-I01-W05", effort_bucket=EffortBucket.M),
-    ]
-
-    result = compute_realistic_wall_clock(
-        waves,
-        max_parallel_waves=2,
-        inside_pessimistic_share=0.5,
-        eu_minutes=60.0,
-    )
-
-    # Every wave costs the 0.8 EU effort constant, whatever its label.
-    assert result.work_sum_eu == pytest.approx(4.0)
-    assert result.critical_path_eu == pytest.approx(0.8)
-    assert result.queue_wall_clock_eu == pytest.approx(2.4)
-    assert result.pessimism_multiplier == pytest.approx(1.5)
-    assert result.realistic_wall_clock_eu == pytest.approx(3.6)
-    assert result.realistic_wall_clock_hours == pytest.approx(3.6)
-
-
-def test_compute_realistic_wall_clock_dependency_chain_sets_lower_bound() -> None:
-    """Critical path dominates even when parallel worker count is high."""
-    waves = [
-        _wave(wave_id="P01-I01-W01", effort_bucket=EffortBucket.M),
-        _wave(
-            wave_id="P01-I01-W02",
-            effort_bucket=EffortBucket.M,
-            deps=["P01-I01-W01"],
-        ),
-        _wave(
-            wave_id="P01-I01-W03",
-            effort_bucket=EffortBucket.M,
-            deps=["P01-I01-W02"],
-        ),
-        _wave(wave_id="P01-I01-W04", effort_bucket=EffortBucket.M),
-    ]
-
-    result = compute_realistic_wall_clock(waves, max_parallel_waves=4)
-
-    assert result.critical_path_eu == pytest.approx(2.4)
-    assert result.queue_wall_clock_eu == pytest.approx(2.4)
-    assert result.realistic_wall_clock_eu == pytest.approx(2.4)
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "message"),
-    [
-        ({"max_parallel_waves": 0}, "max_parallel_waves"),
-        ({"eu_minutes": 0.0}, "eu_minutes"),
-        ({"inside_pessimistic_share": 1.5}, "inside_pessimistic_share"),
-    ],
-)
-def test_compute_realistic_wall_clock_rejects_invalid_inputs(
-    kwargs: dict[str, object],
-    message: str,
-) -> None:
-    """Error paths: invalid queue, conversion, and calibration inputs fail."""
-    with pytest.raises(ValueError, match=message):
-        compute_realistic_wall_clock([], **kwargs)
 
 
 # ---- compute_audit_pass_rate ------------------------------------------------

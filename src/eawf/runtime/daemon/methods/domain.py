@@ -948,6 +948,7 @@ async def _run_verb(
                 urn=request_params.urn,
                 to_status=verb.to_status,
                 updates=request_params.updates,
+                actor=request_params.actor,
             )
         except ValidationError as error:
             return schema_refusal(error, params=params, operation=verb.method).model_dump(

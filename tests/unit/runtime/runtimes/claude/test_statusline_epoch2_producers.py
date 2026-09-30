@@ -21,18 +21,19 @@ import pytest
 import yaml
 
 from eawf.kernel.projection.truth import Precision, TruthKind, TruthState
+from eawf.kernel.state.enums import Confidence
 from eawf.kernel.state.epoch2.authority import require_native_authority
 from eawf.kernel.store.compaction import read_document, write_document
+from eawf.kernel.store.kinds.memory import MemoryNote
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     append_correction,
     append_ledger_record,
-    line_digest,
-    render_ledger_line,
 )
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import canary_ref, provision_canary
+from eawf.platform.memory.book import note_line
 from eawf.runtime.budget.notices import (
     BudgetCrossing,
     BudgetNoticeLedger,
@@ -139,15 +140,19 @@ def memory_ledger(state_path: Path) -> Path:
     return ledger_path(document, Epoch2Collection.MEMORY)
 
 
-def memory_record(key: str, **payload: Any) -> LedgerRecord:
-    """Return one memory ledger line keyed ``key``."""
-    return LedgerRecord(
-        collection=Epoch2Collection.MEMORY,
-        record_key=key,
-        status="imported",
-        recorded_at=PROVISIONED_AT,
-        payload=payload,
+def memory_record(
+    mem_id: str, *, summary: str = "note", replaces: LedgerRecord | None = None
+) -> LedgerRecord:
+    """Return the ledger line filing one native memory note, superseding *replaces*."""
+    note = MemoryNote(
+        id=mem_id,
+        scope_id="QR",
+        title=summary,
+        summary=summary,
+        confidence=Confidence.MEDIUM,
+        created_at=PROVISIONED_AT,
     )
+    return note_line(note, at=PROVISIONED_AT, replaces=replaces)
 
 
 def installed_plugins(home: Path, plugins: object) -> Path:
@@ -262,14 +267,10 @@ def test_budget_epoch2_without_the_session_run_names_the_spine_gap(
 def test_memory_epoch2_counts_the_memory_ledger_records(tmp_path: Path) -> None:
     state_path = canary(tmp_path)
     ledger = memory_ledger(state_path)
-    first = memory_record("legacy:memory_index/MEM-1", summary="one")
+    first = memory_record("MEM-1", summary="one")
     append_ledger_record(ledger, first)
-    append_ledger_record(ledger, memory_record("legacy:memory_index/MEM-2", summary="two"))
-    correction = memory_record("legacy:memory_index/MEM-1", summary="one, corrected")
-    append_correction(
-        ledger,
-        correction.model_copy(update={"supersedes": line_digest(render_ledger_line(first))}),
-    )
+    append_ledger_record(ledger, memory_record("MEM-2", summary="two"))
+    append_correction(ledger, memory_record("MEM-1", summary="one, corrected", replaces=first))
 
     segment = memory.build({}, state_path)
 
@@ -283,7 +284,7 @@ def test_memory_epoch2_counts_the_memory_ledger_records(tmp_path: Path) -> None:
 def test_memory_epoch2_with_one_record_renders_it(tmp_path: Path) -> None:
     state_path = canary(tmp_path)
     ledger = memory_ledger(state_path)
-    append_ledger_record(ledger, memory_record("legacy:memory_index/MEM-1"))
+    append_ledger_record(ledger, memory_record("MEM-1"))
 
     assert memory.build({}, state_path).text == f"mem:1@{ledger.stat().st_size}B"
 
@@ -420,7 +421,7 @@ def test_plugins_epoch2_with_a_malformed_record_names_why(
 def test_epoch2_producers_render_the_line_inside_the_statusline_budget(tmp_path: Path) -> None:
     state_path = session_canary(tmp_path)
     upsert_notice(notices_path(state_path), crossing())
-    append_ledger_record(memory_ledger(state_path), memory_record("legacy:memory_index/MEM-1"))
+    append_ledger_record(memory_ledger(state_path), memory_record("MEM-1"))
     payload = {**PAYLOAD, "cwd": str(tmp_path)}
 
     started = time.perf_counter()

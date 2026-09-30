@@ -20,52 +20,11 @@ import orjson
 import pytest
 
 from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.models import Wave
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.cli._mutation import (
     close_event_extras,
     resolve_close_mechanism,
-    wave_is_gate_bearing,
 )
-from tests._criteria_helpers import legacy_criteria
-
-_WAVE_ID = "P30-I16-W18"
-
-
-def _gate(gate_id: str = "G1", kind: str = "jury_verdict") -> dict[str, object]:
-    """A minimal valid GateSpec payload of *kind* for a gate-bearing wave."""
-    return {
-        "id": gate_id,
-        "criterion_id": "CR-01",
-        "kind": kind,
-        "args": {},
-        "policy": "block",
-        "cadence": "every-wave",
-    }
-
-
-def _make_wave(*, gates: list[dict[str, object]] | None = None) -> Wave:
-    """Build a claimed :class:`Wave`, optionally carrying typed gates."""
-    return Wave.model_validate(
-        {
-            "id": _WAVE_ID,
-            "iter_id": "P30-I16",
-            "title": "bypass-door bundle",
-            "status": "claimed",
-            "deps": [],
-            "blocks": [],
-            "file_scopes": ["src/eawf/surfaces/cli/_mutation.py"],
-            "success_criteria": [
-                c.model_dump(mode="json")
-                for c in legacy_criteria("daemonless close needs a waiver")
-            ],
-            "gates": gates or [],
-            "agent_role": "executor",
-            "effort_bucket": "M",
-            "opened_at": "2026-06-11T00:00:00Z",
-            "claimed_at": "2026-06-11T00:00:00Z",
-        }
-    )
 
 
 def _state_path(tmp_path: object) -> object:
@@ -87,19 +46,6 @@ def _read_events(state_path: object) -> list[dict[str, object]]:
         if line.strip():
             rows.append(orjson.loads(line))
     return rows
-
-
-# --- wave_is_gate_bearing: the gate-bearing predicate ----------------------
-
-
-def test_wave_is_gate_bearing_true_with_gates() -> None:
-    """A wave attaching at least one typed gate is gate-bearing."""
-    assert wave_is_gate_bearing(_make_wave(gates=[_gate()])) is True
-
-
-def test_wave_is_gate_bearing_false_without_gates() -> None:
-    """A wave with an empty gate list is NOT gate-bearing."""
-    assert wave_is_gate_bearing(_make_wave(gates=[])) is False
 
 
 # --- enforce_daemonless_close_waiver: the bypass door ----------------------

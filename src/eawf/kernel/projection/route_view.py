@@ -31,6 +31,7 @@ from eawf.kernel.projection.compute import (
     PROJECTION_PRODUCER,
     ROUTE_COLLECTIONS,
     ROUTE_READ_MODELS,
+    ProjectionRow,
     RouteProjection,
 )
 from eawf.kernel.projection.read_models import ReadModelKind
@@ -64,11 +65,14 @@ class RouteFieldSpec:
             would be silence.
         missing_producer: The work item whose producer would state the field, when one is
             named. ``None`` falls back to the generic unproduced reason.
+        absent: Why a produced field other than the status reads unknown on a row whose
+            facts do not state it; such a field is read from the row's fact of its name.
     """
 
     name: str
     produced: bool = False
     missing_producer: str | None = None
+    absent: str | None = None
 
     def missing_reason(self) -> str:
         """Return why this column is silent, naming the missing producer when one is known."""
@@ -80,6 +84,11 @@ class RouteFieldSpec:
 def status_and(*specs: RouteFieldSpec) -> tuple[RouteFieldSpec, ...]:
     """Return the stored status field followed by ``specs``, in column order."""
     return (RouteFieldSpec(name=STATUS_FIELD, produced=True), *specs)
+
+
+def stated(name: str, *, absent: str) -> RouteFieldSpec:
+    """Return one produced column read from the row's fact of its name, unknown when absent."""
+    return RouteFieldSpec(name=name, produced=True, absent=absent)
 
 
 def unstated(name: str, *, missing_producer: str | None = None) -> RouteFieldSpec:
@@ -234,6 +243,22 @@ def unknown_field(*, urn: str, revision: int, reason: str) -> TruthField[str]:
     )
 
 
+def invalidated_field(*, urn: str, revision: int, reason: str) -> TruthField[str]:
+    """Return the truth field a cell renders as once a later record voided its value.
+
+    Args:
+        urn: The record the voided value rested on.
+        revision: The record's revision when the projection was built.
+        reason: What voided it; an operator reads this beside the token.
+
+    Returns:
+        A derived truth field in the ``invalidated`` state.
+    """
+    return unknown_field(urn=urn, revision=revision, reason=reason).model_copy(
+        update={"state": TruthState.INVALIDATED}
+    )
+
+
 def known_field(*, value: str, urn: str, revision: int) -> TruthField[str]:
     """Return the truth field a stated cell renders as.
 
@@ -256,6 +281,17 @@ def known_field(*, value: str, urn: str, revision: int) -> TruthField[str]:
         freshness=Freshness.LIVE,
         provenance_refs=(urn,),
     )
+
+
+def _cell(row: ProjectionRow, spec: RouteFieldSpec) -> TruthField[str]:
+    """Return one declared cell of one row: its status, a stated fact, or the unknown token."""
+    if spec.produced and spec.name == STATUS_FIELD:
+        return row.status
+    value = row.facts.get(spec.name) if spec.produced else None
+    if value is not None:
+        return known_field(value=value, urn=row.urn, revision=row.revision)
+    reason = spec.absent if spec.produced and spec.absent else spec.missing_reason()
+    return unknown_field(urn=row.urn, revision=row.revision, reason=reason)
 
 
 def build_route_read_model(
@@ -297,18 +333,7 @@ def build_route_read_model(
             revision=row.revision,
             title=row.title,
             parent_key=row.parent_key,
-            fields=MappingProxyType(
-                {
-                    spec.name: (
-                        row.status
-                        if spec.produced
-                        else unknown_field(
-                            urn=row.urn, revision=row.revision, reason=spec.missing_reason()
-                        )
-                    )
-                    for spec in specs
-                }
-            ),
+            fields=MappingProxyType({spec.name: _cell(row, spec) for spec in specs}),
         )
         for row in projection.rows
     )
@@ -339,7 +364,9 @@ __all__ = [
     "RouteRecord",
     "build_route_read_model",
     "check_field_tables",
+    "invalidated_field",
     "known_field",
+    "stated",
     "status_and",
     "unknown_field",
     "unstated",

@@ -63,7 +63,7 @@ def test_get_json_envelope_shape(repo_root: Path) -> None:
     runner.invoke(app, ["config", "set", "foo.bar", "42", "--scope", "local"])
     get_result = runner.invoke(app, ["--json", "config", "get", "foo.bar"])
     assert get_result.exit_code == 0, get_result.output
-    body = json.loads(get_result.output)
+    body = json.loads(get_result.output)["result"]
     assert body == {"key": "foo.bar", "value": 42, "source": "local"}
 
 
@@ -93,14 +93,14 @@ def test_get_returns_built_in_default_with_built_in_source(repo_root: Path) -> N
     """A key that was never overridden returns its built-in default + source."""
     result = runner.invoke(app, ["--json", "config", "get", "estimation.eu_minutes"])
     assert result.exit_code == 0, result.output
-    body = json.loads(result.output)
+    body = json.loads(result.output)["result"]
     assert body == {"key": "estimation.eu_minutes", "value": 30, "source": "built-in"}
 
 
 def test_get_eu_basis_returns_api_duration_default(repo_root: Path) -> None:
     result = runner.invoke(app, ["--json", "config", "get", "estimation.eu_basis"])
     assert result.exit_code == 0, result.output
-    body = json.loads(result.output)
+    body = json.loads(result.output)["result"]
     assert body == {"key": "estimation.eu_basis", "value": "api_duration", "source": "built-in"}
 
 
@@ -119,7 +119,7 @@ def test_validate_rejects_unknown_eu_basis(repo_root: Path) -> None:
 def test_set_overrides_built_in_via_repo_layer(repo_root: Path) -> None:
     runner.invoke(app, ["config", "set", "estimation.eu_minutes", "60", "--scope", "repo"])
     result = runner.invoke(app, ["--json", "config", "get", "estimation.eu_minutes"])
-    body = json.loads(result.output)
+    body = json.loads(result.output)["result"]
     assert body == {"key": "estimation.eu_minutes", "value": 60, "source": "repo"}
 
 
@@ -137,7 +137,7 @@ def test_unset_removes_known_repo_leaf_and_prunes_parent(repo_root: Path) -> Non
     )
 
     assert result.exit_code == 0, result.output
-    assert json.loads(result.output)["removed"] is True
+    assert json.loads(result.output)["result"]["removed"] is True
     assert yaml.safe_load(config_path.read_text()) == {"vcs": {"auto_commit": False}}
 
 
@@ -153,7 +153,7 @@ def test_unset_absent_known_leaf_is_noop(repo_root: Path) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    assert json.loads(result.output)["removed"] is False
+    assert json.loads(result.output)["result"]["removed"] is False
     assert config_path.read_bytes() == before
 
 
@@ -256,7 +256,7 @@ def test_validate_ignores_a_gate_files_value_over_the_settings_cap(repo_root: Pa
 def test_validate_ok_json_envelope(repo_root: Path) -> None:
     result = runner.invoke(app, ["--json", "config", "validate"])
     assert result.exit_code == 0
-    body = json.loads(result.output)
+    body = json.loads(result.output)["result"]
     assert body == {"ok": True, "scope": None}
 
 
@@ -338,14 +338,14 @@ def test_profile_enable_idempotent(repo_root: Path) -> None:
     runner.invoke(app, ["config", "profile", "enable", "python"])
     second = runner.invoke(app, ["--json", "config", "profile", "enable", "python"])
     assert second.exit_code == 0, second.output
-    body = json.loads(second.output)
+    body = json.loads(second.output)["result"]
     assert body["already_enabled"] is True
 
 
 def test_profile_enable_json_envelope(repo_root: Path) -> None:
     result = runner.invoke(app, ["--json", "config", "profile", "enable", "python"])
     assert result.exit_code == 0
-    body = json.loads(result.output)
+    body = json.loads(result.output)["result"]
     assert set(body) == {
         "profile",
         "layer",
@@ -365,7 +365,7 @@ def test_profile_enable_renders_rule_projections(repo_root: Path) -> None:
     )
     result = runner.invoke(app, ["--json", "config", "profile", "enable", "python"])
     assert result.exit_code == 0, result.output
-    body = json.loads(result.output)
+    body = json.loads(result.output)["result"]
     assert body["projections_changed"] == [
         "AGENTS.md",
         "AGENTS.override.md",
@@ -389,7 +389,7 @@ def test_env_var_takes_precedence_over_repo(
     runner.invoke(app, ["config", "set", "estimation.eu_minutes", "60", "--scope", "repo"])
     monkeypatch.setenv("EAWF_ESTIMATION__EU_MINUTES", "90")
     result = runner.invoke(app, ["--json", "config", "get", "estimation.eu_minutes"])
-    body = json.loads(result.output)
+    body = json.loads(result.output)["result"]
     assert body == {"key": "estimation.eu_minutes", "value": 90, "source": "env"}
 
 
@@ -449,7 +449,7 @@ def test_validate_composed_default_enables_core(repo_root: Path) -> None:
     """``--composed`` on a clean repo composes the built-in default (just ``core``)."""
     result = runner.invoke(app, ["--json", "config", "validate", "--composed"])
     assert result.exit_code == 0, result.output
-    body = json.loads(result.output)
+    body = json.loads(result.output)["result"]
     assert body["ok"] is True
     # Built-in default has profiles.enabled == ["core"].
     assert body["enabled_profiles"] == ["core"]
@@ -476,7 +476,7 @@ def test_validate_composed_with_three_profiles(repo_root: Path) -> None:
 
     result = runner.invoke(app, ["--json", "config", "validate", "--composed"])
     assert result.exit_code == 0, result.output
-    body = json.loads(result.output)
+    body = json.loads(result.output)["result"]
     assert body["ok"] is True
     assert body["enabled_profiles"] == ["core", "python", "research"]
     assert body["composed"]["name"] == "core+python+research"
@@ -512,3 +512,81 @@ def test_validate_composed_unknown_profile_exits_3(repo_root: Path) -> None:
     assert result.exit_code == 1, result.output
     body = json.loads(result.output)
     assert body["error"] == "UserError"
+
+
+# --- a write is held to its whole section ------------------------------------
+
+_NAME = "vcs.coauthor.project.name"
+_EMAIL = "vcs.coauthor.project.email"
+_DAEMONLESS = {"EAWF_DAEMONLESS": "1"}
+
+
+def test_set_a_coauthor_name_without_its_email_is_refused_with_how_to_set_both(
+    repo_root: Path,
+) -> None:
+    result = runner.invoke(app, ["config", "set", _NAME, "Jane Doe"], env=_DAEMONLESS)
+
+    assert result.exit_code == 2, result.output
+    assert f"{_EMAIL}: Field required" in result.output
+    assert f"eawf config set {_NAME} <value> --with {_EMAIL}=<value>" in result.output
+    assert not (repo_root / ".ea" / "config.yaml").exists()
+
+
+def test_set_the_pair_at_once_writes_both(repo_root: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["--json", "config", "set", _NAME, "Jane Doe", "--with", f"{_EMAIL}=jane@example.com"],
+        env=_DAEMONLESS,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["result"]["with"] == {_EMAIL: "jane@example.com"}
+    written = yaml.safe_load((repo_root / ".ea" / "config.yaml").read_text())
+    assert written == {
+        "vcs": {"coauthor": {"project": {"name": "Jane Doe", "email": "jane@example.com"}}}
+    }
+
+
+def test_unset_one_leaf_of_the_pair_is_refused_and_both_at_once_is_not(repo_root: Path) -> None:
+    config_path = repo_root / ".ea" / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {"vcs": {"coauthor": {"project": {"name": "Jane", "email": "jane@example.com"}}}}
+        )
+    )
+
+    alone = runner.invoke(app, ["config", "unset", _EMAIL], env=_DAEMONLESS)
+    both = runner.invoke(app, ["config", "unset", _EMAIL, "--with", _NAME], env=_DAEMONLESS)
+
+    assert alone.exit_code == 2, alone.output
+    assert f"eawf config unset {_EMAIL} --with {_NAME}" in alone.output
+    assert both.exit_code == 0, both.output
+    assert yaml.safe_load(config_path.read_text()) == {}
+
+
+def test_set_with_takes_key_equals_value(repo_root: Path) -> None:
+    result = runner.invoke(app, ["config", "set", _NAME, "Jane", "--with", _EMAIL], env=_DAEMONLESS)
+
+    assert result.exit_code == 1, result.output
+    assert "--with takes KEY=VALUE" in result.output
+
+
+def test_set_a_daemon_section_refusal_says_how_to_set_both(
+    repo_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from eawf.surfaces.cli._daemon_client import DaemonRpcError
+    from eawf.surfaces.cli.commands import config as config_cmd
+
+    refusal = f"validation_failed: config_section_invalid: {_EMAIL}: Field required (section vcs)"
+
+    def _refuse(**_kwargs: object) -> None:
+        raise DaemonRpcError(-32602, refusal)
+
+    monkeypatch.setattr(config_cmd, "_save_value_to_layer", _refuse)
+
+    result = runner.invoke(app, ["--json", "config", "set", _NAME, "Jane Doe"])
+
+    assert result.exit_code == 2, result.output
+    body = json.loads(result.output)
+    assert body["message"].startswith(refusal)
+    assert f"--with {_EMAIL}=<value>" in body["message"]

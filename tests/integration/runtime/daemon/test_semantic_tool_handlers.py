@@ -493,10 +493,15 @@ def evidence_payload(*, spike_report_ref: str, spike_report_digest: str) -> dict
 
 
 def receipt_lines(canary: CanaryProvision, runtime_root: Path) -> int:
-    """Return how many receipt lines the canary's receipt ledger holds."""
+    """Return how many semantic receipts the canary's receipt ledger holds.
+
+    The ledger also files the sandbox decision each guarded call earns; those are
+    decisions, not receipts, so they are not counted here.
+    """
     context = root_context(canary, runtime_root)
     with context.session([RUN_URN]) as session:
-        return len(read_ledger_records(session.ledger_path(Epoch2Collection.RECEIPT)))
+        records = read_ledger_records(session.ledger_path(Epoch2Collection.RECEIPT))
+    return sum(1 for item in records if item.payload.get("payload_kind") == "semantic_receipt")
 
 
 def run_revision(canary: CanaryProvision, runtime_root: Path) -> int:

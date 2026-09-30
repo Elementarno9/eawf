@@ -85,7 +85,6 @@ from eawf.kernel.state.epoch2.evidence_rung import ClaimLadder
 from eawf.kernel.state.epoch2.pending_action import PendingAction
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.budget.notices import BudgetThresholdNotice
-from eawf.runtime.daemon.epoch2_transaction import TransactionRefusalCode
 from eawf.runtime.daemon.methods.state_subscribe import PROJECTION_SUBSCRIBE_METHOD
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
@@ -100,7 +99,7 @@ from eawf.surfaces.tui.console.bulk import (
     unanswered_bulk,
 )
 from eawf.surfaces.tui.console.decisions import ClaimRecord, DecisionRecords, QuestionRecord
-from eawf.surfaces.tui.console.live_reads import LIVE_READS
+from eawf.surfaces.tui.console.live_reads import LIVE_READS, counted_replay, held_records
 from eawf.surfaces.tui.console.operations import (
     NO_PRINCIPAL_REASON,
     NOTICE_LIST_METHOD,
@@ -121,6 +120,7 @@ from eawf.surfaces.tui.console.operations import (
     exhausted,
     not_sent,
     refused,
+    rereads,
     settled,
     unanswered,
 )
@@ -136,9 +136,6 @@ if TYPE_CHECKING:
     from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
-
-#: The wire code a write refused for naming a revision the record has moved past carries.
-_STALE_REVISION = f"{TransactionRefusalCode.REVISION_CONFLICT.value}:"
 
 #: The label a count carries when the link cannot vouch for completeness. The number
 #: is still shown, because a register that was read states something true; what it
@@ -387,6 +384,10 @@ class ProjectionSeam:
         """Return the projection held for *route*; ``None`` when it is not held."""
         return self._held.get(route)
 
+    def now(self) -> datetime:
+        """Return the time a read is stamped with: the seam's clock."""
+        return self._clock()
+
     def owed(self) -> tuple[str, ...]:
         """Return the routes the console needs held and does not yet hold.
 
@@ -404,7 +405,7 @@ class ProjectionSeam:
             owed.append(MILESTONE_ACCEPTANCE_METHOD)
         # a live read is owed once it can be addressed, and again when its address moves
         for name, read in LIVE_READS.items():
-            address = read.address(self) if read.route == self._route else None
+            address = read.address(self) if self._route in read.routes else None
             if address is not None and self._live.get(name, ("", None))[0] != address:
                 owed.append(name)
         # a budget notice is addressed to a principal, so a console acting as nobody has none
@@ -449,12 +450,15 @@ class ProjectionSeam:
         """Return the key of the record the visible route is about; ``None`` when none."""
         return self._subject
 
-    def live(self, name: str) -> Any | None:
-        """Return live read *name*'s answer for what the route is about now; ``None`` before it."""
+    def live(self, name: str, *, anywhere: bool = False) -> Any | None:
+        """Return live read *name*'s answer for what the route is about now; ``None`` before it.
+
+        With *anywhere*, the last answer is returned whatever route it was read on.
+        """
         held = self._live.get(name)
         read = LIVE_READS[name]
-        if held is None or read.route != self._route or held[0] != read.address(self):
-            return None
+        if held is None or self._route not in read.routes or held[0] != read.address(self):
+            return held[1] if held is not None and anywhere else None
         return held[1]
 
     def live_on_screen(self) -> tuple[str, ...]:
@@ -663,7 +667,7 @@ class ProjectionSeam:
                 record it is about is not held yet.
         """
         read = LIVE_READS[name]
-        address = read.address(self) if read.route == self._route else None
+        address = read.address(self) if self._route in read.routes else None
         if address is None:
             raise ValueError(f"live read {name} is about nothing the console holds")
         value = await read.fetch(self, address)
@@ -702,19 +706,22 @@ class ProjectionSeam:
 
     @property
     def decisions(self) -> DecisionRecords | None:
-        """Return the records the question detail is bound to; ``None`` before their read.
+        """Return the records the question and pause details are bound to; ``None`` unread.
 
-        Each waiting operator decision is held as the question it asks, so the card an
-        operator opens from its Attention row draws the filed options, the one
-        recommendation and any default with its window, and never a prototype question.
+        Each waiting operator decision is held as the question it asks, beside every
+        question and pause the tree holds, each in the situation the daemon projected, so
+        a detail opened from a row draws the record and never a prototype one.
         """
+        held = held_records(self)
         if self._decisions is None and not self._ladders:
-            return None
-        operator = self._operator
-        return DecisionRecords(
-            principal=operator.principal if operator is not None else None,
-            questions=tuple(QuestionRecord.of_decision(item) for item in self._decisions or ()),
-            claims=tuple(ClaimRecord.of_ladder(ladder) for ladder in self._ladders.values()),
+            return held
+        operator, asked = self._operator, held.questions if held is not None else ()
+        return (held or DecisionRecords()).model_copy(
+            update={
+                "principal": operator.principal if operator is not None else None,
+                "questions": (*map(QuestionRecord.of_decision, self._decisions or ()), *asked),
+                "claims": tuple(map(ClaimRecord.of_ladder, self._ladders.values())),
+            }
         )
 
     def _claim_subject(self) -> str | None:
@@ -812,6 +819,9 @@ class ProjectionSeam:
         gap = negotiation.gap
         assert gap is not None, "a replay always states the range it closes"
         self._refuse_patches_outside(patches, negotiation=negotiation)
+        self._replay = await counted_replay(self, self._replay)
+        for listener in self._listeners:
+            listener((self._route,))
         read_back = self._settle_from_patches(patches)
         self._adopt(
             apply_patches(
@@ -912,7 +922,7 @@ class ProjectionSeam:
         if result.status is OperationStatus.REFUSED and receipt is not None:
             # a refusal wrote nothing, so the receipt still records no answer
             self._answered_under.pop(receipt, None)
-        if result.status is OperationStatus.REFUSED and _STALE_REVISION in result.detail:
+        if rereads(request, result):
             await self._reload_holding(request.target)
         return result
 

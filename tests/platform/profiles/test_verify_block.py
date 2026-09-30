@@ -10,8 +10,6 @@ Pins the W10 success criteria:
   each carries a non-empty floor pack.
 * ``waiver_mode`` defaults to ``"B"`` on a freshly-constructed
   :class:`VerifyBlock`.
-* :func:`resolve_waiver_mode` reads from a typed :class:`VerifyBlock`
-  AND the legacy merged-config dict.
 """
 
 from __future__ import annotations
@@ -29,7 +27,6 @@ from eawf.platform.profiles import (
     list_profiles,
     load_profile,
 )
-from eawf.workflow.lifecycle.waivers import DEFAULT_WAIVER_MODE, resolve_waiver_mode
 from eawf.workflow.verify.compile import compile_floor_pack
 from eawf.workflow.verify.readiness import (
     _merge_verify_blocks,
@@ -640,36 +637,9 @@ def test_apps_floor_check_carries_docs_build_at_every_iter() -> None:
     assert docs.timeout_class == "slow"
 
 
-# ---- W11 resolve_waiver_mode now reads typed VerifyBlock --------------------
-
-
-def test_resolve_waiver_mode_reads_typed_verify_block() -> None:
-    """The W11 helper now accepts a typed :class:`VerifyBlock` directly."""
-    block_a = VerifyBlock(waiver_mode="A")
-    block_b = VerifyBlock()  # default B
-    block_c = VerifyBlock(waiver_mode="C")
-
-    assert resolve_waiver_mode(block_a) == "A"
-    assert resolve_waiver_mode(block_b) == "B"
-    assert resolve_waiver_mode(block_c) == "C"
-
-
-def test_resolve_waiver_mode_legacy_dict_path_still_works() -> None:
-    """The legacy merged-config dict path is preserved (no regressions)."""
-    assert resolve_waiver_mode({}) == DEFAULT_WAIVER_MODE
-    assert resolve_waiver_mode({"verify": {"waiver_mode": "A"}}) == "A"
-    assert resolve_waiver_mode({"verify": {"waiver_mode": "C"}}) == "C"
-
-
-def test_resolve_waiver_mode_none_falls_back_to_default() -> None:
-    """``None`` (no source) returns :data:`DEFAULT_WAIVER_MODE`."""
-    assert resolve_waiver_mode(None) == DEFAULT_WAIVER_MODE
-
-
 def test_verify_block_waiver_mode_default_is_b() -> None:
     """The W11 default IS mode B per the typed field default."""
     assert VerifyBlock().waiver_mode == "B"
-    assert DEFAULT_WAIVER_MODE == "B"
 
 
 # ---- P30-I01-W05: checkpoint drift-cadence dial -----------------------------

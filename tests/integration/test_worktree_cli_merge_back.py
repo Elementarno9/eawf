@@ -20,13 +20,17 @@ from typer.testing import CliRunner
 from eawf.surfaces.cli.app import app
 from tests._worktree_helpers import create_wave_worktree
 from tests._worktree_helpers import seed_repo_with_state as _seed_repo_with_state
+from tests.integration._upkeep_daemon import upkeep_daemon  # noqa: F401
 
 runner = CliRunner()
 
-pytestmark = pytest.mark.skipif(
-    shutil.which("git") is None,
-    reason="git is required for worktree CLI integration tests",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        shutil.which("git") is None,
+        reason="git is required for worktree CLI integration tests",
+    ),
+    pytest.mark.usefixtures("upkeep_daemon"),
+]
 
 
 def _create_worktree_and_commit(

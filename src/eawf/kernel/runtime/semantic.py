@@ -41,7 +41,6 @@ from eawf.kernel.runtime.compiled import BoundedText, JsonPointer, canonical_dig
 from eawf.kernel.runtime.lease import LeaseId, WorkspaceHandle
 from eawf.kernel.runtime.provider import (
     ArtifactUrn,
-    CommandFamilyId,
     Digest,
     RuntimeRecord,
     SchemaUrn,
@@ -53,6 +52,7 @@ from eawf.kernel.state.epoch2.run import SuspensionReason
 from eawf.kernel.state.epoch2.urns import AnyEntityUrn, EvidenceUrn, QuestionUrn, RunUrn, TaskUrn
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.kinds.evidence import EvidenceSourceKind
+from eawf.runtime.sandbox.command_families import CommandFamilyId
 
 #: The version every catalog tool's input and output schema carries. One
 #: version covers the catalog because a provider binds the catalog as a

@@ -288,6 +288,47 @@ def test_cli_restore_round_trips(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert state_path.read_bytes() == original
 
 
+def test_cli_restore_is_refused_while_a_daemon_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Error path: a restore never rewrites state under a running daemon."""
+    repo = tmp_path / "repo"
+    home = tmp_path / "home"
+    original = b'{"schema_version": "1.0"}\n'
+    state_path = _seed_workspace(repo, state=original)
+    monkeypatch.setenv("EAWF_HOME", str(home))
+    create_backup(state_path, home=home, when=datetime(2026, 5, 17, 12, tzinfo=UTC))
+    state_path.write_bytes(b'{"drift": true}\n')
+    monkeypatch.setattr("eawf.runtime.daemon.spawn.daemon_pid_if_ready", lambda _dir: 4242)
+
+    res = runner.invoke(app, ["-w", str(repo), "backup", "restore", "--ts", "2026-05-17T12-00-00Z"])
+    assert res.exit_code != 0, res.output
+    assert "eawf daemon stop" in res.output
+    assert state_path.read_bytes() == b'{"drift": true}\n'
+
+
+def test_cli_restore_is_refused_on_an_epoch2_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Error path: the frozen epoch-1 document of an epoch-2 tree is never restored over."""
+    from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
+
+    repo = tmp_path / "repo"
+    home = tmp_path / "home"
+    state_path = _seed_workspace(repo)
+    monkeypatch.setenv("EAWF_HOME", str(home))
+    create_backup(state_path, home=home, when=datetime(2026, 5, 17, 12, tzinfo=UTC))
+    marker = state_path.parent / GENERATIONS_DIRNAME / MARKER_FILENAME
+    marker.parent.mkdir(parents=True)
+    marker.write_text("{}", encoding="utf-8")
+    state_path.write_bytes(b'{"frozen": true}\n')
+    before = state_path.read_bytes()
+    res = runner.invoke(app, ["-w", str(repo), "backup", "restore", "--ts", "2026-05-17T12-00-00Z"])
+    assert res.exit_code != 0, res.output
+    assert "legacy_operation_removed" in res.output
+    assert state_path.read_bytes() == before
+
+
 def test_cli_restore_unknown_ts_exits_user_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

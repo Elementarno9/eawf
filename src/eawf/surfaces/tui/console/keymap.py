@@ -151,20 +151,17 @@ MOTION: frozenset[str] = frozenset(
     }
 )
 #: The keys a route's native frame draws nothing for, so its bar neither advertises nor
-#: binds them: no dated marker for the marker keys to move between, no campaign section
-#: row for Tab to walk, no filter field for
-#: ``\`` to type into, no kind for ``k`` to cycle (``k`` also steps up), no decision record
-#: for Enter to open a Run from, no detail beyond the docked repair readout, no
-#: dispatch-queue record for a pause or drain to address, and no criteria or Runs region
-#: on a Task frame for Tab to move between.
+#: binds them: no dated marker for the marker keys to move between, no filter field for
+#: ``\`` to type into, no kind for ``k`` to cycle (``k`` also steps up), no detail beyond
+#: the docked repair readout, no dispatch-queue record for a pause or drain to address,
+#: and no criteria or Runs region on a Task frame for Tab to move between.
 NATIVE_UNSERVED: Mapping[str, frozenset[str]] = MappingProxyType(
     {
         "timeline": frozenset({"ArrowLeft", "ArrowRight"}),
-        "campaign": frozenset({"Tab"}),
         "history": frozenset({"\\"}),
         "health": frozenset({"\\", "Enter"}),
         "search": frozenset({"\\", "k"}),
-        "sandbox.log": frozenset({"\\", "Enter"}),
+        "sandbox.log": frozenset({"\\"}),
         "task.detail": frozenset({"Tab"}),
         "unattended": frozenset({"a", "."}),
     }

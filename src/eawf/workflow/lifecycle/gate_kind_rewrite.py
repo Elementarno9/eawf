@@ -6,7 +6,7 @@ greps, or they were authored at phase close with attested criteria and no
 gate at all. Re-running such a record produces a receipt, but not proof --
 a grep for one word passes whether or not the behaviour exists.
 
-The argv repoint (:mod:`eawf.workflow.lifecycle.gate_repoint`) cannot help:
+An argv repoint cannot help:
 it moves argv and nothing else, by design. This module is the one other
 degree of freedom, and it only points one way. A grep-style gate may
 become a ``command_exit_zero`` gate, and a criterion with no gate may gain

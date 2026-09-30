@@ -7,8 +7,7 @@ Each module exposes pure mutator functions that take an in-memory
 serialise them under the sibling lock without leaking I/O concerns into the
 business logic. The audit-evidence invariant from
 :mod:`eawf.kernel.validate.invariants` (``check_audit_evidence``) is the source of
-truth for verdict-bearing rules and is invoked at write time via
-:func:`require_complete_audit`.
+truth for verdict-bearing rules.
 """
 
 from __future__ import annotations
@@ -19,7 +18,6 @@ from eawf.workflow.evidence.evibound import (
     check_brief_promotable,
     run_rung1_gate,
 )
-from eawf.workflow.evidence.guards import require_complete_audit
 from eawf.workflow.evidence.resolve import (
     DeferredAspect,
     ResolveCheck,
@@ -73,7 +71,6 @@ __all__ = [
     "dominant_verdict",
     "load_default_scorer",
     "render_attested_verdict",
-    "require_complete_audit",
     "resolve",
     "run_rung1_gate",
     "run_rung2_gate",

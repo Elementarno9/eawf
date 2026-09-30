@@ -873,6 +873,59 @@ def _emitted_host_answer(event: HookEvent, results: list[HookResult]) -> bool:
     return False
 
 
+def _guarded_pre_tool_use(
+    event_type: str, runtime: str, stdin_text: str, flags: GlobalFlags, started_at: datetime
+) -> bool:
+    """Run the data-loss guard on a pre-tool call; print the host's deny when it refuses.
+
+    The guard runs ahead of every other hook and of the bundle-epoch check, because it
+    reads no state and must not stand down. A payload it cannot read is refused. Codex
+    subscribes its pre-tool hook for the guard alone, so on Codex an allowed call ends
+    here too, with nothing printed.
+
+    Args:
+        event_type: The event argument as given.
+        runtime: The runtime label, lowercased.
+        stdin_text: The hook payload.
+        flags: The global flags.
+        started_at: When the hook started.
+
+    Returns:
+        Whether the command has answered the host and must stop here.
+    """
+    from eawf.runtime.hooks.data_loss_guard import (
+        DATA_LOSS_GUARD_HOOK,
+        DENY_EMISSION_RUNTIMES,
+        deny_document,
+        guard_pre_tool_use,
+        unreadable_payload_denial,
+    )
+    from eawf.runtime.hooks.event import HookEventType
+    from eawf.runtime.sandbox.data_loss import DataLossDenial
+
+    if event_type != HookEventType.PRE_TOOL_USE.value or runtime not in DENY_EMISSION_RUNTIMES:
+        return False
+    denial: DataLossDenial | None
+    try:
+        event = _build_event(
+            event_type=HookEventType.PRE_TOOL_USE,
+            payload=_parse_payload(stdin_text),
+            scope="",
+            command="",
+            runtime=cast("HookRuntime", runtime),
+            occurred_at=started_at,
+        )
+    except (cli_errors.CliError, ValidationError) as err:
+        denial = unreadable_payload_denial(type(err).__name__)
+    else:
+        denial = guard_pre_tool_use(event, repo_root=(flags.workspace or Path.cwd()).resolve())
+    if denial is None:
+        return runtime == "codex"
+    typer.echo(orjson.dumps(deny_document(denial)).decode("utf-8"))
+    typer.echo(f"{DATA_LOSS_GUARD_HOOK} deny {denial.rule}: {denial.reason}", err=True)
+    return True
+
+
 @hook_app.command(name="run")
 def run(
     ctx: typer.Context,
@@ -920,6 +973,11 @@ def run(
 
     flags: GlobalFlags = ctx.obj
     started_at = datetime.now(UTC)
+    # Skip stdin read on a TTY so interactive smoke runs don't block
+    # waiting for EOF; piped/redirected stdin reads normally.
+    stdin_text = "" if sys.stdin.isatty() else sys.stdin.read()
+    if _guarded_pre_tool_use(event_type, runtime.lower(), stdin_text, flags, started_at):
+        return
     if target_epoch is not None:
         # A bundle built for another epoch reads records it does not
         # understand; it stands down with guidance rather than writing, and
@@ -942,9 +1000,6 @@ def run(
 
     try:
         resolved_event_type = _parse_event_type(event_type)
-        # Skip stdin read on a TTY so interactive smoke runs don't block
-        # waiting for EOF; piped/redirected stdin reads normally.
-        stdin_text = "" if sys.stdin.isatty() else sys.stdin.read()
         payload = _parse_payload(stdin_text)
         event = _build_event(
             event_type=resolved_event_type,

@@ -14,6 +14,8 @@ from types import MappingProxyType
 from typing import Final
 
 from eawf.kernel.spec.release import ReleaseStatus
+from eawf.kernel.state.epoch2.pause import PauseSituation
+from eawf.kernel.state.epoch2.question import QuestionSituation
 from eawf.surfaces.tui.console.decisions import (
     PERSON_REASONS,
     UNKNOWN_OUTCOME_REASONS,
@@ -57,44 +59,88 @@ class Situation:
 # ---------- the question ----------
 
 _OPEN_QUESTION_ENDS = "an operator or evidence answers it"
+#: The situations in which an answer, or an override of a default, may still be given.
+_ANSWERABLE: Final = frozenset(
+    {
+        QuestionSituation.OPEN,
+        QuestionSituation.OPEN_BLOCKING,
+        QuestionSituation.OPEN_ESCALATED,
+        QuestionSituation.DEFAULTED_OVERRIDE_OPEN,
+    }
+)
 
 
-def question_situation(
+def question_kind(
     q: QuestionRecord, *, principal: str | None, run_state: str | None
-) -> Situation:
-    """Return the one situation of the question projection ``q`` is in.
+) -> QuestionSituation:
+    """Return which situation of the question projection ``q`` is in.
+
+    A record the daemon read carries the situation its projection computed; one that
+    arrived without it -- a waiting operator decision, a replayed record -- has it
+    derived here from the same persisted fields.
 
     Args:
         q: The question.
         principal: Who the console acts as, which tells an answer by you from one elsewhere.
         run_state: The asking Run's state, which makes an open question unanswerable.
     """
+    if q.situation is not None:
+        return q.situation
     live = q.status in (QuestionStatus.OPEN, QuestionStatus.BLOCKED)
     if live and run_state in UNANSWERABLE_RUN_STATES:
-        return Situation(
-            f"unanswerable · recover {q.run} first", "the asking Run is recovered or let go"
-        )
+        return QuestionSituation.UNANSWERABLE
     if q.status is QuestionStatus.OPEN:
-        return Situation(
-            "open",
-            "an operator or claim evidence answers it, or policy selects its declared default",
-        )
+        return QuestionSituation.OPEN
     if q.status is QuestionStatus.BLOCKED:
-        name = "open · escalated" if q.escalated_by else "open · blocking"
-        return Situation(name, _OPEN_QUESTION_ENDS)
+        return (
+            QuestionSituation.OPEN_ESCALATED if q.escalated_by else QuestionSituation.OPEN_BLOCKING
+        )
     if q.status is QuestionStatus.ANSWERED:
         mine = principal is not None and q.resolution_actor == principal
-        return Situation("answered by you" if mine else "answered elsewhere", TERMINAL)
+        return QuestionSituation.ANSWERED_BY_YOU if mine else QuestionSituation.ANSWERED_ELSEWHERE
     if q.status is QuestionStatus.AUTO_RESOLVED:
-        return Situation(
+        return QuestionSituation.DEFAULTED_OVERRIDE_OPEN
+    if q.status is QuestionStatus.SEALED:
+        return QuestionSituation.DEFAULTED_SEALED
+    if q.drop_reason is DropReason.SUPERSEDED:
+        return QuestionSituation.REPLACED
+    return QuestionSituation.WITHDRAWN
+
+
+def question_situation(
+    q: QuestionRecord, *, principal: str | None, run_state: str | None
+) -> Situation:
+    """Return the rendered name of the situation ``q`` is in, and what would end it.
+
+    Args:
+        q: The question.
+        principal: Who the console acts as, which tells an answer by you from one elsewhere.
+        run_state: The asking Run's state, which makes an open question unanswerable.
+    """
+    kind = question_kind(q, principal=principal, run_state=run_state)
+    renders: dict[QuestionSituation, Situation] = {
+        QuestionSituation.UNANSWERABLE: Situation(
+            f"unanswerable · recover {q.run} first", "the asking Run is recovered or let go"
+        ),
+        QuestionSituation.OPEN: Situation(
+            "open",
+            "an operator or claim evidence answers it, or policy selects its declared default",
+        ),
+        QuestionSituation.OPEN_BLOCKING: Situation("open · blocking", _OPEN_QUESTION_ENDS),
+        QuestionSituation.OPEN_ESCALATED: Situation("open · escalated", _OPEN_QUESTION_ENDS),
+        QuestionSituation.ANSWERED_BY_YOU: Situation("answered by you", TERMINAL),
+        QuestionSituation.ANSWERED_ELSEWHERE: Situation("answered elsewhere", TERMINAL),
+        QuestionSituation.DEFAULTED_OVERRIDE_OPEN: Situation(
             f"defaulted · override open until {short_time(q.override_until)}",
             "the override window closes, or an operator overrides inside it",
-        )
-    if q.status is QuestionStatus.SEALED:
-        return Situation("defaulted · sealed", TERMINAL)
-    if q.drop_reason is DropReason.SUPERSEDED:
-        return Situation(f"replaced by {q.superseded_by}", TERMINAL)
-    return Situation(f"withdrawn · by {q.resolution_actor or 'the system'}", TERMINAL)
+        ),
+        QuestionSituation.DEFAULTED_SEALED: Situation("defaulted · sealed", TERMINAL),
+        QuestionSituation.REPLACED: Situation(f"replaced by {q.superseded_by}", TERMINAL),
+        QuestionSituation.WITHDRAWN: Situation(
+            f"withdrawn · by {q.resolution_actor or 'the system'}", TERMINAL
+        ),
+    }
+    return renders[kind]
 
 
 def answerable(q: QuestionRecord, run_state: str | None) -> bool:
@@ -103,10 +149,7 @@ def answerable(q: QuestionRecord, run_state: str | None) -> bool:
     An open or blocking question takes an answer, and a defaulted one takes an override
     inside its window; an asking Run that cannot hear the answer takes none.
     """
-    live = q.status in (QuestionStatus.OPEN, QuestionStatus.BLOCKED)
-    if live and run_state in UNANSWERABLE_RUN_STATES:
-        return False
-    return live or q.status is QuestionStatus.AUTO_RESOLVED
+    return question_kind(q, principal=None, run_state=run_state) in _ANSWERABLE
 
 
 def reply_legal(q: QuestionRecord, run_state: str | None) -> bool:
@@ -133,41 +176,67 @@ REASON_WORDS: Final[Mapping[PauseReason, str]] = MappingProxyType(
 )
 
 
-def unknown_outcome(p: PauseRecord, run_state: str | None) -> bool:
-    """Return whether ``p`` is the lost-Run card, whose control outcome is unknown."""
-    return (
-        p.status is PauseStatus.OPEN and p.reason in UNKNOWN_OUTCOME_REASONS and run_state == LOST
-    )
+def pause_kind(p: PauseRecord, run_state: str | None) -> PauseSituation:
+    """Return which situation of the pause projection ``p`` is in.
 
-
-def pause_situation(p: PauseRecord, run_state: str | None) -> Situation:
-    """Return the one situation of the pause projection ``p`` is in.
+    A record the daemon read carries the situation its projection computed; one that
+    arrived without it has it derived here from the same persisted fields.
 
     Args:
         p: The pause.
         run_state: The affected Run's state, which leaves a control outcome unknown.
     """
+    if p.situation is not None:
+        return p.situation
     if p.status is PauseStatus.HELD:
+        return PauseSituation.HELD
+    if p.status is PauseStatus.ESCALATED and p.escalation is not None:
+        return PauseSituation.ESCALATED
+    if p.status is PauseStatus.RESOLVED:
+        return PauseSituation.RESOLVED
+    if p.status is PauseStatus.CANCELLED:
+        return PauseSituation.CANCELLED
+    if p.reason in PERSON_REASONS:
+        return PauseSituation.WAITING_ON_PERSON
+    if p.reason in UNKNOWN_OUTCOME_REASONS and run_state == LOST:
+        return PauseSituation.CONTROL_OUTCOME_UNKNOWN
+    return PauseSituation.WAITING_ON_CHECK
+
+
+def unknown_outcome(p: PauseRecord, run_state: str | None) -> bool:
+    """Return whether ``p`` is the lost-Run card, whose control outcome is unknown."""
+    return pause_kind(p, run_state) is PauseSituation.CONTROL_OUTCOME_UNKNOWN
+
+
+def pause_situation(p: PauseRecord, run_state: str | None) -> Situation:
+    """Return the rendered name of the situation ``p`` is in, and what would end it.
+
+    Args:
+        p: The pause.
+        run_state: The affected Run's state, which leaves a control outcome unknown.
+    """
+    kind = pause_kind(p, run_state)
+    if kind is PauseSituation.HELD:
         return Situation(
             f"held · by {p.held_by} · Hold {p.hold_id}",
             "the holder, or a principal of the same authority class, releases the Hold — "
             "no predicate will",
         )
-    if p.status is PauseStatus.ESCALATED and p.escalation is not None:
+    if kind is PauseSituation.ESCALATED and p.escalation is not None:
         raised = p.escalation.raised_ref
         return Situation(
             f"escalated · {p.escalation.cause.value} · now waiting on {raised}",
             f"this pause never ends; {raised} is answered",
         )
-    if p.status is PauseStatus.RESOLVED:
+    if kind is PauseSituation.RESOLVED:
         return Situation(
             f"resolved · {p.resume_predicate} observed at {short_time(p.resolved_at)}", TERMINAL
         )
-    if p.status is PauseStatus.CANCELLED:
+    if kind is PauseSituation.CANCELLED:
         return Situation("cancelled · enclosing work cancelled", TERMINAL)
-    if p.reason in PERSON_REASONS:
+    if kind is PauseSituation.WAITING_ON_PERSON:
         return Situation("waiting on a person", f"an eligible principal answers {p.waiting_on}")
-    if unknown_outcome(p, run_state):
+    if kind is PauseSituation.CONTROL_OUTCOME_UNKNOWN:
         return Situation(
             "waiting on a check · the control outcome is unknown",
             "the predicate is observed, or you reconcile or let go",

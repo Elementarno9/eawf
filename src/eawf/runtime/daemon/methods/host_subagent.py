@@ -320,7 +320,9 @@ def _move(
     envelopes: list[Envelope],
 ) -> None:
     """Take one Run edge, with the counter readings the edge records."""
-    captured = bind_run_capture(context, urn=run.urn, to_status=to_status, updates=updates)
+    captured = bind_run_capture(
+        context, urn=run.urn, to_status=to_status, updates=updates, actor=adoption.actor
+    )
     committed = run_transaction(
         context=context,
         request=TransitionRequest(

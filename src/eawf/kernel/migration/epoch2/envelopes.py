@@ -18,7 +18,8 @@ The ledger imports are the other half. Artifacts, memory notes and audits
 already have epoch-2 homes that take their rows unchanged, so those rows
 travel byte for byte and only their addressing changes: each is reachable
 under a reindexed alias rather than under whatever position the epoch-1
-document happened to give it.
+document happened to give it. A memory note also travels as the latest
+envelope the memory store kept for it, which is where its body lives.
 """
 
 from __future__ import annotations
@@ -32,6 +33,13 @@ from typing import Annotated, Any
 from pydantic import Field
 
 from eawf.kernel.migration.epoch2.errors import MigrationDuplicateKeyError
+from eawf.kernel.migration.epoch2.memory import (
+    MEMORY_STORE_SOURCE,
+    MemoryUnionCensus,
+    check_memory_union,
+    latest_store_rows,
+    memory_union_rule_payload,
+)
 from eawf.kernel.migration.epoch2.origins import build_legacy_origin, source_digest
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel
 from eawf.kernel.state.epoch2.values import EntityOrigin
@@ -274,11 +282,14 @@ class EnvelopeImportPlan(StrictMigrationModel):
             collection and each in source-id order.
         ledger_rows: The artifact, memory and audit rows, in the same
             order, with audits taken as the union of the document
-            collection and the store ledger.
+            collection and the store ledger, then each memory note's
+            latest store envelope.
+        memory: The memory counts, reconciled.
     """
 
     envelopes: tuple[LegacyEnvelope, ...]
     ledger_rows: tuple[ImportedLedgerRow, ...]
+    memory: MemoryUnionCensus
 
     @classmethod
     def build(
@@ -286,6 +297,7 @@ class EnvelopeImportPlan(StrictMigrationModel):
         *,
         document: Mapping[str, Any],
         audit_ledger_rows: Iterable[Mapping[str, Any]],
+        memory_store_rows: Iterable[Mapping[str, Any]],
         source_schema_version: str,
     ) -> EnvelopeImportPlan:
         """Import every envelope and ledger collection of ``document``.
@@ -295,6 +307,8 @@ class EnvelopeImportPlan(StrictMigrationModel):
             audit_ledger_rows: The rows of the epoch-1 audit ledger, in
                 file order. An id the document also holds is imported
                 once, from the document.
+            memory_store_rows: The rows of the epoch-1 memory store, in
+                file order; empty when the tree never wrote one.
             source_schema_version: The epoch-1 schema version.
 
         Returns:
@@ -303,6 +317,8 @@ class EnvelopeImportPlan(StrictMigrationModel):
         Raises:
             TypeError: When a row holds a value ``json`` cannot encode.
             ValidationError: When a row violates the model contract.
+            MigrationCountMismatchError: When the memory counts do not
+                reconcile.
         """
         envelopes: list[LegacyEnvelope] = []
         for envelope_collection in EnvelopeCollection:
@@ -339,7 +355,18 @@ class EnvelopeImportPlan(StrictMigrationModel):
                     )
                 )
 
-        return cls(envelopes=tuple(envelopes), ledger_rows=tuple(ledger_rows))
+        memory_ledger = LEDGER_TARGETS[LedgerCollection.MEMORY_INDEX]
+        store = latest_store_rows(memory_store_rows)
+        ledger_rows.extend(
+            _memory_store_rows(store=store, source_schema_version=source_schema_version)
+        )
+        memory = MemoryUnionCensus.build(
+            document_ids=_keyed_rows(document, LedgerCollection.MEMORY_INDEX.value),
+            store_ids=store,
+            ledger_lines=sum(1 for row in ledger_rows if row.ledger == memory_ledger),
+        )
+        check_memory_union(memory)
+        return cls(envelopes=tuple(envelopes), ledger_rows=tuple(ledger_rows), memory=memory)
 
     def for_collection(self, collection: EnvelopeCollection) -> tuple[LegacyEnvelope, ...]:
         """Return every envelope imported from one collection.
@@ -428,6 +455,46 @@ def _store_only_audits(
     )
 
 
+def _memory_store_rows(
+    *, store: Mapping[str, Mapping[str, Any]], source_schema_version: str
+) -> tuple[ImportedLedgerRow, ...]:
+    """Import the latest store envelope of every memory note.
+
+    Every one of them comes from the store, so every one is store-only in
+    the audit sense, whether or not the index also holds the id.
+
+    Args:
+        store: The latest store row per note id.
+        source_schema_version: The epoch-1 schema version.
+
+    Returns:
+        The rows, in note-id order.
+
+    Raises:
+        TypeError: When a row holds a value ``json`` cannot encode.
+        ValidationError: When a row violates the model contract.
+    """
+    return tuple(
+        ImportedLedgerRow(
+            ledger=LEDGER_TARGETS[LedgerCollection.MEMORY_INDEX],
+            source_collection=MEMORY_STORE_SOURCE,
+            source_id=note_id,
+            alias=legacy_alias(collection=MEMORY_STORE_SOURCE, source_id=note_id),
+            origin=build_legacy_origin(
+                source_kind=MEMORY_STORE_SOURCE,
+                source_id=note_id,
+                row=store[note_id],
+                source_schema_version=source_schema_version,
+                confidence="exact",
+            ),
+            payload=dict(store[note_id]),
+            payload_digest=source_digest(store[note_id]),
+            store_only=True,
+        )
+        for note_id in sorted(store)
+    )
+
+
 def envelope_rule_payload() -> dict[str, Any]:
     """Return the digestable form of the envelope and ledger tables."""
     return {
@@ -445,4 +512,5 @@ def envelope_rule_payload() -> dict[str, Any]:
             EnvelopeCollection.AGENT_SESSIONS.value: SESSION_ACTIVE_ANNOTATION,
         },
         "audit_union_inputs": ["audits_document_collection", AUDIT_LEDGER],
+        "memory_union": memory_union_rule_payload(),
     }

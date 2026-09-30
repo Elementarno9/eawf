@@ -35,6 +35,8 @@ from eawf.kernel.state.epoch2.campaign import ResearchBudget, StepTitle
 from eawf.kernel.state.epoch2.urns import TrackUrn
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.ledger import read_ledger_records
+from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.campaign_scheduler import (
     CampaignDrive,
@@ -48,6 +50,7 @@ from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.campaign import approve_plan
 from eawf.runtime.daemon.methods.delivery_approval import publish_commits
+from eawf.runtime.daemon.methods.host_question import question_keys
 from eawf.runtime.daemon.methods.projection import document_path
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.runtimes.metering import price_spawn_result
@@ -301,9 +304,10 @@ async def start_campaign(
         depth = args.depth or resolve_default_research_depth(merged)
     except ValueError as error:
         raise DaemonValidationError(f"validation_failed: {error}") from error
-    document = read_document(document_path(context.require_selected_generation()))
+    path = document_path(context.require_selected_generation())
+    records = read_ledger_records(ledger_path(path, Epoch2Collection.RUN))
     plan = plan_campaign(
-        document,
+        question_keys(read_document(path), records),
         actor=args.actor,
         track_ref=args.track_ref,
         title=args.title,

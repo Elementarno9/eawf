@@ -66,4 +66,12 @@ else
         "${_eawf_arg4}")
 fi
 
-printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run pre_tool_use --runtime claude --target-epoch 2
+set +e
+_eawf_out="$(printf '%s' "${_eawf_payload}" | "${_eawf_uv}" run eawf hook run pre_tool_use --runtime claude --target-epoch 2)"
+_eawf_status=$?
+set -e
+if [ "${_eawf_status}" -ne 0 ] && printf '%s' "${_eawf_payload}" | grep -Eq '"tool_name"[[:space:]]*:[[:space:]]*"(Agent|Bash|Edit|EnterWorktree|MultiEdit|NotebookEdit|Task|Write|apply_patch|exec_command|local_shell|shell)"'; then
+    printf 'Eä data-loss guard could not run (exit %s), so the call is refused\n' "${_eawf_status}" >&2
+    exit 2
+fi
+printf '%s' "${_eawf_out}"

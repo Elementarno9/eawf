@@ -245,15 +245,20 @@ def render_artifact(view: View, a: ArtifactRecord) -> list[str]:
     shown.extend(lines[win.start : win.start + win.take])
     if win.below:
         shown.append(f"… {win.below} lines below")
-    written = f"written {short_time(a.written_at)} by step {a.step}"
+    by = f"step {a.step}" if a.step is not None else a.run or f"{NONE} no writer recorded"
+    written = f"written {short_time(a.written_at)} by {by}"
     as_of = short_time(a.as_of)
+    record = f" RECORD     Kept with {a.campaign} · sha256 {a.digest}"
+    if len(record) > view.w:
+        # a full digest outgrows a narrow frame; its ends identify it and y copies it whole
+        record = f" RECORD     Kept with {a.campaign} · sha256 {a.digest[:8]}…{a.digest[-4:]}"
     return boxed(
         view,
         crumb=f"Eä ▸ {a.campaign} ▸ {a.file}",
         ctx=f"Campaign {a.campaign} · artifact {a.index} of {a.total} · as of {as_of}",
         pre=[
             f" SOURCE     {a.file} · {a.media} · {a.size} · {written}",
-            f" RECORD     Kept with {a.campaign} · sha256 {a.digest}",
+            record,
         ],
         title=a.file.upper(),
         lines=shown,
@@ -318,7 +323,7 @@ def render_rung(view: View, c: ClaimRecord, r: RungRecord) -> list[str]:
 HISTORY = "HISTORY"
 PRODUCED = "PRODUCED"
 _EVENTS = Grid([12, 8, 0])
-_PRODUCTS = Grid([12, 22, 0])
+_PRODUCTS = Grid([12, 34, 0])
 _STEP_GLYPHS: dict[str, str] = {"done": "✓", "running": "⋯", "blocked": "○", "pending": "○"}
 
 
@@ -378,11 +383,12 @@ def _region(view: View, st: StepRecord, name: str, focused: bool) -> list[str]:
     s, w = view.session, view.w
     rows = st.events if name == HISTORY else st.produced
     if not rows:
-        empty = (
-            "Nothing to show — the step has not started."
-            if name == HISTORY
-            else f"None yet · {st.why_none}"
-        )
+        if name != HISTORY:
+            empty = f"None yet · {st.why_none}"
+        elif st.state is StepState.PENDING:
+            empty = "Nothing to show — the step has not started."
+        else:
+            empty = f"Nothing to show — no event line is held for {st.runner or 'its runner'}."
         return [lab("ACTIVITY" if name == HISTORY else PRODUCED, f"{NONE} {empty}")]
     cursor = s.hist_sel if name == HISTORY else s.sel
     cursor = max(0, min(cursor, len(rows) - 1))

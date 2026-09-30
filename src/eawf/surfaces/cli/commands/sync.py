@@ -107,49 +107,31 @@ def _load_state_or_none(state_path: Path) -> State | None:
     return report.state
 
 
-def _seed_state_for_shadow(target: Path, shadow: Path) -> None:
-    """Copy ``.ea/state.json`` and ``store/memory.jsonl`` into *shadow*.
-
-    The memory-view renderer reads both. The shadow tree is sparse — only the
-    files we actually consume need to be mirrored.
-    """
-    from eawf.kernel.store.paths import store_path
-
-    src_state = target / _STATE_RELPATH
-    if src_state.exists():
-        dst_state = shadow / _STATE_RELPATH
-        dst_state.parent.mkdir(parents=True, exist_ok=True)
-        dst_state.write_bytes(src_state.read_bytes())
-    src_memory = store_path(src_state, StoreKind.MEMORY)
-    if src_memory.exists():
-        rel = src_memory.relative_to(target)
-        dst_memory = shadow / rel
-        dst_memory.parent.mkdir(parents=True, exist_ok=True)
-        dst_memory.write_bytes(src_memory.read_bytes())
-
-
-def _render_memory_views(*, target_root: Path, write: bool) -> list[Path]:
+def _render_memory_views(*, source_root: Path, output_root: Path, write: bool) -> list[Path]:
     """Render ``<state_dir>/artifacts/rendered/memory/<scope>.md`` files.
+
+    The notes are read from *source_root*'s own epoch -- the generation's
+    memory ledger on an epoch-2 tree -- and the views are rendered under
+    *output_root*, which is the tree itself or the ``--check`` shadow.
 
     Returns the sorted list of view paths (or paths that *would* be written
     when ``write=False``). When the workspace has no ``.ea/state.json`` (e.g.
     the bare-directory init path) the function returns an empty list.
     """
     from eawf.kernel.store.paths import store_path
-    from eawf.platform.memory.markdown_view import render_all_views
+    from eawf.platform.memory.book import generation_memory_ledger, notes_from_state, read_book
+    from eawf.platform.memory.markdown_view import render_note_views
 
-    state_path = target_root / _STATE_RELPATH
-    state = _load_state_or_none(state_path)
-    if state is None:
-        return []
-    memory_path = store_path(state_path, StoreKind.MEMORY)
-    output_dir = target_root / _MEMORY_VIEWS_RELDIR
-    return render_all_views(
-        state=state,
-        memory_path=memory_path,
-        output_dir=output_dir,
-        write=write,
-    )
+    state_path = source_root / _STATE_RELPATH
+    ledger = generation_memory_ledger(state_path.parent)
+    if ledger is not None:
+        notes = {mid: standing.note for mid, standing in read_book(ledger).items()}
+    else:
+        state = _load_state_or_none(state_path)
+        if state is None:
+            return []
+        notes = notes_from_state(state, store_path(state_path, StoreKind.MEMORY))
+    return render_note_views(notes, output_dir=output_root / _MEMORY_VIEWS_RELDIR, write=write)
 
 
 def _detect_memory_view_changes(target_root: Path, shadow_root: Path) -> list[str]:
@@ -569,7 +551,6 @@ def sync_cmd(
         with tempfile.TemporaryDirectory() as tmp_root:
             shadow = Path(tmp_root)
             _seed_shadow(target_dir, shadow, _MANIFEST_RELPATH)
-            _seed_state_for_shadow(target_dir, shadow)
             try:
                 agents_result, _before, _after = _render_into(
                     target_root=shadow,
@@ -587,7 +568,9 @@ def sync_cmd(
                 cli_errors.emit_error(exc, flags=flags)
                 return
             try:
-                shadow_view_paths = _render_memory_views(target_root=shadow, write=True)
+                shadow_view_paths = _render_memory_views(
+                    source_root=target_dir, output_root=shadow, write=True
+                )
             except cli_errors.CliError as exc:
                 cli_errors.emit_error(exc, flags=flags)
                 return
@@ -653,7 +636,9 @@ def sync_cmd(
         cli_errors.emit_error(exc, flags=flags)
         return
     try:
-        view_paths = _render_memory_views(target_root=target_dir, write=True)
+        view_paths = _render_memory_views(
+            source_root=target_dir, output_root=target_dir, write=True
+        )
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return

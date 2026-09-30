@@ -15,6 +15,7 @@ from pathlib import Path
 
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.runtime.events import RunEventRecord
+from eawf.kernel.runtime.sandbox_decision import SandboxDecision, sandbox_decisions
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.store.compaction import document_rows, read_document
@@ -41,12 +42,15 @@ class RunReading:
             which is the projection revision the reading stands at.
         fold: The Run's delegation subtree folded into it, or ``None`` when it
             delegated nothing.
+        sandbox_decisions: Every authorisation the gateway decided for the Run's calls,
+            allowed and denied, in ledger order.
     """
 
     run: Run
     events: tuple[RunEventRecord, ...]
     canonical_sequence: int
     fold: SubtreeFold | None = None
+    sandbox_decisions: tuple[SandboxDecision, ...] = ()
 
 
 def read_tree_runs(tree_root: Path) -> tuple[RunReading, ...]:
@@ -84,12 +88,16 @@ def read_tree_runs(tree_root: Path) -> tuple[RunReading, ...]:
         and item.record_key not in rows
     ]
     tree = (*live, *compacted)
+    decided = sandbox_decisions(
+        read_ledger_records(ledger_path(document_path, Epoch2Collection.RECEIPT))
+    )
     readings = [
         RunReading(
             run=run,
             events=run_events_of(records, run.urn),
             canonical_sequence=sequence,
             fold=fold_subtree(run, tree),
+            sandbox_decisions=tuple(item for item in decided if item.run_ref.entity_key == run.key),
         )
         for run in live
     ]

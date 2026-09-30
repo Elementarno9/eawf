@@ -69,6 +69,7 @@ from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.keybar import KEY_NAMES
 from eawf.surfaces.tui.console.keymap import route_keys
+from eawf.surfaces.tui.console.live_reads import LIVE_READS, RECEIPTS_READ
 from eawf.surfaces.tui.console.navigation import Ctx, go, open_overlay
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route
@@ -356,8 +357,14 @@ def test_the_console_carries_its_bundle_and_approval_into_the_milestone_model() 
 
 
 def test_the_console_carries_its_receipts_into_the_receipt_model() -> None:
-    """A card is opened off the receipts the console holds, never off the registers."""
-    model = _app("receipt", proof_receipts=(_receipt(),)).route_view()
+    """A card is opened off the receipts the live read holds, never off the registers."""
+    app = _app("receipt")
+    seam = app.seam
+    assert seam is not None
+    seam.retarget("receipt")
+    seam.about(RECEIPT_KEY)
+    seam._live[RECEIPTS_READ] = (LIVE_READS[RECEIPTS_READ].address(seam), (_receipt(),))
+    model = app.route_view()
     assert isinstance(model, ReceiptCardView)
     assert [card.key for card in model.cards] == [RECEIPT_KEY]
 
@@ -1060,3 +1067,20 @@ def test_prx_062_an_enter_opened_card_returns_to_the_row_it_was_opened_from(
     assert steps[-1].key == "Escape"
     assert steps[-1].frame == steps[opened - 1].frame
     assert steps[-1].after == steps[opened - 1].after
+
+
+def test_con_065_an_approval_a_later_seal_voided_renders_invalidated() -> None:
+    """CON-065: an approval given to other bytes than the held bundle's reads invalidated.
+
+    The token is the invalidated one and the reason names the digest the approval bound, so
+    the frame never says the held bytes were approved or that nothing was approved.
+    """
+    first, second = _bundle(), _bundle(passed=False)
+    model = _view("release", bundle=second, approval=_approval(digest=first.digest()))
+    signal = next(item for item in model.signals if item.name == "approval")
+    assert signal.state.state is TruthState.INVALIDATED
+    assert first.digest() in (signal.state.missing_reason or "")
+    row = next(line for line in _frame(model) if line.lstrip().startswith("approval "))
+    assert "! invalida" in row and "? unknown" not in row
+    held = _view("release", bundle=first, approval=_approval(digest=first.digest()))
+    assert next(i for i in held.signals if i.name == "approval").state.state is TruthState.KNOWN

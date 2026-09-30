@@ -21,6 +21,7 @@ from typing import Any
 import pytest
 
 from eawf.kernel.projection.activity import (
+    LOST_STALE_UNREAD_REASON,
     RUNNING_ESTIMATE_REASON,
     STATUS_BUCKETS,
     UNSTATED_BUCKETS,
@@ -122,7 +123,8 @@ def test_ui_030_every_run_lands_in_exactly_one_bucket_and_the_counts_sum() -> No
 
 
 def test_ui_030_a_bucket_the_register_cannot_count_is_unknown_not_zero() -> None:
-    """Control outcomes, heartbeats and delivery stages are not on the Run row."""
+    """Control outcomes and delivery stages are not on the Run row; stalls are not before
+    their read."""
     counts = _counts(_register())
     for bucket, reason in UNSTATED_BUCKETS.items():
         field = counts[(bucket, False, None)]
@@ -130,9 +132,34 @@ def test_ui_030_a_bucket_the_register_cannot_count_is_unknown_not_zero() -> None
         assert field.missing_reason == reason
     assert set(UNSTATED_BUCKETS) == {
         ActivityExceptionBucket.UNKNOWN_CONTROL_OUTCOME,
-        ActivityExceptionBucket.LOST_STALE,
         ActivityExceptionBucket.CHECKING_INTEGRATING,
     }
+    lost = counts[(ActivityExceptionBucket.LOST_STALE, False, None)]
+    assert lost.state is TruthState.UNKNOWN
+    assert lost.missing_reason == LOST_STALE_UNREAD_REASON
+
+
+def test_ui_030_a_stalled_running_run_is_lost_or_stale_and_not_running() -> None:
+    """With the stall read held, a Run a stall stands over leaves running exactly."""
+    grouping = group_runs(_register(), frozenset({"RUN-00000003"}))
+    counts = {(c.bucket, c.sub, c.reason): c.count for c in grouping.counts}
+    running = counts[(ActivityExceptionBucket.RUNNING, False, None)]
+    lost = counts[(ActivityExceptionBucket.LOST_STALE, False, None)]
+    assert (running.value, lost.value) == ("1", "1")
+    assert running.precision is Precision.EXACT
+    tops = grouping.top_level()
+    known = sum(int(c.count.value or 0) for c in tops if c.count.state is TruthState.KNOWN)
+    assert known + grouping.unbucketed == grouping.total == len(RUNS)
+
+
+def test_ui_030_a_stall_over_a_run_that_is_not_running_moves_nothing() -> None:
+    """Only a running Run is lost; a finished Run's stale stall leaves it where it is."""
+    counts = {
+        (c.bucket, c.sub, c.reason): c.count
+        for c in group_runs(_register(), frozenset({"RUN-00000008"})).counts
+    }
+    assert counts[(ActivityExceptionBucket.LOST_STALE, False, None)].value == "0"
+    assert counts[(ActivityExceptionBucket.TERMINAL_RECENT, False, None)].value == "2"
 
 
 def test_ui_030_running_is_an_estimate_while_stale_runs_cannot_be_told_apart() -> None:

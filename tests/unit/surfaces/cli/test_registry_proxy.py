@@ -8,7 +8,7 @@ The four scenarios mirror :mod:`tests.unit.surfaces.cli.test_config_proxy`:
 2. ``EAWF_DAEMONLESS=1`` — in-process portalocker arm runs.
 3. ``daemon.proxy_enabled=True`` + daemon DOWN — refuses with
    ``daemon_required`` envelope.
-4. Pre-W10 daemon (``-32601 method-not-found``) — fall back.
+4. A daemon that does not serve the route (``-32601``) — refuse, write nothing.
 """
 
 from __future__ import annotations
@@ -188,10 +188,10 @@ def test_persist_registry_daemon_down_raises_daemon_required(
     assert not registry_path.exists()
 
 
-# ---- Scenario 4: pre-W10 daemon (-32601) → fallback ------------------------
+# ---- Scenario 4: route missing (-32601) → refusal, never a silent write ------
 
 
-def test_persist_registry_method_not_found_falls_back(
+def test_persist_registry_method_not_found_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     registry_path = tmp_path / "registry.json"
@@ -217,9 +217,7 @@ def test_persist_registry_method_not_found_falls_back(
     monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _PreW10Client)
 
     candidate = _make_registry({"ABC": ("/repos/abc", None)})
-    repo_cmd._persist_registry(candidate, registry_path)
+    with pytest.raises(cli_errors.StateConflict, match="eawf daemon start"):
+        repo_cmd._persist_registry(candidate, registry_path)
 
-    # In-process arm wrote the file.
-    assert registry_path.exists()
-    payload = orjson.loads(registry_path.read_bytes())
-    assert "ABC" in payload["repos"]
+    assert not registry_path.exists()

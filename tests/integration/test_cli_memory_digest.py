@@ -136,7 +136,7 @@ def test_memory_digest_json_surface(tmp_state: Path) -> None:
     """``eawf memory digest --json`` emits the structured projection."""
     result = runner.invoke(app, ["memory", "digest", "--json"])
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stdout)["result"]
     assert payload["format"] == "json"
     assert payload["phase"]["ref_id"] == "P29"
     assert payload["iter"]["ref_id"] == "P29-I08"
@@ -148,7 +148,7 @@ def test_memory_digest_root_json_flag_emits_json(tmp_state: Path) -> None:
     """The root ``--json`` flag selects the structured surface too."""
     result = runner.invoke(app, ["--json", "memory", "digest"])
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stdout)["result"]
     assert payload["format"] == "json"
 
 

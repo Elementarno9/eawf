@@ -552,7 +552,7 @@ def test_apply_through_the_cli_selects_a_generation(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = json.loads(result.output)["result"]
     assert payload["status"] == "applied"
     assert payload["approval_digest"] == plan.approval_digest
     target = DisposableTarget.require(target_root)
@@ -1142,7 +1142,7 @@ def test_stage_to_matches_stage_live_corpus_byte_for_byte(tmp_path: Path) -> Non
     result = _stage_to(REPO_ROOT, tmp_path / "verb")
 
     assert result.exit_code == 0, result.output
-    envelope = json.loads(result.output)
+    envelope = json.loads(result.output)["result"]
     assert envelope["revision"] == repository_revision(REPO_ROOT)[1]
     assert envelope["sources"][:2] == [".ea/state.json", ".ea/config.yaml"]
     verb = _tree_bytes(tmp_path / "verb")
@@ -1412,7 +1412,7 @@ def _eawf(*argv: str) -> dict[str, Any]:
     result = runner.invoke(app, ["--json", *argv])
     assert result.exit_code == 0, result.output
     payload: dict[str, Any] = json.loads(result.output)
-    return payload
+    return payload["result"] if "operation" in payload else payload
 
 
 def _corpus_argv(*, staged: Path, allowlist: Path) -> list[str]:

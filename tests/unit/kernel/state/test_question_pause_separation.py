@@ -1,6 +1,6 @@
-"""Question status/supersession and OpenPause stay distinct from ANSWERED.
+"""Question status and supersession stay distinct from ANSWERED.
 
-Covers three separate defects:
+Covers two separate defects:
 
 * :class:`~eawf.kernel.state.enums.OpenQuestionStatus` gains ``AUTO_RESOLVED``
   and ``SEALED`` members distinct from ``ANSWERED``, and a round reconcile that
@@ -8,43 +8,26 @@ Covers three separate defects:
 * :class:`~eawf.kernel.state.models.OpenQuestion` carries an acyclic
   ``superseded_by_question_ref`` alongside a paired ``drop_reason``; a State
   holding a supersession cycle across two questions fails validation.
-* ``needs_user.raise`` refuses a caller that hands in daemon-owned
-  :class:`~eawf.workflow.skills.needs_user.OpenPause` bookkeeping fields, and
-  the daemon's pause wire projection (:class:`~eawf.runtime.daemon.methods.needs_user.ParkedPause`)
-  never cross-validates as an :class:`~eawf.kernel.state.models.OpenQuestion`.
 """
 
 from __future__ import annotations
 
-import asyncio
-import os
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
-from eawf import __version__
 from eawf.kernel.spec.campaign_driver import RoundFindings
-from eawf.kernel.state.enums import OpenQuestionDropReason, OpenQuestionStatus, StoreKind
+from eawf.kernel.state.enums import OpenQuestionDropReason, OpenQuestionStatus
 from eawf.kernel.state.models import OpenQuestion, State
 from eawf.kernel.store.kinds.agent_report import ResearcherReportBody
-from eawf.kernel.store.paths import store_path
-from eawf.runtime.daemon import PROTOCOL_VERSION
-from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.needs_user import PauseFabricationError, raise_needs_user
 from eawf.runtime.daemon.methods.research import reconcile_round_claims
-from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 
 pytestmark = pytest.mark.unit
 
 _SCOPE = "QR"
 _NOW = datetime(2026, 9, 25, 12, 0, 0, tzinfo=UTC)
-_QUESTION = UserQuestion(
-    question="Apply roadmap?",
-    options=[UserQuestionOption(label="apply"), UserQuestionOption(label="revise")],
-)
 
 
 def _question(qid: str, **overrides: Any) -> OpenQuestion:
@@ -201,89 +184,3 @@ def test_state_rejects_a_supersession_cycle() -> None:
     )
     with pytest.raises(ValidationError, match="supersession chain cycles"):
         State.model_validate(_state_with_questions(q1, q2))
-
-
-# --- OpenPause stays daemon-observed (CR-02) --------------------------------
-
-
-def _state_path(tmp_path: Path) -> Path:
-    ea = tmp_path / ".ea"
-    ea.mkdir()
-    path = ea / "state.json"
-    path.touch()
-    return path
-
-
-def _ctx(state_path: Path) -> MethodContext:
-    return MethodContext(
-        started_at="2026-09-25T00:00:00+00:00",
-        pid=os.getpid(),
-        protocol_version=PROTOCOL_VERSION,
-        version=__version__,
-        shutdown_event=asyncio.Event(),
-        bus=None,
-        state_path=state_path,
-        event_path=store_path(state_path, StoreKind.EVENT),
-    )
-
-
-@pytest.mark.parametrize(
-    "fabricated_field,fabricated_value",
-    [
-        ("pause_urn", "urn:eawf:v1:event:QR/needs-user-fake"),
-        ("occurred_at", _NOW.isoformat()),
-        ("wave_id", "P01-I01-W01"),
-    ],
-)
-def test_needs_user_raise_refuses_a_caller_fabricated_pause_field(
-    tmp_path: Path, fabricated_field: str, fabricated_value: str
-) -> None:
-    ctx = _ctx(_state_path(tmp_path))
-    params = {
-        "scope_id": f"urn:eawf:v1:state:{_SCOPE}",
-        "session": "urn:eawf:v1:session:cli/SES-test",
-        "question": _QUESTION.model_dump(mode="json"),
-        fabricated_field: fabricated_value,
-    }
-
-    async def body() -> dict[str, object]:
-        return await raise_needs_user(ctx, params)
-
-    with pytest.raises(PauseFabricationError, match="daemon-owned fields"):
-        asyncio.run(body())
-
-
-def test_needs_user_raise_still_accepts_a_legitimate_pause(tmp_path: Path) -> None:
-    ctx = _ctx(_state_path(tmp_path))
-    params = {
-        "scope_id": f"urn:eawf:v1:state:{_SCOPE}",
-        "session": "urn:eawf:v1:session:cli/SES-test",
-        "question": _QUESTION.model_dump(mode="json"),
-    }
-
-    async def body() -> dict[str, object]:
-        return await raise_needs_user(ctx, params)
-
-    result = asyncio.run(body())
-    assert isinstance(result["pause_urn"], str)
-
-
-def test_parked_pause_row_never_validates_as_an_open_question() -> None:
-    from eawf.runtime.daemon.methods.needs_user import ParkedPause
-
-    pause_row = ParkedPause(
-        pause_urn="urn:eawf:v1:event:QR/needs-user-abc123",
-        scope_id=_SCOPE,
-        session="urn:eawf:v1:session:cli/SES-test",
-        question=_QUESTION,
-    ).model_dump(mode="json")
-    with pytest.raises(ValidationError):
-        OpenQuestion.model_validate(pause_row)
-
-
-def test_open_question_row_never_validates_as_a_parked_pause() -> None:
-    from eawf.runtime.daemon.methods.needs_user import ParkedPause
-
-    question_row = _question("QST-1").model_dump(mode="json")
-    with pytest.raises(ValidationError):
-        ParkedPause.model_validate(question_row)

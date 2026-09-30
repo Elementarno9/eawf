@@ -40,6 +40,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     route_crumb,
     unstated_rows,
 )
+from eawf.surfaces.tui.console.tokens import truth_cell
 from eawf.surfaces.tui.console.width import pad
 from eawf.workflow.projection.acceptance import ReleaseReadinessView
 
@@ -180,7 +181,8 @@ def native_frame(view: View, model: ReleaseReadinessView) -> list[str]:
         # the reason an unknown signal has no state is its evidence, so it is never cut
         evidence = signal.evidence or signal.state.missing_reason or ""
         known = signal.state.state is TruthState.KNOWN
-        state = value_cell(signal.state).slot if known else UNKNOWN_WORD
+        absent = signal.state.state.value
+        state = value_cell(signal.state).slot if known else f"{truth_cell(absent)} {absent}"
         line = readiness.row([signal.name, state, evidence], picked)
         rows.append(line if picked else Fixed(pad(line, w)))
     rows.append(thin(w))

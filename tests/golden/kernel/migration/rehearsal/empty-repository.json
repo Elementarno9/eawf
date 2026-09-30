@@ -2,7 +2,7 @@
   "apply": {
     "applied": true,
     "generation_bytes": 921,
-    "generation_id": "gen-188dbd648448cd4f",
+    "generation_id": "gen-3f0fc2fab4eaacfc",
     "journal_stages": [
       "fence_cleared",
       "workspace_resolved",
@@ -23,7 +23,7 @@
   },
   "disposition": "imports",
   "dry_run": {
-    "approval_digest": "db10c46d18cfa77c59f2fac248ae6c88ff357b68d61e20f4fb984993ab41e80d",
+    "approval_digest": "0492d933d9f010bf824d94f7df0d00dbf44241e0aeb5fc62dc269aacff2cd31a",
     "collections": {
       "actuals": [
         0,
@@ -216,7 +216,7 @@
         0
       ]
     },
-    "manifest_digest": "188dbd648448cd4f2f9f8f9a52f39c670afd2846589247ea217805add047b8ad",
+    "manifest_digest": "3f0fc2fab4eaacfc4af7f7c842047e83d3eeff4dba2836ca5570ebef5c26fe3e",
     "reproducible": true,
     "source_digest": "4b09d388413b8674c008051373e46e55c1a875b99571abc0e279ca0979a86c89",
     "source_rows": 6,
@@ -226,7 +226,7 @@
   "fixture": "empty-repository",
   "rerun": {
     "applied": false,
-    "generation_id": "gen-188dbd648448cd4f",
+    "generation_id": "gen-3f0fc2fab4eaacfc",
     "journal_rows": 0,
     "tree_unchanged": true
   },

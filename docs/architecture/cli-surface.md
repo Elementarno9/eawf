@@ -32,7 +32,7 @@ Each row is a CLI verb / group. Mutates → writes state.json, JSONL store, or r
 | `eawf store compact` | kind / scope / budget | compacted JSONL store | yes | conflict | `cli/commands/store.py` |
 | `eawf render-output` | `--format markdown` \| `json` (stdin JSON) | rendered envelope | no | invalid envelope | `cli/commands/render_output.py` |
 | `eawf config profile enable` | profile id | enabled profile + materialized state keys | yes | unknown profile / conflict | `cli/commands/config.py` |
-| `eawf mcp add` / `install` / `update` / `remove` | id / command / risk / env refs | Eä-owned MCP config | yes | non-env secret / unmanaged entry | `cli/commands/mcp.py` |
+| `eawf mcp add` / `install` / `update` / `remove` | id / command / risk / env refs; `--idempotency-key`, plus `--expected-revision` on a standing row | Eä-owned MCP config (`capability` rows, through `mcp.*` daemon verbs) | yes | non-env secret / unmanaged entry | `cli/commands/mcp.py` |
 | `eawf plugin install claude` / `update claude` / `doctor claude` | target choices | Claude assets / settings | yes for install / update | settings conflict / hash conflict | `cli/commands/plugin.py` |
 | `eawf plugin package claude` | `--target`, `--include-marketplace`, `--include-readme`, `--force`, `--dry-run` | standalone CC plugin tree (`.claude-plugin/` + `skills/` + `agents/` [+ `marketplace.json`] [+ `README.md`]) | no on `--dry-run`, otherwise yes (filesystem only; no state mutation) | non-empty foreign target → exit 8; unknown runtime → exit 3 | `cli/commands/plugin.py` |
 | `eawf hook run` | event, JSON payload stdin | hook result / event | yes maybe | fail-closed / timeout | `cli/commands/hook.py` |

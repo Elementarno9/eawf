@@ -319,7 +319,7 @@ scoped.
 2. A named verb (`save` / `forget`) without a `name` degrades to
    `status=needs_user`.
 3. Append a single append-only `EVENT` describing the operation intent;
-   the daemon is the sole canonical writer of the memory JSONL store, so
+   the daemon is the sole canonical writer of the memory ledger, so
    the skill routes the operator to the `eawf memory` writer via
    `next_valid_actions` rather than mutating the store itself.
 

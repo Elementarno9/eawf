@@ -1,12 +1,14 @@
-"""Read-only ``eawf memory`` verbs (list / render-context / view / stale).
+"""Read-only ``eawf memory`` verbs (list / render-context / view / digest / stale).
 
 Split out of :mod:`eawf.surfaces.cli.commands.memory`. The
-:data:`memory_app` Typer group and the shared helpers (store-path
-resolvers, the read-only state loader, the status parser, the
-inlined default budget) live in the parent module; this module attaches
-the four query command bodies via ``@memory_app.command(...)``. Every
-``eawf.platform.memory.*`` import stays inside the handler bodies so the
-command-tree build path stays off the import-budget heavy graph.
+:data:`memory_app` Typer group and the shared helpers (the note loader,
+the read-only state loader, the status parser, the inlined default
+budget) live in the parent module; this module attaches the query command
+bodies via ``@memory_app.command(...)``. The note verbs read the notes
+from the tree's own epoch -- the generation's memory ledger on an epoch-2
+tree -- through the one loader. Every ``eawf.platform.memory.*`` import
+stays inside the handler bodies so the command-tree build path stays off
+the import-budget heavy graph.
 """
 
 from __future__ import annotations
@@ -22,8 +24,8 @@ if TYPE_CHECKING:
     from eawf.platform.memory.digest import DigestEntry
 from eawf.surfaces.cli.commands.memory import (
     _DEFAULT_BUDGET,
+    _load_notes,
     _load_state,
-    _memory_path_for,
     _resolve_status,
     memory_app,
 )
@@ -40,15 +42,14 @@ def memory_list(
     scope: Annotated[str | None, typer.Option("--scope", help="Filter by scope ID.")] = None,
     status: Annotated[str | None, typer.Option("--status", help="Filter by memory status.")] = None,
 ) -> None:
-    """List memory entries from ``state.memory_index`` (the cache)."""
+    """List the memory notes the tree stands at."""
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
-        state = _load_state(state_path)
         status_filter = _resolve_status(status)
-        index = state.memory_index or {}
+        notes = _load_notes(state_path)
         entries = []
-        for mid, summary in sorted(index.items()):
+        for mid, summary in sorted(notes.items()):
             if scope is not None and summary.scope_id != scope:
                 continue
             if status_filter is not None and summary.status != status_filter:
@@ -111,7 +112,7 @@ def memory_render_context(
     ] = None,
 ) -> None:
     """Produce a token-budgeted Markdown rendering of memory entries."""
-    from eawf.platform.memory.render_context import render_context
+    from eawf.platform.memory.render_context import render_notes
 
     flags: GlobalFlags = ctx.obj
     fmt_norm = fmt.strip().lower()
@@ -133,11 +134,8 @@ def memory_render_context(
         return
     try:
         state_path = resolve_state_path(flags.workspace)
-        memory_path = _memory_path_for(state_path)
-        state = _load_state(state_path)
-        result = render_context(
-            state=state,
-            memory_path=memory_path,
+        result = render_notes(
+            _load_notes(state_path).values(),
             anchor_scope=scope,
             budget=budget,
             include_superseded=include_superseded,
@@ -176,26 +174,19 @@ def memory_view(
         typer.Option("--scope", help="Optional scope guard; rejects mismatch."),
     ] = None,
 ) -> None:
-    """Show a single memory entry: cache summary + JSONL body."""
-    from eawf.platform.memory.store import find_envelope
-
+    """Show a single memory note: its summary and its body."""
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
-        memory_path = _memory_path_for(state_path)
-        state = _load_state(state_path)
-        summary = (state.memory_index or {}).get(mem_id)
+        summary = _load_notes(state_path).get(mem_id)
         if summary is None:
-            raise cli_errors.UserError(
-                f"memory entry {mem_id!r} not in state.memory_index", kind="NotFound"
-            )
+            raise cli_errors.UserError(f"memory entry {mem_id!r} not found", kind="NotFound")
         if scope is not None and summary.scope_id != scope:
             raise cli_errors.UserError(
                 f"scope {scope!r} does not match entry scope {summary.scope_id!r}",
                 kind="InvalidInput",
             )
-        env = find_envelope(memory_path, mem_id)
-        body = env.payload.get("body", "") if env is not None else ""
+        body = summary.body
         emit_json_or_text(
             payload={
                 "id": mem_id,
@@ -204,7 +195,8 @@ def memory_view(
                 "confidence": summary.confidence.value,
                 "summary": summary.summary,
                 "body": body,
-                "store_record_id": summary.store_record_id,
+                "tier": summary.tier.value,
+                "promoted_to_artifact_id": summary.promoted_to_artifact_id,
             },
             text=(
                 f"{mem_id}\t{summary.scope_id}\t{summary.status.value}\t"
@@ -309,19 +301,12 @@ def memory_stale(
     age: Annotated[int, typer.Option("--age", help="Age threshold in days.")] = 30,
 ) -> None:
     """List memory entries that exceed ``--age`` days and are below high confidence."""
-    from eawf.platform.memory.staleness import find_stale
+    from eawf.platform.memory.staleness import stale_notes
 
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
-        memory_path = _memory_path_for(state_path)
-        state = _load_state(state_path)
-        stale = find_stale(
-            state=state,
-            memory_path=memory_path,
-            age_days=age,
-            scope_id=scope,
-        )
+        stale = stale_notes(_load_notes(state_path).values(), age_days=age, scope_id=scope)
         entries = [
             {
                 "id": e.id,

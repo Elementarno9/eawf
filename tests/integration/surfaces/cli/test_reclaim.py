@@ -120,7 +120,7 @@ def test_reclaim_trims_old_backups_and_sweeps_wal(
 
     res = runner.invoke(app, ["--json", "daemon", "reclaim", "--keep", "3"])
     assert res.exit_code == 0, res.output
-    payload = orjson.loads(res.output.strip())
+    payload = orjson.loads(res.output.strip())["result"]
 
     # 8 backups - keep 3 == 5 removed; the newest 3 survive on disk.
     assert payload["backups_trimmed_count"] == 5
@@ -146,7 +146,7 @@ def test_reclaim_retains_newest_backup(monkeypatch: pytest.MonkeyPatch, tmp_path
 
     res = runner.invoke(app, ["--json", "daemon", "reclaim", "--keep", "1"])
     assert res.exit_code == 0, res.output
-    payload = orjson.loads(res.output.strip())
+    payload = orjson.loads(res.output.strip())["result"]
 
     assert payload["backups_trimmed_count"] == 5
     surviving = list(state_path.parent.glob(f"{state_path.name}.bak.*"))
@@ -166,7 +166,7 @@ def test_reclaim_under_keep_window_removes_nothing(
 
     res = runner.invoke(app, ["--json", "daemon", "reclaim", "--keep", "3"])
     assert res.exit_code == 0, res.output
-    payload = orjson.loads(res.output.strip())
+    payload = orjson.loads(res.output.strip())["result"]
 
     assert payload["backups_trimmed_count"] == 0
     for backup in backups:
@@ -180,7 +180,7 @@ def test_reclaim_no_backups_is_noop(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
     res = runner.invoke(app, ["--json", "daemon", "reclaim"])
     assert res.exit_code == 0, res.output
-    payload = orjson.loads(res.output.strip())
+    payload = orjson.loads(res.output.strip())["result"]
     assert payload["backups_trimmed_count"] == 0
     assert payload["wal_swept_count"] == 0
     assert payload["keep"] == 3

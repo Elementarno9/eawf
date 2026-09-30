@@ -19,6 +19,7 @@ import dataclasses
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -47,7 +48,7 @@ from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.harness import capture_cells, grid_errors
 from eawf.surfaces.tui.console.registry import REGISTRY
-from eawf.surfaces.tui.console.renderers import render_route
+from eawf.surfaces.tui.console.renderers import render_route, sandbox_log
 from eawf.surfaces.tui.console.renderers.campaign import replay_line
 from eawf.surfaces.tui.console.renderers.crash_recovery import doors
 from eawf.surfaces.tui.console.renderers.health import NOTHING_TO_REPAIR, checks_line, checks_of
@@ -263,6 +264,72 @@ def test_ui_063_a_milestone_with_no_claim_says_so() -> None:
     assert "no field is focused" in _starts(frame, " FIELD")
 
 
+def _observation(
+    audit: str, verdict: str, *, milestone: str = "MLS-0100", role: str | None = "reviewer"
+) -> dict[str, Any]:
+    """Return one verdict observation as the daemon lists it off a Batch's current cycle."""
+    return {
+        "payload_kind": "verdict_observation",
+        "urn": f"{ROOT}/batch/BAT-0101",
+        "revision": 1,
+        "status": verdict,
+        "site": "verification",
+        "subject": audit,
+        "batch_ref": f"{ROOT}/batch/BAT-0101",
+        "milestone_ref": f"{ROOT}/milestone/{milestone}",
+        "verdict": verdict,
+        "agent_role": role,
+        "runtime": "claude-code" if role else None,
+        "occurred_at": "2026-09-17T13:58:00+00:00",
+    }
+
+
+def _judged(*rows: dict[str, Any]) -> dict[str, Any]:
+    """Return the probe tree whose Batch ledger holds ``rows`` as verdict observations."""
+    batches = {**DOCUMENT["batch"], **{f"BAT-0101-{row['subject']}": row for row in rows}}
+    return {**DOCUMENT, "batch": batches}
+
+
+def test_ui_063_a_verdict_row_is_answered_for_by_role_and_runtime() -> None:
+    frame = _frame(
+        "trust", subject="MLS-0100", document=_judged(_observation("CR-01", "verified_true"))
+    )
+    row = next(r for r in frame if "CR-01" in r)
+    assert "BAT-0101 CR-01" in row and "verified_true" in row
+    assert "reviewer · claude-code" in row
+    assert "jury-" not in _text(frame) and "runner" not in row
+    assert "authority refused · n" in _text(frame)
+
+
+def test_ui_063_a_verdict_is_listed_only_under_its_own_milestone() -> None:
+    document = _judged(_observation("CR-02", "verified_false", milestone="MLS-0101"))
+    assert not any("CR-02" in row for row in _frame("trust", subject="MLS-0100", document=document))
+    assert any("CR-02" in row for row in _frame("trust", subject="MLS-0101", document=document))
+
+
+def test_ui_020_an_insufficient_report_renders_every_numeric_cell_unavailable() -> None:
+    frame = _frame(
+        "trust", subject="MLS-0100", document=_judged(_observation("CR-01", "verified_true"))
+    )
+    calibration = _starts(frame, " CALIBRATION")
+    assert "INSUFFICIENT · Brier ∅ unavailable · co-error no known-bad subject" in calibration
+    assert not re.search(r"\d", calibration)
+    assert "n 0 of 20 scored · authority refused · n" in frame[frame.index(calibration) + 1]
+
+
+def test_ui_020_a_producer_with_zero_judged_verdicts_has_no_rate() -> None:
+    document = _judged(
+        _observation("CR-01", "verified_true"),
+        _observation("CR-02", "verified_false"),
+        _observation("CR-03", "unverified", role=None),
+    )
+    frame = _frame("trust", subject="MLS-0100", document=document)
+    judged = next(r for r in frame if r.startswith(" reviewer · claude-code"))
+    unjudged = next(r for r in frame if r.startswith(" ? unknown · ? unknown"))
+    assert judged.split()[3:6] == ["1", "1", "~0.50"]
+    assert "∅ unavailable · 0 judged" in unjudged and "0.00" not in unjudged
+
+
 # ---------- UI-021 / UI-064: the evidence route ----------
 
 
@@ -386,12 +453,88 @@ def test_ui_065_an_empty_health_register_says_nothing_declared_reported() -> Non
 # ---------- UI-022 / UI-066: the sandbox log ----------
 
 
-def test_ui_066_the_window_states_its_counts_unknown_never_zero_decisions() -> None:
+def _decision(
+    call: int, decision: str, *, revision: int | None = 1, reason: str = "budget_status · admitted"
+) -> dict[str, Any]:
+    """Return one sandbox decision as the receipt ledger files it, spelled as a notice row."""
+    row = {
+        "payload_kind": "sandbox_decision",
+        "schema_version": "sandbox-decision/v1",
+        "call_id": f"call-{call:016x}",
+        "run_ref": f"{ROOT}/run/RUN-00000001",
+        "tool_id": "budget_status",
+        "decision": decision,
+        "rule": "grant" if decision == "allowed" else "scope",
+        "rule_value": "grants budget_status" if decision == "allowed" else "write set src",
+        "reason": reason,
+        "decided_at": f"2026-09-17T14:0{call}:00+00:00",
+        "urn": f"{ROOT}/run/RUN-00000001",
+        "revision": 1,
+        "status": decision,
+    }
+    if revision is not None:
+        row["policy_revision"] = revision
+    return row
+
+
+def _decided(*rows: dict[str, Any]) -> dict[str, Any]:
+    """Return the probe tree holding ``rows`` as its sandbox decisions."""
+    return {**DOCUMENT, "receipt": {f"SBD-{row['call_id']}": row for row in rows}}
+
+
+def test_ui_066_an_empty_log_counts_zero_decisions_under_a_complete_read() -> None:
     frame = _frame("sandbox.log")
     window = _starts(frame, " WINDOW")
-    assert f"{UNKNOWN_WORD} decisions" in window
-    assert "0 decisions" not in window
-    assert SANDBOX_DECISION_PRODUCER in _text(frame)
+    assert "0 decisions · 0 denied · 0 of 0 shown" in window
+    assert UNKNOWN_WORD not in window
+    assert SANDBOX_DECISION_PRODUCER not in _text(frame)
+
+
+def test_ui_066_allowed_and_denied_decisions_are_rows_counted_once() -> None:
+    document = _decided(
+        _decision(1, "allowed"),
+        _decision(2, "denied", reason="submit_candidate · scope_denied"),
+    )
+    frame = _frame("sandbox.log", document=document)
+    assert "2 decisions · 1 denied · 2 of 2 shown" in _starts(frame, " WINDOW")
+    allowed = next(row for row in frame if "14:01" in row)
+    denied = next(row for row in frame if "14:02" in row)
+    assert "allowed" in allowed and "RUN-00000001" in allowed
+    assert "denied" in denied and "submit_candidate · scope_denied" in denied
+    assert "sandbox policy · rev 1" in denied
+    assert sum(" WINDOW" in row for row in frame) == 1
+
+
+def test_ui_066_the_readout_names_the_run_the_rule_its_value_and_the_revision() -> None:
+    frame = _frame("sandbox.log", document=_decided(_decision(2, "denied")))
+    readout = _starts(frame, " DECISION")
+    assert "denied · RUN-00000001" in readout
+    assert "rule scope · write set src · sandbox policy · rev 1" in frame[frame.index(readout) + 1]
+    assert frame[-1].split() == ["Enter", "run", "p", "policy", "Esc", "back"]
+
+
+def test_ui_066_an_unreadable_revision_renders_unavailable_never_allowed() -> None:
+    frame = _frame("sandbox.log", document=_decided(_decision(1, "allowed", revision=None)))
+    row = next(row for row in frame if "14:01" in row)
+    assert "∅ unavailable" in row
+    assert "allowed" not in row
+    assert "∅ unavailable" in frame[frame.index(_starts(frame, " DECISION")) + 1]
+
+
+def test_ui_066_enter_opens_the_run_the_focused_decision_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = _model("sandbox.log", _decided(_decision(2, "denied")))
+    session = Session()
+    session.route = "sandbox.log"
+    session.sel_id = "SBD-call-0000000000000002"
+    opened: list[tuple[str, str | None]] = []
+    monkeypatch.setattr(
+        sandbox_log, "go", lambda _ctx, route, _why, subject=None: opened.append((route, subject))
+    )
+
+    assert sandbox_log._open_run(SimpleNamespace(s=session, projection=model), model)  # type: ignore[arg-type]
+    assert opened == [("run.detail", "RUN-00000001")]
 
 
 @pytest.mark.parametrize(("w", "revision"), [(80, False), (120, True)])

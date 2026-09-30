@@ -137,8 +137,7 @@ class Mutation(BaseModel):
 class MemoryMutationError(ValueError):
     """Raised when a ``MEMORY_*`` apply rejects the mutation.
 
-    Mirrors the :class:`~eawf.platform.memory.gc.GcError` /
-    :class:`~eawf.platform.memory.prune.PruneError` pattern so the
+    A :class:`ValueError`, so the
     daemon's existing ``LifecycleError`` → ``-32602 invalid_params``
     mapping carries memory rejections with the same wire shape.
     """
@@ -159,10 +158,10 @@ class MemoryAddPayload(_StrictPayload):
     Attributes:
         id: Stable memory id (``MEM-<UTC-date>-<NN>``); the caller is
             responsible for allocating a fresh id (see
-            :func:`eawf.platform.memory.store._next_memory_id`).
+            :func:`eawf.platform.memory.book.next_note_id`).
         scope_id: Scope the memory entry belongs to.
         summary: Short summary text — what
-            :func:`eawf.platform.memory.store._summary_text` composed when
+            :func:`eawf.platform.memory.store.summary_text` composed when
             the caller wrote the JSONL envelope.
         confidence: :class:`Confidence` bucket.
         store_record_id: JSONL record id (typically ``id`` itself).
@@ -233,9 +232,8 @@ class MemorySupersedePayload(_StrictPayload):
 class MemoryPrunePayload(_StrictPayload):
     """Params for :attr:`MutationKind.MEMORY_PRUNE`.
 
-    Soft-prune the named entry: flip status to ``PRUNED``. The JSONL
-    side-effect (writing an ``expired_at`` envelope) stays in
-    :func:`eawf.platform.memory.prune.prune_memory`.
+    Soft-prune the named entry: flip status to ``PRUNED``. Stamping
+    ``expired_at`` is the writer's side-effect, not this mutation's.
 
     Attributes:
         id: Memory id to prune.
@@ -397,8 +395,8 @@ def apply_memory_supersede(state: State, mutation: Mutation) -> None:
 def apply_memory_prune(state: State, mutation: Mutation) -> None:
     """Apply :attr:`MutationKind.MEMORY_PRUNE` — flip status to ``PRUNED``.
 
-    Soft-delete only. The JSONL ``expired_at`` envelope is written by
-    :func:`eawf.platform.memory.prune.prune_memory`, not here.
+    Soft-delete only. The ``expired_at`` stamp is the writer's, not
+    this mutation's.
 
     Args:
         state: Loaded :class:`State`. Mutated in place.

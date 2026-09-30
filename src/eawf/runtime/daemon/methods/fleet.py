@@ -959,35 +959,6 @@ _WATCH_POLL_SECONDS = 1.0
 _WATCH_STALL_DEADLINE_SECONDS = 30.0
 
 
-def _has_open_pause(state_path: Path, wave_id: str) -> bool:
-    """Return whether *wave_id* has an unresolved needs_user pause -- W09.
-
-    The live watcher consults this each poll: a lane whose executor surfaced a
-    needs_user pause (a clarification it could not resolve) has an open
-    ``needs_user_pause`` row with no matching resume on the event feed, scoped to
-    the wave id. The watcher reports such a lane ``"needs_user"`` so the loop
-    produces the DL-6 ``NEEDS_USER_SPLIT`` blocking fork rather than wedging.
-    Reads through :func:`~eawf.workflow.skills.needs_user.list_open_pauses` (free
-    read access). A read error degrades to ``False`` (no pause) so a transient
-    feed-read hiccup never mis-forks a healthy lane.
-
-    Args:
-        state_path: Path to ``state.json`` (the event feed resolves under its
-            sibling ``store/``).
-        wave_id: ``W<NN>`` wave whose open pauses to check.
-
-    Returns:
-        ``True`` when the wave has at least one unresolved needs_user pause.
-    """
-    from eawf.workflow.skills.needs_user import list_open_pauses
-
-    try:
-        return bool(list_open_pauses(state_path, scope_id=wave_id))
-    except (OSError, ValueError) as exc:
-        logger.debug(f"_has_open_pause wave={wave_id} read_failed cause={exc!r}")
-        return False
-
-
 @dataclass
 class _StallDeadline:
     """Tracks the dead-pgid stall grace window for one watched lane -- W05.
@@ -1195,17 +1166,9 @@ class _LivenessWatcher:
         """Return the lane's terminal outcome this poll, or ``None`` if in flight.
 
         A vanished / terminal wave resolves immediately
-        (:func:`_status_terminal_outcome`), an open needs_user pause
-        resolves ``"needs_user"``, else the lane is still in flight (``None``).
+        (:func:`_status_terminal_outcome`), else the lane is still in flight (``None``).
         """
-        wave = load_state(state_path).waves.get(lane.wave_id)
-        terminal = _status_terminal_outcome(wave)
-        if terminal is not None:
-            return terminal
-        if _has_open_pause(state_path, lane.wave_id):
-            logger.info(f"liveness_watcher wave={lane.wave_id} status=needs_user")
-            return "needs_user"
-        return None
+        return _status_terminal_outcome(load_state(state_path).waves.get(lane.wave_id))
 
     def _liveness_forked(self, lane: FleetLane, deadline: _StallDeadline) -> bool:
         """Return whether the dead-pgid stall deadline has elapsed this poll -- W05.

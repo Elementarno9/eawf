@@ -140,6 +140,7 @@ RETIRED_VERBS: Final[Mapping[str, str | None]] = {
     "state show": "status",
     "track add": "track create",
     "track switch": None,
+    "track sync": None,
     "wave ack-drift": None,
     "wave archive-refs": None,
     "wave autoland": "batch integrate",

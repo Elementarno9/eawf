@@ -8,7 +8,9 @@ partitions the rows into -- ``needs operator``'s suspension reasons indented und
 the rail and folded into it in the strip. A Run's reason is read off
 its suspension, failure or purpose and the instant is when its record last moved; a Run
 whose record states neither wears the unknown token rather than a blank. The rail is the route's
-declared rail, so it folds into a strip exactly where the registry says it does.
+declared rail, so it folds into a strip exactly where the registry says it does. A running
+Run the daemon's stall read says went quiet is drawn under ``lost or stale`` with when it
+last produced anything, never counted as running.
 """
 
 from __future__ import annotations
@@ -16,8 +18,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from types import MappingProxyType
 
-from eawf.kernel.projection.activity import STATUS_BUCKETS, ActivityGrouping, group_runs
+from eawf.kernel.projection.activity import (
+    STATUS_BUCKETS,
+    ActivityExceptionBucket,
+    ActivityGrouping,
+    group_runs,
+)
 from eawf.kernel.projection.compute import ProjectionRow
+from eawf.kernel.projection.liveness import HeldLiveness
 from eawf.kernel.projection.registers import RegisterView
 from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.surfaces.tui.console import derive as dv
@@ -247,13 +255,17 @@ _STATUS_REASON: Mapping[str, str] = MappingProxyType(
 EMPTY_NEXT = "a Run starts when a Task is dispatched"
 
 
-def run_reason(row: ProjectionRow) -> str:
+def run_reason(row: ProjectionRow, liveness: HeldLiveness | None = None) -> str:
     """Return why a Run stands where it does, read off the facts its record states.
 
     A suspended Run names what it waits for, a failed one its failure, a running one what
-    it runs for; a status that states no reason of its own wears the unknown token.
+    it runs for, or -- when a stall stands over it -- that it went quiet and since when; a
+    status that states no reason of its own wears the unknown token.
     """
     facts, status = row.facts, row.status.value
+    stall = liveness.stall_of(row.key) if liveness is not None and status == "RUNNING" else None
+    if stall is not None:
+        return f"stalled · nothing since {clock_minute(stall.last_activity_at)}"
     waiting = _WAITING_FOR.get(row.suspension_reason or "")
     if status == "SUSPENDED" and waiting:
         return waiting
@@ -294,23 +306,29 @@ def task_cell(row: ProjectionRow, room: int | None = None) -> str:
     return f"{row.parent_key} {clip_words(title, left)}" if left > 1 else row.parent_key
 
 
-def _bucket_of(row: ProjectionRow) -> str | None:
-    """Return the exception bucket a Run lands in, by the grouping's own status table."""
+def _bucket_of(row: ProjectionRow, stalled: frozenset[str]) -> str | None:
+    """Return the exception bucket a Run lands in, by the grouping's own tables."""
     try:
-        return STATUS_BUCKETS[RunStatus(row.status.value or "")].value
+        status = RunStatus(row.status.value or "")
     except ValueError:
         return None
+    if status is RunStatus.RUNNING and row.key in stalled:
+        return ActivityExceptionBucket.LOST_STALE.value
+    return STATUS_BUCKETS[status].value
 
 
 def _shown(view: View, register: RegisterView) -> list[ProjectionRow]:
     """Return the Runs the bucket and the filter leave, in the register's order."""
-    s = view.session
+    s, liveness = view.session, view.liveness
+    stalled = liveness.stalled_keys() if liveness is not None else frozenset()
     flt = dv.filter_of(s).lower()
     return [
         row
         for row in register.rows
-        if not (s.bucket and _bucket_of(row) != s.bucket)
-        and not (flt and flt not in f"{row.key} {task_cell(row)} {run_reason(row)}".lower())
+        if not (s.bucket and _bucket_of(row, stalled) != s.bucket)
+        and not (
+            flt and flt not in f"{row.key} {task_cell(row)} {run_reason(row, liveness)}".lower()
+        )
     ]
 
 
@@ -357,7 +375,8 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     cursor = dv.restore_by_id(s, [row.key for row in shown])
     wide = REGISTRY.rail_at(s.route, view.columns) is not None
     col = w - RAIL_W - 1 if wide else w
-    grouping = group_runs(register)
+    liveness = view.liveness
+    grouping = group_runs(register, liveness.stalled_keys() if liveness is not None else None)
     top = native_head(
         view, register, crumb_text=route_crumb(view, register, "Activity"), summary=counts(register)
     )
@@ -385,7 +404,7 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
             row.key,
             pad(task_cell(row, cols[1] - 1), cols[1] - 1),
             value_cell(row.status).slot,
-            pad(run_reason(row), cols[3] - 1),
+            pad(run_reason(row, liveness), cols[3] - 1),
             as_of(row),
         ]
         body.append(table.row(cells, index == cursor))

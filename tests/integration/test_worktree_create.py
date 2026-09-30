@@ -214,7 +214,21 @@ def test_create_refuses_path_outside_repo(tmp_path: Path) -> None:
     bogus = tmp_path / "elsewhere" / "wt"
     with pytest.raises(cli_errors.UserError) as exc_info:
         create_worktree(state, repo_root=repo, wave_id="P05-I01-W01", path=bogus)
-    assert "outside repo root" in str(exc_info.value)
+    assert "outside the managed worktree root" in str(exc_info.value)
+
+
+def test_surf_050_create_refuses_a_path_in_the_repo_outside_the_managed_root(
+    tmp_path: Path,
+) -> None:
+    """SURF-050: an explicit path inside the repo but outside .ea/worktrees is refused."""
+    repo = _make_repo(tmp_path / "repo")
+    state = _claimed_state()
+    host_native = repo / ".claude" / "worktrees" / "wt"
+    for elsewhere in (repo / "wt", host_native, repo / ".ea" / "worktrees"):
+        with pytest.raises(cli_errors.UserError) as exc_info:
+            create_worktree(state, repo_root=repo, wave_id="P05-I01-W01", path=elsewhere)
+        assert "outside the managed worktree root" in str(exc_info.value)
+    assert not host_native.exists()
 
 
 def test_create_refuses_existing_branch(tmp_path: Path) -> None:

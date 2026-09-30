@@ -190,15 +190,26 @@ def campaign_cancel(
     campaign_key: _CampaignKey,
     actor: _Actor,
     reason: Annotated[str, typer.Option("--reason", help="Why it is abandoned, in one line.")],
+    expected_revision: Annotated[
+        int,
+        typer.Option(
+            "--expected-revision", min=1, help="The Campaign revision the cancel was decided at."
+        ),
+    ],
 ) -> None:
-    """Cancel an active Campaign, recording why; its steps and artifacts stay."""
+    """Cancel an active Campaign, recording why; its steps and artifacts stay.
+
+    The Campaign's key is resolved to its reference; the revision is the
+    caller's, so a Campaign that moved since it was read is refused rather
+    than cancelled.
+    """
     view = _campaign_call(ctx, CAMPAIGN_VIEW, {"campaign_key": campaign_key}, "campaign cancel")
     if view is None:
         return
     params = {
         "actor": actor,
         "urn": view["campaign_ref"],
-        "expected_revision": view["revision"],
+        "expected_revision": expected_revision,
         "to_status": "cancelled",
         "reason": reason,
     }

@@ -34,6 +34,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import eawf.runtime.worktree.git as git
 from eawf.kernel.state.enums import WorktreeStatus
@@ -156,7 +157,19 @@ def cleanup_worktree(
     )
 
 
+def cleanup_payload(result: CleanupResult) -> dict[str, Any]:
+    """Return the answer ``worktree cleanup`` prints for *result*."""
+    return {
+        "worktree_id": result.record.id,
+        "removed_path": result.removed_path,
+        "branch_deleted": result.branch_deleted,
+        "branch": result.branch,
+        "status": result.record.status.value,
+    }
+
+
 __all__ = [
     "CleanupResult",
+    "cleanup_payload",
     "cleanup_worktree",
 ]

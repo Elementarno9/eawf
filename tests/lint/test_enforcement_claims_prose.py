@@ -6,10 +6,8 @@ enforcement the tree does not perform:
 * The sandbox boundary prose named an *egress proxy* as a live member. The
   proxy module exists, but ``start_egress_proxy`` has no production call site,
   so nothing constrains where a spawned agent dials.
-* The research steer / broadcast prose said operator notes shaped the round
-  they landed in. The loop reads the channel only when a round's findings are
-  reconciled, after every researcher of that round was spawned, so a note is
-  recorded against a round record and reaches no live session.
+* The research steer prose said operator notes shaped the round they landed
+  in. A note is recorded against a round record and reaches no live session.
 
 This lint pins the corrected prose against the code it describes: each check
 fails both when the correction is dropped from a source file and when the code
@@ -20,7 +18,6 @@ re-introducing an overstatement.
 
 from __future__ import annotations
 
-import ast
 import re
 from pathlib import Path
 
@@ -35,7 +32,7 @@ _SRC = _REPO_ROOT / "src" / "eawf"
 #: constrained by anything eawf starts today.
 _EGRESS_CLAIM = "outbound network is unrestricted until the provider-native sandbox lands"
 
-#: The one sentence every steer / broadcast surface must carry.
+#: The one sentence every steer surface must carry.
 _STEER_CLAIM = "never reach"
 
 #: Source files whose boundary prose must carry :data:`_EGRESS_CLAIM`.
@@ -45,12 +42,11 @@ _BOUNDARY_FILES: tuple[str, ...] = (
     "runtime/sandbox/jail.py",
 )
 
-#: Source files whose steer / broadcast prose must say notes are recorded and
+#: Source files whose steer prose must say notes are recorded and
 #: never reach a running round, paired with the symbol each claim sits on.
 _STEER_FILES: tuple[tuple[str, str], ...] = (
     ("kernel/state/models.py", "steer_notes"),
     ("kernel/store/kinds/research_round.py", "steer_notes"),
-    ("runtime/daemon/methods/research.py", "broadcast"),
 )
 
 #: The function that would start the UDS egress proxy. A production caller
@@ -106,7 +102,7 @@ def carries_steer_claim(text: str) -> bool:
     """Return whether *text* states a note reaches no running round.
 
     Args:
-        text: Source text of one steer / broadcast surface.
+        text: Source text of one steer surface.
 
     Returns:
         ``True`` when the corrected claim survives *text*'s line wrapping and
@@ -171,35 +167,10 @@ def test_egress_proxy_has_no_production_caller() -> None:
 
 @pytest.mark.parametrize(("relative", "symbol"), _STEER_FILES)
 def test_steer_prose_states_notes_never_reach_a_running_round(relative: str, symbol: str) -> None:
-    """Each steer / broadcast surface says the note reaches no running round."""
+    """Each steer surface says the note reaches no running round."""
     source = _read(relative)
     assert symbol in source
     assert carries_steer_claim(source)
-
-
-def test_research_round_channel_fold_runs_after_dispatch() -> None:
-    """The channel fold is read during reconcile, never before a round spawns.
-
-    The prose correction rests on call order: ``_channel_notes`` is called from
-    ``_reconcile``, which runs on a round's returned findings. Were it hoisted
-    ahead of the dispatch, notes WOULD reach the round and the corrected prose
-    would become the overstatement.
-    """
-    source = _read("runtime/daemon/methods/research.py")
-    tree = ast.parse(source)
-    reconcilers = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name == "_reconcile"
-    ]
-    assert reconcilers, "_reconcile not found in research.py"
-    called = {
-        node.func.id
-        for reconciler in reconcilers
-        for node in ast.walk(reconciler)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-    }
-    assert "_channel_notes" in called
 
 
 def test_boundary_files_all_exist() -> None:

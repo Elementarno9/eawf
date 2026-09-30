@@ -50,6 +50,9 @@ from eawf.kernel.runtime.control import (
     ControlRequestId,
     RunBinding,
 )
+from eawf.kernel.runtime.events import RunEventKind
+from eawf.kernel.runtime.provider import Digest
+from eawf.kernel.runtime.usage import BudgetPayload
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictNonNegativeInt, StrictPositiveInt
 from eawf.kernel.state.epoch2.run import Run, RunStatus
@@ -62,7 +65,7 @@ from eawf.kernel.store.ledger import (
     read_ledger_records,
 )
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.runtime.budget.notices import notices_path
+from eawf.runtime.budget.notices import notice_key_for, notices_path
 from eawf.runtime.budget.policy import (
     DEFAULT_ENFORCE,
     DEFAULT_MULTIPLIER,
@@ -83,6 +86,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.daemon.run_capture_updates import terminal_capture_updates
+from eawf.runtime.daemon.run_events import RunEventAppend
 from eawf.runtime.runtimes.metering import InFlightMeter, MeterReading, UsageSample, meter_stream
 
 logger = logging.getLogger(__name__)
@@ -102,6 +106,26 @@ _NOTICE_STATUS: Final = "noticed"
 
 #: The stable reason a Run terminalized by a confirmed control effect.
 _EFFECT_REASON_CODE: Final = "control-effect-confirmed"
+
+#: The axis a sealed token ceiling bounds: the capsule's one token cap is tested
+#: against the billed total, and the closed axis enum names its token axis so.
+_TOKEN_AXIS: Final = "input_tokens"
+
+
+class BudgetIdentity(BaseModel):
+    """What a Run's budget event names its ceiling by.
+
+    Attributes:
+        contract_digest: The compiled contract the ceiling came from.
+        policy_digest: The budget notice policy the crossing is judged under.
+        policy_revision: That policy's revision.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    contract_digest: Digest
+    policy_digest: Digest
+    policy_revision: StrictPositiveInt
 
 
 class _MeterParams(BaseModel):
@@ -285,10 +309,18 @@ class _BudgetLedger:
     hand two facts the same position and leave the ledger non-contiguous.
     """
 
-    def __init__(self, context: Epoch2RootContext, args: _MeterParams, *, now: datetime) -> None:
+    def __init__(
+        self,
+        context: Epoch2RootContext,
+        args: _MeterParams,
+        *,
+        now: datetime,
+        identity: BudgetIdentity | None = None,
+    ) -> None:
         self._context = context
         self._args = args
         self._now = now
+        self._identity = identity
         self._opened = False
         self.notice: BudgetNotice | None = None
         self.envelopes: list[Envelope] = []
@@ -316,6 +348,8 @@ class _BudgetLedger:
             recorded = standing if standing is not None else notice
             self.notice = recorded
             contract = _contract_digest(records, self._args.urn)
+            if self._identity is not None:
+                self._state_exhaustion(session, recorded, self._identity, contract=contract)
             facts = self._request(session, facts)
             facts, disposition = self._acknowledge(session, facts)
         # The run-ledger line is the control's receipt; the notice readers
@@ -333,6 +367,67 @@ class _BudgetLedger:
             f"request={self._args.control_request_ref!r} disposition={disposition.value}"
         )
         return disposition is ControlDisposition.ACCEPTED
+
+    def _state_exhaustion(
+        self,
+        session: RootSession,
+        notice: BudgetNotice,
+        identity: BudgetIdentity,
+        *,
+        contract: str | None,
+    ) -> None:
+        """State the crossing as ``budget_exhausted`` on the Run's own stream.
+
+        It is written before the control is opened, while the Run is still live: a line
+        landing after the terminal edge would be quarantined and derived from by nothing.
+        The notice key is the one the notice ledger files this crossing under. A line the
+        stream refuses is logged and dropped.
+        """
+        # the run verbs import the dispatch module, which imports this one
+        from eawf.runtime.daemon.methods.run import append_run_event_in_session
+
+        payload = BudgetPayload(
+            phase="exhausted",
+            axis=_TOKEN_AXIS,
+            basis="hard_limit",
+            band="limit_reached",
+            contract_digest=identity.contract_digest,
+            policy_digest=identity.policy_digest,
+            policy_revision=identity.policy_revision,
+            ceiling_value=notice.cap_tokens,
+            observed_value=notice.observed_tokens,
+            unit="tokens",
+            fraction=notice.observed_tokens / notice.cap_tokens,
+            measurement_quality="measured",
+            notice_key=notice_key_for(
+                scope_id=self._args.urn.entity_key,
+                axis="tokens",
+                basis="hard_limit",
+                contract_digest=contract,
+            ),
+        )
+        body = f"{notice.control_request_ref}:budget_exhausted"
+        try:
+            append_run_event_in_session(
+                session,
+                RunEventAppend(
+                    urn=self._args.urn,
+                    event_ref=f"EVT-{hashlib.sha256(body.encode('utf-8')).hexdigest()[:32]}",
+                    run_sequence=1,
+                    event_kind=RunEventKind.BUDGET_EXHAUSTED,
+                    provenance="daemon_observed",
+                    payload=payload,
+                    actor=self._args.actor,
+                    observed_at=notice.noticed_at,
+                ),
+                now=self._now,
+                at_tail=True,
+            )
+        except DaemonValidationError as error:
+            # the stream line reports the stop; losing it must never stop the reap
+            logger.warning(
+                f"_state_exhaustion refused run={self._args.urn.entity_key!r} cause={error}"
+            )
 
     def confirm(self, notice: BudgetNotice, termination: TerminationResult) -> None:
         """Record the reap the kill ladder observed and move the record.
@@ -528,6 +623,7 @@ class InFlightRunMeter:
         control_request_ref: ControlRequestId,
         idempotency_key: str,
         cap_tokens: int,
+        identity: BudgetIdentity | None = None,
     ) -> None:
         """Bind the meter to one Run and its hard token cap.
 
@@ -541,6 +637,9 @@ class InFlightRunMeter:
             idempotency_key: The key the terminal transition commits under.
             cap_tokens: The sealed token ceiling, enforced exactly: a
                 capsule ceiling is a limit, not a baseline to scale.
+            identity: The contract and notice policy a crossing names, so it is
+                stated as ``budget_exhausted`` on the Run's stream; ``None``
+                records the notice and the control alone.
 
         Raises:
             pydantic.ValidationError: An argument breaks the verb's own
@@ -557,6 +656,7 @@ class InFlightRunMeter:
             idempotency_key=idempotency_key,
         )
         self._meter = InFlightMeter()
+        self._identity = identity
         self.outcome: InFlightBudgetOutcome | None = None
 
     @property
@@ -597,7 +697,7 @@ class InFlightRunMeter:
             control_request_ref=self._args.control_request_ref,
             noticed_at=now,
             pgid=pgid,
-            ledger=_BudgetLedger(self._context, self._args, now=now),
+            ledger=_BudgetLedger(self._context, self._args, now=now, identity=self._identity),
         )
 
 
@@ -630,6 +730,7 @@ async def _meter_run_budget(
 
 __all__ = [
     "RUN_BUDGET_METER_METHOD",
+    "BudgetIdentity",
     "InFlightRunMeter",
     "RunBudgetAnswer",
 ]

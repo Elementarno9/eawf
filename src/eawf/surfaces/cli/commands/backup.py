@@ -13,7 +13,8 @@ Verbs:
   ``config.yaml`` and any legacy ``profile.yaml`` sidecar into a timestamped dir.
 - ``eawf backup list`` — list every snapshot, most-recent first.
 - ``eawf backup restore --ts <ISO>`` — restore the named snapshot (writes a
-  pre-restore safety copy of the live ``state.json`` first).
+  pre-restore safety copy of the live ``state.json`` first). Refused while a
+  daemon is reachable and on an epoch-2 tree.
 - ``eawf backup prune --keep <N>`` — keep the N most-recent snapshots.
 
 Exit codes:
@@ -26,6 +27,7 @@ Exit codes:
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -120,6 +122,37 @@ def backup_list(ctx: typer.Context) -> None:
     emit_json_or_text(payload, text, flags=flags)
 
 
+def _refuse_live_restore(state_path: Path) -> None:
+    """Refuse a restore the daemon or the epoch-2 fence has not let through.
+
+    A restore rewrites the daemon's canonical file below the record layer,
+    so it runs only while no daemon is reachable; the daemon accepts the
+    restored file by being started afterwards. A tree in epoch 2 keeps its
+    records in the selected generation, which a snapshot never holds, and
+    its ``state.json`` is the frozen epoch-1 document no writer may touch.
+
+    Raises:
+        StateConflict: A daemon is reachable (``kind="DaemonRunning"``).
+        ValidationError: The tree carries the epoch marker.
+    """
+    from eawf.kernel.state.io import LegacyOperationRemovedError, refuse_legacy_write
+    from eawf.runtime.daemon.runtime_dir import runtime_dir
+    from eawf.runtime.daemon.spawn import daemon_pid_if_ready
+
+    try:
+        refuse_legacy_write(state_path)
+    except LegacyOperationRemovedError as exc:
+        raise cli_errors.ValidationError(
+            str(exc), kind=cli_errors.LEGACY_OPERATION_REMOVED_KIND
+        ) from exc
+    if daemon_pid_if_ready(runtime_dir()) is not None:
+        raise cli_errors.StateConflict(
+            "daemon_running: a restore rewrites the daemon's canonical state file; run "
+            "`eawf daemon stop`, restore, then `eawf daemon start`",
+            kind="DaemonRunning",
+        )
+
+
 @backup_app.command("restore")
 def backup_restore(
     ctx: typer.Context,
@@ -136,6 +169,11 @@ def backup_restore(
     """
     flags: GlobalFlags = ctx.obj
     state_path, _reason = resolve_with_reason(workspace=flags.workspace)
+    try:
+        _refuse_live_restore(state_path)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
     try:
         result = restore_backup(state_path, ts=ts)
     except UnknownSnapshotError as exc:

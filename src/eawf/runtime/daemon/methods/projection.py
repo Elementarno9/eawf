@@ -81,6 +81,7 @@ from eawf.kernel.projection.settings import (
     build_settings_view,
 )
 from eawf.kernel.runtime.delegation import ChildCeilingBreach
+from eawf.kernel.runtime.sandbox_decision import sandbox_decisions
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import NonEmptyStr, StrictNonNegativeInt
@@ -95,8 +96,10 @@ from eawf.runtime.daemon.epoch2_root import RootIdentity
 from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY
 from eawf.runtime.daemon.methods import DaemonValidationError, Handler, MethodContext, register
 from eawf.runtime.daemon.methods.delivery_acceptance import BUNDLE_KEY_PREFIX
+from eawf.runtime.daemon.methods.host_question import open_question_rows
 from eawf.runtime.daemon.methods.permission import open_permission_rows
 from eawf.runtime.daemon.native_guard import require_native_call
+from eawf.runtime.daemon.verdict_observations import verdict_observation_rows
 from eawf.workflow.delivery.acceptance import (
     AcceptanceApproval,
     AcceptanceRefusedError,
@@ -226,7 +229,7 @@ def document_path(authority: RootAuthority) -> Path:
     return target.generation_path(generation_id) / GENERATION_DOCUMENT
 
 
-def _firehose_path(authority: RootAuthority) -> Path:
+def firehose_path(authority: RootAuthority) -> Path:
     """Return the firehose of a fence-cleared tree, where its commits are logged."""
     return store_path(authority.root / _TREE_ANCHOR_FILENAME, StoreKind.EVENT)
 
@@ -316,14 +319,41 @@ def _live_breach_rows(
     return tuple(rows)
 
 
+def _decision_rows(authority: RootAuthority) -> tuple[dict[str, Any], ...]:
+    """Return every sandbox decision on the receipt ledger, as a notice row, oldest first.
+
+    Every decision is read, not a recent handful: the sandbox log states how many
+    decisions there are and how many were denied, and a count taken over a truncated
+    read would claim a completeness it does not have.
+
+    Raises:
+        pydantic.ValidationError: A line claims to be a decision and does not validate
+            as one, which means the ledger is corrupt.
+    """
+    path = ledger_path(document_path(authority), Epoch2Collection.RECEIPT)
+    return tuple(
+        {
+            **decision.model_dump(mode="json"),
+            "key": decision.key,
+            "urn": str(decision.run_ref),
+            "revision": 1,
+            "status": decision.decision.value,
+        }
+        for decision in sandbox_decisions(read_ledger_records(path))
+    )
+
+
 def _ledger_rows_for(
     *, route: str, authority: RootAuthority, document: dict[str, Any]
 ) -> dict[Epoch2Collection, tuple[dict[str, Any], ...]]:
     """Return the ledger-held rows *route*'s merged collections contribute.
 
     A provider permission is filed on the run ledger rather than a ledger of its
-    own, so a route that renders permissions reads the open ones from there, and a
-    route that lists notices from the run ledger reads the live ceiling breaches.
+    own, so a route that renders permissions reads the open ones from there, as a
+    route that renders questions reads the open questions a host asked. A route
+    that lists notices reads them from the ledger they are filed on: the live ceiling
+    breaches from the run ledger, the sandbox decisions from the receipt ledger and
+    the audit verdicts of the Batches' current cycles from the Batch ledger.
     """
     rows: dict[Epoch2Collection, tuple[dict[str, Any], ...]] = {
         collection: _terminal_ledger_rows(authority=authority, collection=collection)
@@ -332,8 +362,15 @@ def _ledger_rows_for(
     }
     if Epoch2Collection.PERMISSION in ROUTE_COLLECTIONS.get(route, ()):
         rows[Epoch2Collection.PERMISSION] = open_permission_rows(authority)
-    if Epoch2Collection.RUN in ROUTE_NOTICE_COLLECTIONS.get(route, ()):
+    if Epoch2Collection.OPEN_QUESTION in ROUTE_COLLECTIONS.get(route, ()):
+        rows[Epoch2Collection.OPEN_QUESTION] = open_question_rows(authority)
+    notices = ROUTE_NOTICE_COLLECTIONS.get(route, ())
+    if Epoch2Collection.RUN in notices:
         rows[Epoch2Collection.RUN] = _live_breach_rows(authority, document)
+    if Epoch2Collection.RECEIPT in notices:
+        rows[Epoch2Collection.RECEIPT] = _decision_rows(authority)
+    if Epoch2Collection.BATCH in notices:
+        rows[Epoch2Collection.BATCH] = verdict_observation_rows(document_path(authority), document)
     return rows
 
 
@@ -535,7 +572,7 @@ def _reconnect(*, route: str, authority: RootAuthority, cursor: int) -> dict[str
             the client's cursor is one this tree could never have issued.
     """
     server_cursor = _document_cursor(read_document(document_path(authority)))
-    held, patches = _retained(_firehose_path(authority), route=route)
+    held, patches = _retained(firehose_path(authority), route=route)
     try:
         negotiation = negotiate_reconnect(
             route=route,
@@ -777,6 +814,7 @@ __all__ = [
     "AcceptanceParams",
     "ExportParams",
     "ReconnectParams",
+    "firehose_path",
     "read_export_report",
     "read_milestone_acceptance",
     "read_settings",

@@ -31,7 +31,7 @@ from eawf.platform.profiles.certification import profile_digest
 from eawf.platform.profiles.loader import list_profiles, load_profile
 from eawf.platform.profiles.trust import profile_sha256
 from eawf.platform.render_block import DISPATCH_SYSTEM_PROMPT_TARGET
-from eawf.runtime.daemon.methods.config import unset_layer_value
+from eawf.runtime.daemon.methods.config import set_layer_values, unset_layer_value
 from eawf.surfaces.tui.console.app import dispatcher_key
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
@@ -537,3 +537,116 @@ def test_ui053_a_typed_j_or_k_is_text_in_an_editor_field_never_a_motion(
 
     sr._press(fixture, view, session, ["Escape", "\\", *"jk"])
     assert session.set_filter == "jk"
+
+
+# ---------- a pair of keys valid only together is written in one write ----------
+
+_NAME = "vcs.coauthor.project.name"
+_EMAIL = "vcs.coauthor.project.email"
+
+
+def test_a_pair_editor_types_both_keys_and_sends_them_in_one_request(
+    tree: Path, fixture: Fixture
+) -> None:
+    view = _view(tree)
+    assert view.leaf(_NAME).editor == "pair"
+    link = sr._Link()
+    session = _on(view, _NAME)
+
+    sr._press(fixture, view, session, ["Enter", *"Jane Doe"])
+    body = _body(fixture, view, session)
+    assert "▸ name" in body
+    assert "Jane Doe▏" in body
+    assert "email" in body
+
+    sr._press(fixture, view, session, ["Enter"], send=link)
+    assert link.sent == []
+    assert "email empty · the pair is written whole or removed whole" in session.log[0].note
+
+    sr._press(fixture, view, session, ["ArrowDown", *"jane@example.com", "Enter"], send=link)
+    card = _card(session)
+    assert card.items[0].changes == ("name  – → Jane Doe", "email  – → jane@example.com")  # noqa: RUF001
+    sr._press(fixture, view, session, ["Enter"], send=link)
+
+    request = SettingRequest(
+        target=_NAME,
+        layer="repo",
+        value="Jane Doe",
+        together=((_EMAIL, "jane@example.com"),),
+    )
+    assert link.sent == [request]
+    operation = address_setting(request)
+    assert operation.method == "config.set_layer_values"
+    assert operation.params["writes"] == [
+        {"key_path": _NAME.split("."), "value": "Jane Doe"},
+        {"key_path": _EMAIL.split("."), "value": "jane@example.com"},
+    ]
+
+
+def test_a_pair_emptied_whole_removes_both_keys_in_one_request(
+    tree: Path, fixture: Fixture
+) -> None:
+    sr._write(
+        tree / ".ea" / "config.yaml",
+        yaml.safe_dump(
+            {"vcs": {"coauthor": {"project": {"name": "Jo", "email": "jo@example.com"}}}}
+        ),
+    )
+    view = _view(tree)
+    link = sr._Link()
+    session = _on(view, _EMAIL)
+
+    sr._press(fixture, view, session, ["Enter"])
+    edit = session.edit
+    assert edit is not None
+    assert edit["fields"] == [_NAME, _EMAIL]
+    assert edit["slots"] == {_NAME: "Jo", _EMAIL: "jo@example.com"}
+    sr._press(
+        fixture,
+        view,
+        session,
+        ["Backspace"] * len("jo@example.com") + ["ArrowUp", "Backspace", "Backspace"],
+    )
+    sr._press(fixture, view, session, ["Enter", "Enter"], send=link)
+
+    assert link.sent == [
+        SettingRequest(target=_EMAIL, layer="repo", unset=True, together=((_NAME, None),))
+    ]
+    writes = address_setting(link.sent[0]).params["writes"]
+    assert writes == [
+        {"key_path": _EMAIL.split("."), "unset": True},
+        {"key_path": _NAME.split("."), "unset": True},
+    ]
+
+
+def test_the_daemon_writes_a_pair_and_refuses_one_key_of_it_removed_alone(tree: Path) -> None:
+    daemon = sr._daemon_ctx(tree)
+
+    async def _call(method: str, params: dict[str, object]) -> dict[str, object]:
+        handlers = {
+            "config.set_layer_values": set_layer_values,
+            sr.SETTING_UNSET_METHOD: unset_layer_value,
+        }
+        if method in handlers:
+            try:
+                return await handlers[method](daemon, dict(params))
+            except ValueError as error:
+                raise sr.DaemonRpcError(-32602, str(error)) from error
+        return _view(tree).model_dump(mode="json")
+
+    seam = sr.ProjectionSeam(route="settings", scope_id=sr.SCOPE, state_path=None, repo_root=tree)
+    seam.binding.call = _call  # type: ignore[method-assign]
+    asyncio.run(seam.load_settings())
+    pair = SettingRequest(
+        target=_NAME, layer="repo", value="Jane Doe", together=((_EMAIL, "jane@example.com"),)
+    )
+
+    written = asyncio.run(seam.request(pair))
+    alone = asyncio.run(seam.request(SettingRequest(target=_EMAIL, layer="repo", unset=True)))
+
+    assert written.status is sr.OperationStatus.APPLIED
+    assert written.detail == f"{_NAME}, {_EMAIL} written at repo · settings re-read"
+    assert alone.status is sr.OperationStatus.REFUSED
+    assert f"config_section_invalid: {_EMAIL}: Field required" in alone.detail
+    stated = yaml.safe_load((tree / ".ea" / "config.yaml").read_text())
+    assert stated["vcs"]["coauthor"]["project"] == {"name": "Jane Doe", "email": "jane@example.com"}

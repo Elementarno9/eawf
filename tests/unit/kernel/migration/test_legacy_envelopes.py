@@ -43,6 +43,7 @@ from eawf.kernel.migration.epoch2.envelopes import (
     map_legacy_envelope,
 )
 from eawf.kernel.migration.epoch2.errors import MigrationDuplicateKeyError
+from eawf.kernel.migration.epoch2.memory import MemoryUnionCensus
 from eawf.kernel.migration.epoch2.origins import build_legacy_origin, source_digest
 from eawf.kernel.migration.epoch2.plan import CorpusImportPlan
 from eawf.kernel.migration.epoch2.rules import canonical_json
@@ -233,6 +234,7 @@ def test_envelope_import_plan_build_over_an_empty_document() -> None:
     plan = EnvelopeImportPlan.build(
         document={},
         audit_ledger_rows=(),
+        memory_store_rows=(),
         source_schema_version=SOURCE_SCHEMA_VERSION,
     )
 
@@ -245,6 +247,7 @@ def test_envelope_import_plan_build_over_a_single_row() -> None:
     plan = EnvelopeImportPlan.build(
         document={"worktrees": {"WT001": _worktree_row()}, "agent_sessions": None},
         audit_ledger_rows=(),
+        memory_store_rows=(),
         source_schema_version=SOURCE_SCHEMA_VERSION,
     )
 
@@ -257,6 +260,7 @@ def test_envelope_import_plan_build_skips_a_row_that_is_not_an_object() -> None:
     plan = EnvelopeImportPlan.build(
         document={"worktrees": {"WT001": "not a row", "": _worktree_row()}},
         audit_ledger_rows=(),
+        memory_store_rows=(),
         source_schema_version=SOURCE_SCHEMA_VERSION,
     )
 
@@ -273,6 +277,7 @@ def test_envelope_import_plan_build_imports_a_store_only_audit_once() -> None:
             {"id": ""},
             {"kind": "audit"},
         ),
+        memory_store_rows=(),
         source_schema_version=SOURCE_SCHEMA_VERSION,
     )
     audits = plan.for_ledger(LedgerCollection.AUDITS)
@@ -291,7 +296,11 @@ def test_alias_index_rejects_two_rows_claiming_one_alias() -> None:
         row=_worktree_row(),
         source_schema_version=SOURCE_SCHEMA_VERSION,
     )
-    plan = EnvelopeImportPlan(envelopes=(envelope, envelope), ledger_rows=())
+    plan = EnvelopeImportPlan(
+        envelopes=(envelope, envelope),
+        ledger_rows=(),
+        memory=MemoryUnionCensus.build(document_ids=(), store_ids=(), ledger_lines=0),
+    )
 
     with pytest.raises(MigrationDuplicateKeyError, match="WT001"):
         plan.alias_index()

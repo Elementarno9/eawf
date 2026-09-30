@@ -50,6 +50,7 @@ from eawf.kernel.projection.route_view import (
     RouteReadModel,
     build_route_read_model,
     check_field_tables,
+    invalidated_field,
     known_field,
     status_and,
     unknown_field,
@@ -57,11 +58,7 @@ from eawf.kernel.projection.route_view import (
 )
 from eawf.kernel.projection.truth import TruthField, TruthState
 from eawf.kernel.state.epoch2.base import NonEmptyStr
-from eawf.observability.reflect.run_report import (
-    DEFAULT_PARTS,
-    SANDBOX_UNAVAILABLE,
-    ReportPartName,
-)
+from eawf.observability.reflect.run_report import DEFAULT_PARTS, ReportPartName
 from eawf.workflow.delivery.acceptance import AcceptanceApproval
 
 logger = logging.getLogger(__name__)
@@ -145,8 +142,8 @@ REPORT_PARTS: Final[Mapping[ReportPartName, str]] = MappingProxyType(
         ReportPartName.SECRETS: (  # pragma: allowlist secret
             "policy redacts these; no report of any Run can carry them"
         ),
-        ReportPartName.SANDBOX_DECISIONS: f"left out unless --parts names it; "
-        f"{SANDBOX_UNAVAILABLE}",
+        ReportPartName.SANDBOX_DECISIONS: "left out unless --parts names it; every "
+        "authorisation the gateway decided for the Run's calls, allowed and denied",
     }
 )
 
@@ -428,11 +425,40 @@ def _signal(
     return ReadinessSignal(name=name, state=state, evidence=evidence)
 
 
+def _approval_signal(
+    model: RouteReadModel,
+    *,
+    bundle: MilestoneAcceptanceBundle | None,
+    approval: ApprovalBinding | None,
+    superseded: ApprovalBinding | None,
+) -> ReadinessSignal:
+    """Return the approval signal: met, voided by a bundle it was not given to, or not held."""
+    if approval is None and superseded is not None and bundle is not None:
+        urn, revision = _anchor(model)
+        reason = (
+            f"the approval bound digest {superseded.approved_digest}; the bundle held now is "
+            f"revision {bundle.revision} at digest {bundle.digest()}"
+        )
+        return ReadinessSignal(
+            name=APPROVAL_SIGNAL,
+            state=invalidated_field(urn=urn, revision=revision, reason=reason),
+            evidence=f"head {superseded.head_sha}",
+        )
+    return _signal(
+        name=APPROVAL_SIGNAL,
+        model=model,
+        value=None if approval is None else READINESS_MET,
+        evidence="" if approval is None else f"head {approval.head_sha}",
+        reason="no approval is held for this candidate",
+    )
+
+
 def readiness_signals(
     model: RouteReadModel,
     *,
     bundle: MilestoneAcceptanceBundle | None,
     approval: ApprovalBinding | None,
+    superseded: ApprovalBinding | None = None,
 ) -> tuple[ReadinessSignal, ...]:
     """Return the candidate's readiness, stated where the records in hand state it.
 
@@ -441,6 +467,8 @@ def readiness_signals(
         bundle: The sealed bundle of the Milestone the candidate is held on, when one is
             held; its blocking steps are what acceptance is not complete on.
         approval: The approval given to that bundle, when one is held.
+        superseded: An approval held for the Milestone whose digest the held bundle does
+            not carry; the approval signal then says it was voided.
 
     Returns:
         One signal per name in :data:`READINESS_SIGNALS`, in that order. Acceptance and
@@ -457,13 +485,7 @@ def readiness_signals(
             evidence="" if bundle is None else f"revision {bundle.revision}",
             reason="no acceptance bundle is held for this candidate",
         ),
-        _signal(
-            name=APPROVAL_SIGNAL,
-            model=model,
-            value=None if approval is None else READINESS_MET,
-            evidence="" if approval is None else f"head {approval.head_sha}",
-            reason="no approval is held for this candidate",
-        ),
+        _approval_signal(model, bundle=bundle, approval=approval, superseded=superseded),
         *(
             _signal(name=name, model=model, value=None, evidence="", reason=RC_GATE_REASON)
             for name in GATE_SIGNALS
@@ -604,7 +626,8 @@ def build_acceptance_view(
         ValueError: The projection is for a route this module states no read model for.
     """
     model = build_route_read_model(projection, family=FAMILY, fields=ACCEPTANCE_FIELDS)
-    bound = _approval_for(bundle, None if approval is None else approval_binding(approval))
+    given = None if approval is None else approval_binding(approval)
+    bound = _approval_for(bundle, given)
     if projection.route == MILESTONE_ROUTE:
         return _as(
             model,
@@ -619,7 +642,9 @@ def build_acceptance_view(
         return _as(
             model,
             ReleaseReadinessView,
-            signals=readiness_signals(model, bundle=bundle, approval=bound),
+            signals=readiness_signals(
+                model, bundle=bundle, approval=bound, superseded=given if bound is None else None
+            ),
             approval=bound,
         )
     if projection.route == RECEIPT_ROUTE:

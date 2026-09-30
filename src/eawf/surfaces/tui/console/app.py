@@ -19,10 +19,10 @@ import logging
 import shutil
 import subprocess
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from rich.segment import Segment
 from rich.style import Style
@@ -34,11 +34,10 @@ from textual.strip import Strip
 from textual.widget import Widget
 
 from eawf.kernel.config.schema import ToastVerbosity
-from eawf.kernel.delivery.integration import IntegrationConflict, IntegrationGeneration
-from eawf.kernel.delivery.receipts import ProofReceipt
 from eawf.kernel.projection.attention import delivered_revisions, deliveries
 from eawf.kernel.projection.compute import RouteProjection
 from eawf.kernel.projection.integration import INTEGRATION_ROUTES, build_integration_view
+from eawf.kernel.projection.liveness import HeldLiveness
 from eawf.kernel.projection.operations import OPERATIONS_ROUTES, build_operations_view
 from eawf.kernel.projection.registers import (
     ATTENTION_ROUTE,
@@ -47,6 +46,7 @@ from eawf.kernel.projection.registers import (
     build_register_view,
 )
 from eawf.kernel.projection.route_view import RouteReadModel
+from eawf.kernel.projection.run_timeline import RunTimeline
 from eawf.kernel.projection.settings import (
     SETTINGS_ROUTES,
     EffectiveSettingsView,
@@ -56,7 +56,6 @@ from eawf.kernel.projection.spine import NATIVE_ROUTES, SpineView, build_spine_v
 from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE, build_transcript_view
 from eawf.kernel.projection.verification import (
     VERIFICATION_ROUTES,
-    RuntimeTupleVerdict,
     build_verification_view,
 )
 from eawf.kernel.runtime.control import ControlDisposition
@@ -93,7 +92,7 @@ from eawf.surfaces.tui.console.header import CrumbRun, crumb_at
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS, ENTRY_ROUTE
 from eawf.surfaces.tui.console.mutation import settle
-from eawf.surfaces.tui.console.navigation import Ctx
+from eawf.surfaces.tui.console.navigation import Ctx, open_overlay
 from eawf.surfaces.tui.console.onboarding import FirstRun, register_workspace, registered_state
 from eawf.surfaces.tui.console.operations import (
     NO_PRINCIPAL_REASON,
@@ -431,16 +430,6 @@ class ConsoleApp(App[None]):
             transcript routes from the read model it holds; a console given none draws
             the prototype registers, which is the mode the tracked golden contract
             replays.
-        health_verdicts: The conformance verdicts the health route draws. A console
-            given none draws the unknown token for every tuple cell, which is the
-            honest answer while nothing has read the conformance store for it.
-        integration_generations: The Batch generations the Git surface draws, oldest
-            first. Generations are ledger lines rather than document rows, so they
-            arrive beside the projection under the same rule as the health verdicts.
-        integration_conflicts: The conflict frames the conflict card draws. A console
-            given none draws no hunk and says the Batch is not blocked.
-        proof_receipts: The receipts a receipt card may open, in record order. A console
-            given none opens no card and says the receipt is not held.
         chrome: The static tables a console given no fixture draws; the packaged chrome
             when omitted. A fixture carries its own chrome, so passing both is refused.
         gutter: The blank cells kept clear at each side of every row; the frame is laid
@@ -475,10 +464,6 @@ class ConsoleApp(App[None]):
         chrome: ConsoleChrome | None = None,
         verbose: bool = False,
         seam: ProjectionSeam | None = None,
-        health_verdicts: Sequence[RuntimeTupleVerdict] = (),
-        integration_generations: Sequence[IntegrationGeneration] = (),
-        integration_conflicts: Sequence[IntegrationConflict] = (),
-        proof_receipts: Sequence[ProofReceipt] = (),
         gutter: int = 0,
         theme: str = DEFAULT_THEME,
         toast_verbosity: ToastVerbosity = "important",
@@ -509,12 +494,8 @@ class ConsoleApp(App[None]):
         self.first_run = first_run
         if seam is not None:
             seam.watch(self._on_seam_patched)
-        self.health_verdicts = tuple(health_verdicts)
-        self.integration_generations = tuple(integration_generations)
-        self.integration_conflicts = tuple(integration_conflicts)
         # when the live reads of the route on screen were last read, on the console clock
         self._live_read_at = 0.0
-        self.proof_receipts = tuple(proof_receipts)
         self.session = Session()
         # the attention revisions already announced to this principal; ``None`` until the
         # first read, which seeds it so nothing already open is toasted after a restart
@@ -583,12 +564,29 @@ class ConsoleApp(App[None]):
         """Read the owed routes and repaint once any of them arrived."""
         seam = self.seam
         assert seam is not None, "only started with a seam"
-        if await seam.sync():
+        if loaded := await seam.sync():
             self.deliver_attention()
+            self._open_resolution(loaded)
             if self.is_running:
                 self.arrive()
         elif not seam.held_routes and seam.settings is None and self.is_running:
             self._land_offline()
+
+    def _open_resolution(self, loaded: tuple[str, ...]) -> None:
+        """Open the resolution card when the key the operator navigated to names nothing.
+
+        The card is the answer to the navigation that asked for the key, so it opens only
+        from the read that navigation owed, and only over a bare route.
+        """
+        from eawf.surfaces.tui.console.live_reads import RESOLUTION_READ
+
+        seam = self.seam
+        ending = seam.live(RESOLUTION_READ) if seam is not None else None
+        if RESOLUTION_READ not in loaded or ending is None or self.session.overlay is not None:
+            return
+        open_overlay(self.session, "resolution", subject=self.subject)
+        self.session.resolution_ending = ending
+        logger.info(f"resolution card opened ending={ending}")
 
     def _land_offline(self) -> None:
         """Open the offline entry frame: the daemon answered no read, so nothing is live.
@@ -747,22 +745,26 @@ class ConsoleApp(App[None]):
         route = projection.route
         if route in NATIVE_ROUTES:
             return build_spine_view(projection)
+        # the live reads pull the daemon's method registry in, as the seam does
+        from eawf.surfaces.tui.console import live_reads
+
+        def live(name: str) -> Any:
+            return self.seam.live(name) if self.seam is not None else None
+
         if route in VERIFICATION_ROUTES:
-            return build_verification_view(projection, verdicts=self.health_verdicts)
+            verdicts = live(live_reads.HEALTH_VERDICTS_READ) or ()
+            return build_verification_view(projection, verdicts=verdicts)
         if route in OPERATIONS_ROUTES:
             return build_operations_view(projection)
         if route in INTEGRATION_ROUTES:
             return build_integration_view(
                 projection,
-                generations=self.integration_generations,
-                conflicts=self.integration_conflicts,
+                generations=live(live_reads.GENERATIONS_READ) or (),
+                conflicts=live(live_reads.CONFLICTS_READ) or (),
             )
         if route == TRANSCRIPT_ROUTE:
-            # the live reads pull the daemon's method registry in, as the seam does
-            from eawf.surfaces.tui.console.live_reads import TRANSCRIPT_READ, HeldTranscript
-
-            lines = self.seam.live(TRANSCRIPT_READ) if self.seam is not None else None
-            if not isinstance(lines, HeldTranscript):
+            lines = live(live_reads.TRANSCRIPT_READ)
+            if not isinstance(lines, live_reads.HeldTranscript):
                 return build_transcript_view(projection)
             return build_transcript_view(
                 projection,
@@ -778,7 +780,7 @@ class ConsoleApp(App[None]):
                 projection,
                 bundle=held.bundle if held is not None else None,
                 approval=held.approval if held is not None else None,
-                receipts=self.proof_receipts,
+                receipts=live(live_reads.RECEIPTS_READ) or (),
             )
         return None
 
@@ -817,6 +819,7 @@ class ConsoleApp(App[None]):
         self._sync_conn()
         w, h = self.frame_size
         register = self.register_view()
+        liveness, timeline = self._liveness_and_timeline()
         return View(
             session=self.session,
             fixture=self.fixture,
@@ -834,11 +837,34 @@ class ConsoleApp(App[None]):
             rows=self.seam.held_rows() if self.seam is not None else (),
             notices=self.seam.notices if self.seam is not None else (),
             decisions=self.seam.decisions if self.seam is not None else None,
+            liveness=liveness,
+            timeline=timeline,
             principal=self.principal(),
             # a held clock reads no wall time, so a held frame is its authored instant
             now=self.console_clock.wall() if self.seam is not None and not self.held else None,
             scope_name=self.seam.scope_name if self.seam is not None else "",
             gutter=self.gutter,
+            live=self._live_answers(),
+        )
+
+    def _live_answers(self) -> dict[str, object]:
+        """Return the answers of the live reads the route on screen holds, by read name."""
+        seam = self.seam
+        if seam is None:
+            return {}
+        return {name: seam.live(name) for name in seam.live_on_screen()}
+
+    def _liveness_and_timeline(self) -> tuple[HeldLiveness | None, RunTimeline | None]:
+        """Return the stall read and the Run's timeline rows the route on screen holds."""
+        if self.seam is None:
+            return None, None
+        # the live reads pull the daemon's method registry in, as the seam does
+        from eawf.surfaces.tui.console.live_reads import LIVENESS_READ, RUN_TIMELINE_READ
+
+        liveness, timeline = self.seam.live(LIVENESS_READ), self.seam.live(RUN_TIMELINE_READ)
+        return (
+            liveness if isinstance(liveness, HeldLiveness) else None,
+            timeline if isinstance(timeline, RunTimeline) else None,
         )
 
     def principal(self) -> str | None:
@@ -956,6 +982,7 @@ class ConsoleApp(App[None]):
             recover=self.recover if self.seam is not None else None,
             first_run=self.first_run,
             onboard=self.onboard if self.first_run is not None else None,
+            live=view.live,
         )
 
     def _tree_root(self) -> Path | None:

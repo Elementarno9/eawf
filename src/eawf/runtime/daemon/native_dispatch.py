@@ -52,6 +52,7 @@ from eawf.kernel.config.providers import (
     parse_provider_configuration,
 )
 from eawf.kernel.economics.governor import AdmissionDecision, EconomicsPolicy
+from eawf.kernel.economics.notice_policy import BudgetNoticePolicy
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.runtime.capsule import AuthorityCapsule, CapsuleBudget, StopCondition
 from eawf.kernel.runtime.compiled import (
@@ -59,6 +60,7 @@ from eawf.kernel.runtime.compiled import (
     PolicyOverlay,
     RunCompileRequest,
     RuntimeBinding,
+    canonical_digest,
 )
 from eawf.kernel.runtime.control import TERMINAL_RUN_STATUSES, ControlFact, RunBinding
 from eawf.kernel.runtime.delegation import child_grant
@@ -98,11 +100,11 @@ from eawf.runtime.daemon.admission import (
     load_economics,
 )
 from eawf.runtime.daemon.delegation import delegation_parent
-from eawf.runtime.daemon.dispatch_stream import message_sink, state_spawn_failure
+from eawf.runtime.daemon.dispatch_stream import message_sink, state_spawn_failure, usage_sink
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError
-from eawf.runtime.daemon.methods.run_budget import InFlightRunMeter
+from eawf.runtime.daemon.methods.run_budget import BudgetIdentity, InFlightRunMeter
 from eawf.runtime.daemon.run_events import (
     hello_facts_of,
     next_hello_sequence,
@@ -1004,13 +1006,15 @@ async def launch_worker(
     capsule: AuthorityCapsule,
     lease: WorkLease,
     launchers: Mapping[str, NativeRunLauncher],
+    notice_policy: BudgetNoticePolicy,
     now: datetime,
 ) -> tuple[DispatchAttempt, NativeLaunchOutcome | None]:
     """Start the provider process with the compiled spec, once.
 
     An attempt already at the spawned stage is not launched again: the
     provider accepted it, and starting a second process would give one
-    attempt identity two workers.
+    attempt identity two workers. A crossing of the Run's token cap is
+    judged under *notice_policy*.
 
     Raises:
         DaemonValidationError: No launcher serves the compiled provider,
@@ -1029,7 +1033,12 @@ async def launch_worker(
         sequence = next_hello_sequence(
             hello_facts_of(read_ledger_records(run_ledger(session)), args.urn)
         )
-    meter = run_meter(context, args, attempt=attempt, capsule=capsule)
+    identity = BudgetIdentity(
+        contract_digest=spec.contract_digest,
+        policy_digest=canonical_digest(notice_policy.model_dump(mode="json")),
+        policy_revision=notice_policy.revision,
+    )
+    meter = run_meter(context, args, attempt=attempt, capsule=capsule, identity=identity)
     workspace = workspace_path(context, handle=lease.workspace_handle)
     before = await _worker_tree(workspace)
     try:
@@ -1041,7 +1050,13 @@ async def launch_worker(
                 workspace=workspace,
                 prompt=args.prompt,
                 hello_sequence=sequence,
-                usage_sink=None if meter is None else meter.observe,
+                usage_sink=usage_sink(
+                    context,
+                    args.urn,
+                    actor=args.actor,
+                    attempt_ref=attempt.attempt_ref,
+                    meter=meter,
+                ),
                 message_sink=message_sink(
                     context, args.urn, actor=args.actor, attempt_ref=attempt.attempt_ref
                 ),
@@ -1139,12 +1154,13 @@ def run_meter(
     *,
     attempt: DispatchAttempt,
     capsule: AuthorityCapsule,
+    identity: BudgetIdentity,
 ) -> InFlightRunMeter | None:
     """Return the in-flight meter of a capped Run, or ``None`` when uncapped.
 
     The control and the transition key are derived from the attempt, so a
     dispatch resumed after a lost daemon opens the same control instead of
-    a second one.
+    a second one. A crossing names its ceiling by *identity*.
     """
     cap = capsule.budget.tokens
     if cap is None:
@@ -1157,6 +1173,7 @@ def run_meter(
         control_request_ref=f"CTL-{body}",
         idempotency_key=f"budget-{attempt.attempt_ref}",
         cap_tokens=cap,
+        identity=identity,
     )
 
 
@@ -1269,6 +1286,7 @@ async def dispatch_run(
         capsule=capsule,
         lease=lease,
         launchers=table,
+        notice_policy=economics.notice_policy,
         now=now,
     )
     if outcome is None:

@@ -137,7 +137,8 @@ def _invoke(*args: str) -> Any:
 
 def _payload(result: Any) -> dict[str, Any]:
     """Parse the JSON envelope a successful command printed."""
-    return json.loads(result.stdout)
+    payload = json.loads(result.stdout)
+    return payload["result"] if "operation" in payload else payload
 
 
 def _add(registry_path: Path, key: str, *, home: str, members: tuple[str, ...] = ()) -> Any:

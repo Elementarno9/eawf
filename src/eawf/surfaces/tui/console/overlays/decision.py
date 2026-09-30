@@ -500,7 +500,8 @@ def _release_status(value: str | None) -> ReleaseStatus | None:
 def _signal_state(signal: ReadinessSignal) -> str:
     if signal.state.state is TruthState.KNOWN:
         return signal.state.value or ""
-    return f"{UNKNOWN} unknown"
+    absent = signal.state.state.value
+    return f"{TRUTH[absent].unicode} {absent}"
 
 
 def _remedy(signal: ReadinessSignal) -> str:

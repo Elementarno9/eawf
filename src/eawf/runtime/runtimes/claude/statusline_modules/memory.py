@@ -3,7 +3,7 @@
 On an epoch-1 tree, reads ``state.memory_index`` (cache projection) for the
 entry count and the byte size of ``store/memory.jsonl`` for the total. On an
 epoch-2 tree the cutover moved every memory note into the selected
-generation's memory ledger, so the count is the ledger's distinct records
+generation's memory ledger, so the count is the notes the ledger stands at
 and the size is the ledger's. Output is ``mem:<count>@<bytes>``. An
 unreadable source, or no memory at all, renders ``mem:n/a(<reason>)`` with
 ``status="missing"``.
@@ -18,7 +18,7 @@ from typing import Any, Final
 from pydantic import ValidationError
 
 from eawf.kernel.projection.truth import TruthKind
-from eawf.kernel.store.ledger import LedgerError, effective_records, read_ledger_records
+from eawf.kernel.store.ledger import LedgerError
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.runtimes.claude.statusline_modules._document import (
@@ -84,13 +84,14 @@ def _ledger_memory(state_path: Path) -> StatuslineSegment:
     if isinstance(document_path, str):
         return unavailable_segment(_MODULE, _LABEL, document_path, _LEDGER_SOURCE)
     path = ledger_path(document_path, Epoch2Collection.MEMORY)
+    from eawf.platform.memory.book import read_book
+
     try:
-        records = effective_records(read_ledger_records(path))
-        size = path.stat().st_size if records else 0
+        count = len(read_book(path))
+        size = path.stat().st_size if count else 0
     except (OSError, LedgerError, ValidationError) as exc:
         logger.debug(f"_ledger_memory memory-ledger-unreadable error={exc}")
         return unavailable_segment(_MODULE, _LABEL, "memory-ledger-unreadable", _LEDGER_SOURCE)
-    count = len({record.record_key for record in records})
     if count == 0:
         return unavailable_segment(_MODULE, _LABEL, "no-memory-records", _LEDGER_SOURCE)
     return sourced_segment(_MODULE, _LABEL, f"{count}@{_format_bytes(size)}", _LEDGER_SOURCE)

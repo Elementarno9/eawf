@@ -8,11 +8,13 @@ none, under an explicit unknown-reason sub-bucket rather than the largest one. A
 states no status lands in no bucket and is counted apart, so the buckets never claim a Run
 they were not told about.
 
-Three buckets are read off records the Run register does not carry -- a control outcome,
-a heartbeat, a delivery stage -- so their count is unknown and names why, and never a
-zero standing in for a count nobody took. Because a heartbeat is not on the row, a stale
-Run cannot yet be told from a running one; the ``running`` count is therefore stated as
-an estimate, so it is never read as exact while it may still hold a Run that went quiet.
+Two buckets are read off records the Run register does not carry -- a control outcome
+and a delivery stage -- so their count is unknown and names why, and never a zero standing
+in for a count nobody took. Whether a running Run went quiet is not on the row either: it
+is the daemon's stall read, which the caller hands in. Held, a running Run a stall stands
+over lands under ``lost or stale`` and not under ``running``; not held, ``lost or stale``
+is unknown naming the read, and ``running`` is stated as an estimate, so it is never read
+as exact while it may still hold a Run that went quiet.
 
 Every count, the parent's included, is derived from the rows when asked for and never
 stored beside them, so the rail, the strip and the summary line cannot disagree.
@@ -76,7 +78,6 @@ UNSTATED_BUCKETS: Final[Mapping[ActivityExceptionBucket, str]] = MappingProxyTyp
         ActivityExceptionBucket.UNKNOWN_CONTROL_OUTCOME: (
             "a control outcome is on the control ledger, not the Run register"
         ),
-        ActivityExceptionBucket.LOST_STALE: "a Run's heartbeat is not on the Run register",
         ActivityExceptionBucket.CHECKING_INTEGRATING: (
             "a delivery stage is on the Batch, not the Run register"
         ),
@@ -85,6 +86,9 @@ UNSTATED_BUCKETS: Final[Mapping[ActivityExceptionBucket, str]] = MappingProxyTyp
 
 #: Why ``running`` is an estimate: a stale Run cannot be told from a running one yet.
 RUNNING_ESTIMATE_REASON: Final = "a stale Run cannot be told from a running one without a heartbeat"
+
+#: Why ``lost or stale`` has no count before the stall read arrives.
+LOST_STALE_UNREAD_REASON: Final = "the daemon's stall read has not arrived"
 
 #: What a Run's status must be for its record to name a reason at all.
 _SUSPENDED: Final = RunStatus.SUSPENDED.value
@@ -153,14 +157,21 @@ class ActivityGrouping:
         return tuple(c for c in self.counts if not c.sub)
 
 
-def _placed(row: ProjectionRow) -> tuple[ActivityExceptionBucket, SuspensionReason | None] | None:
-    """Return the bucket and suspension reason of one row, or ``None`` when it states none."""
+def _placed(
+    row: ProjectionRow, stalled: frozenset[str]
+) -> tuple[ActivityExceptionBucket, SuspensionReason | None] | None:
+    """Return the bucket and suspension reason of one row, or ``None`` when it states none.
+
+    A running Run a stall stands over is lost or stale, never running.
+    """
     if row.status.state is not TruthState.KNOWN or row.status.value is None:
         return None
     try:
         status = RunStatus(row.status.value)
     except ValueError:
         return None
+    if status is RunStatus.RUNNING and row.key in stalled:
+        return ActivityExceptionBucket.LOST_STALE, None
     reason: SuspensionReason | None = None
     if row.status.value == _SUSPENDED and row.suspension_reason is not None:
         try:
@@ -170,11 +181,14 @@ def _placed(row: ProjectionRow) -> tuple[ActivityExceptionBucket, SuspensionReas
     return STATUS_BUCKETS[status], reason
 
 
-def group_runs(register: RegisterView) -> ActivityGrouping:
+def group_runs(register: RegisterView, stalled: frozenset[str] | None = None) -> ActivityGrouping:
     """Return the Run register partitioned into the eight buckets.
 
     Args:
         register: The Activity route's read model.
+        stalled: The keys of the Runs a stall stands over, from the daemon's stall read;
+            ``None`` before that read arrives, which leaves ``lost or stale`` unknown and
+            ``running`` an estimate.
 
     Returns:
         Every bucket's count, the sub-buckets of ``needs operator`` after it, and the
@@ -189,11 +203,13 @@ def group_runs(register: RegisterView) -> ActivityGrouping:
             f"{ACTIVITY_ROUTE!r} route's register"
         )
     revision = revision_of(register)
-    placed = [_placed(row) for row in register.rows]
+    placed = [_placed(row, stalled or frozenset()) for row in register.rows]
     landed = [p for p in placed if p is not None]
     counts: list[ActivityCount] = []
     for bucket in ActivityExceptionBucket:
         unstated = UNSTATED_BUCKETS.get(bucket)
+        if bucket is ActivityExceptionBucket.LOST_STALE and stalled is None:
+            unstated = LOST_STALE_UNREAD_REASON
         if unstated is not None:
             counts.append(
                 ActivityCount(
@@ -204,7 +220,7 @@ def group_runs(register: RegisterView) -> ActivityGrouping:
                 )
             )
             continue
-        estimate = bucket is ActivityExceptionBucket.RUNNING
+        estimate = bucket is ActivityExceptionBucket.RUNNING and stalled is None
         counts.append(
             ActivityCount(
                 bucket=bucket,
@@ -240,6 +256,7 @@ def group_runs(register: RegisterView) -> ActivityGrouping:
 
 __all__ = [
     "ACTIVITY_ROUTE",
+    "LOST_STALE_UNREAD_REASON",
     "RUNNING_ESTIMATE_REASON",
     "STATUS_BUCKETS",
     "UNSTATED_BUCKETS",

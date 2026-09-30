@@ -505,7 +505,7 @@ def test_preflight_cli_reports_pass_for_every_required_row_but_the_version(
 
     result = CliRunner().invoke(app, ["--json", "release", "preflight", DEV1_VERSION])
 
-    payload = json.loads(result.output)
+    payload = json.loads(result.output)["result"]
     required = set(payload["required_signals"])
     assert required == {signal.value for signal in REQUIRED_DEV1_SIGNALS}
     reported = {row["signal"]: row["status"] for row in payload["signals"]}

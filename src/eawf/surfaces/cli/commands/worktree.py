@@ -30,17 +30,14 @@ This module also wires the wave-centric automation verbs onto the
   never drives a close (the wave is closed already); it only replays
   commits and tears the worktree down.
 
-Most mutating handlers run inside
-:func:`eawf.surfaces.cli._mutation.state_transaction` (state-side serialisation)
-*and* :func:`eawf.runtime.worktree.locks.worktree_registry_lock` (git-side
-registry serialisation). The two locks compose without re-entry: the
-state lock guards ``state.json`` and the registry lock guards
-``.git/worktrees/<name>``; they target disjoint paths.
-``wave land``, ``wave land-batch``, ``wave autoland`` and ``worktree
-reconcile`` are daemon-owned exceptions: their state writes route through
-``state.wave_land`` / ``state.wave_land_batch`` / ``state.wave_autoland``
-/ ``state.worktree_reconcile`` so the daemon remains the canonical state
-mutator.
+The mutating handlers write through the daemon: ``worktree merge-back``
+and ``worktree cleanup`` route to ``state.worktree_merge_back`` /
+``state.worktree_cleanup``, and the land and reconcile verbs to
+``state.wave_land`` / ``state.wave_land_batch`` / ``state.wave_autoland`` /
+``state.worktree_reconcile``. Each takes the git-side
+:func:`eawf.runtime.worktree.locks.worktree_registry_lock` before the state
+lock; the two guard disjoint paths. The in-process writer runs only under
+the explicit daemonless carve-out.
 """
 
 from __future__ import annotations
@@ -140,8 +137,7 @@ def worktree_merge_back_cmd(
     ] = False,
 ) -> None:
     """Replay worktree commits onto the parent branch."""
-    from eawf.runtime.worktree import merge_back, worktree_registry_lock
-    from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.surfaces.cli import _dispatch
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave):
@@ -153,22 +149,71 @@ def worktree_merge_back_cmd(
     try:
         state_path = _resolve_state_path(flags)
         repo_root = _resolve_repo_root(state_path)
+        payload = _dispatch.call_upkeep(
+            "state.worktree_merge_back",
+            {
+                "repo_root": str(repo_root),
+                "wave_id": wave,
+                "strategy": strategy,
+                "target": target,
+                "continue_": continue_,
+                "abort": abort,
+            },
+            flags=flags,
+            verb="worktree merge-back",
+            local=lambda: _merge_back_locally(
+                state_path,
+                repo_root,
+                wave=wave,
+                strategy=strategy,
+                target=target,
+                continue_=continue_,
+                abort=abort,
+            ),
+        )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
 
-    result = None
-    # Lock ordering invariant: every worktree mutator acquires the
-    # registry lock FIRST, then the state-transaction lock. The two
-    # target disjoint paths so they never deadlock on themselves, but
-    # mixing the order across handlers would deadlock against a sibling
-    # mutator holding the opposite pair. Always: registry → state.
-    try:
-        with (
-            worktree_registry_lock(repo_root, timeout=5.0),
-            state_transaction(state_path) as state,
-        ):
-            result = merge_back(
+    if payload["status"] == "conflicted":
+        conflict = payload["conflict"]
+        text = (
+            f"merge-back conflict wave={wave} strategy={payload['strategy']} "
+            f"files={conflict['files']}"
+        )
+    else:
+        text = (
+            f"merge-back wave={wave} strategy={payload['strategy']} "
+            f"merged={payload['merged_commit']} target={payload['target_branch']}"
+        )
+    emit_json_or_text(payload, text, flags=flags)
+
+
+def _merge_back_locally(
+    state_path: Path,
+    repo_root: Path,
+    *,
+    wave: str,
+    strategy: str,
+    target: str | None,
+    continue_: bool,
+    abort: bool,
+) -> dict[str, Any]:
+    """Run one merge-back in process, under the daemonless carve-out.
+
+    Lock order matches every worktree mutator: the registry lock first,
+    then the state lock, so no two mutators ever hold the pair crossed.
+    """
+    from eawf.runtime.worktree import merge_back, worktree_registry_lock
+    from eawf.runtime.worktree.merge_back import merge_back_payload
+    from eawf.surfaces.cli._mutation import state_transaction
+
+    with (
+        worktree_registry_lock(repo_root, timeout=5.0),
+        state_transaction(state_path) as state,
+    ):
+        return merge_back_payload(
+            merge_back(
                 state,
                 repo_root=repo_root,
                 wave_id=wave,
@@ -177,45 +222,7 @@ def worktree_merge_back_cmd(
                 continue_=continue_,
                 abort=abort,
             )
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-        return
-
-    assert result is not None
-    payload: dict[str, Any]
-    if result.conflicted:
-        payload = {
-            "worktree_id": result.record.id,
-            "strategy": result.strategy,
-            "conflict": {
-                "stage": result.strategy,
-                "commit": result.conflict_commit,
-                "files": result.conflict_files,
-                "next_step": (
-                    "resolve in parent worktree, then "
-                    "`eawf worktree merge-back --wave ... --continue`"
-                ),
-            },
-            "status": "conflicted",
-        }
-        text = (
-            f"merge-back conflict wave={wave} strategy={result.strategy} "
-            f"files={result.conflict_files}"
         )
-    else:
-        payload = {
-            "worktree_id": result.record.id,
-            "strategy": result.strategy,
-            "picked_commits": result.picked_commits,
-            "target_branch": result.target_branch,
-            "merged_commit": result.merged_commit,
-            "status": result.record.status.value,
-        }
-        text = (
-            f"merge-back wave={wave} strategy={result.strategy} "
-            f"merged={result.merged_commit} target={result.target_branch}"
-        )
-    emit_json_or_text(payload, text, flags=flags)
 
 
 # ---- worktree path-fix ------------------------------------------------------
@@ -241,8 +248,7 @@ def worktree_cleanup_cmd(
     ] = False,
 ) -> None:
     """Tear down the worktree directory + per-wave branch."""
-    from eawf.runtime.worktree import cleanup_worktree, worktree_registry_lock
-    from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.surfaces.cli import _dispatch
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave):
@@ -254,45 +260,48 @@ def worktree_cleanup_cmd(
     try:
         state_path = _resolve_state_path(flags)
         repo_root = _resolve_repo_root(state_path)
+        payload = _dispatch.call_upkeep(
+            "state.worktree_cleanup",
+            {
+                "repo_root": str(repo_root),
+                "wave_id": wave,
+                "force": force,
+                "keep_branch": keep_branch,
+            },
+            flags=flags,
+            verb="worktree cleanup",
+            local=lambda: _cleanup_locally(
+                state_path, repo_root, wave=wave, force=force, keep_branch=keep_branch
+            ),
+        )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
-
-    result = None
-    # Lock ordering invariant: every worktree mutator acquires the
-    # registry lock FIRST, then the state-transaction lock. The two
-    # target disjoint paths so they never deadlock on themselves, but
-    # mixing the order across handlers would deadlock against a sibling
-    # mutator holding the opposite pair. Always: registry → state.
-    try:
-        with (
-            worktree_registry_lock(repo_root, timeout=5.0),
-            state_transaction(state_path) as state,
-        ):
-            result = cleanup_worktree(
-                state,
-                repo_root=repo_root,
-                wave_id=wave,
-                force=force,
-                keep_branch=keep_branch,
-            )
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-        return
-
-    assert result is not None
     emit_json_or_text(
-        {
-            "worktree_id": result.record.id,
-            "removed_path": result.removed_path,
-            "branch_deleted": result.branch_deleted,
-            "branch": result.branch,
-            "status": result.record.status.value,
-        },
-        f"worktree cleanup wave={wave} branch={result.branch} "
-        f"branch_deleted={result.branch_deleted}",
+        payload,
+        f"worktree cleanup wave={wave} branch={payload['branch']} "
+        f"branch_deleted={payload['branch_deleted']}",
         flags=flags,
     )
+
+
+def _cleanup_locally(
+    state_path: Path, repo_root: Path, *, wave: str, force: bool, keep_branch: bool
+) -> dict[str, Any]:
+    """Run one cleanup in process, under the daemonless carve-out (registry lock first)."""
+    from eawf.runtime.worktree import cleanup_worktree, worktree_registry_lock
+    from eawf.runtime.worktree.cleanup import cleanup_payload
+    from eawf.surfaces.cli._mutation import state_transaction
+
+    with (
+        worktree_registry_lock(repo_root, timeout=5.0),
+        state_transaction(state_path) as state,
+    ):
+        return cleanup_payload(
+            cleanup_worktree(
+                state, repo_root=repo_root, wave_id=wave, force=force, keep_branch=keep_branch
+            )
+        )
 
 
 # ---- worktree reconcile -----------------------------------------------------

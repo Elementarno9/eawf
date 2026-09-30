@@ -1,8 +1,9 @@
 """``eawf campaign new|run|cancel`` forward to the native Campaign verbs.
 
 Each verb is a dispatch: ``new`` sends the brief to ``runtime.campaign.start``, ``run``
-names the Campaign to ``runtime.campaign.run``, and ``cancel`` reads the Campaign's
-revision back before closing it through ``runtime.campaign.close``. The daemon is
+names the Campaign to ``runtime.campaign.run``, and ``cancel`` resolves the Campaign's
+reference, then closes it through ``runtime.campaign.close`` at the caller's
+revision rather than the one it read. The daemon is
 replaced by a recorder, so nothing here reaches a socket.
 """
 
@@ -81,7 +82,7 @@ def test_campaign_new_sends_the_brief_with_its_budget(
             },
         )
     ]
-    assert orjson.loads(result.stdout)["record"]["key"] == "CAM-0001"
+    assert orjson.loads(result.stdout)["result"]["record"]["key"] == "CAM-0001"
 
 
 def test_campaign_run_names_the_campaign_and_its_width(
@@ -97,10 +98,13 @@ def test_campaign_run_names_the_campaign_and_its_width(
     ]
 
 
-def test_campaign_cancel_closes_against_the_revision_it_read(
+def test_campaign_cancel_closes_against_the_callers_revision(
     tmp_path: Path, sent: list[tuple[str, dict[str, Any]]]
 ) -> None:
-    result = _invoke(tmp_path, "cancel", "CAM-0001", "--actor", "OP-0001", "--reason", "superseded")
+    result = _invoke(
+        tmp_path, "cancel", "CAM-0001", "--actor", "OP-0001", "--reason", "superseded",
+        "--expected-revision", "9",
+    )  # fmt: skip
     assert result.exit_code == exit_codes.OK, result.output
     assert [method for method, _params in sent] == [
         "projection.campaign.view",
@@ -109,7 +113,7 @@ def test_campaign_cancel_closes_against_the_revision_it_read(
     assert sent[1][1] == {
         "actor": "OP-0001",
         "urn": CAMPAIGN,
-        "expected_revision": 7,
+        "expected_revision": 9,
         "to_status": "cancelled",
         "reason": "superseded",
     }

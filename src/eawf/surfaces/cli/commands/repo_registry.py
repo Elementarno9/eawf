@@ -200,6 +200,7 @@ def _handle_idempotent_readd(
     target: Path,
     set_active: bool,
     flags: GlobalFlags,
+    idempotency_key: str | None,
 ) -> None:
     """Handle a same-code/same-path re-add: optionally re-activate, then report.
 
@@ -215,7 +216,7 @@ def _handle_idempotent_readd(
             active_code=derived_code,
             repos=dict(registry.repos),
         )
-        _persist_registry_or_exit(updated, target, flags=flags)
+        _persist_registry_or_exit(updated, target, flags=flags, idempotency_key=idempotency_key)
     emit_json_or_text(
         {
             "code": derived_code,
@@ -239,6 +240,7 @@ def _insert_new_repo_entry(
     target: Path,
     set_active: bool,
     flags: GlobalFlags,
+    idempotency_key: str | None,
 ) -> None:
     """Insert a fresh registry entry, persist, and emit the success envelope."""
     from eawf.platform.registry import Registry, RegistryRepoEntry
@@ -257,7 +259,7 @@ def _insert_new_repo_entry(
         active_code=derived_code if set_active else registry.active_code,
         repos=new_repos,
     )
-    _persist_registry_or_exit(updated, target, flags=flags)
+    _persist_registry_or_exit(updated, target, flags=flags, idempotency_key=idempotency_key)
     emit_json_or_text(
         {
             "code": derived_code,
@@ -320,6 +322,10 @@ def repo_add_cmd(
             help="Override the default ``~/.eawf/registry.json`` (mostly for tests).",
         ),
     ] = None,
+    idempotency_key: Annotated[
+        str | None,
+        typer.Option("--idempotency-key", help="Retry key the registry write is filed under."),
+    ] = None,
 ) -> None:
     """Explicitly add/register a repo to the user-scope registry.
 
@@ -374,6 +380,7 @@ def repo_add_cmd(
             target=target,
             set_active=set_active,
             flags=flags,
+            idempotency_key=idempotency_key,
         )
         return
     if existing is not None and existing.path != str(resolved_path):
@@ -394,6 +401,7 @@ def repo_add_cmd(
         target=target,
         set_active=set_active,
         flags=flags,
+        idempotency_key=idempotency_key,
     )
 
 
@@ -412,6 +420,10 @@ def repo_remove_cmd(
             "--registry-path",
             help="Override the default ``~/.eawf/registry.json`` (mostly for tests).",
         ),
+    ] = None,
+    idempotency_key: Annotated[
+        str | None,
+        typer.Option("--idempotency-key", help="Retry key the registry write is filed under."),
     ] = None,
 ) -> None:
     """Drop the entry whose ``code == <code>`` from the registry.
@@ -469,7 +481,7 @@ def repo_remove_cmd(
         repos=new_repos,
     )
     try:
-        _persist_registry(updated, target)
+        _persist_registry(updated, target, idempotency_key=idempotency_key)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
@@ -538,6 +550,10 @@ def repo_prune_cmd(
             "--registry-path",
             help="Override the default ``~/.eawf/registry.json`` (mostly for tests).",
         ),
+    ] = None,
+    idempotency_key: Annotated[
+        str | None,
+        typer.Option("--idempotency-key", help="Retry key the registry write is filed under."),
     ] = None,
 ) -> None:
     """Drop registry entries whose on-disk paths no longer exist.
@@ -611,7 +627,7 @@ def repo_prune_cmd(
         repos=survivors,
     )
     try:
-        _persist_registry(updated, target)
+        _persist_registry(updated, target, idempotency_key=idempotency_key)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return

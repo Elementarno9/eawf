@@ -76,7 +76,7 @@ render_blocks:
 def _enable(workspace_flag: list[str]) -> dict[str, object]:
     result = runner.invoke(app, ["--json", *workspace_flag, "config", "profile", "enable", _PROBE])
     assert result.exit_code == 0, result.output
-    return json.loads(result.output)
+    return json.loads(result.output)["result"]
 
 
 def _render(repo: Path, workspace_flag: list[str]) -> str:

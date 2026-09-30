@@ -18,6 +18,8 @@ import pytest
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
 from eawf.runtime.budget.notices import BudgetThresholdNotice, notice_key_for
+from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
+from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD
 from eawf.surfaces.tui.console.app import compose_frame
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.frame import View
@@ -249,6 +251,8 @@ class _Daemon:
             ).model_dump(mode="json")
         if method == QUESTION_DECISIONS_METHOD:
             return {"decisions": []}
+        if method in (QUESTION_READ_METHOD, PAUSE_READ_METHOD):
+            return {}
         self.calls.append((method, params))
         if method == NOTICE_LIST_METHOD:
             return {"active": [n.model_dump(mode="json") for n in self.notices]}

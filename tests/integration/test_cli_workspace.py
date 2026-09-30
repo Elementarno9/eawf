@@ -106,7 +106,7 @@ def test_registry_list_emits_json_envelope(tmp_path: Path) -> None:
         ["--json", "workspace", "registry-list", "--registry-path", str(target)],
     )
     assert result.exit_code == 0, result.stdout
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stdout)["result"]
     assert payload["count"] == 1
     assert payload["active_code"] == "EAWF"
     assert payload["registry_version"] == "1"
@@ -153,7 +153,7 @@ def test_registry_list_sorts_alphabetically(tmp_path: Path) -> None:
         ["--json", "workspace", "registry-list", "--registry-path", str(target)],
     )
     assert result.exit_code == 0
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stdout)["result"]
     codes = [row["code"] for row in payload["repos"]]
     assert codes == ["ALPHA", "ZED"]
 
@@ -173,7 +173,7 @@ def test_registry_list_marks_stale_entries(tmp_path: Path) -> None:
         ["--json", "workspace", "registry-list", "--registry-path", str(target)],
     )
     assert result.exit_code == 0
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stdout)["result"]
     assert payload["repos"][0]["stale"] is True
 
 
@@ -217,7 +217,7 @@ def test_registry_status_json_envelope_carries_rendered(tmp_path: Path) -> None:
         ["--json", "workspace", "registry-status", "--registry-path", str(target)],
     )
     assert result.exit_code == 0, result.stdout
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stdout)["result"]
     assert payload["registry_available"] is True
     assert payload["active_code"] == "EAWF"
     assert payload["count"] == 1
@@ -257,7 +257,7 @@ def test_registry_status_json_missing_registry_envelope(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == 0
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stdout)["result"]
     assert payload["registry_available"] is False
     assert "not found" in payload["error"]
     assert "rendered" in payload
@@ -391,7 +391,7 @@ def test_registry_list_handles_known_active_codes(tmp_path: Path, code: str) -> 
         ["--json", "workspace", "registry-list", "--registry-path", str(target)],
     )
     assert result.exit_code == 0, result.stdout
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stdout)["result"]
     assert payload["active_code"] == code
     assert payload["repos"][0]["active"] is True
 

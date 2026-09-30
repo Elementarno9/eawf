@@ -65,7 +65,15 @@ _CALLER_ROOTS = [_REPO_ROOT / "tools"]
 #: 218 dropped to 214: the flag day deleted the epoch-1 command surface, and
 #: the helpers only those verbs called went with it; the rest of the
 #: epoch-1 library it left without a caller is still counted here.
-IDLE_CEILING = 214
+#:
+#: 214 was never met: the flag day measured 225. 225 dropped to 213 by
+#: deleting the epoch-1 close, waiver, repoint and audit-guard helpers
+#: whose only callers were the deleted verbs. ``plan_roadmap`` stays: it
+#: is the last caller of ``plan_phase`` and ``plan_iter``, which the
+#: lifecycle tests build their fixtures from. The question and pause reads
+#: then wired ``project_question``, ``project_pause`` and
+#: ``answer_with_reply`` and removed ``clarify.py``, which leaves 209.
+IDLE_CEILING = 209
 
 
 def _load_tool() -> Any:

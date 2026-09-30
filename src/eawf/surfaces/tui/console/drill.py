@@ -45,6 +45,7 @@ from eawf.surfaces.tui.console.keybar import KEY_NAMES
 from eawf.surfaces.tui.console.keymap import ALIASES, unserved
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go, open_overlay, remember
 from eawf.surfaces.tui.console.registry import COLLECTION_ROUTES, REGISTRY, route_for_id
+from eawf.surfaces.tui.console.renderers.cost_ceiling import held_ceiling, stopped_key
 from eawf.surfaces.tui.console.renderers.run_detail import open_transcript
 from eawf.surfaces.tui.console.renderers.scope_home import (
     ATTENTION_REGION,
@@ -455,14 +456,15 @@ def _transcript(ctx: Ctx) -> bool:
     return True
 
 
-def _nothing_held(what: str) -> Callable[[Ctx], bool]:
-    """Return an Enter that names why the frame holds no row for it to open."""
-
-    def enter(ctx: Ctx) -> bool:
-        ctx.log("Enter", f"no {what} is held · nothing to open")
+def _stopped_run(ctx: Ctx) -> bool:
+    """Open the stopped Run under the cursor, from the spend read the frame drew its list from."""
+    ceiling = held_ceiling(ctx.live)
+    key = stopped_key(ctx.s, ceiling) if ceiling is not None else None
+    if key is None:
+        ctx.log("Enter", "no stopped Run is held · nothing to open")
         return True
-
-    return enter
+    drill_to(ctx, RUN_DETAIL, key)
+    return True
 
 
 def _needs_rows(what: str) -> Callable[[Ctx], bool]:
@@ -499,7 +501,7 @@ _ENTER: Mapping[str, Callable[[Ctx], bool]] = MappingProxyType(
         "history": _history,
         "release": _release,
         "backlog": _backlog,
-        "cost.ceiling": _nothing_held("stopped Run"),
+        "cost.ceiling": _stopped_run,
         "trust": _needs_rows("truth field"),
         "evidence": _needs_claim,
     }

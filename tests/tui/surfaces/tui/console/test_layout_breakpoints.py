@@ -327,8 +327,8 @@ def test_the_empty_attention_labels_share_the_strip_width() -> None:
 
 def test_the_sandbox_log_head_sits_over_its_rows() -> None:
     frame = nrf._frame("sandbox.log", w=80)
-    head = next(row for row in frame if "DECISION  RUN" in row)
-    empty = next(row for row in frame if "no decision record is held" in row)
+    head = next(row for row in frame if "DECISION" in row and "REASON" in row)
+    empty = next(row for row in frame if "no decision is recorded for this scope" in row)
     assert head.index("TIME") == len(empty) - len(empty.lstrip())
 
 

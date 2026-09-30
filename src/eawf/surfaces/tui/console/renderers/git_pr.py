@@ -63,7 +63,7 @@ def _commit_rows(view: View, model: GitPrReadModel) -> list[str]:
             [
                 row.head_sha[:6],
                 clock_minute(row.created_at),
-                row.key + (" ◂ head" if row.selected else ""),
+                row.key + (" · head" if row.selected else ""),
                 f"generation {group(row.ordinal)} · {dv.plural(len(row.changed_paths), 'path')}",
             ],
             index == cursor,

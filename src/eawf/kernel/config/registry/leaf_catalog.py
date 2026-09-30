@@ -678,6 +678,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=None,
         writable_layers=_WRITABLE_GWR,
         description="The co-author name a project-mode trailer names.",
+        editor="pair",
     ),
     LeafKey(
         key="vcs.coauthor.project.email",
@@ -686,6 +687,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=None,
         writable_layers=_WRITABLE_GWR,
         description="The co-author email a project-mode trailer names.",
+        editor="pair",
     ),
     LeafKey(
         key="vcs.coauthor.trailers.claude.name",
@@ -1089,6 +1091,29 @@ def leaf_key_lookup(key: str) -> LeafKey:
     if entry is None:
         raise ValueError(f"unknown config key: {key!r}")
     return entry
+
+
+def pair_siblings(key: str) -> tuple[str, ...]:
+    """Return the leaves written together with *key*, in catalog order.
+
+    A ``pair`` leaf is only valid beside the other ``pair`` leaves of its block, such
+    as a co-author's name and email, so it is never written alone.
+
+    Args:
+        key: Dotted config key.
+
+    Returns:
+        The other ``pair`` leaves under the same block; empty for any other key.
+    """
+    entry = LEAF_KEY_REGISTRY.get(key)
+    if entry is None or entry.editor != "pair":
+        return ()
+    block = key.rpartition(".")[0]
+    return tuple(
+        other.key
+        for other in _LEAF_KEYS
+        if other.editor == "pair" and other.key != key and other.key.rpartition(".")[0] == block
+    )
 
 
 def is_known_leaf_key(key: str) -> bool:

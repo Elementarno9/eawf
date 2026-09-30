@@ -57,6 +57,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints, V
 
 from eawf.kernel.config.layered import resolve_stall_interval_seconds
 from eawf.kernel.identity import QualifiedUrn
+from eawf.kernel.projection.run_timeline import RunTimeline, reduce_timeline
 from eawf.kernel.runtime.control import (
     TERMINAL_RUN_STATUSES,
     ControlDisposition,
@@ -78,6 +79,7 @@ from eawf.kernel.runtime.handshake import (
 )
 from eawf.kernel.runtime.provider import ControlKind, Digest, reject_repeats
 from eawf.kernel.runtime.semantic import SemanticToolId
+from eawf.kernel.runtime.stall import RunStallFact, standing_stall
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictNonNegativeInt, StrictPositiveInt
 from eawf.kernel.state.epoch2.run import Run, RunStatus
@@ -128,6 +130,8 @@ from eawf.runtime.daemon.run_events import (
     plan_event_append,
     reduce_run_events,
     run_events_of,
+    runtime_of,
+    stall_facts_of,
 )
 
 logger = logging.getLogger(__name__)
@@ -317,6 +321,8 @@ class RunStallAnswer(BaseModel):
         ambiguity: ``lost`` for a stalled Run still recorded as running:
             its outcome is unknown, which is neither a success nor a
             failure, and only a principal's control ends it.
+        raised: The stall fact the daemon's sweep raised for this silence, or ``None``
+            while none stands: the Run is live, or the sweep has not reached it yet.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -329,6 +335,7 @@ class RunStallAnswer(BaseModel):
     resume_method: str
     resume_control: ControlKind
     ambiguity: AmbiguityLabel | None = None
+    raised: RunStallFact | None = None
 
 
 class RunEventsAnswer(BaseModel):
@@ -344,6 +351,8 @@ class RunEventsAnswer(BaseModel):
         derivation_stopped: Whether a hole sits inside the stream.
         run_status: The status the Run's confirmed effects support.
         stall: The Run's liveness at the moment of the read.
+        timeline: The stream reduced to timeline rows, repeated low-priority events
+            coalesced, so a surface draws the groups rather than recreating them.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -356,6 +365,7 @@ class RunEventsAnswer(BaseModel):
     derivation_stopped: bool
     run_status: RunStatus
     stall: RunStallAnswer
+    timeline: RunTimeline
 
 
 class RunControlAnswer(BaseModel):
@@ -988,12 +998,10 @@ def _read_events(
         ).status
         events = run_events_of(records, args.urn)
         hellos = hello_facts_of(records, args.urn)
+        stalls = stall_facts_of(records, args.urn)
     interval = args.stall_interval_seconds
     if interval is None:
-        # The context is the fenced ``.ea`` tree; the layered config is read
-        # against the repository that holds it.
-        repository = context.identity.tree_root.parent
-        interval = resolve_stall_interval_seconds(repository, _runtime_of(hellos))
+        interval = run_stall_interval(context, hellos)
     state = reduce_run_events(events)
     stall = assess_stall(state=state, now=now, interval_seconds=interval)
     stalled = stall.verdict is RunLiveness.STALLED
@@ -1020,14 +1028,17 @@ def _read_events(
             resume_method=RUN_CONTROL_REQUEST_METHOD,
             resume_control=stall.resume_control,
             ambiguity=ambiguity_label(LifecycleEntity.RUN, status) if stalled else None,
+            raised=standing_stall(stalls, state.last_activity_sequence),
         ),
+        timeline=reduce_timeline(events),
     )
 
 
-def _runtime_of(hellos: tuple[WorkerHelloFact, ...]) -> str | None:
-    """Return the runtime the Run's latest accepted hello announced, if any."""
-    accepted = [fact for fact in hellos if fact.disposition is HandshakeDisposition.ACCEPTED]
-    return accepted[-1].hello.provider_id if accepted else None
+def run_stall_interval(context: Epoch2RootContext, hellos: tuple[WorkerHelloFact, ...]) -> int:
+    """Return the stall interval of the runtime the Run's accepted hello named."""
+    # The context is the fenced ``.ea`` tree; the layered config is read
+    # against the repository that holds it.
+    return resolve_stall_interval_seconds(context.identity.tree_root.parent, runtime_of(hellos))
 
 
 def _contract(context: Epoch2RootContext, args: _RunParams) -> RunContract:
@@ -1222,4 +1233,5 @@ __all__ = [
     "WorkerHelloAnswer",
     "append_run_event",
     "append_run_event_in_session",
+    "run_stall_interval",
 ]

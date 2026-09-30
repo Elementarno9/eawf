@@ -114,9 +114,11 @@
       "written_by": []
     },
     {
-      "consumer": "none",
+      "consumer": "console_route",
       "producer": "none",
-      "read_by": [],
+      "read_by": [
+        "projection.attention.read"
+      ],
       "record": "open_question",
       "written_by": []
     },

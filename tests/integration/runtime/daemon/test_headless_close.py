@@ -44,7 +44,7 @@ from eawf.runtime.daemon.methods.close import status, submit
 from eawf.runtime.daemon.methods.close_hosted import host
 from eawf.runtime.daemon.methods.daemon import ping
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
-from eawf.workflow.verify.hosted_close import count_scope_waivers, resolve_hosted_close
+from eawf.workflow.verify.hosted_close import count_scope_waivers
 from tests.integration.runtime.daemon.test_close_fault_matrix import (
     _configure_real_fault_matrix,
 )
@@ -324,22 +324,6 @@ def test_close_host_takes_no_waiver_when_the_daemon_is_available(
     assert started["waiver_count"] == 0
     assert terminal["attempt"]["status"] == CloseAttemptStatus.CLOSED.value
     assert count_scope_waivers(store_dir(state_path), scope_id=_WAVE) == 0
-    decision = resolve_hosted_close(mode="hosted", daemon_available=True, gate_bearing=True)
-    assert decision.hosted is True
-    assert decision.waiver_required is False
-
-
-def test_resolve_hosted_close_gateless_daemonless_needs_no_waiver() -> None:
-    """A wave with no gates has nothing to falsify, so the bypass costs nothing."""
-    decision = resolve_hosted_close(
-        mode="interactive",
-        daemon_available=False,
-        gate_bearing=False,
-    )
-
-    assert decision.hosted is False
-    assert decision.waiver_required is False
-    assert "no gate to run" in decision.reason
 
 
 def test_count_scope_waivers_missing_store_dir_is_zero(tmp_path: Path) -> None:

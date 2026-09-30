@@ -22,7 +22,11 @@ from typing import Final
 
 from pydantic import ValidationError
 
-from eawf.kernel.runtime.certification import ConformanceStage, ConformanceStageRecord
+from eawf.kernel.runtime.certification import (
+    CertificationFailureCode,
+    ConformanceStage,
+    ConformanceStageRecord,
+)
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_path
@@ -74,16 +78,30 @@ def run_runtime_tuple_health_checks(*, workspace: Path | None) -> list[CheckResu
     """
     if workspace is None:
         return []
+    checks = [check for check, _code in runtime_tuple_verdicts(workspace)]
+    logger.info(f"run_runtime_tuple_health_checks tuples={len(checks)}")
+    return checks
+
+
+def runtime_tuple_verdicts(
+    workspace: Path,
+) -> list[tuple[CheckResult, CertificationFailureCode | None]]:
+    """Return each runtime tuple's check beside the failure code its newest record carries.
+
+    Args:
+        workspace: The ``.ea/`` parent directory.
+
+    Returns:
+        One pair per tuple, ordered by tuple digest; the code is ``None`` for a newest
+        record that passed. Empty when the tree has no conformance store.
+    """
     path = store_path(workspace / ".ea" / "state.json", StoreKind.CONFORMANCE_STAGE)
     if not path.is_file():
         return []
-    history = _history_by_tuple(path)
-    checks = [
-        _tuple_check(tuple_digest=digest, records=records)
-        for digest, records in sorted(history.items())
+    return [
+        (_tuple_check(tuple_digest=digest, records=records), records[-1].reason_code)
+        for digest, records in sorted(_history_by_tuple(path).items())
     ]
-    logger.info(f"run_runtime_tuple_health_checks tuples={len(checks)}")
-    return checks
 
 
 def _history_by_tuple(path: Path) -> dict[str, list[ConformanceStageRecord]]:
@@ -147,4 +165,4 @@ def _producer_of(record: ConformanceStageRecord) -> HealthProducer:
     return _PRODUCER_OF_STAGE[record.stage]
 
 
-__all__ = ["run_runtime_tuple_health_checks"]
+__all__ = ["run_runtime_tuple_health_checks", "runtime_tuple_verdicts"]

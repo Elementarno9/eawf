@@ -47,7 +47,6 @@ from eawf.kernel.runtime.compiled import BoundedText
 from eawf.kernel.runtime.provider import (
     ArtifactUrn,
     BoundedIdentifier,
-    CommandFamilyId,
     DelegationRequestUrn,
     Digest,
     RuntimeRecord,
@@ -66,6 +65,7 @@ from eawf.kernel.state.epoch2.urns import (
     RunUrn,
 )
 from eawf.kernel.state.types import UtcDatetime
+from eawf.runtime.sandbox.command_families import CommandFamilyId
 
 
 def _identifier(prefix: str) -> StringConstraints:

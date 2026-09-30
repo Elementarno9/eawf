@@ -157,6 +157,7 @@ def regenerate_grid(recorded: CoverageManifest) -> CoverageManifest:
     carried = {row.route: row for row in recorded.routes}
     rows: list[CoverageRow] = []
     for spec in sorted(REGISTRY.routes, key=lambda spec: spec.id):
+        extra: dict[str, str | None]
         prior = carried.get(spec.id)
         if spec.key in ROUTE_COLLECTIONS:
             binding, extra = "bound", {}

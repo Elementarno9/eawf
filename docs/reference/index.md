@@ -6,6 +6,7 @@ Curated prose plus auto-generated catalogs for the `eawf` framework.
 
 - [Enums (prose)](enums.md) — annotated `StrEnum` catalog with per-field notes.
 - [Exit codes (prose)](exit-codes.md) — exit-code surface plus the `--json` error envelope.
+- [Machine envelope](machine-envelope.md) — the `--json` answer of every contract verb, and what changed in v0.7.0rc1.
 - [Error codes (prose)](error-codes.md) — cause-level `ErrorCode` vocabulary with remediation.
 - [Hook events](hook-events.md) — `HookEvent` shape and per-event payloads.
 - [Lockfile semantics](lockfile-semantics.md) — `portalocker` sibling-lock contract.

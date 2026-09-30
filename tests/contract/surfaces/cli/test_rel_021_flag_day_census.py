@@ -28,7 +28,8 @@ from eawf.surfaces.cli.flag_day import (
     replacement_guidance,
     retired_verb,
 )
-from eawf.surfaces.cli.verb_catalog import CLI_VERB_EFFECTS
+from eawf.surfaces.cli.verb_contract import CONTRACT_GROUPS
+from eawf.surfaces.cli.verb_effects import CLI_VERB_EFFECTS
 
 pytestmark = pytest.mark.contract
 
@@ -141,31 +142,32 @@ def test_rel_021_retired_verb_matches_the_longest_retired_path(
 
 # ---- REL-021: the plain-epoch-1-tree gate ------------------------------------
 
-#: The unclassified verbs, read from the gate's typed list.
-UNCLASSIFIED_LEAVES: Final = frozenset(flag_day_gate.UNCLASSIFIED_VERBS)
-
 
 def test_rel_021_every_leaf_is_classified_for_the_epoch1_gate(
     leaves: dict[str, click.Command],
 ) -> None:
-    """A new verb must be classified (or pinned unclassified) before it ships."""
+    """A new verb must be classified before it ships; no verb is left unclassified."""
     classified = set(CLI_VERB_EFFECTS) | set(EPOCH1_REPLACEMENTS)
-    epoch1 = {path for path, cmd in leaves.items() if _handler_module(cmd) in EPOCH1_MODULES}
-    unknown = sorted(set(leaves) - classified - epoch1 - UNCLASSIFIED_LEAVES)
-    stale = sorted(UNCLASSIFIED_LEAVES - set(leaves))
-    assert unknown == [], "leaves the epoch-1 gate cannot classify"
-    assert stale == []
-    assert len(flag_day_gate.UNCLASSIFIED_VERBS) == len(UNCLASSIFIED_LEAVES)
-    assert sorted(UNCLASSIFIED_LEAVES & classified) == []
+    assert sorted(set(leaves) - classified) == [], "leaves the epoch-1 gate cannot classify"
+    assert not hasattr(flag_day_gate, "UNCLASSIFIED_VERBS")
 
 
-def test_rel_021_every_mutating_verb_is_refused_or_exempt() -> None:
+def test_rel_021_every_mutating_verb_is_refused_exempt_or_outside_the_contract() -> None:
     mutating = {v for v, eff in CLI_VERB_EFFECTS.items() if eff.effect_class != "read"}
     mutating |= set(EPOCH1_REPLACEMENTS)
     assert mutating == set(flag_day_gate.mutating_verbs())
-    neither = sorted(mutating - flag_day_gate.refused_verbs() - flag_day_gate.exempt_verbs())
-    assert neither == []
+    outside = {v for v in mutating if v.split(" ", 1)[0] not in CONTRACT_GROUPS}
+    neither = mutating - flag_day_gate.refused_verbs() - flag_day_gate.exempt_verbs() - outside
+    assert sorted(neither) == []
     assert flag_day_gate.refused_verbs() & flag_day_gate.exempt_verbs() == frozenset()
+    assert sorted(flag_day_gate.refused_verbs() & outside) == []
+
+
+@pytest.mark.parametrize("verb", ["plan apply", "hook run", "repo add"])
+def test_rel_021_a_writing_verb_outside_the_contract_groups_is_not_refused(verb: str) -> None:
+    """Boundary: classified as writing, yet under a declared root exception."""
+    assert verb in flag_day_gate.mutating_verbs()
+    assert verb not in flag_day_gate.refused_verbs()
 
 
 def test_rel_021_every_exemption_is_a_live_path_with_a_reason() -> None:

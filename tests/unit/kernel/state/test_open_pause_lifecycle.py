@@ -177,3 +177,14 @@ def test_plan_047_a_pause_missing_what_its_render_reads_fails_validation(
 def test_plan_047_the_projection_is_not_stored_on_the_record() -> None:
     with pytest.raises(ValidationError):
         pause(situation="waiting_on_check")
+
+
+def test_plan_047_d_pause_a_person_wait_may_cite_the_question_it_observed() -> None:
+    """A user pause the daemon opened on a host's question cites that question as its fact."""
+    waiting = pause("user", waiting_on_ref=QUESTION, health_evidence_refs=(QUESTION,))
+    assert situation(waiting) is PauseSituation.WAITING_ON_PERSON
+
+
+def test_plan_047_d_pause_only_a_person_wait_cites_anything_but_evidence() -> None:
+    with pytest.raises(ValidationError, match="only a person-wait pause cites"):
+        pause("provider", health_evidence_refs=(QUESTION,))

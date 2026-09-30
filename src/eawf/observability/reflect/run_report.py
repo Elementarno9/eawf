@@ -25,6 +25,7 @@ from typing import Final
 
 from eawf.kernel.projection.transcript import TranscriptBlock, build_transcript_blocks
 from eawf.kernel.projection.truth import TruthState
+from eawf.kernel.runtime.sandbox_decision import SandboxDecision
 from eawf.kernel.state.epoch2.measurement import (
     CounterName,
     ExcludedRuntime,
@@ -75,8 +76,8 @@ PURGED_TOKEN: Final = "∅ purged"
 #: What the secrets part says, whether or not it was asked for.
 SECRETS_LINE: Final = "secrets never included: policy redacts secrets from every report"
 
-#: What the sandbox part says: nothing records a Run's sandbox decisions yet.
-SANDBOX_UNAVAILABLE: Final = "no producer records a Run's sandbox decisions"
+#: What the sandbox part says of a Run the gateway decided nothing for.
+NO_SANDBOX_DECISIONS: Final = "sandbox_decisions: no call of this Run was decided by the gateway"
 
 
 def parse_parts(text: str | None) -> tuple[ReportPartName, ...]:
@@ -242,7 +243,18 @@ def _part_lines(
         return tuple(_transcript_line(block) for block in blocks) or ("transcript: no events",)
     if part is ReportPartName.USAGE_AND_COST:
         return _usage_lines(reading)
-    return (f"sandbox_decisions unavailable: {SANDBOX_UNAVAILABLE}",)
+    return tuple(_decision_line(item) for item in reading.sandbox_decisions) or (
+        NO_SANDBOX_DECISIONS,
+    )
+
+
+def _decision_line(decision: SandboxDecision) -> str:
+    """Return one sandbox decision fact: when, what, why, the rule and the policy revision."""
+    return (
+        f"sandbox_decisions {decision.decided_at.isoformat()} {decision.decision.value}"
+        f" {decision.reason} · rule {decision.rule} · {decision.rule_value}"
+        f" · sandbox policy · rev {decision.policy_revision}"
+    )
 
 
 def plan_run_report(
@@ -316,10 +328,10 @@ def write_run_report(plan: RunReportPlan) -> Path:
 
 __all__ = [
     "DEFAULT_PARTS",
+    "NO_SANDBOX_DECISIONS",
     "PURGED_TOKEN",
     "QUOTABILITY",
     "REDACTION_POLICY",
-    "SANDBOX_UNAVAILABLE",
     "SECRETS_LINE",
     "PlannedPart",
     "ReportPartName",

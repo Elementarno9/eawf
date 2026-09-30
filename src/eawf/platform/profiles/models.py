@@ -287,8 +287,7 @@ class VerifyBlock(BaseModel):
       forward-looking override of the runner's default per-class
       seconds; ``None`` defers to the runner default (the v0.4.0
       runner does not yet read overrides — captured for v0.4.1+);
-    * the **waiver-mode** (:attr:`waiver_mode`) — consumed by W11's
-      :func:`~eawf.workflow.lifecycle.waivers.resolve_waiver_mode`;
+    * the **waiver-mode** (:attr:`waiver_mode`);
     * the **enforcement bit** (:attr:`enforce`) — when true, close
       seams reject a non-ready
       :class:`~eawf.workflow.verify.models.CloseReadiness` instead
@@ -307,8 +306,7 @@ class VerifyBlock(BaseModel):
             inside :func:`compile_floor_pack`.
         timeout_class_seconds: Optional per-class seconds override.
             ``None`` defers to the gate runner default.
-        waiver_mode: Mode-gated linkage policy for operator waivers —
-            see :data:`~eawf.workflow.lifecycle.waivers.WaiverMode`.
+        waiver_mode: Mode-gated linkage policy for operator waivers.
             Defaults to ``"B"`` (reason required, decision/audit
             optional) per the W11 default.
         enforce: Whether close readiness is a hard gate. Defaults

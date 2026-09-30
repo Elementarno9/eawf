@@ -2,10 +2,11 @@
 
 A Run the host harness spawned gets its transcript from the host's hooks; a Run Eawf
 starts itself has no hook, so the dispatch path is the producer. The launcher hands
-each message the worker says to :func:`message_sink` as it arrives, and a worker that
-fails to start is stated by :func:`state_spawn_failure`, its full cause filed as the
-error's trace. Every line takes the stream's tail, because the Run's hooks write the
-same stream, and its id is derived from the attempt, so a replay repeats it.
+each message the worker says to :func:`message_sink` as it arrives, each usage reading
+to :func:`usage_sink`, and a worker that fails to start is stated by
+:func:`state_spawn_failure`, its full cause filed as the error's trace. Every line takes
+the stream's tail, because the Run's hooks write the same stream, and its id is derived
+from the attempt, so a replay repeats it.
 """
 
 from __future__ import annotations
@@ -19,11 +20,14 @@ from datetime import UTC, datetime
 
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.runtime.events import ErrorPayload, MessageSummaryPayload, RunEventKind
+from eawf.kernel.runtime.usage import UsagePayload
 from eawf.runtime.daemon.content_store import file_content
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import DaemonValidationError
+from eawf.runtime.daemon.methods.run_budget import InFlightRunMeter
 from eawf.runtime.daemon.run_events import RunEventAppend
 from eawf.runtime.runtimes.host_transcript import scrubbed_words
+from eawf.runtime.runtimes.metering import UsageSample
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +39,7 @@ def _append(
     actor: str,
     event_ref: str,
     kind: RunEventKind,
-    payload: MessageSummaryPayload | ErrorPayload,
+    payload: MessageSummaryPayload | ErrorPayload | UsagePayload,
 ) -> None:
     """State one line the worker's turn produced on the Run's own stream.
 
@@ -100,6 +104,59 @@ def message_sink(
     return sink
 
 
+def usage_sink(
+    context: Epoch2RootContext,
+    urn: QualifiedUrn,
+    *,
+    actor: str,
+    attempt_ref: str,
+    meter: InFlightRunMeter | None,
+) -> Callable[[UsageSample, int | None], Awaitable[bool]]:
+    """Return where the launcher hands each cumulative usage reading of the turn.
+
+    Each reading is stated as ``usage_observed`` on the Run's stream before the meter
+    tests it, so what the Run has spent is on its ledger while it runs -- the accrual
+    admission holds it to -- and the reading that crosses a cap precedes the crossing.
+    A reading is a running total of the attempt, so the fold over the stream takes its
+    maximum and never adds two readings of one turn. Once the meter has reaped the Run,
+    later readings are answered and not stated: the Run is ending.
+
+    Args:
+        context: The tree the Run lives in.
+        urn: The dispatched Run.
+        actor: The principal the dispatch was asked by.
+        attempt_ref: The dispatch attempt the worker was started under.
+        meter: The in-flight meter of a capped Run, or ``None`` when it is uncapped.
+
+    Returns:
+        A sink answering whether the Run was terminated at its cap.
+    """
+    said = itertools.count()
+
+    async def sink(sample: UsageSample, pgid: int | None) -> bool:
+        if meter is not None and meter.terminated:
+            return True
+        await asyncio.to_thread(
+            _append,
+            context,
+            urn,
+            actor=actor,
+            event_ref=_event_ref(attempt_ref, f"usage:{next(said)}"),
+            kind=RunEventKind.USAGE_OBSERVED,
+            payload=UsagePayload(
+                input_tokens=sample.input_tokens,
+                output_tokens=sample.output_tokens,
+                cache_tokens=sample.cache_read_input_tokens,
+                usage_source="provider_transcript",
+                is_cumulative=True,
+                measurement_quality="measured",
+            ),
+        )
+        return False if meter is None else await meter.observe(sample, pgid)
+
+    return sink
+
+
 def state_spawn_failure(
     context: Epoch2RootContext,
     urn: QualifiedUrn,
@@ -139,4 +196,4 @@ def state_spawn_failure(
     )
 
 
-__all__ = ["message_sink", "state_spawn_failure"]
+__all__ = ["message_sink", "state_spawn_failure", "usage_sink"]

@@ -529,7 +529,13 @@ def check_mcp_drift(*, workspace: Path | None) -> CheckResult:
     if isinstance(loaded, CheckResult):
         return loaded
     state, state_path = loaded
-    eawf_owned = {sid: s for sid, s in (state.mcp_servers or {}).items() if s.owner == "eawf"}
+    from eawf.runtime.mcp.book import registered, tree_servers
+
+    # An epoch-2 tree keeps its registry in the selected generation; the
+    # frozen document beside it stops at the cutover.
+    epoch2 = tree_servers(state_path.parent)
+    servers = (state.mcp_servers or {}) if epoch2 is None else registered(epoch2)
+    eawf_owned = {sid: s for sid, s in servers.items() if s.owner == "eawf"}
     if not eawf_owned:
         return CheckResult(name=name, status="ok", detail="no eawf-owned mcp servers")
 

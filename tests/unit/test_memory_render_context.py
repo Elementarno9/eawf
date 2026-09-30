@@ -12,7 +12,7 @@ from eawf.platform.memory.render_context import (
     estimate_tokens,
     render_context,
 )
-from eawf.platform.memory.store import add_memory
+from tests._memory_epoch1 import add_epoch1_note
 
 
 def _make_state() -> State:
@@ -73,7 +73,7 @@ def test_render_context_honours_token_budget(tmp_path: Path) -> None:
     memory_path = tmp_path / "memory.jsonl"
     # Add 5 entries with sizable bodies; budget tight so most must be skipped.
     for i in range(5):
-        add_memory(
+        add_epoch1_note(
             state=state,
             memory_path=memory_path,
             scope_id="QR",
@@ -92,7 +92,7 @@ def test_render_context_honours_token_budget(tmp_path: Path) -> None:
 def test_render_context_high_confidence_ranks_first(tmp_path: Path) -> None:
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
-    low = add_memory(
+    low = add_epoch1_note(
         state=state,
         memory_path=memory_path,
         scope_id="QR",
@@ -100,7 +100,7 @@ def test_render_context_high_confidence_ranks_first(tmp_path: Path) -> None:
         body="low body",
         confidence=Confidence.LOW,
     )
-    high = add_memory(
+    high = add_epoch1_note(
         state=state,
         memory_path=memory_path,
         scope_id="QR",
@@ -118,7 +118,7 @@ def test_render_context_high_confidence_ranks_first(tmp_path: Path) -> None:
 def test_render_context_anchor_scope_boosts_matching(tmp_path: Path) -> None:
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
-    other = add_memory(
+    other = add_epoch1_note(
         state=state,
         memory_path=memory_path,
         scope_id="OTHER",
@@ -126,7 +126,7 @@ def test_render_context_anchor_scope_boosts_matching(tmp_path: Path) -> None:
         body="other body",
         confidence=Confidence.MEDIUM,
     )
-    matching = add_memory(
+    matching = add_epoch1_note(
         state=state,
         memory_path=memory_path,
         scope_id="P01-I01",
@@ -150,7 +150,7 @@ def test_render_context_skipped_count_matches(tmp_path: Path) -> None:
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
     for i in range(10):
-        add_memory(
+        add_epoch1_note(
             state=state,
             memory_path=memory_path,
             scope_id="QR",
@@ -164,7 +164,7 @@ def test_render_context_skipped_count_matches(tmp_path: Path) -> None:
 def test_render_context_skips_inactive_entries(tmp_path: Path) -> None:
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
-    rec = add_memory(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
+    rec = add_epoch1_note(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
     # Manually flip status to STALE in the cache.
     from eawf.kernel.state.enums import MemoryStatus
 
@@ -179,7 +179,7 @@ def test_render_context_skips_inactive_entries(tmp_path: Path) -> None:
 def test_render_context_explicit_now_decay(tmp_path: Path) -> None:
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
-    rec = add_memory(
+    rec = add_epoch1_note(
         state=state,
         memory_path=memory_path,
         scope_id="QR",
@@ -205,7 +205,7 @@ def test_render_context_never_exceeds_budget_when_first_block_too_big(tmp_path: 
     """Even the first block must not overflow the budget — emit zero blocks."""
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
-    add_memory(
+    add_epoch1_note(
         state=state,
         memory_path=memory_path,
         scope_id="QR",
@@ -224,7 +224,7 @@ def test_render_context_deterministic_for_fixed_inputs(tmp_path: Path) -> None:
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
     for i in range(3):
-        add_memory(
+        add_epoch1_note(
             state=state,
             memory_path=memory_path,
             scope_id="QR",
@@ -244,7 +244,7 @@ def test_render_context_max_entries_caps_count(tmp_path: Path) -> None:
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
     for i in range(5):
-        add_memory(
+        add_epoch1_note(
             state=state,
             memory_path=memory_path,
             scope_id="QR",
@@ -261,7 +261,7 @@ def test_render_context_max_entries_caps_count(tmp_path: Path) -> None:
 def test_render_context_excludes_superseded_by_default(tmp_path: Path) -> None:
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
-    rec = add_memory(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
+    rec = add_epoch1_note(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
     from eawf.kernel.state.enums import MemoryStatus
 
     assert state.memory_index is not None
@@ -276,7 +276,7 @@ def test_render_context_excludes_superseded_by_default(tmp_path: Path) -> None:
 def test_render_context_include_superseded_admits_them(tmp_path: Path) -> None:
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
-    rec = add_memory(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
+    rec = add_epoch1_note(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
     from eawf.kernel.state.enums import MemoryStatus
 
     assert state.memory_index is not None
@@ -293,7 +293,7 @@ def test_render_context_pruned_never_admitted(tmp_path: Path) -> None:
     """PRUNED is excluded even when include_superseded=True."""
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
-    rec = add_memory(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
+    rec = add_epoch1_note(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
     from eawf.kernel.state.enums import MemoryStatus
 
     assert state.memory_index is not None

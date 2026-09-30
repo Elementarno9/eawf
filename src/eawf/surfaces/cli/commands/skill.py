@@ -59,7 +59,6 @@ from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
-from eawf.surfaces.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
     from eawf.surfaces.render.envelope import EnvelopeStatus, OutputEnvelope, SkillName
@@ -524,87 +523,6 @@ def render_cmd(
     typer.echo(raw.decode("utf-8"))
 
 
-@skill_app.command(name="resume")
-def resume_cmd(
-    ctx: typer.Context,
-    pause_urn: Annotated[
-        str,
-        typer.Argument(help="Pause URN to resume (urn:eawf:v1:event:.../needs-user-...)."),
-    ],
-    choice: Annotated[
-        str,
-        typer.Option(
-            "--choice",
-            help="Option label answering the paused question; must match an option.",
-        ),
-    ],
-    workspace: Annotated[
-        Path | None,
-        typer.Option(
-            "-w",
-            "--workspace",
-            help="Workspace root to anchor the state resolver.",
-        ),
-    ] = None,
-) -> None:
-    """Resume a paused needs_user question with the chosen option label.
-
-    Resolves the pause record by *pause_urn*, validates *choice* against
-    the paused question's options, and persists the answer by appending a
-    resume row to the event store (the daemon-owned append path; no
-    hand-written ``state.json``). The paused skill picks the answer up
-    from that record on its next run.
-
-    Raises:
-        UserError: When *pause_urn* names no open pause (it never existed
-            or was already resolved), or the resolved ``state.json`` does
-            not exist (``kind="NotFound"``); or when *choice* is not one of
-            the question's option labels (``kind="InvalidInput"``) — exit
-            non-zero.
-    """
-    from eawf.workflow.skills.needs_user import PauseError, find_open_pause, resolve_pause
-
-    flags: GlobalFlags = ctx.obj
-    effective_ws = workspace if workspace is not None else flags.workspace
-    try:
-        state_path = resolve_state_path(effective_ws)
-    except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
-        return
-    if not state_path.exists():
-        cli_errors.emit_error(
-            cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound"),
-            flags=flags,
-            data={"path": str(state_path)},
-        )
-        return
-
-    try:
-        pause = find_open_pause(state_path, pause_urn)
-    except PauseError as exc:
-        cli_errors.emit_error(
-            cli_errors.UserError(str(exc), kind="NotFound"),
-            flags=flags,
-            data={"kind": "NotFound", "pause_urn": pause_urn},
-        )
-        return
-    try:
-        resolve_pause(state_path, pause_urn=pause_urn, choice=choice)
-    except PauseError as exc:
-        cli_errors.emit_error(
-            cli_errors.UserError(str(exc), kind="InvalidInput"),
-            flags=flags,
-            data={"kind": "InvalidInput", "pause_urn": pause_urn, "choice": choice},
-        )
-        return
-
-    emit_json_or_text(
-        {"pause_urn": pause_urn, "choice": choice, "scope_id": pause.scope_id},
-        f"skill resume {pause_urn} choice={choice}",
-        flags=flags,
-    )
-
-
 @skill_app.command(name="run")
 def run_cmd(
     ctx: typer.Context,
@@ -890,7 +808,6 @@ __all__ = [
     "list_cmd",
     "reconcile_cmd",
     "render_cmd",
-    "resume_cmd",
     "run_cmd",
     "skill_app",
 ]

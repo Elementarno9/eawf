@@ -111,7 +111,7 @@ def test_replay_wal_inspect_json_output(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
     res = runner.invoke(app, ["--json", "daemon", "replay-wal", "--inspect"])
     assert res.exit_code == 0, res.output
-    payload = orjson.loads(res.output.strip())
+    payload = orjson.loads(res.output.strip())["result"]
     assert payload["count"] == 1
     assert payload["records"][0]["record_id"] == "rec-poison-c"
     assert payload["records"][0]["poison_reason"] == "pre_apply_crash"
@@ -193,7 +193,7 @@ def test_replay_wal_gc_json_output(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
     res = runner.invoke(app, ["--json", "daemon", "replay-wal", "--gc", "--max-age-seconds", "0"])
     assert res.exit_code == 0, res.output
-    payload = orjson.loads(res.output.strip())
+    payload = orjson.loads(res.output.strip())["result"]
     assert payload["removed_count"] == 1
     assert payload["max_age_seconds"] == 0
 

@@ -1,7 +1,9 @@
 """The verification read models: what trust, evidence and health draw at one cursor.
 
 Four routes answer the one question an operator asks of a verification surface: what is
-believed here, and on whose say-so. ``trust`` renders the claims a milestone rests on,
+believed here, and on whose say-so. ``trust`` renders the audit verdicts the Batches'
+current verification cycles hold, each with the producer that reached it, beside the
+claims no verdict has been recorded for,
 ``evidence`` the claim and the rungs under it, ``evidence.digest`` one rung's record, and
 ``health`` the conformance verdicts a runtime tuple carries.
 
@@ -33,6 +35,7 @@ from eawf.kernel.projection.route_view import (
     build_route_read_model,
     check_field_tables,
     known_field,
+    stated,
     status_and,
     unknown_field,
     unstated,
@@ -73,6 +76,12 @@ NO_TRIGGER_REASON: Final = "no failure code was recorded, so no trigger is named
 #: Why a row that is not quarantined names no trigger at all.
 NOT_QUARANTINED_REASON: Final = "the tuple is in service, so no trigger fired"
 
+#: Why a Trust subject states no verdict: no observation was recorded for it.
+NO_OUTCOME_REASON: Final = "no outcome recorded"
+
+#: Why a verdict names no Milestone: the Batch it was reached on is filed under none.
+NO_MILESTONE_REASON: Final = "the Batch this verdict was reached on is filed under no Milestone"
+
 #: The producer revision every verdict cell states. A conformance verdict is never
 #: revised: the next stage record supersedes it, so the first revision is the only one a
 #: single verdict ever stands at.
@@ -83,7 +92,17 @@ VERDICT_REVISION: Final = 1
 #: producers are later items, so the console draws the unknown token in their place.
 VERIFICATION_FIELDS: Final[Mapping[str, tuple[RouteFieldSpec, ...]]] = MappingProxyType(
     {
-        "trust": status_and(unstated("verdict"), unstated("answered_by"), unstated("freshness")),
+        "trust": status_and(
+            stated("verdict", absent=NO_OUTCOME_REASON),
+            stated("answered_by", absent=NO_OUTCOME_REASON),
+            stated("occurred_at", absent=NO_OUTCOME_REASON),
+            stated("site", absent=NO_OUTCOME_REASON),
+            stated("subject", absent=NO_OUTCOME_REASON),
+            stated("batch", absent=NO_OUTCOME_REASON),
+            stated("milestone", absent=NO_MILESTONE_REASON),
+            stated("agent_role", absent=NO_OUTCOME_REASON),
+            stated("runtime", absent=NO_OUTCOME_REASON),
+        ),
         "evidence": status_and(unstated("outcome"), unstated("checked"), unstated("as_of")),
         "evidence.digest": status_and(unstated("found"), unstated("input_digest")),
         "health": status_and(unstated("checked_at")),
@@ -285,6 +304,8 @@ __all__ = [
     "FAMILY",
     "HEALTH_ROUTE",
     "NOT_QUARANTINED_REASON",
+    "NO_MILESTONE_REASON",
+    "NO_OUTCOME_REASON",
     "NO_PROVENANCE_REASON",
     "NO_TRIGGER_REASON",
     "QUARANTINE_PRODUCER",

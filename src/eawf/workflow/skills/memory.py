@@ -11,7 +11,7 @@ three skill verbs map onto real ``eawf memory`` CLI commands:
   ``--scope`` filter rather than a positional name).
 
 Per the authority map, the daemon is the sole canonical writer of the
-memory JSONL store; the skill therefore does **not** mutate the store
+memory ledger; the skill therefore does **not** mutate the ledger
 itself. It validates + normalises the requested operation, appends a
 single append-only ``EVENT`` describing the intent, and routes the
 operator to the canonical ``eawf memory`` writer via

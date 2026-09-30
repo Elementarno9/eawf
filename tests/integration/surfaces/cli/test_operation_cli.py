@@ -275,7 +275,7 @@ def test_surf_086_daemon_status_reports_not_running_without_starting_one(
     assert "daemon not running" in result.output
     as_json = runner.invoke(app, ["--json", "daemon", "status"])
     assert as_json.exit_code == exit_codes.DAEMON_UNREACHABLE
-    assert orjson.loads(as_json.stdout) == {"running": False}
+    assert orjson.loads(as_json.stdout)["result"] == {"running": False}
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the POSIX socket transport")

@@ -38,6 +38,7 @@ existing caller passes them by value.
 
 from __future__ import annotations
 
+import copy
 import logging
 import os
 import subprocess
@@ -464,6 +465,7 @@ def merge_config(
     cli_overrides: Mapping[str, Any] | None = None,
     branch: str | None = None,
     wave_overlay: Mapping[str, Any] | None = None,
+    staged: Mapping[Path, Mapping[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """Compose the layered config and return ``(merged, source_map)``.
 
@@ -486,6 +488,9 @@ def merge_config(
             daemon keeps ``wave_config_overrides[wave_id]`` in RAM and
             passes the relevant dict in; library callers without a
             daemon context leave this ``None``.
+        staged: Layer file bodies to compose in place of what the files hold, keyed
+            by file path: a writer composes the body it is about to write, so it can
+            refuse one that leaves the config invalid before any file changes.
 
     Returns:
         ``merged``: a freshly composed dict suitable for direct mutation by
@@ -498,13 +503,18 @@ def merge_config(
     """
     effective_env = env if env is not None else os.environ
     overrides = cli_overrides if cli_overrides is not None else {}
+    bodies = {path.resolve(): body for path, body in (staged or {}).items()}
+
+    def load(path: Path) -> dict[str, Any]:
+        body = bodies.get(path.resolve())
+        return copy.deepcopy(dict(body)) if body is not None else load_yaml_layer(path)
 
     # Layer 1: built-in defaults.
     merged = built_in_defaults()
     sources: dict[str, str] = dict.fromkeys(_flatten(merged), "built-in")
 
     # Layer 2: global.
-    global_overlay = load_yaml_layer(global_config_path())
+    global_overlay = load(global_config_path())
     _normalise_overlay_in_memory(global_overlay)
     _normalise_runtime_adapters(global_overlay)
     merged, sources = _deep_merge_with_sources(
@@ -516,7 +526,7 @@ def merge_config(
 
     # Layer 3: workspace (only if anchor provided).
     if workspace is not None:
-        ws_overlay = load_yaml_layer(workspace_config_path(workspace))
+        ws_overlay = load(workspace_config_path(workspace))
         _normalise_overlay_in_memory(ws_overlay)
         _normalise_runtime_adapters(ws_overlay)
         merged, sources = _deep_merge_with_sources(
@@ -528,7 +538,7 @@ def merge_config(
 
     # Layer 4-6: repo + branch + local (only if anchor provided).
     if repo is not None:
-        repo_overlay = load_yaml_layer(repo_config_path(repo))
+        repo_overlay = load(repo_config_path(repo))
         _normalise_overlay_in_memory(repo_overlay)
         _normalise_runtime_adapters(repo_overlay)
         merged, sources = _deep_merge_with_sources(
@@ -544,8 +554,8 @@ def merge_config(
         effective_branch = branch if branch is not None else detect_current_branch(repo)
         if effective_branch is not None:
             branch_file = branch_config_path(repo, effective_branch)
-            if branch_file.exists():
-                branch_overlay = load_yaml_layer(branch_file)
+            if branch_file.exists() or branch_file.resolve() in bodies:
+                branch_overlay = load(branch_file)
                 _normalise_overlay_in_memory(branch_overlay)
                 _normalise_runtime_adapters(branch_overlay)
                 merged, sources = _deep_merge_with_sources(
@@ -556,7 +566,7 @@ def merge_config(
                 )
 
         # Layer 6: local.
-        local_overlay = load_yaml_layer(local_config_path(repo))
+        local_overlay = load(local_config_path(repo))
         _normalise_overlay_in_memory(local_overlay)
         _normalise_runtime_adapters(local_overlay)
         merged, sources = _deep_merge_with_sources(

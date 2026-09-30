@@ -40,9 +40,10 @@ LeafKeyType = Literal[
 ConsumerKind = Literal["engine", "skill", "declarative", "deprecated", "reserved"]
 #: The console editor a leaf whose value is not one scalar is edited with: ``check`` ticks
 #: members of a known set, ``order`` also orders them, ``tiers`` fills a fixed three-slot
-#: ladder, ``rows`` edits a record keyed by a known set, and ``pin`` records digests the
-#: console computes.
-EditorKind = Literal["check", "order", "tiers", "rows", "pin"]
+#: ladder, ``rows`` edits a record keyed by a known set, ``pin`` records digests the
+#: console computes, and ``pair`` edits the leaves of one block that are only valid
+#: together, written in one write.
+EditorKind = Literal["check", "order", "tiers", "rows", "pin", "pair"]
 #: A value set that cannot be stated in the catalog because it is read per settings read:
 #: the discoverable profiles, the ship gates, and the digests a profile is trusted or
 #: certified under.
@@ -98,8 +99,9 @@ class LeafKey(BaseModel):
             it therefore needs; ``None`` for a runtime-neutral leaf.
         secret_refs: Whether the leaf's value names credentials, which it
             may do only by ``${ENV:NAME}`` reference.
-        editor: The console editor for a list or mapping leaf; ``None`` for a
-            leaf edited as one value, or left to its file.
+        editor: The console editor for a list or mapping leaf, or for a leaf
+            written with its ``pair`` siblings; ``None`` for a leaf edited as one
+            value, or left to its file.
         choices_from: The value set read per settings read in place of
             ``choices``; ``None`` when the set is static or there is none.
     """

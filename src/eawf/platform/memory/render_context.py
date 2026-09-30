@@ -14,13 +14,14 @@ tokenisation is runtime-dependent and the budget is advisory, not contractual.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 from eawf.kernel.state.enums import Confidence, MemoryStatus
-from eawf.kernel.state.models import MemorySummary, State
-from eawf.platform.memory.store import find_envelope
+from eawf.kernel.state.models import State
+from eawf.kernel.store.kinds.memory import MemoryNote
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +59,11 @@ def _scope_distance(memory_scope: str, anchor_scope: str | None) -> float:
     return 0.5
 
 
-def _recency_weight(now: datetime, summary: MemorySummary) -> float:
+def _recency_weight(now: datetime, note: MemoryNote) -> float:
     """Decay weight from the entry's ``review_due`` (or 1.0 if none)."""
-    if summary.review_due is None:
+    if note.review_due is None:
         return 1.0
-    age_days = (now - summary.review_due).total_seconds() / 86400.0
+    age_days = (now - note.review_due).total_seconds() / 86400.0
     if age_days <= 0:
         return 1.0
     return max(0.1, 1.0 / (1.0 + age_days / 30.0))
@@ -132,16 +133,56 @@ def render_context(
     Raises:
         ValueError: when ``heading_level`` is less than 1.
     """
+    from eawf.platform.memory.book import notes_from_state
+
+    return render_notes(
+        notes_from_state(state, memory_path).values(),
+        anchor_scope=anchor_scope,
+        budget=budget,
+        now=now,
+        include_superseded=include_superseded,
+        max_entries=max_entries,
+        heading_level=heading_level,
+    )
+
+
+def render_notes(
+    notes: Iterable[MemoryNote],
+    *,
+    anchor_scope: str | None = None,
+    budget: int = DEFAULT_BUDGET,
+    now: datetime | None = None,
+    include_superseded: bool = False,
+    max_entries: int | None = None,
+    heading_level: int = 2,
+) -> RenderContextResult:
+    """Walk *notes*, render until *budget* is exhausted.
+
+    Args:
+        notes: The notes to rank; each carries its own body.
+        anchor_scope: Optional anchor scope ID; entries closer to it rank higher.
+        budget: Token budget (HARD; the result never exceeds it).
+        now: Override for the current time. Defaults to UTC now.
+        include_superseded: Also consider SUPERSEDED notes; PRUNED never.
+        max_entries: Optional cap on the count of included entries.
+        heading_level: Markdown heading depth used for each emitted entry.
+
+    Returns:
+        The rendered body and the included and skipped IDs, under the
+        determinism contract :func:`render_context` states.
+
+    Raises:
+        ValueError: when ``heading_level`` is less than 1.
+    """
     if heading_level < 1:
         raise ValueError(f"heading_level must be >= 1; got {heading_level}")
     moment = now if now is not None else datetime.now(UTC)
-    index = state.memory_index or {}
     eligible_statuses: set[MemoryStatus] = {MemoryStatus.ACTIVE}
     if include_superseded:
         eligible_statuses.add(MemoryStatus.SUPERSEDED)
-    actives: list[MemorySummary] = [s for s in index.values() if s.status in eligible_statuses]
+    actives: list[MemoryNote] = [s for s in notes if s.status in eligible_statuses]
 
-    def score(s: MemorySummary) -> float:
+    def score(s: MemoryNote) -> float:
         return (
             _recency_weight(moment, s)
             * _CONFIDENCE_WEIGHT[s.confidence]
@@ -158,16 +199,11 @@ def render_context(
         if max_entries is not None and len(included_ids) >= max_entries:
             skipped_ids.append(summary.id)
             continue
-        env = find_envelope(memory_path, summary.id)
-        body = ""
-        if env is not None:
-            body_payload = env.payload.get("body")
-            body = str(body_payload) if body_payload is not None else ""
         heading = "#" * heading_level
         block = (
             f"{heading} {summary.id} ({summary.scope_id}, {summary.confidence.value})\n"
             f"{summary.summary}\n\n"
-            f"{body}\n"
+            f"{summary.body}\n"
         )
         block_tokens = estimate_tokens(block)
         # Budget is HARD: never include a block that would overflow it, even

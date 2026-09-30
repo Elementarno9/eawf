@@ -42,6 +42,7 @@ from pydantic import ValidationError as PydanticValidationError
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.output import emit_json_or_text
+from eawf.surfaces.cli.verb_closure import ROOT_ENTRY_EXCEPTIONS
 
 if TYPE_CHECKING:
     from eawf.runtime.daemon.methods.domain_envelope import DomainEnvelope
@@ -62,16 +63,14 @@ ENTITY_GROUPS: Final[tuple[str, ...]] = (
 )
 
 #: The cross-cutting groups: surfaces that report or configure across entities
-#: and so have no entity group to live in. Closed by amendment.
-CROSS_CUTTING_GROUPS: Final[tuple[str, ...]] = (
-    "workspace",
-    "config",
-    "daemon",
-    "memory",
-    "ui",
-    "migrate",
-    "reflect",
+#: and so have no entity group to live in. Closed by amendment, each with its
+#: reason in the root entry exceptions.
+CROSS_CUTTING_GROUPS: Final[tuple[str, ...]] = tuple(
+    row.name for row in ROOT_ENTRY_EXCEPTIONS if row.kind == "cross_cutting"
 )
+
+#: Every group whose verbs answer under this contract.
+CONTRACT_GROUPS: Final[frozenset[str]] = frozenset((*ENTITY_GROUPS, *CROSS_CUTTING_GROUPS))
 
 #: The ``--from-spec`` value that reads the document from stdin.
 STDIN_SPEC: Final = "-"
@@ -369,6 +368,7 @@ def emit_envelope(envelope: DomainEnvelope, *, urn: str, flags: GlobalFlags) -> 
 
 
 __all__ = [
+    "CONTRACT_GROUPS",
     "CROSS_CUTTING_GROUPS",
     "ENTITY_GROUPS",
     "STDIN_SPEC",

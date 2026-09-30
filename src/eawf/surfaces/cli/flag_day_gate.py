@@ -7,10 +7,10 @@ root group resolves the command path the operator typed before any handler
 runs, and refuses it when the path mutates state and the tree it addresses is
 a plain epoch-1 tree.
 
-Which paths mutate is not restated here. The verb catalog's effect table
-classifies the epoch-2 and cross-cutting verbs, and the flag-day replacement
-table lists every epoch-1 verb that writes; the refused set is their union
-less :data:`FLAG_DAY_EXEMPTIONS`, the verbs a tree needs in order to reach the
+Which paths mutate is not restated here. The effect table classifies every
+verb, and the flag-day replacement table lists every epoch-1 verb that
+writes; the refused set is the writing verbs of the contract groups less
+:data:`FLAG_DAY_EXEMPTIONS`, the verbs a tree needs in order to reach the
 cutover at all. Each exemption states why, so widening the list is a
 reviewable claim rather than a silent hole.
 """
@@ -30,7 +30,8 @@ from eawf.surfaces.cli.error_codes import ErrorCode
 from eawf.surfaces.cli.flag_day import EPOCH1_REPLACEMENTS, replacement_guidance, retired_verb
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.help_panels import RegistryOrderedTyperGroup
-from eawf.surfaces.cli.verb_catalog import CLI_VERB_EFFECTS
+from eawf.surfaces.cli.verb_contract import CONTRACT_GROUPS
+from eawf.surfaces.cli.verb_effects import CLI_VERB_EFFECTS
 
 logger = logging.getLogger(__name__)
 
@@ -127,116 +128,6 @@ FLAG_DAY_EXEMPTIONS: Final[tuple[FlagDayExemption, ...]] = (
 )
 
 
-#: Verbs neither effect table classifies, so the gate cannot tell whether they
-#: write. Listed so a new verb must be refused, exempt or named here; the
-#: census fails on a verb that is none of the three.
-UNCLASSIFIED_VERBS: Final[tuple[str, ...]] = (
-    "backup create",
-    "backup list",
-    "backup prune",
-    "backup restore",
-    "bench compare",
-    "bench fixture seed",
-    "bench list",
-    "bench run",
-    "bench turn-cost",
-    "cc statusline prewarm",
-    "clone-repo",
-    "coauthor resolve",
-    "completion install",
-    "completion show",
-    "doc verify",
-    "follow",
-    "hook agent-output",
-    "hook dispatch",
-    "hook eawf002-log-key",
-    "hook eawf003-logger-acquire",
-    "hook eawf010-module-length",
-    "hook eawf011-cognitive-complexity",
-    "hook eawf012-design-provenance",
-    "hook eawf013-bracket-position",
-    "hook eawf014-no-manual-wrap",
-    "hook eawf015-ears-advisory",
-    "hook eawf016-title-clarity",
-    "hook eawf017-inline-refs",
-    "hook eawf018-structure-smell",
-    "hook eawf019-math-facets",
-    "hook eawf023-artifact-placement",
-    "hook eawf024-test-tier-contract",
-    "hook eawf025-test-placement",
-    "hook eawf026-settings-categories",
-    "hook eawf027-citation-scope",
-    "hook email-leak-lint",
-    "hook log-format-lint",
-    "hook path-leak-lint",
-    "hook plugin-doctor-drift",
-    "hook run",
-    "hook sigil-totality",
-    "hook vale-prose",
-    "hook validate-prose",
-    "impact",
-    "init",
-    "jury label",
-    "mcp add",
-    "mcp grant",
-    "mcp install",
-    "mcp list",
-    "mcp remove",
-    "mcp revoke",
-    "mcp run-config",
-    "mcp serve",
-    "mcp update",
-    "metrics",
-    "plan apply",
-    "plan approve",
-    "plan show",
-    "plan submit",
-    "plugin doctor",
-    "plugin install",
-    "plugin package",
-    "plugin sync",
-    "plugin update",
-    "pr render",
-    "profile new",
-    "profile validate",
-    "record append",
-    "record evidence",
-    "render-output",
-    "repo add",
-    "repo init",
-    "repo prune",
-    "repo register",
-    "repo remove",
-    "repository create",
-    "rules migrate",
-    "rules rollback",
-    "rules view",
-    "schema dump",
-    "scope-debug",
-    "skill check-report",
-    "skill list",
-    "skill reconcile",
-    "skill render",
-    "skill resume",
-    "skill run",
-    "snapshot list",
-    "snapshot update",
-    "status",
-    "store compact",
-    "sync",
-    "telemetry pricing-currency-check",
-    "validate",
-    "verbs",
-    "version",
-    "vfl approve",
-    "wal list",
-    "wal show",
-    "wal status",
-    "why",
-    "wiki render",
-)
-
-
 @cache
 def exempt_verbs() -> frozenset[str]:
     """Return the command paths :data:`FLAG_DAY_EXEMPTIONS` names."""
@@ -252,8 +143,17 @@ def mutating_verbs() -> frozenset[str]:
 
 @cache
 def refused_verbs() -> frozenset[str]:
-    """Return the command paths a plain epoch-1 tree refuses."""
-    return mutating_verbs() - exempt_verbs()
+    """Return the command paths a plain epoch-1 tree refuses.
+
+    Only a verb of a contract group is refused: a writing verb under a root
+    entry the verb contract declares an exception for keeps the behaviour it
+    had before the flag day until it is regrouped.
+    """
+    return frozenset(
+        verb
+        for verb in mutating_verbs() - exempt_verbs()
+        if verb.split(" ", 1)[0] in CONTRACT_GROUPS
+    )
 
 
 def command_path(root: click.Group, ctx: click.Context, args: list[str]) -> str:
@@ -387,7 +287,6 @@ __all__ = [
     "MIGRATION_REQUIRED_KIND",
     "MIGRATION_VERB",
     "REPO_ROOTED_GROUPS",
-    "UNCLASSIFIED_VERBS",
     "FlagDayExemption",
     "FlagDayTyperGroup",
     "command_path",

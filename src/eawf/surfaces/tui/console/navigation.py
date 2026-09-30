@@ -16,9 +16,10 @@ the place rather than its first row.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Protocol
 
 from eawf.kernel.projection.compute import ProjectionRow, RouteProjection
@@ -107,6 +108,8 @@ class Ctx:
             card previews; ``None`` outside the first run.
         onboard: Performs the confirmed workspace step through the daemon, answering
             whether it was started; ``None`` outside the first run.
+        live: The answers of the route's live reads the frame was drawn from, by read
+            name; a key on the frame acts on the same answer.
     """
 
     session: Session
@@ -134,6 +137,7 @@ class Ctx:
     recover: Callable[[str], bool] | None = None
     first_run: FirstRun | None = None
     onboard: Callable[[], bool] | None = None
+    live: Mapping[str, object] = MappingProxyType({})
 
     @property
     def s(self) -> Session:
@@ -292,7 +296,7 @@ def return_focus(session: Session) -> bool:
 
 
 #: The editor kinds whose keys are typed into a field: every letter is text, never a motion.
-_TYPED_EDITS = frozenset({"num", "text", "tiers"})
+_TYPED_EDITS = frozenset({"num", "text", "tiers", "pair"})
 
 
 def enters_text(session: Session) -> bool:

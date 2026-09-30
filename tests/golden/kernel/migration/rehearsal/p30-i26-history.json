@@ -2,7 +2,7 @@
   "apply": {
     "applied": true,
     "generation_bytes": 1146644,
-    "generation_id": "gen-3db6409567e9e48e",
+    "generation_id": "gen-28cb72f3204cda6d",
     "journal_stages": [
       "fence_cleared",
       "workspace_resolved",
@@ -23,7 +23,7 @@
   },
   "disposition": "imports",
   "dry_run": {
-    "approval_digest": "743485cad7571b56dc260264d20f8d4629bd98572646eb1fad0b5f5b9d5ee90d",
+    "approval_digest": "733c1b78f409c965780f70d47eba019db642149a0f2b19b0e010a3c71a67cd20",
     "collections": {
       "actuals": [
         24,
@@ -216,7 +216,7 @@
         0
       ]
     },
-    "manifest_digest": "3db6409567e9e48e591e80fb0fea2e94dab0f134cb0c512fe15fa2597375b5c4",
+    "manifest_digest": "28cb72f3204cda6dac75ca72738e4da0fe5e22bf6bd0c02968b92c133beaebb4",
     "reproducible": true,
     "source_digest": "dc40bc96a3e3137faab4f519f3a2242beec01dec06d3530ebd8f86fb3cc9bc01",
     "source_rows": 874,
@@ -226,7 +226,7 @@
   "fixture": "p30-i26-history",
   "rerun": {
     "applied": false,
-    "generation_id": "gen-3db6409567e9e48e",
+    "generation_id": "gen-28cb72f3204cda6d",
     "journal_rows": 0,
     "tree_unchanged": true
   },

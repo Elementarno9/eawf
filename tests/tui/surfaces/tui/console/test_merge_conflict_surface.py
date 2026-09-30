@@ -77,6 +77,7 @@ from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.keybar import KEY_NAMES, ROUTE_KEYS
 from eawf.surfaces.tui.console.keymap import route_keys
+from eawf.surfaces.tui.console.live_reads import CONFLICTS_READ, GENERATIONS_READ, LIVE_READS
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import git_pr, merge_conflict, render_route
@@ -253,15 +254,27 @@ def test_the_console_composes_this_routes_read_model_from_the_seam(route: str) -
 
 
 def test_the_console_carries_its_generations_into_the_git_model() -> None:
-    """The generations the console was given reach the Git surface, and no other route's."""
-    model = _app(GIT_PR_ROUTE, integration_generations=(_generation(2),)).route_view()
+    """The generations the live read holds reach the Git surface, and no other route's."""
+    app = _app(GIT_PR_ROUTE)
+    seam = app.seam
+    assert seam is not None
+    seam.retarget(GIT_PR_ROUTE)
+    read = LIVE_READS[GENERATIONS_READ]
+    seam._live[GENERATIONS_READ] = (read.address(seam), (_generation(2),))
+    model = app.route_view()
     assert isinstance(model, GitPrReadModel)
     assert [row.key for row in model.generations] == ["ING-000002"]
 
 
 def test_the_console_carries_its_conflicts_into_the_card_model() -> None:
-    """The conflict frames the console was given reach the card, hunks and all."""
-    model = _app(MERGE_CONFLICT_ROUTE, integration_conflicts=(_conflict(),)).route_view()
+    """The conflict frames the live read holds reach the card, hunks and all."""
+    app = _app(MERGE_CONFLICT_ROUTE)
+    seam = app.seam
+    assert seam is not None
+    seam.retarget(MERGE_CONFLICT_ROUTE)
+    read = LIVE_READS[CONFLICTS_READ]
+    seam._live[CONFLICTS_READ] = (read.address(seam), (_conflict(),))
+    model = app.route_view()
     assert isinstance(model, MergeConflictReadModel)
     assert [frame.key for frame in model.conflicts] == ["INC-000001"]
     assert len(model.hunks) == 3
@@ -354,7 +367,7 @@ def test_the_git_frame_marks_the_head_and_names_every_generation() -> None:
     model = _view(GIT_PR_ROUTE, generations=(_generation(2), _generation(3)))
     body = "\n".join(_frame(GIT_PR_ROUTE, model))
     assert "ING-000002" in body
-    assert "ING-000003 ◂ head" in body
+    assert "ING-000003 · head" in body
     assert "head ING-000003" in body
 
 

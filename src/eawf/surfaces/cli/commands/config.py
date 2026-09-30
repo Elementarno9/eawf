@@ -262,12 +262,30 @@ def _daemon_proxy_enabled() -> bool:
     return _proxy_enabled(None)
 
 
+def _check_layer_body(
+    *, target_path: Path, body: dict[str, Any], keys: list[str], repo_root: Path | None
+) -> None:
+    """Refuse a layer body that leaves a written key's config section invalid.
+
+    Raises:
+        ConfigSectionError: A touched section fails its model.
+    """
+    from eawf.kernel.config.layered import merge_config
+    from eawf.kernel.config.sections import check_sections
+
+    merged, _sources = merge_config(
+        workspace=repo_root, repo=repo_root, env={}, staged={target_path: body}
+    )
+    check_sections(merged, keys)
+
+
 def _save_value_to_layer(
     *,
     target_path: Path,
     key: str,
     value: Any,
     repo_root: Path | None = None,
+    also: dict[str, Any] | None = None,
 ) -> None:
     """Persist ``key=value`` into the YAML layer at *target_path*.
 
@@ -296,12 +314,16 @@ def _save_value_to_layer(
             the daemon as the per-request anchor. ``None`` falls back
             to the daemon's boot-time anchor with a one-shot
             ``daemon_anchor_fallback`` warning on the daemon side.
+        also: Further dotted keys and values written in the same write, for
+            leaves that are only valid together.
 
     Raises:
         StateConflict: Daemon required but unreachable
             (``daemon_required`` envelope; ``kind="IntegrityViolation"``).
         UserError: The in-process arm refuses a value outside the type, range
             or choices the config registry declares for *key*.
+        ConfigSectionError: The in-process arm refuses a write that leaves a
+            written key's config section invalid.
         ValidationError: Underlying YAML is malformed.
         OSError: Filesystem failure during read or write.
         yaml.YAMLError: Dump failure when serialising the merged payload.
@@ -319,14 +341,21 @@ def _save_value_to_layer(
                     kind="IntegrityViolation",
                 )
             key_path = key.split(".")
+            anchor = str(repo_root) if repo_root is not None else None
             try:
                 with DaemonClient() as client:
-                    client.config_set_layer_value(
-                        layer=layer_label,
-                        key_path=key_path,
-                        value=value,
-                        repo_root=str(repo_root) if repo_root is not None else None,
-                    )
+                    if also:
+                        writes = [
+                            {"key_path": dotted.split("."), "value": typed}
+                            for dotted, typed in {key: value, **also}.items()
+                        ]
+                        client.config_set_layer_values(
+                            layer=layer_label, writes=writes, repo_root=anchor
+                        )
+                    else:
+                        client.config_set_layer_value(
+                            layer=layer_label, key_path=key_path, value=value, repo_root=anchor
+                        )
                 return
             except DaemonRpcError as exc:
                 if exc.code == -32601:
@@ -340,10 +369,15 @@ def _save_value_to_layer(
     from eawf.kernel.config.loader import load_yaml_layer
     from eawf.kernel.config.registry import validate_config_value
 
-    typed = validate_config_value(key, value)
+    values = {key: value, **(also or {})}
+    typed = {dotted: validate_config_value(dotted, raw) for dotted, raw in values.items()}
     with portalock.acquire(target_path):
         existing = load_yaml_layer(target_path)
-        _set_dotted_in_yaml(existing, key, typed)
+        for dotted, leaf in typed.items():
+            _set_dotted_in_yaml(existing, dotted, leaf)
+        _check_layer_body(
+            target_path=target_path, body=existing, keys=list(typed), repo_root=repo_root
+        )
         _atomic_write_yaml(target_path, existing)
 
 
@@ -353,13 +387,15 @@ def _unset_value_from_layer(
     key: str,
     layer: str,
     repo_root: Path | None = None,
+    also: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    """Remove *key* through the canonical daemon writer or V1 fallback."""
+    """Remove *key*, and the keys in *also* in the same write, through the daemon or V1 fallback."""
     from eawf.kernel.config.registry import leaf_key_lookup
 
-    entry = leaf_key_lookup(key)
-    if layer not in entry.writable_layers:
-        raise ValueError(f"leaf {key!r} is not writable from the {layer} layer")
+    keys = [key, *also]
+    for dotted in keys:
+        if layer not in leaf_key_lookup(dotted).writable_layers:
+            raise ValueError(f"leaf {dotted!r} is not writable from the {layer} layer")
 
     if _daemon_proxy_enabled():
         from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
@@ -371,12 +407,17 @@ def _unset_value_from_layer(
                 "run `eawf daemon start` or set EAWF_DAEMONLESS=1 for the V1 carve-out",
                 kind="IntegrityViolation",
             )
+        anchor = str(repo_root) if repo_root is not None else None
         try:
             with DaemonClient() as client:
+                if also:
+                    writes = [{"key_path": dotted.split("."), "unset": True} for dotted in keys]
+                    answer = client.config_set_layer_values(
+                        layer=layer, writes=writes, repo_root=anchor
+                    )
+                    return {**answer, "removed": bool(answer["envelopes"])}
                 return client.config_unset_layer_value(
-                    layer=layer,
-                    key_path=key.split("."),
-                    repo_root=str(repo_root) if repo_root is not None else None,
+                    layer=layer, key_path=key.split("."), repo_root=anchor
                 )
         except DaemonRpcError as exc:
             if exc.code != -32601:
@@ -389,8 +430,11 @@ def _unset_value_from_layer(
     key_path = key.split(".")
     with portalock.acquire(target_path):
         existing = load_yaml_layer(target_path)
-        removed = unset_dotted(existing, key_path)
+        removed = bool([dotted for dotted in keys if unset_dotted(existing, dotted.split("."))])
         if removed:
+            _check_layer_body(
+                target_path=target_path, body=existing, keys=keys, repo_root=repo_root
+            )
             _atomic_write_yaml(target_path, existing)
     return {
         "layer": layer,
@@ -400,6 +444,42 @@ def _unset_value_from_layer(
         "envelope": None,
         "idempotent_replay": False,
     }
+
+
+def _section_refusal(exc: Exception, *, key: str, verb: str, paired: bool) -> ValidationError:
+    """Return a refused write as the error the CLI prints, with how to write a pair.
+
+    A ``pair`` leaf is only valid beside its siblings, so a refusal of one written alone
+    says how to write them all at once.
+    """
+    from eawf.kernel.config.registry.leaf_catalog import pair_siblings
+    from eawf.surfaces.cli._daemon_client import DaemonRpcError
+
+    message = exc.message if isinstance(exc, DaemonRpcError) else str(exc)
+    siblings = pair_siblings(key)
+    if not siblings or paired:
+        return ValidationError(message)
+    if verb == "set":
+        extra = " ".join(f"--with {sibling}=<value>" for sibling in siblings)
+        how = f"eawf config set {key} <value> {extra}"
+    else:
+        how = f"eawf config unset {key} " + " ".join(f"--with {s}" for s in siblings)
+    return ValidationError(f"{message}; {key} is written with {', '.join(siblings)}: {how}")
+
+
+def _with_values(pairs: list[str]) -> dict[str, Any]:
+    """Return ``--with KEY=VALUE`` options as coerced values by key.
+
+    Raises:
+        UserError: An option names no ``=``.
+    """
+    values: dict[str, Any] = {}
+    for pair in pairs:
+        dotted, sep, raw = pair.partition("=")
+        if not sep or not dotted:
+            raise UserError(f"--with takes KEY=VALUE, got {pair!r}", kind="InvalidInput")
+        values[dotted] = _coerce_value(raw)
+    return values
 
 
 # --- Subcommands ------------------------------------------------------------
@@ -460,11 +540,20 @@ def config_set(
             help=("Layer to write to (global | workspace | repo | local). built-in is read-only."),
         ),
     ] = "repo",
+    with_: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--with",
+            help="Another KEY=VALUE written in the same write, for keys only valid together.",
+        ),
+    ] = None,
 ) -> None:
     """Write *value* under *key* to the chosen layer file."""
     import yaml
 
     from eawf.kernel.config.layered import WRITABLE_LAYERS, layer_path
+    from eawf.kernel.config.sections import ConfigSectionError
+    from eawf.surfaces.cli._daemon_client import DaemonRpcError
 
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
@@ -496,8 +585,14 @@ def config_set(
 
     coerced = _coerce_value(value)
     try:
-        _save_value_to_layer(target_path=target_path, key=key, value=coerced, repo_root=repo)
-    except ValidationError as exc:
+        also = _with_values(with_ or [])
+        _save_value_to_layer(
+            target_path=target_path, key=key, value=coerced, repo_root=repo, also=also
+        )
+    except (ConfigSectionError, DaemonRpcError) as exc:
+        emit_error(_section_refusal(exc, key=key, verb="set", paired=bool(also)), flags=flags)
+        return  # pragma: no cover  emit_error raises Exit
+    except (ValidationError, UserError) as exc:
         emit_error(exc, flags=flags)
         return  # pragma: no cover  emit_error raises Exit
     except yaml.YAMLError as exc:
@@ -519,7 +614,10 @@ def config_set(
         "scope": scope,
         "path": str(target_path),
     }
+    if also:
+        payload["with"] = also
     text = f"set {key} = {coerced!r}  (scope: {scope}, path: {target_path})"
+    text += "".join(f"\nset {dotted} = {typed!r}" for dotted, typed in also.items())
     emit_json_or_text(payload, text, flags=flags)
 
 
@@ -534,11 +632,17 @@ def config_unset(
             help=("Layer to remove from (global | workspace | repo | local)."),
         ),
     ] = "repo",
+    with_: Annotated[
+        list[str] | None,
+        typer.Option("--with", help="Another KEY removed in the same write."),
+    ] = None,
 ) -> None:
     """Remove *key* from one layer without changing lower-precedence values."""
     import yaml
 
     from eawf.kernel.config.layered import WRITABLE_LAYERS, layer_path
+    from eawf.kernel.config.sections import ConfigSectionError
+    from eawf.surfaces.cli._daemon_client import DaemonRpcError
 
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
@@ -565,7 +669,11 @@ def config_unset(
             key=key,
             layer=scope,
             repo_root=mutation_root,
+            also=tuple(with_ or ()),
         )
+    except (ConfigSectionError, DaemonRpcError) as exc:
+        emit_error(_section_refusal(exc, key=key, verb="unset", paired=bool(with_)), flags=flags)
+        return
     except ValueError as exc:
         emit_error(UserError(str(exc), kind="InvalidInput"), flags=flags)
         return

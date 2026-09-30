@@ -119,10 +119,10 @@ def test_surf_172_the_consequence_block_names_parts_sizes_and_destination(tree: 
     assert "not: no canonical record moves; nothing leaves the machine" in stderr
 
 
-def test_surf_172_a_part_without_a_producer_says_so(tree: Path) -> None:
-    """Sandbox decisions and an uncaptured runtime state their absence, not a blank."""
+def test_surf_172_a_part_with_nothing_to_state_says_so(tree: Path) -> None:
+    """A Run the gateway decided nothing for and an uncaptured runtime say so, not a blank."""
     _, text, _ = _report(tree, "--parts", "sandbox_decisions,usage_and_cost")
-    assert f"sandbox_decisions unavailable: {rr.SANDBOX_UNAVAILABLE}" in text
+    assert rr.NO_SANDBOX_DECISIONS in text
     assert "usage_and_cost unavailable: the Run holds no captured runtime" in text
 
 

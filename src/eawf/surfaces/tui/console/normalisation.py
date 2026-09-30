@@ -447,8 +447,6 @@ def _error_toast(frame: PackFrame) -> list[str]:
 
 # The row a pack overlay splices its state model into, just above its keybar.
 _STATE_ROW = re.compile(r"^ (?:STATE      |ENDS WHEN  |IMPOSSIBLE )")
-_PACK_EVIDENCE = " Eä ▸ evidence · "
-_PORT_ACCEPTANCE = " Eä ▸ acceptance evidence · "
 
 
 def _recrumb(row: str, old: str, new: str) -> str:
@@ -546,13 +544,6 @@ def _without_harness_rows(frame: PackFrame) -> list[str]:
     can never take; the port states the record's own state from the projection instead.
     """
     return [" " * frame.w if _STATE_ROW.match(row) else row for row in frame.rows]
-
-
-def _acceptance_evidence(frame: PackFrame) -> list[str]:
-    """Name the milestone's evidence as the acceptance evidence overlay."""
-    rows = list(frame.rows)
-    rows[0] = _recrumb(rows[0], _PACK_EVIDENCE, _PORT_ACCEPTANCE)
-    return rows
 
 
 # Each cursor overlay the pack recorded: its ids, its table's head and what its foot calls
@@ -714,11 +705,7 @@ REWRITES: tuple[Rewrite, ...] = (
     Rewrite(entry="error toast glyph", rows=_error_toast),
     Rewrite(entry="backlog open verb", rows=_backlog_open),
     Rewrite(entry="decision overlay harness rows", rows=_without_harness_rows),
-    Rewrite(
-        entry="acceptance evidence overlay",
-        rows=_acceptance_evidence,
-        overlays={"evidence": "acceptance"},
-    ),
+    Rewrite(entry="acceptance evidence overlay", overlays={"evidence": "acceptance"}),
     Rewrite(entry="cursor overlay foot", rows=_cursor_foot),
     Rewrite(entry="notifications matrix", rows=_matrix_body),
     Rewrite(entry="roadmap marker cursor", rows=_text_marker),

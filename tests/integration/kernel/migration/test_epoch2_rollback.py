@@ -589,7 +589,7 @@ def test_rollback_through_the_cli_restores_a_post_select_crash(
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = json.loads(result.output)["result"]
     assert payload["status"] == "surfaces_restored"
     assert payload["authority"]["epoch"] == 1
     assert generation_ids(target) == ()
@@ -937,7 +937,7 @@ def test_rollback_boundary_through_the_cli_reports_two_separate_windows(
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = json.loads(result.output)["result"]
     assert payload["simple_rollback_window"]["remedy"] == "forward_repair"
     assert payload["simple_rollback_window"]["state"] == "closed"
     assert payload["canary_reversible_window"]["state"] == "open"

@@ -56,6 +56,7 @@ from eawf.kernel.runtime.control import ControlFact, RunBinding
 from eawf.kernel.runtime.events import ToolPayload
 from eawf.kernel.runtime.lease import LeaseStatus, WorkLease, lease_has_expired
 from eawf.kernel.runtime.provider import MUTATING_ROLES, Digest, RuntimeRecord
+from eawf.kernel.runtime.sandbox_decision import SandboxDecision, SandboxDecisionOutcome
 from eawf.kernel.runtime.semantic import (
     TOOL_SCHEMA_VERSION,
     CallId,
@@ -105,6 +106,12 @@ RECEIPT_PAYLOAD_KIND: Final = "semantic_receipt"
 
 #: The principal the gateway states what it did on a Run's transcript as.
 GATEWAY_ACTOR: Final = "DAEMON"
+
+#: The revision of the sandbox policy this module enforces: the check order, the role
+#: ceiling and the scope rules below. Every decision cites it, so a change to any of
+#: those tables moves this number and a decision stays explicable by the policy it
+#: was read against.
+SANDBOX_POLICY_REVISION: Final = 1
 
 #: How many random bytes a minted receipt identity carries.
 _RECEIPT_ENTROPY_BYTES: Final = 8
@@ -647,6 +654,32 @@ _EVALUATORS: Final[Mapping[PreHandlerCheck, Callable[[GuardInputs], SemanticTool
 )
 
 
+#: The value each check holds when it decides, one per check, as a decision
+#: names it. It is the policy side of the check -- what the Run was allowed -- and never
+#: the call's own target, which stays on the receipt.
+_RULES_IN_FORCE: Final[Mapping[PreHandlerCheck, Callable[[GuardInputs], str]]] = MappingProxyType(
+    {
+        PreHandlerCheck.RUN_STATE: lambda i: f"run status {i.run.status.value.lower()}",
+        PreHandlerCheck.CONTRACT_DIGEST: lambda i: (
+            "no contract binding recorded"
+            if i.binding is None
+            else "the capsule the run was bound under"
+        ),
+        PreHandlerCheck.GRANT: lambda i: f"grants {', '.join(i.capsule.tool_grants) or 'none'}",
+        PreHandlerCheck.DENIAL: lambda i: f"denials {', '.join(i.capsule.tool_denials) or 'none'}",
+        PreHandlerCheck.SCOPE: lambda i: f"write set {', '.join(i.run.scope.write_set) or 'none'}",
+        PreHandlerCheck.LEASE: lambda i: (
+            "no active lease"
+            if i.lease is None
+            else f"lease generation {i.lease.workspace_generation}"
+        ),
+        PreHandlerCheck.BUDGET: lambda i: f"wall ceiling {i.capsule.budget.wall_seconds}s",
+        PreHandlerCheck.IDEMPOTENCY: lambda _i: "one payload per idempotency key",
+        PreHandlerCheck.REVOCATION: lambda _i: "no confirmed control effect has ended the run",
+    }
+)
+
+
 def _compile_check_order(
     declared: tuple[PreHandlerCheck, ...],
 ) -> tuple[PreHandlerCheck, ...]:
@@ -896,6 +929,7 @@ def serve_semantic_call(
             logger.info(f"serve_semantic_call replayed call={outcome.replay.call_id}")
             return outcome.replay
         _state_phase(session, call, phase="requested", now=now)
+        _append_decision(session, _decision(call, inputs=inputs, outcome=outcome, now=now))
         receipt = (
             _denied_receipt(call, check=outcome.check, error=outcome.error, now=now)
             if outcome.verdict == "refused"
@@ -1064,6 +1098,47 @@ def _state_phase(
     )
 
 
+def _decision(
+    call: SemanticCall, *, inputs: GuardInputs, outcome: GuardOutcome, now: datetime
+) -> SandboxDecision:
+    """Return the authorisation decision the walk reached for *call*.
+
+    A refusal is decided by the check that refused; an admission by the grant, which is
+    the one check whose passing is what lets a call through.
+    """
+    check = outcome.check or PreHandlerCheck.GRANT
+    code = "admitted" if outcome.error is None else outcome.error.code.value.lower()
+    return SandboxDecision(
+        call_id=call.call_id,
+        run_ref=call.run_ref,
+        tool_id=call.tool_id,
+        decision=(
+            SandboxDecisionOutcome.DENIED
+            if outcome.verdict == "refused"
+            else SandboxDecisionOutcome.ALLOWED
+        ),
+        rule=check.value,
+        rule_value=_RULES_IN_FORCE[check](inputs),
+        reason=f"{call.tool_id.value} · {code}",
+        policy_revision=SANDBOX_POLICY_REVISION,
+        decided_at=now,
+    )
+
+
+def _append_decision(session: RootSession, decision: SandboxDecision) -> None:
+    """File one sandbox decision as a line of the root's receipt ledger."""
+    commit_ledger_append(
+        session,
+        LedgerRecord(
+            collection=Epoch2Collection.RECEIPT,
+            record_key=decision.key,
+            status=decision.decision.value,
+            recorded_at=decision.decided_at,
+            payload=decision.model_dump(mode="json"),
+        ),
+    )
+
+
 def _append_receipt(session: RootSession, receipt: SemanticCallReceipt, *, now: datetime) -> None:
     """File one receipt as a line of the root's receipt ledger."""
     commit_ledger_append(
@@ -1171,6 +1246,7 @@ __all__ = [
     "REFUSAL_CODES_BY_CHECK",
     "ROLE_GATED_TOOLS",
     "ROLE_TOOL_CEILING",
+    "SANDBOX_POLICY_REVISION",
     "SCOPE_RULES",
     "GatewayTableError",
     "GuardInputs",

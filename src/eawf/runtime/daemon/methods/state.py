@@ -128,7 +128,6 @@ from eawf.runtime.daemon.methods.state_close import (
     enforce_wave_verdict_gate,
     load_wave_session_rollup,
     resolve_close_gate_tier,
-    retract_closed_wave_advisories,
     score_required_criteria,
     validate_close_apply_snapshot,
     validate_wave_close_gate_refs,
@@ -1330,7 +1329,6 @@ async def _mutate_wave_close(
     bus = bus_for_root(ctx, state_path)
     if bus is not None:
         bus.publish(envelope)
-    retract_closed_wave_advisories(state_path, wave_id=wave_id, bus=bus)
     ctx.last_event_id = envelope.id
 
     logger.info(

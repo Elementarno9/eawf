@@ -29,7 +29,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from types import MappingProxyType
 from typing import Annotated, Any, Final, Literal
@@ -51,6 +51,7 @@ from eawf.kernel.projection.truth import (
     TruthKind,
     TruthState,
 )
+from eawf.kernel.runtime.sandbox_decision import SANDBOX_DECISION_KIND
 from eawf.kernel.spec.release import Sha256DigestStr
 from eawf.kernel.state.enums import MeasurementQuality
 from eawf.kernel.state.epoch2.base import Epoch2Model, NonEmptyStr, StrictPositiveInt
@@ -94,7 +95,11 @@ _IMPORT_REVISION: Final = 1
 #: The fields a record's title is read from, in preference order, where they are not
 #: simply ``title``.
 _TITLE_FIELDS: Final[Mapping[Epoch2Collection, tuple[str, ...]]] = MappingProxyType(
-    {Epoch2Collection.TASK: ("title", "intent"), Epoch2Collection.PERMISSION: ("request_scope",)}
+    {
+        Epoch2Collection.TASK: ("title", "intent"),
+        Epoch2Collection.PERMISSION: ("request_scope",),
+        Epoch2Collection.OPEN_QUESTION: ("question",),
+    }
 )
 
 #: The stored field a pending action names the principal it is addressed to in, which is
@@ -157,8 +162,13 @@ ROUTE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingPr
     {
         "activity": (Epoch2Collection.RUN,),
         # a provider permission waits on a principal as a pending action does; its rows
-        # are the open ones on the run ledger, which the daemon supplies beside the document
-        "attention": (Epoch2Collection.PENDING_ACTION, Epoch2Collection.PERMISSION),
+        # are the open ones on the run ledger, which the daemon supplies beside the document,
+        # and so does a question a host asked, beside the questions a Campaign filed
+        "attention": (
+            Epoch2Collection.PENDING_ACTION,
+            Epoch2Collection.PERMISSION,
+            Epoch2Collection.OPEN_QUESTION,
+        ),
         "backlog": (Epoch2Collection.TASK,),
         # a Batch frame lists the Tasks filed under it, so it reads them beside the Batch
         "batch.detail": (Epoch2Collection.BATCH, Epoch2Collection.TASK),
@@ -197,6 +207,7 @@ ROUTE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingPr
             Epoch2Collection.RELEASE,
         ),
         "run.detail": (Epoch2Collection.RUN,),
+        # the decisions are notices on the receipt ledger, listed beside the policies
         "sandbox.log": (Epoch2Collection.SANDBOX_POLICY,),
         # home nests each Milestone under its Track and counts the Batches cut under
         # each Milestone, so its progress is read off rows it holds rather than guessed
@@ -216,12 +227,29 @@ ROUTE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingPr
 #: ledger files it. It is a notice: it records an overrun nobody can answer.
 CEILING_BREACH_KIND: Final = "child_ceiling_breach"
 
+#: The kind of a verdict observation: one independent audit verdict a Batch's
+#: verification cycle holds, read off the Batch ledger with the producer that reached it.
+#: It is derived at read time and never stored beside the Milestone it is listed under.
+VERDICT_OBSERVATION_KIND: Final = "verdict_observation"
+
+#: The kinds a notice row may be. Each is a line of a ledger a route lists from without
+#: binding the collection: a row of any other kind is a record of that collection.
+NOTICE_KINDS: Final = frozenset(
+    {CEILING_BREACH_KIND, SANDBOX_DECISION_KIND, VERDICT_OBSERVATION_KIND}
+)
+
 #: The collections a route lists notices from without binding the collection itself.
 #: Attention lists a ceiling breach beside the calls waiting on a principal, but the
 #: breach is a line on the run ledger, and listing the Runs it sits among would turn
-#: the register of what needs a principal into a list of work.
+#: the register of what needs a principal into a list of work. The sandbox log lists the
+#: decisions filed on the receipt ledger, and Trust the audit verdicts a Batch's
+#: verification cycles hold on the Batch ledger, for the same reason.
 ROUTE_NOTICE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingProxyType(
-    {"attention": (Epoch2Collection.RUN,)}
+    {
+        "attention": (Epoch2Collection.RUN,),
+        "sandbox.log": (Epoch2Collection.RECEIPT,),
+        "trust": (Epoch2Collection.BATCH,),
+    }
 )
 
 
@@ -622,17 +650,22 @@ def _collection_rows(
     return merged
 
 
-def _is_notice(row: Any) -> bool:
-    """Return whether a stored row is a ceiling breach rather than a record of its collection.
+def _notice_kind(row: Any) -> str | None:
+    """Return the notice kind a stored row is, or ``None`` when it is a record of its collection.
 
     The ledger line states its payload kind; a row spelled back for a replay states the
     kind among the facts it was projected with.
     """
     if not isinstance(row, dict):
-        return False
+        return None
     carried = row.get(FACTS_FIELD)
     kind = carried.get("kind") if isinstance(carried, dict) else row.get("payload_kind")
-    return kind == CEILING_BREACH_KIND
+    return kind if kind in NOTICE_KINDS else None
+
+
+def _is_notice(row: Any) -> bool:
+    """Return whether a stored row is a notice rather than a record of its collection."""
+    return _notice_kind(row) is not None
 
 
 def _notice_rows(
@@ -936,6 +969,59 @@ def _breach_facts(fields: Mapping[str, Any]) -> dict[str, str]:
     return {name: value for name, value in facts.items() if value}
 
 
+def _decision_facts(fields: Mapping[str, Any]) -> dict[str, str]:
+    """Return what a sandbox decision states: its Run, its outcome and the rule that decided.
+
+    The call's raw target is not among them: a decision never carries it.
+    """
+    revision = fields.get("policy_revision")
+    facts = {
+        "kind": SANDBOX_DECISION_KIND,
+        "run": _key_of(fields.get("run_ref")),
+        "decision": _text(fields.get("decision")),
+        "reason": _text(fields.get("reason")),
+        "rule": _text(fields.get("rule")),
+        "rule_value": _text(fields.get("rule_value")),
+        "policy_revision": str(revision) if isinstance(revision, int) else None,
+        "decided_at": _text(fields.get("decided_at")),
+    }
+    return {name: value for name, value in facts.items() if value}
+
+
+def _verdict_facts(fields: Mapping[str, Any]) -> dict[str, str]:
+    """Return what a verdict observation states: its site, subject, verdict and producer.
+
+    The producer is answered for as ``(agent_role, runtime)``; a part no record states
+    reads unknown in its place rather than dropping the pair.
+    """
+    role, runtime = _text(fields.get("agent_role")), _text(fields.get("runtime"))
+    facts = {
+        "kind": VERDICT_OBSERVATION_KIND,
+        "site": _text(fields.get("site")),
+        "subject": _text(fields.get("subject")),
+        "batch": _key_of(fields.get("batch_ref")),
+        "milestone": _key_of(fields.get("milestone_ref")),
+        "verdict": _text(fields.get("verdict")),
+        "agent_role": role,
+        "runtime": runtime,
+        "occurred_at": _text(fields.get("occurred_at")),
+        "answered_by": f"{role or '? unknown'} · {runtime or '? unknown'}",
+    }
+    return {name: value for name, value in facts.items() if value}
+
+
+#: What each notice kind states about itself, by kind.
+_NOTICE_FACTS: Final[Mapping[str, Callable[[Mapping[str, Any]], dict[str, str]]]] = (
+    MappingProxyType(
+        {
+            CEILING_BREACH_KIND: _breach_facts,
+            SANDBOX_DECISION_KIND: _decision_facts,
+            VERDICT_OBSERVATION_KIND: _verdict_facts,
+        }
+    )
+)
+
+
 def _permission_facts(fields: Mapping[str, Any]) -> dict[str, str]:
     """Return what a provider permission states: its Run, its deadline and who may decide it.
 
@@ -957,6 +1043,19 @@ def _permission_facts(fields: Mapping[str, Any]) -> dict[str, str]:
         "approve": ", ".join(str(c) for c in classes.get("approve", ())),
         "deny": ", ".join(str(c) for c in classes.get("deny", ())),
         "repository_may_approve": ("yes" if may else "no") if isinstance(may, bool) else None,
+    }
+    return {name: value for name, value in facts.items() if value}
+
+
+def _question_facts(fields: Mapping[str, Any]) -> dict[str, str]:
+    """Return what an open question states: what it was asked under and what it offers."""
+    options = fields.get("options")
+    facts = {
+        "kind": "question",
+        "subject": _key_of(fields.get("scope_ref")),
+        "question": _text(fields.get("question")),
+        "blocking": "yes" if fields.get("blocking") is True else None,
+        "options": str(len(options)) if isinstance(options, list | tuple) and options else None,
     }
     return {name: value for name, value in facts.items() if value}
 
@@ -1046,14 +1145,17 @@ def _with_facts(row: ProjectionRow, stored: Any, links: _Links) -> ProjectionRow
         if isinstance(name, str) and _text(value)
     }
     fields, _status = _stored_fields(row.collection, row.key, stored)
-    if _is_notice(stored):
-        facts.update(_breach_facts(fields))
+    notice = _notice_kind(stored)
+    if notice is not None:
+        facts.update(_NOTICE_FACTS[notice](fields))
     elif row.collection is Epoch2Collection.RUN:
         facts.update(_run_facts(row.key, fields, links))
     elif row.collection is Epoch2Collection.PENDING_ACTION:
         facts.update(_action_facts(fields, links))
     elif row.collection is Epoch2Collection.PERMISSION:
         facts.update(_permission_facts(fields))
+    elif row.collection is Epoch2Collection.OPEN_QUESTION:
+        facts.update(_question_facts(fields))
     elif row.collection is Epoch2Collection.TASK:
         facts.update(_task_facts(fields))
     elif row.collection is Epoch2Collection.BATCH:
@@ -1136,12 +1238,14 @@ __all__ = [
     "DIAGNOSTICS_CORPUS",
     "FACTS_FIELD",
     "MISSING_STATUS_REASON",
+    "NOTICE_KINDS",
     "PROJECTION_POLICY_REVISION",
     "PROJECTION_PRODUCER",
     "PROJECTION_SCHEMA_VERSION",
     "ROUTE_COLLECTIONS",
     "ROUTE_NOTICE_COLLECTIONS",
     "ROUTE_READ_MODELS",
+    "VERDICT_OBSERVATION_KIND",
     "ControlMark",
     "KeyedPatch",
     "PatchEntry",

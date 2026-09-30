@@ -52,11 +52,20 @@ CONTROL_METHOD: Final = "runtime.run.control.request"
 #: The daemon verb that approves or denies a provider permission.
 PERMISSION_DECIDE_METHOD: Final = "runtime.permission.decide"
 
+#: The daemon verb that records an operator's answer to a question, by option or reply.
+QUESTION_ANSWER_METHOD: Final = "runtime.question.answer"
+
+#: The wire code a write refused for naming a revision the record has moved past carries.
+STALE_REVISION_CODE: Final = "revision_conflict"
+
 #: The daemon verbs a settings edit writes and removes one layer's value through. The
 #: console never writes a layer file itself: the daemon holds the file lock and checks the
 #: key against the leaf catalog before it writes.
 SETTING_SET_METHOD: Final = "config.set_layer_value"
 SETTING_UNSET_METHOD: Final = "config.unset_layer_value"
+#: The daemon verb that writes several keys of one layer at once, for keys only valid
+#: together; the daemon checks their section once, after all of them.
+SETTING_SET_MANY_METHOD: Final = "config.set_layer_values"
 
 #: The daemon verbs that list one principal's budget notices and record what they did to
 #: one. A notice is not a pending action: it blocks nothing and is answered by nobody.
@@ -191,6 +200,30 @@ class AnswerRequest:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class QuestionAnswer:
+    """An operator's answer to one question, before it is addressed.
+
+    Attributes:
+        target: The question's public key.
+        option_key: The option chosen, for an answer by option.
+        reply: The operator's own words, for an answer by reply.
+    """
+
+    target: str
+    option_key: str | None = None
+    reply: str | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse an answer that is both or neither of an option and a reply.
+
+        Raises:
+            ValueError: Both or neither is given.
+        """
+        if (self.option_key is None) == (self.reply is None):
+            raise ValueError("an answer to a question is exactly one of an option or a reply")
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PermissionDecision:
     """An operator's approval or denial of one provider permission, before it is addressed.
 
@@ -235,6 +268,8 @@ class SettingRequest:
         value: The typed value to write; ignored when ``unset``.
         unset: Whether the edit removes the layer's value instead of writing one.
         branch: The branch whose layer a ``branch`` edit writes; ``None`` for the others.
+        together: The other keys written in the same write, with their values, for keys
+            only valid together; removed with ``target`` when ``unset``.
     """
 
     target: str
@@ -242,6 +277,7 @@ class SettingRequest:
     value: Any = None
     unset: bool = False
     branch: str | None = None
+    together: tuple[tuple[str, Any], ...] = ()
 
     def __post_init__(self) -> None:
         """Refuse an edit no layer write could carry.
@@ -328,6 +364,7 @@ class NoticeRequest:
 
 VerbRequest = (
     AnswerRequest
+    | QuestionAnswer
     | PermissionDecision
     | ControlRequest
     | SettingRequest
@@ -494,25 +531,33 @@ def address_setting(request: SettingRequest) -> ConsoleOperation:
         The addressed set or unset operation under a freshly minted id.
     """
     key = _minted("CFG")
-    params: dict[str, Any] = {
-        "layer": request.layer,
-        "key_path": request.target.split("."),
-        "idempotency_key": key,
-    }
-    if not request.unset:
-        params["value"] = request.value
+    params: dict[str, Any] = {"layer": request.layer, "idempotency_key": key}
+    if request.together:
+        leaves = ((request.target, request.value), *request.together)
+        params["writes"] = [
+            {"key_path": dotted.split("."), "unset": True}
+            if request.unset
+            else {"key_path": dotted.split("."), "value": value}
+            for dotted, value in leaves
+        ]
+        method = SETTING_SET_MANY_METHOD
+    else:
+        params["key_path"] = request.target.split(".")
+        if not request.unset:
+            params["value"] = request.value
+        method = SETTING_UNSET_METHOD if request.unset else SETTING_SET_METHOD
     if request.branch is not None:
         params["branch"] = request.branch
     return ConsoleOperation(
         operation_id=key,
-        method=SETTING_UNSET_METHOD if request.unset else SETTING_SET_METHOD,
+        method=method,
         params=MappingProxyType(params),
         target=request.target,
     )
 
 
 def address(
-    request: AnswerRequest | PermissionDecision | ControlRequest,
+    request: AnswerRequest | QuestionAnswer | PermissionDecision | ControlRequest,
     *,
     urn: str,
     revision: int,
@@ -542,6 +587,20 @@ def address(
                     "control": request.control.value,
                     "actor": operator.principal,
                 }
+            ),
+            target=request.target,
+        )
+    if isinstance(request, QuestionAnswer):
+        said = (
+            {"option_key": request.option_key}
+            if request.reply is None
+            else {"reply": request.reply}
+        )
+        return ConsoleOperation(
+            operation_id=_minted("QST"),
+            method=QUESTION_ANSWER_METHOD,
+            params=MappingProxyType(
+                {"urn": urn, "expected_revision": revision, "actor": operator.principal, **said}
             ),
             target=request.target,
         )
@@ -581,6 +640,21 @@ def address(
     )
 
 
+def rereads(request: VerbRequest, result: OperationResult) -> bool:
+    """Return whether the rows holding ``request``'s target are read again after ``result``.
+
+    A stale compare-and-swap is read again so the record is shown as it now stands, and an
+    answer to a question is, because a host's question lands on a ledger no patch carries.
+
+    Args:
+        request: What the operator asked for.
+        result: What became of it.
+    """
+    if result.status is OperationStatus.REFUSED:
+        return f"{STALE_REVISION_CODE}:" in result.detail
+    return isinstance(request, QuestionAnswer) and result.status is OperationStatus.APPLIED
+
+
 def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> OperationResult:
     """Return the result the daemon's answer to ``operation`` states.
 
@@ -599,7 +673,7 @@ def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> Operation
     Returns:
         The result, carrying the disposition the answer states.
     """
-    if operation.method in (SETTING_SET_METHOD, SETTING_UNSET_METHOD):
+    if operation.method in (SETTING_SET_METHOD, SETTING_UNSET_METHOD, SETTING_SET_MANY_METHOD):
         return OperationResult(
             operation_id=operation.operation_id,
             target=operation.target,
@@ -623,7 +697,7 @@ def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> Operation
     reason = answer.get("reason")
     if answer.get("outcome") == OperationStatus.SUPERSEDED.value:
         disposition = ControlDisposition.SUPERSEDED
-    elif operation.method in (SEAL_METHOD, PERMISSION_DECIDE_METHOD):
+    elif operation.method in (SEAL_METHOD, PERMISSION_DECIDE_METHOD, QUESTION_ANSWER_METHOD):
         disposition = ControlDisposition.CONFIRMED
     else:
         # an answer that names no disposition says nothing about the effect
@@ -691,7 +765,13 @@ def outcome_detail(operation: ConsoleOperation, disposition: ControlDisposition)
         The target, the verb asked for, and the outcome's own sentence.
     """
     params = operation.params
-    verb = params.get("control") or params.get("option_id") or params.get("verb") or "request"
+    verb = (
+        params.get("control")
+        or params.get("option_id")
+        or params.get("option_key")
+        or params.get("verb")
+        or ("reply" if "reply" in params else "request")
+    )
     return f"{operation.target} {verb} {OUTCOME_SENTENCES[disposition]}"
 
 
@@ -748,6 +828,10 @@ def _lifecycle_settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -
 def _setting_detail(operation: ConsoleOperation, answer: Mapping[str, Any]) -> str:
     """Return what a layered-config answer says was written, in the operator's words."""
     layer = answer.get("layer", operation.params.get("layer"))
+    if operation.method == SETTING_SET_MANY_METHOD:
+        keys = ", ".join(".".join(write["key_path"]) for write in operation.params["writes"])
+        done = "unset" if operation.params["writes"][0].get("unset") else "written"
+        return f"{keys} {done} at {layer} · settings re-read"
     if operation.method == SETTING_UNSET_METHOD:
         if answer.get("removed") is False:
             return f"{operation.target} was not set at {layer} · nothing was written"
@@ -885,15 +969,18 @@ __all__ = [
     "OUTCOME_SENTENCES",
     "PERMISSION_DECIDE_METHOD",
     "PERMISSION_VERBS",
+    "QUESTION_ANSWER_METHOD",
     "QUESTION_OPTIONS",
     "RUN_CONTROLS",
     "RUN_KINDS",
     "SAME_VERB",
     "SEAL_METHOD",
     "SETTING_LAYERS",
+    "SETTING_SET_MANY_METHOD",
     "SETTING_SET_METHOD",
     "SETTING_UNSET_METHOD",
     "SNOOZE_FOR",
+    "STALE_REVISION_CODE",
     "UNBOUND_REASON",
     "AnswerRequest",
     "ConsoleOperation",
@@ -905,6 +992,7 @@ __all__ = [
     "OperationStatus",
     "Operator",
     "PermissionDecision",
+    "QuestionAnswer",
     "SettingRequest",
     "VerbRequest",
     "address",
@@ -918,6 +1006,7 @@ __all__ = [
     "not_sent",
     "outcome_detail",
     "refused",
+    "rereads",
     "settled",
     "unanswered",
 ]

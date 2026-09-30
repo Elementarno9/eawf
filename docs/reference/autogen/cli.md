@@ -193,15 +193,15 @@ Manage MCP server entries (add/install/update/remove/list/grant/revoke).
 
 | Verb | Summary |
 |---|---|
-| `add` | Register a new Eä-owned MCP entry in ``state.mcp_servers``. |
+| `add` | Register a new Eä-owned MCP server. |
 | `grant` | Bind an MCP server to a scope so dispatch can project allowed-tools. |
-| `install` | Materialise an Eä-owned MCP entry into the runtime config. |
-| `list` | List MCP entries from state and/or runtime config. |
-| `remove` | Delete an Eä-owned MCP entry from state (and optionally runtime configs). |
-| `revoke` | Remove an MCP grant from ``state.mcp_grants``. |
+| `install` | Write a registered MCP server into a runtime config and record the install. |
+| `list` | List MCP entries from the registry and/or the runtime config. |
+| `remove` | Retire an Eä-owned MCP server (and optionally its runtime config entries). |
+| `revoke` | Revoke an MCP grant; its row stays under its id so the id is never reused. |
 | `run-config` | Render how one lane is told about a Run's semantic tool server. |
 | `serve` | Serve one Run's granted semantic tools over MCP stdio. |
-| `update` | Patch an existing Eä-owned MCP entry in ``state.mcp_servers``. |
+| `update` | Replace fields of a registered Eä-owned MCP server. |
 
 ### `eawf memory`
 
@@ -209,17 +209,17 @@ Manage curated durable memory entries.
 
 | Verb | Summary |
 |---|---|
-| `add` | Write a new memory entry to ``memory.jsonl`` + ``state.memory_index``. |
+| `add` | File a new memory note on the generation's memory ledger. |
 | `compact` | Compact ``memory.jsonl`` (dedup by content; idempotent). |
 | `digest` | Emit a state-derived standup: current focus, recent closes, decisions. |
-| `gc` | Archive matched memory entries by flipping their ``tier`` to ARCHIVAL. |
-| `list` | List memory entries from ``state.memory_index`` (the cache). |
+| `gc` | Archive matched memory notes by moving them to the ARCHIVAL tier. |
+| `list` | List the memory notes the tree stands at. |
 | `promote` | Promote a record. ``--to memory`` (default) or ``--to artifact``. |
-| `prune` | Soft-delete prune. Flips status to PRUNED; preserves the prior record. |
+| `prune` | Soft-delete prune. Flips status to PRUNED; the prior revision stays on the ledger. |
 | `render-context` | Produce a token-budgeted Markdown rendering of memory entries. |
 | `stale` | List memory entries that exceed ``--age`` days and are below high confidence. |
-| `tier` | Set the tier on a single memory entry. |
-| `view` | Show a single memory entry: cache summary + JSONL body. |
+| `tier` | Set the tier on a single memory note. |
+| `view` | Show a single memory note: its summary and its body. |
 
 ### `eawf migrate`
 
@@ -412,7 +412,6 @@ List, render, and run Eä workflow skills.
 | `list` | List every skill resolvable across builtin / user / workspace layers. |
 | `reconcile` | Reconcile the built-in skill registry against the disk skill tree. |
 | `render` | Render a registered skill's metadata or SKILL.md body to stdout. |
-| `resume` | Resume a paused needs_user question with the chosen option label. |
 | `run` | Run a registered skill headlessly and emit its envelope. |
 
 ### `eawf snapshot`
@@ -462,13 +461,12 @@ Telemetry / observability subsystem — pricing currency, projection.
 
 ### `eawf track`
 
-Track lifecycle (add, switch).
+Track lifecycle (create, retire).
 
 | Verb | Summary |
 |---|---|
 | `create` | Admit a new Track's create document into the addressed tree. |
 | `retire` | Retire an ACTIVE Track once no Milestone under it is open. |
-| `sync` | Recompute a Track's measured outcome statuses from their samples. |
 
 ### `eawf vfl`
 

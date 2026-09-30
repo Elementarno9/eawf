@@ -150,7 +150,7 @@ def test_train_show_json_emits_the_ladder_index_and_statuses(
     result = runner.invoke(app, ["release", "train", "show", "--json"])
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stdout)["result"]
     assert payload["train_id"] == "TRAIN-0.7.0"
     assert payload["current_checkpoint_index"] == 0
     assert [row["status"] for row in payload["checkpoints"]] == ["open", *["pending"] * 7]
@@ -208,7 +208,7 @@ def test_train_show_derives_the_open_rung_from_release_records(
     result = runner.invoke(app, ["release", "train", "show", "--json"])
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stdout)["result"]
     assert payload["current_checkpoint_index"] == 1
     assert payload["current_checkpoint"] == "REL-0.7.0.dev2"
     statuses = [row["status"] for row in payload["checkpoints"]]

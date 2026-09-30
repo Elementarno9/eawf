@@ -69,21 +69,24 @@ def _default_path(repo_root: Path, wave_id: str) -> Path:
     return repo_root / ".ea" / "worktrees" / suffix
 
 
-def _validate_path_inside_repo(repo_root: Path, target: Path) -> None:
-    """Refuse if *target* resolves outside *repo_root* (path-traversal guard).
+def _validate_path_inside_managed_root(repo_root: Path, target: Path) -> None:
+    """Refuse if *target* resolves outside ``<repo_root>/.ea/worktrees/``.
 
-    Thin adapter over :func:`eawf.runtime.sandbox.cwd_guard.is_path_inside`
+    Eawf owns every worktree it creates, and owns them only under the managed
+    worktree root, so an explicit path elsewhere -- inside the repository or not --
+    is refused. Thin adapter over :func:`eawf.runtime.sandbox.cwd_guard.is_path_inside`
     that maps the boolean predicate onto the worktree CLI's
-    :class:`~eawf.surfaces.cli.errors.UserError` contract (``kind=
-    "InvalidInput"``). The shared predicate handles ``..`` segments,
-    absolute paths, and symlink resolution.
+    :class:`~eawf.surfaces.cli.errors.UserError` contract (``kind="InvalidInput"``).
+    The shared predicate handles ``..`` segments, absolute paths, and symlink
+    resolution.
     """
-    if is_path_inside(target, root=repo_root):
-        return
+    managed_root = repo_root / ".ea" / "worktrees"
     target_resolved = target.resolve(strict=False)
-    repo_resolved = repo_root.resolve(strict=False)
+    if is_path_inside(target, root=managed_root) and target_resolved != managed_root.resolve():
+        return
     raise cli_errors.UserError(
-        f"worktree path {target_resolved} resolves outside repo root {repo_resolved}",
+        f"worktree path {target_resolved} resolves outside the managed worktree root "
+        f"{managed_root.resolve(strict=False)}",
         kind="InvalidInput",
     )
 
@@ -197,12 +200,12 @@ def _resolve_worktree_path(
     """Resolve + validate the on-disk worktree path, clearing an empty dir under *force*.
 
     Raises:
-        UserError: when the path resolves outside *repo_root*, is a
+        UserError: when the path resolves outside the managed worktree root, is a
             non-empty directory, or already exists (empty) without *force*
             (``kind="InvalidInput"``).
     """
     chosen_path = path or _default_path(repo_root, wave_id)
-    _validate_path_inside_repo(repo_root, chosen_path)
+    _validate_path_inside_managed_root(repo_root, chosen_path)
     if chosen_path.exists():
         if any(chosen_path.iterdir()):
             raise cli_errors.UserError(

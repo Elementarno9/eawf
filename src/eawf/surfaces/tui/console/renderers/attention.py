@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
+from typing import Final
 
 from eawf.kernel.projection.attention import (
     AttentionBucket,
@@ -26,6 +27,7 @@ from eawf.kernel.projection.attention import (
 from eawf.kernel.projection.compute import ProjectionRow
 from eawf.kernel.projection.registers import UNWRITTEN_REASON, RegisterView
 from eawf.kernel.projection.truth import TruthState
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.budget.notices import BudgetThresholdNotice
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.attention import (
@@ -40,6 +42,7 @@ from eawf.surfaces.tui.console.attention import (
     verbs_for,
 )
 from eawf.surfaces.tui.console.cells import value_cell
+from eawf.surfaces.tui.console.decisions import PauseRecord, PauseStatus
 from eawf.surfaces.tui.console.fixture import Action
 from eawf.surfaces.tui.console.format import group as group_n
 from eawf.surfaces.tui.console.frame import (
@@ -62,6 +65,7 @@ from eawf.surfaces.tui.console.notices import (
     notice_cells,
     notice_detail,
 )
+from eawf.surfaces.tui.console.overlays.situations import pause_situation
 from eawf.surfaces.tui.console.reads import can_mutate, prototype_attached, reads
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers.activity import beside
@@ -371,7 +375,13 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     listed = [item for item in items if _in_bucket(item, s.bucket) and item.key in by_key]
     # a budget notice lands in the over-budget bucket, so a filter on another hides it
     notices = list(view.notices) if s.bucket in (None, AttentionBucket.OVER_BUDGET.value) else []
-    keys = [item.key for item in listed] + [notice.notice_key for notice in notices]
+    # a pause is work held waiting, listed beside what it waits on and counted by neither
+    pauses = held_pauses(view) if s.bucket is None else []
+    keys = [
+        *(item.key for item in listed),
+        *(pause.id for pause in pauses),
+        *(notice.notice_key for notice in notices),
+    ]
     cursor = dv.restore_by_id(s, keys)
     # a frame that lists no row gives the cursor nothing to walk and Enter nothing to open
     s.nav_rows = len(keys)
@@ -415,11 +425,12 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
             body.append(table.row(cells, index == cursor))
             if index == cursor:
                 body.extend(_selected_lines(row, item, principal, holders))
+        body.extend(_pause_lines(view, pauses, table, first=len(listed), win=win, cursor=cursor))
         body.extend(
             _notice_lines(
                 notices,
                 table,
-                first=len(listed),
+                first=len(listed) + len(pauses),
                 win=win,
                 cursor=cursor,
                 headed=last is AttentionBucket.OVER_BUDGET,
@@ -439,11 +450,69 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
             + " "
             + " · ".join(f"{name} {UNKNOWN_WORD}" for name in register.withheld),
         ]
-    # a ceiling breach is read-only: it is listed, but no verb is offered on it
-    acts = cursor < len(listed) and not listed[cursor].read_only
-    selected = by_key[listed[cursor].key] if acts else None
-    on_notice = cursor >= len(listed) and bool(notices)
+    selected = _verb_row(listed, cursor, by_key)
+    on_notice = cursor >= len(listed) + len(pauses) and bool(notices)
     return build(view, rows, route_keys_bar(view, _bar_keys(view, selected, on_notice=on_notice)))
+
+
+#: The heading the held work is listed under.
+PAUSED_HEADING = "PAUSED"
+
+#: The pause states that still hold work.
+_HOLDING: Final = frozenset({PauseStatus.OPEN, PauseStatus.HELD})
+
+
+def held_pauses(view: View) -> list[PauseRecord]:
+    """Return the pauses still holding work, from the records the overlays are bound to."""
+    held = view.decisions.pauses if view.decisions is not None else ()
+    return [pause for pause in held if pause.status in _HOLDING]
+
+
+def _verb_row(
+    listed: Sequence[AttentionItem], cursor: int, by_key: Mapping[str, ProjectionRow]
+) -> ProjectionRow | None:
+    """Return the row the caret is on when the Attention verbs may act on it.
+
+    A ceiling breach is read-only: it is listed, but no verb is offered on it. A question
+    is answered from its own detail, where its options are, so none is offered on it either.
+    """
+    if cursor >= len(listed) or listed[cursor].read_only:
+        return None
+    row = by_key[listed[cursor].key]
+    return None if row.collection is Epoch2Collection.OPEN_QUESTION else row
+
+
+def _pause_lines(
+    view: View,
+    pauses: Sequence[PauseRecord],
+    table: Table,
+    *,
+    first: int,
+    win: RowWindow,
+    cursor: int,
+) -> list[str]:
+    """Return the pauses the window shows, after the actions, under their own heading.
+
+    Args:
+        view: The render being built, whose records state each affected Run's state.
+        pauses: The pauses listed after the actions.
+        table: The table the actions were drawn in, so the columns line up.
+        first: The offset of the first pause in the whole list.
+        win: The window of the whole list the frame draws.
+        cursor: The offset the caret sits on.
+    """
+    states = view.decisions.run_states if view.decisions is not None else {}
+    lines: list[str] = []
+    for index in range(max(win.start, first), min(win.stop, first + len(pauses))):
+        pause = pauses[index - first]
+        if index in (first, win.start):
+            lines.append(f" {PAUSED_HEADING}  {group_n(len(pauses))}")
+        situation = pause_situation(pause, states.get(pause.scope))
+        cells = [pause.id, f"{pause.scope} {situation.name}", pause.status.value, NO_DEADLINE]
+        lines.append(table.row(cells, index == cursor))
+        if index == cursor:
+            lines.append(_KIND_INDENT + f"pause · ends when {situation.ends}")
+    return lines
 
 
 def _notice_lines(

@@ -238,6 +238,8 @@ def test_native_record_rule_payload_names_every_target_and_urn_kind() -> None:
         "decisions": "decision",
         "incidents": "incident",
         "sandbox_policies": "sandbox_policy",
+        "mcp_servers": "capability",
+        "mcp_grants": "tool_authority",
         "project": "project",
     }
     assert payload["urn_kinds"] == {"decisions": "decision"}

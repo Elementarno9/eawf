@@ -30,6 +30,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import eawf.runtime.worktree.git as git
 from eawf.kernel.state.enums import WorktreeStatus
@@ -384,9 +385,37 @@ def merge_back(
     return result
 
 
+def merge_back_payload(result: MergeBackResult) -> dict[str, Any]:
+    """Return the answer ``worktree merge-back`` prints for *result*."""
+    if result.conflicted:
+        return {
+            "worktree_id": result.record.id,
+            "strategy": result.strategy,
+            "conflict": {
+                "stage": result.strategy,
+                "commit": result.conflict_commit,
+                "files": result.conflict_files,
+                "next_step": (
+                    "resolve in parent worktree, then "
+                    "`eawf worktree merge-back --wave ... --continue`"
+                ),
+            },
+            "status": "conflicted",
+        }
+    return {
+        "worktree_id": result.record.id,
+        "strategy": result.strategy,
+        "picked_commits": result.picked_commits,
+        "target_branch": result.target_branch,
+        "merged_commit": result.merged_commit,
+        "status": result.record.status.value,
+    }
+
+
 __all__ = [
     "STRATEGY_CHERRY_PICK",
     "STRATEGY_REBASE_THEN_FF",
     "MergeBackResult",
     "merge_back",
+    "merge_back_payload",
 ]

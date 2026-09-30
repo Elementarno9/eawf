@@ -101,6 +101,9 @@ def confirm(ctx: Ctx) -> None:
     if row.collection is Epoch2Collection.RUN:
         ctx.log("Enter", f"{action_id} is a notice — nothing answers it, nothing was sent")
         return
+    if row.collection is Epoch2Collection.OPEN_QUESTION:
+        ctx.log("Enter", f"{action_id} is a question — answer it from its detail, nothing was sent")
+        return
     verb = att.VERB[s.verb or "a"]
     refusal = write_refusal(s, ctx.fixture, verb=verb.name, kind=att.ATTENTION_ROUTE)
     # a provider permission is decided by its own verb, never sealed as an answer
@@ -274,6 +277,12 @@ def _enter_attention(ctx: Ctx) -> None:
     if notice is not None:
         # a notice has nothing to confirm: its detail is the notifications record form
         go(ctx, "notifications", f"notice detail · {short_key(notice)}", notice.notice_key)
+        return
+    pause = ctx.decisions.pause(s.sel_id) if ctx.decisions is not None and s.sel_id else None
+    if pause is not None and pause.id == s.sel_id:
+        # a pause is answered by nobody here: its detail says what would end it
+        open_overlay(s, "pause", subject=pause.id)
+        ctx.log("Enter", f"pause detail · {pause.id}")
         return
     if att.held_refusal(ctx, "Enter") or open_held_row(ctx):
         return

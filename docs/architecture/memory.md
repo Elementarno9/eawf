@@ -1,14 +1,13 @@
 # Memory model
 
-*Authoritative memory lives in `memory.jsonl`; markdown views are generated.*
+*Authoritative memory lives on the selected generation's memory ledger; markdown views are generated.*
 
-Eä memory is durable, synchronized across terminals, informative, and
-token-efficient.
+Eä memory is durable, synchronized across terminals, informative, and token-efficient.
 
 ## Memory storage
 
 ```text
-Project/repo memory      .ea/store/memory.jsonl
+Project/repo memory      .ea/generations/<generation>/ledger/memory.jsonl
 Workspace memory         <workspace>/.ea/store/memory.jsonl
 User/global memory       ~/.ea/store/memory.jsonl
 Generated markdown views .ea/artifacts/rendered/memory/*.md
@@ -17,18 +16,15 @@ Session scratch          .ea/local/sessions/* (gitignored)
 
 ## Source of truth
 
-Memory is not random chat history. Memory is **curated facts** promoted
-by explicit commands or hooks.
+Memory is not random chat history. Memory is **curated facts** promoted by explicit commands or hooks.
 
 Rules:
 
-- `memory.jsonl` is the authoritative memory source of truth in v0.1.
-- Markdown memory files are generated / curated views only, never
-  lifecycle authority.
+- The generation's memory ledger is the authoritative memory source of truth. On a tree that has not cut over, `.ea/store/memory.jsonl` still is, and it is read-only.
+- Markdown memory files are generated / curated views only, never lifecycle authority.
 - User preferences live in global `~/.ea/store/memory.jsonl`.
 - Session scratch is local and expires.
-- State remains authoritative for lifecycle; memory explains recurring
-  context / gotchas.
+- State remains authoritative for lifecycle; memory explains recurring context / gotchas.
 
 ## Memory commands
 
@@ -52,21 +48,19 @@ eawf memory render-context --budget 2000
 # Produce token-budgeted context block for statusline / hooks / agents.
 ```
 
-`eawf memory` is the only writer of `memory.jsonl`. Multiple terminals
-coordinate via sibling lockfiles such as `.ea/store/memory.jsonl.lock`
-and `.ea/state.json.lock`.
+`eawf memory add`, `promote`, `prune`, `gc` and `tier` send the daemon's native `memory.*` verbs, and the daemon is the only writer of the memory ledger. It reads the standing notes under the tree's locks and commits each revision as one ledger line that supersedes the note's previous line, so a note is never edited in place and each revision emits one firehose row.
+
+`promote --to artifact` retires a note into a decision the decision ledger already holds, named by `--artifact-id`; the decision itself is filed with `eawf record append`. The reads (`list`, `view`, `stale`, `render-context`, the `--dry-run` of `prune` and `gc`) read the ledger directly and need no daemon.
+
+The cutover imports every `memory_index` row and, from `.ea/store/memory.jsonl`, the latest envelope of every note, which carries its body and creation time. The two id sets are reconciled as a union: the index rows plus the store-only ids, and one ledger line per index row plus one per store id.
 
 ## Sync with terminals
 
-- Claude / OpenCode plugins inject only a compact memory summary, not
-  full memory files.
+- Claude / OpenCode plugins inject only a compact memory summary, not full memory files.
 - Statusline shows memory freshness and active scope, not content.
-- `SessionStart` hook calls `eawf memory render-context --budget N` and
-  injects state + memory summary.
-- `PreCompact` hook saves unresolved facts to session scratch and asks
-  user / agent to promote later.
-- Memory writes are atomic and append / edit through `eawf memory`, not
-  direct agent edits.
+- `SessionStart` hook calls `eawf memory render-context --budget N` and injects state + memory summary.
+- `PreCompact` hook saves unresolved facts to session scratch and asks user / agent to promote later.
+- Memory writes are atomic and append / edit through `eawf memory`, not direct agent edits.
 
 ## Memory entry schema
 
@@ -92,12 +86,10 @@ superseded_by: null
 - Exclude stale / superseded by default.
 - Summarize repeated items.
 - Link long memory to artifacts.
-- `eawf doctor` warns when memory grows too large or `review_due`
-  passes.
+- `eawf doctor` warns when memory grows too large or `review_due` passes.
 
 ## Cross-references
 
 - JSONL store envelope — `docs/architecture/state-model.md`.
-- Skills that promote / prune memory (`/polish`, `/ship`,
-  `/memory`) — `docs/architecture/workflow.md`.
+- Skills that promote / prune memory (`/polish`, `/ship`, `/memory`) — `docs/architecture/workflow.md`.
 - Statusline memory module — `docs/architecture/statusline.md`.

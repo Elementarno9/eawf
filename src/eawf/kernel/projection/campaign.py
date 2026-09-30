@@ -48,6 +48,7 @@ from eawf.kernel.state.epoch2.campaign import (
 from eawf.kernel.state.epoch2.finding import CampaignFinding
 from eawf.kernel.state.epoch2.urns import CampaignUrn, RunUrn
 from eawf.kernel.state.types import UtcDatetime
+from eawf.kernel.store.tiers import Epoch2Collection
 
 
 class _View(Epoch2Model):
@@ -157,6 +158,9 @@ class CampaignView(_View):
         steps: The plan steps, in order.
         artifacts: The artifact revisions it keeps, in the order it listed them.
         findings: The findings it promoted, held and consumed alike, by key.
+        promoted_at: The canonical sequence each finding's promoting event took, by
+            finding key. A finding whose event the firehose no longer retains is
+            absent, since it was promoted before any replay could start from.
     """
 
     campaign_ref: CampaignUrn
@@ -169,6 +173,11 @@ class CampaignView(_View):
     steps: tuple[CampaignStepView, ...]
     artifacts: tuple[ArtifactCardView, ...] = ()
     findings: tuple[CampaignFinding, ...] = ()
+    promoted_at: dict[str, StrictPositiveInt] = Field(default_factory=dict)
+
+    def promoted_after(self, cursor: int) -> tuple[CampaignFinding, ...]:
+        """Return the findings whose promoting event lies past *cursor*."""
+        return tuple(f for f in self.findings if self.promoted_at.get(f.key, 0) > cursor)
 
     def artifact(self, ref: str) -> ArtifactCardView | None:
         """Return the card of revision *ref*, or ``None`` when the Campaign keeps none."""
@@ -259,6 +268,7 @@ def build_campaign_view(
     *,
     revisions: Mapping[str, StoredArtifactRevision],
     findings: Iterable[CampaignFinding],
+    promoted_at: Mapping[str, int] | None = None,
 ) -> CampaignView:
     """Return one Campaign's read model.
 
@@ -266,6 +276,7 @@ def build_campaign_view(
         row: The Campaign's document row.
         revisions: Every stored artifact revision, keyed by its reference.
         findings: Every promoted finding; those of other Campaigns are left out.
+        promoted_at: The sequence each finding's promoting event took, by key.
 
     Returns:
         The view, with every artifact revision the Campaign lists resolved to its card.
@@ -294,6 +305,7 @@ def build_campaign_view(
             key=lambda finding: finding.key,
         )
     )
+    sequences = promoted_at or {}
     return CampaignView(
         campaign_ref=campaign.urn,
         key=campaign.key,
@@ -305,6 +317,7 @@ def build_campaign_view(
         steps=steps,
         artifacts=cards,
         findings=own,
+        promoted_at={f.key: sequences[f.key] for f in own if f.key in sequences},
     )
 
 
@@ -318,6 +331,27 @@ def promoted_findings(payloads: Iterable[Mapping[str, Any]]) -> tuple[CampaignFi
     return tuple(CampaignFinding.model_validate(payload) for payload in payloads)
 
 
+def promoting_sequences(payloads: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+    """Return the sequence each finding's promoting event took, from the firehose rows.
+
+    A finding is appended once and never re-promoted, so its first row is its promotion.
+
+    Args:
+        payloads: The payloads of the firehose rows, in the order they were written.
+
+    Returns:
+        The canonical sequence, by finding key.
+    """
+    held: dict[str, int] = {}
+    for payload in payloads:
+        if payload.get("collection") != Epoch2Collection.CAMPAIGN_FINDING.value:
+            continue
+        key, sequence = payload.get("record_key"), payload.get("canonical_sequence")
+        if isinstance(key, str) and isinstance(sequence, int) and not isinstance(sequence, bool):
+            held.setdefault(key, sequence)
+    return held
+
+
 __all__ = [
     "ArtifactCardView",
     "CampaignStepView",
@@ -327,5 +361,6 @@ __all__ = [
     "build_campaign_view",
     "plan_line",
     "promoted_findings",
+    "promoting_sequences",
     "stored_revisions",
 ]

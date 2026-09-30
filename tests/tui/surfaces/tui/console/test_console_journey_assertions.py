@@ -33,7 +33,6 @@ from eawf.kernel.projection.compute import (
 from eawf.kernel.projection.connection import (
     ConnectionValue,
     ReconnectDisposition,
-    replay_note,
 )
 from eawf.kernel.projection.registers import ATTENTION_ROUTE, build_register_view
 from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE
@@ -1097,7 +1096,7 @@ def test_prx_065_a_provider_with_no_start_marker_renders_thinking_labelled_deriv
 # ---------- PRX-066: a replaying Campaign shows nothing past its cursor ----------
 
 
-def _replayed_campaign() -> tuple[Any, str]:
+def _replayed_campaign() -> tuple[Any, str, list[str]]:
     document = {
         **bodies.DOCUMENT,
         "campaign": {"CAM-0001": bodies._row("campaign", "CAM-0001", "ACTIVE", title="drift")},
@@ -1105,36 +1104,37 @@ def _replayed_campaign() -> tuple[Any, str]:
     daemon = js.DocumentDaemon(document)
     daemon.reconnect_answer = _reconnect(ReconnectDisposition.REPLAY, route="campaign")
 
-    async def body() -> tuple[Any, str]:
+    async def body() -> tuple[Any, str, list[str]]:
         async with js.driven(js.held_app(daemon, route="campaign")) as harness:
             seam = harness.app.seam
             assert seam is not None
             await js.walk(harness, {"route": "campaign", "subjId": "CAM-0001", "size": 1}, [])
+            drawn: list[str] = []
+            seam.watch(lambda _routes: drawn.append("\n".join(harness.app.frame_rows)))
             outcome = await seam.reconnect()
             harness.app.render_frame()
             closed, _cycles = await settle(harness.pilot)
-            return outcome, closed
+            return outcome, closed, drawn
 
     return asyncio.run(body())
 
 
 def test_prx_066_a_replayed_campaign_draws_no_finding_it_was_not_shown_promoted() -> None:
-    outcome, closed = _replayed_campaign()
+    outcome, closed, _drawn = _replayed_campaign()
     assert outcome.negotiation.disposition is ReconnectDisposition.REPLAY
     assert (outcome.negotiation.client_cursor, outcome.negotiation.server_cursor) == (41190, 41208)
     # nothing the replay carried promotes a finding, so none is drawn promoted
     assert "promoted" not in closed
-    assert "no producer states the campaign plan yet" in closed
+    assert "the campaign plan has not been read yet" in closed
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="no producer counts the findings promoted past the replay cursor (replay_note "
-    "never sets ReplayNote.findings_promoted_after_cursor), and ProjectionSeam.reconnect "
-    "adopts the replay inside the call, so no frame is drawn under REPLAYING",
-)
-def test_prx_066_the_replaying_frame_names_the_findings_promoted_after_the_cursor() -> None:
-    outcome, _closed = _replayed_campaign()
-    assert outcome.connection is ConnectionValue.REPLAYING
-    note = replay_note(outcome.negotiation)
-    assert note is not None and note.findings_promoted_after_cursor is not None
+def test_prx_066_a_frame_is_drawn_under_replaying_before_the_replay_is_adopted() -> None:
+    """The frame the watchers draw mid-replay heads with the replay; the head count is
+    unknown here because this daemon serves no Campaign read, and the live suite
+    (test_campaign_cards_live) holds the count against a real one.
+    """
+    outcome, closed, drawn = _replayed_campaign()
+    assert drawn, "no frame was drawn while the link was replaying"
+    assert "replaying 41,190 → 41,208 · ? unknown findings promoted after this point" in drawn[0]
+    assert outcome.connection is not ConnectionValue.REPLAYING
+    assert "replaying 41,190" not in closed

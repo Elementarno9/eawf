@@ -153,7 +153,7 @@ def test_con_091_the_evidence_viewer_and_the_acceptance_evidence_are_two_subject
     claim = render_overlay("evidence", view_of(session_on("campaign", overlay="evidence"), fixture))
     bundle = render_overlay("acceptance", view_of(session_on("milestone"), fixture))
     assert "Eä ▸ evidence · EVD-0011" in claim[0]
-    assert "Eä ▸ acceptance evidence · MLS-0004" in bundle[0]
+    assert "Eä ▸ evidence · MLS-0004" in bundle[0]
     assert "Reading evidence does not accept the milestone." in "\n".join(bundle)
     assert "it seals no digest" in "\n".join(claim)
 

@@ -35,6 +35,7 @@ _TRUSTED_HOOK_HASHES = {
     "subagent_start": "sha256:d4668602f9c0321859e3515cc397cfc48f2bb8ebfbaf659c0d7dc4bd66ab9185",
     "subagent_stop": "sha256:f9c8f2c77aa7a2e2bf3625625684421e77fd5e097c63cb569360f9ea9c03a33c",
     "session_end": "sha256:0b68efff9048a85638caee762a85997b402f95bfd974ab4e34111469d46a6dca",
+    "pre_tool_use": "sha256:737696f7dab239051192d96b204ea0ee97dd32ff49e3ea26cf374b8b7a16fa3d",
 }
 
 
@@ -389,6 +390,7 @@ def test_install_codex_emits_manifest_toml(tmp_path: Path, fake_home: Path, scop
         "SubagentStart",
         "SubagentStop",
         "SessionEnd",
+        "PreToolUse",
     }
     for event_type in CODEX_HOOK_EVENT_TYPES:
         event_name = codex_hook_event_name(event_type)

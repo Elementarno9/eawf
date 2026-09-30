@@ -23,7 +23,7 @@ from eawf.surfaces.cli.commands.lifecycle import (
 # ``retire`` and ``create`` are the native epoch-2 verbs the ``domain``
 # sibling attaches to the same app; the three epoch-1 verbs keep their
 # places beside them.
-EXPECTED_TRACK_VERBS = {"sync", "retire", "create"}
+EXPECTED_TRACK_VERBS = {"retire", "create"}
 
 
 def _verb_names(app: typer.Typer) -> set[str]:

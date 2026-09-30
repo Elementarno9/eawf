@@ -75,7 +75,7 @@ def test_enable_accepts_workspace_overlay_profile(
         ["--json", "--workspace", str(ws), "config", "profile", "enable", "overlay-test"],
     )
     assert result.exit_code == 0, result.output
-    body = json.loads(result.output)
+    body = json.loads(result.output)["result"]
     assert body["profile"] == "overlay-test"
     written = (ws / ".ea" / "config.yaml").read_text(encoding="utf-8")
     assert "overlay-test" in written
@@ -123,7 +123,7 @@ def test_enable_workspace_overlay_shadows_builtin(
         ["--json", "--workspace", str(ws), "config", "profile", "enable", "python"],
     )
     assert result.exit_code == 0, result.output
-    body = json.loads(result.output)
+    body = json.loads(result.output)["result"]
     assert body["state_keys_required"] == ["overlay_marker"]
 
 

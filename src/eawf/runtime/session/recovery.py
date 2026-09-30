@@ -13,10 +13,14 @@ or ``CHECKPOINTED`` and the inferred heartbeat is older than
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
+
+import orjson
 
 from eawf.kernel.state.enums import AgentSessionStatus, StoreKind
 from eawf.kernel.state.models import State
@@ -122,3 +126,32 @@ def recover_sessions(
         skipped_session_ids=skipped,
         age_minutes=age_minutes,
     )
+
+
+def record_recovery_summary(*, events_path: Path, report: RecoveryReport, now: datetime) -> None:
+    """Append the one summary event a recovery sweep closes with."""
+    args = orjson.dumps({"age": report.age_minutes}, option=orjson.OPT_SORT_KEYS)
+    append_event(
+        events_path=events_path,
+        event_id=f"session-recover-summary-{now.strftime('%Y%m%dT%H%M%SZ')}",
+        event_type="session.recover.summary",
+        actor="cli",
+        command="session recover",
+        args_hash=hashlib.sha256(args).hexdigest(),
+        status="ok",
+        message=(
+            f"recovered {len(report.marked_session_ids)} session(s); "
+            f"skipped {len(report.skipped_session_ids)}"
+        ),
+        scope_id=None,
+        occurred_at=now,
+    )
+
+
+def recovery_payload(report: RecoveryReport) -> dict[str, Any]:
+    """Return the answer ``session recover`` prints for *report*."""
+    return {
+        "marked_session_ids": report.marked_session_ids,
+        "skipped_session_ids": report.skipped_session_ids,
+        "age_minutes": report.age_minutes,
+    }

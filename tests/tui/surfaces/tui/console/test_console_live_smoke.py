@@ -58,6 +58,7 @@ from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.epoch2_root import RootIdentity
 from eawf.runtime.daemon.runtime_dir import ensure_runtime_dir
 from eawf.runtime.daemon.server import handle_connection
+from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.tui.console.app import OUTER_GUTTER, ConsoleApp
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import FakeClock
@@ -153,8 +154,9 @@ class _LoopbackClient:
         """Send one request frame and return the result the daemon answered with.
 
         Raises:
-            RuntimeError: the daemon answered with a JSON-RPC error, or closed the
-                socket before answering.
+            DaemonRpcError: the daemon answered with a JSON-RPC error, as the real
+                client raises it, so a refusal reaches the console as a refusal.
+            RuntimeError: the daemon closed the socket before answering.
         """
         assert self._sock is not None and self._reader is not None, (
             "a call is made inside the client's context"
@@ -168,7 +170,8 @@ class _LoopbackClient:
             raise RuntimeError(f"the daemon closed the socket during {method}")
         reply = orjson.loads(line)
         if "error" in reply:
-            raise RuntimeError(str(reply["error"].get("message", reply["error"])))
+            error = reply["error"]
+            raise DaemonRpcError(int(error["code"]), str(error["message"]), error.get("data"))
         return dict(reply["result"])
 
 

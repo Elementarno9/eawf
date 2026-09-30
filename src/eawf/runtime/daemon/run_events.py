@@ -29,7 +29,10 @@ recording clock against the stall interval. It anchors on
 that has stopped responding is in no position to be believed about what
 time it is, and it returns an observation rather than a transition: a
 stall is the fact that makes a lost Run a deliberate call instead of a
-timeout guess.
+timeout guess. :func:`plan_stall` turns that observation into the typed
+fact the daemon's sweep records, once per quiet episode: the episode is
+named by the sequence of the last activity, so a Run that produced
+anything since has moved past the fact and the next silence earns its own.
 """
 
 from __future__ import annotations
@@ -57,8 +60,9 @@ from eawf.kernel.runtime.events import (
     RunEventPayload,
     RunEventRecord,
 )
-from eawf.kernel.runtime.handshake import WorkerHelloFact
+from eawf.kernel.runtime.handshake import HandshakeDisposition, WorkerHelloFact
 from eawf.kernel.runtime.provider import ControlKind
+from eawf.kernel.runtime.stall import RunStallFact, standing_stall
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.state.types import UtcDatetime
@@ -155,6 +159,8 @@ class RunEventState:
         last_activity_at: When the Run last produced something, as the
             daemon recorded it.
         last_activity_kind: What it last produced.
+        last_activity_sequence: The sequence of that activity, which names the quiet
+            episode a stall is raised for.
     """
 
     last_contiguous_sequence: int
@@ -164,6 +170,7 @@ class RunEventState:
     derivation_stopped: bool
     last_activity_at: datetime | None
     last_activity_kind: RunEventKind | None
+    last_activity_sequence: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,6 +294,7 @@ def reduce_run_events(events: Sequence[RunEventRecord]) -> RunEventState:
     gaps: list[EventGapPayload] = []
     last_at: datetime | None = None
     last_kind: RunEventKind | None = None
+    last_sequence: int | None = None
     for event in live:
         if event.run_sequence != expected:
             raise ValueError(
@@ -303,6 +311,7 @@ def reduce_run_events(events: Sequence[RunEventRecord]) -> RunEventState:
             last_contiguous = event.run_sequence
         last_at = event.recorded_at
         last_kind = event.event_kind
+        last_sequence = event.run_sequence
         expected = event.run_sequence + 1
     return RunEventState(
         last_contiguous_sequence=last_contiguous,
@@ -312,6 +321,7 @@ def reduce_run_events(events: Sequence[RunEventRecord]) -> RunEventState:
         derivation_stopped=stopped,
         last_activity_at=last_at,
         last_activity_kind=last_kind,
+        last_activity_sequence=last_sequence,
     )
 
 
@@ -423,6 +433,78 @@ def assess_stall(*, state: RunEventState, now: datetime, interval_seconds: int) 
         interval_seconds=interval_seconds,
         resume_control=STALL_RESUME_CONTROL,
     )
+
+
+def stall_facts_of(records: Sequence[LedgerRecord], urn: QualifiedUrn) -> tuple[RunStallFact, ...]:
+    """Return one Run's stall facts from the run ledger, in ledger order.
+
+    Args:
+        records: Every line the run ledger holds.
+        urn: The Run to select.
+
+    Returns:
+        The Run's stall facts, in the order they were raised.
+
+    Raises:
+        pydantic.ValidationError: A line claims to be a stall and does not validate as
+            one.
+    """
+    facts = [
+        RunStallFact.model_validate(item.payload)
+        for item in records
+        if item.payload.get("payload_kind") == "run_stall"
+    ]
+    return tuple(fact for fact in facts if fact.run_ref == urn)
+
+
+def plan_stall(
+    *,
+    urn: RunUrn,
+    state: RunEventState,
+    facts: Sequence[RunStallFact],
+    now: datetime,
+    interval_seconds: int,
+    resume_method: str,
+) -> RunStallFact | None:
+    """Return the stall fact a sweep raises for one running Run, or ``None``.
+
+    Args:
+        urn: The Run swept.
+        state: Its reduced event stream.
+        facts: The stall facts it already holds, in ledger order.
+        now: The daemon's recording clock.
+        interval_seconds: The silence the Run is allowed.
+        resume_method: The verb the fact offers as the way to resume the Run.
+
+    Returns:
+        A new fact when the Run has been silent past its interval and no fact stands
+        for this quiet episode yet; ``None`` when it is live, has recorded nothing to
+        measure silence against, or the episode already carries its fact.
+    """
+    stall = assess_stall(state=state, now=now, interval_seconds=interval_seconds)
+    anchor = state.last_activity_sequence
+    if stall.verdict is not RunLiveness.STALLED or anchor is None:
+        return None
+    if standing_stall(facts, anchor) is not None:
+        return None
+    assert stall.last_activity_at is not None and stall.last_activity_kind is not None
+    return RunStallFact(
+        run_ref=urn,
+        anchor_sequence=anchor,
+        last_activity_at=stall.last_activity_at,
+        last_activity_kind=stall.last_activity_kind,
+        elapsed_seconds=stall.elapsed_seconds,
+        interval_seconds=interval_seconds,
+        resume_method=resume_method,
+        resume_control=stall.resume_control,
+        raised_at=now,
+    )
+
+
+def runtime_of(facts: Sequence[WorkerHelloFact]) -> str | None:
+    """Return the runtime the Run's latest accepted hello announced, if any."""
+    accepted = [fact for fact in facts if fact.disposition is HandshakeDisposition.ACCEPTED]
+    return accepted[-1].hello.provider_id if accepted else None
 
 
 def next_hello_sequence(facts: Sequence[WorkerHelloFact]) -> int:
@@ -639,6 +721,9 @@ __all__ = [
     "ledger_receipt",
     "next_hello_sequence",
     "plan_event_append",
+    "plan_stall",
     "reduce_run_events",
     "run_events_of",
+    "runtime_of",
+    "stall_facts_of",
 ]

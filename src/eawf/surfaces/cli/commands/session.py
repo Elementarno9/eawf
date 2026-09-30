@@ -6,17 +6,19 @@ Sub-commands:
 - ``checkpoint`` — append a ``session.checkpoint`` event for an existing session.
 - ``close``      — terminate a session with ``closed | stale | failed``.
 - ``recover``    — mark heartbeat-aged sessions ``stale``; default age 30 m.
+
+``close`` and ``recover`` write through the daemon's ``state.session_close``
+and ``state.session_recover``; the in-process writer runs only under the
+explicit daemonless carve-out.
 """
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
-import orjson
 import typer
 
 from eawf.kernel.state.enums import AgentSessionStatus, StoreKind
@@ -65,10 +67,6 @@ def _resolve_close_status(raw: str) -> AgentSessionStatus:
     return status
 
 
-def _args_hash(args: dict[str, object]) -> str:
-    return hashlib.sha256(orjson.dumps(args, option=orjson.OPT_SORT_KEYS)).hexdigest()
-
-
 @session_app.command("close")
 def session_close_cmd(
     ctx: typer.Context,
@@ -83,42 +81,59 @@ def session_close_cmd(
     ] = None,
 ) -> None:
     """Close a session; required to reach the ``closed/stale/failed`` set."""
-    from eawf.runtime.session.store import SessionNotFound, close_session
-    from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.surfaces.cli import _dispatch
 
     flags: GlobalFlags = ctx.obj
     try:
         status_enum = _resolve_close_status(status)
         state_path = resolve_state_path(flags.workspace)
-        events_path = _events_path_for(state_path)
-        with state_transaction(state_path) as state:
-            try:
-                result = close_session(
-                    state=state,
-                    events_path=events_path,
-                    session_id=session_id,
-                    status=status_enum,
-                    summary=summary,
-                )
-            except SessionNotFound as exc:
-                raise cli_errors.UserError(str(exc), kind="NotFound") from exc
-        emit_json_or_text(
-            payload={
-                "id": result.session.id,
-                "status": result.session.status.value,
-                "ended_at": (
-                    result.session.ended_at.isoformat()
-                    if result.session.ended_at is not None
-                    else None
-                ),
+        answer = _dispatch.call_upkeep(
+            "state.session_close",
+            {
+                "repo_root": str(state_path.parent.parent),
+                "session_id": session_id,
+                "status": status_enum.value,
+                "summary": summary,
             },
-            text=f"session closed: {result.session.id} ({status_enum.value})",
+            flags=flags,
+            verb="session close",
+            local=lambda: _close_locally(state_path, session_id, status_enum, summary),
+        )
+        emit_json_or_text(
+            payload=answer,
+            text=f"session closed: {answer['id']} ({status_enum.value})",
             flags=flags,
         )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
         cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
+
+
+def _close_locally(
+    state_path: Path, session_id: str, status: AgentSessionStatus, summary: str | None
+) -> dict[str, object]:
+    """Close one session in process, under the daemonless carve-out."""
+    from eawf.runtime.session.store import SessionNotFound, close_session
+    from eawf.surfaces.cli._mutation import state_transaction
+
+    with state_transaction(state_path) as state:
+        try:
+            result = close_session(
+                state=state,
+                events_path=_events_path_for(state_path),
+                session_id=session_id,
+                status=status,
+                summary=summary,
+            )
+        except SessionNotFound as exc:
+            raise cli_errors.UserError(str(exc), kind="NotFound") from exc
+    ended = result.session.ended_at
+    return {
+        "id": result.session.id,
+        "status": result.session.status.value,
+        "ended_at": ended.isoformat() if ended is not None else None,
+    }
 
 
 @session_app.command("recover")
@@ -133,45 +148,24 @@ def session_recover_cmd(
     ] = _DEFAULT_AGE_MINUTES,
 ) -> None:
     """Mark every active/checkpointed session whose heartbeat is older than ``--age`` as stale."""
-    from eawf.runtime.session.recovery import recover_sessions
-    from eawf.runtime.session.store import append_event
-    from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.surfaces.cli import _dispatch
 
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
-        events_path = _events_path_for(state_path)
-        with state_transaction(state_path) as state:
-            report = recover_sessions(
-                state=state,
-                events_path=events_path,
-                age_minutes=age,
-            )
-        append_event(
-            events_path=events_path,
-            event_id=f"session-recover-summary-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
-            event_type="session.recover.summary",
-            actor="cli",
-            command="session recover",
-            args_hash=_args_hash({"age": age}),
-            status="ok",
-            message=(
-                f"recovered {len(report.marked_session_ids)} session(s); "
-                f"skipped {len(report.skipped_session_ids)}"
-            ),
-            scope_id=None,
-            occurred_at=datetime.now(UTC),
+        answer = _dispatch.call_upkeep(
+            "state.session_recover",
+            {"repo_root": str(state_path.parent.parent), "age_minutes": age},
+            flags=flags,
+            verb="session recover",
+            local=lambda: _recover_locally(state_path, age),
         )
+        marked = [str(sid) for sid in answer["marked_session_ids"]]
         emit_json_or_text(
-            payload={
-                "marked_session_ids": report.marked_session_ids,
-                "skipped_session_ids": report.skipped_session_ids,
-                "age_minutes": report.age_minutes,
-            },
+            payload=answer,
             text=(
-                f"sessions marked stale: {len(report.marked_session_ids)}\n"
-                + "\n".join(report.marked_session_ids)
-                if report.marked_session_ids
+                f"sessions marked stale: {len(marked)}\n" + "\n".join(marked)
+                if marked
                 else "no stale sessions found"
             ),
             flags=flags,
@@ -180,3 +174,19 @@ def session_recover_cmd(
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
         cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
+
+
+def _recover_locally(state_path: Path, age: int) -> dict[str, object]:
+    """Run one recovery sweep in process, under the daemonless carve-out."""
+    from eawf.runtime.session.recovery import (
+        record_recovery_summary,
+        recover_sessions,
+        recovery_payload,
+    )
+    from eawf.surfaces.cli._mutation import state_transaction
+
+    events_path = _events_path_for(state_path)
+    with state_transaction(state_path) as state:
+        report = recover_sessions(state=state, events_path=events_path, age_minutes=age)
+    record_recovery_summary(events_path=events_path, report=report, now=datetime.now(UTC))
+    return recovery_payload(report)

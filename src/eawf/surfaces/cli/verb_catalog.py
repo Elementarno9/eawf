@@ -1,8 +1,9 @@
 """The introspectable verb catalog: every verb, its entity, parameters, errors and effect.
 
-A verb is one legal operation on one entity group of the verb contract. The
-catalog is built by walking the live Typer tree under the contract's groups,
-so a verb's parameters are the ones its command actually declares rather
+A verb is one legal operation on one entity group of the verb contract, or
+a verb under a root entry the contract declares an exception for. The
+catalog is built by walking the live Typer tree under every root entry, so
+a verb's parameters are the ones its command actually declares rather
 than a list maintained beside it. What the tree cannot say about a verb --
 whether it reads, mutates or creates, and which daemon routes it drives -- is
 declared once in :data:`CLI_VERB_EFFECTS`, and :func:`build_verb_catalog`
@@ -32,11 +33,12 @@ import orjson
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.surfaces.cli import exit_codes
+from eawf.surfaces.cli.verb_closure import ROOT_ENTRY_EXCEPTIONS
 from eawf.surfaces.cli.verb_contract import CROSS_CUTTING_GROUPS, ENTITY_GROUPS
+from eawf.surfaces.cli.verb_effects import CLI_VERB_EFFECTS, EffectClass, VerbEffect
 
 logger = logging.getLogger(__name__)
 
-EffectClass = Literal["read", "mutate", "create"]
 VerbSurface = Literal["cli", "rpc"]
 ParameterKind = Literal["argument", "option"]
 
@@ -165,19 +167,6 @@ class VerbCatalog(BaseModel):
 
 
 @dataclass(frozen=True, slots=True)
-class VerbEffect:
-    """What the command tree cannot say about one CLI verb.
-
-    Attributes:
-        effect_class: Whether the verb reads, mutates or creates.
-        routes: The daemon routes it drives; empty for a local verb.
-    """
-
-    effect_class: EffectClass
-    routes: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
 class RpcVerb:
     """A native verb the daemon carries with no CLI spelling yet.
 
@@ -194,146 +183,6 @@ class RpcVerb:
     effect_class: EffectClass
     params_model: str
 
-
-def _read(*routes: str) -> VerbEffect:
-    return VerbEffect("read", routes)
-
-
-def _mutate(*routes: str) -> VerbEffect:
-    return VerbEffect("mutate", routes)
-
-
-def _create(*routes: str) -> VerbEffect:
-    return VerbEffect("create", routes)
-
-
-#: The effect and routes of every CLI verb under the contract groups.
-CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
-    "track retire": _mutate("domain.track.retire"),
-    "track create": _create("domain.track.create"),
-    "track sync": _mutate("track.sync"),
-    "milestone activate": _mutate("domain.milestone.activate"),
-    "milestone open-review": _mutate("domain.milestone.open_review"),
-    "milestone accept": _mutate("domain.milestone.accept"),
-    "milestone cancel": _mutate("domain.milestone.cancel"),
-    "milestone create": _create("domain.milestone.create"),
-    "milestone close-legacy": _mutate("domain.legacy.advance"),
-    "milestone cancel-legacy": _mutate("domain.legacy.advance"),
-    "milestone open-approval": _create("runtime.delivery.open_acceptance_approval"),
-    "milestone seal-approval": _mutate("runtime.delivery.seal_acceptance_approval"),
-    "batch activate": _mutate("domain.batch.activate"),
-    "batch ready": _mutate("domain.batch.ready"),
-    "batch create": _create("domain.batch.create"),
-    "batch merge": _mutate("domain.batch.merge"),
-    "batch observe-merge": _mutate("domain.batch.observe_merge"),
-    "batch complete": _mutate("domain.batch.complete"),
-    "batch close-legacy": _mutate("domain.legacy.advance"),
-    "batch integrate": _mutate(
-        "runtime.delivery.assemble", "operation.submit", "runtime.delivery.integrate"
-    ),
-    "batch adopt-landed": _mutate("runtime.delivery.adopt_landed"),
-    "batch reconcile": _mutate(
-        "runtime.delivery.read_back_merge", "runtime.delivery.reconcile_merge"
-    ),
-    "task promote": _mutate("domain.task.promote"),
-    "task demote": _mutate("domain.task.demote"),
-    "task start": _mutate("domain.task.start"),
-    "task create": _create("domain.task.create"),
-    "task claim": _mutate("domain.task.claim"),
-    "task release": _mutate("domain.task.release"),
-    "task ready": _mutate("domain.task.ready"),
-    "task complete": _mutate("domain.task.complete"),
-    "task advance-legacy": _mutate("domain.legacy.advance"),
-    "task submit": _create("runtime.candidate.submit"),
-    "task seal": _mutate("runtime.candidate.report.bind"),
-    "task prove": _mutate("operation.submit", "runtime.delivery.prove_task"),
-    "task assess": _read("runtime.delivery.task_assessment"),
-    "run create": _create("domain.run.create"),
-    "run start": _mutate("domain.run.start"),
-    "run finish": _mutate("domain.run.finish"),
-    "run fail": _mutate("domain.run.fail"),
-    "run report": _read(),
-    "release changelog": _read(),
-    "release notes": _read(),
-    "release observe": _mutate("release.observe_target"),
-    "release show": _read("release.show"),
-    "release readiness": _read("release.compute_readiness"),
-    "release create": _create("release.create"),
-    "release approve": _mutate("release.approve"),
-    "release publish": _mutate("release.publish"),
-    "release retry": _mutate("release.retry_target"),
-    "release reconcile": _mutate("release.reconcile"),
-    "release burn": _mutate("release.burn"),
-    "release adopt": _mutate("release.adopt"),
-    "release cancel": _mutate("release.cancel"),
-    "release candidate": _create("release.candidate"),
-    "release pipeline": _mutate(
-        "release.create",
-        "release.candidate",
-        "release.compute_readiness",
-        "release.approve",
-        "release.publish",
-        "release.observe_target",
-        "release.reconcile",
-        "release.advance_train",
-    ),
-    "release tag": _mutate(),
-    "release preflight": _read(),
-    "release receipts": _create("release.produce_receipts"),
-    "release advance": _mutate("release.advance_train"),
-    "release bind-regime": _create("runtime.regime.bind"),
-    "release discharge-debt": _mutate("runtime.regime.discharge_debt"),
-    "release train show": _read(),
-    "campaign new": _create("runtime.campaign.start"),
-    "campaign run": _mutate("runtime.campaign.run"),
-    "campaign cancel": _mutate("projection.campaign.view", "runtime.campaign.close"),
-    "question open-decision": _create("runtime.question.open_decision"),
-    "question answer": _mutate("runtime.question.answer_numbered"),
-    "workspace registry-list": _read(),
-    "workspace registry-status": _read(),
-    "workspace add": _create("registry.workspace.create"),
-    "workspace show": _read(),
-    "workspace list": _read(),
-    "workspace select": _mutate(),
-    "workspace member add": _mutate("registry.workspace.update_membership"),
-    "workspace member remove": _mutate("registry.workspace.update_membership"),
-    "config get": _read(),
-    "config set": _mutate("config.set_layer_value"),
-    "config unset": _mutate("config.unset_layer_value"),
-    "config validate": _read(),
-    "config menu": _mutate("config.set_layer_value", "config.unset_layer_value"),
-    "config profile enable": _mutate(),
-    "daemon run": _mutate(),
-    "daemon start": _mutate(),
-    "daemon restart": _mutate("daemon.shutdown"),
-    "daemon ping": _read("daemon.ping"),
-    "daemon status": _read("daemon.status"),
-    "daemon stop": _mutate("daemon.shutdown"),
-    "daemon replay-wal": _mutate(),
-    "daemon reclaim": _mutate(),
-    "daemon logs": _read(),
-    "daemon service-enable": _mutate(),
-    "daemon service-disable": _mutate(),
-    "daemon service-status": _read(),
-    "memory list": _read(),
-    "memory render-context": _read(),
-    "memory view": _read(),
-    "memory digest": _read(),
-    "memory stale": _read(),
-    "memory add": _create(),
-    "memory promote": _mutate(),
-    "memory compact": _mutate(),
-    "memory prune": _mutate(),
-    "memory gc": _mutate(),
-    "memory tier": _mutate(),
-    "ui": _read(),
-    "migrate status": _read(),
-    "reflect run": _read(),
-    "reflect show": _read(),
-    "reflect export": _read(),
-    "reflect serve": _read(),
-    "reflect prune": _read(),
-}
 
 #: The native verbs a shipped skill drives that no CLI verb spells yet.
 RPC_VERBS: Final[tuple[RpcVerb, ...]] = (
@@ -391,6 +240,36 @@ RPC_VERBS: Final[tuple[RpcVerb, ...]] = (
         "milestone",
         "read",
         "eawf.runtime.daemon.methods.projection:AcceptanceParams",
+    ),
+    RpcVerb(
+        "projection.health.verdicts",
+        "ui",
+        "read",
+        "eawf.runtime.daemon.methods.console_records:HealthVerdictsRead",
+    ),
+    RpcVerb(
+        "projection.git.pr.generations",
+        "batch",
+        "read",
+        "eawf.runtime.daemon.methods.console_records:BatchRecordsRead",
+    ),
+    RpcVerb(
+        "projection.merge.conflict.frames",
+        "batch",
+        "read",
+        "eawf.runtime.daemon.methods.console_records:BatchRecordsRead",
+    ),
+    RpcVerb(
+        "projection.receipt.proofs",
+        "ui",
+        "read",
+        "eawf.runtime.daemon.methods.console_records:ProofReceiptsRead",
+    ),
+    RpcVerb(
+        "projection.target.resolve",
+        "ui",
+        "read",
+        "eawf.runtime.daemon.methods.console_records:TargetResolve",
     ),
     RpcVerb(
         "runtime.run.events.read",
@@ -452,7 +331,10 @@ def _walk(
 
 
 def _cli_entries(root: click.Group) -> tuple[VerbEntry, ...]:
-    """Return one entry per CLI verb under the contract groups.
+    """Return one entry per CLI verb, the contract groups' first.
+
+    A verb under a root entry the contract declares an exception for is
+    catalogued under that entry's name.
 
     Raises:
         VerbCatalogError: A verb has no declared effect, or a declared verb is
@@ -460,7 +342,8 @@ def _cli_entries(root: click.Group) -> tuple[VerbEntry, ...]:
     """
     ctx = click.Context(root)
     found: dict[str, VerbEntry] = {}
-    for group in (*ENTITY_GROUPS, *CROSS_CUTTING_GROUPS):
+    exceptions = tuple(row.name for row in ROOT_ENTRY_EXCEPTIONS if row.kind != "cross_cutting")
+    for group in (*ENTITY_GROUPS, *CROSS_CUTTING_GROUPS, *exceptions):
         command = root.get_command(ctx, group)
         if command is None:
             continue

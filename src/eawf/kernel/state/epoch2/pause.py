@@ -25,6 +25,7 @@ from typing import Annotated, Final, Self
 
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
+from eawf.kernel.identity import EntityKind
 from eawf.kernel.state.epoch2.base import (
     Epoch2Model,
     NonEmptyStr,
@@ -36,6 +37,7 @@ from eawf.kernel.state.epoch2.urns import (
     CampaignUrn,
     EvidenceUrn,
     PendingActionUrn,
+    PermissionUrn,
     QuestionUrn,
     ReleaseUrn,
     RunUrn,
@@ -47,6 +49,10 @@ from eawf.kernel.state.types import UtcDatetime
 #: A ``PAU-####`` pause key. Local grammar: a pause is addressed by key
 #: inside the daemon's pause projection and has no URN kind of its own.
 PauseKey = Annotated[str, StringConstraints(strict=True, pattern=r"^PAU-\d{4,}$")]
+
+#: A ``STL-<run key>-<anchor>`` stall fact key: the run-ledger record of one quiet
+#: episode of a Run, which is what the daemon observed when the Run went silent.
+StallKey = Annotated[str, StringConstraints(strict=True, pattern=r"^STL-RUN-[0-9A-Za-z]+-\d+$")]
 
 #: A bounded single-line label: a Hold id, an evaluator's name.
 ShortText = Annotated[
@@ -154,7 +160,9 @@ class OpenPause(Epoch2Model):
         key: The pause's key.
         scope_ref: The Run, Batch, Campaign, Release or Workspace it pauses.
         reason: Why it paused.
-        health_evidence_refs: The daemon observations that opened it.
+        health_evidence_refs: The daemon observations that opened it: evidence; for a
+            person-wait pause the question or permission whose opening it observed; for a
+            provider or ambiguity pause the stall fact of the Run that went quiet.
         resume_predicate: What would resume the work.
         deadline: When the policy bounds the wait.
         retry_budget: Attempts spent of attempts allowed.
@@ -179,7 +187,9 @@ class OpenPause(Epoch2Model):
     key: PauseKey
     scope_ref: RunUrn | BatchUrn | CampaignUrn | ReleaseUrn | WorkspaceUrn
     reason: PauseReason
-    health_evidence_refs: tuple[EvidenceUrn, ...] = Field(min_length=1)
+    health_evidence_refs: tuple[EvidenceUrn | QuestionUrn | PermissionUrn | StallKey, ...] = Field(
+        min_length=1
+    )
     resume_predicate: ResumePredicate
     deadline: UtcDatetime | None = None
     retry_budget: RetryBudget | None = None
@@ -203,6 +213,12 @@ class OpenPause(Epoch2Model):
                 f"waiting_on_ref is required for a permission or user pause only, "
                 f"not {self.reason.value}"
             )
+        refs = self.health_evidence_refs
+        cited = {ref.kind for ref in refs if not isinstance(ref, str)} - {EntityKind.EVIDENCE}
+        if cited and self.reason not in PERSON_REASONS:
+            raise ValueError("only a person-wait pause cites the question or permission it saw")
+        if any(isinstance(ref, str) for ref in refs) and self.reason not in UNKNOWN_OUTCOME_REASONS:
+            raise ValueError("only a provider or ambiguity pause cites a stall fact")
         held = self.status is PauseStatus.HELD
         if held != (self.held_by is not None) or held != (self.hold_id is not None):
             raise ValueError("held_by and hold_id are set exactly when the pause is HELD")
@@ -335,5 +351,6 @@ __all__ = [
     "PauseVerb",
     "ResumePredicate",
     "RetryBudget",
+    "StallKey",
     "project_pause",
 ]

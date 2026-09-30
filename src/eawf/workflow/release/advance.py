@@ -698,7 +698,7 @@ def _rung_row(train: ReleaseTrain, index: int, rung: ReleaseCheckpoint) -> dict[
 
 
 def render_train_ladder(train: ReleaseTrain) -> dict[str, Any]:
-    """Return the JSON body ``eawf release train show`` emits.
+    """Return the body ``eawf release train show`` answers with as its envelope's result.
 
     Args:
         train: The train to describe.

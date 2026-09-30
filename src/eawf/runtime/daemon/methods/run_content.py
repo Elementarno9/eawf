@@ -23,10 +23,10 @@ from eawf.kernel.runtime.semantic import SemanticResult
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.runtime.daemon.content_store import stored_contents
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
-from eawf.runtime.daemon.host_calls import host_receipts
+from eawf.runtime.daemon.host_calls import HostCallReceipt, host_receipts
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.daemon.native_guard import native_params, require_native_call
-from eawf.runtime.daemon.semantic_gateway import run_receipts
+from eawf.runtime.daemon.semantic_gateway import SemanticCallReceipt, run_receipts
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,11 @@ def resolve_contents(context: Epoch2RootContext, args: RunContentRead) -> RunCon
     with context.session([args.urn]) as session:
         stored = stored_contents(session, args.urn)
         results: dict[str, SemanticResult] = {}
-        for receipt in (*run_receipts(session, args.urn), *host_receipts(session, args.urn)):
+        receipts: tuple[SemanticCallReceipt | HostCallReceipt, ...] = (
+            *run_receipts(session, args.urn),
+            *host_receipts(session, args.urn),
+        )
+        for receipt in receipts:
             results[receipt.call_id] = results[receipt.receipt_id] = receipt.result
     contents: list[ResolvedContent] = []
     missing: list[str] = []

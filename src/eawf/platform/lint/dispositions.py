@@ -98,13 +98,7 @@ RULE_DISPOSITIONS: Final[tuple[RuleDisposition, ...]] = (
     RuleDisposition("EAWF020", "laconic-bullet prose shape", Disposition.CARRY),
     RuleDisposition("EAWF021", "success criteria are measurable", Disposition.REWRITE),
     RuleDisposition(
-        "EAWF022",
-        "dropped brief detail surfaces at plan render time",
-        Disposition.REWRITE,
-        epoch1_reference=(
-            "still reads the epoch-1 wave spec sync; the plan-revision surface it moves to "
-            "has no coverage input yet"
-        ),
+        "EAWF022", "dropped brief detail surfaces at plan render time", Disposition.REWRITE
     ),
     RuleDisposition("EAWF023", "artifact placement and date stem", Disposition.REWRITE),
     RuleDisposition("EAWF024", "test-tier contract for the unit tier", Disposition.REWRITE),

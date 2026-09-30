@@ -9,8 +9,9 @@ Every event in :data:`CODEX_HOOK_EVENT_NAMES` genuinely has a runner
 callable under the Codex runtime: ``runtime.codex_lifecycle`` handles
 SESSION_START / SUBAGENT_START / SUBAGENT_STOP unconditionally on
 ``register_runtime_capture_hooks`` (the two subagent events also adopt the
-subagent as a Run through ``runtime.host_subagent``), and SESSION_END is handled by both
-``runtime.capture`` and ``session.end_stamp``. A module-level boot guard
+subagent as a Run through ``runtime.host_subagent``), SESSION_END is handled by both
+``runtime.capture`` and ``session.end_stamp``, and PRE_TOOL_USE runs the data-loss
+guard, which refuses a call before Codex runs it. A module-level boot guard
 verifies this against the real runner registrations rather than trusting
 this dict by inspection, so an event added here with no registered
 handler fails import instead of shipping an idle wrapper.
@@ -28,6 +29,7 @@ CODEX_HOOK_EVENT_NAMES: Final[dict[HookEventType, str]] = {
     HookEventType.SUBAGENT_START: "SubagentStart",
     HookEventType.SUBAGENT_STOP: "SubagentStop",
     HookEventType.SESSION_END: "SessionEnd",
+    HookEventType.PRE_TOOL_USE: "PreToolUse",
 }
 
 CODEX_HOOK_EVENT_TYPES: Final[tuple[HookEventType, ...]] = tuple(CODEX_HOOK_EVENT_NAMES)

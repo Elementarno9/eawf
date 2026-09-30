@@ -137,7 +137,7 @@ def test_surf_170_serve_announces_a_loopback_url_with_a_nonce(
     monkeypatch.setattr(sv.ReportServer, "serve_until_interrupted", lambda self: None)
     result = runner.invoke(app, ["--json", "-w", str(tree.parent), "reflect", "serve"])
     assert result.exit_code == 0
-    url = json.loads(result.output)["url"]
+    url = json.loads(result.output)["result"]["url"]
     assert url.startswith("http://127.0.0.1:")
     assert len(url.rstrip("/").rsplit("/", 1)[1]) >= 16
 

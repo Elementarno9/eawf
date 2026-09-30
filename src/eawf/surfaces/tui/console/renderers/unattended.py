@@ -6,20 +6,25 @@ row's Run.
 The native frame observes the queue rather than driving it: the Runs whose lifecycle has
 not ended, under ``RUN``, ``TASK``, ``STATE`` and ``PROGRESS``, headed by the ``QUEUE`` line
 the rows are counted into. Progress is a named numerator or the unknown token, never a
-bare percentage, and a queued Run reads ``∅ not started``. The concurrency plan derives
+bare percentage, and a queued Run reads ``∅ not started``. A running Run's progress is a
+truth field that carries its freshness: a Run the daemon's stall read says went quiet reads
+``stalled``, and once that read itself stops arriving every running Run reads ``stale``,
+so the reader losing its source never looks like the work stopping. The concurrency plan derives
 from the dependency graph at render time; the dispatch-queue projection that states it
 has not shipped, so the ``PLAN`` readout names that producer instead of a number.
 """
 
 from __future__ import annotations
 
+from eawf.kernel.projection.liveness import STALLED, run_liveness
 from eawf.kernel.projection.operations import DISPATCH_QUEUE_PRODUCER
 from eawf.kernel.projection.route_view import RouteReadModel, RouteRecord
-from eawf.kernel.projection.truth import TruthState
+from eawf.kernel.projection.truth import Freshness, TruthState
 from eawf.kernel.state.epoch2.transitions import TERMINAL_STATUSES, LifecycleEntity
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
+from eawf.surfaces.tui.console.format import clock_minute
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, thin, window_rows
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
@@ -70,10 +75,17 @@ def _state(row: RouteRecord) -> str:
     return value_cell(row.field("status")).slot
 
 
-def _progress(row: RouteRecord) -> str:
-    """Return a queue row's progress: not started for a queued Run, else the producer's cell."""
+def _progress(row: RouteRecord, view: View) -> str:
+    """Return a queue row's progress: not started, stale, stalled, or the producer's cell."""
     if _state(row) == QUEUED:
         return NOT_STARTED
+    held = view.liveness
+    if _state(row) == RUNNING and held is not None:
+        field = run_liveness(row.key, held, now=view.now or held.read_at)
+        if field.freshness is Freshness.STALE:
+            return f"stale · liveness last read {clock_minute(held.read_at)}"
+        if field.value == STALLED and field.occurred_at is not None:
+            return f"stalled · nothing since {clock_minute(field.occurred_at)}"
     return value_cell(row.field("progress")).slot + " unknown"
 
 
@@ -120,7 +132,9 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
         view, total=len(queue), cursor=cursor, chrome=len(top) + len(body) + 1 + len(foot)
     )
     body.extend(
-        grid.row([row.key, row.parent_key or NO_VALUE, _state(row), _progress(row)], i == cursor, w)
+        grid.row(
+            [row.key, row.parent_key or NO_VALUE, _state(row), _progress(row, view)], i == cursor, w
+        )
         for i, row in enumerate(queue[win.start : win.stop], start=win.start)
     )
     if not queue:

@@ -422,6 +422,30 @@ class DaemonClient:
             params["repo_root"] = repo_root
         return self.call("config.unset_layer_value", params)
 
+    def config_set_layer_values(
+        self,
+        *,
+        layer: str,
+        writes: list[dict[str, Any]],
+        repo_root: str | None = None,
+    ) -> dict[str, Any]:
+        """Proxy several leaves of one layer through ``config.set_layer_values``.
+
+        Args:
+            layer: Canonical writable-layer label.
+            writes: One ``{"key_path": [...], "value": ...}`` or
+                ``{"key_path": [...], "unset": True}`` per leaf, written together.
+            repo_root: Optional absolute path of the repo whose layer is written.
+
+        Returns:
+            Dict matching
+            :class:`eawf.runtime.daemon.methods.config.SetLayerValuesResult`.
+        """
+        params: dict[str, Any] = {"layer": layer, "writes": list(writes)}
+        if repo_root is not None:
+            params["repo_root"] = repo_root
+        return self.call("config.set_layer_values", params)
+
     def registry_update(
         self,
         *,
