@@ -134,13 +134,13 @@ Perf bench harness — seed corpora, time harnesses, flag regressions.
 
 ### `eawf campaign`
 
-Stage and persist multi-domain research campaigns.
+Plan, drive and cancel research Campaigns.
 
 | Verb | Summary |
 |---|---|
-| `cancel` | Cancel an ACTIVE research campaign, tombstoning it in the store. |
-| `new` | Stage a research campaign for the active scope and persist it. |
-| `run` | Start a live research campaign run over the daemon's agent spawn. |
+| `cancel` | Cancel an active Campaign, recording why; its steps and artifacts stay. |
+| `new` | Plan a research Campaign from its brief and approve the plan. |
+| `run` | Drive an approved Campaign round by round in the daemon. |
 
 ### `eawf cc`
 
@@ -515,6 +515,7 @@ Add and list open questions, and file operator decisions.
 | Verb | Summary |
 |---|---|
 | `add` | Add a research-campaign open question for the active scope. |
+| `answer` | Seal the option a reply to a numbered question prompt chooses. |
 | `list` | List the research-campaign open questions for the active scope. |
 | `open-decision` | File a reversible operator decision the host shows as a typed question. |
 | `resolve` | Resolve a blocking / open research-campaign question for the active scope. |
@@ -549,11 +550,13 @@ Tag releases and drive the release train's checkpoint records.
 | `adopt` | Adopt a publication that ran without a release record. |
 | `advance` | Walk the train past one finished checkpoint, or refuse and change nothing. |
 | `approve` | Approve a candidate against a readiness sweep, and record it. |
+| `bind-regime` | Bind a Milestone or Batch to the steady, fast or experimental regime. |
 | `burn` | Burn the version: record the spent checkpoint as partially released. |
 | `cancel` | Abandon a checkpoint that never touched a registry, or refuse. |
 | `candidate` | Freeze the manifest from the receipts and record the CANDIDATE. |
 | `changelog` | Mine the current ``CHANGELOG.md`` unreleased section. |
 | `create` | Open one checkpoint's DRAFT record, after measured admission. |
+| `discharge-debt` | Discharge a verification debt once its deferred gate has passed. |
 | `notes` | Render a scrubbed release-notes draft. |
 | `observe` | Read one publication target back and settle it against the manifest. |
 | `pipeline` | Take a merged phase's checkpoint from tag to BAKED and the train advance. |

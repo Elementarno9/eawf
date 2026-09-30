@@ -13,7 +13,7 @@ import logging
 import uuid
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any, Final
 
 import orjson
 import typer
@@ -21,13 +21,12 @@ import typer
 from eawf.kernel.state.enums import OpenQuestionDropReason, StoreKind
 from eawf.surfaces.cli import errors
 from eawf.surfaces.cli.commands.draft import install_promote_command
-from eawf.surfaces.cli.commands.question_decision import question_open_decision
+from eawf.surfaces.cli.commands.question_decision import question_answer, question_open_decision
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
-    from eawf.kernel.spec.research_campaign import ResearchProfileBlock
     from eawf.kernel.store.envelope import Envelope
     from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
     from eawf.runtime.daemon.methods.research import AddQuestionParams
@@ -42,7 +41,7 @@ research_app = typer.Typer(
 
 campaign_app = typer.Typer(
     name="campaign",
-    help="Stage and persist multi-domain research campaigns.",
+    help="Plan, drive and cancel research Campaigns.",
     no_args_is_help=True,
 )
 
@@ -54,298 +53,178 @@ question_app = typer.Typer(
 
 # an epoch-2 verb of this group, kept in a module of its own so it is not an epoch-1 one
 question_app.command("open-decision")(question_open_decision)
+question_app.command("answer")(question_answer)
 
 install_promote_command(research_app, "research")
 
 
-def resolve_research_block(flags: GlobalFlags) -> ResearchProfileBlock | None:
-    """Compose the active scope's enabled profiles and return the merged ``research:`` block.
+#: The daemon verbs the campaign group forwards to, spelled here so the Typer tree
+#: builds without the daemon method registry on the path.
+CAMPAIGN_START: Final = "runtime.campaign.start"
+CAMPAIGN_RUN: Final = "runtime.campaign.run"
+CAMPAIGN_CLOSE: Final = "runtime.campaign.close"
+CAMPAIGN_VIEW: Final = "projection.campaign.view"
 
-    Mirrors the profile-composition entrypoint the PR-body command uses:
-    merge the layered config for the active workspace/repo, compose every
-    enabled profile, and read the last-non-``None``-wins ``research:`` block
-    off the composed view. Returns ``None`` when no enabled profile declares
-    a ``research:`` block.
+_CampaignKey = Annotated[str, typer.Argument(help="The Campaign's CAM-#### key.")]
+_Actor = Annotated[str, typer.Option("--actor", help="Principal key the change is made as.")]
+_Agents = Annotated[
+    int | None,
+    typer.Option(
+        "--agents",
+        min=1,
+        max=12,
+        help="Ready steps one round dispatches; the research.agent_count layer otherwise.",
+    ),
+]
+_Runtime = Annotated[
+    str, typer.Option("--runtime", help="Runtime whose headless session works each round.")
+]
 
-    Args:
-        flags: Resolved global flags carrying the optional workspace anchor.
 
-    Returns:
-        The merged :class:`~eawf.kernel.spec.research_campaign.ResearchProfileBlock`,
-        or ``None`` when no enabled profile contributes one.
-    """
-    from eawf.kernel.config.layered import merge_config
-    from eawf.platform.profiles.compose import compose
-    from eawf.platform.profiles.loader import load_profile
+def _campaign_call(
+    ctx: typer.Context, method: str, params: dict[str, Any], verb_text: str
+) -> dict[str, Any] | None:
+    """Send one campaign verb and return its answer, or emit the error and return ``None``."""
+    from eawf.surfaces.cli._daemon_client import DaemonRpcError
+    from eawf.surfaces.cli.commands.domain import _native_answer
 
-    merged, _sources = merge_config(workspace=flags.workspace, repo=Path.cwd())
-    enabled = [str(pid) for pid in (merged.get("profiles", {}).get("enabled") or [])]
-    composed = compose([load_profile(pid, workspace=flags.workspace) for pid in enabled])
-    return composed.research
+    flags: GlobalFlags = ctx.obj
+    try:
+        return _native_answer(
+            method,
+            params,
+            flags=flags,
+            verb_text=verb_text,
+            read=method == CAMPAIGN_VIEW,
+        )
+    except DaemonRpcError as exc:
+        errors.emit_error(errors.cli_error_for_rpc(exc.code, exc.message), flags=flags)
+    except errors.CliError as exc:
+        errors.emit_error(exc, flags=flags)
+    return None
 
 
 @campaign_app.command("new")
 def campaign_new(
     ctx: typer.Context,
-    topic: Annotated[
-        str | None, typer.Argument(help="The campaign topic to fan out across domains.")
-    ] = None,
-    dry_run: Annotated[
-        bool,
+    title: Annotated[str, typer.Argument(help="What the Campaign researches, in one line.")],
+    actor: _Actor,
+    track: Annotated[str, typer.Option("--track", help="URN of the Track that owns it.")],
+    question: Annotated[
+        list[str],
+        typer.Option("--question", help="A question to work; repeat it, the Campaign's own first."),
+    ],
+    depth: Annotated[
+        str | None,
         typer.Option(
-            "--dry-run",
-            help="Resolve + count domains without persisting a campaign (a resolve-check).",
+            "--depth",
+            help="shallow|medium|deep|exhaustive; the research.default_depth layer otherwise.",
         ),
-    ] = False,
+    ] = None,
+    agents: _Agents = None,
     budget_rounds: Annotated[
-        float | None,
-        typer.Option(
-            "--budget-rounds",
-            help="Evidence-budget limit on rounds; a run halts before exceeding it.",
-        ),
+        int | None,
+        typer.Option("--budget-rounds", min=1, help="Hard limit on the rounds it runs."),
     ] = None,
-    budget_usd: Annotated[
-        float | None,
-        typer.Option(
-            "--budget-usd",
-            help="Evidence-budget limit on researcher USD spend; a run halts before exceeding it.",
-        ),
+    budget_tokens: Annotated[
+        int | None,
+        typer.Option("--budget-tokens", min=1, help="Hard limit on the tokens its rounds spend."),
     ] = None,
-    from_spec: Annotated[
-        Path | None,
-        typer.Option(
-            "--from-spec",
-            help="JSON file (or - for stdin) carrying the topic and budgets, in place of flags.",
-        ),
-    ] = None,
+    runtime: _Runtime = "claude-code",
+    run: Annotated[
+        bool, typer.Option("--run/--no-run", help="Start driving it once it is approved.")
+    ] = False,
 ) -> None:
-    """Stage a research campaign for the active scope and persist it.
+    """Plan a research Campaign from its brief and approve the plan.
 
-    Resolves the active scope's merged ``research:`` block, stages the
-    campaign plan-only via
-    :func:`~eawf.kernel.spec.research_campaign.stage_campaign`, and persists
-    the resulting :class:`~eawf.kernel.store.kinds.research_campaign.ResearchCampaignPayload`
-    through the daemon ``research.create_campaign`` RPC -- falling back to a
-    direct store append when the daemon is unavailable. The persisted row
-    surfaces in the TUI Research board's topic tree.
-
-    ``--dry-run`` resolves the block and reports the domain count WITHOUT
-    persisting a campaign, so a sanity resolve-check never leaks a durable
-    active campaign into the store.
-
-    ``--budget-rounds`` / ``--budget-usd`` set the campaign's evidence-budget
-    limits; ``campaign run`` charges every round against them and halts
-    before a round would exceed one. The topic and budgets, or the
-    ``--from-spec`` document carrying them, parse through the closed
-    :class:`~eawf.kernel.spec.research_campaign.CampaignRequest` model first.
+    The daemon files each question, plans one step per question and method
+    the depth names plus a closing synthesis, and approves the plan under the
+    Track. With ``--run`` it also starts driving it; ``campaign run`` does so
+    later. A budget left unset bounds the Campaign by one round per step.
     """
-    from pydantic import ValidationError
-
-    from eawf.kernel.spec.research_campaign import CampaignRequest, stage_campaign
-    from eawf.kernel.store.kinds.research_campaign import (
-        ResearchCampaignPayload,
-        open_evidence_budget,
-    )
-    from eawf.surfaces.cli.verb_contract import request_document
-
-    flags: GlobalFlags = ctx.obj
-    try:
-        request = request_document(
-            CampaignRequest,
-            from_spec,
-            {"topic": topic, "budget_rounds": budget_rounds, "budget_usd": budget_usd},
-        )
-        state_path = resolve_state_path(flags.workspace)
-        block = resolve_research_block(flags)
-        if block is None:
-            raise errors.UserError(
-                "no research: block configured for this scope", kind="InvalidInput"
-            )
-        campaign = stage_campaign(request.topic, block)
-        campaign_id = f"campaign-{uuid.uuid4().hex}"
-        limits = {
-            axis: limit
-            for axis, limit in (("rounds", request.budget_rounds), ("usd", request.budget_usd))
-            if limit is not None
-        }
-        payload = ResearchCampaignPayload(
-            campaign_id=campaign_id,
-            config=block,
-            campaign=campaign,
-            evidence_budget=open_evidence_budget(limits),
-        )
-    except ValueError as exc:
-        # ``stage_campaign`` rejects an empty topic; the payload validator
-        # rejects an over-bound dispatch count. Both surface as InvalidInput.
-        errors.emit_error(errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
-        return
-    except (errors.CliError, ValidationError) as exc:
-        errors.emit_error(
-            exc if isinstance(exc, errors.CliError) else errors.ValidationError(str(exc)),
-            flags=flags,
-        )
-        return
-
-    if dry_run:
-        body = {
-            "campaign_id": campaign_id,
-            "dry_run": True,
-            "topic": campaign.topic,
-            "domain_count": campaign.domain_count,
-        }
-        text = (
-            f"dry-run campaign (topic={campaign.topic!r}, "
-            f"{campaign.domain_count} domain(s)); not persisted"
-        )
-        emit_json_or_text(body, text, flags=flags)
-        return
-
-    appended_id = _persist_campaign_via_daemon_or_fallback(state_path, payload)
-    body = {
-        "campaign_id": campaign_id,
-        "id": appended_id,
-        "topic": campaign.topic,
-        "domain_count": campaign.domain_count,
+    axes = [
+        {"axis_kind": kind, "limit": limit, "unit": kind}
+        for kind, limit in (("rounds", budget_rounds), ("tokens", budget_tokens))
+        if limit is not None
+    ]
+    params: dict[str, Any] = {
+        "actor": actor,
+        "track_ref": track,
+        "title": title,
+        "questions": question,
+        "runtime": runtime,
+        "drive": run,
     }
-    text = (
-        f"staged campaign {campaign_id} "
-        f"(topic={campaign.topic!r}, {campaign.domain_count} domain(s))"
+    params |= {
+        key: value
+        for key, value in (
+            ("depth", depth),
+            ("agents", agents),
+            ("budget", {"axes": axes} if axes else None),
+        )
+        if value is not None
+    }
+    answer = _campaign_call(ctx, CAMPAIGN_START, params, "campaign new")
+    if answer is None:
+        return
+    record = answer["record"]
+    text = f"approved campaign {record['key']} ({len(record['plan_steps'])} steps)" + (
+        "; driving" if answer["driving"] else ""
     )
-    emit_json_or_text(body, text, flags=flags)
+    emit_json_or_text(answer, text, flags=ctx.obj)
 
 
 @campaign_app.command("run")
 def campaign_run(
     ctx: typer.Context,
-    campaign_id: Annotated[str, typer.Argument(help="Id of the staged ACTIVE campaign to drive.")],
-    round_budget: Annotated[
-        int | None,
-        typer.Option(
-            "--round-budget", help="Hard ceiling on rounds (>= 1); daemon default otherwise."
-        ),
-    ] = None,
+    campaign_key: _CampaignKey,
+    actor: _Actor,
+    agents: _Agents = None,
+    runtime: _Runtime = "claude-code",
 ) -> None:
-    """Start a live research campaign run over the daemon's agent spawn.
+    """Drive an approved Campaign round by round in the daemon.
 
-    Issues the daemon ``research.run`` RPC, which spawns a researcher session
-    per staged dispatch each round, reconciles the findings into Claim rows,
-    and persists each round + checkpoint as the TUI Research board's RUN band
-    reads them. The run is backgrounded on a daemon worker thread, so the RPC
-    returns a run handle immediately.
-
-    Unlike ``campaign new`` this has NO offline fallback: a live run spawns
-    real researcher sessions, which only the daemon can do, so an unavailable
-    daemon -- or a campaign that is not staged / already running -- is a hard
-    error (the daemon's ``research.run`` enforces the ACTIVE-campaign and
-    not-already-in-flight guards) rather than a silent no-op.
+    Each ready step runs on a Run of its own; each round checkpoints its
+    report as an artifact revision, charges the budget and finishes its step.
+    The drive runs behind the answer: follow it in the console's Campaign
+    screen. A hard budget axis at its limit stops it and says why.
     """
-    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
-
-    flags: GlobalFlags = ctx.obj
-    try:
-        resolve_state_path(flags.workspace)
-    except errors.CliError as exc:
-        errors.emit_error(exc, flags=flags)
-        return
-    params: dict[str, object] = {"campaign_id": campaign_id}
-    if round_budget is not None:
-        params["round_budget"] = round_budget
-    try:
-        with DaemonClient() as client:
-            handle = client.call("research.run", params)
-    except (OSError, DaemonRpcError) as exc:
-        errors.emit_error(
-            errors.UserError(f"could not start research run: {exc}", kind="InvalidInput"),
-            flags=flags,
-        )
+    params: dict[str, Any] = {"actor": actor, "campaign_key": campaign_key, "runtime": runtime}
+    if agents is not None:
+        params["agents"] = agents
+    answer = _campaign_call(ctx, CAMPAIGN_RUN, params, "campaign run")
+    if answer is None:
         return
     text = (
-        f"started research run {handle.get('handle_id')} for campaign {campaign_id} "
-        f"(state={handle.get('run_state')})"
+        f"driving campaign {campaign_key}"
+        if answer["driving"]
+        else f"campaign {campaign_key} is already being driven"
     )
-    emit_json_or_text(handle, text, flags=flags)
+    emit_json_or_text(answer, text, flags=ctx.obj)
 
 
 @campaign_app.command("cancel")
 def campaign_cancel(
     ctx: typer.Context,
-    campaign_id: Annotated[str, typer.Argument(help="Id of the ACTIVE campaign to cancel.")],
-    reason: Annotated[
-        str | None,
-        typer.Option("--reason", help="Optional short reason recorded on the tombstone."),
-    ] = None,
+    campaign_key: _CampaignKey,
+    actor: _Actor,
+    reason: Annotated[str, typer.Option("--reason", help="Why it is abandoned, in one line.")],
 ) -> None:
-    """Cancel an ACTIVE research campaign, tombstoning it in the store.
-
-    Issues the daemon ``research.cancel_campaign`` RPC, which stamps a cancelled
-    tombstone row so the campaign drops out of ``research status``. Like
-    ``campaign run`` this has NO offline fallback: the cancel is a daemon-owned
-    state mutation, so an unavailable daemon -- or a campaign that is not
-    ACTIVE / unknown to the store -- is a hard error rather than a silent no-op.
-    """
-    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
-
-    flags: GlobalFlags = ctx.obj
-    try:
-        resolve_state_path(flags.workspace)
-    except errors.CliError as exc:
-        errors.emit_error(exc, flags=flags)
+    """Cancel an active Campaign, recording why; its steps and artifacts stay."""
+    view = _campaign_call(ctx, CAMPAIGN_VIEW, {"campaign_key": campaign_key}, "campaign cancel")
+    if view is None:
         return
-    params: dict[str, object] = {"campaign_id": campaign_id}
-    if reason is not None:
-        params["reason"] = reason
-    try:
-        with DaemonClient() as client:
-            result = client.call("research.cancel_campaign", params)
-    except (OSError, DaemonRpcError) as exc:
-        errors.emit_error(
-            errors.UserError(f"could not cancel campaign: {exc}", kind="InvalidInput"),
-            flags=flags,
-        )
-        return
-    text = (
-        f"cancelled campaign {result.get('id')} "
-        f"(status={result.get('status')}, at={result.get('cancelled_at')})"
-    )
-    emit_json_or_text(result, text, flags=flags)
-
-
-def _persist_campaign_via_daemon_or_fallback(
-    state_path: Path, payload: ResearchCampaignPayload
-) -> str:
-    """Persist *payload* through the daemon RPC, falling back to a direct append.
-
-    Tries the daemon ``research.create_campaign`` RPC (the canonical writer per
-    AGENTS rule 4). On ANY daemon failure -- a connection error or a
-    :class:`~eawf.surfaces.cli._daemon_client.DaemonRpcError` (e.g. a daemon
-    predating this method) -- falls back to the shared
-    :func:`~eawf.runtime.daemon.methods.research.persist_campaign` helper so the
-    command works offline / in CI / against a stale daemon (rule 4's
-    daemon-proxy-then-portalocker-fallback).
-
-    Args:
-        state_path: Path to the scope's ``state.json``.
-        payload: The validated :class:`ResearchCampaignPayload` to persist.
-
-    Returns:
-        The appended envelope id.
-    """
-    from eawf.runtime.daemon.methods.research import persist_campaign
-    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
-
     params = {
-        "campaign_id": payload.campaign_id,
-        "config": payload.config.model_dump(mode="json"),
-        "campaign": payload.campaign.model_dump(mode="json"),
-        "budget_limits": {axis: pair.limit for axis, pair in payload.evidence_budget.items()},
+        "actor": actor,
+        "urn": view["campaign_ref"],
+        "expected_revision": view["revision"],
+        "to_status": "cancelled",
+        "reason": reason,
     }
-    try:
-        with DaemonClient() as client:
-            result = client.call("research.create_campaign", params)
-        return str(result["id"])
-    except (DaemonRpcError, OSError, RuntimeError, TimeoutError) as exc:
-        logger.debug(f"_persist_campaign_via_daemon_or_fallback daemon_fallback cause={exc!r}")
-        return persist_campaign(state_path, payload)
+    answer = _campaign_call(ctx, CAMPAIGN_CLOSE, params, "campaign cancel")
+    if answer is None:
+        return
+    emit_json_or_text(answer, f"cancelled campaign {campaign_key}", flags=ctx.obj)
 
 
 def _load_research_envelope(state_path: Path, record_id: str) -> Envelope:
@@ -474,7 +353,6 @@ def _add_question_via_daemon_or_fallback(
         A result dict (``question_id`` / ``status`` / ``scope_id``), or ``None``
         on rejection.
     """
-    import uuid
 
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 

@@ -162,7 +162,7 @@ def test_the_activity_rail_marks_the_chosen_bucket_with_the_caret() -> None:
 def test_an_empty_chosen_bucket_names_itself_rather_than_a_filter() -> None:
     frame = _frame("activity", bucket="lost or stale")
     assert "nothing in lost or stale · 3 runs are in other buckets" in _text(frame)
-    assert "Esc clears the bucket" in _text(frame)
+    assert "Esc clears the bucket" not in _text(frame)
 
 
 def test_the_activity_rail_marks_nothing_when_every_bucket_shows() -> None:
@@ -426,10 +426,10 @@ def test_the_readiness_region_offers_the_arrows_and_they_walk_its_signals() -> N
     assert view.session.rel_sel == 0
 
 
-# ---------- the filter row says what its keys do as it stands ----------
+# ---------- the filter's keys are promised by the keybar as the field stands ----------
 
 
-def test_a_kept_filter_stops_promising_that_escape_clears_it() -> None:
+def test_con_154_the_filter_keys_are_the_keybars_and_never_the_rows() -> None:
     view = _view("activity")
     render_route(view)
     ctx = Ctx(
@@ -441,13 +441,13 @@ def test_a_kept_filter_stops_promising_that_escape_clears_it() -> None:
         projection=view.projection,
     )
 
-    def filter_row() -> str:
-        return next(row for row in render_route(view) if row.startswith(" FILTER"))
-
     for key in ("\\", "R"):
         dispatch(ctx, key, False)
-    assert "Esc clears · Enter keeps" in filter_row()
+    typing = render_route(view)
+    assert next(row for row in typing if row.startswith(" FILTER")).rstrip().endswith("\\R▏")
+    assert typing[-1].split() == ["type", "narrow", "Enter", "keep", "Esc", "clear"]
     dispatch(ctx, "Enter", False)
-    kept = filter_row()
-    assert "Esc clears" not in kept
-    assert "kept · \\ starts a new filter" in kept
+    kept = render_route(view)
+    assert next(row for row in kept if row.startswith(" FILTER")).rstrip().endswith("\\R")
+    assert "Esc clear" not in kept[-1]
+    assert not any("Esc clears" in row or "starts a new filter" in row for row in kept)

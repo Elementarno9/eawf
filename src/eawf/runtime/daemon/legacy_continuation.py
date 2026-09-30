@@ -61,8 +61,10 @@ from eawf.kernel.migration.epoch2.continuation import (
     require_gates_passed,
     require_proof,
 )
+from eawf.kernel.migration.epoch2.decision_record import decision_lines
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.state.epoch2.base import PrincipalKey
+from eawf.kernel.state.epoch2.decision import DecisionError
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import LedgerRecord, effective_records, read_ledger_records
@@ -152,8 +154,9 @@ class RecordAppendRequest(BaseModel):
 
     Attributes:
         kind: Which record it is.
-        record: The record, validated through its epoch-1 model when the
-            line is built.
+        record: The record, validated when the line is built: an audit or
+            artifact through its epoch-1 model, a decision as a native
+            decision with its evidence and supersession chain.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -515,6 +518,68 @@ def advance_legacy(
         raise _refused(error, subject=subject) from error
 
 
+def _schema_refusal(error: ValidationError, *, kind: str, subject: str) -> TransactionRefusedError:
+    """Return the refusal a record that does not validate is answered with."""
+    fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
+    return TransactionRefusedError(
+        code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
+        detail=f"the {kind} record does not validate; check {', '.join(fields) or 'the record'}",
+        entity_ref=subject[:400],
+        remediation=f"Correct the named fields of the {kind} and retry.",
+    )
+
+
+def _append_decision(
+    context: Epoch2RootContext, request: RecordAppendRequest, *, now: datetime
+) -> CommittedContinuation[RecordAppendReceipt]:
+    """File one native decision, and the successor of any decision it supersedes.
+
+    Raises:
+        TransactionRefusedError: The decision does not validate, or its
+            lifecycle move or supersession chain does not hold.
+    """
+    subject = f"{request.kind.value}/{request.record.get('key', '?')}"
+    if "key" not in request.record and "id" in request.record:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
+            detail=(
+                f"decision {str(request.record['id'])[:40]} is in the epoch-1 shape "
+                "(id, scope_id); a decision is appended as the native Decision document "
+                "(key, scope_ref, alternatives, chosen_option_key, evidence_refs)"
+            ),
+            entity_ref=subject[:400],
+            guard="decision_epoch1_shape",
+            remediation="Resend the decision as the native Decision document.",
+        )
+    with context.session([_project_urn(context)]) as session:
+        try:
+            lines = decision_lines(
+                request.record, _standing(session, Epoch2Collection.DECISION), at=now
+            )
+        except ValidationError as error:
+            raise _schema_refusal(error, kind=request.kind.value, subject=subject) from error
+        except DecisionError as error:
+            illegal = error.code == "decision_transition_illegal"
+            raise TransactionRefusedError(
+                code=TransactionRefusalCode.ILLEGAL_TRANSITION
+                if illegal
+                else TransactionRefusalCode.TRANSITION_GUARD_FAILED,
+                detail=str(error),
+                entity_ref=subject[:400],
+                guard=None if illegal else error.code,
+                remediation="File a changed decision under a new key that supersedes it.",
+            ) from error
+        envelopes = tuple(commit_ledger_append(session, line) for line in lines)
+    return CommittedContinuation(
+        receipt=RecordAppendReceipt(
+            collection=Epoch2Collection.DECISION,
+            record_key=lines[-1].record_key,
+            event_id=envelopes[-1].id,
+        ),
+        envelopes=envelopes,
+    )
+
+
 def append_record(
     context: Epoch2RootContext, request: RecordAppendRequest, *, now: datetime
 ) -> CommittedContinuation[RecordAppendReceipt]:
@@ -535,17 +600,13 @@ def append_record(
         NativeAuthorityRequiredError: The tree left epoch 2.
         LockTimeout: A lock stayed held past the lock timeout.
     """
+    if request.kind is RecordKind.DECISION:
+        return _append_decision(context, request, now=now)
     subject = f"{request.kind.value}/{request.record.get('id', '?')}"
     try:
         line = appended_record_line(request.kind, request.record, at=now)
     except ValidationError as error:
-        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
-        raise TransactionRefusedError(
-            code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
-            detail=f"the {request.kind.value} record does not validate; check {', '.join(fields)}",
-            entity_ref=subject[:400],
-            remediation=f"Correct the named fields of the {request.kind.value} and retry.",
-        ) from error
+        raise _schema_refusal(error, kind=request.kind.value, subject=subject) from error
     with context.session([_project_urn(context)]) as session:
         if any(line.record_key in ledger_ids(held) for held in _standing(session, line.collection)):
             raise TransactionRefusedError(

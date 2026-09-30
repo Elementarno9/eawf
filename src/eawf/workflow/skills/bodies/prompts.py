@@ -184,45 +184,41 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " existing Campaign named by its reference, with its plan and artifact revisions."
         ),
         method=(
-            "Validate topic, goal, audience, intended use, desired artifact, known context, seed"
-            " questions, exclusions, source policy, success definition, budget, checkpoint"
-            " policy, and stop rules. An incomplete brief raises one prepared operator question"
-            " instead of creating a shell Campaign.",
-            "Create the DRAFT Campaign, build its question DAG and independent role/frontier"
-            " plan, and render the complete plan for protected operator approval. Never select"
-            " approval yourself.",
-            "Activate only the exact approved revision. Dispatch bounded researcher Runs by ready"
-            " frontier and role; each Run receives its own question, source scope, budget, and"
-            " output schema.",
-            "After every round, resolve and score evidence, reconcile claims and contradictions,"
-            " update open questions, record the round, and recompute hard caps and semantic"
-            " saturation.",
-            "A goal, artifact, scope, source-policy, or budget expansion raises a PendingAction."
-            " Provider loss or resumable timeout creates an OpenPause with an exact resume"
-            " anchor.",
-            "At convergence or a hard cap with minimum evidence, synthesize one immutable"
-            " artifact revision. Every promoted claim must resolve and entail; contradictions and"
-            " open questions receive explicit dispositions.",
-            "Dispatch a fresh EvidenceVerifier with the artifact and sources but no producer"
-            " transcript. A failed verification returns a bounded child revision while budget"
-            " remains.",
-            "Enter REVIEW and present accept, revise, or drop. Only operator acceptance completes"
-            " the Campaign. Revision returns to ACTIVE with a child plan/artifact revision;"
-            " cancellation drops; unrecoverable failure preserves evidence and fails.",
-            "Continue through safe automatic steps until completed, dropped, failed,"
-            " budget-exhausted, or paused for a real operator decision. A pause is resumable,"
-            " never false completion.",
+            "Validate the brief: title, owning Track, the questions to work (the Campaign's own"
+            " first), depth, fan-out width and budget. An incomplete brief raises one prepared"
+            " operator question instead of creating a shell Campaign.",
+            "Show the plan `runtime.campaign.start` would approve -- one step per question and"
+            " method the depth names, then one synthesis step -- and approve it only on the"
+            " operator's protected approval. The daemon files each question and approves the"
+            " exact plan; never select approval yourself.",
+            "`runtime.campaign.run` drives the approved plan in the daemon: each round it starts"
+            " every ready step, up to the fan-out width, on a Run of its own, and the research"
+            " agent works that step's question read-only.",
+            "Each round checkpoints in the daemon: the accountant charges the round's spend to"
+            " the step and the Campaign, the round's report is kept as an artifact revision of"
+            " the step, the step finishes with its outcome, and the findings it names are"
+            " promoted as held CFN findings.",
+            "A hard budget axis at its limit stops dispatch, and the Campaign records the budget"
+            " stop so it never reads as converged on its own; widening the budget, the questions"
+            " or the steps is a plan revision (`runtime.campaign.plan.revise`) the operator"
+            " approves, which keeps every started step unchanged.",
+            "A failed round returns its step to pending and pauses the drive; `campaign run`"
+            " resumes it on a new Run. Read progress through `projection.campaign.view` and each"
+            " checkpoint through `projection.campaign.artifact`.",
+            "The drive converges the Campaign once every step is done, or once a budget stop"
+            " leaves nothing running; `runtime.campaign.close` cancels it with the operator's"
+            " reason. A pause is resumable, never false completion.",
         ),
         constraints=(
-            "Only operator acceptance completes the Campaign; you never select approval or"
-            " acceptance yourself.",
+            "Only the operator approves a plan or its revision, and only the operator cancels;"
+            " you never select approval yourself.",
             "Every parallel researcher Run declares what its result would rule out; a Run that"
             " cannot name it is not dispatched.",
         ),
         output=(
-            "Output one CampaignRunReport containing Campaign/plan/artifact revisions, round"
-            " ledger, Runs, claim/evidence coverage, saturation, verifier result, Attention"
-            " items, receipts, and final disposition."
+            "Output one CampaignRunReport containing the Campaign and plan revisions, the steps"
+            " with their Runs and outcomes, the artifact revisions, the promoted findings, the"
+            " budget spend and stop, and the final disposition."
         ),
         activities=("research",),
         roles=("researcher",),
@@ -652,7 +648,10 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             "Compare plausible alternatives with their main advantage and cost. Give a verdict,"
             " confidence, and material open gaps.",
             "If evidence cannot decide, recommend the cheapest discriminating next step. Do not"
-            " turn the invocation into a Campaign or Spike implicitly.",
+            " turn the invocation into a Campaign or Spike implicitly: a question that needs"
+            " several rounds is recommended as a Campaign, which the operator plans with"
+            " `eawf campaign new` (`runtime.campaign.start`) and the daemon drives step by step"
+            " with `eawf campaign run` (`runtime.campaign.run`).",
             "Stop at one pass, one rendered page, or the first hard budget cap. Saving writes"
             " only the same report to the declared gitignored local path.",
         ),

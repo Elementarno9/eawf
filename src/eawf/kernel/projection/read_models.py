@@ -80,6 +80,49 @@ class ReadModelSpec:
     projection_backed: bool = True
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class NoticeDetailView:
+    """The notice detail: every fact of one budget notice, as its record form draws them.
+
+    It is not a route: the notifications route lends it a record form, and Enter on a
+    notice's Attention row opens it. A fact no producer states is ``None`` and is drawn
+    as the unknown token, never as a zero.
+
+    Attributes:
+        notice_ref: The notice's key.
+        basis: What the budget was set on.
+        axis: The metered resource dimension.
+        threshold: The highest band the notice reached.
+        observed_value: The consumption at the latest escalation.
+        budget_value: The budget that consumption was measured against.
+        measurement_quality: How exactly the consumption was measured.
+        provenance_event_refs: The identifiers the notice was imported from.
+        run_ref: The Run the notice is about, when its scope is a Run.
+        run_owner: The principal who answers for that Run.
+        run_state: Where that Run stands.
+        last_progress_at: When that Run last made progress.
+        last_heartbeat_at: When that Run last reported alive.
+        history: Each disposition, oldest first, as ``revision · action · principal``.
+        my_disposition: Where the principal the console acts as stands with the notice.
+    """
+
+    notice_ref: str
+    basis: str
+    axis: str
+    threshold: str
+    observed_value: int
+    budget_value: int | None
+    measurement_quality: str | None
+    provenance_event_refs: tuple[str, ...]
+    run_ref: str | None
+    run_owner: str | None
+    run_state: str | None
+    last_progress_at: str | None
+    last_heartbeat_at: str | None
+    history: tuple[str, ...]
+    my_disposition: str | None
+
+
 _K = ReadModelKind
 
 READ_MODELS: tuple[ReadModelSpec, ...] = (

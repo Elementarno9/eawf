@@ -794,6 +794,11 @@ def _register_projection_staleness(runner: HookRunner, *, repo_root: Path) -> No
 #: it, and the OpenCode bridge lifts the same field out of it.
 _SESSION_CONTEXT_RUNTIMES: frozenset[str] = frozenset({"claude", "codex", "opencode"})
 
+#: The tool events whose hooks observe a host call and print nothing on stdout.
+_SILENT_TOOL_EVENTS: frozenset[str] = frozenset(
+    {"pre_tool_use", "post_tool_use", "post_tool_use_failure"}
+)
+
 
 def _emit_session_context(results: list[HookResult]) -> None:
     """Print the staleness report as a session-start context document.
@@ -836,6 +841,36 @@ def _emit_permission_decision(results: list[HookResult]) -> None:
         verdict["message"] = "A principal denied this call in Eä."
     document = {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": verdict}}
     typer.echo(orjson.dumps(document).decode("utf-8"))
+
+
+def _emitted_host_answer(event: HookEvent, results: list[HookResult]) -> bool:
+    """Print the host-shaped answer an event owes instead of the envelope, if it owes one.
+
+    Args:
+        event: The dispatched event.
+        results: What its hooks returned.
+
+    Returns:
+        Whether an answer was printed, so the envelope must not be.
+    """
+    from eawf.runtime.hooks.event import HookEventType
+
+    if (
+        event.event_type == HookEventType.SESSION_START
+        and event.runtime in _SESSION_CONTEXT_RUNTIMES
+    ):
+        _emit_session_context(results)
+        return True
+    if event.event_type == HookEventType.PERMISSION_REQUEST and event.runtime == "claude":
+        _emit_permission_decision(results)
+        return True
+    if event.event_type.value in _SILENT_TOOL_EVENTS and event.runtime == "claude":
+        # Claude Code reads a tool hook's stdout as a decision about the call; an
+        # observer has none to give, so what it did goes to stderr alone.
+        for result in results:
+            typer.echo(result.output, err=True)
+        return True
+    return False
 
 
 @hook_app.command(name="run")
@@ -941,14 +976,7 @@ def run(
     _register_projection_staleness(runner, repo_root=repo_root)
     results = runner.run_event(event)
 
-    if (
-        event.event_type == HookEventType.SESSION_START
-        and event.runtime in _SESSION_CONTEXT_RUNTIMES
-    ):
-        _emit_session_context(results)
-        return
-    if event.event_type == HookEventType.PERMISSION_REQUEST and event.runtime == "claude":
-        _emit_permission_decision(results)
+    if _emitted_host_answer(event, results):
         return
 
     finished_at = datetime.now(UTC)

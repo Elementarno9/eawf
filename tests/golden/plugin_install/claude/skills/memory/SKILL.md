@@ -13,10 +13,10 @@ Search, write, promote or show memory entries.
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
-- Operates on: memory entry, through `runtime.question.open_decision`, `eawf memory list`, `eawf memory view`, `eawf memory add`, `eawf memory promote`.
-- Operator-only actions: `promote`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`), shows the bound question the answer carries, and stops; it never chooses the recommended option itself.
+- Operates on: memory entry, through `eawf memory list`, `eawf memory view`, `eawf memory add`, `eawf memory promote`.
+- Operator-only actions: `promote`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`), shows the bound question the answer carries, and stops; it never chooses the recommended option itself. In Codex the bound question is the answer's `numbered_prompt`, printed verbatim, and the operator's reply is relayed with `eawf question answer` (`runtime.question.answer_numbered`); the console answers the same record, and the first answer wins.
 - Effects: The memory list, view, add and promote verbs.
-- Allowed RPCs: `runtime.question.open_decision`. Any other RPC is denied before it reaches a handler.
+- Allowed RPCs: `runtime.question.answer_numbered`, `runtime.question.open_decision`. Any other RPC is denied before it reaches a handler.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.

@@ -49,7 +49,7 @@ NO_CALIBRATION = f"{UNAVAILABLE} · no calibration report is held"
 NO_TRACK_RECORD = f"{UNAVAILABLE} · no reputation store is held"
 
 _VERDICTS = Grid([20, 12, 26, 0])
-_RECORD = Grid([16, 11, 11, 0], 3)
+_RECORD = Grid([19, 11, 11, 0], 0)
 
 
 def _verdict_cells(model: RouteReadModel, index: int) -> list[str]:
@@ -111,8 +111,7 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
             label("CALIBRATION", NO_CALIBRATION),
             more("every numeric cell reads unavailable, never a number"),
             thin(w),
-            label("TRACK RECORD"),
-            _RECORD.head(["AGENT", "ACCEPTED", "REJECTED", "RATE"]),
+            _RECORD.head(["TRACK RECORD", "ACCEPTED", "REJECTED", "RATE"]),
             f"    {NO_TRACK_RECORD}",
             "    a rate over zero judged attempts has no value, so none is drawn",
             thin(w),

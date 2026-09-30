@@ -77,7 +77,7 @@ _NONE_IN: Mapping[str, str] = MappingProxyType(
 )
 
 #: The next move an empty backlog offers instead of a dead screen.
-EMPTY_NEXT = "a drafted Task lands here · g t shows what is planned"
+EMPTY_NEXT = "a drafted Task lands here"
 
 
 def _date(stamp: str | None) -> str:
@@ -87,22 +87,21 @@ def _date(stamp: str | None) -> str:
 
 
 def _native_rows(
-    view: View, rows: Sequence[SpineRow], group: str, on: bool, shown: range
+    view: View, grid: Grid, rows: Sequence[SpineRow], group: str, on: bool, shown: range
 ) -> list[str]:
     """Return one group's Task rows in ``shown``: key, title, then the group's two columns."""
     s, w = view.session, view.w
-    grid = _native_grid(w)
     out: list[str] = []
     for i in shown:
         row = rows[i]
         # a hard cut, so every clipped title ends in the same cell of its column
-        title = clip(row.title or UNKNOWN_WORD, grid.cols[2] - 1)
+        title = clip(row.title or UNKNOWN_WORD, grid.cols[1] - 1)
         if group == _DRAFTS:
             due = row.facts.get("due")
             tail = [promotion_needs(row), due or "undated"]
         else:
             tail = [value_cell(row.field("reason")).full, _date(row.facts.get("updated_at"))]
-        line = _caret(grid.row(["", row.key, title, *tail], False, w), on and i == s.sel)
+        line = grid.row([row.key, title, *tail], on and i == s.sel, w)
         out.append(g_row(line, w) if on else Fixed(pad(line, w)))
     return out
 
@@ -132,10 +131,15 @@ def promotion_needs(row: SpineRow) -> str:
     return f"needs {' · '.join(missing)}" if missing else "ready to promote"
 
 
-def _native_grid(w: int) -> Grid:
-    """Return the backlog grid at width ``w``: the title narrows so the due never clips."""
-    title = min(_TITLE_MAX, max(16, w - 2 - 11 - _KEY_W - _STATUS_W - _DUE_W))
-    return Grid([11, _KEY_W, title, _STATUS_W, 0], 2)
+def _native_grid(w: int, keys: Sequence[str]) -> Grid:
+    """Return the backlog grid at width ``w``: the title narrows so the due never clips.
+
+    The key column holds the longest key whole, since a key never gives way; the caret
+    sits in the gutter against it, as in every other list.
+    """
+    key_w = max([_KEY_W, *(cell_len(key) + 1 for key in keys)])
+    title = min(_TITLE_MAX, max(16, w - 3 - key_w - _STATUS_W - _DUE_W))
+    return Grid([key_w, title, _STATUS_W, 0], 2)
 
 
 def native_backlog(view: View, spine: SpineView) -> list[str]:
@@ -189,21 +193,22 @@ def native_backlog(view: View, spine: SpineView) -> list[str]:
     # the focused group is windowed into what the other group and the heads leave
     chrome = len(top) + 2 * 2 + peek + (1 if len(grouped[other]) > peek else 0) + 2
     win = window_rows(view, total=len(shown), cursor=s.sel, chrome=chrome)
+    grid = _native_grid(w, [row.key for row in spine.rows])
     for name, heads in ((_DRAFTS, ["STATUS", "DUE"]), (_DEFERRED, ["REASON", "SINCE"])):
-        raw = _native_grid(w).row([name, "", "", *heads], False, w)
+        raw = grid.row([name, "", *heads], False, w)
         tail = raw[raw.index(name) + cell_len(name) :].rstrip()
         body.append(Fixed(pad(f" {name}  {tail}", w)))
         rows = grouped[name]
         if not rows:
             body.append(Fixed(pad(f"   {_NONE_IN[name]}", w)))
         elif name == focus:
-            body += _native_rows(view, rows, name, True, range(win.start, win.stop))
+            body += _native_rows(view, grid, rows, name, True, range(win.start, win.stop))
             if win.hides:
                 body.append(win.line(complete=spine.complete))
         else:
-            body += _native_rows(view, rows, name, False, range(peek))
+            body += _native_rows(view, grid, rows, name, False, range(peek))
             if len(rows) > peek:
-                body.append(Fixed(pad(f"   … {len(rows) - peek} more · Tab walks them", w)))
+                body.append(Fixed(pad(f"   … {len(rows) - peek} more", w)))
         body.append(thin(w))
     s.nav_rows = len(shown)
     # a group cut to its window pages as well as steps, and its bar says so

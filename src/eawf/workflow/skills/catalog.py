@@ -512,6 +512,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
                 "projection.notifications.read",
                 "runtime.delivery.seal_acceptance_approval",
                 "runtime.permission.decide",
+                "runtime.question.answer_numbered",
                 "runtime.question.open_decision",
             ),
             canonical_mutates=True,
@@ -574,15 +575,17 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             show=(),
         ),
         effects=EffectsBoundary(
-            summary="Campaign create, run, steer and cancel verbs, their reads, and Run tools.",
+            summary="Campaign start, drive, revise and close verbs, their reads, and Run tools.",
             rpcs=(
                 "projection.campaign.read",
-                "projection.campaign.step.read",
-                "projection.campaign.artifact.read",
-                "research.create_campaign",
-                "research.run",
-                "research.steer",
-                "research.cancel_campaign",
+                "projection.campaign.view",
+                "projection.campaign.artifact",
+                "runtime.campaign.start",
+                "runtime.campaign.run",
+                "runtime.campaign.plan.revise",
+                "runtime.campaign.close",
+                "runtime.question.answer_numbered",
+                "runtime.question.open_decision",
             ),
             tools=(
                 SemanticToolId.SUBMIT_EVIDENCE,
@@ -618,7 +621,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
         ),
         effects=EffectsBoundary(
             summary="The decision add, supersede, list and graph verbs.",
-            rpcs=("runtime.question.open_decision",),
+            rpcs=("runtime.question.answer_numbered", "runtime.question.open_decision"),
             verbs=("decision add", "decision supersede", "decision list", "decision graph"),
             canonical_mutates=True,
         ),
@@ -725,6 +728,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
                 "runtime.candidate.report.bind",
                 "runtime.delivery.assemble",
                 "runtime.delivery.integrate",
+                "runtime.question.answer_numbered",
                 "runtime.question.open_decision",
             ),
             canonical_mutates=True,
@@ -757,7 +761,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
         ),
         effects=EffectsBoundary(
             summary="The memory list, view, add and promote verbs.",
-            rpcs=("runtime.question.open_decision",),
+            rpcs=("runtime.question.answer_numbered", "runtime.question.open_decision"),
             verbs=("memory list", "memory view", "memory add", "memory promote"),
             canonical_mutates=True,
         ),
@@ -820,9 +824,13 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             " [--local-root <path-under-.ea/local/mockups>] [--budget <spec>]"
         ),
         effects=EffectsBoundary(
-            summary="Inline rendering or proposal-local assets only.",
+            summary=(
+                "Inline rendering or proposal-local assets, and the operator decision the"
+                " options are filed as."
+            ),
+            rpcs=("runtime.question.answer_numbered", "runtime.question.open_decision"),
             tools=(SemanticToolId.ASK_OPERATOR,),
-            canonical_mutates=False,
+            canonical_mutates=True,
             local_write_scope=".ea/local/mockups",
         ),
         output=_out("MockupReport", "presented|selected|needs_operator|blocked"),
@@ -861,6 +869,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
                 "planning.plan_revision.submit",
                 "planning.plan_revision.approve",
                 "planning.plan_revision.apply",
+                "runtime.question.answer_numbered",
                 "runtime.question.open_decision",
             ),
             canonical_mutates=True,

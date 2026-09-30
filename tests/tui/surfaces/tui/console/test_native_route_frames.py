@@ -483,7 +483,7 @@ def test_ui_046_the_ceiling_observes_and_no_zero_stands_for_unpriced() -> None:
 
 
 def test_ui_047_three_doors_each_state_where_they_leave_the_console() -> None:
-    assert [(name, leaves) for name, _lost, leaves in doors(41208)] == [
+    assert [(name, leaves) for name, _cost, _lost, leaves in doors(41208)] == [
         ("reattach", "GAP DETECTED"),
         ("replay", "REPLAYING"),
         ("read-only", "OFFLINE SNAPSHOT"),
@@ -491,9 +491,17 @@ def test_ui_047_three_doors_each_state_where_they_leave_the_console() -> None:
     frame = _frame("crash.recovery")
     assert "41,209" in _text(frame)
     assert "2 runs were active then" in _text(frame)
-    assert len([row for row in frame if re.search(r"(reattach|replay|read-only)\s+\?", row)]) == 3
     assert "No door discards work" in _starts(frame, " NO LOSS")
-    assert frame[-1].split() == ["↑↓", "door", "i", "inspect", "Esc", "later"]
+    assert frame[-1].split() == ["↑↓", "door", "Enter", "choose", "i", "inspect", "Esc", "later"]
+
+
+def test_ui_047_each_door_states_its_cost_in_reads_from_the_held_cursor() -> None:
+    """UI-047: a door's cost is counted from the cursor, never left unknown."""
+    costs = [cost for _name, cost, _lost, _leaves in doors(41208)]
+    assert costs == ["one head read", "all from 41,209", "no read"]
+    frame = _frame("crash.recovery")
+    assert not [row for row in frame if re.search(r"(reattach|replay|read-only)\s+\?", row)]
+    assert "costs one head read" in _starts(frame, " CHOSEN")
 
 
 @pytest.mark.parametrize(("sel", "door"), [(0, "reattach"), (2, "read-only"), (9, "read-only")])

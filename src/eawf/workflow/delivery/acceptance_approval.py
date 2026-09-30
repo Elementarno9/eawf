@@ -77,12 +77,14 @@ ACCEPTANCE_OPTIONS: Final[tuple[PendingActionOption, ...]] = (
             "The Milestone is recorded as accepted on exactly this bundle. "
             "A later change needs a new acceptance."
         ),
+        cost="Any change after acceptance needs a new bundle and a new acceptance.",
     ),
     PendingActionOption(
         option_id="decline",
         label="Do not accept it",
         effect=OptionEffect.DECLINE,
         consequence="The Milestone stays in review and is not accepted. Nothing else changes.",
+        cost="Verified work waits unaccepted, and nothing says what would make it acceptable.",
     ),
     PendingActionOption(
         option_id="repair",
@@ -92,6 +94,7 @@ ACCEPTANCE_OPTIONS: Final[tuple[PendingActionOption, ...]] = (
             "The Milestone stays in review and a repair is requested. "
             "The next bundle revision is verified and asked about again."
         ),
+        cost="Delivery waits for another verified revision and another question.",
     ),
 )
 

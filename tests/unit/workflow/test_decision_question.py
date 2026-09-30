@@ -50,6 +50,7 @@ def _options() -> list[dict[str, Any]]:
             "label": "Ask before each commit",
             "effect": "decline",
             "consequence": "Nothing is committed until you say so.",
+            "cost": "Every step waits for you to answer.",
             "preview": "edit -> ask -> commit",
         },
         {
@@ -57,6 +58,7 @@ def _options() -> list[dict[str, Any]]:
             "label": "Commit on its own",
             "effect": "approve",
             "consequence": "Each finished step is committed at once.",
+            "cost": "A step you would have stopped lands first.",
             "preview": "edit -> commit",
         },
     ]

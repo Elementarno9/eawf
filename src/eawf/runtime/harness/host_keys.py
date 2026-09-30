@@ -226,6 +226,16 @@ HOST_KEYS: Final[tuple[HostKeyRecord, ...]] = (
         effect="honoured",
         evidence=_probe("test_surf_168_claude_permission_request_hook_fires"),
     ),
+    *(
+        HostKeyRecord(
+            document="claude_settings",
+            path=f"hooks.{event}",
+            source="RUN-062",
+            effect="honoured",
+            evidence=_probe("test_surf_168_claude_tool_hooks_fire"),
+        )
+        for event in ("PreToolUse", "PostToolUse", "PostToolUseFailure")
+    ),
     HostKeyRecord(
         document="claude_settings",
         path="statusLine",

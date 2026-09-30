@@ -107,7 +107,7 @@ ROUTE_MODULES: Mapping[str, RouteModule] = MappingProxyType(
         "attention": RouteModule(render=attention.render, seam=activity.bucket_seam),
         "transcript": RouteModule(render=transcript.render, seam=transcript.seam),
         "cost.ceiling": RouteModule(render=cost_ceiling.render),
-        "crash.recovery": RouteModule(render=crash_recovery.render),
+        "crash.recovery": RouteModule(render=crash_recovery.render, seam=crash_recovery.seam),
         "milestone": RouteModule(render=milestone.render),
         "release": RouteModule(render=release.render),
         "timeline": RouteModule(render=timeline.render),

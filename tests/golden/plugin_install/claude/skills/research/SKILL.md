@@ -42,7 +42,7 @@ Answer one bounded question quickly in at most one rendered page. You do not cre
 3. Run one survey pass. Independent parallel slices are allowed within the agent ceiling, but recursion and additional rounds are forbidden.
 4. Reconcile evidence once. Distinguish implementation fact, document claim, external claim, and inference. Resolve every citation used by the verdict.
 5. Compare plausible alternatives with their main advantage and cost. Give a verdict, confidence, and material open gaps.
-6. If evidence cannot decide, recommend the cheapest discriminating next step. Do not turn the invocation into a Campaign or Spike implicitly.
+6. If evidence cannot decide, recommend the cheapest discriminating next step. Do not turn the invocation into a Campaign or Spike implicitly: a question that needs several rounds is recommended as a Campaign, which the operator plans with `eawf campaign new` (`runtime.campaign.start`) and the daemon drives step by step with `eawf campaign run` (`runtime.campaign.run`).
 7. Stop at one pass, one rendered page, or the first hard budget cap. Saving writes only the same report to the declared gitignored local path.
 
 ## 4b. Applicable rules

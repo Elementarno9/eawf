@@ -61,6 +61,9 @@ def test_hook_event_v1_event_type_set_is_frozen() -> None:
         "subagent_stop",
         "pre_compact",
         "permission_request",
+        "pre_tool_use",
+        "post_tool_use",
+        "post_tool_use_failure",
     }
     assert {member.value for member in HookEventType} == expected
 

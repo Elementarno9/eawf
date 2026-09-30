@@ -537,6 +537,8 @@ def test_store_kind_values() -> None:
         "conduct_deviation",
         # Deferred gates owed until they run and pass; stable approval reads them.
         "verification_debt",
+        # The regime each Milestone or Batch is delivered under, one row per binding.
+        "regime_binding",
         # Machine-local trail of every state a submitted operation reaches.
         "operation",
     }

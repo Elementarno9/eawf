@@ -13,12 +13,19 @@ the seal verb accepts, so an answer that is not one of those ids -- a
 paraphrase, a free-text "yes" -- has nothing to bind to and is not consent.
 
 What a presentable question carries. Every option states its consequence
-in plain words and shows a concrete rendering of what choosing it
-produces; the options differ in what they produce, since a question whose
+in plain words, what choosing it costs, and shows a concrete rendering of
+what choosing it produces; the options differ in what they produce, since a question whose
 answers all lead to the same place costs attention and changes nothing.
 Exactly one option is recommended, for a reason stated in one sentence.
 Every identifier, abbreviation or screaming-case key in the view is
 expanded in the same view. Sentences are short.
+
+A host without a native multiple-choice picker -- Codex -- shows the same
+question as :func:`numbered_prompt`: the question, then each option on its
+own numbered line in the persisted order, then the action and revision it
+is bound to. :func:`numbered_option` reads the reply back to the persisted
+option id, and only a bare option number binds: a label, a paraphrase or a
+"yes" is refused, because free text is never consent.
 
 When it may be shown. Only a question that is filed and waiting: the
 record is durable before any surface sees it, so losing the surface loses
@@ -63,6 +70,8 @@ class PresentationRefusal(StrEnum):
     PROSE_NOT_PLAIN = "prose_not_plain"
     RECOMMENDATION_UNSTATED = "recommendation_unstated"
     NO_CONSEQUENCE = "question_without_consequence"
+    COST_UNSTATED = "option_cost_unstated"
+    REPLY_NOT_AN_OPTION = "reply_not_an_option"
 
 
 class QuestionPresentationError(ValueError):
@@ -107,8 +116,8 @@ def _require_shown_options(action: PendingAction) -> None:
     """Refuse an option told only in prose, and options that all lead to the same place.
 
     Raises:
-        QuestionPresentationError: ``option_not_shown`` or
-            ``question_without_consequence``.
+        QuestionPresentationError: ``option_not_shown``,
+            ``option_cost_unstated`` or ``question_without_consequence``.
     """
     for option in action.options:
         missing = [name for name in ("consequence", "preview") if getattr(option, name) is None]
@@ -116,6 +125,11 @@ def _require_shown_options(action: PendingAction) -> None:
             raise QuestionPresentationError(
                 PresentationRefusal.OPTION_UNSHOWN,
                 f"{action.id} option {option.option_id!r} has no {' or '.join(missing)}",
+            )
+        if option.cost is None:
+            raise QuestionPresentationError(
+                PresentationRefusal.COST_UNSTATED,
+                f"{action.id} option {option.option_id!r} does not say what choosing it costs",
             )
     for name in ("consequence", "preview"):
         values = [getattr(option, name) for option in action.options]
@@ -157,6 +171,7 @@ def _require_plain_prose(action: PendingAction, rationale: str) -> None:
     for option in action.options:
         texts.append(option.label)
         texts.append(option.consequence or "")
+        texts.append(option.cost or "")
     for text in texts:
         for sentence in _sentences(text):
             if len(sentence.split()) > MAX_SENTENCE_WORDS:
@@ -175,7 +190,9 @@ def _require_expanded_terms(action: PendingAction, rationale: str) -> None:
     """
     view = [action.question, rationale]
     for option in action.options:
-        view.extend((option.label, option.consequence or "", option.preview or ""))
+        view.extend(
+            (option.label, option.consequence or "", option.cost or "", option.preview or "")
+        )
     expanded = {item.term for item in action.terms}
     unexpanded = sorted({term for text in view for term in _TERM.findall(text)} - expanded)
     if unexpanded:
@@ -202,8 +219,8 @@ def present_pending_action(action: PendingAction) -> UserQuestion:
     Raises:
         QuestionPresentationError: The action is not a filed waiting
             question, carries a timeout default with no override window, or is not
-            presentable as it stands -- an option without a consequence or
-            rendering, options that do not differ, no single one-sentence
+            presentable as it stands -- an option without a consequence,
+            cost or rendering, options that do not differ, no single one-sentence
             recommendation, a sentence too long, or an unexpanded term.
     """
     _require_answerable(action)
@@ -226,9 +243,9 @@ def present_pending_action(action: PendingAction) -> UserQuestion:
         UserQuestionOption(
             label=option.label,
             description=(
-                f"Recommended. {rationale} {option.consequence}"
+                f"Recommended. {rationale} {option.consequence} Cost: {option.cost}"
                 if option.option_id == action.recommended_option_id
-                else option.consequence
+                else f"{option.consequence} Cost: {option.cost}"
             ),
             preview=option.preview,
             option_id=option.option_id,
@@ -243,9 +260,64 @@ def present_pending_action(action: PendingAction) -> UserQuestion:
     )
 
 
+def numbered_prompt(question: UserQuestion) -> str:
+    """Return *question* as the numbered text prompt a host without a picker prints.
+
+    Args:
+        question: A bound question, as :func:`present_pending_action` returns it.
+
+    Returns:
+        The question, one numbered line per option in the persisted order
+        with its consequence and its rendering indented below, and a closing
+        line naming the action and revision the reply is sealed against.
+    """
+    lines = [question.question, ""]
+    for number, option in enumerate(question.options, start=1):
+        lines.append(f"{number}) {option.label}")
+        if option.description:
+            lines.append(f"   {option.description}")
+        if option.preview:
+            lines.extend(f"   | {row}" for row in option.preview.splitlines())
+    lines.append("")
+    lines.append(
+        f"Reply with one number from 1 to {len(question.options)}. "
+        f"The answer is sealed on {question.action_ref} at revision {question.action_revision}."
+    )
+    return "\n".join(lines)
+
+
+def numbered_option(action: PendingAction, reply: str) -> str:
+    """Return the option id a numbered *reply* to *action*'s prompt chooses.
+
+    The numbers follow the persisted option order, which is the order the
+    prompt shows, so the reply reads back against the record itself.
+
+    Args:
+        action: The pending action the prompt was presented from.
+        reply: What the operator typed.
+
+    Returns:
+        The persisted id of the chosen option.
+
+    Raises:
+        QuestionPresentationError: ``reply_not_an_option`` when *reply* is
+            not a bare number of an offered option.
+    """
+    text = reply.strip()
+    count = len(action.options)
+    if not (text.isascii() and text.isdigit() and 1 <= int(text) <= count):
+        raise QuestionPresentationError(
+            PresentationRefusal.REPLY_NOT_AN_OPTION,
+            f"{action.id} takes a number from 1 to {count}, not {reply[:40]!r}",
+        )
+    return action.options[int(text) - 1].option_id
+
+
 __all__ = [
     "MAX_SENTENCE_WORDS",
     "PresentationRefusal",
     "QuestionPresentationError",
+    "numbered_option",
+    "numbered_prompt",
     "present_pending_action",
 ]

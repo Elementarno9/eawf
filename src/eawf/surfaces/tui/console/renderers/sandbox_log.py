@@ -18,6 +18,7 @@ from eawf.kernel.projection.route_view import RouteReadModel
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import value_cell
+from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, g_pad, thin, window_rows
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
@@ -98,14 +99,14 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     )
     # the head sits over the rows below it, in the same two-cell caret gutter
     decisions = Grid([7, 10, 17, 30, 0] if wide else [7, 10, 17, 0])
+    held = len(model.rows)
+    noun = "policy" if held == 1 else "policies"
     body = [
         label("WINDOW", f"{UNKNOWN_WORD} decisions · ? denied · 0 of ? shown"),
         decisions.head(["TIME", "DECISION", "RUN", "REASON", *(["REVISION"] if wide else [])]),
         f"   no decision record is held · waiting on {SANDBOX_DECISION_PRODUCER}",
         thin(w),
-        label(
-            "POLICIES", f"{dv.plural(len(model.rows), 'policy', 'ies')} the decisions read against"
-        ),
+        label("POLICIES", f"{group(held)} {noun} the decisions read against"),
     ]
     policies = Grid([24, 14, 0])
     win = window_rows(view, total=len(model.rows), cursor=cursor, chrome=len(top) + len(body) + 5)

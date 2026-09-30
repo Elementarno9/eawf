@@ -9,9 +9,10 @@ Run a complete Campaign from definition through terminal synthesis.
 ## 1. Authority
 
 - Only an authenticated operator initiates this skill, by design: it is kept out of the model's reach. An agent may prepare evidence or recommend the invocation, but never calls it.
-- Operates on: Campaign, through `projection.campaign.read`, `projection.campaign.step.read`, `projection.campaign.artifact.read`, `research.create_campaign`, `research.run`, `research.steer`, `research.cancel_campaign`.
-- Effects: Campaign create, run, steer and cancel verbs, their reads, and Run tools.
-- Allowed RPCs: `projection.campaign.read`, `projection.campaign.step.read`, `projection.campaign.artifact.read`, `research.create_campaign`, `research.run`, `research.steer`, `research.cancel_campaign`. Any other RPC is denied before it reaches a handler.
+- Operates on: Campaign, through `projection.campaign.read`, `projection.campaign.view`, `projection.campaign.artifact`, `runtime.campaign.start`, `runtime.campaign.run`, `runtime.campaign.plan.revise`, `runtime.campaign.close`.
+- Operator choices: an agent that reaches a choice this skill puts to the operator files it with `eawf question open-decision` (`runtime.question.open_decision`), shows the bound question the answer carries, and stops; it never chooses the recommended option itself. In Codex the bound question is the answer's `numbered_prompt`, printed verbatim, and the operator's reply is relayed with `eawf question answer` (`runtime.question.answer_numbered`); the console answers the same record, and the first answer wins.
+- Effects: Campaign start, drive, revise and close verbs, their reads, and Run tools.
+- Allowed RPCs: `projection.campaign.read`, `projection.campaign.view`, `projection.campaign.artifact`, `runtime.campaign.start`, `runtime.campaign.run`, `runtime.campaign.plan.revise`, `runtime.campaign.close`, `runtime.question.answer_numbered`, `runtime.question.open_decision`. Any other RPC is denied before it reaches a handler.
 - Run tools: `submit_evidence`, `submit_report`, `ask_operator`.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
@@ -35,15 +36,13 @@ Select exactly one action: `run`, `resume`, `steer`, `cancel`, `show`. An option
 
 ## 4. Method
 
-1. Validate topic, goal, audience, intended use, desired artifact, known context, seed questions, exclusions, source policy, success definition, budget, checkpoint policy, and stop rules. An incomplete brief raises one prepared operator question instead of creating a shell Campaign.
-2. Create the DRAFT Campaign, build its question DAG and independent role/frontier plan, and render the complete plan for protected operator approval. Never select approval yourself.
-3. Activate only the exact approved revision. Dispatch bounded researcher Runs by ready frontier and role; each Run receives its own question, source scope, budget, and output schema.
-4. After every round, resolve and score evidence, reconcile claims and contradictions, update open questions, record the round, and recompute hard caps and semantic saturation.
-5. A goal, artifact, scope, source-policy, or budget expansion raises a PendingAction. Provider loss or resumable timeout creates an OpenPause with an exact resume anchor.
-6. At convergence or a hard cap with minimum evidence, synthesize one immutable artifact revision. Every promoted claim must resolve and entail; contradictions and open questions receive explicit dispositions.
-7. Dispatch a fresh EvidenceVerifier with the artifact and sources but no producer transcript. A failed verification returns a bounded child revision while budget remains.
-8. Enter REVIEW and present accept, revise, or drop. Only operator acceptance completes the Campaign. Revision returns to ACTIVE with a child plan/artifact revision; cancellation drops; unrecoverable failure preserves evidence and fails.
-9. Continue through safe automatic steps until completed, dropped, failed, budget-exhausted, or paused for a real operator decision. A pause is resumable, never false completion.
+1. Validate the brief: title, owning Track, the questions to work (the Campaign's own first), depth, fan-out width and budget. An incomplete brief raises one prepared operator question instead of creating a shell Campaign.
+2. Show the plan `runtime.campaign.start` would approve -- one step per question and method the depth names, then one synthesis step -- and approve it only on the operator's protected approval. The daemon files each question and approves the exact plan; never select approval yourself.
+3. `runtime.campaign.run` drives the approved plan in the daemon: each round it starts every ready step, up to the fan-out width, on a Run of its own, and the research agent works that step's question read-only.
+4. Each round checkpoints in the daemon: the accountant charges the round's spend to the step and the Campaign, the round's report is kept as an artifact revision of the step, the step finishes with its outcome, and the findings it names are promoted as held CFN findings.
+5. A hard budget axis at its limit stops dispatch, and the Campaign records the budget stop so it never reads as converged on its own; widening the budget, the questions or the steps is a plan revision (`runtime.campaign.plan.revise`) the operator approves, which keeps every started step unchanged.
+6. A failed round returns its step to pending and pauses the drive; `campaign run` resumes it on a new Run. Read progress through `projection.campaign.view` and each checkpoint through `projection.campaign.artifact`.
+7. The drive converges the Campaign once every step is done, or once a budget stop leaves nothing running; `runtime.campaign.close` cancels it with the operator's reason. A pause is resumable, never false completion.
 
 ## 4b. Applicable rules
 
@@ -55,13 +54,13 @@ The obligations the effective rule graph holds for activities `research` and rol
 
 ## 5. Constraints
 
-- Only operator acceptance completes the Campaign; you never select approval or acceptance yourself.
+- Only the operator approves a plan or its revision, and only the operator cancels; you never select approval yourself.
 - Every parallel researcher Run declares what its result would rule out; a Run that cannot name it is not dispatched.
 - Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `needs_operator` or `paused` with the reason rather than guessing.
 
 ## 6. Output
 
-Output one CampaignRunReport containing Campaign/plan/artifact revisions, round ledger, Runs, claim/evidence coverage, saturation, verifier result, Attention items, receipts, and final disposition.
+Output one CampaignRunReport containing the Campaign and plan revisions, the steps with their Runs and outcomes, the artifact revisions, the promoted findings, the budget spend and stop, and the final disposition.
 
 The report validates against `CampaignRunReport`, and its terminal outcome is exactly one of `completed`, `dropped`, `failed`, `needs_operator`, `paused`, `budget_exhausted`. It carries a `coverage` block listing what the pass covered and, with a reason each, what it did not. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /campaign` before returning it.
 

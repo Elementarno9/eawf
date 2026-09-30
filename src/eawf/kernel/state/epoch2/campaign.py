@@ -12,6 +12,12 @@ in one shared unit, so a route renders spend against its limit and derives
 the remainder rather than storing one. A step's limit on an axis never
 exceeds the Campaign's limit on the same axis.
 
+A plan orders its methods by the Campaign's :class:`CampaignMethodPolicy`: a
+step never works a method the policy places before the method of a step it
+depends on, so a synthesis never feeds a survey. A Campaign that stops says
+why in its :class:`CampaignStop`, so a Campaign a hard budget axis starved is
+never read as one that converged.
+
 The artifacts a Campaign keeps are addressed by revision: an
 :data:`ArtifactRevisionRef` names one immutable
 :class:`~eawf.kernel.state.epoch2.artifact_revision.ArtifactRevision`, and the
@@ -97,6 +103,56 @@ class StepState(StrEnum):
 
 
 BudgetAxisKind = Literal["wall_time", "tokens", "cost", "sources", "rounds"]
+
+#: Why a Campaign stopped dispatching.
+StopReason = Literal["budget_exhausted", "converged", "cancelled"]
+
+
+class CampaignMethodPolicy(Epoch2Model):
+    """The order a Campaign's plan may work its methods in.
+
+    Attributes:
+        order: The allowed methods, earliest first. A step may work only a
+            listed method, and never one listed before the method of a step
+            it depends on.
+
+    Raises:
+        pydantic.ValidationError: No method, or one method twice.
+    """
+
+    order: Annotated[tuple[CampaignMethod, ...], Field(min_length=1)] = tuple(CampaignMethod)
+
+    @model_validator(mode="after")
+    def _each_method_once(self) -> Self:
+        """Refuse a method listed twice, since its position would be ambiguous."""
+        if len(set(self.order)) != len(self.order):
+            raise ValueError(f"the method order repeats a method: {list(self.order)}")
+        return self
+
+    def violations(self, steps: tuple[CampaignPlanStep, ...]) -> tuple[str, ...]:
+        """Return each step whose method the policy does not allow where it stands.
+
+        Args:
+            steps: Every step of a plan.
+
+        Returns:
+            One sentence per refused step; empty when the plan keeps the order.
+        """
+        rank = {method: index for index, method in enumerate(self.order)}
+        methods = {step.ordinal: step.method for step in steps}
+        refused: list[str] = []
+        for step in steps:
+            if step.method not in rank:
+                refused.append(f"step {step.ordinal} works {step.method.value}, outside the policy")
+                continue
+            for ordinal in step.depends_on:
+                before = methods.get(ordinal)
+                if before is not None and rank.get(before, -1) > rank[step.method]:
+                    refused.append(
+                        f"step {step.ordinal} works {step.method.value} after step {ordinal}'s "
+                        f"{before.value}, which the policy orders later"
+                    )
+        return tuple(refused)
 
 
 class BudgetAxis(Epoch2Model):
@@ -222,6 +278,38 @@ class CampaignPlanStep(Epoch2Model):
         return self
 
 
+class CampaignStop(Epoch2Model):
+    """Why a Campaign stopped dispatching steps, and when.
+
+    Attributes:
+        reason: What stopped it.
+        axis_kind: The hard axis that reached its limit, for a budget stop.
+        detail: The stop in one line.
+        stopped_at: When it stopped.
+
+    Raises:
+        pydantic.ValidationError: A budget stop that names no axis, or
+            another stop that names one.
+    """
+
+    reason: StopReason
+    axis_kind: BudgetAxisKind | None = None
+    detail: StepOutcome
+    stopped_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def _budget_stop_names_its_axis(self) -> Self:
+        """Name the exhausted axis exactly when the budget stopped the Campaign."""
+        if (self.reason == "budget_exhausted") != (self.axis_kind is not None):
+            raise ValueError("a budget stop names its axis, and no other stop does")
+        return self
+
+
+def exhausted_axis(budget: ResearchBudget) -> BudgetAxis | None:
+    """Return the first hard axis whose spend reached its limit, or ``None``."""
+    return next((a for a in budget.axes if a.hard and a.spent >= a.limit), None)
+
+
 def step_blockers(step: CampaignPlanStep, steps: tuple[CampaignPlanStep, ...]) -> tuple[str, ...]:
     """Return what keeps a pending step from starting, by name; empty when nothing does.
 
@@ -284,22 +372,27 @@ class Campaign(Epoch2Record):
         track_ref: The one Track that owns it.
         title: What it researches, in one line.
         status: Where it stands.
+        stop: Why it stopped dispatching; set before it leaves ``active`` and
+            whenever a hard axis reached its limit.
         evidence_budget: Its axis pairs.
+        method_policy: The order its plan may work methods in.
         plan_revision: Which approved plan the steps are.
         approved_plan_digest: The digest of the approved steps.
         plan_steps: The approved plan, in order.
         artifact_revision_refs: Every artifact revision it keeps, append-only.
 
     Raises:
-        pydantic.ValidationError: The plan's ordinals, dependencies or bounds
-            do not hold.
+        pydantic.ValidationError: The plan's ordinals, dependencies, methods
+            or bounds do not hold, or the status and the stop disagree.
     """
 
     urn: CampaignUrn
     track_ref: TrackUrn
     title: StepTitle
     status: CampaignStatus = CampaignStatus.ACTIVE
+    stop: CampaignStop | None = None
     evidence_budget: ResearchBudget
+    method_policy: CampaignMethodPolicy = CampaignMethodPolicy()
     plan_revision: StrictPositiveInt = 1
     approved_plan_digest: Sha256DigestStr
     plan_steps: Annotated[tuple[CampaignPlanStep, ...], Field(min_length=1)]
@@ -307,8 +400,26 @@ class Campaign(Epoch2Record):
 
     @model_validator(mode="after")
     def _plan_holds(self) -> Self:
-        """Check the plan against itself and the Campaign's bounds."""
+        """Check the plan against itself, the method policy and the Campaign's bounds."""
         _check_plan(self.plan_steps, self.evidence_budget)
+        refused = self.method_policy.violations(self.plan_steps)
+        if refused:
+            raise ValueError(f"the plan breaks the method policy: {'; '.join(refused)}")
+        return self
+
+    @model_validator(mode="after")
+    def _status_agrees_with_its_stop(self) -> Self:
+        """Require a stop off ``active``, and a cancel stop exactly when cancelled.
+
+        Raises:
+            ValueError: A converged or cancelled Campaign that states no stop,
+                or a cancel stop on a Campaign that is not cancelled.
+        """
+        if self.status is not CampaignStatus.ACTIVE and self.stop is None:
+            raise ValueError(f"a {self.status.value} Campaign states why it stopped")
+        cancelled = self.stop is not None and self.stop.reason == "cancelled"
+        if cancelled != (self.status is CampaignStatus.CANCELLED):
+            raise ValueError("a cancel stop belongs to a cancelled Campaign, and only to one")
         return self
 
     def step(self, ordinal: int) -> CampaignPlanStep | None:
@@ -321,10 +432,14 @@ __all__ = [
     "BudgetAxis",
     "Campaign",
     "CampaignMethod",
+    "CampaignMethodPolicy",
     "CampaignPlanStep",
+    "CampaignStop",
     "NamedProgress",
     "ResearchBudget",
     "StepState",
+    "StopReason",
+    "exhausted_axis",
     "revision_ref",
     "step_blockers",
 ]

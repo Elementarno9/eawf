@@ -28,6 +28,12 @@ otherwise the host's own prompt decides, and a later decision is still recorded
 here. :func:`expire_lapsed` is what the
 daemon's expiry sweep calls, so a lapse is recorded whether or not anyone reads
 the Run again.
+
+Each revision is also stated on the Run's own stream: an open as
+``approval_requested`` and a decision or a lapse as ``approval_resolved``, naming the
+permission and the ledger line the resolution was committed as. The Run's transcript
+then draws the held call as a question waiting on a principal, and its answer, from
+typed events rather than from a second read of the ledger.
 """
 
 from __future__ import annotations
@@ -53,6 +59,7 @@ from eawf.kernel.identity import (
 )
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.runtime.compiled import BoundedText
+from eawf.kernel.runtime.events import QuestionActionPayload, RunEventKind
 from eawf.kernel.runtime.permission import (
     ApprovalAuthority,
     PermissionActionClass,
@@ -79,8 +86,10 @@ from eawf.observability.logging.state_leak import default_allowed_emails, scan_s
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
+from eawf.runtime.daemon.methods.run import append_run_event
 from eawf.runtime.daemon.native_dispatch import stored_run
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator, require_native_call
+from eawf.runtime.daemon.run_events import RunEventAppend, ledger_receipt
 from eawf.runtime.runtimes.host_transcript import HostHarness
 from eawf.runtime.session.vendor_id import hash_vendor_session_id
 
@@ -135,6 +144,10 @@ _PAYLOAD_KIND: Final = "provider_permission"
 
 #: The Run statuses a provider can be holding a call in.
 _HOLDING_STATUSES: Final = frozenset({RunStatus.RUNNING, RunStatus.SUSPENDED})
+
+#: Who a line the daemon states on its own observation is attributed to: an open it
+#: recorded, or a lapse the provider decided and nobody answered.
+DAEMON_ACTOR: Final = "EAWFD"
 
 
 class _OpenParams(BaseModel):
@@ -273,18 +286,59 @@ def _next_key(taken: dict[str, ProviderPermission]) -> str:
     return f"PERM-{max(ordinals, default=0) + 1:04d}"
 
 
-def _append(session: RootSession, permission: ProviderPermission, *, now: datetime) -> None:
-    """Append one revision of *permission* as a line of the run ledger."""
+def _append(session: RootSession, permission: ProviderPermission, *, now: datetime) -> LedgerRecord:
+    """Append one revision of *permission* as a line of the run ledger, and return it."""
     resolution = permission.resolution
-    commit_ledger_append(
-        session,
-        LedgerRecord(
-            collection=Epoch2Collection.RUN,
-            record_key=permission.key,
-            status="open" if resolution is None else resolution.decision,
-            recorded_at=now,
-            payload=permission.model_dump(mode="json"),
+    record = LedgerRecord(
+        collection=Epoch2Collection.RUN,
+        record_key=permission.key,
+        status="open" if resolution is None else resolution.decision,
+        recorded_at=now,
+        payload=permission.model_dump(mode="json"),
+    )
+    commit_ledger_append(session, record)
+    return record
+
+
+def _state(
+    context: Epoch2RootContext,
+    permission: ProviderPermission,
+    record: LedgerRecord,
+    *,
+    now: datetime,
+) -> None:
+    """State one revision of *permission* on its Run's stream.
+
+    The line takes the stream's tail, because the Run's worker and its hooks write the
+    same stream, and its id is derived from the revision, so a replayed revision is
+    answered with the line already standing. A Run that has already ended keeps the
+    line as a quarantined diagnostic, as any late event is kept.
+    """
+    resolution = permission.resolution
+    body = f"{permission.urn}:{permission.revision}"
+    principal = None if resolution is None else resolution.principal_ref
+    append_run_event(
+        context,
+        RunEventAppend(
+            urn=permission.run_ref,
+            event_ref=f"EVT-{hashlib.sha256(body.encode()).hexdigest()[:32]}",
+            run_sequence=1,
+            event_kind=(
+                RunEventKind.APPROVAL_REQUESTED
+                if resolution is None
+                else RunEventKind.APPROVAL_RESOLVED
+            ),
+            provenance="daemon_observed",
+            payload=QuestionActionPayload(
+                subject_ref=permission.urn,
+                phase="requested" if resolution is None else "resolved",
+                choice_key=None if resolution is None else resolution.decision,
+                receipt_ref=None if resolution is None else ledger_receipt(record),
+            ),
+            actor=principal or DAEMON_ACTOR,
         ),
+        now=now,
+        at_tail=True,
     )
 
 
@@ -350,7 +404,8 @@ def _open(context: Epoch2RootContext, args: _OpenParams, *, now: datetime) -> Pe
             raise DaemonValidationError(
                 f"validation_failed: schema_validation_failed: {error.errors()[0]['msg']}"
             ) from error
-        _append(session, permission, now=now)
+        record = _append(session, permission, now=now)
+    _state(context, permission, record, now=now)
     logger.info(f"_open key={key} run={args.urn.entity_key}")
     return _answer(permission)
 
@@ -369,6 +424,8 @@ def _decide(context: Epoch2RootContext, args: _DecideParams, *, now: datetime) -
                 f"validation_failed: identity_not_found: no provider permission is recorded "
                 f"under {args.urn.entity_key}"
             )
+        refusal: PermissionRefusalError | None = None
+        recorded: LedgerRecord | None = None
         try:
             decided = decide_permission(
                 permission,
@@ -378,14 +435,19 @@ def _decide(context: Epoch2RootContext, args: _DecideParams, *, now: datetime) -
                 expected_revision=args.expected_revision,
                 now=now,
             )
-        except PermissionRefusalError as refusal:
+        except PermissionRefusalError as error:
+            refusal = error
             lapsed = expire_permission(permission, now=now)
-            if refusal.code is PermissionRefusalCode.LAPSED and lapsed is not None:
-                _append(session, lapsed, now=now)
+            if error.code is PermissionRefusalCode.LAPSED and lapsed is not None:
+                recorded = _append(session, lapsed, now=now)
                 permission = lapsed
-            return _Decision(permission=permission, refusal=refusal)
-        _append(session, decided, now=now)
-    return _Decision(permission=decided, refusal=None)
+        else:
+            recorded = _append(session, decided, now=now)
+            permission = decided
+    # stated once the Run's lock is released, since the stream append takes it again
+    if recorded is not None:
+        _state(context, permission, recorded, now=now)
+    return _Decision(permission=permission, refusal=refusal)
 
 
 def _expire(context: Epoch2RootContext, run: QualifiedUrn, *, now: datetime) -> PermissionsAnswer:
@@ -400,15 +462,18 @@ def _expire(context: Epoch2RootContext, run: QualifiedUrn, *, now: datetime) -> 
         Every permission of the Run after the sweep, and the keys it expired.
     """
     expired: list[str] = []
+    recorded: list[tuple[ProviderPermission, LedgerRecord]] = []
     with context.session([run]) as session:
         latest = _latest(read_ledger_records(session.ledger_path(Epoch2Collection.RUN)))
         mine = {key: item for key, item in latest.items() if item.run_ref == run}
         for key in sorted(mine):
             lapsed = expire_permission(mine[key], now=now)
             if lapsed is not None:
-                _append(session, lapsed, now=now)
+                recorded.append((lapsed, _append(session, lapsed, now=now)))
                 mine[key] = lapsed
                 expired.append(key)
+    for lapsed, record in recorded:
+        _state(context, lapsed, record, now=now)
     return PermissionsAnswer(
         permissions=tuple(_answer(mine[key]) for key in sorted(mine)), expired=tuple(expired)
     )
@@ -483,8 +548,11 @@ def _document_path(authority: RootAuthority) -> Path:
     return target.generation_path(generation_id) / GENERATION_DOCUMENT
 
 
-def _host_run(authority: RootAuthority, host_session_id: str) -> RunUrn:
+def host_run(authority: RootAuthority, host_session_id: str) -> RunUrn:
     """Return the one live Run the host session is the vendor session of.
+
+    Inside a subagent the host names the subagent, whose own adopted Run is the one
+    its calls belong to; elsewhere it names the session.
 
     Raises:
         DaemonValidationError: No live Run is on that session, or several are,
@@ -524,7 +592,7 @@ def _host_open(
     Raises:
         DaemonValidationError: The host session is on no one live Run.
     """
-    run = _host_run(authority, args.host_session_id)
+    run = host_run(authority, args.host_session_id)
     call_ref = _host_call_ref(args)
     with context.session([run]) as session:
         latest = _latest(read_ledger_records(session.ledger_path(Epoch2Collection.RUN)))
@@ -672,6 +740,7 @@ async def _read_permissions(ctx: MethodContext, params: dict[str, Any]) -> dict[
 
 
 __all__ = [
+    "DAEMON_ACTOR",
     "HOST_AUTHORITY",
     "HOST_DECISION_WINDOW",
     "HOST_PERMISSION_REQUEST_METHOD",
@@ -683,5 +752,6 @@ __all__ = [
     "PermissionAnswer",
     "PermissionsAnswer",
     "expire_lapsed",
+    "host_run",
     "open_permission_rows",
 ]

@@ -2,11 +2,14 @@
 
 Driven through the real ``runtime.campaign.*`` writers and the ``projection.campaign.*``
 reads against a provisioned canary whose document holds one live Track. Row ids name the
-packet requirement each test proves: PLAN-050 (every artifact revision a Campaign or a step
-lists resolves to a record carrying what its card names), UI-056 (the Campaign view carries
-its steps and artifacts, a blocked step is derived and names its blocker), UI-070 (the
-artifact card is a typed read model whose lines are the revision's text, and a binary one
-carries none) and DOM-034 (a Campaign promotion writes a held ``CFN-####`` finding).
+packet requirement each test proves: PLAN-049 (a plan revision keeps every started step,
+keeps the method order and works only questions the tree holds), PLAN-034 (a hard axis
+at its limit stops dispatch and the Campaign records why), PLAN-050 (every artifact
+revision a Campaign or a step lists resolves to a record carrying what its card names),
+UI-056 (the Campaign view carries its steps and artifacts, a blocked step is derived and
+names its blocker), UI-070 (the artifact card is a typed read model whose lines are the
+revision's text, and a binary one carries none) and DOM-034 (a Campaign promotion writes
+a held ``CFN-####`` finding).
 """
 
 from __future__ import annotations
@@ -30,8 +33,10 @@ from eawf.runtime.daemon.epoch2_transaction import TransactionRefusedError
 from eawf.runtime.daemon.methods.campaign import (
     CAMPAIGN_ARTIFACT_METHOD,
     CAMPAIGN_ARTIFACT_RECORD_METHOD,
+    CAMPAIGN_CLOSE_METHOD,
     CAMPAIGN_FINDING_PROMOTE_METHOD,
     CAMPAIGN_PLAN_APPROVE_METHOD,
+    CAMPAIGN_PLAN_REVISE_METHOD,
     CAMPAIGN_STEP_UPDATE_METHOD,
     CAMPAIGN_VIEW_METHOD,
 )
@@ -106,6 +111,7 @@ def approve(canary: CanaryProvision, tmp_path: Path, **overrides: Any) -> dict[s
             _step(2, depends_on=(1,)),
             _step(3, blocking_contradiction_refs=[CONTRADICTION]),
         ],
+        "seed_questions": [{"urn": QUESTION, "question": "Does replay preserve event order?"}],
         **overrides,
     }
     return call(canary, tmp_path, CAMPAIGN_PLAN_APPROVE_METHOD, **params)
@@ -345,3 +351,146 @@ def test_dom_034_a_campaign_promotion_writes_a_held_cfn_finding(
     ]
     held = view(canary, tmp_path).findings
     assert [(f.key, f.disposition.value) for f in held] == [("CFN-0001", "held")]
+
+
+# ---------- PLAN-050: a round checkpoint records the text it holds ----------
+
+
+def test_plan_050_a_round_checkpoint_records_the_text_it_holds_without_a_file(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    approve(canary, tmp_path)
+    update(canary, tmp_path, ordinal=1, to_state="running", run_ref=RUN_A)
+    stored = record(
+        canary,
+        tmp_path,
+        "round-1/summary.md",
+        media_kind="markdown",
+        run_ref=RUN_A,
+        step_ordinal=1,
+        text=REPORT,
+    )
+    revision = stored["record"]["revision"]
+    assert not (canary.root / "round-1").exists()
+    assert revision["digest"] == f"sha256:{hashlib.sha256(REPORT.encode()).hexdigest()}"
+    assert (revision["file_name"], revision["size_bytes"]) == ("round-1/summary.md", len(REPORT))
+    card = ArtifactCardView.model_validate(
+        call(
+            canary,
+            tmp_path,
+            CAMPAIGN_ARTIFACT_METHOD,
+            campaign_key="CAM-0001",
+            artifact_ref=f"{revision['artifact_ref']}#r1",
+        )
+    )
+    assert card.lines == tuple(REPORT.splitlines())
+    with pytest.raises(TransactionRefusedError, match="binary"):
+        record(canary, tmp_path, "trace.bin", media_kind="binary", run_ref=RUN_A, text="x")
+
+
+# ---------- PLAN-049: plan revision, method order and question resolution ----------
+
+
+def revise(canary: CanaryProvision, tmp_path: Path, steps: list[dict[str, Any]]) -> dict[str, Any]:
+    """Revise the Campaign's plan against its current revision."""
+    revision = read_document(document_path(canary))["campaign"]["CAM-0001"]["revision"]
+    return call(
+        canary,
+        tmp_path,
+        CAMPAIGN_PLAN_REVISE_METHOD,
+        actor="OP-0001",
+        urn=CAMPAIGN,
+        expected_revision=revision,
+        plan_steps=steps,
+    )
+
+
+def test_plan_049_a_revision_replaces_pending_steps_and_keeps_started_ones(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    approve(canary, tmp_path)
+    update(canary, tmp_path, ordinal=1, to_state="running", run_ref=RUN_A, spent={"wall_time": 1})
+    revised = revise(
+        canary,
+        tmp_path,
+        [_step(1), _step(2, depends_on=(1,), method="synthesis", title="Synthesize the order")],
+    )["record"]
+    assert revised["plan_revision"] == 2
+    assert [s["title"] for s in revised["plan_steps"]] == [
+        "Survey replay order source 1",
+        "Synthesize the order",
+    ]
+    assert revised["plan_steps"][0]["state"] == "running"
+    assert revised["plan_steps"][0]["bound"]["axes"][0]["spent"] == 1
+    with pytest.raises(TransactionRefusedError, match="carries it unchanged"):
+        revise(canary, tmp_path, [_step(1, title="Survey something else"), _step(2)])
+
+
+def test_plan_049_a_method_out_of_the_policy_order_is_refused(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    approve(canary, tmp_path)
+    steps = [_step(1, method="synthesis"), _step(2, depends_on=(1,))]
+    with pytest.raises(TransactionRefusedError, match="method policy"):
+        revise(canary, tmp_path, steps)
+
+
+def test_plan_049_a_step_question_that_does_not_resolve_is_refused(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    unknown = "eawf://WSP-MAIN/PRJ-EAWF/_/question/QST-0099"
+    with pytest.raises(TransactionRefusedError, match="QST-0099"):
+        approve(canary, tmp_path, plan_steps=[_step(1, question_ref=unknown)])
+    approve(canary, tmp_path)
+    with pytest.raises(TransactionRefusedError, match="QST-0099"):
+        revise(canary, tmp_path, [_step(1, question_ref=unknown)])
+    question = read_document(document_path(canary))["open_question"]["QST-0001"]
+    assert (question["status"], question["scope_ref"]) == ("open", CAMPAIGN)
+
+
+# ---------- the Campaign's status and its stop ----------
+
+
+def close(canary: CanaryProvision, tmp_path: Path, to_status: str) -> dict[str, Any]:
+    revision = read_document(document_path(canary))["campaign"]["CAM-0001"]["revision"]
+    return call(
+        canary,
+        tmp_path,
+        CAMPAIGN_CLOSE_METHOD,
+        actor="OP-0001",
+        urn=CAMPAIGN,
+        expected_revision=revision,
+        to_status=to_status,
+        reason="superseded by a narrower question",
+    )
+
+
+def test_plan_034_a_hard_axis_at_its_limit_stops_dispatch_and_records_why(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    approve(canary, tmp_path, evidence_budget=_axes(2))
+    update(canary, tmp_path, ordinal=1, to_state="running", run_ref=RUN_A, spent={"wall_time": 2})
+    stop = read_document(document_path(canary))["campaign"]["CAM-0001"]["stop"]
+    assert (stop["reason"], stop["axis_kind"]) == ("budget_exhausted", "wall_time")
+    update(canary, tmp_path, ordinal=1, to_state="done", outcome="Order holds across restarts")
+    update(canary, tmp_path, ordinal=3, cleared_contradiction_refs=[CONTRADICTION])
+    with pytest.raises(TransactionRefusedError, match="campaign_budget_exhausted"):
+        update(canary, tmp_path, ordinal=2, to_state="running", run_ref=RUN_B)
+    closed = close(canary, tmp_path, "converged")["record"]
+    assert (closed["status"], closed["stop"]["reason"]) == ("converged", "budget_exhausted")
+    with pytest.raises(TransactionRefusedError, match="takes no more changes"):
+        update(canary, tmp_path, ordinal=2, cleared_contradiction_refs=[CONTRADICTION])
+
+
+def test_a_cancelled_campaign_records_its_reason_and_refuses_a_second_close(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    approve(canary, tmp_path)
+    update(canary, tmp_path, ordinal=1, to_state="running", run_ref=RUN_A)
+    with pytest.raises(TransactionRefusedError, match="cannot converge"):
+        close(canary, tmp_path, "converged")
+    closed = close(canary, tmp_path, "cancelled")["record"]
+    assert (closed["status"], closed["stop"]["reason"]) == ("cancelled", "cancelled")
+    assert closed["stop"]["detail"] == "superseded by a narrower question"
+    with pytest.raises(TransactionRefusedError, match="cancelled"):
+        close(canary, tmp_path, "converged")

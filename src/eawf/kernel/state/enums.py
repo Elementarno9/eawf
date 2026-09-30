@@ -758,6 +758,7 @@ class StoreKind(StrEnum):
     CONFORMANCE_STAGE = "conformance_stage"
     CONDUCT_DEVIATION = "conduct_deviation"
     VERIFICATION_DEBT = "verification_debt"
+    REGIME_BINDING = "regime_binding"
     OPERATION = "operation"
 
 

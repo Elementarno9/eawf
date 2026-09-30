@@ -36,7 +36,7 @@ MAX_LOC = 1400
 #: ``# noqa: EAWF010 <rationale>`` waiver. Each is a cohesive command surface
 #: whose split is its own piece of work; the set is frozen here so a NEW module
 #: cannot join it silently -- an addition has to edit this list in review.
-WAIVERED_MODULES = frozenset({"agent.py", "fleet.py", "research.py"})
+WAIVERED_MODULES = frozenset({"agent.py", "fleet.py"})
 
 
 def _method_modules() -> list[Path]:

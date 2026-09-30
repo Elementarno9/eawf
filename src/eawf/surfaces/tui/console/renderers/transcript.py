@@ -96,10 +96,26 @@ def blocks_now(authored: Sequence[Block]) -> list[Block]:
     return list(authored)
 
 
+def _pieces(word: str, room: int) -> list[str]:
+    """Return *word* cut into runs of at most *room* cells.
+
+    A reference or digest has no space to wrap at, and a word wider than the region
+    would otherwise be clipped at its edge, which a block may never be.
+    """
+    if cell_len(word) <= room:
+        return [word]
+    pieces = [""]
+    for char in word:
+        if pieces[-1] and cell_len(pieces[-1] + char) > room:
+            pieces.append("")
+        pieces[-1] += char
+    return pieces
+
+
 def _wrap_to(text: str, room: int) -> list[str]:
     out: list[str] = []
     cur = ""
-    for word in text.split(" "):
+    for word in (piece for raw in text.split(" ") for piece in _pieces(raw, room)):
         if not cur:
             cur = word
         elif cell_len(f"{cur} {word}") <= room:

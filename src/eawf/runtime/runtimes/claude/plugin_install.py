@@ -88,8 +88,10 @@ _DEFAULT_TIMESTAMP: str = "1970-01-01T00:00:00+00:00"
 # subscribe the operator's session to a no-op script (and paint a false-green
 # "hooks:<n>" in the statusline). SESSION_START (the rule-projection
 # staleness check), SESSION_END (runtime.capture), the two subagent events
-# (runtime.host_subagent) and PERMISSION_REQUEST (runtime.host_permission) are
-# the handler-backed events today — see
+# (runtime.host_subagent), PERMISSION_REQUEST (runtime.host_permission) and the
+# three tool-use events (runtime.host_tool, runtime.host_file_edit) are the
+# handler-backed events
+# today — see
 # HookSpec.has_handler.
 _INSTALLED_HOOKS: tuple[HookSpec, ...] = tuple(spec for spec in HOOK_REGISTRY if spec.has_handler)
 _INSTALLED_EVENTS: frozenset[HookEventType] = frozenset(

@@ -55,7 +55,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from eawf.kernel.projection.compute import (
     ROUTE_COLLECTIONS,
@@ -166,6 +166,13 @@ EVIDENCE_ROUTES: tuple[str, ...] = ("evidence", "evidence.digest")
 #: Called with the routes one pushed patch changed, so the app can repaint when the
 #: route on screen is among them.
 PatchListener = Callable[[tuple[str, ...]], None]
+
+
+#: The Recovery doors, the reconnect protocol's three paths back into a lost projection.
+REATTACH_DOOR: Final = "reattach"
+REPLAY_DOOR: Final = "replay"
+READ_ONLY_DOOR: Final = "read-only"
+RECOVERY_DOORS: Final = (REATTACH_DOOR, REPLAY_DOOR, READ_ONLY_DOOR)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -328,6 +335,11 @@ class ProjectionSeam:
     def scope_name(self) -> str:
         """Return the name the header gives the scope; empty when it is named by its id."""
         return self._scope_name
+
+    @property
+    def repo_root(self) -> Path | None:
+        """Return the repository the seam reads; ``None`` when the daemon's own tree is it."""
+        return self._repo_root
 
     @property
     def operator(self) -> Operator | None:
@@ -813,6 +825,37 @@ class ProjectionSeam:
         self._drop_hidden()
         reconciled = read_back + await self._reconcile()
         return self._outcome(negotiation, applied=len(patches), reconciled=reconciled)
+
+    async def take_door(self, door: str) -> ConnectionValue:
+        """Take one Recovery door, the reconnect protocol's own path, and nothing else.
+
+        Reattach reads the visible route at the daemon's head and leaves the link in
+        ``GAP``, because the events between the held cursor and that head are not
+        replayed. Replay runs :meth:`reconnect` from the held cursor. Read-only reads
+        nothing and leaves the console on the snapshot it holds. No door discards a
+        held row or picks another door on its own.
+
+        Args:
+            door: One of :data:`RECOVERY_DOORS`.
+
+        Returns:
+            The connection value the door left the link in.
+
+        Raises:
+            ValueError: ``door`` is not a Recovery door.
+        """
+        if door == REATTACH_DOOR:
+            await self.load()
+            self._drop_hidden()
+            self._connection = ConnectionValue.GAP
+        elif door == REPLAY_DOOR:
+            await self.reconnect()
+        elif door == READ_ONLY_DOOR:
+            self._connection = ConnectionValue.OFFLINE_SNAPSHOT
+        else:
+            raise ValueError(f"{door!r} is not a Recovery door; the doors are {RECOVERY_DOORS}")
+        logger.info(f"take_door door={door} route={self._route} value={self._connection}")
+        return self._connection
 
     @property
     def outstanding(self) -> tuple[ConsoleOperation, ...]:
@@ -1336,6 +1379,10 @@ __all__ = [
     "DEFAULT_ROUTE_CAPACITY",
     "KNOWN_COUNT_LABEL",
     "PINNED_ROUTES",
+    "READ_ONLY_DOOR",
+    "REATTACH_DOOR",
+    "RECOVERY_DOORS",
+    "REPLAY_DOOR",
     "PatchListener",
     "ProjectionSeam",
     "ReconnectOutcome",

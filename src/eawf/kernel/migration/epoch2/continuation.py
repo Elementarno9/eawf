@@ -56,7 +56,7 @@ from eawf.kernel.state.epoch2.batch import BatchStatus
 from eawf.kernel.state.epoch2.milestone import MilestoneStatus
 from eawf.kernel.state.epoch2.task import TaskStatus
 from eawf.kernel.state.epoch2.transitions import TERMINAL_STATUSES, LifecycleEntity
-from eawf.kernel.state.models import Artifact, Audit, Decision
+from eawf.kernel.state.models import Artifact, Audit
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.ledger import LedgerRecord
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -578,10 +578,11 @@ class RecordKind(StrEnum):
 
 #: The epoch-1 model each record kind validates through, and the ledger it
 #: lands in. The epoch-1 models forbid unknown fields, so a record that
-#: would not have been accepted before the cut is not accepted after it.
-RECORD_MODELS: Final[Mapping[RecordKind, type[Audit | Decision | Artifact]]] = {
+#: would not have been accepted before the cut is not accepted after it. A
+#: decision has no epoch-1 model here: it is filed as a native decision,
+#: through :mod:`eawf.kernel.migration.epoch2.decision_record`.
+RECORD_MODELS: Final[Mapping[RecordKind, type[Audit | Artifact]]] = {
     RecordKind.AUDIT: Audit,
-    RecordKind.DECISION: Decision,
     RecordKind.ARTIFACT: Artifact,
 }
 RECORD_COLLECTIONS: Final[Mapping[RecordKind, Epoch2Collection]] = {
@@ -594,13 +595,14 @@ RECORD_COLLECTIONS: Final[Mapping[RecordKind, Epoch2Collection]] = {
 def appended_record_line(
     kind: RecordKind, record: Mapping[str, Any], *, at: datetime
 ) -> LedgerRecord:
-    """Return the ledger line one appended audit, decision or artifact becomes.
+    """Return the ledger line one appended audit or artifact becomes.
 
     The payload keeps the record under ``payload``, the key the import used
     for the same kinds, so one reader serves imported and appended lines.
 
     Args:
-        kind: Which record it is.
+        kind: Which record it is; an audit or an artifact, since a decision
+            is filed through its own lifecycle.
         record: The record as the caller supplied it.
         at: When it was appended.
 
@@ -610,6 +612,7 @@ def appended_record_line(
     Raises:
         ValidationError: The record does not validate through its epoch-1
             model.
+        KeyError: *kind* is a decision.
     """
     validated = RECORD_MODELS[kind].model_validate(record)
     return LedgerRecord(

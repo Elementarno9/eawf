@@ -570,8 +570,10 @@ def onboarding_state(chrome: ConsoleChrome, root: Path, *, registered: bool) -> 
             whether the first step registers it or makes it a workspace.
 
     Returns:
-        The onboarding state; Enter copies the step's command where a declared one
-        exists, and nothing here applies a migration or starts an agent.
+        The onboarding state. Enter on the workspace step previews it on a consequence
+        card and, once confirmed, performs it through the daemon's registry verbs; a
+        console with no daemon link copies the step's command instead. Nothing here
+        applies a migration or starts an agent.
     """
     first = (
         EntryCommand(argv=("workspace", "add", "<KEY>", "--home", "<CODE>"), purpose="")
@@ -589,8 +591,8 @@ def onboarding_state(chrome: ConsoleChrome, root: Path, *, registered: bool) -> 
             "keys": (("↑↓", "step"), ("Enter", "do it"), ("s", "skip"), ("Esc", "exit")),
             "commands": (first.line, "", "", ""),
             "tail": (
-                "No workspace is registered on this machine.",
-                f"  {first.shown(Path.cwd())}",
+                "No workspace is registered on this machine. Enter registers it here,",
+                f"as this command does:  {first.shown(Path.cwd())}",
                 "",
                 "No migration is applied and no agent is started here.",
             ),

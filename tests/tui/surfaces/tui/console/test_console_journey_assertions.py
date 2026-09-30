@@ -660,30 +660,42 @@ def test_the_empty_backlog_frame_names_its_revision_and_next_move() -> None:
 
 
 def test_con_149_u_climbs_to_the_task_and_escape_still_goes_back() -> None:
+    """CON-149, on a held tree: ``u`` lands on the Run's own Task; Escape goes back."""
     journey = port("PJ09")
+    assert js.spec("PJ09").world == js.TREE
     routes = [(s.after["route"], s.after["subjId"]) for s in journey.steps]
+    run = routes[1][1]
+    assert run in js.TREE_DOCUMENT["run"]
+    task = js.TREE_DOCUMENT["run"][run]["scope"]["task_ref"].rsplit("/", 1)[-1]
     assert routes == [
         ("activity", None),
-        ("run.detail", "RUN-538453eb"),
-        ("task.detail", "EAWF-0042"),
-        ("run.detail", "RUN-538453eb"),
+        ("run.detail", run),
+        ("task.detail", task),
+        ("run.detail", run),
     ]
 
 
 def test_con_149_brackets_walk_the_batch_and_keep_the_crumb_depth() -> None:
+    """CON-149, on a held tree: ``]`` and ``[`` walk the Tasks filed under one Batch."""
     journey = port("PJ10")
-    assert [s.after["subjId"] for s in journey.steps] == ["EAWF-0042", "EAWF-0043", "EAWF-0042"]
+    assert js.spec("PJ10").world == js.TREE
+    assert [s.after["subjId"] for s in journey.steps] == ["TSK-0001", "TSK-0002", "TSK-0001"]
     depths = {s.frame.split("\n")[0].count("▸") for s in journey.steps}
     assert len(depths) == 1
     assert {s.after["back_depth"] for s in journey.steps} == {0}
 
 
-@pytest.mark.parametrize("journey_id", ["PJ06", "PJ11"])
-def test_con_149_bang_lands_on_the_top_open_action(journey_id: str) -> None:
+@pytest.mark.parametrize(("journey_id", "left"), [("PJ06", "activity"), ("PJ11", "run.detail")])
+def test_con_149_bang_opens_the_top_open_action_and_keeps_the_departure(
+    journey_id: str, left: str
+) -> None:
+    """CON-149: ``!`` opens the top item's own detail, never the bare route, and pushes."""
     journey = port(journey_id)
-    assert journey.steps[-1].after["route"] == "attention"
-    caret = [row for row in frames(journey)[-1].split("\n") if row.startswith(" ▸ ACT-")]
-    assert len(caret) == 1
+    after = journey.steps[-1].after
+    assert after["route"] == "attention"
+    assert after["overlay"] in {"consequence", "question", "pause"}
+    assert after["back_depth"] == 1
+    assert journey.setup.route == left
 
 
 # ---------- PRX-054 and PRX-060: the bucket partitions sum alike everywhere ----------
@@ -857,7 +869,9 @@ def test_prx_061_an_item_raised_on_settings_is_delivered_once_and_stays_counted(
     assert "needs you" not in aged.split("\n")[-2].lower() or "ACT-0009" not in aged
     assert any("toast expired · needs you" in entry.note for entry in log)
     assert route == "attention"
-    assert "ACT-0009" in jumped
+    # CON-149: the jump opens the top item's own card and the header still counts both
+    assert badge(jumped) == [2]
+    assert " ▸ consequence · " in jumped.split("\n")[0]
 
 
 # ---------- PRX-053: the nine control outcomes stay distinguishable ----------

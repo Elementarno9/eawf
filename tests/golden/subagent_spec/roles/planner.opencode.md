@@ -48,7 +48,7 @@ eawf roadmap revise <phase-id> --add-wave W01 --title "feat: ..."
     [--agent-role executor] [--effort-bucket S]
 ```
 
-…repeated per wave. The parent surfaces an `AskUserQuestion` with `approve / edit / cancel` before applying the batch. On `approve`, `/prep` runs the commands then `eawf phase activate <phase-id>`.
+…repeated per wave. The parent files an `approve / edit / cancel` decision with `eawf question open-decision` before applying the batch and shows the bound question it answers with (`AskUserQuestion` in Claude Code, the numbered prompt in Codex). On `approve`, `/prep` runs the commands then `eawf phase activate <phase-id>`.
 
 ## Anti-patterns
 

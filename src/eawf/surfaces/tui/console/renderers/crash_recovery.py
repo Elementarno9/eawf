@@ -4,7 +4,9 @@ The native frame offers exactly the reconnect protocol's three paths as a choice
 fourth: reattach to the current head leaves the console in ``GAP`` until it reconciles,
 replay from the last acknowledged sequence leaves it ``REPLAYING``, and attaching read-only
 leaves it on an ``OFFLINE SNAPSHOT``. What a door cannot recover is a span of sequence
-numbers from the cursor the console last held; a cost no producer estimates reads unknown.
+numbers from the cursor the console last held, and what it costs is counted in reads from
+that same cursor: one read of the head, every event after the cursor, or no read at all.
+Enter takes the door under the cursor through the seam, and nothing else takes one.
 """
 
 from __future__ import annotations
@@ -17,8 +19,8 @@ from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
 from eawf.surfaces.tui.console.keybar import route_pairs
+from eawf.surfaces.tui.console.navigation import Ctx, busy
 from eawf.surfaces.tui.console.renderers.read_model import (
-    UNKNOWN_WORD,
     finish,
     label,
     more,
@@ -26,7 +28,12 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     native_head,
     route_crumb,
 )
+from eawf.surfaces.tui.console.seam import READ_ONLY_DOOR, REATTACH_DOOR, REPLAY_DOOR
 from eawf.surfaces.tui.console.session import conn_label
+from eawf.surfaces.tui.console.tokens import Severity
+
+#: What Enter says when the console holds no daemon link to take a door through.
+NO_LINK = "the console holds no daemon link · no door can be taken"
 
 _KEYS = route_pairs("crash.recovery")
 
@@ -40,22 +47,30 @@ def _doors(revision: int) -> tuple[list[str], ...]:
     )
 
 
-def doors(cursor: int) -> tuple[tuple[str, str, str], ...]:
-    """Return each door: its name, what it cannot recover past ``cursor``, and where it leaves you.
+def doors(cursor: int) -> tuple[tuple[str, str, str, str], ...]:
+    """Return each door: its name, its cost, what it cannot recover and where it leaves you.
 
-    The span a door cannot recover is stated from the cursor the console last held, the
-    one sequence number it knows; the head it would reach is the daemon's to state.
+    The span a door cannot recover and the reads it costs are both stated from the cursor
+    the console last held, the one sequence number it knows; the head it would reach is
+    the daemon's to state.
     """
     after = group(cursor + 1)
     return (
-        ("reattach", f"events from {after} on, until reconciled", conn_label(ConnectionValue.GAP)),
         (
-            "replay",
+            REATTACH_DOOR,
+            "one head read",
+            f"events from {after} on, until reconciled",
+            conn_label(ConnectionValue.GAP),
+        ),
+        (
+            REPLAY_DOOR,
+            f"all from {after}",
             f"nothing · replays from {after} exactly",
             conn_label(ConnectionValue.REPLAYING),
         ),
         (
-            "read-only",
+            READ_ONLY_DOOR,
+            "no read",
             "nothing · no mutation until you attach",
             conn_label(ConnectionValue.OFFLINE_SNAPSHOT),
         ),
@@ -97,7 +112,7 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     # below the wide frame the connection a door leaves is stated once, on the CHOSEN
     # line, so the three packet columns keep their room
     wide = view.wide
-    grid = Grid([13, 13, 44, 0] if wide else [13, 13, 0])
+    grid = Grid([13, 17, 44, 0] if wide else [13, 17, 0])
     heads = ["DOOR", "COSTS", "CANNOT RECOVER", *(["LEAVES YOU"] if wide else [])]
     body = [
         label("HAPPENED", f"The console lost its projection after event {group(cursor)}."),
@@ -106,13 +121,13 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
         grid.head(heads),
     ]
     body.extend(
-        grid.row([name, UNKNOWN_WORD, lost, *([leaves] if wide else [])], i == s.sel, w)
-        for i, (name, lost, leaves) in enumerate(choices)
+        grid.row([name, cost, lost, *([leaves] if wide else [])], i == s.sel, w)
+        for i, (name, cost, lost, leaves) in enumerate(choices)
     )
-    name, lost, leaves = choices[s.sel]
+    name, cost, lost, leaves = choices[s.sel]
     body += [
         thin(w),
-        label("CHOSEN", f"{name} · leaves you {leaves} · costs {UNKNOWN_WORD}"),
+        label("CHOSEN", f"{name} · leaves you {leaves} · costs {cost}"),
         more(f"cannot recover {lost}"),
         thin(w),
         label("NO LOSS", "No door discards work; two of them defer reading it."),
@@ -153,3 +168,33 @@ def render(view: View) -> list[str]:
         body=body,
         keys=_KEYS,
     )
+
+
+def seam(ctx: Ctx, key: str, shift: bool) -> bool:
+    """Take the door under the cursor on Enter, through the seam and never on its own.
+
+    The door is the one the frame marks, read from the same cursor the frame drew; the
+    connection value it leaves the console in arrives with the next render. A console
+    with no daemon link has no door to take and says so.
+
+    Args:
+        ctx: The keystroke's context.
+        key: The dispatcher name of the key pressed.
+        shift: Whether shift was held; the frame binds no shifted key.
+
+    Returns:
+        Whether the key was claimed.
+    """
+    s = ctx.s
+    if s.route != "crash.recovery" or key != "Enter" or shift or busy(s):
+        return False
+    model = ctx.projection
+    if ctx.recover is None or not isinstance(model, RouteReadModel):
+        ctx.notify(NO_LINK, "recovery", Severity.WARN)
+        ctx.log(key, NO_LINK)
+        return True
+    choices = doors(int(model.source_cursor))
+    name, _cost, _lost, leaves = choices[min(max(s.sel, 0), len(choices) - 1)]
+    ctx.recover(name)
+    ctx.log(key, f"door {name} · leaves you {leaves}")
+    return True

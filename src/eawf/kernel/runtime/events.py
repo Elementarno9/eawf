@@ -58,7 +58,13 @@ from eawf.kernel.runtime.usage import BudgetPayload, UsagePayload
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.question import OptionKey
 from eawf.kernel.state.epoch2.run import RunStatus
-from eawf.kernel.state.epoch2.urns import PendingActionUrn, QuestionUrn, RepositoryUrn, RunUrn
+from eawf.kernel.state.epoch2.urns import (
+    PendingActionUrn,
+    PermissionUrn,
+    QuestionUrn,
+    RepositoryUrn,
+    RunUrn,
+)
 from eawf.kernel.state.types import UtcDatetime
 
 
@@ -537,14 +543,17 @@ class QuestionActionPayload(RuntimeRecord):
 
     Attributes:
         payload_kind: The payload discriminator.
-        subject_ref: The open question or pending action the event is about.
+        subject_ref: The open question, pending action or provider permission the event
+            is about. A provider permission is its own record with a deadline the
+            provider owns, so an approval the provider holds names it rather than a
+            pending action standing in for it.
         phase: ``raised``, ``requested`` or ``resolved``.
         choice_key: The option the answer chose, when one was chosen.
         receipt_ref: The receipt the resolution was recorded under, at ``resolved`` only.
     """
 
     payload_kind: Literal["question_action"] = "question_action"
-    subject_ref: QuestionUrn | PendingActionUrn
+    subject_ref: QuestionUrn | PendingActionUrn | PermissionUrn
     phase: Literal["raised", "requested", "resolved"]
     choice_key: OptionKey | None = None
     receipt_ref: ReceiptId | None = None

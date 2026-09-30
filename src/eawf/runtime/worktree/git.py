@@ -29,6 +29,7 @@ import hashlib
 import logging
 import shutil
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 
 from eawf.platform.subprocess_detach import no_window_kwargs
@@ -58,8 +59,11 @@ def _run(
     cwd: Path | None = None,
     timeout: float = _FAST_TIMEOUT,
     input_text: str | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Invoke *args* via :func:`subprocess.run`, feeding *input_text* to stdin.
+
+    *env* replaces the child's environment when given.
 
     A timeout maps to :class:`StateConflict` (``kind="IntegrityViolation"``).
     """
@@ -74,6 +78,7 @@ def _run(
             text=True,
             check=False,
             timeout=timeout,
+            env=None if env is None else dict(env),
             **no_window_kwargs(),
         )
     except subprocess.TimeoutExpired as exc:
@@ -504,16 +509,19 @@ def update_ref(repo: Path, *, ref: str, sha: str) -> None:
 
 
 def invoke(
-    repo: Path, *args: str, input_text: str | None = None
+    repo: Path, *args: str, input_text: str | None = None, env: Mapping[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     """Run ``git -C <repo> <args>`` and return the process unchecked.
 
     For a caller whose subcommand's exit status is itself the answer --
     a merge that conflicts, a plumbing call fed on stdin -- and which
     therefore maps the result itself rather than through a fixed
-    taxonomy.
+    taxonomy. *env*, when given, replaces the child's environment, which is
+    how a caller points git at an index other than the checkout's own.
     """
-    return _run(["git", "-C", str(repo), *args], timeout=_SLOW_TIMEOUT, input_text=input_text)
+    return _run(
+        ["git", "-C", str(repo), *args], timeout=_SLOW_TIMEOUT, input_text=input_text, env=env
+    )
 
 
 def branch_delete(repo: Path, *, name: str) -> bool:

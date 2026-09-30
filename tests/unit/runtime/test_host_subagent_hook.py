@@ -222,6 +222,9 @@ def test_surf_076_every_claude_manifest_event_has_a_registered_handler() -> None
         "SubagentStart",
         "SubagentStop",
         "PermissionRequest",
+        "PreToolUse",
+        "PostToolUse",
+        "PostToolUseFailure",
     }
 
 

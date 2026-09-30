@@ -120,6 +120,9 @@ def test_settings_managed_hook_listing_matches_registry(tmp_path: Path) -> None:
         "subagent_start",
         "subagent_stop",
         "permission_request",
+        "pre_tool_use",
+        "post_tool_use",
+        "post_tool_use_failure",
     }
 
 

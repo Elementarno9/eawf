@@ -35,19 +35,19 @@ def test_in_flight_counts_live_drive(monkeypatch: pytest.MonkeyPatch) -> None:
     """A live background drive counts as in-flight so the watchdog holds off."""
     monkeypatch.setattr("eawf.runtime.daemon.methods.fleet.drive_in_flight", lambda: True)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.research.research_run_in_flight",
-        lambda campaign_id=None: False,
+        "eawf.runtime.daemon.methods.campaign_run.campaign_drive_in_flight",
+        lambda campaign_key=None: False,
     )
     watchdog = _build_watchdog(_ctx(), 60.0)
     assert watchdog.in_flight() == 1
 
 
-def test_in_flight_counts_live_research_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A live research campaign counts as in-flight (parity with the drive)."""
+def test_in_flight_counts_live_campaign_drive(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A live research Campaign drive counts as in-flight (parity with the drive)."""
     monkeypatch.setattr("eawf.runtime.daemon.methods.fleet.drive_in_flight", lambda: False)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.research.research_run_in_flight",
-        lambda campaign_id=None: True,
+        "eawf.runtime.daemon.methods.campaign_run.campaign_drive_in_flight",
+        lambda campaign_key=None: True,
     )
     watchdog = _build_watchdog(_ctx(), 60.0)
     assert watchdog.in_flight() == 1
@@ -57,8 +57,8 @@ def test_in_flight_sums_mutations_drive_and_research(monkeypatch: pytest.MonkeyP
     """The probe adds live drive + research atop the mutation counter."""
     monkeypatch.setattr("eawf.runtime.daemon.methods.fleet.drive_in_flight", lambda: True)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.research.research_run_in_flight",
-        lambda campaign_id=None: True,
+        "eawf.runtime.daemon.methods.campaign_run.campaign_drive_in_flight",
+        lambda campaign_key=None: True,
     )
     watchdog = _build_watchdog(_ctx(in_flight_mutations=2), 60.0)
     assert watchdog.in_flight() == 4
@@ -68,8 +68,8 @@ def test_in_flight_is_zero_when_idle(monkeypatch: pytest.MonkeyPatch) -> None:
     """No background work + no mutations reports zero so the watchdog can trip."""
     monkeypatch.setattr("eawf.runtime.daemon.methods.fleet.drive_in_flight", lambda: False)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.research.research_run_in_flight",
-        lambda campaign_id=None: False,
+        "eawf.runtime.daemon.methods.campaign_run.campaign_drive_in_flight",
+        lambda campaign_key=None: False,
     )
     watchdog = _build_watchdog(_ctx(), 60.0)
     assert watchdog.in_flight() == 0

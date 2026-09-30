@@ -243,6 +243,9 @@ def test_claude_installer_emits_only_handler_backed_hooks(tmp_path: Path) -> Non
         "subagent_start",
         "subagent_stop",
         "permission_request",
+        "pre_tool_use",
+        "post_tool_use",
+        "post_tool_use_failure",
     }
 
 

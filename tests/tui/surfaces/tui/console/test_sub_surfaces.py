@@ -15,6 +15,7 @@ Requirement rows proved here, by id:
 
 from __future__ import annotations
 
+import asyncio
 import re
 from pathlib import Path
 
@@ -29,7 +30,7 @@ from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.navigation import Ctx, go
 from eawf.surfaces.tui.console.registry import REGISTRY, RouteGroup
 from eawf.surfaces.tui.console.renderers import copy_target, render_route
-from eawf.surfaces.tui.console.session import Session
+from eawf.surfaces.tui.console.session import Session, SessionSetup
 from tests.tui.surfaces.tui.console import test_enter_opened_cards as cards
 from tests.tui.surfaces.tui.console.test_route_registry_closure import SUB_SURFACES
 
@@ -258,15 +259,44 @@ def test_ui_054_enter_opens_no_second_card_and_answers_in_the_rack() -> None:
     assert [toast.title for toast in session.toasts] == ["report"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the export seam takes the report in memory and holds no tree root to hand "
-    "write_run_report, so Enter writes no file and names no path; the plan's parts count "
-    "no purged range either",
-)
-def test_ui_054_enter_writes_the_report_file_and_answers_with_its_path() -> None:
-    session = cards._press_export_enter(cards._view("export"))
-    assert ".ea/local/" in session.toasts[0].text
+def test_ui_054_enter_writes_the_report_file_and_answers_with_its_path(tmp_path: Path) -> None:
+    """UI-054, live: Enter on the export card writes ``eawf run report``'s file and names it.
+
+    The canary tree is walked, served over a real daemon socket, and the export card of its
+    Run is opened from the daemon's read model; Enter writes the report under the tree's
+    ``.ea/local/`` and the rack answers with that path and the purged ranges it marks.
+    """
+    from eawf.observability.reflect.runs import read_tree_runs
+    from tests.tui.surfaces.tui.console.test_console_live_smoke import (
+        live_console,
+        render_setup,
+        walk_canary_isolated,
+    )
+
+    walk, runtime_root = walk_canary_isolated(tmp_path)
+    tree = walk.canary.root / ".ea"
+    run = read_tree_runs(tree)[0].run.key
+
+    async def body() -> list[str]:
+        async with (
+            live_console(walk.canary.root, runtime_root) as (app, _seam),
+            app.run_test(size=SIZES[1]) as pilot,
+        ):
+            await render_setup(app, pilot, SessionSetup(route="export", subjId=run, size=1))
+            app.press_key("Enter")
+            await pilot.pause()
+            return [toast.text for toast in app.session.toasts]
+
+    toasts = asyncio.run(body())
+    (text,) = toasts
+    assert text.startswith("wrote .ea/local/") and f"run-report-{run}.txt" in text
+    assert "purged ranges:" in text
+    written = sorted((tree / "local").glob(f"*-run-report-{run}.txt"))
+    assert len(written) == 1
+    head = written[0].read_text(encoding="utf-8").splitlines()
+    assert head[0].startswith("run report ") and any(
+        line.startswith("purged ranges:") for line in head
+    )
 
 
 # ---------- UI-055: a receipt opens as an immutable card over its RCP key ----------
@@ -435,12 +465,10 @@ def test_ui_071_a_notice_accepts_only_snooze_and_resolve(fixture: Fixture) -> No
     assert att.verbs_for(None) == ["a", "x", "z", "v"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="no NoticeDetailView is produced: the read-model kind is named, but no "
-    "projection builds the notice detail's fields for the notifications record form",
-)
 def test_ui_071_the_notice_detail_is_a_typed_read_model() -> None:
-    from eawf.kernel.projection import read_models
+    from dataclasses import fields
 
-    assert hasattr(read_models, "NoticeDetailView")
+    from eawf.kernel.projection.read_models import NoticeDetailView
+    from tests.tui.surfaces.tui.console.test_budget_notice_verbs import NOTICE_DETAIL_FIELDS
+
+    assert tuple(field.name for field in fields(NoticeDetailView)) == NOTICE_DETAIL_FIELDS

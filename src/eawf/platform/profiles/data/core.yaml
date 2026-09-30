@@ -361,16 +361,16 @@ render_blocks:
   - id: prep-plan-mode
     target: AGENTS.md
     tier: tier0
-    version: "1.0"
+    version: "1.1"
     body_template: |
       ### /prep always renders the DAG in plan mode
 
-      Both Case A and Case B of ``/prep`` MUST enter Claude Code plan mode (``EnterPlanMode``) with the rendered wave DAG of the target phase's current iter before surfacing the approve / edit / cancel ``AskUserQuestion``. Free-text approvals are forbidden per the project-wide ``AskUserQuestion``-only approval policy.
+      Both Case A and Case B of ``/prep`` MUST enter Claude Code plan mode (``EnterPlanMode``) with the rendered wave DAG of the target phase's current iter before surfacing the approve / edit / cancel choice. File that choice with ``eawf question open-decision`` so it is a pending action with typed options, then show the bound question the answer carries: ``AskUserQuestion`` in Claude Code, the answer's numbered prompt printed verbatim in Codex. The operator answers by option, in the session or in the console, and the first answer wins; a free-text approval is not consent.
 
       **Case A — PLANNED phase with at least one PENDING wave.**
-      Render the plan via ``eawf roadmap show --phase <id> --md`` → ``EnterPlanMode`` → ``AskUserQuestion`` (``use-as-is`` / ``revise`` / ``replace`` / ``cancel``). On ``revise``, hand back to ``/roadmap revise``; on ``replace``, hand back to ``/roadmap drop`` + ``/roadmap propose``.
+      Render the plan via ``eawf roadmap show --phase <id> --md`` → ``EnterPlanMode`` → the bound decision (``use-as-is`` / ``revise`` / ``replace`` / ``cancel``). On ``revise``, hand back to ``/roadmap revise``; on ``replace``, hand back to ``/roadmap drop`` + ``/roadmap propose``.
 
-      **Case B — PLANNED phase with empty wave DAG.** Apply the planner's emitted ``eawf roadmap revise --add-wave`` commands **first** (waves land as PENDING on the still-PLANNED iter), then render the resulting DAG via ``eawf roadmap show --phase <id> --md`` → ``EnterPlanMode`` → ``AskUserQuestion`` (``approve`` / ``edit`` / ``cancel``). The operator reviews the rendered roadmap, not the planner's raw commands. Edits during plan mode are ``/roadmap revise`` calls (PLANNED scope is mutable). On ``approve``, run ``eawf phase activate <id>`` (V11 hard gate).
+      **Case B — PLANNED phase with empty wave DAG.** Apply the planner's emitted ``eawf roadmap revise --add-wave`` commands **first** (waves land as PENDING on the still-PLANNED iter), then render the resulting DAG via ``eawf roadmap show --phase <id> --md`` → ``EnterPlanMode`` → the bound decision (``approve`` / ``edit`` / ``cancel``). The operator reviews the rendered roadmap, not the planner's raw commands. Edits during plan mode are ``/roadmap revise`` calls (PLANNED scope is mutable). On ``approve``, run ``eawf phase activate <id>`` (V11 hard gate).
 
       The plan-mode-first invariant applies to any future ``/prep`` cases (e.g. mid-flight scope expansion of an ACTIVE iter): the operator-facing surface is always the rendered DAG, not raw mutator commands.
 
@@ -543,13 +543,13 @@ render_blocks:
 
   - id: orchestrator-decision-surface
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
     placement: reference
     summary: "Surface every consequential choice as an explicit question with visual option previews, never a silent default."
     rationale: |
       An orchestrating agent that picks silently spends the operator's budget on a decision the operator never saw, and a choice offered as prose alone is answered on vibes. The cost of a wrong pick is a wave of rework; the cost of asking is one round trip. Options compared side by side, with the trade-off drawn rather than described, are the difference between an informed answer and an agreeable one.
     mechanism: |
-      When two paths would produce materially different work, stop and ask. In Claude Code use ``AskUserQuestion`` with an option preview per choice: an ASCII sketch of the before / after, the measured cost, and what is given up. In Codex use the equivalent numbered text prompt carrying the same previews. Expand every abbreviation, mark the option that is best for the long term as recommended, and state the cost of each option rather than only its benefit. Do not ask a question whose answer changes nothing — make the call, state the assumption, and continue. Free-text approval is not a decision record: the choice must be one of the offered options.
+      When two paths would produce materially different work, stop and ask. File the choice with ``eawf question open-decision`` so it is a pending action with typed options, one per path, each carrying its consequence, its cost and a preview: an ASCII sketch of the before / after, the measured cost, and what is given up. Show the bound question the answer carries and stop: ``AskUserQuestion`` in Claude Code, the answer's numbered prompt printed verbatim in Codex, with the reply relayed through ``eawf question answer``. The operator may answer in the session or in the console, and the first answer wins. Expand every abbreviation, mark the option that is best for the long term as recommended, and state the cost of each option rather than only its benefit. Do not ask a question whose answer changes nothing — make the call, state the assumption, and continue. Free-text approval is not a decision record: the choice must be one of the offered options.
     verification: |
       A dispatched decision shows an option set with previews, not a paragraph of prose. Every abbreviation in the question is expanded on first use, one option is marked recommended, and each option names what it costs. A choice made silently that later needed rework is a rule violation, not bad luck.
 

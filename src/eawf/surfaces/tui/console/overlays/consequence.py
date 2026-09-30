@@ -14,6 +14,7 @@ from eawf.surfaces.tui.console.fixture import Action
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
+from eawf.surfaces.tui.console.onboarding import ONBOARDING_KIND
 from eawf.surfaces.tui.console.overlays import mutation_card
 from eawf.surfaces.tui.console.overlays.chassis import crumb
 from eawf.surfaces.tui.console.registry import kind_of
@@ -64,7 +65,8 @@ def render(view: View) -> list[str]:
             f" {target['verb']} · {target['id']} · {kind_of(target['id'])}",
             bar(w),
             f" ASKING    {target['verb']} {target['id']}",
-            revision,
+            # a first-run step writes the machine registry, which carries no revision
+            *([] if target.get("kind") == ONBOARDING_KIND else [revision]),
             *_panes(
                 view,
                 target.get("effects") or "This verb’s effects are not modelled in this prototype.",  # noqa: RUF001

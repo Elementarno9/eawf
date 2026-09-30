@@ -184,7 +184,7 @@ def _keys(view: View, shown: Sequence[Action]) -> list[KeyEntry]:
 NOTHING_NEEDS_YOU = "nothing needs you"
 
 #: The next move an empty Attention route offers instead of a dead screen.
-EMPTY_NEXT = "nothing. Runs continue without you. g a shows what is executing."
+EMPTY_NEXT = "nothing. Runs continue without you."
 
 #: What the frame states about the all-principals count, so it is never read as a queue.
 NOT_A_WORK_LIST = "an all-principals count is not a work list"
@@ -339,7 +339,7 @@ def _empty_lines(register: RegisterView, bucket: str | None) -> list[str]:
             register empty.
     """
     if bucket is not None:
-        return ["   nothing in this bucket needs you", "   Esc clears the bucket"]
+        return ["   nothing in this bucket needs you"]
     revision = group_n(int(register.source_cursor))
     return [
         label("NOTHING YET", f"nothing is open at revision {revision}"),

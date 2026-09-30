@@ -31,9 +31,16 @@ the child is doing now, what it has found and that it reports back into this Run
 off the child's own event lines, which the caller hands in beside the parent's. A child
 whose lines the caller could not read says so rather than drawing a blank.
 
+*A block unfolds to what its reference holds.* A tool result, a diff and a trace are
+stored as bounded, scrubbed content and named by reference on the event line; the
+caller resolves those references through the daemon's content read and hands the
+answers in, and a block whose reference the caller holds content for unfolds to that
+content, stating how many lines the store did not keep. A reference with no content
+handed in is named instead.
+
 Nothing here reads a ledger or a lock. The inputs are one validated
-:class:`~eawf.kernel.projection.compute.RouteProjection` and the already-validated event
-records the caller holds.
+:class:`~eawf.kernel.projection.compute.RouteProjection`, the already-validated event
+records the caller holds and the content it resolved for them.
 """
 
 from __future__ import annotations
@@ -41,10 +48,11 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import Final
 
+from eawf.kernel.identity import EntityKind, QualifiedUrn
 from eawf.kernel.projection.compute import PROJECTION_PRODUCER, RouteProjection
 from eawf.kernel.projection.route_view import (
     RouteFieldSpec,
@@ -63,6 +71,7 @@ from eawf.kernel.projection.truth import (
     TruthKind,
     TruthState,
 )
+from eawf.kernel.runtime.content import ResolvedContent
 from eawf.kernel.runtime.events import (
     ChildRunPayload,
     CommandPayload,
@@ -207,7 +216,7 @@ class TranscriptBlock:
         body: The labelled lines the block folds away beyond its text, in order: what a
             tool call returned, the diff a file change is held at, what a question waits
             on, an error's code, retry class and trace. Every line is read off the
-            event's own payload; a stored artifact is named, never inlined here.
+            event's own payload, or off the content its reference resolved to.
     """
 
     sequence: int
@@ -351,47 +360,118 @@ def _more_paths(count: int) -> str:
     return f"{count} more path" + ("" if count == 1 else "s")
 
 
-def block_body(event: RunEventRecord) -> tuple[tuple[str, str], ...]:
-    """Return the labelled lines a block folds away beyond its first line.
+#: What an unfolded block says for content whose source returned nothing.
+EMPTY_CONTENT: Final = "nothing was returned"
 
-    A tool call states the receipt its output is held under or the gateway's error; a
-    file change its paths, the diff it is held at and the trees on either side; a
-    question what it waits on or how it was answered; an error its code, what a retry
-    would take and where its trace is kept. A stored artifact is named rather than read:
-    this module reads no store.
+
+def content_refs(event: RunEventRecord) -> tuple[str, ...]:
+    """Return the references one event line's block unfolds to.
+
+    A tool result is resolved by its call, which names its output when it ran and its
+    trace when it failed; a file change by its diff; an error by its trace.
 
     Args:
         event: One live event line.
 
     Returns:
+        The references, empty for a line that holds no stored content.
+    """
+    payload = event.payload
+    if isinstance(payload, ToolPayload) and payload.phase == "result":
+        return (payload.call_ref,)
+    if isinstance(payload, FileChangePayload):
+        return (payload.diff_ref,)
+    if isinstance(payload, ErrorPayload) and payload.diagnostic_ref is not None:
+        return (payload.diagnostic_ref,)
+    return ()
+
+
+def _content_rows(label: str, held: ResolvedContent) -> tuple[tuple[str, str], ...]:
+    """Return resolved content as body rows: the label on its first line, then the rest."""
+    first, *rest = held.lines or (EMPTY_CONTENT,)
+    rows = [(label, first), *(("", line) for line in rest)]
+    if held.unkept:
+        rows.append(
+            ("", f"{held.unkept} more {'line was' if held.unkept == 1 else 'lines were'} not kept")
+        )
+    return tuple(rows)
+
+
+def _deadline_words(subject: QualifiedUrn, deadline: datetime | None) -> str:
+    """Return when a wait ends: its deadline in UTC, ``open``, or that it went unread.
+
+    A provider permission always has a deadline, the provider's; a question has none,
+    since nothing in the machine expires one, so it is ``open``. A permission whose
+    deadline the caller could not read says so rather than claiming it is open.
+    """
+    if deadline is not None:
+        return f"deadline {deadline.astimezone(UTC):%H:%M:%S} UTC"
+    if subject.kind is EntityKind.PERMISSION:
+        return "deadline not read"
+    return "open"
+
+
+def block_body(
+    event: RunEventRecord,
+    contents: Mapping[str, ResolvedContent] = MappingProxyType({}),
+    *,
+    deadline: datetime | None = None,
+) -> tuple[tuple[str, str], ...]:
+    """Return the labelled lines a block folds away beyond its first line.
+
+    A tool call states what it returned or the gateway's error and the trace it failed
+    with; a file change its paths, its diff and the trees on either side; a question
+    what it waits on and until when, or how it was answered; an error its code, what a
+    retry would take and its trace. Stored content is inlined when the caller resolved
+    it and named otherwise: this module reads no store.
+
+    Args:
+        event: One live event line.
+        contents: The content the caller resolved, by the reference
+            :func:`content_refs` names.
+        deadline: When the wait a question or approval block opens ends, as its record
+            states it; ``None`` when the record sets none or was not read.
+
+    Returns:
         The lines in order, each a label and its value; empty for every other kind.
     """
     payload = event.payload
+    held = next((contents[ref] for ref in content_refs(event) if ref in contents), None)
     if isinstance(payload, ToolPayload):
-        if payload.error_code is not None:
-            return (("ERROR", payload.error_code.value),)
+        error = () if payload.error_code is None else (("ERROR", payload.error_code.value),)
+        if held is not None:
+            return (*error, *_content_rows("OUTPUT", held))
         if payload.result_ref is not None:
             return (("OUTPUT", f"held under receipt {payload.result_ref}"),)
-        return ()
+        return error
     if isinstance(payload, FileChangePayload):
         summary = " · a summary, not the full hunks" if payload.summary_only else ""
+        diff = (
+            _content_rows("DIFF", held)
+            if held is not None
+            else (("DIFF", f"held at {payload.diff_ref}{summary}"),)
+        )
         return (
             ("PATHS", ", ".join(payload.changed_paths)),
-            ("DIFF", f"held at {payload.diff_ref}{summary}"),
+            *diff,
             ("BEFORE", payload.before_tree_digest),
             ("AFTER", payload.after_tree_digest),
         )
     if isinstance(payload, QuestionActionPayload):
+        subject = payload.subject_ref
         if payload.receipt_ref is None:
-            return (("WAITS ON", f"an answer to {payload.subject_ref.entity_key}"),)
-        return (("ANSWERED", f"under receipt {payload.receipt_ref}"),)
+            ends = _deadline_words(subject, deadline)
+            return (("WAITS ON", f"an answer to {subject.entity_key} · {ends}"),)
+        chosen = f"{payload.choice_key} · " if payload.choice_key is not None else ""
+        return (("ANSWERED", f"{chosen}under receipt {payload.receipt_ref}"),)
     if isinstance(payload, ErrorPayload):
         trace = payload.diagnostic_ref
-        return (
-            ("CODE", payload.code),
-            ("RETRY", RETRY_WORDS[payload.retry_class]),
-            ("TRACE", f"held at {trace}" if trace is not None else "no trace was kept"),
+        traced = (
+            _content_rows("TRACE", held)
+            if held is not None
+            else (("TRACE", f"held at {trace}" if trace is not None else "no trace was kept"),)
         )
+        return (("CODE", payload.code), ("RETRY", RETRY_WORDS[payload.retry_class]), *traced)
     return ()
 
 
@@ -630,10 +710,19 @@ def _delegation(
     )
 
 
+def _subject_deadline(payload: object, deadlines: Mapping[str, datetime]) -> datetime | None:
+    """Return the deadline of the record a question or approval block waits on, if held."""
+    if isinstance(payload, QuestionActionPayload):
+        return deadlines.get(str(payload.subject_ref))
+    return None
+
+
 def build_transcript_blocks(
     events: Sequence[RunEventRecord],
     *,
     children: Mapping[str, Sequence[RunEventRecord]] = MappingProxyType({}),
+    contents: Mapping[str, ResolvedContent] = MappingProxyType({}),
+    deadlines: Mapping[str, datetime] = MappingProxyType({}),
 ) -> tuple[tuple[TranscriptBlock, ...], tuple[PurgedRange, ...]]:
     """Return the Run's blocks in stream order and the ranges the console does not hold.
 
@@ -641,6 +730,9 @@ def build_transcript_blocks(
         events: The Run's event lines, in any order. Quarantined lines are dropped.
         children: The event lines of the child Runs this Run delegated to, by child URN.
             A delegation whose child is absent here is drawn as unreadable.
+        contents: The content the Run's references resolved to, by reference.
+        deadlines: When each record a question or approval waits on stops waiting, by
+            the record's URN, as the caller read it.
 
     Returns:
         One block per live line, a recorded gap becoming a purged block in its own
@@ -690,7 +782,7 @@ def build_transcript_blocks(
                     if isinstance(payload, ChildRunPayload)
                     else None
                 ),
-                body=block_body(event),
+                body=block_body(event, contents, deadline=_subject_deadline(payload, deadlines)),
             )
         )
     logger.debug(f"build_transcript_blocks blocks={len(blocks)} purged={len(purged)}")
@@ -702,6 +794,8 @@ def build_transcript_view(
     *,
     events: Sequence[RunEventRecord] = (),
     children: Mapping[str, Sequence[RunEventRecord]] = MappingProxyType({}),
+    contents: Mapping[str, ResolvedContent] = MappingProxyType({}),
+    deadlines: Mapping[str, datetime] = MappingProxyType({}),
 ) -> TranscriptReadModel:
     """Return the read model the transcript route draws from one served projection.
 
@@ -710,6 +804,9 @@ def build_transcript_view(
         events: The Run's event lines, in any order; empty for a Run that has produced
             nothing, which draws no block rather than a block saying nothing.
         children: The event lines of the Runs this Run delegated to, by child URN.
+        contents: The content the Run's references resolved to, by reference.
+        deadlines: When each record a question or approval waits on stops waiting, by
+            the record's URN.
 
     Returns:
         The route's rows, the Run's blocks, the ranges the console does not hold, and
@@ -723,7 +820,9 @@ def build_transcript_view(
     """
     model = build_route_read_model(projection, family=FAMILY, fields=TRANSCRIPT_FIELDS)
     state = reduce_run_events(events)
-    blocks, purged = build_transcript_blocks(events, children=children)
+    blocks, purged = build_transcript_blocks(
+        events, children=children, contents=contents, deadlines=deadlines
+    )
     return TranscriptReadModel(
         route=model.route,
         read_model=model.read_model,
@@ -745,6 +844,7 @@ def build_transcript_view(
 
 __all__ = [
     "BLOCK_REVISION",
+    "EMPTY_CONTENT",
     "EVENT_LANE",
     "FAMILY",
     "LANES",
@@ -766,5 +866,6 @@ __all__ = [
     "block_text",
     "build_transcript_blocks",
     "build_transcript_view",
+    "content_refs",
     "open_reasoning_turn",
 ]

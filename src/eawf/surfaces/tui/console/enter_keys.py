@@ -15,6 +15,7 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import attention as att
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import drill
+from eawf.surfaces.tui.console.attach import ONBOARDING
 from eawf.surfaces.tui.console.drill import HOME
 from eawf.surfaces.tui.console.keymap import ENTRY_ROUTE
 from eawf.surfaces.tui.console.navigation import (
@@ -25,6 +26,8 @@ from eawf.surfaces.tui.console.navigation import (
     open_overlay,
     remember,
 )
+from eawf.surfaces.tui.console.notices import notice_of, short_key
+from eawf.surfaces.tui.console.onboarding import ONBOARDING_KIND, WORKSPACE_VERB
 from eawf.surfaces.tui.console.operations import (
     ANSWER_OPTIONS,
     PERMISSION_VERBS,
@@ -126,8 +129,17 @@ def _selected_row(s: Session, rows: tuple[ProjectionRow, ...]) -> ProjectionRow 
 
 
 def _confirm_target(ctx: Ctx, target: Mapping[str, str]) -> None:
-    """Send a Run control the card previewed, or say why its verb reaches no daemon."""
+    """Send a Run control the card previewed, or say why its verb reaches no daemon.
+
+    A first-run step's card is confirmed into its own daemon verbs, which write the
+    machine registry rather than a projection row, so no connection gate applies.
+    """
     verb, kind, target_id = target["verb"], target["kind"], target["id"]
+    if kind == ONBOARDING_KIND:
+        started = ctx.onboard is not None and ctx.onboard()
+        note = "sent to the daemon · waiting for its answer" if started else NO_LINK
+        ctx.log("Enter", f"{verb} {target_id} {note}")
+        return
     refusal = write_refusal(ctx.s, ctx.fixture, verb=verb, kind=kind)
     control = RUN_CONTROLS.get(verb) if kind in RUN_KINDS else None
     if refusal or control is None:
@@ -176,6 +188,12 @@ def _enter_release(ctx: Ctx) -> None:
 def _enter_entry(ctx: Ctx) -> None:
     s = ctx.s
     state = ctx.fixture.proto.entry[s.entry_sel]
+    if state.id == ONBOARDING and s.path_sel == 0 and ctx.first_run is not None:
+        # the workspace step runs here, through the daemon, once its card is confirmed
+        s.c_target = ctx.first_run.card()
+        open_overlay(s, "consequence", subject=ctx.first_run.code)
+        ctx.log("Enter", f"{WORKSPACE_VERB} {ctx.first_run.code} → consequence preview")
+        return
     if state.commands:
         # One command per path or row, else the primary command first.
         at = s.path_sel if (state.paths or state.rows) else 0
@@ -252,6 +270,11 @@ def _enter_milestone(ctx: Ctx) -> None:
 
 def _enter_attention(ctx: Ctx) -> None:
     s = ctx.s
+    notice = notice_of(ctx.notices, s.sel_id)
+    if notice is not None:
+        # a notice has nothing to confirm: its detail is the notifications record form
+        go(ctx, "notifications", f"notice detail · {short_key(notice)}", notice.notice_key)
+        return
     if att.held_refusal(ctx, "Enter") or open_held_row(ctx):
         return
     rows = att.attn_list(s, ctx.fixture)

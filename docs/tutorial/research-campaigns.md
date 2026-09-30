@@ -1,84 +1,63 @@
 # Research campaigns walkthrough
 
-*Start, steer, cancel, and inspect a multi-domain research campaign from the command line.*
+*Plan, drive, follow and cancel a research Campaign from the command line.*
 
-A research campaign is one topic fanned out across several research domains. The daemon owns the campaign store, the round store, and the operator-input channel; the CLI verbs below proxy through the daemon (falling back to a direct write when the daemon is unavailable) so every mutation lands through the single canonical writer.
+A research Campaign investigates a set of questions under one Track through an approved plan of bounded steps. Each step is one Run over one question, so its spend, its report and its outcome are recorded against it. The daemon owns the Campaign record: the CLI verbs below forward to its `runtime.campaign.*` verbs, and the console's Campaign screen reads the same record as the rounds land.
 
 This page walks the operator surface end to end.
 
-## 1. Start a campaign
+## 1. Plan a Campaign
 
-Stage a campaign for the active scope. The topic fans out across the domains declared in the scope's `research:` profile block:
-
-```bash
-eawf campaign new "Survey the options-pricing landscape"
-```
-
-The command stages the plan-only campaign and persists it; the staged record appears in `eawf research status`. Staging never spawns a subprocess — it is a plan-only hand-off.
-
-## 2. Track open questions
-
-A campaign accumulates open questions as it surveys. Add one (the title is an imperative noun-phrase, 1–72 characters):
+Give the Campaign its title, the Track that owns it, and the questions it investigates, the Campaign's own question first:
 
 ```bash
-eawf question add "which curve model fits the short tenor"
+eawf campaign new "Establish whether replay preserves event order" \
+  --actor OP-0001 --track <track-urn> \
+  --question "Does replay preserve event order?" \
+  --question "Which restarts reorder events?"
 ```
 
-Mark a question as blocking when its answer gates further work — a blocking question is the one the balanced-autonomy interrupt raises to the operator:
+The daemon files each question as an open question and plans one step per question and method, then one synthesis step that depends on every other. The depth sets the methods: `shallow` and `medium` survey each question, `deep` adds an adversarial pass, and `exhaustive` adds a depth pass as well. Without `--depth` the `research.default_depth` setting decides. The plan is approved as shown, with every step pending.
+
+A Campaign is bounded by its budget. Without one, it gets one round per step; `--budget-rounds` and `--budget-tokens` set hard limits instead.
+
+## 2. Drive it
 
 ```bash
-eawf question add "is the venue feed authoritative" --blocking
+eawf campaign run CAM-0001 --actor OP-0001
 ```
 
-List the scope's open questions:
+The daemon drives the plan round by round. Each round starts every ready step on a Run of its own, up to the fan-out width: `--agents`, or the `research.agent_count` setting. A step is ready once every step it depends on is done and no open contradiction blocks it. For each round, the research agent investigates the step's question read-only, and then the daemon:
+
+1. charges the round's spend to the step and to the Campaign;
+2. keeps the round's report as an artifact revision of the step;
+3. finishes the step with the outcome the agent stated, and promotes the findings it names as held `CFN-####` findings.
+
+`eawf campaign new --run` plans and starts driving in one go.
+
+## 3. Follow it
+
+The console's Campaign screen shows the plan line (`1 of 3 steps done · 1 running · 1 blocked by step 2`), each step with its runner, spend and outcome, each artifact revision, and the promoted findings. The same record is read through `projection.campaign.view`, and each artifact through `projection.campaign.artifact`.
+
+## 4. How a drive ends
+
+- **Converged.** Every step is done, and the Campaign converges.
+- **Budget exhausted.** A hard budget axis reached its limit while steps still waited, so no further step starts. The Campaign records a budget stop naming the axis, and converges with that stop once nothing is running, so a starved Campaign never reads as one that converged on its own.
+- **Paused.** A round failed, and its step returned to pending. `eawf campaign run` resumes the drive on a new Run. A step a stopped daemon left running is returned to pending when the next drive starts.
+
+To widen the questions, the steps or the budget, revise the plan through `runtime.campaign.plan.revise`. A revision replaces only the steps that have not started; every started step stays as it stands.
+
+## 5. Cancel a Campaign
 
 ```bash
-eawf question list
+eawf campaign cancel CAM-0001 --actor OP-0001 --reason "superseded by a narrower question"
 ```
 
-Each row renders its id, status (`open` / `blocked` / `answered` / `dropped`), and a `blocking` marker when set. The verb exits `0` with `no open questions` when the scope has none.
+Cancelling records the reason on the Campaign and keeps its steps, artifact revisions and findings. A cancelled Campaign takes no further changes.
 
-## 3. Steer a running campaign
+## 6. Keep a brief
 
-The operator channels push typed inputs onto the daemon-owned blackboard while a campaign runs. They are append-only, so every later round sees the input: a steer narrows, widens or parks a topic between rounds, a broadcast posts a notice to every running round, and an override settles a blocking fork with an operator verdict that persists across rounds until cleared. The daemon serves them as the `research.steer`, `research.broadcast` and `research.override` methods; no `eawf` command issues them yet.
-
-## 4. Inspect the run
-
-Render the campaign's progress, round, and checkpoint state:
-
-```bash
-eawf research status
-```
-
-The summary folds the staged campaigns, the executed rounds, and the open-question ledger into a single answer to "can the campaign proceed":
-
-- `runnable` — the frontier has ready domain work.
-- `blocked_await_user` — a blocking question or operator input is open (the round is soft-paused).
-- `saturated` — the loop-until-dry gates all passed (a good terminal).
-
-The line also reports `rounds` (how many rounds the run executed), `checkpoints` (rounds that coincided with an operator-review pause), and `open_questions`. The same campaign summary appears under [`eawf status`](../architecture/cli-surface.md) when a campaign is staged.
-
-`eawf research status` exits `0` with `no research campaign staged` when the scope has staged none.
-
-## 5. Cancel a campaign
-
-Cancelling tombstones the campaign — the append-only store keeps the record (with a cancel time + reason) rather than deleting it, so the history stays traceable:
-
-```bash
-eawf campaign cancel <campaign-id> --reason "superseded by a narrower topic"
-```
-
-A cancelled campaign no longer counts as live research signal and drops out of `eawf research status`.
-
-## 6. Delete a draft / promote a synthesis
-
-A campaign's surviving claims synthesise into a promotable research brief. Promotion runs the EviBound rung-1 gate over the brief's evidence references — a synthesis whose evidence does not resolve is rejected, a fully-referenced one promotes:
-
-```bash
-eawf research promote <slug>
-```
-
-To remove a local draft before promotion, delete the file under `.ea/local/research/`; drafts are local-only (gitignored) until promoted to `.ea/artifacts/`.
+To remove a local draft before promotion, delete the file under `.ea/local/research/`. Drafts stay local-only (gitignored) until promoted to `.ea/artifacts/`, which happens in the commit that lands the decision the brief supports.
 
 ## See also
 

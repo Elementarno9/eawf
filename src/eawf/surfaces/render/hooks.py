@@ -79,7 +79,9 @@ class HookSpec:
             harness-spawned subagent as a Run, and
             :data:`HookEventType.PERMISSION_REQUEST` has
             ``runtime.host_permission``, which records the held call as a
-            provider permission. Every other
+            provider permission, and the three tool events have
+            ``runtime.host_tool``, which states each host tool call on its Run's
+            transcript. Every other
             event's wrapper exits ``0`` with an empty result list (an idle
             contract), so the Claude installer subscribes
             only handler-backed events and never wires the operator's
@@ -208,6 +210,17 @@ HOOK_REGISTRY: tuple[HookSpec, ...] = (
     HookSpec(
         event_type=HookEventType.PERMISSION_REQUEST,
         claude_event_name="PermissionRequest",
+        has_handler=True,
+    ),
+    HookSpec(
+        event_type=HookEventType.PRE_TOOL_USE, claude_event_name="PreToolUse", has_handler=True
+    ),
+    HookSpec(
+        event_type=HookEventType.POST_TOOL_USE, claude_event_name="PostToolUse", has_handler=True
+    ),
+    HookSpec(
+        event_type=HookEventType.POST_TOOL_USE_FAILURE,
+        claude_event_name="PostToolUseFailure",
         has_handler=True,
     ),
 )

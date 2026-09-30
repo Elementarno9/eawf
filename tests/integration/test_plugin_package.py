@@ -87,7 +87,10 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert (target / "hooks" / "subagent_start.sh").exists()
     assert (target / "hooks" / "subagent_stop.sh").exists()
     assert (target / "hooks" / "permission_request.sh").exists()
-    assert len(list((target / "hooks").iterdir())) == 5
+    assert (target / "hooks" / "pre_tool_use.sh").exists()
+    assert (target / "hooks" / "post_tool_use.sh").exists()
+    assert (target / "hooks" / "post_tool_use_failure.sh").exists()
+    assert len(list((target / "hooks").iterdir())) == 8
     hooks_manifest = json.loads((target / "hooks.json").read_text())
     assert set(hooks_manifest["hooks"].keys()) == {
         "SessionStart",
@@ -95,6 +98,9 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
         "SubagentStart",
         "SubagentStop",
         "PermissionRequest",
+        "PreToolUse",
+        "PostToolUse",
+        "PostToolUseFailure",
     }
     # Every command path uses the portable ``${CLAUDE_PLUGIN_ROOT}``
     # variable so the manifest installs cleanly regardless of where CC

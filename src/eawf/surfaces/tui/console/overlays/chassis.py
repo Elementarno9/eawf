@@ -19,6 +19,7 @@ from types import MappingProxyType
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import KEY, Pair, keybar
+from eawf.surfaces.tui.console.onboarding import ONBOARDING_KIND
 from eawf.surfaces.tui.console.registry import SURFACES
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import BRAND, CRUMB_SEP, TRUTH
@@ -60,14 +61,17 @@ def holds(name: str, session: Session, fixture: Fixture) -> bool:
 
     The chrome overlays always do. A resolution card holds once the ending of its target
     has been captured, because every other word it prints is chrome. A consequence card
-    holds once a card was built from what the daemon link holds. Every other overlay
-    draws from the prototype registers until it is drawn from the projection.
+    holds once a card was built from what the daemon link holds, or once a first run's
+    step was previewed on it. Every other overlay draws from the prototype registers
+    until it is drawn from the projection.
     """
     if name in CHROME_OVERLAYS:
         return True
     if name == "resolution" and session.resolution_ending and session.ov_subject:
         return True
     if name == "consequence" and session.mutation is not None:
+        return True
+    if name == "consequence" and (session.c_target or {}).get("kind") == ONBOARDING_KIND:
         return True
     return fixture.prototype
 

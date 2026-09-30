@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 from eawf.kernel.projection.compute import ProjectionRow, RouteProjection
@@ -29,6 +30,7 @@ from eawf.surfaces.tui.console.bulk import BulkRequest
 from eawf.surfaces.tui.console.clock import Clock, notify
 from eawf.surfaces.tui.console.decisions import DecisionRecords
 from eawf.surfaces.tui.console.fixture import Fixture
+from eawf.surfaces.tui.console.onboarding import FirstRun
 from eawf.surfaces.tui.console.operations import VerbRequest
 from eawf.surfaces.tui.console.registry import REGISTRY, SURFACES
 from eawf.surfaces.tui.console.session import BackEntry, FocusTarget, Session
@@ -97,6 +99,14 @@ class Ctx:
             written; ``None`` for a console with no terminal to copy through.
         pressed_at: When the key arrived, on the console clock; ``None`` reads the clock
             when the key is handled. The quit guard judges a press on its arrival.
+        tree_root: The ``.ea`` directory of the tree the link reads, where a local write
+            such as a Run report lands; ``None`` with no link or no tree named.
+        recover: Takes one Recovery door by name, answering whether a link took it;
+            ``None`` for a console with no daemon link, where no door can be taken.
+        first_run: The tree a first run stands in, whose workspace step the consequence
+            card previews; ``None`` outside the first run.
+        onboard: Performs the confirmed workspace step through the daemon, answering
+            whether it was started; ``None`` outside the first run.
     """
 
     session: Session
@@ -120,6 +130,10 @@ class Ctx:
     gutter: int = 0
     clipboard: Callable[[str], bool] | None = None
     pressed_at: float | None = None
+    tree_root: Path | None = None
+    recover: Callable[[str], bool] | None = None
+    first_run: FirstRun | None = None
+    onboard: Callable[[], bool] | None = None
 
     @property
     def s(self) -> Session:

@@ -66,15 +66,15 @@ Cherry-pick procedure: ``git -C <main-worktree> cherry-pick <worktree-sha>`` per
 Claim order (P19-W02): ``eawf wave claim`` enforces deps + W## monotonic ordering. Each claim rejects when (a) any wave in ``.deps`` is not CLOSED, or (b) a lower-numbered sibling wave under the same iter is still PENDING with its own deps already satisfied. Parallel-worktree dispatch where multiple siblings of the same dep frontier are claimed at once MUST pass ``--out-of-order`` on each claim to opt out of the gate.
 
 <!-- END EAWF:managed id=worktree-discipline -->
-<!-- BEGIN EAWF:managed id=prep-plan-mode version=1.0 hash=390f282fbb12944f -->
+<!-- BEGIN EAWF:managed id=prep-plan-mode version=1.1 hash=26003c3b2acbb354 -->
 ### /prep always renders the DAG in plan mode
 
-Both Case A and Case B of ``/prep`` MUST enter Claude Code plan mode (``EnterPlanMode``) with the rendered wave DAG of the target phase's current iter before surfacing the approve / edit / cancel ``AskUserQuestion``. Free-text approvals are forbidden per the project-wide ``AskUserQuestion``-only approval policy.
+Both Case A and Case B of ``/prep`` MUST enter Claude Code plan mode (``EnterPlanMode``) with the rendered wave DAG of the target phase's current iter before surfacing the approve / edit / cancel choice. File that choice with ``eawf question open-decision`` so it is a pending action with typed options, then show the bound question the answer carries: ``AskUserQuestion`` in Claude Code, the answer's numbered prompt printed verbatim in Codex. The operator answers by option, in the session or in the console, and the first answer wins; a free-text approval is not consent.
 
 **Case A — PLANNED phase with at least one PENDING wave.**
-Render the plan via ``eawf roadmap show --phase <id> --md`` → ``EnterPlanMode`` → ``AskUserQuestion`` (``use-as-is`` / ``revise`` / ``replace`` / ``cancel``). On ``revise``, hand back to ``/roadmap revise``; on ``replace``, hand back to ``/roadmap drop`` + ``/roadmap propose``.
+Render the plan via ``eawf roadmap show --phase <id> --md`` → ``EnterPlanMode`` → the bound decision (``use-as-is`` / ``revise`` / ``replace`` / ``cancel``). On ``revise``, hand back to ``/roadmap revise``; on ``replace``, hand back to ``/roadmap drop`` + ``/roadmap propose``.
 
-**Case B — PLANNED phase with empty wave DAG.** Apply the planner's emitted ``eawf roadmap revise --add-wave`` commands **first** (waves land as PENDING on the still-PLANNED iter), then render the resulting DAG via ``eawf roadmap show --phase <id> --md`` → ``EnterPlanMode`` → ``AskUserQuestion`` (``approve`` / ``edit`` / ``cancel``). The operator reviews the rendered roadmap, not the planner's raw commands. Edits during plan mode are ``/roadmap revise`` calls (PLANNED scope is mutable). On ``approve``, run ``eawf phase activate <id>`` (V11 hard gate).
+**Case B — PLANNED phase with empty wave DAG.** Apply the planner's emitted ``eawf roadmap revise --add-wave`` commands **first** (waves land as PENDING on the still-PLANNED iter), then render the resulting DAG via ``eawf roadmap show --phase <id> --md`` → ``EnterPlanMode`` → the bound decision (``approve`` / ``edit`` / ``cancel``). The operator reviews the rendered roadmap, not the planner's raw commands. Edits during plan mode are ``/roadmap revise`` calls (PLANNED scope is mutable). On ``approve``, run ``eawf phase activate <id>`` (V11 hard gate).
 
 The plan-mode-first invariant applies to any future ``/prep`` cases (e.g. mid-flight scope expansion of an ACTIVE iter): the operator-facing surface is always the rendered DAG, not raw mutator commands.
 
@@ -263,7 +263,7 @@ Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``, ``pass-with-followup
 <!-- BEGIN EAWF:managed id=comment-economy version=1.1 hash=d094cbd2800f756a -->
 `comment-economy` — Comments carry why, not what: document every parameter, return and raise, but no restated signatures, change-log narration, or lifecycle ids. Full text: [docs/rules/comment-economy.md](docs/rules/comment-economy.md)
 <!-- END EAWF:managed id=comment-economy -->
-<!-- BEGIN EAWF:managed id=orchestrator-decision-surface version=1.0 hash=7a31e6bd6d6c497f -->
+<!-- BEGIN EAWF:managed id=orchestrator-decision-surface version=1.1 hash=7a31e6bd6d6c497f -->
 `orchestrator-decision-surface` — Surface every consequential choice as an explicit question with visual option previews, never a silent default. Full text: [docs/rules/orchestrator-decision-surface.md](docs/rules/orchestrator-decision-surface.md)
 <!-- END EAWF:managed id=orchestrator-decision-surface -->
 <!-- BEGIN EAWF:managed id=gate-fire-proof-sunset version=1.0 hash=4a0a7685adec45f5 -->

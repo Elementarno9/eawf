@@ -1034,6 +1034,7 @@ def release_cancel(
 # every shared symbol is defined, so the siblings can import them from here.
 from eawf.surfaces.cli.commands import release_candidate as _release_candidate  # noqa: E402, F401
 from eawf.surfaces.cli.commands import release_pipeline as _release_pipeline  # noqa: E402, F401
+from eawf.surfaces.cli.commands import release_regime as _release_regime  # noqa: E402, F401
 from eawf.surfaces.cli.commands import release_tag as _release_tag  # noqa: E402, F401
 from eawf.surfaces.cli.commands import release_train as _release_train  # noqa: E402, F401
 

@@ -4,15 +4,22 @@ The route only reads: every row is one row of the presentation matrix the attent
 reducer states, over exactly its three columns, in the same boxed card whether the console
 runs on the prototype or on a held register. No class takes focus, opens a modal or
 changes route; a toast is the one interruption any class may make.
+
+Opened onto a held budget notice, the route lends that notice's detail its record form:
+every field of the notice detail read model, a fact no producer states drawn unknown.
 """
 
 from __future__ import annotations
 
+from dataclasses import fields
+
 from eawf.kernel.projection.attention import NOTIFICATION_MATRIX, NotificationPolicy, ToastPolicy
+from eawf.kernel.projection.read_models import NoticeDetailView
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed, g_pad
 from eawf.surfaces.tui.console.keybar import route_pairs
-from eawf.surfaces.tui.console.renderers.read_model import route_crumb
+from eawf.surfaces.tui.console.notices import detail_view, notice_of, short_key
+from eawf.surfaces.tui.console.renderers.read_model import UNKNOWN_WORD, route_crumb
 
 _KEYS = route_pairs("notifications")
 
@@ -29,6 +36,23 @@ def class_name(row: NotificationPolicy) -> str:
     return row.notification_class.value.replace("_", " ")
 
 
+def _value(value: object) -> str:
+    """Return one detail field as its record form draws it; unstated reads unknown."""
+    if value is None:
+        return UNKNOWN_WORD
+    if isinstance(value, tuple):
+        return " · ".join(str(item) for item in value) or "none"
+    return str(value)
+
+
+def detail_lines(detail: NoticeDetailView) -> list[str]:
+    """Return the notice detail's record form: one field per line, in declared order."""
+    return [
+        g_pad(field.name.replace("_", " "), 22) + _value(getattr(detail, field.name))
+        for field in fields(detail)
+    ]
+
+
 def render(view: View) -> list[str]:
     """Return the Notifications card, over the held register's crumb when one is held.
 
@@ -36,6 +60,19 @@ def render(view: View) -> list[str]:
     register carries are not classes, so the cursor walks the matrix and nothing else.
     """
     s = view.session
+    notice = notice_of(view.notices, s.subj_id)
+    if notice is not None:
+        detail = detail_view(notice, principal=view.principal, rows=view.rows)
+        return boxed(
+            view,
+            crumb=f"Eä ▸ {view.fixture.scope} ▸ Notifications ▸ {short_key(notice)}",
+            ctx="notice detail · opening it resolves nothing",
+            pre=[],
+            title=f"NOTICE · {short_key(notice)}",
+            lines=detail_lines(detail),
+            foot="A notice has nothing to confirm; snooze or resolve it from Attention.",
+            keys=_KEYS,
+        )
     classes = NOTIFICATION_MATRIX.classes
     dv.sel_in(s, len(classes))
     lines = [f"{LABEL_MARK}CLASS               TOAST               DECIDED BY{CHIP_END}", ""]

@@ -40,6 +40,7 @@ from eawf.kernel.state.epoch2.campaign import (
     ArtifactRevisionRef,
     Campaign,
     CampaignPlanStep,
+    CampaignStop,
     StepState,
     revision_ref,
     step_blockers,
@@ -150,6 +151,7 @@ class CampaignView(_View):
         key: Its ``CAM-####`` key.
         title: What it researches.
         status: Where it stands.
+        stop: Why it stopped dispatching, once it has.
         revision: The Campaign row's revision when it was read.
         plan_line: The plan's counts, derived from the steps.
         steps: The plan steps, in order.
@@ -161,6 +163,7 @@ class CampaignView(_View):
     key: Annotated[str, Field(pattern=r"^CAM-\d{4,}$")]
     title: str
     status: CampaignStatus
+    stop: CampaignStop | None = None
     revision: StrictPositiveInt
     plan_line: str
     steps: tuple[CampaignStepView, ...]
@@ -296,6 +299,7 @@ def build_campaign_view(
         key=campaign.key,
         title=campaign.title,
         status=campaign.status,
+        stop=campaign.stop,
         revision=campaign.revision,
         plan_line=plan_line(steps),
         steps=steps,

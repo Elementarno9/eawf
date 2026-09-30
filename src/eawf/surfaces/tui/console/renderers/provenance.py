@@ -91,13 +91,15 @@ RAIL_NARROW = 14
 RAIL_WIDE = 17
 
 #: The gutter glyph per lens relation: set at the lens and in force, set at the lens and
-#: shadowed, inherited from another layer, and stated by no layer but the defaults. A key
-#: no code reads, listed only while a file still states it, is marked apart from all four.
+#: shadowed, inherited from another layer, and stated by no layer but the defaults.
 GLYPH_WINS = "="
 GLYPH_SHADOWED = "≠"
 GLYPH_INHERITS = "·"
 GLYPH_DEFAULT = "–"  # noqa: RUF001
-GLYPH_UNREAD = "!"
+
+#: The FROM cell of a key no code reads, listed only while a file still states it: the
+#: four glyphs keep their meaning for it, and the word says what sets it apart.
+UNREAD = "unread"
 
 #: How a layer that states nothing for a key reads in the stack card.
 NOT_STATED = "–"  # noqa: RUF001
@@ -153,8 +155,6 @@ def _rank(layer: Layer | None) -> int:
 
 def glyph(leaf: SettingsLeaf, at: Layer) -> str:
     """Return the key's gutter glyph as the lens layer ``at`` sees it."""
-    if leaf.unread:
-        return GLYPH_UNREAD
     if leaf.stated_at(at) is not None:
         return GLYPH_WINS if leaf.source_layer is at else GLYPH_SHADOWED
     if leaf.source_layer not in (None, Layer.BUILT_IN):
@@ -443,6 +443,8 @@ def _key_rows(
     for index, leaf in enumerate(keys[top : top + take], start=top):
         caret = "▸" if index == session.set_key else " "
         source = leaf.source_layer.value if leaf.source_layer is not None else NOT_STATED
+        if leaf.unread:
+            source = UNREAD
         line = (
             f"{caret} {glyph(leaf, at)} "
             + pad(_name(leaf, section), key_w - 1)
@@ -649,7 +651,7 @@ def _stack_lines(
     source = leaf.source_layer.value if leaf.source_layer is not None else "no layer"
     reading = [
         f"WINNING    {source} {value_text(leaf) if leaf.source_layer else ''}".rstrip(),
-        f"LENS       {at} · l on the Settings route cycles the file layers",
+        f"LENS       {at} · the file layer an edit on the Settings route writes to",
         f"LENS SETS  {_on_lens(leaf, at)}",
         *_tier_two(leaf),
     ]

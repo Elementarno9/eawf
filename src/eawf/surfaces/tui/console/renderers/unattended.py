@@ -32,6 +32,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     native_head,
     route_crumb,
 )
+from eawf.surfaces.tui.console.width import cell_len
 
 _KEYS = route_pairs("unattended")
 RUNS: tuple[str, ...] = tuple(row[0] for row in pt.QUEUE)
@@ -98,11 +99,14 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
             f"Dispatch queue · the daemon owns scheduling · {dv.plural(len(queue), 'run')} in it"
         ),
     )
+    # the Task column holds the longest Task key whole, since a key never gives way
+    longest = max((cell_len(row.parent_key or "") for row in queue), default=0)
+    grid = Grid([17, max(14, longest + 2), 13, 0])
     queued = sum(1 for row in queue if _state(row) == QUEUED)
     running = sum(1 for row in queue if _state(row) == RUNNING)
     body = [
         label("QUEUE", f"{queued} queued · {running} running · ? forced sequential"),
-        Grid([17, 14, 13, 0]).head(["RUN", "TASK", "STATE", "PROGRESS"]),
+        grid.head(["RUN", "TASK", "STATE", "PROGRESS"]),
     ]
     foot = [
         thin(w),
@@ -112,7 +116,6 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
         label("CONTROL", "This surface observes — every verb is a daemon request."),
         more("∅ no request has been sent from this console"),
     ]
-    grid = Grid([17, 14, 13, 0])
     win = window_rows(
         view, total=len(queue), cursor=cursor, chrome=len(top) + len(body) + 1 + len(foot)
     )

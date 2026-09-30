@@ -4,23 +4,15 @@
 
 ## Direct command surface
 
-State is the core, so commands are direct: `eawf phase`, `eawf iter`,
-`eawf wave`, not `eawf state phase`.
+State is the core, so commands are direct: `eawf phase`, `eawf iter`, `eawf wave`, not `eawf state phase`.
 
-All commands support `--json`, `--plain`, `--no-input`, and deterministic
-non-TTY behavior unless explicitly TUI-only. All mutating commands
-acquire the relevant sibling lockfile and append an audit event to
-`.ea/store/event.jsonl`.
+All commands support `--json`, `--plain`, `--no-input`, and deterministic non-TTY behavior unless explicitly TUI-only. All mutating commands acquire the relevant sibling lockfile and append an audit event to `.ea/store/event.jsonl`.
 
-Run `eawf <command> --help` for the authoritative flag list. Source of
-truth: `src/eawf/cli/app.py` and the per-group handlers in
-`src/eawf/cli/commands/`.
+Run `eawf <command> --help` for the authoritative flag list. Source of truth: `src/eawf/cli/app.py` and the per-group handlers in `src/eawf/cli/commands/`.
 
 ## Command groups (v0.1)
 
-Each row is a CLI verb / group. Mutates → writes state.json,
-JSONL store, or repo files. Errors → command fails with a non-zero exit
-code (see `docs/reference/exit-codes.md`).
+Each row is a CLI verb / group. Mutates → writes state.json, JSONL store, or repo files. Errors → command fails with a non-zero exit code (see `docs/reference/exit-codes.md`).
 
 | Command | Inputs / options | Output | Mutates | Errors / blocks | Source |
 |---|---|---|---:|---|---|
@@ -75,41 +67,27 @@ code (see `docs/reference/exit-codes.md`).
 - `--json`: emit envelope verbatim; agents and CI parse machine output.
 - `--plain`: ASCII-only formatted output; no rich glyphs / colors.
 - `--no-input`: deterministic non-interactive mode; rejects prompts.
-- `--scope <urn-or-id>`: pin scope explicitly when active state is
-  ambiguous.
+- `--scope <urn-or-id>`: pin scope explicitly when active state is ambiguous.
 - `-w / --workspace [<code>]`: prefer workspace state over repo state.
 - `--save`: persist outputs to `.ea/artifacts/...` when applicable.
 - `--dry-run`: show what would change, never mutate.
 
-The short workspace flag is `-w`. `-W` is reserved for future use; in
-v0.1 it is unbound (avoiding the conventional Python / GCC meaning of
-"warnings").
+The short workspace flag is `-w`. `-W` is reserved for future use; in v0.1 it is unbound (avoiding the conventional Python / GCC meaning of "warnings").
 
 ## Plugin command policy
 
-- User-facing v0.1 plugin lifecycle is `eawf plugin install / update /
-  doctor <runtime>`.
-- Rendering is an internal library operation used by plugin install /
-  update and tests.
-- Generated assets update only Eä-owned files or managed regions. Hash
-  mismatch or unmanaged conflicts raise an error with a diff and repair
-  instructions.
+- User-facing v0.1 plugin lifecycle is `eawf plugin install / update / doctor <runtime>`.
+- Rendering is an internal library operation used by plugin install / update and tests.
+- Generated assets update only Eä-owned files or managed regions. Hash mismatch or unmanaged conflicts raise an error with a diff and repair instructions.
 - OpenCode and other harness plugin commands are deferred beyond v0.1.
 
 ## CLI / TUI implementation stack
 
-The v0.1 stack is `typer + rich` for the CLI surface and
-`questionary + rich` for TTY-interactive prompts (install wizard,
-configuration flows). Roles:
+The v0.1 stack is `typer + rich` for the CLI surface and `questionary + rich` for TTY-interactive prompts (install wizard, configuration flows). Roles:
 
-- **typer**: parses `eawf phase open --title X`, generates `--help`,
-  shell completion.
-- **rich**: non-TTY rendering for `eawf status --json`, `--plain`, piped
-  output, tables in scripts.
-- **questionary**: portable single-prompt TTY interaction backed by
-  `prompt_toolkit`. Used for the `eawf init` wizard and short
-  per-command prompts; falls back to `--no-input` for non-interactive
-  callers.
+- **typer**: parses `eawf phase open --title X`, generates `--help`, shell completion.
+- **rich**: non-TTY rendering for `eawf status --json`, `--plain`, piped output, tables in scripts.
+- **questionary**: portable single-prompt TTY interaction backed by `prompt_toolkit`. Used for the `eawf init` wizard and short per-command prompts; falls back to `--no-input` for non-interactive callers.
 
 Core runtime deps (clean install, source of truth: `pyproject.toml`):
 
@@ -126,20 +104,11 @@ Core runtime deps (clean install, source of truth: `pyproject.toml`):
 | `portalocker` | cross-platform sibling lockfiles |
 | `pyyaml` | layered YAML config / state-extension loaders |
 
-`InquirerPy`, `textual`, and `watchfiles` are NOT runtime deps — the
-`typer + rich + questionary` trio covers the v0.1 surface and avoids
-dual event loops.
+`InquirerPy`, `textual`, and `watchfiles` are NOT runtime deps — the `typer + rich + questionary` trio covers the v0.1 surface and avoids dual event loops.
 
 ## Bare `eawf` interactive dashboard
 
-Running `eawf` with no args is the entry point for the future
-interactive dashboard. v0.1 falls back to `eawf status --plain` or help
-on every invocation; a richer multi-pane TUI (state, roadmap,
-hypotheses, budgets, audits, PR / ship, memory, config, artifacts) is
-deferred beyond v0.1. When materialised it will never mutate state
-without explicit confirmation; it will watch `.ea/state.json`,
-`.ea/config.yaml`, artifact indexes, git branch / status, and optional
-runtime session files.
+Running `eawf` with no args is the entry point for the future interactive dashboard. v0.1 falls back to `eawf status --plain` or help on every invocation; a richer multi-pane TUI (state, roadmap, hypotheses, budgets, audits, PR / ship, memory, config, artifacts) is deferred beyond v0.1. When materialised it will never mutate state without explicit confirmation; it will watch `.ea/state.json`, `.ea/config.yaml`, artifact indexes, git branch / status, and optional runtime session files.
 
 ## Cross-references
 

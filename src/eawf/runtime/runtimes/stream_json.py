@@ -21,7 +21,11 @@ stream-json result line down to its ``result`` payload, and
 report body validates against. :func:`unwrap_agent_json` composes the two for
 the bind path.
 
-A third consumer reads the same transcript for a different reason: under
+A Run Eawf starts itself reads the same stream for its transcript:
+:func:`stream_message_payloads` turns each stream-json line the child writes into the
+message payloads the Run's stream carries, as the line arrives.
+
+A fourth consumer reads the same transcript for a different reason: under
 ``--output-format stream-json`` a *failing* call routes the vendor's error
 envelope to **stdout**, leaving stderr empty, so an error taxonomy that only
 matches stderr classifies every such failure as its default.
@@ -38,6 +42,9 @@ import json
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+
+from eawf.kernel.runtime.events import MessageSummaryPayload
+from eawf.runtime.runtimes.host_transcript import claude_record_payloads
 
 #: The stream-json event type carrying the agent's final answer.
 _RESULT_EVENT_TYPE: str = "result"
@@ -114,6 +121,32 @@ def unwrap_result_envelope(raw: str) -> str:
         if envelope is not None:
             return envelope
     return raw
+
+
+def stream_message_payloads(line: str) -> tuple[MessageSummaryPayload, ...]:
+    """Return the messages one claude stream-json line carries, in order.
+
+    What the agent says is a message; its tool calls, their results and the result
+    envelope are not, and hidden reasoning is never read. A line that is not a JSON
+    object carries nothing.
+
+    Args:
+        line: One stdout line of a ``claude -p --output-format stream-json`` turn.
+
+    Returns:
+        The line's message payloads; empty for every other line.
+    """
+    try:
+        record = json.loads(line)
+    except ValueError:
+        return ()
+    if not isinstance(record, dict):
+        return ()
+    return tuple(
+        payload
+        for payload in claude_record_payloads(record)
+        if isinstance(payload, MessageSummaryPayload)
+    )
 
 
 def terminal_result_envelope(raw: str) -> str | None:
@@ -464,6 +497,7 @@ def _first_opener(text: str) -> int | None:
 __all__ = [
     "VendorErrorSignal",
     "extract_embedded_json",
+    "stream_message_payloads",
     "terminal_result_envelope",
     "unwrap_agent_json",
     "unwrap_result_envelope",

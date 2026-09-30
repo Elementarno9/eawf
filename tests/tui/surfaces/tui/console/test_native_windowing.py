@@ -491,8 +491,8 @@ def test_home_paging_rests_on_a_leaf_and_never_on_the_track() -> None:
 
 
 def test_a_native_frame_leaves_off_what_it_does_not_serve() -> None:
-    """Recovery can take no door yet; a Track's Tab walks groups only on a Track's own frame."""
-    assert "Enter" in unserved("crash.recovery", None)
+    """Recovery serves Enter to take a door (UI-047); Tab walks a Track's groups on its frame."""
+    assert "Enter" not in unserved("crash.recovery", None)
     assert "Tab" in unserved("track", None)
     assert "Tab" not in unserved("track", "TRK-0001")
 

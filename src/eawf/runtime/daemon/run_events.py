@@ -62,7 +62,7 @@ from eawf.kernel.runtime.provider import ControlKind
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.state.types import UtcDatetime
-from eawf.kernel.store.ledger import LedgerRecord
+from eawf.kernel.store.ledger import LedgerRecord, line_digest, render_ledger_line
 
 logger = logging.getLogger(__name__)
 
@@ -601,6 +601,23 @@ def _gap_payload(event: RunEventRecord) -> EventGapPayload:
     return event.payload
 
 
+def ledger_receipt(record: LedgerRecord) -> str:
+    """Return the receipt a resolution committed as *record* is recorded under.
+
+    The receipt names the very line the resolution was written as: its digest is the
+    one a correction would supersede the line by, so the reference resolves to exactly
+    one line of the run ledger rather than to an id minted beside it.
+
+    Args:
+        record: The ledger line the resolution was committed as.
+
+    Returns:
+        ``receipt-`` and the first sixteen hex characters of the line's digest.
+    """
+    digest = line_digest(render_ledger_line(record)).removeprefix("sha256:")
+    return f"receipt-{digest[:16]}"
+
+
 def _payload_digest(payload: RunEventPayload) -> str:
     """Return the canonical digest of one event payload."""
     return canonical_digest(payload.model_dump(mode="json"))
@@ -619,6 +636,7 @@ __all__ = [
     "StallAssessment",
     "assess_stall",
     "hello_facts_of",
+    "ledger_receipt",
     "next_hello_sequence",
     "plan_event_append",
     "reduce_run_events",

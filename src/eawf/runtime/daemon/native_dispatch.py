@@ -26,6 +26,7 @@ module writes.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import secrets
@@ -97,6 +98,7 @@ from eawf.runtime.daemon.admission import (
     load_economics,
 )
 from eawf.runtime.daemon.delegation import delegation_parent
+from eawf.runtime.daemon.dispatch_stream import message_sink, state_spawn_failure
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError
@@ -120,6 +122,8 @@ from eawf.runtime.workspace.lease import (
     root_leases,
     workspace_path,
 )
+from eawf.runtime.worktree.tree_change import TreeSnapshot, snapshot_tree
+from eawf.surfaces.cli import errors as cli_errors
 from eawf.workflow.runtime.compile import RunCompileError, compile_run_spec
 
 logger = logging.getLogger(__name__)
@@ -1026,21 +1030,35 @@ async def launch_worker(
             hello_facts_of(read_ledger_records(run_ledger(session)), args.urn)
         )
     meter = run_meter(context, args, attempt=attempt, capsule=capsule)
+    workspace = workspace_path(context, handle=lease.workspace_handle)
+    before = await _worker_tree(workspace)
     try:
         outcome = await launcher.launch(
             NativeLaunchRequest(
                 spec=spec,
                 capsule=capsule,
                 workspace_handle=lease.workspace_handle,
-                workspace=workspace_path(context, handle=lease.workspace_handle),
+                workspace=workspace,
                 prompt=args.prompt,
                 hello_sequence=sequence,
                 usage_sink=None if meter is None else meter.observe,
+                message_sink=message_sink(
+                    context, args.urn, actor=args.actor, attempt_ref=attempt.attempt_ref
+                ),
             )
         )
     except RuntimeSpawnError as error:
         if meter is None or not meter.terminated:
             logger.info(f"launch_worker failed attempt={attempt.attempt_ref}")
+            await asyncio.to_thread(
+                state_spawn_failure,
+                context,
+                args.urn,
+                actor=args.actor,
+                attempt_ref=attempt.attempt_ref,
+                code=DispatchRefusal.SPAWN_FAILED.value,
+                cause=str(error),
+            )
             raise refused(DispatchRefusal.SPAWN_FAILED, str(error)) from error
     # A reaped child either fails its launch or returns a hello for a Run
     # that is already cancelled; neither may be recorded as a live worker.
@@ -1051,6 +1069,9 @@ async def launch_worker(
             f"run {args.urn.entity_key!r} reached {observed} tokens against its cap of "
             f"{capsule.budget.tokens} and was terminated mid-turn",
         )
+    await _record_worker_edits(
+        context, args, attempt=attempt, workspace=workspace, before=before, now=now
+    )
     moved = attempt.model_copy(
         update={
             "stage": DispatchStage.SPAWNED,
@@ -1062,6 +1083,54 @@ async def launch_worker(
     with context.session([args.urn]) as session:
         append_attempt(session, moved)
     return moved, outcome
+
+
+async def _worker_tree(workspace: Path) -> TreeSnapshot | None:
+    """Return the tree of the worker's workspace, or ``None`` when git cannot read it.
+
+    An unreadable tree costs the Run its edit record and nothing else, so the
+    dispatch goes on without one.
+    """
+    try:
+        return await asyncio.to_thread(snapshot_tree, workspace)
+    except cli_errors.CliError as error:
+        logger.warning(f"worker_tree unreadable workspace={workspace.name} error={error}")
+        return None
+
+
+async def _record_worker_edits(
+    context: Epoch2RootContext,
+    args: DispatchParams,
+    *,
+    attempt: DispatchAttempt,
+    workspace: Path,
+    before: TreeSnapshot | None,
+    now: datetime,
+) -> None:
+    """Record what the worker's turn changed in its workspace on the Run's stream.
+
+    The event is named from the attempt, so a resumed dispatch that records the
+    same turn again repeats the line rather than adding one.
+    """
+    # The recorder appends through the run verbs, which import this module.
+    from eawf.runtime.daemon.file_changes import FileEdit, record_file_edit
+
+    after = None if before is None else await _worker_tree(workspace)
+    if before is None or after is None:
+        return
+    digest = hashlib.sha256(f"{attempt.attempt_ref}:edits".encode()).hexdigest()[:32]
+    try:
+        await asyncio.to_thread(
+            record_file_edit,
+            context,
+            FileEdit(workspace=workspace, before=before, after=after),
+            run_ref=args.urn,
+            event_ref=f"EVT-{digest}",
+            actor=args.actor,
+            now=now,
+        )
+    except (cli_errors.CliError, DaemonValidationError) as error:
+        logger.warning(f"record_worker_edits skipped attempt={attempt.attempt_ref} error={error}")
 
 
 def run_meter(

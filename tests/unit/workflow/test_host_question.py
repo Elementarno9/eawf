@@ -18,6 +18,8 @@ from eawf.workflow.host_question import (
     MAX_SENTENCE_WORDS,
     PresentationRefusal,
     QuestionPresentationError,
+    numbered_option,
+    numbered_prompt,
     present_pending_action,
 )
 from eawf.workflow.skills.bodies.user_question import UserQuestion
@@ -36,6 +38,7 @@ def _options() -> list[dict[str, Any]]:
             "label": "Keep the current layout",
             "effect": "decline",
             "consequence": "Nothing moves. The panel stays on the left.",
+            "cost": "The narrow view stays cramped.",
             "preview": "[panel] [main]",
         },
         {
@@ -43,6 +46,7 @@ def _options() -> list[dict[str, Any]]:
             "label": "Split the panel in two",
             "effect": "request_repair",
             "consequence": "The panel is split. Each half scrolls on its own.",
+            "cost": "Each half shows fewer rows.",
             "preview": "[top]\n[bottom] [main]",
         },
         {
@@ -50,6 +54,7 @@ def _options() -> list[dict[str, Any]]:
             "label": "Move the panel right",
             "effect": "approve",
             "consequence": "The panel moves to the right edge. The main view widens.",
+            "cost": "Readers used to the left edge must look again.",
             "preview": "[main] [panel]",
         },
     ]
@@ -190,6 +195,7 @@ def test_surf_031_every_offered_count_presents_whole(count: int) -> None:
             "label": f"Choice {index}",
             "effect": "approve" if index == 0 else "decline",
             "consequence": f"Outcome number {index} happens.",
+            "cost": f"Outcome number {index} is given up.",
             "preview": f"state {index}",
         }
         for index in range(count)
@@ -314,7 +320,9 @@ def test_surf_036_the_consequence_is_stated_in_the_option() -> None:
     """Each option's description carries its consequence, not a footnote."""
     question = present_pending_action(_action())
 
-    assert question.options[0].description == "Nothing moves. The panel stays on the left."
+    assert question.options[0].description == (
+        "Nothing moves. The panel stays on the left. Cost: The narrow view stays cramped."
+    )
 
 
 def test_surf_036_an_option_without_its_consequence_is_refused() -> None:
@@ -373,6 +381,35 @@ def test_surf_037_a_rationale_without_a_recommendation_does_not_validate() -> No
         _action(recommended_option_id=None)
 
 
+def test_surf_037_every_option_states_its_cost_the_recommended_one_included() -> None:
+    """The cost of the alternative is stated plainly, and so is the recommendation's own."""
+    question = present_pending_action(_action())
+
+    for option, filed in zip(question.options, _options(), strict=True):
+        assert option.description is not None
+        assert option.description.endswith(f"Cost: {filed['cost']}")
+
+
+@pytest.mark.parametrize("index", [0, 1, 2])
+def test_surf_037_an_option_without_its_cost_is_refused(index: int) -> None:
+    """Error path: a recommendation cannot hide what the other paths would have saved."""
+    action = _action(options=_option_with(index, cost=None))
+
+    assert _refusal(action) is PresentationRefusal.COST_UNSTATED
+
+
+def test_surf_037_a_cost_too_long_to_read_once_is_refused() -> None:
+    action = _action(options=_option_with(1, cost=_sentence(MAX_SENTENCE_WORDS + 1)))
+
+    assert _refusal(action) is PresentationRefusal.PROSE_NOT_PLAIN
+
+
+def test_surf_037_an_unexpanded_term_in_a_cost_is_refused() -> None:
+    action = _action(options=_option_with(1, cost="The ZQX lane is given up."))
+
+    assert _refusal(action) is PresentationRefusal.TERM_UNEXPANDED
+
+
 def test_surf_037_a_recommendation_of_an_option_not_offered_does_not_validate() -> None:
     """Error path: a recommendation names one of the offered options."""
     with pytest.raises(ValidationError, match="recommended_option_id 'elsewhere'"):
@@ -419,3 +456,32 @@ def test_surf_111_the_presented_question_carries_visuals_terms_and_a_recommendat
     assert [o.option_id for o in question.options if "Recommended." in (o.description or "")] == [
         "move"
     ]
+
+
+# ---------- SURF-073 on Codex: the numbered prompt and its reply ----------
+
+
+def test_surf_073_the_numbered_prompt_lists_the_persisted_options_in_order() -> None:
+    action = _action()
+    prompt = numbered_prompt(present_pending_action(action))
+
+    positions = [prompt.index(f"{n}) {o['label']}") for n, o in enumerate(_options(), start=1)]
+    assert positions == sorted(positions)
+    assert prompt.endswith(f"sealed on {ACTION_URN} at revision 3.")
+
+
+@pytest.mark.parametrize(("reply", "index"), [("1", 0), ("3", 2), (" 2 ", 1), ("2\n", 1)])
+def test_surf_073_a_numbered_reply_reads_back_to_the_persisted_option(
+    reply: str, index: int
+) -> None:
+    action = _action()
+
+    assert numbered_option(action, reply) == _options()[index]["option_id"]
+
+
+@pytest.mark.parametrize("reply", ["", "0", "4", "-1", "yes", "1.0", "one", "\u0661", "1 2"])
+def test_surf_073_a_reply_that_is_not_an_option_number_is_not_consent(reply: str) -> None:
+    with pytest.raises(QuestionPresentationError) as caught:
+        numbered_option(_action(), reply)
+
+    assert caught.value.code is PresentationRefusal.REPLY_NOT_AN_OPTION

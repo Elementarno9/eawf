@@ -66,16 +66,6 @@ exits non-zero:
   into ``run_dispatch``, so the W08 stdout producer fires on a real
   spawn and the agent-watch live tail is not empty. Dropping the thread reds this
   row.
-- :func:`check_campaign_claim_fold_wired` -- a source-scan probe asserting the
-  campaign run path (``research.py``) folds each round's reconciled claims into
-  the canonical ``state.claims`` via ``_commit_worktree_state`` (P30-I18 W05/W06),
-  so a live round populates the real claim ledger instead of a throwaway
-  ``State.model_construct`` shadow. Reverting to the shadow-only reconcile reds
-  this row.
-- :func:`check_campaign_carryover_prune_wired` -- a source-scan probe asserting
-  ``run_campaign`` calls ``prune_round_carryover`` between rounds (P30-I18 W06),
-  so the L1 between-rounds reducer has a production caller. Dropping the call
-  (its prior zero-caller state) reds this row.
 - :func:`check_runtime_gate_is_not_idle` -- verifies this always-run
   pre-commit gate stays enabled so the runtime close gate cannot ship idle.
 - :func:`detect_idle_contracts` -- a *meta-gate* that reads a git diff and
@@ -220,8 +210,6 @@ from idle_contract_wiring import (  # noqa: E402
 )
 from idle_contract_wiring import (  # noqa: E402
     check_audit_dsl_kinds_wired,
-    check_campaign_carryover_prune_wired,
-    check_campaign_claim_fold_wired,
     check_campaign_producer_class_non_stub,
     check_console_app_construction_wired,
     check_coverage_gate_helpers_wired,
@@ -725,9 +713,7 @@ def main(argv: list[str]) -> int:
     :func:`check_validate_jury_cli_wired`), then the I11 phase-track-tag binding
     probe (:func:`check_phase_track_tag_wired`), then the
     two I17 live-autopilot binding probes (:func:`check_drive_ladders_wired`,
-    :func:`check_live_output_text_wired`), then the two P30-I18 campaign-run
-    binding probes (:func:`check_campaign_claim_fold_wired`,
-    :func:`check_campaign_carryover_prune_wired`), then the
+    :func:`check_live_output_text_wired`), then the
     runtime-gate binding check (:func:`check_runtime_gate_is_not_idle`), then the
     console-app construction-reachability check
     (:func:`check_console_app_construction_wired`), then the
@@ -791,11 +777,6 @@ def main(argv: list[str]) -> int:
     # tree the same way: the drive-arming classify + repair kwargs and the
     # live-spawn output_text fan. Either re-dormant fails its row.
     #
-    # The two P30-I18 campaign-run bindings read their live source off the working
-    # tree the same way: run_campaign's state.claims fold via the canonical writer
-    # (W05/W06) and its L1 carryover prune call between rounds. Either
-    # re-idle fails its row.
-    #
     # The P30-I20 campaign producer class seam is checked opportunistically: W06
     # owns adding the class, and this row reds it if it lands as a stub.
     for source_scan_check in (
@@ -806,8 +787,6 @@ def main(argv: list[str]) -> int:
         check_phase_track_tag_wired(),
         check_drive_ladders_wired(),
         check_live_output_text_wired(),
-        check_campaign_claim_fold_wired(),
-        check_campaign_carryover_prune_wired(),
         check_campaign_producer_class_non_stub(),
     ):
         failed |= _report_result(source_scan_check)

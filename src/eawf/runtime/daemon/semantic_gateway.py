@@ -53,6 +53,7 @@ from pydantic import model_validator
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.runtime.capsule import AuthorityCapsule
 from eawf.kernel.runtime.control import ControlFact, RunBinding
+from eawf.kernel.runtime.events import ToolPayload
 from eawf.kernel.runtime.lease import LeaseStatus, WorkLease, lease_has_expired
 from eawf.kernel.runtime.provider import MUTATING_ROLES, Digest, RuntimeRecord
 from eawf.kernel.runtime.semantic import (
@@ -92,6 +93,7 @@ from eawf.runtime.daemon.semantic_handlers import (
     HandlerInputs,
     HandlerRefusalError,
 )
+from eawf.runtime.daemon.tool_events import ToolPhase, state_tool_phase
 from eawf.runtime.workspace.lease import root_leases
 
 logger = logging.getLogger(__name__)
@@ -100,6 +102,9 @@ logger = logging.getLogger(__name__)
 #: The discriminator separating a semantic receipt from the other payload
 #: kinds the receipt collection may come to hold.
 RECEIPT_PAYLOAD_KIND: Final = "semantic_receipt"
+
+#: The principal the gateway states what it did on a Run's transcript as.
+GATEWAY_ACTOR: Final = "DAEMON"
 
 #: How many random bytes a minted receipt identity carries.
 _RECEIPT_ENTROPY_BYTES: Final = 8
@@ -873,7 +878,7 @@ def serve_semantic_call(
     """
     with context.session([call.run_ref]) as session:
         run_records = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
-        held = _receipts_of(session, call.run_ref)
+        held = run_receipts(session, call.run_ref)
         key = call.idempotency_key
         inputs = GuardInputs(
             call=call,
@@ -890,12 +895,14 @@ def serve_semantic_call(
         if outcome.replay is not None:
             logger.info(f"serve_semantic_call replayed call={outcome.replay.call_id}")
             return outcome.replay
+        _state_phase(session, call, phase="requested", now=now)
         receipt = (
             _denied_receipt(call, check=outcome.check, error=outcome.error, now=now)
             if outcome.verdict == "refused"
             else _served_receipt(call, session=session, inputs=inputs, now=now)
         )
         _append_receipt(session, receipt, now=now)
+        _state_phase(session, call, phase="result", now=now, result=receipt.result)
     logger.info(
         f"serve_semantic_call tool={call.tool_id.value} status={receipt.result.status} "
         f"check={'-' if receipt.refused_check is None else receipt.refused_check.value}"
@@ -919,7 +926,7 @@ def read_receipt(context: Epoch2RootContext, *, run_ref: str, call_id: str) -> S
         NativeAuthorityRequiredError: The tree is not in epoch 2.
     """
     with context.session([run_ref]) as session:
-        for receipt in _receipts_of(session, run_ref):
+        for receipt in run_receipts(session, run_ref):
             if receipt.call_id == call_id:
                 return receipt
     raise SemanticGatewayError(
@@ -962,6 +969,7 @@ def _served_receipt(
             code=HANDLER_NOT_BROKERED,
             detail=f"{call.tool_id.value} passed every check and reaches no handler here",
         )
+    _state_phase(session, call, phase="accepted", now=now)
     try:
         output = handler(
             HandlerInputs(
@@ -975,6 +983,11 @@ def _served_receipt(
             )
         )
     except HandlerRefusalError as error:
+        # The call ran and was refused by its handler, so no receipt is filed; its
+        # transcript still ends, with the code a changed request would get past.
+        _state_phase(
+            session, call, phase="result", now=now, error_code=SemanticToolErrorCode.PAYLOAD_INVALID
+        )
         raise SemanticGatewayError(code=error.code, detail=error.detail) from error
     return _receipt(call, status="succeeded", error=None, output=output, check=None, now=now)
 
@@ -1012,6 +1025,45 @@ def _receipt(
     )
 
 
+def _state_phase(
+    session: RootSession,
+    call: SemanticCall,
+    *,
+    phase: ToolPhase,
+    now: datetime,
+    result: SemanticResult | None = None,
+    error_code: SemanticToolErrorCode | None = None,
+) -> None:
+    """State one phase of *call* on the calling Run's own transcript.
+
+    Args:
+        session: The session the call is being answered in.
+        call: The call.
+        phase: Which phase to state.
+        now: The daemon's recording clock.
+        result: The answer, at a result the gateway filed a receipt for: its receipt
+            when it succeeded, else its error's code.
+        error_code: Why a call with no receipt ended, at such a result.
+    """
+    if result is not None:
+        error_code = None if result.error is None else result.error.code
+    payload = ToolPayload(
+        call_ref=call.call_id,
+        tool_id=call.tool_id.value,
+        phase=phase,
+        result_ref=result.receipt_id if result is not None and error_code is None else None,
+        error_code=error_code,
+    )
+    state_tool_phase(
+        session,
+        run_ref=call.run_ref,
+        payload=payload,
+        provenance="daemon_observed",
+        actor=GATEWAY_ACTOR,
+        now=now,
+    )
+
+
 def _append_receipt(session: RootSession, receipt: SemanticCallReceipt, *, now: datetime) -> None:
     """File one receipt as a line of the root's receipt ledger."""
     commit_ledger_append(
@@ -1026,7 +1078,7 @@ def _append_receipt(session: RootSession, receipt: SemanticCallReceipt, *, now: 
     )
 
 
-def _receipts_of(
+def run_receipts(
     session: RootSession, run_ref: str | QualifiedUrn
 ) -> tuple[SemanticCallReceipt, ...]:
     """Return one Run's receipts from the receipt ledger, in ledger order.
@@ -1111,6 +1163,7 @@ _compile_role_ceiling()
 __all__ = [
     "AGENT_LAUNCH_COMMANDS",
     "BROKERED_TOOLS",
+    "GATEWAY_ACTOR",
     "HANDLER_NOT_BROKERED",
     "IDENTITY_NOT_FOUND",
     "PRE_HANDLER_CHECKS",
@@ -1128,5 +1181,6 @@ __all__ = [
     "SemanticGatewayError",
     "evaluate_pre_handler_checks",
     "read_receipt",
+    "run_receipts",
     "serve_semantic_call",
 ]

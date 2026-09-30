@@ -51,7 +51,7 @@ from eawf.runtime.runtimes.claude.managed_run import (
 )
 from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.runtimes.selector import runtime_supports
-from eawf.runtime.runtimes.stream_json import terminal_result_envelope
+from eawf.runtime.runtimes.stream_json import stream_message_payloads, terminal_result_envelope
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.runtime.sandbox.egress_proxy import (
     EnforcementSink,
@@ -1121,6 +1121,16 @@ class ClaudeNativeLauncher:
                 return
             relayed_terminated = await request.usage_sink(sample, pgid_box[0])
 
+        async def _relay_line(line: str) -> None:
+            """Relay *line*'s usage reading, then each message it carries."""
+            await _relay_usage(line)
+            if request.message_sink is None:
+                return
+            for message in stream_message_payloads(line):
+                await request.message_sink(message)
+
+        relaying = request.usage_sink is not None or request.message_sink is not None
+
         result = await self._adapter.spawn_session(
             request.prompt,
             model=spec.model_id,
@@ -1129,7 +1139,7 @@ class ClaudeNativeLauncher:
             denied_tools=ambient_denied_tools(spec),
             timeout=float(spec.limits.wall_seconds),
             on_pgid=_capture_pgid if request.usage_sink is not None else None,
-            on_chunk=_relay_usage if request.usage_sink is not None else None,
+            on_chunk=_relay_line if relaying else None,
             isolation=isolation,
         )
         return NativeLaunchOutcome(

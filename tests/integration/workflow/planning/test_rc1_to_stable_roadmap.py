@@ -163,11 +163,12 @@ def test_after_the_three_plans_apply_every_id_is_accounted_for(tmp_path: Path) -
     catalog = load_catalog(root / CATALOG_PATH)
     assert catalog.summary.unowned == 0
     assert catalog.summary.satisfied == sum(len(s.ids) for s in catalog.satisfactions)
-    native_owners = {
-        owner for row in catalog.requirements if row.id in _atom_ids("rc1") for owner in row.owners
-    }
-    assert native_owners, "the rc1 ids are owned by its native Tasks"
-    assert all(owner.startswith("EAWF-01") for owner in native_owners)
+    # A later follow-up Task may cite an rc1 id too, so each id needs one rc1
+    # Task among its owners rather than rc1 Tasks alone.
+    rc1_tasks = {task["urn"].rsplit("/", 1)[1] for task in load_proposal("rc1")["body"]["tasks"]}
+    rc1_rows = [row for row in catalog.requirements if row.id in _atom_ids("rc1")]
+    assert rc1_rows, "the rc1 ids are in the catalog"
+    assert [row.id for row in rc1_rows if not rc1_tasks & set(row.owners)] == []
     assert load_state_view(root).phases["P35"].closed
     assert main(["--repo-root", str(root), "check", "--require-owned"]) == 0
 

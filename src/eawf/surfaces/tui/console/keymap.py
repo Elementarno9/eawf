@@ -154,9 +154,9 @@ MOTION: frozenset[str] = frozenset(
 #: binds them: no dated marker for the marker keys to move between, no campaign section
 #: row for Tab to walk, no filter field for
 #: ``\`` to type into, no kind for ``k`` to cycle (``k`` also steps up), no decision record
-#: for Enter to open a Run from, no door the console can take yet, no detail beyond the
-#: docked repair readout, no dispatch-queue record for a pause or drain to address, and no
-#: criteria or Runs region on a Task frame for Tab to move between.
+#: for Enter to open a Run from, no detail beyond the docked repair readout, no
+#: dispatch-queue record for a pause or drain to address, and no criteria or Runs region
+#: on a Task frame for Tab to move between.
 NATIVE_UNSERVED: Mapping[str, frozenset[str]] = MappingProxyType(
     {
         "timeline": frozenset({"ArrowLeft", "ArrowRight"}),
@@ -165,7 +165,6 @@ NATIVE_UNSERVED: Mapping[str, frozenset[str]] = MappingProxyType(
         "health": frozenset({"\\", "Enter"}),
         "search": frozenset({"\\", "k"}),
         "sandbox.log": frozenset({"\\", "Enter"}),
-        "crash.recovery": frozenset({"Enter"}),
         "task.detail": frozenset({"Tab"}),
         "unattended": frozenset({"a", "."}),
     }

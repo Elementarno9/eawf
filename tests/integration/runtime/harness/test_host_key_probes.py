@@ -562,6 +562,36 @@ def test_surf_168_claude_permission_request_hook_fires(claude_host: _ClaudeHost)
 
 
 @needs_claude
+def test_surf_168_claude_tool_hooks_fire(claude_host: _ClaudeHost) -> None:
+    """Every tool call fires the tool hooks with its id; a failed call fires the failure one."""
+    sink = claude_host.root / "events"
+    (claude_host.project / "notes.txt").write_text("alpha\n", "utf-8")
+    claude_host.settings(
+        {
+            "permissions": {"allow": ["Bash(false)"]},
+            "hooks": _recording_hooks(["PreToolUse", "PostToolUse", "PostToolUseFailure"], sink),
+        }
+    )
+    calls = [
+        _tool(1, "Read", {"file_path": str(claude_host.project / "notes.txt")}),
+        _tool(2, "Bash", {"command": "false", "description": "probe"}),
+    ]
+    claude_host.run("PROBE", _claude_stub(calls))
+    fired = [json.loads(line) for line in sink.read_text("utf-8").splitlines() if line.strip()]
+    seen = {(row["hook_event_name"], row["tool_use_id"]) for row in fired}
+    assert seen == {
+        ("PreToolUse", "toolu_1"),
+        ("PostToolUse", "toolu_1"),
+        ("PreToolUse", "toolu_2"),
+        ("PostToolUseFailure", "toolu_2"),
+    }
+    (read,) = (row for row in fired if row["hook_event_name"] == "PostToolUse")
+    assert read["tool_response"]["file"]["content"] == "alpha\n"
+    (failed,) = (row for row in fired if row["hook_event_name"] == "PostToolUseFailure")
+    assert failed["error"].startswith("Exit code 1")
+
+
+@needs_claude
 def test_surf_168_claude_concurrency_cap_limits_children(claude_host: _ClaudeHost) -> None:
     fan_out = [_agent(index, f"CHILD {index} say done") for index in range(3)]
     children: dict[str | None, int] = {}

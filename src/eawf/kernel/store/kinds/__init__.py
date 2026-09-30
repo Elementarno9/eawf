@@ -8,7 +8,7 @@ from eawf.kernel.runtime.certification import ConformanceStageRecord
 from eawf.kernel.spec.publication import PublicationOperation
 from eawf.kernel.spec.release import Release
 from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.epoch2.regime import VerificationDebt
+from eawf.kernel.state.epoch2.regime import RegimeBinding, VerificationDebt
 from eawf.kernel.store.kinds.actual import ActualPayload
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload
 from eawf.kernel.store.kinds.audit import AuditPayload
@@ -93,6 +93,9 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     # One row per debt revision, filed under the debt key: an open debt
     # and its discharge are two rows, and the newest one is the debt.
     StoreKind.VERIFICATION_DEBT: VerificationDebt,
+    # One row per binding a scope was delivered under; a successor binding
+    # is a new row that names the one it replaces.
+    StoreKind.REGIME_BINDING: RegimeBinding,
     # One row per state a submitted operation reaches, machine-local.
     StoreKind.OPERATION: OperationRecord,
 }

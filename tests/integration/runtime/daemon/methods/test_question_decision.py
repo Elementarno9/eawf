@@ -9,7 +9,9 @@ SURF-032 (a timeout default only where the persisted policy permits it), SURF-03
 (durable before displayed, and an unpresentable question never filed), SURF-038
 (the resolved configuration outranks the recommendation), SURF-039 (a question whose
 answers change nothing is not asked), and SURF-091 and SURF-111 (the verb the skills
-call produces a question that passes every presentation rule).
+call produces a question that passes every presentation rule). The Codex path --
+a numbered text prompt bound to the same pending action, answerable in the session or
+in the console with the first answer winning -- is proved under SURF-073 too.
 """
 
 from __future__ import annotations
@@ -30,7 +32,10 @@ from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.epoch2_transaction import TransactionRefusedError
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.methods.delivery_approval import DELIVERY_SEAL_APPROVAL_METHOD
-from eawf.runtime.daemon.methods.question_decision import QUESTION_OPEN_DECISION_METHOD
+from eawf.runtime.daemon.methods.question_decision import (
+    QUESTION_ANSWER_NUMBERED_METHOD,
+    QUESTION_OPEN_DECISION_METHOD,
+)
 from eawf.workflow.decision_question import QUESTION_DECISIONS_METHOD
 from eawf.workflow.skills.bodies.user_question import UserQuestion
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
@@ -116,6 +121,7 @@ def _options() -> list[dict[str, Any]]:
             "label": "Ask before each commit",
             "effect": "decline",
             "consequence": "Nothing is committed until you say so.",
+            "cost": "Every step waits for you to answer.",
             "preview": "edit -> ask -> commit",
         },
         {
@@ -123,6 +129,7 @@ def _options() -> list[dict[str, Any]]:
             "label": "Commit on its own",
             "effect": "approve",
             "consequence": "Each finished step is committed at once.",
+            "cost": "A step you would have stopped lands first.",
             "preview": "edit -> commit",
         },
     ]
@@ -350,3 +357,103 @@ def test_surf_091_the_read_holds_only_waiting_decisions(
     assert call(canary, tmp_path, QUESTION_DECISIONS_METHOD) == {"decisions": []}
     with pytest.raises(DaemonValidationError, match="schema_validation_failed"):
         call(canary, tmp_path, QUESTION_DECISIONS_METHOD, route="attention")
+
+
+# ---------- SURF-073 on Codex: a numbered prompt bound to the pending action ----------
+
+
+def _answer_numbered(
+    canary: CanaryProvision, tmp_path: Path, reply: str, *, key: str = "req-codex-1"
+) -> dict[str, Any]:
+    return call(
+        canary,
+        tmp_path,
+        QUESTION_ANSWER_NUMBERED_METHOD,
+        urn=ACTION,
+        expected_revision=1,
+        idempotency_key=key,
+        actor="OP-0001",
+        resolver=dict(OPERATOR),
+        reply=reply,
+        receipt_ref=RECEIPT,
+    )
+
+
+def test_surf_073_codex_prompt_numbers_the_filed_options_and_names_its_binding(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    opened = open_decision(canary, tmp_path)
+
+    prompt = opened["numbered_prompt"]
+    assert prompt.index("1) Ask before each commit") < prompt.index("2) Commit on its own")
+    assert "   | edit -> commit" in prompt
+    assert f"sealed on {ACTION} at revision 1" in prompt
+    assert "Reply with one number from 1 to 2." in prompt
+
+
+def test_surf_073_codex_reply_seals_the_numbered_option(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    open_decision(canary, tmp_path)
+
+    sealed = _answer_numbered(canary, tmp_path, " 2\n")
+
+    assert sealed["outcome"] == "sealed"
+    assert filed(canary)["ACT-0001"]["selected_option_id"] == "auto"
+
+
+@pytest.mark.parametrize("reply", ["yes", "Commit on its own", "3", "0", "", "2 please", "\u0662"])
+def test_surf_073_codex_free_text_reply_is_not_consent(
+    canary: CanaryProvision, tmp_path: Path, reply: str
+) -> None:
+    open_decision(canary, tmp_path)
+
+    with pytest.raises(DaemonValidationError, match="reply_not_an_option"):
+        _answer_numbered(canary, tmp_path, reply)
+    assert filed(canary)["ACT-0001"]["status"] == "WAITING"
+
+
+def test_surf_073_the_console_answer_first_wins_over_the_codex_reply(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    open_decision(canary, tmp_path)
+    call(
+        canary,
+        tmp_path,
+        DELIVERY_SEAL_APPROVAL_METHOD,
+        urn=ACTION,
+        expected_revision=1,
+        idempotency_key="req-console-1",
+        actor="OP-0001",
+        resolver=dict(OPERATOR),
+        option_id="ask",
+        receipt_ref=RECEIPT,
+    )
+
+    late = _answer_numbered(canary, tmp_path, "2")
+
+    assert late["outcome"] == "superseded"
+    assert filed(canary)["ACT-0001"]["selected_option_id"] == "ask"
+
+
+def test_surf_073_the_codex_reply_first_wins_over_the_console(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    open_decision(canary, tmp_path)
+    assert _answer_numbered(canary, tmp_path, "2")["outcome"] == "sealed"
+
+    late = call(
+        canary,
+        tmp_path,
+        DELIVERY_SEAL_APPROVAL_METHOD,
+        urn=ACTION,
+        expected_revision=1,
+        idempotency_key="req-console-1",
+        actor="OP-0001",
+        resolver=dict(OPERATOR),
+        option_id="ask",
+        receipt_ref=RECEIPT,
+    )
+
+    assert late["outcome"] == "superseded"
+    assert filed(canary)["ACT-0001"]["selected_option_id"] == "auto"

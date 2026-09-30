@@ -48,11 +48,22 @@ AUDIT = {
     "verdict": "pass",
 }
 DECISION = {
-    "id": "D90",
-    "scope_id": PHASE,
+    "key": "D90",
+    "scope_ref": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0004",
     "title": "Close the phase through the legacy continuation",
+    "decision": "The imported phase closes through the legacy continuation.",
     "rationale": "The epoch-1 close verbs are fenced after the cutover.",
-    "status": "active",
+    "alternatives": [
+        {"key": "continue", "label": "Continue the imported phase"},
+        {"key": "reopen", "label": "Reopen the phase natively"},
+    ],
+    "chosen_option_key": "continue",
+    "consequences": ["The phase closes against its imported audit"],
+    "evidence_refs": ["eawf://EAWF/EAWF/EAWF/evidence/EVD-0090"],
+    "effective_policy_revision": 1,
+    "status": "ACTIVE",
+    "ratified_by": "OP-0001",
+    "ratified_at": "2026-03-04T00:00:00Z",
     "created_at": "2026-03-04T00:00:00Z",
 }
 ARTIFACT = {
@@ -99,12 +110,11 @@ def test_phase_closes_through_the_generation_alone(tmp_path: Path, ctx: MethodCo
     _ok(advance(tree, ctx, key=RUNNING_RED, collection="task", to="COMPLETED"))
 
     for kind, record in (("audit", AUDIT), ("decision", DECISION), ("artifact", ARTIFACT)):
+        key = record.get("id", record.get("key"))
         filed = _ok(call(tree, APPEND, ctx, kind=kind, record=record))
-        assert filed["record_key"] == record["id"]
-        (line,) = [
-            item for item in ledger(tree, Epoch2Collection(kind)) if item.record_key == record["id"]
-        ]
-        assert line.payload["payload"]["id"] == record["id"]
+        assert filed["record_key"] == key
+        (line,) = [item for item in ledger(tree, Epoch2Collection(kind)) if item.record_key == key]
+        assert line.payload["payload"].get("id", line.payload["payload"].get("key")) == key
 
     _ok(advance(tree, ctx, key=BACKLOG_ROW, collection="task", to="DROPPED"))
     closed_batch = _ok(advance(tree, ctx, key=ITER, collection="batch", to="COMPLETED"))
@@ -121,7 +131,7 @@ def test_phase_closes_through_the_generation_alone(tmp_path: Path, ctx: MethodCo
             key=PHASE,
             collection="milestone",
             to="COMPLETED",
-            evidence_refs=(AUDIT["id"], DECISION["id"]),
+            evidence_refs=(AUDIT["id"], DECISION["key"]),
         )
     )
 

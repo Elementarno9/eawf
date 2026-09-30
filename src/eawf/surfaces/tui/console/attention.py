@@ -210,23 +210,30 @@ def top_key(
     return actions[0].id if actions else None
 
 
-def top_attention(ctx: Ctx, k: str, pane: bool) -> None:
-    """Jump to the top attention item from anywhere: one gesture, never a modal.
+def top_attention(ctx: Ctx, k: str, pane: bool) -> bool:
+    """Land on the top attention item from anywhere, the Attention route selecting it.
 
-    The jump is a fresh arrival with no path behind it, as a ``g`` letter is, so it opens
-    nothing and leaves no back step. With nothing open the session stays where it is.
+    The Attention route opens fresh -- no bucket, no filter, no scroll -- with the item
+    under the cursor by its id. The caller opens the item's own decision surface and
+    keeps the departure on the back stack. With nothing open the session stays where
+    it is.
+
+    Returns:
+        Whether an item was found and landed on.
     """
     s = ctx.s
     key = top_key(ctx.fixture, ctx.attention, principal=ctx.principal)
     if key is None:
         ctx.log("!", "nothing needs you")
-        return
+        return False
     # a fresh arrival: no bucket, no filter, no scroll, as every route reached by name
     s.bucket, s.filter, s.scroll, s.typing = None, "", 0, False
     s.filters[ATTENTION_ROUTE] = ""
     s.route, s.sel, s.sel_id, s.region, s.subj_id = ATTENTION_ROUTE, 0, key, None, None
-    s.back.clear()
+    listed = [row.id for row in attn_list(s, ctx.fixture)]
+    s.sel = listed.index(key) if key in listed else 0
     ctx.log("!", f"→ {ATTENTION_ROUTE} · top item {key}")
+    return True
 
 
 def attn_row(session: Session, fixture: Fixture) -> Action | None:

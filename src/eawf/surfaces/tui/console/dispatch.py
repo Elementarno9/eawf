@@ -730,6 +730,19 @@ def _sibling(ctx: Ctx, k: str, pane: bool) -> None:
     ctx.log(k, f"sibling → {s.subj_id}")
 
 
+def _top_attention(ctx: Ctx, k: str, pane: bool) -> None:
+    """Open the decision surface of the top attention item from anywhere.
+
+    The departure is pushed, so Escape comes back to it once the surface is closed; the
+    surface is the one Enter on the item's Attention row opens, by its kind.
+    """
+    s = ctx.s
+    departure = remember(s)
+    if att.top_attention(ctx, k, pane):
+        s.back.record(departure)
+        enter(ctx, "Enter", pane)
+
+
 def siblings_of(session: Session, fixture: Fixture) -> list[str]:
     """Return the subject and its siblings under one containment parent, in id order.
 
@@ -1044,7 +1057,7 @@ _KEYS: Mapping[str, Callable[[Ctx, str, bool], None]] = MappingProxyType(
         "Y": _copy_urn,
         "-": _dismiss,
         "?": _help,
-        km.ATTENTION_JUMP_KEY: att.top_attention,
+        km.ATTENTION_JUMP_KEY: _top_attention,
         "/": _palette,
         "\\": _filter,
         "ctrl+f": _filter,

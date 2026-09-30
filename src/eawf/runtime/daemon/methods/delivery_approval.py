@@ -125,7 +125,11 @@ from eawf.workflow.delivery.acceptance_approval import (
     seal_question,
     standing_question,
 )
-from eawf.workflow.host_question import QuestionPresentationError, present_pending_action
+from eawf.workflow.host_question import (
+    QuestionPresentationError,
+    numbered_prompt,
+    present_pending_action,
+)
 from eawf.workflow.skills.bodies.user_question import UserQuestion
 
 logger = logging.getLogger(__name__)
@@ -286,6 +290,9 @@ class ApprovalAnswer(BaseModel):
         host_question: The multiple-choice question a host shows for a
             waiting action, bound to it and read from the committed row;
             ``None`` once the action is sealed, or for a seal answer.
+        numbered_prompt: The same question as the numbered text prompt a
+            host without a native picker prints verbatim; set exactly when
+            ``host_question`` is.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -303,6 +310,7 @@ class ApprovalAnswer(BaseModel):
     receipt_ref: str | None = None
     dispositions: tuple[PrincipalDispositionRow, ...] = ()
     host_question: UserQuestion | None = None
+    numbered_prompt: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -560,6 +568,7 @@ def action_answer(
         receipt_ref=None if action.receipt_ref is None else str(action.receipt_ref),
         dispositions=action.dispositions,
         host_question=host_question,
+        numbered_prompt=None if host_question is None else numbered_prompt(host_question),
     )
 
 

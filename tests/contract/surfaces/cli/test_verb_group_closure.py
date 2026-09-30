@@ -74,7 +74,7 @@ def _options(*path: str) -> dict[str, click.Parameter]:
     ("group", "verbs"),
     [
         ("campaign", {"new", "run", "cancel"}),
-        ("question", {"add", "resolve", "list", "open-decision"}),
+        ("question", {"add", "resolve", "list", "open-decision", "answer"}),
     ],
 )
 def test_surf_080_campaign_and_question_are_root_entity_groups(group: str, verbs: set[str]) -> None:
@@ -324,20 +324,6 @@ def test_surf_082_release_create_refuses_a_version_beside_the_spec(
     result = runner.invoke(app, ["release", "create", "0.7.0.dev9", "--from-spec", str(spec)])
     assert result.exit_code == exit_codes.USER_ERROR
     assert release_calls == []
-
-
-def test_surf_082_campaign_new_dry_run_reads_the_topic_from_the_spec(tmp_path: Path) -> None:
-    """The document stands in for the positional topic and the budget flags."""
-    result = runner.invoke(app, ["--no-input", "init", "--quick", "--target", str(tmp_path)])
-    assert result.exit_code == exit_codes.OK, result.output
-    spec = tmp_path.parent / f"{tmp_path.name}-campaign.json"
-    spec.write_bytes(orjson.dumps({"topic": "Survey caching options", "budget_rounds": 2}))
-    result = runner.invoke(
-        app,
-        ["--json", "-w", str(tmp_path), "campaign", "new", "--dry-run", "--from-spec", str(spec)],
-    )
-    assert result.exit_code == exit_codes.OK, result.output
-    assert orjson.loads(result.stdout)["topic"] == "Survey caching options"
 
 
 def test_surf_082_decision_add_refuses_a_document_missing_a_field(tmp_path: Path) -> None:

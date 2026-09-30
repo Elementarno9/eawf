@@ -14,10 +14,11 @@ Build and compare operator-visible design options.
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
 - Operates on: operator-visible surface, through no lifecycle route; this is an explicit skill contract.
-- Effects: Inline rendering or proposal-local assets only.
-- Allowed RPCs: none. This skill calls no daemon RPC.
+- Operator choices: an agent that reaches a choice this skill puts to the operator files it with `eawf question open-decision` (`runtime.question.open_decision`), shows the bound question the answer carries, and stops; it never chooses the recommended option itself. In Codex the bound question is the answer's `numbered_prompt`, printed verbatim, and the operator's reply is relayed with `eawf question answer` (`runtime.question.answer_numbered`); the console answers the same record, and the first answer wins.
+- Effects: Inline rendering or proposal-local assets, and the operator decision the options are filed as.
+- Allowed RPCs: `runtime.question.answer_numbered`, `runtime.question.open_decision`. Any other RPC is denied before it reaches a handler.
 - Run tools: `ask_operator`.
-- Canonical state: never mutated by this skill.
+- Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: `.ea/local/mockups`; nothing is written outside it.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
 

@@ -52,6 +52,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.runtime.capsule import AuthorityCapsule
 from eawf.kernel.runtime.compiled import CompiledRunSpec, canonical_digest
+from eawf.kernel.runtime.events import MessageSummaryPayload
 from eawf.kernel.runtime.handshake import WorkerHello
 from eawf.kernel.runtime.lease import WorkspaceHandle
 from eawf.kernel.state.enums import MeasurementQuality, MeasurementStatus
@@ -689,6 +690,9 @@ class NativeLaunchRequest(BaseModel):
             answers ``True`` once the Run was terminated at its cap, after
             which the launcher stops relaying. ``None`` when the Run
             carries no token cap, so nothing is metered in flight.
+        message_sink: Where the launcher hands each message the child says, as it
+            says it, so the Run's transcript carries the turn while it runs.
+            ``None`` when nothing records the Run's messages.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
@@ -700,6 +704,9 @@ class NativeLaunchRequest(BaseModel):
     prompt: Annotated[str, Field(min_length=1, max_length=200_000)]
     hello_sequence: Annotated[int, Field(strict=True, ge=1)]
     usage_sink: Callable[[UsageSample, int | None], Awaitable[bool]] | None = Field(
+        default=None, exclude=True
+    )
+    message_sink: Callable[[MessageSummaryPayload], Awaitable[None]] | None = Field(
         default=None, exclude=True
     )
 

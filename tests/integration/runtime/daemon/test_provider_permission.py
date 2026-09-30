@@ -204,7 +204,9 @@ def test_run_051_resolving_a_permission_writes_nothing_but_the_permission(
         after = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
         assert session.read_document().get("pending_action") == document.get("pending_action")
     added = after[len(before) :]
-    assert [line.payload["payload_kind"] for line in added] == ["provider_permission"]
+    # the decision is the permission's own revision, stated on the Run's stream
+    assert [line.payload["payload_kind"] for line in added] == ["provider_permission", "run_event"]
+    assert added[1].payload["event_kind"] == "approval_resolved"
 
 
 def test_run_051_a_lapse_is_recorded_as_expired_by_the_provider(

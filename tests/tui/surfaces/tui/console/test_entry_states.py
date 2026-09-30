@@ -20,11 +20,12 @@ import json
 import re
 import shlex
 import sys
+import tempfile
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, ClassVar
 
 import click
 import pytest
@@ -886,3 +887,98 @@ def test_con_124_skipping_a_step_says_what_stays_unavailable_and_changes_nothing
     assert any("no declared command runs this step yet" in note for note in notes)
     assert running is False
     assert _digests(world.repo) == before
+
+
+# ---------- CON-124 and FU-27: the workspace step runs here, through the daemon ----------
+
+
+class _InProcessDaemon:
+    """The daemon client, answering from the registered verbs in this process."""
+
+    calls: ClassVar[list[str]] = []
+
+    def __init__(self, *_a: object, **_k: object) -> None:
+        return None
+
+    def __enter__(self) -> _InProcessDaemon:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        return None
+
+    def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        from eawf.runtime.daemon import methods
+        from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
+            method_context,
+        )
+
+        type(self).calls.append(method)
+        methods.ensure_all_methods_registered()
+        context = method_context(Path(tempfile.mkdtemp(prefix="eawf-0225-")))
+        answer = asyncio.run(methods.dispatch(method, context, params or {}))
+        assert isinstance(answer, dict)
+        return answer
+
+
+def _first_run(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> ConsoleApp:
+    """Land a first run on a tree whose state records project ``CODE``, daemon in process."""
+    import eawf.surfaces.cli._daemon_client as daemon_client
+
+    _InProcessDaemon.calls = []
+    monkeypatch.setattr(daemon_client, "DaemonClient", _InProcessDaemon)
+    world.ea.mkdir(parents=True, exist_ok=True)
+    (world.ea / "state.json").write_text(json.dumps({"project": {"code": CODE}}))
+    return _land(world, monkeypatch, "onboarding")
+
+
+def _drive(app: ConsoleApp, *keys: str) -> tuple[list[str], list[str]]:
+    """Press ``keys``, letting the daemon answer, and return the frames and key-log notes."""
+
+    async def drive() -> tuple[list[str], list[str]]:
+        frames: list[str] = []
+        async with app.run_test(size=SIZES[1]) as pilot:
+            for key in keys:
+                app.press_key(key)
+                await app.workers.wait_for_complete()
+                await pilot.pause()
+                app.render_frame()
+                frames.append(_text(app.frame_rows))
+        return frames, [row.note for row in app.session.log]
+
+    return asyncio.run(drive())
+
+
+def test_con_124_enter_on_the_workspace_step_opens_its_consequence_card_first(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D-ONBOARD: the step is previewed on a card, and leaving the card writes nothing."""
+    app = _first_run(world, monkeypatch)
+    registry = world.home / ".eawf" / "registry.json"
+    frames, notes = _drive(app, "Enter", "Escape")
+    assert app.session.overlay is None
+    assert "consequence" in frames[0].split("\n")[0]
+    assert f"workspace {CODE}" in frames[0] and "no migration is applied" in frames[0]
+    assert any("register the workspace ABC → consequence preview" in n for n in notes)
+    assert not registry.exists()
+    assert _InProcessDaemon.calls == []
+
+
+def test_fu_27_con_124_the_confirmed_workspace_step_registers_it_and_ui_then_attaches(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FU-27: after the first-run step the same launch attaches rather than onboarding again.
+
+    The step writes through the daemon's own registry verbs, the frame states the step as
+    done, and the attach path, read afresh, resolves the root to the new workspace.
+    """
+    app = _first_run(world, monkeypatch)
+    frames, notes = _drive(app, "Enter", "Enter")
+    assert _InProcessDaemon.calls == ["registry.update", "registry.workspace.create"]
+    assert any("sent to the daemon" in n for n in notes)
+    assert f"registered · {CODE}" in frames[-1]
+    payload = json.loads((world.home / ".eawf" / "registry.json").read_text())
+    assert payload["repos"][CODE]["path"] == str(world.repo)
+    assert payload["workspaces"][CODE]["member_project_codes"] == [CODE]
+    # the next launch attaches: it opens over a daemon seam rather than an entry state
+    _rc, again = _launch(monkeypatch)
+    assert again is not None and again.seam is not None

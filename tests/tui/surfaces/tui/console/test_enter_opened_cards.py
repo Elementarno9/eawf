@@ -72,6 +72,7 @@ from eawf.surfaces.tui.console.keymap import route_keys
 from eawf.surfaces.tui.console.navigation import Ctx, go, open_overlay
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route
+from eawf.surfaces.tui.console.renderers.export import NO_TREE
 from eawf.surfaces.tui.console.renderers.milestone import NO_APPROVAL, NO_BUNDLE, short_digest
 from eawf.surfaces.tui.console.renderers.receipt import NO_RECEIPT
 from eawf.surfaces.tui.console.seam import ProjectionSeam
@@ -689,13 +690,11 @@ def _press_export_enter(model: Any) -> Session:
     return session
 
 
-def test_enter_on_the_export_card_takes_the_report_at_the_views_digest() -> None:
-    """The console call site: Enter reports the model the frame in front of it drew."""
-    model = _view("export")
-    session = _press_export_enter(model)
+def test_enter_on_the_export_card_with_no_tree_writes_nothing_and_says_so() -> None:
+    """UI-054: a report is written into the tree the link reads; with none named, none is."""
+    session = _press_export_enter(_view("export"))
     assert [toast.title for toast in session.toasts] == ["report"]
-    assert model.digest in session.toasts[0].text
-    assert "nothing was written" in session.toasts[0].text
+    assert session.toasts[0].text == NO_TREE
 
 
 def test_enter_on_the_export_card_moves_no_record_it_reported() -> None:

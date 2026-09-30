@@ -323,3 +323,45 @@ def test_seam_refuses_unsent_a_notice_it_does_not_hold() -> None:
 def test_seam_load_notices_acting_as_nobody_raises_value_error() -> None:
     with pytest.raises(ValueError, match="acts as nobody"):
         asyncio.run(_seam(_Daemon([]), None).load_notices())
+
+
+# ---------- UI-071: Enter on a held notice opens its detail, a typed record form ----------
+
+#: The notice detail's fields, as the packet binds them.
+NOTICE_DETAIL_FIELDS = (
+    "notice_ref",
+    "basis",
+    "axis",
+    "threshold",
+    "observed_value",
+    "budget_value",
+    "measurement_quality",
+    "provenance_event_refs",
+    "run_ref",
+    "run_owner",
+    "run_state",
+    "last_progress_at",
+    "last_heartbeat_at",
+    "history",
+    "my_disposition",
+)
+
+
+def test_ui_071_enter_on_a_held_notice_opens_its_detail_never_a_card() -> None:
+    view = _view(sel_id=NOTICE.notice_key)
+    _press(view, "Enter")
+    session = view.session
+    assert session.overlay is None
+    assert (session.route, session.subj_id) == ("notifications", NOTICE.notice_key)
+    assert [entry.route for entry in session.back.entries] == ["attention"]
+
+
+def test_ui_071_the_notice_detail_record_form_draws_every_bound_field() -> None:
+    view = _view(sel_id=NOTICE.notice_key)
+    _press(view, "Enter")
+    rows = compose_frame(_with(dataclasses.replace(view, session=view.session), (NOTICE,)))
+    text = "\n".join(rows)
+    for name in NOTICE_DETAIL_FIELDS:
+        assert name.replace("_", " ") in text, name
+    assert f"NOTICE · {short_key(NOTICE)}" in text
+    assert "1200" in text and "1000" in text and "limit_reached" in text

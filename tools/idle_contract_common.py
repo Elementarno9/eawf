@@ -47,8 +47,6 @@ class GateFailure(StrEnum):
     PHASE_TRACK_TAG_IDLE = "phase_track_tag_idle"
     DRIVE_LADDERS_IDLE = "drive_ladders_idle"
     LIVE_OUTPUT_TEXT_IDLE = "live_output_text_idle"
-    CAMPAIGN_CLAIM_FOLD_IDLE = "campaign_claim_fold_idle"
-    CAMPAIGN_CARRYOVER_PRUNE_IDLE = "campaign_carryover_prune_idle"
     EAWF023_ARTIFACT_PLACEMENT_IDLE = "eawf023_artifact_placement_idle"
     EAWF024_TEST_TIER_IDLE = "eawf024_test_tier_idle"
     EAWF025_TEST_PLACEMENT_IDLE = "eawf025_test_placement_idle"

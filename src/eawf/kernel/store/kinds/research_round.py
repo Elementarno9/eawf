@@ -24,8 +24,9 @@ from pydantic import BaseModel, ConfigDict, Field
 class ResearchRoundPayload(BaseModel):
     """Payload for one persisted research-campaign round record.
 
-    Appended to the append-only ``research_round`` store once per executed
-    round by :func:`~eawf.runtime.daemon.methods.research.run_campaign`. Carries
+    Appended to the append-only ``research_round`` store once per round an
+    epoch-1 campaign run executed; a native Campaign keeps its rounds on its
+    plan steps instead. Carries
     the round's per-domain findings, the saturation verdict that ended the
     round, and whether the round coincided with an operator-review checkpoint --
     enough for the board RUN / ROUND bands + the snapshot RPC to read the real

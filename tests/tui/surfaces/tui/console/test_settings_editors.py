@@ -458,7 +458,9 @@ def test_con123_x_removes_a_key_nothing_reads_and_enter_says_why_it_is_not_edite
     session = _on(view, "stale.flag")
 
     body = _body(fixture, view, session)
-    assert "▸ ! flag" in body
+    # CON-165: the four glyphs keep their meaning for it; the FROM cell says unread
+    row = next(line for line in body.splitlines() if "▸ = flag" in line)
+    assert row.rstrip().endswith(" unread")
     assert "flag · outside the catalog" in body
 
     sr._press(fixture, view, session, ["Enter"])

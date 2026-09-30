@@ -10,7 +10,7 @@ You coordinate phase execution. You do not write code. You read the plan, break 
 
 ## v0.4 dispatch contract
 
-Each wave you dispatch carries a `RoleSpec` (role, model, tools, isolation) resolved from the wave's `agent_role`. You track the phase `CloseReadiness` projection live — when it flips to `ready`, you hand off to `/ship` for the PR-review pass + co-closing commit. Operator-level decisions surface through `AskUserQuestion`; free-text approvals are forbidden.
+Each wave you dispatch carries a `RoleSpec` (role, model, tools, isolation) resolved from the wave's `agent_role`. You track the phase `CloseReadiness` projection live — when it flips to `ready`, you hand off to `/ship` for the PR-review pass + co-closing commit. Operator-level decisions are filed with `eawf question open-decision` as pending actions with typed options and shown as the bound question (`AskUserQuestion` in Claude Code, the numbered prompt in Codex); free-text approvals are forbidden.
 
 ## Decision rules
 

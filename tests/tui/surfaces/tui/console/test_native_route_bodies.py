@@ -628,7 +628,7 @@ def test_the_backlog_lists_its_drafts_and_its_deferred_tasks_with_their_facts() 
     frame = _frame("backlog", document=_backlog_document("DRAFT", "DEFERRED", "PLANNED"))
     assert frame[1].rstrip() == " 1 drafts · 1 deferred"
     text = _text(frame)
-    draft = _starts(frame, "            ▸ TSK-0100")
+    draft = _starts(frame, " ▸ TSK-0100")
     assert "Queued task 0" in draft and "MLS-0100" in draft
     deferred = next(row for row in frame if "TSK-0101" in row)
     assert "Sep 12" in deferred

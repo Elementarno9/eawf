@@ -488,13 +488,14 @@ def _press(
 
 
 def test_ui_028_bang_jumps_to_this_principals_top_item_from_any_route() -> None:
-    """``!`` lands on the Attention route with the top item selected, and opens nothing."""
+    """``!`` opens the top item's decision surface and keeps the route it left (CON-149)."""
     held = _projection(ATTENTION_ROUTE, document=AUDIENCE)
     for route in ("activity", "scope.home", "roadmap"):
         session = _press("!", route=route, attention=held, principal="OP-0002")
         assert session.route == ATTENTION_ROUTE
         assert session.sel_id == "ACT-0002"
-        assert session.overlay is None
+        assert session.overlay == "consequence"
+        assert [entry.route for entry in session.back.entries] == [route]
     mine_first = _press("!", route="activity", attention=held, principal="OP-0001")
     assert mine_first.sel_id == "ACT-0001"
 

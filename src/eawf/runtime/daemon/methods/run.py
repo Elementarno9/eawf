@@ -919,34 +919,51 @@ def append_run_event(
             gap, which the replay path negotiates rather than this one.
     """
     with context.session([args.urn]) as session:
-        records = read_ledger_records(_ledger(session))
-        run = _stored_run(session, records, args.urn)
-        status = reduce_run_control(
-            status=run.status, facts=_control_facts(records, args.urn)
-        ).status
-        events = run_events_of(records, args.urn)
-        if at_tail:
-            standing = next((line for line in events if line.event_ref == args.event_ref), None)
-            sequence = (
-                standing.run_sequence
-                if standing is not None
-                else reduce_run_events(events).next_sequence
-            )
-            args = args.model_copy(update={"run_sequence": sequence})
-        try:
-            plan = plan_event_append(
-                request=args,
-                events=events,
-                terminal=status in TERMINAL_RUN_STATUSES,
-                gap_ref=_mint_gap_ref(),
-                now=now,
-            )
-        except ValueError as error:
-            raise DaemonValidationError(
-                f"validation_failed: illegal_transition: {error}"
-            ) from error
-        for line in plan.lines:
-            _append_event_line(session, line, now=now)
+        return append_run_event_in_session(session, args, now=now, at_tail=at_tail)
+
+
+def append_run_event_in_session(
+    session: RootSession, args: RunEventAppend, *, now: datetime, at_tail: bool = False
+) -> RunEventAnswer:
+    """Order one observed event into the Run's stream inside a session already open.
+
+    A writer that holds the Run's session for its own reasons, such as the gateway
+    answering a call, states what it did in that same pass: reopening the session here
+    would block on the lock the writer holds.
+
+    Args:
+        session: The open session whose locks cover ``args.urn``.
+        args: The proposed event line.
+        now: The daemon's recording clock.
+        at_tail: As :func:`append_run_event` takes it.
+
+    Raises:
+        DaemonValidationError: As :func:`append_run_event` raises it.
+    """
+    records = read_ledger_records(_ledger(session))
+    run = _stored_run(session, records, args.urn)
+    status = reduce_run_control(status=run.status, facts=_control_facts(records, args.urn)).status
+    events = run_events_of(records, args.urn)
+    if at_tail:
+        standing = next((line for line in events if line.event_ref == args.event_ref), None)
+        sequence = (
+            standing.run_sequence
+            if standing is not None
+            else reduce_run_events(events).next_sequence
+        )
+        args = args.model_copy(update={"run_sequence": sequence})
+    try:
+        plan = plan_event_append(
+            request=args,
+            events=events,
+            terminal=status in TERMINAL_RUN_STATUSES,
+            gap_ref=_mint_gap_ref(),
+            now=now,
+        )
+    except ValueError as error:
+        raise DaemonValidationError(f"validation_failed: illegal_transition: {error}") from error
+    for line in plan.lines:
+        _append_event_line(session, line, now=now)
     state = reduce_run_events((*events, *plan.lines))
     return RunEventAnswer(
         event=plan.event.model_dump(mode="json"),
@@ -1204,4 +1221,5 @@ __all__ = [
     "ToolGrantAnswer",
     "WorkerHelloAnswer",
     "append_run_event",
+    "append_run_event_in_session",
 ]

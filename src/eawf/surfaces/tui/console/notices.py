@@ -14,6 +14,9 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Final
 
 from eawf.kernel.projection.attention import AttentionBucket
+from eawf.kernel.projection.compute import ProjectionRow
+from eawf.kernel.projection.read_models import NoticeDetailView
+from eawf.kernel.projection.truth import TruthState
 from eawf.runtime.budget.notices import BudgetThresholdNotice
 from eawf.surfaces.tui.console.navigation import open_overlay
 
@@ -61,6 +64,62 @@ def notice_detail(notice: BudgetThresholdNotice) -> str:
     )
 
 
+def _disposition(notice: BudgetThresholdNotice, principal: str | None) -> str | None:
+    """Return where ``principal`` stands with ``notice``, newest disposition first."""
+    state = notice.recipients.get(principal) if principal is not None else None
+    if state is None:
+        return None
+    if state.acknowledged_revision is not None:
+        return f"acknowledged revision {state.acknowledged_revision}"
+    if state.snoozed_until is not None:
+        return f"snoozed until {state.snoozed_until.isoformat()}"
+    if state.seen_revision is not None:
+        return f"seen revision {state.seen_revision}"
+    if state.delivered_revision is not None:
+        return f"delivered revision {state.delivered_revision}"
+    return None
+
+
+def detail_view(
+    notice: BudgetThresholdNotice, *, principal: str | None, rows: Sequence[ProjectionRow]
+) -> NoticeDetailView:
+    """Return the notice detail of ``notice``, for the principal the console acts as.
+
+    The Run a notice's scope names is read from the rows the link holds; a Run fact the
+    held rows do not state stays unknown.
+
+    Args:
+        notice: The held notice.
+        principal: Who the console acts as; ``None`` when nobody.
+        rows: Every row the link's held projections carry.
+    """
+    run_key = notice.scope_id.rsplit("/", 1)[-1]
+    run = next((row for row in rows if row.key == run_key), None) if "RUN-" in run_key else None
+    status = run.status if run is not None else None
+    return NoticeDetailView(
+        notice_ref=notice.notice_key,
+        basis=notice.basis,
+        axis=notice.axis,
+        threshold=notice.highest_band,
+        observed_value=notice.observed_value,
+        budget_value=notice.budget_value,
+        measurement_quality=None,
+        provenance_event_refs=tuple(notice.provenance),
+        run_ref=run.urn if run is not None else (run_key if "RUN-" in run_key else None),
+        run_owner=None,
+        run_state=(
+            str(status.value) if status is not None and status.state is TruthState.KNOWN else None
+        ),
+        last_progress_at=None,
+        last_heartbeat_at=None,
+        history=tuple(
+            f"{entry.revision} · {entry.action} · {entry.principal or 'imported'}"
+            for entry in notice.history
+        ),
+        my_disposition=_disposition(notice, principal),
+    )
+
+
 def notice_verb(ctx: Ctx, key: str) -> bool:
     """Preview a snooze or resolve of the notice the cursor is on; refuse an answer to it.
 
@@ -90,6 +149,7 @@ __all__ = [
     "NOTHING_TO_ANSWER",
     "NOTICE_BUCKET",
     "NOTICE_VERBS",
+    "detail_view",
     "notice_cells",
     "notice_detail",
     "notice_of",

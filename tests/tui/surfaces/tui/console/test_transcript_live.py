@@ -72,6 +72,11 @@ ARRIVAL_TIMEOUT_S: Final = 15.0
 BLOCK_HEAD: Final = re.compile(r"^.\d\d:\d\d:\d\d  (?P<glyph>\S) (?P<word>[a-z]+)")
 
 
+async def _shut(server: asyncio.AbstractServer) -> None:
+    server.close()
+    await server.wait_closed()
+
+
 class _Daemon:
     """A real daemon serving one tree on a private unix socket from its own thread.
 
@@ -102,8 +107,9 @@ class _Daemon:
     def __exit__(self, *_exc: object) -> None:
         server = self._server
         if server is not None:
-            server.close()
-            asyncio.run_coroutine_threadsafe(server.wait_closed(), self._loop).result(10)
+            # Closed on the daemon's own loop: a close from this thread races the loop
+            # detaching the last connection, and both then wake the server's waiters.
+            asyncio.run_coroutine_threadsafe(_shut(server), self._loop).result(10)
         self._loop.call_soon_threadsafe(self._loop.stop)
         self._thread.join(timeout=10)
         self._loop.close()

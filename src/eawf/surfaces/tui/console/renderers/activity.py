@@ -36,7 +36,7 @@ from eawf.surfaces.tui.console.frame import (
     thin,
     window_rows,
 )
-from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.keybar import ROUTE_KEYS, keybar
 from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.navigation import Ctx, busy
 from eawf.surfaces.tui.console.reads import prototype_attached, reads
@@ -49,7 +49,8 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     route_crumb,
 )
 from eawf.surfaces.tui.console.session import Session
-from eawf.surfaces.tui.console.width import cell_len, pad
+from eawf.surfaces.tui.console.tokens import TRUTH
+from eawf.surfaces.tui.console.width import cell_len, clip_words, pad
 
 RAIL_W = 29
 #: The rail's count column, the count set against its right edge.
@@ -61,6 +62,8 @@ _COL_HEAD = 1
 #: a kept filter stays until ``\\`` starts a new one, since Esc then leaves the route.
 FILTER_TYPING = "Esc clears · Enter keeps"
 FILTER_KEPT = "kept · \\ starts a new filter"
+#: The native keybar while the filter field takes the typing.
+FILTER_KEYS: tuple[tuple[str, str], ...] = (("type", "narrow"), ("Enter", "keep"), ("Esc", "clear"))
 
 
 def _filter_hint(s: Session) -> str:
@@ -241,7 +244,7 @@ _STATUS_REASON: Mapping[str, str] = MappingProxyType(
 
 
 #: The next move an empty Activity route offers: nothing executes until a Task is claimed.
-EMPTY_NEXT = "g b shows the backlog · a Run starts when a Task is dispatched"
+EMPTY_NEXT = "a Run starts when a Task is dispatched"
 
 
 def run_reason(row: ProjectionRow) -> str:
@@ -262,17 +265,33 @@ def run_reason(row: ProjectionRow) -> str:
 
 
 def as_of(row: ProjectionRow) -> str:
-    """Return the minute a Run's record last moved, or the unknown token when unstated."""
+    """Return the minute a Run's record last moved, or the unknown slot when unstated.
+
+    The column is a clock's width, so an unstated minute is the bare unknown token: the
+    token keeps its form where its word would be cut to an ellipsis.
+    """
     at = instant(row.facts.get("updated_at"))
-    return clock_minute(at) if at is not None else UNKNOWN_WORD
+    return clock_minute(at) if at is not None else TRUTH["unknown"].unicode
 
 
-def task_cell(row: ProjectionRow) -> str:
-    """Return the Task a Run runs: its key and title, or the no-value mark."""
+def task_cell(row: ProjectionRow, room: int | None = None) -> str:
+    """Return the Task a Run runs: its key and title, or the no-value mark.
+
+    Args:
+        row: The Run's row; its parent key names the Task.
+        room: The cells the column holds, when the text is being fitted to one. The
+            title gives way at a word and the key never does, so a title with no room
+            left is dropped rather than cut to an ellipsis beside the key.
+    """
     if row.parent_key is None:
         return NO_VALUE
     title = row.facts.get("task_title")
-    return f"{row.parent_key} {title}" if title else row.parent_key
+    if not title:
+        return row.parent_key
+    if room is None:
+        return f"{row.parent_key} {title}"
+    left = room - cell_len(row.parent_key) - 1
+    return f"{row.parent_key} {clip_words(title, left)}" if left > 1 else row.parent_key
 
 
 def _bucket_of(row: ProjectionRow) -> str | None:
@@ -300,19 +319,17 @@ def empty_lines(view: View, register: RegisterView) -> list[str]:
 
     Each names what it is, because the three answer different questions: a filter hid
     the Runs, a read could not vouch for them, or the scope really runs nothing at this
-    revision -- and each offers the next move.
+    revision -- and real emptiness offers the next move.
     """
     s = view.session
     revision = group(int(register.source_cursor))
     if register.rows and s.bucket and not dv.filter_of(s):
         return [
             f"   nothing in {s.bucket} · {len(register.rows)} runs are in other buckets",
-            "   Esc clears the bucket",
         ]
     if register.rows and (s.bucket or dv.filter_of(s)):
         return [
             f"   nothing matches the filter · {len(register.rows)} runs hidden",
-            "   Esc clears the filter",
         ]
     if not reads(s).complete:
         return [
@@ -345,8 +362,9 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
         view, register, crumb_text=route_crumb(view, register, "Activity"), summary=counts(register)
     )
     if s.typing or dv.filter_of(s):
+        # the keys that answer the field are the keybar's to promise, never the row's
         typed = "▏" if s.typing else ""
-        top.append(label("FILTER", f"\\{dv.filter_of(s)}{typed}   {_filter_hint(s)}"))
+        top.append(label("FILTER", f"\\{dv.filter_of(s)}{typed}"))
     items = bucket_items(grouping)
     s.bucket_keys = [item.key for item in items]
     if not wide:
@@ -354,7 +372,9 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     unstated = grouping.unbucketed
     if unstated:
         top.append(label("UNBUCKETED", f"{unstated} in no bucket · the row states no status"))
-    task_w = max(14, (col - 16 - 12 - _AS_OF_W) // 2)
+    # the column holds the longest Task key whole, since a key never gives way
+    longest = max((cell_len(row.parent_key or "") for row in shown), default=0)
+    task_w = max(14, longest + 1, (col - 16 - 12 - _AS_OF_W) // 2)
     cols = [16, task_w, 12, max(12, col - 16 - task_w - 12 - _AS_OF_W - 1)]
     table = Table([cols[0] - 3, cols[1], cols[2], cols[3], 0], 2)
     body: list[str] = [table.head(["RUN", "TASK", "STATE", "REASON", "AS OF"])]
@@ -363,7 +383,7 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
         row = shown[index]
         cells = [
             row.key,
-            pad(task_cell(row), cols[1] - 1),
+            pad(task_cell(row, cols[1] - 1), cols[1] - 1),
             value_cell(row.status).slot,
             pad(run_reason(row), cols[3] - 1),
             as_of(row),
@@ -378,6 +398,8 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     # a WINDOW row owes the operator only the rows it hides
     foot = [thin(w), win.line(complete=register.complete) + matching] if win.hides else []
     rows = [*top, *body, *foot]
+    if s.typing:
+        return build(view, rows, keybar(list(FILTER_KEYS), w))
     return build(view, rows, route_keys_bar(view, native_keys(s.route, windowed=s.windowed)))
 
 

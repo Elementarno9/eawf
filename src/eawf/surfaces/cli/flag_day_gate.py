@@ -46,7 +46,7 @@ INIT_VERB: Final = "eawf init"
 #: The groups whose verbs send the daemon the ``--workspace`` root, or the
 #: working directory, as the tree to write -- never the ``EA_STATE`` document.
 #: The gate asks about the tree the verb will actually write.
-REPO_ROOTED_GROUPS: Final = frozenset({"track", "milestone", "batch", "task", "run"})
+REPO_ROOTED_GROUPS: Final = frozenset({"track", "milestone", "batch", "task", "run", "campaign"})
 
 
 #: Why a mutating verb is exempt: it is needed to reach the cutover, or it

@@ -60,13 +60,27 @@ RECORD_ENV: Final = "EAWF_RECORD_CONSOLE_JOURNEYS"
 
 #: The worlds a journey is driven in: the pack's prototype registers; the probe tree held
 #: for one principal; two planned Milestones and two Runs whose second write answer is lost;
-#: and the probe tree with nothing open and nothing queued.
-PROTOTYPE, HELD, BULK, QUIET = "prototype", "held", "bulk", "quiet"
+#: the probe tree with nothing open and nothing queued; and the probe tree with both its
+#: Tasks filed under its one Batch, so a Task has a sibling to walk to.
+PROTOTYPE, HELD, BULK, QUIET, TREE = "prototype", "held", "bulk", "quiet", "tree"
 
 #: The probe tree with its one sealed action and no open one, and no draft or deferred Task.
 QUIET_DOCUMENT: Final[dict[str, Any]] = {
     **bodies.DOCUMENT,
     "pending_action": {"ACT-0003": bodies.DOCUMENT["pending_action"]["ACT-0003"]},
+}
+
+
+#: The probe tree with its second Task filed under the Batch the first one is in.
+TREE_DOCUMENT: Final[dict[str, Any]] = {
+    **bodies.DOCUMENT,
+    "task": {
+        **bodies.DOCUMENT["task"],
+        "TSK-0002": {
+            **bodies.DOCUMENT["task"]["TSK-0002"],
+            "batch_ref": f"{bodies.ROOT}/batch/BAT-0100",
+        },
+    },
 }
 
 
@@ -298,6 +312,7 @@ _WORLDS: dict[str, Callable[[], ConsoleApp]] = {
     HELD: lambda: held_app(DocumentDaemon(bodies.DOCUMENT)),
     BULK: lambda: held_app(DocumentDaemon(bulk.DOCUMENT, lost=frozenset({bulk.MS_SECOND}))),
     QUIET: lambda: held_app(DocumentDaemon(QUIET_DOCUMENT)),
+    TREE: lambda: held_app(DocumentDaemon(TREE_DOCUMENT)),
 }
 
 
@@ -368,8 +383,8 @@ PORT_SPECS: Final[tuple[JourneySpec, ...]] = (
     _spec(
         "PJ06",
         HELD,
-        "! lands on this principal's top action",
-        "CON-149's ! walk over a held register",
+        "! opens this principal's top action",
+        "CON-149's ! walk over a held register: its detail opens, the departure is kept",
         {"route": "activity"},
         "!",
     ),
@@ -389,9 +404,9 @@ PORT_SPECS: Final[tuple[JourneySpec, ...]] = (
     ),
     _spec(
         "PJ09",
-        PROTOTYPE,
+        TREE,
         "u climbs from a Run reached through Activity",
-        "CON-149's u walk: u lands on the Task, Esc still goes back",
+        "CON-149's u walk on a held tree: u lands on the Task, Esc still goes back",
         {"route": "activity"},
         "Enter",
         "u",
@@ -399,18 +414,18 @@ PORT_SPECS: Final[tuple[JourneySpec, ...]] = (
     ),
     _spec(
         "PJ10",
-        PROTOTYPE,
+        TREE,
         "brackets walk a Task's Batch",
-        "CON-149's [ ] walk: the sibling Task, then back, the crumb depth kept",
-        {"route": "task.detail", "subjId": "EAWF-0042"},
+        "CON-149's [ ] walk on a held tree: the sibling Task, then back, the crumb depth kept",
+        {"route": "task.detail", "subjId": "TSK-0001"},
         "]",
         "[",
     ),
     _spec(
         "PJ11",
         PROTOTYPE,
-        "! from a Run lands on the top open action",
-        "CON-149's ! walk over the prototype register",
+        "! from a Run opens the top open action",
+        "CON-149's ! walk over the prototype register: its detail opens, the Run is kept",
         {"route": "run.detail", "subjId": "RUN-538453eb"},
         "!",
     ),

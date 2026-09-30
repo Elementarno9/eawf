@@ -81,6 +81,25 @@ def _message(
     )
 
 
+def scrubbed_words(text: str, *, limit: int = SUMMARY_LIMIT) -> str | None:
+    """Return *text* as a record may hold it: cut to *limit*, or withheld whole.
+
+    Args:
+        text: What the host reported, in its own words.
+        limit: The most characters the record holds.
+
+    Returns:
+        The stripped words cut to *limit*; :data:`WITHHELD_TEXT` when they carry a
+        path, an address or a token shape; ``None`` when there are none.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return None
+    if scan_state_leaks(stripped, allowed_emails=default_allowed_emails()):
+        return WITHHELD_TEXT[:limit]
+    return stripped[:limit].strip()
+
+
 def _delegation(harness: HostHarness, call_id: str) -> ChildRunPayload:
     """Return the requested-phase payload for one spawn call the subagent made."""
     digest = hashlib.sha256(call_id.encode("utf-8")).hexdigest()[:_DELEGATION_DIGEST_CHARS]
@@ -153,6 +172,21 @@ def _codex_payloads(
         yield bridged
 
 
+def claude_record_payloads(record: Mapping[str, Any]) -> tuple[BridgedPayload, ...]:
+    """Return the payloads one Claude Code conversation line carries.
+
+    A stream-json line of a headless ``claude`` turn has the shape of a transcript line,
+    so the same reading serves a Run Eawf started itself.
+
+    Args:
+        record: One decoded JSON line.
+
+    Returns:
+        Its message and delegation payloads, cut or withheld as a transcript line's are.
+    """
+    return tuple(_claude_payloads(record, allowed=default_allowed_emails()))
+
+
 def read_host_transcript(path: Path, *, harness: HostHarness) -> tuple[BridgedPayload, ...]:
     """Return what a host subagent said and delegated, in transcript order.
 
@@ -178,5 +212,7 @@ __all__ = [
     "WITHHELD_TEXT",
     "BridgedPayload",
     "HostHarness",
+    "claude_record_payloads",
     "read_host_transcript",
+    "scrubbed_words",
 ]

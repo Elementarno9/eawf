@@ -36,6 +36,7 @@ from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.platform.registry import default_registry_path
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.tui.console.attach import (
+    ONBOARDING,
     AttachRequest,
     offline_snapshot,
     offline_state,
@@ -44,6 +45,7 @@ from eawf.surfaces.tui.console.attach import (
     with_entry_state,
 )
 from eawf.surfaces.tui.console.chrome import ConsoleChrome, EntryState, load_chrome
+from eawf.surfaces.tui.console.onboarding import FirstRun, project_code
 from eawf.surfaces.tui.terminal_logging import restore_root_logging, swap_root_logging_to_textual
 
 if TYPE_CHECKING:
@@ -286,7 +288,10 @@ def launch_tui(
 
         if entry is not None:
             return _launch_entry(
-                chrome=with_entry_state(chrome, entry), state=entry, verbose=verbose
+                chrome=with_entry_state(chrome, entry),
+                state=entry,
+                verbose=verbose,
+                first_run=_first_run(entry, state_path),
             )
 
         resolving = resolving_state(chrome, attached.trace, elapsed=time.monotonic() - started)
@@ -381,11 +386,33 @@ def _launch_native(
     return _run_console(app, seam)
 
 
-def _launch_entry(*, chrome: ConsoleChrome, state: EntryState, verbose: bool) -> int:
+def _first_run(state: EntryState, state_path: Path) -> FirstRun | None:
+    """Return the first run the onboarding ``state`` performs its workspace step for.
+
+    Any other state, or a tree whose state records no project code to register it
+    under, has no step to perform and hands its command over instead.
+    """
+    from eawf.surfaces.cli._daemon_client import DaemonClient
+
+    code = project_code(state_path)
+    if state.id != ONBOARDING or code is None:
+        return None
+    return FirstRun(
+        repo_root=state_path.parent.parent,
+        code=code,
+        registry_path=default_registry_path(),
+        client=DaemonClient,
+    )
+
+
+def _launch_entry(
+    *, chrome: ConsoleChrome, state: EntryState, verbose: bool, first_run: FirstRun | None
+) -> int:
     """Open the console on the pre-session ``state`` the attach path landed in.
 
     A terminal state leaves its commands on stderr once the console closes and exits 4;
-    any other state ends the process cleanly, not attached.
+    any other state ends the process cleanly, not attached. A first run performs its
+    workspace step in the console through ``first_run``.
     """
     from eawf.surfaces.tui.chassis.theme import persisted_theme
     from eawf.surfaces.tui.console.app import OUTER_GUTTER, ConsoleApp
@@ -399,6 +426,7 @@ def _launch_entry(*, chrome: ConsoleChrome, state: EntryState, verbose: bool) ->
         gutter=OUTER_GUTTER,
         theme=persisted_theme(),
         glyphs=persisted_glyphs(),
+        first_run=first_run,
     )
     app.reset(SessionSetup(route=_ENTRY_ROUTE, entrySel=_entry_sel(chrome, state.id)))
     _run_console(app, None)

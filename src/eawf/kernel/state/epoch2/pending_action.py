@@ -208,18 +208,22 @@ PreviewStr = Annotated[str, StringConstraints(strict=True, min_length=1, max_len
 class PendingActionOption(_FrozenModel):
     """One answer the question offers, and what choosing it does.
 
-    ``consequence`` and ``preview`` are what a host surface shows beside
-    the label: the consequence in plain words, and a sketch of the result.
-    They are filed with the question rather than supplied by the surface,
-    so a question re-presented after its surface was lost shows the same
-    thing the first presentation did. A row filed before they existed
-    still reads back; the presenter refuses to show it.
+    ``consequence``, ``cost`` and ``preview`` are what a host surface shows
+    beside the label: the consequence in plain words, what choosing the
+    option gives up, and a sketch of the result. The cost is stated for
+    every option, the recommended one included, so a recommendation that
+    follows durability over convenience says plainly what the cheaper path
+    would have saved. They are filed with the question rather than supplied
+    by the surface, so a question re-presented after its surface was lost
+    shows the same thing the first presentation did. A row filed before
+    they existed still reads back; the presenter refuses to show it.
     """
 
     option_id: OptionId
     label: TitleStr
     effect: OptionEffect
     consequence: NonEmptyStr | None = None
+    cost: NonEmptyStr | None = None
     preview: PreviewStr | None = None
 
 

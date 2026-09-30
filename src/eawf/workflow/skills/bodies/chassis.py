@@ -26,6 +26,7 @@ import re
 from collections.abc import Iterable
 from typing import Final
 
+from eawf.kernel.runtime.semantic import SemanticToolId
 from eawf.platform.rules.records import RuleRecord
 from eawf.workflow.skills.arguments import UNIVERSAL_OPTIONS
 from eawf.workflow.skills.bodies.prompts import SkillPrompt, skill_prompt
@@ -36,6 +37,20 @@ logger = logging.getLogger(__name__)
 
 #: The verb an agent files an operator-only choice through, as an operator decision.
 DECISION_RPC: Final = "runtime.question.open_decision"
+
+#: The verb a reply to a decision's numbered prompt is sealed through.
+ANSWER_RPC: Final = "runtime.question.answer_numbered"
+
+
+def asks_operator(entry: SkillCatalogEntry) -> bool:
+    """Return whether *entry* puts a choice to the operator.
+
+    A skill does when it declares an operator-only action or carries the
+    ``ask_operator`` Run tool; either way the choice is filed as a pending
+    action, so the page names the decision verbs and the catalog grants them.
+    """
+    return bool(entry.operator_only_actions) or SemanticToolId.ASK_OPERATOR in entry.effects.tools
+
 
 #: The slot headings of every page, in the order they must appear.
 CHASSIS_SLOTS: Final[tuple[str, ...]] = (
@@ -237,12 +252,20 @@ def _authority(entry: SkillCatalogEntry) -> str:
             " capsule already grants every read, write, RPC, budget and external effect below."
         )
     lines = [f"- {audience}", f"- Operates on: {_operates_on(entry)}."]
-    if entry.operator_only_actions:
+    if asks_operator(entry):
         actions = ", ".join(f"`{action}`" for action in entry.operator_only_actions)
+        lead = (
+            f"- Operator-only actions: {actions}. An agent that reaches one"
+            if actions
+            else "- Operator choices: an agent that reaches a choice this skill puts to the"
+            " operator"
+        )
         lines.append(
-            f"- Operator-only actions: {actions}. An agent that reaches one files it with"
-            f" `eawf question open-decision` (`{DECISION_RPC}`), shows the bound question the"
-            " answer carries, and stops; it never chooses the recommended option itself."
+            f"{lead} files it with `eawf question open-decision` (`{DECISION_RPC}`), shows the"
+            " bound question the answer carries, and stops; it never chooses the recommended"
+            " option itself. In Codex the bound question is the answer's `numbered_prompt`,"
+            " printed verbatim, and the operator's reply is relayed with `eawf question answer`"
+            f" (`{ANSWER_RPC}`); the console answers the same record, and the first answer wins."
         )
     lines.append(f"- Effects: {effects.summary}")
     if effects.rpcs:
@@ -276,7 +299,8 @@ def _authority(entry: SkillCatalogEntry) -> str:
 
 
 def _operates_on(entry: SkillCatalogEntry) -> str:
-    routes = [f"`{rpc}`" for rpc in entry.effects.rpcs]
+    # The decision verbs are how a skill asks, named on their own line, not a route to its subject.
+    routes = [f"`{rpc}`" for rpc in entry.effects.rpcs if rpc not in (DECISION_RPC, ANSWER_RPC)]
     routes += [f"`eawf {verb}`" for verb in entry.effects.verbs]
     if not routes:
         return f"{entry.subject}, through no lifecycle route; this is an explicit skill contract"

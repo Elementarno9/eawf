@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar
 
@@ -59,6 +60,9 @@ from eawf.kernel.projection.verification import (
     build_verification_view,
 )
 from eawf.kernel.runtime.control import ControlDisposition
+from eawf.platform.registry import RegistryReadError
+from eawf.runtime.daemon.native_guard import EA_DIRNAME
+from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.tui.chassis.theme import (
     DEFAULT_THEME,
     EA_THEMES,
@@ -67,7 +71,7 @@ from eawf.surfaces.tui.chassis.theme import (
     detect_os_appearance,
     resolve_theme_name,
 )
-from eawf.surfaces.tui.console.attach import OFFLINE
+from eawf.surfaces.tui.console.attach import OFFLINE, ONBOARDING, with_entry_state
 from eawf.surfaces.tui.console.bulk import BulkRequest
 from eawf.surfaces.tui.console.chrome import ConsoleChrome, load_chrome
 from eawf.surfaces.tui.console.clock import (
@@ -90,6 +94,7 @@ from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS, ENTRY_ROUTE
 from eawf.surfaces.tui.console.mutation import settle
 from eawf.surfaces.tui.console.navigation import Ctx
+from eawf.surfaces.tui.console.onboarding import FirstRun, register_workspace, registered_state
 from eawf.surfaces.tui.console.operations import (
     NO_PRINCIPAL_REASON,
     OperationResult,
@@ -450,6 +455,8 @@ class ConsoleApp(App[None]):
         glyphs: The glyph allocation the frame is drawn in. Under ``ascii`` every row
             is drawn through the plain-mode twins, so no glyph outside ASCII reaches
             the terminal.
+        first_run: The tree a first run stands in and the daemon link its workspace
+            step writes through; ``None`` for any launch that is not a first run.
 
     Raises:
         ValueError: both a fixture and a chrome were given, ``gutter`` is negative, or
@@ -476,6 +483,7 @@ class ConsoleApp(App[None]):
         theme: str = DEFAULT_THEME,
         toast_verbosity: ToastVerbosity = "important",
         glyphs: str = "unicode",
+        first_run: FirstRun | None = None,
     ) -> None:
         if fixture is not None and chrome is not None:
             raise ValueError("a fixture carries its own chrome; pass a fixture or a chrome")
@@ -498,6 +506,7 @@ class ConsoleApp(App[None]):
         self.toast_verbosity = toast_verbosity
         self.glyphs = glyphs
         self.seam = seam
+        self.first_run = first_run
         if seam is not None:
             seam.watch(self._on_seam_patched)
         self.health_verdicts = tuple(health_verdicts)
@@ -755,7 +764,13 @@ class ConsoleApp(App[None]):
             lines = self.seam.live(TRANSCRIPT_READ) if self.seam is not None else None
             if not isinstance(lines, HeldTranscript):
                 return build_transcript_view(projection)
-            return build_transcript_view(projection, events=lines.events, children=lines.children)
+            return build_transcript_view(
+                projection,
+                events=lines.events,
+                children=lines.children,
+                contents=lines.contents,
+                deadlines=lines.deadlines,
+            )
         if route in ACCEPTANCE_ROUTES:
             # the Milestone's bundle and approval are read for the subject on screen alone
             held = self.seam.acceptance_for(self.subject) if self.seam is not None else None
@@ -937,7 +952,16 @@ class ConsoleApp(App[None]):
             gutter=view.gutter,
             clipboard=self.copy_text,
             pressed_at=pressed_at,
+            tree_root=self._tree_root(),
+            recover=self.recover if self.seam is not None else None,
+            first_run=self.first_run,
+            onboard=self.onboard if self.first_run is not None else None,
         )
+
+    def _tree_root(self) -> Path | None:
+        """Return the ``.ea`` directory of the tree the link reads, when it names one."""
+        root = self.seam.repo_root if self.seam is not None else None
+        return root / EA_DIRNAME if root is not None else None
 
     def copy_text(self, text: str) -> bool:
         """Put ``text`` on the operator's clipboard; the console's one clipboard seam.
@@ -1023,6 +1047,66 @@ class ConsoleApp(App[None]):
         )
         self.run_worker(work, group=WRITE_WORKERS)
         return True
+
+    def recover(self, door: str) -> bool:
+        """Take one Recovery door through the seam, off the key path.
+
+        Args:
+            door: The door the operator chose.
+
+        Returns:
+            Whether a daemon link took the door: ``False`` for a console with no seam, or
+            one not yet running.
+        """
+        seam = self.seam
+        if seam is None or not self.is_running:
+            return False
+        self.run_worker(self._take_door(seam, door), group=WRITE_WORKERS)
+        return True
+
+    async def _take_door(self, seam: ProjectionSeam, door: str) -> None:
+        """Wait for the door to be taken, then say where it left the console."""
+        try:
+            value = await seam.take_door(door)
+        except (DaemonRpcError, OSError, ValueError) as error:
+            self.raise_toast(
+                f"{door} did not complete · {error}", title="recovery", sev=Severity.WARN
+            )
+        else:
+            self.session.conn = conn_label(value)
+            self.raise_toast(f"{door} · the console is {conn_label(value)}", title="recovery")
+        if self.is_running:
+            self.arrive()
+
+    def onboard(self) -> bool:
+        """Perform the confirmed first-run workspace step through the daemon, off the key path.
+
+        Returns:
+            Whether the step was started: ``False`` outside a first run or before the
+            console runs.
+        """
+        first_run = self.first_run
+        if first_run is None or not self.is_running:
+            return False
+        self.run_worker(self._file_workspace(first_run), group=WRITE_WORKERS)
+        return True
+
+    async def _file_workspace(self, first_run: FirstRun) -> None:
+        """Wait for the daemon to register the workspace, then state the step as done."""
+        try:
+            done = await asyncio.to_thread(register_workspace, first_run)
+        except (DaemonRpcError, OSError, RegistryReadError) as error:
+            self.raise_toast(
+                f"nothing was registered · {error}", title="not registered", sev=Severity.WARN
+            )
+        else:
+            entry = next(state for state in self.fixture.proto.entry if state.id == ONBOARDING)
+            chrome = with_entry_state(self.fixture.chrome, registered_state(entry, first_run.code))
+            self.fixture = Fixture.from_chrome(chrome)
+            self.raise_toast(done, title="registered")
+            self.session.log_key(DAEMON_KEY, done)
+        if self.is_running:
+            self.arrive()
 
     async def _deliver(self, seam: ProjectionSeam, request: VerbRequest) -> None:
         """Wait for the daemon's answer to one verb, then say what became of it."""
