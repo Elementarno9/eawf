@@ -252,6 +252,8 @@ def bucket_items(register: RegisterView, *, notices: int) -> list[dv.StripItem]:
 
     One derivation feeds the strip and the rail, and a bucket filter never changes it; a
     bucket no record feeds states the no-record token, never a zero that reads as counted.
+    ``all`` is the filter that lists every bucket, so it counts every item they list,
+    notices included; who must answer is the summary line's count, not this one.
 
     Args:
         register: The Attention register.
@@ -259,7 +261,7 @@ def bucket_items(register: RegisterView, *, notices: int) -> list[dv.StripItem]:
             with the ceiling breaches.
     """
     view = build_attention_view(register)
-    items = [dv.StripItem(None, "all", len(view.blocking()))]
+    items = [dv.StripItem(None, "all", len(view.items) + notices)]
     items.extend(
         dv.StripItem(
             f"{c.bucket.value}.{c.need.value}" if c.need else c.bucket.value,

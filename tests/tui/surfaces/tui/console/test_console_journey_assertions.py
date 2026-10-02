@@ -26,11 +26,14 @@ import pytest
 from eawf.kernel.projection.attention import attention_mine, build_attention_view
 from eawf.kernel.projection.compute import (
     ROUTE_READ_MODELS,
+    RUN_STATE_KIND,
     KeyedPatch,
     PatchEntry,
+    RouteProjection,
     build_route_projection,
 )
 from eawf.kernel.projection.connection import (
+    READ_METHOD_TEMPLATE,
     ConnectionValue,
     ReconnectDisposition,
 )
@@ -38,6 +41,8 @@ from eawf.kernel.projection.registers import ATTENTION_ROUTE, build_register_vie
 from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.runtime.events import ChildRunPayload, MessageSummaryPayload, RunEventKind
+from eawf.runtime.daemon.methods.console_records import REPOSITORY_READ_METHOD
+from eawf.runtime.vcs.repository_read import RepositoryAnswer
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.cards import Card
 from eawf.surfaces.tui.console.chrome import load_chrome
@@ -783,26 +788,25 @@ def test_prx_060_the_attention_strip_rail_summary_and_home_list_sum_alike() -> N
     assert len([k for k in rail if " > " not in k]) == 8
     strip = _strip(narrow)
     assert all(rail[k] == v for k, v in strip.items() if k != "all"), strip
-    register = build_register_view(
-        build_route_projection(
-            route=ATTENTION_ROUTE,
-            document=bodies.DOCUMENT,
-            cursor=bodies.CURSOR,
-            scope_id=bodies.SCOPE,
-            generated_at=bodies.AT,
-        )
+    served = js.DocumentDaemon(bodies.DOCUMENT).answer(
+        READ_METHOD_TEMPLATE.format(route=ATTENTION_ROUTE), {}
     )
-    items = build_attention_view(register).items
+    register = build_register_view(RouteProjection.model_validate(served))
+    view = build_attention_view(register)
+    items = view.items
     assert len({item.key for item in items}) == len(items), "an item sits in two buckets"
-    total = len(items)
-    assert int(strip["all"]) == _top(rail) == total
+    # ``all`` is every item the buckets list, notices included
+    assert int(strip["all"]) == _top(rail) == len(items)
+    assert any(item.read_only for item in items), "the document must hold a notice"
+    # a notice counts toward no principal, so the principal counts are the blocking items
+    blocking = len(view.blocking())
     for shot in (narrow, wide, widest):
         summary = re.search(r"^ (\d+) mine · (\d+) all principals", shot, re.MULTILINE)
-        assert summary is not None and int(summary.group(2)) == total
+        assert summary is not None and int(summary.group(2)) == blocking
     listed = re.search(r"^ NEEDS OPERATOR\s+(\d+)", home, re.MULTILINE)
     others = re.search(r"^\s+(\d+) actions? open to other principals", home, re.MULTILINE)
     assert listed is not None and others is not None
-    assert int(listed.group(1)) + int(others.group(1)) == total
+    assert int(listed.group(1)) + int(others.group(1)) == blocking
     for producerless in ("rejected", "active"):
         assert rail[producerless] == "0", producerless
     assert rail["stalled"] == "0", "the document stands over no stalled Run"
@@ -1141,3 +1145,21 @@ def test_prx_066_a_frame_is_drawn_under_replaying_before_the_replay_is_adopted()
     assert "replaying 41,190 → 41,208 · ? unknown findings promoted after this point" in drawn[0]
     assert outcome.connection is not ConnectionValue.REPLAYING
     assert "replaying 41,190" not in closed
+
+
+def test_the_fake_daemon_lists_runs_by_their_state_on_attention_as_the_daemon_does() -> None:
+    """A failed Run still the newest attempt of an open Task is an Attention item."""
+    answer = js.DocumentDaemon(bodies.DOCUMENT).answer(
+        READ_METHOD_TEMPLATE.format(route=ATTENTION_ROUTE), {}
+    )
+    rows = RouteProjection.model_validate(answer).rows
+    assert {row.key for row in rows if row.facts.get("kind") == RUN_STATE_KIND} == {"RUN-00000003"}
+
+
+def test_the_fake_daemon_answers_the_repository_read_for_the_branch_asked() -> None:
+    daemon = js.DocumentDaemon(bodies.DOCUMENT)
+    asked = RepositoryAnswer.model_validate(
+        daemon.answer(REPOSITORY_READ_METHOD, {"branch": "feature/x"})
+    )
+    checkout = RepositoryAnswer.model_validate(daemon.answer(REPOSITORY_READ_METHOD, {}))
+    assert (asked.pull_request_branch, checkout.pull_request_branch) == ("feature/x", "main")

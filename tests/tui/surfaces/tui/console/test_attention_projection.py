@@ -619,6 +619,7 @@ def test_the_patch_carries_the_three_columns_and_the_audience() -> None:
         "status",
         "control",
         "assignee_ref",
+        "facts",
     }
     assert entry.control is None
     assert entry.assignee_ref is None

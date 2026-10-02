@@ -8,9 +8,17 @@ on one certified capability, that capability is certified ``verified`` too.
 
 The certifications are the conformance runner's own records as the repository
 committed them in its native-canary exports, so the gate reads the same
-evidence a release readiness sweep does. A certification is matched on the
-runtime and its version, because a certification describes exactly one tuple
-and a version it never saw is not certified by it.
+evidence a release readiness sweep does, together with the certifications this
+machine's daemon recorded by probing the versions installed here. A
+certification is matched on the runtime and its version, because a
+certification describes exactly one tuple and a version it never saw is not
+certified by it. The newest record of a version decides, so a probe that
+failed after an export certified the version quarantines it, and a later probe
+that passed lifts the quarantine.
+
+A version the daemon is probing right now is refused as in progress rather
+than as uncertified, so the operator waits instead of looking for a gap to
+close.
 
 A Run that records no runtime tuple predates every producer of one. Locking
 it out would turn a missing record into a refusal nobody can clear, so it
@@ -21,6 +29,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -29,8 +38,10 @@ from typing import Final
 
 from pydantic import BaseModel, ConfigDict
 
+from eawf.kernel.runtime.certification import CapabilityCertification
 from eawf.kernel.runtime.provider import CapabilityId, ControlKind
 from eawf.kernel.state.epoch2.run import RunRuntimeTuple
+from eawf.kernel.store.kinds.runtime_certification import MachineCertification
 from eawf.workflow.evidence.provider_certification import (
     CANARY_EVIDENCE_DIRS,
     CertificationRecord,
@@ -69,6 +80,7 @@ class ControlGateCode(StrEnum):
     NOT_RECORDED = "runtime_not_recorded"
     VERSION_NOT_RECORDED = "runtime_version_not_recorded"
     UNCERTIFIED = "runtime_uncertified"
+    IN_PROGRESS = "runtime_certification_in_progress"
     QUARANTINED = "runtime_quarantined"
     NOT_VERIFIED = "runtime_certification_not_verified"
     EXPIRED = "runtime_certification_expired"
@@ -123,12 +135,66 @@ def _named(runtime: RunRuntimeTuple) -> str:
     return f"{runtime.harness} {runtime.harness_version or 'of an unrecorded version'}"
 
 
+@dataclass(frozen=True, slots=True)
+class _Held:
+    """One record of a runtime version, whichever store it was read from.
+
+    Attributes:
+        ref: The certification URN the decision cites.
+        tuple_digest: The digest a quarantine of the tuple is journaled under.
+        verified_at: When the record was taken; the newest record decides.
+        expires_at: When the certification stops being current, or ``None``
+            for a quarantine.
+        status: ``verified``, or the status that keeps it from admitting.
+        capabilities: The certified capability rows.
+        quarantine: The probe's account of why the version was quarantined,
+            or ``None`` for a certification.
+    """
+
+    ref: str
+    tuple_digest: str
+    verified_at: datetime
+    expires_at: datetime | None
+    status: str
+    capabilities: tuple[CapabilityCertification, ...]
+    quarantine: str | None
+
+
+def _exported(record: CertificationRecord) -> _Held:
+    """Return a committed export's certification as the gate reads it."""
+    certification = record.certification
+    return _Held(
+        ref=record.certification_urn,
+        tuple_digest=record.tuple_digest,
+        verified_at=certification.verified_at,
+        expires_at=certification.expires_at,
+        status="revoked" if certification.revoked_at is not None else certification.overall_status,
+        capabilities=certification.capabilities,
+        quarantine=None,
+    )
+
+
+def _probed(row: MachineCertification) -> _Held:
+    """Return this machine's probe row as the gate reads it."""
+    return _Held(
+        ref=row.certification_urn,
+        tuple_digest=row.tuple_digest,
+        verified_at=row.verified_at,
+        expires_at=row.expires_at,
+        status="verified" if row.outcome == "certified" else "quarantined",
+        capabilities=row.capabilities,
+        quarantine=row.reason if row.outcome == "quarantined" else None,
+    )
+
+
 def decide_run_control(
     runtime: RunRuntimeTuple | None,
     control: ControlKind,
     *,
     certifications: Sequence[CertificationRecord],
+    machine: Sequence[MachineCertification],
     quarantined: Callable[[str], bool],
+    certifying: Callable[[str, str], bool],
     now: datetime,
 ) -> ControlGate:
     """Decide whether *control* may be asked of a Run that ran on *runtime*.
@@ -136,9 +202,12 @@ def decide_run_control(
     Args:
         runtime: The Run's runtime tuple, or ``None`` when it records none.
         control: The control asked for.
-        certifications: Every certification the repository holds.
+        certifications: Every certification the repository's exports hold.
+        machine: Every probe row this machine recorded.
         quarantined: Whether the tuple a certification addresses by its digest
             is out of service now.
+        certifying: Whether a probe of a runtime, by id and version, is
+            running now.
         now: The instant a certification's expiry is judged at.
 
     Returns:
@@ -151,7 +220,8 @@ def decide_run_control(
             reason=("this Run records no runtime, so the control was not gated on a certification"),
         )
     named = _named(runtime)
-    if runtime.harness_version is None:
+    version = runtime.harness_version
+    if version is None:
         return ControlGate(
             admitted=False,
             code=ControlGateCode.VERSION_NOT_RECORDED,
@@ -161,55 +231,81 @@ def decide_run_control(
                 f"certification can be matched to it"
             ),
         )
-    matching = [
-        record
-        for record in certifications
-        if record.runtime_id == runtime.harness
-        and record.certification.distribution_version == runtime.harness_version
+    held = [
+        *(
+            _exported(record)
+            for record in certifications
+            if record.runtime_id == runtime.harness
+            and record.certification.distribution_version == version
+        ),
+        *(
+            _probed(row)
+            for row in machine
+            if row.runtime_id == runtime.harness and row.harness_version == version
+        ),
     ]
-    if not matching:
+    probing = certifying(runtime.harness, version)
+    in_progress = ControlGate(
+        admitted=False,
+        code=ControlGateCode.IN_PROGRESS,
+        runtime=named,
+        reason=f"{named} is being certified by the conformance probe now; ask again shortly",
+    )
+    if not held:
+        if probing:
+            return in_progress
         return ControlGate(
             admitted=False,
             code=ControlGateCode.UNCERTIFIED,
             runtime=named,
             reason=f"{named} holds no certification",
         )
-    record = max(matching, key=lambda item: item.certification.verified_at)
-    return _judged(record, named=named, control=control, quarantined=quarantined, now=now)
+    newest = max(held, key=lambda item: item.verified_at)
+    if newest.quarantine is not None:
+        return ControlGate(
+            admitted=False,
+            code=ControlGateCode.QUARANTINED,
+            runtime=named,
+            certification_ref=newest.ref,
+            reason=f"{named} is quarantined: {newest.quarantine}",
+        )
+    gate = _judged(newest, named=named, control=control, quarantined=quarantined, now=now)
+    if gate.code is ControlGateCode.EXPIRED and probing:
+        return in_progress
+    return gate
 
 
 def _judged(
-    record: CertificationRecord,
+    held: _Held,
     *,
     named: str,
     control: ControlKind,
     quarantined: Callable[[str], bool],
     now: datetime,
 ) -> ControlGate:
-    """Judge the newest certification of a runtime against *control* at *now*."""
-    ref = record.certification_urn
-    certification = record.certification
+    """Judge the newest record of a runtime version against *control* at *now*."""
+    ref = held.ref
 
     def refused(code: ControlGateCode, reason: str) -> ControlGate:
         return ControlGate(
             admitted=False, code=code, runtime=named, certification_ref=ref, reason=reason
         )
 
-    if quarantined(record.tuple_digest):
+    if quarantined(held.tuple_digest):
         return refused(ControlGateCode.QUARANTINED, f"{named} is quarantined; {ref} is suspended")
-    if certification.overall_status != "verified" or certification.revoked_at is not None:
+    if held.status != "verified":
         return refused(
             ControlGateCode.NOT_VERIFIED,
-            f"{ref} for {named} is {certification.overall_status}, not verified",
+            f"{ref} for {named} is {held.status}, not verified",
         )
-    if certification.expires_at <= now:
+    if held.expires_at is not None and held.expires_at <= now:
         return refused(
             ControlGateCode.EXPIRED,
-            f"{ref} for {named} expired at {certification.expires_at.isoformat()}",
+            f"{ref} for {named} expired at {held.expires_at.isoformat()}",
         )
     capability = CONTROL_CAPABILITIES[control]
     if capability is not None:
-        row = next((c for c in certification.capabilities if c.capability_id == capability), None)
+        row = next((c for c in held.capabilities if c.capability_id == capability), None)
         if row is None:
             observed = "absent"
         elif row.status != "verified":

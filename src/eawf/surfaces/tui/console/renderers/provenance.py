@@ -165,7 +165,7 @@ def glyph(leaf: SettingsLeaf, at: Layer) -> str:
 
 
 def value_text(leaf: SettingsLeaf, *, short: bool = False) -> str:
-    """Return the key's effective value cell; a denied key keeps the denied token.
+    """Return the key's effective value cell.
 
     Args:
         leaf: The key whose value in force is drawn.
@@ -173,8 +173,7 @@ def value_text(leaf: SettingsLeaf, *, short: bool = False) -> str:
             the readout under the table carries the reason for the key under the cursor.
     """
     cell = value_cell(leaf.effective)
-    shown = f"{cell.slot} {cell.word}".rstrip() if short else cell.full
-    return f"{TRUTH['denied'].unicode} denied · {shown}" if leaf.deny_chain else shown
+    return f"{cell.slot} {cell.word}".rstrip() if short else cell.full
 
 
 def why(leaf: SettingsLeaf, at: Layer) -> str:
@@ -618,8 +617,6 @@ def _on_lens(leaf: SettingsLeaf, at: Layer) -> str:
 def _tier_two(leaf: SettingsLeaf) -> list[str]:
     """Return the stack's second tier: only the parts of the field tuple that are stated."""
     rows: list[str] = []
-    if leaf.deny_chain:
-        rows.append(f"DENIED BY  {' › '.join(leaf.deny_chain)}")  # noqa: RUF001
     if leaf.constraint_chain:
         rows.append(f"CONSTRAINED BY  {' › '.join(leaf.constraint_chain)}")  # noqa: RUF001
     if leaf.capability_requirement is not None:
@@ -642,13 +639,7 @@ def _stack_lines(
     for index, name in enumerate(LAYER_ORDER):
         layer = Layer(name)
         kind, where = LAYER_PLACES[layer]
-        stated = leaf.stated_at(layer)
-        value = (
-            stated
-            if stated is None or not leaf.deny_chain
-            else f"{TRUTH['denied'].unicode} {stated}"
-        )
-        cells = [layer.value, value or NOT_STATED, kind.value, where]
+        cells = [layer.value, leaf.stated_at(layer) or NOT_STATED, kind.value, where]
         ladder.append(_STACK.row(cells, index == session.sel, inner))
     source = leaf.source_layer.value if leaf.source_layer is not None else "no layer"
     reading = [

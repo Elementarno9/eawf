@@ -113,7 +113,7 @@ ROUTE_MODULES: Mapping[str, RouteModule] = MappingProxyType(
         "timeline": RouteModule(render=timeline.render, seam=timeline.seam),
         "backlog": RouteModule(render=backlog.render, seam=backlog.seam),
         "campaign": RouteModule(render=campaign.render, seam=campaign.seam),
-        "history": RouteModule(render=history.render),
+        "history": RouteModule(render=history.render, seam=history.seam),
         "settings": RouteModule(render=settings.render, seam=settings.seam),
         "search": RouteModule(render=search.render),
         "history.diff": RouteModule(render=history_diff.render, seam=history_diff.seam),

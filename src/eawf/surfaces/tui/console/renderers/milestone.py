@@ -20,6 +20,7 @@ from types import MappingProxyType
 
 from eawf.kernel.projection.route_view import RouteRecord
 from eawf.kernel.state.epoch2.batch import BatchStatus
+from eawf.kernel.state.epoch2.milestone import MilestoneStatus
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
@@ -46,7 +47,6 @@ from eawf.surfaces.tui.console.renderers.children import (
     status,
 )
 from eawf.surfaces.tui.console.renderers.read_model import (
-    UNKNOWN_WORD,
     counts,
     crumb,
     native,
@@ -59,7 +59,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
 )
 from eawf.surfaces.tui.console.renderers.spine import finished_rows, finished_subject
 from eawf.surfaces.tui.console.width import cell_len, pad
-from eawf.workflow.projection.acceptance import AcceptanceBundleView
+from eawf.workflow.projection.acceptance import AcceptanceBundleView, JourneyStepRow
 
 OWN = pt.OWN_MILESTONE
 _UNAVAILABLE = "∅ unavailable"
@@ -77,6 +77,9 @@ NO_BUNDLE_CRITERIA = "∅ no bundle is held, so no step is listed"
 
 #: What the criteria read when a held bundle lists no step.
 NO_STEP = "∅ the held bundle states no step"
+
+#: What a journey section reads before the Milestone's acceptance record is read.
+NO_JOURNEY = "∅ the Milestone's acceptance journey is not read yet"
 
 
 def _no_criteria(model: AcceptanceBundleView) -> str:
@@ -126,8 +129,8 @@ def _lrow(label: str, value: str, cur: bool = False) -> str:
 def _section(sec: str, mid: str, w: int) -> list[str]:
     if sec == "try":
         return [
-            _lrow("TRY", f"eawf milestone try {mid}"),
-            _lrow("", "Runs the accepted bundle locally against this digest."),
+            _lrow("TRY", f"eawf milestone open-approval {mid}"),
+            _lrow("", "Asks for acceptance on the bundle sealed at this digest."),
         ]
     if sec != "glance":
         label, first, second = _SECTION_ROWS[sec]
@@ -214,10 +217,15 @@ def _tabs(sec: str) -> str:
     return " ".join(f"[{x}]" if x == sec else f" {x} " for x in SECTIONS)
 
 
-def _section_rows(sec: str, model: AcceptanceBundleView) -> list[str]:
-    """Return the focused section: the journey's criteria at a glance, else what is stated."""
-    if sec != "glance":
-        return [lrow(sec.upper(), f"{UNKNOWN_WORD} · no producer states this section yet")]
+def _verdict(step: JourneyStepRow) -> str:
+    """Return what the held bundle found for ``step``, or that it has not been run."""
+    if step.outcome is None:
+        return "not yet run"
+    return "proven" if step.outcome.passed else "open"
+
+
+def _criteria_glance(model: AcceptanceBundleView) -> list[str]:
+    """Return the sealed criteria alone, for a bundle read without its journey."""
     if not model.criteria:
         return [lrow("CRITERIA", _no_criteria(model))]
     proven, blocking = model.proven(), len(model.blocking())
@@ -229,6 +237,153 @@ def _section_rows(sec: str, model: AcceptanceBundleView) -> list[str]:
             for verdict in ("proven" if row.passed else "open",)
         ),
     ]
+
+
+def _glance_rows(model: AcceptanceBundleView) -> list[str]:
+    """Return the declared journey, each step beside what the sealed bundle found."""
+    steps = model.journey
+    if not steps:
+        return _criteria_glance(model)
+    verdicts = [_verdict(step) for step in steps]
+    head = (
+        f"{dv.plural(len(steps), 'step')} · {verdicts.count('proven')} proven · "
+        f"{verdicts.count('open')} open · {verdicts.count('not yet run')} not yet run"
+    )
+    rows = [lrow("JOURNEY", head)]
+    for step, verdict in zip(steps, verdicts, strict=True):
+        need = "required" if step.required else "optional"
+        rows.append(lrow("", f"{step.step_id} · {step.actor} · {need} · {verdict} · {step.action}"))
+        rows.append(lrow("", f"      expects {step.expected_observation}"))
+    return rows
+
+
+def _next_verb(model: AcceptanceBundleView, subject: RouteRecord) -> tuple[str, str]:
+    """Return the acceptance verb the Milestone's stage asks for next, and why."""
+    state, urn = status(subject), subject.urn
+    if model.accepted_binding is not None:
+        head, tree = model.accepted_binding.head_sha[:7], model.accepted_binding.tree_sha[:7]
+        return f"accepted at head {head} · tree {tree}", "nothing is left to run to accept it"
+    if state == MilestoneStatus.CANCELLED.value:
+        return "cancelled", "no acceptance is owed"
+    if model.waiting_approval_urn is not None:
+        return (
+            f"eawf milestone seal-approval {model.waiting_approval_urn}",
+            "an acceptance question was asked and waits for its answer",
+        )
+    if model.approval is not None:
+        return f"eawf milestone accept {urn}", "the approval binds this bundle; accept records it"
+    if state == MilestoneStatus.ACCEPTANCE_REVIEW.value:
+        return (
+            f"eawf milestone open-approval {urn}",
+            "asks for acceptance on the bundle sealed for review",
+        )
+    if state == MilestoneStatus.ACTIVE.value:
+        return (
+            f"eawf milestone open-review {urn}",
+            "walk the journey below first; review seals the acceptance bundle",
+        )
+    return f"eawf milestone activate {urn}", "the journey is walked once the Milestone is active"
+
+
+def _try_rows(model: AcceptanceBundleView, subject: RouteRecord) -> list[str]:
+    """Return the next acceptance verb, then the journey steps an operator walks."""
+    verb, why = _next_verb(model, subject)
+    rows = [lrow("TRY", verb), lrow("", why)]
+    walked = [step for step in model.journey if step.actor == "operator"]
+    if model.journey and not walked:
+        rows.append(lrow("WALK", "∅ every step is run by the system; none is walked by hand"))
+    for ix, step in enumerate(walked):
+        rows.append(lrow("" if ix else "WALK", f"{step.step_id} · {step.action}"))
+        rows.append(lrow("", f"      expects {step.expected_observation}"))
+    return rows
+
+
+def _changes_rows(model: AcceptanceBundleView) -> list[str]:
+    """Return the bundle revision chain: the first revision, or what a repair replaced."""
+    if model.bundle_revision is None:
+        return [lrow("CHANGES", "∅ no bundle is sealed, so no revision has changed")]
+    if model.supersedes_revision is None:
+        return [lrow("CHANGES", f"revision {model.bundle_revision} · the first sealed revision")]
+    return [
+        lrow(
+            "CHANGES",
+            f"revision {model.bundle_revision} supersedes revision {model.supersedes_revision}",
+        ),
+        lrow("", f"repair · {model.repair_reason}"),
+    ]
+
+
+def _evidence_rows(model: AcceptanceBundleView) -> list[str]:
+    """Return each step's evidence: the rows the store holds, else why there are none."""
+    rows: list[str] = []
+    for ix, step in enumerate(model.journey):
+        rows.append(
+            lrow(
+                "" if ix else "EVIDENCE",
+                f"{step.step_id} · asks for {', '.join(step.evidence_kinds)}",
+            )
+        )
+        rows.extend(lrow("", f"  {ev.id} · {ev.kind} · {ev.summary}") for ev in step.evidence)
+        rows.extend(
+            lrow("", f"  {key} · cited, but the evidence store holds no row for it")
+            for key in step.unheld_keys
+        )
+        if step.outcome is None:
+            rows.append(lrow("", "  no evidence is recorded: no sealed bundle covers this step"))
+        elif not step.outcome.evidence_keys:
+            rows.append(lrow("", "  no evidence is recorded for this step"))
+    return rows
+
+
+def _risk_rows(model: AcceptanceBundleView) -> list[str]:
+    """Return what still stands between the journey and acceptance, else that nothing does."""
+    risks: list[str] = []
+    for step in model.journey:
+        if step.outcome is not None and step.outcome.passed:
+            continue
+        if not step.required:
+            risks.append(f"{step.step_id} is optional, so it cannot satisfy acceptance")
+        elif step.outcome is None:
+            risks.append(f"{step.step_id} has not been run")
+        else:
+            risks.append(f"{step.step_id} did not pass · {step.outcome.observation}")
+    if not risks:
+        return [lrow("RISKS", "nothing open · every required step is proven")]
+    return [lrow("" if ix else "RISKS", risk) for ix, risk in enumerate(risks)]
+
+
+def _raw_rows(model: AcceptanceBundleView) -> list[str]:
+    """Return the bundle's digest and the accepted binding, whole rather than shortened."""
+    bundle = (
+        NO_BUNDLE
+        if model.bundle_digest is None
+        else f"revision {model.bundle_revision} · digest {model.bundle_digest}"
+    )
+    rows = [lrow("RAW", f"bundle {bundle}")]
+    binding = model.accepted_binding
+    if binding is None:
+        return [*rows, lrow("", "∅ the record states no accepted binding yet")]
+    return [
+        *rows,
+        lrow("", f"accepted head {binding.head_sha} · tree {binding.tree_sha}"),
+        lrow("", f"contract {binding.contract_digest}"),
+        lrow("", f"evidence {binding.evidence_digest} · policy revision {binding.policy_revision}"),
+    ]
+
+
+def _section_rows(sec: str, model: AcceptanceBundleView, subject: RouteRecord) -> list[str]:
+    """Return the focused section, drawn from the Milestone's acceptance records."""
+    if sec == "glance":
+        return _glance_rows(model)
+    if sec == "try":
+        return _try_rows(model, subject)
+    if sec == "changes":
+        return _changes_rows(model)
+    if sec == "raw":
+        return _raw_rows(model)
+    if not model.journey:
+        return [lrow(sec.upper(), NO_JOURNEY)]
+    return _evidence_rows(model) if sec == "evidence" else _risk_rows(model)
 
 
 def _keys(view: View, model: AcceptanceBundleView) -> str:
@@ -273,7 +428,7 @@ def milestone_frame(view: View, model: AcceptanceBundleView, subject: RouteRecor
         lrow("BUILT", f"{dv.plural(len(batches), 'batch', 'es')} · {done} completed"),
         lrow("", _tabs(sec)),
         thin(w),
-        *_section_rows(sec, model),
+        *_section_rows(sec, model, subject),
     ]
     cursor = child_cursor(session, [batch.key for batch in batches], subject=subject.key)
     listed = child_rows(

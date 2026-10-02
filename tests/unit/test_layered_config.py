@@ -420,6 +420,7 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
     "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
     "runtime.adapters": f"{_LAYERED}.resolve_dispatch_provider_tuple",
+    "runtime.auto_certify": f"{_LAYERED}.resolve_auto_certify",
     "runtime.claude.permission_wait_s": f"{_LAYERED}.resolve_permission_wait_seconds",
     "runtime.claude.stall_interval_s": f"{_LAYERED}.resolve_stall_interval_seconds",
     "runtime.codex.stall_interval_s": f"{_LAYERED}.resolve_stall_interval_seconds",
@@ -684,3 +685,21 @@ def test_resolve_runtime_tier_models_rejects_unknown_runtime(tmp_path: Path) -> 
     )
     with pytest.raises(ValidationError):
         resolve_runtime_tier_models(repo)
+
+
+def test_resolve_auto_certify_is_on_when_no_layer_states_it(tmp_path: Path) -> None:
+    assert layered.resolve_auto_certify(tmp_path / "repo") is True
+
+
+def test_resolve_auto_certify_reads_the_repo_layer(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _write_yaml(repo / ".ea" / "config.yaml", "runtime:\n  auto_certify: false\n")
+    assert layered.resolve_auto_certify(repo) is False
+
+
+def test_resolve_auto_certify_rejects_a_non_boolean(tmp_path: Path) -> None:
+    """Error path: a quoted switch is a string, not a boolean."""
+    repo = tmp_path / "repo"
+    _write_yaml(repo / ".ea" / "config.yaml", "runtime:\n  auto_certify: 'no'\n")
+    with pytest.raises(ValidationError):
+        layered.resolve_auto_certify(repo)

@@ -138,13 +138,15 @@ class RepositoryAnswer(_Closed):
     """The branch and its pull request, each with why it went unread when it did.
 
     A ``pull_request`` of ``None`` with no ``pull_request_unread`` reason is a fact the
-    host stated: no pull request is open for the branch.
+    host stated: no pull request is open for ``pull_request_branch``, the branch it was
+    looked up for -- the one asked for, else the checkout's.
     """
 
     branch: BranchRead | None = None
     branch_unread: str | None = None
     pull_request: PullRequestRead | None = None
     pull_request_unread: str | None = None
+    pull_request_branch: str | None = None
 
 
 class _GhAuthor(_Closed):
@@ -382,8 +384,8 @@ _branches: dict[Path, tuple[float, BranchRead | str]] = {}
 _pull_requests: dict[tuple[Path, str], tuple[float, PullRequestRead | str | None]] = {}
 
 
-def read_repository(root: Path) -> RepositoryAnswer:
-    """Return the branch of the tree at *root* and the pull request open for it.
+def read_repository(root: Path, branch: str | None = None) -> RepositoryAnswer:
+    """Return the branch of the tree at *root* and the pull request open for a branch.
 
     Each half is reused while it is younger than its TTL, so a console that re-reads every
     second spawns ``git`` every few seconds and calls the host once a minute. One read runs
@@ -391,6 +393,8 @@ def read_repository(root: Path) -> RepositoryAnswer:
 
     Args:
         root: The working tree, the parent of its ``.ea`` directory.
+        branch: The branch to look the pull request up for, such as the one a Batch
+            integrates into; ``None`` looks it up for the checked-out branch.
 
     Returns:
         The answer, with each half's reason when it went unread.
@@ -401,21 +405,24 @@ def read_repository(root: Path) -> RepositoryAnswer:
         if held is None or now - held[0] >= BRANCH_TTL_SECONDS:
             held = (now, read_branch(root))
             _branches[root] = held
-        branch = held[1]
-        if isinstance(branch, str):
-            return RepositoryAnswer(branch_unread=branch, pull_request_unread=branch)
-        if branch.branch is None:
-            return RepositoryAnswer(branch=branch, pull_request_unread=DETACHED)
-        key = (root, branch.branch)
+        checkout = held[1]
+        if isinstance(checkout, str):
+            return RepositoryAnswer(branch_unread=checkout, pull_request_unread=checkout)
+        looked_up = branch or checkout.branch
+        if looked_up is None:
+            return RepositoryAnswer(branch=checkout, pull_request_unread=DETACHED)
+        key = (root, looked_up)
         cached = _pull_requests.get(key)
         if cached is None or now - cached[0] >= PULL_REQUEST_TTL_SECONDS:
-            cached = (now, read_pull_request(root, branch.branch))
+            cached = (now, read_pull_request(root, looked_up))
             _pull_requests[key] = cached
     found = cached[1]
-    logger.debug(f"read_repository branch={branch.branch} pr={type(found).__name__}")
+    logger.debug(f"read_repository branch={looked_up} pr={type(found).__name__}")
     if isinstance(found, str):
-        return RepositoryAnswer(branch=branch, pull_request_unread=found)
-    return RepositoryAnswer(branch=branch, pull_request=found)
+        return RepositoryAnswer(
+            branch=checkout, pull_request_unread=found, pull_request_branch=looked_up
+        )
+    return RepositoryAnswer(branch=checkout, pull_request=found, pull_request_branch=looked_up)
 
 
 __all__ = [

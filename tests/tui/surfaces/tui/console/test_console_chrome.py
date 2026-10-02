@@ -322,7 +322,6 @@ PROTOTYPE_ONLY_VERBS: frozenset[tuple[str, str]] = frozenset(
         *(("timeline", key) for key in "dt"),
         *(("backlog", key) for key in "dx"),
         *(("campaign", key) for key in "pe"),
-        ("history", "o"),
         *(("settings", key) for key in "rc"),
         ("milestone", "r"),
     }

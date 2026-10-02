@@ -171,7 +171,7 @@ def _run_status(workspace: Path, *, json_output: bool, capsys: pytest.CaptureFix
     """Run the status handler in process and return its captured stdout."""
     ctx = typer.Context(click.Command("status"))
     ctx.obj = GlobalFlags(json_output=json_output, workspace=workspace)
-    status(ctx, workspace=None, scope=None, json_output=False)
+    status(ctx, workspace=None, json_output=False)
     return capsys.readouterr().out
 
 

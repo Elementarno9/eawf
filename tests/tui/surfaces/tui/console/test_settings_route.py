@@ -455,40 +455,36 @@ def test_ui053_the_stack_is_every_layer_with_kind_and_template_place(
 
 
 def test_ui053_the_second_tier_is_absent_until_stated(tree: Path, fixture: Fixture) -> None:
-    """An empty deny, constraint, capability or secret field draws no row at all."""
+    """An empty constraint, capability or secret field draws no row at all."""
     view = _view(tree)
     body = "\n".join(_frame(fixture, view, _on(_session("settings.stack"), view, BOOL_KEY)))
 
-    for label in (" DENIED BY  ", " CONSTRAINED BY  ", " NEEDS      ", " SECRET     "):
+    for label in (" CONSTRAINED BY  ", " NEEDS      ", " SECRET     "):
         assert label not in body
 
 
-def test_ui053_a_denied_degraded_secret_key_draws_the_whole_tuple_at_80(
+def test_ui053_a_constrained_degraded_secret_key_draws_the_whole_tuple_at_80(
     tree: Path, fixture: Fixture
 ) -> None:
-    """Every tier-two field has a home at 80 by 24, and the value keeps the denied token."""
+    """Every tier-two field has a home at 80 by 24."""
     view = _view(tree)
     leaf = view.leaf(BOOL_KEY).model_copy(
         update={
-            "deny_chain": ("org policy",),
             "constraint_chain": ("workspace profile",),
             "capability_requirement": "network.egress",
             "secret_ref": "ref://vault/deploy",  # pragma: allowlist secret
         }
     )
-    denied = view.model_copy(
+    held = view.model_copy(
         update={"leaves": tuple(leaf if x.key == BOOL_KEY else x for x in view.leaves)}
     )
-    rows = _frame(fixture, denied, _on(_session("settings.stack"), denied, BOOL_KEY))
+    rows = _frame(fixture, held, _on(_session("settings.stack"), held, BOOL_KEY))
     body = "\n".join(rows)
 
-    assert "DENIED BY  org policy" in body
     assert "CONSTRAINED BY  workspace profile" in body
     assert "NEEDS      network.egress · ? certification unknown" in body
     assert "SECRET     ref://vault/deploy · the value never renders" in body
-    assert "⊘ true" in body
-    route = "\n".join(_frame(fixture, denied, _on(_session(), denied, BOOL_KEY)))
-    assert "⊘ denied" in route
+    assert "⊘" not in "\n".join(_frame(fixture, held, _on(_session(), held, BOOL_KEY)))
 
 
 def test_ui053_the_stack_opens_on_i_and_reads_the_same_view(tree: Path, fixture: Fixture) -> None:

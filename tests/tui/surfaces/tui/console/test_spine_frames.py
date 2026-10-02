@@ -30,6 +30,7 @@ from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.history import UNREAD
 from eawf.surfaces.tui.console.renderers.run_detail import NO_EVENTS, TIMELINE_LEGEND, timeline_head
 from eawf.surfaces.tui.console.renderers.timeline import (
+    CANCELLED,
     DATED,
     DONE,
     NO_DATE,
@@ -421,13 +422,14 @@ def test_a_dated_milestone_is_a_marker_in_the_week_of_its_date() -> None:
     assert labels.rstrip().endswith("2 dated · 0 undated below")
 
 
-def test_a_closed_milestone_is_drawn_done_whichever_way_it_closed() -> None:
+def test_a_closed_milestone_is_drawn_by_the_way_it_closed() -> None:
     frame = _frame("timeline", w=160, document=_dated_document())
     weeks = next(row for row in frame if "│" in row and "W38" in row)
     core, _ = _lane_rows(frame, "TRK-CORE")
     docs, _ = _lane_rows(frame, "TRK-DOCS")
     assert core[weeks.index("W36") + 1] == DONE, "a COMPLETED Milestone is done"
-    assert docs[weeks.index("W40") + 1] == DONE, "a CANCELLED Milestone is done too"
+    assert docs[weeks.index("W40") + 1] == CANCELLED, "a CANCELLED Milestone is not done"
+    assert any(f"{CANCELLED} cancelled" in row for row in frame), "the legend keys it"
     assert DONE in frame[-1] or any(f"{DONE} done" in row for row in frame), "the legend keys it"
 
 

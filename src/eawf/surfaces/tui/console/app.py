@@ -563,6 +563,7 @@ class ConsoleApp(App[None]):
             return
         seam.retarget(self.route_key)
         seam.about(self.subject)
+        seam.page_history(self.session.history_cursor)
         if self.is_running and seam.owed():
             self.run_worker(self._load_owed(), group=SEAM_WORKERS)
 
@@ -792,6 +793,10 @@ class ConsoleApp(App[None]):
                 bundle=held.bundle if held is not None else None,
                 approval=held.approval if held is not None else None,
                 receipts=live(live_reads.RECEIPTS_READ) or (),
+                journey=held.journey if held is not None else (),
+                evidence=held.evidence if held is not None else (),
+                waiting_approval_urn=held.waiting_approval_urn if held is not None else None,
+                accepted_binding=held.accepted_binding if held is not None else None,
             )
         return None
 

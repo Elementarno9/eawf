@@ -55,9 +55,13 @@ from pathlib import Path
 from typing import Any, Final, Self
 
 import orjson
-from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError, model_validator
 
-from eawf.kernel.delivery.acceptance import AcceptanceBundleLedger, MilestoneAcceptanceBundle
+from eawf.kernel.delivery.acceptance import (
+    AcceptanceBundleLedger,
+    EvidenceRow,
+    MilestoneAcceptanceBundle,
+)
 from eawf.kernel.delivery.batch_proof import BLOCKING_VERDICTS
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.projection.compute import (
@@ -91,8 +95,14 @@ from eawf.kernel.runtime.sandbox_decision import sandbox_decisions
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import NonEmptyStr, StrictNonNegativeInt
-from eawf.kernel.state.epoch2.pending_action import PendingAction
+from eawf.kernel.state.epoch2.milestone import AcceptanceStep
+from eawf.kernel.state.epoch2.pending_action import (
+    PendingAction,
+    PendingActionKind,
+    PendingActionStatus,
+)
 from eawf.kernel.state.epoch2.run import RunStatus
+from eawf.kernel.state.epoch2.values import ExactRevisionBinding
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import effective_records, latest_rows, read_ledger_records
@@ -433,14 +443,30 @@ def _rejected_verdict_rows(
 def _run_state_rows(
     authority: RootAuthority, document: dict[str, Any], stalled: frozenset[str]
 ) -> tuple[dict[str, Any], ...]:
+    """Return the Runs Attention lists by their state, read across the document and ledger."""
+    held = document_rows(document, Epoch2Collection.RUN)
+    runs = {**latest_rows(ledger_path(document_path(authority), Epoch2Collection.RUN)), **held}
+    return run_state_rows(document, runs, stalled)
+
+
+def run_state_rows(
+    document: dict[str, Any], runs: Mapping[str, Any], stalled: frozenset[str]
+) -> tuple[dict[str, Any], ...]:
     """Return the Runs Attention lists by their state, each as a notice row.
 
     A failed Run is listed while it is the newest attempt of a Task still open in the
     document: a later attempt or the Task ending is what answers it. A running Run is
     listed unless a stall stands over it, which the stall row already lists.
+
+    Args:
+        document: The epoch-2 document, which says which Runs and Tasks are still open.
+        runs: Every Run row known, the document's over the ledger's latest, by key.
+        stalled: The Runs a standing stall is listed for.
+
+    Returns:
+        One notice row per listed Run, by key.
     """
     held = document_rows(document, Epoch2Collection.RUN)
-    runs = {**latest_rows(ledger_path(document_path(authority), Epoch2Collection.RUN)), **held}
     open_tasks = set(document_rows(document, Epoch2Collection.TASK))
     newest: dict[str, tuple[str, str]] = {}
     for key, row in runs.items():
@@ -729,7 +755,65 @@ def _milestone_acceptance(*, authority: RootAuthority, key: str) -> MilestoneAcc
         authority=authority, urn=urn, revision=fields.get("acceptance_bundle_revision")
     )
     approval = None if bundle is None else _bound_approval(document, bundle)
-    return MilestoneAcceptanceRecord(milestone_key=key, bundle=bundle, approval=approval)
+    binding = fields.get("accepted_binding")
+    try:
+        journey = _JOURNEY.validate_python(fields.get("acceptance_journey", ()))
+        accepted = None if binding is None else ExactRevisionBinding.model_validate(binding)
+    except ValidationError as error:
+        raise DaemonValidationError(
+            f"validation_failed: {PROJECTION_UNREADABLE}: the acceptance journey of {key} does "
+            "not read back"
+        ) from error
+    return MilestoneAcceptanceRecord(
+        milestone_key=key,
+        bundle=bundle,
+        approval=approval,
+        journey=journey,
+        evidence=() if bundle is None else _cited_evidence(authority, bundle.evidence_keys),
+        waiting_approval_urn=_waiting_approval(document, urn),
+        accepted_binding=accepted,
+    )
+
+
+#: The shape a Milestone row's acceptance journey reads back through.
+_JOURNEY: Final = TypeAdapter(tuple[AcceptanceStep, ...])
+
+
+def _cited_evidence(authority: RootAuthority, keys: tuple[str, ...]) -> tuple[EvidenceRow, ...]:
+    """Return the evidence rows the ledger holds for *keys*; an unheld key is left out.
+
+    Raises:
+        DaemonValidationError: A cited key's evidence line does not read as a row.
+    """
+    wanted = set(keys)
+    path = ledger_path(document_path(authority), Epoch2Collection.EVIDENCE)
+    try:
+        return tuple(
+            EvidenceRow.model_validate(record.payload)
+            for record in effective_records(read_ledger_records(path))
+            if record.record_key in wanted
+        )
+    except ValidationError as error:
+        raise DaemonValidationError(
+            f"validation_failed: {PROJECTION_UNREADABLE}: a cited evidence row does not read back"
+        ) from error
+
+
+def _waiting_approval(document: dict[str, Any], urn: str) -> str | None:
+    """Return the acceptance question asked of the Milestone *urn* that nobody answered."""
+    for key, row in document_rows(document, Epoch2Collection.PENDING_ACTION).items():
+        try:
+            action = PendingAction.model_validate(row)
+        except ValidationError as error:
+            logger.debug(f"_waiting_approval passed over action={key!r} cause={error!s}")
+            continue
+        if (
+            action.kind is PendingActionKind.PROTECTED_APPROVAL
+            and action.status is not PendingActionStatus.SEALED
+            and str(action.subject_ref) == urn
+        ):
+            return str(action.urn)
+    return None
 
 
 def _retained(path: Path, *, route: str) -> tuple[set[int], dict[int, tuple[KeyedPatch, ...]]]:
@@ -1044,4 +1128,5 @@ __all__ = [
     "read_export_report",
     "read_milestone_acceptance",
     "read_settings",
+    "run_state_rows",
 ]

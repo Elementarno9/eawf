@@ -7,9 +7,10 @@ the button that is not there.
 
 Under a held read model the rows are the Batch's generations at one committed cursor,
 newest last, with the head marked from its position rather than from a stored flag. The
-branch, review and checks rows are the tree's checkout and the pull request open for it,
-as the daemon read them from ``git`` and ``gh``; a half it could not read names the tool
-and why. With
+branch row is the tree's checkout and the review and checks rows the pull request open
+for the branch the Batch integrates into -- the checkout's when the Batch names none -- as
+the daemon read them from ``git`` and ``gh``; a half it could not read names the tool and
+why. With
 no read model held the route draws its epoch-1 frame from the prototype registers, which
 is the mode the tracked golden contract replays.
 """
@@ -83,23 +84,24 @@ def _branch_rows(repository: RepositoryAnswer | None, w: int) -> list[str]:
     return [*wrapped("BRANCH", " · ".join(parts), w), more(last)]
 
 
-def _review_rows(repository: RepositoryAnswer | None, w: int) -> list[str]:
-    """Return the review and checks rows of the pull request open for the branch."""
+def review_texts(repository: RepositoryAnswer | None) -> tuple[str, str, list[str]]:
+    """Return the review and the checks of the pull request the read looked up, in words.
+
+    Args:
+        repository: The daemon's repository read; ``None`` before it arrives.
+
+    Returns:
+        The review text, the checks text, and the names of the failing checks.
+    """
     if repository is None:
-        return [label("REVIEW", NOT_READ), label("CHECKS", NOT_READ)]
+        return NOT_READ, NOT_READ, []
     pr = repository.pull_request
     if pr is None:
         reason = repository.pull_request_unread
         if reason is not None:
-            return [
-                *wrapped("REVIEW", f"{UNAVAILABLE} · {reason}", w),
-                label("CHECKS", f"{UNAVAILABLE} · read with the review"),
-            ]
-        branch = repository.branch.branch if repository.branch else None
-        return [
-            label("REVIEW", f"no pull request is open for {branch}"),
-            label("CHECKS", "none · no pull request to report on"),
-        ]
+            return f"{UNAVAILABLE} · {reason}", f"{UNAVAILABLE} · read with the review", []
+        branch = repository.pull_request_branch
+        return f"no pull request is open for {branch}", "none · no pull request to report on", []
     decision = (pr.review_decision or "no review decision").replace("_", " ").lower()
     review = (
         f"PR #{pr.number} {pr.state.lower()} · {decision} · "
@@ -107,18 +109,21 @@ def _review_rows(repository: RepositoryAnswer | None, w: int) -> list[str]:
         f"{dv.plural(pr.changes_requested, 'change')} requested"
     )
     if not pr.checks:
-        return [
-            label("REVIEW", review),
-            label("CHECKS", f"none · nothing reported on #{pr.number}"),
-        ]
+        return review, f"none · nothing reported on #{pr.number}", []
     counts = {
         outcome: sum(1 for check in pr.checks if check.outcome == outcome)
         for outcome in ("pass", "fail", "pending", "skipped")
     }
     checks = " · ".join(f"{group(n)} {outcome}" for outcome, n in counts.items() if n)
     failing = [check.name for check in pr.checks if check.outcome == "fail"]
+    return review, checks, failing
+
+
+def _review_rows(repository: RepositoryAnswer | None, w: int) -> list[str]:
+    """Return the review and checks rows of the pull request the read looked up."""
+    review, checks, failing = review_texts(repository)
     return [
-        label("REVIEW", review),
+        *wrapped("REVIEW", review, w),
         label("CHECKS", checks),
         *([more(f"failing: {', '.join(failing)}")] if failing else []),
     ]

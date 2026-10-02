@@ -57,6 +57,9 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # synthesises ``preference`` from ``adapters`` when only the
         # latter is present.
         "preference": ["claude-code"],
+        # Probe a runtime version no certification covers when a Run first
+        # reports it, so its controls certify without an operator step.
+        "auto_certify": True,
         # Liveness per runtime: the silence a Run may keep before it is flagged
         # stalled, and how long Claude's permission hook waits for a decision.
         "claude": {

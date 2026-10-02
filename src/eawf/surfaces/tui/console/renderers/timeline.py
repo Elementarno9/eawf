@@ -73,7 +73,7 @@ _LABEL_OFFSET = 9
 _WEEKS = "            W26     W27     W28     W29  │  W30     W31     W32"
 _LEGEND = "● dated  ○ forecast  ┄ uncertain  │ now  ▣ release"
 # The native chart draws solid lanes crossed by a plain keyline, so it states no dotted run.
-_NATIVE_LEGEND = "● dated  ✓ done  ○ forecast  │ now  ▣ release"
+_NATIVE_LEGEND = "● dated  ✓ done  ✗ cancelled  ○ forecast  │ now  ▣ release"
 UNDATED_ROWS: tuple[tuple[str, str, str], ...] = (
     ("MLS-0012", "Calibration follow-up", "no date proposed yet"),
     ("MLS-0014", "Snapshot retention review", "waits on MLS-0011"),
@@ -236,11 +236,13 @@ _WEEK_W = 8
 _MARK_AT = 1
 #: What an undated Milestone's row says about its date.
 NO_DATE = "no date proposed yet"
-#: The marker of a closed Milestone: it is done, whichever way it closed.
+#: The marker of a completed Milestone.
 DONE = "✓"
+#: The marker of a cancelled Milestone, kept apart from a completed one.
+CANCELLED = "✗"
 #: The fact a Milestone row states its target date in, as ``YYYY-MM-DD``.
 TARGET_FACT = "target_date"
-_CLOSED = frozenset({"COMPLETED", "CANCELLED"})
+_CLOSED_GLYPH = {"COMPLETED": DONE, "CANCELLED": CANCELLED}
 
 
 def _of(spine: SpineView, collection: Epoch2Collection) -> list[SpineRow]:
@@ -277,15 +279,16 @@ def _beyond(days: list[date], arrow: str) -> str:
 
 def _lane(
     line: str, dated: list[tuple[date, SpineRow]], now: datetime | None
-) -> tuple[str, list[tuple[int, str]]]:
-    """Return a lane's line with its markers drawn, and each drawn marker's column and key.
+) -> tuple[str, list[tuple[int, str]], list[tuple[int, str]]]:
+    """Return a lane's line with its markers drawn, each cell's label, and each Milestone drawn.
 
     A marker sits in the week of its date; two in one week share the cell, drawn open while
     either is open, and its label names the earlier with a count. A date past either end of
-    the drawn weeks is named after the line, so it is stated rather than dropped.
+    the drawn weeks is named after the line, so it is stated rather than dropped. The drawn
+    Milestones are listed by column, then key: the order the marker cursor walks them in.
     """
     if now is None or not dated:
-        return line, []
+        return line, [], []
     cells = list(line)
     keys: dict[int, list[str]] = {}
     early: list[date] = []
@@ -299,13 +302,14 @@ def _lane(
         else:
             col = _WEEK_W * (k + _SPAN) + _MARK_AT
             if cells[col] != DATED:
-                cells[col] = DONE if status(row) in _CLOSED else DATED
+                cells[col] = _CLOSED_GLYPH.get(status(row), DATED)
             keys.setdefault(col, []).append(row.key)
     edges = [_beyond(sorted(early, reverse=True), "◂")] if early else []
     edges += [_beyond(late, "▸")] if late else []
     tail = "".join(f" {edge}" for edge in edges)
     labels = [(col, f"{ks[0]}+{len(ks) - 1}" if len(ks) > 1 else ks[0]) for col, ks in keys.items()]
-    return "".join(cells) + tail, sorted(labels)
+    drawn = [(col, key) for col in sorted(keys) for key in keys[col]]
+    return "".join(cells) + tail, sorted(labels), drawn
 
 
 def _label_row(labels: list[tuple[int, str]], note: str) -> str:
@@ -328,7 +332,7 @@ def _native_lanes(view: View, spine: SpineView, now: datetime | None) -> list[st
     label_w = min(20, max(_LANE, *(cell_len(t.key) + 3 for t in tracks))) if tracks else _LANE
     on_lanes = (s.tl_reg or LANES) == LANES
     dv.sel_in(s, len(tracks))
-    s.mark, s.timeline_marks, s.timeline_marker = 0, 0, None
+    s.timeline_marks, s.timeline_marker = 0, None
     if not tracks:
         return ["   ∅ no Track is recorded, so the chart has no lane"]
     if now is None:
@@ -340,14 +344,23 @@ def _native_lanes(view: View, spine: SpineView, now: datetime | None) -> list[st
         rows = [weeks]
         line = "─" * at + "│" + "─" * max(0, cell_len(weeks) - label_w - at - 1)
     milestones = _of(spine, Epoch2Collection.MILESTONE)
+    marker = ""
     for i, track in enumerate(tracks):
         on = on_lanes and i == s.sel
         mine = [m for m in milestones if m.parent_key == track.key]
         dated = [(day, m) for m in mine if (day := target_of(m)) is not None]
-        drawn, labels = _lane(line, dated, now)
+        drawn, labels, placed = _lane(line, dated, now)
+        if on and placed:
+            s.mark = max(0, min(s.mark, len(placed) - 1))
+            col, key = placed[s.mark]
+            s.timeline_marks, s.timeline_marker = len(placed), key
+            drawn = f"{drawn[: col - 1]}[{drawn[col]}]{drawn[col + 2 :]}"
+            marker = f"{key} · {track.key} · {s.mark + 1} of {len(placed)}"
         rows.append(Fixed(pad(("▸ " if on else "  ") + pad(track.key, label_w - 2) + drawn, w)))
         note = f"{len(dated)} dated · {len(mine) - len(dated)} undated below"
         rows.append(Fixed(pad(" " * label_w + _label_row(labels, note), w)))
+    if marker:
+        rows.append(label("MARKER", marker))
     return rows
 
 
@@ -389,6 +402,8 @@ def _native_regions(view: View, spine: SpineView) -> list[str]:
     return rows
 
 
+#: The keys that step the marker cursor along the focused lane.
+_MARKER_KEYS = ("ArrowLeft", "ArrowRight")
 #: The edit kind of the field the menu's ``propose date`` opens over an undated Milestone.
 DATE_FIELD = "date"
 #: The keybar while the date field takes the typing.
@@ -402,16 +417,21 @@ _DAY_W = 10
 
 
 def propose(ctx: Ctx, key: str) -> None:
-    """Open the date field over the undated Milestone the cursor is on, or say why not.
+    """Open the date field over the marked or selected Milestone, or say why not.
 
-    The lanes draw no marker cursor, so a date is proposed for a row of the UNDATED region.
+    On the lanes the date is proposed for the Milestone the marker brackets, which re-dates
+    it; in the UNDATED region, for the row the cursor is on.
     """
     s = ctx.s
+    region = s.tl_reg or LANES
     listed = (s.tl_regs or {}).get(UNDATED) or []
-    if (s.tl_reg or LANES) != UNDATED or not listed:
-        ctx.log(key, "propose date · Tab to UNDATED and choose a milestone · a lane has no cursor")
+    if region == LANES and isinstance(ctx.projection, SpineView) and s.timeline_marker:
+        milestone = s.timeline_marker
+    elif region == UNDATED and listed:
+        milestone = listed[min(s.tl_sel, len(listed) - 1)][0]
+    else:
+        ctx.log(key, "propose date · mark a dated milestone or Tab to UNDATED and choose one")
         return
-    milestone = listed[min(s.tl_sel, len(listed) - 1)][0]
     s.edit = {"kind": DATE_FIELD, "key": milestone, "text": ""}
     ctx.log(key, f"propose date · type {milestone}'s target as YYYY-MM-DD · Esc cancels")
 
@@ -482,10 +502,13 @@ def roadmap_frame(view: View, spine: SpineView) -> list[str]:
         field = f"{edit['key']} target {edit['text']}▏ · Enter previews · Esc cancels"
         rows.append(label("DATE", field))
         return _with_legend(view, rows, keybar(list(DATE_KEYS), view.w), _NATIVE_LEGEND)
-    entries = native_keys("timeline", windowed=view.session.windowed)
-    if (view.session.tl_reg or LANES) == LANES:
-        # the lanes carry no marker cursor, so Enter has nothing to open until Tab moves on
+    s = view.session
+    entries = native_keys("timeline", windowed=s.windowed)
+    if (s.tl_reg or LANES) == LANES and s.timeline_marker is None:
+        # a lane with no dated Milestone brackets nothing for Enter to open
         entries = tuple(e for e in entries if e.keys != ("Enter",))
+    if s.timeline_marks < 2:
+        entries = tuple(e for e in entries if e.keys != _MARKER_KEYS)
     return _with_legend(view, rows, route_keys_bar(view, entries), _NATIVE_LEGEND)
 
 

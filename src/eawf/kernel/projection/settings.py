@@ -210,7 +210,6 @@ class SettingsLeaf(_SettingsModel):
         value_type: The catalog's value shape for the key; ``None`` outside the catalog.
         meaning: The catalog's one-line description; empty when it states none.
         allowed: The values the catalog admits for a literal key; empty otherwise.
-        deny_chain: The policies that deny the key, innermost first.
         constraint_chain: The policies that constrain the key's value, innermost first.
         capability_requirement: The capability the key needs to take effect.
         certification_state: Whether that capability is certified on this runtime.
@@ -235,7 +234,6 @@ class SettingsLeaf(_SettingsModel):
     value_type: LeafKeyType | None = None
     meaning: str = ""
     allowed: tuple[str, ...] = ()
-    deny_chain: tuple[NonEmptyStr, ...] = ()
     constraint_chain: tuple[NonEmptyStr, ...] = ()
     capability_requirement: NonEmptyStr | None = None
     certification_state: NonEmptyStr | None = None

@@ -435,12 +435,15 @@ def _backlog(ctx: Ctx) -> bool:
 
 
 def _timeline(ctx: Ctx) -> bool:
-    """Drill the undated Milestone or the Release under the caret of the region in focus.
-
-    A lane states no dated marker yet, so Enter on the lanes has nothing to open.
-    """
+    """Drill the marked Milestone, or the undated Milestone or Release under the caret."""
     s = ctx.s
     region = s.tl_reg or LANES
+    if region == LANES:
+        if s.timeline_marker is None:
+            ctx.log("Enter", "no dated milestone on this lane · nothing to open")
+        else:
+            drill_to(ctx, "milestone", s.timeline_marker)
+        return True
     rows = (s.tl_regs or {}).get(region, [])
     pick = rows[s.tl_sel] if region != LANES and 0 <= s.tl_sel < len(rows) else None
     if pick is None:

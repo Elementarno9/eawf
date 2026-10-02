@@ -14,7 +14,6 @@ from pathlib import Path
 
 import pytest
 
-from eawf.kernel.projection.integration import PULL_REQUEST_PRODUCER
 from eawf.kernel.projection.operations import DISPATCH_QUEUE_PRODUCER, SANDBOX_DECISION_PRODUCER
 from eawf.kernel.projection.settings import (
     EffectiveSettingsView,
@@ -196,7 +195,6 @@ def test_a_full_second_tier_folds_the_card_rather_than_losing_a_row(
     view = _view(tree)
     leaf = view.leaf(sr.BOOL_KEY).model_copy(
         update={
-            "deny_chain": ("org policy",),
             "constraint_chain": ("workspace profile",),
             "capability_requirement": "network.egress",
             "secret_ref": "ref://vault/deploy",  # pragma: allowlist secret
@@ -209,7 +207,7 @@ def test_a_full_second_tier_folds_the_card_rather_than_losing_a_row(
     body = "\n".join(rows)
     assert len(rows) == 24
     assert f"KEY        {sr.BOOL_KEY} · bool" in body
-    for label in ("DENIED BY", "CONSTRAINED BY", "NEEDS", "SECRET", "LENS SETS"):
+    for label in ("CONSTRAINED BY", "NEEDS", "SECRET", "LENS SETS"):
         assert f"│ {label}" in body, label
 
 
@@ -344,9 +342,7 @@ def test_the_body_and_summary_name_no_cursor(route: str) -> None:
     assert not any("after cursor" in row for row in frame)
 
 
-@pytest.mark.parametrize(
-    "producer", [SANDBOX_DECISION_PRODUCER, DISPATCH_QUEUE_PRODUCER, PULL_REQUEST_PRODUCER]
-)
+@pytest.mark.parametrize("producer", [SANDBOX_DECISION_PRODUCER, DISPATCH_QUEUE_PRODUCER])
 def test_a_missing_producer_is_named_without_a_requirement_id(producer: str) -> None:
     assert not REQUIREMENT_ID.search(producer)
 

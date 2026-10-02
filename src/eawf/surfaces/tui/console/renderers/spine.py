@@ -21,6 +21,7 @@ opens against the prototype registers, and the tracked golden contract is that m
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from eawf.kernel.projection.connection import staleness_target_seconds
 from eawf.kernel.projection.route_view import RouteReadModel
@@ -71,6 +72,21 @@ from eawf.surfaces.tui.console.width import pad
 
 _ROWS = Table([34, 12, 0], 2)
 _EMPTY = "   this scope holds no record the read model renders"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExtraColumns:
+    """Columns a route's register draws after ``STATUS``, beside the shared three.
+
+    Attributes:
+        table: The whole row's column widths, the shared three first.
+        names: The added columns' heads, in order.
+        cells: The added cells of one row, one per name.
+    """
+
+    table: Table
+    names: tuple[str, ...]
+    cells: Callable[[SpineRow], tuple[str, ...]]
 
 
 def finished_subject(session: Session, model: SpineView | RouteReadModel) -> Record | None:
@@ -222,12 +238,13 @@ def held(view: View) -> SpineView | None:
     return model if isinstance(model, SpineView) else None
 
 
-def native_frame(view: View, spine: SpineView) -> list[str]:
+def native_frame(view: View, spine: SpineView, *, extra: ExtraColumns | None = None) -> list[str]:
     """Return one spine route's frame, drawn from the read model the daemon served.
 
     Args:
         view: The render being built; its session carries the cursor and the selection.
         spine: The route's read model at the committed cursor.
+        extra: Columns the route's register adds after ``STATUS``; ``None`` adds none.
 
     Returns:
         The full frame, keybar last.
@@ -264,7 +281,8 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     if regions:
         rows.append(" REGIONS   " + " · ".join(regions))
         rows.append(thin(w))
-    rows.append(_ROWS.head(["ROW", "KIND", "STATUS"]))
+    table = _ROWS if extra is None else extra.table
+    rows.append(table.head(["ROW", "KIND", "STATUS", *(extra.names if extra else ())]))
     below = [thin(w), _unstated(spine)]
     win = window_rows(view, total=len(spine.rows), cursor=cursor, chrome=len(rows) + 1 + len(below))
     if not spine.rows:
@@ -273,7 +291,8 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         row = spine.rows[index]
         # the kind is the collection the read model states, never guessed from the id
         cells = [row.key, row.collection.value, cell(row.field("status"))]
-        line = _ROWS.row(cells, index == cursor)
+        cells += extra.cells(row) if extra is not None else ()
+        line = table.row(cells, index == cursor)
         rows.append(line if index == cursor else Fixed(pad(line, w)))
     rows.append(win.line(complete=spine.complete))
     rows.extend(below)

@@ -38,7 +38,6 @@ from eawf.kernel.projection.operations import (
 from eawf.kernel.projection.registers import build_register_view
 from eawf.kernel.projection.spine import (
     NO_CANDIDATE_REASON,
-    NO_CHECKS_REASON,
     UNPRODUCED_REASON,
     build_spine_view,
 )
@@ -57,6 +56,7 @@ from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.renderers import attention as attention_renderer
 from eawf.surfaces.tui.console.renderers import render_route
+from eawf.surfaces.tui.console.renderers.batch_detail import NO_BRANCH
 from eawf.surfaces.tui.console.renderers.budget_lines import cost_line
 from eawf.surfaces.tui.console.renderers.read_model import UNKNOWN_WORD
 from eawf.surfaces.tui.console.session import Session
@@ -228,17 +228,16 @@ def test_a_task_with_no_receipt_says_none_is_filed() -> None:
     assert "∅ not integrated" in frame
 
 
-# ---------- a Batch counts the Runs of its Tasks and names why checks are unknown ----------
+# ---------- a Batch counts the Runs of its Tasks and names why no pull request is read ----------
 
 
 def test_a_batch_states_how_many_runs_ran_its_tasks() -> None:
     view = build_spine_view(_projection("batch.detail"))
     batch = view.rows[view.index_of("BAT-0100") or 0]
     assert batch.field("runs").value == "2"
-    assert batch.field("checks").missing_reason == NO_CHECKS_REASON
     frame = _frame("batch.detail", "BAT-0100", view)
     assert "2 runs · 1 running · newest RUN-00000002" in frame
-    assert NO_CHECKS_REASON in frame
+    assert NO_BRANCH in frame
 
 
 def test_a_batch_with_no_run_says_none_is_held() -> None:

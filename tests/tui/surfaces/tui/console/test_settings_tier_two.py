@@ -1,13 +1,12 @@
 """The settings stack draws its second tier from the live tree, and only where it is stated.
 
-The stack card has always known how to draw ``DENIED BY``, ``CONSTRAINED BY``, ``NEEDS``
-and ``SECRET``, but nothing produced them: the config catalog carried no policy,
-capability or secret data, so the tier existed only in hand-edited fixtures. The catalog
-now states it per leaf and the effective-settings read fills it from the merged layers,
-so the suite pins both halves against a real layer tree: no catalog leaf states a
-refusal, so no key is denied; a registry range, a runtime's certification and a
-credential reference each reach the card, a credential value never does, and a key with
-none of these draws no second tier at all.
+The stack card has always known how to draw ``CONSTRAINED BY``, ``NEEDS`` and ``SECRET``,
+but nothing produced them: the config catalog carried no policy, capability or secret data,
+so the tier existed only in hand-edited fixtures. The catalog now states it per leaf and
+the effective-settings read fills it from the merged layers, so the suite pins both halves
+against a real layer tree: no catalog leaf states a refusal, so no key is denied; a
+registry range, a runtime's certification and a credential reference each reach the card,
+a credential value never does, and a key with none of these draws no second tier at all.
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ from eawf.kernel.projection import settings
 from tests.tui.surfaces.tui.console import test_settings_provenance as provenance
 
 #: The labels of the second tier, as the stack card starts each row.
-TIER_TWO = (" DENIED BY", " CONSTRAINED BY", " NEEDS", " SECRET")
+TIER_TWO = (" CONSTRAINED BY", " NEEDS", " SECRET")
 
 
 @pytest.fixture
@@ -59,6 +58,11 @@ def test_con_123_no_catalog_leaf_states_a_refusal() -> None:
     """No engine refuses one value of a leaf, so the catalog carries no refusal field."""
     with pytest.raises(ValidationError):
         LeafKey(key="probe.x", domain="probe", type="str", deny={"value": "x", "unless": "y"})  # type: ignore[call-arg]
+
+
+def test_settings_leaf_states_no_deny_chain() -> None:
+    """With no refusal anywhere in the catalog, a read model states no denial to draw."""
+    assert "deny_chain" not in settings.SettingsLeaf.model_fields
 
 
 # ---------- CONSTRAINED BY: the registry's range ----------
@@ -178,7 +182,6 @@ def test_ui_053_only_a_catalog_key_with_metadata_carries_a_second_tier(tree: Pat
     view = provenance._view(tree)
     for key, entry in LEAF_KEY_REGISTRY.items():
         leaf = view.leaf(key)
-        assert leaf.deny_chain == (), key
         if entry.value_range is None:
             assert leaf.constraint_chain == (), key
         if entry.runtime is None:

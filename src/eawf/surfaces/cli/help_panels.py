@@ -138,6 +138,7 @@ COMMAND_PANELS: dict[str, str] = {
     "plugin": "runtime",
     "profile": "runtime",
     "rules": "runtime",
+    "runtime": "runtime",
     "skill": "runtime",
     # ship: PR / wiki / release artifacts and the sync renderer.
     "pr": "ship",

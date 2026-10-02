@@ -86,6 +86,8 @@ DIRTY: dict[str, Any] = {
     "mark": 2,
     "timeline_marker": "MLS-0001",
     "timeline_marks": 4,
+    "diff_change": "evt-1:task:TSK-0001",
+    "history_cursor": 11,
     "marker_card": {"id": "MLS-0001"},
     "rung": 3,
     "bl_draft": 1,

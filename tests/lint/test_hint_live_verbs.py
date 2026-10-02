@@ -174,3 +174,12 @@ def test_a_command_list_and_a_backtick_span_are_scanned_and_a_docstring_is_not(
         "listed-verb",
         "spanned-verb",
     ]
+
+
+def test_the_milestone_try_section_names_a_live_verb() -> None:
+    """The Milestone frame's TRY row is a command the operator can run as written."""
+    from eawf.surfaces.tui.console.renderers.milestone import _section
+
+    row = _section("try", "MS-01", 80)[0]
+    command = row.split("eawf ", 1)[1].strip()
+    assert _unknown(command, _root()) is None

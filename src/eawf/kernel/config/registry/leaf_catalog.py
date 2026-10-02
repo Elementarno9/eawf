@@ -110,6 +110,17 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         choices=RUNTIME_ADAPTER_IDS,
     ),
     LeafKey(
+        key="runtime.auto_certify",
+        domain="runtime",
+        type="bool",
+        default=True,
+        writable_layers=_WRITABLE_GWR,
+        description=(
+            "Probe a runtime version no certification covers in the background when a "
+            "Run first reports it."
+        ),
+    ),
+    LeafKey(
         key="runtime.models.claude",
         domain="runtime",
         type="list_str",
@@ -685,6 +696,7 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
     "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
     "runtime.adapters": "eawf.kernel.config.layered.resolve_dispatch_provider_tuple",
+    "runtime.auto_certify": "eawf.kernel.config.layered.resolve_auto_certify",
     "runtime.claude.permission_wait_s": (
         "eawf.kernel.config.layered.resolve_permission_wait_seconds"
     ),

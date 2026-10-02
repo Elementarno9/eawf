@@ -581,11 +581,6 @@
     ".ea/artifacts/rendered/research"
    ],
    [
-    "auto_save",
-    "b",
-    false
-   ],
-   [
     "default_depth",
     "e",
     "standard",

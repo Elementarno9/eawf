@@ -46,6 +46,7 @@ from eawf.kernel.projection.compute import (
     row_document,
 )
 from eawf.kernel.projection.read_models import READ_MODEL_BY_KIND
+from eawf.kernel.projection.row_facts import FACTS_FIELD
 from eawf.kernel.projection.truth import Completeness, ConnectionState
 from eawf.kernel.state.epoch2.base import (
     Epoch2Model,
@@ -585,6 +586,9 @@ def apply_patches(
             stored.pop("suspension_reason", None)
             if entry.assignee_ref is not None:
                 stored["assignee_ref"] = entry.assignee_ref
+            if entry.facts:
+                facts = {**stored.get(FACTS_FIELD, {}), **entry.facts}
+                stored[FACTS_FIELD] = {k: v for k, v in facts.items() if v is not None}
             rows.setdefault(entry.collection.value, {})[entry.key] = stored
     return build_route_projection(
         route=projection.route,

@@ -191,9 +191,9 @@ def test_the_repository_verb_reads_the_working_tree_the_ea_tree_sits_in(
     canary = provision(tmp_path / "repo")
     asked: list[Path] = []
 
-    def read(root: Path) -> RepositoryAnswer:
+    def read(root: Path, branch: str | None = None) -> RepositoryAnswer:
         asked.append(root)
-        return repository_read.read_repository(root)
+        return repository_read.read_repository(root, branch)
 
     monkeypatch.setattr("eawf.runtime.daemon.methods.console_records.read_repository", read)
     answer = RepositoryAnswer.model_validate(
@@ -209,6 +209,31 @@ def test_the_repository_verb_reads_the_working_tree_the_ea_tree_sits_in(
     assert answer.branch_unread == NOT_A_REPOSITORY
 
 
-def test_the_repository_verb_refuses_a_parameter() -> None:
+def test_the_repository_verb_takes_a_branch_and_refuses_any_other_parameter() -> None:
+    assert RepositoryRead.model_validate({"branch": "main"}).branch == "main"
+    assert RepositoryRead.model_validate({}).branch is None
     with pytest.raises(ValidationError):
-        RepositoryRead.model_validate({"branch": "main"})
+        RepositoryRead.model_validate({"remote": "origin"})
+    with pytest.raises(ValidationError):
+        RepositoryRead.model_validate({"branch": ""})
+
+
+def test_the_repository_verb_looks_the_pull_request_up_for_the_branch_asked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    canary = provision(tmp_path / "repo")
+    asked: list[str | None] = []
+
+    def read(root: Path, branch: str | None = None) -> RepositoryAnswer:
+        asked.append(branch)
+        return RepositoryAnswer(pull_request_branch=branch)
+
+    monkeypatch.setattr("eawf.runtime.daemon.methods.console_records.read_repository", read)
+    asyncio.run(
+        methods.dispatch(
+            REPOSITORY_READ_METHOD,
+            method_context(tmp_path / "runtime"),
+            {"repo_root": str(canary.root), "branch": "feature/x"},
+        )
+    )
+    assert asked == ["feature/x"]

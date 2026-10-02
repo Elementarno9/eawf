@@ -541,6 +541,8 @@ def test_store_kind_values() -> None:
         "regime_binding",
         # Machine-local trail of every state a submitted operation reaches.
         "operation",
+        # Machine-local certification of each installed runtime version.
+        "runtime_certification",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

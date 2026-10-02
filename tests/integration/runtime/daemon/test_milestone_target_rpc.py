@@ -143,6 +143,8 @@ def test_set_target_event_patches_the_milestone_routes(tmp_path: Path) -> None:
     assert patches, "a console holding the roadmap hears the new revision"
     entry = patches[0].entries[0]
     assert (entry.key, entry.revision, entry.status) == ("MLS-0030", 2, "PLANNED")
+    # the new day rides the patch, so an open Timeline redraws it without a fresh read
+    assert entry.facts == {"target_date": "2026-10-09"}
 
 
 @pytest.mark.parametrize("status", ["COMPLETED", "CANCELLED"])

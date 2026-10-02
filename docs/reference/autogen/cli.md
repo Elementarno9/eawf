@@ -417,6 +417,14 @@ Run lifecycle (create, start, finish, fail).
 | `resume-dispatch` | Ask the scheduler to admit queued Runs again after a pause or a drain. |
 | `start` | Start a QUEUED Run; the payload's updates carry started_at. |
 
+### `eawf runtime`
+
+Certify the runtime harnesses installed on this machine.
+
+| Verb | Summary |
+|---|---|
+| `certify` | Probe the installed runtime and record its certification or quarantine. |
+
 ### `eawf schema`
 
 Dump JSON Schema + reference pages for the canonical models.

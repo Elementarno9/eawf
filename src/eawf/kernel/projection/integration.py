@@ -53,7 +53,6 @@ from eawf.kernel.projection.route_view import (
     build_route_read_model,
     check_field_tables,
     status_and,
-    unstated,
 )
 from eawf.runtime.vcs.repository_read import RepositoryAnswer
 
@@ -82,21 +81,13 @@ BASE_GENERATION: Final = 1
 #: ordinal and every record the Git surface draws is a delivery.
 FIRST_INTEGRATED_GENERATION: Final = BASE_GENERATION + 1
 
-#: The item whose producer would state the pull request a delivery was opened as. The
-#: daemon integrates in an isolated workspace and touches no remote, so nothing in this
-#: tree observes a review, its approvals or its checks.
-PULL_REQUEST_PRODUCER: Final = "pull-request observation"
-
 #: What each integration route renders per row, in column order. The first field of both
-#: is the status the Batch document states; the review columns name the producer they
-#: wait on, so the frame says which item would fill the cell. A conflict's resolution is
+#: is the status the Batch document states; the review and checks of a Batch are the pull
+#: request the console reads for its branch, beside the rows. A conflict's resolution is
 #: no column of a Batch row: it is stated on the conflict frame it belongs to.
 INTEGRATION_FIELDS: Final[Mapping[str, tuple[RouteFieldSpec, ...]]] = MappingProxyType(
     {
-        "git.pr": status_and(
-            unstated("review", missing_producer=PULL_REQUEST_PRODUCER),
-            unstated("checks", missing_producer=PULL_REQUEST_PRODUCER),
-        ),
+        "git.pr": status_and(),
         "merge.conflict": status_and(),
     }
 )
@@ -412,7 +403,6 @@ __all__ = [
     "INTEGRATION_FIELDS",
     "INTEGRATION_ROUTES",
     "MERGE_CONFLICT_ROUTE",
-    "PULL_REQUEST_PRODUCER",
     "ConflictSideView",
     "ConflictView",
     "GenerationRow",

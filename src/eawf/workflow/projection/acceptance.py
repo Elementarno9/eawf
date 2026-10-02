@@ -42,7 +42,7 @@ from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict
 
-from eawf.kernel.delivery.acceptance import MilestoneAcceptanceBundle
+from eawf.kernel.delivery.acceptance import EvidenceRow, MilestoneAcceptanceBundle
 from eawf.kernel.delivery.receipts import ProofReceipt
 from eawf.kernel.projection.compute import RouteProjection
 from eawf.kernel.projection.route_view import (
@@ -58,6 +58,8 @@ from eawf.kernel.projection.route_view import (
 )
 from eawf.kernel.projection.truth import TruthField, TruthState
 from eawf.kernel.state.epoch2.base import NonEmptyStr
+from eawf.kernel.state.epoch2.milestone import AcceptanceStep
+from eawf.kernel.state.epoch2.values import ExactRevisionBinding
 from eawf.observability.reflect.run_report import DEFAULT_PARTS, ReportPartName
 from eawf.workflow.delivery.acceptance import AcceptanceApproval
 
@@ -173,6 +175,12 @@ class MilestoneAcceptanceRecord(BaseModel):
             revision; ``None`` when none was ever sealed.
         approval: The sealed approval given to that bundle's own digest; ``None`` when
             nobody approved those bytes.
+        journey: The acceptance journey the Milestone record declares, in step order.
+        evidence: The evidence rows the store holds for the keys the bundle cites.
+        waiting_approval_urn: The acceptance question asked of the Milestone and not yet
+            answered; ``None`` when none waits.
+        accepted_binding: The exact revision the Milestone record states it was accepted
+            at; ``None`` until it is accepted.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -180,6 +188,10 @@ class MilestoneAcceptanceRecord(BaseModel):
     milestone_key: NonEmptyStr
     bundle: MilestoneAcceptanceBundle | None = None
     approval: AcceptanceApproval | None = None
+    journey: tuple[AcceptanceStep, ...] = ()
+    evidence: tuple[EvidenceRow, ...] = ()
+    waiting_approval_urn: NonEmptyStr | None = None
+    accepted_binding: ExactRevisionBinding | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -222,6 +234,34 @@ class CriterionRow:
     observation: str
     evidence_keys: tuple[str, ...]
     evidence_kinds: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class JourneyStepRow:
+    """One declared step of the acceptance journey beside what the sealed bundle found.
+
+    Attributes:
+        step_id: The step's ``AS-##`` id.
+        actor: Who performs the step, the operator or the system.
+        action: What the actor does, as the record states it.
+        expected_observation: What the step must show to pass.
+        evidence_kinds: The kinds of evidence the step asks for, in record order.
+        required: Whether the step gates acceptance.
+        outcome: What the held bundle recorded for the step; ``None`` when no bundle is
+            held or it records nothing for this step.
+        evidence: The cited evidence rows the store holds, in citation order.
+        unheld_keys: The cited ``EVD-####`` keys the store holds no row for.
+    """
+
+    step_id: str
+    actor: str
+    action: str
+    expected_observation: str
+    evidence_kinds: tuple[str, ...]
+    required: bool
+    outcome: CriterionRow | None
+    evidence: tuple[EvidenceRow, ...]
+    unheld_keys: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -293,6 +333,11 @@ class AcceptanceBundleView(RouteReadModel):
     sealed_at: datetime | None = None
     criteria: tuple[CriterionRow, ...] = ()
     approval: ApprovalBinding | None = None
+    journey: tuple[JourneyStepRow, ...] = ()
+    supersedes_revision: int | None = None
+    repair_reason: str | None = None
+    waiting_approval_urn: str | None = None
+    accepted_binding: ExactRevisionBinding | None = None
 
     def blocking(self) -> tuple[CriterionRow, ...]:
         """Return the criteria that did not pass, in render order."""
@@ -397,6 +442,43 @@ def criteria_rows(bundle: MilestoneAcceptanceBundle) -> tuple[CriterionRow, ...]
         )
         for step in bundle.steps
     )
+
+
+def journey_rows(
+    journey: Sequence[AcceptanceStep],
+    criteria: Sequence[CriterionRow],
+    evidence: Sequence[EvidenceRow],
+) -> tuple[JourneyStepRow, ...]:
+    """Return each declared step beside its sealed outcome and the evidence it cites.
+
+    Args:
+        journey: The steps the Milestone record declares, in step order.
+        criteria: The outcomes the held bundle recorded, one per step it covers.
+        evidence: The evidence rows the store holds.
+
+    Returns:
+        One row per declared step, in the record's order.
+    """
+    outcomes = {row.step_id: row for row in criteria}
+    held = {row.id: row for row in evidence}
+    rows: list[JourneyStepRow] = []
+    for step in journey:
+        outcome = outcomes.get(step.step_id)
+        cited = outcome.evidence_keys if outcome is not None else ()
+        rows.append(
+            JourneyStepRow(
+                step_id=step.step_id,
+                actor=step.actor,
+                action=step.action,
+                expected_observation=step.expected_observation,
+                evidence_kinds=tuple(step.evidence_kinds),
+                required=step.required,
+                outcome=outcome,
+                evidence=tuple(held[key] for key in cited if key in held),
+                unheld_keys=tuple(key for key in cited if key not in held),
+            )
+        )
+    return tuple(rows)
 
 
 def _anchor(model: RouteReadModel) -> tuple[str, int]:
@@ -606,6 +688,10 @@ def build_acceptance_view(
     bundle: MilestoneAcceptanceBundle | None = None,
     approval: AcceptanceApproval | None = None,
     receipts: Sequence[ProofReceipt] = (),
+    journey: Sequence[AcceptanceStep] = (),
+    evidence: Sequence[EvidenceRow] = (),
+    waiting_approval_urn: str | None = None,
+    accepted_binding: ExactRevisionBinding | None = None,
 ) -> RouteReadModel:
     """Return the read model one acceptance route draws from one served projection.
 
@@ -615,6 +701,10 @@ def build_acceptance_view(
         approval: The approval given to a bundle digest, when one is held. It is shown
             only against the bundle whose digest it names.
         receipts: The proof receipts a card may open, in record order.
+        journey: The acceptance journey the Milestone record declares.
+        evidence: The evidence rows the store holds for the bundle's citations.
+        waiting_approval_urn: The acceptance question asked and not yet answered.
+        accepted_binding: The exact revision the Milestone states it was accepted at.
 
     Returns:
         An :class:`AcceptanceBundleView` for the Milestone, a
@@ -629,14 +719,21 @@ def build_acceptance_view(
     given = None if approval is None else approval_binding(approval)
     bound = _approval_for(bundle, given)
     if projection.route == MILESTONE_ROUTE:
+        criteria = () if bundle is None else criteria_rows(bundle)
+        reason = None if bundle is None or bundle.repair_reason is None else bundle.repair_reason
         return _as(
             model,
             AcceptanceBundleView,
             bundle_revision=None if bundle is None else bundle.revision,
             bundle_digest=None if bundle is None else bundle.digest(),
             sealed_at=None if bundle is None else bundle.sealed_at,
-            criteria=() if bundle is None else criteria_rows(bundle),
+            criteria=criteria,
             approval=bound,
+            journey=journey_rows(journey, criteria, evidence),
+            supersedes_revision=None if bundle is None else bundle.supersedes_revision,
+            repair_reason=None if reason is None else reason.message,
+            waiting_approval_urn=waiting_approval_urn,
+            accepted_binding=accepted_binding,
         )
     if projection.route == RELEASE_ROUTE:
         return _as(
@@ -675,6 +772,7 @@ __all__ = [
     "ApprovalBinding",
     "CriterionRow",
     "ExportReport",
+    "JourneyStepRow",
     "MilestoneAcceptanceRecord",
     "ReadinessSignal",
     "ReceiptCard",
@@ -686,6 +784,7 @@ __all__ = [
     "build_acceptance_view",
     "criteria_rows",
     "export_report",
+    "journey_rows",
     "readiness_signals",
     "receipt_cards",
     "report_parts",

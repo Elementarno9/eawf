@@ -7,9 +7,10 @@ import socket
 import sys
 import tempfile
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import hypothesis
 import pytest
@@ -306,6 +307,28 @@ def host_session_isolation() -> Iterator[None]:
         monkeypatch.delenv(variable, raising=False)
     try:
         yield
+    finally:
+        monkeypatch.undo()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def runtime_certification_isolation() -> Iterator[Callable[..., Any]]:
+    """Keep the daemon's background runtime probe off every Run a test starts.
+
+    A Run started on a reported harness version would otherwise probe the
+    real binary on the machine's ``PATH`` from a background thread, so a test
+    would pass or fail by what the machine has installed.
+
+    Yields:
+        The real trigger, for the tests that drive it against stubbed binaries.
+    """
+    from eawf.runtime.daemon import runtime_certifier
+
+    real = runtime_certifier.start_auto_certification
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(runtime_certifier, "start_auto_certification", lambda *_a, **_k: None)
+    try:
+        yield real
     finally:
         monkeypatch.undo()
 

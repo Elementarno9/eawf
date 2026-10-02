@@ -35,7 +35,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
 logger = logging.getLogger(__name__)
 
 
-def _standing_revision(session: RootSession, urn: QualifiedUrn) -> int | None:
+def standing_revision(session: RootSession, urn: QualifiedUrn) -> int | None:
     """Return the revision *urn*'s record stands at, or ``None`` when none is held.
 
     A terminal record is compacted out of the document into its ledger, so
@@ -89,7 +89,7 @@ def require_anchor(
             remediation="Name a Track, Milestone, Batch, Task or Run as the subject.",
         )
     with context.session([urn]) as session:
-        revision = _standing_revision(session, urn)
+        revision = standing_revision(session, urn)
     if revision is None:
         raise TransactionRefusedError(
             code=TransactionRefusalCode.IDENTITY_NOT_FOUND,
@@ -112,4 +112,4 @@ def require_anchor(
         )
 
 
-__all__ = ["require_anchor"]
+__all__ = ["require_anchor", "standing_revision"]

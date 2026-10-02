@@ -767,6 +767,7 @@ class StoreKind(StrEnum):
     VERIFICATION_DEBT = "verification_debt"
     REGIME_BINDING = "regime_binding"
     OPERATION = "operation"
+    RUNTIME_CERTIFICATION = "runtime_certification"
 
 
 class ArtifactKind(StrEnum):

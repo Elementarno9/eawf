@@ -46,6 +46,7 @@ from eawf.kernel.delivery.integration import IntegrationConflict, IntegrationGen
 from eawf.kernel.delivery.receipts import ProofReceipt
 from eawf.kernel.runtime.boot_recovery import BootRecovery
 from eawf.kernel.runtime.certification import CertificationFailureCode
+from eawf.kernel.state.epoch2.base import BranchName
 from eawf.kernel.state.epoch2.urns import BatchUrn
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.changes import MAX_PAGE, ChangePage, read_change_page
@@ -150,7 +151,14 @@ class ConflictFramesAnswer(_Closed):
 
 
 class RepositoryRead(_Closed):
-    """What the repository read is asked for: nothing beyond the tree it addresses."""
+    """What the repository read is asked for beyond the tree it addresses.
+
+    Attributes:
+        branch: The branch to look the pull request up for, such as the one a Batch
+            integrates into; ``None`` looks it up for the tree's checkout.
+    """
+
+    branch: BranchName | None = None
 
 
 class BootRecoveryRead(_Closed):
@@ -279,8 +287,8 @@ async def _read_generations(ctx: MethodContext, params: dict[str, Any]) -> dict[
 async def _read_repository(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Return the tree's branch and its pull request, off the event loop."""
     authority = require_native_call(ctx, params)
-    native_params(RepositoryRead, params)
-    answer = await asyncio.to_thread(read_repository, authority.root.parent)
+    args = native_params(RepositoryRead, params)
+    answer = await asyncio.to_thread(read_repository, authority.root.parent, args.branch)
     return answer.model_dump(mode="json")
 
 

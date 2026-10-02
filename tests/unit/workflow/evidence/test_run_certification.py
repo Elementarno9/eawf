@@ -49,7 +49,9 @@ def _decide(
         runtime,
         control,
         certifications=certifications,
+        machine=(),
         quarantined=lambda _digest: quarantined,
+        certifying=lambda _runtime, _version: False,
         now=now,
     )
     return gate.admitted, gate.code, gate.reason

@@ -164,6 +164,7 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("hook", "eawf.surfaces.cli.commands.hook", "hook_app"),
     GroupRow("plugin", "eawf.surfaces.cli.commands.plugin", "plugin_app"),
     GroupRow("cc", "eawf.surfaces.cli.commands.cc", "cc_app"),
+    GroupRow("runtime", "eawf.surfaces.cli.commands.runtime", "runtime_app"),
     GroupRow("skill", "eawf.surfaces.cli.commands.skill", "skill_app"),
     # Worktree dispatch + flow loop + headless dispatch pause/resume.
     GroupRow("worktree", "eawf.surfaces.cli.commands.worktree", "worktree_app"),

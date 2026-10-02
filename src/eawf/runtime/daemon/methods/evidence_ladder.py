@@ -75,7 +75,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 from eawf.runtime.daemon.methods.delivery import keyed_call
 from eawf.runtime.daemon.methods.delivery_acceptance import EVIDENCE_KEY_PREFIX, EVIDENCE_STATUS
-from eawf.runtime.daemon.methods.delivery_anchor import _standing_revision
+from eawf.runtime.daemon.methods.delivery_anchor import standing_revision
 from eawf.runtime.daemon.methods.delivery_completion import PROOF_PAYLOAD_KIND, FiledProof
 from eawf.runtime.daemon.methods.projection import PROJECTION_UNREADABLE, document_path
 from eawf.runtime.daemon.native_guard import native_mutator, native_params, require_native_call
@@ -422,7 +422,7 @@ def _require_subject(session: RootSession, args: ClaimFileParams) -> int:
             the subject, or ``revision_conflict`` when the tree moved past the cursor the
             caller read.
     """
-    if _standing_revision(session, args.urn) is None:
+    if standing_revision(session, args.urn) is None:
         raise TransactionRefusedError(
             code=TransactionRefusalCode.IDENTITY_NOT_FOUND,
             detail=f"the tree holds no record keyed {args.urn.entity_key!r}",

@@ -446,6 +446,7 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "run_budget",
     "run_content",
     "run_liveness",
+    "runtime_certification",
     "semantic",
     "spec",
     "spend",

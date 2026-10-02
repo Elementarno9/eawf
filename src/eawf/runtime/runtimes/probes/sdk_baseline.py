@@ -348,6 +348,21 @@ def _probe_one(runtime_id: str, bin_name: str) -> RuntimeProbeRow:
     )
 
 
+def probe_runtime(runtime_id: str) -> RuntimeProbeRow:
+    """Probe the one installed binary of *runtime_id*.
+
+    Args:
+        runtime_id: The eawf adapter id, such as ``claude-code``.
+
+    Returns:
+        The runtime's advertised baseline.
+
+    Raises:
+        KeyError: *runtime_id* names no runtime this probe knows a binary for.
+    """
+    return _probe_one(runtime_id, dict(_PROBE_BINARIES)[runtime_id])
+
+
 def probe_all() -> BaselineSnapshot:
     """Probe every runtime in :data:`_PROBE_BINARIES` and return the snapshot."""
     rows = tuple(_probe_one(runtime_id, bin_name) for runtime_id, bin_name in _PROBE_BINARIES)

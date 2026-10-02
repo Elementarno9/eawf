@@ -5,8 +5,10 @@ The source note for the fact under the cursor docks to the foot of the frame.
 History is a ledger of facts, never a list of the records they are about. The native
 frame lists the tree's change feed, newest first: one row per record a commit changed,
 naming the fields, the revision it left, who asked and when. Enter opens the diff of the
-record under the caret. A tree whose feed holds nothing says since when nothing was
-recorded, because the feed starts the day its producer shipped and holds no older change.
+record under the caret, the menu's ``open target`` opens the record itself, and ``n``
+reads the next older page, or the newest again from the last one. A tree whose feed holds
+nothing says since when nothing was recorded, because the feed starts the day its
+producer shipped and holds no older change.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from __future__ import annotations
 from datetime import date
 
 from eawf.kernel.projection.spine import SpineView
-from eawf.kernel.store.changes import ChangeRecord
+from eawf.kernel.store.changes import ChangePage, ChangeRecord
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import NO_VALUE
@@ -31,8 +33,10 @@ from eawf.surfaces.tui.console.frame import (
     thin,
     window_rows,
 )
-from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
+from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS, KeyEntry
 from eawf.surfaces.tui.console.live_reads import HISTORY_READ, held_changes
+from eawf.surfaces.tui.console.navigation import Ctx, go
+from eawf.surfaces.tui.console.registry import COLLECTION_ROUTES
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
     native_head,
@@ -81,6 +85,11 @@ NATIVE_LEDGER = Table([32, 9, 24, 0], 2)
 
 #: What the ledger says before the change feed has been read.
 UNREAD = f"{UNKNOWN_WORD} · the change feed has not been read yet, so no fact is listed"
+
+#: The key that pages the ledger: to the next older page, or from the last back to the newest.
+PAGE_KEY = "n"
+OLDER = KeyEntry("older", (PAGE_KEY,))
+NEWEST = KeyEntry("newest", (PAGE_KEY,))
 
 #: What the source pane says while the ledger lists no fact.
 NO_SOURCE = f"{UNKNOWN_WORD} · no fact is listed, so none has a source to name"
@@ -135,7 +144,8 @@ def ledger_frame(view: View, spine: SpineView) -> list[str]:
             view,
             spine,
             crumb_text=route_crumb(view, spine, "History"),
-            summary="what changed, from what source, at which revision",
+            summary="what changed, from what source, at which revision"
+            + (" · an older page" if session.history_cursor is not None else ""),
         ),
         NATIVE_LEDGER.head(["FACT", "REVISION", "SOURCE", "WHEN"]),
     ]
@@ -154,7 +164,46 @@ def ledger_frame(view: View, spine: SpineView) -> list[str]:
     )
     rows.extend(Fixed(pad("", w)) for _ in range(h - 1 - len(foot) - len(rows)))
     keys = [KEY["up"], KEY["enter"], KEY["esc"]]
+    paging = _paging(page, session.history_cursor) if page is not None else None
+    if paging is not None:
+        keys.insert(2, paging)
     return build(view, [*rows, *foot], route_keys_bar(view, keys))
+
+
+def _paging(page: ChangePage, cursor: int | None) -> KeyEntry | None:
+    """Return what ``n`` does on ``page``: read an older one, return to the newest, or nothing."""
+    if page.next_cursor is not None:
+        return OLDER
+    return NEWEST if cursor is not None else None
+
+
+def seam(ctx: Ctx, key: str, shift: bool) -> bool:
+    """Page the native ledger on ``n``; the read the new cursor owes runs after the key."""
+    s = ctx.s
+    page = held_changes(ctx.live, HISTORY_READ)
+    if key != PAGE_KEY or page is None:
+        return False
+    paging = _paging(page, s.history_cursor)
+    if paging is None:
+        ctx.noop(key)
+        return True
+    s.history_cursor = page.next_cursor if paging is OLDER else None
+    s.sel = 0
+    ctx.log(key, f"{paging.label} page")
+    return True
+
+
+def open_target(ctx: Ctx, key: str) -> None:
+    """Open the record the change under the caret is about, on its own frame."""
+    page = held_changes(ctx.live, HISTORY_READ)
+    records = page.changes if page is not None else ()
+    record = next((r for r in records if r.record_key == ctx.s.sel_id), None)
+    route = COLLECTION_ROUTES.get(record.collection) if record is not None else None
+    if record is None or route is None:
+        what = record.collection.value if record is not None else "no change"
+        ctx.log(key, f"open target · {what} has no frame of its own")
+        return
+    go(ctx, route, "open target", record.record_key)
 
 
 def render(view: View) -> list[str]:

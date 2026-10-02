@@ -391,15 +391,8 @@ def test_con_123_the_first_tier_is_the_nine_layers_winning_lens_and_on_this(tree
 
 def test_con_123_an_empty_second_tier_draws_no_row(tree: Path) -> None:
     frame = _stack(tree)
-    for label in (" DENIED BY", " CONSTRAINED BY", " NEEDS", " SECRET"):
+    for label in (" CONSTRAINED BY", " NEEDS", " SECRET"):
         assert not any(row.startswith(f"│{label}") for row in frame), label
-
-
-def test_con_123_an_authority_denied_key_keeps_the_denied_token_in_its_value(tree: Path) -> None:
-    frame = _stack(tree, deny_chain=("org.policy",))
-    assert any(row.startswith("│ DENIED BY  org.policy") for row in frame)
-    repo = next(row for row in frame if re.match(r"^│\s+.?\s*repo\s", row))
-    assert "⊘ tokens" in repo
 
 
 def test_con_123_a_capability_degraded_key_names_its_requirement_and_state(tree: Path) -> None:
@@ -415,17 +408,17 @@ def test_con_123_a_secret_is_named_by_its_reference_never_its_value(tree: Path) 
 
 
 def test_con_123_the_settings_stack_gallery_tells_its_three_key_states_apart(tree: Path) -> None:
-    """A plain key, an authority-denied key and a capability-degraded key never read alike."""
+    """A plain key, a secret key and a capability-degraded key never read alike."""
     gallery = {
         "plain": _stack(tree),
-        "authority-denied": _stack(tree, deny_chain=("org.policy",)),
+        "secret": _stack(tree, secret_ref="secret://vault/prose"),
         "capability-degraded": _stack(
             tree, capability_requirement="cap.prose", certification_state=None
         ),
     }
     bodies = {name: "\n".join(frame[3:-1]) for name, frame in gallery.items()}
     assert len(set(bodies.values())) == 3
-    assert "⊘" in bodies["authority-denied"] and "⊘" not in bodies["capability-degraded"]
+    assert "never renders" in bodies["secret"]
     assert "certification unknown" in bodies["capability-degraded"]
     assert all(len(frame) == 24 for frame in gallery.values())
 

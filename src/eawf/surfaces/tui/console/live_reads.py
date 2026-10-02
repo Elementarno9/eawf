@@ -109,6 +109,11 @@ class LiveReadHost(Protocol):
         """Return who the console acts as, or ``None`` when it acts as nobody."""
         ...
 
+    @property
+    def history_cursor(self) -> int | None:
+        """Return the feed cursor History's page is read from; ``None`` reads the newest."""
+        ...
+
     def projection_for(self, route: str) -> RouteProjection | None:
         """Return the projection held for *route*, if any."""
         ...
@@ -565,13 +570,82 @@ async def _fetch_conflicts(host: LiveReadHost, urn: str) -> tuple[IntegrationCon
 
 
 def _repository_address(host: LiveReadHost) -> str | None:
-    """Return the tree while the Git surface is on screen: the checkout is the tree's."""
-    return _TREE if host.route == GIT_PR_ROUTE else None
+    """Return the tree, and the branch the Batch on screen integrates into when it names one.
+
+    The Git surface reads the checkout whatever its Batch states, and falls back to the
+    checkout's pull request; a Batch frame reads only for a Batch that names its branch.
+    """
+    held = host.projection_for(host.route)
+    rows = held.rows if held is not None else ()
+    batches = [row for row in rows if row.collection is Epoch2Collection.BATCH]
+    batch = next((row for row in batches if row.key == host.subject), None)
+    if host.route == GIT_PR_ROUTE:
+        batch = batch or (batches[0] if batches else None)
+    elif host.route != BATCH_ROUTE or batch is None:
+        return None
+    branch = batch.facts.get("target_branch") if batch is not None else None
+    if branch is None:
+        return _TREE if host.route == GIT_PR_ROUTE else None
+    return f"{_TREE}@{branch}"
 
 
-async def _fetch_repository(host: LiveReadHost, _address: str) -> RepositoryAnswer:
-    """Read the tree's branch and the pull request open for it."""
-    return RepositoryAnswer.model_validate(await host.call(REPOSITORY_READ_METHOD, {}))
+async def _fetch_repository(host: LiveReadHost, address: str) -> RepositoryAnswer:
+    """Read the tree's branch and the pull request open for the branch *address* names."""
+    _tree, _at, branch = address.partition("@")
+    params = {"branch": branch} if branch else {}
+    return RepositoryAnswer.model_validate(await host.call(REPOSITORY_READ_METHOD, params))
+
+
+#: The most distinct branches the Batch register looks pull requests up for at once. Each
+#: is one ``gh`` round trip the daemon caches for a minute, so a register of many branches
+#: costs at most this many; a Batch past the cap says its branch went unread.
+BRANCH_READS_MAX: Final = 8
+
+#: What separates the branches an address names; ``git`` refuses ``:`` in a branch name.
+_BRANCH_SEP: Final = ":"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class HeldBranchReviews:
+    """The pull request read for each branch the Batch register's rows integrate into.
+
+    Attributes:
+        answers: The daemon's repository read, by the branch it was looked up for. A
+            branch the register names and this lacks went unread.
+    """
+
+    answers: Mapping[str, RepositoryAnswer] = field(default_factory=dict)
+
+
+def _register_branches(host: LiveReadHost) -> tuple[str, ...]:
+    """Return the distinct branches the Batch register's rows integrate into, capped."""
+    held = host.projection_for(BATCH_ROUTE)
+    rows = held.rows if held is not None else ()
+    branches = dict.fromkeys(
+        branch
+        for row in rows
+        if row.collection is Epoch2Collection.BATCH
+        and (branch := row.facts.get("target_branch")) is not None
+    )
+    return tuple(branches)[:BRANCH_READS_MAX]
+
+
+def _branch_reviews_address(host: LiveReadHost) -> str | None:
+    """Return the branches the Batch register reads, while it is on screen opened on none."""
+    if host.route != BATCH_ROUTE or host.subject is not None:
+        return None
+    branches = _register_branches(host)
+    return f"{_TREE}@{_BRANCH_SEP.join(branches)}" if branches else None
+
+
+async def _fetch_branch_reviews(host: LiveReadHost, address: str) -> HeldBranchReviews:
+    """Read the pull request of each branch *address* names, one daemon read per branch."""
+    _tree, _at, named = address.partition("@")
+    answers: dict[str, RepositoryAnswer] = {}
+    for branch in named.split(_BRANCH_SEP):
+        answer = await host.call(REPOSITORY_READ_METHOD, {"branch": branch})
+        answers[branch] = RepositoryAnswer.model_validate(answer)
+    return HeldBranchReviews(answers=answers)
 
 
 def _receipt_address(host: LiveReadHost) -> str | None:
@@ -617,8 +691,15 @@ BOOT_RECOVERY_READ: Final = BOOT_RECOVERY_READ_METHOD
 #: The read the Git surface draws a Batch's generations from.
 GENERATIONS_READ: Final = GENERATIONS_READ_METHOD
 
-#: The read the Git surface draws the tree's branch, review and checks from.
+#: The read the Git surface and a Batch frame draw the branch, review and checks from.
 REPOSITORY_READ: Final = REPOSITORY_READ_METHOD
+
+#: The route a Batch's own frame, and the Batch register, are drawn on.
+BATCH_ROUTE: Final = "batch.detail"
+
+#: The read the Batch register draws each row's review and checks from.
+BRANCH_REVIEWS_READ: Final = f"{REPOSITORY_READ_METHOD}@{BATCH_ROUTE}"
+
 
 #: The read the conflict card draws its frames and hunks from.
 CONFLICTS_READ: Final = CONFLICT_FRAMES_READ_METHOD
@@ -644,15 +725,18 @@ HISTORY_DIFF_READ: Final = f"{HISTORY_CHANGES_READ_METHOD}@{HISTORY_DIFF_ROUTE}"
 
 
 def _history_address(host: LiveReadHost) -> str | None:
-    """Return the tree once History's rows are held: its feed is the whole tree's."""
+    """Return the tree once History's rows are held, and the page's cursor when paged back."""
     if host.route != HISTORY_ROUTE or host.projection_for(HISTORY_ROUTE) is None:
         return None
-    return _TREE
+    cursor = host.history_cursor
+    return _TREE if cursor is None else f"{_TREE}@{cursor}"
 
 
-async def _fetch_history(host: LiveReadHost, _address: str) -> ChangePage:
-    """Read the newest page of the tree's change feed."""
-    return ChangePage.model_validate(await host.call(HISTORY_CHANGES_READ_METHOD, {}))
+async def _fetch_history(host: LiveReadHost, address: str) -> ChangePage:
+    """Read one page of the tree's change feed: the newest, or the one *address* pages to."""
+    _tree, _at, cursor = address.partition("@")
+    params = {"cursor": int(cursor)} if cursor else {}
+    return ChangePage.model_validate(await host.call(HISTORY_CHANGES_READ_METHOD, params))
 
 
 def diff_subject(subject: str | None, rows_keys: list[str]) -> str | None:
@@ -717,7 +801,14 @@ LIVE_READS: Final[Mapping[str, LiveRead]] = MappingProxyType(
             fetch=_fetch_generations,
         ),
         REPOSITORY_READ: LiveRead(
-            routes=frozenset({GIT_PR_ROUTE}), address=_repository_address, fetch=_fetch_repository
+            routes=frozenset({GIT_PR_ROUTE, BATCH_ROUTE}),
+            address=_repository_address,
+            fetch=_fetch_repository,
+        ),
+        BRANCH_REVIEWS_READ: LiveRead(
+            routes=frozenset({BATCH_ROUTE}),
+            address=_branch_reviews_address,
+            fetch=_fetch_branch_reviews,
         ),
         CONFLICTS_READ: LiveRead(
             routes=frozenset({MERGE_CONFLICT_ROUTE}),
@@ -761,6 +852,8 @@ LIVE_READS: Final[Mapping[str, LiveRead]] = MappingProxyType(
 __all__ = [
     "ARTIFACT_READ",
     "BOOT_RECOVERY_READ",
+    "BRANCH_READS_MAX",
+    "BRANCH_REVIEWS_READ",
     "CAMPAIGN_READ",
     "CAMPAIGN_ROUTES",
     "CEILING_READ",
@@ -782,6 +875,7 @@ __all__ = [
     "UNATTENDED_ROUTE",
     "USAGE_READ",
     "HeldArtifact",
+    "HeldBranchReviews",
     "HeldCampaign",
     "HeldTranscript",
     "LiveRead",

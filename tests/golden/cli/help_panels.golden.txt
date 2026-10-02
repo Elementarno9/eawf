@@ -1,8 +1,8 @@
-Commands: jury, record, repository, why
+Commands: claim, jury, record, repository, why
 audit: backup, doc, doctor, migrate, schema, snapshot, validate, vfl
 estimation: bench, impact, metrics, reflect, telemetry
 planning: action, batch, campaign, memory, milestone, plan, question, run, session, task, track
-runtime: cc, config, daemon, follow, hook, mcp, plugin, profile, rules, skill
+runtime: cc, config, daemon, follow, hook, mcp, plugin, profile, rules, runtime, skill
 ship: pr, release, sync, wiki
 ui: completion, help, render-output, status, ui, verbs, version
 vcs: clone-repo, coauthor, init, repo, store, wal, workspace

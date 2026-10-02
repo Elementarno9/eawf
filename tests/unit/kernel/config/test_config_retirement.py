@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import orjson
 import pytest
 import yaml
 
@@ -294,3 +295,11 @@ def test_the_toast_level_defaults_to_important(repo: Path) -> None:
 def test_an_unusable_toast_level_keeps_the_default(repo: Path, body: str) -> None:
     _write(repo / ".ea" / "config.yaml", body)
     assert persisted_toast_verbosity(repo) == "important"
+
+
+def test_the_console_fixture_lists_no_unread_leaf() -> None:
+    """The console fixture draws no leaf the catalog retired for want of a reader."""
+    fixture = Path(__file__).parents[3] / "fixtures/console/golden/fixture/settings.json"
+    sections = orjson.loads(fixture.read_bytes())["SECTIONS"]
+    listed = {f"{section}.{row[0]}" for section, rows in sections.items() for row in rows}
+    assert listed.isdisjoint(UNREAD)

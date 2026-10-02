@@ -132,9 +132,6 @@ def _fields(*specs: str | SpineFieldSpec) -> tuple[SpineFieldSpec, ...]:
 #: Why a Task's candidates read unknown.
 NO_CANDIDATE_REASON: Final = "no producer files an integration candidate against a Task"
 
-#: Why a Batch's checks read unknown: the daemon integrates locally and touches no remote.
-NO_CHECKS_REASON: Final = "no producer observes pull-request checks"
-
 
 #: What each native route renders per row, in column order. The first field of every
 #: route is the status the document states; a produced column is read from the row's fact
@@ -146,8 +143,8 @@ ROUTE_FIELDS: Final[Mapping[str, tuple[SpineFieldSpec, ...]]] = MappingProxyType
     {
         "scope.home": _fields("runs", "attention", "progress"),
         "track": _fields("batches", "due"),
+        # the review and checks are the pull request the console reads for the Batch's branch
         "batch.detail": _fields(
-            SpineFieldSpec(name="checks", reason=NO_CHECKS_REASON),
             SpineFieldSpec(name="runs", produced=True, reason="the row is not a Batch"),
         ),
         "task.detail": _fields(
@@ -399,7 +396,6 @@ __all__ = [
     "ENTRY_ROUTE",
     "NATIVE_ROUTES",
     "NO_CANDIDATE_REASON",
-    "NO_CHECKS_REASON",
     "PLANNING_ROUTES",
     "ROUTE_FIELDS",
     "SPINE_ROUTES",

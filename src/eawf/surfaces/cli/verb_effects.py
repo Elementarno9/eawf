@@ -265,6 +265,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "status": _read(),
     "validate": _read(),
     "doctor": _mutate(),
+    "runtime certify": _create("runtime.certification.certify"),
     "doc verify": _read(),
     "schema dump": _mutate(),
     "sync": _mutate(),

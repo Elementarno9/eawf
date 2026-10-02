@@ -256,6 +256,10 @@ class Session(BaseModel):
     follow: bool = True
     bound: Any = None
     diff_pair: str | None = None
+    # the change the native diff shows, by change id; ``None`` shows the newest
+    diff_change: str | None = None
+    # the feed cursor History's page is read from; ``None`` reads the newest page
+    history_cursor: int | None = None
     mark: int = 0
     timeline_marker: str | None = None
     timeline_marks: int = 0

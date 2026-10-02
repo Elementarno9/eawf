@@ -108,7 +108,6 @@ from eawf.runtime.daemon.epoch2_transaction import (
     run_transaction,
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
-from eawf.runtime.daemon.methods.conformance import StoreStageJournal
 from eawf.runtime.daemon.native_dispatch import (
     RUN_DISPATCH_METHOD,
     RUN_RETRY_METHOD,
@@ -134,14 +133,9 @@ from eawf.runtime.daemon.run_events import (
     runtime_of,
     stall_facts_of,
 )
+from eawf.runtime.daemon.runtime_certifier import gate_run_control
 from eawf.runtime.hooks.event import HOST_HARNESSES
-from eawf.runtime.runtimes.quarantine import is_quarantined
-from eawf.workflow.evidence.run_certification import (
-    ControlGate,
-    ControlGateCode,
-    decide_run_control,
-    runtime_certifications,
-)
+from eawf.workflow.evidence.run_certification import ControlGate, ControlGateCode
 
 logger = logging.getLogger(__name__)
 
@@ -595,15 +589,7 @@ def _require_certified(
             the control; the refusal code and sentence name the runtime and
             the certification that is missing, expired or short of it.
     """
-    tree = context.identity.tree_root
-    journal = StoreStageJournal(tree / "state.json")
-    gate = decide_run_control(
-        run.runtime_tuple,
-        control,
-        certifications=runtime_certifications(tree.parent),
-        quarantined=lambda digest: is_quarantined(journal.records(tuple_digest=digest)),
-        now=now,
-    )
+    gate = gate_run_control(context.identity.tree_root, run.runtime_tuple, control, now=now)
     logger.info(
         f"_require_certified run={run.key!r} control={control.value} code={gate.code.value} "
         f"admitted={gate.admitted}"

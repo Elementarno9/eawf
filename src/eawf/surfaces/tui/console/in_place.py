@@ -3,8 +3,9 @@
 Each changes only what this console shows, or opens the lens's own editor, so none needs a
 daemon verb and each acts at once. The Activity verbs order, follow, hold and mark the Run
 register's window; scope home's pin leads the operator's tree with one Track; the Settings
-verbs run the lens's Enter and ``x`` on the key under the cursor; and the Timeline's
-proposed date opens a date field whose Enter previews the Milestone's target-date write.
+verbs run the lens's Enter and ``x`` on the key under the cursor; the Timeline's
+proposed date opens a date field whose Enter previews the Milestone's target-date write;
+and History's open target opens the record the change under the caret is about.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console.mutation import NOTHING_TO_MARK, select_key
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.renderers.activity import FOLLOW, SORT_COLUMNS
+from eawf.surfaces.tui.console.renderers.history import open_target
 from eawf.surfaces.tui.console.renderers.provenance import lens_verb
 from eawf.surfaces.tui.console.renderers.timeline import propose
 
@@ -85,6 +87,7 @@ IN_PLACE: Final[Mapping[tuple[str, str], Callable[[Ctx, str], None]]] = MappingP
         ("activity", "select all shown"): _mark_all,
         ("scope.home", "pin outcome"): _pin,
         ("timeline", "propose date"): propose,
+        ("history", "open target"): open_target,
         ("settings", "edit"): lambda ctx, key: lens_verb(ctx, key, "edit"),
         ("settings", "unset"): lambda ctx, key: lens_verb(ctx, key, "unset"),
     }

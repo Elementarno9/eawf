@@ -266,6 +266,7 @@ class ProjectionSeam:
         self._decisions: tuple[PendingAction, ...] | None = None
         self._ladders: dict[str, ClaimLadder] = {}
         self._subject: str | None = None
+        self._history_cursor: int | None = None
         self._selected_id: str | None = None
         self._filters: dict[str, str] = {}
         self._connection = ConnectionValue.DISCONNECTED
@@ -417,6 +418,15 @@ class ProjectionSeam:
     def about(self, subject: str | None) -> None:
         """Record the record the visible route is about, so its per-subject reads are owed."""
         self._subject = subject
+
+    def page_history(self, cursor: int | None) -> None:
+        """Record the feed cursor History reads its page from; ``None`` reads the newest."""
+        self._history_cursor = cursor
+
+    @property
+    def history_cursor(self) -> int | None:
+        """Return the feed cursor History reads its page from; ``None`` reads the newest."""
+        return self._history_cursor
 
     def _about(self, route: str) -> str | None:
         """Return the record *route* is read for: the subject of a visible single-record route.

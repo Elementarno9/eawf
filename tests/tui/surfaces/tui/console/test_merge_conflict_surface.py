@@ -59,7 +59,6 @@ from eawf.kernel.projection.integration import (
     INTEGRATION_FIELDS,
     INTEGRATION_ROUTES,
     MERGE_CONFLICT_ROUTE,
-    PULL_REQUEST_PRODUCER,
     GitPrReadModel,
     MergeConflictReadModel,
     authority_label,
@@ -394,11 +393,9 @@ def test_the_git_frame_says_so_when_the_batch_has_taken_nothing() -> None:
     assert git_pr.NO_GENERATION in body
 
 
-def test_the_batch_review_columns_name_the_pull_request_producer_they_wait_on() -> None:
-    """A Batch row's review and check columns wait on a named item, not on a blank cell."""
-    model = _view(GIT_PR_ROUTE)
-    waiting = {spec.name: spec.missing_producer for spec in model.unproduced()}
-    assert waiting == dict.fromkeys(("review", "checks"), PULL_REQUEST_PRODUCER)
+def test_the_git_surface_declares_no_silent_column() -> None:
+    """The review and checks are read for the Batch's branch, never left as unknown cells."""
+    assert _view(GIT_PR_ROUTE).unproduced() == ()
 
 
 # ---------- the tree's branch, review and checks ----------
@@ -489,7 +486,7 @@ def test_a_pull_request_with_no_check_says_nothing_reported() -> None:
 
 
 def test_a_branch_with_no_pull_request_is_stated_not_unavailable() -> None:
-    rows = _rows(RepositoryAnswer(branch=BRANCH_READ))
+    rows = _rows(RepositoryAnswer(branch=BRANCH_READ, pull_request_branch="feature/topic"))
     assert rows["REVIEW"] == "no pull request is open for feature/topic"
     assert rows["CHECKS"] == "none · no pull request to report on"
 

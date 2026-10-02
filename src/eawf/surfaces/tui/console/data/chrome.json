@@ -386,6 +386,16 @@
     "the stable URN goes to your clipboard",
     "the URN survives moves and retirement",
     "light"
+   ],
+   [
+    "o",
+    "open target",
+    "yes",
+    "",
+    "",
+    "the changed record's own frame opens",
+    "nothing is read or changed",
+    "light"
    ]
   ],
   "settings": [

@@ -1,18 +1,20 @@
 """history.diff: one entity at two revisions, field by field.
 
-``p`` cycles the revision pair and ``e`` opens the entity the diff is about.
+``p`` steps to an older revision pair and ``e`` opens the entity the diff is about.
 
-The native frame diffs one entity across its newest recorded change, never a range: the
-change feed states each field the commit changed with its value before and after, and who
-asked. Every field the change does not list held its value, which the frame says rather
-than hiding. A value too large to keep shows its preview and an ellipsis. A change that
-names nobody says so, and is never attributed to the system. An entity with no change on
-file says since when none was recorded.
+The native frame diffs one entity across one recorded change, never a range: the newest
+first, and ``p`` steps to each older change of the same record the feed holds, back to
+the newest after the oldest. The change feed states each field the commit changed with
+its value before and after, and who asked. Every field the change does not list held its
+value, which the frame says rather than hiding. A value too large to keep shows its
+preview and an ellipsis. A change that names nobody says so, and is never attributed to
+the system. An entity with no change on file says since when none was recorded.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 
 from eawf.kernel.identity import IdentityError, parse_qualified_urn
 from eawf.kernel.projection.spine import SpineView
@@ -24,6 +26,7 @@ from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, thin
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.live_reads import HISTORY_DIFF_READ, diff_subject, held_changes
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
+from eawf.surfaces.tui.console.registry import COLLECTION_ROUTES
 from eawf.surfaces.tui.console.renderers.history import none_since
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNAVAILABLE,
@@ -34,6 +37,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     route_crumb,
 )
 from eawf.surfaces.tui.console.renderers.spine import held
+from eawf.surfaces.tui.console.session import Session
 
 PAIRS: tuple[str, ...] = pt.DIFF_PAIRS
 ENTITY = pt.DIFF_ENTITY
@@ -69,6 +73,18 @@ def _pair(change: ChangeRecord) -> str:
     return f"rev {change.revision_before} → rev {change.revision_after}"
 
 
+def _changes(live: Mapping[str, object], key: str | None) -> tuple[ChangeRecord, ...]:
+    """Return the held changes of record ``key``, newest first."""
+    page = held_changes(live, HISTORY_DIFF_READ)
+    return tuple(c for c in page.changes if c.record_key == key) if page is not None else ()
+
+
+def _shown_at(s: Session, changes: tuple[ChangeRecord, ...]) -> int:
+    """Return the place of the change the diff shows: the stepped-to one, else the newest."""
+    ids = [c.change_id for c in changes]
+    return ids.index(s.diff_change) if s.diff_change in ids else 0
+
+
 def native_frame(view: View, spine: SpineView) -> list[str]:
     """Return the History diff frame drawn from the corpus the daemon served.
 
@@ -84,8 +100,9 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     found = spine.index_of(key)
     subject = spine.rows[found] if found is not None else None
     page = held_changes(view.live, HISTORY_DIFF_READ)
-    changes = tuple(c for c in page.changes if c.record_key == key) if page is not None else ()
-    change = changes[0] if changes else None
+    changes = _changes(view.live, key)
+    place = _shown_at(s, changes)
+    change = changes[place] if changes else None
     pair = _pair(change) if change is not None else ""
     top = native_head(
         view,
@@ -113,7 +130,11 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         body += [
             thin(w),
             label("UNCHANGED", "every field not listed held its value · none is hidden"),
-            label("EARLIER", f"{dv.plural(len(changes) - 1, 'earlier change')} on file"),
+            label(
+                "EARLIER",
+                f"{dv.plural(len(changes) - 1 - place, 'earlier change')} on file"
+                f" · change {place + 1} of {len(changes)}",
+            ),
         ]
     else:
         dv.sel_in(s, 0)
@@ -122,7 +143,11 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         else:
             body.append(label("BETWEEN", none_since(page.since)))
     body.append(label("RULE", "One entity at two revisions — the subject is never a range."))
-    return finish(view, top, body, _KEYS)
+    # p steps only between two changes, and e opens only a held entity with a frame
+    idle = {"p"} if len(changes) < 2 else set()
+    if subject is None or subject.collection not in COLLECTION_ROUTES:
+        idle.add("e")
+    return finish(view, top, body, [pair for pair in _KEYS if pair[0] not in idle])
 
 
 def render(view: View) -> list[str]:
@@ -165,10 +190,13 @@ def render(view: View) -> list[str]:
 
 
 def seam(ctx: Ctx, key: str, shift: bool) -> bool:
-    """Open the diffed entity on ``e`` and cycle the revision pair on ``p``."""
+    """Open the diffed entity on ``e`` and step to an older revision pair on ``p``."""
     s = ctx.s
     if busy(s):
         return False
+    spine = ctx.projection
+    if isinstance(spine, SpineView):
+        return _native_key(ctx, spine, key)
     if key == "e":
         go(ctx, "run.detail", "the entity this diff is about", ENTITY)
         return True
@@ -178,5 +206,29 @@ def seam(ctx: Ctx, key: str, shift: bool) -> bool:
         s.diff_pair = PAIRS[(at + 1) % len(PAIRS)]
         ctx.notify(s.diff_pair, title="revisions")
         ctx.log("p", f"revisions → {s.diff_pair}")
+        return True
+    return False
+
+
+def _native_key(ctx: Ctx, spine: SpineView, key: str) -> bool:
+    """Open the held entity on ``e``; step to the record's next older change on ``p``."""
+    s = ctx.s
+    subject = diff_subject(s.subj_id or s.sel_id, [row.key for row in spine.rows])
+    if key == "e":
+        found = spine.index_of(subject)
+        route = COLLECTION_ROUTES.get(spine.rows[found].collection) if found is not None else None
+        if route is None or subject is None:
+            ctx.noop(key)
+        else:
+            go(ctx, route, "the entity this diff is about", subject)
+        return True
+    if key == "p":
+        changes = _changes(ctx.live, subject)
+        if len(changes) < 2:
+            ctx.noop(key)
+            return True
+        step = changes[(_shown_at(s, changes) + 1) % len(changes)]
+        s.diff_change, s.sel = step.change_id, 0
+        ctx.log("p", f"revisions → {_pair(step)}")
         return True
     return False

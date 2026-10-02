@@ -753,6 +753,27 @@ def resolve_permission_wait_seconds(repo_root: Path) -> int:
     return RuntimeLivenessConfig.model_validate(raw or {}).permission_wait_s
 
 
+def resolve_auto_certify(repo_root: Path) -> bool:
+    """Return whether ``runtime.auto_certify`` lets the daemon probe a new version.
+
+    Args:
+        repo_root: Repo root the layered config is composed against.
+
+    Returns:
+        The configured switch, or ``True`` when no layer states it.
+
+    Raises:
+        pydantic.ValidationError: A layer states the leaf as something other
+            than a boolean.
+    """
+    from pydantic import StrictBool, TypeAdapter
+
+    merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
+    section = merged.get("runtime")
+    raw = section.get("auto_certify", True) if isinstance(section, dict) else True
+    return TypeAdapter(StrictBool).validate_python(raw)
+
+
 def resolve_agent_extra_tools(repo_root: Path | None = None) -> dict[str, tuple[str, ...]]:
     """Return the merged ``agents.extra_tools`` grant map (role to extra tools).
 

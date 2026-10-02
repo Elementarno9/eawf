@@ -32,6 +32,7 @@ from eawf.kernel.store.kinds.registry_updated import RegistryUpdatedPayload
 from eawf.kernel.store.kinds.research import ResearchPayload
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.kinds.research_round import ResearchRoundPayload
+from eawf.kernel.store.kinds.runtime_certification import MachineCertification
 from eawf.kernel.store.kinds.spec_updated import SpecUpdatedPayload
 from eawf.kernel.store.kinds.subscription_lag import SubscriptionLagPayload
 from eawf.workflow.release.advance import CheckpointGateReceipt, TrainAdvanceRecord
@@ -98,4 +99,6 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     StoreKind.REGIME_BINDING: RegimeBinding,
     # One row per state a submitted operation reaches, machine-local.
     StoreKind.OPERATION: OperationRecord,
+    # One row per conformance probe of an installed runtime version, machine-local.
+    StoreKind.RUNTIME_CERTIFICATION: MachineCertification,
 }

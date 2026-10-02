@@ -325,7 +325,7 @@ def test_a_row_stating_no_status_is_unknown_rather_than_blank() -> None:
     assert status.missing_reason
 
 
-@pytest.mark.parametrize("route", SPINE_ROUTES)
+@pytest.mark.parametrize("route", [r for r in SPINE_ROUTES if r != "batch.detail"])
 def test_unproduced_columns_are_unknown_truth_fields_naming_why(route: str) -> None:
     """A dev4 column is declared and comes back unknown, never silently absent."""
     spine = _view(route)
@@ -340,6 +340,11 @@ def test_unproduced_columns_are_unknown_truth_fields_naming_why(route: str) -> N
             spec = next(s for s in ROUTE_FIELDS[route] if s.name == name)
             assert field.missing_reason == spec.reason
             assert field.truth_kind is TruthKind.DERIVED
+
+
+def test_a_batch_declares_no_silent_column() -> None:
+    """Its review and checks are the pull request read for its branch, not unknown cells."""
+    assert _view("batch.detail").unproduced() == ()
 
 
 #: The spine routes still drawn as the shared record table. Home draws a tree and the Run

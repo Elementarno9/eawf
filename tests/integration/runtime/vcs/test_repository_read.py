@@ -356,3 +356,40 @@ def test_an_unreadable_checkout_leaves_both_halves_unread(tmp_path: Path) -> Non
         NOT_A_REPOSITORY,
         NOT_A_REPOSITORY,
     )
+
+
+def test_a_named_branch_is_looked_up_instead_of_the_checkout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A Batch's pull request is the one open for its branch, whatever the tree has out."""
+    checkout = read_branch_of(tmp_path)
+    asked: list[str] = []
+
+    def lookup(root: Path, branch: str) -> None:
+        asked.append(branch)
+
+    monkeypatch.setattr(rr, "read_branch", lambda root: checkout)
+    monkeypatch.setattr(rr, "read_pull_request", lookup)
+    answer = read_repository(tmp_path, "feature/batch")
+    assert asked == ["feature/batch"]
+    assert answer.branch == checkout and answer.pull_request_branch == "feature/batch"
+    assert answer.pull_request is None and answer.pull_request_unread is None
+
+
+def test_without_a_named_branch_the_checkout_is_looked_up(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    checkout = read_branch_of(tmp_path)
+    monkeypatch.setattr(rr, "read_branch", lambda root: checkout)
+    monkeypatch.setattr(rr, "read_pull_request", lambda root, branch: None)
+    assert read_repository(tmp_path).pull_request_branch == "main"
+
+
+def read_branch_of(root: Path) -> BranchRead:
+    """Return a checkout of ``main`` at one commit, as :func:`read_branch` states one."""
+    return BranchRead.model_validate(
+        {
+            "branch": "main",
+            "head": {"sha": "a" * 40, "subject": "first", "committed_at": "2026-10-02T12:00:00Z"},
+        }
+    )

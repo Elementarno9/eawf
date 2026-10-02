@@ -50,6 +50,7 @@ from eawf.observability.measurement.capture import (
     capture_run_terminal,
     observe_session_runtime,
 )
+from eawf.runtime.daemon import runtime_certifier
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.run_events import RunEventAppend
@@ -281,7 +282,14 @@ def bind_run_capture(
     if to_status is RunStatus.RUNNING and run.status is RunStatus.QUEUED:
         if "started_at" not in normalized:
             return normalized
-        return {**normalized, **start_capture_updates(document, run=run, updates=normalized)}
+        started = start_capture_updates(document, run=run, updates=normalized)
+        if started["runtime_tuple"] is not None:
+            runtime_certifier.start_auto_certification(
+                context.identity.tree_root,
+                RunRuntimeTuple.model_validate(started["runtime_tuple"]),
+                now=datetime.now(UTC),
+            )
+        return {**normalized, **started}
     if to_status in TERMINAL_RUN_STATUSES and "ended_at" in normalized:
         stop = terminal_capture_updates(run, ended_at=normalized["ended_at"])
         _state_captured_usage(context, urn=urn, actor=actor, captured=stop["captured_runtime"])

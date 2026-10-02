@@ -29,16 +29,21 @@ from pydantic import BaseModel, ConfigDict
 from eawf.kernel.economics.spend import CostCeilingView, RunUsageView
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, RECONNECT_METHOD_TEMPLATE
+from eawf.kernel.projection.registers import ATTENTION_ROUTE
 from eawf.kernel.projection.run_timeline import reduce_timeline
 from eawf.kernel.runtime.dispatch_queue import DispatchControl, DispatchPlan, DispatchQueueView
 from eawf.kernel.runtime.events import RunEventRecord
 from eawf.kernel.store.changes import ChangePage
+from eawf.kernel.store.compaction import document_rows
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.methods.console_records import (
     BOOT_RECOVERY_READ_METHOD,
     HISTORY_CHANGES_READ_METHOD,
+    REPOSITORY_READ_METHOD,
 )
 from eawf.runtime.daemon.methods.dispatch_queue import DISPATCH_QUEUE_READ_METHOD
 from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
+from eawf.runtime.daemon.methods.projection import run_state_rows
 from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD
 from eawf.runtime.daemon.methods.run import RUN_EVENTS_READ_METHOD
 from eawf.runtime.daemon.methods.run_liveness import RUN_STALLS_READ_METHOD
@@ -47,6 +52,7 @@ from eawf.runtime.daemon.methods.spend import (
     SPEND_CEILING_READ_METHOD,
     RunUsageReadParams,
 )
+from eawf.runtime.vcs.repository_read import BranchRead, LastCommit, RepositoryAnswer
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import FakeClock
@@ -89,6 +95,8 @@ PROTOTYPE, HELD, BULK, QUIET, TREE = "prototype", "held", "bulk", "quiet", "tree
 QUIET_DOCUMENT: Final[dict[str, Any]] = {
     **bodies.DOCUMENT,
     "pending_action": {"ACT-0003": bodies.DOCUMENT["pending_action"]["ACT-0003"]},
+    # a quiet tree has no failed Run for Attention to list
+    "run": {k: r for k, r in bodies.DOCUMENT["run"].items() if r["status"] != "FAILED"},
 }
 
 
@@ -213,6 +221,15 @@ class DocumentDaemon:
             return self._run_usage(RunUsageReadParams.model_validate(params).urn.entity_key)
         if method == SPEND_CEILING_READ_METHOD:
             return self._ceiling()
+        if method == REPOSITORY_READ_METHOD:
+            # the tree is checked out on main and no pull request is open for any branch
+            return RepositoryAnswer(
+                branch=BranchRead(
+                    branch="main",
+                    head=LastCommit(sha="0" * 40, subject="journey tree", committed_at=bodies.AT),
+                ),
+                pull_request_branch=params.get("branch") or "main",
+            ).model_dump(mode="json")
         if method == HISTORY_CHANGES_READ_METHOD:
             # the document was written whole, never through a commit, so no change is on file
             return ChangePage().model_dump(mode="json")
@@ -267,12 +284,20 @@ class DocumentDaemon:
         """
         route = self._routes.get(method)
         if route is not None:
+            # Attention lists the running and failed Runs by their state, as the daemon does
+            # a stored Run states its own key; these hand-written rows are keyed only by place
+            runs = {
+                key: {**row, "key": key}
+                for key, row in document_rows(self.document, Epoch2Collection.RUN).items()
+            }
+            listed = run_state_rows(self.document, runs, frozenset())
             return build_route_projection(
                 route=route,
                 document=self.document,
                 cursor=bodies.CURSOR,
                 scope_id=bodies.SCOPE,
                 generated_at=bodies.AT,
+                ledger_rows={Epoch2Collection.RUN: listed} if route == ATTENTION_ROUTE else {},
             ).model_dump(mode="json")
         if method in self._reconnects and self.reconnect_answer is not None:
             return self.reconnect_answer
@@ -414,7 +439,8 @@ PORT_SPECS: Final[tuple[JourneySpec, ...]] = (
         HELD,
         "a linked card previews before it commits",
         "PRX-058 over J5's walk: the six panes stand before Enter and Esc writes nothing",
-        _ATTENTION,
+        # the failed Run is a notice listed first; the caret starts on the first question
+        {**_ATTENTION, "sel": 1},
         "a",
         "Escape",
     ),

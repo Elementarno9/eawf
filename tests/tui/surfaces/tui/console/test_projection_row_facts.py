@@ -193,6 +193,33 @@ def test_a_replayed_patch_keeps_the_title_and_parent_and_digests_as_a_clean_read
     assert replayed.digest == clean.digest
 
 
+@pytest.mark.parametrize(("moved", "drawn"), [("2026-10-20", "2026-10-20"), (None, None)])
+def test_a_patch_carrying_a_target_date_moves_or_clears_the_held_one(
+    moved: str | None, drawn: str | None
+) -> None:
+    milestone = _native("milestone", "MLS-1", target_date="2026-10-05")
+    held = _project("scope.home", {"milestone": {"MLS-1": milestone}})
+    patch = KeyedPatch(
+        schema_version="1.0",
+        projection_kind=ReadModelKind(held.header.projection_kind),
+        routes=("scope.home",),
+        scope_id="EAWF",
+        canonical_sequence=6,
+        entries=(
+            PatchEntry(
+                key="MLS-1",
+                urn=f"{ROOT}/milestone/MLS-1",
+                collection=Epoch2Collection.MILESTONE,
+                revision=3,
+                status="ACTIVE",
+                facts={"target_date": moved},
+            ),
+        ),
+    )
+    row = apply_patches(held, [patch], cursor=6, scope_id="EAWF", generated_at=AT).rows[0]
+    assert row.facts.get("target_date") == drawn
+
+
 def test_a_patch_for_a_row_the_client_never_held_states_no_title() -> None:
     held = _project("scope.home", {})
     patch = KeyedPatch(
