@@ -33,6 +33,7 @@ from eawf.kernel.state.epoch2.pause import OpenPause, PauseSituation
 from eawf.kernel.state.epoch2.pending_action import AgentPrincipal, PendingAction
 from eawf.kernel.state.epoch2.question import OpenQuestion, QuestionSituation
 from eawf.kernel.state.epoch2.urns import render_qualified_urn
+from eawf.runtime.daemon.methods.pause import stall_of
 
 #: An open question's ``QST-####`` key, or the ``ACT-####`` key of an operator decision,
 #: which the question detail draws the same way: a question with offered answers.
@@ -348,6 +349,7 @@ class PauseRecord(_Record):
         escalation: Why an escalated pause escalated.
         resolved_at: When the predicate was observed.
         enclosing: The work whose cancellation cancelled it.
+        stall: The stall fact a pause over a quiet Run cites, which ties it to one episode.
         situation: The situation the daemon projected the pause to; ``None`` for a record
             the console derives it for.
 
@@ -373,6 +375,7 @@ class PauseRecord(_Record):
     escalation: Escalation | None = None
     resolved_at: AwareDatetime | None = None
     enclosing: str | None = None
+    stall: str | None = None
     situation: PauseSituation | None = None
 
     @model_validator(mode="after")
@@ -425,6 +428,7 @@ class PauseRecord(_Record):
                 )
             ),
             resolved_at=pause.resolved_at,
+            stall=stall_of(pause),
             situation=situation,
         )
 
@@ -907,6 +911,15 @@ class DecisionRecords(_Record):
     def pause(self, key: str | None) -> PauseRecord | None:
         """Return the pause ``key`` names by its id or its scope, or ``None``."""
         return next((p for p in self.pauses if key in (p.id, p.scope)), None)
+
+    def stall_pause(self, stall: str) -> PauseRecord | None:
+        """Return the standing pause that cites stall fact ``stall``, or ``None``.
+
+        A Run keeps the pauses of its earlier quiet episodes once they end, so the Run's
+        key alone could name a pause that no longer stands over it.
+        """
+        ended = (PauseStatus.RESOLVED, PauseStatus.CANCELLED)
+        return next((p for p in self.pauses if p.stall == stall and p.status not in ended), None)
 
     def claim(self, key: str | None) -> ClaimRecord | None:
         """Return the claim ``key`` names, or ``None`` when none is held."""

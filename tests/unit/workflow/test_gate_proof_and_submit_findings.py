@@ -21,6 +21,7 @@ import pytest
 from eawf.workflow.planning.apply import validate_plan_proposal
 from eawf.workflow.planning.revision import PlanRefusal
 from eawf.workflow.release import checkpoint_receipts
+from eawf.workflow.release.pipeline import PipelineHostError
 from eawf.workflow.release.pipeline_host import GitHubReleaseHost
 from tests.unit.workflow.planning.test_criterion_oracle_lens import (
     AT,
@@ -43,7 +44,12 @@ def test_prove_gates_hands_the_proof_path_to_the_serving_daemon(
 
     def fake_run(argv: list[str], **kwargs: Any) -> SimpleNamespace:
         calls.append((list(argv), kwargs.get("env")))
-        envelope = {"status": "ok", "result": {"receipts": []}}
+        envelope = {
+            "schema_version": "1",
+            "status": "ok",
+            "operation": "release.produce_receipts",
+            "result": {"receipts": []},
+        }
         return SimpleNamespace(returncode=0, stdout=json.dumps(envelope), stderr="")
 
     monkeypatch.setattr("subprocess.run", fake_run)
@@ -56,6 +62,35 @@ def test_prove_gates_hands_the_proof_path_to_the_serving_daemon(
     assert argv[-4:-1] == ["receipts", "0.7.0.dev3", "--proof-path"]
     assert "daemon" not in argv
     assert env is None or "EAWF_RUNTIME_DIR" not in env
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    [
+        json.dumps({"status": "ok", "result": {"receipts": []}}),
+        json.dumps(
+            {
+                "schema_version": "1",
+                "status": "ok",
+                "operation": "release.produce_receipts",
+                "result": {"receipts": []},
+                "smuggled": True,
+            }
+        ),
+        "not json",
+    ],
+)
+def test_prove_gates_refuses_an_answer_that_is_not_a_domain_envelope(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stdout: str
+) -> None:
+    def fake_run(argv: list[str], **kwargs: Any) -> SimpleNamespace:
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    host = GitHubReleaseHost(tmp_path, state_path=tmp_path / "state.json")
+
+    with pytest.raises(PipelineHostError, match="release receipts exited 0"):
+        host.prove_gates("0.7.0.dev3")
 
 
 def test_pinned_worktree_runs_proofs_with_the_named_path(

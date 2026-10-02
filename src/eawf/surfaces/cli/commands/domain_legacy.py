@@ -242,6 +242,13 @@ def record_append_cmd(
     )
 
 
+# ---- Command registration ---------------------------------------------------
+# ``domain_integration`` adds ``record evidence`` to :data:`record_app`, so it
+# loads here, once the app exists, whichever module a process imports first.
+from eawf.surfaces.cli.commands import (  # noqa: E402
+    domain_integration as _domain_integration,  # noqa: F401
+)
+
 __all__ = [
     "LEGACY_ADVANCE",
     "RECORD_APPEND",

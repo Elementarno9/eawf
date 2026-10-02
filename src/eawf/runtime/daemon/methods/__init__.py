@@ -409,6 +409,7 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "domain",
     "domain_create",
     "domain_envelope",
+    "effort_mapping",
     "event",
     "evidence_ladder",
     "fleet",

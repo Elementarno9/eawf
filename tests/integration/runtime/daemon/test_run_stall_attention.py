@@ -269,6 +269,35 @@ def test_ui_062_enter_on_a_stall_opens_the_pause_over_its_run(
     assert sent == []
 
 
+def test_ui_062_enter_on_a_later_stall_opens_its_own_pause_not_the_ended_one(
+    canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    stalled(ctx, canary)
+    act(ctx, canary, 2)
+    assert sweep_once(ctx, now=datetime.now(UTC)) == (RUN_KEY,)
+    projection, register = attention(ctx, canary)
+    (row,) = register.rows
+    records = _pauses(ctx, canary)
+    ended, standing = sorted(records.pauses, key=lambda p: p.id)
+    assert (ended.scope, standing.scope) == (RUN_KEY, RUN_KEY)
+    assert (ended.status.value, standing.status.value) == ("RESOLVED", "OPEN")
+    session = Session(route="attention", sel_id=row.key)
+    sent: list[VerbRequest] = []
+
+    dispatch(_ctx(projection, session, sent, records), "Enter", False)
+
+    assert (session.overlay, session.ov_subject) == ("pause", standing.id)
+
+    # with only the ended pause read, nothing stands over this stall to open
+    session = Session(route="attention", sel_id=row.key)
+    only_ended = DecisionRecords(pauses=(ended,))
+    dispatch(_ctx(projection, session, sent, only_ended), "Enter", False)
+
+    assert session.overlay is None
+    assert "not read yet" in (session.trace or "")
+    assert sent == []
+
+
 def test_ui_062_enter_on_a_stall_whose_pause_is_unread_opens_nothing(
     canary: CanaryProvision, ctx: MethodContext
 ) -> None:

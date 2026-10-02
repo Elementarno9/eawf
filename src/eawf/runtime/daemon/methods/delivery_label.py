@@ -24,6 +24,7 @@ from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict
 
+from eawf.kernel.delivery.batch_proof import BatchVerificationCycle
 from eawf.kernel.delivery.gold_label import AuditGoldLabel, LabelNote, gold_label_line
 from eawf.kernel.delivery.integration import IdempotencyKey
 from eawf.kernel.state.epoch2.authority import RootAuthority
@@ -32,12 +33,18 @@ from eawf.kernel.state.epoch2.urns import BatchUrn
 from eawf.kernel.store.kinds.gate_receipt import GateIdentityStr
 from eawf.kernel.store.ledger import read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.observability.eval.native_cohort import (
+    newest_by_subject,
+    observe_verdict_outcomes,
+    scoreable,
+)
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.delivery import CYCLE_KEY_PREFIX, keyed_call
 from eawf.runtime.daemon.methods.delivery_anchor import require_anchor
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
+from eawf.runtime.daemon.verdict_observations import jury_producers
 
 logger = logging.getLogger(__name__)
 
@@ -104,22 +111,33 @@ def label_audit(
 
     Raises:
         DaemonValidationError: No verification cycle of the Batch ever held a
-            verdict for the criterion, so there is nothing for the label to score.
+            verdict for the criterion, or its newest verdict is one the jury's
+            cohort never scores, so there is nothing for the label to score.
     """
     wanted = f"{CYCLE_KEY_PREFIX}{args.urn.entity_key}"
     with context.session([str(args.urn)]) as session:
-        judged = {
-            audit.get("criterion_id")
+        lines = tuple(
+            BatchVerificationCycle.model_validate(item.payload)
             for item in read_ledger_records(session.ledger_path(Epoch2Collection.BATCH))
             if item.record_key == wanted
-            for audit in item.payload.get("audits", ())
-            if isinstance(audit, dict)
-        }
-        if args.criterion_id not in judged:
+        )
+        # The label judges the subject's newest verdict, so it is anchored by the
+        # same rule the cohort scores by; settlement plays no part in that rule.
+        newest = newest_by_subject(observe_verdict_outcomes(lines, merged_batches=frozenset())).get(
+            (args.urn.entity_key, args.criterion_id)
+        )
+        if newest is None:
             raise DaemonValidationError(
                 f"validation_failed: gold_label_unanchored: no verification cycle of batch "
                 f"{args.urn.entity_key} held a verdict for criterion {args.criterion_id}, so a "
                 "label on it scores nothing"
+            )
+        run_lines = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
+        if not scoreable(newest, jury_producers(session.read_document(), run_lines)):
+            raise DaemonValidationError(
+                f"validation_failed: gold_label_unscored: the newest verdict on criterion "
+                f"{args.criterion_id} of batch {args.urn.entity_key} is unverified or no "
+                "reviewer identity answers for it, so the cohort never scores a label on it"
             )
         label = AuditGoldLabel(
             batch_ref=args.urn,

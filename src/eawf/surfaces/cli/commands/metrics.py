@@ -37,6 +37,11 @@ existing single-command registration in :mod:`eawf.surfaces.cli.app` stays intac
   BlockAuthority tier. Under the cohort floor the reducer refuses to score
   and the render is the honest "insufficient signal (n=k)" banner -- it reads
   no telemetry cache, so it is not gated on ``telemetry.enabled``.
+- ``eawf metrics refit --actor KEY`` — re-fit the effort-unit mapping
+  through the daemon against the recorded actuals. A move within the
+  threshold is stored as the next revision; a larger one files an operator
+  decision. It prints whether the re-fit was due, how many actuals it
+  excluded and why, and what it stored or asked.
 - ``eawf metrics conduct`` — render the conduct deviation rate: deviations
   per completed wave, per obligation (every compiled conduct obligation,
   so a never-breached one reads as zero) and per runtime, read from the
@@ -79,7 +84,17 @@ _JURY_VALIDATION_SUBCOMMAND = "jury-validation"
 
 _CONDUCT_SUBCOMMAND = "conduct"
 
-_KNOWN_SUBCOMMANDS = _TELEMETRY_SUBCOMMANDS | {_JURY_VALIDATION_SUBCOMMAND, _CONDUCT_SUBCOMMAND}
+_REFIT_SUBCOMMAND = "refit"
+
+#: The daemon verb ``metrics refit`` forwards to, spelled here so the Typer tree
+#: builds without the daemon method registry on the path.
+_REFIT_METHOD = "runtime.estimation.refit"
+
+_KNOWN_SUBCOMMANDS = _TELEMETRY_SUBCOMMANDS | {
+    _JURY_VALIDATION_SUBCOMMAND,
+    _CONDUCT_SUBCOMMAND,
+    _REFIT_SUBCOMMAND,
+}
 
 _OPT_IN_NUDGE = (
     "telemetry is disabled — no metrics are collected.\n"
@@ -94,7 +109,7 @@ def metrics_cmd(
     subcommand: Annotated[
         str | None,
         typer.Argument(
-            metavar="[show|export|rebuild|info|variance|jury-validation|conduct]",
+            metavar="[show|export|rebuild|info|variance|jury-validation|conduct|refit]",
             help="Metrics sub-verb. Omit for the rolling workflow-metrics view.",
         ),
     ] = None,
@@ -117,10 +132,22 @@ def metrics_cmd(
             help="`metrics rebuild`: project only the tail appended since the last scan.",
         ),
     ] = False,
+    actor: Annotated[
+        str | None,
+        typer.Option("--actor", help="`metrics refit`: principal key of the person asking."),
+    ] = None,
+    idempotency_key: Annotated[
+        str | None,
+        typer.Option(
+            "--idempotency-key",
+            help="`metrics refit`: the name the request is filed under; defaults to the day.",
+        ),
+    ] = None,
 ) -> None:
     """Dispatch the bare workflow-metrics view or a metrics sub-verb.
 
     Read-only for ``show`` / ``info`` / ``variance`` / the bare view;
+    ``refit`` stores a mapping revision or files a decision through the daemon;
     ``export`` may write a file; ``rebuild`` mutates the local telemetry
     cache only (never ``state.json``).
 
@@ -148,6 +175,8 @@ def metrics_cmd(
         _jury_validation(flags)
     elif subcommand == _CONDUCT_SUBCOMMAND:
         _conduct_deviation_rate(flags)
+    elif subcommand == _REFIT_SUBCOMMAND:
+        _refit(flags, actor=actor, idempotency_key=idempotency_key)
     else:  # subcommand == "info"
         _telemetry_info(flags)
 
@@ -210,16 +239,63 @@ def _estimate_actual_variance(flags: GlobalFlags) -> None:
 
     metric = compute_estimate_actual_variance(state)
     payload: dict[str, Any] = metric.model_dump(mode="json")
-    text = _render_variance(metric.variance_pct, metric.sample_count)
+    text = _render_variance(metric.variance_pct, metric.sample_count, metric.mapping_revisions)
     emit_json_or_text(payload, text, flags=flags)
 
 
-def _render_variance(variance_pct: float | None, sample_count: int) -> str:
-    """Render the M26 variance gauge as a one-line ship-gate summary."""
+def _render_variance(
+    variance_pct: float | None, sample_count: int, mapping_revisions: list[str]
+) -> str:
+    """Render the M26 variance gauge as a one-line ship-gate summary.
+
+    A roll-up whose estimates span more than one mapping revision names them.
+    """
     if variance_pct is None:
         return f"estimate-actual variance: no data (samples={sample_count})"
     sign = "+" if variance_pct >= 0 else ""
-    return f"estimate-actual variance: {sign}{variance_pct:.1f}% (samples={sample_count})"
+    line = f"estimate-actual variance: {sign}{variance_pct:.1f}% (samples={sample_count})"
+    if len(mapping_revisions) > 1:
+        line += f" across mapping revisions {', '.join(mapping_revisions)}"
+    return line
+
+
+def _refit(flags: GlobalFlags, *, actor: str | None, idempotency_key: str | None) -> None:
+    """Re-fit the effort-unit mapping through the daemon and print what it did.
+
+    The daemon stores a revision the threshold admits and files an operator
+    decision for a larger move. Without ``--idempotency-key`` the request is
+    keyed by the day, so a re-run the same day answers with what the first
+    stored. Failures map to the canonical CLI exit codes: UserError
+    (``exit=1``) without ``--actor``, and the daemon's own refusal otherwise.
+    """
+    from datetime import UTC, datetime
+
+    from eawf.surfaces.cli._daemon_client import DaemonRpcError
+    from eawf.surfaces.cli.commands.domain import _native_answer
+    from eawf.surfaces.render.metrics_view import render_refit_answer
+    from eawf.workflow.estimation.mapping_revisions import RefitAnswer
+
+    if actor is None:
+        cli_errors.emit_error(
+            cli_errors.UserError("metrics refit needs --actor, the person asking"), flags=flags
+        )
+        return
+    key = idempotency_key or f"refit-{datetime.now(UTC):%Y-%m-%d}"
+    try:
+        raw = _native_answer(
+            _REFIT_METHOD,
+            {"actor": actor, "idempotency_key": key},
+            flags=flags,
+            verb_text="metrics refit",
+        )
+    except DaemonRpcError as exc:
+        cli_errors.emit_error(cli_errors.cli_error_for_rpc(exc.code, exc.message), flags=flags)
+        return
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    answer = RefitAnswer.model_validate(raw)
+    emit_json_or_text(answer.model_dump(mode="json"), render_refit_answer(answer), flags=flags)
 
 
 #: The Wilson lower-bound floor the jury's pass-fraction forecast must clear

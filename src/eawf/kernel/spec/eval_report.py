@@ -63,7 +63,8 @@ class MetricUnit(StrEnum):
 
     - ``COUNT`` — a whole-number tally (waves, phases, criteria, commits).
     - ``EU`` — effort units (one EU is ~30 minutes of agent-driven session
-      time; see :data:`eawf.workflow.estimation.buckets.EU_MINUTES`).
+      time; see
+      :attr:`eawf.workflow.estimation.mapping.EffortMapping.eu_minutes`).
     - ``RATIO`` — a dimensionless fraction in ``[0, 1]`` (coverage ratios).
     - ``USD`` — a dollar figure (API-equivalent build cost).
     """

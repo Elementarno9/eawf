@@ -1,12 +1,12 @@
-"""A Task runs from start to completion without touching a tracked file.
+"""A Task runs from claim to integration without touching a tracked file.
 
 Driven over the registered daemon verbs on a disposable canary that is a
 real git repository carrying the managed ignore block. The planned tree
 is committed first, so every later ``git status`` line is something a
-step wrote. Claiming, starting, sealing, completing the Task and ending
-its Run are status, and leave the tree clean. Integrating and verifying
-the Batch is a delivery fact, and it lands in the committed generation
-document.
+step wrote. Claiming, starting and sealing the Task and running and
+ending its Run are in-flight status, and leave the tree clean.
+Integrating and verifying the Batch is a delivery fact, and completing
+the Task a terminal status; both land in the committed generation.
 
 Nothing here stands in for the split. With the status projection folded
 back into ``state.json``, the start alone rewrites a tracked file and
@@ -26,9 +26,8 @@ import pytest
 import eawf.runtime.daemon.methods.delivery
 import eawf.runtime.daemon.methods.domain
 import eawf.runtime.daemon.methods.run  # noqa: F401  (registers the verbs the walk reaches)
-from eawf.kernel.store.compaction import STATUS_DOCUMENT_KEYS
 from eawf.kernel.store.ledger import read_ledger_records
-from eawf.kernel.store.paths import ledger_path, seed_ledger_path, status_projection_path
+from eawf.kernel.store.paths import ledger_path, status_projection_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.gitignore_writer import write_gitignore
 from eawf.runtime.daemon import native_dispatch
@@ -75,7 +74,7 @@ def ledger_keys(path: Path) -> set[str]:
     return {item.record_key for item in read_ledger_records(path)}
 
 
-def test_a_task_start_to_completion_changes_no_tracked_file(tmp_path: Path) -> None:
+def test_only_a_terminal_or_delivery_fact_changes_a_tracked_file(tmp_path: Path) -> None:
     walker = Walker(tmp_path / "repo", tmp_path / "runtime")
     with mock.patch.object(
         native_dispatch, "NATIVE_LAUNCHERS", dict(compile_launchers((StandInLauncher(),)))
@@ -85,14 +84,16 @@ def test_a_task_start_to_completion_changes_no_tracked_file(tmp_path: Path) -> N
         commit_all(walker, "chore: initialize the canary")
         assert porcelain(walker) == []
         state_path = document_path(walker)
-        assert STATUS_DOCUMENT_KEYS.isdisjoint(committed(walker))
+        task_key, run_key = planned.task.rsplit("/", 1)[1], planned.run.rsplit("/", 1)[1]
+        assert committed(walker)["task"][task_key]["status"] == "PLANNED"
+        assert "run" not in committed(walker)
 
         _dispatch_and_seal(walker, planned)
         assert walker.stored(planned.task)["status"] == "READY_TO_INTEGRATE"
         assert porcelain(walker) == [], "starting a Task rewrote a tracked file"
         projection = json.loads(status_projection_path(state_path).read_text("utf-8"))
-        assert planned.task.rsplit("/", 1)[1] in projection["task"]
-        assert STATUS_DOCUMENT_KEYS.isdisjoint(committed(walker))
+        assert projection["status"]["task"][task_key]["status"] == "READY_TO_INTEGRATE"
+        assert committed(walker)["task"][task_key]["status"] == "PLANNED"
 
         binding = _integrate_and_verify(walker, planned)
         batch_key = planned.batch.rsplit("/", 1)[1]
@@ -107,6 +108,13 @@ def test_a_task_start_to_completion_changes_no_tracked_file(tmp_path: Path) -> N
             "the Batch integrated the Task's work",
             updates={"integrated_binding": binding},
         )
+        changed = porcelain(walker)
+        assert changed, "completing a Task left no committed trace"
+        assert all(
+            not path.startswith(".ea/generations/gen-") or "/local/" not in path
+            for _, path in changed
+        ), changed
+        commit_all(walker, "chore: record the completed Task")
         walker.transition(
             planned.run,
             "RUNNING",
@@ -120,9 +128,8 @@ def test_a_task_start_to_completion_changes_no_tracked_file(tmp_path: Path) -> N
             updates={"ended_at": datetime.now(UTC).isoformat()},
             observations=["run_report_bound"],
         )
-        assert porcelain(walker) == [], "completing a Task rewrote a tracked file"
+        assert porcelain(walker) == [], "ending a Run rewrote a tracked file"
 
-    task_key, run_key = planned.task.rsplit("/", 1)[1], planned.run.rsplit("/", 1)[1]
+    assert ledger_path(state_path, Epoch2Collection.TASK).parent == state_path.parent / "ledger"
     assert task_key in ledger_keys(ledger_path(state_path, Epoch2Collection.TASK))
     assert run_key in ledger_keys(ledger_path(state_path, Epoch2Collection.RUN))
-    assert task_key not in ledger_keys(seed_ledger_path(state_path, Epoch2Collection.TASK))

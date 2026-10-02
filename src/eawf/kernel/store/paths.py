@@ -29,12 +29,12 @@ The epoch-2 tiers are siblings of ``store/`` rather than members of it::
     <state_dir>/local/ledger/<collection>.jsonl   status ledger
     <state_dir>/store/event.jsonl                 firehose
 
-Task and Run status is the machine-local projection: those collections'
-document rows sit in ``local/status.json`` and their ledgers under
+Run rows and in-flight Task status are the machine-local projection:
+they sit in ``local/status.json`` and the Run ledger under
 ``local/ledger/``, so a claim, a start or a completion rewrites nothing
-version control carries. A ledger either collection once kept at
-``ledger/`` stays there as the committed seed a clone rebuilds its
-status ledger from (:func:`seed_ledger_path`).
+version control carries. A Run ledger once kept at ``ledger/`` stays
+there as the committed seed a clone rebuilds its status ledger from
+(:func:`seed_ledger_path`). The Task ledger is committed.
 
 The ledger, its derived index and the local store have resolvers; a
 store kind whose rows are machine-local resolves under ``local/`` through

@@ -14,7 +14,6 @@ workspace that already claims the project is left as it is rather than duplicate
 
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import Callable
 from contextlib import AbstractContextManager
@@ -22,6 +21,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Protocol
 
+from pydantic import ValidationError
+
+from eawf.kernel.state.models import State
 from eawf.platform.registry import (
     Registry,
     WorkspaceRecord,
@@ -87,16 +89,16 @@ class FirstRun:
 def project_code(state_path: Path) -> str | None:
     """Return the project code the tree's state records, or ``None`` when it records none.
 
+    A document that does not validate records no code to register the tree under.
+
     Args:
         state_path: The tree's ``state.json``.
     """
     try:
-        payload = json.loads(state_path.read_text("utf-8"))
-    except OSError, ValueError:
+        project = State.model_validate_json(state_path.read_bytes()).project
+    except OSError, ValidationError:
         return None
-    project = payload.get("project") if isinstance(payload, dict) else None
-    code = project.get("code") if isinstance(project, dict) else None
-    return code if isinstance(code, str) and code else None
+    return project.code if project is not None else None
 
 
 def _registry(path: Path) -> Registry:

@@ -32,9 +32,16 @@ def test_etime_seconds_rejects_garbage() -> None:
     ("command", "expected"),
     [
         ("/venv/bin/python -m eawf.runtime.daemon.main", True),
+        ("/usr/bin/python3.14 -m eawf.runtime.daemon.main", True),
         ("/venv/bin/python /venv/bin/eawfd --foreground", True),
+        ("/venv/bin/eawfd --foreground", True),
         ("/venv/bin/eawf doctor --fix", False),
         ("tail -f .eawfd/eawfd.log", False),
+        ("tail -f eawfd", False),
+        ("pgrep eawfd", False),
+        ("vim /venv/bin/eawfd", False),
+        ("grep eawf.runtime.daemon.main notes.txt", False),
+        ("/venv/bin/python", False),
         ("", False),
     ],
 )
@@ -70,6 +77,52 @@ def test_daemon_whose_socket_answers_as_another_is_a_stray(
     monkeypatch.setattr(daemon_strays, "daemon_pid_if_ready", lambda _dir: 1)
 
     assert daemon_strays._stray_reason(_process(0.0), str(socket)) == "address_lost"
+
+
+def _at_base(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pinned: list[bytes] | None) -> str:
+    """Bind a live daemon at the per-user base dir while clients dial a per-tree dir."""
+    base = tmp_path / "base"
+    base.mkdir()
+    socket = base / "eawfd.sock"
+    socket.write_text("", encoding="utf-8")
+    monkeypatch.setattr(daemon_strays, "daemon_pid_if_ready", lambda _dir: 4242)
+    monkeypatch.setattr(daemon_strays, "runtime_base_dir", lambda: base)
+    monkeypatch.setattr(daemon_strays, "runtime_dir", lambda: base / "trees" / "abc")
+    monkeypatch.setattr(daemon_strays, "_process_environment", lambda _pid: pinned)
+    return str(socket)
+
+
+def test_daemon_on_the_per_user_address_is_superseded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    socket = _at_base(tmp_path, monkeypatch, [b"HOME=/h"])
+
+    assert daemon_strays._stray_reason(_process(0.0), socket) == "superseded_address"
+
+
+def test_daemon_with_an_unreadable_environment_keeps_the_superseded_reading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    socket = _at_base(tmp_path, monkeypatch, None)
+
+    assert daemon_strays._stray_reason(_process(0.0), socket) == "superseded_address"
+
+
+def test_daemon_strays_repro_pinned_runtime_dir_flagged_superseded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pin = f"EAWF_RUNTIME_DIR={tmp_path / 'base'}".encode()
+    socket = _at_base(tmp_path, monkeypatch, [b"HOME=/h", pin])
+
+    assert daemon_strays._stray_reason(_process(0.0), socket) is None
+
+
+def test_daemon_pinned_elsewhere_on_the_per_user_address_is_superseded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    socket = _at_base(tmp_path, monkeypatch, [b"EAWF_RUNTIME_DIR=/somewhere/else"])
+
+    assert daemon_strays._stray_reason(_process(0.0), socket) == "superseded_address"
 
 
 def test_check_is_ok_without_a_readable_process_table(monkeypatch: pytest.MonkeyPatch) -> None:

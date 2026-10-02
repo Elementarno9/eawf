@@ -29,6 +29,7 @@ from eawf.kernel.store.commit_policy import (
     UndeclaredPathError,
     classify_path,
 )
+from eawf.kernel.store.paths import status_projection_path
 from eawf.kernel.store.tiers import (
     LEDGER_COLLECTIONS,
     STATUS_PROJECTION_COLLECTIONS,
@@ -150,6 +151,8 @@ def test_session_write_leaves_only_declared_files_behind(
         path.relative_to(canary).as_posix()
         for path in (
             document_path,
+            # The projection names the committed bytes it belongs to.
+            status_projection_path(document_path),
             context.lock_path(MILESTONE),
             context.lock_path(BATCH),
             context.lock_path(DOCUMENT_LOCK_NAME),

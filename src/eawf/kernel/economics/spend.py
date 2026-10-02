@@ -78,6 +78,9 @@ class CostCeilingView(_View):
             reservation and its spend -- or ``None`` when one holds no cap.
         spent_cost_microusd: Their priced spend: zero with none live, ``None`` when
             none was priced.
+        spent_cost_pricing: ``priced`` when every live Run's cost was read,
+            ``unmetered`` when none was, ``partial`` between: a partial sum leaves
+            the unpriced Runs out, so it is a floor under the spend.
         held_cost_microusd: What they hold in cost, or ``None`` when one is uncapped.
         stopped: The crossings a hard limit answered, newest first.
         providers: Spend by provider over every Run on the ledger.
@@ -90,6 +93,7 @@ class CostCeilingView(_View):
     spent_tokens: StrictNonNegativeInt | None
     held_tokens: StrictNonNegativeInt | None
     spent_cost_microusd: StrictNonNegativeInt | None
+    spent_cost_pricing: Pricing
     held_cost_microusd: StrictNonNegativeInt | None
     stopped: tuple[StoppedRun, ...] = ()
     providers: tuple[ProviderSpend, ...] = ()

@@ -100,6 +100,7 @@ from eawf.workflow.agents.specs.models import (
     SubagentSpec,
 )
 from eawf.workflow.agents.specs.roles import RoleSpec, get_role_spec
+from eawf.workflow.estimation.mapping import CURRENT_EFFORT_MAPPING, estimate_unavailable_reason
 from eawf.workflow.lifecycle.ceremony import compute_ceremony
 
 logger = logging.getLogger(__name__)
@@ -677,12 +678,23 @@ def build_subagent_spec(
 
 
 def _build_estimate(state: State, wave: Wave) -> SpecEstimate:
-    """Return dispatch estimate hints for *wave*."""
+    """Return dispatch estimate hints for *wave*.
+
+    A recorded estimate that names no reference class, sample size or
+    mapping revision, or rests on too small a sample, renders as unavailable
+    rather than as a number.
+    """
     estimate = (state.estimates or {}).get(wave.id)
+    unavailable = (
+        estimate_unavailable_reason(estimate, CURRENT_EFFORT_MAPPING)
+        if estimate is not None
+        else None
+    )
     return SpecEstimate(
         effort_bucket=wave.effort_bucket.value if wave.effort_bucket else None,
         expected_eu=estimate.expected_eu if estimate is not None else None,
         expected_minutes=estimate.expected_minutes if estimate is not None else None,
+        unavailable_reason=unavailable.value if unavailable is not None else None,
         token_budget=wave.token_budget,
         parallel_siblings=_parallel_siblings(state, wave),
     )

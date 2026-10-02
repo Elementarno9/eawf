@@ -9,7 +9,7 @@ This repo is managed by eawf, an agent-driven workflow. Work nests as **phase** 
 Reality lives in ``.ea/state.json``, not here: this file carries the rules, ``eawf status`` carries the current position.
 
 <!-- END EAWF:managed id=project-orientation -->
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.12 hash=0ff2ad22299d4262 -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.12 hash=32b578658b7cc22f -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a non-trivial body has an expansion block immediately following.
@@ -17,7 +17,7 @@ The rules below apply to every eawf-managed project. Each rule with a non-trivia
 1. **CLI is dispatch; library implements.** See ``architecture-cli-dispatch``.
 2. **Strict config validation.** Every YAML/JSON ingestion path uses Pydantic v2 ``BaseModel`` with ``ConfigDict(extra="forbid")``. Validation lives in the loader; downstream functions accept already-validated typed objects only.
 3. **`.ea/` is committed.** See ``ea-directory-commit-policy``.
-4. **Daemon is the sole canonical mutator** for ``state.json``, layered config YAML, registry JSON, event/audit stores, and telemetry DB (Decision D-SUP-01; per-file authority map at ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md``). Reads are free. ``uv run eawf state ...`` is the operator-facing surface: it proxies mutations to the daemon over JSON-RPC and falls back to direct ``portalocker`` writes only when the daemon is unavailable (CI, one-shot, recovery shell).
+4. **Daemon is the sole canonical mutator** for ``state.json``, layered config YAML, registry JSON, event/audit stores, and telemetry DB (Decision D-SUP-01; per-file authority map at ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md``). Reads are free. The eawf entity verbs (``eawf task ...``, ``eawf batch ...``) are the operator-facing surface: they send mutations to the daemon over JSON-RPC, with a fallback to direct ``portalocker`` writes only when the daemon is unavailable (CI, one-shot, recovery shell).
 5. **Symbol conventions.** See ``symbol-conventions``.
 6. **Deletion rule.** See ``deletion-rule``.
 7. **State is in `state.json`, not in specs.** See ``state-vs-specs``.
@@ -98,10 +98,10 @@ Iter close is gated on **audit + polish + ship CI + PR review pass**. Do not clo
 The CLI layer parses arguments and formats output. All domain logic lives in the library. CLI handlers must accept typed config / state objects, never raw ``dict``.
 
 <!-- END EAWF:managed id=architecture-cli-dispatch -->
-<!-- BEGIN EAWF:managed id=ea-directory-commit-policy version=1.0 hash=576350ef948e7c4d -->
+<!-- BEGIN EAWF:managed id=ea-directory-commit-policy version=1.0 hash=f86049892662bace -->
 ### `.ea/` directory: commit policy
 
-``.ea/state.json``, ``.ea/profile.yaml`` and each generation's ``state.json`` and ledgers are committed to version control — they are the source of truth for what was released, delivered and decided. Per-Task and per-Run status (each generation's ``local/`` projection), ``.ea/locks/`` and ``.ea/local/`` are gitignored.
+``.ea/state.json``, ``.ea/profile.yaml`` and each generation's ``state.json`` and ledgers are committed to version control — they are the source of truth for what was released, delivered and decided. Task definitions are committed too. In-flight Task status and Run rows (each generation's ``local/`` projection), ``.ea/locks/`` and ``.ea/local/`` are gitignored.
 
 <!-- END EAWF:managed id=ea-directory-commit-policy -->
 <!-- BEGIN EAWF:managed id=symbol-conventions version=1.1 hash=aa4eba138c4bd39e -->
@@ -272,10 +272,10 @@ Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``, ``pass-with-followup
 <!-- BEGIN EAWF:managed id=commit-granularity version=1.3 hash=df917983dc831b9e -->
 `commit-granularity` — One commit per wave and per deliverable; wave-close bookkeeping rides the wave commit, and a golden refresh rides its cause. Full text: [docs/rules/commit-granularity.md](docs/rules/commit-granularity.md)
 <!-- END EAWF:managed id=commit-granularity -->
-<!-- BEGIN EAWF:managed id=anti-patterns version=1.2 hash=d92fc4c83b8d1338 -->
+<!-- BEGIN EAWF:managed id=anti-patterns version=1.2 hash=c174bad32821d1ea -->
 ## Anti-patterns
 
-- Mutating ``state.json`` outside the daemon (or its state-CLI proxy / portalocker direct-write fallback) — see rule 4.
+- Mutating ``state.json`` outside the daemon (or its entity-verb proxy / portalocker direct-write fallback) — see rule 4.
 - Skipping ``extra="forbid"`` on a Pydantic model "just for now".
 - Merging worktree branches instead of cherry-picking.
 - ``--no-verify`` on a failing pre-commit hook.

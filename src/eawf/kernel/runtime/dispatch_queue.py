@@ -66,8 +66,8 @@ class DispatchControlFact(_Frozen):
 
     Attributes:
         payload_kind: The payload discriminator.
-        request_ref: The id the request was sent under; the same id sent again answers
-            with this fact rather than recording a second.
+        request_ref: The id the request was sent under; the same id sent again with
+            the same verb answers with this fact rather than recording a second.
         verb: What was asked.
         actor: The principal who asked.
         requested_at: When the daemon recorded it.

@@ -81,8 +81,9 @@ _DEPTH_EFFORT: Final = {
 
 _JSON_BLOCK: Final = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 
-#: The drives running in this daemon, by Campaign key.
-_DRIVES: dict[str, asyncio.Task[CampaignDrive]] = {}
+#: The drives running in this daemon, by tree root id and Campaign key: one daemon
+#: serves several trees, and each numbers its Campaigns from one.
+_DRIVES: dict[tuple[str, str], asyncio.Task[CampaignDrive]] = {}
 
 Runtime = Annotated[str, Field(pattern=r"^(claude-code|codex|opencode)$")]
 AgentCount = Annotated[int, Field(ge=AGENT_COUNT_BAND[0], le=AGENT_COUNT_BAND[1], strict=True)]
@@ -234,10 +235,14 @@ def resolve_agent_count(merged: dict[str, Any], explicit: int | None) -> int:
     return min(max(raw, low), high) if isinstance(raw, int) else DEFAULT_AGENT_COUNT
 
 
-def campaign_drive_in_flight(campaign_key: str | None = None) -> bool:
-    """Return whether this daemon is driving *campaign_key*, or any Campaign."""
+def campaign_drive_in_flight(drive: tuple[str, str] | None = None) -> bool:
+    """Return whether this daemon is driving *drive*, or any Campaign.
+
+    Args:
+        drive: The tree's root id and the Campaign key; ``None`` asks about any drive.
+    """
     live = {key for key, task in _DRIVES.items() if not task.done()}
-    return bool(live) if campaign_key is None else campaign_key in live
+    return bool(live) if drive is None else drive in live
 
 
 def _begin(
@@ -250,7 +255,8 @@ def _begin(
     width: int,
 ) -> bool:
     """Start driving *campaign_key* behind the answer; ``False`` when a drive already runs."""
-    if campaign_drive_in_flight(campaign_key):
+    drive = (context.identity.root_id, campaign_key)
+    if campaign_drive_in_flight(drive):
         return False
 
     def publish(envelopes: tuple[Envelope, ...]) -> None:
@@ -278,7 +284,7 @@ def _begin(
         logger.info(f"campaign drive ended campaign={campaign_key} disposition={drive.disposition}")
 
     task.add_done_callback(finished)
-    _DRIVES[campaign_key] = task
+    _DRIVES[drive] = task
     return True
 
 

@@ -66,10 +66,10 @@ from eawf.kernel.state.models import (
     Wave,
 )
 from eawf.workflow.estimation.buckets import (
-    EFFORT_EU,
     critical_path_eu,
     sum_wave_eu,
 )
+from eawf.workflow.estimation.mapping import CURRENT_EFFORT_MAPPING
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
 logger = logging.getLogger(__name__)
@@ -581,7 +581,7 @@ def build_view(state: State, iter_id: str) -> PlanView:
             success_criteria=[c.text for c in w.success_criteria],
             agent_role=w.agent_role.value if w.agent_role else None,
             effort_bucket=w.effort_bucket.value if w.effort_bucket else None,
-            estimate_eu=EFFORT_EU,
+            estimate_eu=CURRENT_EFFORT_MAPPING.effort_eu,
             claim_session_id=w.claim_session_id,
             commit=derive_wave_sha(w.id),
             outcome=w.outcome,

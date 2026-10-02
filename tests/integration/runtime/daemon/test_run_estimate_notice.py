@@ -33,7 +33,7 @@ from eawf.runtime.daemon.methods.pause import latest_pauses, stall_of
 from eawf.runtime.daemon.methods.run import RUN_EVENT_APPEND_METHOD
 from eawf.runtime.daemon.methods.run_liveness import detect_estimate_crossings
 from eawf.runtime.daemon.stall_sweep import sweep_once
-from eawf.workflow.estimation.buckets import EFFORT_DISPERSION_MINUTES, EFFORT_MINUTES
+from eawf.workflow.estimation.mapping import CURRENT_EFFORT_MAPPING
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     document_path,
     method_context,
@@ -53,7 +53,7 @@ STARTED: Final = datetime(2026, 9, 8, 1, 0, tzinfo=UTC)
 GRACE: Final = timedelta(seconds=600)
 
 #: The one effort constant, as the elapsed time that passes it.
-ESTIMATE: Final = timedelta(minutes=EFFORT_MINUTES)
+ESTIMATE: Final = timedelta(minutes=CURRENT_EFFORT_MAPPING.effort_minutes)
 
 #: A Run of the tree that is not running, which the sweep must pass over.
 DONE_KEY: Final = "RUN-00000011"
@@ -137,7 +137,7 @@ def test_prx_034_an_epoch2_run_past_its_estimate_with_no_progress_opens_one_noti
     )
     assert notice.highest_band == "limit_reached"
     assert notice.blocking is False
-    assert notice.budget_value == int(EFFORT_MINUTES * 60) == 1440
+    assert notice.budget_value == int(CURRENT_EFFORT_MAPPING.effort_minutes * 60) == 1440
     assert notice.observed_value == 1440
     assert notice.audience == (LOCAL_OPERATOR,)
     assert _pauses(canary) == {}
@@ -157,7 +157,7 @@ def test_prx_034_the_estimate_is_the_effort_constant_not_the_pessimistic_p90(
     canary: CanaryProvision, tmp_path: Path
 ) -> None:
     ctx = _daemon(canary, tmp_path / "runtime")
-    p90 = timedelta(minutes=EFFORT_DISPERSION_MINUTES["p90"])
+    p90 = timedelta(minutes=CURRENT_EFFORT_MAPPING.pessimistic_minutes)
 
     opened = detect_estimate_crossings(_attached(ctx), now=STARTED + ESTIMATE)
 

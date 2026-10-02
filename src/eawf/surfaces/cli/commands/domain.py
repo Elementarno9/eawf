@@ -1345,6 +1345,14 @@ def task_create_cmd(
     )
 
 
+# ---- Command registration ---------------------------------------------------
+# The sibling modules import verb names and runners from this module, so they
+# load here, after every one is defined, rather than from ``lifecycle``: from
+# there they would run against a partial module whenever this module is the
+# first of the two a process imports.
+from eawf.surfaces.cli.commands import domain_delivery as _domain_delivery  # noqa: E402, F401
+from eawf.surfaces.cli.commands import domain_legacy as _domain_legacy  # noqa: E402, F401
+
 __all__ = [
     "CANDIDATE_SUBMIT",
     "DELIVERY_SEAL_APPROVAL",

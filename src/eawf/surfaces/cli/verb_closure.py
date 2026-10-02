@@ -343,7 +343,16 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
     _exempt("daemon reclaim", "local_setup", "trims the daemon's backups and write-ahead log"),
     _exempt("daemon service-enable", "local_setup", "installs the daemon service unit"),
     _exempt("daemon service-disable", "local_setup", "removes the daemon service unit"),
-    _exempt("metrics", "unversioned_store", "rebuild re-projects the derived telemetry database"),
+    _exempt(
+        "metrics",
+        "optional_key",
+        "refit files a mapping revision under --idempotency-key or the day; rebuild "
+        "re-projects the derived telemetry database",
+    ),
+    _exempt("doctor", "local_setup", "--fix repairs the local install, below the record layer"),
+    _exempt("migrate", "epoch1_state", "rewrites an epoch-1 state.json across schema versions"),
+    _exempt("migrate epoch2", "epoch1_state", "cuts an epoch-1 tree over before any record exists"),
+    _exempt("cc statusline install", "local_setup", "writes the host statusline configuration"),
     _exempt("schema dump", "local_setup", "rewrites the committed generated schema files"),
     _exempt("sync", "local_setup", "re-renders the managed instruction files"),
     _exempt("snapshot update", "local_setup", "rewrites committed golden fixtures"),

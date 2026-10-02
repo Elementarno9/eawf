@@ -152,12 +152,37 @@ def observe_verdict_outcomes(
     return tuple(observed)
 
 
-def _newest_by_subject(observed: Sequence[ObservedVerdict]) -> Mapping[AuditSubject, str]:
-    """Return the key of each subject's newest verdict, the one a gold label judges."""
-    newest: dict[AuditSubject, str] = {}
+def newest_by_subject(
+    observed: Sequence[ObservedVerdict],
+) -> Mapping[AuditSubject, ObservedVerdict]:
+    """Return each subject's newest verdict, the one a gold label judges.
+
+    Args:
+        observed: The verdicts, each Batch's in the order they were first filed.
+
+    Returns:
+        The last verdict filed on each subject.
+    """
+    newest: dict[AuditSubject, ObservedVerdict] = {}
     for item in observed:
-        newest[item.subject] = item.key
+        newest[item.subject] = item
     return newest
+
+
+def scoreable(item: ObservedVerdict, producers: Mapping[str, tuple[AgentSessionRole, str]]) -> bool:
+    """Return whether the cohort can score *item*: it judged, and a producer answers for it.
+
+    Args:
+        item: The verdict.
+        producers: The ``(agent_role, runtime)`` each reviewer Run answers for, by Run key.
+
+    Returns:
+        ``False`` for an unverified verdict or one no producer answers for.
+    """
+    return (
+        item.audit.verdict is not AuditVerdict.UNVERIFIED
+        and item.audit.review.run_ref.entity_key in producers
+    )
 
 
 def native_cohort(
@@ -177,19 +202,18 @@ def native_cohort(
         The cohort, silver rows first-filed order and gold rows likewise, and the
         ballots keyed by verdict key, which each row's ``base_id`` names.
     """
-    newest = _newest_by_subject(observed)
+    newest = newest_by_subject(observed)
     silver: list[LabeledVerdict] = []
     gold: list[LabeledVerdict] = []
     ballots: dict[str, tuple[JurorBallot, ...]] = {}
     for item in observed:
         audit = item.audit
-        producer = producers.get(audit.review.run_ref.entity_key)
-        if audit.verdict is AuditVerdict.UNVERIFIED or producer is None:
+        if not scoreable(item, producers):
             continue
-        label = labels.get(item.subject) if newest[item.subject] == item.key else None
+        label = labels.get(item.subject) if newest[item.subject].key == item.key else None
         if label is None and item.outcome is None:
             continue
-        role, runtime = producer
+        role, runtime = producers[audit.review.run_ref.entity_key]
         verdict = (
             AgentReportVerdict.PASS
             if audit.verdict is AuditVerdict.VERIFIED_TRUE
@@ -237,5 +261,7 @@ __all__ = [
     "ObservedVerdict",
     "OutcomeSource",
     "native_cohort",
+    "newest_by_subject",
     "observe_verdict_outcomes",
+    "scoreable",
 ]

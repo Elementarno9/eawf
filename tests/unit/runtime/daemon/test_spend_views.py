@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.economics.governor import DEFAULT_GOVERNOR
+from eawf.kernel.economics.governor import DEFAULT_GOVERNOR, RunReservation
 from eawf.kernel.identity import EntityKind, parse_qualified_urn
 from eawf.kernel.runtime.budget_notice import BudgetNotice
 from eawf.kernel.runtime.usage import UsageQuality
@@ -27,6 +27,7 @@ from eawf.kernel.state.epoch2.measurement import (
 )
 from eawf.kernel.store.ledger import LedgerRecord
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.daemon import spend
 from eawf.runtime.daemon.run_capture_updates import captured_usage
 from eawf.runtime.daemon.spend import cost_ceiling_view, run_usage_view
 from eawf.surfaces.tui.console.renderers.budget_lines import (
@@ -106,6 +107,31 @@ def test_ui_046_a_crossing_no_confirmed_effect_answers_is_not_called_stopped() -
     assert (stop.observed_tokens, stop.cap_tokens) == (1_050, 1_000)
 
 
+@pytest.mark.parametrize(
+    ("accrued", "spent", "pricing"),
+    [
+        ((), 0, "priced"),
+        ((4_000,), 4_000, "priced"),
+        ((4_000, None), 4_000, "partial"),
+        ((None, None), None, "unmetered"),
+    ],
+    ids=["none-live", "one-priced", "one-unpriced", "all-unpriced"],
+)
+def test_ui_046_the_ceiling_spend_states_how_much_of_it_was_priced(
+    monkeypatch: pytest.MonkeyPatch,
+    accrued: tuple[int | None, ...],
+    spent: int | None,
+    pricing: str,
+) -> None:
+    """A sum over the priced Runs alone is a floor, and the view says so."""
+    live = tuple(RunReservation(run_ref=URN, accrued_cost_microusd=cost) for cost in accrued)
+    monkeypatch.setattr(spend, "in_flight_reservations", lambda *_, **__: live)
+
+    view = cost_ceiling_view(_document(), (), governor=DEFAULT_GOVERNOR)
+
+    assert (view.spent_cost_microusd, view.spent_cost_pricing) == (spent, pricing)
+
+
 # ---- the Run fold -----------------------------------------------------------
 
 
@@ -183,6 +209,20 @@ def test_con_077_an_unpriced_cost_reads_unmetered_never_zero() -> None:
     assert cost_line(None, 20_000_000) == "cost ∅ unmetered of 20.00"
     assert cost_line(4_620_000, 20_000_000) == "cost 4.62 of 20.00 · ≈15.38 left"
     assert money(0) == "0.00"
+
+
+@pytest.mark.parametrize(
+    ("limit", "expected"),
+    [
+        (20_000_000, "cost ≥4.62 of 20.00 · partly unmetered"),
+        (None, "cost ≥4.62 · no limit is set · partly unmetered"),
+    ],
+    ids=["limited", "unlimited"],
+)
+def test_ui_046_a_partly_priced_cost_reads_as_a_floor_with_no_remainder(
+    limit: int | None, expected: str
+) -> None:
+    assert cost_line(4_620_000, limit, partial=True) == expected
 
 
 def test_con_077_a_time_budget_never_reads_a_remaining_time() -> None:

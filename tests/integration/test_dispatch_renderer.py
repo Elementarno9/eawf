@@ -217,7 +217,13 @@ def _seam_wave_state() -> State:
     return state
 
 
-def _estimate(*, wave_id: str, expected_eu: float, expected_minutes: float) -> EstimateSummary:
+def _estimate(
+    *,
+    wave_id: str,
+    expected_eu: float,
+    expected_minutes: float,
+    reference_sample_size: int | None = 40,
+) -> EstimateSummary:
     """Return a deterministic estimate summary for renderer tests."""
     return EstimateSummary(
         id=f"EST-{wave_id}",
@@ -228,6 +234,8 @@ def _estimate(*, wave_id: str, expected_eu: float, expected_minutes: float) -> E
         pessimistic_minutes=expected_minutes * 1.5,
         display=f"{expected_eu} EU",
         reference_class="test",
+        reference_sample_size=reference_sample_size,
+        mapping_revision=2,
         confidence=Confidence.MEDIUM,
         current_store_record_id=f"REC-{wave_id}",
         updated_at=_T0,
@@ -391,6 +399,32 @@ def test_render_wave_prompt_estimate_values() -> None:
     assert "- expected_minutes: 90.0" in block
     assert "- token_budget: 8192" in block
     assert "- parallel_siblings: P01-I01-W02" in block
+
+
+@pytest.mark.parametrize(
+    ("sample_size", "reason"),
+    [(None, "no_sample_size"), (0, "sample_below_minimum"), (19, "sample_below_minimum")],
+)
+def test_meas_013_014_render_wave_prompt_estimate_unavailable(
+    sample_size: int | None, reason: str
+) -> None:
+    """An estimate with no sample size, or one below the minimum, renders no number."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.estimates = {
+        "P01-I01-W01": _estimate(
+            wave_id="P01-I01-W01",
+            expected_eu=3.0,
+            expected_minutes=90.0,
+            reference_sample_size=sample_size,
+        )
+    }
+
+    block = render_wave_prompt(state, "P01-I01-W01").split("## Estimate", 1)[1]
+
+    assert f"- expected_eu: unavailable ({reason})" in block
+    assert f"- expected_minutes: unavailable ({reason})" in block
+    assert "3.0" not in block
 
 
 def test_render_wave_prompt_includes_ceremony_recommendation() -> None:

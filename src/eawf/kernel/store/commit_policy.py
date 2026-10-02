@@ -252,8 +252,8 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
     _row(
         ".ea/generations/gen-*/local/**",
         _NO,
-        "one generation's Task and Run status projection; only release, delivery "
-        "and decision facts are committed",
+        "one generation's status projection: Run rows and in-flight Task status; "
+        "Task definitions and planning status are committed",
         tier=StorageTier.LOCAL_STORE,
     ),
     _row(
@@ -511,6 +511,9 @@ class PermanentCommitKind(StrEnum):
 #: The order the permanent commits descend in, each the only parent of the next.
 PERMANENT_COMMIT_ORDER: Final[tuple[PermanentCommitKind, ...]] = tuple(PermanentCommitKind)
 
+#: The trailer key a delivery commit names its manifest under.
+PROVENANCE_TRAILER_KEY: Final = "Eawf-Provenance"
+
 #: The scheme a delivery commit's provenance trailer addresses its manifest by.
 DELIVERY_PROVENANCE_SCHEME: Final = "manifest://"
 
@@ -691,6 +694,7 @@ __all__ = [
     "EA_PATH_CLASSES",
     "PERMANENT_COMMIT_ORDER",
     "PROBE_SEGMENT",
+    "PROVENANCE_TRAILER_KEY",
     "PUBLICATION_SUBJECT",
     "REVIEW_CHECKPOINT_TRAILER_KEY",
     "AncestryFinding",

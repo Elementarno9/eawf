@@ -4,7 +4,7 @@
 its Runs with their elapsed-time inputs and sealed budgets, the running verification legs
 with their progress, the concurrency plan derived at read time, and where the control
 stands. ``runtime.dispatch.control.request`` records one pause, drain or resume under the
-id it was sent with, so a request sent again answers with what the first one did.
+id and verb it was sent with, so a request sent again answers with what the first one did.
 """
 
 from __future__ import annotations

@@ -368,7 +368,7 @@ class ResearchSkill(SkillAction):
                 recommendation=None,
                 persisted_brief=None,
                 research_plan=research_plan,
-                next_actions=["eawf agent dispatch", "eawf prep", "eawf migrate epoch2 --plan"],
+                next_actions=["eawf campaign new", "eawf prep", "eawf migrate epoch2 --plan"],
             )
         # Step 6 — synthesise options (v0.1 placeholder pair).
         options = self._build_options(run)

@@ -104,12 +104,6 @@ def test_plan_048_rung_three_negative_is_advisory() -> None:
     assert record(4, "failed").means == "refutes"
 
 
-def test_plan_048_copy_yields_the_claim_urn_with_its_rung_fragment() -> None:
-    urn = record(3).copy_urn
-    assert urn == f"{CLAIM}#rung-3"
-    assert not urn.startswith("urn:eawf:")
-
-
 def test_plan_048_the_four_outcomes_are_closed() -> None:
     assert {o.value for o in RungOutcome} == {"passed", "failed", "unknown", "not_run"}
 

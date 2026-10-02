@@ -101,6 +101,15 @@ def test_research_deep_depth_returns_research_plan(state_dir: Path) -> None:
     assert len(body.research_plan.fanout_envelopes) == len(body.questions)
 
 
+def test_research_plan_names_the_campaign_verb_that_fans_it_out(state_dir: Path) -> None:
+    skill = ResearchSkill()
+    ctx = _ctx()
+    ctx.args = {"depth": "deep"}
+    env = run_skill(skill, ctx)
+    assert env.footer.next_valid_actions[0] == "eawf campaign new"
+    assert "eawf agent dispatch" not in env.footer.next_valid_actions
+
+
 def test_research_exhaustive_depth_returns_research_plan(state_dir: Path) -> None:
     skill = ResearchSkill()
     ctx = _ctx()

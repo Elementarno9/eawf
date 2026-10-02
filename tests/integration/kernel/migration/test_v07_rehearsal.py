@@ -341,9 +341,10 @@ def test_apply_publishes_the_whole_corpus_into_the_generation_ledgers(
     target = DisposableTarget.require(target_root)
     generation = target.generation_path(result.generation_id)
 
-    # The Task and Run ledgers are the status projection, kept under local/.
+    # The Run ledger is the status projection, kept under local/.
+    local = generation / "local" / "ledger"
     ledgers = sorted(
-        [*(generation / "ledger").iterdir(), *(generation / "local" / "ledger").iterdir()]
+        [*(generation / "ledger").iterdir(), *(local.iterdir() if local.is_dir() else ())]
     )
     assert len(ledgers) == EXPECTED_LEDGER_FILES
     assert sum(len(path.read_text("utf-8").splitlines()) for path in ledgers) == (

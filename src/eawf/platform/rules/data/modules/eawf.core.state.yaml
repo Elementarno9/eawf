@@ -8,26 +8,26 @@ when_to_use: reading or changing phase, iter, wave or decision records, or any f
 rules:
   - rule_id: eawf.core.state.ea-directory-committed
     obligation_id: state.ea-directory-commit-policy
-    revision: 2
+    revision: 3
     title: Commit the project state and profile files
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Commit .ea/state.json, .ea/profile.yaml and each generation's state.json and ledgers with the release, delivery or decision change behind them; keep Task and Run status (each generation's local/), .ea/locks/ and .ea/local/ out of version control.
+      Commit .ea/state.json, .ea/profile.yaml and each generation's state.json, ledgers and Task definitions with the release, delivery or decision behind them; keep in-flight Task status and Run rows (each generation's local/), .ea/locks/ and .ea/local/ out of git.
     rationale: >-
-      The committed files are the source of truth for what was released, delivered and decided, so a clone without them has no history; Task and Run status is a local projection rebuilt from the ledger, and committing it, like locks and local drafts, would only add a commit per status change.
+      The committed files are the source of truth for what was released, delivered and decided, so a clone without them has no history; in-flight Task status and Run rows are a local projection rebuilt from the ledger, and committing them, like locks and local drafts, would only add a commit per status change.
     verification:
       method: review
   - rule_id: eawf.core.state.daemon-mutator
     obligation_id: state.canonical-mutator
-    revision: 1
+    revision: 2
     title: Mutate project state only through the daemon
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Change state.json, the layered config, the registry, the event and audit stores and the telemetry database only through the daemon, reached by the eawf state commands; the locked direct write is only for when no daemon runs. Reading needs no daemon.
+      Change state.json, the layered config, registry, event and audit stores and telemetry database only through the daemon, reached by the eawf entity verbs; a locked direct write is only for when no daemon runs. Reading needs no daemon.
     rationale: >-
       One writer serialises every mutation, so two sessions cannot interleave partial writes or silently drop each other's changes.
     verification:

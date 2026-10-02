@@ -22,7 +22,11 @@ from eawf.kernel.runtime.dispatch_queue import (
     DispatchOutcome,
     DispatchQueueView,
     DispatchVerb,
+    dispatch_control_facts,
 )
+from eawf.kernel.store.ledger import read_ledger_records
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.dispatch_queue import DRAIN_WHILE_PUBLISHING
@@ -32,7 +36,11 @@ from eawf.runtime.daemon.methods.dispatch_queue import (
     DISPATCH_QUEUE_READ_METHOD,
 )
 from eawf.runtime.daemon.native_dispatch import DispatchRefusal
-from tests.integration.runtime.daemon._epoch2_transaction_fixtures import seed, seed_row
+from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
+    document_path,
+    seed,
+    seed_row,
+)
 from tests.integration.runtime.daemon.test_governor_admission import (
     declare,
     second_params,
@@ -122,6 +130,30 @@ def test_ui_023_resume_admits_again_and_a_resent_request_records_once(tmp_path: 
     assert run_urn(SUCCESSOR_KEY) in [row.run_ref for row in attempts_of(canary, runtime)]
     stated = queue(method_ctx(runtime), canary)
     assert stated.control.holding is None
+
+
+def test_dispatch_control_repro_resume_under_the_pause_id_swallowed(tmp_path: Path) -> None:
+    canary = tree(tmp_path / "repo")
+    runtime = tmp_path / "runtime"
+    declare(canary, governor=TWO_SLOTS)
+    launcher = LedgerReadingLauncher(canary, runtime)
+    ask(method_ctx(runtime), canary, "pause", "DSP-0007")
+
+    resumed = ask(method_ctx(runtime), canary, "resume", "DSP-0007")
+    again = ask(method_ctx(runtime), canary, "resume", "DSP-0007")
+    dispatch(method_ctx(runtime), canary, launcher, params=second_params(canary))
+
+    assert resumed["fact"]["verb"] == again["fact"]["verb"] == "resume"
+    facts = dispatch_control_facts(
+        read_ledger_records(ledger_path(document_path(canary), Epoch2Collection.RUN))
+    )
+    # the pause and the resume both recorded; the resent resume recorded nothing
+    assert [fact.verb for fact in facts] == [DispatchVerb.PAUSE, DispatchVerb.RESUME]
+    assert queue(method_ctx(runtime), canary).control.holding is None
+    assert run_urn(SUCCESSOR_KEY) in [row.run_ref for row in attempts_of(canary, runtime)]
+    # a pause sent again under the same id after the resume is a new request
+    ask(method_ctx(runtime), canary, "pause", "DSP-0007")
+    assert queue(method_ctx(runtime), canary).control.holding is DispatchVerb.PAUSE
 
 
 def test_ui_067_drain_is_refused_while_a_release_is_publishing(tmp_path: Path) -> None:

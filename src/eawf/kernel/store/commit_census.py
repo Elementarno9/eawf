@@ -20,6 +20,7 @@ import subprocess
 from pathlib import Path
 
 from eawf.kernel.store.commit_policy import (
+    PROVENANCE_TRAILER_KEY,
     REVIEW_CHECKPOINT_TRAILER_KEY,
     AncestryFinding,
     CensusFinding,
@@ -28,7 +29,6 @@ from eawf.kernel.store.commit_policy import (
     census_findings,
     probe_paths,
 )
-from eawf.runtime.integration.commit_policy import PROVENANCE_TRAILER_KEY
 
 logger = logging.getLogger(__name__)
 

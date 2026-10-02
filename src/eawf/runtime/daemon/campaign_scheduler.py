@@ -30,8 +30,10 @@ with its own WAL intent and firehose row and publishes like any other.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import math
+import secrets
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
@@ -39,7 +41,10 @@ from typing import Annotated, Any, Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
-from eawf.kernel.identity import EntityKind, QualifiedUrn
+from eawf.kernel.config.schema import DEFAULT_STALL_INTERVAL_SECONDS
+from eawf.kernel.identity import EntityKind, QualifiedUrn, parse_qualified_urn
+from eawf.kernel.runtime.dispatch_queue import admission_hold
+from eawf.kernel.runtime.events import MessageSummaryPayload, RunEventKind
 from eawf.kernel.spec.research import ResearchDepth
 from eawf.kernel.state.enums import CampaignStatus
 from eawf.kernel.state.epoch2.artifact_revision import MediaKind
@@ -54,12 +59,19 @@ from eawf.kernel.state.epoch2.campaign import (
     step_blockers,
 )
 from eawf.kernel.state.epoch2.finding import FindingStatement
+from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.kernel.state.epoch2.urns import CampaignUrn, RunUrn, TrackUrn
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.control.reducer import reduce_run_control
+from eawf.runtime.daemon.admission import (
+    EconomicsPolicyError,
+    in_flight_reservations,
+    load_economics,
+)
 from eawf.runtime.daemon.epoch2_create import CreateRequest, run_create
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.epoch2_transaction import TransitionRequest, run_transaction
@@ -77,6 +89,9 @@ from eawf.runtime.daemon.methods.campaign import (
     update_step,
 )
 from eawf.runtime.daemon.methods.projection import document_path
+from eawf.runtime.daemon.methods.run import append_run_event
+from eawf.runtime.daemon.native_dispatch import control_facts_of, stored_run
+from eawf.runtime.daemon.run_events import RunEventAppend
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +112,11 @@ _DEPTH_METHODS: Final[Mapping[ResearchDepth, tuple[CampaignMethod, ...]]] = {
 
 #: The one-line progress a finished round states: one round of one.
 _ROUND_UNIT: Final = "rounds"
+
+#: How often a round still being worked says so on its Run's stream. A round's
+#: Run sends no worker hello, so the stall sweep holds it to the default interval,
+#: and a beat at a quarter of that keeps a slow round from reading as lost.
+_HEARTBEAT_SECONDS: float = DEFAULT_STALL_INTERVAL_SECONDS / 4
 
 Report = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=MAX_TEXT_BYTES)]
 
@@ -417,21 +437,82 @@ class _Driver:
         )
         return committed.envelope
 
+    def _say(self, urn: str, text: str) -> None:
+        """Append one daemon-observed line to the round's Run stream."""
+        append_run_event(
+            self._context,
+            RunEventAppend(
+                urn=parse_qualified_urn(urn),
+                event_ref=f"EVT-{secrets.token_hex(8)}",
+                run_sequence=1,
+                event_kind=RunEventKind.MESSAGE_SUMMARIZED,
+                provenance="daemon_observed",
+                payload=MessageSummaryPayload(message_role="system", summary=text),
+                actor=self._actor,
+            ),
+            now=datetime.now(UTC),
+            at_tail=True,
+        )
+
     def _end_run(self, urn: str, *, succeeded: bool) -> None:
         now = datetime.now(UTC).isoformat()
+        # anything that moved the Run while the round was worked moved its revision
+        with self._context.session([urn]) as session:
+            records = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
+            revision = stored_run(session, records, parse_qualified_urn(urn)).revision
         if succeeded:
             envelope = self._transition(
                 urn,
                 "COMPLETED",
-                2,
+                revision,
                 observations=("run_report_bound",),
                 updates={"ended_at": now},
             )
         else:
             envelope = self._transition(
-                urn, "CANCELLED", 2, reason_code="round-failed", updates={"ended_at": now}
+                urn, "CANCELLED", revision, reason_code="round-failed", updates={"ended_at": now}
             )
         self._publish(() if envelope is None else (envelope,))
+
+    def admission(self) -> tuple[str | None, int]:
+        """Return what holds new rounds back, and how many more Runs the governor admits.
+
+        A round is a Run like any other: the operator's pause or drain holds it,
+        and the governor's Run ceiling counts it beside the admitted Runs still
+        live. A round's Run carries no sealed spend cap, so only the ceiling on
+        Runs binds it; the Campaign's own axes bound what the rounds spend.
+        """
+        try:
+            governor = load_economics(self._context.identity.tree_root.parent).governor
+        except EconomicsPolicyError as error:
+            return str(error)[:400], 0
+        campaign = self.campaign()
+        with self._context.session([campaign.urn]) as session:
+            records = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
+            held = admission_hold(records)
+            if held is not None:
+                return f"dispatch is held by a {held.value} request", 0
+
+            def status_of(urn: QualifiedUrn) -> RunStatus:
+                run = stored_run(session, records, urn)
+                return reduce_run_control(
+                    status=run.status, facts=control_facts_of(records, urn)
+                ).status
+
+            admitted = in_flight_reservations(records, status_of=status_of, excluding=None)
+            rounds = [
+                row
+                for row in document_rows(session.read_document(), Epoch2Collection.RUN).values()
+                if row.get("scope", {}).get("scope_kind") == "campaign"
+                and status_of(parse_qualified_urn(row["urn"])) is RunStatus.RUNNING
+            ]
+        free = governor.max_concurrent_runs - len(admitted) - len(rounds)
+        if free < 1:
+            return (
+                f"the governor's ceiling of {governor.max_concurrent_runs} live Runs is reached",
+                0,
+            )
+        return None, free
 
     # ----- one round -----
 
@@ -463,6 +544,7 @@ class _Driver:
         run = self._new_run(campaign)
         assignment = self._assignment(campaign, step, run)
         self._step(step.ordinal, to_state=StepState.RUNNING.value, run_ref=run)
+        self._say(run, f"round {assignment.round_number} of step {step.ordinal} started")
         return assignment
 
     def _spent(self, step: CampaignPlanStep, report: StepReport, seconds: float) -> dict[str, int]:
@@ -532,11 +614,30 @@ class _Driver:
     async def work(self, assignment: StepAssignment) -> tuple[StepReport | None, float, str]:
         """Have the agent work *assignment*; the report, its seconds and any failure."""
         began = time.monotonic()
+        done = asyncio.Event()
+
+        async def heartbeat() -> None:
+            while True:
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(done.wait(), timeout=_HEARTBEAT_SECONDS)
+                if done.is_set():
+                    return
+                elapsed = round(time.monotonic() - began)
+                await asyncio.to_thread(
+                    self._say, str(assignment.run_ref), f"round still working after {elapsed}s"
+                )
+
+        # the beat is stopped and awaited, never cancelled, so no line lands after the Run ends
+        beating = asyncio.create_task(heartbeat())
         try:
             report = await self._agent.work(assignment)
         except Exception as error:  # an agent failure of any kind ends only its round
+            done.set()
+            await beating
             self.abandon(assignment, error)
             return None, time.monotonic() - began, f"{type(error).__name__}: {error}"
+        done.set()
+        await beating
         return report, time.monotonic() - began, ""
 
     def recover(self) -> None:
@@ -666,9 +767,12 @@ async def drive_campaign(
                 f"rounds={settled.rounds}"
             )
             return settled
+        held, room = await asyncio.to_thread(driver.admission)
+        if held is not None:
+            return driver.ended("paused", held)
         started = [
             assignment
-            for step in _ready(campaign, width)
+            for step in _ready(campaign, min(width, room))
             if (assignment := await asyncio.to_thread(driver.start, step)) is not None
         ]
         if not started:

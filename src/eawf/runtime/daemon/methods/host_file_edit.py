@@ -6,12 +6,16 @@ tool: it binds the call to the one live Run on the host's session, takes the tre
 repository's working files commit to, and keeps it under the tool call's id. ``after``
 is called once the tool has run: it takes the tree again and records what changed
 between the two on the Run's stream, limited to the path the tool named, because the
-daemon and other sessions write to the same working tree while the tool runs.
+daemon and other sessions write to the same working tree while the tool runs. The tree
+taken is the work tree holding the file, so an edit in a managed worktree is read off
+that worktree rather than off the main checkout, which ignores it.
 
 The pending snapshot is kept in the tree's machine-local directory rather than in
 memory, so a daemon restart between the two hooks does not lose the edit. An
 ``after`` whose ``before`` never arrived records nothing: without the tree before the
-edit there is no honest before digest to state.
+edit there is no honest before digest to state. A ``before`` whose ``after`` never
+arrives, because the host refused the call after its pre-tool hook, is released once
+it is older than :data:`PENDING_LIFETIME_SECONDS`.
 """
 
 from __future__ import annotations
@@ -20,25 +24,22 @@ import asyncio
 import hashlib
 import json
 import logging
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
-from eawf.kernel.identity import QualifiedUrn, parse_qualified_urn
-from eawf.kernel.runtime.control import TERMINAL_RUN_STATUSES
+from eawf.kernel.identity import parse_qualified_urn
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.kernel.store.compaction import document_rows, read_document
-from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.file_changes import FileEdit, record_file_edit
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.host_subagent import HARNESS_ACTORS
-from eawf.runtime.daemon.methods.projection import document_path
+from eawf.runtime.daemon.methods.permission import host_run
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.runtimes.host_transcript import HostHarness
-from eawf.runtime.session.vendor_id import hash_vendor_session_id
 from eawf.runtime.worktree.tree_change import TreeSnapshot, snapshot_tree
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,10 @@ HOST_FILE_EDIT_AFTER_METHOD: Final = "runtime.host.file_edit.after"
 
 #: Where a tree keeps the snapshots taken before an edit, until its after arrives.
 PENDING_LOCATOR: Final = "local/epoch2/file-edits"
+
+#: How long a kept snapshot waits for its after. A host refuses some calls after the
+#: pre-tool hook ran, and the after of such a call never arrives.
+PENDING_LIFETIME_SECONDS: Final = 86_400
 
 _HostId = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=256)]
 
@@ -97,6 +102,7 @@ class _Pending(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     run_ref: str
+    workspace: str
     path: str
     git_tree: str
     digest: str
@@ -112,63 +118,58 @@ def _pending_path(context: Epoch2RootContext, args: HostFileEdit) -> Path:
     )
 
 
-def _workspace(context: Epoch2RootContext) -> Path:
-    """Return the working tree of the repository the tree belongs to."""
-    return context.identity.tree_root.parent
+def _edited_file(context: Epoch2RootContext, file_path: str) -> tuple[Path, str]:
+    """Return the work tree holding *file_path*, and the path relative to that tree.
 
-
-def _repo_path(context: Epoch2RootContext, file_path: str) -> str:
-    """Return *file_path* relative to the repository's working tree.
+    The tree is the innermost one inside the repository's main checkout, so an edit
+    in a managed worktree belongs to that worktree.
 
     Raises:
-        DaemonValidationError: The path lies outside the working tree, so the
+        DaemonValidationError: The path lies outside the main checkout, so the
             edit is not the repository's to record.
     """
-    root = _workspace(context).resolve()
+    root = context.identity.tree_root.parent.resolve()
     target = Path(file_path)
     target = (target if target.is_absolute() else root / target).resolve()
     if not target.is_relative_to(root) or target == root:
         raise DaemonValidationError(
             "validation_failed: path_escape: the edited file lies outside the repository"
         )
-    return target.relative_to(root).as_posix()
-
-
-def _live_run(authority: RootAuthority, host_session_id: str) -> QualifiedUrn:
-    """Return the one live Run the host session is the vendor session of.
-
-    Raises:
-        DaemonValidationError: No live Run is on that session, or several are.
-    """
-    digest = hash_vendor_session_id(host_session_id)
-    terminal = {status.value for status in TERMINAL_RUN_STATUSES}
-    rows = document_rows(read_document(document_path(authority)), Epoch2Collection.RUN)
-    live = sorted(
-        row["urn"]
-        for row in rows.values()
-        if row.get("status") not in terminal
-        and isinstance(row.get("vendor_session"), dict)
-        and row["vendor_session"].get("session_digest") == digest
+    workspace = next(
+        (tree for tree in target.parents if tree.is_relative_to(root) and (tree / ".git").exists()),
+        root,
     )
-    if len(live) != 1:
-        raise DaemonValidationError(
-            f"validation_failed: identity_not_found: {len(live)} live Runs are on the "
-            "host session, so the edit is bound to no one Run"
-        )
-    return parse_qualified_urn(live[0])
+    return workspace, target.relative_to(workspace).as_posix()
+
+
+def _release_stale(directory: Path) -> None:
+    """Remove the kept snapshots whose after has not come within their lifetime."""
+    cutoff = time.time() - PENDING_LIFETIME_SECONDS
+    for kept in directory.glob("*.json"):
+        try:
+            if kept.stat().st_mtime < cutoff:
+                kept.unlink()
+        except FileNotFoundError:
+            # Its after arrived and released it while the sweep ran.
+            continue
 
 
 def _before(
     context: Epoch2RootContext, authority: RootAuthority, args: HostFileEdit
 ) -> HostFileEditAnswer:
-    run = _live_run(authority, args.host_session_id)
-    path = _repo_path(context, args.file_path)
-    snapshot = snapshot_tree(_workspace(context))
+    run = host_run(authority, args.host_session_id)
+    workspace, path = _edited_file(context, args.file_path)
+    snapshot = snapshot_tree(workspace)
     pending = _Pending(
-        run_ref=str(run), path=path, git_tree=snapshot.git_tree, digest=snapshot.digest
+        run_ref=str(run),
+        workspace=str(workspace),
+        path=path,
+        git_tree=snapshot.git_tree,
+        digest=snapshot.digest,
     )
     target = _pending_path(context, args)
     target.parent.mkdir(parents=True, exist_ok=True)
+    _release_stale(target.parent)
     target.write_text(pending.model_dump_json())
     return HostFileEditAnswer(run_ref=str(run), reason=f"the tree before {path} is kept")
 
@@ -178,13 +179,13 @@ def _after(
 ) -> HostFileEditAnswer:
     source = _pending_path(context, args)
     if not source.is_file():
-        run = _live_run(authority, args.host_session_id)
+        run = host_run(authority, args.host_session_id)
         return HostFileEditAnswer(
             run_ref=str(run), reason="no tree was taken before the edit, so none is recorded"
         )
     pending = _Pending.model_validate(json.loads(source.read_text()))
     run = parse_qualified_urn(pending.run_ref)
-    workspace = _workspace(context)
+    workspace = Path(pending.workspace)
     answer = record_file_edit(
         context,
         FileEdit(
@@ -233,6 +234,7 @@ async def _after_host_file_edit(
 __all__ = [
     "HOST_FILE_EDIT_AFTER_METHOD",
     "HOST_FILE_EDIT_BEFORE_METHOD",
+    "PENDING_LIFETIME_SECONDS",
     "PENDING_LOCATOR",
     "HostFileEdit",
     "HostFileEditAnswer",

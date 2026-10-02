@@ -69,8 +69,8 @@ def wave_budget_minutes(state: State, wave_id: str) -> float:
     The single wave-id -> budget-minutes projection shared by the gauge,
     the digest elapsed publisher, and the stale-wave advisory. Prefers an
     explicit estimate row's ``pessimistic_minutes`` and falls back to the
-    measured p90 of the effort constant, whatever size label the wave
-    carries.
+    declared upper bound of the mapping in force, whatever size label the
+    wave carries.
 
     Args:
         state: Loaded typed state snapshot (read-only).
@@ -83,9 +83,9 @@ def wave_budget_minutes(state: State, wave_id: str) -> float:
     estimate = estimates.get(wave_id)
     if estimate is not None and estimate.pessimistic_minutes > 0:
         return estimate.pessimistic_minutes
-    from eawf.workflow.estimation.buckets import EFFORT_DISPERSION_MINUTES
+    from eawf.workflow.estimation.mapping import CURRENT_EFFORT_MAPPING
 
-    return EFFORT_DISPERSION_MINUTES["p90"]
+    return CURRENT_EFFORT_MAPPING.pessimistic_minutes
 
 
 __all__ = [

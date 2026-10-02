@@ -34,8 +34,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Final
 
+from pydantic import ValidationError
+
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import State
+from eawf.runtime.daemon.methods.domain_envelope import DomainEnvelope
 from eawf.workflow.release.pipeline import PUBLISH_WORKFLOWS, PipelineHostError
 from eawf.workflow.release.pipeline_receipts import RECEIPT_FILENAMES
 from eawf.workflow.verify.release_probes import release_tree_status
@@ -321,11 +324,10 @@ class GitHubReleaseHost:
         finally:
             shutil.rmtree(scratch, ignore_errors=True)
         try:
-            envelope = json.loads(result.stdout)
-        except json.JSONDecodeError:
-            envelope = None
-        reply = envelope.get("result") if isinstance(envelope, dict) else None
-        if not isinstance(reply, dict) or "receipts" not in reply:
+            reply = DomainEnvelope.model_validate_json(result.stdout).result
+        except ValidationError:
+            reply = None
+        if reply is None or "receipts" not in reply:
             detail = (result.stdout or result.stderr).strip()[-400:]
             raise PipelineHostError(f"release receipts exited {result.returncode}: {detail}")
         return reply

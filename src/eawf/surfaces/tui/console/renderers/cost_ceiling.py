@@ -96,7 +96,13 @@ def _read_body(view: View, ceiling: CostCeilingView) -> list[str]:
     tokens = tokens_line(ceiling.spent_tokens, ceiling.ceiling_tokens, held=ceiling.held_tokens)
     body = [
         label("CEILING", tokens),
-        more(cost_line(ceiling.spent_cost_microusd, ceiling.ceiling_cost_microusd)),
+        more(
+            cost_line(
+                ceiling.spent_cost_microusd,
+                ceiling.ceiling_cost_microusd,
+                partial=ceiling.spent_cost_pricing == "partial",
+            )
+        ),
         more(f"in flight · {flight}"),
         label("OWNED BY", f"settings ▸ {ceiling.owner}"),
         thin(w),

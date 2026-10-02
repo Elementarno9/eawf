@@ -10,8 +10,11 @@ Epoch 1 defaulted an actual's cost and token tally to zero, so a row no
 runtime capture ever touched reads as a measured zero spend. Epoch 2 makes
 every priced field nullable, and the import carries such a default zero as
 null: a row that names neither the harness nor the model it ran on was
-never captured, so its zero was the schema default, not a reading. A zero
-on a row that does name its harness or model was captured and stays zero.
+never captured, so its zero was the schema default, not a reading. A row
+that does name its harness or model but still carries a zero cost was
+never priced either: its tokens show usage nobody priced, or show nothing
+was read at all. Its zero cost, and a zero token tally beside it, import
+as null. Only a captured row with a recorded cost keeps its zeros.
 
 Two fields travel verbatim. The quality marker says how good the number
 is -- the confidence an estimate was made under, the state the measured
@@ -90,6 +93,10 @@ PRICED_ACTUAL_FIELDS: tuple[str, ...] = ("actual_cost_usd", "actual_tokens")
 #: was never captured.
 CAPTURE_ATTRIBUTION_FIELDS: tuple[str, ...] = ("harness", "model")
 
+#: The priced field whose zero on a captured row means the capture never
+#: priced the run.
+COST_FIELD = "actual_cost_usd"
+
 
 class ImportedMeasurement(StrictMigrationModel):
     """One epoch-1 measurement row as the importer will write it.
@@ -155,11 +162,12 @@ def unpriced_default_fields(*, kind: MeasurementKind, row: Mapping[str, Any]) ->
 
     Returns:
         The fields, in :data:`PRICED_ACTUAL_FIELDS` order; empty for an
-        estimate or for a row a runtime capture attributed.
+        estimate or for a captured row whose cost is not zero.
     """
     if kind is not MeasurementKind.ACTUAL:
         return ()
-    if any(row.get(name) is not None for name in CAPTURE_ATTRIBUTION_FIELDS):
+    captured = any(row.get(name) is not None for name in CAPTURE_ATTRIBUTION_FIELDS)
+    if captured and row.get(COST_FIELD) != 0:
         return ()
     return tuple(name for name in PRICED_ACTUAL_FIELDS if row.get(name) == 0)
 
@@ -403,5 +411,6 @@ def measurement_rule_payload() -> dict[str, Any]:
         "default_zero_imports_as_null": {
             "fields": list(PRICED_ACTUAL_FIELDS),
             "when_all_null": list(CAPTURE_ATTRIBUTION_FIELDS),
+            "or_when_zero": COST_FIELD,
         },
     }

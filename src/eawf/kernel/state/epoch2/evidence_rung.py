@@ -22,7 +22,6 @@ attests without certifying.
 
 from __future__ import annotations
 
-import dataclasses
 from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from types import MappingProxyType
@@ -204,11 +203,6 @@ class EvidenceRungRecord(Epoch2Model):
         if self.rung == _ENTAIL_RUNG - 1:
             return "an advisory negative - it routes the claim to rung 4"
         return "refutes"
-
-    @property
-    def copy_urn(self) -> str:
-        """Return what the card's copy verb yields: the claim URN with this rung's fragment."""
-        return render_qualified_urn(dataclasses.replace(self.claim_ref, rung=self.rung))
 
 
 #: The lifecycle a filed claim stands at: open until a promotion clears it.

@@ -83,11 +83,18 @@ def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tempfile, "tempdir", str(scratch))
 
 
-def _reviewed(tmp_path: Path, *, status: str, lines: tuple[Any, ...]) -> CanaryProvision:
-    """Return a canary whose Batch BAT-0007 stands in *status* with *lines* filed."""
+def _reviewed(
+    tmp_path: Path, *, status: str, lines: tuple[Any, ...], harness: str | None = "claude-code"
+) -> CanaryProvision:
+    """Return a canary whose Batch BAT-0007 stands in *status* with *lines* filed.
+
+    With *harness* ``None`` the reviewer ran under no vendor session, so no producer
+    identity answers for its verdicts.
+    """
     canary = provision(tmp_path / "repo", code="TRC")
     reviewer = rekeyed(seed_row("run", "RUNNING"), key=REVIEWER.rsplit("/", 1)[-1])
-    reviewer["vendor_session"] = {"harness": "claude-code", "session_digest": "raw-session-01"}
+    if harness is not None:
+        reviewer["vendor_session"] = {"harness": harness, "session_digest": "raw-session-01"}
     seed(
         canary,
         {"batch": {"BAT-0007": seed_row("batch", status)}, "run": {reviewer["key"]: reviewer}},
@@ -240,6 +247,27 @@ def test_ui_063_a_label_on_a_criterion_no_cycle_judged_is_refused(
 ) -> None:
     with pytest.raises(DaemonValidationError, match="gold_label_unanchored"):
         _label(merged, tmp_path, "CR-99")
+
+
+def test_ui_063_a_label_whose_newest_verdict_is_unverified_is_refused(tmp_path: Path) -> None:
+    """The cohort scores no unverified verdict, so a label on its subject would score nothing."""
+    judged = cycle(audits=(audit("CR-01"),))
+    reopened = cycle(
+        audits=(audit("CR-01", verdict=AuditVerdict.UNVERIFIED, audit_id="BAU-900001"),)
+    )
+    canary = _reviewed(tmp_path, status="COMPLETED", lines=(judged, reopened))
+
+    with pytest.raises(DaemonValidationError, match="gold_label_unscored"):
+        _label(canary, tmp_path, "CR-01")
+
+
+def test_ui_063_a_label_whose_newest_verdict_has_no_producer_is_refused(tmp_path: Path) -> None:
+    """A verdict no ``(agent_role, runtime)`` answers for is never scored against one."""
+    judged = cycle(audits=(audit("CR-01"),))
+    canary = _reviewed(tmp_path, status="COMPLETED", lines=(judged,), harness=None)
+
+    with pytest.raises(DaemonValidationError, match="gold_label_unscored"):
+        _label(canary, tmp_path, "CR-01")
 
 
 def test_ui_063_a_label_sent_against_a_stale_batch_revision_is_refused(

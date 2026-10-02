@@ -310,6 +310,147 @@ def test_surf_052_the_per_call_set_is_exactly_four_patterns() -> None:
     assert "Read" not in JUDGED_TOOLS and "Grep" not in JUDGED_TOOLS
 
 
+@pytest.mark.parametrize(
+    ("tool", "tool_input"),
+    [
+        ("Edit", {"file_path": ".ea/generations/gen-1/state.json"}),
+        ("Write", {"file_path": "{main}/.ea/generations/gen-1/local/task.json"}),
+        ("Bash", {"command": "rm -rf .ea/generations"}),
+        ("Bash", {"command": "echo x >> .ea/generations/gen-1/ledger/run.jsonl"}),
+        ("Bash", {"command": "git checkout -- .ea/generations/gen-1/state.json"}),
+        ("apply_patch", {"input": "*** Update File: .ea/generations/selected.json\n"}),
+    ],
+)
+def test_a_write_to_generation_state_is_denied(
+    tree: _Tree, tool: str, tool_input: dict[str, object]
+) -> None:
+    resolved = {
+        key: value.format(main=tree.main) if isinstance(value, str) else value
+        for key, value in tool_input.items()
+    }
+    denial = judge_tool_call(tool, resolved, cwd=tree.main, anchor=tree.main)
+    assert denial is not None and denial.pattern is CANONICAL
+
+
+@pytest.mark.parametrize(
+    ("tool", "tool_input", "expected"),
+    [
+        ("exec_command", {"cmd": "rm -rf w1", "workdir": ".ea/worktrees"}, FOREIGN),
+        ("exec_command", {"cmd": "rm -rf w1", "workdir": "{main}/.ea/worktrees"}, FOREIGN),
+        ("exec_command", {"cmd": "rm state.json", "workdir": ".ea"}, CANONICAL),
+        ("exec_command", {"cmd": "git reset --hard", "workdir": ".ea/worktrees/w1"}, FOREIGN),
+        (
+            "local_shell",
+            {"command": ["rm", "-rf", "w1"], "working_directory": ".ea/worktrees"},
+            FOREIGN,
+        ),
+        ("exec_command", {"cmd": "rm -rf build", "workdir": ".ea/worktrees/w1"}, None),
+        ("exec_command", {"cmd": "rm -rf w1", "workdir": None}, None),
+    ],
+)
+def test_a_codex_shell_call_is_judged_in_its_workdir(
+    tree: _Tree, tool: str, tool_input: dict[str, object], expected: DataLossPattern | None
+) -> None:
+    resolved = {
+        key: value.format(main=tree.main) if isinstance(value, str) else value
+        for key, value in tool_input.items()
+    }
+    denial = judge_tool_call(tool, resolved, cwd=tree.main, anchor=tree.main)
+    assert (denial and denial.pattern) is expected
+
+
+def test_a_commit_in_an_explicit_codex_workdir_is_not_drift(tree: _Tree) -> None:
+    tool_input = {"cmd": "git commit -m x", "workdir": str(tree.worktree)}
+    assert judge_tool_call("exec_command", tool_input, cwd=tree.main, anchor=tree.main) is None
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "find . -name '*.pyc' -delete",
+        "find -L . -name __pycache__ -type d -exec rm -rf {} +",
+        "find . -type f -exec grep -l needle {} +",
+        "find src -exec grep x {} \\;",
+        "find src -delete",
+        "find . -name '*.py' -print",
+        "mv build/out.txt .",
+        "mv -t . build/a.txt build/b.txt",
+        "mv a.txt .ea/worktrees/w1/src/",
+        "find . -name '*.pyc' | xargs rm -f",
+        "echo build | xargs rm -rf",
+        "rg -l foo | xargs grep bar",
+        "bash -o pipefail -c 'rm -rf build'",
+        "git clean -n",
+        "git reset --soft HEAD~1",
+    ],
+)
+def test_a_harmless_call_from_the_repo_root_is_allowed(tree: _Tree, command: str) -> None:
+    assert _bash(tree, command) == "allowed"
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("find . -delete", FOREIGN),
+        ("find . -type f -delete", FOREIGN),
+        ("find . -name '*.json' -delete", FOREIGN),
+        ("find . ! -name '*.pyc' -delete", FOREIGN),
+        ("find . -name '*.pyc' -o -path '*' -delete", FOREIGN),
+        ("find . -name state.json -exec rm {} +", FOREIGN),
+        ("find .ea/local -delete", FOREIGN),
+        ("find .ea/state.json -delete", CANONICAL),
+        ("mv x.json .ea/state.json", CANONICAL),
+        ("mv -t /tmp .ea/worktrees/w1", FOREIGN),
+    ],
+)
+def test_a_find_or_mv_aimed_at_protected_paths_is_denied(
+    tree: _Tree, command: str, expected: DataLossPattern
+) -> None:
+    assert _bash(tree, command) is expected
+
+
+@pytest.mark.parametrize(
+    ("command", "cwd", "expected"),
+    [
+        ('rm -rf "$PWD/.ea/worktrees/w1"', "main", FOREIGN),
+        ("rm -rf ${PWD}/.ea/worktrees/w1", "main", FOREIGN),
+        ('rm -rf "$(pwd)/.ea/worktrees/w1"', "main", FOREIGN),
+        ("rm -rf $(pwd)/.ea/worktrees/w1", "main", FOREIGN),
+        ("rm -rf `pwd -P`/.ea/worktrees/w1", "main", FOREIGN),
+        ('rm -rf "$PWD/.."', "worktree/src", FOREIGN),
+        ('cd .ea && rm -rf "$PWD/worktrees"', "main", FOREIGN),
+        ("echo .ea/worktrees/w1 | xargs rm -rf", "main", FOREIGN),
+        ("printf '%s\\n' .ea/state.json | xargs -n 1 rm", "main", CANONICAL),
+        ("xargs -0 rm -rf .ea/worktrees/w1 < /dev/null", "main", FOREIGN),
+        ("find .ea/worktrees -maxdepth 1 | xargs rm -rf", "main", FOREIGN),
+        ("bash -o pipefail -c 'rm -rf .ea/worktrees/w1'", "main", FOREIGN),
+        ("bash +x -O extglob -c 'rm -rf .ea/state.json'", "main", CANONICAL),
+        ("git clean -ffdx", "main", CANONICAL),
+        ("git clean --force -d", "main/src", CANONICAL),
+        ("git reset --hard", "main", CANONICAL),
+        ("git -C {main} reset --hard HEAD", "worktree", CANONICAL),
+    ],
+)
+def test_a_guard_bypass_is_denied(
+    tree: _Tree, command: str, cwd: str, expected: DataLossPattern
+) -> None:
+    where = {
+        "main": tree.main,
+        "main/src": tree.main / "src",
+        "worktree": tree.worktree,
+        "worktree/src": tree.worktree / "src",
+    }[cwd]
+    assert _bash(tree, command.replace("{main}", str(tree.main)), cwd=where) is expected
+
+
+@pytest.mark.parametrize(
+    "command", ["git ls-files | xargs rm", "xargs rm -rf < paths.txt", "xargs mv -t /tmp"]
+)
+def test_xargs_removing_what_the_guard_cannot_see_is_unjudged(tree: _Tree, command: str) -> None:
+    denial = judge_tool_call("Bash", {"command": command}, cwd=tree.main, anchor=tree.main)
+    assert denial is not None and denial.pattern is None
+
+
 def test_surf_050_the_isolated_subagent_denial_says_where_to_create_the_worktree(
     tree: _Tree,
 ) -> None:

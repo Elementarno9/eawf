@@ -168,7 +168,7 @@ def test_lint_034_partition_keeps_collection_order() -> None:
 def test_lint_034_an_empty_lane_reports_a_zero_flake_rate() -> None:
     report = LaneReport(outcomes={})
 
-    assert report.flake_rate == 0.0
+    assert report.flake_rate == pytest.approx(0.0)
     assert report.render() == [
         "quarantine lane: 0 of 0 quarantined run(s) failed (flake rate 0%); "
         "the lane reports and never blocks"

@@ -36,14 +36,10 @@ from eawf.kernel.state.models import Track, Wave
 from eawf.runtime.budget import policy
 from eawf.runtime.budget.policy import BLOCK_TAG, classify
 from eawf.surfaces.cli.registry import COMMAND_REGISTRY, GroupRow
-from eawf.workflow.estimation.buckets import (
-    EFFORT_DISPERSION_MINUTES,
-    EFFORT_EU,
-    EFFORT_MINUTES,
-    EU_MINUTES,
-    critical_path_eu,
-    sum_wave_eu,
-)
+from eawf.workflow.estimation.buckets import critical_path_eu, sum_wave_eu
+from eawf.workflow.estimation.mapping import CURRENT_EFFORT_MAPPING
+
+WAVE_EU = CURRENT_EFFORT_MAPPING.effort_eu
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "migration"
@@ -148,10 +144,11 @@ def test_auth_036_the_policy_declares_no_warning_fraction() -> None:
 
 def test_auth_041_effort_is_one_constant_with_its_measured_dispersion() -> None:
     """Effort is 0.8 EU, 24 minutes, shipped with p10/p50/p90."""
-    assert pytest.approx(0.8) == EFFORT_EU
-    assert pytest.approx(30.0) == EU_MINUTES
-    assert pytest.approx(24.0) == EFFORT_MINUTES
-    assert dict(EFFORT_DISPERSION_MINUTES) == pytest.approx({"p10": 8.8, "p50": 23.9, "p90": 123.1})
+    mapping = CURRENT_EFFORT_MAPPING
+    assert pytest.approx(0.8) == mapping.effort_eu
+    assert pytest.approx(30.0) == mapping.eu_minutes
+    assert pytest.approx(24.0) == mapping.effort_minutes
+    assert mapping.dispersion.model_dump() == pytest.approx({"p10": 8.8, "p50": 23.9, "p90": 123.1})
 
 
 def test_auth_041_the_serial_sum_ignores_every_size_label() -> None:
@@ -159,7 +156,7 @@ def test_auth_041_the_serial_sum_ignores_every_size_label() -> None:
     labels: list[EffortBucket | None] = [*EffortBucket, None]
     waves = [_wave(f"P01-I01-W{index:02d}", bucket) for index, bucket in enumerate(labels, 1)]
 
-    assert sum_wave_eu(waves) == pytest.approx(len(labels) * EFFORT_EU)
+    assert sum_wave_eu(waves) == pytest.approx(len(labels) * WAVE_EU)
     assert sum_wave_eu([_wave("P01-I01-W01", EffortBucket.XS)]) == sum_wave_eu(
         [_wave("P01-I01-W01", EffortBucket.XL)]
     )
@@ -174,12 +171,12 @@ def test_auth_041_the_critical_path_counts_waves_not_labels() -> None:
         _wave("P01-I01-W04", EffortBucket.XL),
     ]
 
-    assert critical_path_eu(chain) == pytest.approx(3 * EFFORT_EU)
+    assert critical_path_eu(chain) == pytest.approx(3 * WAVE_EU)
 
 
 @pytest.mark.parametrize(
     ("waves", "expected"),
-    [([], 0.0), ([_wave("P01-I01-W01", EffortBucket.L)], EFFORT_EU)],
+    [([], 0.0), ([_wave("P01-I01-W01", EffortBucket.L)], WAVE_EU)],
 )
 def test_auth_041_roll_ups_at_the_empty_and_single_boundaries(
     waves: list[Wave], expected: float
@@ -196,7 +193,7 @@ def test_auth_041_a_dependency_cycle_is_cut_rather_than_followed() -> None:
         _wave("P01-I01-W02", None, deps=["P01-I01-W01"]),
     ]
 
-    assert critical_path_eu(cycle) == pytest.approx(3 * EFFORT_EU)
+    assert critical_path_eu(cycle) == pytest.approx(3 * WAVE_EU)
 
 
 def test_auth_041_the_ladder_calibration_config_is_retired() -> None:

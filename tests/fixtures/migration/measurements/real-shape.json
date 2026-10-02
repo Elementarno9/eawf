@@ -75,6 +75,21 @@
     "scope_id": "P30-I23-W45",
     "status": "done",
     "updated_at": "2026-07-02T23:29:36.385725Z"
+   },
+   "P31-I01-W10": {
+    "actual_cost_usd": 0.0,
+    "actual_tokens": 55658657,
+    "agent_runtime_eu": null,
+    "attention_eu": null,
+    "calibration_excluded": false,
+    "current_store_record_id": "REC-P31-I01-W10",
+    "elapsed_eu": 0.0,
+    "harness": "claude-code",
+    "id": "ACT-P31-I01-W10",
+    "model": "claude-opus-4-8",
+    "scope_id": "P31-I01-W10",
+    "status": "done",
+    "updated_at": "2026-09-04T16:13:01.267481Z"
    }
   },
   "estimates": {
@@ -123,6 +138,7 @@
   "P28-I02-W07",
   "P30-I21-W46",
   "P30-I23-W28",
-  "P30-I23-W45"
+  "P30-I23-W45",
+  "P31-I01-W10"
  ]
 }

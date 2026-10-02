@@ -390,16 +390,12 @@ def _load_state_readonly(ctx: typer.Context) -> tuple[State, GlobalFlags] | None
 
 
 # ---- Command registration ---------------------------------------------------
-# Importing the sibling modules runs their ``@<app>.command(...)`` decorators
-# so the apps above carry their full verb set. The imports sit at the bottom,
-# after every shared symbol is defined, so the siblings can import the apps and
-# helpers from this module without a circular-import failure.
+# Importing the domain module runs its ``@<app>.command(...)`` decorators, and
+# its own sibling registrations, so the apps above carry their full verb set.
+# The import sits at the bottom, after every shared symbol is defined, so the
+# domain modules can import the apps from this module without a circular-import
+# failure.
 from eawf.surfaces.cli.commands import domain as _domain  # noqa: E402, F401
-from eawf.surfaces.cli.commands import domain_delivery as _domain_delivery  # noqa: E402, F401
-from eawf.surfaces.cli.commands import (  # noqa: E402
-    domain_integration as _domain_integration,  # noqa: F401
-)
-from eawf.surfaces.cli.commands import domain_legacy as _domain_legacy  # noqa: E402, F401
 
 # ---- Re-exports -------------------------------------------------------------
 

@@ -79,3 +79,39 @@ def test_con_106_the_pause_is_cancelled_with_its_run(
 
     (item,) = _pauses(ctx, canary)["pauses"]
     assert item["situation"] == "cancelled"
+
+
+def test_con_106_one_unreadable_run_never_stops_the_others_settling_or_stalling(
+    canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    bad_key = "RUN-00000001"
+    bad = seed_row("run", "RUNNING")
+    bad["urn"], bad["key"] = RUN_URN.replace(RUN_KEY, bad_key), bad_key
+    seed(canary, {"run": {bad_key: bad}})
+    quiet(ctx, canary)
+    later = datetime.now(UTC) + timedelta(hours=2)
+    assert sweep_once(ctx, now=later) == (bad_key, RUN_KEY)
+    # the Run sorted first can no longer be read, after its stall pause was opened
+    seed(canary, {"run": {bad_key: {**bad, "unreadable": True}}})
+    act(ctx, canary, 2)
+
+    assert sweep_once(ctx, now=later) == (RUN_KEY,)
+
+    pauses = {item["pause"]["key"]: item for item in _pauses(ctx, canary)["pauses"]}
+    over_run = {
+        key: item["situation"]
+        for key, item in pauses.items()
+        if item["pause"]["scope_ref"].endswith(RUN_KEY)
+    }
+    assert sorted(over_run.values()) == ["control_outcome_unknown", "resolved"]
+
+
+def test_con_106_a_running_row_with_no_readable_urn_is_passed_over(
+    canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    broken = seed_row("run", "RUNNING")
+    broken["urn"], broken["key"] = "not-a-urn", "RUN-00000001"
+    seed(canary, {"run": {"RUN-00000001": broken}})
+    quiet(ctx, canary)
+
+    assert sweep_once(ctx, now=datetime.now(UTC)) == (RUN_KEY,)

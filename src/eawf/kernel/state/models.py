@@ -1343,7 +1343,14 @@ class BacklogItem(_StrictModel):
 
 
 class EstimateSummary(_StrictModel):
-    """Latest estimate (full history in store)."""
+    """Latest estimate (full history in store).
+
+    ``mapping_revision`` is the effort-unit mapping revision the estimate was
+    made under and ``reference_sample_size`` the number of reference rows
+    behind it. Both default to ``None`` because no row written before they
+    existed recorded either, and inventing one would be a fabricated fact; an
+    estimate missing either renders as unavailable.
+    """
 
     id: IdStr
     scope_id: str
@@ -1353,6 +1360,8 @@ class EstimateSummary(_StrictModel):
     pessimistic_minutes: float
     display: str
     reference_class: str | None = None
+    reference_sample_size: Annotated[int, Field(ge=0)] | None = None
+    mapping_revision: Annotated[int, Field(ge=1)] | None = None
     confidence: Confidence
     current_store_record_id: str
     updated_at: UtcDatetime

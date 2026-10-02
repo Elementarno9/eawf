@@ -83,7 +83,11 @@ class SwitchoverFrequencyProjection(BaseModel):
 
 
 class VarianceWaveProjection(BaseModel):
-    """Per-wave estimate-vs-actual variance drill row."""
+    """Per-wave estimate-vs-actual variance drill row.
+
+    ``mapping_revision`` is the effort-unit mapping revision the estimate was
+    made under, ``"unrecorded"`` when it recorded none.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -95,6 +99,7 @@ class VarianceWaveProjection(BaseModel):
     delta_eu: float
     variance_pct: float | None
     inside_pessimistic: bool
+    mapping_revision: str = "unrecorded"
 
 
 class VarianceBucketProjection(BaseModel):
@@ -369,6 +374,9 @@ def _variance_rows(state: State, *, scope: str | None) -> list[VarianceWaveProje
                 delta_eu=delta,
                 variance_pct=variance_pct,
                 inside_pessimistic=act.elapsed_eu <= est.pessimistic_eu,
+                mapping_revision=(
+                    "unrecorded" if est.mapping_revision is None else str(est.mapping_revision)
+                ),
             )
         )
     return sorted(rows, key=lambda row: row.wave_id)
@@ -410,6 +418,7 @@ def _compute_variance(state: State, *, scope: str | None) -> EstimateActualVaria
         planned_eu=planned_eu,
         actual_eu=actual_eu,
         variance_pct=variance_pct,
+        mapping_revisions=sorted({row.mapping_revision for row in rows}),
     )
 
 

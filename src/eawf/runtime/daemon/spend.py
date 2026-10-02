@@ -89,6 +89,12 @@ def _sum(values: Sequence[int | None]) -> int | None:
     return sum(reported) if reported else None
 
 
+def _pricing(costs: Sequence[int | None]) -> Pricing:
+    """Return how many of *costs* were read: all, none, or some -- with none, all of them."""
+    priced = sum(cost is not None for cost in costs)
+    return "priced" if priced == len(costs) else "unmetered" if priced == 0 else "partial"
+
+
 def _provider(records: Sequence[LedgerRecord], run: Run) -> str:
     """Return the provider a Run was routed to: its dispatch, else its host session."""
     routed = [
@@ -141,17 +147,13 @@ def _providers(
     rows: list[ProviderSpend] = []
     for provider, totals in sorted(grouped.items()):
         costs = [total.cost_microusd for total in totals]
-        priced = sum(cost is not None for cost in costs)
-        pricing: Pricing = (
-            "priced" if priced == len(costs) else "unmetered" if priced == 0 else "partial"
-        )
         rows.append(
             ProviderSpend(
                 provider=provider,
                 runs=len(totals),
                 tokens=_sum([total.tokens for total in totals]),
                 cost_microusd=_sum(costs),
-                pricing=pricing,
+                pricing=_pricing(costs),
             )
         )
     return tuple(rows)
@@ -177,13 +179,15 @@ def cost_ceiling_view(
         return _status(run, records) if run is not None else RunStatus.CANCELLED
 
     live = in_flight_reservations(records, status_of=status_of, excluding=None)
+    costs = [row.accrued_cost_microusd for row in live]
     view = CostCeilingView(
         ceiling_tokens=governor.max_in_flight_tokens,
         ceiling_cost_microusd=governor.max_in_flight_cost_microusd,
         live_runs=len(live),
         spent_tokens=_sum([row.accrued_tokens for row in live]) if live else 0,
         held_tokens=_held(row.held(AdmissionAxis.TOKENS) for row in live),
-        spent_cost_microusd=_sum([row.accrued_cost_microusd for row in live]) if live else 0,
+        spent_cost_microusd=_sum(costs) if live else 0,
+        spent_cost_pricing=_pricing(costs),
         held_cost_microusd=_held(row.held(AdmissionAxis.COST) for row in live),
         stopped=_stops(records, runs),
         providers=_providers(records, runs),

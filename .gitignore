@@ -98,8 +98,8 @@ AGENTS.override.md
 # regenerate from the ledgers, the staging dirs are half-built generations,
 # restore/ copies the firehose and telemetry out of the epoch-1 tree, and
 # the cutover journal carries free-text detail about one machine's run.
-# local/ is the generation's status projection: the Task and Run rows and
-# ledgers that every claim, start and completion rewrites.
+# local/ is the generation's status projection: the Run rows and ledger
+# and the in-flight Task status that every claim, start and run rewrites.
 .ea/generations/gen-*/indexes/
 .ea/generations/gen-*/local/
 .ea/generations/.staging-*/

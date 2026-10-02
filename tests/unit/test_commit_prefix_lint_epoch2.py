@@ -16,6 +16,7 @@ import importlib.util
 import json
 import shutil
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -29,8 +30,15 @@ from eawf.kernel.migration.epoch2.canary import (
     OPT_IN_DECLARATION_FILENAME,
 )
 from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.state.epoch2.task import TERMINAL_TASK_STATUSES
 from eawf.kernel.state.ids import RE_PROJECT_CODE
-from eawf.kernel.store.compaction import STATUS_DOCUMENT_KEYS, read_document, write_document
+from eawf.kernel.store.compaction import (
+    CANONICAL_SEQUENCE_KEY,
+    IN_FLIGHT_TASK_FIELDS,
+    IN_FLIGHT_TASK_STATUSES,
+    read_document,
+    write_document,
+)
 from eawf.kernel.store.paths import ledger_path, status_projection_path
 from eawf.kernel.store.tiers import STATUS_PROJECTION_COLLECTIONS, Epoch2Collection
 from eawf.runtime.integration.commit_policy import TASK_TRAILER_KEY
@@ -448,13 +456,50 @@ def test_the_task_trailer_name_mirrors_the_package(mod: Any) -> None:
 def test_the_status_projection_mirrors_the_package(view_mod: Any) -> None:
     generation = Path("gen-0123456789abcdef")
     document = generation / view_mod.GENERATION_DOCUMENT
-    assert view_mod.STATUS_DOCUMENT_KEYS == STATUS_DOCUMENT_KEYS
     assert {
         collection.value for collection in STATUS_PROJECTION_COLLECTIONS
     } == view_mod.STATUS_PROJECTION_COLLECTIONS
+    assert {status.value for status in IN_FLIGHT_TASK_STATUSES} == (
+        view_mod.IN_FLIGHT_TASK_STATUSES
+    )
+    assert {status.value for status in TERMINAL_TASK_STATUSES} == view_mod.TERMINAL_TASK_STATUSES
+    assert IN_FLIGHT_TASK_FIELDS == view_mod.IN_FLIGHT_TASK_FIELDS
+    assert CANONICAL_SEQUENCE_KEY == view_mod.CANONICAL_SEQUENCE_KEY
     assert generation / view_mod.LOCAL_DIRNAME / view_mod.STATUS_PROJECTION_FILENAME == (
         status_projection_path(document)
     )
+
+
+def _merge_cases(generation: Path) -> Iterator[str]:
+    """Leave *generation* in each state a reader must merge, naming each in turn."""
+    state_path = generation / "state.json"
+    task = {"key": "EAWF-0001", "batch_ref": "BAT-0001", "status": "PLANNED", "revision": 1}
+    document = {"batch": {"BAT-0001": {}}, "task": {"EAWF-0001": task}, "canonical_sequence": 3}
+    write_document(state_path, document)
+    running = task | {"status": "RUNNING", "claimed_by": "agent-a", "revision": 2}
+    write_document(state_path, document | {"task": {"EAWF-0001": running}, "run": {"R": {}}})
+    yield "in-flight overlay"
+    status_projection_path(state_path).write_text(
+        json.dumps({"task": {"EAWF-0001": running}, "canonical_sequence": 4}), encoding="utf-8"
+    )
+    yield "pre-definition overlay"
+    write_document(state_path, document | {"task": {"EAWF-0001": running}})
+    before = state_path.read_bytes()
+    write_document(state_path, document | {"batch": {"BAT-0001": {"x": 1}}})
+    state_path.write_bytes(before)
+    yield "crash between the two writes"
+    moved = json.loads(before) | {"milestone": {"MLS-0001": {}}}
+    state_path.write_text(json.dumps(moved), encoding="utf-8")
+    yield "committed file moved from outside"
+
+
+def test_the_view_merges_every_projection_state_as_the_package_does(
+    view_mod: Any, tmp_path: Path
+) -> None:
+    generation = tmp_path / "gen-0123456789abcdef"
+    generation.mkdir()
+    for case in _merge_cases(generation):
+        assert view_mod._document(generation) == read_document(generation / "state.json"), case
 
 
 def test_the_native_task_key_grammar_mirrors_the_package(view_mod: Any) -> None:

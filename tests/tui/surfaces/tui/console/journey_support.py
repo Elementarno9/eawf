@@ -240,6 +240,7 @@ class DocumentDaemon:
             spent_tokens=0,
             held_tokens=0,
             spent_cost_microusd=0,
+            spent_cost_pricing="priced",
             held_cost_microusd=0,
         ).model_dump(mode="json")
 

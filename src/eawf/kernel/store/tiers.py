@@ -217,13 +217,14 @@ LEDGER_COLLECTIONS: Final[tuple[Epoch2Collection, ...]] = tuple(
 )
 
 
-#: The collections whose rows and ledger lines are per-Task and per-Run
-#: status. Every claim, start, report and completion moves one of them, so
-#: they live in the machine-local status projection rather than beside the
-#: committed release, delivery and decision facts, and a status change
-#: leaves no tracked file behind to commit.
+#: The collections whose rows and ledger lines are wholly machine-local
+#: status. Every start, report and completion moves a Run, so Runs live in
+#: the status projection rather than beside the committed release,
+#: delivery and decision facts. A Task is not here: its definition and
+#: planning status are committed, and only its in-flight status is local
+#: (eawf.kernel.store.compaction).
 STATUS_PROJECTION_COLLECTIONS: Final[frozenset[Epoch2Collection]] = frozenset(
-    {Epoch2Collection.TASK, Epoch2Collection.RUN}
+    {Epoch2Collection.RUN}
 )
 
 

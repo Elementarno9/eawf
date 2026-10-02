@@ -41,6 +41,7 @@ from eawf.kernel.config.layered import merge_config
 from eawf.kernel.economics.governor import economics_policy_from
 from eawf.kernel.economics.prompt_budget import ClassStatus
 from eawf.kernel.runtime.host_facts import HostFactRegistry, ProjectionKind
+from eawf.observability.telemetry.models import RuntimeName
 from eawf.platform.install.gitignore_writer import (
     GitignoreBlockPlan,
     plan_gitignore_block,
@@ -239,7 +240,7 @@ def certify_steering_chain(repo_root: Path) -> None:
 
 
 def _global_overages(
-    report: ChainBudgetReport, global_documents: Mapping[str, Mapping[str, str]]
+    report: ChainBudgetReport, global_documents: Mapping[RuntimeName, Mapping[str, str]]
 ) -> tuple[GlobalDocumentOverage, ...]:
     """Return every class the global documents put over its byte ceiling.
 

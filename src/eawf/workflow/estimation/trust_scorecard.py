@@ -454,9 +454,17 @@ def _compute_verifier_reliability(projection: StoreProjection) -> VerifierReliab
     )
 
 
-def _verified_share(labels: Iterable[OutputTrustLabel]) -> ScorecardValue:
-    """Return the verified share of labelled waves whose outcome is in."""
-    settled = [label for label in labels if label.tier != "deferred_outcome"]
+def _verified_share(labels: Iterable[OutputTrustLabel], *, state: State) -> ScorecardValue:
+    """Return the verified share of the labelled waves that have closed.
+
+    An open wave can already carry passing evidence, but its outcome is not in,
+    so it stays out of both sides of the share.
+    """
+    settled = [
+        label
+        for label in labels
+        if label.scope_id in state.waves and state.waves[label.scope_id].status == WaveStatus.CLOSED
+    ]
     verified = sum(1 for label in settled if label.tier == "verified")
     return _rate(verified, len(settled), sample="closed waves labelled in window")
 
@@ -524,7 +532,7 @@ def compute_trust_scorecard(
         },
         output_labels=labels,
         tier_counts=_tier_counts(labels),
-        verified_share=_verified_share(labels),
+        verified_share=_verified_share(labels, state=state),
         verifier_reliability=_compute_verifier_reliability(scoped_projection),
         coverage=_coverage(labels, window=parsed_window),
     )

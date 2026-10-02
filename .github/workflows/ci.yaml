@@ -517,9 +517,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path (Join-Path $daemonlessDir ".ea") | Out-Null
           $env:EA_STATE = Join-Path $daemonlessDir ".ea/state.json"
           $env:EAWF_DAEMONLESS = "1"
-          uv run eawf project init WSMK --title "Windows daemonless smoke" --domains ci --default-branch main
+          uv run eawf --no-input init --project-code WSMK --project-title "Windows daemonless smoke" --target $daemonlessDir --no-acceptance-tests --no-acceptance-lint --no-acceptance-typecheck
           if (-not (Test-Path $env:EA_STATE)) {
-            throw "daemonless project init did not create state"
+            throw "daemonless eawf init did not create state"
           }
           uv run eawf status *> $null
 

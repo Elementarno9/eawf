@@ -116,7 +116,7 @@ def test_con040_any_other_key_disarms_and_says_so() -> None:
     host = _Host()
     _press(session, host, "Escape")
     _press(session, host, "ArrowDown")
-    assert session.last_esc == 0.0
+    assert session.last_esc == pytest.approx(0.0)
     assert any(entry.note.startswith("quit disarmed") for entry in session.log)
     host.clock.advance(0.5)
     _press(session, host, "Escape")
@@ -130,7 +130,7 @@ def test_con040_escape_with_an_overlay_open_closes_it_and_never_arms() -> None:
     host = _Host()
     _press(session, host, "Escape")
     assert session.overlay is None
-    assert session.last_esc == 0.0
+    assert session.last_esc == pytest.approx(0.0)
     assert host.quits == 0
 
 
@@ -141,7 +141,7 @@ def test_con040_escape_with_the_prefix_armed_cancels_it_and_never_arms() -> None
     _press(session, host, "g")
     _press(session, host, "Escape")
     assert session.prefix is None
-    assert session.last_esc == 0.0
+    assert session.last_esc == pytest.approx(0.0)
 
 
 def test_con040_a_back_stack_turns_escape_into_back() -> None:
@@ -163,7 +163,7 @@ def test_con040_an_outstanding_control_holds_the_quit() -> None:
     host.clock.advance(0.5)
     _press(session, host, "Escape", outstanding=1)
     assert host.quits == 0
-    assert session.last_esc == 0.0
+    assert session.last_esc == pytest.approx(0.0)
     assert "outstanding" in session.log[0].note
 
 

@@ -8,7 +8,6 @@ frozen document of a tree still in epoch 1.
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Annotated
@@ -23,7 +22,6 @@ from eawf.surfaces.cli.commands.mcp import (
     ExpectedRevision,
     IdempotencyKey,
     _escape_tsv_field,
-    _generation_document,
     _mcp_rpc,
     _resolve_target,
     _server_payload,
@@ -38,43 +36,18 @@ logger = logging.getLogger(__name__)
 
 
 def _registry_rows(flags: GlobalFlags) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
-    """Return the Eä-owned server rows and the grant rows the tree holds.
-
-    An epoch-2 tree answers from its generation; an epoch-1 tree answers
-    from its frozen document, which carries no revisions. A tree with no
-    ``state.json`` yet holds nothing.
-    """
-    from eawf.kernel.store.compaction import read_document
-    from eawf.runtime.mcp.book import granted, read_grants, read_servers
+    """Return the Eä-owned server rows and the grant rows the tree holds, as envelope dicts."""
+    from eawf.runtime.mcp.book import owned_registry
 
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError:
         return [], []
-    document_path = _generation_document(flags)
-    if document_path is None:
-        if not state_path.exists():
-            return [], []
-        payload = json.loads(state_path.read_text(encoding="utf-8"))
-        rows = [
-            {"id": sid, **body, "revision": None}
-            for sid, body in sorted((payload.get("mcp_servers") or {}).items())
-            if isinstance(body, dict) and body.get("owner") == "eawf"
-        ]
-        return rows, []
-    document = read_document(document_path)
-    servers = read_servers(document)
-    rows = [
-        _server_payload(s.server, s.revision)
-        for s in servers.values()
-        if s.server is not None and s.server.owner == "eawf"
-    ]
-    grants = read_grants(document)
-    grant_rows = [
-        {**grant.model_dump(mode="json"), "revision": grants[gid].revision}
-        for gid, grant in granted(grants).items()
-    ]
-    return rows, grant_rows
+    servers, grants = owned_registry(state_path)
+    return (
+        [_server_payload(server, revision) for server, revision in servers],
+        [{**grant.model_dump(mode="json"), "revision": revision} for grant, revision in grants],
+    )
 
 
 @mcp_app.command(name="list")

@@ -46,6 +46,8 @@ def _root() -> click.Group:
 
 def _leaves(command: click.Command, path: tuple[str, ...] = ()) -> Iterator[tuple[str, Any]]:
     if isinstance(command, click.Group):
+        if path and command.invoke_without_command:
+            yield " ".join(path), command
         for name, child in sorted(command.commands.items()):
             yield from _leaves(child, (*path, name))
     else:

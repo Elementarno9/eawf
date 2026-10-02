@@ -14,6 +14,8 @@ and are not scanned.
 
 from __future__ import annotations
 
+import ctypes
+import ctypes.util
 import logging
 import os
 import signal
@@ -117,10 +119,21 @@ def _etime_seconds(etime: str) -> float:
 
 
 def _is_daemon_command(command: str) -> bool:
-    """Return whether *command* runs the eawfd entry point."""
-    return any(
-        token == DAEMON_MODULE or Path(token).name == DAEMON_SCRIPT for token in command.split()
-    )
+    """Return whether *command* is a daemon launch, not a tool that names the daemon.
+
+    The daemon starts as ``<python> -m eawf.runtime.daemon.main``, as the ``eawfd``
+    console script run directly, or as that script run by its interpreter. A
+    ``tail -f eawfd`` or ``pgrep eawfd`` only mentions it.
+    """
+    argv = command.split()
+    if not argv:
+        return False
+    if Path(argv[0]).name == DAEMON_SCRIPT:
+        return True
+    if not Path(argv[0]).name.lower().startswith("python"):
+        return False
+    rest = argv[1:]
+    return rest[:2] == ["-m", DAEMON_MODULE] or (bool(rest) and Path(rest[0]).name == DAEMON_SCRIPT)
 
 
 def _daemon_processes() -> list[_DaemonProcess] | None:
@@ -168,6 +181,38 @@ def _bound_sockets(pids: list[int]) -> dict[int, str] | None:
     return sockets
 
 
+def _process_environment(pid: int) -> list[bytes] | None:
+    """Return *pid*'s environment entries, or ``None`` where the platform hides them."""
+    if sys.platform.startswith("linux"):
+        try:
+            return Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+        except OSError:
+            return None
+    if sys.platform != "darwin":
+        return None
+    # KERN_PROCARGS2 lays out argc, the exec path, argv and then the environment.
+    libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+    argmax, width = ctypes.c_int(0), ctypes.c_size_t(ctypes.sizeof(ctypes.c_int))
+    if libc.sysctl((ctypes.c_int * 2)(1, 8), 2, ctypes.byref(argmax), ctypes.byref(width), None, 0):
+        return None
+    buffer, size = ctypes.create_string_buffer(argmax.value), ctypes.c_size_t(argmax.value)
+    if libc.sysctl((ctypes.c_int * 3)(1, 49, pid), 3, buffer, ctypes.byref(size), None, 0):
+        return None
+    raw = buffer.raw[: size.value]
+    argc = int.from_bytes(raw[:4], sys.byteorder)
+    words = [word for word in raw[4:].split(b"\0") if word]
+    return words[1 + argc :]
+
+
+def _pinned_runtime_dir(pid: int) -> Path | None:
+    """Return the runtime dir *pid* was pinned to by ``EAWF_RUNTIME_DIR``, if readable."""
+    for entry in _process_environment(pid) or []:
+        name, _, value = entry.partition(b"=")
+        if name == b"EAWF_RUNTIME_DIR" and value:
+            return Path(os.fsdecode(value))
+    return None
+
+
 def _stray_reason(process: _DaemonProcess, socket: str | None) -> StrayReason | None:
     """Return why *process* is unreachable, or ``None`` when a client reaches it."""
     if socket is None:
@@ -177,7 +222,12 @@ def _stray_reason(process: _DaemonProcess, socket: str | None) -> StrayReason | 
         return "address_gone"
     if daemon_pid_if_ready(path.parent) != process.pid:
         return "address_lost"
-    if path.parent == runtime_base_dir() and runtime_dir() != path.parent:
+    # a daemon pinned to the per-user dir answers the clients pinned with it
+    if (
+        path.parent == runtime_base_dir()
+        and runtime_dir() != path.parent
+        and _pinned_runtime_dir(process.pid) != path.parent
+    ):
         return "superseded_address"
     return None
 

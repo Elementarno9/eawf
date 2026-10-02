@@ -16,7 +16,8 @@ irreversible mutation of owned state:
   names no directory while the session's working directory sits in another work tree
   than the one the session was started in, so the commit lands where nobody meant.
 - :attr:`DataLossPattern.CANONICAL_STORE_EDIT` -- a direct write to a canonical state
-  or store file, which only the daemon may change.
+  or store file, which only the daemon may change, or a ``git clean`` or ``git reset
+  --hard`` in the main checkout, which discards the daemon's uncommitted state with it.
 
 Everything else is advisory or post-hoc. A rule Eawf enforces at its own mutator is
 not judged again here: an ``eawf`` command line is never judged, because the verb it
@@ -30,6 +31,7 @@ so no guard fault can stop one.
 
 from __future__ import annotations
 
+import fnmatch
 import logging
 import os
 import re
@@ -86,7 +88,7 @@ MANAGED_WORKTREE_ROOTS: Final[tuple[tuple[str, ...], ...]] = (
 )
 
 #: The revision of the data-loss policy a recorded denial belongs to.
-DATA_LOSS_POLICY_REVISION: Final = 1
+DATA_LOSS_POLICY_REVISION: Final = 2
 
 #: What each rule held when it refused: the roots or files it protects.
 RULE_VALUES: Final[dict[str, str]] = {
@@ -94,7 +96,7 @@ RULE_VALUES: Final[dict[str, str]] = {
     DataLossPattern.OUT_OF_ROOT_WORKTREE.value: ".ea/worktrees .ea/local/epoch2/workspaces",
     DataLossPattern.DRIFTED_COMMIT.value: "the work tree the session started in",
     DataLossPattern.CANONICAL_STORE_EDIT.value: (
-        ".ea/state.json .ea/store .ea/ledger .ea/telemetry.db .ea/local/epoch2"
+        ".ea/state.json .ea/store .ea/ledger .ea/telemetry.db .ea/local/epoch2 .ea/generations"
     ),
     UNJUDGED_RULE: "fail closed",
 }
@@ -142,9 +144,41 @@ _REMOVERS: Final = frozenset({"rm", "rmdir", "unlink", "shred", "trash", "srm"})
 _COPIERS: Final = frozenset({"cp", "install", "rsync", "ln", "ditto"})
 _IN_PLACE_EDITORS: Final = frozenset({"sed", "gsed", "perl"})
 _INTERPRETERS: Final = frozenset({"python", "python3", "node", "ruby", "perl", "uv"})
-_CANONICAL_FRAGMENTS: Final = (".ea/state.json", ".ea/store", ".ea/ledger", "telemetry.db")
+_CANONICAL_FRAGMENTS: Final = (
+    ".ea/state.json",
+    ".ea/store",
+    ".ea/ledger",
+    ".ea/generations",
+    "telemetry.db",
+)
 _WRITE_WORDS = re.compile(
     r"write|dump|unlink|rename|replace|remove|rmtree|truncate|['\"][wa]b?\+?['\"]"
+)
+_PIPES: Final = frozenset({"|", "|&"})
+_PWD_VARIABLE = re.compile(r"\$(?:\{PWD\}|PWD(?![A-Za-z0-9_]))")
+_PWD_SUBSTITUTION = re.compile(r"\$\(\s*pwd(?:\s+-[LP])?\s*\)|`\s*pwd(?:\s+-[LP])?\s*`")
+_SHELL_VALUED: Final = frozenset({"-o", "+o", "-O", "+O", "--rcfile", "--init-file"})
+_XARGS_VALUED: Final = frozenset({"-I", "-n", "-L", "-P", "-d", "-E", "-s", "-a", "-R", "-S"})
+_FIND_LEADING: Final = frozenset({"-H", "-L", "-P"})
+_FIND_EXEC: Final = frozenset({"-exec", "-execdir", "-ok", "-okdir"})
+_FIND_PATH_TESTS: Final = frozenset(
+    {"-path", "-ipath", "-wholename", "-iwholename", "-regex", "-iregex"}
+)
+#: Names a canonical file, a managed worktree or a directory holding one carries.
+_PROTECTED_NAMES: Final = (
+    ".ea",
+    "state.json",
+    "selected.json",
+    "telemetry.db",
+    "store",
+    "ledger",
+    "run.jsonl",
+    "run.jsonl.lock",
+    "generations",
+    "local",
+    "epoch2",
+    "worktrees",
+    "workspaces",
 )
 _WORKTREE_ADD_VALUED: Final = frozenset({"-b", "-B", "--reason"})
 _GIT_VALUED: Final = frozenset({"-c", "--namespace", "--exec-path", "--config-env"})
@@ -215,7 +249,14 @@ def _judge(tool_name: str, tool_input: object, *, cwd: Path, anchor: Path) -> Da
     if tool_name == PATCH_TOOL:
         return _judge_patch(_patch_text(tool_input), cwd=cwd)
     command = _command_text(tool_input)
-    return _judge_line(command, _Shell(cwd=cwd, session_cwd=cwd, anchor=anchor), depth=0)
+    shell = _Shell(cwd=cwd, session_cwd=cwd, anchor=anchor)
+    # Codex's exec_command and shell tools run in the call's workdir, local_shell in its
+    # working_directory; naming one is as explicit as a cd at the head of the line.
+    workdir = tool_input.get("workdir", tool_input.get("working_directory"))
+    if isinstance(workdir, str) and workdir:
+        shell.cwd = _resolve(cwd, workdir)
+        shell.moved = True
+    return _judge_line(command, shell, depth=0)
 
 
 def _deny(pattern: DataLossPattern, reason: str) -> DataLossDenial:
@@ -321,7 +362,7 @@ def _canonical(path: Path) -> bool:
     if not rest:
         return True
     head = rest[0]
-    if head in {"state.json", "telemetry.db", "store", "ledger"}:
+    if head in {"state.json", "telemetry.db", "store", "ledger", "generations"}:
         return True
     return rest[:2] == ("local", "epoch2") and (len(rest) < 3 or rest[2] != "workspaces")
 
@@ -377,8 +418,8 @@ def _strip_heredocs(command: str) -> str:
     return "\n".join(kept)
 
 
-def _segments(command: str) -> Iterator[tuple[list[str], list[tuple[str, str]]]]:
-    """Yield each simple command's words and its redirections.
+def _segments(command: str) -> Iterator[tuple[list[str], list[tuple[str, str]], bool]]:
+    """Yield each simple command's words, its redirections, and whether a pipe feeds it.
 
     Raises:
         ValueError: The line does not tokenize (an unclosed quote, say).
@@ -389,6 +430,7 @@ def _segments(command: str) -> Iterator[tuple[list[str], list[tuple[str, str]]]]
     words: list[str] = []
     redirects: list[tuple[str, str]] = []
     pending: str | None = None
+    piped = False
     for token in lexer:
         if pending is not None:
             redirects.append((pending, token))
@@ -399,34 +441,47 @@ def _segments(command: str) -> Iterator[tuple[list[str], list[tuple[str, str]]]]
                 pending = token
                 continue
             if words or redirects:
-                yield words, redirects
+                yield words, redirects, piped
             words, redirects = [], []
+            piped = token in _PIPES
             continue
         words.append(token)
     if pending is not None:
         raise ValueError(f"redirection {pending!r} names no target")
     if words or redirects:
-        yield words, redirects
+        yield words, redirects, piped
+
+
+def _expand_pwd(word: str, cwd: Path) -> str:
+    """Return *word* with the shell's own spellings of the working directory filled in."""
+    return _PWD_VARIABLE.sub(lambda _: str(cwd), word)
 
 
 def _judge_line(command: str, shell: _Shell, *, depth: int) -> DataLossDenial | None:
     """Judge every simple command of a command line, in order."""
     if depth > 8:
         raise ValueError("the command nests too deeply to judge")
+    # A pwd substitution names the working directory, not a command worth judging, and
+    # left in place its parentheses would split the word it sits in.
+    command = _PWD_SUBSTITUTION.sub("$PWD", command)
     for match in _SUBSTITUTION.finditer(command):
         inner = match.group(1) if match.group(1) is not None else match.group(2)
         denial = _judge_line(inner, shell, depth=depth + 1)
         if denial is not None:
             return denial
-    for words, redirects in _segments(_strip_heredocs(command)):
-        for operator, target in redirects:
+    producer: list[str] | None = None
+    for raw_words, redirects, piped in _segments(_strip_heredocs(command)):
+        words = [_expand_pwd(word, shell.cwd) for word in raw_words]
+        for operator, raw_target in redirects:
+            target = _expand_pwd(raw_target, shell.cwd)
             if operator in _REDIRECT_OUT and not target.isdigit() and target != "-":
                 denial = _canonical_denial(_resolve(shell.cwd, target), verb="a redirect to")
                 if denial is not None:
                     return denial
-        denial = _judge_words(words, shell, depth=depth)
+        denial = _judge_words(words, shell, depth=depth, producer=producer if piped else None)
         if denial is not None:
             return denial
+        producer = words
     return None
 
 
@@ -458,8 +513,10 @@ def _unwrap(words: list[str]) -> list[str]:
     return words[index:]
 
 
-def _judge_words(words: list[str], shell: _Shell, *, depth: int) -> DataLossDenial | None:
-    """Judge one simple command."""
+def _judge_words(
+    words: list[str], shell: _Shell, *, depth: int, producer: list[str] | None = None
+) -> DataLossDenial | None:
+    """Judge one simple command; *producer* is the command piping into it, if any."""
     words = _unwrap(words)
     if not words:
         return None
@@ -476,6 +533,8 @@ def _judge_words(words: list[str], shell: _Shell, *, depth: int) -> DataLossDeni
         return None if script is None else _judge_line(script, shell, depth=depth + 1)
     if name == "eval":
         return _judge_line(" ".join(args), shell, depth=depth + 1)
+    if name == "xargs":
+        return _judge_xargs(args, shell, depth=depth, producer=producer)
     if name == "eawf":
         return None
     if name == "git":
@@ -485,12 +544,51 @@ def _judge_words(words: list[str], shell: _Shell, *, depth: int) -> DataLossDeni
 
 def _shell_script(args: list[str]) -> str | None:
     """Return the script a ``sh -c`` style call runs, if it runs one."""
-    for index, arg in enumerate(args):
+    index = 0
+    while index < len(args):
+        arg = args[index]
         if arg.startswith("-") and not arg.startswith("--") and "c" in arg[1:]:
             return args[index + 1] if index + 1 < len(args) else None
-        if not arg.startswith("-"):
+        if not arg.startswith(("-", "+")):
             return None
+        index += 2 if arg in _SHELL_VALUED else 1
     return None
+
+
+def _judge_xargs(
+    args: list[str], shell: _Shell, *, depth: int, producer: list[str] | None
+) -> DataLossDenial | None:
+    """Judge the command xargs runs, with the operands its input adds to it.
+
+    Raises:
+        ValueError: The command removes or moves files named by input the guard
+            cannot read, so what it would remove is unknown.
+    """
+    index = 0
+    while index < len(args) and args[index].startswith("-"):
+        index += 2 if args[index] in _XARGS_VALUED else 1
+    command = _unwrap(args[index:])
+    if not command:
+        return None
+    denial = _judge_words(command, shell, depth=depth)
+    if denial is not None:
+        return denial
+    name = os.path.basename(command[0])
+    if name not in _REMOVERS and name != "mv":
+        return None
+    feeder = _unwrap(producer or [])
+    feeder_name = os.path.basename(feeder[0]) if feeder else None
+    if feeder_name == "find":
+        return _judge_find(feeder[1:], shell, removing=True)
+    if feeder_name in {"echo", "printf"}:
+        items = _operands(feeder[1:])[1 if feeder_name == "printf" else 0 :]
+        verb = "moving" if name == "mv" else "removing"
+        for item in items:
+            denial = _removal_denial(_resolve(shell.cwd, item), shell, verb=verb)
+            if denial is not None:
+                return denial
+        return None
+    raise ValueError(f"xargs feeds {name} paths the guard cannot read")
 
 
 def _operands(args: list[str]) -> list[str]:
@@ -504,10 +602,12 @@ def _operands(args: list[str]) -> list[str]:
 def _judge_file_command(name: str, args: list[str], shell: _Shell) -> DataLossDenial | None:
     """Judge a command that removes, moves or writes files."""
     removed: list[str] = []
-    if name in _REMOVERS or name == "mv":
+    if name in _REMOVERS:
         removed = _operands(args)
-    elif name == "find" and any(arg in {"-delete", "-exec", "-execdir", "-ok"} for arg in args):
-        removed = _find_starts(args)
+    elif name == "mv":
+        removed = _mv_operands(args)[0]
+    elif name == "find":
+        return _judge_find(args, shell, removing=False)
     if name in _INTERPRETERS or name.startswith("python3."):
         denial = _judge_inline_code(args)
         if denial is not None:
@@ -530,6 +630,10 @@ def _written_files(name: str, args: list[str]) -> list[str]:
         return [args[args.index("-t") + 1]] if "-t" in args[:-1] else _operands(args)[-1:]
     if name in {"tee", "truncate", "touch"}:
         return _operands(args)
+    if name == "mv":
+        # The destination is written rather than moved away: it can only be overwritten.
+        destination = _mv_operands(args)[1]
+        return [] if destination is None else [destination]
     if name == "dd":
         return [arg.removeprefix("of=") for arg in args if arg.startswith("of=")]
     if name in _IN_PLACE_EDITORS and any(_in_place_flag(arg) for arg in args):
@@ -546,13 +650,92 @@ def _in_place_flag(arg: str) -> bool:
     return arg.startswith("-") and "i" in arg[1:]
 
 
-def _find_starts(args: list[str]) -> list[str]:
+def _mv_operands(args: list[str]) -> tuple[list[str], str | None]:
+    """Return what an ``mv`` moves away and where it moves it to."""
+    for index, arg in enumerate(args[:-1]):
+        if arg == "-t":
+            destination = args[index + 1]
+            return [op for op in _operands(args) if op != destination], destination
+        if arg.startswith("--target-directory="):
+            return _operands(args), arg.split("=", 1)[1]
+    operands = _operands(args)
+    if len(operands) < 2:
+        return operands, None
+    return operands[:-1], operands[-1]
+
+
+def _judge_find(args: list[str], shell: _Shell, *, removing: bool) -> DataLossDenial | None:
+    """Judge a find that removes what it matches, or whose matches xargs removes.
+
+    A find that only reads is never judged. One that removes is refused when it
+    starts in a canonical path, or starts at or above a managed worktree without
+    a name test that keeps every protected name out of its matches.
+    """
+    index = 0
+    while index < len(args) and args[index] in _FIND_LEADING:
+        index += 1
     starts: list[str] = []
-    for arg in args:
-        if arg.startswith(("-", "(", "!")):
-            break
-        starts.append(arg)
-    return starts or ["."]
+    while index < len(args) and not args[index].startswith(("-", "(", "!")):
+        starts.append(args[index])
+        index += 1
+    expression = args[index:]
+    if not removing and not _find_removes(expression):
+        return None
+    narrowed = _find_narrowed(expression)
+    for start in starts or ["."]:
+        path = _glob_base(_resolve(shell.cwd, start))
+        denial = _canonical_denial(path, verb="a find removing under")
+        if denial is not None:
+            return denial
+        if not narrowed and _holds_managed_worktree(
+            path, _managed_roots(shell.cwd, shell.anchor, path)
+        ):
+            return _deny(
+                DataLossPattern.FOREIGN_WORKTREE_MUTATION,
+                "a find removing files above a managed worktree, with no name test that "
+                "keeps Eawf's state out of its matches, is refused; start it lower or add "
+                "-name tests naming what to remove",
+            )
+    return None
+
+
+def _find_removes(expression: list[str]) -> bool:
+    """Return whether a find expression deletes, or runs a command that removes or moves."""
+    for index, arg in enumerate(expression):
+        if arg == "-delete":
+            return True
+        if arg in _FIND_EXEC and index + 1 < len(expression):
+            command = _unwrap(expression[index + 1 :])
+            name = os.path.basename(command[0]) if command else ""
+            if name in _REMOVERS or name in _SHELLS or name == "mv":
+                return True
+    return False
+
+
+def _find_narrowed(expression: list[str]) -> bool:
+    """Return whether every match of a find expression passes a name test sparing Eawf's state.
+
+    The expression is narrowed only when it has a name test, negates nothing, and
+    either has no alternation or alternates name tests alone, so each match carries a
+    name none of whose patterns matches a protected name.
+    """
+    tests = {arg for arg in expression if arg.startswith("-") and arg not in _FIND_EXEC}
+    if "!" in expression or "-not" in tests:
+        return False
+    names = [
+        expression[index + 1]
+        for index, arg in enumerate(expression[:-1])
+        if arg in {"-name", "-iname"}
+    ]
+    if not names:
+        return False
+    if tests & {"-o", "-or"} and tests & _FIND_PATH_TESTS:
+        return False
+    return not any(
+        fnmatch.fnmatchcase(protected.lower(), pattern.lower())
+        for pattern in names
+        for protected in _PROTECTED_NAMES
+    )
 
 
 def _judge_inline_code(args: list[str]) -> DataLossDenial | None:
@@ -604,9 +787,22 @@ def _judge_git(args: list[str], shell: _Shell) -> DataLossDenial | None:
         denial = _judge_restore_canonical(subcommand, rest, where)
         if denial is not None:
             return denial
-    if _discards_work(subcommand, rest):
-        return _judge_foreign_reset(subcommand, where, shell)
-    return None
+    if not _discards_work(subcommand, rest):
+        return None
+    if subcommand in {"clean", "reset"} and _in_main_checkout(where):
+        return _deny(
+            DataLossPattern.CANONICAL_STORE_EDIT,
+            f"git {subcommand} discarding work in the main checkout is refused: it takes "
+            "the daemon's uncommitted generation state and .ea/local with it; discard "
+            "named paths with git restore, or work in a managed worktree",
+        )
+    return _judge_foreign_reset(subcommand, where, shell)
+
+
+def _in_main_checkout(where: Path) -> bool:
+    """Return whether *where* lies in the main checkout of a repository Eawf manages."""
+    tree = _work_tree(where)
+    return tree is not None and (tree / ".git").is_dir() and (tree / ".ea").is_dir()
 
 
 def _worktree_operands(args: list[str]) -> list[str]:

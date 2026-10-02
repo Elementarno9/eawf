@@ -108,8 +108,8 @@ def _resolve_risk(raw: str) -> McpRisk:
         ) from exc
 
 
-def _server_payload(server: McpServer, revision: int) -> dict[str, object]:
-    """Render *server* at *revision* as a JSON-friendly dict for envelopes."""
+def _server_payload(server: McpServer, revision: int | None) -> dict[str, object]:
+    """Render *server* at *revision*, ``None`` for an epoch-1 row, as a JSON-friendly dict."""
     return {
         "id": server.id,
         "owner": server.owner,

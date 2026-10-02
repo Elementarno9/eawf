@@ -36,7 +36,7 @@ from eawf.runtime.daemon.stale_wave import (
     run_sweep_loop,
     sweep_once,
 )
-from eawf.workflow.estimation.buckets import EFFORT_DISPERSION_MINUTES
+from eawf.workflow.estimation.mapping import CURRENT_EFFORT_MAPPING
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 
 pytestmark = pytest.mark.unit
@@ -51,7 +51,7 @@ def _now() -> datetime:
 
 
 #: The estimate of a wave with no estimate row, whatever its size label.
-_BUDGET = EFFORT_DISPERSION_MINUTES["p90"]
+_BUDGET = CURRENT_EFFORT_MAPPING.pessimistic_minutes
 
 
 def _state_payload(

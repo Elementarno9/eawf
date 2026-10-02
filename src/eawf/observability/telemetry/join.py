@@ -9,8 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from eawf.kernel.state.models import Wave
 from eawf.observability.telemetry.models import TelemetrySession
 from eawf.runtime.session.vendor_id import hash_vendor_session_id
+from eawf.workflow.estimation.mapping import CURRENT_EFFORT_MAPPING
 
-DEFAULT_EU_MINUTES = 30.0
+#: The minutes one EU stands for under the mapping in force; a configured
+#: ``estimation.eu_minutes`` overrides it at wave close.
+DEFAULT_EU_MINUTES = CURRENT_EFFORT_MAPPING.eu_minutes
 DEFAULT_TOKENS_PER_EU = 200_000.0
 
 

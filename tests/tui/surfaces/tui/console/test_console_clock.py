@@ -184,7 +184,7 @@ def test_quit_step_judges_the_second_escape_by_its_gap(gap: float, step: QuitSte
     assert check.gap_ms == int((held.now() - armed_at) * 1000)
     assert abs(check.gap_ms - gap * 1000) <= 1
     if step == QuitStep.QUIT:
-        assert session.last_esc == 0.0
+        assert session.last_esc == pytest.approx(0.0)
     elif step == QuitStep.BURST:
         assert session.last_esc == armed_at
     else:

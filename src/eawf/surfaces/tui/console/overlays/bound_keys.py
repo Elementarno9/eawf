@@ -433,9 +433,9 @@ def open_held_row(ctx: Ctx) -> bool:
         return True
     s.sel_id = row.key
     if row.collection is Epoch2Collection.RUN:
-        # a stalled Run is resumed or let go from the pause the sweep opened over it
+        # a stalled Run is resumed or let go from the pause the sweep opened over this stall
         run = row.facts.get("subject")
-        pause = ctx.decisions.pause(run) if ctx.decisions is not None and run else None
+        pause = ctx.decisions.stall_pause(row.key) if ctx.decisions is not None else None
         if pause is None:
             ctx.log("Enter", f"{row.key} · the pause over {run} is not read yet — nothing opened")
             return True

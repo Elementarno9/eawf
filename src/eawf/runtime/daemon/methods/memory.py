@@ -20,13 +20,13 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Annotated, Any, Final
 
-import orjson
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.identity import EntityKind, format_qualified_urn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.state.enums import Confidence, MemoryStatus, MemoryTier, StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
+from eawf.kernel.state.models import State
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.kinds.memory import MemoryNote
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
@@ -133,7 +133,8 @@ def project_subject(context: Epoch2RootContext) -> str:
 
     Raises:
         DaemonValidationError: Neither the generation nor the frozen
-            document names exactly one project.
+            document names exactly one project, or the frozen document
+            does not validate.
     """
     authority = context.require_selected_generation()
     assert authority.target is not None and authority.generation_id is not None
@@ -144,9 +145,13 @@ def project_subject(context: Epoch2RootContext) -> str:
     code = projects[0] if len(projects) == 1 else None
     frozen = context.identity.tree_root / _FROZEN_DOCUMENT
     if code is None and frozen.exists():
-        project = orjson.loads(frozen.read_bytes()).get("project")
-        named = project.get("code") if isinstance(project, dict) else None
-        code = named if isinstance(named, str) and named else None
+        try:
+            project = State.model_validate_json(frozen.read_bytes()).project
+        except ValidationError as error:
+            raise _refusal(
+                "project_unresolved", f"the frozen document does not validate: {error}"
+            ) from error
+        code = project.code if project is not None else None
     if code is None:
         raise _refusal(
             "project_unresolved",

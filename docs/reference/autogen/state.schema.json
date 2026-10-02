@@ -1583,7 +1583,7 @@
     },
     "EstimateSummary": {
       "additionalProperties": false,
-      "description": "Latest estimate (full history in store).",
+      "description": "Latest estimate (full history in store).\n\n``mapping_revision`` is the effort-unit mapping revision the estimate was\nmade under and ``reference_sample_size`` the number of reference rows\nbehind it. Both default to ``None`` because no row written before they\nexisted recorded either, and inventing one would be a fabricated fact; an\nestimate missing either renders as unavailable.",
       "properties": {
         "confidence": {
           "$ref": "#/$defs/Confidence"
@@ -1610,6 +1610,19 @@
           "title": "Id",
           "type": "string"
         },
+        "mapping_revision": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mapping Revision"
+        },
         "pessimistic_eu": {
           "title": "Pessimistic Eu",
           "type": "number"
@@ -1629,6 +1642,19 @@
           ],
           "default": null,
           "title": "Reference Class"
+        },
+        "reference_sample_size": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Sample Size"
         },
         "scope_id": {
           "title": "Scope Id",

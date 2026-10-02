@@ -1001,16 +1001,14 @@ def _stall_facts(fields: Mapping[str, Any]) -> dict[str, str]:
     """
     since = _text(fields.get("last_activity_at"))
     elapsed, interval = fields.get("elapsed_seconds"), fields.get("interval_seconds")
-    stated = isinstance(elapsed, int | float) and isinstance(interval, int) and since is not None
+    question = None
+    if isinstance(elapsed, int | float) and isinstance(interval, int) and since is not None:
+        question = f"stopped responding · silent {int(elapsed)}s past its {interval}s interval"
     what = _text(fields.get("last_activity_kind"))
     facts = {
         "kind": STALL_KIND,
         "subject": _key_of(fields.get("run_ref")),
-        "question": (
-            f"stopped responding · silent {int(elapsed)}s past its {interval}s interval"
-            if stated
-            else None
-        ),
+        "question": question,
         "last_activity_at": since,
         "last_activity": what.replace("_", " ") if what else "nothing since it started",
         "raised_at": _text(fields.get("raised_at")),

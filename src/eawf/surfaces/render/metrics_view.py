@@ -26,6 +26,8 @@ import io
 from rich.console import Console
 from rich.table import Table
 
+from eawf.workflow.estimation.calibration import RefitDisposition, RefitOutcome
+from eawf.workflow.estimation.mapping_revisions import RefitAnswer
 from eawf.workflow.estimation.metrics import MetricsSummary
 
 # Header strings are module-level so tests can grep for them without
@@ -134,7 +136,48 @@ def render_metrics_plain(summary: MetricsSummary) -> str:
     return "\n".join(lines)
 
 
+def render_refit(outcome: RefitOutcome) -> str:
+    """Render an effort-mapping re-fit outcome as plain lines.
+
+    The first line names the disposition and the revision the re-fit started
+    from; the exclusions are always listed, so no fit reads as resting on an
+    unstated sample.
+    """
+    lines = [
+        f"effort mapping re-fit: {outcome.disposition.value} "
+        f"(revision {outcome.current_revision}, {outcome.current_digest})",
+        f"eligible actuals: {outcome.eligible_count}",
+    ]
+    excluded = ", ".join(f"{row.reason.value}={row.count}" for row in outcome.excluded)
+    lines.append(f"excluded: {excluded or 'none'}")
+    if outcome.disposition is RefitDisposition.NOT_DUE:
+        lines.append(f"not due: {', '.join(reason.value for reason in outcome.not_due)}")
+    elif outcome.disposition is RefitDisposition.APPLY:
+        lines.append(f"notice: {outcome.notice}")
+    else:
+        lines.append(f"operator decision: {outcome.question}")
+        lines.extend(f"  {option.option_id}: {option.label}" for option in outcome.options)
+    return "\n".join(lines)
+
+
+def render_refit_answer(answer: RefitAnswer) -> str:
+    """Render what one re-fit request did, then the re-fit it computed.
+
+    The first line names the result and the revision in force afterwards.
+    """
+    lines = [f"effort mapping: {answer.result.value}, revision {answer.revision} in force"]
+    if answer.notice is not None:
+        lines.append(f"notice: {answer.notice}")
+    if answer.action_ref is not None:
+        lines.append(f"operator decision: {answer.action_ref}")
+    if answer.outcome is not None:
+        lines.append(render_refit(answer.outcome))
+    return "\n".join(lines)
+
+
 __all__ = [
     "render_metrics_plain",
     "render_metrics_table",
+    "render_refit",
+    "render_refit_answer",
 ]

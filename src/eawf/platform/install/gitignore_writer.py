@@ -47,9 +47,9 @@ GITIGNORE_PATTERNS: tuple[str, ...] = (
     ".ea/locks/",
     ".ea/**/*.lock",
     ".ea/local/",
-    # Each generation's status projection: the Task and Run rows and ledgers
-    # every claim, start and completion rewrites. Only release, delivery and
-    # decision facts are committed, so a status change leaves nothing to commit.
+    # Each generation's status projection: the Run rows and ledger and the
+    # in-flight Task status every claim, start and run rewrites. Task
+    # definitions and planning status are committed beside the delivery facts.
     # The generation's indexes regenerate from its ledgers.
     ".ea/generations/gen-*/local/",
     ".ea/generations/gen-*/indexes/",

@@ -18,6 +18,7 @@ import contextlib
 import tempfile
 import uuid
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -26,27 +27,36 @@ import pytest
 import yaml
 
 from eawf.kernel.projection.campaign import CampaignView
+from eawf.kernel.runtime.events import MessageSummaryPayload
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
+from eawf.runtime.daemon import campaign_scheduler
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.campaign_scheduler import StepAssignment, StepReport
+from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, root_id_for
+from eawf.runtime.daemon.epoch2_transaction import TransitionRequest, run_transaction
 from eawf.runtime.daemon.methods import campaign_run
 from eawf.runtime.daemon.methods.campaign_run import (
     CAMPAIGN_START_METHOD,
     parse_round_report,
     resolve_agent_count,
 )
+from eawf.runtime.daemon.methods.dispatch_queue import DISPATCH_CONTROL_REQUEST_METHOD
+from eawf.runtime.daemon.run_events import run_events_of
 from eawf.runtime.daemon.server import handle_connection
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     document_path,
     method_context,
     provision,
+    root_context,
     seed,
     seed_row,
+    tree_root,
 )
+from tests.integration.runtime.daemon.test_governor_admission import declare
 
 pytestmark = pytest.mark.integration
 
@@ -127,8 +137,10 @@ async def served(canary: CanaryProvision, tmp_path: Path) -> AsyncIterator[_Clie
     server = await asyncio.start_unix_server(lambda r, w: handle_connection(r, w, ctx), path=path)
     try:
         reader, writer = await asyncio.open_unix_connection(path)
-        yield _Client(reader, writer)
-        writer.close()
+        try:
+            yield _Client(reader, writer)
+        finally:
+            writer.close()
     finally:
         server.close()
         await server.wait_closed()
@@ -158,6 +170,11 @@ def _start(root: Path, **brief: Any) -> dict[str, Any]:
         "questions": [QUESTION],
         **brief,
     }
+
+
+def _drive(canary: CanaryProvision, key: str) -> tuple[str, str]:
+    """Return the in-flight key of *canary*'s drive of *key*."""
+    return root_id_for(tree_root(canary)), key
 
 
 def _runs(canary: CanaryProvision) -> dict[str, dict[str, Any]]:
@@ -293,7 +310,7 @@ def test_plan_049_a_failed_round_pauses_and_the_next_drive_resumes_on_a_new_run(
                 CAMPAIGN_START_METHOD, **_start(canary.root, depth="shallow")
             )
             key = started["record"]["key"]
-            while campaign_run.campaign_drive_in_flight(key):
+            while campaign_run.campaign_drive_in_flight(_drive(canary, key)):
                 await asyncio.sleep(0.05)
             paused = CampaignView.model_validate(
                 await client.call(
@@ -360,3 +377,225 @@ def test_the_agent_count_layer_sets_how_many_steps_a_live_round_dispatches(
     assert [s.step.method.value for s in view.steps] == ["survey", "survey", "synthesis"]
     assert counting.peak == agent_count
     assert view.status.value == "converged"
+
+
+def _control(root: Path, verb: str, ref: str) -> dict[str, Any]:
+    return {"repo_root": str(root), "verb": verb, "actor": "OP-0001", "request_ref": ref}
+
+
+def test_campaign_rounds_repro_dispatch_pause_bypassed(
+    canary: CanaryProvision, tmp_path: Path, agent: StubAgent
+) -> None:
+    # dispatch control is filed under the tree's one project
+    seed(canary, {"project": {"CAM": {"key": "CAM"}}})
+
+    async def body() -> tuple[CampaignView, CampaignView]:
+        async with served(canary, tmp_path) as client:
+            await client.call(
+                DISPATCH_CONTROL_REQUEST_METHOD, **_control(canary.root, "pause", "P1")
+            )
+            started = await client.call(
+                CAMPAIGN_START_METHOD, **_start(canary.root, depth="shallow")
+            )
+            key = started["record"]["key"]
+            while campaign_run.campaign_drive_in_flight(_drive(canary, key)):
+                await asyncio.sleep(0.05)
+            # a drive that ignored the hold would have worked every round by now
+            await asyncio.sleep(0.5)
+            held = CampaignView.model_validate(
+                await client.call(
+                    "projection.campaign.view", repo_root=str(canary.root), campaign_key=key
+                )
+            )
+            await client.call(
+                DISPATCH_CONTROL_REQUEST_METHOD, **_control(canary.root, "resume", "R1")
+            )
+            await client.call(
+                campaign_run.CAMPAIGN_RUN_METHOD,
+                repo_root=str(canary.root),
+                actor="OP-0001",
+                campaign_key=key,
+            )
+            return held, await _settled(client, canary.root, key)
+
+    held, view = asyncio.run(body())
+
+    # the pause held every round: no Run was created and no agent was asked
+    assert [s.step.state.value for s in held.steps] == ["pending", "pending"]
+    assert [s.step.run_refs for s in held.steps] == [(), ()]
+    assert held.status.value == "active"
+    assert len(agent.assignments) == 2
+    assert view.status.value == "converged"
+
+
+def test_the_governor_run_ceiling_bounds_how_many_rounds_run_at_once(
+    canary: CanaryProvision, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    counting = CountingAgent()
+    monkeypatch.setattr(campaign_run, "research_agent_for", lambda *_args: counting)
+    declare(
+        canary,
+        governor={
+            "max_concurrent_runs": 1,
+            "max_in_flight_tokens": 1_000_000,
+            "admission": "queue",
+        },
+    )
+    brief = _start(
+        canary.root, depth="medium", agents=2, questions=[QUESTION, "Which restarts reorder?"]
+    )
+
+    async def body() -> CampaignView:
+        async with served(canary, tmp_path) as client:
+            started = await client.call(CAMPAIGN_START_METHOD, **brief)
+            return await _settled(client, canary.root, started["record"]["key"])
+
+    view = asyncio.run(body())
+
+    assert counting.peak == 1
+    assert view.status.value == "converged"
+
+
+class SlowAgent(StubAgent):
+    """Holds each round open across several heartbeats."""
+
+    async def work(self, assignment: StepAssignment) -> StepReport:
+        await asyncio.sleep(0.3)
+        return await super().work(assignment)
+
+
+def test_campaign_runs_repro_no_events_false_stall(
+    canary: CanaryProvision, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(campaign_run, "research_agent_for", lambda *_args: SlowAgent())
+    monkeypatch.setattr(campaign_scheduler, "_HEARTBEAT_SECONDS", 0.05)
+
+    async def body() -> CampaignView:
+        async with served(canary, tmp_path) as client:
+            started = await client.call(
+                CAMPAIGN_START_METHOD, **_start(canary.root, depth="shallow")
+            )
+            return await _settled(client, canary.root, started["record"]["key"])
+
+    view = asyncio.run(body())
+
+    records = read_ledger_records(ledger_path(document_path(canary), Epoch2Collection.RUN))
+    for step in view.steps:
+        lines = [
+            event.payload.summary
+            for event in run_events_of(records, step.step.run_refs[0])
+            if isinstance(event.payload, MessageSummaryPayload)
+        ]
+        assert lines[0] == f"round 1 of step {step.step.ordinal} started"
+        assert any(line.startswith("round still working after") for line in lines[1:])
+
+
+class MovingAgent(StubAgent):
+    """Suspends and resumes its first round's Run, moving its revision, then fails."""
+
+    def __init__(self, context: Epoch2RootContext) -> None:
+        super().__init__()
+        self._context = context
+
+    def _move(self, urn: str, to_status: str, revision: int, **fields: Any) -> None:
+        run_transaction(
+            context=self._context,
+            request=TransitionRequest.model_validate(
+                {
+                    "urn": urn,
+                    "to_status": to_status,
+                    "expected_revision": revision,
+                    "idempotency_key": f"moving-{to_status.lower()}",
+                    "actor": "OP-0001",
+                    **fields,
+                }
+            ),
+            now=datetime.now(UTC),
+        )
+
+    async def work(self, assignment: StepAssignment) -> StepReport:
+        if self.assignments:
+            return await super().work(assignment)
+        self.assignments.append(assignment)
+        urn = str(assignment.run_ref)
+        reason = {"suspension_reason": "AWAITING_PROVIDER_CAPACITY"}
+        await asyncio.to_thread(self._move, urn, "SUSPENDED", 2, updates=reason)
+        await asyncio.to_thread(
+            self._move,
+            urn,
+            "RUNNING",
+            3,
+            observations=("run_clearing_fact_observed",),
+            updates={"suspension_reason": None},
+        )
+        raise RuntimeError("provider lost")
+
+
+def test_campaign_round_cancel_repro_hard_coded_revision(
+    canary: CanaryProvision, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    moving = MovingAgent(root_context(canary, tmp_path / "runtime"))
+    monkeypatch.setattr(campaign_run, "research_agent_for", lambda *_args: moving)
+
+    async def body() -> CampaignView:
+        async with served(canary, tmp_path) as client:
+            started = await client.call(
+                CAMPAIGN_START_METHOD, **_start(canary.root, depth="shallow")
+            )
+            key = started["record"]["key"]
+            while campaign_run.campaign_drive_in_flight(_drive(canary, key)):
+                await asyncio.sleep(0.05)
+            return CampaignView.model_validate(
+                await client.call(
+                    "projection.campaign.view", repo_root=str(canary.root), campaign_key=key
+                )
+            )
+
+    view = asyncio.run(body())
+
+    first = view.steps[0].step.run_refs[0]
+    assert _runs(canary)[first.entity_key]["status"] == "CANCELLED"
+    assert [s.step.state.value for s in view.steps] == ["pending", "pending"]
+
+
+class GatedAgent(StubAgent):
+    """Holds every round until the test opens the gate."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.gate: asyncio.Event | None = None
+
+    async def work(self, assignment: StepAssignment) -> StepReport:
+        assert self.gate is not None
+        await self.gate.wait()
+        return await super().work(assignment)
+
+
+def test_campaign_drives_repro_same_key_in_two_trees_collide(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gated = GatedAgent()
+    monkeypatch.setattr(campaign_run, "research_agent_for", lambda *_args: gated)
+    trees = [provision(tmp_path / name, code="CAM") for name in ("one", "two")]
+    for tree in trees:
+        seed(tree, {"track": {"TRK-RUNTIME": seed_row("track", "ACTIVE")}})
+
+    async def body() -> list[CampaignView]:
+        gated.gate = asyncio.Event()
+        async with served(trees[0], tmp_path) as client:
+            started = [
+                await client.call(CAMPAIGN_START_METHOD, **_start(tree.root, depth="shallow"))
+                for tree in trees
+            ]
+            gated.gate.set()
+            # the second tree's CAM-0001 is driven beside the first's, not refused as its twin
+            assert [answer["driving"] for answer in started] == [True, True]
+            return [
+                await _settled(client, tree.root, answer["record"]["key"])
+                for tree, answer in zip(trees, started, strict=True)
+            ]
+
+    views = asyncio.run(body())
+
+    assert [view.key for view in views] == ["CAM-0001", "CAM-0001"]
+    assert [view.status.value for view in views] == ["converged", "converged"]

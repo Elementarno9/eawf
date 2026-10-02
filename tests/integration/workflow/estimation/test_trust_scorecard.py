@@ -687,6 +687,35 @@ def test_meas_026_every_scorecard_rate_declares_its_sample_and_quality(tmp_path:
     assert scorecard.coverage.sampled is False
 
 
+def test_meas_026_an_open_wave_with_passing_evidence_stays_out_of_the_closed_sample(
+    tmp_path: Path,
+) -> None:
+    """An open wave labelled verified has no outcome yet, so the share skips it."""
+    state = _state_with_entities()
+    state_path = _write_repo(tmp_path, state)
+    _seed_stores(state_path)
+    _append(
+        store_path(state_path, StoreKind.EVIDENCE),
+        _envelope(
+            record_id="EV-W03",
+            kind=StoreKind.EVIDENCE,
+            scope_id="P01-I01-W03",
+            payload=_evidence("EV-W03", "P01-I01-W03", evidence_kind="deterministic").model_dump(
+                mode="json"
+            ),
+        ),
+    )
+
+    scorecard = compute_trust_scorecard(
+        state, store_projection=read_store_projection(state_path), now=_T0
+    )
+
+    tiers = {label.scope_id: label.tier for label in scorecard.output_labels}
+    assert tiers["P01-I01-W03"] == "verified"
+    assert scorecard.verified_share.sample_size == 2
+    assert scorecard.verified_share.value == pytest.approx(0.5)
+
+
 def test_meas_026_an_undefined_rate_is_unavailable_never_zero() -> None:
     """Boundary: no waves and no evidence leave every rate undefined, not zero."""
     scorecard = compute_trust_scorecard(_empty_state(), store_projection=None, now=_T0)

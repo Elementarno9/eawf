@@ -45,6 +45,7 @@ from eawf.kernel.runtime.candidate import CandidateBundle, CandidateId
 from eawf.kernel.runtime.provider import Digest
 from eawf.kernel.state.epoch2.base import ShaStr, StrictPositiveInt
 from eawf.kernel.state.epoch2.urns import BatchUrn, TaskUrn
+from eawf.kernel.store.commit_policy import PROVENANCE_TRAILER_KEY
 from eawf.runtime.integration.apply import (
     ORDER_KEY_FIELDS,
     IntegrationRefusal,
@@ -57,9 +58,6 @@ logger = logging.getLogger(__name__)
 
 #: The trailer key each Task is named under.
 TASK_TRAILER_KEY: Final = "Task"
-
-#: The trailer key the delivery manifest is named under.
-PROVENANCE_TRAILER_KEY: Final = "Eawf-Provenance"
 
 #: The scheme a provenance trailer addresses its manifest through.
 PROVENANCE_SCHEME: Final = "manifest://"

@@ -53,6 +53,8 @@ EXCLUDED_SUBJECT = "P30-I21-W46"
 PRICED_SUBJECT = "P30-I23-W28"
 #: A real actual that is null across effort and attribution and zero in cost.
 UNPRICED_SUBJECT = "P28-I02-W07"
+#: A real captured actual with tokens recorded but its cost left at zero.
+USAGE_WITHOUT_PRICE_SUBJECT = "P31-I01-W10"
 
 #: A statusline session cache entry and its counter sidecar, as the
 #: statusline writes them. Neither is a canonical fact.
@@ -219,8 +221,10 @@ def test_meas_041_an_uncaptured_default_zero_imports_as_null() -> None:
     for row in plan.for_kind(MeasurementKind.ACTUAL):
         source = document["actuals"][row.map_key]
         captured = source["harness"] is not None or source["model"] is not None
+        if captured:
+            continue
         for field in ("actual_cost_usd", "actual_tokens"):
-            if captured or source[field] != 0:
+            if source[field] != 0:
                 assert row.payload[field] == source[field]
             else:
                 assert row.payload[field] is None
@@ -232,17 +236,66 @@ def test_meas_041_an_uncaptured_default_zero_imports_as_null() -> None:
     )
 
 
-def test_meas_041_a_captured_zero_stays_a_measured_zero() -> None:
-    """A row that names its harness and model was captured; its zero is a reading."""
+def test_meas_041_a_captured_row_with_a_zero_cost_and_no_usage_imports_as_null() -> None:
+    """A capture that read neither tokens nor a price measured nothing."""
     document, task_ids = _real_shape()
 
     excluded = _build(document, task_ids).measurement_for(
         kind=MeasurementKind.ACTUAL, map_key=EXCLUDED_SUBJECT
     )
 
-    assert excluded.payload["actual_cost_usd"] == pytest.approx(0.0)
-    assert excluded.payload["actual_tokens"] == 0
-    assert excluded.nulled_fields == ()
+    assert excluded.payload["actual_cost_usd"] is None
+    assert excluded.payload["actual_tokens"] is None
+    assert excluded.nulled_fields == ("actual_cost_usd", "actual_tokens")
+
+
+def test_meas_041_a_captured_row_with_usage_but_a_zero_cost_imports_unpriced() -> None:
+    """Real token usage at a zero cost is a missing price, not a free run."""
+    document, task_ids = _real_shape()
+
+    row = _build(document, task_ids).measurement_for(
+        kind=MeasurementKind.ACTUAL, map_key=USAGE_WITHOUT_PRICE_SUBJECT
+    )
+
+    assert row.payload["actual_cost_usd"] is None
+    assert (
+        row.payload["actual_tokens"]
+        == document["actuals"][USAGE_WITHOUT_PRICE_SUBJECT]["actual_tokens"]
+    )
+    assert row.nulled_fields == ("actual_cost_usd",)
+
+
+def test_meas_041_a_priced_capture_keeps_every_field() -> None:
+    """A capture that recorded a price is a reading, so nothing is nulled."""
+    document, task_ids = _real_shape()
+    plan = _build(document, task_ids)
+
+    priced = plan.measurement_for(kind=MeasurementKind.ACTUAL, map_key=PRICED_SUBJECT)
+    source = {**document["actuals"][PRICED_SUBJECT], "actual_tokens": 0}
+    rebuilt = _build(
+        {**document, "actuals": {**document["actuals"], PRICED_SUBJECT: source}}, task_ids
+    ).measurement_for(kind=MeasurementKind.ACTUAL, map_key=PRICED_SUBJECT)
+
+    assert priced.nulled_fields == ()
+    assert rebuilt.nulled_fields == ()
+    assert rebuilt.payload["actual_tokens"] == 0
+
+
+def test_meas_041_require_reconciled_refuses_a_zero_restored_on_a_usage_row() -> None:
+    """Writing the default zero cost back on a usage row fabricates a free run."""
+    document, task_ids = _real_shape()
+    plan = _build(document, task_ids)
+    target = plan.measurement_for(kind=MeasurementKind.ACTUAL, map_key=USAGE_WITHOUT_PRICE_SUBJECT)
+    zeroed = target.model_copy(update={"payload": {**target.payload, "actual_cost_usd": 0.0}})
+    tampered = plan.model_copy(
+        update={
+            "measurements": tuple(zeroed if row is target else row for row in plan.measurements)
+        }
+    )
+
+    plan.require_reconciled(document)
+    with pytest.raises(MigrationFabricationDetectedError, match=USAGE_WITHOUT_PRICE_SUBJECT):
+        tampered.require_reconciled(document)
 
 
 def test_meas_041_require_reconciled_refuses_a_zero_restored_on_an_unpriced_row() -> None:
@@ -374,7 +427,7 @@ def test_meas_042_require_reconciled_refuses_one_row_too_many() -> None:
     plan = _build(document, task_ids)
     doubled = plan.model_copy(update={"measurements": (*plan.measurements, plan.measurements[-1])})
 
-    with pytest.raises(MigrationCountMismatchError, match="carries 6"):
+    with pytest.raises(MigrationCountMismatchError, match="carries 7"):
         doubled.require_reconciled(document)
 
 

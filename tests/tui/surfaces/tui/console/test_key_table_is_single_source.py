@@ -480,7 +480,7 @@ def test_con024_escape_leaves_the_filter_and_goes_no_further() -> None:
     _press(session, "\\", "x", "Escape")
     assert session.typing is False
     assert session.route == "activity"
-    assert session.last_esc == 0.0
+    assert session.last_esc == pytest.approx(0.0)
 
 
 def test_con024_escape_in_the_palette_at_scope_home_never_arms_the_quit() -> None:
@@ -488,7 +488,7 @@ def test_con024_escape_in_the_palette_at_scope_home_never_arms_the_quit() -> Non
     session = _session("scope.home")
     host = _press(session, "/", "r", "u", "Escape")
     assert session.overlay is None
-    assert session.last_esc == 0.0
+    assert session.last_esc == pytest.approx(0.0)
     assert host.quits == 0
 
 

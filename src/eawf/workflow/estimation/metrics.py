@@ -163,6 +163,10 @@ class EstimateActualVarianceMetric(BaseModel):
     planned-EU denominator is zero — the VarianceTile and the ship-gate
     Variance section surface "no data" rather than a fabricated ``0%``
     or a divide-by-zero.
+
+    ``mapping_revisions`` labels the effort-unit mapping revisions the
+    contributing estimates were made under, ``"unrecorded"`` for an estimate
+    that recorded none, so an aggregate spanning revisions says so.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -171,6 +175,7 @@ class EstimateActualVarianceMetric(BaseModel):
     planned_eu: float = Field(ge=0.0)
     actual_eu: float = Field(ge=0.0)
     variance_pct: float | None
+    mapping_revisions: list[str] = Field(default_factory=list)
 
 
 class WeeklyBurnMetric(BaseModel):
@@ -350,6 +355,9 @@ def compute_estimate_actual_variance(state: State) -> EstimateActualVarianceMetr
     of actuals vs sum of estimates) — rather than a mean of per-wave ratios
     — keeps a single large over-run from being diluted by many small waves,
     matching the ship-gate's "did the phase as a whole run over?" question.
+    Estimate and actual join on the wave alone, and the mapping revision each
+    estimate recorded is carried into ``mapping_revisions`` so a roll-up across
+    revisions is labelled rather than silent.
     An excluded actual is dropped for the same reason the re-fit drops it:
     the figure is a floor or a split, so folding it into the numerator
     reports a measurement artefact as an over- or under-run.
@@ -369,6 +377,7 @@ def compute_estimate_actual_variance(state: State) -> EstimateActualVarianceMetr
     planned_eu = 0.0
     actual_eu = 0.0
     sample_count = 0
+    revisions: set[str] = set()
     for wave in state.waves.values():
         if wave.status != WaveStatus.CLOSED:
             continue
@@ -379,12 +388,14 @@ def compute_estimate_actual_variance(state: State) -> EstimateActualVarianceMetr
         planned_eu += est.expected_eu
         actual_eu += act.elapsed_eu
         sample_count += 1
+        revisions.add("unrecorded" if est.mapping_revision is None else str(est.mapping_revision))
     variance_pct = (actual_eu - planned_eu) / planned_eu * 100.0 if planned_eu > 0 else None
     return EstimateActualVarianceMetric(
         sample_count=sample_count,
         planned_eu=planned_eu,
         actual_eu=actual_eu,
         variance_pct=variance_pct,
+        mapping_revisions=sorted(revisions),
     )
 
 

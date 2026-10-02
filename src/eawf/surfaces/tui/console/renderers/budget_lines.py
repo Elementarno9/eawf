@@ -67,16 +67,20 @@ def tokens_line(
     return spent_of(shown, None if limit is None else group(limit), left)
 
 
-def cost_line(spent: int | None, limit: int | None) -> str:
+def cost_line(spent: int | None, limit: int | None, *, partial: bool = False) -> str:
     """Return a cost budget, or the unmetered mark when no reading priced the spend.
 
     Args:
         spent: Cost spent in micro-dollars, or ``None`` when unpriced.
         limit: The cost limit in micro-dollars, or ``None`` when none is set.
+        partial: Whether some of the spend went unpriced, so *spent* is a floor
+            and no remainder can be projected from it.
     """
+    cap = f" of {money(limit)}" if limit is not None else " · no limit is set"
     if spent is None:
-        cap = f" of {money(limit)}" if limit is not None else " · no limit is set"
         return f"cost {UNMETERED}{cap}"
+    if partial:
+        return f"cost ≥{money(spent)}{cap} · partly unmetered"
     left = None if limit is None else money(max(0, limit - spent))
     return spent_of(f"cost {money(spent)}", None if limit is None else money(limit), left)
 

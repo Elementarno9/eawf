@@ -20,10 +20,13 @@ the two halves of that job are restated here rather than imported:
   trailer names; rows keyed any other way are native work, so the
   projection leaves them out.
 - the status projection mirrors ``eawf.kernel.store.compaction``: the
-  Task and Run rows and the canonical sequence sit in the generation's
-  ``local/status.json`` and win over the committed document, and those
-  collections' ledgers sit under ``local/ledger/``, the committed ledger
-  being only the seed a local ledger starts from.
+  committed document holds every Task row with its definition and its
+  last planning status, and the generation's ``local/status.json`` holds
+  the Run rows, each in-flight Task's status fields and the live
+  sequence, applied only over the committed bytes whose digest it names
+  (or, mid-write, the ones its ``previous`` names). The Run ledger sits
+  under ``local/ledger/``; the Task ledger is committed, though a tree
+  not yet migrated still keeps its newest copy under ``local/ledger/``.
 - the native Task key grammar mirrors the task family of
   ``eawf.kernel.identity.keys``: ``<PROJECT>-####``, which is what an
   ``Task`` trailer names. :func:`native_task_status` reads such a row
@@ -35,6 +38,7 @@ All four copies are pinned against the package by
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -49,8 +53,22 @@ LEDGER_DIRNAME = "ledger"
 LEDGER_SUFFIX = ".jsonl"
 LOCAL_DIRNAME = "local"
 STATUS_PROJECTION_FILENAME = "status.json"
-STATUS_PROJECTION_COLLECTIONS = frozenset({"task", "run"})
-STATUS_DOCUMENT_KEYS = frozenset({*STATUS_PROJECTION_COLLECTIONS, "canonical_sequence"})
+STATUS_PROJECTION_COLLECTIONS = frozenset({"run"})
+IN_FLIGHT_TASK_STATUSES = frozenset({"CLAIMED", "RUNNING", "READY_TO_INTEGRATE"})
+IN_FLIGHT_TASK_FIELDS = frozenset(
+    {
+        "status",
+        "active_run_ref",
+        "claimed_by",
+        "first_claimed_at",
+        "integrated_binding",
+        "revision",
+        "updated_at",
+    }
+)
+TERMINAL_TASK_STATUSES = frozenset({"COMPLETED", "CANCELLED", "FAILED"})
+CANONICAL_SEQUENCE_KEY = "canonical_sequence"
+_PRE_DEFINITION_KEYS = frozenset({"task", *STATUS_PROJECTION_COLLECTIONS, CANONICAL_SEQUENCE_KEY})
 
 _GENERATION_ID_RE = re.compile(r"^gen-[0-9a-f]{16}$")
 _PHASE_KEY_RE = re.compile(r"^P\d{2,}$")
@@ -124,31 +142,83 @@ def epoch2_generation(ea_dir: Path) -> Path | None:
 def _ledger_file(generation: Path, collection: str) -> Path:
     """Return the ledger file that holds *collection*'s history.
 
-    A status collection's ledger is the local one once it exists; before
-    that, the committed seed it would be rebuilt from.
+    A Run ledger is the local one once it exists; before that, the
+    committed seed it would be rebuilt from. The Task ledger is the
+    committed one, unless a tree not yet migrated still keeps its newest
+    copy locally.
     """
     committed = generation / LEDGER_DIRNAME / f"{collection}{LEDGER_SUFFIX}"
-    if collection not in STATUS_PROJECTION_COLLECTIONS:
+    if collection not in {*STATUS_PROJECTION_COLLECTIONS, "task"}:
         return committed
     local = generation / LOCAL_DIRNAME / LEDGER_DIRNAME / committed.name
     return local if local.is_file() else committed
+
+
+def _overlay(committed: dict[str, Any], status: dict[str, Any]) -> dict[str, Any]:
+    """Lay one projection's local half over the committed document."""
+    document = {k: v for k, v in committed.items() if k not in STATUS_PROJECTION_COLLECTIONS}
+    document.update({k: v for k, v in status.items() if k in STATUS_PROJECTION_COLLECTIONS})
+    sequences = [
+        value
+        for value in (committed.get(CANONICAL_SEQUENCE_KEY), status.get(CANONICAL_SEQUENCE_KEY))
+        if value is not None
+    ]
+    if sequences:
+        document[CANONICAL_SEQUENCE_KEY] = max(sequences)
+    rows, entries = document.get("task"), status.get("task")
+    if isinstance(rows, dict) and isinstance(entries, dict):
+        merged = dict(rows)
+        for key, entry in entries.items():
+            row = rows.get(key)
+            if not isinstance(row, dict) or row.get("status") in TERMINAL_TASK_STATUSES:
+                continue
+            if not isinstance(entry, dict):
+                raise ValueError(f"{STATUS_PROJECTION_FILENAME}: task {key!r} must be an object")
+            definition = {k: v for k, v in row.items() if k not in IN_FLIGHT_TASK_FIELDS}
+            merged[key] = definition | entry
+        document["task"] = merged
+    return document
+
+
+def _merged(committed: dict[str, Any], projection: Any, digest: str) -> dict[str, Any]:
+    """Return *committed* with the projection that belongs to it laid over.
+
+    Raises:
+        ValueError: The projection is not the expected JSON shape.
+    """
+    if projection is None:
+        return committed
+    if not isinstance(projection, dict):
+        raise ValueError(f"{STATUS_PROJECTION_FILENAME}: must be an object")
+    if "base" not in projection:
+        kept = {k: v for k, v in committed.items() if k not in _PRE_DEFINITION_KEYS}
+        return kept | projection
+    previous = projection.get("previous")
+    if (
+        projection["base"] != digest
+        and isinstance(previous, dict)
+        and previous.get("base") == digest
+    ):
+        return _merged(committed, previous.get("projection"), digest)
+    status = projection.get("status")
+    if not isinstance(status, dict):
+        raise ValueError(f"{STATUS_PROJECTION_FILENAME}: status must be an object")
+    return _overlay(committed, status)
 
 
 def _document(generation: Path) -> Any:
     """Return the generation document with its status projection merged in.
 
     Raises:
-        ValueError: The projection is not a JSON object.
+        ValueError: The projection is not the expected JSON shape.
     """
-    document = json.loads((generation / GENERATION_DOCUMENT).read_text(encoding="utf-8"))
+    raw = (generation / GENERATION_DOCUMENT).read_bytes()
+    document = json.loads(raw.decode("utf-8"))
     projection = generation / LOCAL_DIRNAME / STATUS_PROJECTION_FILENAME
     if not projection.is_file() or not isinstance(document, dict):
         return document
     status = json.loads(projection.read_text(encoding="utf-8"))
-    if not isinstance(status, dict):
-        raise ValueError(f"{STATUS_PROJECTION_FILENAME}: must be an object")
-    committed = {key: value for key, value in document.items() if key not in STATUS_DOCUMENT_KEYS}
-    return committed | status
+    return _merged(document, status, hashlib.sha256(raw).hexdigest())
 
 
 def _collection_rows(generation: Path, collection: str) -> dict[str, dict[str, Any]]:

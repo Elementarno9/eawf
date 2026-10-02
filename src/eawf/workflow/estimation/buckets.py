@@ -1,35 +1,17 @@
 """Wave effort roll-up and realized-EU accessors.
 
-Every wave is costed at one effort constant, :data:`EFFORT_EU`. The five
+Every wave is costed at the effort constant of the mapping in force,
+:data:`~eawf.workflow.estimation.mapping.CURRENT_EFFORT_MAPPING`. The five
 size labels it replaced were measured non-monotonic, with a declared span
 of 14x against a measured 1.31x, and no size proxy separated them, so a
 label left on a wave is a narrative annotation: nothing multiplies by it
-and no schedule or capacity figure derives from it. With no observable to
-re-fit against, the per-label calibration retired with the ladder.
+and no schedule or capacity figure derives from it.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from types import MappingProxyType
-from typing import Final
-
 from eawf.kernel.state.models import ActualSummary, State, Wave
-
-#: Effort of one wave in EU, whatever size label it carries.
-EFFORT_EU: Final[float] = 0.8
-
-#: Minutes of agent-driven session time in one EU.
-EU_MINUTES: Final[float] = 30.0
-
-#: :data:`EFFORT_EU` in minutes -- the expected duration of one wave.
-EFFORT_MINUTES: Final[float] = EFFORT_EU * EU_MINUTES
-
-#: The measured dispersion of per-wave effort, in minutes. The p90 is the
-#: pessimistic budget a wave without an explicit estimate is held to.
-EFFORT_DISPERSION_MINUTES: Final[Mapping[str, float]] = MappingProxyType(
-    {"p10": 8.8, "p50": 23.9, "p90": 123.1}
-)
+from eawf.workflow.estimation.mapping import CURRENT_EFFORT_MAPPING
 
 
 def sum_wave_eu(waves: list[Wave]) -> float:
@@ -39,9 +21,9 @@ def sum_wave_eu(waves: list[Wave]) -> float:
         waves: The waves to sum.
 
     Returns:
-        ``len(waves) * EFFORT_EU``, rounded to 2 dp.
+        The wave count times the mapping's effort constant, rounded to 2 dp.
     """
-    return round(len(waves) * EFFORT_EU, 2)
+    return round(len(waves) * CURRENT_EFFORT_MAPPING.effort_eu, 2)
 
 
 def critical_path_eu(waves: list[Wave]) -> float:
@@ -54,8 +36,8 @@ def critical_path_eu(waves: list[Wave]) -> float:
         waves: The waves forming one dependency graph.
 
     Returns:
-        The longest chain's wave count times :data:`EFFORT_EU`, rounded to
-        2 dp; ``0.0`` for no waves.
+        The longest chain's wave count times the mapping's effort constant,
+        rounded to 2 dp; ``0.0`` for no waves.
     """
     by_id = {wave.id: wave for wave in waves}
     memo: dict[str, int] = {}
@@ -72,7 +54,7 @@ def critical_path_eu(waves: list[Wave]) -> float:
 
     if not waves:
         return 0.0
-    return round(max(_depth(wave, set()) for wave in waves) * EFFORT_EU, 2)
+    return round(max(_depth(wave, set()) for wave in waves) * CURRENT_EFFORT_MAPPING.effort_eu, 2)
 
 
 def resolve_wave_actual(state: State, wave_id: str) -> ActualSummary | None:
@@ -112,7 +94,7 @@ def actual_eu_for_wave(state: State, wave_id: str) -> float:
     """Return realized EU for one wave — the single realized-EU accessor.
 
     Reads ``elapsed_eu`` off the actual resolved by :func:`resolve_wave_actual`
-    (the realized-EU counterpart to :data:`EFFORT_EU` on the planned side).
+    (the realized-EU counterpart to the mapping's effort constant).
     A wave with no matching actual contributes ``0.0`` — there is no
     realized effort to report yet.
 

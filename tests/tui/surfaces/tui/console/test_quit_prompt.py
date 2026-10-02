@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.clock import (
     QUIT_CEILING,
@@ -47,7 +49,7 @@ def test_a_key_between_the_presses_withdraws_the_prompt() -> None:
     session, host = _home(), _Host()
     _press(session, host, "Escape")
     _press(session, host, "ArrowDown")
-    assert session.last_esc == 0.0
+    assert session.last_esc == pytest.approx(0.0)
     assert QUIT_PROMPT not in [t.text for t in session.toasts]
 
 

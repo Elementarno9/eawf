@@ -164,6 +164,10 @@ class SpecEstimate(_SpecModel):
             when no estimate has been recorded yet.
         expected_minutes: Latest expected minutes estimate, or ``None``
             when no estimate has been recorded yet.
+        unavailable_reason: Why the recorded estimate is not a usable
+            number, such as a missing sample size; ``None`` when it is
+            usable or when there is none. Set, it renders in place of
+            both expected figures.
         token_budget: Token budget attached to the wave, or ``None``
             when unset.
         parallel_siblings: Other active waves in the same iter. Empty
@@ -174,18 +178,23 @@ class SpecEstimate(_SpecModel):
     effort_bucket: str | None = None
     expected_eu: float | None = None
     expected_minutes: float | None = None
+    unavailable_reason: str | None = None
     token_budget: int | None = None
     parallel_siblings: list[str] = Field(default_factory=list)
 
     def render(self) -> str:
         """Return the ``## Estimate`` section."""
         siblings = ", ".join(self.parallel_siblings) if self.parallel_siblings else "none"
+        expected_eu = _display_value(self.expected_eu)
+        expected_minutes = _display_value(self.expected_minutes)
+        if self.unavailable_reason is not None:
+            expected_eu = expected_minutes = f"unavailable ({self.unavailable_reason})"
         return (
             "## Estimate\n"
             "\n"
             f"- bucket: {_display_value(self.effort_bucket)}\n"
-            f"- expected_eu: {_display_value(self.expected_eu)}\n"
-            f"- expected_minutes: {_display_value(self.expected_minutes)}\n"
+            f"- expected_eu: {expected_eu}\n"
+            f"- expected_minutes: {expected_minutes}\n"
             f"- token_budget: {_display_value(self.token_budget)}\n"
             f"- parallel_siblings: {siblings}"
         )

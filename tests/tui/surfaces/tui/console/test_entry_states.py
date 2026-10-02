@@ -60,6 +60,7 @@ from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.entry import render_state
 from eawf.surfaces.tui.console.session import SIZES, Session
 from eawf.surfaces.tui.console.tokens import CONNECTION, TRUTH
+from tests.integration._memory_native import QR_DOCUMENT
 
 from .overlay_support import chrome
 
@@ -927,7 +928,14 @@ def _first_run(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> Conso
     _InProcessDaemon.calls = []
     monkeypatch.setattr(daemon_client, "DaemonClient", _InProcessDaemon)
     world.ea.mkdir(parents=True, exist_ok=True)
-    (world.ea / "state.json").write_text(json.dumps({"project": {"code": CODE}}))
+    project = {**QR_DOCUMENT["project"], "code": CODE, "repo_urn": f"urn:eawf:v1:repo:{CODE}"}
+    document = {
+        **QR_DOCUMENT,
+        "urn": f"urn:eawf:v1:state:{CODE}",
+        "project": project,
+        "current": {**QR_DOCUMENT["current"], "project_code": CODE},
+    }
+    (world.ea / "state.json").write_text(json.dumps(document))
     return _land(world, monkeypatch, "onboarding")
 
 

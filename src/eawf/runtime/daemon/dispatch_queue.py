@@ -79,7 +79,11 @@ def request_dispatch_control(
     request_ref: str,
     now: datetime,
 ) -> DispatchControlFact:
-    """Record one control request, or answer with the one already recorded under its id.
+    """Record one control request, or answer with the resend it repeats.
+
+    A resend repeats the id and the verb of the request last recorded under that id,
+    so it answers with that fact. A different verb under the same id is a new request
+    and is recorded, so a pause and then a resume sent under one id both apply.
 
     Args:
         session: The locked session the fact is appended under.
@@ -93,9 +97,9 @@ def request_dispatch_control(
     Returns:
         The fact as recorded: confirmed, or rejected with its reason.
     """
-    for fact in dispatch_control_facts(records):
-        if fact.request_ref == request_ref:
-            return fact
+    prior = [fact for fact in dispatch_control_facts(records) if fact.request_ref == request_ref]
+    if prior and prior[-1].verb is verb:
+        return prior[-1]
     rejected = verb is DispatchVerb.DRAIN and _publishing(document)
     fact = DispatchControlFact(
         request_ref=request_ref,
@@ -109,7 +113,7 @@ def request_dispatch_control(
         session,
         LedgerRecord(
             collection=Epoch2Collection.RUN,
-            record_key=f"{DISPATCH_CONTROL_KEY_PREFIX}{request_ref}",
+            record_key=f"{DISPATCH_CONTROL_KEY_PREFIX}{request_ref}-{len(prior) + 1}",
             status=fact.outcome.value,
             recorded_at=now,
             payload=fact.model_dump(mode="json"),

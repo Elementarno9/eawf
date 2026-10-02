@@ -112,6 +112,26 @@ def _runtimes(document: dict[str, Any], run_lines: tuple[LedgerRecord, ...]) -> 
     return runtimes
 
 
+def jury_producers(
+    document: dict[str, Any], run_lines: tuple[LedgerRecord, ...]
+) -> Mapping[str, tuple[AgentSessionRole, str]]:
+    """Return the ``(agent_role, runtime)`` each reviewer Run answers for, by Run key.
+
+    Args:
+        document: The tree's document, which holds the live Runs.
+        run_lines: Every line the run ledger holds.
+
+    Returns:
+        One entry per Run both a sealed capsule and a vendor session name.
+    """
+    roles, runtimes = _roles(run_lines), _runtimes(document, run_lines)
+    return {
+        key: (AgentSessionRole(role), runtimes[key])
+        for key, role in roles.items()
+        if key in runtimes
+    }
+
+
 def _row(
     audit: BatchAudit, *, milestone_ref: str | None, role: str | None, runtime: str | None
 ) -> dict[str, Any]:
@@ -224,15 +244,9 @@ def jury_calibration_row(
         for key, row in _stored(document, batch_lines, Epoch2Collection.BATCH).items()
         if row.get("status") in MERGED_STATUSES
     )
-    roles, runtimes = _roles(run_lines), _runtimes(document, run_lines)
-    producers = {
-        key: (AgentSessionRole(role), runtimes[key])
-        for key, role in roles.items()
-        if key in runtimes
-    }
     cohort, ballots = native_cohort(
         observe_verdict_outcomes(lines, merged_batches=merged),
-        producers=producers,
+        producers=jury_producers(document, run_lines),
         labels=latest_gold_labels(batch_lines),
     )
     group = calibrate(cohort, ballots, max_brier=max_brier, max_co_error=max_co_error)
@@ -260,6 +274,7 @@ __all__ = [
     "MERGED_STATUSES",
     "VERIFICATION_SITE",
     "jury_calibration_row",
+    "jury_producers",
     "resolve_jury_thresholds",
     "verdict_observation_rows",
 ]

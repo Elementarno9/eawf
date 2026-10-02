@@ -320,8 +320,14 @@ def _parameter(param: click.Parameter) -> VerbParameter | None:
 def _walk(
     command: click.Command, path: tuple[str, ...], ctx: click.Context
 ) -> Iterable[tuple[tuple[str, ...], click.Command]]:
-    """Yield every leaf command under *command* with its path, hidden ones skipped."""
+    """Yield every runnable command under *command* with its path, hidden ones skipped.
+
+    A group that runs its own callback when no subcommand is named (``doctor``,
+    ``migrate --to``) is a verb as well as a parent, so it is yielded too.
+    """
     if isinstance(command, click.Group):
+        if command.invoke_without_command:
+            yield path, command
         for name in command.list_commands(ctx):
             child = command.get_command(ctx, name)
             if child is not None and not child.hidden:

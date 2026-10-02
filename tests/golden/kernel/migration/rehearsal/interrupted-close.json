@@ -1,8 +1,8 @@
 {
   "apply": {
     "applied": true,
-    "generation_bytes": 8395,
-    "generation_id": "gen-02071e1691cbcae3",
+    "generation_bytes": 8591,
+    "generation_id": "gen-436382d7f664ad66",
     "journal_stages": [
       "fence_cleared",
       "workspace_resolved",
@@ -19,11 +19,11 @@
     ],
     "ledger_files": 1,
     "ledger_records": 1,
-    "residual_document_bytes": 4363
+    "residual_document_bytes": 6511
   },
   "disposition": "imports",
   "dry_run": {
-    "approval_digest": "2c62749e5ca83d034815d965efd33bc998e4033098ab52723d0dad8be4815f5f",
+    "approval_digest": "2cd526457af4911ef2d2e0a7af7b50d966301235fddd0463e02a09bae915996d",
     "collections": {
       "actuals": [
         0,
@@ -216,7 +216,7 @@
         0
       ]
     },
-    "manifest_digest": "02071e1691cbcae3987bc8f4352460a9e2c1b972f24aaac84c79c9931c969538",
+    "manifest_digest": "436382d7f664ad66a510e75f78ec105232e0e116758baa7eb973bf22375790e7",
     "reproducible": true,
     "source_digest": "553620eb12d1b063ac1b62ba759dfdea9a418922479176dee4686ee811c72878",
     "source_rows": 11,
@@ -226,7 +226,7 @@
   "fixture": "interrupted-close",
   "rerun": {
     "applied": false,
-    "generation_id": "gen-02071e1691cbcae3",
+    "generation_id": "gen-436382d7f664ad66",
     "journal_rows": 0,
     "tree_unchanged": true
   },
