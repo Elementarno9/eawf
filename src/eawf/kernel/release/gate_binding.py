@@ -197,8 +197,15 @@ PRODUCT_CANARY_POST_MERGE_GATES: Final[tuple[ReleaseGateName, ...]] = (
     ReleaseGateName.RELEASE_TAGGED_OBSERVED,
 )
 
-#: The gate names each profile admits. ``dev1`` through
-#: ``product_canary`` are authored: the later profiles add their gates
+#: The one gate ``flag_day`` adds on top of the ``product_canary``
+#: twenty-two. The first release candidate is the first rung whose
+#: package refuses epoch-1 state, so it is the first that can be asked
+#: to prove the refusal: a plain epoch-1 tree takes no mutating verb,
+#: and every epoch-1 verb the tree still answers has a disposition.
+FLAG_DAY_ADDED_GATES: Final[tuple[ReleaseGateName, ...]] = (ReleaseGateName.EPOCH1_REFUSAL,)
+
+#: The gate names each profile admits. ``dev1`` through ``flag_day``
+#: are authored: the later profiles add their gates
 #: with the waves that build their producers, and an unauthored profile
 #: is a loud :attr:`GateBindingRejection.UNDECLARED_PROFILE` rather than
 #: a silently empty gate set.
@@ -216,6 +223,14 @@ PROFILE_GATES: Final[Mapping[ReleaseGateProfile, tuple[ReleaseGateName, ...]]] =
         *NATIVE_CANARY_ADDED_GATES,
         *PRODUCT_CANARY_PRE_MERGE_GATES,
         *PRODUCT_CANARY_POST_MERGE_GATES,
+    ),
+    ReleaseGateProfile.FLAG_DAY: (
+        *DEV1_GATES,
+        *DEV2_ADDED_GATES,
+        *NATIVE_CANARY_ADDED_GATES,
+        *PRODUCT_CANARY_PRE_MERGE_GATES,
+        *PRODUCT_CANARY_POST_MERGE_GATES,
+        *FLAG_DAY_ADDED_GATES,
     ),
 }
 
@@ -670,6 +685,7 @@ def resolved_proof_commands(
 __all__ = [
     "DEV1_GATES",
     "DEV2_ADDED_GATES",
+    "FLAG_DAY_ADDED_GATES",
     "NATIVE_CANARY_ADDED_GATES",
     "PRODUCT_CANARY_POST_MERGE_GATES",
     "PRODUCT_CANARY_PRE_MERGE_GATES",

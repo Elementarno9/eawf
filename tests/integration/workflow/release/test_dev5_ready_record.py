@@ -22,7 +22,6 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from eawf import __version__
 from eawf.kernel.release.gate_binding import (
     PRODUCT_CANARY_POST_MERGE_GATES,
     PRODUCT_CANARY_PRE_MERGE_GATES,
@@ -231,10 +230,6 @@ def test_a_record_filed_for_another_rung_does_not_load(tmp_path: Path) -> None:
 def test_an_absent_record_and_an_unmapped_rung_read_as_none(tmp_path: Path) -> None:
     assert load_canary_receipts(tmp_path, DEV5_KEY) is None
     assert load_canary_receipts(REPO_ROOT, "REL-0.7.0rc1") is None
-
-
-def test_the_package_version_is_dev5() -> None:
-    assert __version__ == DEV5_VERSION
 
 
 def test_the_changelog_section_states_its_migration_and_limitations() -> None:

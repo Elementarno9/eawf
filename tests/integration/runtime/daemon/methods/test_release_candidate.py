@@ -429,7 +429,7 @@ def test_candidate_refuses_an_unauthored_checkpoint(repo: Path) -> None:
     """A rung with no configuration has no target set to freeze."""
     ctx = context(repo, record=dev2_draft())
 
-    message = refused(ctx, params_for(repo, version="0.7.0rc1"))
+    message = refused(ctx, params_for(repo, version="0.7.0rc2"))
 
     assert "no release configuration" in message
 

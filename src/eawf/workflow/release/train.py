@@ -290,6 +290,16 @@ DEV5_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
     template=V07_CONFIG_TEMPLATE,
 )
 
+#: The ``0.7.0rc1`` checkpoint configuration: the first rung under
+#: ``flag_day``, so the first whose required list carries the
+#: epoch-1 refusal on top of the twenty-two ``product_canary`` gates.
+#: Its four targets are the ones ``dev5`` declared, because the profile
+#: adds a proof rather than a publication leg.
+RC1_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
+    rung=V07_TRAIN.checkpoint_for_version("0.7.0rc1"),
+    template=V07_CONFIG_TEMPLATE,
+)
+
 #: Checkpoint configurations by version. ``dev1`` is authored -- it was
 #: cut before the template existed and its file is the one the burned
 #: checkpoint was swept against -- and every later rung is rendered, so
@@ -300,6 +310,7 @@ CHECKPOINT_CONFIGS: Final[dict[str, str]] = {
     "0.7.0.dev3": DEV3_RELEASE_CONFIG_YAML,
     "0.7.0.dev4": DEV4_RELEASE_CONFIG_YAML,
     "0.7.0.dev5": DEV5_RELEASE_CONFIG_YAML,
+    "0.7.0rc1": RC1_RELEASE_CONFIG_YAML,
 }
 
 #: What each of the eight ``dev1`` gates reads.
@@ -508,14 +519,38 @@ PRODUCT_CANARY_GATE_BINDINGS_YAML: Final[str] = (
 """
 )
 
+#: What the one gate ``flag_day`` adds on top of ``product_canary``
+#: reads.
+#:
+#: ``epoch1_refusal`` is a proof command because the refusal is a
+#: property of the command tree the pinned source builds, not of any
+#: checkout: the first suite drives every refused verb against a plain
+#: epoch-1 tree and checks the tree did not move, and the second is the
+#: census that gives every epoch-1 verb exactly one disposition, so a
+#: verb added later without one reddens the gate.
+FLAG_DAY_GATE_BINDINGS_YAML: Final[str] = (
+    PRODUCT_CANARY_GATE_BINDINGS_YAML
+    + """\
+  - gate: epoch1_refusal
+    kind: proof_command
+    proof:
+      command_id: epoch1_tree_refuses_every_mutating_verb
+      argv: [uv, run, pytest,
+        tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py,
+        tests/contract/surfaces/cli/test_rel_021_flag_day_census.py, -q]
+      timeout_seconds: 900
+"""
+)
+
 #: Authored gate binding tables by profile. ``dev1`` through
-#: ``product_canary`` are authored; the later profiles land with the
-#: waves that build their producers.
+#: ``flag_day`` are authored; the later profiles land with the waves
+#: that build their producers.
 PROFILE_GATE_BINDINGS: Final[dict[ReleaseGateProfile, str]] = {
     ReleaseGateProfile.DEV1: DEV1_GATE_BINDINGS_YAML,
     ReleaseGateProfile.DEV2: DEV2_GATE_BINDINGS_YAML,
     ReleaseGateProfile.NATIVE_CANARY: NATIVE_CANARY_GATE_BINDINGS_YAML,
     ReleaseGateProfile.PRODUCT_CANARY: PRODUCT_CANARY_GATE_BINDINGS_YAML,
+    ReleaseGateProfile.FLAG_DAY: FLAG_DAY_GATE_BINDINGS_YAML,
 }
 
 
@@ -591,9 +626,11 @@ __all__ = [
     "DEV3_RELEASE_CONFIG_YAML",
     "DEV4_RELEASE_CONFIG_YAML",
     "DEV5_RELEASE_CONFIG_YAML",
+    "FLAG_DAY_GATE_BINDINGS_YAML",
     "NATIVE_CANARY_GATE_BINDINGS_YAML",
     "PRODUCT_CANARY_GATE_BINDINGS_YAML",
     "PROFILE_GATE_BINDINGS",
+    "RC1_RELEASE_CONFIG_YAML",
     "V07_CHECKPOINTS",
     "V07_CONFIG_TEMPLATE",
     "V07_TARGET_VERSION",

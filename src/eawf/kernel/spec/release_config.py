@@ -192,6 +192,9 @@ class ReleaseGateName(StrEnum):
             manifest and changed nothing.
         RELEASE_TAGGED_OBSERVED: The tagged version is installable from
             its index. Settled only after the tag is pushed.
+        EPOCH1_REFUSAL: The flag-day proof command -- a plain epoch-1
+            tree refuses every mutating verb and every epoch-1 verb has
+            a disposition.
     """
 
     VERSION_CONSISTENCY = "version_consistency"
@@ -216,6 +219,7 @@ class ReleaseGateName(StrEnum):
     MILESTONE_ACCEPTED = "milestone_accepted"
     MIGRATION_RERUN_IDENTICAL = "migration_rerun_identical"
     RELEASE_TAGGED_OBSERVED = "release_tagged_observed"
+    EPOCH1_REFUSAL = "epoch1_refusal"
 
 
 class ReleaseTargetConfig(_StrictModel):

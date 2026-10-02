@@ -4,6 +4,58 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.7.0rc1]
+
+This is the first release candidate of v0.7.0. It is the first build meant for real projects on epoch-2 authority: the epoch-1 command surface is retired on a flag day, the native console replaces the epoch-1 TUI, and a v0.6.8 tree upgrades in place by the procedure in `docs/help/upgrade-from-0.6.md` (`eawf help upgrade-from-0.6`). Read the Migration section before upgrading.
+
+### Added
+
+- **The native console is the only UI.** `eawf ui` opens the epoch-2 console: route frames, entity state galleries, decision and consequence cards, attention per principal, a live Run transcript with tool calls, file edits, questions and errors, Campaign step and finding cards, open questions and pauses, stalled Runs, spend against the ceiling, and every consumed setting editable in place.
+- **Native Run governance.** Runs are admitted against the prompt budget and an in-flight governor, child Runs are bounded by a subtree ceiling, bulk Run controls are authorised per item, host subagents are adopted as Runs, typed stall facts raise pauses, and a dispatch queue has pause and drain verbs that also hold Campaign rounds.
+- **Host integration.** Claude Code permission requests, questions and approvals bind to pending actions answerable from the console; each host config key records its source; the host steering chain is certified with a row per hook; and a data-loss guard denies destructive commands fail-closed on Claude Code and Codex.
+- **A versioned effort-unit mapping.** The EU constant is a revisioned policy with a re-fit verb (`eawf metrics refit`): a move of at most 25% applies as the next revision, a larger one files an operator decision.
+- **Typed decisions and records.** Decisions, regimes and operator choices route through typed records; skills are generated from the catalog joined to the verb catalog; config writes are held to the registry's type, range and choices.
+- **An epoch-2 opt-in for existing repos.** `eawf migrate epoch2 --opt-in` declares an existing repo for the cutover, and `eawf status` reads the generation once it is cut over.
+
+### Changed
+
+- **Flag day: the epoch-1 command surface is retired.** 155 epoch-1 verbs are gone and exit 2 with `LegacyOperationRemoved`; 67 name their replacement and 88 have none. Examples: `phase open`/`activate`/`close` became `milestone create`/`activate`/`accept`; `iter open`/`close` became `batch create`/`complete`; `wave plan` and `backlog add` became `task create`; `wave claim`/`close` became `task claim`/`complete`; `session start` became `run start`; `decision add` became `record append`; `state show` became `status`; `tui` became `ui`; `calibrate` became `metrics refit`; `research campaign` became `campaign`; `dispatch pause`/`resume` became `run pause-dispatch`/`resume-dispatch`. `goal define` and `hypothesis define` have no replacement in this release.
+- **An epoch-1 tree refuses native writes.** Every writing verb of the entity and cross-cutting groups, except a declared list of 13 cutover and registry verbs, refuses on an epoch-1 tree with `MigrationRequired` (exit 4) until `eawf migrate epoch2` cuts it over.
+- **Strict `--json` envelope.** Machine output of the cross-cutting groups (config, memory, workspace, daemon, migrate, reflect), `campaign`, `ui` and the entity-group reads is the envelope described in `docs/reference/machine-envelope.md`; read the payload from `.result`.
+- **Native lifecycle writes are explicit.** The lifecycle write verbs (`task`, `run`, `batch`, `milestone` and peers) take `--expected-revision`, `--idempotency-key`, `--actor` and a `--from-spec` JSON, with `--dry-run` or `--yes`. New Task keys follow `<PROJECT>-####` and are addressed by URN (`eawf://<workspace>/<project>/<repo>/task/<KEY>`); imported keys keep their epoch-1 spelling.
+- **State layout.** Each generation commits its document and ledgers; Task definitions and planning status are committed, while in-flight Task status and Run rows live in the gitignored `gen-*/local/`. The document write is atomic across both files.
+- **131 config leaves are retired,** including `project.*`, `hooks.*`, `mcp.*`, `estimation.buckets` and ten `vcs.*` leaves such as `vcs.auto_commit`; a stock 0.6.8 config sets seven of them. They are ignored, and `eawf doctor` and the `eawf --no-input doctor --fix` preview name those still set.
+- **Claude Code hooks grow from one to ten.** `eawf plugin install claude` replaces the 0.6.8 Stop hook with the full set, including the PreToolUse data-loss guard.
+- **The managed `.gitignore` block is derived from the commit policy,** and `eawf sync`, the cutover apply and `eawf doctor` refresh or flag an outdated block.
+- **Each tree has its own daemon,** and the CLI replaces a daemon left running by an older eawf before it calls it.
+
+### Fixed
+
+- **Upgrade from v0.6.8.** The cutover accepts a fresh or used v0.6.8 tree without hand edits, writes Goals as track outcomes, carries hypotheses as legacy rows, and refuses to switch over unless every counted row reads back.
+- **Registry writes keep registered workspaces** across `repo add`, `register`, `remove` and `prune`.
+- **Unpriced epoch-1 measurements no longer import as $0,** and a ceiling spend over partly unpriced Runs says so.
+- **Enter on a stalled Attention item opens its own standing pause,** and one bad Run no longer stops the stall sweep.
+- **`eawf doctor --fix` stops only real stray daemons of this HOME,** never a `tail -f eawfd`, another user's daemon, or a daemon still serving another HOME.
+- **The kernel store and CLI domain import cycles are broken,** so those modules import on their own.
+
+### Migration
+
+- **Upgrading a v0.6.8 tree is a one-way cutover.** Follow `docs/help/upgrade-from-0.6.md`: back up `.ea`, close live sessions, opt in, stage, plan, apply, refresh the generated files with `eawf sync` and `eawf plugin install claude`, commit, and register the repo for the console. `.ea/state.json` stays as the frozen epoch-1 record.
+- **Status is no longer committed in full.** Task definitions stay in git; in-flight Task status and Runs are machine-local, so a fresh clone shows each Task's last committed planning status and starts its own Run ids.
+- **Scripts that parse `--json`** must read `.result` from the envelope (`docs/reference/machine-envelope.md`).
+- **Stop the 0.6.8 daemon before upgrading** (`eawf daemon stop`, guide step 0). A daemon on a pinned runtime dir is replaced automatically; one on the old shared address is not dialled by the per-tree layout.
+- **Delete retired config leaves by hand;** `eawf config unset` refuses them as unknown keys, and `eawf doctor` lists any left.
+
+### Limitations
+
+- **Claims, open questions and tracks have no epoch-2 converter.** The cutover proceeds past them only when each is named with `--accept-unresolved`, and those rows remain only in the frozen `.ea/state.json`.
+- **88 retired verbs have no replacement yet,** among them `goal define` and `hypothesis define`.
+- **A Run's runtime tuple is not recorded,** so Run controls are not yet gated by per-capability runtime certification.
+- **The console cannot open a completed Task's detail.** A finished Task compacts into its ledger and the console's detail read covers only the live document, so climbing from a Run to a completed Task lands on the home screen.
+- **The runtime certification is carried forward from dev3** (`claude-code` 2.1.274, expiring 2026-12-17), not re-probed.
+- **Run ids restart in a fresh clone,** because Runs are machine-local.
+- **`--default-track-key` creates no Track.** It answers the cutover's Track questions in the manifest only; imported Milestones carry no Track until a later release adds a verb to assign one.
+
 ## [0.7.0.dev5]
 
 This is the fifth development checkpoint of the v0.7.0 release train, and the product-canary rung: this repository itself now runs on epoch-2 authority. It is gated on twenty-two gates, the fifteen native-canary gates plus seven canary-window receipts, and it cannot be opened until `0.7.0.dev4` has been burned. It is still a development checkpoint, not a stable release.
