@@ -17,14 +17,33 @@
         "source_urn": null
       },
       "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF",
-      "revision": 2,
+      "revision": 21,
       "status": "ACTIVE",
       "target_branch": "feature/eawf-v0.7-rc1",
       "task_refs": [
-        "eawf://EAWF/EAWF/EAWF/task/EAWF-0146"
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0146",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0273",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0274",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0275",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0276",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0277",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0278",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0279",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0280",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0281",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0282",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0283",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0284",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0285",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0287",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0288",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0286",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0289",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0290",
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0291"
       ],
       "uid": "fe108532-34a5-572a-a26d-9bb1039a7fdb",
-      "updated_at": "2026-10-02T19:18:27.644057Z",
+      "updated_at": "2026-10-02T22:58:41.103581Z",
       "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105"
     },
     "BAT-0201": {
@@ -378,7 +397,7 @@
       "status": "PLANNED"
     }
   },
-  "canonical_sequence": 2152,
+  "canonical_sequence": 2307,
   "milestone": {
     "MLS-0101": {
       "acceptance_bundle_revision": null,
@@ -433,11 +452,12 @@
         "eawf://EAWF/EAWF/EAWF/batch/BAT-0104",
         "eawf://EAWF/EAWF/EAWF/batch/BAT-0105"
       ],
-      "revision": 2,
+      "revision": 3,
       "status": "ACTIVE",
+      "target_date": "2026-10-03",
       "title": "Cut 0.7.0rc1 with the epoch-1 TUI retired",
       "uid": "e2e1cd8a-bea9-5d4b-affe-6bf4ac89cdf3",
-      "updated_at": "2026-09-27T19:11:56.868937Z",
+      "updated_at": "2026-10-02T20:35:15.417260Z",
       "urn": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101"
     },
     "MLS-0102": {
@@ -492,11 +512,12 @@
         "eawf://EAWF/EAWF/EAWF/batch/BAT-0203",
         "eawf://EAWF/EAWF/EAWF/batch/BAT-0204"
       ],
-      "revision": 1,
+      "revision": 2,
       "status": "PLANNED",
+      "target_date": "2026-10-06",
       "title": "Cut 0.7.0rc2 on cross-provider, platform and recovery evidence",
       "uid": "306c0e54-eb89-58d7-81fc-4ab87200a269",
-      "updated_at": "2026-09-26T22:44:57.081892Z",
+      "updated_at": "2026-10-02T20:35:17.065432Z",
       "urn": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0102"
     },
     "MLS-0103": {
@@ -550,11 +571,12 @@
         "eawf://EAWF/EAWF/EAWF/batch/BAT-0303",
         "eawf://EAWF/EAWF/EAWF/batch/BAT-0304"
       ],
-      "revision": 1,
+      "revision": 2,
       "status": "PLANNED",
+      "target_date": "2026-10-09",
       "title": "Publish 0.7.0 against the complete acceptance gate",
       "uid": "7358605e-255e-5241-8977-fc17c38a4984",
-      "updated_at": "2026-09-26T22:44:59.432404Z",
+      "updated_at": "2026-10-02T20:35:18.625435Z",
       "urn": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0103"
     },
     "P37": {
@@ -25588,6 +25610,1051 @@
       "uid": "fcf50df1-2224-542b-9537-446aff149f5a",
       "updated_at": "2026-09-26T22:44:57.081892Z",
       "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0213"
+    },
+    "EAWF-0273": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T19:47:55.801073Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A completed Batch or Milestone lists every child Task in the console, a completed Task's detail opens, and u from a finished Run climbs to its Task and Batch; records are read from the ledgers, not only the recent merge",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Read completed Tasks and their parents back from the ledgers in the console",
+      "key": "EAWF-0273",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "0d115cc4-cbc4-5998-a882-78bd91bb7bad",
+      "updated_at": "2026-10-02T19:48:21.017537Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0273"
+    },
+    "EAWF-0274": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:00:24.642485Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A Milestone carries an optional typed target date set through a native verb; the console Timeline places each dated Milestone on its Track lane in its week and lists only undated ones as undated; MLS-0101, 0102 and 0103 carry 2026-10-02, 2026-10-05 and 2026-10-09",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Give Milestones a target date and place them on the Timeline",
+      "key": "EAWF-0274",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "b727b213-d769-506f-aa93-7e240396b4cc",
+      "updated_at": "2026-10-02T20:00:24.794181Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0274"
+    },
+    "EAWF-0275": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:11:48.658169Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "task.detail and batch.detail draw criteria and candidates from their records; Attention counts failed, lost, over-budget, rejected and active from producers; the transcript foot and unattended register stop declaring live data unproduced",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Draw Task criteria, Attention counts and live queue truth in the console",
+      "key": "EAWF-0275",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "7557bbdf-0e45-5c1f-b8b2-158f36b38bae",
+      "updated_at": "2026-10-02T20:11:48.810748Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0275"
+    },
+    "EAWF-0276": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:11:49.870883Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Display-only verbs act without the daemon; every remaining menu verb either reaches a daemon mutator that does the job or is absent from the live menu; no live menu verb says no daemon verb carries this",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Make every console action-menu verb do its job",
+      "key": "EAWF-0276",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "85cbdc99-3079-550d-953a-eff1c978fb8f",
+      "updated_at": "2026-10-02T20:11:50.044659Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0276"
+    },
+    "EAWF-0277": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:11:50.938990Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "status --scope, config validate --scope, memory compact --scope/--budget, render-output --strict and the eawf016 hook --base change behaviour or are removed; the 16 config leaves read only by retired skills are retired and stripped on load with a notice",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Honour or remove every ignored CLI option and dead setting",
+      "key": "EAWF-0277",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "f601e298-16bc-5080-8df8-878f5e35acbf",
+      "updated_at": "2026-10-02T20:11:51.078214Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0277"
+    },
+    "EAWF-0278": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:11:52.004767Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "eawf skill run research produces real questions and options through the native campaign verbs or refuses with a typed reason; no placeholder rows and no eawf prep hint",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Run headless research through native Campaigns",
+      "key": "EAWF-0278",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "e028cea0-cd60-5d9c-bfec-8a11c569f4ca",
+      "updated_at": "2026-10-02T20:11:52.157841Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0278"
+    },
+    "EAWF-0279": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:11:53.188387Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "release preflight perfect_realization reports pass when every realization assertion it covers holds, fail when one breaks, and unavailable only for an assertion with no producer, each named",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Let the perfect-realization readiness signal pass",
+      "key": "EAWF-0279",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "cb3a9559-b9ab-566e-97f1-25ccea96906e",
+      "updated_at": "2026-10-02T20:11:53.327196Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0279"
+    },
+    "EAWF-0280": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:11:54.424581Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Every committed transition records the prior and next field values it changed; the console History and history.diff routes draw that feed with before and after",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Serve a per-entity change feed to History",
+      "key": "EAWF-0280",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "113190f4-c7f5-5fe1-9fa1-1e4789c1c7e3",
+      "updated_at": "2026-10-02T20:11:54.591333Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0280"
+    },
+    "EAWF-0281": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:11:55.713172Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The git.pr route draws the branch, pull request review state and CI checks from git and the host CLI when available, and names the missing tool otherwise",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Read branch, review and checks into the git.pr route",
+      "key": "EAWF-0281",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "c4a5d2d4-5727-5955-a756-61fbea68605b",
+      "updated_at": "2026-10-02T20:11:55.895522Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0281"
+    },
+    "EAWF-0282": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:11:56.788244Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A native gold-label verb and an observed-outcome reducer from merge, repair and invalidation feed the jury track record so Trust shows judged counts and a Brier score",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Produce gold labels and observed outcomes for Trust",
+      "key": "EAWF-0282",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "b426d2e9-be51-5fb9-808a-8d511a761462",
+      "updated_at": "2026-10-02T20:11:57.128363Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0282"
+    },
+    "EAWF-0283": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:11:57.910620Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A Campaign record carries its budget, set at creation and through a verb, and the campaign route BOUNDS row draws spend against it",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Give Campaigns a budget and draw their bounds",
+      "key": "EAWF-0283",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "2d5721e1-ad09-523c-82ed-dd0be174259f",
+      "updated_at": "2026-10-02T20:11:58.077135Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0283"
+    },
+    "EAWF-0284": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:11:58.956085Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "crash.recovery door and cost, merge.conflict resolution and health checked_at come from records the daemon writes when those events happen",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Produce recovery, merge-conflict and health facts",
+      "key": "EAWF-0284",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "f3d4e827-3b0a-5fe6-874b-4cfe639b016b",
+      "updated_at": "2026-10-02T20:11:59.145243Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0284"
+    },
+    "EAWF-0285": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:12:00.247933Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Each claim rung 2 to 4 runs or reads its check and records outcome, checked, as_of, found and input_digest, and the evidence routes draw them",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Run the checks behind evidence rungs 2 to 4",
+      "key": "EAWF-0285",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "1c614211-6301-589d-b9cb-7fd7d76b5ae9",
+      "updated_at": "2026-10-02T20:12:00.395656Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0285"
+    },
+    "EAWF-0286": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T21:00:04.456813Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "No live hint names a retired verb; store compact, init and repo accept no option that changes nothing; no live setting or model lacks a reader or producer; skill run help states the real exit codes",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Remove the no-op hints, options and leftovers the no-op wave surfaced",
+      "key": "EAWF-0286",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "50471636-c9b9-5075-9f35-d3183bd42cc2",
+      "updated_at": "2026-10-02T21:00:04.641713Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0286"
+    },
+    "EAWF-0287": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:46:32.905602Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Every Run producer records the runtime tuple (runtime, version, provider, model, session) it ran on; run.detail and the Campaign step card RUNNER draw it; Run controls are gated by the runtime's certification",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Record each Run's runtime tuple and draw it",
+      "key": "EAWF-0287",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "35cdbc7b-8f6f-5676-b73f-224adb1ee36e",
+      "updated_at": "2026-10-02T20:46:33.411487Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0287"
+    },
+    "EAWF-0288": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T20:54:24.426497Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "An operator or agent files a claim with its evidence anchors through a native verb that allocates the CLM key; filing runs the rung checks and the evidence routes list it",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "File claims natively so the evidence ladder has subjects",
+      "key": "EAWF-0288",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "fd753ce3-05bb-56c6-9412-b71a3f121c94",
+      "updated_at": "2026-10-02T20:54:24.608157Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0288"
+    },
+    "EAWF-0289": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T21:00:05.244900Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Timeline lanes have a marker cursor and Enter opens the Milestone; a live patch refreshes a Milestone's date; CANCELLED draws distinctly from COMPLETED; Batch rows state review and checks from the pull request reader",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Finish the console no-ops the no-op wave surfaced",
+      "key": "EAWF-0289",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "c47cf1ef-425a-50ad-aab2-82f72d25388f",
+      "updated_at": "2026-10-02T21:00:05.431033Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0289"
+    },
+    "EAWF-0290": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T21:32:33.286002Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A verb runs the conformance probe for an installed runtime version and records its certification or quarantine as evidence; the daemon starts that probe when a Run first reports an uncertified version; controls report the probe as in progress until it settles",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Certify runtime versions automatically through the conformance probe",
+      "key": "EAWF-0290",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "83b983da-5ee2-58a9-9b88-82bd27cfcf59",
+      "updated_at": "2026-10-02T21:32:33.401744Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0290"
+    },
+    "EAWF-0291": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+      "contract_revision": 1,
+      "created_at": "2026-10-02T22:58:40.976155Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tests this Task names",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The milestone frame's acceptance sections draw the record's acceptance journey and approval state; the Attention all count equals the sum its buckets list; Batch register rows state review and checks; the prose gate is clean",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+      "integrated_binding": null,
+      "intent": "Draw Milestone acceptance from records and close the last console gaps",
+      "key": "EAWF-0291",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "status": "PLANNED",
+      "uid": "c1455acd-97ae-5f2d-b8e0-9f92fa9259ce",
+      "updated_at": "2026-10-02T22:58:41.103581Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0291"
     },
     "EAWF-0301": {
       "active_run_ref": null,
