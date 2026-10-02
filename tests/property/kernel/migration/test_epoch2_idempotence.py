@@ -64,8 +64,8 @@ SEALED_BY = "idempotence-test"
 #: implements, and the row seeded into a corpus copy so the plan names
 #: something unplaceable. The pinned full-shape corpus converts every
 #: collection it holds, so the unresolved row has to be planted.
-UNCONVERTED_COLLECTION = "hypotheses"
-UNCONVERTED_ROW = "H01-01"
+UNCONVERTED_COLLECTION = "claims"
+UNCONVERTED_ROW = "CLM-0001"
 UNRESOLVED_ADDRESSES = (f"{UNCONVERTED_COLLECTION}/{UNCONVERTED_ROW}",)
 
 

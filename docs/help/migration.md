@@ -31,6 +31,8 @@ eawf migrate status     # show current schema_version + chain
 
 ## Epoch-2 cutover rehearsal
 
+Upgrading a live 0.6.8 repository rather than rehearsing on a throwaway copy: follow [Upgrading from 0.6.8](upgrade-from-0.6.md) (`eawf help upgrade-from-0.6`), which adds the opt-in, quiescence and post-cutover steps.
+
 Stage the committed corpus, register the workspace the apply mints under, then plan and apply. `--apply` refuses with `workspace_not_registered` until `eawf workspace add` files the key in `~/.eawf/registry.json` (or `--registry-path` names another registry).
 
 ```text

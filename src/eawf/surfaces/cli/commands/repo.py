@@ -374,6 +374,9 @@ def _persist_registry_via_daemon(
             (``kind="IntegrityViolation"``).
         UserError: On-disk registry exists but cannot be read
             (``kind="InvalidInput"``).
+        CliError: The daemon rejected an update; its JSON-RPC code picks
+            the subclass, e.g. ``ValidationError`` for a payload its
+            registry schema refuses.
     """
     from eawf.platform.registry import Registry, RegistryReadError, read_registry
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
@@ -424,7 +427,7 @@ def _persist_registry_via_daemon(
                             "`eawf daemon start` to load the current daemon",
                             kind="IntegrityViolation",
                         ) from exc
-                    raise
+                    raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
     finally:
         if previous is None:
             os.environ.pop("EAWF_REGISTRY_PATH", None)

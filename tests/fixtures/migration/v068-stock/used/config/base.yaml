@@ -1,0 +1,36 @@
+acceptance:
+  lint: true
+  tests: true
+  typecheck: true
+estimation:
+  buckets:
+    overrides:
+      L:
+        expected_eu: 2.0
+      M:
+        expected_eu: 1.0
+      S:
+        expected_eu: 0.5
+      XL:
+        expected_eu: 3.5
+      XS:
+        expected_eu: 0.25
+mcp:
+  enabled: []
+profiles:
+  enabled:
+  - core
+project:
+  code: USED
+  domains:
+  - general
+  goals:
+  - Establish USED project intent
+  slug: used
+  title: USED
+runtime:
+  adapters:
+  - claude-code
+  preference:
+  - claude-code
+schema_version: '1.0'

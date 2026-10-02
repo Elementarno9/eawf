@@ -32,6 +32,7 @@ from eawf.kernel.migration.epoch2.errors import (
     MigrationSourceUnreadableError,
     MigrationStagingRefusedError,
 )
+from eawf.kernel.migration.epoch2.rows import with_epoch1_defaults
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel, rule_digest
 from eawf.kernel.store.commit_policy import CommitPolicy, classify_path
 
@@ -252,7 +253,8 @@ class SourceSnapshot(StrictMigrationModel):
     Attributes:
         root: The staging directory the barrier was taken over.
         identity: The digest set naming this revision of the corpus.
-        document: The decoded epoch-1 state document.
+        document: The decoded epoch-1 state document, with every omitted
+            defaulted key read as its epoch-1 default.
         ledgers: Every store ledger's rows, keyed by file stem.
     """
 
@@ -268,7 +270,9 @@ class SourceSnapshot(StrictMigrationModel):
         The layout is fixed: ``document.json`` for the epoch-1 state
         document, ``store/*.jsonl`` for the ledgers, ``registry.json``,
         ``config/*.yaml`` for the layered configuration and
-        ``telemetry.json`` for the telemetry metadata. The registry,
+        ``telemetry.json`` for the telemetry metadata. Every surface is
+        required except the store, whose absence reads as no ledgers, the
+        same as an absent ledger reads as no rows. The registry,
         config and telemetry surfaces are digested but not decoded: the
         census reports no facts about their contents, and pinning their
         bytes is what stops a later stage from reading a different
@@ -305,10 +309,14 @@ class SourceSnapshot(StrictMigrationModel):
             root / DOCUMENT_LOCATOR, surface=SourceSurface.DOCUMENT, locator=DOCUMENT_LOCATOR
         )
 
+        # A fresh v0.6.8 tree has written no ledger, and git keeps no empty
+        # directory, so an absent store is that tree's store, not a lost one.
         store_dir = root / STORE_DIRECTORY
-        _require_directory(store_dir, what=STORE_DIRECTORY)
         ledgers: dict[str, tuple[dict[str, Any], ...]] = {}
-        for ledger_path in _sorted_children(store_dir, suffix=LEDGER_SUFFIX):
+        store_paths = (
+            _sorted_children(store_dir, suffix=LEDGER_SUFFIX) if store_dir.is_dir() else ()
+        )
+        for ledger_path in store_paths:
             locator = f"{STORE_DIRECTORY}/{ledger_path.name}"
             data = pin(ledger_path, surface=SourceSurface.STORE, locator=locator)
             ledgers[ledger_path.name[: -len(LEDGER_SUFFIX)]] = _parse_ledger(data, locator=locator)
@@ -333,7 +341,9 @@ class SourceSnapshot(StrictMigrationModel):
                 surfaces=surfaces,
                 snapshot_digest=rule_digest([[row.locator, row.digest] for row in surfaces]),
             ),
-            document=_parse_document(document_bytes, locator=DOCUMENT_LOCATOR),
+            document=with_epoch1_defaults(
+                _parse_document(document_bytes, locator=DOCUMENT_LOCATOR)
+            ),
             ledgers=ledgers,
         )
 
@@ -344,19 +354,12 @@ class SourceSnapshot(StrictMigrationModel):
             name: The ledger file stem, such as ``audit``.
 
         Returns:
-            The ledger rows, in file order.
-
-        Raises:
-            MigrationSourceUnreadableError: When the snapshot holds no
-                such ledger. A missing ledger is not an empty one, and
-                counting it as zero rows would shrink the census.
+            The ledger rows, in file order. A ledger the snapshot does not
+            hold has no rows: epoch-1 creates each store file on its
+            first append, so a tree that never wrote one is a tree whose
+            ledger is empty, not one that lost it.
         """
-        try:
-            return self.ledgers[name]
-        except KeyError as error:
-            raise MigrationSourceUnreadableError(
-                f"the snapshot holds no {name!r} ledger under {STORE_DIRECTORY}/"
-            ) from error
+        return self.ledgers.get(name, ())
 
     def verify_unchanged(self) -> None:
         """Re-read every pinned surface and confirm the barrier held.

@@ -30,6 +30,7 @@ from eawf.kernel.config.registry import LEAF_KEY_REGISTRY
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.observability.doctor import daemon_checks
 from eawf.observability.doctor.checks_authority import check_authority_epoch
+from eawf.observability.doctor.checks_gitignore import check_gitignore_block
 from eawf.observability.doctor.checks_steering_cap import (
     CODEX_PROJECT_DOC_BYTE_CAP as CODEX_PROJECT_DOC_BYTE_CAP,
 )
@@ -1344,6 +1345,7 @@ def run_all(
         check_mcp_drift(workspace=anchor),
         check_state_scale_ceiling(workspace=anchor),
         check_authority_epoch(workspace=anchor),
+        check_gitignore_block(workspace=anchor),
         *run_workflow_health_checks(workspace=anchor, daemon_version_probe=daemon_version_probe),
         *run_runtime_tuple_health_checks(workspace=anchor),
         check_incident_fold_parity(workspace=anchor),

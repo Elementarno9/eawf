@@ -142,6 +142,17 @@ class MigrationRequired(CliError):  # noqa: N818 — canonical bucket name
     exit_code = exit_codes.ATTACH_FAILURE
 
 
+class DaemonVersionMismatch(StateConflict):
+    """The running daemon is a different eawf release than this CLI.
+
+    A daemon from another release serves another wire surface: an older
+    one lacks the current methods and rejects the current payloads, so
+    every call it answers would fail or, worse, apply the old rules. The
+    client replaces an older daemon itself; this is raised when the daemon
+    is newer, its version cannot be ordered, or the replacement failed.
+    """
+
+
 #: Envelope exit names for a bucket whose exit code another bucket shares.
 _EXIT_NAMES: Final[dict[str, str]] = {"MigrationRequired": "ATTACH_FAILURE"}
 
@@ -287,13 +298,17 @@ _KIND_HINTS: dict[str, str] = {
         "clear every holder the refusal names: `eawf worktree reconcile` retires "
         "stale worktree rows and `eawf session close` ends a live session; then re-run"
     ),
+    "DaemonVersionMismatch": (
+        "run `eawf daemon restart` so the daemon matches this eawf; "
+        "`eawf daemon status` prints the running daemon's version"
+    ),
     "DaemonMutationIndeterminate": (
         "the mutation may or may not have applied; re-check state "
         "(`eawf status`) before retrying to avoid a double-apply"
     ),
     LEGACY_OPERATION_REMOVED_KIND: (
-        "this tree runs on epoch 2, so epoch-1 writes refuse; run the epoch-2 verb the "
-        "error names, and read the native state with `eawf status`"
+        "run the epoch-2 verb the error names; `eawf status` reports which epoch this tree "
+        "runs on, and an epoch-1 tree upgrades by `eawf help upgrade-from-0.6`"
     ),
 }
 

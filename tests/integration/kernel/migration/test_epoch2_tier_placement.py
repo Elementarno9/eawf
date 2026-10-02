@@ -82,7 +82,7 @@ DOCUMENT_BYTE_CEILING = 1_600_000
 #: rule change that moves a record between tiers reds here instead of
 #: silently agreeing with whatever the writer did.
 EXPECTED_LEDGER_RECORDS = 514
-EXPECTED_DOCUMENT_RECORDS = 5
+EXPECTED_DOCUMENT_RECORDS = 6
 
 
 def _staged_tree(tmp_path: Path) -> tuple[Path, Path]:
@@ -186,18 +186,15 @@ def test_the_placement_accounts_for_every_addressed_record(
 ) -> None:
     """The two tiers together hold exactly what the plan counted.
 
-    The one planned collection no importer stage writes yet is the Track
-    outcome, which waits on an operator's Track; every other planned
-    record -- the natively keyed decisions, incidents, sandbox policies
-    and project -- is on disk.
+    Every planned record -- the natively keyed decisions, incidents,
+    sandbox policies, Track outcomes and project -- is on disk.
     """
     _, manifest = staged
     placement = manifest.tier_placement
     assert placement is not None
     census = manifest.target_census
-    awaiting_a_track = census.by_collection.get(Epoch2Collection.TRACK_OUTCOME.value, 0)
 
-    assert placement.total_records == census.total_rows - awaiting_a_track
+    assert placement.total_records == census.total_rows
 
 
 def test_the_ledgers_hold_the_history_the_document_stopped_rewriting(

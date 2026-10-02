@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Final
 
 from pydantic import Field
 
@@ -27,6 +27,11 @@ RENAME_DIRECTIVE = "rename"
 DELETE_DIRECTIVE = "delete"
 
 _DIRECTIVES = frozenset({ALLOW_DIRECTIVE, RENAME_DIRECTIVE, DELETE_DIRECTIVE})
+
+#: The allowlist the package ships, read when the operator names none. It
+#: is the epoch-2 deleted set itself, so an operator cutting over a stock
+#: tree has nothing to author.
+DEFAULT_ALLOWLIST_PATH: Final = Path(__file__).with_name("allowed_legacy_symbols.txt")
 
 
 class LegacySymbolAllowlist(StrictMigrationModel):

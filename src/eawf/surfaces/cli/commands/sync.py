@@ -81,6 +81,7 @@ logger = logging.getLogger(__name__)
 
 _AGENTS_MD: str = "AGENTS.md"
 _CLAUDE_MD: str = "CLAUDE.md"
+_GITIGNORE: str = ".gitignore"
 _MANIFEST_RELPATH: str = ".ea/indexes/generated.json"
 _STATE_RELPATH: str = ".ea/state.json"
 _MEMORY_VIEWS_RELDIR: str = ".ea/artifacts/rendered/memory"
@@ -225,7 +226,8 @@ def _rule_projections(
         write: ``True`` runs the render transaction; ``False`` only compares
             the planned projections against disk.
         rules: Whether the repository authors a rule source; ``False``
-            renders nothing.
+            renders nothing and only refreshes the managed ``.gitignore``
+            block.
         mode: ``certified`` refuses a chain the operator's global instruction
             documents put over its ceiling; ``local`` warns and renders.
 
@@ -252,7 +254,7 @@ def _rule_projections(
     from eawf.platform.rules.views import RuleViewError
 
     if not rules:
-        return [], [], []
+        return _ignore_block(target_dir, write=write)
     try:
         plan = plan_rule_projections(target_dir, mode=mode)
         warnings = list(plan.manifest.render_warnings)
@@ -275,6 +277,42 @@ def _rule_projections(
     if added:
         logger.info(f"sync_cmd gitignore_patterns_added patterns={added!r}")
     return list(written.changed), warnings, added
+
+
+def _ignore_block(target_dir: Path, *, write: bool) -> tuple[list[str], list[str], list[str]]:
+    """Refresh, or diff, the managed ``.gitignore`` block of a repository without rules.
+
+    The rule render owns the block when the repository authors rules; without
+    them nothing else would rewrite a block an older release wrote.
+
+    Args:
+        target_dir: Repository root.
+        write: ``True`` rewrites an outdated block; ``False`` only reports it.
+
+    Returns:
+        The same triple :func:`_rule_projections` returns: ``.gitignore``
+        when its block changed or would change, no warnings, and the shipped
+        patterns the block lacked (``write`` only).
+
+    Raises:
+        ValidationError: The ``.gitignore`` markers cannot be spliced safely.
+    """
+    from eawf.platform.install.gitignore_writer import (
+        plan_gitignore_block,
+        refresh_gitignore_block,
+    )
+    from eawf.platform.install.managed_block import ManagedBlockError
+
+    try:
+        plan = refresh_gitignore_block(target_dir) if write else plan_gitignore_block(target_dir)
+    except ManagedBlockError as exc:
+        raise cli_errors.ValidationError(f".gitignore not updated: {exc}") from exc
+    if not plan.stale:
+        return [], [], []
+    added = list(plan.added) if write else []
+    if added:
+        logger.info(f"sync_cmd gitignore_patterns_added patterns={added!r}")
+    return [_GITIGNORE], [], added
 
 
 def _card_changed(*, rules: bool, projections: list[str], legacy: bool) -> bool:

@@ -72,6 +72,7 @@ FORBIDDEN_MODULES: tuple[str, ...] = (
     "eawf.kernel.store.kinds",
     "eawf.platform.profiles.compose",
     "eawf.platform.profiles.loader",
+    "eawf.kernel.runtime.compiled",
     "jinja2",
     "yaml",
 )

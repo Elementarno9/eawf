@@ -11,8 +11,8 @@
       }
     ]
   },
-  "idempotence_digest": "9b56dce229e8afef040a9fc3420b23171b085854fb7492f36b496386e4198d11",
-  "manifest_digest": "5ee341fccf3f67b5366230a116ad18d37cdeb6516aff30ec527267db99bc7b77",
+  "idempotence_digest": "c05faa259d7a423fd44c87927999d0622fb568ede2bf9739b397db7919eafb04",
+  "manifest_digest": "c90ce413d9b37cdd0563b5f777b2ab58d5c9617077a99334fbc9ad424009262c",
   "mapping_rules": [
     {
       "implementation_version": "epoch2-1",
@@ -242,14 +242,14 @@
       "unresolved_row_count": 0
     },
     {
-      "disposition": "native_conversion",
+      "disposition": "immutable_legacy_record",
       "operator_assignment_count": 0,
       "proof_form": "null_not_empty",
       "shape": "keyed_rows",
       "source_collection": "hypotheses",
       "source_row_count": null,
       "source_tier": "ledger",
-      "target_collection": "hypothesis",
+      "target_collection": "legacy",
       "target_row_count": 0,
       "unresolved_row_count": 0
     },
@@ -531,7 +531,7 @@
     }
   ],
   "schema_version": "2",
-  "seal_digest": "8e9c5e0aa4cb836423f7a6759a6f2ef9507bb0c5317421b69b74be14bd2a57b6",
+  "seal_digest": "91ccc9e93cb5df654422b335dff505ba18df95bc1ab9fcbeb0b51ead60cc7f29",
   "seal_state": "sealed",
   "sealed_at": "2026-01-01T00:00:00Z",
   "sealed_by": "fixture-operator",

@@ -27,8 +27,11 @@ import shutil
 import subprocess
 import sys
 
+import click
 import pytest
+import typer
 
+from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands.completion import _render_script
 
 pytestmark = pytest.mark.integration
@@ -192,9 +195,10 @@ def test_installed_zsh_script_completes_in_live_zsh() -> None:
     ``compinit`` loaded (so ``_describe`` / ``compadd`` exist), source the
     generated script in a real ``zsh`` and invoke its ``_eawf_completion``
     function with ``words`` / ``CURRENT`` set. We stub ``_describe`` / ``compadd``
-    to print the candidates the function feeds them, then assert ``wave`` is
-    offered with no ``KeyError`` (the input-layer crash) and no ``bad pattern``
-    (the output-layer crash from ``eval``-ing click's ``(...)`` descriptions).
+    to print the candidates the function feeds them, then assert a live root
+    verb whose help carries ``(`` is offered for its prefix, with no
+    ``KeyError`` (the input-layer crash) and no ``bad pattern`` (the
+    output-layer crash from ``eval``-ing click's ``(...)`` descriptions).
 
     Both ``completion show`` and the ``eawf`` wrapper are pinned to this
     worktree's binary so a globally ``uv tool install``-ed ``eawf`` cannot mask
@@ -204,6 +208,18 @@ def test_installed_zsh_script_completes_in_live_zsh() -> None:
     if zsh is None:
         pytest.skip("zsh not installed")
     assert _EAWF_BIN is not None
+    # Take the verb from the live tree so retiring one cannot red this test; a
+    # help with ``(`` keeps the ``bad pattern`` assertion below meaningful.
+    root = typer.main.get_command(app)
+    assert isinstance(root, click.Group)
+    ctx = click.Context(root)
+    verb = next(
+        name
+        for name in sorted(root.list_commands(ctx))
+        if (command := root.get_command(ctx, name)) is not None
+        and not command.hidden
+        and "(" in command.get_short_help_str()
+    )
     # compinit provides _describe/compadd the click-native function calls; we
     # override them after sourcing to capture the candidate args the function
     # builds from the live ``env ... eawf`` triple output.
@@ -215,7 +231,7 @@ def test_installed_zsh_script_completes_in_live_zsh() -> None:
         # contents (dynamically scoped, visible from the stub) to capture them.
         '_describe() { print -r -- "${completions_with_descriptions[@]}" "${completions[@]}" }\n'
         'compadd() { print -r -- "${completions[@]}" "$@" }\n'
-        "words=(eawf wa)\n"
+        f"words=(eawf {verb[:2]})\n"
         "CURRENT=2\n"
         "_eawf_completion\n"
     )
@@ -229,7 +245,7 @@ def test_installed_zsh_script_completes_in_live_zsh() -> None:
     assert "KeyError" not in combined, f"live zsh completion crashed: {combined!r}"
     assert "bad pattern" not in combined, f"zsh bad pattern (eval of descriptions): {combined!r}"
     assert "Traceback" not in combined
-    assert "wave" in combined, f"no candidate from live zsh: {combined!r}"
+    assert verb in combined, f"no candidate from live zsh: {combined!r}"
 
 
 if __name__ == "__main__":  # pragma: no cover

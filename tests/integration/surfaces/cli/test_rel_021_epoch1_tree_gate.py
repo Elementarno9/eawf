@@ -13,6 +13,7 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import click
 import pytest
@@ -144,7 +145,7 @@ def test_rel_021_a_repo_rooted_verb_is_judged_by_the_tree_it_writes(
     ],
 )
 def test_auth_049_a_retired_workspace_pointer_verb_names_its_replacement(
-    argv: tuple[str, ...], replacement: str
+    epoch1_tree: Path, argv: tuple[str, ...], replacement: str
 ) -> None:
     result = runner.invoke(app, ["--json", *argv])
     assert result.exit_code == exit_codes.VALIDATION_ERROR, result.output
@@ -152,3 +153,41 @@ def test_auth_049_a_retired_workspace_pointer_verb_names_its_replacement(
     assert envelope["data"]["kind"] == "LegacyOperationRemoved"
     assert f"run `eawf {replacement}` instead" in envelope["message"]
     assert "No such command" not in result.output
+
+
+def _retired(*argv: str) -> dict[str, Any]:
+    result = runner.invoke(app, ["--json", *argv])
+    assert result.exit_code == exit_codes.VALIDATION_ERROR, result.output
+    envelope: dict[str, Any] = json.loads(result.output)
+    return envelope
+
+
+def test_a_retired_verb_on_an_epoch1_tree_says_so_and_points_at_the_upgrade_guide(
+    epoch1_tree: Path,
+) -> None:
+    envelope = _retired("wave", "claim", "P01-I01-W01")
+    assert "this tree still runs on epoch 1" in envelope["message"]
+    assert flag_day_gate.UPGRADE_GUIDE in envelope["message"]
+    assert "runs on epoch 2" not in envelope["suggested_next_step"]
+
+
+def test_a_retired_verb_on_an_epoch2_tree_says_it_runs_on_epoch_2(epoch1_tree: Path) -> None:
+    bear_epoch2_tree(
+        epoch1_tree / ".ea" / "state.json", project_code="QR", born_at=datetime.now(UTC)
+    )
+    envelope = _retired("wave", "claim", "P01-I01-W01")
+    assert envelope["message"].endswith("this tree runs on epoch 2")
+
+
+def test_a_retired_verb_where_no_tree_exists_points_at_init(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EA_STATE", str(tmp_path / "none" / ".ea" / "state.json"))
+    envelope = _retired("wave", "claim")
+    assert f"create one with `{flag_day_gate.INIT_VERB}`" in envelope["message"]
+
+
+def test_the_retired_tui_alias_names_ui(epoch1_tree: Path) -> None:
+    envelope = _retired("tui")
+    assert "run `eawf ui` instead" in envelope["message"]
+    assert envelope["data"]["kind"] == "LegacyOperationRemoved"

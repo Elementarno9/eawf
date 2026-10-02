@@ -84,7 +84,10 @@ class QuiescenceHolderKind(StrEnum):
 #: operator is not left with the generic validation hint, which re-reads
 #: the schema and clears nothing.
 REMEDIATIONS: Final[dict[QuiescenceHolderKind, str]] = {
-    QuiescenceHolderKind.ACTIVE_SESSION: "close each live session with `eawf session close`",
+    QuiescenceHolderKind.ACTIVE_SESSION: (
+        "close each live session with `eawf session close <session id>`, then commit the "
+        "state it writes and stage the corpus again"
+    ),
     QuiescenceHolderKind.HELD_LEASE: "let the process holding each lease finish, or stop it",
     QuiescenceHolderKind.PENDING_WAL_RECORD: (
         "let the daemon drain its write-ahead log, then stop it"

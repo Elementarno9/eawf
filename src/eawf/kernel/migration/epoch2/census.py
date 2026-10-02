@@ -195,8 +195,6 @@ class SourceCensus(StrictMigrationModel):
                 is absent from the document.
             MigrationCollectionUnknownError: When the document carries an
                 undeclared collection.
-            MigrationSourceUnreadableError: When the snapshot holds no
-                audit ledger.
             MigrationCountMismatchError: When the audit counts cannot
                 describe a union.
         """

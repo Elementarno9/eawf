@@ -22,7 +22,7 @@ from eawf.kernel.projection.settings import (
     catalog_section_order,
 )
 from eawf.surfaces.tui.console.app import ConsoleApp
-from eawf.surfaces.tui.console.attach import EntryCommand, failed_state
+from eawf.surfaces.tui.console.attach import EntryCommand, failed_state, onboarding_state
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
@@ -455,3 +455,10 @@ def test_the_queue_window_row_shares_the_label_gutter() -> None:
     window = next(row for row in frame if row.startswith(" WINDOW"))
     assert len(queue) - len(queue[14:].lstrip()) == len(window) - len(window[14:].lstrip())
     assert window.startswith(" WINDOW       ")
+
+
+def test_the_register_command_a_frame_hands_over_runs_off_a_tty(tmp_path: Path) -> None:
+    """``repo register`` prompts unless ``--yes`` is passed, and a pasted line has no TTY."""
+    state = onboarding_state(load_chrome(), tmp_path, registered=False)
+    register = next(line for line in state.commands if " repo register " in line)
+    assert register.endswith(" --yes")

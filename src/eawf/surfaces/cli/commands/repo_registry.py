@@ -207,14 +207,13 @@ def _handle_idempotent_readd(
     Writes only when ``--set-active`` flips the active pointer; otherwise
     the call is a pure no-op that still emits the idempotent envelope.
     """
-    from eawf.platform.registry import Registry
 
     if set_active and registry.active_code != derived_code:
-        updated = Registry(
-            version=registry.version,
-            updated_at=datetime.now(UTC),
-            active_code=derived_code,
-            repos=dict(registry.repos),
+        updated = registry.model_copy(
+            update={
+                "updated_at": datetime.now(UTC),
+                "active_code": derived_code,
+            }
         )
         _persist_registry_or_exit(updated, target, flags=flags, idempotency_key=idempotency_key)
     emit_json_or_text(
@@ -243,7 +242,7 @@ def _insert_new_repo_entry(
     idempotency_key: str | None,
 ) -> None:
     """Insert a fresh registry entry, persist, and emit the success envelope."""
-    from eawf.platform.registry import Registry, RegistryRepoEntry
+    from eawf.platform.registry import RegistryRepoEntry
 
     new_entry = RegistryRepoEntry(
         code=derived_code,
@@ -253,11 +252,12 @@ def _insert_new_repo_entry(
     )
     new_repos = dict(registry.repos)
     new_repos[derived_code] = new_entry
-    updated = Registry(
-        version=registry.version,
-        updated_at=datetime.now(UTC),
-        active_code=derived_code if set_active else registry.active_code,
-        repos=new_repos,
+    updated = registry.model_copy(
+        update={
+            "updated_at": datetime.now(UTC),
+            "active_code": derived_code if set_active else registry.active_code,
+            "repos": new_repos,
+        }
     )
     _persist_registry_or_exit(updated, target, flags=flags, idempotency_key=idempotency_key)
     emit_json_or_text(
@@ -441,7 +441,7 @@ def repo_remove_cmd(
     - 3 (UserError, ``kind="InvalidInput"``) — invalid code shape,
       registry corrupted.
     """
-    from eawf.platform.registry import Registry, RegistryReadError, read_registry
+    from eawf.platform.registry import RegistryReadError, read_registry
 
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
@@ -474,11 +474,12 @@ def repo_remove_cmd(
     dropped = registry.repos[code]
     new_repos = {k: v for k, v in registry.repos.items() if k != code}
     new_active = None if registry.active_code == code else registry.active_code
-    updated = Registry(
-        version=registry.version,
-        updated_at=datetime.now(UTC),
-        active_code=new_active,
-        repos=new_repos,
+    updated = registry.model_copy(
+        update={
+            "updated_at": datetime.now(UTC),
+            "active_code": new_active,
+            "repos": new_repos,
+        }
     )
     try:
         _persist_registry(updated, target, idempotency_key=idempotency_key)
@@ -576,7 +577,7 @@ def repo_prune_cmd(
       invalid schema.
     - 6 (UserError, ``kind="UserDeclined"``) — confirmation gate declined.
     """
-    from eawf.platform.registry import Registry, RegistryReadError, read_registry
+    from eawf.platform.registry import RegistryReadError, read_registry
 
     flags: GlobalFlags = ctx.obj
     target = _resolve_registry_path(registry_path)
@@ -620,11 +621,12 @@ def repo_prune_cmd(
         cli_errors.emit_error(err, flags=flags)
         return
     new_active = registry.active_code if registry.active_code in survivors else None
-    updated = Registry(
-        version=registry.version,
-        updated_at=datetime.now(UTC),
-        active_code=new_active,
-        repos=survivors,
+    updated = registry.model_copy(
+        update={
+            "updated_at": datetime.now(UTC),
+            "active_code": new_active,
+            "repos": survivors,
+        }
     )
     try:
         _persist_registry(updated, target, idempotency_key=idempotency_key)

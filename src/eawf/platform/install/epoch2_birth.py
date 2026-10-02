@@ -19,14 +19,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Final
 
-from eawf.kernel.migration.epoch2.canary import (
-    DisposableTarget,
-    OptInDeclaration,
-    opt_in_path,
-)
-from eawf.kernel.migration.epoch2.generation import atomic_write_json, verify_selected_generation
+from eawf.kernel.migration.epoch2.canary import DisposableTarget
+from eawf.kernel.migration.epoch2.generation import verify_selected_generation
+from eawf.kernel.migration.epoch2.opt_in import declare_opt_in
 from eawf.kernel.state.epoch2.authority import resolve_authority
-from eawf.platform.backup import create_backup, snapshot_digest
 from eawf.platform.install.canary import activate_born_generation, write_born_generation
 
 logger = logging.getLogger(__name__)
@@ -62,15 +58,13 @@ def bear_epoch2_tree(state_path: Path, *, project_code: str, born_at: datetime) 
         OSError: A file could not be written.
     """
     tree_root = state_path.parent
-    snapshot = create_backup(state_path, note=INIT_BACKUP_NOTE, when=born_at)
-    declaration = OptInDeclaration(
-        opt_in=True,
+    declare_opt_in(
+        state_path,
         declared_by=INIT_DECLARED_BY,
         purpose=INIT_PURPOSE,
-        backup_ts=snapshot.ts,
-        backup_digest=snapshot_digest(snapshot),
+        note=INIT_BACKUP_NOTE,
+        when=born_at,
     )
-    atomic_write_json(opt_in_path(tree_root), declaration)
     target = DisposableTarget.require(tree_root)
     generation_id, birth_digest = write_born_generation(
         target, birth={"init": {"project_code": project_code}}

@@ -215,7 +215,7 @@ def _enter_entry(ctx: Ctx) -> None:
     )
     notes = {
         "ambiguous": f"attach to {first_cell} · remembered for this session only",
-        "failed": "copied: eawf repo register .",
+        "failed": "copied: eawf repo register . --yes",
         "schema": "copied: eawf migrate epoch2 --export",
         "offline": f"drill → {first_cell} · read-only, controls are gone",
     }

@@ -9,14 +9,21 @@ from __future__ import annotations
 
 import json
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import orjson
 import pytest
 from typer.testing import CliRunner
 
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.state.epoch2.task import Task, TaskPriority, TaskStatus
+from eawf.kernel.store.compaction import read_document, write_document
 from eawf.surfaces.cli.app import app
+from tests._epoch2_helpers import lay_epoch2_tree
 
 runner = CliRunner()
 
@@ -299,12 +306,15 @@ def test_status_payload_keys_documented_set(
         "git",
         "drift",
         "authority",
+        "native",
         "blockers",
         "research_campaign",
     }
     assert set(payload.keys()) == expected_keys
     # No campaign is staged on the base fixture, so the fold is None.
     assert payload["research_campaign"] is None
+    # An epoch-1 tree holds no generation, so there is no native work to list.
+    assert payload["native"] is None
 
 
 def _state_with_decisions_and_backlog() -> dict[str, Any]:
@@ -494,3 +504,88 @@ def test_status_research_campaign_fold(
     # The text branch surfaces a compact research line.
     text = runner.invoke(app, ["status"])
     assert "research: runnable (rounds=1" in text.stdout
+
+
+def _native_task(key: str, status: TaskStatus) -> dict[str, Any]:
+    """Return one native backlog Task row, as ``eawf task create`` stores it."""
+    at = datetime(2026, 10, 1, tzinfo=UTC).isoformat()
+    row: dict[str, Any] = Task.model_validate(
+        {
+            "uid": str(uuid4()),
+            "key": key,
+            "urn": f"eawf://QR/QR/QR/task/{key}",
+            "origin": {"kind": "native", "mapping_basis": "native", "confidence": "exact"},
+            "revision": 1,
+            "created_at": at,
+            "updated_at": at,
+            "priority": TaskPriority.P1.value,
+            "intent": f"deliver {key}",
+            "contract_revision": 1,
+            "status": status.value,
+        }
+    ).model_dump(mode="json")
+    return row
+
+
+def _epoch2_tree_with_tasks(tmp_path: Path, tasks: dict[str, TaskStatus]) -> Path:
+    """Bear a tree at epoch 2 from the base fixture and file ``tasks`` in its generation."""
+    state_path = lay_epoch2_tree(tmp_path, state=_VALID_STATE)
+    authority = resolve_authority(state_path.parent)
+    assert authority.target is not None and authority.generation_id is not None
+    document_path = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    document = read_document(document_path)
+    document["task"] = {key: _native_task(key, status) for key, status in tasks.items()}
+    write_document(document_path, document)
+    return state_path
+
+
+def test_status_lists_the_open_native_tasks_of_an_epoch2_tree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = _epoch2_tree_with_tasks(
+        tmp_path, {"QR-0001": TaskStatus.DRAFT, "QR-0002": TaskStatus.DROPPED}
+    )
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    _stub_no_git(monkeypatch)
+    result = runner.invoke(app, ["--json", "status"])
+    assert result.exit_code == 0, result.output
+    native = json.loads(result.stdout)["native"]
+    assert native == {
+        "open_task_count": 1,
+        "open_tasks": [{"key": "QR-0001", "status": "DRAFT", "title": "deliver QR-0001"}],
+    }
+    text = runner.invoke(app, ["status"]).stdout
+    assert "open tasks: 1 (QR-0001 DRAFT)" in text
+    # The frozen epoch-1 pointers would name a wave nothing moves any more.
+    assert "phase=P01" not in text
+    assert "open backlog:" not in text
+
+
+def test_status_says_an_epoch2_tree_with_no_open_task_has_none(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = _epoch2_tree_with_tasks(tmp_path, {})
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    _stub_no_git(monkeypatch)
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == 0, result.output
+    assert "open tasks: none" in result.stdout
+
+
+def test_status_refuses_a_generation_document_that_is_not_an_object(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = _epoch2_tree_with_tasks(tmp_path, {})
+    authority = resolve_authority(state_path.parent)
+    assert authority.target is not None and authority.generation_id is not None
+    document_path = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    document_path.write_text("[]")
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    _stub_no_git(monkeypatch)
+    result = runner.invoke(app, ["--json", "status"])
+    assert result.exit_code == 1, result.output
+    envelope = json.loads(result.stdout)
+    assert "generation document unreadable" in envelope["message"]

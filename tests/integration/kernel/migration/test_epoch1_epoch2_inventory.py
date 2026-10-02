@@ -146,11 +146,20 @@ def test_source_snapshot_read_rejects_a_missing_document(writable_snapshot: Path
         SourceSnapshot.read(writable_snapshot)
 
 
-def test_source_snapshot_read_rejects_a_missing_store_directory(writable_snapshot: Path) -> None:
-    shutil.rmtree(writable_snapshot / STORE_DIRECTORY)
+def test_source_snapshot_read_takes_an_absent_store_as_no_ledgers(tmp_path: Path) -> None:
+    root = tmp_path / "snapshot"
+    (root / CONFIG_DIRECTORY).mkdir(parents=True)
+    (root / CONFIG_DIRECTORY / "base.yaml").write_text("project: {}\n", encoding="utf-8")
+    for locator in (DOCUMENT_LOCATOR, REGISTRY_LOCATOR, TELEMETRY_LOCATOR):
+        (root / locator).write_text("{}", encoding="utf-8")
 
-    with pytest.raises(MigrationSourceUnreadableError, match=STORE_DIRECTORY):
-        SourceSnapshot.read(writable_snapshot)
+    snapshot = SourceSnapshot.read(root)
+
+    assert not (root / STORE_DIRECTORY).exists()
+    assert snapshot.ledgers == {}
+    assert snapshot.ledger("audit") == ()
+    assert snapshot.identity.locators_for(SourceSurface.STORE) == ()
+    snapshot.verify_unchanged()
 
 
 def test_source_snapshot_read_rejects_a_missing_config_directory(writable_snapshot: Path) -> None:
@@ -213,12 +222,11 @@ def test_source_snapshot_read_accepts_a_ledger_with_no_rows(writable_snapshot: P
     assert SourceCensus.build(snapshot).audits.ledger_rows == 0
 
 
-def test_source_snapshot_ledger_rejects_an_absent_ledger(writable_snapshot: Path) -> None:
+def test_source_snapshot_ledger_reads_an_absent_ledger_as_empty(writable_snapshot: Path) -> None:
     (writable_snapshot / STORE_DIRECTORY / "audit.jsonl").unlink()
     snapshot = SourceSnapshot.read(writable_snapshot)
 
-    with pytest.raises(MigrationSourceUnreadableError, match="audit"):
-        snapshot.ledger("audit")
+    assert snapshot.ledger("audit") == ()
 
 
 def test_source_snapshot_verify_unchanged_accepts_an_untouched_snapshot() -> None:
@@ -261,9 +269,9 @@ def test_source_census_build_covers_every_declared_collection(full_census: Sourc
 
 
 def test_source_census_build_rejects_an_omitted_collection(writable_snapshot: Path) -> None:
-    _rewrite_document(writable_snapshot, lambda document: document.pop("worktrees"))
+    _rewrite_document(writable_snapshot, lambda document: document.pop("phases"))
 
-    with pytest.raises(MigrationCollectionOmittedError, match="worktrees"):
+    with pytest.raises(MigrationCollectionOmittedError, match="phases"):
         SourceCensus.build(SourceSnapshot.read(writable_snapshot))
 
 

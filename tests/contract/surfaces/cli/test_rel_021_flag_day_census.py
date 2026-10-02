@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Final
 
 import click
@@ -44,6 +45,10 @@ EPOCH1_MODULES: Final = frozenset(
 #: epoch-2 surface carries forward rather than retiring.
 EPOCH1_CARRIED: Final = frozenset({"campaign cancel", "campaign new", "campaign run"})
 
+#: Every leaf command path of the v0.6.8 release, written by
+#: ``tools/command_tree_paths.py``; the release cannot be imported beside HEAD.
+V068_PATHS: Final = Path(__file__).parents[3] / "fixtures" / "cli" / "v068_command_paths.txt"
+
 
 def _leaves() -> Iterator[tuple[str, click.Command]]:
     """Yield every mounted leaf command as ``(path after eawf, command)``."""
@@ -57,6 +62,24 @@ def _leaves() -> Iterator[tuple[str, click.Command]]:
             yield " ".join(path), command
 
     yield from walk(root, ())
+
+
+def _live_leaf(path: str, leaves: dict[str, click.Command]) -> click.Command | None:
+    """Return the leaf ``path`` runs, or ``None`` when nothing live answers it.
+
+    A path is live as a leaf, or as a leaf followed by one of the sub-verbs
+    its first argument names: ``metrics refit`` runs the ``metrics`` leaf.
+    """
+    if path in leaves:
+        return leaves[path]
+    head, _, word = path.rpartition(" ")
+    command = leaves.get(head)
+    if command is None:
+        return None
+    arguments = [p for p in command.params if isinstance(p, click.Argument)]
+    if arguments and word in (arguments[0].metavar or "").strip("[]").split("|"):
+        return command
+    return None
 
 
 def _handler_module(command: click.Command) -> str:
@@ -97,8 +120,40 @@ def test_rel_021_every_replacement_is_a_live_verb(leaves: dict[str, click.Comman
     replacements = {
         r for table in (EPOCH1_REPLACEMENTS, RETIRED_VERBS) for r in table.values() if r is not None
     }
-    assert sorted(replacements - set(leaves)) == []
-    assert sorted(r for r in replacements if _handler_module(leaves[r]) in EPOCH1_MODULES) == []
+    live = {r: _live_leaf(r, leaves) for r in replacements}
+    assert sorted(r for r, leaf in live.items() if leaf is None) == []
+    epoch1 = {r for r, leaf in live.items() if leaf and _handler_module(leaf) in EPOCH1_MODULES}
+    assert sorted(epoch1 - EPOCH1_CARRIED) == []
+
+
+def test_rel_021_v068_fixture_is_a_sorted_set_of_leaf_paths() -> None:
+    paths = V068_PATHS.read_text(encoding="utf-8").splitlines()
+    assert paths, "the v0.6.8 command tree fixture is empty"
+    assert paths == sorted(set(paths))
+    assert all(p and p == " ".join(p.split()) for p in paths)
+
+
+def test_rel_021_every_v068_verb_is_live_or_retired(leaves: dict[str, click.Command]) -> None:
+    paths = V068_PATHS.read_text(encoding="utf-8").splitlines()
+    unanswered = [p for p in paths if p not in leaves and p not in RETIRED_VERBS]
+    assert unanswered == [], "v0.6.8 verbs that fail as an unknown command at HEAD"
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("metrics refit", "metrics"),
+        ("status", "status"),
+        ("metrics bogus", None),
+        ("wave claim", None),
+        ("", None),
+    ],
+)
+def test_rel_021_live_leaf_resolves_a_leaf_or_its_named_sub_verb(
+    leaves: dict[str, click.Command], path: str, expected: str | None
+) -> None:
+    resolved = _live_leaf(path, leaves)
+    assert resolved is (leaves[expected] if expected else None)
 
 
 def test_rel_021_guidance_names_the_replacement_verb() -> None:
@@ -113,6 +168,30 @@ def test_rel_021_guidance_points_a_verb_with_no_replacement_at_the_migration_pla
         "no epoch-2 verb replaces `eawf wave release`; inspect or migrate an epoch-1 tree "
         "with `eawf migrate epoch2 --plan`"
     )
+
+
+@pytest.mark.parametrize(
+    ("verb", "replacement"),
+    [
+        ("calibrate apply", "metrics refit"),
+        ("calibrate buckets", "metrics refit"),
+        ("dispatch pause", "run pause-dispatch"),
+        ("dispatch resume", "run resume-dispatch"),
+        ("question resolve", "question reply"),
+        ("research campaign cancel", "campaign cancel"),
+        ("research campaign new", "campaign new"),
+        ("research campaign run", "campaign run"),
+        ("research question resolve", "question reply"),
+        ("skill resume", "question reply"),
+        ("question add", None),
+        ("research question add", None),
+        ("research question list", None),
+    ],
+)
+def test_rel_021_a_retired_verb_names_the_live_verb_doing_its_job(
+    verb: str, replacement: str | None
+) -> None:
+    assert RETIRED_VERBS[verb] == replacement
 
 
 @pytest.mark.parametrize("path", ["", "wave", "wave claim extra", "memory add"])
@@ -130,6 +209,9 @@ def test_rel_021_guidance_for_a_path_outside_the_census_points_at_the_native_nou
         (("wave", "budget", "show", "P01"), "wave budget show"),
         (("wave", "claim", "P01-I01-W01"), "wave claim"),
         (("state", "show"), "state show"),
+        (("research", "campaign", "new", "topic"), "research campaign new"),
+        (("research", "status"), "research status"),
+        (("research",), None),
         (("task", "claim"), None),
         ((), None),
     ],

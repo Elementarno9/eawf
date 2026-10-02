@@ -1,0 +1,444 @@
+{
+  "actuals": null,
+  "agent_sessions": {
+    "SES-20261002T143631.339827Z-executor-claude-c68294a8-0d6b-4978-b08e-3b7dd19b223e": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P01-I01-W01"
+      ],
+      "ended_at": "2026-10-02T14:36:39.259037Z",
+      "id": "SES-20261002T143631.339827Z-executor-claude-c68294a8-0d6b-4978-b08e-3b7dd19b223e",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-10-02T14:36:31.339827Z",
+      "status": "closed",
+      "summary": null,
+      "worktree_ids": []
+    }
+  },
+  "artifacts": {},
+  "audits": null,
+  "backlog": {
+    "B001": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-10-02T14:36:26.729957Z",
+      "description": null,
+      "id": "B001",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "USED",
+      "status": "open",
+      "title": "Add logging"
+    },
+    "B002": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-10-02T14:36:27.435898Z",
+      "description": null,
+      "id": "B002",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "USED",
+      "status": "open",
+      "title": "Write the user guide"
+    },
+    "B003": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-10-02T14:36:28.087010Z",
+      "description": null,
+      "id": "B003",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "USED",
+      "status": "open",
+      "title": "Drop dead code"
+    }
+  },
+  "claims": null,
+  "close_attempts": {},
+  "current": {
+    "active_session_ids": [],
+    "active_wave_ids": [
+      "P01-I01-W01"
+    ],
+    "iter_id": null,
+    "phase_id": "P02",
+    "project_code": "USED",
+    "track_id": null
+  },
+  "decisions": {
+    "D01": {
+      "alternatives": [
+        "click"
+      ],
+      "consequences": [],
+      "created_at": "2026-10-02T14:36:28.735703Z",
+      "description": null,
+      "id": "D01",
+      "obsoleted_at": null,
+      "rationale": "No extra dependency for a tiny CLI",
+      "scope_id": "USED",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Use stdlib argparse"
+    }
+  },
+  "dispatch_paused": false,
+  "estimates": {
+    "P01-I01-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P01-I01-W01-bucket-20261002T143631Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P01-I01-W01",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P01-I01-W01",
+      "updated_at": "2026-10-02T14:36:31.923501Z"
+    }
+  },
+  "fleet_run": null,
+  "goals": {
+    "G01": {
+      "closed_at": null,
+      "created_at": "2026-10-02T14:36:21.307263Z",
+      "id": "G01",
+      "outcome_ids": [],
+      "scope_id": "USED",
+      "status": "open",
+      "summary": "Bootstrap goal seeded by eawf init so planning, dispatch, and evidence surfaces start with project intent.",
+      "title": "Establish USED project intent"
+    },
+    "G02": {
+      "closed_at": null,
+      "created_at": "2026-10-02T14:36:29.827420Z",
+      "id": "G02",
+      "outcome_ids": [],
+      "scope_id": "USED",
+      "status": "open",
+      "summary": "Parse the sample format end to end.",
+      "title": "Ship a usable parser"
+    }
+  },
+  "health": null,
+  "hypotheses": {
+    "H01-01": {
+      "audit_id": null,
+      "confirm": "<10ms on 1MB",
+      "description": null,
+      "id": "H01-01",
+      "metric": "parse_ms",
+      "reject": ">50ms on 1MB",
+      "scope_id": "P01",
+      "source_artifact_id": null,
+      "status": "pending",
+      "title": "Parser is linear time",
+      "verdict": null
+    }
+  },
+  "incidents": null,
+  "indexes": {
+    "project_title": ""
+  },
+  "iters": {
+    "P01-I01": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P01-I01",
+      "intent": null,
+      "opened_at": "2026-10-02T14:36:24.028453Z",
+      "phase_id": "P01",
+      "status": "active",
+      "title": "Ship the first slice",
+      "trigger": "none",
+      "wave_ids": [
+        "P01-I01-W01",
+        "P01-I01-W02",
+        "P01-I01-W03"
+      ]
+    }
+  },
+  "mcp_grants": null,
+  "mcp_servers": null,
+  "memory_index": {
+    "MEM-20261002-01": {
+      "confidence": "high",
+      "id": "MEM-20261002-01",
+      "promoted_to_artifact_id": null,
+      "review_due": null,
+      "scope_id": "USED",
+      "status": "active",
+      "store_record_id": "MEM-20261002-01",
+      "summary": "Parser must stay pure: The parser has no IO; keep side effects in the CLI layer.",
+      "tier": "working"
+    }
+  },
+  "open_questions": null,
+  "outcomes": null,
+  "phases": {
+    "P01": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [],
+      "description": null,
+      "id": "P01",
+      "intent": null,
+      "iter_ids": [
+        "P01-I01"
+      ],
+      "opened_at": "2026-10-02T14:36:22.064067Z",
+      "outcome_ids": [],
+      "release": null,
+      "scope_id": "USED",
+      "source_brief_ids": [],
+      "status": "active",
+      "title": "Build the sample app core",
+      "track_id": null
+    },
+    "P02": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [],
+      "description": null,
+      "id": "P02",
+      "intent": null,
+      "iter_ids": [],
+      "opened_at": "2026-10-02T14:36:30.336771Z",
+      "outcome_ids": [],
+      "release": null,
+      "scope_id": "USED",
+      "source_brief_ids": [],
+      "status": "active",
+      "title": "Harden the sample app",
+      "track_id": null
+    }
+  },
+  "plugins": {},
+  "project": {
+    "code": "USED",
+    "default_branch": "main",
+    "description": null,
+    "domains": [
+      "general"
+    ],
+    "repo_urn": "urn:eawf:v1:repo:USED",
+    "slug": "used",
+    "status": "active",
+    "title": "USED",
+    "track_ids": [],
+    "weekly_eu_target": null
+  },
+  "sandbox_policies": null,
+  "schema_version": "1.20",
+  "scope_kind": "repo",
+  "tracks": null,
+  "updated_at": "2026-10-02T14:36:31.924039Z",
+  "urn": "urn:eawf:v1:state:USED",
+  "wave_dependency_barriers": {},
+  "wave_dependency_bindings": {},
+  "wave_integrations": {},
+  "waves": {
+    "P01-I01-W01": {
+      "agent_role": null,
+      "blocks": [
+        "P01-I01-W02"
+      ],
+      "claim_session_id": "SES-20261002T143631.339827Z-executor-claude-c68294a8-0d6b-4978-b08e-3b7dd19b223e",
+      "claimed_at": "2026-10-02T14:36:31.923467Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "sample project for upgrade testing only",
+        "waived_at": "2026-10-02T14:36:25.093327Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/**"
+      ],
+      "gates": [],
+      "id": "P01-I01-W01",
+      "intent": {
+        "desired_outcome": "Add the parser",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "staged via wave plan P01-I01-W01",
+        "problem": "plan wave P01-I01-W01",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P01-I01",
+      "opened_at": "2026-10-02T14:36:25.094489Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "parser handles empty input",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "parser handles empty input",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the parser",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P01-I01-W02": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "sample project for upgrade testing only",
+        "waived_at": "2026-10-02T14:36:25.616183Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P01-I01-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/cli/**"
+      ],
+      "gates": [],
+      "id": "P01-I01-W02",
+      "intent": {
+        "desired_outcome": "Add the CLI",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "staged via wave plan P01-I01-W02",
+        "problem": "plan wave P01-I01-W02",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P01-I01",
+      "opened_at": "2026-10-02T14:36:25.616291Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "grandfathered legacy criterion",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "cli prints help",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the CLI",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P01-I01-W03": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "sample project for upgrade testing only",
+        "waived_at": "2026-10-02T14:36:26.113545Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "docs/**"
+      ],
+      "gates": [],
+      "id": "P01-I01-W03",
+      "intent": {
+        "desired_outcome": "Add the docs",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "staged via wave plan P01-I01-W03",
+        "problem": "plan wave P01-I01-W03",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P01-I01",
+      "opened_at": "2026-10-02T14:36:26.113629Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "grandfathered legacy criterion",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "docs build",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the docs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    }
+  },
+  "workspace": null,
+  "worktrees": null
+}

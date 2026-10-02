@@ -74,6 +74,7 @@ from eawf.kernel.migration.epoch2.generation import (
     read_marker,
     read_selection,
     read_smoke,
+    reconcile_generation,
     select_generation,
     write_marker,
 )
@@ -103,6 +104,8 @@ from eawf.kernel.migration.epoch2.snapshot import (
     digest_bytes,
     is_committed,
 )
+from eawf.platform.install.gitignore_writer import refresh_gitignore_block
+from eawf.platform.install.managed_block import ManagedBlockError
 from eawf.platform.registry.models import Registry, RegistryReadError, read_registry
 from eawf.platform.registry.workspace import WorkspaceMutationError, get_workspace
 from eawf.runtime.lock import portalock
@@ -526,6 +529,8 @@ def _commit(
         MigrationValidationDivergedError: The two staging imports differ.
         MigrationReadSmokeFailedError: The built generation does not read
             back as its manifest describes it.
+        MigrationRowsUnreconciledError: The built generation does not hold
+            the rows its plan counted, source collection by collection.
         MigrationRestoreIncompleteError: A surface moved between the digest
             that pinned it and the copy that would restore it.
         OSError: A durable write failed.
@@ -580,12 +585,21 @@ def _commit(
         written += journal.flush()
 
         records = read_smoke(target=target, generation_id=generation_id, manifest=manifest)
+        reconcile_generation(
+            target=target,
+            generation_id=generation_id,
+            manifest=manifest,
+            snapshot_root=snapshot_root,
+        )
         published_digest = generation_digest(target, generation_id=generation_id)
         journal.record(
             stage=CutoverStage.READ_SMOKE_PASSED,
             boundary=RollbackBoundary.STAGED,
             recorded_at=applied_at,
-            detail=f"read {records} records back through the public readers",
+            detail=(
+                f"read {records} records back through the public readers and reconciled "
+                "each source collection with the plan"
+            ),
         )
         journal.record(
             stage=CutoverStage.GENERATION_SELECTED,
@@ -667,7 +681,8 @@ def apply_cutover(request: Epoch2ApplyRequest, *, applied_at: datetime) -> Cutov
     Returns:
         The result. ``applied=False`` with ``journal_rows=0`` is the
         idempotent case: the approved generation was already selected, so
-        the run changed nothing.
+        the run changed nothing but an outdated managed ``.gitignore``
+        block, which every apply refreshes.
 
     Raises:
         MigrationTargetNotDisposableError: The target has declared itself
@@ -736,7 +751,7 @@ def apply_cutover(request: Epoch2ApplyRequest, *, applied_at: datetime) -> Cutov
                 f"apply_cutover no-op generation={selected.generation_id} "
                 f"manifest_digest={selected.manifest_digest[:12]}"
             )
-            return CutoverResult(
+            result = CutoverResult(
                 applied=False,
                 generation_id=selected.generation_id,
                 manifest_digest=selected.manifest_digest,
@@ -747,13 +762,36 @@ def apply_cutover(request: Epoch2ApplyRequest, *, applied_at: datetime) -> Cutov
                 generation_count=len(generation_ids(target)),
                 accepted_unresolved_rows=request.accepted_unresolved_rows,
             )
-        return _commit(
-            target=target,
-            request=request,
-            plan=plan,
-            journal=journal,
-            applied_at=applied_at,
-        )
+        else:
+            result = _commit(
+                target=target,
+                request=request,
+                plan=plan,
+                journal=journal,
+                applied_at=applied_at,
+            )
+    _refresh_ignore_block(target)
+    return result
+
+
+def _refresh_ignore_block(target: DisposableTarget) -> None:
+    """Bring the repository's managed ``.gitignore`` block up to this release.
+
+    A block an older release wrote does not know the generation tree, so
+    the first ``git status`` after the cutover would list its machine-local
+    files as committable. Marker damage is logged rather than raised: the
+    cutover has already landed, and doctor names the block for a hand repair.
+
+    Args:
+        target: The fence-cleared tree; its parent is the repository root.
+    """
+    try:
+        plan = refresh_gitignore_block(target.root.parent)
+    except ManagedBlockError as exc:
+        logger.warning(f"apply_cutover gitignore_not_refreshed detail={exc}")
+        return
+    if plan.stale:
+        logger.info(f"apply_cutover gitignore_refreshed added={list(plan.added)!r}")
 
 
 def apply_envelope(result: CutoverResult) -> dict[str, Any]:

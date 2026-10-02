@@ -1,16 +1,17 @@
 """Native conversion for the epoch-1 rows epoch 2 keeps under their own key.
 
-Decisions, incidents, sandbox policies, MCP servers and grants and the
-project block each have an epoch-2 collection of the same meaning, so none of them is an immutable
-legacy envelope: the row lands in its native collection, keyed by the id
-it already had. That key is the point. Rules, waivers and accepted-risk
-criteria cite a Decision by its ``D-*`` id and by the ``urn:eawf:v1``
-URN built from it; re-keying the record under a minted ordinal would
-leave every one of those citations naming nothing.
+Decisions, incidents, sandbox policies, MCP servers and grants, goals,
+outcomes and the project block each have an epoch-2 collection of the
+same meaning, so none of them is an immutable legacy envelope: the row
+lands in its native collection, keyed by the id it already had. That
+key is the point. Rules, waivers and accepted-risk criteria cite a
+Decision by its ``D-*`` id and by the ``urn:eawf:v1`` URN built from it;
+re-keying the record under a minted ordinal would leave every one of
+those citations naming nothing.
 
 None of these collections is addressed by the epoch-2 identity grammar --
-a Decision, an Incident, a SandboxPolicy, a capability and a tool
-authority have no entity kind, and a
+a Decision, an Incident, a SandboxPolicy, a capability, a tool
+authority and a Track outcome have no entity kind, and a
 Project's key is the supplied project slot rather than a minted one -- so
 their records are planned beside the identity traversal rather than
 minted through it.
@@ -49,6 +50,8 @@ class NativeRecordCollection(StrEnum):
     SANDBOX_POLICIES = "sandbox_policies"
     MCP_SERVERS = "mcp_servers"
     MCP_GRANTS = "mcp_grants"
+    GOALS = "goals"
+    OUTCOMES = "outcomes"
     PROJECT = "project"
 
 
@@ -60,6 +63,8 @@ NATIVE_RECORD_TARGETS: Mapping[NativeRecordCollection, Epoch2Collection] = Mappi
         NativeRecordCollection.SANDBOX_POLICIES: Epoch2Collection.SANDBOX_POLICY,
         NativeRecordCollection.MCP_SERVERS: Epoch2Collection.CAPABILITY,
         NativeRecordCollection.MCP_GRANTS: Epoch2Collection.TOOL_AUTHORITY,
+        NativeRecordCollection.GOALS: Epoch2Collection.TRACK_OUTCOME,
+        NativeRecordCollection.OUTCOMES: Epoch2Collection.TRACK_OUTCOME,
         NativeRecordCollection.PROJECT: Epoch2Collection.PROJECT,
     }
 )

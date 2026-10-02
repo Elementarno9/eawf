@@ -660,3 +660,5 @@ def test_status_authority_canary_tree_is_epoch2_with_generation(
     payload = _status_json(state_path, monkeypatch)
 
     assert payload["authority"] == {"epoch": 2, "gap": None, "generation_id": _GENERATION_ID}
+    # The marker names a generation that has written no document yet.
+    assert payload["native"] is None

@@ -1,0 +1,53 @@
+# DOM-015 allowed-legacy-symbol allowlist.
+#
+# One file, two readers: the operational-surface census asks which epoch-1
+# symbols may still be reachable after activation, and the backlog
+# obsolescence sweep asks which epoch-1 entities and verbs the cutover
+# deletes. Binding both to this file is what stops the two answers from
+# drifting apart.
+#
+# Directives (one per line, `<verb>: <payload>`; `#` starts a comment):
+#
+#   allow:  a legacy surface that survives activation. Only the migration,
+#           audit, export and recovery families are allowed through.
+#   rename: `<epoch-1 term> -> <epoch-2 term>`. A rename is NOT a deletion:
+#           the substance survives under a new name, so a backlog row
+#           naming the old term still imports as a live draft.
+#   delete: an epoch-1 entity or verb with no epoch-2 successor. A backlog
+#           row naming one of these is obsoleted rather than imported.
+#
+# An identifier (P##-I##-W##, B###, A##) never appears here: an id in a
+# backlog row is provenance, not a verdict about the row's substance.
+
+allow: migrate
+allow: audit
+allow: export
+allow: recover
+
+rename: wave -> Task
+rename: iter -> DeliveryBatch
+rename: phase -> Milestone
+rename: backlog -> draft head
+rename: agent session -> Run
+
+delete: close attempt
+delete: close_attempt
+delete: close gate
+delete: close-gate
+delete: wave integration
+delete: wave_integration
+delete: dependency binding
+delete: dependency_binding
+delete: dependency barrier
+delete: dependency_barrier
+delete: worktree lease
+delete: active lease
+delete: fleet run
+delete: fleet_run
+delete: dispatch pause
+delete: dispatch_paused
+delete: egress proxy
+delete: bwrap
+delete: self-built jail
+delete: offset-based paging
+delete: application shell

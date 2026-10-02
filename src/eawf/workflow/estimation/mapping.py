@@ -24,7 +24,6 @@ from typing import Annotated, Final, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
-from eawf.kernel.runtime.compiled import canonical_digest
 from eawf.kernel.state.models import EstimateSummary
 
 
@@ -164,6 +163,10 @@ class EffortMapping(_MappingRecord):
     @property
     def digest(self) -> str:
         """The ``sha256:`` digest of the revision, so a silent edit is detectable."""
+        # The lifecycle modules import this one while the CLI tree is built,
+        # and the compiled runtime models behind the digest are not cheap.
+        from eawf.kernel.runtime.compiled import canonical_digest
+
         return canonical_digest(self.model_dump(mode="json"))
 
     @property

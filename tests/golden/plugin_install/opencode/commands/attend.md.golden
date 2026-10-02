@@ -45,7 +45,7 @@ Select exactly one action: `list`, `prepare`, `resolve`. An option the selected 
 
 The obligations the effective rule graph holds for activities `operate`. They bind what you do; they grant no capability.
 
-- must: **Record each conduct deviation as a typed local row.** Record every conduct deviation as a typed row bound to the run that produced it and the obligation it breached, with how it was detected, its severity, an evidence reference and its disposition, in the machine-local store and never in the committed surface.
+- must: **Record each conduct deviation as a typed local row.** Record every conduct deviation as a typed row in the machine-local store, never the committed surface, bound to its run and breached obligation, with detection method, severity, evidence reference and disposition.
 - must: **Record the goal before the first mutating action.** Before the first mutating action, record the task as a typed goal bound to the declared success criteria of the entity it serves.
 - must: **Record a runtime cap only as a measured value.** Record a runtime's declared cap as a measured value with its measurement provenance, never as a figure chosen for headroom; report a cap not re-measured against a certified runtime version as stale.
 - must: **Record a missed practice as a conduct deviation.** Record a practice whose trigger fired and whose obligation was not met as a conduct deviation, so recall failure is counted per rule and per runtime.

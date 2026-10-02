@@ -42,7 +42,7 @@ Improve the selected structure without changing observable behavior. Apply mode 
 
 The obligations the effective rule graph holds for activities `implement`. They bind what you do; they grant no capability.
 
-- must: **Block on a question only when proceeding is unsafe.** Raise a blocking question only when proceeding under any available assumption would be unsafe or would make the completed work useless if the assumption proved wrong; resolve every other uncertainty by assumption plus disclosure.
+- must: **Block on a question only when proceeding is unsafe.** Raise a blocking question only when proceeding under any available assumption would be unsafe or would make the work useless if wrong; resolve every other uncertainty by assumption plus disclosure.
 - must: **Dispatch independent units of work together.** Dispatch independent units of work together rather than in sequence, where neither consumes the other's output; a sequential dispatch of independent units is a recorded miss.
 - must: **Evaluate the practice set at each decision point.** Evaluate the applicable practice set at each decision point rather than recalling it: at least before dispatching work, before presenting a choice to the operator and before emitting a terminal report.
 - must: **Stop only at operator-declared checkpoints.** Stop at a checkpoint the operator declared and at no other point; a self-selected pause is a deviation.

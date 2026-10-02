@@ -19,10 +19,12 @@ first. Turning that report into a refusal is the caller's job.
 
 from __future__ import annotations
 
+import copy
 import logging
 from collections.abc import Iterable, Mapping
 from enum import StrEnum
-from typing import Annotated, Any
+from types import MappingProxyType
+from typing import Annotated, Any, Final
 
 from pydantic import Field
 
@@ -85,8 +87,9 @@ class CollectionRowContract(StrictMigrationModel):
         source_collection: The top-level key.
         shape: What the key holds.
         nullable: Whether the key is allowed to serialize as JSON
-            ``null``. Only the keys that actually did so at the pinned
-            revision are nullable; anywhere else a null is a lost
+            ``null``. Exactly the keys epoch-1 ``State`` types as
+            optional are nullable, because a stock tree writes those as
+            null until their first row; anywhere else a null is a lost
             container rather than an empty one.
         key_field: The row field that must equal the row's own key, or
             ``None`` when the collection keys rows by something other
@@ -145,12 +148,13 @@ COLLECTION_ROW_CONTRACTS: tuple[CollectionRowContract, ...] = (
     _rows("phases", "id", ("id", "scope_id", "status", "title", "opened_at")),
     _rows("iters", "id", ("id", "phase_id", "status", "title", "opened_at")),
     _rows("waves", "id", ("id", "iter_id", "status", "title", "opened_at")),
-    _rows("backlog", "id", ("id", "scope_id", "status", "title", "created_at")),
+    _rows("backlog", "id", ("id", "scope_id", "status", "title", "created_at"), nullable=True),
     _rows("agent_sessions", "id", ("id", "role", "runtime", "scope_id", "status", "started_at")),
     _rows(
         "worktrees",
         "id",
         ("id", "wave_id", "branch", "base_branch", "path", "status", "created_at"),
+        nullable=True,
     ),
     # ``estimates`` and ``actuals`` key by the scope they measure, not by
     # their own row id, so the id field is real but is not the key.
@@ -158,28 +162,37 @@ COLLECTION_ROW_CONTRACTS: tuple[CollectionRowContract, ...] = (
         "estimates",
         "scope_id",
         ("id", "scope_id", "display", "confidence", "reference_class", "updated_at"),
+        nullable=True,
     ),
-    _rows("actuals", "scope_id", ("id", "scope_id", "status", "updated_at")),
-    _rows("audits", "id", ("id", "scope_id", "kind", "status", "created_at")),
+    _rows("actuals", "scope_id", ("id", "scope_id", "status", "updated_at"), nullable=True),
+    _rows("audits", "id", ("id", "scope_id", "kind", "status", "created_at"), nullable=True),
     _rows("decisions", "id", ("id", "scope_id", "status", "title", "rationale", "created_at")),
     _rows(
         "incidents",
         "id",
         ("id", "scope_id", "status", "title", "severity", "cause", "opened_at"),
+        nullable=True,
     ),
     _rows("artifacts", "id", ("id", "kind", "uri", "urn", "created_at")),
-    _rows("memory_index", "id", ("id", "scope_id", "status", "tier", "summary", "confidence")),
-    _rows("goals", "id", ("id", "scope_id", "status", "title", "summary", "created_at")),
-    _rows("sandbox_policies", "id", ("id", "scope_id", "scope_kind", "granted_at")),
+    _rows(
+        "memory_index",
+        "id",
+        ("id", "scope_id", "status", "tier", "summary", "confidence"),
+        nullable=True,
+    ),
+    _rows(
+        "goals", "id", ("id", "scope_id", "status", "title", "summary", "created_at"), nullable=True
+    ),
+    _rows("sandbox_policies", "id", ("id", "scope_id", "scope_kind", "granted_at"), nullable=True),
     _rows("close_attempts", "id", ("id", "wave_id", "status", "outcome", "requested_at")),
     _rows("wave_integrations", "id", ("id", "wave_id", "kind", "status", "created_at")),
     # Keyed by a composite the row does not carry as a single field.
     _rows("wave_dependency_bindings", None, ("wave_id", "dep_wave_id", "bound_at")),
     _rows("wave_dependency_barriers", None, ()),
     _rows("plugins", "id", ("id",)),
-    # The ten keys that serialized as JSON null at the pinned revision.
-    # Their row shape is unmeasured, so each declares only the identity
-    # field: a contract invented from nothing is worse than a narrow one.
+    # Keys whose row shape is unmeasured, so each declares only the
+    # identity field: a contract invented from nothing is worse than a
+    # narrow one.
     _rows("claims", "id", ("id",), nullable=True),
     _rows("hypotheses", "id", ("id",), nullable=True),
     _rows("open_questions", "id", ("id",), nullable=True),
@@ -204,6 +217,59 @@ COLLECTION_ROW_CONTRACTS: tuple[CollectionRowContract, ...] = (
 COLLECTION_ROW_CONTRACT_INDEX: dict[str, CollectionRowContract] = {
     contract.source_collection: contract for contract in COLLECTION_ROW_CONTRACTS
 }
+
+
+#: What epoch-1 ``State`` reads an absent top-level key as. ``eawf init``
+#: writes its first document without these keys, so a tree no command has
+#: touched since omits every one of them; the model default is what any
+#: epoch-1 reader saw there.
+EPOCH1_OMITTED_DEFAULTS: Final[Mapping[str, Any]] = MappingProxyType(
+    {
+        "actuals": None,
+        "audits": None,
+        "backlog": None,
+        "claims": None,
+        "close_attempts": {},
+        "decisions": {},
+        "dispatch_paused": False,
+        "estimates": None,
+        "fleet_run": None,
+        "goals": None,
+        "health": None,
+        "hypotheses": None,
+        "incidents": None,
+        "mcp_grants": None,
+        "mcp_servers": None,
+        "memory_index": None,
+        "open_questions": None,
+        "outcomes": None,
+        "sandbox_policies": None,
+        "tracks": None,
+        "wave_dependency_barriers": {},
+        "wave_dependency_bindings": {},
+        "wave_integrations": {},
+        "worktrees": None,
+    }
+)
+
+
+def with_epoch1_defaults(document: Mapping[str, Any]) -> dict[str, Any]:
+    """Return ``document`` with every omitted defaulted key filled in.
+
+    Args:
+        document: The decoded epoch-1 document.
+
+    Returns:
+        A copy carrying each key of :data:`EPOCH1_OMITTED_DEFAULTS` the
+        document omits, set to its epoch-1 default. Keys the document
+        holds, null included, are kept as written; a key with no default
+        stays absent, so the census still refuses its omission.
+    """
+    filled = dict(document)
+    for collection, default in EPOCH1_OMITTED_DEFAULTS.items():
+        if collection not in filled:
+            filled[collection] = copy.deepcopy(default)
+    return filled
 
 
 LEDGER_ROW_ID_FIELD = "id"

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import re
 import socket
 import sys
 import time
@@ -31,9 +32,11 @@ from typing import Any
 
 import orjson
 
+from eawf import __version__
 from eawf.kernel.state.mutations import Mutation
 from eawf.runtime.daemon.runtime_dir import runtime_dir as default_runtime_dir
 from eawf.runtime.daemon.spawn import auto_spawn_daemon, daemon_pid_if_ready
+from eawf.surfaces.cli.errors import DaemonVersionMismatch
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +45,50 @@ logger = logging.getLogger(__name__)
 #: synchronous CLI client. Subscribers use the asyncio surface
 #: directly; this only bounds the round-trip RPC.
 DEFAULT_CALL_TIMEOUT_SECONDS: float = 30.0
+
+
+#: The public-release subset of PEP 440 that eawf versions are cut in:
+#: ``0.6.8``, ``0.7.0.dev5``, ``0.7.0rc1``, ``0.7.0rc1.dev2``.
+_RELEASE_VERSION = re.compile(r"(\d+(?:\.\d+)*)(?:(a|b|rc)(\d+))?(?:\.dev(\d+))?")
+_PRE_RELEASE_RANK = {"a": 0, "b": 1, "rc": 2}
+
+
+def _release_key(version: str) -> tuple[tuple[int, ...], tuple[int, int], tuple[int, int]] | None:
+    """Return the PEP 440 sort key of *version*, or ``None`` outside the grammar."""
+    match = _RELEASE_VERSION.fullmatch(version)
+    if match is None:
+        return None
+    release_text, pre_phase, pre_number, dev_number = match.groups()
+    release = tuple(int(part) for part in release_text.split("."))
+    release += (0,) * (4 - len(release))
+    if pre_phase is not None:
+        pre = (_PRE_RELEASE_RANK[pre_phase], int(pre_number))
+    elif dev_number is not None:
+        # A bare ``X.Y.Z.devN`` precedes every pre-release of ``X.Y.Z``.
+        pre = (-1, 0)
+    else:
+        pre = (len(_PRE_RELEASE_RANK), 0)
+    dev = (0, int(dev_number)) if dev_number is not None else (1, 0)
+    return release, pre, dev
+
+
+def release_order(left: str, right: str) -> int | None:
+    """Order two eawf release versions.
+
+    Args:
+        left: Version string, e.g. the running daemon's.
+        right: Version string, e.g. this CLI's.
+
+    Returns:
+        ``-1`` when *left* is older, ``0`` when equal, ``1`` when newer, and
+        ``None`` when either is outside the release grammar and so cannot
+        be ordered.
+    """
+    left_key = _release_key(left)
+    right_key = _release_key(right)
+    if left_key is None or right_key is None:
+        return None
+    return (left_key > right_key) - (left_key < right_key)
 
 
 class DaemonRpcError(RuntimeError):
@@ -146,7 +193,14 @@ class DaemonClient:
                 f"__enter__ pipe pid={self._pid} pipe={self._pipe_name!r} "
                 f"runtime={self._runtime_dir.name!r}"
             )
+            self._ensure_current_daemon()
             return self
+        self._connect_socket()
+        self._ensure_current_daemon()
+        return self
+
+    def _connect_socket(self) -> None:
+        """Open the POSIX UDS connection to the daemon at ``self._pid``."""
         sock_path = self._runtime_dir / "eawfd.sock"
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.settimeout(self._call_timeout_seconds)
@@ -155,7 +209,64 @@ class DaemonClient:
         self._reader = sock.makefile("rb")
         self._entered = True
         logger.debug(f"__enter__ connected pid={self._pid} runtime={self._runtime_dir.name!r}")
-        return self
+
+    def _ensure_current_daemon(self) -> None:
+        """Replace a daemon from an older release before any call reaches it.
+
+        A daemon outlives the install that started it, so after an upgrade
+        the CLI finds the previous release still serving: it lacks the
+        current methods and validates payloads against the old schemas.
+        An older daemon is restarted through the same path as
+        ``eawf daemon restart``; a newer or unorderable one is refused, as
+        replacing it would downgrade whoever started it.
+
+        Raises:
+            DaemonVersionMismatch: When the daemon is newer, its version
+                cannot be ordered, the restart fails, or the restarted
+                daemon still reports another release.
+        """
+        from eawf.runtime.daemon import lifecycle
+
+        daemon_version = str(self.call("daemon.ping").get("version", ""))
+        if daemon_version == __version__:
+            return
+        order = release_order(daemon_version, __version__)
+        if order is None or order > 0:
+            self.__exit__(None, None, None)
+            raise DaemonVersionMismatch(
+                f"the running daemon is eawf {daemon_version}, not this eawf {__version__}; "
+                "run `eawf daemon restart` to replace it with this release"
+            )
+        previous_pid = self._pid
+        self.__exit__(None, None, None)
+        try:
+            result = lifecycle.restart_daemon(runtime_dir=self._runtime_dir)
+        except lifecycle.DaemonLifecycleError as exc:
+            raise DaemonVersionMismatch(
+                f"the running daemon is eawf {daemon_version}, older than this eawf "
+                f"{__version__}, and restarting it failed: {exc}; "
+                "run `eawf daemon restart`"
+            ) from exc
+        logger.info(
+            f"daemon restarted stale previous_pid={previous_pid} pid={result.pid} "
+            f"daemon_version={daemon_version!r} client_version={__version__!r}"
+        )
+        self._pid = result.pid
+        if sys.platform == "win32":
+            from eawf.runtime.daemon.windows_pipe import default_pipe_name
+
+            self._pipe_name = default_pipe_name()
+            self._entered = True
+        else:
+            self._connect_socket()
+        restarted_version = str(self.call("daemon.ping").get("version", ""))
+        if restarted_version != __version__:
+            self.__exit__(None, None, None)
+            raise DaemonVersionMismatch(
+                f"the restarted daemon is eawf {restarted_version}, not this eawf "
+                f"{__version__}; its supervisor still starts the old release; "
+                "reinstall the daemon service, then run `eawf daemon restart`"
+            )
 
     def __exit__(
         self,

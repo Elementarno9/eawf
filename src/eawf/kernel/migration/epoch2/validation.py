@@ -350,8 +350,6 @@ class StagedImport(StrictMigrationModel):
             The reduction, with rows in import order.
 
         Raises:
-            MigrationSourceUnreadableError: When the snapshot holds no
-                audit ledger, which the audit population needs.
             ValidationError: When a reduced row violates its contract.
         """
         populations = source_populations(snapshot)
@@ -409,11 +407,6 @@ def source_populations(snapshot: SourceSnapshot) -> Mapping[str, frozenset[str]]
     Returns:
         One id set per population named by
         :data:`LEGACY_REFERENCE_POPULATIONS`.
-
-    Raises:
-        MigrationSourceUnreadableError: When the snapshot holds no audit
-            ledger. A missing ledger is not an empty one, and treating it
-            as empty would report resolving audit ids as unresolved.
     """
     document = snapshot.document
     populations = {
@@ -1131,8 +1124,6 @@ class ImportValidationReport(StrictMigrationModel):
             MigrationFabricationDetectedError: When a measurement
                 re-points at a Task the import never wrote, or the
                 document records no project code.
-            MigrationSourceUnreadableError: When the snapshot holds no
-                audit ledger.
             MigrationCountMismatchError: When a source row reaches no arm
                 of a rule that must be total.
             ValidationError: When a source row is unreadable.

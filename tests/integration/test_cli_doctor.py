@@ -138,6 +138,7 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "mcp_drift",
         "state_scale_ceiling",
         "authority_epoch",
+        "gitignore_block",
         "active_phase_without_iter",
         "stale_session_count",
         "recent_actuals",

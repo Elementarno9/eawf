@@ -11,22 +11,26 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import os
 import sys
 import tempfile
 import threading
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from eawf import __version__
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.lifecycle import DaemonLifecycleError, DaemonLifecycleResult
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.server import serve_unix
-from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError, release_order
+from eawf.surfaces.cli.errors import DaemonVersionMismatch
 
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),
@@ -43,8 +47,9 @@ def _short_runtime_dir() -> Path:
 class _ServerHandle:
     """Async server harness — boots a loop in a worker thread."""
 
-    def __init__(self, runtime_dir: Path) -> None:
+    def __init__(self, runtime_dir: Path, *, version: str = __version__) -> None:
         self.runtime_dir = runtime_dir
+        self.version = version
         self.sock_path = runtime_dir / "eawfd.sock"
         self.runtime_dir.mkdir(parents=True, exist_ok=True)
         self._thread: threading.Thread | None = None
@@ -55,6 +60,7 @@ class _ServerHandle:
         self._pid_file = runtime_dir / "eawfd.pid"
 
     def start(self) -> None:
+        self._ready.clear()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
         assert self._ready.wait(timeout=5.0), "server failed to start within 5 s"
@@ -84,7 +90,7 @@ class _ServerHandle:
             started_at="2026-05-19T00:00:00+00:00",
             pid=os.getpid(),
             protocol_version=PROTOCOL_VERSION,
-            version=__version__,
+            version=self.version,
             shutdown_event=asyncio.Event(),
             bus=EventBus(),
         )
@@ -215,3 +221,136 @@ def test_rpc_error_carries_code_message_data() -> None:
     assert err.message == "catch up too large"
     assert err.data == {"missed": 9000}
     assert "-32008" in str(err)
+
+
+@pytest.fixture
+def stale_server() -> Iterator[_ServerHandle]:
+    """A daemon left running by the previous release, reporting ``0.6.8``."""
+    handle = _ServerHandle(_short_runtime_dir(), version="0.6.8")
+    handle.start()
+    try:
+        yield handle
+    finally:
+        handle.stop()
+
+
+def _restart_into(handle: _ServerHandle, version: str) -> Callable[..., DaemonLifecycleResult]:
+    """Return a ``restart_daemon`` double that swaps *handle* for a *version* daemon."""
+
+    def _restart(*, runtime_dir: Path | None = None, **_: Any) -> DaemonLifecycleResult:
+        assert runtime_dir == handle.runtime_dir
+        handle.stop()
+        handle.version = version
+        handle.start()
+        return DaemonLifecycleResult(
+            action="restarted", pid=os.getpid(), previous_pid=os.getpid(), supervisor="none"
+        )
+
+    return _restart
+
+
+def test_client_restarts_an_older_daemon_before_the_call(
+    stale_server: _ServerHandle,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A 0.6.8 daemon is replaced before the first call reaches it."""
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.lifecycle.restart_daemon",
+        _restart_into(stale_server, __version__),
+    )
+    with caplog.at_level(logging.INFO), DaemonClient(runtime_dir=stale_server.runtime_dir) as c:
+        result = c.call("daemon.ping")
+    assert result["version"] == __version__
+    assert "daemon_version='0.6.8'" in caplog.text
+    assert "restarted" in caplog.text
+
+
+def test_client_refuses_a_newer_daemon_without_restarting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A daemon from a later release is refused, never replaced by an older one."""
+    handle = _ServerHandle(_short_runtime_dir(), version="99.0.0")
+    handle.start()
+    restarts: list[object] = []
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.lifecycle.restart_daemon", lambda **kw: restarts.append(kw)
+    )
+    try:
+        with pytest.raises(DaemonVersionMismatch) as excinfo:
+            DaemonClient(runtime_dir=handle.runtime_dir).__enter__()
+    finally:
+        handle.stop()
+    message = str(excinfo.value)
+    assert "99.0.0" in message
+    assert __version__ in message
+    assert "eawf daemon restart" in message
+    assert restarts == []
+
+
+def test_client_refuses_when_the_restart_fails(
+    stale_server: _ServerHandle, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed replacement surfaces both versions instead of calling the old daemon."""
+
+    def _fail(**_: Any) -> DaemonLifecycleResult:
+        raise DaemonLifecycleError("daemon did not stop within 30.0s pid=1")
+
+    monkeypatch.setattr("eawf.runtime.daemon.lifecycle.restart_daemon", _fail)
+    with pytest.raises(DaemonVersionMismatch) as excinfo:
+        DaemonClient(runtime_dir=stale_server.runtime_dir).__enter__()
+    message = str(excinfo.value)
+    assert "0.6.8" in message
+    assert __version__ in message
+    assert "did not stop" in message
+    assert "eawf daemon restart" in message
+
+
+def test_client_refuses_when_the_restarted_daemon_is_still_stale(
+    stale_server: _ServerHandle, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A supervisor that restarts the old binary again is refused, not looped on."""
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.lifecycle.restart_daemon", _restart_into(stale_server, "0.6.8")
+    )
+    with pytest.raises(DaemonVersionMismatch, match=r"0\.6\.8"):
+        DaemonClient(runtime_dir=stale_server.runtime_dir).__enter__()
+
+
+def test_read_only_attach_also_replaces_an_older_daemon(
+    stale_server: _ServerHandle, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A read verb that only attaches still never talks to a stale daemon."""
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.lifecycle.restart_daemon",
+        _restart_into(stale_server, __version__),
+    )
+    with DaemonClient(runtime_dir=stale_server.runtime_dir, spawn=False) as client:
+        assert client.call("daemon.ping")["version"] == __version__
+
+
+@pytest.mark.parametrize(
+    ("daemon", "client", "order"),
+    [
+        ("0.6.8", "0.7.0rc1", -1),
+        ("0.7.0.dev5", "0.7.0rc1", -1),
+        ("0.7.0rc1", "0.7.0", -1),
+        ("0.7.0a1", "0.7.0b1", -1),
+        ("0.7.0rc1.dev2", "0.7.0rc1", -1),
+        ("0.7.0.dev9", "0.7.0a1", -1),
+        ("0.7", "0.7.0", 0),
+        ("0.7.0rc1", "0.7.0rc1", 0),
+        ("0.7.1", "0.7.0", 1),
+        ("1.0.0", "0.99.99", 1),
+        ("0.7.0rc2", "0.7.0rc1", 1),
+    ],
+)
+def test_release_order_follows_pep440(daemon: str, client: str, order: int) -> None:
+    """Release, pre-release and dev segments order as PEP 440 does."""
+    assert release_order(daemon, client) == order
+
+
+@pytest.mark.parametrize("version", ["", "test", "0.7.0+local", "v0.7.0", "0.7.0post1"])
+def test_release_order_is_none_for_an_unorderable_version(version: str) -> None:
+    """A version outside the release grammar cannot be ordered, so it is never restarted."""
+    assert release_order(version, "0.7.0") is None

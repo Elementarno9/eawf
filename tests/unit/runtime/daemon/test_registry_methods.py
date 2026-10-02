@@ -427,3 +427,54 @@ def test_update_sequential_writes_preserve_both_entries(
 
     payload = orjson.loads(registry_path.read_bytes())
     assert set(payload["repos"].keys()) == {"ABC", "DEF"}
+
+
+# ---- registry.update keeps workspaces ---------------------------------------
+
+
+_WORKSPACE = {
+    "key": "GHI",
+    "member_project_codes": ["ABC", "DEF"],
+    "home_project_code": "ABC",
+    "revision": 1,
+}
+
+
+@pytest.mark.parametrize(
+    ("operation", "repo_id", "fields"),
+    [
+        ("add", "JKL", {"path": "/repos/jkl"}),
+        ("add", "ABC", {"path": "/repos/abc", "set_active": True}),
+        ("remove", "DEF", {}),
+        ("rename", "DEF", {"new_code": "XYZ"}),
+    ],
+)
+def test_update_keeps_registered_workspaces(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+    repo_id: str,
+    fields: dict[str, Any],
+) -> None:
+    ctx, registry_path = _build_ctx(tmp_path=tmp_path, monkeypatch=monkeypatch)
+    registry_path.write_bytes(
+        orjson.dumps(
+            {
+                "version": "1",
+                "repos": {
+                    "ABC": {"code": "ABC", "path": "/repos/abc"},
+                    "DEF": {"code": "DEF", "path": "/repos/def"},
+                },
+                "workspaces": {"GHI": _WORKSPACE},
+            }
+        )
+    )
+
+    async def body() -> None:
+        await update(ctx, {"operation": operation, "repo_id": repo_id, "fields": fields})
+
+    _run(body)
+
+    payload = orjson.loads(registry_path.read_bytes())
+    assert payload["workspaces"]["GHI"]["home_project_code"] == "ABC"
+    assert sorted(payload["workspaces"]["GHI"]["member_project_codes"]) == ["ABC", "DEF"]

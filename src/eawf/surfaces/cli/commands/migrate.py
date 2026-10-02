@@ -20,6 +20,8 @@ Verbs:
 - ``eawf migrate --dry-run`` — show what would change; write nothing.
 - ``eawf migrate --no-backup`` — skip the backup write (testing only).
 - ``eawf migrate status`` — show current ``schema_version`` + chain.
+- ``eawf migrate epoch2 --opt-in --target-root .ea`` — back up a live
+  epoch-1 tree and opt it into the cutover against that backup.
 - ``eawf migrate epoch2 --plan`` — read-only epoch-2 cutover plan.
 - ``eawf migrate epoch2 --export`` — read-only epoch-1 collection export.
 - ``eawf migrate epoch2 --apply --plan-digest <d>`` — build and select a
@@ -80,6 +82,12 @@ if TYPE_CHECKING:
     from eawf.kernel.migration.epoch2.recovery import Epoch2RecoverRequest
 
 logger = logging.getLogger(__name__)
+
+#: What an opt-in written by ``--opt-in`` says the repository is moving for.
+_OPT_IN_PURPOSE: Final = "opted in to authority epoch 2 by eawf migrate epoch2 --opt-in"
+
+#: The note the backup an opt-in pins carries.
+_OPT_IN_BACKUP_NOTE: Final = "eawf migrate epoch2 --opt-in: the tree before the cutover"
 
 #: The error-envelope kind a quiescence refusal carries, so the hint names
 #: the commands that clear holders instead of the generic validation hint.
@@ -253,7 +261,7 @@ def migrate_status(ctx: typer.Context) -> None:
 
 epoch2_app = typer.Typer(
     name="epoch2",
-    help="Plan, apply or export the one-shot epoch-1 to epoch-2 cutover.",
+    help="Opt in to, plan, apply or export the one-shot epoch-1 to epoch-2 cutover.",
     no_args_is_help=True,
     invoke_without_command=True,
     add_completion=False,
@@ -262,7 +270,7 @@ migrate_app.add_typer(epoch2_app)
 
 
 class Epoch2Mode(StrEnum):
-    """The six things ``eawf migrate epoch2`` can be asked to do."""
+    """The eight things ``eawf migrate epoch2`` can be asked to do."""
 
     PLAN = "plan"
     APPLY = "apply"
@@ -271,6 +279,7 @@ class Epoch2Mode(StrEnum):
     ROLLBACK = "rollback"
     STAGE = "stage-to"
     ROLLBACK_BOUNDARY = "rollback-boundary"
+    OPT_IN = "opt-in"
 
 
 #: The modes that read a corpus. The two recovery modes do not: they repair
@@ -285,6 +294,7 @@ _CORPUS_MODES: Final[tuple[Epoch2Mode, ...]] = (
 
 def _epoch2_mode(
     *,
+    opt_in: bool,
     plan: bool,
     apply_: bool,
     export: bool,
@@ -296,6 +306,7 @@ def _epoch2_mode(
     """Return the one mode the flags select.
 
     Args:
+        opt_in: Whether ``--opt-in`` was passed.
         plan: Whether ``--plan`` was passed.
         apply_: Whether ``--apply`` was passed.
         export: Whether ``--export`` was passed.
@@ -322,6 +333,7 @@ def _epoch2_mode(
             (Epoch2Mode.ROLLBACK, rollback),
             (Epoch2Mode.STAGE, stage),
             (Epoch2Mode.ROLLBACK_BOUNDARY, rollback_boundary),
+            (Epoch2Mode.OPT_IN, opt_in),
         )
         if chosen
     ]
@@ -545,7 +557,10 @@ def epoch2_cmd(
     ] = None,
     allowlist: Annotated[
         Path | None,
-        typer.Option("--allowlist", help="Path to the allowed-legacy-symbol allowlist."),
+        typer.Option(
+            "--allowlist",
+            help="Path to the allowed-legacy-symbol allowlist; defaults to the one eawf ships.",
+        ),
     ] = None,
     workspace_key: Annotated[
         str | None,
@@ -559,6 +574,13 @@ def epoch2_cmd(
         str | None,
         typer.Option("--repository-key", help="Addressing repository for the imported corpus."),
     ] = None,
+    opt_in: Annotated[
+        bool,
+        typer.Option(
+            "--opt-in",
+            help="Back up a live tree and opt it into the cutover (needs --target-root).",
+        ),
+    ] = False,
     plan: Annotated[
         bool,
         typer.Option("--plan", help="Read-only plan: report what the cutover would do."),
@@ -621,13 +643,20 @@ def epoch2_cmd(
     ] = None,
     sealed_by: Annotated[
         str,
-        typer.Option("--sealed-by", help="Principal recorded in the manifest seal."),
+        typer.Option(
+            "--sealed-by",
+            help="Principal recorded in the manifest seal, or in the --opt-in declaration.",
+        ),
     ] = "operator",
     default_track_key: Annotated[
         str | None,
         typer.Option(
             "--default-track-key",
-            help="Track (TRK-...) declared as owner of every record whose source names none.",
+            help=(
+                "Track (TRK-...) recorded in the manifest as the answer for every record "
+                "whose source names none; required when such records exist. The Track is "
+                "not created and those records import with no Track."
+            ),
         ),
     ] = None,
     stage_to: Annotated[
@@ -638,7 +667,12 @@ def epoch2_cmd(
         ),
     ] = None,
 ) -> None:
-    """Plan, apply, recover, roll back or export the epoch-1 to epoch-2 cutover.
+    """Opt in to, plan, apply, recover, roll back or export the epoch-1 to epoch-2 cutover.
+
+    ``--opt-in`` is the step a live repository takes first: it backs up
+    ``--target-root`` and writes the opt-in declaration pinned to that
+    backup, the declaration ``--apply`` refuses to write into a tree
+    without. It writes nothing else.
 
     ``--plan`` and ``--export`` write nothing: no canonical document, no
     registry, no staging tree. ``--apply`` is the only write that builds,
@@ -663,6 +697,7 @@ def epoch2_cmd(
     flags: GlobalFlags = ctx.obj
     try:
         mode = _epoch2_mode(
+            opt_in=opt_in,
             plan=plan,
             apply_=apply_,
             export=export,
@@ -774,17 +809,18 @@ def _epoch2_dispatch(
         mode: Which mode was selected.
         snapshot_root: The staging directory holding the epoch-1 corpus,
             required by every mode that reads one.
-        allowlist: The allowed-legacy-symbol allowlist, required by the
-            two modes that import.
+        allowlist: The allowed-legacy-symbol allowlist the two modes
+            that import read, or ``None`` for the shipped one.
         workspace_key: The addressing workspace.
         project_key: The addressing project.
         repository_key: The addressing repository.
-        sealed_by: The principal recorded in the seal.
+        sealed_by: The principal recorded in the seal, or in the opt-in
+            declaration.
         default_track_key: The Track the operator declares for every
             record whose source names none, or ``None``.
         plan_digest: The approved plan digest, required by ``--apply``.
         target_root: The tree the generation lands in, required by
-            ``--apply`` and by both recovery modes.
+            ``--opt-in``, ``--apply`` and both recovery modes.
         registry_path: The workspace registry ``--apply`` resolves the
             addressing key in. ``None`` means the machine registry, the one
             ``eawf workspace add`` writes, so an operator who registered
@@ -800,6 +836,10 @@ def _epoch2_dispatch(
         ValidationError: An importer rule refused the corpus.
         CliError: The daemon answered with any other failure.
     """
+    if mode is Epoch2Mode.OPT_IN:
+        return _epoch2_opt_in_payload(
+            _required(target_root, option="--target-root", mode=mode), declared_by=sealed_by
+        )
     if mode is Epoch2Mode.ROLLBACK_BOUNDARY:
         return _epoch2_boundary_payload(_required(target_root, option="--target-root", mode=mode))
     if mode not in _CORPUS_MODES:
@@ -837,9 +877,11 @@ def _epoch2_dispatch(
             local=lambda: export_epoch1(export_request),
         )
 
+    from eawf.kernel.migration.epoch2.allowlist import DEFAULT_ALLOWLIST_PATH
+
     plan_request = _epoch2_request(
         snapshot_root=corpus,
-        allowlist=_required(allowlist, option="--allowlist", mode=mode),
+        allowlist=allowlist if allowlist is not None else DEFAULT_ALLOWLIST_PATH,
         workspace_key=_required(workspace_key, option="--workspace-key", mode=mode),
         project_key=_required(project_key, option="--project-key", mode=mode),
         repository_key=_required(repository_key, option="--repository-key", mode=mode),
@@ -877,6 +919,64 @@ def _epoch2_dispatch(
         method=EPOCH2_APPLY_METHOD,
         params=apply_request.model_dump(mode="json"),
         local=lambda: apply_envelope(apply_cutover(apply_request, applied_at=datetime.now(UTC))),
+    )
+
+
+def _epoch2_opt_in_payload(target_root: Path, *, declared_by: str) -> dict[str, Any]:
+    """Opt the tree at ``target_root`` into the cutover and return its envelope.
+
+    The opt-in runs in process rather than through the daemon: it writes a
+    user-scope backup and one declaration file beside ``state.json``, and
+    neither is a store the daemon owns.
+
+    Args:
+        target_root: The tree to opt in, the directory holding ``state.json``.
+        declared_by: Who opts the repository in.
+
+    Returns:
+        The opt-in envelope.
+
+    Raises:
+        UserError: The tree has no ``state.json`` to back up.
+        ValidationError: The tree already declares itself a disposable
+            canary, or ``declared_by`` is not a bounded principal.
+    """
+    from eawf.kernel.migration.epoch2.canary import opt_in_path
+    from eawf.kernel.migration.epoch2.opt_in import declare_opt_in
+    from eawf.platform.backup import BackupError
+
+    try:
+        declaration = declare_opt_in(
+            target_root / "state.json",
+            declared_by=declared_by,
+            purpose=_OPT_IN_PURPOSE,
+            note=_OPT_IN_BACKUP_NOTE,
+            when=datetime.now(UTC),
+        )
+    except BackupError as exc:
+        raise cli_errors.UserError(str(exc), kind="NotFound") from exc
+    except MigrationRuleError as exc:
+        raise cli_errors.ValidationError(f"{exc.code}: {exc}") from exc
+    except PydanticValidationError as exc:
+        raise cli_errors.ValidationError(
+            f"invalid opt-in declaration: {exc}", kind="InvalidInput"
+        ) from exc
+    return {
+        "declaration": str(opt_in_path(target_root)),
+        **declaration.model_dump(mode="json"),
+    }
+
+
+def _epoch2_opt_in_text(payload: Mapping[str, Any]) -> str:
+    """Render one opt-in envelope for a terminal."""
+    return "\n".join(
+        [
+            f"epoch2 opt-in: declared by {payload['declared_by']} against backup "
+            f"{payload['backup_ts']}",
+            f"  declaration:   {payload['declaration']}",
+            f"  backup digest: {payload['backup_digest']}",
+            "  next:          commit the declaration, then stage and --plan the cutover",
+        ]
     )
 
 
@@ -919,6 +1019,8 @@ def _epoch2_text(mode: Epoch2Mode, payload: Mapping[str, Any]) -> str:
     Returns:
         The rendered text.
     """
+    if mode is Epoch2Mode.OPT_IN:
+        return _epoch2_opt_in_text(payload)
     if mode is Epoch2Mode.EXPORT:
         from eawf.kernel.migration.epoch2.export import export_text
 
@@ -976,6 +1078,16 @@ def _epoch2_plan_text(payload: Mapping[str, Any]) -> str:
         f"  approval digest: {payload['approval_digest']}",
         f"  applicable:      {payload['applicable']}",
     ]
+    declared = payload["plan"]["manifest"]["declared_track_assignments"]
+    if declared:
+        # The declaration only answers the Track question in the manifest:
+        # minting the Track would invent its charter and owner, so the
+        # operator is told the records still arrive unassigned.
+        lines.append(
+            f"  declared Track:  {declared[0]['track_key']} answers {len(declared)} Track "
+            "question(s) in the manifest; the Track is not created and those records "
+            "import with no Track"
+        )
     lines += [f"  {row['order']}. {row['step']}: {row['summary']}" for row in payload["steps"]]
     return "\n".join(lines)
 

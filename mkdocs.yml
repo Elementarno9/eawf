@@ -35,6 +35,7 @@ nav:
       - Research campaigns: tutorial/research-campaigns.md
       - TUI tour: tutorial/tui-tour.md
       - Troubleshooting: tutorial/troubleshooting.md
+      - Upgrade from 0.6: help/upgrade-from-0.6.md
   - Concepts: concepts.md
   - Architecture:
       - Overview: architecture/overview.md

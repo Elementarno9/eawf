@@ -79,7 +79,7 @@ def test_daemon_whose_socket_answers_as_another_is_a_stray(
     assert daemon_strays._stray_reason(_process(0.0), str(socket)) == "address_lost"
 
 
-def _at_base(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pinned: list[bytes] | None) -> str:
+def _at_base(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """Bind a live daemon at the per-user base dir while clients dial a per-tree dir."""
     base = tmp_path / "base"
     base.mkdir()
@@ -88,41 +88,77 @@ def _at_base(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pinned: list[bytes
     monkeypatch.setattr(daemon_strays, "daemon_pid_if_ready", lambda _dir: 4242)
     monkeypatch.setattr(daemon_strays, "runtime_base_dir", lambda: base)
     monkeypatch.setattr(daemon_strays, "runtime_dir", lambda: base / "trees" / "abc")
-    monkeypatch.setattr(daemon_strays, "_process_environment", lambda _pid: pinned)
     return str(socket)
 
 
 def test_daemon_on_the_per_user_address_is_superseded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    socket = _at_base(tmp_path, monkeypatch, [b"HOME=/h"])
+    socket = _at_base(tmp_path, monkeypatch)
 
     assert daemon_strays._stray_reason(_process(0.0), socket) == "superseded_address"
 
 
-def test_daemon_with_an_unreadable_environment_keeps_the_superseded_reading(
+def _bind(runtime: Path) -> str:
+    runtime.mkdir(parents=True)
+    socket = runtime / "eawfd.sock"
+    socket.write_text("", encoding="utf-8")
+    return str(socket)
+
+
+def test_daemon_on_the_per_user_address_is_spared_for_a_doctor_pinned_to_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    socket = _at_base(tmp_path, monkeypatch, None)
-
-    assert daemon_strays._stray_reason(_process(0.0), socket) == "superseded_address"
-
-
-def test_daemon_strays_repro_pinned_runtime_dir_flagged_superseded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    pin = f"EAWF_RUNTIME_DIR={tmp_path / 'base'}".encode()
-    socket = _at_base(tmp_path, monkeypatch, [b"HOME=/h", pin])
+    base = tmp_path / "base"
+    monkeypatch.setattr(daemon_strays, "daemon_pid_if_ready", lambda _dir: 4242)
+    monkeypatch.setattr(daemon_strays, "runtime_base_dir", lambda: base)
+    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(base))
+    socket = _bind(base)
 
     assert daemon_strays._stray_reason(_process(0.0), socket) is None
 
 
-def test_daemon_pinned_elsewhere_on_the_per_user_address_is_superseded(
+def test_daemon_on_the_per_user_address_is_superseded_for_a_doctor_pinned_elsewhere(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    socket = _at_base(tmp_path, monkeypatch, [b"EAWF_RUNTIME_DIR=/somewhere/else"])
+    base = tmp_path / "base"
+    monkeypatch.setattr(daemon_strays, "daemon_pid_if_ready", lambda _dir: 4242)
+    monkeypatch.setattr(daemon_strays, "runtime_base_dir", lambda: base)
+    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "elsewhere"))
+    socket = _bind(base)
 
     assert daemon_strays._stray_reason(_process(0.0), socket) == "superseded_address"
+
+
+@pytest.mark.parametrize("runtime", [Path(".eawfd") / "trees" / "abc", Path(".eawfd")])
+def test_live_daemon_under_another_home_is_not_a_stray(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runtime: Path
+) -> None:
+    monkeypatch.setattr(daemon_strays, "runtime_base_dir", lambda: tmp_path / "me" / ".eawfd")
+    monkeypatch.setattr(daemon_strays, "daemon_pid_if_ready", lambda _dir: None)
+    socket = _bind(tmp_path / "other" / runtime)
+
+    assert daemon_strays._stray_reason(_process(0.0), socket) is None
+
+
+def test_gone_daemon_under_another_home_is_still_a_stray(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(daemon_strays, "runtime_base_dir", lambda: tmp_path / "me" / ".eawfd")
+    socket = str(tmp_path / "other" / ".eawfd" / "trees" / "abc" / "eawfd.sock")
+
+    assert daemon_strays._stray_reason(_process(0.0), socket) == "address_gone"
+
+
+def test_lost_daemon_under_this_home_is_still_a_stray(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = tmp_path / "me" / ".eawfd"
+    monkeypatch.setattr(daemon_strays, "runtime_base_dir", lambda: base)
+    monkeypatch.setattr(daemon_strays, "daemon_pid_if_ready", lambda _dir: None)
+    socket = _bind(base / "trees" / "abc")
+
+    assert daemon_strays._stray_reason(_process(0.0), socket) == "address_lost"
 
 
 def test_check_is_ok_without_a_readable_process_table(monkeypatch: pytest.MonkeyPatch) -> None:

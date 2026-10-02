@@ -347,3 +347,29 @@ def test_surf_004_certified_sync_refuses_a_global_overflow(
     assert res.exit_code != exit_codes.OK
     assert "~/.codex/AGENTS.md (40000 bytes)" in res.output
     assert not (root / "AGENTS.md").exists()
+
+
+def test_sync_refreshes_an_outdated_ignore_block_without_a_rule_source(tmp_path: Path) -> None:
+    _init_core(tmp_path)
+    assert not (tmp_path / ".ea" / "rules.yaml").exists()
+    gitignore = tmp_path / ".gitignore"
+    old_block = "# BEGIN EAWF:gitignore\nCLAUDE.md\n.ea/local/\n# END EAWF:gitignore\n"
+    gitignore.write_text(f"build/\n\n{old_block}\n!keep.db\n", encoding="utf-8")
+
+    check = runner.invoke(app, ["--json", "sync", "--check", "--target", str(tmp_path)])
+    assert check.exit_code == exit_codes.VALIDATION_ERROR, check.output
+    assert gitignore.read_text(encoding="utf-8").count(".ea/") == 1
+
+    res = runner.invoke(app, ["--json", "sync", "--target", str(tmp_path)])
+    assert res.exit_code == 0, res.output
+    payload = json.loads(res.output)
+    text = gitignore.read_text(encoding="utf-8")
+    assert text.startswith("build/\n\n")
+    assert text.endswith("\n!keep.db\n")
+    assert ".ea/generations/journal.jsonl\n" in text
+    assert ".ea/generations/journal.jsonl" in json.dumps(payload)
+
+    refreshed = gitignore.read_bytes()
+    again = runner.invoke(app, ["--json", "sync", "--check", "--target", str(tmp_path)])
+    assert again.exit_code == 0, again.output
+    assert gitignore.read_bytes() == refreshed

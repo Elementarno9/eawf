@@ -110,6 +110,7 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "mcp_drift",
         "state_scale_ceiling",
         "authority_epoch",
+        "gitignore_block",
         "active_phase_without_iter",
         "stale_session_count",
         "recent_actuals",

@@ -386,7 +386,7 @@ def test_source_digest_is_stable_across_key_order() -> None:
 def test_envelope_rule_payload_states_that_nothing_is_minted() -> None:
     payload = envelope_rule_payload()
 
-    assert payload["envelope_mints"] == {"agent_sessions": [], "worktrees": []}
+    assert payload["envelope_mints"] == {"agent_sessions": [], "worktrees": [], "hypotheses": []}
     assert payload["never_minted"] == ["run", "work_lease"]
     assert payload["alias_prefix"] == LEGACY_ALIAS_PREFIX
     assert payload["active_annotations"]["worktrees"] == WORKTREE_ACTIVE_ANNOTATION

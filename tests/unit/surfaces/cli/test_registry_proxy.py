@@ -221,3 +221,54 @@ def test_persist_registry_method_not_found_is_refused(
         repo_cmd._persist_registry(candidate, registry_path)
 
     assert not registry_path.exists()
+
+
+# ---- Scenario 5: any other daemon refusal → typed CLI error, never a traceback
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        (-32602, cli_errors.UserError),
+        (cli_errors.RPC_VALIDATION_FAILED, cli_errors.ValidationError),
+        (-32001, cli_errors.StateConflict),
+        (-32099, cli_errors.InternalError),
+    ],
+)
+def test_persist_registry_daemon_refusal_is_a_typed_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    code: int,
+    expected: type[cli_errors.CliError],
+) -> None:
+    """A daemon that rejects the payload surfaces as the matching CLI error."""
+    registry_path = tmp_path / "registry.json"
+    monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
+    monkeypatch.setattr(repo_cmd, "_daemon_proxy_enabled_for_registry", lambda: True)
+    monkeypatch.setattr("eawf.surfaces.cli._mutation._daemon_reachable", lambda *a, **k: True)
+    message = (
+        "validation_failed: 1 validation error for Registry\n"
+        "workspaces\n  Extra inputs are not permitted"
+    )
+
+    class _RejectingClient:
+        def __init__(self, *_a: Any, **_kw: Any) -> None:
+            pass
+
+        def __enter__(self) -> _RejectingClient:
+            return self
+
+        def __exit__(self, *_a: Any) -> None:
+            return None
+
+        def registry_update(self, *_a: Any, **_kw: Any) -> dict[str, Any]:
+            from eawf.surfaces.cli._daemon_client import DaemonRpcError
+
+            raise DaemonRpcError(code=code, message=message, data=None)
+
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _RejectingClient)
+
+    candidate = _make_registry({"ABC": ("/repos/abc", None)})
+    with pytest.raises(expected, match="Extra inputs are not permitted"):
+        repo_cmd._persist_registry(candidate, registry_path)
+    assert not registry_path.exists()

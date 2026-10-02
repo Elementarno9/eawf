@@ -44,6 +44,9 @@ MIGRATION_VERB: Final = "eawf migrate epoch2"
 #: The verb that creates a new tree at epoch 2.
 INIT_VERB: Final = "eawf init"
 
+#: The help topic that walks an epoch-1 tree through the cutover.
+UPGRADE_GUIDE: Final = "eawf help upgrade-from-0.6"
+
 #: The groups whose verbs send the daemon the ``--workspace`` root, or the
 #: working directory, as the tree to write -- never the ``EA_STATE`` document.
 #: The gate asks about the tree the verb will actually write.
@@ -199,6 +202,24 @@ def _addressed_state(verb: str, workspace: Path | None) -> Path:
     return resolve_with_reason(workspace)[0]
 
 
+def _tree_epoch(state_path: Path) -> str:
+    """Return one clause stating the epoch of the tree holding ``state_path``.
+
+    A retired verb is answered before anything resolves it, so the clause
+    says which tree it looked at; an epoch-1 tree is pointed at the upgrade
+    guide, because no replacement verb writes there until it migrates.
+    """
+    if not state_path.is_file():
+        return f"no eawf tree is here; create one with `{INIT_VERB}`"
+    from eawf.kernel.state.epoch2.authority import resolve_authority
+
+    if resolve_authority(state_path.parent).epoch == 2:
+        return "this tree runs on epoch 2"
+    return (
+        f"this tree still runs on epoch 1, so migrate it first: `{UPGRADE_GUIDE}` walks the upgrade"
+    )
+
+
 def _refusal(verb: str, ea_dir: Path, *, tree_exists: bool) -> cli_errors.CliError:
     """Build the typed refusal for ``verb`` against the tree at ``ea_dir``."""
     if tree_exists:
@@ -242,10 +263,13 @@ def enforce(root: click.Group, ctx: click.Context, args: list[str]) -> None:
         json_output=bool(params.get("json_output")),
         plain_output=bool(params.get("plain_output")),
     )
+    workspace = params.get("workspace")
     if (retired := retired_verb(args)) is not None:
+        tree = _tree_epoch(_addressed_state(retired, Path(workspace) if workspace else None))
         cli_errors.emit_error(
             cli_errors.ValidationError(
-                f"`eawf {retired}` retired at the flag day; {replacement_guidance(retired)}",
+                f"`eawf {retired}` retired at the flag day; {replacement_guidance(retired)}; "
+                f"{tree}",
                 kind=cli_errors.LEGACY_OPERATION_REMOVED_KIND,
             ),
             flags=flags,
@@ -257,7 +281,6 @@ def enforce(root: click.Group, ctx: click.Context, args: list[str]) -> None:
         return
     from eawf.kernel.state.io import epoch_marker_present
 
-    workspace = params.get("workspace")
     state_path = _addressed_state(verb, Path(workspace) if workspace else None)
     tree_exists = state_path.is_file()
     if not tree_exists and verb not in EPOCH1_REPLACEMENTS:
@@ -287,6 +310,7 @@ __all__ = [
     "MIGRATION_REQUIRED_KIND",
     "MIGRATION_VERB",
     "REPO_ROOTED_GROUPS",
+    "UPGRADE_GUIDE",
     "FlagDayExemption",
     "FlagDayTyperGroup",
     "command_path",

@@ -3,7 +3,8 @@
 Some epoch-1 collections have no epoch-2 successor that can hold them
 without changing what they mean. An ``agent_sessions`` row is provenance
 about an episode that has already ended; a ``worktrees`` row is the
-record that a checkout once existed. Neither is a live capability, so
+record that a checkout once existed; a ``hypotheses`` row is a research
+claim epoch 2 has no record model for yet. None is a live capability, so
 each imports as an immutable legacy envelope: the source row preserved
 whole, addressable by an alias, and minting nothing.
 
@@ -52,6 +53,7 @@ class EnvelopeCollection(StrEnum):
 
     AGENT_SESSIONS = "agent_sessions"
     WORKTREES = "worktrees"
+    HYPOTHESES = "hypotheses"
 
 
 class LedgerCollection(StrEnum):
@@ -84,6 +86,7 @@ ENVELOPE_MINTS: Mapping[EnvelopeCollection, tuple[str, ...]] = MappingProxyType(
     {
         EnvelopeCollection.AGENT_SESSIONS: (),
         EnvelopeCollection.WORKTREES: (),
+        EnvelopeCollection.HYPOTHESES: (),
     }
 )
 
@@ -278,7 +281,7 @@ class EnvelopeImportPlan(StrictMigrationModel):
     """Every collection that imports without conversion.
 
     Attributes:
-        envelopes: The session and worktree rows, collection by
+        envelopes: The session, worktree and hypothesis rows, collection by
             collection and each in source-id order.
         ledger_rows: The artifact, memory and audit rows, in the same
             order, with audits taken as the union of the document

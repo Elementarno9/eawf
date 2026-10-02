@@ -129,16 +129,18 @@ HISTORY_COLLECTIONS: Final[frozenset[Epoch2Collection]] = frozenset(
 )
 
 #: The document-tier collections the importer writes. None ever
-#: terminates -- a tree has one Project for its whole life, and a sandbox
+#: terminates -- a tree has one Project for its whole life, a sandbox
 #: policy, a registered MCP server and its grants are consulted before
-#: every dispatch -- so every record of them stays in the document and none
-#: has a ledger form to compact into.
+#: every dispatch, and a Track outcome is read on every render -- so every
+#: record of them stays in the document and none has a ledger form to
+#: compact into.
 DOCUMENT_RESIDENT_COLLECTIONS: Final[frozenset[Epoch2Collection]] = frozenset(
     {
         Epoch2Collection.PROJECT,
         Epoch2Collection.SANDBOX_POLICY,
         Epoch2Collection.CAPABILITY,
         Epoch2Collection.TOOL_AUTHORITY,
+        Epoch2Collection.TRACK_OUTCOME,
     }
 )
 
@@ -686,11 +688,10 @@ def _require_ledger_tier_routes(records: tuple[StagedRecord, ...]) -> None:
     Every collection the importer materialises is either a ledger
     collection, whose records split by terminality or are history
     outright, or one of :data:`DOCUMENT_RESIDENT_COLLECTIONS`, whose
-    records never leave the document. The other document-tier collections
-    -- Track and the outcome metrics -- are planned by the manifest and
-    written by no importer stage yet, so a record arriving at one of them
-    has no residency rule, and guessing one is how a record lands
-    somewhere plausible and wrong.
+    records never leave the document. The other document-tier
+    collections, Track among them, are written by no importer stage, so
+    a record arriving at one of them has no residency rule, and guessing
+    one is how a record lands somewhere plausible and wrong.
 
     Args:
         records: The staged records.

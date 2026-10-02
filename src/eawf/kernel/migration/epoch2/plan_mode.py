@@ -579,7 +579,7 @@ class _Placement(StrictMigrationModel):
         document = snapshot.document
         index = corpus.lifecycle.source_index
         placed_ids = _placed_ids(staged=staged, corpus=corpus)
-        planned = _planned_rows(document=document, corpus=corpus)
+        planned = _planned_rows(corpus=corpus)
         assignments, declared = declare_default_track(
             _track_assignments(corpus=corpus, document=document, index=index),
             track_key=default_track_key,
@@ -766,27 +766,22 @@ def _keyed_rows(document: Mapping[str, Any], collection: str) -> dict[str, Mappi
     return {str(key): row for key, row in value.items() if key and isinstance(row, Mapping)}
 
 
-def _planned_rows(*, document: Mapping[str, Any], corpus: CorpusImportPlan) -> dict[str, int]:
+def _planned_rows(*, corpus: CorpusImportPlan) -> dict[str, int]:
     """Count the rows planned outside the identity traversal, per collection.
 
     Args:
-        document: The decoded epoch-1 document.
         corpus: The staged import, read for the natively keyed records it
             converted.
 
     Returns:
-        One count per planned collection that holds rows. A Track outcome
-        has no key of its own in epoch 2, and a natively keyed record
-        keeps its source key rather than a minted one, so both are
-        planned here rather than minted. A native collection counts the
-        records the importer converted, never the rows the source holds,
-        so a row no converter reached still surfaces as unresolved.
+        One count per planned collection that holds rows. A natively
+        keyed record, Track outcomes included, keeps its source key
+        rather than a minted one, so it is planned here rather than
+        minted. Each collection counts the records the importer
+        converted, never the rows the source holds, so a row no converter
+        reached still surfaces as unresolved.
     """
     counts: dict[str, int] = {}
-    for collection in UNADDRESSED_TARGETS:
-        rows = len(_keyed_rows(document, collection))
-        if rows:
-            counts[collection] = rows
     for record in corpus.native.records:
         collection = record.source_collection.value
         counts[collection] = counts.get(collection, 0) + 1

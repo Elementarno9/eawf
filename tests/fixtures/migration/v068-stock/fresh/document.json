@@ -1,0 +1,50 @@
+{
+  "agent_sessions": {},
+  "artifacts": {},
+  "current": {
+    "active_session_ids": [],
+    "active_wave_ids": [],
+    "iter_id": null,
+    "phase_id": null,
+    "project_code": "FRESH",
+    "track_id": null
+  },
+  "goals": {
+    "G01": {
+      "closed_at": null,
+      "created_at": "2026-10-02T14:36:20.440475Z",
+      "id": "G01",
+      "outcome_ids": [],
+      "scope_id": "FRESH",
+      "status": "open",
+      "summary": "Bootstrap goal seeded by eawf init so planning, dispatch, and evidence surfaces start with project intent.",
+      "title": "Establish FRESH project intent"
+    }
+  },
+  "indexes": {
+    "project_title": ""
+  },
+  "iters": {},
+  "phases": {},
+  "plugins": {},
+  "project": {
+    "code": "FRESH",
+    "default_branch": "main",
+    "description": null,
+    "domains": [
+      "general"
+    ],
+    "repo_urn": "urn:eawf:v1:repo:FRESH",
+    "slug": "fresh",
+    "status": "active",
+    "title": "FRESH",
+    "track_ids": [],
+    "weekly_eu_target": null
+  },
+  "schema_version": "1.20",
+  "scope_kind": "repo",
+  "updated_at": "2026-10-02T14:36:20.440475+00:00",
+  "urn": "urn:eawf:v1:state:FRESH",
+  "waves": {},
+  "workspace": null
+}

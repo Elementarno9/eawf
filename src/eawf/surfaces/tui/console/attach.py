@@ -578,7 +578,7 @@ def onboarding_state(chrome: ConsoleChrome, root: Path, *, registered: bool) -> 
     first = (
         EntryCommand(argv=("workspace", "add", "<KEY>", "--home", "<CODE>"), purpose="")
         if registered
-        else EntryCommand(argv=("repo", "register", str(root)), purpose="")
+        else EntryCommand(argv=("repo", "register", str(root), "--yes"), purpose="")
     )
     return _base(chrome, ONBOARDING).model_copy(
         update={
@@ -709,7 +709,8 @@ def _register_commands(registry: Registry, root: Path) -> tuple[EntryCommand, ..
     codes = sorted(project_codes_at_root(registry, root))
     if not codes:
         register = EntryCommand(
-            argv=("repo", "register", str(root)), purpose="register this folder as a root"
+            argv=("repo", "register", str(root), "--yes"),
+            purpose="register this folder as a root",
         )
         return (register, listing)
     add = EntryCommand(

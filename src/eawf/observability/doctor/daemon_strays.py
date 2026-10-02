@@ -5,7 +5,8 @@ One whose runtime dir was removed under it (a test's tmp dir), whose socket
 no longer answers as it, or that still sits on the per-user address every
 tree shared before runtime dirs were keyed per tree, keeps running while no
 client will ever dial it again. The doctor lists those processes and
-``eawf doctor --fix`` stops them.
+``eawf doctor --fix`` stops them. A daemon whose live socket sits under
+another HOME's runtime base belongs to that HOME's clients and is left alone.
 
 POSIX only: the scan reads ``ps`` for the process table and ``lsof`` for
 the socket each process has bound. Windows daemons listen on a named pipe
@@ -14,8 +15,6 @@ and are not scanned.
 
 from __future__ import annotations
 
-import ctypes
-import ctypes.util
 import logging
 import os
 import signal
@@ -28,7 +27,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.observability.doctor.models import CheckResult
-from eawf.runtime.daemon.runtime_dir import runtime_base_dir, runtime_dir
+from eawf.runtime.daemon.runtime_dir import TREES_DIRNAME, runtime_base_dir, runtime_dir
 from eawf.runtime.daemon.spawn import daemon_pid_if_ready
 
 logger = logging.getLogger(__name__)
@@ -41,6 +40,9 @@ DAEMON_SCRIPT = "eawfd"
 
 #: The socket name every daemon binds in its runtime dir.
 DAEMON_SOCKET_NAME = "eawfd.sock"
+
+#: Names a runtime base dir takes: ``~/.eawfd`` and ``$XDG_RUNTIME_DIR/eawfd``.
+_RUNTIME_BASE_NAMES = frozenset({".eawfd", "eawfd"})
 
 #: A daemon younger than this may still be replaying its WAL before it binds,
 #: so an unbound one is not yet a stray.
@@ -181,36 +183,11 @@ def _bound_sockets(pids: list[int]) -> dict[int, str] | None:
     return sockets
 
 
-def _process_environment(pid: int) -> list[bytes] | None:
-    """Return *pid*'s environment entries, or ``None`` where the platform hides them."""
-    if sys.platform.startswith("linux"):
-        try:
-            return Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
-        except OSError:
-            return None
-    if sys.platform != "darwin":
-        return None
-    # KERN_PROCARGS2 lays out argc, the exec path, argv and then the environment.
-    libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
-    argmax, width = ctypes.c_int(0), ctypes.c_size_t(ctypes.sizeof(ctypes.c_int))
-    if libc.sysctl((ctypes.c_int * 2)(1, 8), 2, ctypes.byref(argmax), ctypes.byref(width), None, 0):
-        return None
-    buffer, size = ctypes.create_string_buffer(argmax.value), ctypes.c_size_t(argmax.value)
-    if libc.sysctl((ctypes.c_int * 3)(1, 49, pid), 3, buffer, ctypes.byref(size), None, 0):
-        return None
-    raw = buffer.raw[: size.value]
-    argc = int.from_bytes(raw[:4], sys.byteorder)
-    words = [word for word in raw[4:].split(b"\0") if word]
-    return words[1 + argc :]
-
-
-def _pinned_runtime_dir(pid: int) -> Path | None:
-    """Return the runtime dir *pid* was pinned to by ``EAWF_RUNTIME_DIR``, if readable."""
-    for entry in _process_environment(pid) or []:
-        name, _, value = entry.partition(b"=")
-        if name == b"EAWF_RUNTIME_DIR" and value:
-            return Path(os.fsdecode(value))
-    return None
+def _under_another_base(runtime: Path) -> bool:
+    """Return whether *runtime* is a runtime dir under another HOME's runtime base."""
+    base = runtime.parent.parent if runtime.parent.name == TREES_DIRNAME else runtime
+    # resolve both sides: lsof reports /private/tmp where HOME may say /tmp
+    return base.name in _RUNTIME_BASE_NAMES and base.resolve() != runtime_base_dir().resolve()
 
 
 def _stray_reason(process: _DaemonProcess, socket: str | None) -> StrayReason | None:
@@ -220,14 +197,16 @@ def _stray_reason(process: _DaemonProcess, socket: str | None) -> StrayReason | 
     path = Path(socket)
     if not path.exists():
         return "address_gone"
+    # another HOME's clients still dial a socket that exists; stopping its
+    # daemon from this HOME would cut a live session off
+    if _under_another_base(path.parent):
+        return None
     if daemon_pid_if_ready(path.parent) != process.pid:
         return "address_lost"
-    # a daemon pinned to the per-user dir answers the clients pinned with it
-    if (
-        path.parent == runtime_base_dir()
-        and runtime_dir() != path.parent
-        and _pinned_runtime_dir(process.pid) != path.parent
-    ):
+    # runtime_dir() is the doctor's own EAWF_RUNTIME_DIR pin when set, so an
+    # operator pinned to the base dir keeps its daemon. The daemon's own
+    # environment cannot say this: the spawn pins every daemon to its dir.
+    if path.parent == runtime_base_dir() and runtime_dir() != path.parent:
         return "superseded_address"
     return None
 

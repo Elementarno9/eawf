@@ -575,6 +575,29 @@ def _history_corpus(root: Path, *, phase_count: int) -> Path:
     return root
 
 
+def test_plan_text_says_the_declared_track_is_recorded_not_created(
+    declared_plan: MigrationPlan,
+) -> None:
+    """The operator reads that the declaration answers the question but makes no Track."""
+    from eawf.surfaces.cli.commands.migrate import _epoch2_plan_text
+
+    text = _epoch2_plan_text(plan_envelope(declared_plan))
+    declared = len(declared_plan.manifest.declared_track_assignments)
+    assert (
+        f"declared Track:  {DECLARED_TRACK} answers {declared} Track question(s) in the "
+        "manifest; the Track is not created and those records import with no Track"
+    ) in text
+
+
+def test_plan_text_names_no_declared_track_when_none_was_declared(tmp_path: Path) -> None:
+    """An undeclared plan prints no declaration line."""
+    from eawf.surfaces.cli.commands.migrate import _epoch2_plan_text
+
+    corpus = _history_corpus(tmp_path / "snapshot", phase_count=2)
+    plan = plan_cutover(_declared_request(corpus, track_key=None), sealed_at=SEALED_AT)
+    assert "declared Track:" not in _epoch2_plan_text(plan_envelope(plan))
+
+
 def test_plan_cutover_counts_every_track_question_without_a_declaration(tmp_path: Path) -> None:
     """38 phases and one goal ask 39 Track questions; nothing answers them."""
     corpus = _history_corpus(tmp_path / "snapshot", phase_count=38)

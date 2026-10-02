@@ -294,6 +294,18 @@ class MigrationReadSmokeFailedError(MigrationRuleError):
     code: ClassVar[str] = "migration_read_smoke_failed"
 
 
+class MigrationRowsUnreconciledError(MigrationRuleError):
+    """The built generation does not hold the rows the manifest counted.
+
+    The manifest's target census is what the operator approved, so a
+    collection whose written rows differ from it, in number or by key,
+    is a row the cutover would add or lose without saying so. The apply
+    refuses before the select, while the tree still reads epoch 1.
+    """
+
+    code: ClassVar[str] = "migration_rows_unreconciled"
+
+
 class MigrationJournalBrokenError(MigrationRuleError):
     """The cutover journal does not verify as its own append-only chain.
 
@@ -374,3 +386,15 @@ class MigrationDualAuthorityError(MigrationRuleError):
     """
 
     code: ClassVar[str] = "migration_dual_authority"
+
+
+class MigrationAlreadyCutOverError(MigrationRuleError):
+    """An opt-in was asked of a tree that already carries the epoch marker.
+
+    The opt-in pins the backup the cutover was admitted on. Once the
+    marker is written that pin is the record of what the tree could have
+    been put back to, so re-declaring it would rewrite history rather than
+    prepare a cutover.
+    """
+
+    code: ClassVar[str] = "migration_already_cut_over"

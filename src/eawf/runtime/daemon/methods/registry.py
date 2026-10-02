@@ -208,11 +208,11 @@ def _apply_add(registry: Registry, *, repo_id: str, fields: dict[str, Any]) -> R
     if existing is not None and existing.path == path:
         # Idempotent re-add — preserve title; flip active only when requested.
         if set_active and registry.active_code != repo_id:
-            return Registry(
-                version=registry.version,
-                updated_at=datetime.now(UTC),
-                active_code=repo_id,
-                repos=dict(registry.repos),
+            return registry.model_copy(
+                update={
+                    "updated_at": datetime.now(UTC),
+                    "active_code": repo_id,
+                }
             )
         return registry
     if existing is not None and existing.path != path:
@@ -228,11 +228,12 @@ def _apply_add(registry: Registry, *, repo_id: str, fields: dict[str, Any]) -> R
     )
     new_repos = dict(registry.repos)
     new_repos[repo_id] = new_entry
-    return Registry(
-        version=registry.version,
-        updated_at=datetime.now(UTC),
-        active_code=(repo_id if set_active else registry.active_code),
-        repos=new_repos,
+    return registry.model_copy(
+        update={
+            "updated_at": datetime.now(UTC),
+            "active_code": (repo_id if set_active else registry.active_code),
+            "repos": new_repos,
+        }
     )
 
 
@@ -242,11 +243,12 @@ def _apply_remove(registry: Registry, *, repo_id: str) -> Registry:
         raise ValueError(f"validation_failed: repo {repo_id!r} not registered")
     new_repos = {k: v for k, v in registry.repos.items() if k != repo_id}
     new_active = None if registry.active_code == repo_id else registry.active_code
-    return Registry(
-        version=registry.version,
-        updated_at=datetime.now(UTC),
-        active_code=new_active,
-        repos=new_repos,
+    return registry.model_copy(
+        update={
+            "updated_at": datetime.now(UTC),
+            "active_code": new_active,
+            "repos": new_repos,
+        }
     )
 
 
@@ -269,11 +271,12 @@ def _apply_rename(registry: Registry, *, repo_id: str, fields: dict[str, Any]) -
     )
     new_repos[new_code] = renamed
     new_active = new_code if registry.active_code == repo_id else registry.active_code
-    return Registry(
-        version=registry.version,
-        updated_at=datetime.now(UTC),
-        active_code=new_active,
-        repos=new_repos,
+    return registry.model_copy(
+        update={
+            "updated_at": datetime.now(UTC),
+            "active_code": new_active,
+            "repos": new_repos,
+        }
     )
 
 

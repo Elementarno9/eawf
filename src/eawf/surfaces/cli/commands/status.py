@@ -24,8 +24,16 @@ Output payload (JSON envelope, all keys always present):
       "authority": {"epoch": 1 | 2,
                     "gap": "undeclared"|"marker_absent"|"marker_unreadable" | null,
                     "generation_id": "<gen-id>" | null},
+      "native": {"open_task_count": <int>,
+                 "open_tasks": [{"key", "status", "title"}, ...]} | null,
       "blockers": ["<short-text>", ...]
     }
+
+On an epoch-2 tree ``state.json`` is frozen at the cutover, so ``native``
+carries the work in flight from the selected generation and the text
+branch prints it in place of the frozen pointers and backlog; ``native``
+is ``null`` on an epoch-1 tree, and on an epoch-2 tree whose generation
+document does not exist.
 
 Exit codes:
 
@@ -486,6 +494,22 @@ def status(
         else None
     )
 
+    authority = _authority_summary(state_path)
+    try:
+        native = _native_summary(state_path) if authority["epoch"] == 2 else None
+    except FileNotFoundError as exc:
+        # A marked tree whose generation has not written its document yet
+        # still has status to report; only a document that exists and is
+        # broken is worth refusing over.
+        logger.info(f"status native=unavailable cause={exc!s}")
+        native = None
+    except (OSError, ValueError) as exc:
+        errors.emit_error(
+            errors.UserError(f"generation document unreadable: {exc}", kind="InvalidInput"),
+            flags=effective_flags,
+        )
+        return
+
     payload: dict[str, Any] = {
         "project": _project_summary(state),
         "scope_kind": state.scope_kind.value,
@@ -500,7 +524,8 @@ def status(
         "open_backlog_count": _open_backlog_count(state),
         "git": _git_info(cwd=_find_git_root(state_path.parent)),
         "drift": _drift_summary(state, repo_root=_find_git_root(state_path.parent)),
-        "authority": _authority_summary(state_path),
+        "authority": authority,
+        "native": native,
         "blockers": _blockers(state),
         "research_campaign": _research_campaign_summary(state, state_path),
     }
@@ -530,6 +555,35 @@ def _authority_summary(state_path: Path) -> dict[str, Any]:
         "epoch": authority.epoch,
         "gap": authority.gap.value if authority.gap is not None else None,
         "generation_id": authority.generation_id,
+    }
+
+
+def _native_summary(state_path: Path, limit: int = 10) -> dict[str, Any]:
+    """Return the open Tasks the epoch-2 tree holding *state_path* carries.
+
+    Args:
+        state_path: Path to the scope's ``state.json``.
+        limit: How many open Tasks to list; the count covers all of them.
+
+    Returns:
+        ``{"open_task_count", "open_tasks"}``, each listed Task as
+        ``{"key", "status", "title"}``; ``title`` is the Task's intent, or
+        ``None`` when its record states none.
+
+    Raises:
+        ValueError: The generation document is not a JSON object, or holds a
+            Task row the projection cannot render.
+        OSError: The generation document could not be read.
+    """
+    from eawf.observability.reflect.tasks import read_open_tasks
+
+    tasks = read_open_tasks(state_path.parent)
+    return {
+        "open_task_count": len(tasks),
+        "open_tasks": [
+            {"key": task.key, "status": task.status.value, "title": task.title}
+            for task in tasks[:limit]
+        ],
     }
 
 
@@ -596,14 +650,23 @@ def _format_text(payload: dict[str, Any]) -> str:
     )
     blockers = payload["blockers"]
     blockers_line = f"blockers: {', '.join(blockers) if blockers else 'none'}"
+    native = payload.get("native")
+    pointer_lines, backlog_lines = [cur_line], [backlog_line]
+    if native is not None:
+        # The frozen epoch-1 pointers and backlog no longer move, so the
+        # generation's open Tasks stand where the pointers stood.
+        listed = ", ".join(f"{t['key']} {t['status']}" for t in native["open_tasks"])
+        count = native["open_task_count"]
+        pointer_lines = [f"open tasks: {count} ({listed})" if listed else "open tasks: none"]
+        backlog_lines = []
     lines = [
         proj_line,
-        cur_line,
+        *pointer_lines,
         git_line,
         drift_line,
         authority_line,
         decisions_line,
-        backlog_line,
+        *backlog_lines,
         blockers_line,
     ]
     campaign = payload.get("research_campaign")

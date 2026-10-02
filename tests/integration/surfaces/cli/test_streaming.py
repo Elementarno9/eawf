@@ -380,6 +380,13 @@ def test_help_all_topics_resolve_and_fit_line_budget(topic: str) -> None:
     assert line_count <= 80, f"{topic}.md is {line_count} lines (budget 80)"
 
 
+def test_help_renders_the_upgrade_guide() -> None:
+    """``eawf help upgrade-from-0.6`` walks an epoch-1 tree through the opt-in."""
+    result = runner.invoke(app, ["help", "upgrade-from-0.6"])
+    assert result.exit_code == 0, result.output
+    assert "eawf migrate epoch2 --opt-in --target-root .ea" in result.stdout
+
+
 def test_help_topics_dir_resolves_in_repo() -> None:
     """The repo-root ``docs/help`` directory is discoverable from the package."""
     base = help_cmd._topics_dir()

@@ -258,7 +258,13 @@ COLLECTION_DISPOSITIONS: tuple[CollectionDisposition, ...] = (
         StorageTier.LEDGER,
         "evidence rungs carried; a certifying rung never invented",
     ),
-    _row("hypotheses", _N, "hypothesis", StorageTier.LEDGER, "payload, links and provenance"),
+    _row(
+        "hypotheses",
+        _L,
+        "legacy",
+        StorageTier.LEDGER,
+        "carried verbatim; epoch 2 has no hypothesis record to convert into",
+    ),
     _row(
         "open_questions", _N, "open_question", StorageTier.DOCUMENT, "payload, links and provenance"
     ),

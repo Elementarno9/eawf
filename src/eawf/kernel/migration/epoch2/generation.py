@@ -30,9 +30,10 @@ import os
 import re
 import secrets
 import shutil
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Final, Literal
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import Field
 
@@ -42,6 +43,7 @@ from eawf.kernel.migration.epoch2.canary import (
     DisposableTarget,
 )
 from eawf.kernel.migration.epoch2.cutover import (
+    DOCUMENT_COUNTED_COLLECTIONS,
     document_record_count,
     require_document_holds_only_work_in_flight,
     stage_cutover,
@@ -49,16 +51,20 @@ from eawf.kernel.migration.epoch2.cutover import (
 from eawf.kernel.migration.epoch2.errors import (
     MigrationDualAuthorityError,
     MigrationReadSmokeFailedError,
+    MigrationRowsUnreconciledError,
     MigrationRuleError,
     MigrationValidationDivergedError,
 )
 from eawf.kernel.migration.epoch2.manifest import MigrationManifest
 from eawf.kernel.migration.epoch2.plan_mode import MigrationPlan
+from eawf.kernel.migration.epoch2.rows import SourceShape
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel, rule_digest
-from eawf.kernel.store.compaction import read_document
+from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot
+from eawf.kernel.migration.epoch2.validation import ATTEMPT_RUN_SOURCE_KIND
+from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.ledger import LedgerError, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
-from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, StorageTier
+from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, Epoch2Collection, StorageTier
 
 logger = logging.getLogger(__name__)
 
@@ -657,6 +663,135 @@ def _require_counts_agree(
         )
 
 
+#: How many keys one reconciliation finding names before it summarises
+#: the rest, so a collection that lost thousands of rows stays readable.
+RECONCILED_KEYS_SHOWN: Final = 10
+
+#: The source collection every minted Run counts against.
+RUN_SOURCE: Final = ATTEMPT_RUN_SOURCE_KIND.split(".", 1)[0]
+
+#: The source collection a written record that cites no origin counts
+#: against. No mapping counts rows under it, so such a record always reds.
+UNCITED_SOURCE: Final = "-"
+
+
+def _source_of(collection: Epoch2Collection, payload: Mapping[str, Any]) -> tuple[str, str | None]:
+    """Return the source collection and source id one written record cites."""
+    if collection is Epoch2Collection.RUN:
+        # A Run is minted from a wave's attempt entry and carries no origin
+        # of its own; its plan counts it against the wave that minted it.
+        wave_id = payload.get("wave_id")
+        return RUN_SOURCE, wave_id if isinstance(wave_id, str) else None
+    origin = payload.get("origin")
+    if not isinstance(origin, Mapping) or not isinstance(origin.get("source_kind"), str):
+        return UNCITED_SOURCE, None
+    source_id = origin.get("source_id")
+    return (
+        origin["source_kind"].split(".", 1)[0],
+        source_id if isinstance(source_id, str) else None,
+    )
+
+
+def _written_sources(state_path: Path) -> dict[str, list[str | None]]:
+    """Return the source id of every row a built generation holds, per source collection.
+
+    Args:
+        state_path: The generation's document.
+
+    Returns:
+        One entry per written row, document and ledgers alike, grouped by
+        the epoch-1 collection its origin cites, so a row written twice
+        counts twice.
+    """
+    document = read_document(state_path)
+    payloads: list[tuple[Epoch2Collection, Mapping[str, Any]]] = [
+        (collection, row.get("payload", {}))
+        for collection in DOCUMENT_COUNTED_COLLECTIONS
+        for row in document_rows(document, collection).values()
+    ]
+    payloads.extend(
+        (collection, line.payload)
+        for collection in LEDGER_COLLECTIONS
+        for line in read_ledger_records(ledger_path(state_path, collection))
+    )
+    written: dict[str, list[str | None]] = {}
+    for collection, payload in payloads:
+        source, source_id = _source_of(collection, payload)
+        written.setdefault(source, []).append(source_id)
+    return written
+
+
+def _shown(keys: set[str]) -> str:
+    """Return ``keys`` sorted and capped at :data:`RECONCILED_KEYS_SHOWN`."""
+    ordered = sorted(keys)
+    shown = ", ".join(ordered[:RECONCILED_KEYS_SHOWN]) or "-"
+    hidden = len(ordered) - RECONCILED_KEYS_SHOWN
+    return f"{shown} ... and {hidden} more" if hidden > 0 else shown
+
+
+def reconcile_generation(
+    *,
+    target: DisposableTarget,
+    generation_id: str,
+    manifest: MigrationManifest,
+    snapshot_root: Path,
+) -> int:
+    """Refuse a generation whose rows differ from what the plan counted.
+
+    The read smoke compares the generation with the placement its own
+    write reported, so a row the write never received passes it. This
+    check holds every source collection to the row count its mapping
+    declared, which is what the operator approved, and reads the rows
+    back by the origin each one cites.
+
+    Args:
+        target: The fence-cleared target tree.
+        generation_id: The built generation.
+        manifest: The manifest the build produced.
+        snapshot_root: The staging directory holding the epoch-1 corpus,
+            read for the ids a short collection failed to carry.
+
+    Returns:
+        How many rows were reconciled.
+
+    Raises:
+        MigrationRowsUnreconciledError: A source collection's written rows
+            differ in number from its mapping. Each one is named with its
+            target, the source ids no written row carries and the written
+            ids the source does not hold.
+    """
+    counted = {row.source_collection: row for row in manifest.row_mappings}
+    written = _written_sources(target.generation_path(generation_id) / GENERATION_DOCUMENT)
+    document = SourceSnapshot.read(snapshot_root).document
+
+    findings: list[str] = []
+    sources = set(written) | {name for name, row in counted.items() if row.target_row_count}
+    for source in sorted(sources):
+        mapping = counted.get(source)
+        expected = 0 if mapping is None else mapping.target_row_count
+        rows = written.get(source, [])
+        if expected == len(rows):
+            continue
+        # Only a keyed collection names its rows by the ids its origins cite.
+        keyed = mapping is not None and mapping.shape is SourceShape.KEYED_ROWS
+        held = document.get(source)
+        source_ids = set(held) if keyed and isinstance(held, Mapping) else set()
+        found = {row_id for row_id in rows if row_id is not None}
+        target_name = "-" if mapping is None else mapping.target_collection
+        findings.append(
+            f"{source} -> {target_name} counted {expected}, written {len(rows)} "
+            f"(missing: {_shown(source_ids - found)}; unsourced: {_shown(found - source_ids)})"
+        )
+    if findings:
+        raise MigrationRowsUnreconciledError(
+            f"{generation_id} does not hold the rows the plan counted, so selecting it "
+            f"would add or lose rows silently: {'; '.join(findings)}"
+        )
+    reconciled = sum(len(rows) for rows in written.values())
+    logger.info(f"reconcile_generation generation={generation_id} rows={reconciled}")
+    return reconciled
+
+
 def select_generation(
     *,
     target: DisposableTarget,
@@ -781,6 +916,7 @@ __all__ = [
     "read_marker",
     "read_selection",
     "read_smoke",
+    "reconcile_generation",
     "select_generation",
     "staging_directories",
     "tree_digests",

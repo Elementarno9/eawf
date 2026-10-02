@@ -1361,8 +1361,8 @@ LIVE_ALLOWLIST_LOCATOR = "tests/fixtures/migration/allowed_legacy_symbols.txt"
 
 #: The collection whose conversion is declared but not implemented, and the
 #: one row the negative corpus adds to it.
-UNCONVERTED_COLLECTION = "hypotheses"
-UNCONVERTED_ROW = "H01-01"
+UNCONVERTED_COLLECTION = "claims"
+UNCONVERTED_ROW = "CLM-0001"
 
 
 @dataclass(frozen=True)

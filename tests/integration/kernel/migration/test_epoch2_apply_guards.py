@@ -113,8 +113,8 @@ STALE_DIGEST = "f" * 64
 
 #: A collection whose conversion no importer rule implements, and the row
 #: seeded into it so the guard corpus has something unplaceable.
-UNCONVERTED_COLLECTION = "hypotheses"
-UNCONVERTED_ROW = "H01-01"
+UNCONVERTED_COLLECTION = "claims"
+UNCONVERTED_ROW = "CLM-0001"
 
 runner = CliRunner()
 
@@ -176,7 +176,7 @@ def tree_digests(root: Path) -> dict[str, str]:
 def corpus_plan(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, MigrationPlan]:
     """One corpus copy and its sealed plan, shared across the guard tests.
 
-    The copy carries one hypothesis row, a collection whose conversion is
+    The copy carries one claim row, a collection whose conversion is
     declared but not implemented, so the plan names an unresolved row for
     the waiver guards to refuse over.
     """

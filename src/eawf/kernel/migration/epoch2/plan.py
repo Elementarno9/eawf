@@ -238,10 +238,6 @@ def _audit_population(snapshot: SourceSnapshot) -> frozenset[str]:
 
     Returns:
         Every audit id either input holds.
-
-    Raises:
-        MigrationSourceUnreadableError: When the snapshot holds no audit
-            ledger. A missing ledger is not an empty one.
     """
     document_ids = frozenset(_keyed_rows(snapshot.document, AUDITS_COLLECTION))
     ledger_ids = frozenset(
@@ -311,8 +307,6 @@ class LifecycleImportPlan(StrictMigrationModel):
 
         Raises:
             FileNotFoundError: When ``allowlist_path`` does not exist.
-            MigrationSourceUnreadableError: When the snapshot holds no
-                audit ledger.
             MigrationCountMismatchError: When a row carries a status
                 outside the closed map, cannot default its intent, or
                 reaches no classifier arm.
@@ -465,8 +459,6 @@ class CorpusImportPlan(StrictMigrationModel):
                 re-points at a Task the import never wrote or would
                 import a rewritten row, or when the project block records
                 no project code.
-            MigrationSourceUnreadableError: When the snapshot holds no
-                audit ledger.
             MigrationCountMismatchError: When a row carries a status
                 outside the closed map, cannot default its intent, or
                 reaches no classifier arm, or when a measurement
@@ -484,9 +476,7 @@ class CorpusImportPlan(StrictMigrationModel):
         envelopes = EnvelopeImportPlan.build(
             document=snapshot.document,
             audit_ledger_rows=snapshot.ledger(AUDIT_LEDGER),
-            # The memory store is written on a tree's first note, so a tree
-            # without one never held a body to lose.
-            memory_store_rows=snapshot.ledgers.get(MEMORY_LEDGER, ()),
+            memory_store_rows=snapshot.ledger(MEMORY_LEDGER),
             source_schema_version=lifecycle.source_index.source_schema_version,
         )
         native = NativeRecordImportPlan.build(

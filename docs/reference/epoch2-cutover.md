@@ -1,6 +1,6 @@
 # Epoch-2 cutover guide
 
-The epoch-2 cutover imports a repository's whole epoch-1 `.ea` corpus into a new generation tree, once. Every step below except the apply is read-only against the repository, and the apply only ever writes into a target tree that has declared itself disposable. `eawf help migration` carries the short form.
+The epoch-2 cutover imports a repository's whole epoch-1 `.ea` corpus into a new generation tree, once. Every step below except the apply is read-only against the repository, and the apply only ever writes into a target tree that has declared itself disposable. `eawf help migration` carries the short form. To move a live 0.6.8 repository rather than a disposable copy, follow [Upgrading from 0.6.8](../help/upgrade-from-0.6.md): it opts the tree in against a verified backup first, which the apply accepts in place of the disposable declaration.
 
 ## 1. Stage the committed corpus
 

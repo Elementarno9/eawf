@@ -1,0 +1,263 @@
+actual recover
+actual start
+actual stop
+agent-report add
+agent-report list
+agent-report show
+artifact add
+artifact show
+artifact update
+artifact validate
+artifact verify
+audit add
+audit integrity
+audit list
+audit promote
+audit run
+audit set-verdict
+audit show
+backfill titles
+backfill wave-intents
+backlog add
+backlog backfill-titles
+backlog close
+backlog edit
+backlog set-priority
+backup create
+backup list
+backup prune
+backup restore
+bench compare
+bench fixture seed
+bench list
+bench run
+calibrate apply
+calibrate buckets
+cc statusline prewarm
+clone-repo
+close cancel
+close follow
+close resume
+close status
+close submit
+coauthor resolve
+completion install
+completion show
+config get
+config menu
+config profile enable
+config set
+config unset
+config validate
+daemon logs
+daemon ping
+daemon reclaim
+daemon replay-wal
+daemon restart
+daemon run
+daemon service-disable
+daemon service-enable
+daemon service-status
+daemon start
+daemon status
+daemon stop
+decision add
+decision graph
+decision list
+decision promote
+decision supersede
+dispatch pause
+dispatch resume
+dispatch wave
+doc verify
+draft new
+draft validate
+estimate set
+estimate update
+evidence attest
+flow abort
+flow run
+flow status
+goal define
+hook dispatch
+hook eawf002-log-key
+hook eawf003-logger-acquire
+hook eawf010-module-length
+hook eawf011-cognitive-complexity
+hook eawf012-design-provenance
+hook eawf013-bracket-position
+hook eawf014-no-manual-wrap
+hook eawf015-ears-advisory
+hook eawf016-title-clarity
+hook eawf017-inline-refs
+hook eawf018-structure-smell
+hook eawf019-math-facets
+hook eawf023-artifact-placement
+hook eawf024-test-tier-contract
+hook email-leak-lint
+hook log-format-lint
+hook path-leak-lint
+hook plugin-doctor-drift
+hook run
+hook sigil-totality
+hook vale-prose
+hook validate-prose
+hypothesis define
+hypothesis list
+hypothesis promote
+hypothesis verdict
+impact
+incident close
+incident open
+incident promote
+incident view
+init
+iter activate
+iter candidate-tag
+iter close
+iter open
+iter plan
+jury label
+mcp add
+mcp grant
+mcp install
+mcp list
+mcp remove
+mcp revoke
+mcp update
+memory add
+memory compact
+memory digest
+memory gc
+memory list
+memory promote
+memory prune
+memory render-context
+memory stale
+memory tier
+memory view
+metrics
+migrate status
+operator rollup
+outcome define
+outcome set
+phase activate
+phase close
+phase open
+phase prepare-close
+phase reopen
+phase retro
+plan promote
+plan show
+plugin doctor
+plugin install
+plugin package
+plugin sync
+plugin update
+pr render
+profile new
+profile validate
+project init
+release changelog
+release notes
+release tag
+render-output
+repo add
+repo init
+repo link
+repo link-workspace
+repo prune
+repo register
+repo remove
+research campaign cancel
+research campaign new
+research campaign run
+research promote
+research question add
+research question list
+research question resolve
+research show
+research status
+roadmap apply
+roadmap drop
+roadmap propose
+roadmap revise
+roadmap show
+schema dump
+scope-debug
+session checkpoint
+session close
+session recover
+session start
+skill list
+skill reconcile
+skill render
+skill resume
+skill run
+snapshot list
+snapshot update
+spec archive
+spec convert-legacy
+spec init
+spec promote
+spec show
+spec sync
+spec validate
+state resolve
+state rpc
+state show
+status
+store compact
+sync
+telemetry pricing-currency-check
+track add
+track switch
+track sync
+tui
+validate
+version
+vfl approve
+wal list
+wal show
+wal status
+wave ack-drift
+wave autoland
+wave blocks-rebuild
+wave budget consume
+wave budget set
+wave budget show
+wave claim
+wave close
+wave dispatch
+wave dispatch-batch
+wave fail
+wave fix-ci
+wave fix-ci-loop
+wave graph
+wave integration adopt
+wave integration show
+wave land
+wave land-batch
+wave next-ready
+wave plan
+wave policy set
+wave policy show
+wave release
+wave review
+wave show
+wave update
+wave verify-commits
+why
+wiki render
+workspace add-repo
+workspace init
+workspace registry-list
+workspace registry-status
+workspace remove-repo
+workspace status
+workspace validate
+worktree cleanup
+worktree create
+worktree list
+worktree merge-back
+worktree path-fix

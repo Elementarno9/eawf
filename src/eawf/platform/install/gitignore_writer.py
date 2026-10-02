@@ -14,6 +14,7 @@ from pathlib import Path, PurePosixPath
 
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.io import fallback_wal_dir
+from eawf.kernel.store.commit_policy import EA_PATH_CLASSES, CommitPolicy
 from eawf.kernel.store.paths import store_path
 from eawf.platform.install.managed_block import (
     managed_block_lines,
@@ -25,7 +26,7 @@ from eawf.runtime.lock import sibling
 _BEGIN = "# BEGIN EAWF:gitignore"
 _END = "# END EAWF:gitignore"
 
-GITIGNORE_PATTERNS: tuple[str, ...] = (
+_LISTED_PATTERNS: tuple[str, ...] = (
     "CLAUDE.md",
     ".claude/",
     ".codex/",
@@ -69,6 +70,32 @@ GITIGNORE_PATTERNS: tuple[str, ...] = (
     # instead re-stores a multi-megabyte blob on every bookkeeping commit and
     # points a raw-output channel at version control.
     ".ea/store/event.jsonl",
+)
+
+
+def _policy_line(pattern: str) -> str:
+    """Return the gitignore line for one commit-policy row's file pattern.
+
+    A row names files (``dir/**``); gitignore ignores the directory itself
+    (``dir/``), which also keeps git from descending into it.
+    """
+    return pattern.removesuffix("**") if pattern.endswith("/**") else pattern
+
+
+#: Every path the commit policy keeps out of version control, appended so a
+#: row declared there -- a new machine-local generation path included -- is
+#: ignored without a second edit here.
+GITIGNORE_PATTERNS: tuple[str, ...] = tuple(
+    dict.fromkeys(
+        (
+            *_LISTED_PATTERNS,
+            *(
+                _policy_line(row.pattern)
+                for row in EA_PATH_CLASSES
+                if row.policy is CommitPolicy.NOT_COMMITTED
+            ),
+        )
+    )
 )
 
 
@@ -199,12 +226,15 @@ class GitignoreBlockPlan:
         payload: The whole file with the managed block regenerated.
         patterns: The lines of the regenerated block.
         added: Shipped patterns the block on disk lacked.
+        stale: A managed block is on disk and the regenerated one differs
+            from it, so an older release or a hand edit wrote it.
     """
 
     path: Path
     payload: bytes
     patterns: tuple[str, ...]
     added: tuple[str, ...]
+    stale: bool
 
 
 def plan_gitignore_block(target_dir: Path) -> GitignoreBlockPlan:
@@ -229,17 +259,43 @@ def plan_gitignore_block(target_dir: Path) -> GitignoreBlockPlan:
     """
     path = (target_dir.resolve() / ".gitignore").resolve()
     existing = path.read_bytes() if path.exists() else b""
-    current = managed_block_lines(existing, begin=_BEGIN, end=_END) or ()
+    on_disk = managed_block_lines(existing, begin=_BEGIN, end=_END)
+    current = on_disk or ()
     shipped = tuple(dict.fromkeys(GITIGNORE_PATTERNS))
     derived = tuple(line for line in current if line.startswith("/") and line not in shipped)
     patterns = tuple(dict.fromkeys((*shipped, *derived)))
     block = render_managed_block(begin=_BEGIN, end=_END, body_lines=patterns)
+    payload = splice_managed_block(existing, begin=_BEGIN, end=_END, block=block)
     return GitignoreBlockPlan(
         path=path,
-        payload=splice_managed_block(existing, begin=_BEGIN, end=_END, block=block),
+        payload=payload,
         patterns=patterns,
         added=tuple(pattern for pattern in shipped if pattern not in current),
+        stale=on_disk is not None and payload != existing,
     )
+
+
+def refresh_gitignore_block(target_dir: Path) -> GitignoreBlockPlan:
+    """Rewrite an outdated managed block in place, leaving every other byte.
+
+    Only a block already on disk is rewritten: a repository that never ran
+    ``eawf init`` opted out of the block, so no ``.gitignore`` is created
+    and none gains a block it did not have.
+
+    Args:
+        target_dir: Repository root.
+
+    Returns:
+        The plan; ``stale`` says whether this call rewrote the file.
+
+    Raises:
+        ManagedBlockError: When the existing file's markers are not exactly
+            one ordered pair; the file is left untouched.
+    """
+    plan = plan_gitignore_block(target_dir)
+    if plan.stale:
+        plan.path.write_bytes(plan.payload)
+    return plan
 
 
 def unenumerated_paths(patterns: Iterable[str], paths: Iterable[str]) -> tuple[str, ...]:
@@ -284,6 +340,7 @@ __all__ = [
     "GitignoreBlockPlan",
     "GitignoreWriteResult",
     "plan_gitignore_block",
+    "refresh_gitignore_block",
     "unenumerated_paths",
     "write_gitignore",
 ]

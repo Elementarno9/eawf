@@ -9,6 +9,7 @@ Six hand-authored topics ship with v0.3, each ≤80 lines, sourced from
 * ``profiles`` — composable profile bundles + precedence.
 * ``urns`` — URN grammar + kind catalog.
 * ``migration`` — per-cluster migration steps.
+* ``upgrade-from-0.6`` — the 0.6.8 to 0.7 upgrade, step by step.
 * ``streaming`` — ``--stream`` flag, NDJSON shape, EOF semantics.
 
 ``eawf help`` (no topic) lists the registered topics. ``eawf help <topic>``
@@ -49,6 +50,7 @@ TOPICS: tuple[str, ...] = (
     "profiles",
     "urns",
     "migration",
+    "upgrade-from-0.6",
     "streaming",
 )
 
@@ -110,7 +112,10 @@ def _page(text: str) -> None:
 
 help_app = typer.Typer(
     name="help",
-    help="Show prose help topics (exit-codes, daemon, profiles, urns, migration, streaming).",
+    help=(
+        "Show prose help topics "
+        "(exit-codes, daemon, profiles, urns, migration, upgrade-from-0.6, streaming)."
+    ),
     no_args_is_help=False,
     add_completion=False,
     invoke_without_command=True,
