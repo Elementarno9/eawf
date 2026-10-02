@@ -291,9 +291,7 @@ _KIND_HINTS: dict[str, str] = {
         "run `eawf plugin doctor <runtime>` to inspect, or `--force` to overwrite"
     ),
     "HookBlocked": "the hook printed its reason above; fix the underlying issue and retry",
-    "RuntimeUnavailable": (
-        "check runtime preference: `eawf runtime list` and `eawf config get runtime.preference`"
-    ),
+    "RuntimeUnavailable": "check runtime preference: `eawf config get runtime.preference`",
     "MigrationNotQuiescent": (
         "clear every holder the refusal names: `eawf worktree reconcile` retires "
         "stale worktree rows and `eawf session close` ends a live session; then re-run"

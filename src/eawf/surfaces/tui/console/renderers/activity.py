@@ -10,12 +10,15 @@ its suspension, failure or purpose and the instant is when its record last moved
 whose record states neither wears the unknown token rather than a blank. The rail is the route's
 declared rail, so it folds into a strip exactly where the registry says it does. A running
 Run the daemon's stall read says went quiet is drawn under ``lost or stale`` with when it
-last produced anything, never counted as running.
+last produced anything, never counted as running. The window is this console's own: it
+can be ordered by a column, follow the newest change, or hold its rows while the register
+moves on, and none of that changes a Run or a count.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from types import MappingProxyType
 
 from eawf.kernel.projection.activity import (
@@ -72,6 +75,12 @@ FILTER_TYPING = "Esc clears · Enter keeps"
 FILTER_KEPT = "kept · \\ starts a new filter"
 #: The native keybar while the filter field takes the typing.
 FILTER_KEYS: tuple[tuple[str, str], ...] = (("type", "narrow"), ("Enter", "keep"), ("Esc", "clear"))
+#: The columns the menu's sort steps the window through, in order, before the register's own.
+SORT_COLUMNS: tuple[str, ...] = ("run", "task", "state", "as of")
+#: The order of a following window: the Run whose record moved last first, under the cursor.
+FOLLOW = "follow"
+#: Where an instant no record states sorts: after every stated one.
+_NEVER = datetime.min.replace(tzinfo=UTC)
 
 
 def _filter_hint(s: Session) -> str:
@@ -317,19 +326,46 @@ def _bucket_of(row: ProjectionRow, stalled: frozenset[str]) -> str | None:
     return STATUS_BUCKETS[status].value
 
 
-def _shown(view: View, register: RegisterView) -> list[ProjectionRow]:
-    """Return the Runs the bucket and the filter leave, in the register's order."""
+def _shown(view: View, rows: Sequence[ProjectionRow]) -> list[ProjectionRow]:
+    """Return the Runs the bucket and the filter leave, in the window's order."""
     s, liveness = view.session, view.liveness
     stalled = liveness.stalled_keys() if liveness is not None else frozenset()
     flt = dv.filter_of(s).lower()
-    return [
+    kept = [
         row
-        for row in register.rows
+        for row in rows
         if not (s.bucket and _bucket_of(row, stalled) != s.bucket)
         and not (
             flt and flt not in f"{row.key} {task_cell(row)} {run_reason(row, liveness)}".lower()
         )
     ]
+    return ordered(kept, s.activity_order)
+
+
+def ordered(rows: Sequence[ProjectionRow], order: str | None) -> list[ProjectionRow]:
+    """Return ``rows`` in the window's ``order``: the register's own when it names none.
+
+    Following and the ``as of`` column both put the Run whose record moved last first; a
+    Run whose record states no instant goes last, since it states no change at all.
+    """
+    if order in (FOLLOW, "as of"):
+        return sorted(
+            rows, key=lambda row: instant(row.facts.get("updated_at")) or _NEVER, reverse=True
+        )
+    if order == "run":
+        return sorted(rows, key=lambda row: row.key)
+    if order == "task":
+        return sorted(rows, key=lambda row: row.parent_key or "")
+    if order == "state":
+        return sorted(rows, key=lambda row: row.status.value or "")
+    return list(rows)
+
+
+def changed_since(held: Sequence[ProjectionRow], live: Sequence[ProjectionRow]) -> int:
+    """Return how many Runs a paused window holds back: moved, added or gone since it paused."""
+    then = {row.key: row.revision for row in held}
+    now = {row.key: row.revision for row in live}
+    return sum(1 for key in then.keys() | now.keys() if then.get(key) != now.get(key))
 
 
 def empty_lines(view: View, register: RegisterView) -> list[str]:
@@ -360,6 +396,29 @@ def empty_lines(view: View, register: RegisterView) -> list[str]:
     ]
 
 
+def _window(view: View, register: RegisterView) -> tuple[list[ProjectionRow], list[str]]:
+    """Return the Runs the window shows, in its order, and the rows saying how it holds them.
+
+    A paused window takes the register's rows at the first frame drawn after the pause and
+    keeps them, counting what moved since; a following one keeps the cursor on its top row.
+    """
+    s = view.session
+    if s.activity_paused and s.activity_held is None:
+        s.activity_held = register.rows
+    held = s.activity_held
+    shown = _shown(view, register.rows if held is None else held)
+    if s.activity_order == FOLLOW and shown:
+        s.sel_id = shown[0].key
+    said: list[str] = []
+    if held is not None:
+        moved = changed_since(held, register.rows)
+        said.append(label("PAUSED", f"{dv.plural(moved, 'run')} changed since · . p resumes"))
+    if s.activity_order is not None:
+        by = "newest change first, following" if s.activity_order == FOLLOW else s.activity_order
+        said.append(label("ORDER", f"{by} · . s re-orders"))
+    return shown, said
+
+
 def native_frame(view: View, register: RegisterView) -> list[str]:
     """Return the Activity frame drawn from the Run register the daemon served.
 
@@ -371,7 +430,7 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
         The full frame, keybar last.
     """
     s, w = view.session, view.w
-    shown = _shown(view, register)
+    shown, held_as = _window(view, register)
     cursor = dv.restore_by_id(s, [row.key for row in shown])
     wide = REGISTRY.rail_at(s.route, view.columns) is not None
     col = w - RAIL_W - 1 if wide else w
@@ -384,6 +443,7 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
         # the keys that answer the field are the keybar's to promise, never the row's
         typed = "▏" if s.typing else ""
         top.append(label("FILTER", f"\\{dv.filter_of(s)}{typed}"))
+    top.extend(held_as)
     items = bucket_items(grouping)
     s.bucket_keys = [item.key for item in items]
     if not wide:

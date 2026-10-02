@@ -138,7 +138,7 @@ The targeted config layer is read-only for the current operation. Bucket: `USER_
 
 ### CONFIG_FIELD_UNKNOWN
 
-A config get/set referenced a field the schema does not define. Bucket: `USER_ERROR (1)`. Run `eawf config list` to see valid field paths.
+A config get/set referenced a field the schema does not define. Bucket: `USER_ERROR (1)`. Run `eawf config menu` to browse the catalogued field paths.
 
 ## User input
 

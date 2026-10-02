@@ -27,7 +27,11 @@ from eawf.kernel.projection.compute import (
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, negotiate_reconnect
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.runtime.provider import ControlKind
+from eawf.runtime.daemon.methods.campaign import (
+    CAMPAIGN_CLOSE_METHOD as DAEMON_CAMPAIGN_CLOSE_METHOD,
+)
 from eawf.runtime.daemon.methods.delivery_approval import DELIVERY_SEAL_APPROVAL_METHOD
+from eawf.runtime.daemon.methods.milestone_target import MILESTONE_SET_TARGET
 from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
 from eawf.runtime.daemon.methods.pending_action_disposition import (
     ACTION_ASSIGN_METHOD as DAEMON_ACTION_ASSIGN_METHOD,
@@ -51,7 +55,9 @@ from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
     ACTION_ASSIGN_METHOD,
     ACTION_SNOOZE_METHOD,
+    CAMPAIGN_CLOSE_METHOD,
     CONTROL_METHOD,
+    MILESTONE_TARGET_METHOD,
     NOTICE_LIST_METHOD,
     QUESTION_OPTIONS,
     SEAL_METHOD,
@@ -344,6 +350,8 @@ def test_method_spellings_match_the_daemon() -> None:
     assert CONTROL_METHOD == RUN_CONTROL_REQUEST_METHOD
     assert ACTION_SNOOZE_METHOD == DAEMON_ACTION_SNOOZE_METHOD
     assert ACTION_ASSIGN_METHOD == DAEMON_ACTION_ASSIGN_METHOD
+    assert CAMPAIGN_CLOSE_METHOD == DAEMON_CAMPAIGN_CLOSE_METHOD
+    assert MILESTONE_TARGET_METHOD == MILESTONE_SET_TARGET
 
 
 def test_answer_request_refuses_an_option_not_offered() -> None:

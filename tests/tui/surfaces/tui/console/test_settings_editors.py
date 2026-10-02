@@ -448,7 +448,7 @@ def test_con123_a_key_nothing_reads_is_listed_only_while_a_file_states_it(tree: 
 def test_con123_x_removes_a_key_nothing_reads_and_enter_says_why_it_is_not_edited(
     tree: Path, fixture: Fixture
 ) -> None:
-    sr._write(tree / ".ea" / "config.yaml", "stale:\n  flag: []\nresearch:\n  auto_save: true\n")
+    sr._write(tree / ".ea" / "config.yaml", "stale:\n  flag: []\ntelemetry:\n  enabled: false\n")
     view = _view(tree)
     link = sr._Link()
     session = _on(view, "stale.flag")
@@ -471,7 +471,7 @@ def test_con123_x_removes_a_key_nothing_reads_and_enter_says_why_it_is_not_edite
     removed = asyncio.run(unset_layer_value(daemon, params))
     assert removed["removed"] is True
     assert yaml.safe_load((tree / ".ea" / "config.yaml").read_text()) == {
-        "research": {"auto_save": True}
+        "telemetry": {"enabled": False}
     }
 
 

@@ -196,9 +196,7 @@ class PolishSkill(Skill):
             report_only=report_only,
         )
 
-        next_actions = ["eawf audit", "eawf milestone open-review", "eawf ship"]
-        if category != "all":
-            next_actions.insert(0, f"eawf polish --category {category}")
+        next_actions = ["eawf milestone open-review"]
 
         return SkillResult(
             status="ok",

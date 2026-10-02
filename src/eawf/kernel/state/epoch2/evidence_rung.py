@@ -44,7 +44,13 @@ from eawf.kernel.state.epoch2.base import (
     StrictNonNegativeInt,
     StrictPositiveInt,
 )
-from eawf.kernel.state.epoch2.urns import ClaimUrn, EvidenceUrn, RunUrn, render_qualified_urn
+from eawf.kernel.state.epoch2.urns import (
+    ClaimSubjectUrn,
+    ClaimUrn,
+    EvidenceUrn,
+    RunUrn,
+    render_qualified_urn,
+)
 from eawf.kernel.state.types import UtcDatetime
 
 #: A bounded single-line label: a count's name, an evaluator's name.
@@ -320,6 +326,7 @@ class ClaimFiling(Epoch2Model):
     Attributes:
         key: The claim's ``CLM-####`` key; the entity key of ``urn``.
         urn: The claim's canonical address.
+        subject_ref: The Task, Batch or Milestone the claim is about.
         revision: The filing's revision; a claim is filed once.
         status: The lifecycle it was filed at.
         title: The claim in one line.
@@ -342,6 +349,7 @@ class ClaimFiling(Epoch2Model):
 
     key: Annotated[str, StringConstraints(pattern=r"^CLM-\d{4,}$")]
     urn: ClaimUrn
+    subject_ref: ClaimSubjectUrn
     revision: StrictPositiveInt = 1
     status: ClaimStatus
     title: Annotated[str, StringConstraints(strict=True, min_length=1, max_length=72)]

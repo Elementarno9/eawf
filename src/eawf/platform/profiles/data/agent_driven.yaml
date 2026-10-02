@@ -61,7 +61,7 @@ render_blocks:
     mechanism: |
       The phase=release + large-phase-PR cadence is ratified by Decision D10 (keep one-PR-per-phase cadence) and the rebase-merge strategy by Decision D07 (rebase-and-merge; never squash). The canonical workflow reference is ``docs/architecture/workflow.md`` (VCS, commit, PR, and merge policy). Cite the Decision id, not this rule's prose, when a review or roadmap discussion questions the cadence; reverse the divergence only by superseding D10 with a new Decision row.
     verification: |
-      The decisions exist in ``state.json`` and surface in the rendered ``## Decisions`` section: ``eawf decisions show`` (or grep the rendered AGENTS.md) lists D07 and D10. ``docs/architecture/workflow.md`` resolves as a repo-relative path. A claim that small-CL should replace this rule is checked against D10's status — only a superseding Decision discharges the divergence.
+      The decisions exist in ``state.json`` and surface in the rendered ``## Decisions`` section: grepping the rendered AGENTS.md lists D07 and D10. ``docs/architecture/workflow.md`` resolves as a repo-relative path. A claim that small-CL should replace this rule is checked against D10's status — only a superseding Decision discharges the divergence.
   - id: lean-wave-verification
     target: AGENTS.md
     version: "1.3"

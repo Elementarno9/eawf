@@ -32,12 +32,15 @@ from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, MeasurementS
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import NonEmptyStr, PrincipalKey
 from eawf.kernel.state.epoch2.campaign import ResearchBudget, StepTitle
+from eawf.kernel.state.epoch2.measurement import VendorSessionRef
+from eawf.kernel.state.epoch2.run import RUNTIME_MODEL_PATTERN, RunRuntimeTuple
 from eawf.kernel.state.epoch2.urns import TrackUrn
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.observability.measurement.capture import CLAUDE_HARNESS
 from eawf.runtime.daemon.campaign_scheduler import (
     CampaignDrive,
     ResearchAgent,
@@ -53,8 +56,11 @@ from eawf.runtime.daemon.methods.delivery_approval import publish_commits
 from eawf.runtime.daemon.methods.host_question import question_keys
 from eawf.runtime.daemon.methods.projection import document_path
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
+from eawf.runtime.runtimes.adapter import SpawnResult
 from eawf.runtime.runtimes.metering import price_spawn_result
 from eawf.runtime.runtimes.selector import select_adapter
+from eawf.runtime.sandbox.env_scrub import build_child_env
+from eawf.runtime.session.host_session import claude_code_provider
 from eawf.workflow.dispatch.routing import model_for_runtime
 
 logger = logging.getLogger(__name__)
@@ -80,6 +86,9 @@ _DEPTH_EFFORT: Final = {
 }
 
 _JSON_BLOCK: Final = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
+
+#: The grammar a billed model id must read in before a round's Run records it.
+_MODEL: Final = re.compile(RUNTIME_MODEL_PATTERN)
 
 #: The drives running in this daemon, by tree root id and Campaign key: one daemon
 #: serves several trees, and each numbers its Campaigns from one.
@@ -170,7 +179,29 @@ class HostResearchAgent:
         metered = price_spawn_result(result)
         observed = result.measurement_status is MeasurementStatus.USAGE_OBSERVED
         tokens = metered.input_tokens + metered.output_tokens if observed else None
-        return parse_round_report(result.text, tokens=tokens)
+        report = parse_round_report(result.text, tokens=tokens)
+        return report.model_copy(update=self._ran_on(result))
+
+    def _ran_on(self, result: SpawnResult) -> dict[str, Any]:
+        """Return the runtime tuple and vendor session one round's spawn ran on.
+
+        The model is the one the runtime billed, else the one it was asked for.
+        Only a Claude Code child's provider is known: the scrubbed environment it
+        is spawned with decides where it routes.
+        """
+        model = result.resolved_model or result.model
+        provider = (
+            claude_code_provider(build_child_env(self._runtime))
+            if self._runtime == CLAUDE_HARNESS
+            else None
+        )
+        runtime = RunRuntimeTuple(
+            harness=self._runtime,
+            provider=provider,
+            model=model if _MODEL.fullmatch(model) else None,
+        )
+        session = VendorSessionRef(harness=self._runtime, session_digest=result.session_id)
+        return {"runtime": runtime, "session": session}
 
 
 def round_prompt(assignment: StepAssignment) -> str:

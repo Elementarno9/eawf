@@ -59,13 +59,15 @@ from eawf.kernel.state.epoch2.campaign import (
     step_blockers,
 )
 from eawf.kernel.state.epoch2.finding import FindingStatement
-from eawf.kernel.state.epoch2.run import RunStatus
+from eawf.kernel.state.epoch2.measurement import VendorSessionRef
+from eawf.kernel.state.epoch2.run import RunRuntimeTuple, RunStatus
 from eawf.kernel.state.epoch2.urns import CampaignUrn, RunUrn, TrackUrn
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.observability.measurement.capture import observe_session_runtime
 from eawf.runtime.control.reducer import reduce_run_control
 from eawf.runtime.daemon.admission import (
     EconomicsPolicyError,
@@ -158,6 +160,10 @@ class StepReport(BaseModel):
         tokens: The tokens the round consumed; ``None`` when no reading metered them.
         sources: The sources the round consulted.
         findings: What the round learned that should outlive it, one line each.
+        runtime: The runtime the round ran on, as the agent that spawned it knows
+            it; ``None`` when the agent states none.
+        session: The vendor session the round ran in; ``None`` when the agent
+            states none.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -167,6 +173,8 @@ class StepReport(BaseModel):
     tokens: StrictNonNegativeInt | None = 0
     sources: StrictNonNegativeInt = 0
     findings: tuple[FindingStatement, ...] = ()
+    runtime: RunRuntimeTuple | None = None
+    session: VendorSessionRef | None = None
 
 
 class ResearchAgent(Protocol):
@@ -454,19 +462,21 @@ class _Driver:
             at_tail=True,
         )
 
-    def _end_run(self, urn: str, *, succeeded: bool) -> None:
-        now = datetime.now(UTC).isoformat()
+    def _end_run(self, urn: str, *, report: StepReport | None) -> None:
+        """End a round's Run: completed with what its report states, else cancelled."""
+        at = datetime.now(UTC)
+        now = at.isoformat()
         # anything that moved the Run while the round was worked moved its revision
         with self._context.session([urn]) as session:
             records = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
             revision = stored_run(session, records, parse_qualified_urn(urn)).revision
-        if succeeded:
+        if report is not None:
             envelope = self._transition(
                 urn,
                 "COMPLETED",
                 revision,
                 observations=("run_report_bound",),
-                updates={"ended_at": now},
+                updates={"ended_at": now, **_round_runtime(report, at=at)},
             )
         else:
             envelope = self._transition(
@@ -602,7 +612,7 @@ class _Driver:
                     now=datetime.now(UTC),
                 )
             )
-        self._end_run(str(assignment.run_ref), succeeded=True)
+        self._end_run(str(assignment.run_ref), report=report)
         self._rounds += 1
 
     def abandon(self, assignment: StepAssignment, error: BaseException) -> None:
@@ -612,7 +622,7 @@ class _Driver:
             f"error={type(error).__name__}"
         )
         self._step(assignment.ordinal, to_state=StepState.PENDING.value)
-        self._end_run(str(assignment.run_ref), succeeded=False)
+        self._end_run(str(assignment.run_ref), report=None)
 
     async def work(self, assignment: StepAssignment) -> tuple[StepReport | None, float, str]:
         """Have the agent work *assignment*; the report, its seconds and any failure."""
@@ -697,6 +707,23 @@ class _Driver:
                 "detail": detail,
             }
         )
+
+
+def _round_runtime(report: StepReport, *, at: datetime) -> dict[str, Any]:
+    """Return the runtime tuple and vendor session a round's report lets its Run record.
+
+    The agent knows the runtime it spawned and the session that answered; the
+    session's transcript adds what the agent did not, such as the version.
+    """
+    updates: dict[str, Any] = {}
+    observed = None
+    if report.session is not None:
+        updates["vendor_session"] = report.session.model_dump(mode="json")
+        observed = observe_session_runtime(report.session, as_of=at)
+    runtime = observed if report.runtime is None else report.runtime.filled_from(observed)
+    if runtime is not None:
+        updates["runtime_tuple"] = runtime.model_dump(mode="json")
+    return updates
 
 
 def _ready(campaign: Campaign, width: int) -> tuple[CampaignPlanStep, ...]:

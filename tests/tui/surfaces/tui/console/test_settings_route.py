@@ -82,7 +82,7 @@ BRANCH = "probe"
 SIZES = ((80, 24), (120, 30), (160, 40))
 
 #: A bool the catalog lets global, workspace and repo write, and no other layer.
-BOOL_KEY = "research.auto_save"
+BOOL_KEY = "telemetry.enabled"
 #: A literal with three allowed values, writable at global, workspace and repo.
 LITERAL_KEY = "estimation.eu_basis"
 #: An int writable at global, workspace and repo, whose default has two digits.
@@ -336,7 +336,7 @@ def test_ui057_the_route_draws_at_every_size_with_the_packet_keybar(
 ) -> None:
     """The keybar reads as the packet states it, and the chain sits above the table."""
     # unset removes the lens layer's own value, so the key is set at repo to offer it
-    _write(tree / ".ea" / "config.yaml", "research:\n  auto_save: true\n")
+    _write(tree / ".ea" / "config.yaml", "telemetry:\n  enabled: false\n")
     view = _view(tree)
     rows = _frame(fixture, view, _on(_session(), view, BOOL_KEY), w=w, h=h)
 
@@ -486,7 +486,7 @@ def test_ui053_a_denied_degraded_secret_key_draws_the_whole_tuple_at_80(
     assert "CONSTRAINED BY  workspace profile" in body
     assert "NEEDS      network.egress · ? certification unknown" in body
     assert "SECRET     ref://vault/deploy · the value never renders" in body
-    assert "⊘ false" in body
+    assert "⊘ true" in body
     route = "\n".join(_frame(fixture, denied, _on(_session(), denied, BOOL_KEY)))
     assert "⊘ denied" in route
 
@@ -533,7 +533,7 @@ def test_edit_a_lens_the_key_is_not_writable_at_offers_the_layers_that_are(
         "layers": ["repo", "global"],
         "idx": 0,
     }
-    assert "local cannot hold research.auto_save" in session.log[0].note
+    assert "local cannot hold telemetry.enabled" in session.log[0].note
 
 
 def test_edit_a_mapping_is_left_to_its_file(tree: Path, fixture: Fixture) -> None:
@@ -694,7 +694,7 @@ def test_edit_the_request_is_addressed_to_the_layered_config_verbs() -> None:
     assert written.method == SETTING_SET_METHOD
     assert dict(written.params) == {
         "layer": "repo",
-        "key_path": ["research", "auto_save"],
+        "key_path": ["telemetry", "enabled"],
         "idempotency_key": written.operation_id,
         "value": False,
     }

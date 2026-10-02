@@ -1,12 +1,9 @@
 {
   "body_keys": [
     "brief_id",
-    "options",
     "peer_review",
     "persisted_brief",
     "questions",
-    "recommendation",
-    "research_plan",
     "user_question"
   ],
   "eval_score_threshold": 0.85,

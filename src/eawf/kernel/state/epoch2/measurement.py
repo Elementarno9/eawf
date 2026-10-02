@@ -57,8 +57,10 @@ UNKNOWN_ATTRIBUTION: Final = "unknown"
 
 #: The Run fields the daemon reads off the vendor session at the edge
 #: rather than taking from the caller. A retry reads them again and gets
-#: different numbers, so they never identify the request they ride on.
-DAEMON_READ_RUN_FIELDS: Final = frozenset({"counter_baseline", "captured_runtime"})
+#: different numbers, so they never identify the request they ride on. The
+#: runtime tuple is among them because its version and model are read off
+#: the session's transcript, which grows between a request and its retry.
+DAEMON_READ_RUN_FIELDS: Final = frozenset({"counter_baseline", "captured_runtime", "runtime_tuple"})
 
 #: How a quantity not read from the record was obtained: computed from
 #: counters the runtime's transcript recorded, matched against a

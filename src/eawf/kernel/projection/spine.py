@@ -38,6 +38,7 @@ from eawf.kernel.projection.compute import (
     PROJECTION_PRODUCER,
     ROUTE_COLLECTIONS,
     ROUTE_READ_MODELS,
+    ProjectionRow,
     RouteProjection,
 )
 from eawf.kernel.projection.read_models import ReadModelKind
@@ -110,31 +111,49 @@ class SpineFieldSpec:
         produced: Whether an epoch-2 producer states the field today. A field declared
             ``False`` renders unknown, which is a statement, where leaving it out of the
             table would be silence.
+        reason: Why the field reads unknown: for an unproduced field, which producer is
+            missing; for a produced field other than the status, which is read from the
+            row's fact of its name, why a row may state no such fact.
     """
 
     name: str
     produced: bool = False
+    reason: str = UNPRODUCED_REASON
 
 
-def _fields(*names: str) -> tuple[SpineFieldSpec, ...]:
-    """Return the status field followed by one unproduced field per name."""
+def _fields(*specs: str | SpineFieldSpec) -> tuple[SpineFieldSpec, ...]:
+    """Return the status field followed by the given fields, a bare name unproduced."""
     return (
         SpineFieldSpec(name=STATUS_FIELD, produced=True),
-        *(SpineFieldSpec(name=name) for name in names),
+        *(SpineFieldSpec(name=spec) if isinstance(spec, str) else spec for spec in specs),
     )
 
 
+#: Why a Task's candidates read unknown.
+NO_CANDIDATE_REASON: Final = "no producer files an integration candidate against a Task"
+
+#: Why a Batch's checks read unknown: the daemon integrates locally and touches no remote.
+NO_CHECKS_REASON: Final = "no producer observes pull-request checks"
+
+
 #: What each native route renders per row, in column order. The first field of every
-#: route is the status the document states; the rest are the design's columns whose
-#: producers are dev4 items, declared so the console draws the unknown token in their
-#: place. A column the row itself carries -- its key, its collection, its revision -- is
-#: not declared here, because it is stated rather than missing.
+#: route is the status the document states; a produced column is read from the row's fact
+#: of its name, and an unproduced one is declared so the console draws the unknown token
+#: in its place, naming the producer it waits on. A column the row itself carries -- its
+#: key, its collection, its revision -- is not declared here, because it is stated rather
+#: than missing.
 ROUTE_FIELDS: Final[Mapping[str, tuple[SpineFieldSpec, ...]]] = MappingProxyType(
     {
         "scope.home": _fields("runs", "attention", "progress"),
         "track": _fields("batches", "due"),
-        "batch.detail": _fields("checks", "runs"),
-        "task.detail": _fields("criteria", "candidates"),
+        "batch.detail": _fields(
+            SpineFieldSpec(name="checks", reason=NO_CHECKS_REASON),
+            SpineFieldSpec(name="runs", produced=True, reason="the row is not a Batch"),
+        ),
+        "task.detail": _fields(
+            SpineFieldSpec(name="criteria", produced=True, reason="the record states no criteria"),
+            SpineFieldSpec(name="candidates", reason=NO_CANDIDATE_REASON),
+        ),
         "run.detail": _fields("provider", "elapsed", "cost"),
         "roadmap": _fields("lane", "date", "forecast"),
         "backlog": _fields("group", "due", "reason"),
@@ -282,8 +301,8 @@ class SpineView:
         return tuple(spec.name for spec in ROUTE_FIELDS[self.route] if not spec.produced)
 
 
-def _unknown_field(*, urn: str, revision: int) -> TruthField[str]:
-    """Return the truth field a declared but unproduced column renders as."""
+def _unknown_field(*, urn: str, revision: int, reason: str) -> TruthField[str]:
+    """Return the truth field a column states no value in renders as, naming why."""
     return TruthField[str](
         value=None,
         state=TruthState.UNKNOWN,
@@ -294,7 +313,27 @@ def _unknown_field(*, urn: str, revision: int) -> TruthField[str]:
         measurement_quality=MeasurementQuality.UNAVAILABLE,
         freshness=Freshness.LIVE,
         provenance_refs=(urn,),
-        missing_reason=UNPRODUCED_REASON,
+        missing_reason=reason,
+    )
+
+
+def _cell(row: ProjectionRow, spec: SpineFieldSpec) -> TruthField[str]:
+    """Return one row's field: the stored status, a stated fact, or unknown naming why."""
+    if spec.name == STATUS_FIELD:
+        return row.status
+    fact = row.facts.get(spec.name) if spec.produced else None
+    if fact is None:
+        return _unknown_field(urn=row.urn, revision=row.revision, reason=spec.reason)
+    return TruthField[str](
+        value=fact,
+        state=TruthState.KNOWN,
+        truth_kind=TruthKind.DERIVED,
+        producer=PROJECTION_PRODUCER,
+        producer_revision=row.revision,
+        precision=Precision.EXACT,
+        measurement_quality=MeasurementQuality.EXACT,
+        freshness=Freshness.LIVE,
+        provenance_refs=(row.urn,),
     )
 
 
@@ -331,16 +370,7 @@ def build_spine_view(projection: RouteProjection) -> SpineView:
             title=row.title,
             parent_key=row.parent_key,
             facts=MappingProxyType(dict(row.facts)),
-            fields=MappingProxyType(
-                {
-                    spec.name: (
-                        row.status
-                        if spec.produced
-                        else _unknown_field(urn=row.urn, revision=row.revision)
-                    )
-                    for spec in specs
-                }
-            ),
+            fields=MappingProxyType({spec.name: _cell(row, spec) for spec in specs}),
         )
         for row in projection.rows
     )
@@ -368,6 +398,8 @@ __all__ = [
     "DIAGNOSTICS_ROUTES",
     "ENTRY_ROUTE",
     "NATIVE_ROUTES",
+    "NO_CANDIDATE_REASON",
+    "NO_CHECKS_REASON",
     "PLANNING_ROUTES",
     "ROUTE_FIELDS",
     "SPINE_ROUTES",

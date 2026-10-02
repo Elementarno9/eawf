@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -253,7 +254,8 @@ def test_availability_read_only_verb_acts_in_any_state() -> None:
     ("verb", "guard", "expected"),
     [
         (_light(), LIVE, Outcome.OPEN),
-        (_light(target=None), LIVE, Outcome.COPY),
+        (replace(_light(target=None), verb="copy URN"), LIVE, Outcome.COPY),
+        (_light(target=None), LIVE, Outcome.IN_PLACE),
         (_light(), Availability(False, "no"), Outcome.REFUSED_TOAST),
         (_heavy(), LIVE, Outcome.CONSEQUENCE),
         (_heavy(), Availability(False, "no"), Outcome.REFUSED),

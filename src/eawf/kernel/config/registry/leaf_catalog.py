@@ -357,13 +357,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
     ),
     # --- research ----------------------------------------------------------
     LeafKey(
-        key="research.auto_save",
-        domain="research",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
         key="research.default_depth",
         domain="research",
         type="literal",
@@ -690,7 +683,6 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "profiles.enabled": "eawf.platform.profiles.selection.resolve_enabled_profiles",
     "profiles.trusted": "eawf.platform.profiles.trust.load_trust_ledger",
     "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
-    "research.auto_save": "eawf.workflow.skills.research.ResearchSkill._gather",
     "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
     "runtime.adapters": "eawf.kernel.config.layered.resolve_dispatch_provider_tuple",
     "runtime.claude.permission_wait_s": (
@@ -775,6 +767,8 @@ _RETIRED_KEYS: frozenset[str] = frozenset(
         "ship.gauntlet",
         "vcs.pr_merge_method",
         "vcs.squash_allowed",
+        # named /research as its reader, but no code ever read it
+        "research.auto_save",
         # retired before this catalog tracked them: renamed or never consumed
         "estimation.buckets",
         "mcp.enabled",

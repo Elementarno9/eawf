@@ -1,5 +1,10 @@
 """The claim verbs and ``projection.evidence.ladder``: a claim, its rungs and their checks.
 
+A claim is filed about a Task, Batch or Milestone the tree holds, under the next
+``CLM-####`` key of the subject's project. The writer names evidence by key and spans as
+``path:start-end``; the daemon addresses the keys under the subject's repository and
+digests each span from the working tree as it reads at filing.
+
 Filing a claim is the scoring transaction. The claim's row and the record of each of its
 four rungs are appended to the claim ledger in one session, so no claim is ever held
 without the ladder that scored it, and the sequence each rung record states is the one
@@ -28,8 +33,13 @@ from pydantic import BaseModel, ConfigDict, StringConstraints, ValidationError, 
 
 from eawf.kernel.delivery.acceptance import EvidenceRow
 from eawf.kernel.delivery.integration import IdempotencyKey
+from eawf.kernel.identity import EntityKind, format_qualified_urn
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
+from eawf.kernel.state.epoch2.base import (
+    PrincipalKey,
+    StrictNonNegativeInt,
+    StrictPositiveInt,
+)
 from eawf.kernel.state.epoch2.evidence_rung import (
     RUNG_NAMES,
     RUNG_QUESTIONS,
@@ -38,15 +48,14 @@ from eawf.kernel.state.epoch2.evidence_rung import (
     ClaimProse,
     EvidenceInput,
     EvidenceRungRecord,
-    ReceiptRef,
+    RepoPath,
     RungBasis,
     RungOutcome,
-    SpanAnchor,
     latest_rungs,
     promotion_blockers,
-    require_cited_anchors,
+    span_digest,
 )
-from eawf.kernel.state.epoch2.urns import ClaimUrn, EvidenceUrn
+from eawf.kernel.state.epoch2.urns import ClaimSubjectUrn, ClaimUrn, EvidenceUrn
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     effective_records,
@@ -66,6 +75,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 from eawf.runtime.daemon.methods.delivery import keyed_call
 from eawf.runtime.daemon.methods.delivery_acceptance import EVIDENCE_KEY_PREFIX, EVIDENCE_STATUS
+from eawf.runtime.daemon.methods.delivery_anchor import _standing_revision
 from eawf.runtime.daemon.methods.delivery_completion import PROOF_PAYLOAD_KIND, FiledProof
 from eawf.runtime.daemon.methods.projection import PROJECTION_UNREADABLE, document_path
 from eawf.runtime.daemon.native_guard import native_mutator, native_params, require_native_call
@@ -90,8 +100,8 @@ EVIDENCE_CLAIM_CHECK_METHOD: Final = "runtime.evidence.claim.check"
 #: The verb that records what an outside party decided about a claim's rung 4.
 EVIDENCE_CLAIM_ATTEST_METHOD: Final = "runtime.evidence.claim.attest"
 
-#: The stable code a filing under a key the ledger already holds is refused with.
-CLAIM_ALREADY_FILED: Final = "claim_already_filed"
+#: The stable code a span that is not a repository file holding those lines is refused with.
+ANCHOR_UNREADABLE: Final = "anchor_unreadable"
 
 #: The stable code a rung that cannot run yet, or cannot be attested, is refused with.
 RUNG_NOT_RUNNABLE: Final = "rung_not_runnable"
@@ -108,49 +118,115 @@ _ENTAILMENT_KIND: Final = "store_record"
 #: What separates a claim's key from the rung a record in its ledger scores.
 _RUNG_KEY_MARK: Final = "#rung-"
 
+#: The prefix of a claim's key, whose ordinal the next filing takes one past.
+_CLAIM_KEY_PREFIX: Final = "CLM-"
+
+#: The prefix of a cited key that names a gate receipt rather than an evidence record.
+_RECEIPT_KEY_PREFIX: Final = "RCP-"
+
+#: An evidence record's key, as a claim writer cites it.
+EvidenceKey = Annotated[str, StringConstraints(strict=True, pattern=r"^EVD-\d{4,}$")]
+
+#: A cited key: an evidence record, or the gate receipt whose result proves the claim.
+CitedKey = Annotated[str, StringConstraints(strict=True, pattern=r"^(EVD|RCP)-\d{4,}$")]
+
 
 def rung_record_key(record: EvidenceRungRecord) -> str:
     """Return the claim-ledger key one rung record is filed under."""
     return f"{record.claim_ref.entity_key}{_RUNG_KEY_MARK}{record.rung}@{record.revision}"
 
 
+class SpanRequest(BaseModel):
+    """One span a claim anchors, as its writer names it; the daemon digests it.
+
+    Attributes:
+        evidence: The cited evidence record the span belongs to; the claim's one cited
+            evidence record when absent.
+        path: The file, relative to the repository root.
+        start_line: The span's first line, counted from one.
+        end_line: The span's last line, inclusive.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    evidence: EvidenceKey | None = None
+    path: RepoPath
+    start_line: StrictPositiveInt
+    end_line: StrictPositiveInt
+
+    @model_validator(mode="after")
+    def _span_runs_forward(self) -> Self:
+        """Refuse a span that ends before it starts.
+
+        Raises:
+            ValueError: ``end_line`` precedes ``start_line``.
+        """
+        if self.end_line < self.start_line:
+            raise ValueError(f"the span ends at line {self.end_line}, before {self.start_line}")
+        return self
+
+
 class ClaimFileParams(BaseModel):
     """Params of :data:`EVIDENCE_CLAIM_FILE_METHOD`.
 
     Attributes:
-        urn: The address the claim is filed under.
+        urn: The Task, Batch or Milestone the claim is about.
+        expected_revision: The tree's committed canonical sequence the caller read; the
+            next ``CLM-####`` key is allocated against it.
         actor: Who asked.
         idempotency_key: The client's name for this request.
         title: The claim in one line.
         description: The claim restated plainly.
         implication: What the claim buys if it stands.
         falsifier: What observation would take it away.
-        evidence_refs: The evidence records the claim cites.
-        anchors: The spans the cited records point into.
-        gate_receipt: The receipt of the gate whose result proves the claim.
+        evidence: The keys the claim cites: evidence records, and at most one gate
+            receipt whose result proves it.
+        anchors: The spans the cited evidence records point into.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    urn: ClaimUrn
+    urn: ClaimSubjectUrn
+    expected_revision: StrictNonNegativeInt
     actor: PrincipalKey
     idempotency_key: IdempotencyKey
     title: Annotated[str, StringConstraints(strict=True, min_length=1, max_length=72)]
     description: Annotated[str, StringConstraints(max_length=500)] | None = None
     implication: ClaimProse | None = None
     falsifier: ClaimProse | None = None
-    evidence_refs: tuple[EvidenceUrn, ...] = ()
-    anchors: tuple[SpanAnchor, ...] = ()
-    gate_receipt: ReceiptRef | None = None
+    evidence: tuple[CitedKey, ...] = ()
+    anchors: tuple[SpanRequest, ...] = ()
+
+    @property
+    def evidence_keys(self) -> tuple[str, ...]:
+        """Return the cited evidence records' keys, in the order cited."""
+        return tuple(key for key in self.evidence if not key.startswith(_RECEIPT_KEY_PREFIX))
+
+    @property
+    def receipt_key(self) -> str | None:
+        """Return the cited gate receipt's key, ``None`` when none is cited."""
+        return next((key for key in self.evidence if key.startswith(_RECEIPT_KEY_PREFIX)), None)
 
     @model_validator(mode="after")
-    def _anchors_are_cited(self) -> Self:
-        """Refuse an anchor into a record the claim does not cite, before anything is read.
+    def _citations_bind(self) -> Self:
+        """Refuse two receipts, or a span bound to no cited record, before anything is read.
 
         Raises:
-            ValueError: An anchor's evidence record is not cited.
+            ValueError: More than one receipt is cited, a span names an evidence record the
+                claim does not cite, or a span names none while the claim cites other than
+                exactly one.
         """
-        require_cited_anchors(self.evidence_refs, self.anchors)
+        receipts = [key for key in self.evidence if key.startswith(_RECEIPT_KEY_PREFIX)]
+        if len(receipts) > 1:
+            raise ValueError(f"a claim cites at most one gate receipt, got {len(receipts)}")
+        cited = self.evidence_keys
+        for span in self.anchors:
+            if span.evidence is None and len(cited) != 1:
+                raise ValueError(
+                    f"{span.path} names no evidence record and the claim cites {len(cited)}"
+                )
+            if span.evidence is not None and span.evidence not in cited:
+                raise ValueError(f"{span.path} belongs to {span.evidence}, which is not cited")
         return self
 
 
@@ -251,19 +327,19 @@ def _held_receipt(path: Path, key: str | None) -> HeldReceipt | None:
     )
 
 
-def _read_span(repo_root: Path, anchor: SpanAnchor) -> str | None:
-    """Return the anchored lines joined by newlines, ``None`` when the file or lines are gone.
+def _read_span(repo_root: Path, relative: str, start_line: int, end_line: int) -> str | None:
+    """Return the lines of a span joined by newlines, ``None`` when the file or lines are gone.
 
     A path that resolves outside the repository -- through a symlink -- reads as gone.
     """
     root = repo_root.resolve()
-    path = (root / anchor.path).resolve()
+    path = (root / relative).resolve()
     if not path.is_relative_to(root) or not path.is_file():
         return None
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    if anchor.end_line > len(lines):
+    if end_line > len(lines):
         return None
-    return "\n".join(lines[anchor.start_line - 1 : anchor.end_line])
+    return "\n".join(lines[start_line - 1 : end_line])
 
 
 def _inputs(session: RootSession, claim: ClaimFiling, repo_root: Path) -> LadderInputs:
@@ -272,7 +348,10 @@ def _inputs(session: RootSession, claim: ClaimFiling, repo_root: Path) -> Ladder
     ordinal = 1 + max((int(key.removeprefix(EVIDENCE_KEY_PREFIX)) for key in held), default=0)
     return LadderInputs(
         evidence=held,
-        spans={anchor: _read_span(repo_root, anchor) for anchor in claim.anchors},
+        spans={
+            anchor: _read_span(repo_root, anchor.path, anchor.start_line, anchor.end_line)
+            for anchor in claim.anchors
+        },
         receipt=_held_receipt(session.ledger_path(Epoch2Collection.RECEIPT), claim.gate_receipt),
         # an automated rung 4 pass files its entailment in the repository its cited records
         # are filed in, under the next key; a claim citing nothing never reaches rung 4
@@ -335,15 +414,87 @@ def _answer(claim: ClaimFiling, ladder: Sequence[EvidenceRungRecord]) -> ClaimFi
     )
 
 
+def _require_subject(session: RootSession, args: ClaimFileParams) -> int:
+    """Return the tree's canonical sequence once the subject and cursor both hold.
+
+    Raises:
+        TransactionRefusedError: ``identity_not_found`` when the tree holds no record under
+            the subject, or ``revision_conflict`` when the tree moved past the cursor the
+            caller read.
+    """
+    if _standing_revision(session, args.urn) is None:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.IDENTITY_NOT_FOUND,
+            detail=f"the tree holds no record keyed {args.urn.entity_key!r}",
+            entity_ref=str(args.urn),
+            remediation="Name a Task, Batch or Milestone the tree holds.",
+        )
+    cursor: int = session.read_document().get(CANONICAL_SEQUENCE_KEY, 0)
+    if cursor != args.expected_revision:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.REVISION_CONFLICT,
+            detail=f"the tree is at canonical sequence {cursor} but the filing expects "
+            f"{args.expected_revision}",
+            entity_ref=str(args.urn),
+            guard="tree_cursor_current",
+            remediation="Re-read the tree and retry against its current canonical sequence.",
+        )
+    return cursor
+
+
+def _next_claim_key(path: Path) -> str:
+    """Return the key one past the highest claim the ledger holds."""
+    held = (
+        int(record.record_key.partition(_RUNG_KEY_MARK)[0].removeprefix(_CLAIM_KEY_PREFIX))
+        for record in read_ledger_records(path)
+    )
+    return f"{_CLAIM_KEY_PREFIX}{1 + max(held, default=0):04d}"
+
+
+def _address(subject: ClaimSubjectUrn, kind: EntityKind, key: str) -> str:
+    """Return *key*'s URN beside *subject*: a claim in its project, evidence in its repository."""
+    return format_qualified_urn(
+        workspace_key=subject.workspace_key,
+        project_key=subject.project_key,
+        repository_key=None if kind is EntityKind.CLAIM else subject.repository_key,
+        kind=kind,
+        entity_key=key,
+    )
+
+
+def _anchor(repo_root: Path, args: ClaimFileParams, span: SpanRequest) -> dict[str, Any]:
+    """Return the anchor *span* files as, digested from the working tree as it reads now.
+
+    Raises:
+        DaemonValidationError: The path is not a file inside the repository, or the file
+            ends before the span does.
+    """
+    text = _read_span(repo_root, span.path, span.start_line, span.end_line)
+    if text is None:
+        raise DaemonValidationError(
+            f"validation_failed: {ANCHOR_UNREADABLE}: {span.path}:{span.start_line}-"
+            f"{span.end_line} is not a repository file holding those lines"
+        )
+    (only,) = args.evidence_keys if span.evidence is None else (span.evidence,)
+    return {
+        "evidence_ref": _address(args.urn, EntityKind.EVIDENCE, only),
+        "path": span.path,
+        "start_line": span.start_line,
+        "end_line": span.end_line,
+        "anchor_digest": span_digest(text),
+    }
+
+
 def file_claim(
     context: Epoch2RootContext, args: ClaimFileParams, *, repo_root: Path, now: datetime
 ) -> ClaimFileAnswer:
-    """File one claim and the four rung records scoring it, in one session.
+    """File one claim under the next ``CLM-####`` and the four rung records scoring it.
 
     Args:
         context: The native context of the tree the claim belongs to.
         args: The validated request.
-        repo_root: The repository whose files rung 2 reads the anchored spans from.
+        repo_root: The repository whose files the anchored spans are digested from, and
+            rung 2 reads them back from.
         now: When it was filed.
 
     Returns:
@@ -351,22 +502,32 @@ def file_claim(
         cannot promote.
 
     Raises:
-        DaemonValidationError: The claim ledger already holds this key.
+        TransactionRefusedError: The tree holds no such subject, or moved past the
+            cursor the caller read.
+        DaemonValidationError: A span is not a repository file holding those lines.
     """
-    key = args.urn.entity_key
     with context.session([args.urn]) as session:
+        cursor = _require_subject(session, args)
         claims = session.ledger_path(Epoch2Collection.CLAIM)
-        if any(record.record_key == key for record in read_ledger_records(claims)):
-            raise DaemonValidationError(
-                f"validation_failed: {CLAIM_ALREADY_FILED}: {key} is already filed"
-            )
-        cursor = session.read_document().get(CANONICAL_SEQUENCE_KEY, 0)
-        filing = args.model_dump(exclude={"actor", "idempotency_key"}) | {
-            "key": key,
-            "urn": args.urn,
-            "recorded_at": now,
-        }
-        opened = ClaimFiling.model_validate({**filing, "status": "OPEN"})
+        key = _next_claim_key(claims)
+        opened = ClaimFiling.model_validate(
+            {
+                "key": key,
+                "urn": _address(args.urn, EntityKind.CLAIM, key),
+                "subject_ref": args.urn,
+                "status": "OPEN",
+                "title": args.title,
+                "description": args.description,
+                "implication": args.implication,
+                "falsifier": args.falsifier,
+                "evidence_refs": [
+                    _address(args.urn, EntityKind.EVIDENCE, cited) for cited in args.evidence_keys
+                ],
+                "anchors": [_anchor(repo_root, args, span) for span in args.anchors],
+                "gate_receipt": args.receipt_key,
+                "recorded_at": now,
+            }
+        )
         inputs = _inputs(session, opened, repo_root)
         # the claim's own line takes the next sequence and each rung the one after it
         rungs = score_claim(opened, inputs, now=now, first_sequence=cursor + 2)
@@ -699,7 +860,7 @@ async def read_evidence_ladder(ctx: MethodContext, params: dict[str, Any]) -> di
 
 
 __all__ = [
-    "CLAIM_ALREADY_FILED",
+    "ANCHOR_UNREADABLE",
     "EVIDENCE_CLAIM_FILE_METHOD",
     "ClaimFileAnswer",
     "ClaimFileParams",

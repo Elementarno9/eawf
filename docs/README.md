@@ -23,7 +23,7 @@ Side paths from there: **[Profile picker](tutorial/profile-picker.md)**, **[Rese
 - **[Memory](architecture/memory.md)** — `memory.jsonl` authoritative store; markdown views are generated; sync, schema, efficiency rules.
 - **[Skill envelope](architecture/envelope.md)** — uniform skill output envelope, per-skill body schemas, JSONL record envelope, event payload, config schema sections.
 - **[Statusline](architecture/statusline.md)** — Claude Code statusline design, modules, glyph / color modes, performance budgets, install prompt.
-- **[Installation](architecture/installation.md)** — `eawf init` project install, `eawf global install` user install, migration policy, presets.
+- **[Installation](architecture/installation.md)** — `eawf init` project install, user install, migration policy, presets.
 
 ## Policy
 

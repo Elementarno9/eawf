@@ -270,23 +270,17 @@ def test_ui_062_every_open_item_lands_in_exactly_one_bucket_and_one_need() -> No
     assert sum(needs) == counted[(AttentionBucket.NEEDS_OPERATOR, None)] == 2
 
 
-def test_ui_062_holes_state_zero_and_unstated_buckets_state_no_count() -> None:
-    """A hole's zero is declared; a bucket whose producer is off this register is unknown."""
+def test_ui_062_a_hole_states_why_and_every_other_bucket_is_a_count_taken() -> None:
+    """Only ``lost`` has no record; every other bucket's zero is a count that was taken."""
     counts = {
         c.bucket: c for c in build_attention_view(_attention()).bucket_counts() if c.need is None
     }
-    for hole in (AttentionBucket.REJECTED, AttentionBucket.ACTIVE):
-        assert BUCKET_SOURCES[hole] is BucketSource.HOLE
-        assert counts[hole].count == 0
-        assert counts[hole].reason
-    # the stall sweep produces the stalled bucket, so its zero is a count that was taken
-    assert BUCKET_SOURCES[AttentionBucket.STALLED] is BucketSource.DERIVED
-    assert counts[AttentionBucket.STALLED].count == 0
-    assert counts[AttentionBucket.STALLED].reason is None
-    for unstated in (AttentionBucket.FAILED, AttentionBucket.LOST, AttentionBucket.OVER_BUDGET):
-        assert counts[unstated].count is None
-        assert counts[unstated].reason
-    assert counts[AttentionBucket.OVER_BUDGET].reason == BUDGET_UNSTATED_REASON
+    assert BUCKET_SOURCES[AttentionBucket.LOST] is BucketSource.HOLE
+    assert counts[AttentionBucket.LOST].reason
+    for bucket in AttentionBucket:
+        if bucket is not AttentionBucket.LOST:
+            assert BUCKET_SOURCES[bucket] is BucketSource.DERIVED
+            assert counts[bucket].reason is None
 
 
 def test_ui_062_a_row_stating_no_status_lands_in_no_bucket() -> None:
@@ -300,13 +294,14 @@ def test_ui_062_a_row_stating_no_status_lands_in_no_bucket() -> None:
 def test_ui_062_the_strip_the_rail_and_the_summary_are_one_derivation() -> None:
     """The strip's ``all``, the rail's rows and the summary line state the same numbers."""
     register = _attention()
-    items = attention_renderer.bucket_items(register)
-    rail = attention_renderer.rail_lines(register, None)
+    items = attention_renderer.bucket_items(register, notices=0)
+    rail = attention_renderer.rail_lines(register, None, notices=0)
     assert items[0].n == 3
     assert [line.split()[-1] for line in rail[1:]] == [str(x.n) for x in items[1:]]
     assert "3 all principals" in attention_renderer.counts_line(register, principal="OP-0002")
     assert any(line.startswith("   ↳ answer") and line.endswith("2") for line in rail)
-    assert any(line.startswith(" failed") and line.rstrip().endswith("?") for line in rail)
+    assert any(line.startswith(" failed") and line.rstrip().endswith("0") for line in rail)
+    assert any(line.startswith(" lost") and line.rstrip().endswith("∅") for line in rail)
 
 
 def test_ui_062_a_bucket_filter_never_changes_a_rail_count() -> None:

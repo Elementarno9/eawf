@@ -418,7 +418,6 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "profiles.enabled": "eawf.platform.profiles.selection.resolve_enabled_profiles",
     "profiles.trusted": "eawf.platform.profiles.trust.load_trust_ledger",
     "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
-    "research.auto_save": "eawf.workflow.skills.research.ResearchSkill._gather",
     "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
     "runtime.adapters": f"{_LAYERED}.resolve_dispatch_provider_tuple",
     "runtime.claude.permission_wait_s": f"{_LAYERED}.resolve_permission_wait_seconds",
@@ -498,7 +497,6 @@ def test_every_config_leaf_has_exact_consumer_classification() -> None:
     } == DEPRECATED_LEAF_KEYS & set(LEAF_KEY_REGISTRY)
     assert {key for key, entry in LEAF_KEY_REGISTRY.items() if entry.consumer_kind == "skill"} == {
         "research.agent_count",
-        "research.auto_save",
         "research.default_depth",
     }
     for key, entry in LEAF_KEY_REGISTRY.items():

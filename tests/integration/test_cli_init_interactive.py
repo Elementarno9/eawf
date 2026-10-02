@@ -32,9 +32,6 @@ from prompt_toolkit.input.base import PipeInput
 from prompt_toolkit.output import DummyOutput
 
 from eawf.platform.install.steps import (
-    STEP_ACCEPTANCE_LINT,
-    STEP_ACCEPTANCE_TESTS,
-    STEP_ACCEPTANCE_TYPECHECK,
     STEP_LIFECYCLE_DEPTH,
     STEP_MCP,
     STEP_PLUGINS,
@@ -83,13 +80,13 @@ def test_ask_step_text_keeps_default_on_empty_enter(pipe_session: PipeInput) -> 
 
 def test_ask_step_bool_returns_true_for_y(pipe_session: PipeInput) -> None:
     pipe_session.send_text("y\r")
-    value = _ask_step(STEP_ACCEPTANCE_TESTS)
+    value = _ask_step(STEP_WRITE_CONFIRM)
     assert value is True
 
 
 def test_ask_step_bool_returns_false_for_n(pipe_session: PipeInput) -> None:
     pipe_session.send_text("n\r")
-    value = _ask_step(STEP_ACCEPTANCE_TESTS)
+    value = _ask_step(STEP_WRITE_CONFIRM)
     assert value is False
 
 
@@ -170,8 +167,7 @@ def _send_full_wizard_inputs(inp: PipeInput, *, project_code: str) -> None:
 
     Order matches :data:`~eawf.platform.install.steps.WIZARD_STEPS`:
     state_path → project_code → project_title → lifecycle_depth →
-    profiles → runtime → plugins → mcp → acceptance_{tests,lint,typecheck} →
-    write_confirm.
+    profiles → runtime → plugins → mcp → auto_install_plugins → write_confirm.
     """
     inp.send_text("\r")  # state_path: keep default ".ea/state.json"
     inp.send_text(f"{project_code}\r")  # project_code
@@ -181,9 +177,7 @@ def _send_full_wizard_inputs(inp: PipeInput, *, project_code: str) -> None:
     inp.send_text("\r")  # runtime: keep "claude-code" (default)
     inp.send_text("\r")  # plugins (text fallback): empty
     inp.send_text("\r")  # mcp (text fallback): empty
-    inp.send_text("y\r")  # acceptance_tests
-    inp.send_text("y\r")  # acceptance_lint
-    inp.send_text("y\r")  # acceptance_typecheck
+    inp.send_text("n\r")  # auto_install_plugins
     inp.send_text("y\r")  # write_confirm
 
 
@@ -215,11 +209,7 @@ def test_run_wizard_interactive_cancels_at_first_prompt(
 # silent dependencies; mypy + ruff already enforce, but a runtime sanity
 # check avoids a future lint-driven removal that breaks the multichoice
 # defaults assumption.
-_REFERENCED_STEPS = (
-    STEP_ACCEPTANCE_LINT,
-    STEP_ACCEPTANCE_TYPECHECK,
-    STEP_WRITE_CONFIRM,
-)
+_REFERENCED_STEPS = (STEP_WRITE_CONFIRM,)
 
 
 # ---- inline-validate / auto-uppercase regression pins ---------------------

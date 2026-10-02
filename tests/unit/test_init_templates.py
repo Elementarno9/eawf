@@ -5,7 +5,7 @@ templates — ``research``, ``engineering``, ``reverse-engineering``.
 ``spike`` and ``hybrid`` are deferred to v0.4+.
 
 Each template seeds only leaves some code reads: the profiles it enables,
-its wave parallelism and, for engineering, the acceptance commands.
+and its wave parallelism.
 """
 
 from __future__ import annotations
@@ -87,13 +87,10 @@ def test_reverse_engineering_template_enables_core_research_re_profiles() -> Non
     assert payload["profiles"]["enabled"] == ["core", "research", "re"]
 
 
-def test_engineering_template_acceptance_commands_present() -> None:
-    """Engineering template ships the canonical uv-run gauntlet."""
-    payload = load_init_template("engineering")
-    cmds = payload["acceptance"]["commands"]
-    assert cmds["tests"] == "uv run pytest"
-    assert cmds["lint"] == "uv run ruff check ."
-    assert cmds["typecheck"] == "uv run mypy ."
+@pytest.mark.parametrize("name", SHIPPED_TEMPLATES)
+def test_no_template_seeds_the_retired_acceptance_leaves(name: str) -> None:
+    """Nothing reads the acceptance leaves, so no template seeds them."""
+    assert "acceptance" not in load_init_template(name)
 
 
 def test_research_template_planning_max_parallel_waves_is_two() -> None:

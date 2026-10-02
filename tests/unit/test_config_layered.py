@@ -303,10 +303,10 @@ def test_env_boolean_coercion() -> None:
     merged, _ = merge_config(
         workspace=None,
         repo=None,
-        env={"EAWF_RESEARCH__AUTO_SAVE": "true"},
+        env={"EAWF_TELEMETRY__ENABLED": "false"},
         cli_overrides={},
     )
-    assert merged["research"]["auto_save"] is True
+    assert merged["telemetry"]["enabled"] is False
 
 
 def test_env_unknown_prefix_ignored() -> None:

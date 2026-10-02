@@ -61,6 +61,10 @@ SKILL_ONLY = (
 )
 
 
+#: Leaves the catalog named a reader for that never read them.
+UNREAD = ("research.auto_save",)
+
+
 def _nested(key: str, value: Any) -> dict[str, Any]:
     """Return a layer body stating ``value`` at dotted ``key``."""
     body: dict[str, Any] = value
@@ -120,7 +124,7 @@ def test_the_drifted_defaults_now_agree() -> None:
 # ---------- a leaf only a retired skill read is retired ----------
 
 
-@pytest.mark.parametrize("key", SKILL_ONLY)
+@pytest.mark.parametrize("key", (*SKILL_ONLY, *UNREAD))
 def test_a_skill_only_leaf_is_retired_everywhere_it_was_offered(key: str) -> None:
     assert key in DEPRECATED_LEAF_KEYS
     assert key not in LEAF_KEY_REGISTRY

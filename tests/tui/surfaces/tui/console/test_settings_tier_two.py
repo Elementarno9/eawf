@@ -4,10 +4,10 @@ The stack card has always known how to draw ``DENIED BY``, ``CONSTRAINED BY``, `
 and ``SECRET``, but nothing produced them: the config catalog carried no policy,
 capability or secret data, so the tier existed only in hand-edited fixtures. The catalog
 now states it per leaf and the effective-settings read fills it from the merged layers,
-so the suite pins both halves against a real layer tree: a stated refusal appears exactly
-while it holds and names the layer behind it, a registry range, a runtime's
-certification and a credential reference each reach the card, a credential value never
-does, and a key with none of these draws no second tier at all.
+so the suite pins both halves against a real layer tree: no catalog leaf states a
+refusal, so no key is denied; a registry range, a runtime's certification and a
+credential reference each reach the card, a credential value never does, and a key with
+none of these draws no second tier at all.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.config.registry.leaf_catalog import LEAF_KEY_REGISTRY
-from eawf.kernel.config.registry.leaf_keys import LeafDeny, LeafKey
+from eawf.kernel.config.registry.leaf_keys import LeafKey
 from eawf.kernel.projection import settings
 from tests.tui.surfaces.tui.console import test_settings_provenance as provenance
 
@@ -52,77 +52,13 @@ def _row(frame: list[str], label: str) -> str:
     return next(row for row in frame if row.startswith(f"│{label}"))
 
 
-# ---------- DENIED BY: a stated refusal, while it holds ----------
-
-#: The probe refusal: no catalog leaf states one today, so the suite states one on a live
-#: string leaf, lifted by a live boolean leaf the built-in layer sets to false.
-DENIED, LIFTING, REFUSED = "verify.waiver_mode", "verify.require_iter_audit_accepted", "disabled"
+# ---------- DENIED BY: nothing in the catalog refuses a value ----------
 
 
-@pytest.fixture
-def denied(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Give the settings read a catalog whose probe leaf states the probe refusal."""
-    entry = LEAF_KEY_REGISTRY[DENIED].model_copy(
-        update={"deny": LeafDeny(value=REFUSED, unless=LIFTING)}
-    )
-    monkeypatch.setitem(LEAF_KEY_REGISTRY, DENIED, entry)
-
-
-@pytest.mark.usefixtures("denied")
-def test_con_123_a_refused_value_is_denied_by_the_leaf_and_layer_withholding_it(
-    tree: Path,
-) -> None:
-    _repo(tree, f"verify:\n  waiver_mode: {REFUSED}\n")
-    leaf = provenance._view(tree).leaf(DENIED)
-    assert leaf.deny_chain == (f"{LIFTING} = false · built-in",)
-    frame = _stack(tree, DENIED)
-    assert f"{LIFTING} = false · built-in" in _row(frame, " DENIED BY")
-    repo = next(row for row in frame if row.startswith("│") and " repo " in row)
-    assert f"⊘ {REFUSED}" in repo
-
-
-@pytest.mark.usefixtures("denied")
-def test_con_123_the_deny_names_the_layer_that_set_the_withholding_leaf(tree: Path) -> None:
-    provenance._write(
-        tree.parent / "home" / ".config" / "eawf" / "config.yaml",
-        "verify:\n  require_iter_audit_accepted: true\n",
-    )
-    _repo(tree, f"verify:\n  waiver_mode: {REFUSED}\n  require_iter_audit_accepted: false\n")
-    leaf = provenance._view(tree).leaf(DENIED)
-    assert leaf.deny_chain == (f"{LIFTING} = false · repo",)
-
-
-@pytest.mark.usefixtures("denied")
-def test_con_123_the_denied_token_stays_on_the_settings_route_row(tree: Path) -> None:
-    _repo(tree, f"verify:\n  waiver_mode: {REFUSED}\n")
-    frame = provenance._frame("settings", provenance._view(tree), key=DENIED, width=120)
-    assert "⊘ denied" in provenance._leaf_row(frame, "waiver_mode")
-
-
-@pytest.mark.usefixtures("denied")
-def test_con_123_a_true_lifting_leaf_lifts_the_deny(tree: Path) -> None:
-    _repo(tree, f"verify:\n  waiver_mode: {REFUSED}\n")
-    provenance._write(
-        tree / ".ea" / "local" / "config.yaml", "verify:\n  require_iter_audit_accepted: true\n"
-    )
-    leaf = provenance._view(tree).leaf(DENIED)
-    assert leaf.deny_chain == ()
-    assert not any(row.startswith("│ DENIED BY") for row in _stack(tree, DENIED))
-
-
-@pytest.mark.usefixtures("denied")
-def test_con_123_a_lifting_leaf_that_is_not_true_keeps_the_deny(tree: Path) -> None:
-    """Only a true lifting leaf lifts the refusal; a null keeps it."""
-    _repo(tree, f"verify:\n  waiver_mode: {REFUSED}\n  require_iter_audit_accepted: null\n")
-    leaf = provenance._view(tree).leaf(DENIED)
-    assert leaf.deny_chain == (f"{LIFTING} = null · repo",)
-
-
-@pytest.mark.usefixtures("denied")
-@pytest.mark.parametrize("mode", ["A", "B", "disabled-soon", ""])
-def test_con_123_a_value_other_than_the_refused_one_is_not_denied(tree: Path, mode: str) -> None:
-    _repo(tree, f"verify:\n  waiver_mode: '{mode}'\n")
-    assert provenance._view(tree).leaf(DENIED).deny_chain == ()
+def test_con_123_no_catalog_leaf_states_a_refusal() -> None:
+    """No engine refuses one value of a leaf, so the catalog carries no refusal field."""
+    with pytest.raises(ValidationError):
+        LeafKey(key="probe.x", domain="probe", type="str", deny={"value": "x", "unless": "y"})  # type: ignore[call-arg]
 
 
 # ---------- CONSTRAINED BY: the registry's range ----------
@@ -242,8 +178,7 @@ def test_ui_053_only_a_catalog_key_with_metadata_carries_a_second_tier(tree: Pat
     view = provenance._view(tree)
     for key, entry in LEAF_KEY_REGISTRY.items():
         leaf = view.leaf(key)
-        if entry.deny is None:
-            assert leaf.deny_chain == (), key
+        assert leaf.deny_chain == (), key
         if entry.value_range is None:
             assert leaf.constraint_chain == (), key
         if entry.runtime is None:
@@ -252,17 +187,14 @@ def test_ui_053_only_a_catalog_key_with_metadata_carries_a_second_tier(tree: Pat
             assert leaf.secret_ref is None, key
 
 
-@pytest.mark.usefixtures("denied")
 def test_con_123_every_stated_second_tier_row_fits_an_80_column_card(
     tree: Path, secret_leaf: str
 ) -> None:
     _repo(
         tree,
-        f"verify:\n  waiver_mode: {REFUSED}\n"
         "agents:\n  credentials:\n    gh:\n      env_refs: ['${ENV:GITHUB_TOKEN}']\n",
     )
     for key, label in (
-        (DENIED, " DENIED BY"),
         ("planning.max_parallel_waves", " CONSTRAINED BY"),
         ("runtime.opencode.stall_interval_s", " NEEDS"),
         (secret_leaf, " SECRET"),
@@ -273,15 +205,6 @@ def test_con_123_every_stated_second_tier_row_fits_an_80_column_card(
 
 
 # ---------- the catalog's metadata is closed ----------
-
-
-def test_ui_053_a_deny_needs_a_value_and_a_lifting_leaf() -> None:
-    with pytest.raises(ValidationError):
-        LeafDeny(value="", unless=LIFTING)
-    with pytest.raises(ValidationError):
-        LeafDeny(value=REFUSED, unless="")
-    with pytest.raises(ValidationError):
-        LeafDeny(value=REFUSED, unless=LIFTING, layer="repo")  # type: ignore[call-arg]
 
 
 def test_ui_053_a_leaf_names_only_a_known_runtime() -> None:

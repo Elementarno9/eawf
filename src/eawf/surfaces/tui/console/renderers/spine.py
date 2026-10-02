@@ -24,7 +24,7 @@ from collections.abc import Callable
 
 from eawf.kernel.projection.connection import staleness_target_seconds
 from eawf.kernel.projection.route_view import RouteReadModel
-from eawf.kernel.projection.spine import SpineRow, SpineView
+from eawf.kernel.projection.spine import ROUTE_FIELDS, UNPRODUCED_REASON, SpineRow, SpineView
 from eawf.kernel.projection.truth import TruthState
 from eawf.kernel.state.epoch2.transitions import TERMINAL_STATUSES, LifecycleEntity
 from eawf.surfaces.tui.console.action_menu import MenuVerb, VerbWeight
@@ -199,8 +199,17 @@ def detail_head(view: View, spine: SpineView, subject: SpineRow) -> list[str]:
 
 
 def _unstated(spine: SpineView) -> str:
-    """Return the declared columns no producer states, each beside the unknown token."""
-    return " UNSTATED  " + " · ".join(f"{name} {UNKNOWN_WORD}" for name in spine.unproduced())
+    """Return the declared columns no producer states, each beside the unknown token.
+
+    A column whose missing producer is named says which, so the line reads as the reason
+    rather than as a list of blanks.
+    """
+    return " UNSTATED  " + " · ".join(
+        f"{spec.name} {UNKNOWN_WORD}"
+        + (f" · {spec.reason}" if spec.reason != UNPRODUCED_REASON else "")
+        for spec in ROUTE_FIELDS[spine.route]
+        if not spec.produced
+    )
 
 
 def held(view: View) -> SpineView | None:

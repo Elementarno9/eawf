@@ -23,7 +23,7 @@ input source (see ``tests/integration/test_cli_init_interactive.py``).
 
 Public API:
 
-- :class:`WizardAnswers` — Pydantic v2 model mirroring the 13 step ids,
+- :class:`WizardAnswers` — Pydantic v2 model mirroring the 10 step ids,
   forbidding extras and validating ``project_code`` plus ``profiles`` membership.
 - :class:`WizardResult` — Pydantic v2 model summarising the artefacts written.
 - :class:`WizardCancelled` — raised when the operator aborts a prompt
@@ -124,7 +124,7 @@ _QUICK_SKIP_DIRS: frozenset[str] = frozenset(
 
 
 class WizardAnswers(BaseModel):
-    """Pydantic-validated answers to all 13 wizard prompts.
+    """Pydantic-validated answers to all 10 wizard prompts.
 
     The field names match :data:`~eawf.platform.install.steps.WIZARD_STEPS` ids so the
     interactive surface can map widget values straight onto this model with
@@ -160,9 +160,6 @@ class WizardAnswers(BaseModel):
     plugins: tuple[str, ...] = ()
     mcp: tuple[str, ...] = ()
     auto_install_plugins: bool = False
-    acceptance_tests: bool = True
-    acceptance_lint: bool = True
-    acceptance_typecheck: bool = True
     # ``write_confirm`` is reserved for the **interactive** wizard surface.
     # In the v0.1 ``--no-input`` pipeline it has no effect — the pipeline
     # always proceeds straight to the writes. The field is retained so the
@@ -443,8 +440,8 @@ def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]
     (``answers.template_extras``) into the answers-derived base. Rules:
 
     - For matching nested dict slots, recurse so per-key overrides land
-      precisely (e.g. an ``acceptance.commands`` block in a template
-      extends the base ``acceptance`` map without nuking peer keys).
+      precisely (e.g. a template's ``runtime.preference`` replaces the
+      base ladder without nuking the peer ``runtime.adapters`` key).
     - For every other type pair (list, scalar, type mismatch), the
       overlay value replaces the base value verbatim. The template is
       treated as authoritative for the keys it declares.
@@ -474,7 +471,6 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
           "schema_version": "1.0",
           "profiles":   {"enabled": [...]},
           "runtime":    {"adapters": [...], "preference": [...]},
-          "acceptance": {"tests": True, "lint": True, "typecheck": True},
         }
 
     Sorting (by ``yaml.safe_dump(sort_keys=True)``) keeps the file
@@ -501,11 +497,6 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
         "runtime": {
             "adapters": [runtime_id],
             "preference": [runtime_id],
-        },
-        "acceptance": {
-            "tests": answers.acceptance_tests,
-            "lint": answers.acceptance_lint,
-            "typecheck": answers.acceptance_typecheck,
         },
     }
     # P25-W16: when ``eawf init --template <name>`` is used, the parsed

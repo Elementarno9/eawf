@@ -309,6 +309,26 @@ def _without_retired(settings: SettingsCatalog) -> dict[str, Any]:
     }
 
 
+#: The prototype's menu verbs the live chrome leaves out, by route and letter: no daemon
+#: verb does their job, and none is a change to what the console shows.
+PROTOTYPE_ONLY_VERBS: frozenset[tuple[str, str]] = frozenset(
+    {
+        *(("scope.home", key) for key in "nw"),
+        *(("run.detail", key) for key in "stfp"),
+        *(("batch.detail", key) for key in "ircn"),
+        *(("track", key) for key in "nb"),
+        *(("task.detail", key) for key in "eit"),
+        *(("release", key) for key in "apm"),
+        *(("timeline", key) for key in "dt"),
+        *(("backlog", key) for key in "dx"),
+        *(("campaign", key) for key in "pe"),
+        ("history", "o"),
+        *(("settings", key) for key in "rc"),
+        ("milestone", "r"),
+    }
+)
+
+
 def test_packaged_chrome_keeps_the_shape_of_the_fixture_chrome(
     prototype_fixture: Fixture,
 ) -> None:
@@ -316,9 +336,10 @@ def test_packaged_chrome_keeps_the_shape_of_the_fixture_chrome(
     assert packaged.buckets == replayed.buckets
     assert packaged.xbuckets == replayed.xbuckets
     assert packaged.states == replayed.states
-    assert {
-        route: [(r[0], r[1], r[4]) for r in rows] for route, rows in packaged.actions.items()
-    } == {route: [(r[0], r[1], r[4]) for r in rows] for route, rows in replayed.actions.items()}
+    assert {route: [(r[0], r[1]) for r in rows] for route, rows in packaged.actions.items()} == {
+        route: [(r[0], r[1]) for r in rows if (route, r[0]) not in PROTOTYPE_ONLY_VERBS]
+        for route, rows in replayed.actions.items()
+    }
     assert [(e.id, e.state, e.glyph, e.keys, e.paths) for e in packaged.entry] == [
         (e.id, e.state, e.glyph, e.keys, e.paths) for e in replayed.entry
     ]

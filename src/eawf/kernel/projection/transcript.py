@@ -60,9 +60,9 @@ from eawf.kernel.projection.route_view import (
     build_route_read_model,
     check_field_tables,
     known_field,
+    stated,
     status_and,
     unknown_field,
-    unstated,
 )
 from eawf.kernel.projection.truth import (
     Freshness,
@@ -100,9 +100,12 @@ TRANSCRIPT_ROUTE: Final = "transcript"
 #: The routes of this family, stated as a tuple so the family check reads like the others.
 TRANSCRIPT_ROUTES: Final[tuple[str, ...]] = (TRANSCRIPT_ROUTE,)
 
-#: The item whose producer would state what a Run cost and how it ended. Those are
-#: metering and outcome facts rather than stream facts, so no event line carries them.
-RUN_OUTCOME_PRODUCER: Final = "no producer reports a Run's outcome or cost yet"
+#: Why a Run states no outcome: its stored status is one it still leaves. What it cost is
+#: the Run's usage read, which the frame draws beside the rows rather than a column of them.
+RUN_NOT_ENDED: Final = "the Run has not ended"
+
+#: Why a Run states no failure: it recorded none.
+NO_FAILURE: Final = "the Run recorded no failure"
 
 #: The revision every derived transcript cell states. A block is folded out of one line
 #: that is never revised, so the first revision is the only one it stands at.
@@ -129,9 +132,9 @@ NO_TEXT_REASON: Final = "this event kind states no text the transcript can rende
 TRANSCRIPT_FIELDS: Final[Mapping[str, tuple[RouteFieldSpec, ...]]] = MappingProxyType(
     {
         TRANSCRIPT_ROUTE: status_and(
-            unstated("outcome", missing_producer=RUN_OUTCOME_PRODUCER),
-            unstated("cost", missing_producer=RUN_OUTCOME_PRODUCER),
-        )
+            stated("outcome", absent=RUN_NOT_ENDED),
+            stated("failure", absent=NO_FAILURE),
+        ),
     }
 )
 
@@ -860,12 +863,13 @@ __all__ = [
     "EVENT_LANE",
     "FAMILY",
     "LANES",
+    "NO_FAILURE",
     "NO_OPEN_TURN_REASON",
     "NO_TEXT_REASON",
     "OPEN_TURN_TEXT",
     "PURGED_REASON",
     "RETRY_WORDS",
-    "RUN_OUTCOME_PRODUCER",
+    "RUN_NOT_ENDED",
     "THINKING",
     "TRANSCRIPT_FIELDS",
     "TRANSCRIPT_ROUTE",

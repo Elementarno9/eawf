@@ -3,9 +3,7 @@
 Pins the W08 compile-gate contract:
 
 * deterministic ``command_exit_zero`` gates compile to a CheckSpec that
-  carries the gate's ``argv`` + the canonical ``criterion`` metadata
-  shape that :func:`eawf.workflow.skills.audit.build_criterion_specs`
-  already produces — same CheckSpec audit emits, no duplication;
+  carries the gate's ``argv`` + the canonical ``criterion`` metadata;
 * W15-added kwargs on the typed gate (``timeout_class``, ``scope``,
   ``wave_id``, ``wave_file_scopes``) thread through onto the compiled
   CheckSpec.args so the runner picks them up;
@@ -282,36 +280,16 @@ def test_compile_gate_passthrough_other_kind_jury_still_none() -> None:
     assert compile_gate(gate, criterion=criterion) is None
 
 
-# ---- reuse contract — same shape as audit build_criterion_specs -------------
+# ---- the canonical command_exit_zero args shape -----------------------------
 
 
-def test_compile_gate_reuses_build_criterion_specs_shape() -> None:
-    """The compiled CheckSpec carries the canonical audit-side shape.
-
-    Cross-pin to :func:`eawf.workflow.skills.audit.build_criterion_specs`:
-    a directive with ``argv`` + ``criterion`` produces the exact args
-    shape compile_gate must emit. Drift here means audit and verify
-    no longer hand the runner identical CheckSpec shapes — a
-    rule 1 + rule 4 hygiene break that this test guards against.
-    """
-    from eawf.workflow.skills.audit import build_criterion_specs
-
-    directive = {"criterion": "CRIT-1", "argv": ["uv", "run", "pytest", "-q"]}
-    audit_specs = build_criterion_specs(criterion_checks=[directive], wave=None)
-    assert len(audit_specs) == 1
-    audit_spec = audit_specs[0]
-
-    gate = _command_exit_zero_gate()
-    verify_spec = compile_gate(gate, criterion=_criterion())
+def test_compile_gate_emits_the_canonical_command_exit_zero_shape() -> None:
+    """The compiled spec carries exactly the gate's argv and its criterion id."""
+    verify_spec = compile_gate(_command_exit_zero_gate(), criterion=_criterion())
 
     assert verify_spec is not None
-    # Same kind, same argv, same criterion metadata. The only
-    # intentional delta is the spec name (compile_gate uses gate.id
-    # so per-gate evidence + waivers still address it by typed
-    # identity).
-    assert verify_spec.kind == audit_spec.kind
-    assert verify_spec.args["argv"] == audit_spec.args["argv"]
-    assert verify_spec.args["criterion"] == audit_spec.args["criterion"]
+    assert verify_spec.kind == "command_exit_zero"
+    assert verify_spec.args == {"argv": ["uv", "run", "pytest", "-q"], "criterion": "CRIT-1"}
 
 
 # ---- boundary: validation -------------------------------------------------

@@ -28,7 +28,7 @@ from eawf.kernel.projection.attention import (
     deliveries,
     top_item,
 )
-from eawf.kernel.projection.compute import STALL_KIND, RouteProjection
+from eawf.kernel.projection.compute import RUN_STATE_KIND, STALL_KIND, RouteProjection
 from eawf.kernel.projection.registers import RegisterView, build_register_view
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
@@ -126,12 +126,14 @@ def test_ui_062_the_item_leaves_once_the_run_answers_and_a_new_silence_is_a_new_
     _projection, first = stalled(ctx, canary)
     act(ctx, canary, 2)
 
+    # the Run answered, so it is listed as running again rather than as stalled
     _projection, answered = attention(ctx, canary)
-    assert answered.rows == ()
-    assert build_attention_view(answered).items == ()
+    assert [row.facts["kind"] for row in answered.rows] == [RUN_STATE_KIND]
+    assert [i.bucket for i in build_attention_view(answered).items] == [AttentionBucket.ACTIVE]
 
     assert sweep_once(ctx, now=datetime.now(UTC)) == (RUN_KEY,)
     _projection, again = attention(ctx, canary)
+    # a stall stands over the Run again, so it is listed as stalled and not as running
     (row,) = again.rows
     assert (row.key, row.revision) == (f"STL-{RUN_KEY}-2", 3)
     (fresh,) = deliveries(again, principal=ACTOR, delivered=delivered_revisions(first))
@@ -159,9 +161,10 @@ def test_ui_062_no_stall_raised_lists_nothing(canary: CanaryProvision, ctx: Meth
 
     _projection, register = attention(ctx, canary)
 
-    assert register.rows == ()
+    assert [row.facts["kind"] for row in register.rows] == [RUN_STATE_KIND]
     counts = {c.bucket: c.count for c in build_attention_view(register).bucket_counts()}
     assert counts[AttentionBucket.STALLED] == 0
+    assert counts[AttentionBucket.ACTIVE] == 1
 
 
 def _view(register: RegisterView, session: Session) -> View:

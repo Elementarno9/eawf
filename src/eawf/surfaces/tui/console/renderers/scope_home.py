@@ -55,6 +55,7 @@ from eawf.surfaces.tui.console.renderers.attention import NO_DEADLINE
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
     counts,
+    label,
     native_head,
     route_crumb,
 )
@@ -150,9 +151,14 @@ def _of(spine: SpineView, collection: Epoch2Collection) -> list[SpineRow]:
     return [row for row in spine.rows if row.collection is collection]
 
 
-def groups_of(spine: SpineView) -> list[Group]:
-    """Return each Track with its Milestones, then the Milestones filed under no held Track."""
-    tracks = _of(spine, Epoch2Collection.TRACK)
+def groups_of(spine: SpineView, pinned: str | None) -> list[Group]:
+    """Return each Track with its Milestones, then the Milestones filed under no held Track.
+
+    Args:
+        spine: The home read model.
+        pinned: The Track the operator pinned, which leads the tree; ``None`` for none.
+    """
+    tracks = sorted(_of(spine, Epoch2Collection.TRACK), key=lambda track: track.key != pinned)
     milestones = _of(spine, Epoch2Collection.MILESTONE)
     held_keys = {track.key for track in tracks}
     groups: list[Group] = [(t, [m for m in milestones if m.parent_key == t.key]) for t in tracks]
@@ -398,7 +404,7 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         The full frame, keybar last.
     """
     s, w = view.session, view.w
-    groups = groups_of(spine)
+    groups = groups_of(spine, s.pinned_track)
     focus = _focus(groups, s.sel_id, s.home_track)
     tree = tree_of(groups, focus)
     keys = [item.row.key if item.row is not None else None for item in tree]
@@ -431,6 +437,8 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         *native_head(view, spine, crumb_text=route_crumb(view, spine), summary=counts(spine)),
         *principal_line(view),
     ]
+    if s.pinned_track is not None:
+        top.append(label("PINNED", f"{s.pinned_track} leads your tree · . p unpins"))
     listed = attention_lines(view, view.attention, s.home_sel if on_list else None)
     # the pane that does not own the arrows recedes, so where the focus is reads at a glance
     below = [thin(w), *(listed if on_list else [recede(line, w) for line in listed])]

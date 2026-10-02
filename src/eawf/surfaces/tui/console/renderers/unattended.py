@@ -39,6 +39,7 @@ from eawf.surfaces.tui.console.operations import DISPATCH_QUEUE_TARGET
 from eawf.surfaces.tui.console.reads import write_refusal
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
+    cell,
     finish,
     label,
     more,
@@ -107,7 +108,7 @@ def _progress(row: RouteRecord, view: View, queue: DispatchQueueView | None) -> 
             return f"stalled · nothing since {clock_minute(field.occurred_at)}"
     entry = queue.run(row.key) if queue is not None else None
     if queue is None or entry is None or entry.started_at is None:
-        return value_cell(row.field("progress")).slot + " unknown"
+        return cell(row.field("progress"))
     if freshness_of(queue.read_at, view.now or queue.read_at) is Freshness.STALE:
         return f"stale · queue last read {clock_minute(queue.read_at)}"
     return f"opaque · {_elapsed(entry.started_at, view, queue)}{_against(entry.budget_seconds)}"

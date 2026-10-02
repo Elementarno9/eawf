@@ -80,22 +80,14 @@
  "actions": {
   "scope.home": [
    [
-    "n",
-    "new draft",
-    "yes",
-    "",
-    "control",
-    "a DRAFT task is added to this track’s backlog",
-    "it is not dispatched and has no owner yet"
-   ],
-   [
     "p",
     "pin outcome",
     "yes",
     "",
     "",
-    "this track sorts first for you",
-    "no other principal’s order changes"
+    "this track sorts first in your tree",
+    "no other principal’s order changes",
+    "light"
    ],
    [
     "y",
@@ -105,15 +97,6 @@
     "",
     "the stable URN goes to your clipboard",
     "nothing in the workspace is read or changed"
-   ],
-   [
-    "w",
-    "switch workspace",
-    "yes",
-    "",
-    "control",
-    "the console re-attaches to another registered root",
-    "no run is stopped, paused or reassigned"
    ],
    [
     "r",
@@ -132,8 +115,9 @@
     "yes",
     "",
     "",
-    "new rows arrive at the top as they change",
-    "the sort and your selection stay put"
+    "the run whose record moved last is listed first",
+    "no run is touched · only this display",
+    "light"
    ],
    [
     "p",
@@ -141,8 +125,9 @@
     "yes",
     "",
     "",
-    "the window stops updating and counts what it held back",
-    "no run is paused — only this display"
+    "the window holds its rows and counts what changed since",
+    "no run is paused · only this display",
+    "light"
    ],
    [
     "s",
@@ -150,35 +135,37 @@
     "yes",
     "",
     "",
-    "the window re-orders by the column you pick",
-    "fleet-wide counts are unaffected"
+    "the window re-orders by the next column",
+    "fleet-wide counts are unaffected",
+    "light"
    ],
    [
     "*",
     "select all shown",
     "yes",
     "",
-    "control",
-    "every run in the focused bucket joins the selection",
-    "nothing is dispatched or cancelled by selecting"
+    "",
+    "every run in the register joins the selection",
+    "nothing is dispatched or cancelled by selecting",
+    "light"
    ],
    [
     "n",
     "reconcile selected",
-    "no",
-    "no control outcome is unknown here",
-    "control",
+    "yes",
     "",
-    ""
+    "control",
+    "the run under the cursor is asked again for its control outcome",
+    "nothing is stopped or restarted"
    ],
    [
     "c",
     "cancel selected",
-    "no",
-    "nothing is selected",
-    "control",
+    "yes",
     "",
-    ""
+    "control",
+    "the run under the cursor ends and closes as CANCELLED",
+    "its task is not failed and no batch is touched"
    ]
   ],
   "run.detail": [
@@ -216,15 +203,6 @@
     "cost.ceiling"
    ],
    [
-    "s",
-    "steer",
-    "yes",
-    "",
-    "",
-    "a steering note is delivered to the running agent",
-    "it does not stop the run or change its task"
-   ],
-   [
     "n",
     "interrupt",
     "yes",
@@ -241,33 +219,6 @@
     "control",
     "the run ends and closes as CANCELLED",
     "the task is not failed and no batch is touched"
-   ],
-   [
-    "t",
-    "retry",
-    "no",
-    "the run has not ended",
-    "control",
-    "",
-    ""
-   ],
-   [
-    "f",
-    "fork",
-    "no",
-    "requires a terminal run",
-    "control",
-    "",
-    ""
-   ],
-   [
-    "p",
-    "purge events",
-    "no",
-    "not certified for your class",
-    "admin",
-    "",
-    ""
    ]
   ],
   "batch.detail": [
@@ -277,42 +228,6 @@
     "no",
     "checks incomplete · 3 of 4 passed",
     "merge",
-    "",
-    ""
-   ],
-   [
-    "i",
-    "integrate task",
-    "yes",
-    "",
-    "control",
-    "the selected task joins this batch at its head",
-    "no other task changes and no check re-runs"
-   ],
-   [
-    "r",
-    "request repair",
-    "yes",
-    "",
-    "control",
-    "the batch enters CHANGES_REQUIRED with your reason",
-    "nothing already merged is reverted"
-   ],
-   [
-    "c",
-    "cancel batch",
-    "yes",
-    "",
-    "control",
-    "the batch closes and its tasks return to PLANNED",
-    "no completed work is undone"
-   ],
-   [
-    "n",
-    "reconcile",
-    "no",
-    "no control is outstanding",
-    "control",
     "",
     ""
    ]
@@ -366,31 +281,13 @@
   ],
   "track": [
    [
-    "n",
-    "new milestone",
-    "yes",
-    "",
-    "control",
-    "a PLANNED milestone joins this track",
-    "it is not scheduled and holds no batches yet"
-   ],
-   [
-    "b",
-    "open batch",
-    "no",
-    "WIP is 3 of 3 batches",
-    "control",
-    "",
-    ""
-   ],
-   [
     "p",
     "pause dispatch",
     "yes",
     "",
     "control",
-    "no new run starts in this track",
-    "runs already executing continue"
+    "the daemon is asked to pause the dispatch queue at its next safe point",
+    "the queue is the whole tree’s, not this track’s; a claimed run continues"
    ],
    [
     "r",
@@ -404,33 +301,6 @@
   ],
   "task.detail": [
    [
-    "e",
-    "dispatch",
-    "no",
-    "not planned · already ready",
-    "control",
-    "",
-    ""
-   ],
-   [
-    "i",
-    "integrate",
-    "yes",
-    "",
-    "control",
-    "the task joins its Batch at the Batch head",
-    "no check re-runs and no other task moves"
-   ],
-   [
-    "t",
-    "retry",
-    "no",
-    "the task has not failed",
-    "control",
-    "",
-    ""
-   ],
-   [
     "y",
     "copy task URN",
     "yes",
@@ -441,33 +311,6 @@
    ]
   ],
   "release": [
-   [
-    "a",
-    "approve",
-    "no",
-    "1 member is not accepted",
-    "approve",
-    "",
-    ""
-   ],
-   [
-    "p",
-    "publish",
-    "no",
-    "approval is incomplete",
-    "publish",
-    "",
-    ""
-   ],
-   [
-    "m",
-    "edit membership",
-    "yes",
-    "",
-    "control",
-    "the selected milestone leaves this release",
-    "the milestone itself is unchanged"
-   ],
    [
     "y",
     "copy release URN",
@@ -480,31 +323,14 @@
   ],
   "timeline": [
    [
-    "d",
-    "explain dependency",
-    "yes",
-    "",
-    "",
-    "the blocking edge is named in full",
-    "no date moves"
-   ],
-   [
-    "t",
-    "today",
-    "yes",
-    "",
-    "",
-    "the horizon recentres on W29",
-    "the pan position is the only thing that changes"
-   ],
-   [
     "m",
     "propose date",
-    "no",
-    "the milestone has no owner",
-    "control",
+    "yes",
     "",
-    ""
+    "control",
+    "the milestone’s target date becomes the date you type",
+    "no milestone changes status and no batch is touched",
+    "light"
    ]
   ],
   "backlog": [
@@ -516,52 +342,16 @@
     "control",
     "",
     ""
-   ],
-   [
-    "d",
-    "defer",
-    "yes",
-    "",
-    "control",
-    "the draft moves to DEFERRED with your reason",
-    "it is not dropped and keeps its place in the queue"
-   ],
-   [
-    "x",
-    "drop",
-    "yes",
-    "",
-    "control",
-    "the draft is closed and leaves the backlog",
-    "no task or batch is affected"
    ]
   ],
   "campaign": [
-   [
-    "p",
-    "promote finding",
-    "yes",
-    "",
-    "control",
-    "the finding becomes available to a milestone",
-    "the campaign does not close and its bounds are unchanged"
-   ],
-   [
-    "e",
-    "extend bounds",
-    "no",
-    "checkpoint not reached",
-    "control",
-    "",
-    ""
-   ],
    [
     "x",
     "drop campaign",
     "yes",
     "",
     "control",
-    "the campaign closes as DROPPED",
+    "the campaign closes as CANCELLED",
     "promoted findings stay promoted"
    ]
   ],
@@ -596,15 +386,6 @@
     "the stable URN goes to your clipboard",
     "the URN survives moves and retirement",
     "light"
-   ],
-   [
-    "o",
-    "open target",
-    "no",
-    "purged · nothing to open",
-    "",
-    "",
-    ""
    ]
   ],
   "settings": [
@@ -614,17 +395,9 @@
     "yes",
     "",
     "control",
-    "the requested value changes at the session layer",
-    "the project ceiling still wins if it is lower"
-   ],
-   [
-    "r",
-    "reset to inherited",
-    "yes",
-    "",
-    "control",
-    "the session request is removed",
-    "the effective value may not change at all"
+    "the key’s editor opens at the lens layer",
+    "nothing is written until its card is confirmed",
+    "light"
    ],
    [
     "x",
@@ -633,16 +406,8 @@
     "",
     "control",
     "the value stated at the lens layer is removed",
-    "the next layer's value applies; no other layer changes"
-   ],
-   [
-    "c",
-    "request capability",
-    "no",
-    "needs a workspace owner",
-    "admin",
-    "",
-    ""
+    "the next layer’s value applies; no other layer changes",
+    "light"
    ]
   ],
   "unattended": [
@@ -685,15 +450,6 @@
     "accept",
     "",
     ""
-   ],
-   [
-    "r",
-    "request repair",
-    "yes",
-    "",
-    "control",
-    "the milestone returns to ACTIVE with your reason",
-    "the sealed digest stays addressable"
    ],
    [
     "y",
@@ -1157,11 +913,6 @@
     ]
    ],
    "research": [
-    [
-     "auto_save",
-     "b",
-     false
-    ],
     [
      "default_depth",
      "e",

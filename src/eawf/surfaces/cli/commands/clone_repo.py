@@ -272,9 +272,6 @@ def clone_repo_cmd(
             lifecycle_depth=lifecycle_depth,
             plugin=None,
             mcp=None,
-            acceptance_tests=True,
-            acceptance_lint=True,
-            acceptance_typecheck=True,
             force=force,
         )
     finally:

@@ -320,8 +320,8 @@ def test_no_key_checks_nothing_and_an_unowned_key_has_no_section() -> None:
     broken = {"vcs": {"coauthor": {"mode": "bogus"}}}
 
     check_sections(broken, [])
-    check_sections(broken, ["research.auto_save"])
-    assert section_of("research.auto_save") is None
+    check_sections(broken, ["telemetry.enabled"])
+    assert section_of("telemetry.enabled") is None
 
 
 def test_a_leaf_is_held_to_its_innermost_section() -> None:
@@ -345,12 +345,12 @@ def test_the_refusal_carries_the_section_field_and_message() -> None:
 
 
 def test_a_staged_body_stands_in_for_its_file(repo: Path) -> None:
-    _file(repo).write_text(yaml.safe_dump({"research": {"auto_save": True}}), encoding="utf-8")
-    staged = {"research": {"auto_save": False}}
+    _file(repo).write_text(yaml.safe_dump({"telemetry": {"enabled": True}}), encoding="utf-8")
+    staged = {"telemetry": {"enabled": False}}
 
     merged, sources = merge_config(workspace=repo, repo=repo, env={}, staged={_file(repo): staged})
 
-    assert merged["research"]["auto_save"] is False
-    assert sources["research.auto_save"] == "repo"
-    assert staged == {"research": {"auto_save": False}}
-    assert yaml.safe_load(_file(repo).read_text())["research"]["auto_save"] is True
+    assert merged["telemetry"]["enabled"] is False
+    assert sources["telemetry.enabled"] == "repo"
+    assert staged == {"telemetry": {"enabled": False}}
+    assert yaml.safe_load(_file(repo).read_text())["telemetry"]["enabled"] is True

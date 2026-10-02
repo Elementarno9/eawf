@@ -46,13 +46,16 @@ from eawf.surfaces.tui.console.frame import (
     thin,
 )
 from eawf.surfaces.tui.console.keybar import keybar, route_pairs
+from eawf.surfaces.tui.console.live_reads import held_usage
 from eawf.surfaces.tui.console.navigation import Ctx, busy, copied
+from eawf.surfaces.tui.console.renderers.budget_lines import cost_line
 from eawf.surfaces.tui.console.renderers.read_model import (
+    UNKNOWN_WORD,
+    cell,
     crumb,
     native,
     native_header,
     route_crumb,
-    unstated_rows,
 )
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import cell_len, pad
@@ -595,6 +598,30 @@ def _crumb(view: View, model: TranscriptReadModel) -> str:
     return route_crumb(view, model, run, "Transcript") if run else crumb(view, model)
 
 
+def _outcome_rows(view: View, model: TranscriptReadModel) -> list[str]:
+    """Return how the Run ended, as its stored status says, and what it cost so far.
+
+    The cost is the Run's usage read: until it arrives the line says so rather than
+    drawing a zero, and a Run whose readings priced nothing says it is unmetered. Both
+    share one row, so the blocks keep every row they had at the narrowest frame.
+    """
+    run = view.session.subj_id or (model.rows[0].key if model.rows else None)
+    found = model.index_of(run)
+    if found is None:
+        outcome = f"{UNKNOWN_WORD} · no Run is held"
+    else:
+        row = model.rows[found]
+        failure = row.field("failure").value
+        outcome = cell(row.field("outcome")) + (f" · {failure}" if failure else "")
+    usage = held_usage(view.live, run) if run is not None else None
+    cost = (
+        cost_line(usage.cost_microusd, usage.cap_cost_microusd).removeprefix("cost ")
+        if usage is not None
+        else f"{UNKNOWN_WORD} · usage not read yet"
+    )
+    return [f" OUTCOME   {outcome} · cost {cost}"]
+
+
 def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
     """Return the Transcript frame drawn from the read model the daemon served.
 
@@ -619,7 +646,7 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
         *_state_rows(model, w),
         thin(w),
     ]
-    closing: list[str] = [thin(w), *unstated_rows(model)]
+    closing: list[str] = [thin(w), *_outcome_rows(view, model)]
     # the keybar takes the last row, and the two sections take their own
     track = max(1, h - len(opening) - len(closing) - 1)
     flat = [

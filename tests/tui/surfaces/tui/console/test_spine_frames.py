@@ -17,7 +17,7 @@ import pytest
 
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
 from eawf.kernel.projection.spine import build_spine_view
-from eawf.kernel.projection.transcript import RUN_OUTCOME_PRODUCER
+from eawf.kernel.projection.transcript import RUN_NOT_ENDED
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console.app import compose_frame
 from eawf.surfaces.tui.console.chrome import load_chrome
@@ -498,8 +498,8 @@ def test_enter_opens_the_runs_transcript() -> None:
 # ---------- the transcript agrees with its Run and speaks operator prose ----------
 
 
-def test_the_outcome_producer_is_operator_prose_not_a_requirement_code() -> None:
-    assert not re.search(r"\b[A-Z]{2,5}-\d{2,4}\b", RUN_OUTCOME_PRODUCER)
+def test_the_outcome_reason_is_operator_prose_not_a_requirement_code() -> None:
+    assert not re.search(r"\b[A-Z]{2,5}-\d{2,4}\b", RUN_NOT_ENDED)
 
 
 def test_the_transcript_states_the_runs_own_status_and_climbs_through_it() -> None:

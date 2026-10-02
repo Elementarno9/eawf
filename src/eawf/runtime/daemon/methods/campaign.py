@@ -88,6 +88,7 @@ from eawf.kernel.state.epoch2.campaign import (
 )
 from eawf.kernel.state.epoch2.finding import CampaignFinding, FindingStatement
 from eawf.kernel.state.epoch2.question import OpenQuestion
+from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.state.epoch2.urns import (
     CampaignUrn,
     ClaimUrn,
@@ -1227,7 +1228,8 @@ def campaign_view(authority: RootAuthority, key: str) -> CampaignView:
         ValueError: The Campaign lists an artifact revision no record holds.
     """
     document_file = document_path(authority)
-    row = document_rows(read_document(document_file), Epoch2Collection.CAMPAIGN).get(key)
+    document = read_document(document_file)
+    row = document_rows(document, Epoch2Collection.CAMPAIGN).get(key)
     if row is None:
         raise DaemonValidationError(
             f"validation_failed: identity_not_found: the tree holds no campaign keyed {key!r}"
@@ -1241,8 +1243,28 @@ def campaign_view(authority: RootAuthority, key: str) -> CampaignView:
         row,
         revisions=stored_revisions(payloads(Epoch2Collection.ARTIFACT)),
         findings=promoted_findings(payloads(Epoch2Collection.CAMPAIGN_FINDING)),
+        runners=_runner_runs(document, document_file, Campaign.model_validate(row)),
         promoted_at=promoting_sequences(_firehose_payloads(firehose_path(authority))),
     )
+
+
+def _runner_runs(
+    document: dict[str, Any], document_file: Path, campaign: Campaign
+) -> dict[str, Run]:
+    """Return the Runs the Campaign's steps name as runners, by key.
+
+    A finished round's Run is compacted out of the document into the run ledger,
+    so a runner the document no longer holds is read from there.
+    """
+    wanted = {step.run_refs[-1].entity_key for step in campaign.plan_steps if step.run_refs}
+    rows = document_rows(document, Epoch2Collection.RUN)
+    found = {key: Run.model_validate(rows[key]) for key in wanted if key in rows}
+    if wanted - found.keys():
+        path = ledger_path(document_file, Epoch2Collection.RUN)
+        for line in effective_records(read_ledger_records(path)):
+            if line.record_key in wanted - found.keys() and "payload_kind" not in line.payload:
+                found[line.record_key] = Run.model_validate(line.payload)
+    return found
 
 
 def _firehose_payloads(path: Path) -> Iterator[Mapping[str, Any]]:

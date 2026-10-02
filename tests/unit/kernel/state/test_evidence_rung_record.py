@@ -179,6 +179,7 @@ def filing(**overrides: Any) -> ClaimFiling:
     fields: dict[str, Any] = {
         "key": "CLM-0004",
         "urn": CLAIM,
+        "subject_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/task/EAWF-0042",
         "status": "OPEN",
         "title": "Replay keeps order",
         "evidence_refs": [EVIDENCE],
@@ -213,3 +214,23 @@ def test_plan_048_the_latest_revision_of_each_rung_is_the_one_drawn() -> None:
 def test_plan_048_no_records_is_no_ladder() -> None:
     """Boundary: a claim nothing has scored has no rungs, never four invented ones."""
     assert latest_rungs([]) == ()
+
+
+@pytest.mark.parametrize(
+    "subject",
+    [
+        "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/task/EAWF-0042",
+        "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/batch/BAT-0007",
+        "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/milestone/MLS-0030",
+    ],
+)
+def test_a_claim_is_about_a_task_batch_or_milestone(subject: str) -> None:
+    assert str(filing(subject_ref=subject).subject_ref) == subject
+
+
+@pytest.mark.parametrize(
+    "subject", ["eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000001", CLAIM, None]
+)
+def test_a_claim_about_anything_else_or_nothing_fails(subject: str | None) -> None:
+    with pytest.raises(ValidationError):
+        filing(subject_ref=subject)

@@ -24,14 +24,15 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from pathlib import Path
-from typing import cast
+from typing import cast, get_args
 
 import orjson
 import pytest
 from typer.testing import CliRunner
 
 from eawf.surfaces.cli.app import app
-from eawf.surfaces.render.envelope import OutputEnvelope, SkillName
+from eawf.surfaces.cli.commands.skill import _exit_for_status
+from eawf.surfaces.render.envelope import EnvelopeStatus, OutputEnvelope, SkillName
 from eawf.workflow.skills import registry
 from eawf.workflow.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 
@@ -63,7 +64,7 @@ def stub_research_skill() -> Iterator[type[Skill]]:
         def action(self, ctx: SkillContext) -> SkillResult:
             return SkillResult(
                 status="ok",
-                body={"brief_id": "BR-stub", "questions": [], "options": []},
+                body={"brief_id": "BR-stub", "questions": []},
                 next_valid_actions=["eawf research show BR-stub"],
             )
 
@@ -83,7 +84,7 @@ def stub_failing_skill() -> Iterator[type[Skill]]:
     """Register a stub ``/verify`` skill whose action raises.
 
     The engine catches the exception and returns ``status=failed``; the
-    CLI must exit with ``VALIDATION_FAILED`` (4). The fixture displaces
+    CLI must exit with ``VALIDATION_ERROR`` (2). The fixture displaces
     the production ``/verify`` skill for the duration of the test.
     """
 
@@ -111,7 +112,7 @@ def stub_failing_skill() -> Iterator[type[Skill]]:
 def stub_needs_user_skill() -> Iterator[type[Skill]]:
     """Register a stub ``/plan`` skill that returns ``needs_user``.
 
-    The CLI must exit with ``USER_DECLINED`` (7). The fixture displaces
+    The CLI must exit with ``USER_ERROR`` (1). The fixture displaces
     the production ``/plan`` skill for the duration of the test.
     """
 
@@ -424,3 +425,12 @@ def test_skill_list_help_text_documents_purpose(cli_runner: CliRunner) -> None:
     assert result.exit_code == 0
     assert "list" in result.stdout
     assert "run" in result.stdout
+
+
+@pytest.mark.parametrize("status", get_args(EnvelopeStatus))
+def test_skill_run_help_states_the_exit_code_each_status_returns(
+    cli_runner: CliRunner, status: EnvelopeStatus
+) -> None:
+    result = cli_runner.invoke(app, ["skill", "run", "--help"], env={"COLUMNS": "200"})
+    assert result.exit_code == 0
+    assert f"{status}={_exit_for_status(status)}" in " ".join(result.stdout.split())

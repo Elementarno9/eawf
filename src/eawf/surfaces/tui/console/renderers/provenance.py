@@ -719,6 +719,27 @@ def stack_frame(view: View, settings: EffectiveSettingsView) -> list[str]:
     return build(view, rows, keybar(STACK_KEYS, w))
 
 
+def lens_verb(ctx: Ctx, key: str, verb: str) -> None:
+    """Run the action menu's ``edit`` or ``unset`` on the settings key under the cursor.
+
+    Each is the lens's own key, Enter or ``x``, so the menu verb opens the same editor or
+    the same consequence card, past the same refusals, and logs what the lens logs.
+
+    Args:
+        ctx: The keystroke's context.
+        key: The menu letter pressed, which a refusal is logged under.
+        verb: ``edit`` or ``unset``, as the menu lists it.
+    """
+    settings = ctx.settings
+    leaf = placement(ctx.s, settings)[2] if settings is not None else None
+    if settings is None or leaf is None:
+        ctx.log(key, f"{verb} · no settings key is under the cursor")
+    elif verb == "edit":
+        _open_edit(ctx, settings, leaf)
+    else:
+        _unset(ctx, settings, leaf)
+
+
 # ---------- the route's keys: the lens, the sections, the filter, the edit ----------
 
 

@@ -515,24 +515,6 @@ def _effective_field(*, key: str, value: Any, winner: Layer | None) -> TruthFiel
     )
 
 
-def _deny_chain(
-    entry: LeafKey, value: Any, merged: Mapping[str, Any], sources: Mapping[str, str]
-) -> tuple[str, ...]:
-    """Return the refusal in force on a key's value, naming the leaf and layer behind it.
-
-    A refusal is stated only while it holds: the key carries the refused value and the
-    leaf that would lift it is not ``true``, which is exactly when the engine refuses.
-    """
-    deny = entry.deny
-    if deny is None or value is _ABSENT or render_value(value) != deny.value:
-        return ()
-    # the lifting leaf always has a value in force: the built-in defaults state it
-    lifted = merged[deny.unless]
-    if lifted is True:
-        return ()
-    return (f"{deny.unless} = {render_value(lifted)} · {_winner(deny.unless, sources)}",)
-
-
 def _constraint_chain(entry: LeafKey) -> tuple[str, ...]:
     """Return the range the compiled config registry holds a key's value to, if any."""
     if entry.value_range is None:
@@ -622,7 +604,6 @@ def _leaf(
         value_type=entry.type if entry is not None else None,
         meaning=entry.description if entry is not None else "",
         allowed=() if editor == "pin" else allowed,
-        deny_chain=_deny_chain(entry, value, merged, sources) if entry is not None else (),
         constraint_chain=_constraint_chain(entry) if entry is not None else (),
         capability_requirement=f"{runtime} runtime" if runtime is not None else None,
         certification_state=_certification_state(runtime) if runtime is not None else None,

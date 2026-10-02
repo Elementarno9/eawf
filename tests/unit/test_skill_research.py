@@ -5,8 +5,8 @@ Pin the headless ``/research`` contract:
 - A headless run has no agent to answer questions, so it refuses with
   ``status=blocked``, a ``campaign_required`` warning, and a repair route
   through ``eawf campaign new`` / ``eawf campaign run``.
-- It invents no placeholder rows: no synthetic question slots, options,
-  recommendation, fan-out plan or persisted brief, at any depth.
+- It invents no placeholder rows: no synthetic question slots or
+  persisted brief, at any depth.
 - The scope's live OpenQuestion rows surface in the body and become the
   route's ``--question`` values.
 - ``--depth`` / ``--agents`` (and their config leaves) shape the route;
@@ -88,9 +88,6 @@ def test_research_headless_invents_no_placeholder_rows(state_dir: Path, depth: s
     body = _body(env)
     assert body.brief_id.startswith("BR-")
     assert body.questions == []
-    assert body.options == []
-    assert body.recommendation is None
-    assert body.research_plan is None
     assert body.persisted_brief is None
     assert f"--depth {depth} " in _route(env)
 
@@ -298,8 +295,6 @@ def test_research_surfaces_live_open_questions_into_the_route(state_dir: Path) -
         ("which curve model fits the short tenor", "(open)"),
         ("is the venue feed authoritative", "(blocking)"),
     ]
-    assert body.options == []
-    assert body.recommendation is None
     assert (
         "--question 'which curve model fits the short tenor'"
         " --question 'is the venue feed authoritative' --depth"

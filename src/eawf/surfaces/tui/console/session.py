@@ -242,6 +242,14 @@ class Session(BaseModel):
     home_ms: int = 0
     home_region: str | None = None
     home_sel: int = 0
+    # the Track the operator pinned first in the scope-home tree, for this console alone
+    pinned_track: str | None = None
+    # the Activity window's order (a column, or newest change first while it follows),
+    # whether it is paused, and the rows the paused window holds, taken at the first frame
+    # drawn after the pause; all three change only what this console shows
+    activity_order: str | None = None
+    activity_paused: bool = False
+    activity_held: tuple[Any, ...] | None = None
     track_group: str | None = None
     toasts: list[Toast] = Field(default_factory=list)
     trace: str | None = None

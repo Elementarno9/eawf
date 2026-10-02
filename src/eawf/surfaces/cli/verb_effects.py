@@ -190,6 +190,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "plan apply": _mutate("planning.plan_revision.apply"),
     "record append": _create("domain.record.append"),
     "record evidence": _create("runtime.delivery.record_evidence"),
+    "claim file": _create("runtime.evidence.claim.file"),
     "claim check": _mutate("runtime.evidence.claim.check"),
     "claim attest": _mutate("runtime.evidence.claim.attest"),
     "repository create": _create("domain.repository.create"),

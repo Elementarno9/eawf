@@ -20,6 +20,7 @@ import pytest
 
 from eawf.kernel.projection.attention import (
     AttentionBucket,
+    AttentionItem,
     AttentionNeedKind,
     NotificationClass,
     attention_mine,
@@ -286,13 +287,20 @@ def test_run_051_the_sweep_of_a_daemon_with_no_tree_attached_is_empty(tmp_path: 
 # ---------------------------------------------------------------------------
 
 
+def _needing(register: RegisterView) -> tuple[AttentionItem, ...]:
+    """Return the items a principal answers; the running Runs are listed beside them."""
+    return tuple(
+        i for i in build_attention_view(register).items if i.bucket is not AttentionBucket.ACTIVE
+    )
+
+
 def test_run_051_the_attention_register_lists_the_open_permission(
     canary: CanaryProvision, ctx: MethodContext
 ) -> None:
     request(ctx, canary)
 
     register = attention(ctx, canary)
-    (item,) = build_attention_view(register).items
+    (item,) = _needing(register)
 
     assert (item.key, item.bucket, item.need) == (
         "PERM-0001",
@@ -318,7 +326,7 @@ def test_run_051_a_decided_permission_leaves_the_register(
         expected_revision=1,
     )
 
-    assert build_attention_view(attention(ctx, canary)).items == ()
+    assert _needing(attention(ctx, canary)) == ()
 
 
 def test_run_052_the_console_draws_the_permission_without_a_hold(

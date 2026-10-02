@@ -32,6 +32,7 @@ from eawf.kernel.state.epoch2.evidence_rung import RungOutcome as LadderOutcome
 from eawf.kernel.state.epoch2.pause import OpenPause, PauseSituation
 from eawf.kernel.state.epoch2.pending_action import AgentPrincipal, PendingAction
 from eawf.kernel.state.epoch2.question import OpenQuestion, QuestionSituation
+from eawf.kernel.state.epoch2.run import RunRuntimeTuple
 from eawf.kernel.state.epoch2.urns import render_qualified_urn
 from eawf.runtime.daemon.methods.pause import stall_of
 
@@ -51,6 +52,12 @@ MAX_OPTIONS: Final = 4
 UNFETCHED_DIGEST: Final = "∅ unavailable · the digest could not be fetched"
 #: The rungs of a claim's ladder, in order, by name.
 RUNG_NAMES: Final[tuple[str, ...]] = ("resolve", "anchor", "screen", "entail")
+
+#: What a Run fact no producer recorded for it reads as, in words rather than a token.
+NOT_RECORDED: Final = "not recorded"
+
+#: How many cells of a vendor session digest a frame prints: its prefix and eight hex.
+SESSION_DIGEST_CELLS: Final = 13
 
 
 class _Record(BaseModel):
@@ -832,7 +839,7 @@ class StepRecord(_Record):
         """Return one plan step as its card draws it, from the Campaign the daemon served.
 
         The step's first bounded axis is its spend. The runner's provider and session are
-        facts no Campaign record states, so the card leaves them out rather than guessing.
+        what its Run records; a runner that records neither says so in words.
 
         Args:
             campaign: The Campaign the step belongs to, whose cards name its artifacts.
@@ -855,6 +862,12 @@ class StepRecord(_Record):
             ended_at=step.ended_at,
             waits_on=at.waits_on,
             runner=at.runner_ref.entity_key if at.runner_ref else None,
+            provider=runtime_words(at.runner_runtime) if at.runner_ref else None,
+            session_fact=(
+                session_words(at.runner_session.session_digest if at.runner_session else None)
+                if at.runner_ref
+                else None
+            ),
             spent=axis.spent,
             limit=axis.limit,
             unit=axis.unit,
@@ -973,6 +986,23 @@ def event_words(line: RunEventRecord) -> str:
     kind = line.event_kind.value.replace("_", " ")
     said = block_text(line)
     return f"{kind} · {said.value}" if said.state is TruthState.KNOWN and said.value else kind
+
+
+def runtime_words(runtime: RunRuntimeTuple | None) -> str:
+    """Return a Run's runtime as a frame prints it, each unrecorded member named so."""
+    if runtime is None:
+        return f"runtime {NOT_RECORDED}"
+    version = runtime.harness_version or f"version {NOT_RECORDED}"
+    provider = runtime.provider or f"provider {NOT_RECORDED}"
+    model = runtime.model or f"model {NOT_RECORDED}"
+    return f"{runtime.harness} {version} · {provider} · {model}"
+
+
+def session_words(digest: str | None) -> str:
+    """Return a Run's vendor session digest as a frame prints it, shortened."""
+    if digest is None:
+        return f"session {NOT_RECORDED}"
+    return f"session {digest[:SESSION_DIGEST_CELLS]}"
 
 
 def size_words(size: int) -> str:

@@ -4,13 +4,17 @@ The frame therefore cannot show a different set from the milestone that summaris
 
 The native frame is the packet's labelled facts about one Batch: its Tasks first, the
 caret walking them, then the Milestone it is cut under, how many Tasks it holds, the head
-it is bound at and its checks. A Batch whose merge outcome is unknown draws the two-pane
-frame instead, and a frame opened on no Batch lists the register to pick one from.
+it is bound at, the Runs of its Tasks and its checks. A Batch whose merge outcome is
+unknown draws the two-pane frame instead, and a frame opened on no Batch lists the
+register to pick one from.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from eawf.kernel.projection.spine import SpineView
+from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.kernel.state.epoch2.task import TaskStatus
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import derive as dv
@@ -69,6 +73,21 @@ def _head_text(facts: dict[str, str]) -> str:
     return " · ".join(parts)
 
 
+def _runs_text(spine: SpineView, tasks: Sequence[Record]) -> str:
+    """Return how many Runs ran the Batch's Tasks, how many still run, and the newest."""
+    keys = {task.key for task in tasks}
+    runs = [
+        row
+        for row in spine.rows
+        if row.collection is Epoch2Collection.RUN and row.parent_key in keys
+    ]
+    if not runs:
+        return "∅ no Run of its Tasks is held"
+    running = sum(1 for run in runs if status(run) == RunStatus.RUNNING.value)
+    newest = max(runs, key=lambda run: run.facts.get("created_at", ""))
+    return f"{dv.plural(len(runs), 'run')} · {running} running · newest {newest.key}"
+
+
 def batch_frame(view: View, spine: SpineView) -> list[str]:
     """Return one Batch's frame: its Tasks, then the facts the read model states about it.
 
@@ -94,6 +113,7 @@ def batch_frame(view: View, spine: SpineView) -> list[str]:
         lrow("MILESTONE", subject.parent_key or "∅ cut under no Milestone"),
         lrow("COUNT", f"{dv.plural(len(tasks), 'task')} · {done} completed"),
         lrow("HEAD", _head_text(facts)),
+        lrow("RUNS", _runs_text(spine, tasks)),
         lrow("CHECKS", cell(subject.field("checks"))),
         *([lrow("FAILED", facts["failure"])] if "failure" in facts else []),
     ]

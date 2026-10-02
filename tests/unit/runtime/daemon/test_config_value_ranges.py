@@ -37,7 +37,7 @@ CHOICE = "research.default_depth"
 #: A list whose items must be declared choices.
 MULTICHOICE = "tui.eu_view.fields"
 #: A bool.
-BOOL = "research.auto_save"
+BOOL = "telemetry.enabled"
 #: A leaf the interactive registry does not describe, so no range or choices apply.
 UNREGISTERED = "profiles.enabled"
 

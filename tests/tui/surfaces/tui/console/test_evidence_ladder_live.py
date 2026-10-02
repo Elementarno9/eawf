@@ -21,7 +21,10 @@ import pytest
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
 from eawf.kernel.state.epoch2.evidence_rung import ClaimLadder
+from eawf.kernel.store.compaction import read_document
+from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
+from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY
 from eawf.runtime.daemon.methods.delivery_acceptance import DELIVERY_RECORD_EVIDENCE_METHOD
 from eawf.runtime.daemon.methods.evidence_ladder import EVIDENCE_CLAIM_FILE_METHOD
 from eawf.surfaces.tui.console.decisions import ClaimRecord, RungOutcome
@@ -31,13 +34,16 @@ from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import SIZES, SessionSetup
 from eawf.workflow.evidence.claim_ladder import EVIDENCE_LADDER_METHOD
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
+    MILESTONE_URN,
+    document_path,
     method_context,
     provision,
+    seed,
+    seed_row,
 )
 from tests.tui.surfaces.tui.console.test_console_live_smoke import live_console, render_setup
 
-CONTAINER: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
-CLAIM_URN: Final = "eawf://WSP-MAIN/PRJ-EAWF/_/claim/CLM-0004"
+CLAIM_URN: Final = "eawf://WSP-MAIN/PRJ-EAWF/_/claim/CLM-0001"
 AT: Final = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
 IN_WORDS: Final = "Replay any recorded log and every event arrives in the order it was recorded."
 BREAKS_IF: Final = "One replay puts two events out of order."
@@ -50,13 +56,14 @@ def _dispatch(root: Path, runtime: Path, method: str, **params: Any) -> dict[str
     return answer
 
 
-def _file_claim(root: Path, runtime: Path) -> str:
-    """File one evidence row and a claim citing it; return the evidence row's URN."""
+def _file_claim(canary: CanaryProvision, runtime: Path) -> str:
+    """File one evidence row and a claim about MLS-0030 citing it; return the row's URN."""
+    root = canary.root
     evidence = _dispatch(
         root,
         runtime,
         DELIVERY_RECORD_EVIDENCE_METHOD,
-        urn=f"{CONTAINER}/milestone/MLS-0030",
+        urn=MILESTONE_URN,
         actor="OPERATOR",
         idempotency_key="evidence-1",
         kind="artifact",
@@ -66,13 +73,14 @@ def _file_claim(root: Path, runtime: Path) -> str:
         root,
         runtime,
         EVIDENCE_CLAIM_FILE_METHOD,
-        urn=CLAIM_URN,
+        urn=MILESTONE_URN,
+        expected_revision=read_document(document_path(canary))[CANONICAL_SEQUENCE_KEY],
         actor="OPERATOR",
         idempotency_key="claim-1",
         title="Replay keeps order",
         description=IN_WORDS,
         falsifier=BREAKS_IF,
-        evidence_refs=[evidence],
+        evidence=[str(evidence).rsplit("/", 1)[-1]],
     )
     return str(evidence)
 
@@ -85,8 +93,9 @@ def tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path, s
     monkeypatch.setattr(tempfile, "tempdir", str(scratch))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     canary = provision(tmp_path / "tree", code="EVL")
+    seed(canary, {"milestone": {"MLS-0030": seed_row("milestone", "ACTIVE")}})
     runtime = tmp_path / "runtime"
-    return canary.root, runtime, _file_claim(canary.root, runtime)
+    return canary.root, runtime, _file_claim(canary, runtime)
 
 
 def _frames(
@@ -135,8 +144,8 @@ def test_ui_064_live_the_route_draws_each_rung_from_its_record(
 ) -> None:
     """UI-021/UI-064/PLAN-044: rung outcomes, the claim's prose and the standing, all produced."""
     root, runtime, _ = tree
-    (frame,) = _frames(root, runtime, SessionSetup(route="evidence", subj_id="CLM-0004", size=2))
-    assert "CLM-0004 · Replay keeps order" in frame
+    (frame,) = _frames(root, runtime, SessionSetup(route="evidence", subj_id="CLM-0001", size=2))
+    assert "CLM-0001 · Replay keeps order" in frame
     assert IN_WORDS[:40] in _row(frame, "IN WORDS")
     assert BREAKS_IF in _row(frame, "BREAKS IF")
     # the implication was never filed, so it draws no row at all rather than a glyph
@@ -159,7 +168,7 @@ def test_con_139_live_enter_on_a_rung_opens_the_card_over_the_same_record(
     root, runtime, evidence = tree
     # at 120 columns a reference and its full digest no longer fit on one card line
     (card,) = _frames(
-        root, runtime, SessionSetup(route="evidence", subj_id="CLM-0004", size=1), enter=True
+        root, runtime, SessionSetup(route="evidence", subj_id="CLM-0001", size=1), enter=True
     )
     assert "RUNG 1 RESOLVE · PASS" in card
     assert "CHECK      Does every reference resolve" in card
@@ -181,7 +190,7 @@ def test_con_139_live_an_unknown_rung_states_unknown_and_never_an_empty_card(
     (card,) = _frames(
         root,
         runtime,
-        SessionSetup(route="evidence", subj_id="CLM-0004", size=2, sel=1),
+        SessionSetup(route="evidence", subj_id="CLM-0001", size=2, sel=1),
         enter=True,
     )
     assert "RUNG 2 ANCHOR · UNKNOWN" in card
@@ -197,10 +206,10 @@ def test_con_133_live_the_evidence_viewer_draws_the_filed_claim(
     (frame,) = _frames(
         root,
         runtime,
-        SessionSetup(route="evidence", subj_id="CLM-0004", size=2),
-        overlay_on="CLM-0004",
+        SessionSetup(route="evidence", subj_id="CLM-0001", size=2),
+        overlay_on="CLM-0001",
     )
-    assert "evidence · CLM-0004" in frame
+    assert "evidence · CLM-0001" in frame
     assert BREAKS_IF in frame
     assert "1 resolve" in frame and "pass" in frame
     assert "? unknown" in frame
@@ -213,7 +222,7 @@ def test_con_133_live_the_evidence_viewer_draws_the_filed_claim(
 
 
 def _ladder_answer(root: Path, runtime: Path) -> dict[str, Any]:
-    return _dispatch(root, runtime, EVIDENCE_LADDER_METHOD, claim_key="CLM-0004")
+    return _dispatch(root, runtime, EVIDENCE_LADDER_METHOD, claim_key="CLM-0001")
 
 
 class _Daemon:
@@ -232,7 +241,7 @@ class _Daemon:
         if method == EVIDENCE_LADDER_METHOD:
             self.ladder_reads += 1
             return self.ladder
-        document = {"claim": {"CLM-0004": self.claim_row}}
+        document = {"claim": {"CLM-0001": self.claim_row}}
         return build_route_projection(
             route=self._reads[method], document=document, cursor=6, scope_id="EAWF", generated_at=AT
         ).model_dump(mode="json")
@@ -281,7 +290,7 @@ def test_ui_021_a_route_opened_on_no_claim_owes_the_ladder_of_the_first_it_lists
     assert loaded.index("evidence") < loaded.index(EVIDENCE_LADDER_METHOD)
     held = seam.decisions
     assert held is not None
-    claim = held.claim("CLM-0004")
+    claim = held.claim("CLM-0001")
     assert claim is not None
     assert [r.outcome for r in claim.rungs] == [
         RungOutcome.PASS,
@@ -296,7 +305,7 @@ def test_ui_021_a_route_opened_on_no_claim_owes_the_ladder_of_the_first_it_lists
 def test_ui_051_another_route_owes_no_ladder(tree: tuple[Path, Path, str]) -> None:
     """Boundary: the ladder is read for the Evidence surfaces only."""
     seam = _seam(_daemon(tree), "activity")
-    seam.about("CLM-0004")
+    seam.about("CLM-0001")
     assert EVIDENCE_LADDER_METHOD not in seam.owed()
     assert seam.decisions is None
 

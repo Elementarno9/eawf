@@ -92,12 +92,13 @@ _No verbs registered._
 
 ### `eawf claim`
 
-Re-run and attest the checks behind a claim's evidence rungs.
+File a claim, and re-run and attest the checks behind its evidence rungs.
 
 | Verb | Summary |
 |---|---|
 | `attest` | Record what an outside party decided about a claim's rung 4. |
 | `check` | Re-run the check behind a rung of a claim, and every rung above it. |
+| `file` | File a claim about a Task, Batch or Milestone and score its evidence ladder. |
 
 ### `eawf coauthor`
 

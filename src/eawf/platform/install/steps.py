@@ -1,7 +1,7 @@
 """Ordered list of wizard steps shared by the interactive and ``--no-input`` modes.
 
 Per ``docs/architecture/installation.md``, ``eawf init`` walks the
-operator through thirteen decisions before materialising a fresh ``.ea/``
+operator through ten decisions before materialising a fresh ``.ea/``
 directory. Both the questionary TTY surface (:mod:`eawf.platform.install.wizard`)
 and the ``--no-input`` non-interactive path consume this single, ordered
 list so the two surfaces can never drift on either prompt count or prompt
@@ -23,7 +23,7 @@ Each step is described by an immutable :class:`WizardStep` carrying:
 - ``choices`` — explicit enumeration for ``kind="choice"``; ``None`` for
   free-form ``text``/``path`` and for ``bool`` (only ``True`` / ``False``).
 
-The full list is exported as :data:`WIZARD_STEPS` and pinned to length 13 by
+The full list is exported as :data:`WIZARD_STEPS` and pinned to length 10 by
 :mod:`tests.unit.test_install_wizard_steps` so a future contributor cannot
 silently add or drop a step.
 """
@@ -99,7 +99,7 @@ def _validate_project_code_input(value: str) -> bool | str:
     return "Project code must be 2-16 characters, start with A-Z, then A-Z/0-9/-/_ only."
 
 
-# The thirteen canonical wizard steps. Ordering matches ``docs/architecture/installation.md``.
+# The ten canonical wizard steps. Ordering matches ``docs/architecture/installation.md``.
 # Each id is referenced verbatim by :class:`WizardAnswers`; renaming an id
 # is therefore a breaking change that requires a parallel edit in
 # :mod:`eawf.platform.install.wizard`.
@@ -179,30 +179,6 @@ STEP_AUTO_INSTALL_PLUGINS = WizardStep(
     cli_flag="--auto-install-plugins/--no-auto-install-plugins",
 )
 
-STEP_ACCEPTANCE_TESTS = WizardStep(
-    id="acceptance_tests",
-    prompt="Require tests as an acceptance gate?",
-    kind="bool",
-    default=True,
-    cli_flag="--acceptance-tests/--no-acceptance-tests",
-)
-
-STEP_ACCEPTANCE_LINT = WizardStep(
-    id="acceptance_lint",
-    prompt="Require lint as an acceptance gate?",
-    kind="bool",
-    default=True,
-    cli_flag="--acceptance-lint/--no-acceptance-lint",
-)
-
-STEP_ACCEPTANCE_TYPECHECK = WizardStep(
-    id="acceptance_typecheck",
-    prompt="Require typecheck as an acceptance gate?",
-    kind="bool",
-    default=True,
-    cli_flag="--acceptance-typecheck/--no-acceptance-typecheck",
-)
-
 STEP_WRITE_CONFIRM = WizardStep(
     id="write_confirm",
     prompt="Confirm before writing files?",
@@ -224,9 +200,6 @@ WIZARD_STEPS: tuple[WizardStep, ...] = (
     STEP_PLUGINS,
     STEP_MCP,
     STEP_AUTO_INSTALL_PLUGINS,
-    STEP_ACCEPTANCE_TESTS,
-    STEP_ACCEPTANCE_LINT,
-    STEP_ACCEPTANCE_TYPECHECK,
     STEP_WRITE_CONFIRM,
 )
 
@@ -235,9 +208,6 @@ assert len({s.id for s in WIZARD_STEPS}) == len(WIZARD_STEPS), "WIZARD_STEPS ids
 
 
 __all__ = [
-    "STEP_ACCEPTANCE_LINT",
-    "STEP_ACCEPTANCE_TESTS",
-    "STEP_ACCEPTANCE_TYPECHECK",
     "STEP_AUTO_INSTALL_PLUGINS",
     "STEP_LIFECYCLE_DEPTH",
     "STEP_MCP",

@@ -7,7 +7,7 @@ faithfully enough to gate the CLI plumbing:
 
 - The probe records two instruments (git ok, gh missing).
 - The action returns a valid :class:`ResearchBody` populated with one
-  question and one option, and a recommendation.
+  question.
 - The envelope is emitted as JSON (``--json``), parsed back through
   :class:`OutputEnvelope`, and inspected for the expected shape.
 
@@ -63,20 +63,6 @@ def integration_research_skill() -> Iterator[type[Skill]]:
                             "sources": ["urn:eawf:v1:store:audit/AUD-001"],
                         }
                     ],
-                    "options": [
-                        {
-                            "name": "ship",
-                            "tradeoffs": "fast",
-                            "complexity": "low",
-                            "reversibility": "high",
-                            "risks": [],
-                        }
-                    ],
-                    "recommendation": {
-                        "choice": "ship",
-                        "confidence": "high",
-                        "fallback": None,
-                    },
                     "peer_review": None,
                     "persisted_brief": None,
                 },
@@ -121,7 +107,6 @@ def test_skill_run_research_emits_well_formed_envelope_json(
     # Body has the canonical /research shape.
     assert isinstance(env.body, dict)
     assert env.body["brief_id"] == "BR-INT-01"
-    assert env.body["recommendation"]["choice"] == "ship"
     # The question stdin arg propagated into the action.
     assert env.body["questions"][0]["answer"] == "yes (quick)"
 

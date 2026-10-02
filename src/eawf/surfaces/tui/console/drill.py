@@ -216,7 +216,7 @@ def _tree_key(ctx: Ctx, key: str, spine: SpineView) -> bool:
     place, and the walk wraps at either end.
     """
     s = ctx.s
-    leaves = leaves_of(groups_of(spine))
+    leaves = leaves_of(groups_of(spine, s.pinned_track))
     if key in _ARROWS:
         if not leaves:
             ctx.log(key, "no Milestone is filed in this scope")

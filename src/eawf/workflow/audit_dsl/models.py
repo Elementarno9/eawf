@@ -342,12 +342,10 @@ class CommandExitZeroArgs(BaseModel):
         ]
         | None
     ) = None
-    #: Audit-skill metadata. The ``/audit`` skill stashes the originating
-    #: success-criterion text inside the spec's ``args`` so it can pull
-    #: it back out when rendering findings (see
-    #: :func:`eawf.workflow.skills.audit._build_criterion_specs`). The
-    #: runner ignores it; this field exists only to satisfy
-    #: ``extra="forbid"`` on the args schema.
+    #: The originating success-criterion id, which
+    #: :func:`eawf.workflow.verify.compile.compile_gate` stashes in the
+    #: spec's ``args``. The runner ignores it; this field exists only to
+    #: satisfy ``extra="forbid"`` on the args schema.
     criterion: str | None = None
 
     @field_validator("collected_nodeids_path", "residual_manifest_path")

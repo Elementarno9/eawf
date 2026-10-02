@@ -92,7 +92,7 @@ SNAPSHOT_SURFACES: dict[str, SnapshotSurface] = {
             kind="plan_view",
             golden_dir="tests/golden/surfaces/render/plan_view",
             regen_target="tests/golden/surfaces/render/test_golden_plan_view.py",
-            description="`eawf wave list` ASCII render per fixture (small/medium/large).",
+            description="`eawf plan show` ASCII render per fixture (small/medium/large).",
         ),
         SnapshotSurface(
             kind="spec",

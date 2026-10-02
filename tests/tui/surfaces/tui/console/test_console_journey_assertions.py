@@ -699,8 +699,8 @@ def test_con_149_bang_opens_the_top_open_action_and_keeps_the_departure(
 
 # ---------- PRX-054 and PRX-060: the bucket partitions sum alike everywhere ----------
 
-_RAIL = re.compile(r"│\s+▸?(?P<sub>↳ )?(?P<name>[a-z/ ]+?)\s+(?P<count>≈?\d+|\?)\s*$")
-_STRIP_ITEM = re.compile(r"^▸?(?P<sub>↳ )?(?P<name>[a-z/ ]+?) (?P<count>≈?\d+|\?)$")
+_RAIL = re.compile(r"│\s+▸?(?P<sub>↳ )?(?P<name>[a-z/ ]+?)\s+(?P<count>≈?\d+|\?|∅)\s*$")
+_STRIP_ITEM = re.compile(r"^▸?(?P<sub>↳ )?(?P<name>[a-z/ ]+?) (?P<count>≈?\d+|\?|∅)$")
 
 
 def _rail(frame: str) -> dict[str, str]:
@@ -741,7 +741,9 @@ def _strip(frame: str) -> dict[str, str]:
 def _top(counts: dict[str, str]) -> int:
     """Return the sum of the known top-level counts."""
     return sum(
-        int(v.lstrip("≈")) for k, v in counts.items() if k != "all" and " > " not in k and v != "?"
+        int(v.lstrip("≈"))
+        for k, v in counts.items()
+        if k != "all" and " > " not in k and v not in ("?", "∅")
     )
 
 

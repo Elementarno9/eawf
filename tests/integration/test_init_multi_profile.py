@@ -116,7 +116,7 @@ def test_template_engineering_writes_its_profiles_and_parallelism(tmp_path: Path
     assert cfg["profiles"]["enabled"] == ["core", "python"]
     assert "dispatch" not in cfg
     assert cfg["planning"]["max_parallel_waves"] == 4
-    assert "commands" not in cfg["acceptance"]
+    assert "acceptance" not in cfg
 
 
 def test_template_reverse_engineering_writes_its_profiles_and_parallelism(tmp_path: Path) -> None:

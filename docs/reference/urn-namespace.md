@@ -138,10 +138,7 @@ Rules:
 
 ## Agent usage guidance
 
-Agents should use URNs when referring to durable workflow objects in
-outputs, evidence, memory, PR bodies, and audit findings. URN
-references survive file moves, resolve across workspace / repo
-boundaries, and let `eawf trace / show` navigate directly.
+Agents should use URNs when referring to durable workflow objects in outputs, evidence, memory, PR bodies, and audit findings. URN references survive file moves, resolve across workspace / repo boundaries, and let `eawf why` navigate directly.
 
 Use URNs for:
 

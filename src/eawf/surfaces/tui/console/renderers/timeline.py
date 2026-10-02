@@ -32,11 +32,14 @@ from eawf.surfaces.tui.console.frame import (
     route_keys_bar,
     thin,
 )
-from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.keybar import ROUTE_KEYS, keybar
 from eawf.surfaces.tui.console.keymap import native_keys
+from eawf.surfaces.tui.console.mutation import open_target
+from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.renderers.children import status
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
+    label,
     native_head,
     route_crumb,
 )
@@ -386,6 +389,63 @@ def _native_regions(view: View, spine: SpineView) -> list[str]:
     return rows
 
 
+#: The edit kind of the field the menu's ``propose date`` opens over an undated Milestone.
+DATE_FIELD = "date"
+#: The keybar while the date field takes the typing.
+DATE_KEYS: tuple[tuple[str, str], ...] = (
+    ("type", "YYYY-MM-DD"),
+    ("Enter", "preview"),
+    ("Esc", "cancel"),
+)
+#: The cells an ISO calendar day takes.
+_DAY_W = 10
+
+
+def propose(ctx: Ctx, key: str) -> None:
+    """Open the date field over the undated Milestone the cursor is on, or say why not.
+
+    The lanes draw no marker cursor, so a date is proposed for a row of the UNDATED region.
+    """
+    s = ctx.s
+    listed = (s.tl_regs or {}).get(UNDATED) or []
+    if (s.tl_reg or LANES) != UNDATED or not listed:
+        ctx.log(key, "propose date · Tab to UNDATED and choose a milestone · a lane has no cursor")
+        return
+    milestone = listed[min(s.tl_sel, len(listed) - 1)][0]
+    s.edit = {"kind": DATE_FIELD, "key": milestone, "text": ""}
+    ctx.log(key, f"propose date · type {milestone}'s target as YYYY-MM-DD · Esc cancels")
+
+
+def seam(ctx: Ctx, key: str, shift: bool) -> bool:
+    """Take the keys while the date field is open: type, preview on Enter, cancel on Escape.
+
+    Returns:
+        Whether the key was claimed; every key is while the field is open.
+    """
+    s = ctx.s
+    edit = s.edit
+    if s.overlay or edit is None or edit.get("kind") != DATE_FIELD:
+        return False
+    if key == "Escape":
+        s.edit = None
+        ctx.log("Esc", "propose date cancelled · nothing written")
+    elif key == "Enter":
+        try:
+            day = date.fromisoformat(edit["text"])
+        except ValueError:
+            ctx.log("Enter", f"{edit['text'] or 'nothing'} is not a YYYY-MM-DD day")
+            return True
+        s.edit = None
+        open_target(ctx, edit["key"], day)
+    elif key == "Backspace":
+        edit["text"] = edit["text"][:-1]
+    elif (key.isdigit() or key == "-") and len(edit["text"]) < _DAY_W:
+        edit["text"] += key
+    else:
+        ctx.noop(key)
+    return True
+
+
 def roadmap_frame(view: View, spine: SpineView) -> list[str]:
     """Return the Timeline chart drawn from the read model the daemon served.
 
@@ -417,6 +477,11 @@ def roadmap_frame(view: View, spine: SpineView) -> list[str]:
         *_native_lanes(view, spine, now),
         *_native_regions(view, spine),
     ]
+    edit = view.session.edit
+    if edit is not None and edit.get("kind") == DATE_FIELD:
+        field = f"{edit['key']} target {edit['text']}▏ · Enter previews · Esc cancels"
+        rows.append(label("DATE", field))
+        return _with_legend(view, rows, keybar(list(DATE_KEYS), view.w), _NATIVE_LEGEND)
     entries = native_keys("timeline", windowed=view.session.windowed)
     if (view.session.tl_reg or LANES) == LANES:
         # the lanes carry no marker cursor, so Enter has nothing to open until Tab moves on

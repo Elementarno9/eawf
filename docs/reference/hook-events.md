@@ -33,7 +33,7 @@ Idempotence key: `(event_type, scope_id, occurred_at)`. The runner / CLI handler
 | `post_audit`     | After `/audit` finishes                                       | `{ "scope": str, "verdict": str }`                                                                        |
 | `session_start`  | New agent session opens (Claude `SessionStart`)               | `{ "session_id": str, "cwd": str }`                                                                      |
 | `session_end`    | Agent session closes (Claude `Stop` / `SessionEnd`)           | `{ "session_id": str, "duration_s": float }`                                                             |
-| `wave_open`      | `eawf wave open <wave>` succeeds                              | `{ "wave_id": str, "iter_id": str }`                                                                     |
+| `wave_open`      | A wave opens; no live verb emits it                           | `{ "wave_id": str, "iter_id": str }`                                                                     |
 | `wave_close`     | `eawf task complete` succeeds                             | `{ "wave_id": str, "result": str }`                                                                      |
 | `iter_open`      | `eawf batch create` succeeds                              | `{ "iter_id": str, "phase_id": str }`                                                                    |
 | `iter_close`     | `eawf batch complete` succeeds                             | `{ "iter_id": str, "verdict": str }`                                                                     |

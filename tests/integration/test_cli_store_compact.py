@@ -73,8 +73,8 @@ def test_store_compact_dedupes_duplicate_ids_in_memory_store(
     assert payload["records_in"] == 3
     assert payload["records_out"] == 2
     assert payload["dedup_count"] == 1
-    assert payload["scope"] is None
-    assert payload["budget"] is None
+    assert "scope" not in payload
+    assert "budget" not in payload
     assert payload["path"].endswith("store/memory.jsonl")
 
 
@@ -90,36 +90,6 @@ def test_store_compact_handles_missing_file_zero_report(
     assert payload["records_in"] == 0
     assert payload["records_out"] == 0
     assert payload["dedup_count"] == 0
-
-
-def test_store_compact_records_scope_arg_in_envelope(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    state_path = _seed_state(tmp_path)
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    result = runner.invoke(
-        app,
-        ["--json", "store", "compact", "--kind", "memory", "--scope", "P01-I01"],
-    )
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.stdout)
-    assert payload["scope"] == "P01-I01"
-
-
-def test_store_compact_records_budget_arg_in_envelope(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    state_path = _seed_state(tmp_path)
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    result = runner.invoke(
-        app,
-        ["--json", "store", "compact", "--kind", "memory", "--budget", "1024"],
-    )
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.stdout)
-    assert payload["budget"] == 1024
 
 
 def test_store_compact_text_output(

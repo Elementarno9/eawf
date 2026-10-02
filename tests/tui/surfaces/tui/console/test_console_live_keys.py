@@ -366,3 +366,29 @@ def test_live_a_closed_task_opens_on_its_own_row(tmp_path: Path) -> None:
     assert row.parent_key == CLOSED_BATCH
     assert row.status.value == "COMPLETED"
     assert "Close the console route registry" in text
+
+
+def test_live_a_closed_task_draws_its_criteria_proof_and_commit(tmp_path: Path) -> None:
+    """A completed Task states each criterion with the receipt the receipt ledger filed for it."""
+    require_epoch2_repository()
+    root = committed_tree(tmp_path)
+
+    async def body() -> tuple[str, str]:
+        async with (
+            live_console(root, tmp_path / "runtime") as (app, _seam),
+            app.run_test(size=SIZES[2]) as pilot,
+        ):
+            task = await render_setup(
+                app, pilot, SessionSetup(route="task.detail", size=2, subjId="EAWF-0101")
+            )
+            batch = await render_setup(
+                app, pilot, SessionSetup(route="batch.detail", size=2, subjId=CLOSED_BATCH)
+            )
+            return task, batch
+
+    task, batch = asyncio.run(body())
+    assert "CR-001 · behavioral · gates G-01 · pass RCP-6605" in task
+    assert "1 receipt · 1 pass · 0 not pass" in task
+    assert "no epoch-2 producer states this field yet" not in task
+    assert "no epoch-2 producer states this field yet" not in batch
+    assert re.search(r"RUNS\s+\d+ runs? · \d+ running · newest RUN-", batch)

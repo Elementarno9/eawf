@@ -1,9 +1,10 @@
 """The action menu: every verb a route binds, safest first, refused ones with their reasons.
 
 The menu is the capability-disclosure surface. Light verbs (open a surface, fill the
-clipboard) come first and answer in the rack; heavy verbs (any write) follow and open
-their consequence card. A verb the operator cannot use stays listed with its reason. The
-menu is letter-driven: it draws no caret and its keybar promises neither arrows nor Enter.
+clipboard, change what the frame shows) come first and answer in the rack; heavy verbs
+(any write) follow and open their consequence card. A verb the operator cannot use stays
+listed with its reason. The menu is letter-driven: it draws no caret and its keybar
+promises neither arrows nor Enter.
 One ordering feeds the rows and the letter dispatch, and :func:`outcome` is the one place
 a pressed verb is judged, so the menu and the key path cannot disagree. The menus are
 checked against the route registry when they are built: a menu belongs to a registered
@@ -31,6 +32,8 @@ PAIRS: tuple[Pair, ...] = (
 NO_ACTIONS_TITLE = "NO ACTIONS"
 NO_ACTIONS_TEXT = "No action is available here."
 EMPTY_ROW = "   No verb is defined for this route."
+#: How a light verb that only fills the clipboard is named.
+COPY_PREFIX = "copy "
 # Column widths of the menu table after its two-cell gutter; the reason takes the rest.
 TITLE_COLUMN = 10
 KEY_COLUMN = 5
@@ -69,7 +72,8 @@ class MenuVerb:
         effects: What the consequence card says the verb does.
         non_effects: What the consequence card says it does not do.
         weight: Whether it acts at once or previews its consequence.
-        target: The route a light verb opens; ``None`` for one that fills the clipboard.
+        target: The route a light verb opens; ``None`` for one that fills the clipboard or
+            acts on the frame in place.
 
     Raises:
         ValueError: ``key`` is not one character, ``verb`` is blank or wider than its
@@ -118,6 +122,7 @@ class Outcome(StrEnum):
 
     OPEN = "open"
     COPY = "copy"
+    IN_PLACE = "in_place"
     REFUSED_TOAST = "refused_toast"
     REFUSED = "refused"
     CONSEQUENCE = "consequence"
@@ -170,13 +175,16 @@ def availability(verb: MenuVerb, *, mutable: bool, refusal: str) -> Availability
 def outcome(verb: MenuVerb, guard: Availability) -> Outcome:
     """Return what pressing ``verb`` does under ``guard``.
 
-    A light verb opens its target or fills the clipboard, and refuses in an error toast
-    rather than a card; a heavy verb opens its consequence card, or records a refusal.
+    A light verb opens its target, fills the clipboard or acts on the frame in place, and
+    refuses in an error toast rather than a card; a heavy verb opens its consequence card,
+    or records a refusal.
     """
     if verb.weight == VerbWeight.LIGHT:
         if not guard.ok:
             return Outcome.REFUSED_TOAST
-        return Outcome.OPEN if verb.target else Outcome.COPY
+        if verb.target:
+            return Outcome.OPEN
+        return Outcome.COPY if verb.verb.startswith(COPY_PREFIX) else Outcome.IN_PLACE
     return Outcome.CONSEQUENCE if guard.ok else Outcome.REFUSED
 
 

@@ -41,11 +41,15 @@ from eawf.kernel.state.epoch2.measurement import (
     Observed,
     VendorSessionRef,
 )
-from eawf.kernel.state.epoch2.run import Run, RunStatus
+from eawf.kernel.state.epoch2.run import Run, RunRuntimeTuple, RunStatus
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.observability.measurement.capture import capture_run_start, capture_run_terminal
+from eawf.observability.measurement.capture import (
+    capture_run_start,
+    capture_run_terminal,
+    observe_session_runtime,
+)
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.run_events import RunEventAppend
@@ -72,29 +76,44 @@ def _sharing_runs(document: dict[str, Any], *, run: Run, ref: VendorSessionRef) 
 def start_capture_updates(
     document: dict[str, Any], *, run: Run, updates: Mapping[str, Any]
 ) -> dict[str, Any]:
-    """Return the vendor session and baseline a Run's start records.
+    """Return the vendor session, baseline and runtime tuple a Run's start records.
+
+    The runtime tuple is the one the caller stated, its gaps filled from what
+    the vendor session shows; with neither, the Run records none.
 
     Args:
         document: The root document the concurrent Runs are counted in.
         run: The QUEUED Run being started.
         updates: The start edge's caller-supplied updates; ``started_at``
-            is required by the edge, and ``vendor_session`` names the
-            session when the Run does not already carry one.
+            is required by the edge, ``vendor_session`` names the session
+            when the Run does not already carry one, and ``runtime_tuple``
+            states what the caller knows of the runtime.
 
     Returns:
-        The ``vendor_session`` and ``counter_baseline`` updates.
+        The ``vendor_session``, ``counter_baseline`` and ``runtime_tuple``
+        updates.
 
     Raises:
-        ValidationError: ``started_at`` or ``vendor_session`` is malformed.
+        ValidationError: ``started_at``, ``vendor_session`` or
+            ``runtime_tuple`` is malformed.
     """
     presented = updates.get("vendor_session")
     ref = run.vendor_session if presented is None else VendorSessionRef.model_validate(presented)
     started_at = _INSTANT.validate_python(updates["started_at"])
     count = 1 if ref is None else _sharing_runs(document, run=run, ref=ref)
     baseline = capture_run_start(ref, at=started_at, concurrent_run_count=count)
+    stated = updates.get("runtime_tuple")
+    claimed = run.runtime_tuple if stated is None else RunRuntimeTuple.model_validate(stated)
+    observed = None if ref is None else observe_session_runtime(ref, as_of=started_at)
+    runtime = observed if claimed is None else claimed.filled_from(observed)
+    logger.debug(
+        f"start_capture_updates runtime={None if runtime is None else runtime.harness} "
+        f"version_known={runtime is not None and runtime.harness_version is not None}"
+    )
     return {
         "vendor_session": None if ref is None else ref.model_dump(mode="json"),
         "counter_baseline": baseline.model_dump(mode="json"),
+        "runtime_tuple": None if runtime is None else runtime.model_dump(mode="json"),
     }
 
 

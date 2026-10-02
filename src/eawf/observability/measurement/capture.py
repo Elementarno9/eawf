@@ -25,10 +25,12 @@ baseline that results is marked derived.
 from __future__ import annotations
 
 import logging
+import re
+from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 from eawf.kernel.state.epoch2.measurement import (
     UNKNOWN_ATTRIBUTION,
@@ -45,6 +47,11 @@ from eawf.kernel.state.epoch2.measurement import (
     VendorSessionRef,
     measure_run,
     summarize_spans,
+)
+from eawf.kernel.state.epoch2.run import (
+    RUNTIME_MODEL_PATTERN,
+    RUNTIME_VERSION_PATTERN,
+    RunRuntimeTuple,
 )
 from eawf.observability.measurement.transcript_spans import transcript_spans
 from eawf.runtime.runtime_counter_sidecar import RuntimeCounterSidecar
@@ -65,6 +72,10 @@ CLAUDE_HARNESS: Final = "claude-code"
 
 #: The suffix the statusline gives a session's counter sidecar file.
 _SIDECAR_SUFFIX: Final = ".runtime-counters.json"
+
+#: The grammars a version and a model must read in before a Run records them.
+_VERSION: Final = re.compile(RUNTIME_VERSION_PATTERN)
+_MODEL: Final = re.compile(RUNTIME_MODEL_PATTERN)
 
 #: The directory a session keeps its subagents' transcripts in, and their name prefix.
 _SUBAGENT_DIRNAME: Final = "subagents"
@@ -330,4 +341,56 @@ def capture_run_terminal(
     return captured
 
 
-__all__ = ["CLAUDE_HARNESS", "capture_run_start", "capture_run_terminal"]
+def _stated(value: object, pattern: re.Pattern[str]) -> str | None:
+    """Return *value* when it is text in *pattern*'s grammar, else ``None``."""
+    return value if isinstance(value, str) and pattern.fullmatch(value) else None
+
+
+def _transcript_version(rows: Sequence[dict[str, Any]]) -> str | None:
+    """Return the runtime version the newest transcript row was written by."""
+    for row in reversed(rows):
+        version = _stated(row.get("version"), _VERSION)
+        if version is not None:
+            return version
+    return None
+
+
+def observe_session_runtime(ref: VendorSessionRef, *, as_of: datetime) -> RunRuntimeTuple:
+    """Return the runtime a vendor session shows it ran on, as of *as_of*.
+
+    The harness is the session's own. Claude Code stamps each transcript row
+    with the version that wrote it and each billed message with its model,
+    so both are read off the transcript, or the model alone off the sidecar
+    when no transcript is found. What no source shows stays ``None``.
+
+    Args:
+        ref: The Run's vendor session.
+        as_of: The instant the transcript is read as of.
+
+    Returns:
+        The observed tuple.
+    """
+    observed = RunRuntimeTuple(harness=ref.harness)
+    if ref.harness != CLAUDE_HARNESS:
+        return observed
+    transcript = _transcript_for(ref.session_digest)
+    reading = None if transcript is None else read_transcript(transcript, as_of=as_of)
+    if reading is not None:
+        return observed.model_copy(
+            update={
+                "harness_version": _transcript_version(reading.rows),
+                "model": _stated(reading.scan.model, _MODEL),
+            }
+        )
+    sidecar = _sidecar_for(ref.session_digest)
+    counters = None if sidecar is None else RuntimeCounterSidecar(sidecar).read()
+    model = None if counters is None else _stated(counters.model, _MODEL)
+    return observed.model_copy(update={"model": model})
+
+
+__all__ = [
+    "CLAUDE_HARNESS",
+    "capture_run_start",
+    "capture_run_terminal",
+    "observe_session_runtime",
+]

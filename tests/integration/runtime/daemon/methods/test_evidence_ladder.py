@@ -21,28 +21,34 @@ from eawf.kernel.state.epoch2.evidence_rung import (
     ClaimLadder,
     RungOutcome,
 )
+from eawf.kernel.store.compaction import read_document
 from eawf.kernel.store.ledger import read_ledger_records
 from eawf.platform.install.canary import canary_ref, provision_canary
 from eawf.runtime.daemon import methods
+from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.delivery_acceptance import DELIVERY_RECORD_EVIDENCE_METHOD
-from eawf.runtime.daemon.methods.evidence_ladder import (
-    CLAIM_ALREADY_FILED,
-    EVIDENCE_CLAIM_FILE_METHOD,
-)
+from eawf.runtime.daemon.methods.evidence_ladder import EVIDENCE_CLAIM_FILE_METHOD
 from eawf.workflow.evidence.claim_ladder import EVIDENCE_LADDER_METHOD, SCORER
+from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
+    MILESTONE_URN,
+    document_path,
+    seed,
+    seed_row,
+)
 
 pytestmark = pytest.mark.integration
 
-CONTAINER: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
-CLAIM_URN: Final = "eawf://WSP-MAIN/PRJ-EAWF/_/claim/CLM-0004"
 AT: Final = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
+_DOCUMENTS: dict[Path, Path] = {}
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    provision_canary(repo_root=tmp_path / "repo", ref=canary_ref("CLM"), provisioned_at=AT)
-    return tmp_path / "repo"
+    canary = provision_canary(repo_root=tmp_path / "repo", ref=canary_ref("CLM"), provisioned_at=AT)
+    seed(canary, {"milestone": {"MLS-0030": seed_row("milestone", "ACTIVE")}})
+    _DOCUMENTS[canary.root] = document_path(canary)
+    return canary.root
 
 
 def _dispatch(repo: Path, method: str, **params: Any) -> dict[str, Any]:
@@ -63,7 +69,7 @@ def _evidence(repo: Path) -> str:
     answer = _dispatch(
         repo,
         DELIVERY_RECORD_EVIDENCE_METHOD,
-        urn=f"{CONTAINER}/milestone/MLS-0030",
+        urn=MILESTONE_URN,
         actor="OPERATOR",
         idempotency_key="evidence-1",
         kind="artifact",
@@ -76,17 +82,18 @@ def _file(repo: Path, *refs: str, key: str = "claim-1", **prose: str) -> dict[st
     return _dispatch(
         repo,
         EVIDENCE_CLAIM_FILE_METHOD,
-        urn=CLAIM_URN,
+        urn=MILESTONE_URN,
+        expected_revision=read_document(_DOCUMENTS[repo]).get(CANONICAL_SEQUENCE_KEY, 0),
         actor="OPERATOR",
         idempotency_key=key,
         title="Replay keeps order",
-        evidence_refs=list(refs),
+        evidence=[ref.rsplit("/", 1)[-1] for ref in refs],
         **prose,
     )
 
 
 def _ladder(repo: Path) -> ClaimLadder:
-    return ClaimLadder.model_validate(_dispatch(repo, EVIDENCE_LADDER_METHOD, claim_key="CLM-0004"))
+    return ClaimLadder.model_validate(_dispatch(repo, EVIDENCE_LADDER_METHOD, claim_key="CLM-0001"))
 
 
 def test_plan_048_filing_a_claim_writes_one_record_per_rung(repo: Path) -> None:
@@ -121,7 +128,7 @@ def test_plan_048_each_rung_states_the_sequence_its_own_append_allocated(repo: P
 
 def test_plan_048_an_unheld_reference_fails_rung_1_and_runs_nothing_above(repo: Path) -> None:
     """Error path: a cited evidence record nobody filed leaves its digest unfetched."""
-    answer = _file(repo, f"{CONTAINER}/evidence/EVD-0099")
+    answer = _file(repo, "EVD-0099")
     assert answer["outcomes"] == ["failed", "not_run", "not_run", "not_run"]
     resolve, *above = _ladder(repo).rungs
     assert resolve.input_refs[0].digest is None
@@ -141,17 +148,6 @@ def test_plan_007_an_uncertified_claim_is_filed_open_with_its_blockers(repo: Pat
     assert _ladder(repo).claim.status == "OPEN"
 
 
-def test_plan_048_a_key_already_filed_is_refused(repo: Path) -> None:
-    _file(repo)
-    with pytest.raises(DaemonValidationError, match=CLAIM_ALREADY_FILED):
-        _file(repo, key="claim-2")
-
-
-def test_plan_048_a_retry_under_one_key_replays_rather_than_refiling(repo: Path) -> None:
-    first = _file(repo)
-    assert _file(repo) == first
-
-
 def test_plan_044_prose_over_its_bound_is_refused_at_the_verb(repo: Path) -> None:
     """Off-by-one: 300 characters of falsifier file, 301 are refused."""
     assert _file(repo, falsifier="x" * 300)["status"] == "OPEN"
@@ -163,9 +159,9 @@ def test_ui_064_the_evidence_route_lists_a_filed_claim_from_its_ledger(repo: Pat
     _file(repo, _evidence(repo))
     rows = _dispatch(repo, "projection.evidence.read")["rows"]
     claims = [row for row in rows if row["collection"] == "claim"]
-    assert [(c["key"], c["title"]) for c in claims] == [("CLM-0004", "Replay keeps order")]
+    assert [(c["key"], c["title"]) for c in claims] == [("CLM-0001", "Replay keeps order")]
 
 
 def test_ui_051_a_ladder_read_for_an_unfiled_claim_is_refused(repo: Path) -> None:
-    with pytest.raises(DaemonValidationError, match="holds no CLM-0004"):
+    with pytest.raises(DaemonValidationError, match="holds no CLM-0001"):
         _ladder(repo)

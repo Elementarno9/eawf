@@ -2,20 +2,15 @@
 
 Currently exposes a single subcommand:
 
-- ``eawf store compact [--kind <kind>] [--scope <id>] [--budget <bytes>]``
+- ``eawf store compact [--kind <kind>]``
 
 The command thinly wraps :func:`eawf.kernel.store.compact.compact_store`. The
 ``--kind`` argument selects which JSONL file under the canonical
-``<state_dir>/store/<kind>.jsonl`` path is targeted. The ``--scope`` and
-``--budget`` flags are accepted for v0.1 surface-stability and surfaced
-in the JSON envelope; the underlying compactor does not yet enforce a
-budget, so ``--budget`` is informational only and a TODO is logged when
-set.
+``<state_dir>/store/<kind>.jsonl`` path is targeted.
 """
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -26,8 +21,6 @@ from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.surfaces.cli import errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
-
-logger = logging.getLogger(__name__)
 
 store_app = typer.Typer(
     name="store",
@@ -47,17 +40,6 @@ def compact_cmd(
             help="Store kind to compact (selects <state_dir>/store/<kind>.jsonl).",
         ),
     ] = StoreKind.MEMORY,
-    scope: Annotated[
-        str | None,
-        typer.Option("--scope", help="Optional scope ID (informational; surfaced in envelope)."),
-    ] = None,
-    budget: Annotated[
-        int | None,
-        typer.Option(
-            "--budget",
-            help="Informational byte budget (not enforced by the compactor in v0.1).",
-        ),
-    ] = None,
     workspace: Annotated[
         Path | None,
         typer.Option(
@@ -84,19 +66,14 @@ def compact_cmd(
         return
 
     target_path = _canonical_store_path(state_path, kind)
-    if budget is not None:
-        logger.info(f"compact_cmd budget={budget!r}; accepted but not enforced (v0.1)")
-
     report = compact_store(target_path)
 
     payload: dict[str, Any] = {
         "kind": kind.value,
-        "scope": scope,
         "path": str(target_path),
         "records_in": report.records_in,
         "records_out": report.records_out,
         "dedup_count": report.dedup_count,
-        "budget": budget,
     }
     text = (
         f"compact: kind={kind.value} path={target_path} "

@@ -25,7 +25,7 @@ ea_skill_output:
     persisted_store_records: [urn:eawf:v1:store:QR/research/...]
     state_mutations: [phases.P13.status=active]
     evidence_refs: [urn:eawf:v1:audit:..., urn:eawf:v1:commit:QR/abc123]
-    next_valid_actions: [eawf prep P13-I04, /audit P13-I04]
+    next_valid_actions: [eawf plan show, /verify]
     warnings:
       - { code: instrument_missing, detail: "gh not installed; PR open skipped" }
 ```
@@ -42,7 +42,7 @@ Render rules:
 
 Each workflow skill defines a typed `body` payload validated by the JSON Schema below. Body schemas:
 
-- **`/research`**: `{ brief_id, questions: [{q, answer, confidence, sources}], options: [{name, tradeoffs, complexity, reversibility, risks}], recommendation: {choice, confidence, fallback}, peer_review: {reviewer_id, findings: [], no_flaws_checks: []}, persisted_brief?: urn }`.
+- **`/research`**: `{ brief_id, questions: [{q, answer, confidence, sources}], peer_review: {reviewer_id, findings: [], no_flaws_checks: []}, persisted_brief?: urn }`.
 - **`/prep`**: `{ iter_id, objective, non_goals, dag: [{task_id, deps, file_scope, commands, evidence, risk}], waves: [{wave_id, tasks, worktree_policy, estimate_eu}], acceptance: {checks, baselines}, approval_required: bool }`.
 - **`/audit`**: `{ scope_id, kind: evaluation|ship-gate, checks_run: [{check_id, command, status, output_blob}], outcomes_measured: [{outcome_id, value, threshold, verdict}], hypothesis_verdicts: [{hypothesis_id, verdict, evidence_commit}], findings: [{severity, location, summary, kind: blocker|fix-now|follow-up|false-positive}], audit_artifact_urn }`.
 - **`/ship`**: `{ commit_groups: [{message, files, evidence_refs}], push: {ref, status}, pr: {action, url, template, gates: {ci, reviews, state_valid}}, estimate_vs_actual: {…}, rollback_notes }`.

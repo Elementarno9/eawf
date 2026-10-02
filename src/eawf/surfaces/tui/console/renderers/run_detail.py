@@ -4,16 +4,17 @@ A Run other than the fixture's own renders its record from the register or state
 absence.
 
 The native frame draws one Run -- the session's subject, else the Run under the cursor --
-timeline first, then the packet's labelled facts: its state, the Task it runs, its
-provider, its usage, its controls and its lineage. The timeline pane draws the Run's latest
-rows as the daemon grouped them: each event as its token and its whole word, a repeated
-low-priority run of events as its kind, a count and a span. Before that read arrives the
-pane points at the transcript, which Enter opens. The register states the Run's status and
-its Task; its usage is the Run's own usage read -- spent against the sealed caps with an
-estimated remainder, and the elapsed time against its limit and the typical time of its
-kind, never a remaining time. Every other fact belongs to a producer the console does not
-read yet, so it wears the unknown token with the reason rather than a blank. A Run whose
-lifecycle has ended says so, and offers no lifecycle verb.
+timeline first, then the packet's labelled facts: its state, the Task it runs, the
+runtime it records it ran on, its usage, its controls and its lineage. The timeline pane
+draws the Run's latest rows as the daemon grouped them: each event as its token and its
+whole word, a repeated low-priority run of events as its kind, a count and a span. Before
+that read arrives the pane points at the transcript, which Enter opens. The register
+states the Run's status and its Task; its usage is the Run's own usage read -- spent
+against the sealed caps with an estimated remainder, and the elapsed time against its
+limit and the typical time of its kind, never a remaining time. Every other fact belongs
+to a producer the console does not read yet, so it wears the unknown token with the
+reason rather than a blank. A Run whose lifecycle has ended says so, and offers no
+lifecycle verb.
 """
 
 from __future__ import annotations
@@ -21,16 +22,17 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 
-from eawf.kernel.economics.spend import RunUsageView
 from eawf.kernel.projection.attention import build_attention_view
+from eawf.kernel.projection.compute import RUNTIME_FACTS, SESSION_FACT
 from eawf.kernel.projection.registers import UNWRITTEN_REASON
 from eawf.kernel.projection.run_timeline import RunTimeline, TimelineGroup
 from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.projection.transcript import LANES
-from eawf.kernel.state.epoch2.run import RunStatus
+from eawf.kernel.state.epoch2.run import RunRuntimeTuple, RunStatus
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
+from eawf.surfaces.tui.console.decisions import runtime_words, session_words
 from eawf.surfaces.tui.console.format import clock_time, group, instant, span
 from eawf.surfaces.tui.console.frame import (
     Table,
@@ -44,6 +46,7 @@ from eawf.surfaces.tui.console.frame import (
 )
 from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
 from eawf.surfaces.tui.console.lifecycle import ELAPSED_WORDS
+from eawf.surfaces.tui.console.live_reads import held_usage
 from eawf.surfaces.tui.console.navigation import Ctx, go
 from eawf.surfaces.tui.console.overlays.situations import LOST
 from eawf.surfaces.tui.console.renderers.budget_lines import cost_line, time_line, tokens_line
@@ -252,7 +255,7 @@ def usage_rows(view: View, spine: SpineView, run: SpineRow) -> list[str]:
     Until the Run's usage read arrives the pane states its elapsed time and says the rest
     was not read, rather than drawing a zero.
     """
-    usage = _held_usage(view.live, run.key)
+    usage = held_usage(view.live, run.key)
     took = elapsed(view, spine, run)
     if usage is None:
         return [
@@ -267,12 +270,18 @@ def usage_rows(view: View, spine: SpineView, run: SpineRow) -> list[str]:
     ]
 
 
-def _held_usage(live: Mapping[str, object], key: str) -> RunUsageView | None:
-    """Return the usage read's answer for Run *key*, or ``None`` before it arrives."""
-    return next(
-        (item for item in live.values() if isinstance(item, RunUsageView) and item.run_key == key),
-        None,
-    )
+def runtime_row(facts: Mapping[str, str]) -> str:
+    """Return the runtime row: what the Run records it ran on, and in which session.
+
+    A Run that records no runtime predates every producer of one, so its row says so
+    in words and says that its controls are therefore not gated on a certification.
+    """
+    stated = {name: facts[fact] for name, fact in RUNTIME_FACTS.items() if fact in facts}
+    runtime = RunRuntimeTuple.model_validate(stated) if "harness" in stated else None
+    words = f"{runtime_words(runtime)} · {session_words(facts.get(SESSION_FACT))}"
+    if runtime is None:
+        words += " · controls are not gated on a certification"
+    return label("RUNTIME", words)
 
 
 def native_frame(view: View, spine: SpineView) -> list[str]:
@@ -342,7 +351,7 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
                 else f"{NO_VALUE} the Run states no Task",
             ),
             label("SCOPE", scope or f"{NO_VALUE} the Task is filed in no Batch"),
-            label("PROVIDER", value_cell(run.field("provider")).full),
+            runtime_row(facts),
             label(
                 "STARTED",
                 (clock_time(started) if started else UNKNOWN_WORD)

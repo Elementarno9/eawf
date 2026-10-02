@@ -105,7 +105,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "extra_tools": {},
     },
     "research": {
-        "auto_save": False,
         "default_depth": DEFAULT_RESEARCH_DEPTH.value,
         "agent_count": 4,
     },

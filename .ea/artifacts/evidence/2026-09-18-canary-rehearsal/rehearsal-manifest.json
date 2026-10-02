@@ -207,6 +207,7 @@
       "producer": "native_verb",
       "read_by": [
         "projection.activity.read",
+        "projection.batch.detail.read",
         "projection.cost.ceiling.read",
         "projection.crash.recovery.read",
         "projection.export.read",

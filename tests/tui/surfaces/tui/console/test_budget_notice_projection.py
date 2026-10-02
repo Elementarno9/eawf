@@ -32,7 +32,6 @@ from eawf.kernel.projection.attention import (
 from eawf.kernel.projection.compute import build_route_projection
 from eawf.kernel.projection.registers import (
     ATTENTION_ROUTE,
-    BUDGET_UNSTATED_REASON,
     build_register_view,
     notice_interrupts,
 )
@@ -126,7 +125,7 @@ def test_ui_015_a_budget_notice_can_never_become_a_pending_action() -> None:
 
 
 def test_ui_015_the_attention_projection_carries_no_notice_as_a_question() -> None:
-    """``over budget`` names its producer and states no count; no notice is a needs item."""
+    """``over budget`` counts the breaches the register holds; no notice is a needs item."""
     register = build_register_view(
         build_route_projection(
             route=ATTENTION_ROUTE, document={}, cursor=1, scope_id="EAWF", generated_at=AT
@@ -134,6 +133,6 @@ def test_ui_015_the_attention_projection_carries_no_notice_as_a_question() -> No
     )
     view = build_attention_view(register)
     over = next(c for c in view.bucket_counts() if c.bucket is AttentionBucket.OVER_BUDGET)
-    assert over.count is None
-    assert over.reason == BUDGET_UNSTATED_REASON
+    assert over.count == 0
+    assert over.reason is None
     assert all(not item.notice for item in view.items)

@@ -3,12 +3,16 @@
 Any other task id renders its stored record through the record path or states the absence.
 
 The native frame is the packet's labelled facts about one Task: the Runs of it first, the
-caret walking them, then the Batch it is filed in, its criteria and what proves them. A
-frame opened on no Task lists the register to pick one from.
+caret walking them, then the Batch it is filed in, its active Run, the commit it was
+integrated at, each criterion with the newest proof receipt filed for it, and the
+receipts in all. A frame opened on no Task lists the register to pick one from.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
+
+from eawf.kernel.projection.compute import CRITERION_FACT
 from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import derive as dv
@@ -36,12 +40,16 @@ from eawf.surfaces.tui.console.renderers.read_model import UNKNOWN_WORD, cell
 from eawf.surfaces.tui.console.renderers.spine import (
     detail_head,
     detail_keys,
+    finished,
     held,
     native_frame,
 )
 
 OWN = "EAWF-0001"
 OWN_RUN = pt.OWN_RUN
+
+#: What a Task that has not completed states for its integrated commit.
+NOT_INTEGRATED = "∅ not integrated · only a completed Task names the commit it landed in"
 _CRITERIA: tuple[tuple[str, str], ...] = (
     ("events carry a semantic kind", "receipt EVT-1188"),
     ("no wave vocabulary remains", "receipt EVT-1190"),
@@ -67,6 +75,36 @@ def _run_line(run: SpineRow) -> str:
     return f"{run.key} · {status(run)}" + (f" · started {at(started)}" if started else "")
 
 
+def _criterion_lines(facts: Mapping[str, str], proofs: Sequence[SpineRow]) -> list[str]:
+    """Return one line per criterion the Task states, each with its newest proof.
+
+    A criterion reads ``id · kind · gates`` and then what the newest receipt naming it
+    reached, or that none is filed; its text comes last, so a narrow frame clips it first.
+    """
+    lines: list[str] = []
+    place = 1
+    while (stated := facts.get(f"{CRITERION_FACT}{place}")) is not None:
+        ident, kind, gates, text = stated.split(" · ", 3)
+        named = [p for p in proofs if ident in p.facts.get("criteria", "").split(",")]
+        newest = max(named, key=lambda p: p.facts.get("ended_at", ""), default=None)
+        proof = (
+            f"{newest.facts.get('result', UNKNOWN_WORD)} {newest.facts.get('receipt', newest.key)}"
+            if newest is not None
+            else "∅ no receipt"
+        )
+        lines.append(" · ".join(part for part in (ident, kind, gates, proof, text) if part))
+        place += 1
+    return lines
+
+
+def _proof_text(proofs: Sequence[SpineRow]) -> str:
+    """Return how many receipts are filed for the Task and how they ended."""
+    if not proofs:
+        return "∅ no proof receipt is filed for this Task"
+    passed = sum(1 for p in proofs if p.facts.get("result") == "pass")
+    return f"{dv.plural(len(proofs), 'receipt')} · {passed} pass · {len(proofs) - passed} not pass"
+
+
 def task_frame(view: View, spine: SpineView) -> list[str]:
     """Return one Task's frame: its Runs, then the facts the read model states about it.
 
@@ -83,12 +121,25 @@ def task_frame(view: View, spine: SpineView) -> list[str]:
         return native_frame(view, spine)
     runs = children(spine.rows, subject.key, Epoch2Collection.RUN)
     facts = subject.facts
+    proofs = [
+        row
+        for row in spine.rows
+        if row.collection is Epoch2Collection.RECEIPT and row.facts.get("task") == subject.key
+    ]
     stated = facts.get("criteria")
     criteria = f"{stated} {'criterion' if stated == '1' else 'criteria'} stated" if stated else None
     below = [
         lrow("BATCH", subject.parent_key or "∅ filed in no Batch"),
-        lrow("CRITERIA", criteria or f"{UNKNOWN_WORD} · the record states no criteria"),
-        lrow("PROOF", cell(subject.field("candidates"))),
+        # a finished Task keeps naming the Run it last ran, which is no longer active
+        lrow(
+            "LAST RUN" if finished(subject) else "ACTIVE RUN",
+            facts.get("run", "∅ no Run of this Task is active"),
+        ),
+        lrow("INTEGRATED", facts["integrated"][:7] if "integrated" in facts else NOT_INTEGRATED),
+        lrow("CRITERIA", criteria or cell(subject.field("criteria"))),
+        *(lrow("", line) for line in _criterion_lines(facts, proofs)),
+        lrow("PROOF", _proof_text(proofs)),
+        lrow("CANDIDATES", cell(subject.field("candidates"))),
         *([lrow("PRIORITY", facts["priority"])] if "priority" in facts else []),
         *([lrow("DUE", facts["due"])] if "due" in facts else []),
     ]

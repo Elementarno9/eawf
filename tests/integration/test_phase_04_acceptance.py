@@ -80,7 +80,7 @@ def test_phase_04_end_to_end(
     assert "__eawf_managed" in settings
 
     # Step 3 — `eawf skill run /research --json` emits a well-formed
-    # envelope with status=ok and a populated recommendation.
+    # envelope; headless, it blocks and names the research Campaign verbs.
     monkeypatch.setenv("EA_STATE", str(state_path))
     monkeypatch.setenv(
         "EA_INSTRUMENT_PROBE",
@@ -91,13 +91,13 @@ def test_phase_04_end_to_end(
         ["--json", "skill", "run", "/research"],
         input="{}",
     )
-    assert result.exit_code == 0, result.stdout
+    assert result.exit_code == 1, result.stdout
     env = OutputEnvelope.model_validate_json(result.stdout)
     assert env.header.skill == "/research"
-    assert env.header.status == "ok"
+    assert env.header.status == "blocked"
     body = ResearchBody.model_validate(env.body)
-    assert body.recommendation is not None
-    assert body.recommendation.choice == "option-1"
+    assert body.questions == []
+    assert "campaign_required" in {warning.code for warning in env.footer.warnings}
 
     # Step 4 — `eawf hook run post_commit` returns a canonical envelope
     # with exit 0 (no hooks registered at v1; the surface contract is

@@ -26,6 +26,7 @@ digest cannot be what two surfaces agree through.
 
 from __future__ import annotations
 
+# noqa: EAWF010 one projection pass reads every route binding and every row fact table
 import hashlib
 import json
 import logging
@@ -116,6 +117,11 @@ ANSWERED_FACT: Final = "answered."
 SNOOZED_FACT: Final = "snoozed."
 ACTED_FACT: Final = "acted."
 
+#: The fact prefix a Task states each of its criteria under, followed by the criterion's
+#: one-based place: ``<id> · <kind> · <gates> · <text>``, the text last so it is the
+#: part a narrow cell gives up.
+CRITERION_FACT: Final = "criterion."
+
 #: Where each record names the record it is filed under, as a path into the stored row.
 _PARENT_FIELD: Final[Mapping[Epoch2Collection, tuple[str, ...]]] = MappingProxyType(
     {
@@ -135,6 +141,22 @@ FACTS_FIELD: Final = "projected_facts"
 
 #: The instants a Run states about itself, read verbatim as the document stores them.
 _RUN_INSTANTS: Final = ("created_at", "started_at", "ended_at", "updated_at")
+
+#: The fact each member of a Run's runtime tuple is stated under, by member name.
+RUNTIME_FACTS: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "harness": "runtime_harness",
+        "harness_version": "runtime_version",
+        "provider": "runtime_provider",
+        "model": "runtime_model",
+    }
+)
+
+#: The fact a Run's vendor session digest is stated under.
+SESSION_FACT: Final = "session"
+
+#: The Run statuses that are an outcome: the ones a Run never leaves.
+_RUN_OUTCOMES: Final = frozenset({"COMPLETED", "FAILED", "CANCELLED"})
 
 
 class _ProjectionViewModel(Epoch2Model):
@@ -177,8 +199,9 @@ ROUTE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingPr
             Epoch2Collection.OPEN_QUESTION,
         ),
         "backlog": (Epoch2Collection.TASK,),
-        # a Batch frame lists the Tasks filed under it, so it reads them beside the Batch
-        "batch.detail": (Epoch2Collection.BATCH, Epoch2Collection.TASK),
+        # a Batch frame lists the Tasks filed under it and counts the Runs of those Tasks,
+        # so it reads both beside the Batch
+        "batch.detail": (Epoch2Collection.BATCH, Epoch2Collection.TASK, Epoch2Collection.RUN),
         "campaign": (Epoch2Collection.CAMPAIGN,),
         # a step and an artifact card are sub-surfaces of the campaign: the record each
         # addresses is the campaign row and the artifact row the campaign produced
@@ -258,6 +281,14 @@ JUROR_SCORE_KIND: Final = "juror_score"
 #: The key prefix each juror score row is listed under among the verdicts.
 JUROR_KEY_PREFIX: Final = "jury-juror-"
 
+#: The kind of a Run Attention lists by its state: a failed Run that is still the newest
+#: attempt of an open Task, or a Run running with no stall over it.
+RUN_STATE_KIND: Final = "run_state"
+
+#: The payload kind of a proof receipt as the receipt ledger files it: one gate run over
+#: a Task's criteria, with the result it reached.
+PROOF_RECEIPT_KIND: Final = "proof_receipt"
+
 #: The kinds a notice row may be. Each is a line of a ledger a route lists from without
 #: binding the collection: a row of any other kind is a record of that collection.
 NOTICE_KINDS: Final = frozenset(
@@ -268,6 +299,8 @@ NOTICE_KINDS: Final = frozenset(
         VERDICT_OBSERVATION_KIND,
         JURY_CALIBRATION_KIND,
         JUROR_SCORE_KIND,
+        RUN_STATE_KIND,
+        PROOF_RECEIPT_KIND,
     }
 )
 
@@ -276,11 +309,14 @@ NOTICE_KINDS: Final = frozenset(
 #: principal, but each is a line on the run ledger, and listing the Runs it sits among would turn
 #: the register of what needs a principal into a list of work. The sandbox log lists the
 #: decisions filed on the receipt ledger, and Trust the audit verdicts a Batch's
-#: verification cycles hold on the Batch ledger, for the same reason.
+#: verification cycles hold on the Batch ledger, for the same reason. Attention also lists
+#: the failed and running Runs and the rejecting verdicts of live Batches, and a Task frame
+#: the proof receipts filed for its criteria.
 ROUTE_NOTICE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingProxyType(
     {
-        "attention": (Epoch2Collection.RUN,),
+        "attention": (Epoch2Collection.RUN, Epoch2Collection.BATCH),
         "sandbox.log": (Epoch2Collection.RECEIPT,),
+        "task.detail": (Epoch2Collection.RECEIPT,),
         "trust": (Epoch2Collection.BATCH,),
     }
 )
@@ -521,6 +557,8 @@ def build_route_projection(
             _notice_rows(document=document, collection=collection, ledger_rows=ledger_rows).items()
         )
     )
+    if Epoch2Collection.RUN in collections and Epoch2Collection.BATCH in collections:
+        rows = _with_batch_runs(rows)
     return RouteProjection(
         schema_version=PROJECTION_SCHEMA_VERSION,
         route=route,
@@ -543,6 +581,31 @@ def build_route_projection(
         ),
         digest=_digest(route=route, cursor=cursor, rows=rows),
         rows=rows,
+    )
+
+
+def _with_batch_runs(rows: tuple[ProjectionRow, ...]) -> tuple[ProjectionRow, ...]:
+    """Return ``rows`` with each Batch stating how many of the Runs held run its Tasks.
+
+    The count is taken over the rows themselves, so a Run read back from the ledger for a
+    finished Task counts as one the document still holds does.
+    """
+    batch_of = {
+        row.key: batch
+        for row in rows
+        if row.collection is Epoch2Collection.TASK and (batch := row.parent_key) is not None
+    }
+    tally: dict[str, int] = {}
+    for row in rows:
+        is_run = row.collection is Epoch2Collection.RUN
+        owner = batch_of.get(row.parent_key or "") if is_run else None
+        if owner is not None:
+            tally[owner] = tally.get(owner, 0) + 1
+    return tuple(
+        row.model_copy(update={"facts": {**row.facts, "runs": str(tally.get(row.key, 0))}})
+        if row.collection is Epoch2Collection.BATCH
+        else row
+        for row in rows
     )
 
 
@@ -1014,8 +1077,13 @@ def _stored_fields(
     return legacy.record.record, _text(legacy.status)
 
 
-def _run_facts(key: str, fields: Mapping[str, Any], links: _Links) -> dict[str, str]:
-    """Return what the document states about a Run, its Task and its place among attempts."""
+def _run_facts(
+    key: str, fields: Mapping[str, Any], status: str | None, links: _Links
+) -> dict[str, str]:
+    """Return what the document states about a Run, its Task and its place among attempts.
+
+    A Run whose stored status is one it never leaves states that status as its outcome.
+    """
     facts = {name: _text(fields.get(name)) for name in _RUN_INSTANTS}
     scope = fields.get("scope")
     facts["purpose"] = _text(scope.get("purpose")) if isinstance(scope, dict) else None
@@ -1023,6 +1091,14 @@ def _run_facts(key: str, fields: Mapping[str, Any], links: _Links) -> dict[str, 
     if isinstance(failure, dict):
         facts["failure"] = _text(failure.get("message"))
         facts["failure_code"] = _text(failure.get("code"))
+    runtime = fields.get("runtime_tuple")
+    if isinstance(runtime, dict):
+        facts.update({fact: _text(runtime.get(name)) for name, fact in RUNTIME_FACTS.items()})
+    session = fields.get("vendor_session")
+    if isinstance(session, dict):
+        facts[SESSION_FACT] = _text(session.get("session_digest"))
+    if status in _RUN_OUTCOMES:
+        facts["outcome"] = status
     task = _parent_key_of(Epoch2Collection.RUN, fields)
     if task is not None:
         task_fields, task_status = links.fields(Epoch2Collection.TASK, task)
@@ -1119,6 +1195,44 @@ def _verdict_facts(fields: Mapping[str, Any]) -> dict[str, str]:
         "occurred_at": _text(fields.get("occurred_at")),
         "answered_by": f"{role or '? unknown'} · {runtime or '? unknown'}",
     }
+    if facts["verdict"] and facts["subject"]:
+        facts["question"] = f"audit found {facts['verdict']} on {facts['subject']}"
+    return {name: value for name, value in facts.items() if value}
+
+
+def _run_state_facts(fields: Mapping[str, Any]) -> dict[str, str]:
+    """Return what a Run listed by its state says: its Task and why it is listed."""
+    failure = fields.get("failure")
+    said = _text(failure.get("message")) if isinstance(failure, dict) else None
+    status = _text(fields.get("status"))
+    facts = {
+        "kind": RUN_STATE_KIND,
+        "subject": _parent_key_of(Epoch2Collection.RUN, fields),
+        # a failed Run is listed with its reason; a replayed row states none and keeps its own
+        "question": (f"failed · {said}" if said else None)
+        if status == "FAILED"
+        else (status or "").lower(),
+        "started_at": _text(fields.get("started_at")),
+    }
+    return {name: value for name, value in facts.items() if value}
+
+
+def _proof_facts(fields: Mapping[str, Any]) -> dict[str, str]:
+    """Return what a proof receipt states: its Task, its gate and the criteria it answered."""
+    receipt = fields.get("receipt")
+    held = receipt if isinstance(receipt, dict) else {}
+    criteria = held.get("criterion_ids")
+    facts = {
+        "kind": PROOF_RECEIPT_KIND,
+        "task": _key_of(fields.get("task_ref")),
+        "receipt": _text(held.get("id")),
+        "gate": _text(held.get("gate_id")),
+        "criteria": ",".join(c for c in criteria if isinstance(c, str))
+        if isinstance(criteria, list)
+        else None,
+        "result": _text(held.get("result")),
+        "ended_at": _text(held.get("ended_at")),
+    }
     return {name: value for name, value in facts.items() if value}
 
 
@@ -1167,6 +1281,8 @@ _NOTICE_FACTS: Final[Mapping[str, Callable[[Mapping[str, Any]], dict[str, str]]]
             VERDICT_OBSERVATION_KIND: _verdict_facts,
             JURY_CALIBRATION_KIND: _calibration_facts,
             JUROR_SCORE_KIND: _juror_facts,
+            RUN_STATE_KIND: _run_state_facts,
+            PROOF_RECEIPT_KIND: _proof_facts,
         }
     )
 )
@@ -1277,9 +1393,14 @@ def _task_facts(fields: Mapping[str, Any]) -> dict[str, str]:
         "priority": _text(fields.get("priority")),
         "run": _key_of(fields.get("active_run_ref")),
     }
+    binding = fields.get("integrated_binding")
+    if isinstance(binding, dict):
+        stated["integrated"] = _text(binding.get("head_sha"))
     criteria = fields.get("criteria")
     if isinstance(criteria, list | tuple) and criteria:
         stated["criteria"] = str(len(criteria))
+        for place, criterion in enumerate(criteria, start=1):
+            stated[f"{CRITERION_FACT}{place}"] = _criterion_text(criterion)
     depends_on = fields.get("depends_on")
     if isinstance(depends_on, list | tuple):
         stated["depends_on"] = ",".join(key for ref in depends_on if (key := _key_of(ref)))
@@ -1289,6 +1410,21 @@ def _task_facts(fields: Mapping[str, Any]) -> dict[str, str]:
     if fields.get("exclusive") is True:
         stated["exclusive"] = "true"
     return {name: value for name, value in stated.items() if value}
+
+
+def _criterion_text(criterion: Any) -> str | None:
+    """Return one stored criterion as its fact: ``<id> · <kind> · <gates> · <text>``."""
+    if not isinstance(criterion, dict):
+        return None
+    gates = criterion.get("gate_ids")
+    named = [gate for gate in gates if isinstance(gate, str)] if isinstance(gates, list) else []
+    parts = (
+        _text(criterion.get("id")) or "?",
+        _text(criterion.get("kind")) or "?",
+        f"gates {','.join(named)}" if named else "no gate",
+        _text(criterion.get("text")) or "?",
+    )
+    return " · ".join(parts)
 
 
 def _with_facts(row: ProjectionRow, stored: Any, links: _Links) -> ProjectionRow:
@@ -1303,12 +1439,12 @@ def _with_facts(row: ProjectionRow, stored: Any, links: _Links) -> ProjectionRow
         for name, value in (carried.items() if isinstance(carried, dict) else ())
         if isinstance(name, str) and _text(value)
     }
-    fields, _status = _stored_fields(row.collection, row.key, stored)
+    fields, status = _stored_fields(row.collection, row.key, stored)
     notice = _notice_kind(stored)
     if notice is not None:
         facts.update(_NOTICE_FACTS[notice](fields))
     elif row.collection is Epoch2Collection.RUN:
-        facts.update(_run_facts(row.key, fields, links))
+        facts.update(_run_facts(row.key, fields, status, links))
     elif row.collection is Epoch2Collection.PENDING_ACTION:
         facts.update(_action_facts(fields, links))
     elif row.collection is Epoch2Collection.PERMISSION:
@@ -1412,6 +1548,7 @@ __all__ = [
     "CALIBRATION_KEY",
     "CANONICAL_SEQUENCE_FIELD",
     "CEILING_BREACH_KIND",
+    "CRITERION_FACT",
     "DIAGNOSTICS_CORPUS",
     "FACTS_FIELD",
     "JUROR_KEY_PREFIX",
@@ -1422,9 +1559,13 @@ __all__ = [
     "PROJECTION_POLICY_REVISION",
     "PROJECTION_PRODUCER",
     "PROJECTION_SCHEMA_VERSION",
+    "PROOF_RECEIPT_KIND",
     "ROUTE_COLLECTIONS",
     "ROUTE_NOTICE_COLLECTIONS",
     "ROUTE_READ_MODELS",
+    "RUNTIME_FACTS",
+    "RUN_STATE_KIND",
+    "SESSION_FACT",
     "SNOOZED_FACT",
     "STALL_KIND",
     "VERDICT_OBSERVATION_KIND",

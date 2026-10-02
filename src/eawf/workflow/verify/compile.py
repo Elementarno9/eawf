@@ -27,11 +27,8 @@ readiness compute knows to fall back to its evidence-row path for the
 non-deterministic flavours (jury votes + operator attestations land
 in v0.4.1+ — see ``.ea/local/research/2026-05-26-v04-roadmap.md`` §7).
 
-Reuse contract: the public alias
-:func:`eawf.workflow.skills.audit.build_criterion_specs` is the
-canonical directive->CheckSpec builder for ``command_exit_zero`` gates.
-Compile-gate calls that helper so audit + readiness see the **same**
-CheckSpec shape; the only delta is that compile-gate then overlays the
+A ``command_exit_zero`` gate compiles to the canonical
+``{"argv": [...], "criterion": ...}`` args shape, overlaid with the
 W15-added kwargs (``timeout_class``, ``scope``, ``wave_id``,
 ``wave_file_scopes``) from the gate's typed ``args`` dict.
 """
@@ -56,16 +53,14 @@ from eawf.workflow.audit_dsl.models import (
     CheckSpec,
     GateFreshnessInput,
 )
-from eawf.workflow.skills.audit import build_criterion_specs
 
 logger = logging.getLogger(__name__)
 
 
 #: Kwargs the W15 hardening pass added to ``CommandExitZeroArgs`` that
 #: compile_gate must thread through from the typed ``GateSpec.args``
-#: dict onto the synthesised :class:`CheckSpec.args`. The shared
-#: :func:`eawf.workflow.skills.audit.build_criterion_specs` helper only
-#: sets ``argv`` + ``criterion``; everything below is the per-gate
+#: dict onto the synthesised :class:`CheckSpec.args`. The canonical shape
+#: only sets ``argv`` + ``criterion``; everything below is the per-gate
 #: scoping + timeout-budget the runner needs to honour.
 _COMMAND_EXIT_ZERO_PASSTHROUGH_KEYS: tuple[str, ...] = (
     "timeout_class",
@@ -92,11 +87,8 @@ def compile_gate(
 
     For ``gate.kind == "command_exit_zero"`` the compiler:
 
-    1. Pulls ``args["argv"]`` off the typed gate and routes the
-       construction through :func:`build_criterion_specs` so the
-       resulting CheckSpec carries the canonical
-       ``{"argv": [...], "criterion": ...}`` shape audit already
-       produces.
+    1. Pulls ``args["argv"]`` off the typed gate into the canonical
+       ``{"argv": [...], "criterion": ...}`` args shape.
     2. Overlays the runner kwargs (``timeout_class``, ``scope``,
        ``wave_id``, ``wave_file_scopes``) from ``gate.args`` and propagates
        the top-level ``gate.timeout_s`` when explicitly set. The explicit
@@ -154,22 +146,17 @@ def compile_gate(
                 f"compile_gate skip gate_id={gate.id!r} kind={gate.kind!r} reason=missing-argv"
             )
             return None
-        directive: dict[str, Any] = {
+        merged_args: dict[str, Any] = {
+            "argv": [str(arg) for arg in argv],
             "criterion": criterion.id,
-            "argv": list(argv),
         }
-        base_specs = build_criterion_specs(criterion_checks=[directive], wave=None)
-        if not base_specs:
-            return None
-        base = base_specs[0]
-        merged_args: dict[str, Any] = dict(base.args)
         for key in _COMMAND_EXIT_ZERO_PASSTHROUGH_KEYS:
             if key in gate.args:
                 merged_args[key] = gate.args[key]
         if gate.timeout_s is not None:
             merged_args["timeout_s"] = gate.timeout_s
         compiled = CheckSpec(
-            kind=base.kind,
+            kind="command_exit_zero",
             name=gate.id,
             args=merged_args,
             freshness=freshness,

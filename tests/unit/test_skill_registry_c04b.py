@@ -45,19 +45,15 @@ _C04B_SKILLS: dict[str, type[Skill]] = {
     "/security-review": SecurityReviewSkill,
 }
 
-# The 11 skills that predate C04b (six core + four meta + /blitz).
+# The 6 skills that predate C04b and still have an engine class; the
+# /prep, /audit, /ship, /review and /flow bodies are deleted.
 _ORIGINAL_SKILLS: frozenset[str] = frozenset(
     {
         "/research",
-        "/prep",
-        "/audit",
-        "/ship",
-        "/review",
         "/polish",
         "/init",
         "/roadmap",
         "/differentiate",
-        "/flow",
         "/blitz",
     }
 )
@@ -80,11 +76,11 @@ def _ctx() -> SkillContext:
     )
 
 
-def test_registry_holds_all_seventeen_skills() -> None:
-    """Each of the 17 legacy engine classes registers when its module loads.
+def test_registry_holds_all_twelve_skills() -> None:
+    """Each of the 12 legacy engine classes registers when its module loads.
 
     The bootstrap imports only catalog skills, so the legacy modules are
-    imported here; their lookups refuse retired names, which the flow
+    imported here; their lookups refuse retired names, which the registry
     retirement contract test pins.
     """
     import importlib
@@ -93,7 +89,7 @@ def test_registry_holds_all_seventeen_skills() -> None:
         importlib.import_module(f"eawf.workflow.skills.{name[1:].replace('-', '_')}")
     registered = set(registry.list_registered())
     expected = _ORIGINAL_SKILLS | set(_C04B_SKILLS)
-    assert len(expected) == 17
+    assert len(expected) == 12
     assert expected <= registered, f"missing from registry: {expected - registered}"
 
 

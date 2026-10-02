@@ -48,7 +48,6 @@ from eawf.kernel.projection.spine import (
     ROUTE_FIELDS,
     SPINE_ROUTES,
     STATUS_FIELD,
-    UNPRODUCED_REASON,
     SpineView,
     build_spine_view,
 )
@@ -338,7 +337,8 @@ def test_unproduced_columns_are_unknown_truth_fields_naming_why(route: str) -> N
             field = row.field(name)
             assert field.state is TruthState.UNKNOWN
             assert field.value is None
-            assert field.missing_reason == UNPRODUCED_REASON
+            spec = next(s for s in ROUTE_FIELDS[route] if s.name == name)
+            assert field.missing_reason == spec.reason
             assert field.truth_kind is TruthKind.DERIVED
 
 

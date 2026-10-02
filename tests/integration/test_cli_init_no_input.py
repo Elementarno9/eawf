@@ -114,7 +114,7 @@ def test_cli_init_refuses_existing_non_empty_ea_without_force(tmp_path: Path) ->
 
 
 def test_cli_init_writes_correct_config_yaml(tmp_path: Path) -> None:
-    """config.yaml records profiles.enabled, runtime.adapters, acceptance gates.
+    """config.yaml records profiles.enabled and runtime.adapters, and no acceptance gates.
 
     P26-W02 (C08 D14): the legacy top-level ``lifecycle`` and ``plugins``
     blocks are no longer emitted, and ``runtime.kind`` is replaced by the
@@ -130,7 +130,6 @@ def test_cli_init_writes_correct_config_yaml(tmp_path: Path) -> None:
         "claude-code",
         "--lifecycle-depth",
         "wave",
-        "--no-acceptance-typecheck",
     )
     assert res.exit_code == 0, res.stdout
 
@@ -146,9 +145,8 @@ def test_cli_init_writes_correct_config_yaml(tmp_path: Path) -> None:
     assert "kind" not in parsed["runtime"]
     assert "lifecycle" not in parsed
     assert "plugins" not in parsed
-    assert parsed["acceptance"]["tests"] is True
-    assert parsed["acceptance"]["lint"] is True
-    assert parsed["acceptance"]["typecheck"] is False
+    # the acceptance leaves are retired: nothing reads them, so init writes none
+    assert "acceptance" not in parsed
 
 
 def test_cli_init_renders_managed_regions_for_each_block(tmp_path: Path) -> None:

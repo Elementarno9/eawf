@@ -52,7 +52,7 @@ from eawf.kernel.projection.transcript import (
     NO_TEXT_REASON,
     OPEN_TURN_TEXT,
     PURGED_REASON,
-    RUN_OUTCOME_PRODUCER,
+    RUN_NOT_ENDED,
     THINKING,
     TRANSCRIPT_FIELDS,
     TRANSCRIPT_ROUTE,
@@ -345,12 +345,11 @@ def test_a_command_result_block_states_how_the_command_ended() -> None:
     assert model.blocks[0].text.value == "shell · foreground · result · succeeded"
 
 
-def test_the_route_names_the_outcome_producer_it_waits_on() -> None:
-    """A cell waiting on a named producer is a different answer from a blank cell."""
+def test_a_running_runs_outcome_says_it_has_not_ended() -> None:
+    """A Run still running states no outcome, and says so rather than blaming a producer."""
     model = _view((_event(1),))
-    waiting = {spec.name: spec.missing_producer for spec in model.unproduced()}
-    assert waiting == dict.fromkeys(("outcome", "cost"), RUN_OUTCOME_PRODUCER)
-    assert RUN_OUTCOME_PRODUCER in _frame(model)
+    assert model.unproduced() == ()
+    assert RUN_NOT_ENDED in _frame(model)
 
 
 # ---------- a hole is drawn ----------

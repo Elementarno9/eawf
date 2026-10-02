@@ -46,6 +46,7 @@ from pydantic import ValidationError
 from eawf.kernel.projection.compute import build_route_projection
 from eawf.kernel.projection.connection import ConnectionValue, ReconnectDisposition
 from eawf.kernel.projection.liveness import STALE_AFTER_SECONDS, HeldLiveness, run_liveness
+from eawf.kernel.projection.operations import QUEUE_UNREAD
 from eawf.kernel.projection.spine import build_spine_view
 from eawf.kernel.projection.truth import (
     ConnectionState,
@@ -856,8 +857,8 @@ def test_ui_025_a_queued_leg_reads_not_started_and_an_executing_leg_is_labelled(
     queued = next(row for row in frame if "RUN-00000002" in row)
     running = next(row for row in frame if "RUN-00000001" in row)
     assert "∅ not started" in queued
-    # an executing leg with no progress producer says unknown in words, never a bare mark
-    assert running.rstrip().endswith("? unknown")
+    # an executing leg before the queue read arrives says so in words, never a bare mark
+    assert running.rstrip().endswith(f"? unknown · {QUEUE_UNREAD}")
     assert "%" not in "\n".join(frame)
 
 
@@ -918,7 +919,7 @@ def test_ui_026_a_stopped_read_is_stale_and_a_leg_that_stopped_advancing_is_stal
     assert "stale · liveness last read 10:00" in _unattended_with(stalled, old)
     quiet = HeldLiveness(stalls=(), read_at=read_at)
     assert "stale" in _unattended_with(quiet, old)
-    assert _unattended_with(quiet, fresh).rstrip().endswith("? unknown")
+    assert _unattended_with(quiet, fresh).rstrip().endswith(f"? unknown · {QUEUE_UNREAD}")
     for fields in (run_liveness("RUN-00000001", stalled, now=fresh),):
         assert fields.value == "stalled"
         assert fields.freshness is Freshness.LIVE

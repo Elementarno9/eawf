@@ -100,7 +100,9 @@ REQUIREMENT_ID = re.compile(r"\b[A-Z]{2,4}-\d{3}\b")
 BOUND_ROUTES: tuple[str, ...] = (*VERIFICATION_ROUTES, *OPERATIONS_ROUTES)
 
 #: The routes whose every declared column a producer states, read off the row's facts.
-STATED_ROUTES: frozenset[str] = frozenset({"trust", "sandbox.log", "evidence", "evidence.digest"})
+STATED_ROUTES: frozenset[str] = frozenset(
+    {"trust", "sandbox.log", "evidence", "evidence.digest", "unattended"}
+)
 
 #: The routes whose facts ride on their own records beside the rows, so no row column waits.
 RECORD_STATED_ROUTES: frozenset[str] = frozenset({"crash.recovery", "health"})
@@ -413,12 +415,13 @@ def test_a_policy_row_states_no_decision() -> None:
     assert row.field("decision").missing_reason == NOT_A_DECISION
 
 
-def test_the_queue_names_the_dispatch_projection_it_waits_on() -> None:
-    """The queue state and the progress of a queued Run both wait on the same item."""
-    model = _view("unattended")
-    waiting = {spec.name: spec.missing_producer for spec in model.unproduced()}
-    assert waiting == dict.fromkeys(("queue_state", "progress"), DISPATCH_QUEUE_PRODUCER)
-    assert not REQUIREMENT_ID.search(str(model.rows[0].field("progress").missing_reason))
+def test_the_queue_names_the_dispatch_read_it_waits_on() -> None:
+    """The queue state and the progress of a queued Run both wait on the same read."""
+    row = _view("unattended").rows[0]
+    for name in ("queue_state", "progress"):
+        reason = str(row.field(name).missing_reason)
+        assert DISPATCH_QUEUE_PRODUCER in reason
+        assert not REQUIREMENT_ID.search(reason)
 
 
 def test_a_column_with_no_named_producer_falls_back_to_the_generic_reason() -> None:
@@ -433,16 +436,10 @@ def test_a_route_whose_facts_are_produced_declares_no_silent_column(route: str) 
     assert _view(route).unproduced() == ()
 
 
-@pytest.mark.parametrize(
-    ("route", "item"),
-    [("unattended", DISPATCH_QUEUE_PRODUCER)],
-)
-def test_the_frame_names_the_producer_each_silent_column_waits_on(route: str, item: str) -> None:
-    """The frame prints the item beside the unknown token, not only the token."""
-    model = _view(route)
-    rows, _session = _frame(model)
-    assert model.unproduced()
-    assert any(item in row for row in rows)
+def test_the_unattended_frame_names_the_read_its_progress_waits_on() -> None:
+    """The frame prints the read beside the unknown token, not only the token."""
+    rows, _session = _frame(_view("unattended"))
+    assert any(DISPATCH_QUEUE_PRODUCER in row for row in rows)
 
 
 def test_the_rung_card_frame_says_every_column_is_stated() -> None:

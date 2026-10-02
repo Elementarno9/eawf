@@ -35,7 +35,6 @@ Profiles merge in precedence order; the `core` rules always apply. Field-level c
 ## CLI surface
 
 ```text
-eawf profile list        # show resolved profiles + their source layer
 eawf profile new         # scaffold a new workspace/user profile
 eawf profile validate    # validate a profile body against the schema
 ```

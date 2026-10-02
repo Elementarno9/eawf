@@ -7,7 +7,9 @@ End-to-end:
 - Drive the skill via ``eawf --json skill run /research`` (the W07 CLI
   surface) so the test exercises the registry + engine + body wiring.
 - Assert the envelope shape, parse the body as :class:`ResearchBody`,
-  and verify the events.jsonl record count matches the algorithm steps.
+  and verify the events.jsonl record count matches the steps it ran. A
+  headless run has no agent to answer its questions, so it blocks and
+  names the research Campaign verbs instead of inventing an answer.
 
 Marked ``integration`` so the test runs under both the default suite and
 ``pytest -m integration``.
@@ -55,30 +57,27 @@ def test_skill_research_full_run_persists_events_and_envelope(
         ["--json", "skill", "run", "/research"],
         input="{}",
     )
-    assert result.exit_code == 0, result.stdout
+    assert result.exit_code == 1, result.stdout
 
     # Envelope round-trips through the typed model.
     payload = json.loads(result.stdout)
     env = OutputEnvelope.model_validate(payload)
     assert env.header.skill == "/research"
-    assert env.header.status == "ok"
+    assert env.header.status == "blocked"
+    assert "campaign_required" in {warning.code for warning in env.footer.warnings}
 
     # Body validates against the W01 ResearchBody schema.
     assert isinstance(env.body, dict)
     body = ResearchBody.model_validate(env.body)
     assert body.brief_id.startswith("BR-")
-    assert len(body.questions) == 2  # depth=medium -> 2 slots
-    assert len(body.options) == 2
-    assert body.recommendation is not None
-    assert body.recommendation.choice == "option-1"
+    assert body.questions == []
 
-    # Events were persisted to .ea/store/event.jsonl, one per algorithm
-    # step (resolve_scope, start_brief, define_questions,
-    # synthesize_options, peer_review, recommend → 6).
+    # Events were persisted to .ea/store/event.jsonl, one per step the
+    # headless run reaches before it blocks.
     events_path = integration_repo / ".ea" / "store" / "event.jsonl"
     assert events_path.exists()
     lines = events_path.read_text(encoding="utf-8").splitlines()
-    assert len(lines) == 6
+    assert len(lines) == 2
     # Each line is a valid Envelope JSON with kind=event.
     for ln in lines:
         record = json.loads(ln)
@@ -86,6 +85,6 @@ def test_skill_research_full_run_persists_events_and_envelope(
         assert record["payload"]["actor"] == "skill"
 
     # The envelope's footer mirrors the persisted records list.
-    assert len(env.footer.persisted_store_records) == 6
+    assert len(env.footer.persisted_store_records) == 2
     for rec_id in env.footer.persisted_store_records:
         assert rec_id.startswith("EV-")

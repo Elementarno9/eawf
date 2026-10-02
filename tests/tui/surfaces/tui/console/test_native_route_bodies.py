@@ -15,6 +15,7 @@ off the live frames.
 from __future__ import annotations
 
 import asyncio
+import copy
 import dataclasses
 import re
 from datetime import UTC, datetime, timedelta
@@ -312,8 +313,36 @@ def test_con_088_the_run_frame_names_what_it_is_asked() -> None:
 
 def test_con_088_a_fact_nothing_produces_keeps_its_unknown_token() -> None:
     frame = _frame("run.detail", subject="RUN-00000003")
-    assert UNKNOWN_WORD in _starts(frame, " PROVIDER")
+    assert _starts(frame, " RUNTIME").split()[1:4] == ["runtime", "not", "recorded"]
+    assert "controls are not gated on a certification" in _starts(frame, " RUNTIME")
     assert _starts(frame, " STARTED").split()[1:3] == UNKNOWN_WORD.split()
+
+
+def test_the_run_frame_draws_the_runtime_tuple_and_session_the_run_records() -> None:
+    document = copy.deepcopy(DOCUMENT)
+    document["run"]["RUN-00000001"]["runtime_tuple"] = {
+        "harness": "claude-code",
+        "harness_version": "2.1.274",
+        "model": "claude-sonnet-4-5",
+    }
+    document["run"]["RUN-00000001"]["vendor_session"] = {
+        "harness": "claude-code",
+        "session_digest": "vsid-0123456789abcdef0123456789abcdef",
+    }
+    frame = _frame("run.detail", subject="RUN-00000001", document=document)
+    assert _starts(frame, " RUNTIME").split()[1:] == [
+        "claude-code",
+        "2.1.274",
+        "·",
+        "provider",
+        "not",
+        "recorded",
+        "·",
+        "claude-sonnet-4-5",
+        "·",
+        "session",
+        "vsid-01234567",
+    ]
 
 
 # ---------- Activity draws each Run's Task, reason and instant ----------
@@ -414,11 +443,11 @@ def test_con_084_the_empty_attention_route_names_its_revision_and_the_next_move(
     assert frame[1].startswith(f" {NOTHING_NEEDS_YOU}")
     nothing = _starts(frame, " NOTHING YET")
     assert "revision 41,208" in nothing
-    # the eight buckets stay on the rail: a count the register takes reads 0, one it
-    # cannot take its token, and none of them is drawn as a body row
-    buckets = [row for row in frame if re.search(r"│ [ ▸][a-z][a-z ]+\s+(0|\?)\s*$", row)]
+    # the eight buckets stay on the rail: a count the register takes reads 0, the one no
+    # record feeds its no-record mark, and none of them is drawn as a body row
+    buckets = [row for row in frame if re.search(r"│ [ ▸][a-z][a-z ]+\s+(0|∅)\s*$", row)]
     assert len(buckets) == 8
-    assert not [row for row in frame if re.match(r"^   [a-z ]+\s+(0|\?)\s*$", row)]
+    assert not [row for row in frame if re.match(r"^   [a-z ]+\s+(0|∅)\s*$", row)]
     assert re.search(r"needs operator\s+0", _text(frame))
     assert ATTENTION_NEXT in _starts(frame, " WHAT TO DO")
 

@@ -1,10 +1,9 @@
-"""The three remaining check callers run their checks in the sandboxed child.
+"""The ``/security-review`` skill runs its checks in the sandboxed child.
 
-The ``/audit`` skill, the ``/security-review`` skill and the ``eawf audit run
---checks`` verb each used to execute their checks in the calling process. A
+The skill used to execute its checks in the calling process. A
 check is routinely a test suite that drives eawf's own RPCs, so run there it
 resolved the caller's live ledger and runtime directory and wrote them for
-real. Each caller now hands its checks to
+real. It now hands its checks to
 :func:`eawf.workflow.verify.sandboxed_checks.run_checks_out_of_process`,
 whose child is bound to a throwaway copy of both.
 
@@ -31,8 +30,6 @@ import yaml
 
 from eawf.kernel.state.enums import ProjectStatus, ScopeKind
 from eawf.kernel.state.models import CurrentPointers, Project, State
-from eawf.workflow.skills.audit import AuditSkill
-from eawf.workflow.skills.bodies.audit import AuditBody
 from eawf.workflow.skills.engine import SkillContext, run_skill
 from eawf.workflow.skills.security_review import SecurityReviewSkill
 
@@ -230,26 +227,6 @@ def _skill_ctx(args: dict[str, Any]) -> SkillContext:
     return ctx
 
 
-# ---- /audit --------------------------------------------------------------------
-
-
-def test_audit_skill_state_mutating_check_leaves_live_state_byte_identical(
-    live_repo: LiveRepo,
-) -> None:
-    """The ``/audit`` criterion check runs sandboxed at the repo root."""
-    state_before = live_repo.state_path.read_bytes()
-    ctx = _skill_ctx(
-        {"criterion_checks": [{"criterion": "the probe observes", "argv": _PROBE_ARGV}]}
-    )
-
-    envelope = run_skill(AuditSkill(), ctx)
-
-    body = AuditBody.model_validate(cast(dict[str, Any], envelope.body))
-    assert [run.status for run in body.checks_run] == ["pass"], body.checks_run
-    assert envelope.header.status == "ok"
-    live_repo.assert_isolated(state_before=state_before)
-
-
 # ---- /security-review ----------------------------------------------------------
 
 
@@ -302,6 +279,3 @@ def test_security_review_missing_cwd_fails_before_any_check_runs(
     assert envelope.header.status == "failed"
     assert not live_repo.report.exists(), "a check ran against a cwd that does not exist"
     assert live_repo.state_path.read_bytes() == state_before
-
-
-# ---- eawf audit run --checks ---------------------------------------------------

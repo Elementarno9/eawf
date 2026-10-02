@@ -556,9 +556,8 @@ def run_cmd(
 ) -> None:
     """Run a registered skill headlessly and emit its envelope.
 
-    Exit codes follow the design spec mapping (see module docstring):
-    0 (ok/partial), 4 (failed), 6 (blocked), 7 (needs_user). The
-    canonical envelope is emitted on stdout in markdown by default and
+    Exit codes by envelope status: ok=0, partial=0, needs_user=1,
+    blocked=1, failed=2. The canonical envelope is emitted on stdout in markdown by default and
     in JSON when ``--json`` is set on the root.
     """
     from eawf.workflow.skills import (

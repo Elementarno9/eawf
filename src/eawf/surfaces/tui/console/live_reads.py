@@ -401,6 +401,14 @@ def held_queue(live: Mapping[str, object]) -> DispatchQueueView | None:
     return queue if isinstance(queue, DispatchQueueView) else None
 
 
+def held_usage(live: Mapping[str, object], key: str) -> RunUsageView | None:
+    """Return the usage read's answer for Run *key* among a frame's live answers, if held."""
+    return next(
+        (item for item in live.values() if isinstance(item, RunUsageView) and item.run_key == key),
+        None,
+    )
+
+
 def held_records(host: LiveReadHost) -> DecisionRecords | None:
     """Return the records the reads on screen bind, or ``None`` while none is held.
 
@@ -481,8 +489,8 @@ async def _fetch_ceiling(host: LiveReadHost, _address: str) -> CostCeilingView:
 
 
 def _usage_address(host: LiveReadHost) -> str | None:
-    """Return the URN of the Run the Run frame is about, once its row is held."""
-    held = host.projection_for(RUN_USAGE_ROUTE)
+    """Return the URN of the Run the Run frame or its transcript is about, once held."""
+    held = host.projection_for(host.route)
     subject = host.subject
     if held is None or not subject:
         return None
@@ -691,7 +699,9 @@ LIVE_READS: Final[Mapping[str, LiveRead]] = MappingProxyType(
             routes=frozenset({COST_CEILING_ROUTE}), address=_ceiling_address, fetch=_fetch_ceiling
         ),
         USAGE_READ: LiveRead(
-            routes=frozenset({RUN_USAGE_ROUTE}), address=_usage_address, fetch=_fetch_usage
+            routes=frozenset({RUN_USAGE_ROUTE, TRANSCRIPT_ROUTE}),
+            address=_usage_address,
+            fetch=_fetch_usage,
         ),
         HEALTH_VERDICTS_READ: LiveRead(
             routes=frozenset({HEALTH_ROUTE}), address=_health_address, fetch=_fetch_verdicts
@@ -781,4 +791,5 @@ __all__ = [
     "held_changes",
     "held_queue",
     "held_records",
+    "held_usage",
 ]

@@ -202,9 +202,6 @@ def _build_answers(
     plugins: list[str] | None,
     mcp: list[str] | None,
     auto_install_plugins: bool,
-    acceptance_tests: bool,
-    acceptance_lint: bool,
-    acceptance_typecheck: bool,
     template_extras: dict[str, Any] | None = None,
 ) -> WizardAnswers:
     """Coerce CLI flag values into a validated :class:`WizardAnswers`.
@@ -236,9 +233,6 @@ def _build_answers(
         plugins=tuple(plugins or ()),
         mcp=tuple(mcp or ()),
         auto_install_plugins=auto_install_plugins,
-        acceptance_tests=acceptance_tests,
-        acceptance_lint=acceptance_lint,
-        acceptance_typecheck=acceptance_typecheck,
         template_extras=template_extras,
     )
 
@@ -362,9 +356,6 @@ def _provision_canary(
         plugins=None,
         mcp=None,
         auto_install_plugins=False,
-        acceptance_tests=True,
-        acceptance_lint=True,
-        acceptance_typecheck=True,
     )
     try:
         result = run_wizard_no_input(answers, target_dir)
@@ -588,27 +579,6 @@ def init_cmd(
             help="Install the selected runtime plugin after init writes the workspace files.",
         ),
     ] = False,
-    acceptance_tests: Annotated[
-        bool,
-        typer.Option(
-            "--acceptance-tests/--no-acceptance-tests",
-            help="Require tests as an acceptance gate.",
-        ),
-    ] = True,
-    acceptance_lint: Annotated[
-        bool,
-        typer.Option(
-            "--acceptance-lint/--no-acceptance-lint",
-            help="Require lint as an acceptance gate.",
-        ),
-    ] = True,
-    acceptance_typecheck: Annotated[
-        bool,
-        typer.Option(
-            "--acceptance-typecheck/--no-acceptance-typecheck",
-            help="Require typecheck as an acceptance gate.",
-        ),
-    ] = True,
     refresh_gitignore: Annotated[
         bool,
         typer.Option(
@@ -743,9 +713,6 @@ def init_cmd(
                 plugins=plugin,
                 mcp=mcp,
                 auto_install_plugins=quick or auto_install_plugins,
-                acceptance_tests=acceptance_tests,
-                acceptance_lint=acceptance_lint,
-                acceptance_typecheck=acceptance_typecheck,
                 template_extras=template_extras,
             )
         except ValidationError as exc:

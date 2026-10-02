@@ -50,6 +50,7 @@ def _claim(**overrides: Any) -> ClaimFiling:
     fields = {
         "key": "CLM-0004",
         "urn": CLAIM,
+        "subject_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/task/EAWF-0042",
         "status": "OPEN",
         "title": "Replay keeps order",
         "description": "Replaying run 12 kept every event in order.",

@@ -24,10 +24,11 @@ from eawf.kernel.state.epoch2.evidence_rung import (
     RungOutcome,
     span_digest,
 )
+from eawf.kernel.store.compaction import read_document
 from eawf.kernel.store.ledger import append_ledger_record, read_ledger_records
 from eawf.platform.install.canary import canary_ref, provision_canary
 from eawf.runtime.daemon import methods
-from eawf.runtime.daemon.epoch2_transaction import TransactionRefusedError
+from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY, TransactionRefusedError
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.delivery_acceptance import DELIVERY_RECORD_EVIDENCE_METHOD
 from eawf.runtime.daemon.methods.evidence_ladder import (
@@ -40,22 +41,31 @@ from eawf.runtime.daemon.methods.evidence_ladder import (
 )
 from eawf.workflow.evidence.claim_ladder import EVIDENCE_LADDER_METHOD
 from tests.integration.runtime.daemon._delivery_verb_fixtures import proof_line
+from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
+    MILESTONE_URN,
+    document_path,
+    seed,
+    seed_row,
+)
 from tests.integration.workflow.delivery import _completion_fixtures as world
 
 pytestmark = pytest.mark.integration
 
 CONTAINER: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
-CLAIM_URN: Final = "eawf://WSP-MAIN/PRJ-EAWF/_/claim/CLM-0004"
+CLAIM_URN: Final = "eawf://WSP-MAIN/PRJ-EAWF/_/claim/CLM-0001"
 AT: Final = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
 NOTES: Final = "docs/replay-notes.md"
 NOTES_TEXT: Final = "# Replay\n\nreplaying run 12 kept every event in order\nno event was lost\n"
 SUMMARY: Final = "replaying run 12 kept every event in order"
+_DOCUMENTS: dict[Path, Path] = {}
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
-    provision_canary(repo_root=root, ref=canary_ref("CLM"), provisioned_at=AT)
+    canary = provision_canary(repo_root=root, ref=canary_ref("CLM"), provisioned_at=AT)
+    seed(canary, {"milestone": {"MLS-0030": seed_row("milestone", "ACTIVE")}})
+    _DOCUMENTS[canary.root] = document_path(canary)
     (root / "docs").mkdir(exist_ok=True)
     (root / NOTES).write_text(NOTES_TEXT, encoding="utf-8")
     return root
@@ -79,7 +89,7 @@ def _evidence(repo: Path, summary: str = SUMMARY, key: str = "evidence-1") -> st
     answer = _dispatch(
         repo,
         DELIVERY_RECORD_EVIDENCE_METHOD,
-        urn=f"{CONTAINER}/milestone/MLS-0030",
+        urn=MILESTONE_URN,
         actor="OPERATOR",
         idempotency_key=key,
         kind="artifact",
@@ -88,33 +98,34 @@ def _evidence(repo: Path, summary: str = SUMMARY, key: str = "evidence-1") -> st
     return str(answer["evidence_ref"])
 
 
-def _anchor(ref: str, *, start: int = 3, end: int = 4, text: str | None = None) -> dict[str, Any]:
-    lines = NOTES_TEXT.splitlines()[start - 1 : end]
-    return {
-        "evidence_ref": ref,
-        "path": NOTES,
-        "start_line": start,
-        "end_line": end,
-        "anchor_digest": span_digest("\n".join(lines) if text is None else text),
-    }
+def _anchor(*, start: int = 3, end: int = 4) -> dict[str, Any]:
+    return {"path": NOTES, "start_line": start, "end_line": end}
 
 
-def _file(repo: Path, ref: str, *, key: str = "claim-1", **fields: Any) -> dict[str, Any]:
+def _digest(start: int = 3, end: int = 4) -> str:
+    return span_digest("\n".join(NOTES_TEXT.splitlines()[start - 1 : end]))
+
+
+def _file(
+    repo: Path, ref: str, *, key: str = "claim-1", gate_receipt: str | None = None, **fields: Any
+) -> dict[str, Any]:
     fields.setdefault("description", "Replaying run 12 kept every event in order.")
+    cited = [ref.rsplit("/", 1)[-1], *([gate_receipt] if gate_receipt else [])]
     return _dispatch(
         repo,
         EVIDENCE_CLAIM_FILE_METHOD,
-        urn=CLAIM_URN,
+        urn=MILESTONE_URN,
+        expected_revision=read_document(_DOCUMENTS[repo]).get(CANONICAL_SEQUENCE_KEY, 0),
         actor="OPERATOR",
         idempotency_key=key,
         title="Replay keeps order",
-        evidence_refs=[ref],
+        evidence=cited,
         **fields,
     )
 
 
 def _ladder(repo: Path) -> ClaimLadder:
-    return ClaimLadder.model_validate(_dispatch(repo, EVIDENCE_LADDER_METHOD, claim_key="CLM-0004"))
+    return ClaimLadder.model_validate(_dispatch(repo, EVIDENCE_LADDER_METHOD, claim_key="CLM-0001"))
 
 
 def _receipt(repo: Path, result: GateReceiptResult = GateReceiptResult.PASS) -> str:
@@ -165,17 +176,18 @@ def _attest(repo: Path, ref: str, *, fragment: str = "#rung-4", key: str = "atte
 
 def test_rung_2_passes_over_an_anchored_span_that_still_matches(repo: Path) -> None:
     ref = _evidence(repo)
-    answer = _file(repo, ref, anchors=[_anchor(ref)])
+    answer = _file(repo, ref, anchors=[_anchor()])
     assert answer["outcomes"][:2] == ["passed", "passed"]
     anchor = _ladder(repo).rungs[1]
     assert anchor.counts["spans matched"] == 1
     assert anchor.evaluated_at is not None
-    assert anchor.input_refs[0].digest == _anchor(ref)["anchor_digest"]
+    assert anchor.input_refs[0].digest == _digest()
 
 
 def test_rung_2_fails_on_a_changed_span_and_holds_the_rungs_above(repo: Path) -> None:
-    ref = _evidence(repo)
-    answer = _file(repo, ref, anchors=[_anchor(ref, text="what the writer once read")])
+    _file(repo, _evidence(repo), anchors=[_anchor()])
+    (repo / NOTES).write_text(NOTES_TEXT.replace("no event", "one event"), encoding="utf-8")
+    answer = _check(repo, "#rung-2")
     assert answer["outcomes"] == ["passed", "failed", "not_run", "not_run"]
     _resolve, anchor, screen, entail = _ladder(repo).rungs
     assert anchor.counts["spans changed"] == 1
@@ -183,9 +195,10 @@ def test_rung_2_fails_on_a_changed_span_and_holds_the_rungs_above(repo: Path) ->
 
 
 def test_rung_2_fails_on_a_span_past_the_end_of_its_file(repo: Path) -> None:
-    """Off-by-one: the file has four lines, so a span ending at line 5 is gone."""
-    ref = _evidence(repo)
-    assert _file(repo, ref, anchors=[_anchor(ref, start=4, end=5)])["outcomes"][1] == "failed"
+    """Off-by-one: the file shrank to three lines, so a span ending at line 4 is gone."""
+    _file(repo, _evidence(repo), anchors=[_anchor()])
+    (repo / NOTES).write_text("\n".join(NOTES_TEXT.splitlines()[:3]), encoding="utf-8")
+    assert _check(repo, "#rung-2")["outcomes"][1] == "failed"
     assert _ladder(repo).rungs[1].counts["spans missing"] == 1
 
 
@@ -199,13 +212,13 @@ def test_rung_2_stays_unknown_for_a_claim_that_anchors_nothing(repo: Path) -> No
 def test_an_anchor_that_leaves_the_repository_is_refused_at_the_verb(repo: Path, path: str) -> None:
     ref = _evidence(repo)
     with pytest.raises(DaemonValidationError):
-        _file(repo, ref, anchors=[{**_anchor(ref), "path": path}])
+        _file(repo, ref, anchors=[{**_anchor(), "path": path}])
 
 
 def test_an_anchor_on_a_record_the_claim_does_not_cite_is_refused(repo: Path) -> None:
     ref = _evidence(repo)
     with pytest.raises(DaemonValidationError):
-        _file(repo, ref, anchors=[_anchor(f"{CONTAINER}/evidence/EVD-0099")])
+        _file(repo, ref, anchors=[{**_anchor(), "evidence": "EVD-0099"}])
 
 
 # ---------- rung 3: screen ----------
@@ -213,7 +226,7 @@ def test_an_anchor_on_a_record_the_claim_does_not_cite_is_refused(repo: Path) ->
 
 def test_rung_3_screens_the_claim_against_its_cited_records(repo: Path) -> None:
     ref = _evidence(repo)
-    _file(repo, ref, anchors=[_anchor(ref)])
+    _file(repo, ref, anchors=[_anchor()])
     screen = _ladder(repo).rungs[2]
     assert screen.outcome is RungOutcome.PASSED
     assert screen.finding.startswith("entailed")
@@ -222,9 +235,7 @@ def test_rung_3_screens_the_claim_against_its_cited_records(repo: Path) -> None:
 
 def test_a_rung_3_negative_is_advisory_and_leaves_rung_4_runnable(repo: Path) -> None:
     ref = _evidence(repo)
-    answer = _file(
-        repo, ref, anchors=[_anchor(ref)], description="Compaction halves the ledger size."
-    )
+    answer = _file(repo, ref, anchors=[_anchor()], description="Compaction halves the ledger size.")
     assert answer["outcomes"][2:] == ["failed", "unknown"]
     assert _ladder(repo).rungs[3].awaits_rung is None
 
@@ -235,7 +246,7 @@ def test_a_rung_3_negative_is_advisory_and_leaves_rung_4_runnable(repo: Path) ->
 def test_rung_4_entails_over_a_passing_receipt_and_the_claim_is_supported(repo: Path) -> None:
     ref = _evidence(repo)
     receipt = _receipt(repo)
-    answer = _file(repo, ref, anchors=[_anchor(ref)], gate_receipt=receipt)
+    answer = _file(repo, ref, anchors=[_anchor()], gate_receipt=receipt)
     assert answer["outcomes"] == ["passed", "passed", "passed", "passed"]
     assert (answer["status"], answer["promotion_blockers"]) == ("SUPPORTED", [])
     entail = _ladder(repo).rungs[3]
@@ -250,7 +261,7 @@ def test_rung_4_entails_over_a_passing_receipt_and_the_claim_is_supported(repo: 
 def test_rung_4_fails_over_a_failing_receipt(repo: Path) -> None:
     ref = _evidence(repo)
     receipt = _receipt(repo, GateReceiptResult.FAIL)
-    answer = _file(repo, ref, anchors=[_anchor(ref)], gate_receipt=receipt)
+    answer = _file(repo, ref, anchors=[_anchor()], gate_receipt=receipt)
     assert answer["outcomes"][3] == "failed"
     assert answer["status"] == "OPEN"
     assert _ladder(repo).rungs[3].counts == {"exit status": 1}
@@ -258,7 +269,7 @@ def test_rung_4_fails_over_a_failing_receipt(repo: Path) -> None:
 
 def test_rung_4_fails_when_the_named_receipt_is_not_held(repo: Path) -> None:
     ref = _evidence(repo)
-    answer = _file(repo, ref, anchors=[_anchor(ref)], gate_receipt="RCP-9999")
+    answer = _file(repo, ref, anchors=[_anchor()], gate_receipt="RCP-9999")
     assert answer["outcomes"][3] == "failed"
     assert "RCP-9999 the claim names is not held" in _ladder(repo).rungs[3].finding
 
@@ -268,7 +279,7 @@ def test_rung_4_fails_when_the_named_receipt_is_not_held(repo: Path) -> None:
 
 def test_check_reruns_the_named_rung_and_every_rung_above_it(repo: Path) -> None:
     ref = _evidence(repo)
-    _file(repo, ref, anchors=[_anchor(ref)])
+    _file(repo, ref, anchors=[_anchor()])
     (repo / NOTES).write_text("# Replay\n\nrewritten\n", encoding="utf-8")
     answer = _check(repo, "#rung-2")
     assert answer["outcomes"] == ["passed", "failed", "not_run", "not_run"]
@@ -279,7 +290,7 @@ def test_check_reruns_the_named_rung_and_every_rung_above_it(repo: Path) -> None
 def test_check_moves_the_claim_when_its_receipt_lands_later(repo: Path) -> None:
     ref = _evidence(repo)
     receipt = "RCP-0001"
-    assert _file(repo, ref, anchors=[_anchor(ref)], gate_receipt=receipt)["status"] == "OPEN"
+    assert _file(repo, ref, anchors=[_anchor()], gate_receipt=receipt)["status"] == "OPEN"
     assert _receipt(repo) == receipt
     answer = _check(repo, "#rung-4")
     assert (answer["status"], answer["outcomes"][3]) == ("SUPPORTED", "passed")
@@ -294,7 +305,7 @@ def test_check_against_a_stale_revision_is_a_revision_conflict(repo: Path) -> No
 
 
 def test_check_of_an_unfiled_claim_is_refused(repo: Path) -> None:
-    with pytest.raises(DaemonValidationError, match="holds no CLM-0004"):
+    with pytest.raises(DaemonValidationError, match="holds no CLM-0001"):
         _check(repo)
 
 
@@ -303,7 +314,7 @@ def test_check_of_an_unfiled_claim_is_refused(repo: Path) -> None:
 
 def test_an_attested_rung_4_attests_without_certifying(repo: Path) -> None:
     ref = _evidence(repo)
-    _file(repo, ref, anchors=[_anchor(ref)])
+    _file(repo, ref, anchors=[_anchor()])
     signed = _evidence(repo, "the reviewer reproduced replay run 12 by hand", key="evidence-2")
     answer = _attest(repo, signed)
     assert answer["outcomes"][3] == "passed"
@@ -316,7 +327,7 @@ def test_an_attested_rung_4_attests_without_certifying(repo: Path) -> None:
 
 def test_only_rung_4_is_attested(repo: Path) -> None:
     ref = _evidence(repo)
-    _file(repo, ref, anchors=[_anchor(ref)])
+    _file(repo, ref, anchors=[_anchor()])
     with pytest.raises(DaemonValidationError, match=RUNG_NOT_RUNNABLE):
         _attest(repo, ref, fragment="#rung-3")
 
@@ -330,7 +341,7 @@ def test_attestation_waits_on_an_unpassed_rung_2(repo: Path) -> None:
 
 def test_attestation_cites_a_held_evidence_record(repo: Path) -> None:
     ref = _evidence(repo)
-    _file(repo, ref, anchors=[_anchor(ref)])
+    _file(repo, ref, anchors=[_anchor()])
     with pytest.raises(DaemonValidationError, match=EVIDENCE_UNHELD):
         _attest(repo, f"{CONTAINER}/evidence/EVD-0099")
 
@@ -340,7 +351,7 @@ def test_attestation_cites_a_held_evidence_record(repo: Path) -> None:
 
 def test_the_evidence_route_states_each_claims_ladder(repo: Path) -> None:
     ref = _evidence(repo)
-    _file(repo, ref, anchors=[_anchor(ref)], gate_receipt=_receipt(repo))
+    _file(repo, ref, anchors=[_anchor()], gate_receipt=_receipt(repo))
     rows = _dispatch(repo, "projection.evidence.read")["rows"]
     [claim] = [row for row in rows if row["collection"] == "claim"]
     assert claim["facts"]["outcome"] == "1 passed · 2 passed · 3 passed · 4 passed"
@@ -357,8 +368,8 @@ def test_an_open_ladder_is_not_checked(repo: Path) -> None:
 
 def test_the_rung_card_lists_what_each_rung_ran_over(repo: Path) -> None:
     ref = _evidence(repo)
-    _file(repo, ref, anchors=[_anchor(ref)])
-    rows = _dispatch(repo, "projection.evidence.digest.read", key="CLM-0004")["rows"]
+    _file(repo, ref, anchors=[_anchor()])
+    rows = _dispatch(repo, "projection.evidence.digest.read", key="CLM-0001")["rows"]
     [evidence] = [row for row in rows if row["collection"] == "evidence"]
     assert evidence["key"] == ref.rsplit("/", 1)[-1]
     assert evidence["facts"]["found"].startswith("rung 3 passed")

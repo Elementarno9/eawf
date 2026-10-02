@@ -92,7 +92,7 @@ def test_resolve_default_missing_research_block_falls_back() -> None:
 
 
 def test_resolve_default_missing_leaf_falls_back() -> None:
-    resolved = resolve_default_research_depth({"research": {"auto_save": True}})
+    resolved = resolve_default_research_depth({"research": {"agent_count": 4}})
     assert resolved is DEFAULT_RESEARCH_DEPTH
 
 

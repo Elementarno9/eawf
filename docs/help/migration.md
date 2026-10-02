@@ -9,7 +9,6 @@ Per-cluster migration steps for moving an eawf-managed repo across schema and su
 ```text
 eawf daemon start       # ensure the canonical mutator is running
 eawf validate           # confirm the current state validates
-eawf state digest       # record the post-migration digest
 ```
 
 If a migration validator rejects the state (`2 VALIDATION_ERROR`), the violation list names the offending fields — fix them through the owning domain verb, never by hand-editing `state.json`.

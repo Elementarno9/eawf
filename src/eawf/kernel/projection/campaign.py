@@ -47,6 +47,8 @@ from eawf.kernel.state.epoch2.campaign import (
     step_blockers,
 )
 from eawf.kernel.state.epoch2.finding import CampaignFinding
+from eawf.kernel.state.epoch2.measurement import VendorSessionRef
+from eawf.kernel.state.epoch2.run import Run, RunRuntimeTuple
 from eawf.kernel.state.epoch2.urns import CampaignUrn, RunUrn
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -86,6 +88,10 @@ class CampaignStepView(_View):
             something keeps from starting.
         waits_on: What keeps it from starting, by name; empty unless blocked.
         runner_ref: Its current or most recent runner; ``None`` before its first.
+        runner_runtime: The runtime that runner records it ran on; ``None`` when it
+            records none.
+        runner_session: The vendor session that runner ran in; ``None`` when it
+            records none.
 
     Raises:
         pydantic.ValidationError: A blocked step naming no blocker, or a
@@ -97,6 +103,8 @@ class CampaignStepView(_View):
     state: Literal["pending", "running", "done", "blocked"]
     waits_on: tuple[str, ...] = ()
     runner_ref: RunUrn | None = None
+    runner_runtime: RunRuntimeTuple | None = None
+    runner_session: VendorSessionRef | None = None
 
     @model_validator(mode="after")
     def _blocked_names_its_blocker(self) -> Self:
@@ -187,14 +195,20 @@ class CampaignView(_View):
         return next((card for card in self.artifacts if card.artifact_ref == ref), None)
 
 
-def _step_view(step: CampaignPlanStep, steps: tuple[CampaignPlanStep, ...]) -> CampaignStepView:
+def _step_view(
+    step: CampaignPlanStep, steps: tuple[CampaignPlanStep, ...], runners: Mapping[str, Run]
+) -> CampaignStepView:
     blockers = step_blockers(step, steps)
+    runner_ref = step.run_refs[-1] if step.run_refs else None
+    runner = None if runner_ref is None else runners.get(runner_ref.entity_key)
     return CampaignStepView(
         step=step,
         ordinal_of_total=OrdinalOfTotal(ordinal=step.ordinal, total=len(steps)),
         state="blocked" if blockers else step.state.value,
         waits_on=blockers,
-        runner_ref=step.run_refs[-1] if step.run_refs else None,
+        runner_ref=runner_ref,
+        runner_runtime=None if runner is None else runner.runtime_tuple,
+        runner_session=None if runner is None else runner.vendor_session,
     )
 
 
@@ -271,6 +285,7 @@ def build_campaign_view(
     *,
     revisions: Mapping[str, StoredArtifactRevision],
     findings: Iterable[CampaignFinding],
+    runners: Mapping[str, Run],
     promoted_at: Mapping[str, int] | None = None,
 ) -> CampaignView:
     """Return one Campaign's read model.
@@ -279,6 +294,8 @@ def build_campaign_view(
         row: The Campaign's document row.
         revisions: Every stored artifact revision, keyed by its reference.
         findings: Every promoted finding; those of other Campaigns are left out.
+        runners: The Runs its steps name, by Run key; a step whose runner is not
+            held states no runtime for it.
         promoted_at: The sequence each finding's promoting event took, by key.
 
     Returns:
@@ -297,7 +314,7 @@ def build_campaign_view(
     unresolved = sorted((set(listed) | produced) - set(revisions))
     if unresolved:
         raise ValueError(f"{campaign.key} lists artifact revisions no record holds: {unresolved}")
-    steps = tuple(_step_view(step, campaign.plan_steps) for step in campaign.plan_steps)
+    steps = tuple(_step_view(step, campaign.plan_steps, runners) for step in campaign.plan_steps)
     cards = tuple(
         artifact_card(revisions[ref], ordinal=index, total=len(listed))
         for index, ref in enumerate(listed, start=1)

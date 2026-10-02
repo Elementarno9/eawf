@@ -60,16 +60,6 @@ def test_research_body_full_payload_round_trip() -> None:
             "questions": [
                 {"q": "Why?", "answer": "Because.", "confidence": "high", "sources": ["doc-1"]},
             ],
-            "options": [
-                {
-                    "name": "A",
-                    "tradeoffs": "fast vs. correct",
-                    "complexity": "low",
-                    "reversibility": "easy",
-                    "risks": ["timeout"],
-                }
-            ],
-            "recommendation": {"choice": "A", "confidence": "medium", "fallback": "B"},
             "peer_review": {
                 "reviewer_id": "REV-1",
                 "findings": ["nit"],
@@ -84,6 +74,13 @@ def test_research_body_full_payload_round_trip() -> None:
 def test_research_body_rejects_extra_field() -> None:
     with pytest.raises(ValidationError, match="Extra inputs"):
         ResearchBody.model_validate({"brief_id": "BR-001", "unexpected": True})
+
+
+@pytest.mark.parametrize("field", ["options", "recommendation", "research_plan"])
+def test_research_body_carries_no_fan_out_or_option_field(field: str) -> None:
+    """Nothing produces options, a recommendation or a fan-out plan, so the body has none."""
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        ResearchBody.model_validate({"brief_id": "BR-001", field: None})
 
 
 def test_blitz_body_minimal_construction_and_round_trip() -> None:

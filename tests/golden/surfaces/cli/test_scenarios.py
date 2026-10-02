@@ -60,9 +60,6 @@ def _wizard_answers() -> WizardAnswers:
         runtime="claude-code",
         plugins=(),
         mcp=(),
-        acceptance_tests=True,
-        acceptance_lint=True,
-        acceptance_typecheck=True,
     )
 
 

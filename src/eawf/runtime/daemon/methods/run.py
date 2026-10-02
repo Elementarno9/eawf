@@ -108,6 +108,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
     run_transaction,
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
+from eawf.runtime.daemon.methods.conformance import StoreStageJournal
 from eawf.runtime.daemon.native_dispatch import (
     RUN_DISPATCH_METHOD,
     RUN_RETRY_METHOD,
@@ -134,6 +135,13 @@ from eawf.runtime.daemon.run_events import (
     stall_facts_of,
 )
 from eawf.runtime.hooks.event import HOST_HARNESSES
+from eawf.runtime.runtimes.quarantine import is_quarantined
+from eawf.workflow.evidence.run_certification import (
+    ControlGate,
+    ControlGateCode,
+    decide_run_control,
+    runtime_certifications,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -577,8 +585,44 @@ def _bind(context: Epoch2RootContext, args: _BindParams, *, now: datetime) -> di
         return binding.model_dump(mode="json")
 
 
+def _require_certified(
+    context: Epoch2RootContext, run: Run, control: ControlKind, *, now: datetime
+) -> ControlGate:
+    """Decide whether the Run's runtime is certified for *control*.
+
+    Raises:
+        DaemonValidationError: The runtime holds no current certification for
+            the control; the refusal code and sentence name the runtime and
+            the certification that is missing, expired or short of it.
+    """
+    tree = context.identity.tree_root
+    journal = StoreStageJournal(tree / "state.json")
+    gate = decide_run_control(
+        run.runtime_tuple,
+        control,
+        certifications=runtime_certifications(tree.parent),
+        quarantined=lambda digest: is_quarantined(journal.records(tuple_digest=digest)),
+        now=now,
+    )
+    logger.info(
+        f"_require_certified run={run.key!r} control={control.value} code={gate.code.value} "
+        f"admitted={gate.admitted}"
+    )
+    if not gate.admitted:
+        raise DaemonValidationError(f"validation_failed: {gate.code.value}: {gate.reason}")
+    return gate
+
+
 def _request(context: Epoch2RootContext, args: _RequestParams, *, now: datetime) -> _ControlOutcome:
-    """Record that a principal asked, and move the Run not at all."""
+    """Record that a principal asked, and move the Run not at all.
+
+    A new request is gated on the Run's runtime certification first; a retry
+    of one already standing is answered as it stands.
+
+    Raises:
+        DaemonValidationError: The Run's runtime is not certified for the
+            control asked.
+    """
     with context.session([args.urn]) as session:
         records = read_ledger_records(_ledger(session))
         facts = _control_facts(records, args.urn)
@@ -586,6 +630,7 @@ def _request(context: Epoch2RootContext, args: _RequestParams, *, now: datetime)
         standing = _existing_fact(facts, ref=args.control_request_ref, phase=ControlPhase.REQUESTED)
         if standing is not None:
             return _answer(standing, facts, run.status)
+        gate = _require_certified(context, run, args.control, now=now)
         fact = ControlFact(
             control_request_ref=args.control_request_ref,
             run_ref=args.urn,
@@ -598,7 +643,11 @@ def _request(context: Epoch2RootContext, args: _RequestParams, *, now: datetime)
         )
         extended = (*facts, fact)
         envelope = _append_fact(session, fact, run=run, facts=extended, now=now)
-        return _answer(fact, extended, run.status, envelope=envelope)
+        outcome = _answer(fact, extended, run.status, envelope=envelope)
+    if gate.code is ControlGateCode.CERTIFIED:
+        return outcome
+    noted = outcome.answer.model_copy(update={"warnings": (gate.reason,)})
+    return _ControlOutcome(answer=noted, envelopes=outcome.envelopes)
 
 
 def _acknowledge(
@@ -1137,7 +1186,7 @@ def _published(ctx: MethodContext, outcome: _ControlOutcome) -> dict[str, Any]:
     answer = outcome.answer
     delivered = [publish_projection(ctx.bus, envelope) for envelope in outcome.envelopes]
     if not all(delivered):
-        answer = answer.model_copy(update={"warnings": (PROJECTION_DEGRADED,)})
+        answer = answer.model_copy(update={"warnings": (*answer.warnings, PROJECTION_DEGRADED)})
     return answer.model_dump(mode="json")
 
 

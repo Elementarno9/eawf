@@ -171,27 +171,6 @@ def repo_init_cmd(
         list[str] | None,
         typer.Option("--mcp", help="Optional MCP servers (repeatable)."),
     ] = None,
-    acceptance_tests: Annotated[
-        bool,
-        typer.Option(
-            "--acceptance-tests/--no-acceptance-tests",
-            help="Require tests as an acceptance gate.",
-        ),
-    ] = True,
-    acceptance_lint: Annotated[
-        bool,
-        typer.Option(
-            "--acceptance-lint/--no-acceptance-lint",
-            help="Require lint as an acceptance gate.",
-        ),
-    ] = True,
-    acceptance_typecheck: Annotated[
-        bool,
-        typer.Option(
-            "--acceptance-typecheck/--no-acceptance-typecheck",
-            help="Require typecheck as an acceptance gate.",
-        ),
-    ] = True,
     refresh_gitignore: Annotated[
         bool,
         typer.Option(
@@ -229,9 +208,6 @@ def repo_init_cmd(
         lifecycle_depth=lifecycle_depth,
         plugin=plugin,
         mcp=mcp,
-        acceptance_tests=acceptance_tests,
-        acceptance_lint=acceptance_lint,
-        acceptance_typecheck=acceptance_typecheck,
         refresh_gitignore=refresh_gitignore,
         force=force,
     )

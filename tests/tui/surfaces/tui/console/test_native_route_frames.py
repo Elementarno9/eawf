@@ -922,7 +922,7 @@ def test_ui_073_the_campaign_frame_heads_with_the_replay_only_while_replaying() 
 
 
 def test_home_nests_each_milestone_under_its_track_with_title_and_progress() -> None:
-    groups = groups_of(_model("scope.home"))
+    groups = groups_of(_model("scope.home"), None)
     assert [(t.row.key if t.row else None, t.depth) for t in tree_of(groups, 0)] == [
         ("TRK-CORE", 0),
         ("MLS-0100", 1),
@@ -1009,7 +1009,7 @@ def test_run_frame_draws_one_runs_facts_under_its_task() -> None:
     frame = _frame("run.detail", subject="RUN-00000001")
     assert frame[0].startswith(" Eä ▸ EAWF ▸ TSK-0001 ▸ RUN-00000001")
     assert frame[1].startswith(" Run RUN-00000001 · RUNNING")
-    for label in (" STATE", " TASK", " PROVIDER", " USAGE", " CONTROLS", " LINEAGE"):
+    for label in (" STATE", " TASK", " RUNTIME", " USAGE", " CONTROLS", " LINEAGE"):
         assert any(row.startswith(label) for row in frame), label
     assert frame[3] == timeline_head(len(frame[3])), "the timeline pane comes first"
 
@@ -1064,7 +1064,7 @@ def test_the_journeys_draw_the_packet_layouts_live_over_a_served_tree(tmp_path: 
         line = next(row for row in activity if run.key in row)
         assert run.parent_key is None or run.parent_key in line
     run_frame = frames["run.detail"].splitlines()
-    assert any(row.startswith(" PROVIDER") for row in run_frame)
+    assert any(row.startswith(" RUNTIME") for row in run_frame)
     assert any(re.match(r"^\s+JURY\s+VERDICT", row) for row in frames["trust"].splitlines())
     assert any(row.startswith(" QUEUE") for row in frames["unattended"].splitlines())
     assert any(row.startswith(" CHECKS") for row in frames["health"].splitlines())

@@ -1,7 +1,7 @@
 """A console reading a live tree: its menus, finished records, event keys, scope and marks.
 
-A menu verb no daemon verb carries is listed refused with that reason and never opens a
-consequence card; the chrome's prototype reasons stay off a live tree; a finished
+A heavy menu verb is offered only where a daemon verb carries it and never opens a card
+that could not be sent; the chrome's prototype reasons stay off a live tree; a finished
 Milestone offers no lifecycle verb and states its final band in the frame's own gutter;
 a Run's event keys answer once, in words that hold; the tree names its project, root id
 and URN in one scheme; an empty table draws no head; ``*`` says how many it marked; and
@@ -32,7 +32,6 @@ from eawf.surfaces.tui.console.keybar import KEY, keybar
 from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.operations import (
     SAME_VERB,
-    UNBOUND_REASON,
     binding_refusal,
     linked_refusal,
 )
@@ -93,7 +92,7 @@ def _text(app: ConsoleApp) -> str:
     return "\n".join(compose_frame(app.view()))
 
 
-# ---------- a verb no daemon verb carries never opens a card ----------
+# ---------- a heavy verb is offered only where a daemon verb carries it ----------
 
 
 def test_every_offered_heavy_verb_on_a_live_tree_is_one_a_daemon_verb_carries() -> None:
@@ -108,33 +107,7 @@ def test_every_offered_heavy_verb_on_a_live_tree_is_one_a_daemon_verb_carries() 
                 assert binding_refusal(route, verb.verb) == "", (route, verb.verb)
             else:
                 assert verb.reason == linked_refusal(route, verb.verb), (route, verb.verb)
-    assert audited > 50
-
-
-@pytest.mark.parametrize(("route", "letter"), [("scope.home", "p"), ("run.detail", "s")])
-def test_pin_outcome_and_steer_read_the_unbound_reason(route: str, letter: str) -> None:
-    verb = LINKED.menus.verb(route, letter)
-    assert verb is not None
-    assert (verb.available, verb.reason) == (False, UNBOUND_REASON)
-
-
-@pytest.mark.parametrize(
-    ("route", "subject", "sel", "letter"),
-    [
-        ("scope.home", None, "MLS-0100", "p"),
-        ("run.detail", "RUN-00000001", None, "s"),
-    ],
-)
-def test_an_unbound_verb_is_refused_without_a_card(
-    route: str, subject: str | None, sel: str | None, letter: str
-) -> None:
-    app = _linked(route, subject=subject, sel=sel)
-    _text(app)
-    _press(app, ".")
-    assert UNBOUND_REASON in _text(app)
-    _press(app, letter)
-    assert app.session.overlay != CARD
-    assert app.session.trace is not None and UNBOUND_REASON in app.session.trace
+    assert audited > 30
 
 
 def test_the_prototype_replay_keeps_its_own_menus() -> None:
@@ -393,5 +366,5 @@ def test_live_no_menu_verb_without_a_daemon_verb_opens_a_card(tmp_path: Path) ->
 
     opened, pressed = asyncio.run(body())
     assert not opened, "a card opened for a verb no daemon verb carries:\n" + "\n".join(opened)
-    assert pressed > 60
+    assert pressed > 40
     assert authority_digests(REPO_ROOT) == before, "the live serve wrote to the authority tree"

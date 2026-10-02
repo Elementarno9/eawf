@@ -525,7 +525,7 @@ def test_a_backlog_cut_to_its_window_advertises_paging(drafts: int, paged: bool)
 
 def test_home_end_lands_on_the_last_leaf_and_home_on_the_first() -> None:
     view = drills._open("scope.home", document=nrf.DOCUMENT)
-    leaves = leaves_of(groups_of(view.projection))
+    leaves = leaves_of(groups_of(view.projection, None))
     assert len(leaves) > 1
     assert {"End", "Home"} <= (view.session.bar_keys or frozenset())
     assert drills._press(view, "End", document=nrf.DOCUMENT).sel_id == leaves[-1]

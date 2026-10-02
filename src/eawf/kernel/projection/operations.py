@@ -11,17 +11,17 @@ A decision's columns are the facts its sandbox-decision record states: the outco
 Run, the reason, the rule that decided with its value in force, and the policy revision it
 cites. A fact a row does not state -- a decision whose revision cannot be read, or any
 decision column on a policy row -- renders the unknown truth token saying so, never a
-guess. The queue state and the progress of a Run are not columns of these rows: the route
-reads them from the daemon's dispatch-queue read beside the projection, so these columns
-render the unknown token naming it until that read arrives -- a different and more useful
-answer than a blank cell, and a very different answer from a zero.
+guess. The queue state and the progress of a Run are not facts of these rows: they are
+stated from the daemon's dispatch-queue read beside the projection, so until that read
+arrives they render the unknown token naming it -- a different and more useful answer
+than a blank cell, and a very different answer from a zero.
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Final
 
@@ -29,13 +29,16 @@ from eawf.kernel.projection.compute import RouteProjection
 from eawf.kernel.projection.route_view import (
     RouteFieldSpec,
     RouteReadModel,
+    RouteRecord,
     build_route_read_model,
     check_field_tables,
+    known_field,
     stated,
     status_and,
-    unstated,
+    unknown_field,
 )
 from eawf.kernel.runtime.boot_recovery import BootRecovery
+from eawf.kernel.runtime.dispatch_queue import DispatchQueueView
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +65,18 @@ DISPATCH_QUEUE_PRODUCER: Final = "the daemon's dispatch-queue read"
 #: The route that renders the Runs the console lost sight of.
 CRASH_RECOVERY_ROUTE: Final = "crash.recovery"
 
+#: Why a queue column reads unknown before the dispatch-queue read arrives.
+QUEUE_UNREAD: Final = f"{DISPATCH_QUEUE_PRODUCER} has not arrived"
+
+#: Why a queue column reads unknown on a Run the dispatch queue does not hold.
+NOT_QUEUED: Final = "the dispatch queue does not hold this Run"
+
+#: Why a queued Run states no progress.
+NOT_STARTED: Final = "the Run has not started"
+
+#: The route whose rows the dispatch queue states columns of.
+UNATTENDED_ROUTE: Final = "unattended"
+
 #: What each operations route renders per row, in column order. The first field of every
 #: route is the status the document states; every other column names the producer it is
 #: waiting on, so the frame says which item would fill the cell. The daemon's recovery is
@@ -78,8 +93,8 @@ OPERATIONS_FIELDS: Final[Mapping[str, tuple[RouteFieldSpec, ...]]] = MappingProx
             stated("decided_at", absent=NOT_A_DECISION),
         ),
         "unattended": status_and(
-            unstated("queue_state", missing_producer=DISPATCH_QUEUE_PRODUCER),
-            unstated("progress", missing_producer=DISPATCH_QUEUE_PRODUCER),
+            stated("queue_state", absent=QUEUE_UNREAD),
+            stated("progress", absent=QUEUE_UNREAD),
         ),
         "crash.recovery": status_and(),
     }
@@ -102,13 +117,18 @@ class CrashRecoveryReadModel(RouteReadModel):
 
 
 def build_operations_view(
-    projection: RouteProjection, *, last_start: BootRecovery | None = None
+    projection: RouteProjection,
+    *,
+    last_start: BootRecovery | None = None,
+    queue: DispatchQueueView | None = None,
 ) -> RouteReadModel:
     """Return the read model one operations route draws from one served projection.
 
     Args:
         projection: The route projection the daemon answered, already validated.
         last_start: The daemon's last start; drawn by the Recovery frame only.
+        queue: The daemon's dispatch-queue read, once it has arrived; the unattended
+            rows state their queue state and progress from it.
 
     Returns:
         The route's rows with every declared field stated, and the counts derived from
@@ -118,6 +138,8 @@ def build_operations_view(
         ValueError: The projection is for a route this module states no read model for.
     """
     model = build_route_read_model(projection, family=FAMILY, fields=OPERATIONS_FIELDS)
+    if model.route == UNATTENDED_ROUTE and queue is not None:
+        model = replace(model, rows=tuple(_queued(row, queue) for row in model.rows))
     logger.debug(f"build_operations_view route={model.route} rows={len(model.rows)}")
     if projection.route != CRASH_RECOVERY_ROUTE:
         return model
@@ -135,13 +157,33 @@ def build_operations_view(
     )
 
 
+def _queued(row: RouteRecord, queue: DispatchQueueView) -> RouteRecord:
+    """Return ``row`` with its queue state and progress as the dispatch queue states them."""
+    entry = queue.run(row.key)
+    if entry is None:
+        missing = unknown_field(urn=row.urn, revision=row.revision, reason=NOT_QUEUED)
+        state, progress = missing, missing
+    else:
+        state = known_field(value=entry.state, urn=row.urn, revision=row.revision)
+        progress = (
+            known_field(value=entry.progress_mode.value, urn=row.urn, revision=row.revision)
+            if entry.started_at is not None
+            else unknown_field(urn=row.urn, revision=row.revision, reason=NOT_STARTED)
+        )
+    fields = {**row.fields, "queue_state": state, "progress": progress}
+    return replace(row, fields=MappingProxyType(fields))
+
+
 __all__ = [
     "CRASH_RECOVERY_ROUTE",
     "DISPATCH_QUEUE_PRODUCER",
     "FAMILY",
     "NOT_A_DECISION",
+    "NOT_QUEUED",
+    "NOT_STARTED",
     "OPERATIONS_FIELDS",
     "OPERATIONS_ROUTES",
+    "QUEUE_UNREAD",
     "SANDBOX_DECISION_PRODUCER",
     "UNREADABLE_REVISION",
     "CrashRecoveryReadModel",

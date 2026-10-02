@@ -18,7 +18,10 @@ names it, addressed at the revision its consequence card was built at and filed 
 operation id the card minted, so confirming the same card twice is one write; and a budget
 notice's snooze or resolve goes to the notice ledger's disposition verb, at the revision the
 operator was shown; and a pending action's snooze or assignment goes to the pending-action
-disposition verbs, at the revision the operator was shown. Every other
+disposition verbs, at the revision the operator was shown; and a Campaign's drop goes to
+the Campaign close verb, at the revision the operator was shown; and a proposed Milestone
+date goes to the Milestone's target-date verb, at the revision the operator was shown,
+filed under the operation id as its idempotency key. Every other
 writing verb stays listed and refused with its reason, because a verb that looked like it
 worked while the daemon never heard of it is the one thing a console must not draw.
 """
@@ -29,7 +32,7 @@ import logging
 import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, Final, Literal
@@ -60,6 +63,12 @@ DISPATCH_CONTROL_METHOD: Final = "runtime.dispatch.control.request"
 
 #: The key a dispatch request is filed under: the queue is the tree's one scheduler.
 DISPATCH_QUEUE_TARGET: Final = "dispatch queue"
+
+#: The daemon verb that closes an active Campaign as converged or cancelled.
+CAMPAIGN_CLOSE_METHOD: Final = "runtime.campaign.close"
+
+#: The daemon verb that sets the calendar day a Milestone is aimed at; no status moves.
+MILESTONE_TARGET_METHOD: Final = "domain.milestone.set_target"
 
 #: The daemon verb that approves or denies a provider permission.
 PERMISSION_DECIDE_METHOD: Final = "runtime.permission.decide"
@@ -94,8 +103,9 @@ SETTING_LAYERS: Final = frozenset({"global", "workspace", "repo", "branch", "loc
 #: The route whose verbs answer pending actions.
 ATTENTION_ROUTE: Final = "attention"
 
-#: The target kinds a Run control addresses: the Run's own route, and the pause card's.
-RUN_KINDS: Final = frozenset({"run.detail", "run"})
+#: The target kinds a Run control addresses: the Run's own route, the Run register, and
+#: the pause card's.
+RUN_KINDS: Final = frozenset({"run.detail", "activity", "run"})
 
 #: The answer an attention verb gives, by verb name. The daemon seals only the
 #: acceptance approval, so its option ids are the answers a console can give.
@@ -116,6 +126,8 @@ RUN_CONTROLS: Final[Mapping[str, ControlKind]] = MappingProxyType(
         "interrupt": ControlKind.INTERRUPT,
         "cancel": ControlKind.CANCEL,
         "reconcile": ControlKind.RECONCILE,
+        "cancel selected": ControlKind.CANCEL,
+        "reconcile selected": ControlKind.RECONCILE,
     }
 )
 
@@ -124,13 +136,34 @@ ACTION_VERBS: Final[Mapping[str, str]] = MappingProxyType(
     {"snooze": ACTION_SNOOZE_METHOD, "assign": ACTION_ASSIGN_METHOD}
 )
 
-#: The target kinds a dispatch request addresses: the queue's route and its own card.
-DISPATCH_KINDS: Final = frozenset({"unattended", "dispatch queue"})
+#: The target kinds a dispatch request addresses: the queue's route, its own card, and a
+#: Track, whose pause asks the tree's one queue to pause.
+DISPATCH_KINDS: Final = frozenset({"unattended", "dispatch queue", "track"})
 
 #: The dispatch control each queue verb requests, by verb name.
 DISPATCH_VERBS: Final[Mapping[str, Literal["pause", "drain", "resume"]]] = MappingProxyType(
-    {"request pause": "pause", "request drain": "drain", "request resume": "resume"}
+    {
+        "request pause": "pause",
+        "request drain": "drain",
+        "request resume": "resume",
+        "pause dispatch": "pause",
+    }
 )
+
+#: The route whose lens verbs write one layer's value through the layered-config verbs.
+SETTINGS_ROUTE: Final = "settings"
+#: The settings verbs the lens carries to a layer write or unset.
+SETTING_VERBS: Final = frozenset({"edit", "unset"})
+
+#: The route whose Campaign the drop verb closes, and the verb.
+CAMPAIGN_ROUTE: Final = "campaign"
+DROP_CAMPAIGN_VERB: Final = "drop campaign"
+#: Why a Campaign the console drops was closed, as the Campaign's stop records it.
+DROP_REASON: Final = "dropped by the operator from the console"
+
+#: The route whose undated Milestones the operator proposes a target date for, and the verb.
+TIMELINE_ROUTE: Final = "timeline"
+PROPOSE_DATE_VERB: Final = "propose date"
 
 #: Why a writing verb with no daemon mutator is refused; the reason the menu shows.
 UNBOUND_REASON: Final = "no daemon verb carries this yet"
@@ -199,6 +232,10 @@ def binding_refusal(kind: str, verb: str) -> str:
     if kind in RUN_KINDS and verb in RUN_CONTROLS:
         return ""
     if kind in DISPATCH_KINDS and verb in DISPATCH_VERBS:
+        return ""
+    if (kind, verb) in ((CAMPAIGN_ROUTE, DROP_CAMPAIGN_VERB), (TIMELINE_ROUTE, PROPOSE_DATE_VERB)):
+        return ""
+    if kind == SETTINGS_ROUTE and verb in SETTING_VERBS:
         return ""
     return _UNBOUND_REASONS.get(verb, UNBOUND_REASON)
 
@@ -421,6 +458,30 @@ class ActionDisposition:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class CampaignDrop:
+    """An operator's drop of one active Campaign, before it is addressed.
+
+    Attributes:
+        target: The Campaign's public key.
+    """
+
+    target: str
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TargetDate:
+    """An operator's proposed target date for one Milestone, before it is addressed.
+
+    Attributes:
+        target: The Milestone's public key.
+        target_date: The calendar day the Milestone is aimed at.
+    """
+
+    target: str
+    target_date: date
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class DispatchRequest:
     """An operator's pause, drain or resume of the dispatch scheduler.
 
@@ -443,6 +504,8 @@ VerbRequest = (
     | LifecycleRequest
     | NoticeRequest
     | DispatchRequest
+    | CampaignDrop
+    | TargetDate
 )
 
 
@@ -652,7 +715,9 @@ def address(
     | QuestionAnswer
     | ActionDisposition
     | PermissionDecision
-    | ControlRequest,
+    | ControlRequest
+    | CampaignDrop
+    | TargetDate,
     *,
     urn: str,
     revision: int,
@@ -681,6 +746,37 @@ def address(
                     "control_request_ref": ref,
                     "control": request.control.value,
                     "actor": operator.principal,
+                }
+            ),
+            target=request.target,
+        )
+    if isinstance(request, TargetDate):
+        key = _minted("TGT")
+        return ConsoleOperation(
+            operation_id=key,
+            method=MILESTONE_TARGET_METHOD,
+            params=MappingProxyType(
+                {
+                    "urn": urn,
+                    "expected_revision": revision,
+                    "idempotency_key": key,
+                    "actor": operator.principal,
+                    "target_date": request.target_date.isoformat(),
+                }
+            ),
+            target=request.target,
+        )
+    if isinstance(request, CampaignDrop):
+        return ConsoleOperation(
+            operation_id=_minted("CAM"),
+            method=CAMPAIGN_CLOSE_METHOD,
+            params=MappingProxyType(
+                {
+                    "urn": urn,
+                    "expected_revision": revision,
+                    "actor": operator.principal,
+                    "to_status": "cancelled",
+                    "reason": DROP_REASON,
                 }
             ),
             target=request.target,
@@ -797,8 +893,19 @@ def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> Operation
             detail=_setting_detail(operation, answer),
             disposition=ControlDisposition.CONFIRMED,
         )
-    if operation.method in MUTATIONS_BY_METHOD:
+    if operation.method in MUTATIONS_BY_METHOD or operation.method == MILESTONE_TARGET_METHOD:
         return _lifecycle_settled(operation, answer)
+    if operation.method == CAMPAIGN_CLOSE_METHOD:
+        record = answer.get("record")
+        stated = record.get("status") if isinstance(record, Mapping) else None
+        return OperationResult(
+            operation_id=operation.operation_id,
+            target=operation.target,
+            status=OperationStatus.APPLIED,
+            detail=f"{operation.target} dropped · the campaign is "
+            f"{str(stated).lower() if stated else 'closed'} · promoted findings stay promoted",
+            disposition=ControlDisposition.CONFIRMED,
+        )
     if operation.method == NOTICE_DISPOSE_METHOD:
         notice = answer.get("notice")
         stated = notice.get("status") if isinstance(notice, Mapping) else None
@@ -914,6 +1021,7 @@ def _lifecycle_settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -
 
     A refusal is answered in the envelope rather than as a transport error, so its code,
     the guard that failed and the remediation are read off the envelope's first error row.
+    A committed lifecycle move names the status it reached; a target date names the day.
     """
     after = answer.get("revision_after")
     revision = after if isinstance(after, int) else None
@@ -932,16 +1040,19 @@ def _lifecycle_settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -
             ),
             revision=revision,
         )
-    mutation = MUTATIONS_BY_METHOD[operation.method]
+    mutation = MUTATIONS_BY_METHOD.get(operation.method)
+    moved = (
+        mutation.to_status
+        if mutation is not None
+        else f"target date {operation.params['target_date']}"
+    )
     before = answer.get("revision_before")
     return OperationResult(
         operation_id=operation.operation_id,
         target=operation.target,
         status=OperationStatus.APPLIED,
         disposition=ControlDisposition.CONFIRMED,
-        detail=(
-            f"{operation.target} {mutation.to_status} · revision {before} → {after} · committed"
-        ),
+        detail=f"{operation.target} {moved} · revision {before} → {after} · committed",
         revision=revision,
     )
 
@@ -1086,32 +1197,42 @@ __all__ = [
     "ACTION_SNOOZE_METHOD",
     "ACTION_VERBS",
     "ANSWER_OPTIONS",
+    "CAMPAIGN_CLOSE_METHOD",
+    "CAMPAIGN_ROUTE",
     "CONTROL_METHOD",
     "DISPATCH_CONTROL_METHOD",
     "DISPATCH_KINDS",
     "DISPATCH_QUEUE_TARGET",
     "DISPATCH_VERBS",
+    "DROP_CAMPAIGN_VERB",
+    "DROP_REASON",
+    "MILESTONE_TARGET_METHOD",
     "NOTICE_DISPOSE_METHOD",
     "NOTICE_LIST_METHOD",
     "NO_PRINCIPAL_REASON",
     "OUTCOME_SENTENCES",
     "PERMISSION_DECIDE_METHOD",
     "PERMISSION_VERBS",
+    "PROPOSE_DATE_VERB",
     "QUESTION_ANSWER_METHOD",
     "QUESTION_OPTIONS",
     "RUN_CONTROLS",
     "RUN_KINDS",
     "SAME_VERB",
     "SEAL_METHOD",
+    "SETTINGS_ROUTE",
     "SETTING_LAYERS",
     "SETTING_SET_MANY_METHOD",
     "SETTING_SET_METHOD",
     "SETTING_UNSET_METHOD",
+    "SETTING_VERBS",
     "SNOOZE_FOR",
     "STALE_REVISION_CODE",
+    "TIMELINE_ROUTE",
     "UNBOUND_REASON",
     "ActionDisposition",
     "AnswerRequest",
+    "CampaignDrop",
     "ConsoleOperation",
     "ControlRequest",
     "DispatchRequest",
@@ -1124,6 +1245,7 @@ __all__ = [
     "PermissionDecision",
     "QuestionAnswer",
     "SettingRequest",
+    "TargetDate",
     "VerbRequest",
     "address",
     "address_dispatch",

@@ -176,14 +176,14 @@ def test_polish_y_flag_wins_over_auto_apply_safe(state_dir: Path) -> None:
 
 
 def test_polish_category_recorded_and_surfaced(state_dir: Path) -> None:
-    """``--category`` is recorded on the sweep traces + a rerun action."""
+    """``--category`` is recorded on the sweep traces; no action reruns a retired verb."""
     ctx = _ctx()
     ctx.args = {"category": "naming"}
     env = run_skill(PolishSkill(), ctx)
     assert env.header.status == "ok"
     assert _event_payload(state_dir, "polish.fanout")["category"] == "naming"
     assert _event_payload(state_dir, "polish.apply_gate")["category"] == "naming"
-    assert "eawf polish --category naming" in env.footer.next_valid_actions
+    assert env.footer.next_valid_actions == ["eawf milestone open-review"]
 
 
 def test_polish_default_category_is_all(state_dir: Path) -> None:

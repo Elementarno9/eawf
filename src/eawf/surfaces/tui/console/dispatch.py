@@ -18,7 +18,7 @@ from eawf.surfaces.tui.console import attention as att
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import drill
 from eawf.surfaces.tui.console import keymap as km
-from eawf.surfaces.tui.console.action_menu import MenuVerb, light_opening
+from eawf.surfaces.tui.console.action_menu import COPY_PREFIX, MenuVerb, light_opening
 from eawf.surfaces.tui.console.attach import ONBOARDING, skip_step
 from eawf.surfaces.tui.console.clock import (
     arm_prefix,
@@ -30,6 +30,7 @@ from eawf.surfaces.tui.console.clock import (
 from eawf.surfaces.tui.console.enter_keys import DRAFT_FIELDS, enter, refused, send_verb
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.header import CrumbRun
+from eawf.surfaces.tui.console.in_place import IN_PLACE
 from eawf.surfaces.tui.console.keybar import KEY
 from eawf.surfaces.tui.console.keymap import DISMISS, ENTRY_ALLOW, ENTRY_ROUTE, OVERLAY_KEYS, can
 from eawf.surfaces.tui.console.mutation import adopt, card_key, menu_key, select
@@ -541,6 +542,8 @@ def _menu_key(ctx: Ctx, k: str) -> bool:
     if not check.ok:
         ctx.log(k, f"refused: {check.why}")
         return True
+    # a live tree's verb acts on the record on screen, the subject else the cursor's row
+    target = (None if fx.prototype else s.subj_id or s.sel_id) or dv.target_id(s, fx)
     if s.route == att.ATTENTION_ROUTE and k in att.VERB:
         s.verb = k
         s.c_target = None
@@ -548,18 +551,21 @@ def _menu_key(ctx: Ctx, k: str) -> bool:
         s.c_target = {
             "verb": verb.verb,
             "state": None,
-            "id": dv.target_id(s, fx),
+            "id": target,
             "kind": s.route,
             "effects": verb.effects,
             "not": verb.non_effects,
         }
-    open_overlay(s, "consequence", subject=dv.target_id(s, fx))
+    open_overlay(s, "consequence", subject=target)
     ctx.log(k, f"{verb.verb} → consequence preview")
     return True
 
 
 def fire_light(ctx: Ctx, verb: MenuVerb, k: str) -> None:
-    """Run a light verb: it opens its route or fills the clipboard, answering in the rack."""
+    """Run a light verb: it opens its route, fills the clipboard or acts on the frame in place.
+
+    Each answers in the rack; one acting in place is the handler :data:`IN_PLACE` names.
+    """
     s, fx = ctx.s, ctx.fixture
     check = att.verb_available(s, fx, verb)
     if not check.ok:
@@ -569,6 +575,9 @@ def fire_light(ctx: Ctx, verb: MenuVerb, k: str) -> None:
     leave_overlay(s)
     s.pane_sel = 0
     to = verb.target
+    if not to and not verb.verb.startswith(COPY_PREFIX):
+        IN_PLACE[(s.route, verb.verb)](ctx, k)
+        return
     if not to:
         text = copy_for(ctx)
         ctx.log(k, f"{verb.verb} · {copied(ctx.copy(text))} · {text}")

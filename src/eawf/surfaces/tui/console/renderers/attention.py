@@ -17,9 +17,11 @@ from types import MappingProxyType
 from typing import Final
 
 from eawf.kernel.projection.attention import (
+    LOST_HOLE_REASON,
     AttentionBucket,
     AttentionItem,
     AttentionNeedKind,
+    BucketSource,
     attention_all,
     attention_mine,
     build_attention_view,
@@ -77,10 +79,12 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     route_crumb,
 )
 from eawf.surfaces.tui.console.renderers.registers import UNWRITTEN_ROW
-from eawf.surfaces.tui.console.tokens import TRUTH
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 RAIL_W = 29
+
+#: What a bucket no record feeds shows in place of a count.
+NO_RECORD = "∅"
 _KIND_INDENT = " " * 14
 _LEDGER_LEAD = " " * 14 + "ledger  "
 _LEDGER_CONT = " " * 22
@@ -210,6 +214,8 @@ _KIND_WORDS: Mapping[str, str] = MappingProxyType(
         "provider_permission": "permission",
         "child_ceiling_breach": "ceiling breach",
         "run_stall": "stall",
+        "run_state": "run",
+        "verdict_observation": "audit verdict",
     }
 )
 
@@ -241,11 +247,16 @@ def counts_line(register: RegisterView, *, principal: str | None, complete: bool
     return f"{mine_n} mine · {every_n} {label} · nothing here opened itself"
 
 
-def bucket_items(register: RegisterView) -> list[dv.StripItem]:
+def bucket_items(register: RegisterView, *, notices: int) -> list[dv.StripItem]:
     """Return ``all`` then the eight buckets, each ``needs operator`` need after it.
 
     One derivation feeds the strip and the rail, and a bucket filter never changes it; a
-    bucket the register cannot count states the unknown token, never a zero.
+    bucket no record feeds states the no-record token, never a zero that reads as counted.
+
+    Args:
+        register: The Attention register.
+        notices: The budget notices listed beside it, which count under ``over budget``
+            with the ceiling breaches.
     """
     view = build_attention_view(register)
     items = [dv.StripItem(None, "all", len(view.blocking()))]
@@ -253,14 +264,16 @@ def bucket_items(register: RegisterView) -> list[dv.StripItem]:
         dv.StripItem(
             f"{c.bucket.value}.{c.need.value}" if c.need else c.bucket.value,
             c.label,
-            TRUTH["unknown"].unicode if c.count is None else c.count,
+            NO_RECORD
+            if c.source is BucketSource.HOLE
+            else c.count + (notices if c.bucket is AttentionBucket.OVER_BUDGET else 0),
         )
         for c in view.bucket_counts()
     )
     return items
 
 
-def rail_lines(register: RegisterView, bucket: str | None) -> list[str]:
+def rail_lines(register: RegisterView, bucket: str | None, *, notices: int) -> list[str]:
     """Return the bucket rail: its head, then every bucket, the needs indented under theirs.
 
     The chosen bucket carries the caret, so the rail says which bucket the list shows
@@ -271,7 +284,7 @@ def rail_lines(register: RegisterView, bucket: str | None) -> list[str]:
         *(
             ("▸" if x.key == bucket else " ")
             + f"{pad(('  ' if x.label.startswith('↳') else '') + x.label, 24)}{x.n}"
-            for x in bucket_items(register)[1:]
+            for x in bucket_items(register, notices=notices)[1:]
         ),
     ]
 
@@ -348,6 +361,8 @@ def _empty_lines(register: RegisterView, bucket: str | None) -> list[str]:
         bucket: The chosen bucket; a filtered-out list says so rather than calling the
             register empty.
     """
+    if bucket == AttentionBucket.LOST.value:
+        return [label("LOST", f"{NO_RECORD} {LOST_HOLE_REASON}")]
     if bucket is not None:
         return ["   nothing in this bucket needs you"]
     revision = group_n(int(register.source_cursor))
@@ -378,7 +393,15 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     rd = reads(s)
     items = build_attention_view(register).items if not register.withheld else ()
     by_key = {row.key: row for row in register.rows}
-    listed = [item for item in items if _in_bucket(item, s.bucket) and item.key in by_key]
+    # a running Run needs nobody, so it is counted on the rail and listed only once its
+    # bucket is chosen: Activity is the list of work, this one of what needs someone
+    listed = [
+        item
+        for item in items
+        if _in_bucket(item, s.bucket)
+        and item.key in by_key
+        and (item.bucket is not AttentionBucket.ACTIVE or s.bucket == item.bucket.value)
+    ]
     # a budget notice lands in the over-budget bucket, so a filter on another hides it
     notices = list(view.notices) if s.bucket in (None, AttentionBucket.OVER_BUDGET.value) else []
     # a pause is work held waiting, listed beside what it waits on and counted by neither
@@ -400,7 +423,7 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
         summary=counts_line(register, principal=principal, complete=rd.complete)
         + cursor_note(register),
     )
-    strip = bucket_items(register) if not register.withheld else []
+    strip = bucket_items(register, notices=len(view.notices)) if not register.withheld else []
     s.bucket_keys = [x.key for x in strip] or None
     if not wide and strip:
         top.append(dv.strip_row(s, strip, w, lead=label("BUCKETS")))
@@ -447,7 +470,7 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
             held = "is" if others == 1 else "are"
             body.append(f"   {group_n(others)} {held} another principal's · {NOT_A_WORK_LIST}")
     if wide and strip:
-        body = beside(body, rail_lines(register, s.bucket), col, w)
+        body = beside(body, rail_lines(register, s.bucket, notices=len(view.notices)), col, w)
     rows = [*top, *body]
     if register.withheld:
         rows += [

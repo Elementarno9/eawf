@@ -14,6 +14,7 @@ Curated prose plus auto-generated catalogs for the `eawf` framework.
 - [Coverage gates](coverage-gates.md) — per-package coverage thresholds.
 - [Mutation testing](mutation-testing.md) — rebuild reference; the CI mutation-core job was removed pending a real owner.
 - [Epoch-2 cutover](epoch2-cutover.md) — stage, register, plan and apply the one-shot epoch-2 import.
+- [Claims](claims.md) — file a claim about a Task, Batch or Milestone, and how its four evidence rungs score it.
 
 ## Auto-generated reference
 

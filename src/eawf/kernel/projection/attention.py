@@ -10,11 +10,11 @@ Three questions are answered here, once, for every surface that asks them.
 Which bucket. Eight exception buckets in a fixed severity-first order partition the
 register totally and disjointly: an open item lands in exactly one, and under ``needs
 operator`` in exactly one :class:`AttentionNeedKind`. A Run that stopped responding lands
-under ``stalled`` for as long as the stall the daemon raised over it stands. A bucket the
-Attention register cannot see into states no count and says why -- a Run's failure and a
-budget notice are filed on records this projection does not carry -- and a bucket nothing
-produces yet is a declared hole whose zero is the absence of a producer, not a count that
-was taken.
+under ``stalled`` for as long as the stall the daemon raised over it stands; a failed Run
+that is still its open Task's newest attempt under ``failed``; a Run running unstalled under
+``active``; a ceiling breach under ``over budget``; and a blocking audit verdict of a Batch
+still open under ``rejected``. ``lost`` has no record of its own, so it is a declared hole
+whose zero is the absence of a producer, not a count that was taken.
 
 Whose. An item is *mine* when the console acts as a principal the item is addressed to:
 the one principal its record names, or every principal when it names none. A provider
@@ -44,10 +44,14 @@ from typing import Final
 
 from pydantic import ConfigDict
 
-from eawf.kernel.projection.compute import SNOOZED_FACT, STALL_KIND, ProjectionRow
+from eawf.kernel.projection.compute import (
+    RUN_STATE_KIND,
+    SNOOZED_FACT,
+    STALL_KIND,
+    ProjectionRow,
+)
 from eawf.kernel.projection.registers import (
     ATTENTION_ROUTE,
-    BUDGET_UNSTATED_REASON,
     RegisterView,
     count_field,
     revision_of,
@@ -59,7 +63,7 @@ from eawf.kernel.projection.truth import (
 from eawf.kernel.state.enums import OpenQuestionStatus
 from eawf.kernel.state.epoch2.base import Epoch2Model
 from eawf.kernel.state.epoch2.pending_action import PendingActionStatus
-from eawf.kernel.state.epoch2.run import SuspensionReason
+from eawf.kernel.state.epoch2.run import RunStatus, SuspensionReason
 from eawf.kernel.store.tiers import Epoch2Collection
 
 logger = logging.getLogger(__name__)
@@ -107,38 +111,36 @@ class ToastPolicy(StrEnum):
 class BucketSource(StrEnum):
     """How a bucket's count is known.
 
-    ``DERIVED`` buckets are counted off the register's rows. ``UNSTATED`` buckets have a
-    producer whose records this projection does not carry, so their count is unknown.
-    ``HOLE`` buckets have no producer at all; their zero is declared, never counted.
+    ``DERIVED`` buckets are counted off the register's rows. ``HOLE`` buckets have no
+    producer at all; their zero is declared, never counted.
     """
 
     DERIVED = "derived"
-    UNSTATED = "unstated"
     HOLE = "hole"
 
 
-#: Why each bucket the register cannot count states no number.
-_RUN_UNSTATED_REASON: Final = "a Run's failure is on the Run register, not the Attention one"
+#: Why ``lost`` has no record of its own: a Run that stops answering is the stall the
+#: daemon raises over it, and that lands under ``stalled``.
+LOST_HOLE_REASON: Final = (
+    "nothing records a Run as lost: a Run that stopped answering is the stall the daemon "
+    "raised over it, counted under stalled"
+)
+
+#: Why each bucket with no producer states no count.
 _BUCKET_REASONS: Final[Mapping[AttentionBucket, str]] = MappingProxyType(
-    {
-        AttentionBucket.FAILED: _RUN_UNSTATED_REASON,
-        AttentionBucket.LOST: _RUN_UNSTATED_REASON,
-        AttentionBucket.OVER_BUDGET: BUDGET_UNSTATED_REASON,
-        AttentionBucket.REJECTED: "no producer writes a rejected control awaiting re-issue yet",
-        AttentionBucket.ACTIVE: "no producer writes an answered-but-unconfirmed item yet",
-    }
+    {AttentionBucket.LOST: LOST_HOLE_REASON}
 )
 
 #: How each bucket's count is known. Total over :class:`AttentionBucket`, checked below.
 BUCKET_SOURCES: Final[Mapping[AttentionBucket, BucketSource]] = MappingProxyType(
     {
-        AttentionBucket.FAILED: BucketSource.UNSTATED,
-        AttentionBucket.LOST: BucketSource.UNSTATED,
+        AttentionBucket.FAILED: BucketSource.DERIVED,
+        AttentionBucket.LOST: BucketSource.HOLE,
         AttentionBucket.NEEDS_OPERATOR: BucketSource.DERIVED,
         AttentionBucket.STALLED: BucketSource.DERIVED,
-        AttentionBucket.OVER_BUDGET: BucketSource.UNSTATED,
-        AttentionBucket.REJECTED: BucketSource.HOLE,
-        AttentionBucket.ACTIVE: BucketSource.HOLE,
+        AttentionBucket.OVER_BUDGET: BucketSource.DERIVED,
+        AttentionBucket.REJECTED: BucketSource.DERIVED,
+        AttentionBucket.ACTIVE: BucketSource.DERIVED,
         AttentionBucket.QUEUED: BucketSource.DERIVED,
     }
 )
@@ -324,14 +326,14 @@ class BucketCount:
     Attributes:
         bucket: The bucket counted.
         need: The ``needs operator`` sub-bucket this row counts; ``None`` for a top level.
-        count: The open items in it; ``None`` when the register cannot say.
+        count: The open items in it.
         source: How the count is known.
-        reason: Why ``count`` is ``None``, or why a hole's zero is not a count.
+        reason: Why a hole's zero is not a count; ``None`` for a counted bucket.
     """
 
     bucket: AttentionBucket
     need: AttentionNeedKind | None
-    count: int | None
+    count: int
     source: BucketSource
     reason: str | None = None
 
@@ -380,11 +382,6 @@ class AttentionView:
         for bucket in AttentionBucket:
             source = BUCKET_SOURCES[bucket]
             reason = _BUCKET_REASONS.get(bucket)
-            if source is BucketSource.UNSTATED:
-                out.append(
-                    BucketCount(bucket=bucket, need=None, count=None, source=source, reason=reason)
-                )
-                continue
             count = sum(1 for i in self.items if i.bucket is bucket)
             out.append(
                 BucketCount(bucket=bucket, need=None, count=count, source=source, reason=reason)
@@ -483,26 +480,52 @@ def _question_item(row: ProjectionRow) -> AttentionItem | None:
 
 
 def _run_item(row: ProjectionRow) -> AttentionItem:
-    """Return the item a run-ledger row is: a stalled Run, or the notice of a ceiling breach.
+    """Return the item a run-ledger row is: a stalled, failed or running Run, or a breach.
 
-    The register lists a Run row only as one of these. A Run carries no owner of its own,
-    so both are addressed to every principal. A stall is a Run that stopped responding,
-    which a principal resumes or lets go, so it is counted and announced. The only
-    admission past a ceiling is the adoption of a subagent the host already spawned,
-    whose tree belongs to the operator running that host, so a breach is only listed.
+    A Run carries no owner of its own, so each is addressed to every principal. A stall is
+    a Run that stopped responding, which a principal resumes or lets go, so it is counted
+    and announced. The only admission past a ceiling is the adoption of a subagent the
+    host already spawned, whose tree belongs to the operator running that host, so a
+    breach is only listed. A failed Run is answered by its next attempt and a running one
+    by nothing, so both are listed and answered by no verb here.
     """
-    stalled = row.facts.get("kind") == STALL_KIND
+    kind = row.facts.get("kind")
+    status = row.status.value if row.status.state is TruthState.KNOWN else None
+    if kind == STALL_KIND:
+        bucket, announced = AttentionBucket.STALLED, NotificationClass.STOPPED_RESPONDING
+    elif kind == RUN_STATE_KIND:
+        failed = status == RunStatus.FAILED.value
+        bucket = AttentionBucket.FAILED if failed else AttentionBucket.ACTIVE
+        announced = NotificationClass.RUN_FINISHED
+    else:
+        bucket, announced = AttentionBucket.OVER_BUDGET, NotificationClass.BUDGET_PASSED
     return AttentionItem(
         key=row.key,
         source_ref=row.urn,
         revision=row.revision,
-        bucket=AttentionBucket.STALLED if stalled else AttentionBucket.OVER_BUDGET,
+        bucket=bucket,
         need=None,
         assignee_ref=None,
-        notification_class=(
-            NotificationClass.STOPPED_RESPONDING if stalled else NotificationClass.BUDGET_PASSED
-        ),
-        read_only=not stalled,
+        notification_class=announced,
+        read_only=bucket is not AttentionBucket.STALLED,
+    )
+
+
+def _verdict_item(row: ProjectionRow) -> AttentionItem:
+    """Return the item a blocking audit verdict is: its Batch waits on a repair.
+
+    The repair is the Batch's own next cycle, so the verdict is listed and answered by no
+    verb here.
+    """
+    return AttentionItem(
+        key=row.key,
+        source_ref=row.urn,
+        revision=row.revision,
+        bucket=AttentionBucket.REJECTED,
+        need=None,
+        assignee_ref=None,
+        notification_class=NotificationClass.RUN_FINISHED,
+        read_only=True,
     )
 
 
@@ -534,6 +557,8 @@ def build_attention_view(register: RegisterView) -> AttentionView:
             item = _question_item(row)
         elif row.collection is Epoch2Collection.RUN:
             item = _run_item(row)
+        elif row.collection is Epoch2Collection.BATCH:
+            item = _verdict_item(row)
         else:
             continue
         if item is not None:
@@ -651,6 +676,7 @@ __all__ = [
     "BUCKET_SOURCES",
     "CLASS_SOURCES",
     "CONSOLE_PRINCIPAL_CLASS",
+    "LOST_HOLE_REASON",
     "NOTIFICATION_MATRIX",
     "NO_PRINCIPAL_MINE_REASON",
     "AttentionBucket",

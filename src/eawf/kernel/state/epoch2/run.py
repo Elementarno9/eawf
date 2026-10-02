@@ -30,7 +30,7 @@ from typing import Annotated, ClassVar, Final, Literal, Self
 
 from pydantic import ConfigDict, Field, StringConstraints, field_validator, model_validator
 
-from eawf.kernel.state.epoch2.base import Epoch2Model, RunKey
+from eawf.kernel.state.epoch2.base import Epoch2Model, RunKey, SlugStr
 from eawf.kernel.state.epoch2.measurement import (
     CapturedRuntime,
     CounterSnapshot,
@@ -330,6 +330,65 @@ SUSPENSION_ACTIVITY_BUCKETS: Final[Mapping[SuspensionReason, ActivityBucket]] = 
 _TERMINAL: Final = frozenset({RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED})
 
 
+#: How a runtime spells its own version, such as ``2.1.274``. A runtime
+#: reports it as free text, so the grammar is a bounded token rather than
+#: semver: a pre-release or build suffix is still the version it ran.
+RUNTIME_VERSION_PATTERN: Final = r"^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$"
+
+#: The model id a runtime billed against, such as ``claude-sonnet-4-5``.
+RUNTIME_MODEL_PATTERN: Final = r"^[A-Za-z0-9][A-Za-z0-9._:/@\[\]-]{0,127}$"
+
+RuntimeVersion = Annotated[str, StringConstraints(strict=True, pattern=RUNTIME_VERSION_PATTERN)]
+RuntimeModel = Annotated[str, StringConstraints(strict=True, pattern=RUNTIME_MODEL_PATTERN)]
+
+
+class RunRuntimeTuple(Epoch2Model):
+    """The runtime one Run ran on, as far as its producer observed it.
+
+    Only ``harness`` is required, because every producer knows which
+    runtime it drives; the rest is what the producer actually saw, and a
+    member it could not see stays ``None`` rather than borrowing a default.
+    The vendor session is not repeated here: it is
+    :attr:`Run.vendor_session`, the reference capture already reads.
+
+    Attributes:
+        harness: The runtime, such as ``claude-code`` or ``codex``.
+        harness_version: The runtime's own version, the one a
+            certification is matched on.
+        provider: Who served the model, such as ``anthropic``.
+        model: The model id the runtime ran.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    harness: SlugStr
+    harness_version: RuntimeVersion | None = None
+    provider: SlugStr | None = None
+    model: RuntimeModel | None = None
+
+    def filled_from(self, observed: RunRuntimeTuple | None) -> RunRuntimeTuple:
+        """Return this tuple with the members it lacks taken from *observed*.
+
+        A member this tuple states is kept: the caller who named it knew it.
+        A reading of another runtime fills nothing.
+
+        Args:
+            observed: What a reading of the Run's session saw, or ``None``.
+
+        Returns:
+            The merged tuple.
+        """
+        if observed is None or observed.harness != self.harness:
+            return self
+        return self.model_copy(
+            update={
+                name: getattr(observed, name)
+                for name in ("harness_version", "provider", "model")
+                if getattr(self, name) is None
+            }
+        )
+
+
 class RunCreateSpec(Epoch2Model):
     """The strict create document for a Run.
 
@@ -354,6 +413,8 @@ class Run(Epoch2Record):
     ``captured_runtime`` what the stop reading made of it.
     ``parent_run_ref`` is the Run that delegated this one, which is how a
     delegation tree is read back: lineage only, never a shared transcript.
+    ``runtime_tuple`` is the runtime the episode ran on; a Run recorded
+    before any producer stated it carries ``None``.
     """
 
     key: RunKey
@@ -368,6 +429,7 @@ class Run(Epoch2Record):
     vendor_session: VendorSessionRef | None = None
     counter_baseline: CounterSnapshot | UncapturedRuntime | None = None
     captured_runtime: CapturedRuntime | None = None
+    runtime_tuple: RunRuntimeTuple | None = None
 
     @property
     def activity_bucket(self) -> ActivityBucket | None:
@@ -465,6 +527,8 @@ class Run(Epoch2Record):
 
 __all__ = [
     "MUTATING_PURPOSES",
+    "RUNTIME_MODEL_PATTERN",
+    "RUNTIME_VERSION_PATTERN",
     "SUSPENSION_ACTIVITY_BUCKETS",
     "ActivityBucket",
     "BatchScope",
@@ -478,6 +542,7 @@ __all__ = [
     "Run",
     "RunCreateSpec",
     "RunPurpose",
+    "RunRuntimeTuple",
     "RunScope",
     "RunStatus",
     "SuspensionReason",

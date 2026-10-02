@@ -205,13 +205,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ),
     ConfigKey(
         tab="research",
-        key="research.auto_save",
-        label="Auto-save research drafts on close",
-        type="bool",
-        default=False,
-    ),
-    ConfigKey(
-        tab="research",
         key="research.default_depth",
         label="Default research depth",
         type="choice",

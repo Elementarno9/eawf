@@ -209,6 +209,17 @@ DueScopeUrn = Annotated[
     _JSON_SCHEMA,
 ]
 
+#: What a claim is about: a Task, Batch or Milestone, the records whose
+#: criteria a claim can be evidence for.
+ClaimSubjectUrn = Annotated[
+    QualifiedUrn,
+    PlainValidator(
+        _urn_validator(EntityKind.TASK, EntityKind.BATCH, EntityKind.MILESTONE),
+    ),
+    _SERIALIZER,
+    _JSON_SCHEMA,
+]
+
 #: What a bulk operation may name: a Run for a Run control, a Task for a
 #: lease release. Which of the two a given verb takes is the verb's rule.
 BulkItemUrn = Annotated[
@@ -235,6 +246,7 @@ __all__ = [
     "BulkItemUrn",
     "CampaignFindingUrn",
     "CampaignUrn",
+    "ClaimSubjectUrn",
     "ClaimUrn",
     "DueScopeUrn",
     "EvidenceUrn",

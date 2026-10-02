@@ -56,6 +56,8 @@ OUTCOME: Final = "Order holds across restarts"
 LEARNED: Final = "Replay keeps event order across daemon restarts"
 LATER: Final = "Replay order survives a provider switch"
 SAID: Final = ("Replaying forty recorded events", "No event arrived out of order")
+RAN_ON: Final = {"harness": "codex", "harness_version": "0.46.0", "provider": "openai"}
+SESSION_DIGEST: Final = "vsid-fedcba9876543210fedcba9876543210"
 
 
 def _call(root: Path, runtime: Path, method: str, **params: Any) -> dict[str, Any]:
@@ -129,7 +131,13 @@ def tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
         canary,
         {
             "track": {"TRK-RUNTIME": seed_row("track", "ACTIVE")},
-            "run": {"RUN-00000010": seed_row("run", "RUNNING")},
+            "run": {
+                "RUN-00000010": {
+                    **seed_row("run", "RUNNING"),
+                    "runtime_tuple": RAN_ON,
+                    "vendor_session": {"harness": "codex", "session_digest": SESSION_DIGEST},
+                }
+            },
         },
     )
     root, runtime, document = canary.root, tmp_path / "runtime", document_path(canary)
@@ -246,6 +254,10 @@ def test_con_140_live_enter_on_a_step_opens_its_card_and_escape_returns_to_the_r
     assert "1 Survey replay order source 1 · ✓ done" in _row(card, "STEP")
     assert "Nothing — it could start at once." in _row(card, "WAITS ON")
     assert "RUN-00000010" in _row(card, "RUNNER")
+    # the runner's provider and session are what its Run records, an unrecorded model named
+    assert _row(card, "RUNNER").split("RUNNER", 1)[1].strip() == (
+        "RUN-00000010 · codex 0.46.0 · openai · model not recorded · session vsid-fedcba98"
+    )
     assert "1 of ≤2 h" in _row(card, "SPENT")
     assert OUTCOME in _row(card, "OUTCOME")
     # the history region is the runner Run's own event lines, in the order it appended them

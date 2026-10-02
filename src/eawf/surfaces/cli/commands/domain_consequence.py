@@ -56,6 +56,13 @@ WRITE_CONSEQUENCES: Final[Mapping[str, tuple[tuple[str, ...], tuple[str, ...]]]]
             ("the milestone's target date is set or cleared, one revision on",),
             ("its status does not move", "no batch, task or release is rescheduled by it"),
         ),
+        "runtime.evidence.claim.file": (
+            (
+                "a claim is filed under the next CLM key, its spans digested as they read now",
+                "its four evidence rungs are scored as it lands",
+            ),
+            ("the subject's status does not move", "no cited evidence or receipt changes"),
+        ),
         "runtime.pending_action.snooze": (
             ("hidden for you only until the deadline — other principals still see it",),
             ("it is not answered", "its revision does not move"),

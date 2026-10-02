@@ -134,7 +134,7 @@ class InitSkill(Skill):
 
         persisted_records: list[str] = []
         state_mutations: list[str] = []
-        next_actions: list[str] = ["eawf roadmap", "eawf differentiate"]
+        next_actions: list[str] = ["eawf status", "eawf plan show"]
 
         # Step 1 — detect current state. v0.1 emits one event per
         # algorithm milestone so the audit trail mirrors the §14 steps.

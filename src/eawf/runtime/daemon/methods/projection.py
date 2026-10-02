@@ -58,12 +58,14 @@ import orjson
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from eawf.kernel.delivery.acceptance import AcceptanceBundleLedger, MilestoneAcceptanceBundle
+from eawf.kernel.delivery.batch_proof import BLOCKING_VERDICTS
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.projection.compute import (
     CANONICAL_SEQUENCE_FIELD,
     CEILING_BREACH_KIND,
     ROUTE_COLLECTIONS,
     ROUTE_NOTICE_COLLECTIONS,
+    RUN_STATE_KIND,
     KeyedPatch,
     RouteProjection,
     build_route_projection,
@@ -77,6 +79,7 @@ from eawf.kernel.projection.connection import (
     negotiate_reconnect,
 )
 from eawf.kernel.projection.liveness import STALLED
+from eawf.kernel.projection.registers import ATTENTION_ROUTE
 from eawf.kernel.projection.settings import (
     SETTINGS_ROUTE,
     EffectiveSettingsView,
@@ -99,6 +102,7 @@ from eawf.runtime.daemon.epoch2_root import RootIdentity
 from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY
 from eawf.runtime.daemon.methods import DaemonValidationError, Handler, MethodContext, register
 from eawf.runtime.daemon.methods.delivery_acceptance import BUNDLE_KEY_PREFIX
+from eawf.runtime.daemon.methods.delivery_completion import PROOF_PAYLOAD_KIND, FiledProof
 from eawf.runtime.daemon.methods.host_question import open_question_rows
 from eawf.runtime.daemon.methods.permission import open_permission_rows
 from eawf.runtime.daemon.methods.run_liveness import stall_key, standing_stall_facts
@@ -402,6 +406,96 @@ def _trust_rows(authority: RootAuthority, document: dict[str, Any]) -> tuple[dic
     return (*verdict_observation_rows(document_file, document), *calibration)
 
 
+#: The route whose rows the proof receipts of its subject Task are read beside.
+_TASK_ROUTE: Final = "task.detail"
+
+#: The verdicts Attention lists as rejected.
+_REJECTING: Final = frozenset(verdict.value for verdict in BLOCKING_VERDICTS)
+
+
+def _rejected_verdict_rows(
+    authority: RootAuthority, document: dict[str, Any]
+) -> tuple[dict[str, Any], ...]:
+    """Return the blocking verdicts the current cycles of the Batches still open hold.
+
+    A Batch that merged or was abandoned has left the document, and its verdicts with it:
+    a rejection there is history rather than something waiting on a repair.
+    """
+    batches = document_rows(document, Epoch2Collection.BATCH).values()
+    open_batches = {str(row.get("urn")) for row in batches if isinstance(row, dict)}
+    return tuple(
+        row
+        for row in verdict_observation_rows(document_path(authority), document)
+        if row["verdict"] in _REJECTING and row["batch_ref"] in open_batches
+    )
+
+
+def _run_state_rows(
+    authority: RootAuthority, document: dict[str, Any], stalled: frozenset[str]
+) -> tuple[dict[str, Any], ...]:
+    """Return the Runs Attention lists by their state, each as a notice row.
+
+    A failed Run is listed while it is the newest attempt of a Task still open in the
+    document: a later attempt or the Task ending is what answers it. A running Run is
+    listed unless a stall stands over it, which the stall row already lists.
+    """
+    held = document_rows(document, Epoch2Collection.RUN)
+    runs = {**latest_rows(ledger_path(document_path(authority), Epoch2Collection.RUN)), **held}
+    open_tasks = set(document_rows(document, Epoch2Collection.TASK))
+    newest: dict[str, tuple[str, str]] = {}
+    for key, row in runs.items():
+        task = _task_of(row)
+        stamp = (str(row.get("created_at") or ""), key)
+        if task is not None and stamp > newest.get(task, ("", "")):
+            newest[task] = stamp
+    rows: list[dict[str, Any]] = []
+    for key, row in sorted(runs.items()):
+        status, task = row.get("status"), _task_of(row)
+        failed = (
+            status == RunStatus.FAILED.value
+            and task in open_tasks
+            and newest.get(task or "", ("", ""))[1] == key
+        )
+        running = status == RunStatus.RUNNING.value and key in held and key not in stalled
+        if failed or running:
+            rows.append({**row, "payload_kind": RUN_STATE_KIND})
+    return tuple(rows)
+
+
+def _task_of(row: Mapping[str, Any]) -> str | None:
+    """Return the key of the Task a stored Run row runs, or ``None`` when it names none."""
+    scope = row.get("scope")
+    ref = scope.get("task_ref") if isinstance(scope, dict) else None
+    return ref.rsplit("/", 1)[-1] if isinstance(ref, str) else None
+
+
+def _proof_rows(authority: RootAuthority, key: str) -> tuple[dict[str, Any], ...]:
+    """Return every proof receipt filed for the Task *key* names, as notice rows, oldest first.
+
+    Raises:
+        pydantic.ValidationError: A line claims to be a filed proof and does not validate
+            as one, which means the ledger is corrupt.
+    """
+    task = key.rsplit("/", 1)[-1]
+    rows: list[dict[str, Any]] = []
+    path = ledger_path(document_path(authority), Epoch2Collection.RECEIPT)
+    for record in read_ledger_records(path):
+        if record.payload.get("payload_kind") != PROOF_PAYLOAD_KIND:
+            continue
+        proof = FiledProof.model_validate(record.payload)
+        if proof.task_ref.entity_key == task:
+            rows.append(
+                {
+                    **proof.model_dump(mode="json"),
+                    "key": record.record_key,
+                    "urn": str(proof.task_ref),
+                    "revision": 1,
+                    "status": proof.receipt.result.value,
+                }
+            )
+    return tuple(rows)
+
+
 def _subject_rows(
     *, route: str, authority: RootAuthority, document: dict[str, Any], key: str
 ) -> dict[Epoch2Collection, tuple[Mapping[str, Any], ...]]:
@@ -414,6 +508,39 @@ def _subject_rows(
     return subject_ledger_rows(route=route, subject=key, document=document, filed=filed)
 
 
+def _notice_rows_for(
+    *, route: str, authority: RootAuthority, document: dict[str, Any], key: str | None
+) -> dict[Epoch2Collection, tuple[Mapping[str, Any], ...]]:
+    """Return the notices *route* lists, by the ledger collection each is filed on.
+
+    Attention lists the live ceiling breaches, the standing stalls and the Runs it lists by
+    state from the run ledger, and the blocking verdicts of open Batches from the Batch
+    ledger. Trust lists every verdict of the current cycles with the jury's calibration,
+    the sandbox log the decisions on the receipt ledger, and a Task frame opened on a Task
+    the proof receipts filed for it there.
+    """
+    notices = ROUTE_NOTICE_COLLECTIONS.get(route, ())
+    rows: dict[Epoch2Collection, tuple[Mapping[str, Any], ...]] = {}
+    if Epoch2Collection.RUN in notices:
+        stalls = _standing_stall_rows(authority)
+        stalled = frozenset(str(row["urn"]).rsplit("/", 1)[-1] for row in stalls)
+        rows[Epoch2Collection.RUN] = (
+            *_live_breach_rows(authority, document),
+            *stalls,
+            *_run_state_rows(authority, document, stalled),
+        )
+    if route == _TASK_ROUTE:
+        if key is not None:
+            rows[Epoch2Collection.RECEIPT] = _proof_rows(authority, key)
+    elif Epoch2Collection.RECEIPT in notices:
+        rows[Epoch2Collection.RECEIPT] = _decision_rows(authority)
+    if route == ATTENTION_ROUTE:
+        rows[Epoch2Collection.BATCH] = _rejected_verdict_rows(authority, document)
+    elif Epoch2Collection.BATCH in notices:
+        rows[Epoch2Collection.BATCH] = _trust_rows(authority, document)
+    return rows
+
+
 def _ledger_rows_for(
     *, route: str, authority: RootAuthority, document: dict[str, Any], key: str | None
 ) -> dict[Epoch2Collection, tuple[Mapping[str, Any], ...]]:
@@ -422,11 +549,9 @@ def _ledger_rows_for(
     A provider permission is filed on the run ledger rather than a ledger of its
     own, so a route that renders permissions reads the open ones from there, as a
     route that renders questions reads the open questions a host asked. A route
-    that lists notices reads them from the ledger they are filed on: the live ceiling
-    breaches and the standing stalls from the run ledger, the sandbox decisions from the
-    receipt ledger and the audit verdicts of the Batches' current cycles, with the jury's
-    calibration over every verdict, from the Batch ledger. A route opened on a record
-    also reads that record and everything filed under it, however long ago they closed.
+    that lists notices reads them from the ledger they are filed on. A route opened on a
+    record also reads that record and everything filed under it, however long ago they
+    closed.
     """
     rows: dict[Epoch2Collection, tuple[Mapping[str, Any], ...]] = {
         collection: _terminal_ledger_rows(authority=authority, collection=collection)
@@ -437,16 +562,7 @@ def _ledger_rows_for(
         rows[Epoch2Collection.PERMISSION] = open_permission_rows(authority)
     if Epoch2Collection.OPEN_QUESTION in ROUTE_COLLECTIONS.get(route, ()):
         rows[Epoch2Collection.OPEN_QUESTION] = open_question_rows(authority)
-    notices = ROUTE_NOTICE_COLLECTIONS.get(route, ())
-    if Epoch2Collection.RUN in notices:
-        rows[Epoch2Collection.RUN] = (
-            *_live_breach_rows(authority, document),
-            *_standing_stall_rows(authority),
-        )
-    if Epoch2Collection.RECEIPT in notices:
-        rows[Epoch2Collection.RECEIPT] = _decision_rows(authority)
-    if Epoch2Collection.BATCH in notices:
-        rows[Epoch2Collection.BATCH] = _trust_rows(authority, document)
+    rows.update(_notice_rows_for(route=route, authority=authority, document=document, key=key))
     if key is not None:
         for collection, found in _subject_rows(
             route=route, authority=authority, document=document, key=key

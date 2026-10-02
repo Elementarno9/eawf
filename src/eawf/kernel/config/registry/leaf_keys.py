@@ -49,21 +49,6 @@ EditorKind = Literal["check", "order", "tiers", "rows", "pin", "pair"]
 ChoicesFrom = Literal["profiles", "profile_trust", "profile_certification"]
 
 
-class LeafDeny(BaseModel):
-    """One value of a leaf that an engine refuses while a boolean leaf withholds it.
-
-    Attributes:
-        value: The leaf's value, as the settings view renders it, that is refused.
-        unless: The boolean leaf whose ``true`` lifts the refusal; the layer that sets
-            it is the layer the refusal comes from.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    value: Annotated[str, StringConstraints(min_length=1)]
-    unless: Annotated[str, StringConstraints(min_length=1, max_length=128)]
-
-
 class LeafKey(BaseModel):
     """One leaf-key row in the C08 layered-config catalog.
 
@@ -89,8 +74,6 @@ class LeafKey(BaseModel):
             engine, skill, declarative, deprecated, or reserved.
         reserved: Whether the leaf is hidden from editing because it is
             deprecated or reserved. A leaf cannot be both consumed and reserved.
-        deny: The value an engine refuses for this leaf, and the leaf that
-            lifts the refusal; ``None`` when nothing refuses a value.
         value_range: The inclusive ``(minimum, maximum)`` the interactive
             config registry holds a numeric value to, either end ``None``
             when open; ``None`` when the registry states no range.
@@ -117,7 +100,6 @@ class LeafKey(BaseModel):
     consumer: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)] | None = None
     consumer_kind: ConsumerKind = "declarative"
     reserved: bool = False
-    deny: LeafDeny | None = None
     value_range: tuple[float | None, float | None] | None = None
     runtime: RuntimeName | None = None
     secret_refs: bool = False
@@ -184,4 +166,4 @@ _WRITABLE_RUNTIME_PREFERENCE: tuple[str, ...] = (
 _WRITABLE_NONE: tuple[str, ...] = ()  # locked / code-only
 
 
-__all__ = ["ChoicesFrom", "ConsumerKind", "EditorKind", "LeafDeny", "LeafKey", "LeafKeyType"]
+__all__ = ["ChoicesFrom", "ConsumerKind", "EditorKind", "LeafKey", "LeafKeyType"]

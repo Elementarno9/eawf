@@ -42,7 +42,7 @@ _DEPRECATED_ADAPTER_KEYS: tuple[str, ...] = (
 )
 
 #: Newly wired interactive leaves must stay visible and consumed.
-_ACTIVE_CONSUMED_KEYS: tuple[str, ...] = ("research.auto_save",)
+_ACTIVE_CONSUMED_KEYS: tuple[str, ...] = ("research.agent_count",)
 
 
 def test_registry_non_empty() -> None:

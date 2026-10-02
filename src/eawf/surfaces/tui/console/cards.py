@@ -2,13 +2,13 @@
 
 Every canonical mutation a linked console can send is previewed on one card: a lifecycle
 move on a Track, Milestone, Batch, Task or Run, a settings write or unset, an answer to a
-pending action or permission, a budget notice disposition, a Run control, and a dispatch
-queue request. Nothing is sent while the card only previews. The card is built from the
-row the link holds -- its status and its revision -- and from the transition table, so
-what it says the move will change is what the daemon will judge; a move the request itself
-cannot satisfy is refused on the card with the denial's own code and remediation, and
-nothing is sent for it. Each target carries the token its card compares at confirmation
-to tell a target that moved underneath it.
+pending action or permission, a budget notice disposition, a Run control, a dispatch
+queue request, a Campaign's drop, and a Milestone's target date. Nothing is sent while the
+card only previews. The card is built from the row the link holds -- its status and its
+revision -- and from the transition table, so what it says the move will change is what
+the daemon will judge; a move the request itself cannot satisfy is refused on the card
+with the denial's own code and remediation, and nothing is sent for it. Each target
+carries the token its card compares at confirmation to tell a target that moved under it.
 
 Once confirmed, each target keeps its own result row: requested, accepted and confirmed
 stamps and the outcome it reached, filled from the daemon's answer and never from the request. A
@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Final, Literal
 
@@ -61,6 +61,7 @@ from eawf.surfaces.tui.console.operations import (
     PERMISSION_VERBS,
     RUN_CONTROLS,
     SNOOZE_FOR,
+    CampaignDrop,
     ControlRequest,
     DispatchRequest,
     LifecycleRequest,
@@ -68,6 +69,7 @@ from eawf.surfaces.tui.console.operations import (
     OperationResult,
     PermissionDecision,
     SettingRequest,
+    TargetDate,
     VerbRequest,
     mint_lifecycle_id,
 )
@@ -146,7 +148,9 @@ def gate(
     return Gate(GateKind.REFUSED, refusal) if refusal else Gate(GateKind.OPEN)
 
 
-Kind = Literal["lifecycle", "setting", "answer", "control", "notice", "dispatch"]
+Kind = Literal[
+    "lifecycle", "setting", "answer", "control", "notice", "dispatch", "campaign", "target"
+]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -643,6 +647,81 @@ def control_card(
     )
 
 
+def campaign_card(
+    row: ProjectionRow, target: Mapping[str, str], *, principal: str, now: float
+) -> Card:
+    """Return the card previewing the drop of one held Campaign.
+
+    Args:
+        row: The Campaign as the link holds it.
+        target: The verb the frame asked for, with its effects and non-effects.
+        principal: Who the close is recorded in the name of.
+        now: The console clock.
+    """
+    revision = int(row.revision)
+    item = Item(
+        key=row.key,
+        title=row.title,
+        revision=revision,
+        status=status_of(row),
+        effects=(
+            f"{row.key} closes as cancelled at revision {revision}",
+            target.get("effects", ""),
+        ),
+        not_effects=("a step still running is not stopped by the close", target.get("not", "")),
+        refusal=None,
+        unknown="the daemon refuses a campaign that already left active",
+        request=CampaignDrop(target=row.key),
+        stale_token=str(revision),
+    )
+    return Card(
+        kind="campaign",
+        origin=target["verb"],
+        action=target["verb"],
+        noun="campaign",
+        items=(item,),
+        if_stale=if_stale(revision),
+        authority=_authority("control", principal),
+        issuer=principal,
+        opened_at=now,
+    )
+
+
+def target_card(row: ProjectionRow, day: date, *, principal: str, now: float) -> Card:
+    """Return the card previewing one held Milestone's proposed target date.
+
+    Args:
+        row: The Milestone as the link holds it.
+        day: The calendar day the operator typed.
+        principal: Who the date is recorded in the name of.
+        now: The console clock.
+    """
+    revision = int(row.revision)
+    item = Item(
+        key=row.key,
+        title=row.title,
+        revision=revision,
+        status=status_of(row),
+        effects=(f"{row.key} is aimed at {day.isoformat()}", "the Timeline places it on its lane"),
+        not_effects=("no status moves and no batch is touched",),
+        refusal=None,
+        unknown="the daemon refuses a completed or cancelled milestone",
+        request=TargetDate(target=row.key, target_date=day),
+        stale_token=str(revision),
+    )
+    return Card(
+        kind="target",
+        origin=day.isoformat(),
+        action="propose date",
+        noun="milestone",
+        items=(item,),
+        if_stale=if_stale(revision),
+        authority=_authority("control", principal),
+        issuer=principal,
+        opened_at=now,
+    )
+
+
 def dispatch_card(
     live: Mapping[str, object], target: Mapping[str, str], *, principal: str, now: float
 ) -> Card:
@@ -784,6 +863,7 @@ __all__ = [
     "Kind",
     "Result",
     "answer_card",
+    "campaign_card",
     "control_card",
     "dispatch_card",
     "dispatch_token",
@@ -795,4 +875,5 @@ __all__ = [
     "settle",
     "stamp",
     "status_of",
+    "target_card",
 ]

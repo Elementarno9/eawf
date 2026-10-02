@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from datetime import date
 from types import MappingProxyType
 from typing import Final
 
@@ -49,6 +50,7 @@ from eawf.surfaces.tui.console.cards import (
     Item,
     Result,
     answer_card,
+    campaign_card,
     control_card,
     dispatch_card,
     dispatch_token,
@@ -59,6 +61,7 @@ from eawf.surfaces.tui.console.cards import (
     setting_token,
     stamp,
     status_of,
+    target_card,
 )
 from eawf.surfaces.tui.console.keymap import allowlist
 from eawf.surfaces.tui.console.live_reads import held_queue
@@ -66,7 +69,9 @@ from eawf.surfaces.tui.console.navigation import Ctx, leave_overlay, open_overla
 from eawf.surfaces.tui.console.notices import notice_of
 from eawf.surfaces.tui.console.operations import (
     ATTENTION_ROUTE,
+    CAMPAIGN_ROUTE,
     DISPATCH_KINDS,
+    DROP_CAMPAIGN_VERB,
     RUN_CONTROLS,
     RUN_KINDS,
     SAME_VERB,
@@ -356,13 +361,35 @@ def open_setting(
     ctx.log(key, f"{request.target} · {effect} → consequence preview")
 
 
+def open_target(ctx: Ctx, key: str, day: date) -> None:
+    """Open the card previewing ``day`` as the held Milestone ``key``'s target, or say why not.
+
+    Args:
+        ctx: The keystroke's context.
+        key: The Milestone's public key.
+        day: The calendar day the operator typed.
+    """
+    decided = _gate(ctx, "propose date")
+    if decided.kind is not GateKind.OPEN:
+        ctx.log("Enter", f"propose date refused · {decided.reason}")
+        return
+    row = _row(ctx.rows, key)
+    if row is None:
+        ctx.log("Enter", f"{key} is in no projection the console holds · nothing to date")
+        return
+    ctx.s.mutation = target_card(row, day, principal=principal_of(ctx), now=ctx.clock.now())
+    open_overlay(ctx.s, CARD, subject=key)
+    ctx.log("Enter", f"propose date {key} {day.isoformat()} → consequence preview")
+
+
 def adopt(ctx: Ctx) -> None:
     """Build the card a consequence overlay opened elsewhere needs, from what the link holds.
 
-    An attention verb and a Run control open the consequence overlay by name; on a linked
-    console the card they preview is built here, from the held pending action or the
-    held Run, so the card states the revision the write will be addressed at. Nothing is
-    built for a console holding the prototype registers, whose card is the golden one.
+    An attention verb, a Run control and a Campaign's drop open the consequence overlay by
+    name; on a linked console the card they preview is built here, from the held pending
+    action, Run or Campaign, so the card states the revision the write will be addressed
+    at. Nothing is built for a console holding the prototype registers, whose card is the
+    golden one.
     """
     s = ctx.s
     if s.overlay != CARD:
@@ -390,12 +417,25 @@ def adopt(ctx: Ctx) -> None:
                 rows=ctx.attention.rows,
             )
         return
-    if target is not None and target.get("kind") in RUN_KINDS and target["verb"] in RUN_CONTROLS:
-        row = _row(ctx.rows, target["id"])
-        if row is not None:
-            s.mutation = control_card(row, target, principal=principal_of(ctx), now=now)
-    if target is not None and target.get("kind") in DISPATCH_KINDS:
-        s.mutation = dispatch_card(ctx.live, target, principal=principal_of(ctx), now=now)
+    if target is not None:
+        s.mutation = _target_card(ctx, target, now)
+
+
+def _target_card(ctx: Ctx, target: Mapping[str, str], now: float) -> Card | None:
+    """Return the card a menu verb's target previews, or ``None`` when no held record is it.
+
+    The target is a Run control, a request of the tree's one dispatch queue, or a
+    Campaign's drop; the queue is no row, every other target is the held row it names.
+    """
+    kind, verb, principal = target.get("kind"), target["verb"], principal_of(ctx)
+    if kind in DISPATCH_KINDS:
+        return dispatch_card(ctx.live, target, principal=principal, now=now)
+    row = _row(ctx.rows, target["id"])
+    if row is not None and kind in RUN_KINDS and verb in RUN_CONTROLS:
+        return control_card(row, target, principal=principal, now=now)
+    if row is not None and (kind, verb) == (CAMPAIGN_ROUTE, DROP_CAMPAIGN_VERB):
+        return campaign_card(row, target, principal=principal, now=now)
+    return None
 
 
 def _current_token(ctx: Ctx, card: Card, item: Item) -> str | None:
@@ -444,6 +484,13 @@ def _rebuilt(ctx: Ctx, card: Card) -> Card | None:
         return control_card(row, target, principal=principal, now=now) if row is not None else None
     if card.kind == "dispatch" and target is not None:
         return dispatch_card(ctx.live, target, principal=principal, now=now)
+    if card.kind == "target":
+        row = _row(ctx.rows, key)
+        day = date.fromisoformat(card.origin)
+        return target_card(row, day, principal=principal, now=now) if row else None
+    if card.kind == "campaign" and target is not None:
+        row = _row(ctx.rows, key)
+        return campaign_card(row, target, principal=principal, now=now) if row else None
     return None
 
 

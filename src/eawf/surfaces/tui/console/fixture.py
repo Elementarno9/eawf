@@ -25,7 +25,7 @@ from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 
-from eawf.surfaces.tui.console.action_menu import ActionMenus, MenuVerb, VerbWeight
+from eawf.surfaces.tui.console.action_menu import COPY_PREFIX, ActionMenus, MenuVerb, VerbWeight
 from eawf.surfaces.tui.console.chrome import (
     Bucket,
     ConsoleChrome,
@@ -38,9 +38,6 @@ from eawf.surfaces.tui.console.tokens import TRUTH
 
 # The files a fixture directory holds, one per register.
 FIXTURE_FILES: tuple[str, ...] = ("proto.json", "detail.json", "g.json", "settings.json")
-
-#: How a verb that only fills the clipboard is named in the chrome's menus.
-_COPY_VERB = "copy "
 
 #: The scope a console holding no prototype rows names until a projection states one.
 UNKNOWN_SCOPE = TRUTH["unknown"].unicode
@@ -201,7 +198,7 @@ def linked_verb(route: str, verb: MenuVerb) -> MenuVerb:
     """
     if verb.weight is VerbWeight.LIGHT:
         return verb
-    if not verb.mutates and verb.verb.startswith(_COPY_VERB):
+    if not verb.mutates and verb.verb.startswith(COPY_PREFIX):
         return replace(verb, weight=VerbWeight.LIGHT, available=True, reason="")
     refusal = linked_refusal(route, verb.verb)
     if refusal:

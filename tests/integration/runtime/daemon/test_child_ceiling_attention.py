@@ -27,7 +27,7 @@ from eawf.kernel.projection.attention import (
     deliveries,
     top_item,
 )
-from eawf.kernel.projection.compute import CEILING_BREACH_KIND, RouteProjection
+from eawf.kernel.projection.compute import CEILING_BREACH_KIND, ProjectionRow, RouteProjection
 from eawf.kernel.projection.connection import apply_patches
 from eawf.kernel.projection.registers import RegisterView, build_register_view
 from eawf.kernel.runtime.delegation import ChildCeilingBreach
@@ -87,6 +87,11 @@ def attention(canary: Any, tmp_path: Path) -> tuple[RouteProjection, RegisterVie
     return projection, build_register_view(projection)
 
 
+def _breaches(register: RegisterView) -> tuple[ProjectionRow, ...]:
+    """Return the breach notices the register lists; its running Runs are listed beside them."""
+    return tuple(row for row in register.rows if row.facts.get("kind") == CEILING_BREACH_KIND)
+
+
 def file_breach(canary: Any, *, ancestor: str, child: str) -> None:
     breach = ChildCeilingBreach(
         child_run_ref=parse_qualified_urn(urn(child)),
@@ -115,7 +120,7 @@ def test_run_022_a_breach_is_listed_in_attention_against_the_overrun_run(
 
     _projection, register = attention(canary, tmp_path)
 
-    (row,) = register.rows
+    (row,) = _breaches(register)
     assert (row.collection, row.key, row.urn) == (
         Epoch2Collection.RUN,
         f"CHILD-CEILING-{child}",
@@ -125,7 +130,7 @@ def test_run_022_a_breach_is_listed_in_attention_against_the_overrun_run(
     assert row.facts["kind"] == CEILING_BREACH_KIND
     assert (row.facts["subject"], row.facts["child"]) == (ROOT_KEY, child)
     assert row.facts["question"] == f"{child} made the subtree 1 Runs past child_runs=0"
-    (item,) = build_attention_view(register).items
+    (item,) = [i for i in build_attention_view(register).items if i.key == row.key]
     assert (item.bucket, item.need, item.read_only) == (AttentionBucket.OVER_BUDGET, None, True)
     assert item.assignee_ref is None
     assert item.addressed_to(ACTOR)
@@ -140,13 +145,14 @@ def test_run_022_a_breach_is_a_notice_that_counts_toward_no_one(tmp_path: Path) 
     assert attention_all(register).value == "0"
     assert top_item(register, principal=ACTOR) is None
     assert deliveries(register, principal=ACTOR, delivered=()) == ()
-    assert len(delivered_revisions(register)) == 1
+    (breach,) = _breaches(register)
+    assert (breach.urn, breach.revision) in delivered_revisions(register)
     budget = next(
         count
         for count in build_attention_view(register).bucket_counts()
         if count.bucket is AttentionBucket.OVER_BUDGET and count.need is None
     )
-    assert budget.count is None
+    assert budget.count == 1
 
 
 def test_run_022_the_console_offers_a_breach_no_verb(tmp_path: Path) -> None:
@@ -251,7 +257,7 @@ def test_run_022_a_breach_leaves_attention_once_its_run_is_no_longer_live(
 
     _projection, register = attention(canary, tmp_path)
 
-    assert [row.urn for row in register.rows] == [urn(ROOT_KEY)]
+    assert [row.urn for row in _breaches(register)] == [urn(ROOT_KEY)]
 
 
 def test_run_022_a_replayed_register_keeps_the_notice(tmp_path: Path) -> None:
@@ -275,8 +281,8 @@ def test_run_022_a_tree_with_no_breach_lists_no_run(tmp_path: Path) -> None:
 
     _projection, register = attention(canary, tmp_path)
 
-    assert register.rows == ()
-    assert build_attention_view(register).items == ()
+    assert _breaches(register) == ()
+    assert [i.bucket for i in build_attention_view(register).items] == [AttentionBucket.ACTIVE]
 
 
 def budget_notice() -> BudgetThresholdNotice:
