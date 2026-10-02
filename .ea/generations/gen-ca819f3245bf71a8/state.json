@@ -224,34 +224,6 @@
       "updated_at": "2026-09-29T18:38:14.873485Z",
       "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103"
     },
-    "BAT-0104": {
-      "created_at": "2026-09-26T22:44:48.921387Z",
-      "current_head_binding": null,
-      "failure": null,
-      "key": "BAT-0104",
-      "milestone_ref": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF",
-      "revision": 2,
-      "status": "ACTIVE",
-      "target_branch": "feature/eawf-v0.7-rc1",
-      "task_refs": [
-        "eawf://EAWF/EAWF/EAWF/task/EAWF-0144",
-        "eawf://EAWF/EAWF/EAWF/task/EAWF-0145"
-      ],
-      "uid": "e797d025-03f2-5e0e-8bda-612b1af9f3a1",
-      "updated_at": "2026-09-29T18:38:15.572083Z",
-      "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0104"
-    },
     "BAT-0105": {
       "created_at": "2026-09-26T22:44:48.921387Z",
       "current_head_binding": null,
@@ -630,7 +602,7 @@
       "status": "PLANNED"
     }
   },
-  "canonical_sequence": 1339,
+  "canonical_sequence": 1367,
   "milestone": {
     "MLS-0101": {
       "acceptance_bundle_revision": null,
@@ -27624,116 +27596,6 @@
       "uid": "81f9a7f8-e188-5b90-aba1-d6ed30bf44fe",
       "updated_at": "2026-09-29T18:38:40.917323Z",
       "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0143"
-    },
-    "EAWF-0144": {
-      "active_run_ref": null,
-      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0104",
-      "contract_revision": 1,
-      "created_at": "2026-09-26T22:44:48.921387Z",
-      "criteria": [
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-01"
-          ],
-          "grounding": "measured",
-          "id": "CR-051",
-          "kind": "behavioral",
-          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": {
-            "expected": null,
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "zero from the tests this Task names",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "Each of LINT-001, LINT-002, LINT-006, LINT-008, LINT-009, LINT-010, LINT-030, LINT-031, LINT-032, LINT-033, LINT-034 holds as its packet row states, and a test module that names the id proves it",
-          "waiver_reason": null
-        }
-      ],
-      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
-      "integrated_binding": null,
-      "intent": "Rewrite the lint suite for epoch 2: a disposition per shipped rule, the task-trailer commit grammar and the test-tier protocol.",
-      "key": "EAWF-0144",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P1",
-      "revision": 3,
-      "status": "PLANNED",
-      "uid": "3cd642c0-49e6-5144-b263-b16288268110",
-      "updated_at": "2026-09-29T18:38:43.726306Z",
-      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0144"
-    },
-    "EAWF-0145": {
-      "active_run_ref": null,
-      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0104",
-      "contract_revision": 1,
-      "created_at": "2026-09-26T22:44:48.921387Z",
-      "criteria": [
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-01"
-          ],
-          "grounding": "measured",
-          "id": "CR-052",
-          "kind": "behavioral",
-          "measurable_signal": "uv run pytest over the tests this Task names exits zero",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": {
-            "expected": null,
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "zero from the tests this Task names",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "Each of LINT-004, LINT-035, LINT-036, LINT-037, LINT-041, LINT-042, LINT-043, REL-036 holds as its packet row states, and a test module that names the id proves it",
-          "waiver_reason": null
-        }
-      ],
-      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
-      "integrated_binding": null,
-      "intent": "Gate rendered artifacts and specs: one artifact-placement map, an emitted-page execution harness and the citation-scope lint.",
-      "key": "EAWF-0145",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P1",
-      "revision": 3,
-      "status": "PLANNED",
-      "uid": "217e9237-22bb-51e0-88d1-f98494f791fc",
-      "updated_at": "2026-09-29T20:13:53.523400Z",
-      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0145"
     },
     "EAWF-0146": {
       "active_run_ref": null,
