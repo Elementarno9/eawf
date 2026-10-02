@@ -64918,36 +64918,6 @@
         "P36-I01-W13",
         "P36-I01-W14"
       ]
-    },
-    "P37-I01": {
-      "audit_id": null,
-      "candidate_tag": null,
-      "closed_at": null,
-      "description": "Iter layout and waves authored at the epoch-2 cutover per D65.",
-      "estimate_id": null,
-      "id": "P37-I01",
-      "intent": null,
-      "opened_at": "2026-09-03T18:03:31.187599Z",
-      "phase_id": "P37",
-      "status": "planned",
-      "title": "Cut 0.7.0rc2 on total capability evidence and rehearsed recovery",
-      "trigger": "none",
-      "wave_ids": []
-    },
-    "P38-I01": {
-      "audit_id": null,
-      "candidate_tag": null,
-      "closed_at": null,
-      "description": "Iter layout and waves authored at the epoch-2 cutover per D65.",
-      "estimate_id": null,
-      "id": "P38-I01",
-      "intent": null,
-      "opened_at": "2026-09-23T16:52:12.372709Z",
-      "phase_id": "P38",
-      "status": "planned",
-      "title": "Run the perfect-realization matrix without waiver and publish stable",
-      "trigger": "none",
-      "wave_ids": []
     }
   },
   "mcp_grants": null,
@@ -66320,48 +66290,6 @@
       "source_brief_ids": [],
       "status": "active",
       "title": "Cut this repository over to epoch 2 and ship the 0.7.0.dev5 canary",
-      "track_id": null
-    },
-    "P37": {
-      "audit_id": null,
-      "closed_at": null,
-      "depends_on": [
-        "P36"
-      ],
-      "description": "Seventh v0.7.0 phase, cuts 0.7.0rc2. Capability evidence total over the declared set, cross-provider conformance on the two certified runtimes, platforms certified on real hosts, upgrade from 0.6.x and rollback rehearsed, partial-publication recovery, headless operation, the first-user journey from a clean environment, and the 25 console journeys replayed live on a migrated tree (D63). Waves authored at the cutover (D65).",
-      "id": "P37",
-      "intent": null,
-      "iter_ids": [
-        "P37-I01"
-      ],
-      "opened_at": "2026-09-03T18:03:31.187434Z",
-      "outcome_ids": [],
-      "release": null,
-      "scope_id": "EAWF",
-      "source_brief_ids": [],
-      "status": "planned",
-      "title": "Prove cross-provider, platform, and recovery evidence",
-      "track_id": null
-    },
-    "P38": {
-      "audit_id": null,
-      "closed_at": null,
-      "depends_on": [
-        "P37"
-      ],
-      "description": "Eighth v0.7.0 phase, publishes 0.7.0. Runs the perfect-realization gate to completion (four runs across two runtime profiles and two repository origins) without waiver; closes every idle contract and idle function with a producer and a consumer; proves every requirement id through the per-id trace; freezes the artifact and platform manifests; renders limitations honestly including the D64 deferrals; sunsets unfired gates; publishes with every target observed.",
-      "id": "P38",
-      "intent": null,
-      "iter_ids": [
-        "P38-I01"
-      ],
-      "opened_at": "2026-09-23T16:52:12.372535Z",
-      "outcome_ids": [],
-      "release": null,
-      "scope_id": "EAWF",
-      "source_brief_ids": [],
-      "status": "planned",
-      "title": "Publish 0.7.0 against the complete acceptance gate",
       "track_id": null
     }
   },
