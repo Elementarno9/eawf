@@ -41,6 +41,7 @@ import json
 import os
 import shutil
 import socket
+import subprocess
 import tempfile
 import uuid
 from collections.abc import AsyncIterator
@@ -53,9 +54,11 @@ import pytest
 
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.store.compaction import document_rows
+from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.epoch2_root import RootIdentity
+from eawf.runtime.daemon.methods.projection import document_path
 from eawf.runtime.daemon.runtime_dir import ensure_runtime_dir
 from eawf.runtime.daemon.server import handle_connection
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
@@ -116,6 +119,12 @@ REPO_EVIDENCE_DIR: Final = REPO_ROOT / ".ea/artifacts/evidence/2026-09-dev5-cons
 #: The authority files a read-only serve must leave byte for byte as it found them,
 #: relative to :data:`REPO_ROOT`; every file under ``.ea/generations`` is added too.
 AUTHORITY_FILES: Final = (".ea/state.json", ".ea/epoch2-opt-in.json")
+
+#: The finished Runs of committed Tasks :func:`committed_tree` serves as the local Run
+#: ledger, each as the last line the overlay filed for it.
+LIVE_RUN_LEDGER: Final = (
+    Path(__file__).resolve().parents[4] / "fixtures/console/live-tree-run-ledger.jsonl"
+)
 
 
 class _LoopbackClient:
@@ -318,6 +327,39 @@ def require_epoch2_repository() -> None:
     authority = resolve_authority(REPO_ROOT / ".ea")
     if authority.epoch != 2:
         pytest.skip(f"this repository resolves to epoch 1 ({authority.gap})")
+
+
+def committed_tree(tmp_path: Path) -> Path:
+    """Return a copy of this repository's committed ``.ea`` tree with a fixed Run ledger.
+
+    Run rows live in the gitignored machine-local overlay, which a clean checkout lacks
+    and which, where it exists, ages any one Run out of the ledger read as new Runs
+    finish. Serving the committed files plus :data:`LIVE_RUN_LEDGER` as that overlay
+    gives every checkout the same Runs, and proves the rest is read from what is
+    committed.
+
+    Args:
+        tmp_path: The directory the copy is made under.
+
+    Returns:
+        The copy's root, to serve in place of :data:`REPO_ROOT`.
+
+    Raises:
+        subprocess.CalledProcessError: ``git`` cannot list the tracked files.
+    """
+    root = tmp_path / "repo"
+    listed = subprocess.run(
+        ["git", "ls-files", "-z", "--", ".ea"], cwd=REPO_ROOT, capture_output=True, check=True
+    )
+    for name in filter(None, listed.stdout.decode().split("\0")):
+        source = REPO_ROOT / name
+        if source.is_file():
+            (root / name).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, root / name)
+    target = ledger_path(document_path(resolve_authority(root / ".ea")), Epoch2Collection.RUN)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(LIVE_RUN_LEDGER, target)
+    return root
 
 
 def test_walk_canary_admits_the_milestone_this_suite_keys_on(tmp_path: Path) -> None:

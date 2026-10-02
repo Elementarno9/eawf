@@ -14,6 +14,7 @@ back unowned and the same check exits nonzero.
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import tempfile
@@ -109,10 +110,23 @@ def _copied_tree(tmp_path: Path) -> Path:
     assert authority.target is not None and authority.generation_id is not None
     document_path = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
     document = read_document(document_path)
-    for collection, keys in _planned_keys().items():
+    planned = _planned_keys()
+    for collection, keys in planned.items():
         for key in keys:
             document.get(collection, {}).pop(key, None)
     write_document(document_path, document)
+    # A completed planned record compacts out of the document into its
+    # ledger, where it would still own its ids, so drop it there too.
+    for collection, keys in planned.items():
+        ledger = document_path.parent / "ledger" / f"{collection}.jsonl"
+        if not ledger.is_file():
+            continue
+        kept = [
+            line
+            for line in ledger.read_text(encoding="utf-8").splitlines(keepends=True)
+            if json.loads(line).get("record_key") not in keys
+        ]
+        ledger.write_text("".join(kept), encoding="utf-8")
     create_containers(root, tmp_path / "runtime")
     return root
 

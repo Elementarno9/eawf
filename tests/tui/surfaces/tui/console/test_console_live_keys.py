@@ -16,6 +16,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.harness import settle
 from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
@@ -26,6 +28,7 @@ from tests.tui.surfaces.tui.console.test_console_journey_assertions import adver
 from tests.tui.surfaces.tui.console.test_console_live_smoke import (
     REPO_ROOT,
     authority_digests,
+    committed_tree,
     live_console,
     render_setup,
     require_epoch2_repository,
@@ -173,11 +176,12 @@ def test_live_every_claimed_key_acts_or_says_why(tmp_path: Path) -> None:
 def test_live_drills_carry_the_row_under_the_caret(tmp_path: Path) -> None:
     """Home, Activity and Search open the row the caret is on; a Run stays that Run."""
     require_epoch2_repository()
+    root = committed_tree(tmp_path)
 
     async def body() -> list[tuple[str, str | None, str | None]]:
         walked: list[tuple[str, str | None, str | None]] = []
         async with (
-            live_console(REPO_ROOT, tmp_path / "runtime") as (app, _seam),
+            live_console(root, tmp_path / "runtime") as (app, _seam),
             app.run_test(size=SIZES[SIZE]) as pilot,
         ):
             for route, keys in (
@@ -209,22 +213,24 @@ def test_live_drills_carry_the_row_under_the_caret(tmp_path: Path) -> None:
 
 #: Each walk: where it starts, the keys pressed, and the place every key lands on as
 #: ``(route, subject)``; ``None`` for a place the walk does not pin.
-_WALKS: tuple[
-    tuple[str, SessionSetup, tuple[tuple[str, tuple[str, str | None] | None], ...]], ...
-] = (
+_Walk = tuple[str, SessionSetup, tuple[tuple[str, tuple[str, str | None] | None], ...]]
+
+#: The climb from a finished Run of a finished Task up to its Track. It starts on a
+#: finished Run, not the Nth Activity row: new Runs reorder Activity, and the drill onto
+#: the caret row is pinned by the test above.
+_RUN_CLIMB: _Walk = (
+    "u climbs a Run to its Track through the chain the rows state",
+    SessionSetup(route="run.detail", size=SIZE, subjId="RUN-00000005"),
     (
-        "u climbs a Run to its Track through the chain the rows state",
-        # starts on a finished Run, not the Nth Activity row: new Runs reorder Activity,
-        # and the drill onto the caret row is pinned by the test above
-        SessionSetup(route="run.detail", size=SIZE, subjId="RUN-00000005"),
-        (
-            ("u", ("task.detail", "EAWF-0101")),
-            ("u", ("batch.detail", "BAT-0101")),
-            ("u", ("milestone", "MLS-0101")),
-            ("u", ("track", "TRK-EAWF-CORE")),
-            ("u", ("scope.home", None)),
-        ),
+        ("u", ("task.detail", "EAWF-0101")),
+        ("u", ("batch.detail", "BAT-0101")),
+        ("u", ("milestone", "MLS-0101")),
+        ("u", ("track", "TRK-EAWF-CORE")),
+        ("u", ("scope.home", None)),
     ),
+)
+
+_WALKS: tuple[_Walk, ...] = (
     (
         "[ ] walk the Milestones of one Track; Esc with no history climbs to it",
         SessionSetup(route="milestone", size=SIZE, subjId="MLS-0100"),
@@ -258,24 +264,31 @@ _WALKS: tuple[
 )
 
 
+async def _walked(app: ConsoleApp, pilot: Any, walks: tuple[_Walk, ...]) -> list[str]:
+    """Return each step of ``walks`` that landed off its pinned place or on a prototype."""
+    wrong: list[str] = []
+    for name, setup, steps in walks:
+        await render_setup(app, pilot, setup)
+        for key, want in steps:
+            app.press_key(key)
+            await settle(pilot)
+            got = (app.session.route, app.session.subj_id)
+            if got[1] in PROTOTYPE_IDS or (want is not None and got != want):
+                wrong.append(f"{name}: {key} → {got}, wanted {want}")
+    return wrong
+
+
 def test_live_climbs_and_jumps_land_on_real_records(tmp_path: Path) -> None:
     """On this tree every climb, sibling step and palette jump lands on a record it holds."""
     require_epoch2_repository()
+    root = committed_tree(tmp_path)
 
     async def body() -> list[str]:
-        wrong: list[str] = []
         async with (
-            live_console(REPO_ROOT, tmp_path / "runtime", launched=True) as (app, _seam),
+            live_console(root, tmp_path / "runtime", launched=True) as (app, _seam),
             app.run_test(size=SIZES[SIZE]) as pilot,
         ):
-            for name, setup, steps in _WALKS:
-                await render_setup(app, pilot, setup)
-                for key, want in steps:
-                    app.press_key(key)
-                    await settle(pilot)
-                    got = (app.session.route, app.session.subj_id)
-                    if got[1] in PROTOTYPE_IDS or (want is not None and got != want):
-                        wrong.append(f"{name}: {key} → {got}, wanted {want}")
+            wrong = await _walked(app, pilot, _WALKS)
             for route in ("evidence", "campaign"):
                 await render_setup(app, pilot, SessionSetup(route=route, size=SIZE))
                 app.press_key("Escape")
@@ -283,6 +296,27 @@ def test_live_climbs_and_jumps_land_on_real_records(tmp_path: Path) -> None:
                 if (app.session.route, app.session.subj_id) != ("scope.home", None):
                     wrong.append(f"{route}: Esc → {app.session.route} {app.session.subj_id}")
         return wrong
+
+    wrong = asyncio.run(body())
+    assert not wrong, "\n".join(wrong)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="a finished Task leaves the document and no read holds it, so u from its "
+    "frame climbs to scope home instead of to its Batch",
+)
+def test_live_u_climbs_a_finished_run_to_its_track(tmp_path: Path) -> None:
+    """From a finished Run, ``u`` climbs Task, Batch, Milestone and Track, then home."""
+    require_epoch2_repository()
+    root = committed_tree(tmp_path)
+
+    async def body() -> list[str]:
+        async with (
+            live_console(root, tmp_path / "runtime", launched=True) as (app, _seam),
+            app.run_test(size=SIZES[SIZE]) as pilot,
+        ):
+            return await _walked(app, pilot, (_RUN_CLIMB,))
 
     wrong = asyncio.run(body())
     assert not wrong, "\n".join(wrong)

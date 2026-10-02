@@ -61,6 +61,7 @@ from .overlay_support import chrome
 from .test_console_live_smoke import (
     REPO_ROOT,
     authority_digests,
+    committed_tree,
     live_console,
     render_setup,
     require_epoch2_repository,
@@ -210,11 +211,12 @@ def test_the_live_tree_draws_the_accepted_milestones_bundle_and_approval(
 ) -> None:
     """MLS-0100 was accepted on a sealed approval; the live frame says so, from the tree."""
     require_epoch2_repository()
-    before = authority_digests(REPO_ROOT)
+    root = committed_tree(tmp_path)
+    before = authority_digests(root)
 
     async def body() -> tuple[str, str, MilestoneAcceptanceRecord | None]:
         async with (
-            live_console(REPO_ROOT, tmp_path / "runtime") as (app, seam),
+            live_console(root, tmp_path / "runtime") as (app, seam),
             app.run_test(size=SIZES[2]) as pilot,
         ):
             setup = SessionSetup(route="milestone", subjId=ACCEPTED, size=2)
@@ -234,7 +236,7 @@ def test_the_live_tree_draws_the_accepted_milestones_bundle_and_approval(
     assert f"by {ACCEPTED_BY}" in text
     assert NO_BUNDLE not in text
     assert copied == f"digest {digest}"
-    assert authority_digests(REPO_ROOT) == before, "the live serve wrote to the tree"
+    assert authority_digests(root) == before, "the live serve wrote to the tree"
 
 
 # ---------- y copies what the frame drew ----------
