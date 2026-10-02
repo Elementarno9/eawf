@@ -17,14 +17,14 @@
         "source_urn": null
       },
       "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF",
-      "revision": 1,
-      "status": "PLANNED",
-      "target_branch": null,
+      "revision": 2,
+      "status": "ACTIVE",
+      "target_branch": "feature/eawf-v0.7-rc1",
       "task_refs": [
         "eawf://EAWF/EAWF/EAWF/task/EAWF-0146"
       ],
       "uid": "fe108532-34a5-572a-a26d-9bb1039a7fdb",
-      "updated_at": "2026-09-26T22:44:48.921387Z",
+      "updated_at": "2026-10-02T19:18:27.644057Z",
       "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105"
     },
     "BAT-0201": {
@@ -378,7 +378,7 @@
       "status": "PLANNED"
     }
   },
-  "canonical_sequence": 2151,
+  "canonical_sequence": 2152,
   "milestone": {
     "MLS-0101": {
       "acceptance_bundle_revision": null,
