@@ -2,7 +2,7 @@
 
 Drives the Typer dispatcher with stdin via :class:`typer.testing.CliRunner`
 and asserts the JSON ⇄ markdown round-trip is byte-stable plus the
-``--strict`` exit-4 contract.
+exit-4 contract on malformed input.
 """
 
 from __future__ import annotations
@@ -56,21 +56,21 @@ def test_cli_render_output_md_to_json_to_md_byte_stable() -> None:
     assert md1.stdout == md3.stdout
 
 
-def test_cli_render_output_strict_rejects_malformed_json() -> None:
-    """``--format markdown --strict`` with non-JSON stdin → exit 4."""
+def test_cli_render_output_rejects_malformed_json() -> None:
+    """``--format markdown`` with non-JSON stdin → exit 4."""
     result = runner.invoke(
         app,
-        ["render-output", "--format", "markdown", "--strict"],
+        ["render-output", "--format", "markdown"],
         input="this is not json {{{",
     )
     assert result.exit_code == VALIDATION_ERROR
 
 
-def test_cli_render_output_strict_rejects_malformed_markdown() -> None:
-    """``--format json --strict`` with non-markdown stdin → exit 4."""
+def test_cli_render_output_rejects_malformed_markdown() -> None:
+    """``--format json`` with non-markdown stdin → exit 4."""
     result = runner.invoke(
         app,
-        ["render-output", "--format", "json", "--strict"],
+        ["render-output", "--format", "json"],
         input="just some text without frontmatter\n",
     )
     assert result.exit_code == VALIDATION_ERROR
@@ -90,11 +90,11 @@ def test_cli_render_output_invalid_format_rejected() -> None:
     assert result.exit_code != 0
 
 
-def test_cli_render_output_strict_rejects_envelope_missing_keys() -> None:
+def test_cli_render_output_rejects_envelope_missing_keys() -> None:
     """JSON parses but Pydantic rejects on missing required fields."""
     result = runner.invoke(
         app,
-        ["render-output", "--format", "markdown", "--strict"],
+        ["render-output", "--format", "markdown"],
         input=json.dumps({"header": {}, "body": "x"}),  # missing footer
     )
     assert result.exit_code == VALIDATION_ERROR

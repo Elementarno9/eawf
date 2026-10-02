@@ -79,6 +79,7 @@ Plan, drive and cancel research Campaigns.
 
 | Verb | Summary |
 |---|---|
+| `budget` | Set an active Campaign's budget limits, keeping what it already spent. |
 | `cancel` | Cancel an active Campaign, recording why; its steps and artifacts stay. |
 | `new` | Plan a research Campaign from its brief and approve the plan. |
 | `run` | Drive an approved Campaign round by round in the daemon. |
@@ -88,6 +89,15 @@ Plan, drive and cancel research Campaigns.
 Claude Code adapter (statusline, plugin, hooks).
 
 _No verbs registered._
+
+### `eawf claim`
+
+Re-run and attest the checks behind a claim's evidence rungs.
+
+| Verb | Summary |
+|---|---|
+| `attest` | Record what an outside party decided about a claim's rung 4. |
+| `check` | Re-run the check behind a rung of a claim, and every rung above it. |
 
 ### `eawf coauthor`
 

@@ -40,6 +40,7 @@ from typing import Final
 
 from eawf.kernel.delivery.integration import (
     ConflictAuthority,
+    ConflictClearance,
     ConflictExitKind,
     ConflictHunk,
     IntegrationConflict,
@@ -54,6 +55,7 @@ from eawf.kernel.projection.route_view import (
     status_and,
     unstated,
 )
+from eawf.runtime.vcs.repository_read import RepositoryAnswer
 
 logger = logging.getLogger(__name__)
 
@@ -87,14 +89,15 @@ PULL_REQUEST_PRODUCER: Final = "pull-request observation"
 
 #: What each integration route renders per row, in column order. The first field of both
 #: is the status the Batch document states; the review columns name the producer they
-#: wait on, so the frame says which item would fill the cell.
+#: wait on, so the frame says which item would fill the cell. A conflict's resolution is
+#: no column of a Batch row: it is stated on the conflict frame it belongs to.
 INTEGRATION_FIELDS: Final[Mapping[str, tuple[RouteFieldSpec, ...]]] = MappingProxyType(
     {
         "git.pr": status_and(
             unstated("review", missing_producer=PULL_REQUEST_PRODUCER),
             unstated("checks", missing_producer=PULL_REQUEST_PRODUCER),
         ),
-        "merge.conflict": status_and(unstated("resolution")),
+        "merge.conflict": status_and(),
     }
 )
 
@@ -192,6 +195,8 @@ class ConflictView:
         exit_kind: Where resolution of this conflict lands.
         exit_ref: The record that exit addresses.
         cleared: Whether the conflict has been cleared.
+        cleared_at: When the delivery that resolved it landed, or ``None`` while it stands.
+        cleared_by: That delivery: its generation, its head and who asked for it.
     """
 
     key: str
@@ -203,13 +208,17 @@ class ConflictView:
     exit_kind: ConflictExitKind
     exit_ref: str
     cleared: bool
+    cleared_at: datetime | None
+    cleared_by: ConflictClearance | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GitPrReadModel(RouteReadModel):
-    """The Git surface's read model: the Batch rows, and the generations it has taken."""
+    """The Git surface's read model: the Batch rows, the generations it has taken, and
+    the tree's branch and pull request, ``None`` until the daemon has read them."""
 
     generations: tuple[GenerationRow, ...] = ()
+    repository: RepositoryAnswer | None = None
 
     def selected_generation(self) -> GenerationRow | None:
         """Return the Batch head, or ``None`` when no generation is held."""
@@ -318,6 +327,8 @@ def build_conflict_views(
                 exit_kind=conflict.exit.kind,
                 exit_ref=str(conflict.exit.ref),
                 cleared=conflict.cleared_at is not None,
+                cleared_at=conflict.cleared_at,
+                cleared_by=conflict.cleared_by,
             )
         )
         if conflict.cleared_at is not None:
@@ -343,6 +354,7 @@ def build_integration_view(
     *,
     generations: Sequence[IntegrationGeneration] = (),
     conflicts: Sequence[IntegrationConflict] = (),
+    repository: RepositoryAnswer | None = None,
 ) -> RouteReadModel:
     """Return the read model one integration route draws from one served projection.
 
@@ -350,6 +362,8 @@ def build_integration_view(
         projection: The route projection the daemon answered, already validated.
         generations: The Batch's generations, oldest first; drawn by the Git surface.
         conflicts: The conflict frames held; drawn by the conflict card.
+        repository: The tree's branch and pull request, once read; drawn by the Git
+            surface.
 
     Returns:
         A :class:`GitPrReadModel` for the Git surface and a
@@ -372,6 +386,7 @@ def build_integration_view(
             counts=model.counts,
             specs=model.specs,
             generations=build_generation_rows(generations),
+            repository=repository,
         )
     frames, hunks = build_conflict_views(conflicts)
     return MergeConflictReadModel(

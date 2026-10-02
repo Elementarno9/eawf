@@ -34,7 +34,6 @@ from eawf.kernel.config.registry.leaf_keys import (
     _WRITABLE_GWR,
     _WRITABLE_NONE,
     _WRITABLE_RUNTIME_PREFERENCE,
-    LeafDeny,
     LeafKey,
 )
 from eawf.kernel.config.schema import (
@@ -481,15 +480,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
     ),
     # --- audit -------------------------------------------------------------
     LeafKey(
-        key="audit.default_level",
-        domain="audit",
-        type="literal",
-        default="standard",
-        writable_layers=_WRITABLE_GWR,
-        description="Default /audit check-plan breadth (quick narrows, deep widens).",
-        choices=("quick", "standard", "deep"),
-    ),
-    LeafKey(
         key="audit.fix_safe",
         domain="audit",
         type="bool",
@@ -498,15 +488,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         description="Reserved for compatibility; /audit never mutates source automatically.",
     ),
     # --- ship --------------------------------------------------------------
-    LeafKey(
-        key="ship.gauntlet",
-        domain="ship",
-        type="literal",
-        default="full",
-        writable_layers=_WRITABLE_GWR,
-        description="Ship gauntlet breadth: full (default) runs all gates; scoped is re-run only.",
-        choices=("full", "scoped"),
-    ),
     LeafKey(
         key="ship.require_audit_pass",
         domain="ship",
@@ -522,45 +503,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=True,
         writable_layers=_WRITABLE_GWR,
     ),
-    # --- review ------------------------------------------------------------
-    LeafKey(
-        key="review.default_level",
-        domain="review",
-        type="literal",
-        default="medium",
-        writable_layers=_WRITABLE_GWR,
-        choices=("low", "medium", "high"),
-        description="Default /review finding-confidence threshold.",
-    ),
     # --- flow --------------------------------------------------------------
-    LeafKey(
-        key="flow.advance_after.research",
-        domain="flow",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="flow.advance_after.prep",
-        domain="flow",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="flow.advance_after.audit",
-        domain="flow",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="flow.advance_after.polish",
-        domain="flow",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
     LeafKey(
         key="flow.budget.enforce",
         domain="flow",
@@ -585,49 +528,12 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
             "enforced cap (1.5 == 50% headroom)."
         ),
     ),
-    LeafKey(
-        key="flow.max_repair_cycles",
-        domain="flow",
-        type="int",
-        default=3,
-        writable_layers=_WRITABLE_GWR,
-        description="Reserved for compatibility; this value does not bound repair execution.",
-    ),
-    # --- prep --------------------------------------------------------------
-    LeafKey(
-        key="prep.auto_resume",
-        domain="prep",
-        type="bool",
-        default=True,
-        writable_layers=_WRITABLE_GWR,
-        description=(
-            "When True, /prep leads its claim actions with the dispatch-resume action, "
-            "which points at `eawf migrate epoch2 --plan` since the flag day retired "
-            "dispatch resume."
-        ),
-    ),
     # --- vcs ---------------------------------------------------------------
     LeafKey(
         key="vcs.checkpoint_requires_commit",
         domain="vcs",
         type="bool",
         default=True,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="vcs.pr_merge_method",
-        domain="vcs",
-        type="str",
-        default="merge",
-        writable_layers=_WRITABLE_GWR,
-        # ship refuses a squash merge unless vcs.squash_allowed is set
-        deny=LeafDeny(value="squash", unless="vcs.squash_allowed"),
-    ),
-    LeafKey(
-        key="vcs.squash_allowed",
-        domain="vcs",
-        type="bool",
-        default=False,
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
@@ -742,44 +648,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=True,
         writable_layers=_WRITABLE_GWR,
     ),
-    # --- acceptance --------------------------------------------------------
-    LeafKey(
-        key="acceptance.commands.tests",
-        domain="acceptance",
-        type="str",
-        default=None,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="acceptance.commands.lint",
-        domain="acceptance",
-        type="str",
-        default=None,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="acceptance.commands.typecheck",
-        domain="acceptance",
-        type="str",
-        default=None,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="acceptance.commands.build",
-        domain="acceptance",
-        type="str",
-        default=None,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="acceptance.required_before_ship",
-        domain="acceptance",
-        type="list_str",
-        default=("state",),
-        writable_layers=_WRITABLE_GWR,
-        editor="check",
-        choices_from="ship_gates",
-    ),
     # --- daemon ------------------------------------------------------------
     LeafKey(
         key="daemon.proxy_enabled",
@@ -808,35 +676,22 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
 
 # The callable that reads each leaf's resolved value, for leaves not naming it inline.
 _CONSUMER_BY_KEY: dict[str, str] = {
-    "acceptance.commands.build": "eawf.workflow.skills.ship._resolve_gate_command",
-    "acceptance.commands.lint": "eawf.workflow.skills.ship._resolve_gate_command",
-    "acceptance.commands.tests": "eawf.workflow.skills.ship._resolve_gate_command",
-    "acceptance.commands.typecheck": "eawf.workflow.skills.ship._resolve_gate_command",
-    "acceptance.required_before_ship": "eawf.workflow.skills.ship._ordered_gauntlet_gates",
-    "audit.default_level": "eawf.workflow.skills.audit._resolve_level",
     "daemon.idle_timeout_seconds": "eawf.runtime.daemon.main._resolve_idle_timeout",
     "daemon.proxy_enabled": "eawf.surfaces.cli._mutation._proxy_enabled",
     "daemon.session_handle_ttl_seconds": "eawf.runtime.daemon.main._resolve_session_ttl_seconds",
     "dispatch.role_tier_token_cap": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
-    "flow.advance_after.audit": "eawf.workflow.skills.flow.FlowSkill._run_steps",
-    "flow.advance_after.polish": "eawf.workflow.skills.flow.FlowSkill._run_steps",
-    "flow.advance_after.prep": "eawf.workflow.skills.flow.FlowSkill._run_steps",
-    "flow.advance_after.research": "eawf.workflow.skills.flow.FlowSkill._run_steps",
     "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
     "flow.budget.multiplier": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
-    "flow.max_repair_cycles": "eawf.workflow.skills.flow._config_max_repair_cycles",
     "planning.max_parallel_waves": "eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves",
     "preferences.auto_choose": "eawf.runtime.daemon.methods.question_decision.resolved_preferences",
-    "prep.auto_resume": "eawf.workflow.skills.prep.PrepSkill._resolve_auto_resume",
     "profiles.certified": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "profiles.enabled": "eawf.platform.profiles.selection.resolve_enabled_profiles",
     "profiles.trusted": "eawf.platform.profiles.trust.load_trust_ledger",
     "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
     "research.auto_save": "eawf.workflow.skills.research.ResearchSkill._gather",
     "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
-    "review.default_level": "eawf.workflow.skills.review.ReviewSkill.action",
     "runtime.adapters": "eawf.kernel.config.layered.resolve_dispatch_provider_tuple",
     "runtime.claude.permission_wait_s": (
         "eawf.kernel.config.layered.resolve_permission_wait_seconds"
@@ -850,7 +705,6 @@ _CONSUMER_BY_KEY: dict[str, str] = {
         "eawf.kernel.config.layered.resolve_stall_interval_seconds"
     ),
     "runtime.preference": "eawf.kernel.config.layered.resolve_dispatch_provider_tuple",
-    "ship.gauntlet": "eawf.workflow.skills.ship._resolve_gauntlet",
     "telemetry.db_kind": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
     "telemetry.enabled": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
     "ui.glyphs": "eawf.surfaces.tui.launch.persisted_glyphs",
@@ -868,8 +722,6 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "vcs.conventions.release.cadence": "eawf.runtime.vcs.coauthor.requires_phase_release_preflight",
     "vcs.conventions.subject_style": "tools.commit_prefix_lint._configured_subject_style",
     "vcs.integration_commit_unit": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
-    "vcs.pr_merge_method": "eawf.workflow.skills.ship.ShipSkill._gate_merge_method",
-    "vcs.squash_allowed": "eawf.workflow.skills.ship.ShipSkill._gate_merge_method",
     "vcs.task_reference": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
     "verify.require_iter_audit_accepted": "eawf.workflow.lifecycle.iter_.close_iter",
     "verify.waiver_mode": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
@@ -904,6 +756,25 @@ _DEPRECATED_KEYS: frozenset[str] = frozenset(
 # migration strips them from layer files and doctor names any a layer still sets.
 _RETIRED_KEYS: frozenset[str] = frozenset(
     {
+        # read only by a retired skill: the ship gauntlet and its acceptance commands,
+        # the audit and review levels, the flow transitions, the prep resume and the
+        # pull-request merge policy
+        "acceptance.commands.build",
+        "acceptance.commands.lint",
+        "acceptance.commands.tests",
+        "acceptance.commands.typecheck",
+        "acceptance.required_before_ship",
+        "audit.default_level",
+        "flow.advance_after.audit",
+        "flow.advance_after.polish",
+        "flow.advance_after.prep",
+        "flow.advance_after.research",
+        "flow.max_repair_cycles",
+        "prep.auto_resume",
+        "review.default_level",
+        "ship.gauntlet",
+        "vcs.pr_merge_method",
+        "vcs.squash_allowed",
         # retired before this catalog tracked them: renamed or never consumed
         "estimation.buckets",
         "mcp.enabled",

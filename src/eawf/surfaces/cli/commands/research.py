@@ -49,6 +49,7 @@ question_app.command("reply")(question_reply)
 CAMPAIGN_START: Final = "runtime.campaign.start"
 CAMPAIGN_RUN: Final = "runtime.campaign.run"
 CAMPAIGN_CLOSE: Final = "runtime.campaign.close"
+CAMPAIGN_BUDGET_SET: Final = "runtime.campaign.budget.set"
 CAMPAIGN_VIEW: Final = "projection.campaign.view"
 
 _CampaignKey = Annotated[str, typer.Argument(help="The Campaign's CAM-#### key.")]
@@ -185,6 +186,54 @@ def campaign_run(
         f"driving campaign {campaign_key}"
         if answer["driving"]
         else f"campaign {campaign_key} is already being driven"
+    )
+    emit_json_or_text(answer, text, flags=ctx.obj)
+
+
+@campaign_app.command("budget")
+def campaign_budget(
+    ctx: typer.Context,
+    campaign_key: _CampaignKey,
+    actor: _Actor,
+    expected_revision: Annotated[
+        int,
+        typer.Option(
+            "--expected-revision", min=1, help="The Campaign revision the limits were decided at."
+        ),
+    ],
+    rounds: Annotated[
+        int | None, typer.Option("--rounds", min=1, help="Hard limit on the rounds it runs.")
+    ] = None,
+    tokens: Annotated[
+        int | None,
+        typer.Option("--tokens", min=1, help="Hard limit on the tokens its rounds spend."),
+    ] = None,
+) -> None:
+    """Set an active Campaign's budget limits, keeping what it already spent.
+
+    A limit raised past the spend lets a Campaign its budget stopped dispatch
+    again; one lowered to the spend stops it. Setting the limits it already
+    holds writes nothing.
+    """
+    limits = {kind: limit for kind, limit in (("rounds", rounds), ("tokens", tokens)) if limit}
+    if not limits:
+        raise typer.BadParameter("set at least one of --rounds or --tokens")
+    view = _campaign_call(ctx, CAMPAIGN_VIEW, {"campaign_key": campaign_key}, "campaign budget")
+    if view is None:
+        return
+    params = {
+        "actor": actor,
+        "urn": view["campaign_ref"],
+        "expected_revision": expected_revision,
+        "limits": limits,
+    }
+    answer = _campaign_call(ctx, CAMPAIGN_BUDGET_SET, params, "campaign budget")
+    if answer is None:
+        return
+    text = (
+        f"set the budget of campaign {campaign_key}"
+        if answer["committed"]
+        else f"campaign {campaign_key} already holds that budget"
     )
     emit_json_or_text(answer, text, flags=ctx.obj)
 

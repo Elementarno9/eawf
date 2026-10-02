@@ -40,6 +40,8 @@ from eawf.kernel.projection.operations import (
 from eawf.kernel.projection.registers import build_register_view
 from eawf.kernel.projection.spine import build_spine_view
 from eawf.kernel.projection.verification import RuntimeTupleVerdict, build_verification_view
+from eawf.kernel.runtime.boot_recovery import BootRecovery
+from eawf.kernel.store.changes import ChangePage, StoredValue
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.doctor.models import CheckResult
 from eawf.surfaces.tui.console.cells import NO_VALUE
@@ -47,11 +49,21 @@ from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.harness import capture_cells, grid_errors
+from eawf.surfaces.tui.console.live_reads import HISTORY_DIFF_READ
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route, sandbox_log
 from eawf.surfaces.tui.console.renderers.campaign import replay_line
-from eawf.surfaces.tui.console.renderers.crash_recovery import doors
-from eawf.surfaces.tui.console.renderers.health import NOTHING_TO_REPAIR, checks_line, checks_of
+from eawf.surfaces.tui.console.renderers.crash_recovery import (
+    CLEAN_START,
+    NO_START_RECORDED,
+    doors,
+)
+from eawf.surfaces.tui.console.renderers.health import (
+    NO_CHECK_TIME,
+    NOTHING_TO_REPAIR,
+    checks_line,
+    checks_of,
+)
 from eawf.surfaces.tui.console.renderers.read_model import UNKNOWN_WORD
 from eawf.surfaces.tui.console.renderers.run_detail import timeline_head
 from eawf.surfaces.tui.console.renderers.scope_home import NO_TRACK, groups_of, tree_of
@@ -137,7 +149,7 @@ def _model(route: str, document: dict[str, Any] | None = None, **kwargs: Any) ->
         return build_verification_view(projection, verdicts=kwargs.get("verdicts", ()))
     if route == "git.pr":
         return build_integration_view(projection, generations=(), conflicts=())
-    return build_operations_view(projection)
+    return build_operations_view(projection, last_start=kwargs.get("last_start"))
 
 
 def _frame(
@@ -399,8 +411,13 @@ def test_ui_064_a_scope_with_no_claim_says_so() -> None:
 
 def _verdict(name: str, status: str) -> RuntimeTupleVerdict:
     return RuntimeTupleVerdict(
-        check=CheckResult(name=name, status=status, detail=f"{name} said so")  # type: ignore[arg-type]
+        check=CheckResult(name=name, status=status, detail=f"{name} said so"),  # type: ignore[arg-type]
+        checked_at=CHECKED_AT,
     )
+
+
+#: When the probe verdicts' stages completed.
+CHECKED_AT = datetime(2026, 9, 17, 11, 42, tzinfo=UTC)
 
 
 VERDICTS = (
@@ -427,6 +444,23 @@ def test_ui_065_a_stored_status_the_frame_cannot_vouch_for_is_unknown() -> None:
     row = next(r for r in frame if "hv-9" in r and "stored" in r)
     # the result cell reads unknown; the stored word is only quoted as the reason
     assert re.search(r"hv-9\s+\? unknown\s+stored DEGRADED", row), row
+
+
+def test_ui_065_a_verdict_states_when_its_check_last_ran() -> None:
+    """The LAST RESULT cell is the stage's completion time, never the unknown token."""
+    frame = _frame("health", verdicts=VERDICTS)
+    row = next(r for r in frame if "tuple_warn said so" in r)
+    assert "tuple_warn said so · 11:42" in row
+    assert f"said so · {UNKNOWN_WORD}" not in row
+    assert [row.checked_at for row in _model("health", verdicts=VERDICTS).tuples] == [
+        CHECKED_AT
+    ] * 3
+
+
+def test_ui_065_a_stored_health_record_says_why_it_has_no_time() -> None:
+    document = {"health_view": {"hv-9": _row("health_view", "hv-9", "OK")}}
+    row = next(r for r in _frame("health", document=document) if "hv-9" in r and "stored" in r)
+    assert NO_CHECK_TIME in row
 
 
 def test_ui_065_the_repair_is_named_at_the_foot_and_never_run() -> None:
@@ -610,9 +644,10 @@ def test_ui_067_an_empty_queue_says_so() -> None:
 def test_ui_045_repository_facts_render_unavailable_never_clean() -> None:
     frame = _frame("git.pr", subject="BAT-0100")
     assert frame[0].startswith(" Eä ▸ EAWF ▸ BAT-0100 ▸ Git")
-    assert "∅ unavailable" in _starts(frame, " BRANCH")
+    # with no repository read held yet the rows say so, never clean and never passed
+    assert "not read yet" in _starts(frame, " BRANCH")
     checks = _starts(frame, " CHECKS")
-    assert UNKNOWN_WORD in checks and "pass" not in checks.replace("passed", "")
+    assert "not read yet" in checks and "pass" not in checks
     assert "happen in your git tool" in _starts(frame, " ACTION")
     assert frame[-1].split() == ["m", "conflict", "y", "copy", "Esc", "back"]
 
@@ -654,6 +689,50 @@ def test_ui_047_each_door_states_its_cost_in_reads_from_the_held_cursor() -> Non
     frame = _frame("crash.recovery")
     assert not [row for row in frame if re.search(r"(reattach|replay|read-only)\s+\?", row)]
     assert "costs one head read" in _starts(frame, " CHOSEN")
+
+
+def _start(**counts: int) -> BootRecovery:
+    return BootRecovery(
+        started_at=datetime(2026, 9, 17, 11, 58, tzinfo=UTC),
+        finished_at=datetime(2026, 9, 17, 11, 58, 0, 250_000, tzinfo=UTC),
+        truncated_ledgers=counts.get("truncated", 0),
+        finished_intents=counts.get("finished", 0),
+        abandoned_intents=counts.get("abandoned", 0),
+        document_rows_dropped=counts.get("dropped", 0),
+    )
+
+
+def test_ui_047_the_daemon_line_states_what_its_last_start_repaired() -> None:
+    """The daemon's own recovery is a recorded fact: what it did and what it cost."""
+    frame = _frame("crash.recovery", last_start=_start(truncated=1, finished=2))
+    line = _starts(frame, " DAEMON")
+    assert "last start 11:58" in line
+    assert "cut 1 torn ledger" in line and "finished 2 intents" in line
+    assert "250 ms" in line
+
+
+def test_ui_047_a_clean_start_says_there_was_nothing_to_repair() -> None:
+    line = _starts(_frame("crash.recovery", last_start=_start()), " DAEMON")
+    assert CLEAN_START in line
+    assert "250 ms" in line
+
+
+def test_ui_047_no_recorded_start_is_stated_in_words() -> None:
+    line = _starts(_frame("crash.recovery"), " DAEMON")
+    assert NO_START_RECORDED in line
+    assert UNKNOWN_WORD not in line
+
+
+def test_ui_047_a_recovery_that_finished_before_it_started_is_refused() -> None:
+    with pytest.raises(ValueError, match="finished_at"):
+        BootRecovery(
+            started_at=AT,
+            finished_at=datetime(2026, 9, 17, 11, 0, tzinfo=UTC),
+            truncated_ledgers=0,
+            finished_intents=0,
+            abandoned_intents=0,
+            document_rows_dropped=0,
+        )
 
 
 @pytest.mark.parametrize(("sel", "door"), [(0, "reattach"), (2, "read-only"), (9, "read-only")])
@@ -702,21 +781,80 @@ def test_ui_048_an_incomplete_projection_never_calls_a_count_exact() -> None:
 # ---------- UI-049: the history.diff route ----------
 
 
+def _diff_page(*records: dict[str, Any]) -> dict[str, ChangePage]:
+    """Return the live answers holding one page of the diff subject's change feed."""
+    return {HISTORY_DIFF_READ: ChangePage.model_validate({"changes": list(records)})}
+
+
+def _change(key: str, sequence: int, before: int | None, after: int, **fields: Any) -> dict:
+    """Return one change record of *key*, each field mapped to its ``(before, after)``."""
+    return {
+        "change_id": f"evt-{sequence}:milestone:{key}",
+        "tier": "committed",
+        "collection": "milestone",
+        "record_key": key,
+        "event_name": "domain.milestone.completed",
+        "revision_before": before,
+        "revision_after": after,
+        "canonical_sequence": sequence,
+        "actor_ref": "OP-0001",
+        "recorded_at": "2026-10-02T12:00:00Z",
+        "changes": [
+            {"field": name, "before": then, "after": now}
+            for name, (then, now) in sorted(fields.items())
+        ],
+    }
+
+
+def _value(value: Any) -> dict[str, Any]:
+    return StoredValue.of(value).model_dump(mode="json")
+
+
 def test_ui_049_one_entity_at_two_of_its_own_revisions() -> None:
-    frame = _frame("history.diff", subject="MLS-0101")
+    newest = _change(
+        "MLS-0101", 9, 2, 3, status=(_value("ACTIVE"), _value("COMPLETED")), due=(None, _value(1))
+    )
+    older = _change("MLS-0101", 4, 1, 2, status=(_value("PLANNED"), _value("ACTIVE")))
+    frame = _frame("history.diff", subject="MLS-0101", live=_diff_page(newest, older))
     assert frame[0].startswith(" Eä ▸ EAWF ▸ History ▸ Diff")
     assert "rev 2 → rev 3" in _starts(frame, " BETWEEN")
     field = next(row for row in frame if re.match(r"^ [▸ ] status", row))
-    assert "COMPLETED" in field and field.count(UNKNOWN_WORD) == 2
+    assert field.split()[-3:] == ["ACTIVE", "COMPLETED", "OP-0001"]
+    added = next(row for row in frame if re.match(r"^ [▸ ] due", row))
+    assert "absent" in added
     assert "system" not in _text(frame)
-    assert "counted here, never hidden" in _starts(frame, " UNCHANGED")
-    assert frame[-1].split() == ["Enter", "field", "e", "entity", "p", "revisions", "Esc", "back"]
+    assert "none is hidden" in _starts(frame, " UNCHANGED")
+    assert "1 earlier change" in _starts(frame, " EARLIER")
+    # two fields changed, so the caret walks them
+    assert frame[-1].split()[:2] == ["↑↓", "field"]
 
 
-def test_ui_049_a_first_revision_has_nothing_to_pair() -> None:
-    frame = _frame("history.diff", subject="TRK-CORE")
-    assert "nothing to pair" in _starts(frame, " BETWEEN")
+def test_ui_049_a_cut_value_shows_its_preview() -> None:
+    long = "x" * 400
+    change = _change("MLS-0101", 9, 2, 3, intent=(_value("short"), _value(long)))
+    frame = _frame("history.diff", subject="MLS-0101", live=_diff_page(change))
+    row = next(row for row in frame if re.match(r"^ [▸ ] intent", row))
+    assert "short" in row and "…" in row
+
+
+def test_ui_049_a_reference_shows_the_key_it_addresses() -> None:
+    ref = f"{ROOT}/track/TRK-CORE"
+    change = _change("MLS-0101", 9, 2, 3, primary_track_ref=(None, _value(ref)))
+    frame = _frame("history.diff", subject="MLS-0101", live=_diff_page(change))
+    row = next(row for row in frame if re.match(r"^ [▸ ] primary_tr", row))
+    assert "TRK-CORE" in row and "…" not in row.split("absent")[1]
+
+
+def test_ui_049_a_record_with_no_change_on_file_says_since_when() -> None:
+    frame = _frame("history.diff", subject="TRK-CORE", live=_diff_page())
+    assert "no changes recorded since 2026-10-02" in _starts(frame, " BETWEEN")
     assert not any(re.match(r"^\s+FIELD\s+THEN\s+NOW", row) for row in frame)
+    assert "no change feed" not in _text(frame)
+
+
+def test_ui_049_before_its_read_the_diff_says_the_feed_is_unread() -> None:
+    frame = _frame("history.diff", subject="MLS-0101")
+    assert "has not been read yet" in _starts(frame, " BETWEEN")
 
 
 # ---------- UI-073: the campaign route under REPLAYING ----------

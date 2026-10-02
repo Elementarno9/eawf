@@ -103,6 +103,8 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     # Evidence nouns.
     # Post-cutover ledger records (audit / decision / artifact).
     GroupRow("record", "eawf.surfaces.cli.commands.domain_legacy", "record_app"),
+    # The checks behind a filed claim's evidence rungs.
+    GroupRow("claim", "eawf.surfaces.cli.commands.claim", "claim_app"),
     # Estimation nouns.
     # Memory + session.
     GroupRow("memory", "eawf.surfaces.cli.commands.memory", "memory_app"),

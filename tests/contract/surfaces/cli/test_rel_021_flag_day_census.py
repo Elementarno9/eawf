@@ -43,7 +43,9 @@ EPOCH1_MODULES: Final = frozenset(
 
 #: Research campaign verbs write their own append-only store, which the
 #: epoch-2 surface carries forward rather than retiring.
-EPOCH1_CARRIED: Final = frozenset({"campaign cancel", "campaign new", "campaign run"})
+EPOCH1_CARRIED: Final = frozenset(
+    {"campaign budget", "campaign cancel", "campaign new", "campaign run"}
+)
 
 #: Every leaf command path of the v0.6.8 release, written by
 #: ``tools/command_tree_paths.py``; the release cannot be imported beside HEAD.

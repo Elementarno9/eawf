@@ -20,6 +20,7 @@ from typing import Any
 from eawf.kernel.projection.campaign import CampaignView
 from eawf.kernel.projection.connection import ReplayNote
 from eawf.kernel.projection.spine import SpineRow, SpineView
+from eawf.kernel.state.epoch2.campaign import ResearchBudget
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.cells import value_cell
@@ -40,12 +41,14 @@ from eawf.surfaces.tui.console.frame import (
 )
 from eawf.surfaces.tui.console.keybar import KEY, route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
+from eawf.surfaces.tui.console.renderers.budget_lines import axis_line
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNAVAILABLE,
     UNKNOWN_WORD,
     counts,
     finish,
     label,
+    more,
     native_head,
     route_crumb,
 )
@@ -388,6 +391,12 @@ def _native_sections(view: View, campaign: CampaignView) -> list[str]:
     return body
 
 
+def bounds_rows(budget: ResearchBudget) -> list[str]:
+    """Return the BOUNDS rows: one axis of the Campaign's budget per row, label on the first."""
+    first, *rest = (axis_line(axis) for axis in budget.axes)
+    return [label("BOUNDS", first), *(more(line) for line in rest)]
+
+
 def native_frame(view: View, spine: SpineView) -> list[str]:
     """Return the Campaign frame drawn from the read model the daemon served.
 
@@ -414,13 +423,15 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     if s.conn == REPLAYING:
         body += [label("REPLAYING", replay_line(view.replay)), thin(w)]
     question = (campaign.title if campaign else None) or f"{UNAVAILABLE} · no question is stated"
-    body += [label("QUESTION", question), label("BOUNDS", f"{UNKNOWN_WORD} · no bound is stated")]
+    body.append(label("QUESTION", question))
     if read is not None:
+        body += bounds_rows(read.evidence_budget)
         body += _native_sections(view, read)
         walked = sum(1 for rows in section_rows(read, None).values() if rows)
         keys = [p for p in _KEYS if walked > 1 or p != _TAB]
         return finish(view, top, body, keys)
     dv.sel_in(s, 0)
+    body.append(label("BOUNDS", f"{UNKNOWN_WORD} · the campaign has not been read yet"))
     for name, absent in _NATIVE_SECTIONS:
         body += [thin(w), label(name, f"{UNKNOWN_WORD} · {absent}")]
     return finish(view, top, body, [p for p in _KEYS if p != _TAB])

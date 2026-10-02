@@ -138,35 +138,7 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "eu_minutes": 30,
         "eu_basis": "api_duration",
     },
-    "audit": {
-        # Default /audit check-plan breadth: quick narrows to a smoke set,
-        # standard is the full default set, deep is the widest.
-        "default_level": "standard",
-    },
-    # ``/prep`` runtime knobs. ``auto_resume`` leads /prep's emitted claim
-    # actions with the dispatch-resume action so a leaked ``dispatch_paused``
-    # flag does not silently reject the claim batch.
-    "prep": {
-        "auto_resume": True,
-    },
-    "ship": {
-        # Ship gauntlet breadth: full (default, mandatory for migration waves
-        # + iter close) runs every gate; scoped is legal only for re-runs.
-        "gauntlet": "full",
-    },
-    "review": {
-        "default_level": "medium",
-    },
     "flow": {
-        # Per-transition gates. A true value authorises advancing after the
-        # named completed stage. Protected actions inside the next skill keep
-        # their own explicit confirmation requirements.
-        "advance_after": {
-            "research": False,
-            "prep": False,
-            "audit": False,
-            "polish": False,
-        },
         # Per-wave token-budget enforcement. ``soft`` (default) warns and
         # lets the wave continue past its cap; ``hard`` halts the wave at
         # the cap via the SIGTERM->SIGKILL ladder. ``multiplier`` scales
@@ -175,8 +147,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             "enforce": "soft",
             "multiplier": 1.5,
         },
-        # Stop re-entering a failing flow stage past this many repair cycles.
-        "max_repair_cycles": 3,
     },
     "vcs": {
         "conventions": {
@@ -187,8 +157,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             },
         },
         "checkpoint_requires_commit": True,
-        "pr_merge_method": "merge",
-        "squash_allowed": False,
         "integration_commit_unit": "batch",
         "task_reference": "trailer",
         "coauthor": {
@@ -207,15 +175,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             },
             "require_trailer": True,
         },
-    },
-    "acceptance": {
-        "commands": {
-            "tests": None,
-            "lint": None,
-            "typecheck": None,
-            "build": None,
-        },
-        "required_before_ship": ["state"],
     },
     "daemon": {
         # When True (default since P24-W10), state + config + registry

@@ -26,7 +26,7 @@ RULE_CODE = "EAWF026"
 
 #: The closed set of orientation categories the settings rail may list.
 ORIENTATION_CATEGORIES: Final[frozenset[str]] = frozenset(
-    {"execution", "identity", "interface", "quality", "safety", "system"}
+    {"execution", "identity", "interface", "quality", "system"}
 )
 
 

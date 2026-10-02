@@ -254,10 +254,22 @@ RPC_VERBS: Final[tuple[RpcVerb, ...]] = (
         "eawf.runtime.daemon.methods.console_records:BatchRecordsRead",
     ),
     RpcVerb(
+        "projection.git.pr.repository",
+        "ui",
+        "read",
+        "eawf.runtime.daemon.methods.console_records:RepositoryRead",
+    ),
+    RpcVerb(
         "projection.merge.conflict.frames",
         "batch",
         "read",
         "eawf.runtime.daemon.methods.console_records:BatchRecordsRead",
+    ),
+    RpcVerb(
+        "projection.crash.recovery.boot",
+        "ui",
+        "read",
+        "eawf.runtime.daemon.methods.console_records:BootRecoveryRead",
     ),
     RpcVerb(
         "projection.receipt.proofs",
@@ -270,6 +282,12 @@ RPC_VERBS: Final[tuple[RpcVerb, ...]] = (
         "ui",
         "read",
         "eawf.runtime.daemon.methods.console_records:TargetResolve",
+    ),
+    RpcVerb(
+        "projection.history.changes",
+        "ui",
+        "read",
+        "eawf.runtime.daemon.methods.console_records:HistoryChangesRead",
     ),
     RpcVerb(
         "runtime.run.events.read",

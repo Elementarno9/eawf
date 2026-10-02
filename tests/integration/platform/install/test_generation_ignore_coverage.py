@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.changes import ChangeTier, change_log_path
 from eawf.kernel.store.commit_policy import EA_PATH_CLASSES, CommitPolicy
 from eawf.kernel.store.paths import (
     index_path,
@@ -101,6 +102,7 @@ def _machine_local_paths(repo: Path) -> list[str]:
         *(index_path(epoch1, item) for item in LEDGER_COLLECTIONS),
         *(local_store_path(epoch1, kind) for kind in StoreKind),
         store_path(epoch1, StoreKind.EVENT),
+        change_log_path(generation, ChangeTier.LOCAL),
     ]
     probes = [row.probe for row in EA_PATH_CLASSES if row.policy is CommitPolicy.NOT_COMMITTED]
     return [*_relative(repo, paths), *probes]
@@ -113,6 +115,7 @@ def _committed_paths(repo: Path) -> list[str]:
         generation,
         ledger_path(generation, Epoch2Collection.TASK),
         *(seed_ledger_path(generation, item) for item in STATUS_PROJECTION_COLLECTIONS),
+        change_log_path(generation, ChangeTier.COMMITTED),
     ]
     probes = [row.probe for row in EA_PATH_CLASSES if row.policy is CommitPolicy.COMMITTED]
     return [*_relative(repo, paths), *probes]

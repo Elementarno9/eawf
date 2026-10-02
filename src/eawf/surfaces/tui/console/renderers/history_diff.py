@@ -2,23 +2,29 @@
 
 ``p`` cycles the revision pair and ``e`` opens the entity the diff is about.
 
-The native frame diffs one entity at exactly two of its own revisions -- the one the read
-model holds and the one before it -- never a range. The earlier value and who caused the
-change are the canonical-state store's to state; while no producer reads them into the
-console they render unknown, and a change is never attributed to the system. The
-unchanged fields are counted here and never hidden, so their count is unknown too rather
-than left out. An entity at its first revision has nothing to pair and says so.
+The native frame diffs one entity across its newest recorded change, never a range: the
+change feed states each field the commit changed with its value before and after, and who
+asked. Every field the change does not list held its value, which the frame says rather
+than hiding. A value too large to keep shows its preview and an ellipsis. A change that
+names nobody says so, and is never attributed to the system. An entity with no change on
+file says since when none was recorded.
 """
 
 from __future__ import annotations
 
-from eawf.kernel.projection.spine import SpineRow, SpineView
+import json
+
+from eawf.kernel.identity import IdentityError, parse_qualified_urn
+from eawf.kernel.projection.spine import SpineView
+from eawf.kernel.store.changes import ChangeRecord, StoredValue
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
-from eawf.surfaces.tui.console.cells import value_cell
+from eawf.surfaces.tui.console.format import clock_minute, day
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, thin
 from eawf.surfaces.tui.console.keybar import route_pairs
+from eawf.surfaces.tui.console.live_reads import HISTORY_DIFF_READ, diff_subject, held_changes
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
+from eawf.surfaces.tui.console.renderers.history import none_since
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNAVAILABLE,
     UNKNOWN_WORD,
@@ -34,12 +40,33 @@ ENTITY = pt.DIFF_ENTITY
 _KEYS = route_pairs("history.diff")
 
 
-def _subject(view: View, spine: SpineView) -> SpineRow | None:
-    """Return the one entity the diff is about: the session's subject, else the first record."""
-    found = spine.index_of(view.session.subj_id)
-    if found is not None:
-        return spine.rows[found]
-    return spine.rows[0] if spine.rows else None
+#: What a field the row did not carry on one side of the change reads as.
+ABSENT = "absent"
+
+
+def shown(value: StoredValue | None) -> str:
+    """Return one side of a field change as a cell: the value, or its preview when cut.
+
+    A reference is shown as the key it addresses, because a full address is wider than
+    the cell and an identifier never gives way to the cell's edge.
+    """
+    if value is None:
+        return ABSENT
+    if value.cut:
+        return f"{value.value}…"
+    if not isinstance(value.value, str):
+        return json.dumps(value.value)
+    try:
+        return parse_qualified_urn(value.value).entity_key
+    except IdentityError:
+        return value.value
+
+
+def _pair(change: ChangeRecord) -> str:
+    """Return the revisions a change moved the record between."""
+    if change.revision_before is None:
+        return f"created at rev {change.revision_after}"
+    return f"rev {change.revision_before} → rev {change.revision_after}"
 
 
 def native_frame(view: View, spine: SpineView) -> list[str]:
@@ -53,39 +80,48 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         The full frame, keybar last.
     """
     s, w = view.session, view.w
-    subject = _subject(view, spine)
-    key = subject.key if subject is not None else "no entity"
-    paired = subject is not None and subject.revision > 1
-    pair = f"rev {subject.revision - 1} → rev {subject.revision}" if paired and subject else ""
+    key = diff_subject(s.subj_id or s.sel_id, [row.key for row in spine.rows])
+    found = spine.index_of(key)
+    subject = spine.rows[found] if found is not None else None
+    page = held_changes(view.live, HISTORY_DIFF_READ)
+    changes = tuple(c for c in page.changes if c.record_key == key) if page is not None else ()
+    change = changes[0] if changes else None
+    pair = _pair(change) if change is not None else ""
     top = native_head(
         view,
         spine,
         crumb_text=route_crumb(view, spine, "History", "Diff"),
-        summary=f"{key} · {pair or 'one revision'}",
+        summary=f"{key or 'no entity'} · {pair or 'no change on file'}",
     )
+    named = subject.title or subject.collection.value if subject is not None else "a record"
     body = [
         label(
-            "SUBJECT",
-            f"{key} · {subject.title or subject.collection.value}"
-            if subject
-            else f"{UNAVAILABLE} · no entity is held to diff",
+            "SUBJECT", f"{key} · {named}" if key else f"{UNAVAILABLE} · no entity is held to diff"
         )
     ]
     grid = Grid([12, 17, 17, 0])
-    if subject is not None and paired:
-        body.append(label("BETWEEN", f"{pair} · both instants {UNKNOWN_WORD}"))
+    if change is not None:
+        at = f"{day(change.recorded_at)} {clock_minute(change.recorded_at)}"
+        body.append(label("BETWEEN", f"{pair} · {at} · {change.event_name}"))
         body += [thin(w), grid.head(["FIELD", "THEN", "NOW", "CAUSED BY"])]
-        dv.sel_in(s, 1)
-        now = value_cell(subject.field("status")).slot
-        body.append(grid.row(["status", UNKNOWN_WORD, now, UNKNOWN_WORD], s.sel == 0, w))
+        dv.sel_in(s, len(change.changes))
+        cause = change.actor_ref or UNKNOWN_WORD
+        body.extend(
+            grid.row([item.field, shown(item.before), shown(item.after), cause], s.sel == i, w)
+            for i, item in enumerate(change.changes)
+        )
+        body += [
+            thin(w),
+            label("UNCHANGED", "every field not listed held its value · none is hidden"),
+            label("EARLIER", f"{dv.plural(len(changes) - 1, 'earlier change')} on file"),
+        ]
     else:
         dv.sel_in(s, 0)
-        body.append(label("BETWEEN", "one revision only · nothing to pair it with"))
-    body += [
-        thin(w),
-        label("UNCHANGED", f"{UNKNOWN_WORD} fields · counted here, never hidden"),
-        label("RULE", "One entity at two revisions — the subject is never a range."),
-    ]
+        if page is None:
+            body.append(label("BETWEEN", f"{UNKNOWN_WORD} · the change feed has not been read yet"))
+        else:
+            body.append(label("BETWEEN", none_since(page.since)))
+    body.append(label("RULE", "One entity at two revisions — the subject is never a range."))
     return finish(view, top, body, _KEYS)
 
 

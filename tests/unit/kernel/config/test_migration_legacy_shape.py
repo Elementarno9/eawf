@@ -182,7 +182,7 @@ def test_cleanup_idempotent_double_run() -> None:
 
 
 def test_cleanup_preserves_unrelated_operator_keys() -> None:
-    """Operator values survive while deprecated flow paths are renamed."""
+    """Operator values survive while deprecated flow paths are dropped."""
     payload = {
         "schema_version": "1.0",
         "flow": {"auto_accept": {"research": True}},
@@ -192,7 +192,8 @@ def test_cleanup_preserves_unrelated_operator_keys() -> None:
     }
     upgraded, _ = migrate_config_payload(payload)
     assert "lifecycle" not in upgraded
-    assert upgraded["flow"] == {"advance_after": {"research": True}}
+    assert "flow" not in upgraded
+    assert upgraded["runtime"]["adapters"] == ["claude-code"]
     assert "polish" not in upgraded
 
 

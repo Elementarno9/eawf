@@ -70,6 +70,18 @@ from eawf.kernel.projection.integration import (
 from eawf.kernel.projection.operations import build_operations_view
 from eawf.kernel.projection.route_view import RouteReadModel
 from eawf.runtime.daemon.methods.projection import ROUTE_READ_METHODS, ROUTE_RECONNECT_METHODS
+from eawf.runtime.vcs.repository_read import (
+    DETACHED,
+    GH_MISSING,
+    GH_UNAUTHENTICATED,
+    NOT_A_REPOSITORY,
+    BranchDrift,
+    BranchRead,
+    CheckRead,
+    LastCommit,
+    PullRequestRead,
+    RepositoryAnswer,
+)
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch
@@ -77,11 +89,16 @@ from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.keybar import KEY_NAMES, ROUTE_KEYS
 from eawf.surfaces.tui.console.keymap import route_keys
-from eawf.surfaces.tui.console.live_reads import CONFLICTS_READ, GENERATIONS_READ, LIVE_READS
+from eawf.surfaces.tui.console.live_reads import (
+    CONFLICTS_READ,
+    GENERATIONS_READ,
+    LIVE_READS,
+    REPOSITORY_READ,
+)
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import git_pr, merge_conflict, render_route
-from eawf.surfaces.tui.console.renderers.read_model import native
+from eawf.surfaces.tui.console.renderers.read_model import LABEL_W, native
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import Session
 
@@ -377,12 +394,129 @@ def test_the_git_frame_says_so_when_the_batch_has_taken_nothing() -> None:
     assert git_pr.NO_GENERATION in body
 
 
-def test_the_git_frame_names_the_pull_request_producer_it_waits_on() -> None:
-    """The review and check columns wait on a named item, not on a blank cell."""
+def test_the_batch_review_columns_name_the_pull_request_producer_they_wait_on() -> None:
+    """A Batch row's review and check columns wait on a named item, not on a blank cell."""
     model = _view(GIT_PR_ROUTE)
     waiting = {spec.name: spec.missing_producer for spec in model.unproduced()}
     assert waiting == dict.fromkeys(("review", "checks"), PULL_REQUEST_PRODUCER)
-    assert PULL_REQUEST_PRODUCER in "\n".join(_frame(GIT_PR_ROUTE, model))
+
+
+# ---------- the tree's branch, review and checks ----------
+
+BRANCH_READ = BranchRead(
+    branch="feature/topic",
+    head=LastCommit(sha="9a98817" + "0" * 33, subject="Bound the replay window", committed_at=AT),
+    upstream=BranchDrift(ref="origin/feature/topic", ahead=2, behind=0),
+    default=BranchDrift(ref="origin/main", ahead=4, behind=1),
+)
+
+OPEN_PR = PullRequestRead(
+    number=418,
+    state="OPEN",
+    url="https://github.com/example/repo/pull/418",
+    review_decision="CHANGES_REQUESTED",
+    approvals=1,
+    changes_requested=1,
+    checks=(
+        CheckRead(name="tests", outcome="pass"),
+        CheckRead(name="lint", outcome="fail"),
+        CheckRead(name="conformance", outcome="pending"),
+    ),
+)
+
+
+def _rows(repository: RepositoryAnswer | None) -> dict[str, str]:
+    """Return the Git frame's labelled rows by label, continuation rows joined on."""
+    held: dict[str, str] = {}
+    name = ""
+    for row in _frame(GIT_PR_ROUTE, _view(GIT_PR_ROUTE, repository=repository)):
+        label_text, text = row[1 : LABEL_W + 1].strip(), row[LABEL_W + 1 :].rstrip()
+        if label_text:
+            name = label_text
+            held[name] = text
+        elif name in held and text and row.startswith(" " * (LABEL_W + 1)):
+            held[name] += f" | {text.strip()}"
+        else:
+            name = ""
+    return held
+
+
+def test_the_console_carries_its_repository_read_into_the_git_model() -> None:
+    app = _app(GIT_PR_ROUTE)
+    seam = app.seam
+    assert seam is not None
+    seam.retarget(GIT_PR_ROUTE)
+    held = RepositoryAnswer(branch=BRANCH_READ, pull_request=OPEN_PR)
+    seam._live[REPOSITORY_READ] = (LIVE_READS[REPOSITORY_READ].address(seam), held)
+    model = app.route_view()
+    assert isinstance(model, GitPrReadModel)
+    assert model.repository == held
+
+
+def test_the_repository_read_is_owed_only_on_the_git_surface() -> None:
+    app = _app(MERGE_CONFLICT_ROUTE)
+    seam = app.seam
+    assert seam is not None
+    seam.retarget(MERGE_CONFLICT_ROUTE)
+    assert LIVE_READS[REPOSITORY_READ].address(seam) is None
+
+
+def test_before_the_read_arrives_every_repository_row_says_it_is_not_read_yet() -> None:
+    rows = _rows(None)
+    assert rows["BRANCH"] == rows["REVIEW"] == rows["CHECKS"] == git_pr.NOT_READ
+
+
+def test_a_read_branch_states_its_drift_and_last_commit() -> None:
+    rows = _rows(RepositoryAnswer(branch=BRANCH_READ, pull_request=OPEN_PR))
+    assert rows["BRANCH"] == (
+        "feature/topic · origin/feature/topic ahead 2 · behind 0 · "
+        "origin/main ahead 4 · behind 1 | last commit 9a98817 · Sep 17 12:00 · "
+        "Bound the replay window"
+    )
+
+
+def test_an_open_pull_request_states_its_review_and_names_the_failing_check() -> None:
+    rows = _rows(RepositoryAnswer(branch=BRANCH_READ, pull_request=OPEN_PR))
+    assert rows["REVIEW"] == ("PR #418 open · changes requested · 1 approval · 1 change requested")
+    assert rows["CHECKS"] == "1 pass · 1 fail · 1 pending | failing: lint"
+
+
+def test_a_pull_request_with_no_check_says_nothing_reported() -> None:
+    pr = OPEN_PR.model_copy(update={"checks": (), "review_decision": None, "approvals": 0})
+    rows = _rows(RepositoryAnswer(branch=BRANCH_READ, pull_request=pr))
+    assert rows["REVIEW"] == "PR #418 open · no review decision · 0 approvals · 1 change requested"
+    assert rows["CHECKS"] == "none · nothing reported on #418"
+
+
+def test_a_branch_with_no_pull_request_is_stated_not_unavailable() -> None:
+    rows = _rows(RepositoryAnswer(branch=BRANCH_READ))
+    assert rows["REVIEW"] == "no pull request is open for feature/topic"
+    assert rows["CHECKS"] == "none · no pull request to report on"
+
+
+@pytest.mark.parametrize("reason", [GH_MISSING, GH_UNAUTHENTICATED, DETACHED])
+def test_an_unread_pull_request_names_the_tool_and_why(reason: str) -> None:
+    rows = _rows(RepositoryAnswer(branch=BRANCH_READ, pull_request_unread=reason))
+    assert rows["REVIEW"].replace(" | ", " ") == f"∅ unavailable · {reason}"
+    assert rows["CHECKS"] == "∅ unavailable · read with the review"
+
+
+def test_an_unread_checkout_says_why_on_every_row() -> None:
+    answer = RepositoryAnswer(branch_unread=NOT_A_REPOSITORY, pull_request_unread=NOT_A_REPOSITORY)
+    rows = _rows(answer)
+    assert rows["BRANCH"] == rows["REVIEW"] == f"∅ unavailable · {NOT_A_REPOSITORY}"
+
+
+def test_a_detached_head_and_a_gone_upstream_are_drawn_as_such() -> None:
+    branch = BRANCH_READ.model_copy(
+        update={
+            "branch": None,
+            "upstream": BranchDrift(ref="origin/old", ahead=0, behind=0, gone=True),
+            "default": None,
+        }
+    )
+    rows = _rows(RepositoryAnswer(branch=branch, pull_request_unread=DETACHED))
+    assert rows["BRANCH"].startswith("detached at 9a98817 · origin/old is gone | last commit")
 
 
 # ---------- the card draws one hunk ----------
@@ -445,11 +579,57 @@ def test_a_hunk_at_an_offset_no_hunk_holds_is_none() -> None:
     assert model.hunk_at(2) is model.hunks[2]
 
 
+#: How the probe conflict was resolved: the delivery that landed past it.
+CLEARANCE: dict[str, Any] = {
+    "generation_id": "ING-000004",
+    "head_sha": "4" * 40,
+    "actor": "OP-0001",
+}
+
+
 def test_a_cleared_conflict_keeps_its_frame_and_draws_no_hunk() -> None:
     """The blockage is over, so the card never puts an operator back on that decision."""
-    frames, hunks = build_conflict_views([_conflict(cleared_at=LATER)])
+    frames, hunks = build_conflict_views([_conflict(cleared_at=LATER, cleared_by=CLEARANCE)])
     assert [frame.cleared for frame in frames] == [True]
+    assert frames[0].cleared_by is not None
+    assert frames[0].cleared_by.generation_id == "ING-000004"
     assert hunks == ()
+
+
+@pytest.mark.parametrize(
+    "overrides", [{"cleared_at": LATER}, {"cleared_by": CLEARANCE}], ids=["no-by", "no-at"]
+)
+def test_a_clearance_states_both_when_and_how_or_neither(overrides: dict[str, Any]) -> None:
+    """A conflict cleared with no delivery named would be a resolution nobody can trace."""
+    with pytest.raises(ValidationError, match="cleared"):
+        _conflict(**overrides)
+
+
+def test_a_standing_conflict_reads_unresolved_beside_its_exit() -> None:
+    """The card states the resolution in words: nothing has landed past the conflict yet."""
+    body = "\n".join(
+        _frame(MERGE_CONFLICT_ROUTE, _view(MERGE_CONFLICT_ROUTE, conflicts=(_conflict(),)))
+    )
+    assert merge_conflict.UNRESOLVED in body
+    assert "repair_task" in body
+
+
+def test_the_conflict_card_declares_no_silent_column() -> None:
+    """The resolution rides on the conflict frame it belongs to, never as an unknown cell."""
+    assert _view(MERGE_CONFLICT_ROUTE).unproduced() == ()
+
+
+def test_a_resolved_conflict_names_the_delivery_the_head_and_who_asked() -> None:
+    """A Batch past its conflict says how it got past, not only that nothing blocks it."""
+    cleared = _conflict(cleared_at=LATER, cleared_by=CLEARANCE)
+    body = "\n".join(
+        _frame(MERGE_CONFLICT_ROUTE, _view(MERGE_CONFLICT_ROUTE, conflicts=(cleared,)))
+    )
+    assert merge_conflict.NO_CONFLICT in body
+    assert "INC-000001 resolved by ING-000004" in body
+    assert "head 4444444" in body
+    assert "OP-0001" in body
+    assert merge_conflict.UNRESOLVED not in body
 
 
 def test_no_conflict_at_all_says_so_rather_than_drawing_an_empty_box() -> None:

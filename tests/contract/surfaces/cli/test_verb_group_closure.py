@@ -72,7 +72,7 @@ def _options(*path: str) -> dict[str, click.Parameter]:
 @pytest.mark.parametrize(
     ("group", "verbs"),
     [
-        ("campaign", {"new", "run", "cancel"}),
+        ("campaign", {"new", "run", "budget", "cancel"}),
         ("question", {"open-decision", "answer", "reply"}),
     ],
 )

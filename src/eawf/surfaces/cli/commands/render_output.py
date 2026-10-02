@@ -2,8 +2,8 @@
 
 Surface contract::
 
-    eawf render-output --format markdown [--strict]   # JSON on stdin → markdown
-    eawf render-output --format json     [--strict]   # markdown on stdin → JSON
+    eawf render-output --format markdown   # JSON on stdin → markdown
+    eawf render-output --format json       # markdown on stdin → JSON
 
 The command is the operator-facing edge of :mod:`eawf.surfaces.render.envelope`.
 Skills emit a JSON envelope; chat-runtime adapters pipe it through this
@@ -11,11 +11,9 @@ command to produce a renderable markdown blob (and back again, e.g. to
 parse a hand-authored response into the canonical JSON shape for the
 daemon-backed mutation surface).
 
-``--strict`` is the loud-failure switch: malformed input raises
-:class:`~eawf.surfaces.cli.errors.ValidationError` (exit 4). Without ``--strict``
-the same parse errors still raise (the spec only enumerates strict
-behaviour); we keep the surface symmetric so callers don't have to
-remember which side is permissive.
+Malformed input raises :class:`~eawf.surfaces.cli.errors.ValidationError`
+(exit 4) in both directions; there is no lenient mode, because no partial
+parse yields an envelope worth emitting.
 """
 
 from __future__ import annotations
@@ -69,14 +67,6 @@ def render_output_cmd(
             case_sensitive=False,
         ),
     ] = _FORMAT_MARKDOWN,
-    strict: Annotated[
-        bool,
-        typer.Option(
-            "--strict",
-            help="Reject malformed input with exit 4 instead of best-effort "
-            "emission. The spec mandates this on the strict path.",
-        ),
-    ] = False,
 ) -> None:
     """Convert between the JSON and markdown forms of the output envelope."""
     from pydantic import ValidationError
@@ -120,12 +110,6 @@ def render_output_cmd(
                 ) from exc
             _emit_json(env)
     except cli_errors.ValidationError as err:
-        # ``--strict`` and the default both emit-and-exit on malformed
-        # input; there is no permissive fallback that would still produce
-        # a meaningful envelope, so we treat the two paths identically.
-        # The flag is kept on the surface for forward compatibility with
-        # phase-4 work that may add lenient warning emission.
-        _ = strict
         cli_errors.emit_error(err, flags=flags)
         return
 

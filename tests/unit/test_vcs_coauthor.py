@@ -45,8 +45,6 @@ def test_vcs_config_defaults_subject_style_to_trailer() -> None:
     config = VcsConfig.model_validate(
         {
             "checkpoint_requires_commit": True,
-            "pr_merge_method": "merge",
-            "squash_allowed": False,
         }
     )
     assert config.conventions.subject_style == "trailer"
@@ -58,8 +56,6 @@ def test_vcs_config_rejects_extra_release_convention_key() -> None:
         VcsConfig.model_validate(
             {
                 "checkpoint_requires_commit": True,
-                "pr_merge_method": "merge",
-                "squash_allowed": False,
                 "conventions": {
                     "subject_style": "bracket",
                     "wave_trailer": "Eawf-Wave",

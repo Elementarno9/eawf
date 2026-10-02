@@ -336,9 +336,13 @@ def test_a_cleared_frame_states_when_a_successor_integrated() -> None:
     """Boundary: the record is kept and dated rather than removed."""
     blocked = block(attempt())
 
-    cleared = blocked.conflict.model_copy(update={"cleared_at": LATER})
+    clearance = {"generation_id": "ING-000003", "head_sha": "c" * 40, "actor": "OP-0001"}
+    cleared = blocked.conflict.model_dump(mode="json") | {
+        "cleared_at": LATER,
+        "cleared_by": clearance,
+    }
 
-    assert IntegrationConflict.model_validate(cleared.model_dump(mode="json")).cleared_at == LATER
+    assert IntegrationConflict.model_validate(cleared).cleared_at == LATER
 
 
 # ---- a blocked run moves no canonical ref -------------------------------------

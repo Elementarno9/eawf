@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from datetime import datetime
 from pathlib import Path
 from typing import Final
 
@@ -78,28 +79,34 @@ def run_runtime_tuple_health_checks(*, workspace: Path | None) -> list[CheckResu
     """
     if workspace is None:
         return []
-    checks = [check for check, _code in runtime_tuple_verdicts(workspace)]
+    checks = [check for check, _code, _checked_at in runtime_tuple_verdicts(workspace)]
     logger.info(f"run_runtime_tuple_health_checks tuples={len(checks)}")
     return checks
 
 
 def runtime_tuple_verdicts(
     workspace: Path,
-) -> list[tuple[CheckResult, CertificationFailureCode | None]]:
-    """Return each runtime tuple's check beside the failure code its newest record carries.
+) -> list[tuple[CheckResult, CertificationFailureCode | None, datetime]]:
+    """Return each runtime tuple's check beside its newest record's failure code and time.
 
     Args:
         workspace: The ``.ea/`` parent directory.
 
     Returns:
-        One pair per tuple, ordered by tuple digest; the code is ``None`` for a newest
-        record that passed. Empty when the tree has no conformance store.
+        One triple per tuple, ordered by tuple digest: the check, the failure code
+        (``None`` for a newest record that passed) and when that record's stage
+        completed, which is when the check last ran. Empty when the tree has no
+        conformance store.
     """
     path = store_path(workspace / ".ea" / "state.json", StoreKind.CONFORMANCE_STAGE)
     if not path.is_file():
         return []
     return [
-        (_tuple_check(tuple_digest=digest, records=records), records[-1].reason_code)
+        (
+            _tuple_check(tuple_digest=digest, records=records),
+            records[-1].reason_code,
+            records[-1].completed_at,
+        )
         for digest, records in sorted(_history_by_tuple(path).items())
     ]
 

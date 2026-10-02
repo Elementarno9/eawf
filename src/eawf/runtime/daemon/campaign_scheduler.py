@@ -155,7 +155,7 @@ class StepReport(BaseModel):
     Attributes:
         report: The round's checkpoint report, as markdown.
         outcome: What the step showed, in one line.
-        tokens: The tokens the round consumed.
+        tokens: The tokens the round consumed; ``None`` when no reading metered them.
         sources: The sources the round consulted.
         findings: What the round learned that should outlive it, one line each.
     """
@@ -164,7 +164,7 @@ class StepReport(BaseModel):
 
     report: Report
     outcome: StepOutcome
-    tokens: StrictNonNegativeInt = 0
+    tokens: StrictNonNegativeInt | None = 0
     sources: StrictNonNegativeInt = 0
     findings: tuple[FindingStatement, ...] = ()
 
@@ -551,6 +551,8 @@ class _Driver:
         """Return the step's observed totals per bounded axis after this round."""
         observed: dict[str, int] = {}
         for axis in step.bound.axes:
+            if axis.axis_kind == "tokens" and report.tokens is None:
+                continue
             delta = {
                 "rounds": 1,
                 "tokens": report.tokens,
@@ -569,6 +571,7 @@ class _Driver:
         self._step(
             step.ordinal,
             spent=self._spent(step, report, seconds),
+            unmetered=("tokens",) if report.tokens is None else (),
             progress={"done": 1, "total": 1, "unit": _ROUND_UNIT, "quality": "measured"},
         )
         campaign = self.campaign()

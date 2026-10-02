@@ -425,15 +425,15 @@ def test_audit_level_quick_narrows_the_default_breadth(state_dir: Path) -> None:
     assert len(_build_check_plan_default_checks(state_dir)) == 2
 
 
-def test_audit_level_from_config_default_level(state_dir: Path) -> None:
-    """The ``audit.default_level`` config leaf drives the breadth when no flag is set."""
+def test_audit_level_ignores_the_retired_config_leaf(state_dir: Path) -> None:
+    """A layer still stating the retired ``audit.default_level`` leaf is stripped on load."""
     import yaml
 
     (state_dir / "config.yaml").write_text(
         yaml.safe_dump({"audit": {"default_level": "quick"}}), encoding="utf-8"
     )
     run_skill(AuditSkill(), _ctx())
-    assert len(_build_check_plan_default_checks(state_dir)) == 2
+    assert len(_build_check_plan_default_checks(state_dir)) == 6
 
 
 def test_audit_unknown_level_records_warning_and_falls_back(state_dir: Path) -> None:

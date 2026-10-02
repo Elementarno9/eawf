@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Final
 
+from eawf.kernel.state.epoch2.campaign import BudgetAxis
 from eawf.surfaces.tui.console.format import group, span
 
 #: The marker a projected remainder carries.
@@ -85,6 +86,32 @@ def cost_line(spent: int | None, limit: int | None, *, partial: bool = False) ->
     return spent_of(f"cost {money(spent)}", None if limit is None else money(limit), left)
 
 
+def axis_line(axis: BudgetAxis) -> str:
+    """Return one Campaign budget axis: spent of its limit, and an estimated remainder.
+
+    The axis kind is named only when its unit does not already say it, so a rounds axis
+    reads ``3 of 7 rounds`` and a wall-time axis ``wall time 1 of 6 h``.
+
+    Args:
+        axis: The axis pair as the Campaign record holds it.
+
+    Returns:
+        The line; an axis no reading observed reads ``∅ unmetered``, and one some
+        reading missed reads as a floor with no remainder.
+    """
+    kind = axis.axis_kind.replace("_", " ")
+    head = "" if kind == axis.unit else f"{kind} "
+    limit = f"{group(axis.limit)} {axis.unit}"
+    soft = "" if axis.hard else " · soft"
+    if axis.spent_quality == "unavailable" and axis.spent == 0:
+        return f"{head}{UNMETERED} of {limit}{soft}"
+    if axis.spent_quality == "unavailable":
+        return f"{head}≥{group(axis.spent)} of {limit} · partly unmetered{soft}"
+    mark = "" if axis.spent_quality == "measured" else APPROXIMATE
+    left = group(max(0, axis.limit - axis.spent))
+    return spent_of(f"{head}{mark}{group(axis.spent)}", limit, left) + soft
+
+
 def time_line(elapsed: str, limit: int | None, typical: int | None) -> str:
     """Return a time budget: elapsed, the limit and the typical duration, never a remainder.
 
@@ -103,6 +130,7 @@ __all__ = [
     "APPROXIMATE",
     "ESTIMATED",
     "UNMETERED",
+    "axis_line",
     "cost_line",
     "money",
     "spent_of",

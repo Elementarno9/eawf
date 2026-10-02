@@ -9,15 +9,20 @@ every catalog default equals the value the built-in layer ships.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
+from eawf.kernel.config.layered import _set_dotted as set_dotted
 from eawf.kernel.config.layered import get_dotted
 from eawf.kernel.config.migration import migrate_config_payload
+from eawf.kernel.config.registry.config_keys import CONFIG_REGISTRY
 from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS, LEAF_KEY_REGISTRY
+from eawf.kernel.projection.settings import build_settings_view
 from eawf.observability.doctor.repair import _config_actions
 from eawf.runtime.daemon import main as daemon_main
 from eawf.runtime.daemon.limits import configured_daemon_seconds
@@ -30,6 +35,29 @@ RETIRED = sorted(
     key
     for key in DEPRECATED_LEAF_KEYS - set(LEAF_KEY_REGISTRY)
     if not key.startswith("flow.auto_accept.")
+)
+
+
+#: Leaves only a retired skill read: the ship gauntlet and its acceptance commands, the
+#: audit and review levels, the flow transitions and repair ceiling, the prep resume and
+#: the pull-request merge policy. No live command reads any of them.
+SKILL_ONLY = (
+    "acceptance.commands.build",
+    "acceptance.commands.lint",
+    "acceptance.commands.tests",
+    "acceptance.commands.typecheck",
+    "acceptance.required_before_ship",
+    "audit.default_level",
+    "flow.advance_after.audit",
+    "flow.advance_after.polish",
+    "flow.advance_after.prep",
+    "flow.advance_after.research",
+    "flow.max_repair_cycles",
+    "prep.auto_resume",
+    "review.default_level",
+    "ship.gauntlet",
+    "vcs.pr_merge_method",
+    "vcs.squash_allowed",
 )
 
 
@@ -83,12 +111,44 @@ def test_every_catalog_default_equals_the_built_in_value(key: str) -> None:
     assert shipped == expected
 
 
-def test_the_three_drifted_defaults_now_agree() -> None:
-    """The theme, the toast level and the ship gates were the leaves that disagreed."""
+def test_the_drifted_defaults_now_agree() -> None:
+    """The theme and the toast level were live leaves whose defaults disagreed."""
     assert get_dotted(BUILT_IN_DEFAULTS, "ui.theme") == LEAF_KEY_REGISTRY["ui.theme"].default
     assert get_dotted(BUILT_IN_DEFAULTS, "ui.toasts") == "important"
-    assert get_dotted(BUILT_IN_DEFAULTS, "acceptance.required_before_ship") == ["state"]
-    assert LEAF_KEY_REGISTRY["acceptance.required_before_ship"].default == ("state",)
+
+
+# ---------- a leaf only a retired skill read is retired ----------
+
+
+@pytest.mark.parametrize("key", SKILL_ONLY)
+def test_a_skill_only_leaf_is_retired_everywhere_it_was_offered(key: str) -> None:
+    assert key in DEPRECATED_LEAF_KEYS
+    assert key not in LEAF_KEY_REGISTRY
+    assert key not in {entry.key for entry in CONFIG_REGISTRY}
+    with pytest.raises(KeyError):
+        get_dotted(BUILT_IN_DEFAULTS, key)
+
+
+def test_the_settings_route_offers_no_skill_only_leaf_a_layer_still_states(repo: Path) -> None:
+    body: dict[str, Any] = {"schema_version": "1.0"}
+    for key in SKILL_ONLY:
+        set_dotted(body, key, 1)
+    _write(repo / ".ea" / "config.yaml", yaml.safe_dump(body))
+    assert migrate_config_payload(body)[0] == {"schema_version": "1.0"}
+    view = build_settings_view(
+        workspace=repo,
+        repo=repo,
+        scope_id="P01",
+        cursor=0,
+        generated_at=datetime(2026, 10, 2, tzinfo=UTC),
+        env={},
+        branch=None,
+    )
+    offered = {leaf.key for leaf in view.leaves}
+    assert offered.isdisjoint(SKILL_ONLY)
+    # the doctor repair is the notice: it names every straggler the layer still states
+    (action,) = _config_actions(repo)
+    assert action.detail.endswith(": " + ", ".join(sorted(SKILL_ONLY)))
 
 
 # ---------- the policy tables are catalogued with their consumers ----------
@@ -124,10 +184,10 @@ def test_the_migration_strips_a_retired_leaf_and_the_section_it_empties(key: str
 
 
 def test_the_migration_keeps_a_live_sibling_of_a_retired_leaf() -> None:
-    body = {"schema_version": "1.0", "vcs": {"force_push": "never", "squash_allowed": True}}
+    body = {"schema_version": "1.0", "vcs": {"force_push": "never", "task_reference": "trailer"}}
     upgraded, changed = migrate_config_payload(body)
     assert changed is True
-    assert upgraded == {"schema_version": "1.0", "vcs": {"squash_allowed": True}}
+    assert upgraded == {"schema_version": "1.0", "vcs": {"task_reference": "trailer"}}
 
 
 def test_the_migration_leaves_a_canonical_body_alone() -> None:

@@ -41,6 +41,7 @@ from eawf.kernel.state.epoch2.campaign import (
     Campaign,
     CampaignPlanStep,
     CampaignStop,
+    ResearchBudget,
     StepState,
     revision_ref,
     step_blockers,
@@ -153,6 +154,7 @@ class CampaignView(_View):
         title: What it researches.
         status: Where it stands.
         stop: Why it stopped dispatching, once it has.
+        evidence_budget: Its axis pairs, each limit with the spend charged against it.
         revision: The Campaign row's revision when it was read.
         plan_line: The plan's counts, derived from the steps.
         steps: The plan steps, in order.
@@ -168,6 +170,7 @@ class CampaignView(_View):
     title: str
     status: CampaignStatus
     stop: CampaignStop | None = None
+    evidence_budget: ResearchBudget
     revision: StrictPositiveInt
     plan_line: str
     steps: tuple[CampaignStepView, ...]
@@ -312,6 +315,7 @@ def build_campaign_view(
         title=campaign.title,
         status=campaign.status,
         stop=campaign.stop,
+        evidence_budget=campaign.evidence_budget,
         revision=campaign.revision,
         plan_line=plan_line(steps),
         steps=steps,

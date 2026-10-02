@@ -100,7 +100,10 @@ REQUIREMENT_ID = re.compile(r"\b[A-Z]{2,4}-\d{3}\b")
 BOUND_ROUTES: tuple[str, ...] = (*VERIFICATION_ROUTES, *OPERATIONS_ROUTES)
 
 #: The routes whose every declared column a producer states, read off the row's facts.
-STATED_ROUTES: frozenset[str] = frozenset({"trust", "sandbox.log"})
+STATED_ROUTES: frozenset[str] = frozenset({"trust", "sandbox.log", "evidence", "evidence.digest"})
+
+#: The routes whose facts ride on their own records beside the rows, so no row column waits.
+RECORD_STATED_ROUTES: frozenset[str] = frozenset({"crash.recovery", "health"})
 
 #: The artifact a probe stage record filed its evidence under.
 EVIDENCE_REF = "artifact://conformance/rollback-0001"
@@ -237,7 +240,9 @@ def test_the_console_composes_this_routes_read_model_from_the_seam(route: str) -
 def test_the_console_carries_its_health_verdicts_into_the_health_model() -> None:
     """The verdicts the console was given reach the tuple rows, and no other route's."""
     verdict = RuntimeTupleVerdict(
-        check=_check(), reason_code=CertificationFailureCode.CONTAINMENT_PROBE_ESCAPE
+        check=_check(),
+        reason_code=CertificationFailureCode.CONTAINMENT_PROBE_ESCAPE,
+        checked_at=AT,
     )
     model = _app("health", verdicts=(verdict,)).route_view()
     assert isinstance(model, HealthReadModel)
@@ -356,7 +361,9 @@ def test_a_row_stating_no_status_is_unknown_rather_than_blank() -> None:
     assert status.missing_reason
 
 
-@pytest.mark.parametrize("route", [r for r in BOUND_ROUTES if r not in STATED_ROUTES])
+@pytest.mark.parametrize(
+    "route", [r for r in BOUND_ROUTES if r not in STATED_ROUTES | RECORD_STATED_ROUTES]
+)
 def test_unproduced_columns_are_unknown_truth_fields_naming_why(route: str) -> None:
     """A column with no producer is declared and comes back unknown, never silently absent."""
     model = _view(route)
@@ -416,9 +423,14 @@ def test_the_queue_names_the_dispatch_projection_it_waits_on() -> None:
 
 def test_a_column_with_no_named_producer_falls_back_to_the_generic_reason() -> None:
     """Not every silent column has an item to name; that one still says it is silent."""
-    model = _view("crash.recovery")
-    assert all(spec.missing_producer is None for spec in model.unproduced())
-    assert model.rows[0].field("door").missing_reason == UNPRODUCED_REASON
+    assert unstated("outcome").missing_reason() == UNPRODUCED_REASON
+    assert unstated("outcome", missing_producer="WP-01").missing_reason() != UNPRODUCED_REASON
+
+
+@pytest.mark.parametrize("route", sorted(RECORD_STATED_ROUTES))
+def test_a_route_whose_facts_are_produced_declares_no_silent_column(route: str) -> None:
+    """Recovery and check time ride on their own records, never as unknown columns."""
+    assert _view(route).unproduced() == ()
 
 
 @pytest.mark.parametrize(
@@ -433,14 +445,12 @@ def test_the_frame_names_the_producer_each_silent_column_waits_on(route: str, it
     assert any(item in row for row in rows)
 
 
-@pytest.mark.parametrize("route", ["evidence.digest"])
-def test_the_frame_names_every_unstated_column(route: str) -> None:
-    """The frame says which columns are silent instead of leaving empty cells."""
-    model = _view(route)
+def test_the_rung_card_frame_says_every_column_is_stated() -> None:
+    """The rung card's columns are all produced, so the frame names none as silent."""
+    model = _view("evidence.digest")
     rows, _session = _frame(model)
-    unstated_row = next(row for row in rows if row.startswith(" UNSTATED"))
-    for spec in model.unproduced():
-        assert f"{spec.name} ?" in unstated_row
+    assert model.unproduced() == ()
+    assert any(row.startswith(" UNSTATED  every declared column is stated") for row in rows)
 
 
 #: The routes whose packet frame lists the read model's rows as its cursor list. Evidence
@@ -557,7 +567,9 @@ def test_a_code_no_trigger_files_under_names_none() -> None:
 def test_a_quarantined_tuple_states_its_stage_provenance_and_trigger() -> None:
     """The three facts a health line must carry, and the trigger that put the tuple out."""
     verdict = RuntimeTupleVerdict(
-        check=_check(), reason_code=CertificationFailureCode.CONTAINMENT_PROBE_ESCAPE
+        check=_check(),
+        reason_code=CertificationFailureCode.CONTAINMENT_PROBE_ESCAPE,
+        checked_at=AT,
     )
     row = build_runtime_tuple_rows([verdict])[0]
     assert row.quarantined is True
@@ -574,7 +586,8 @@ def test_a_tuple_in_service_names_no_trigger_and_says_why() -> None:
     row = build_runtime_tuple_rows(
         [
             RuntimeTupleVerdict(
-                check=_check(status="ok", producer="conformance.certify", stage="certify")
+                check=_check(status="ok", producer="conformance.certify", stage="certify"),
+                checked_at=AT,
             )
         ]
     )[0]
@@ -586,7 +599,7 @@ def test_a_tuple_in_service_names_no_trigger_and_says_why() -> None:
 
 def test_a_quarantined_tuple_with_no_recorded_code_still_names_no_trigger() -> None:
     """An absent failure code renders unknown; it never picks a plausible trigger."""
-    row = build_runtime_tuple_rows([RuntimeTupleVerdict(check=_check())])[0]
+    row = build_runtime_tuple_rows([RuntimeTupleVerdict(check=_check(), checked_at=AT)])[0]
     assert row.quarantined is True
     assert row.triggers == ()
     assert row.trigger.state is TruthState.UNKNOWN
@@ -596,7 +609,7 @@ def test_a_quarantined_tuple_with_no_recorded_code_still_names_no_trigger() -> N
 def test_a_verdict_with_no_provenance_renders_the_unknown_token() -> None:
     """A health line an operator cannot trace back is the defect this rule exists for."""
     check = _check(name="clock_skew", status="ok", provenance=False)
-    row = build_runtime_tuple_rows([RuntimeTupleVerdict(check=check)])[0]
+    row = build_runtime_tuple_rows([RuntimeTupleVerdict(check=check, checked_at=AT)])[0]
     for field in (row.stage, row.producer, row.evidence_ref):
         assert field.state is TruthState.UNKNOWN
         assert field.value is None
@@ -621,7 +634,9 @@ def test_no_verdict_at_all_produces_no_tuple_rows() -> None:
 def test_the_health_frame_states_the_stage_the_verb_and_the_trigger() -> None:
     """The three facts reach the frame, beside the check that repeats them."""
     verdict = RuntimeTupleVerdict(
-        check=_check(), reason_code=CertificationFailureCode.CONTAINMENT_PROBE_ESCAPE
+        check=_check(),
+        reason_code=CertificationFailureCode.CONTAINMENT_PROBE_ESCAPE,
+        checked_at=AT,
     )
     rows, _session = _frame(_view("health", verdicts=(verdict,)), width=160)
     body = "\n".join(rows)
@@ -640,7 +655,9 @@ def test_the_health_frame_says_when_no_verdict_is_held() -> None:
 def test_the_health_frame_draws_the_unknown_token_for_a_traceless_verdict() -> None:
     """A verdict with no stage record shows the token in all three provenance cells."""
     check = _check(name="clock_skew", status="warn", provenance=False)
-    rows, _session = _frame(_view("health", verdicts=(RuntimeTupleVerdict(check=check),)))
+    rows, _session = _frame(
+        _view("health", verdicts=(RuntimeTupleVerdict(check=check, checked_at=AT),))
+    )
     # the check is listed once with its result, then once in the runner group beside the
     # stage, the verb and the trigger its provenance would have named
     group = rows[next(i for i, row in enumerate(rows) if row.startswith(" TUPLES")) :]
@@ -651,7 +668,7 @@ def test_the_health_frame_draws_the_unknown_token_for_a_traceless_verdict() -> N
 def test_only_the_health_route_carries_tuple_rows() -> None:
     """The other verification routes carry no conformance verdict, so they hold none."""
     for route in VERIFICATION_ROUTES:
-        model = _view(route, verdicts=(RuntimeTupleVerdict(check=_check()),))
+        model = _view(route, verdicts=(RuntimeTupleVerdict(check=_check(), checked_at=AT),))
         assert isinstance(model, HealthReadModel) is (route == "health")
 
 

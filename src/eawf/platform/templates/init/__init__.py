@@ -6,8 +6,8 @@ operator Q24): ``research.yaml``, ``engineering.yaml``,
 seed that ``eawf init --template <name>`` merges with operator answers
 (project_code, project_title) to bootstrap a workspace.
 
-The templates differ in the profiles they enable, the wave parallelism
-they allow and, for engineering, the acceptance commands ship runs.
+The templates differ in the profiles they enable and the wave parallelism
+they allow.
 
 ``spike.yaml`` and ``hybrid.yaml`` are deferred to v0.4+ (Q24 — YAGNI
 trim; demand-signal unclear). Discovery + load lives in

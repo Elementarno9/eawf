@@ -176,14 +176,14 @@ def test_client_round_trips_config_unset_over_real_rpc(
     config_path = repo / ".ea" / "config.yaml"
     config_path.parent.mkdir(parents=True)
     config_path.write_text(
-        "flow:\n  advance_after:\n    audit: true\n",
+        "verify:\n  odr_blocking: true\n",
         encoding="utf-8",
     )
 
     with DaemonClient(runtime_dir=server.runtime_dir) as client:
         result = client.config_unset_layer_value(
             layer="repo",
-            key_path=["flow", "advance_after", "audit"],
+            key_path=["verify", "odr_blocking"],
             repo_root=str(repo),
         )
 

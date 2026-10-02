@@ -101,15 +101,6 @@ class ConfigKey(BaseModel):
 # breaking change that requires a parallel edit in the TUI surface.
 CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ConfigKey(
-        tab="audit",
-        key="audit.default_level",
-        label="Default /audit check-plan breadth",
-        type="choice",
-        default="standard",
-        description="quick = narrow smoke set; standard = the full default set; deep = widest.",
-        choices=("quick", "standard", "deep"),
-    ),
-    ConfigKey(
         tab="daemon",
         key="daemon.idle_timeout_seconds",
         label="Daemon idle shutdown timeout (seconds)",
@@ -165,38 +156,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ),
     ConfigKey(
         tab="flow",
-        key="flow.advance_after.audit",
-        label="Advance from /audit to /polish",
-        type="bool",
-        default=False,
-        description="When True, /flow advances after audit without a flow-level pause.",
-    ),
-    ConfigKey(
-        tab="flow",
-        key="flow.advance_after.polish",
-        label="Advance from /polish to /ship",
-        type="bool",
-        default=False,
-        description="When True, /flow advances after polish without a flow-level pause.",
-    ),
-    ConfigKey(
-        tab="flow",
-        key="flow.advance_after.prep",
-        label="Advance from /prep to /audit",
-        type="bool",
-        default=False,
-        description="When True, /flow advances after prep without a flow-level pause.",
-    ),
-    ConfigKey(
-        tab="flow",
-        key="flow.advance_after.research",
-        label="Advance from /research to /prep",
-        type="bool",
-        default=False,
-        description="When True, /flow advances after research without a flow-level pause.",
-    ),
-    ConfigKey(
-        tab="flow",
         key="flow.budget.enforce",
         label="Token-budget enforcement mode",
         type="choice",
@@ -212,15 +171,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         default=1.5,
         description="Safety multiplier on a wave's base budget to derive the enforced cap.",
         min_value=1.0,
-    ),
-    ConfigKey(
-        tab="flow",
-        key="flow.max_repair_cycles",
-        label="Max repair cycles per flow stage",
-        type="int",
-        default=3,
-        description="Maximum bounded repair re-entry count for a failing flow stage.",
-        min_value=0,
     ),
     ConfigKey(
         tab="planning",
@@ -245,14 +195,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         choices=("off", "recommended", "always"),
     ),
     ConfigKey(
-        tab="planning",
-        key="prep.auto_resume",
-        label="Lead each claim batch with the dispatch-resume action",
-        type="bool",
-        default=True,
-        description="When True, /prep leads its claim actions with a dispatch-resume command.",
-    ),
-    ConfigKey(
         tab="research",
         key="research.agent_count",
         label="Default subagent count for /research",
@@ -275,24 +217,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         type="choice",
         default=DEFAULT_RESEARCH_DEPTH.value,
         choices=RESEARCH_DEPTH_VALUES,
-    ),
-    ConfigKey(
-        tab="review",
-        key="review.default_level",
-        label="Default review confidence threshold",
-        type="choice",
-        default="medium",
-        choices=("low", "medium", "high"),
-    ),
-    ConfigKey(
-        tab="ship",
-        key="ship.gauntlet",
-        label="Ship gauntlet breadth",
-        type="choice",
-        default="full",
-        description="full (default, mandatory for migration/iter-close) runs all gates; "
-        "scoped is for re-runs only.",
-        choices=("full", "scoped"),
     ),
     ConfigKey(
         tab="telemetry",

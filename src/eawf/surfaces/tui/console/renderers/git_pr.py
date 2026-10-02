@@ -6,23 +6,26 @@ this module reaches writes a file, and the frame says so where an operator will 
 the button that is not there.
 
 Under a held read model the rows are the Batch's generations at one committed cursor,
-newest last, with the head marked from its position rather than from a stored flag. With
+newest last, with the head marked from its position rather than from a stored flag. The
+branch, review and checks rows are the tree's checkout and the pull request open for it,
+as the daemon read them from ``git`` and ``gh``; a half it could not read names the tool
+and why. With
 no read model held the route draws its epoch-1 frame from the prototype registers, which
 is the mode the tracked golden contract replays.
 """
 
 from __future__ import annotations
 
-from eawf.kernel.projection.integration import PULL_REQUEST_PRODUCER, GitPrReadModel
+from eawf.kernel.projection.integration import GitPrReadModel
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.vcs.repository_read import BranchDrift, RepositoryAnswer
 from eawf.surfaces.tui.console import derive as dv
-from eawf.surfaces.tui.console.format import clock_minute, group
+from eawf.surfaces.tui.console.format import clock_minute, day, group
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNAVAILABLE,
-    UNKNOWN_WORD,
     finish,
     label,
     more,
@@ -50,7 +53,75 @@ NO_GENERATION = "∅ this Batch has taken no generation · nothing has been inte
 #: is on is the whole record it holds of that delivery.
 COMMIT_IS_THE_ROW = "this row is the whole record the console holds of that commit"
 
+#: What the branch, review and checks rows say before the daemon's first read arrives.
+NOT_READ = "… not read yet · the daemon reads git and gh for this tree"
+
 _ROWS = Grid([10, 8, 22, 0], 2)
+
+
+def _drift(drift: BranchDrift) -> str:
+    """Return one drift as ``origin/main ahead 4 · behind 1``, or that its ref is gone."""
+    if drift.gone:
+        return f"{drift.ref} is gone"
+    return f"{drift.ref} ahead {group(drift.ahead)} · behind {group(drift.behind)}"
+
+
+def _branch_rows(repository: RepositoryAnswer | None, w: int) -> list[str]:
+    """Return the branch row and its last commit, or why the checkout went unread."""
+    if repository is None:
+        return wrapped("BRANCH", NOT_READ, w)
+    read = repository.branch
+    if read is None:
+        return wrapped("BRANCH", f"{UNAVAILABLE} · {repository.branch_unread}", w)
+    parts = [
+        read.branch or f"detached at {read.head.sha[:7]}",
+        _drift(read.upstream) if read.upstream else "no upstream",
+        *([_drift(read.default)] if read.default else []),
+    ]
+    at = read.head.committed_at
+    last = f"last commit {read.head.sha[:7]} · {day(at)} {clock_minute(at)} · {read.head.subject}"
+    return [*wrapped("BRANCH", " · ".join(parts), w), more(last)]
+
+
+def _review_rows(repository: RepositoryAnswer | None, w: int) -> list[str]:
+    """Return the review and checks rows of the pull request open for the branch."""
+    if repository is None:
+        return [label("REVIEW", NOT_READ), label("CHECKS", NOT_READ)]
+    pr = repository.pull_request
+    if pr is None:
+        reason = repository.pull_request_unread
+        if reason is not None:
+            return [
+                *wrapped("REVIEW", f"{UNAVAILABLE} · {reason}", w),
+                label("CHECKS", f"{UNAVAILABLE} · read with the review"),
+            ]
+        branch = repository.branch.branch if repository.branch else None
+        return [
+            label("REVIEW", f"no pull request is open for {branch}"),
+            label("CHECKS", "none · no pull request to report on"),
+        ]
+    decision = (pr.review_decision or "no review decision").replace("_", " ").lower()
+    review = (
+        f"PR #{pr.number} {pr.state.lower()} · {decision} · "
+        f"{dv.plural(pr.approvals, 'approval')} · "
+        f"{dv.plural(pr.changes_requested, 'change')} requested"
+    )
+    if not pr.checks:
+        return [
+            label("REVIEW", review),
+            label("CHECKS", f"none · nothing reported on #{pr.number}"),
+        ]
+    counts = {
+        outcome: sum(1 for check in pr.checks if check.outcome == outcome)
+        for outcome in ("pass", "fail", "pending", "skipped")
+    }
+    checks = " · ".join(f"{group(n)} {outcome}" for outcome, n in counts.items() if n)
+    failing = [check.name for check in pr.checks if check.outcome == "fail"]
+    return [
+        label("REVIEW", review),
+        label("CHECKS", checks),
+        *([more(f"failing: {', '.join(failing)}")] if failing else []),
+    ]
 
 
 def _commit_rows(view: View, model: GitPrReadModel) -> list[str]:
@@ -96,8 +167,8 @@ def _batch_of(view: View, model: GitPrReadModel) -> str | None:
 def native_frame(view: View, model: GitPrReadModel) -> list[str]:
     """Return the Git frame drawn from the read model the daemon served.
 
-    Every repository fact the console has no reader for renders unavailable, never
-    clean, and a check with no outcome renders unknown, never passed.
+    A repository fact the daemon could not read renders unavailable with the reason it
+    gave, never clean, and a check still running renders pending, never passed.
 
     Args:
         view: The render being built.
@@ -121,15 +192,12 @@ def native_frame(view: View, model: GitPrReadModel) -> list[str]:
         else f"{UNAVAILABLE} · no generation is this Batch's head"
     )
     body = [
-        *wrapped(
-            "BRANCH", f"{UNAVAILABLE} · no repository reader states the branch or its drift", w
-        ),
+        *_branch_rows(model.repository, w),
         label("HEAD", tip),
         thin(w),
         *_commit_rows(view, model),
         thin(w),
-        label("REVIEW", f"{UNAVAILABLE} · waiting on {PULL_REQUEST_PRODUCER}"),
-        label("CHECKS", f"{UNKNOWN_WORD} · no check outcome is recorded yet"),
+        *_review_rows(model.repository, w),
         thin(w),
         label("ACTION", READ_ONLY),
         more("the merge-conflict card also only displays"),

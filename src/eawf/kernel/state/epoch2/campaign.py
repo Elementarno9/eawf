@@ -26,6 +26,8 @@ Campaign and its steps list those references append-only.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal, Self
 
@@ -103,6 +105,10 @@ class StepState(StrEnum):
 
 
 BudgetAxisKind = Literal["wall_time", "tokens", "cost", "sources", "rounds"]
+
+#: The axes an operator sets a limit on once the plan is drawn: the ones ``campaign new``
+#: bounds, whose unit is their kind and whose spend the accountant charges per round.
+SettableAxisKind = Literal["rounds", "tokens"]
 
 #: Why a Campaign stopped dispatching.
 StopReason = Literal["budget_exhausted", "converged", "cancelled"]
@@ -310,6 +316,81 @@ def exhausted_axis(budget: ResearchBudget) -> BudgetAxis | None:
     return next((a for a in budget.axes if a.hard and a.spent >= a.limit), None)
 
 
+def budget_stop(budget: ResearchBudget, *, waiting: bool, now: datetime) -> CampaignStop | None:
+    """Return the stop *budget* calls for, or ``None`` when it calls for none.
+
+    A hard axis at its limit stops the Campaign only while a step still waits to
+    start, since a plan with nothing left to start has nothing a stop would hold back.
+
+    Args:
+        budget: The Campaign's axis pairs.
+        waiting: Whether a step of its plan is still pending.
+        now: When the stop would be recorded.
+    """
+    exhausted = exhausted_axis(budget)
+    if exhausted is None or not waiting:
+        return None
+    return CampaignStop(
+        reason="budget_exhausted",
+        axis_kind=exhausted.axis_kind,
+        detail=(
+            f"{exhausted.axis_kind} reached {exhausted.spent} of its hard "
+            f"{exhausted.limit} {exhausted.unit}"
+        ),
+        stopped_at=now,
+    )
+
+
+def relimited(
+    campaign: Campaign, limits: Mapping[SettableAxisKind, int], *, now: datetime
+) -> tuple[ResearchBudget, tuple[CampaignPlanStep, ...], CampaignStop | None]:
+    """Return *campaign*'s budget, plan and stop once *limits* are set, spend kept.
+
+    An axis the Campaign does not bound yet is added in a unit named for its kind.
+    Each pending step's bound on a set axis follows the new limit: it takes the axis
+    when it lacks it, one round for rounds and the whole limit otherwise, as a plan is
+    drawn, and never exceeds the Campaign's. A started step keeps the bound it started
+    under. A budget stop the new limits no longer call for is lifted, one they still
+    call for is kept as recorded, and one they newly call for is recorded at *now*.
+
+    Args:
+        campaign: The Campaign as it stands.
+        limits: The new limit per axis kind.
+        now: When a newly called-for stop is recorded.
+
+    Returns:
+        The budget, the plan steps and the stop the Campaign holds under *limits*.
+    """
+    budget = campaign.evidence_budget.model_dump(mode="json")
+    held = {axis["axis_kind"]: axis for axis in budget["axes"]}
+    for kind, limit in limits.items():
+        if kind in held:
+            held[kind]["limit"] = limit
+        else:
+            budget["axes"].append({"axis_kind": kind, "limit": limit, "unit": kind})
+    steps: list[CampaignPlanStep] = []
+    for step in campaign.plan_steps:
+        if step.state is not StepState.PENDING:
+            steps.append(step)
+            continue
+        bound = step.bound.model_dump(mode="json")
+        axes = {axis["axis_kind"]: axis for axis in bound["axes"]}
+        for kind, limit in limits.items():
+            if kind in axes:
+                axes[kind]["limit"] = min(axes[kind]["limit"], limit)
+            else:
+                drawn = 1 if kind == "rounds" else limit
+                bound["axes"].append({"axis_kind": kind, "limit": drawn, "unit": kind})
+        steps.append(step.model_copy(update={"bound": ResearchBudget.model_validate(bound)}))
+    total = ResearchBudget.model_validate(budget)
+    stop = campaign.stop
+    if stop is None or stop.reason == "budget_exhausted":
+        waiting = any(step.state is StepState.PENDING for step in steps)
+        called = budget_stop(total, waiting=waiting, now=now)
+        stop = stop if stop is not None and called is not None else called
+    return total, tuple(steps), stop
+
+
 def step_blockers(step: CampaignPlanStep, steps: tuple[CampaignPlanStep, ...]) -> tuple[str, ...]:
     """Return what keeps a pending step from starting, by name; empty when nothing does.
 
@@ -437,9 +518,12 @@ __all__ = [
     "CampaignStop",
     "NamedProgress",
     "ResearchBudget",
+    "SettableAxisKind",
     "StepState",
     "StopReason",
+    "budget_stop",
     "exhausted_axis",
+    "relimited",
     "revision_ref",
     "step_blockers",
 ]

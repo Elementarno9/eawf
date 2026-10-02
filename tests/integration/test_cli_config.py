@@ -69,12 +69,12 @@ def test_get_json_envelope_shape(repo_root: Path) -> None:
 
 def test_set_to_repo_writes_to_repo_layer(repo_root: Path) -> None:
     result = runner.invoke(
-        app, ["config", "set", "review.default_level", "high", "--scope", "repo"]
+        app, ["config", "set", "research.default_depth", "deep", "--scope", "repo"]
     )
     assert result.exit_code == 0, result.output
     contents = (repo_root / ".ea" / "config.yaml").read_text(encoding="utf-8")
     parsed = yaml.safe_load(contents)
-    assert parsed["review"]["default_level"] == "high"
+    assert parsed["research"]["default_depth"] == "deep"
 
 
 def test_set_to_local_writes_to_local_layer(repo_root: Path) -> None:
@@ -257,7 +257,7 @@ def test_validate_ok_json_envelope(repo_root: Path) -> None:
     result = runner.invoke(app, ["--json", "config", "validate"])
     assert result.exit_code == 0
     body = json.loads(result.output)["result"]
-    assert body == {"ok": True, "scope": None}
+    assert body == {"ok": True}
 
 
 def test_validate_exits_4_on_malformed_yaml(repo_root: Path) -> None:

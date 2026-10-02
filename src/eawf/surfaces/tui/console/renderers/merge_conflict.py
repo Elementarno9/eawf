@@ -28,6 +28,12 @@ SIDE_LINES = 3
 #: What the card says for a Batch that is not blocked.
 NO_CONFLICT = "no conflict frame is held · nothing is blocking this Batch"
 
+#: What the card states for a conflict still blocking its Batch.
+UNRESOLVED = "unresolved · no delivery has landed past this conflict yet"
+
+#: The characters of a head commit the card prints, enough to find it in a git log.
+SHORT_SHA = 7
+
 #: The sentence the card prints where an operator looks for the verb it does not have.
 READ_ONLY = "The console never edits a file — resolve it in your git tool."
 
@@ -74,9 +80,21 @@ def _hunk_lines(model: MergeConflictReadModel, hunk: HunkView) -> list[str]:
     frame = model.conflict_of(hunk)
     if frame is not None:
         lines.append(f"{_label('EXIT')}   {frame.exit_kind.value} · {frame.exit_ref}")
+        lines.append(f"{_label('STATE')}  {UNRESOLVED}")
     lines.append("Neither side is retracted and neither is chosen here.")
     lines.append(READ_ONLY)
     return lines
+
+
+def _resolved_lines(model: MergeConflictReadModel) -> list[str]:
+    """Return how each cleared conflict was resolved: the delivery, its head and who asked."""
+    return [
+        f"{frame.key} resolved by {frame.cleared_by.generation_id}"
+        f" · head {frame.cleared_by.head_sha[:SHORT_SHA]}"
+        f" · asked by {frame.cleared_by.actor} · {clock_time(frame.cleared_at)}"
+        for frame in model.conflicts
+        if frame.cleared_by is not None and frame.cleared_at is not None
+    ]
 
 
 def _context(model: MergeConflictReadModel, hunk: HunkView | None) -> str:
@@ -105,7 +123,7 @@ def native_frame(view: View, model: MergeConflictReadModel) -> list[str]:
     hunk = model.hunk_at(cursor)
     total = len(model.hunks)
     title = f"MERGE CONFLICT · {dv.plural(total, 'hunk')}"
-    lines = _hunk_lines(model, hunk) if hunk is not None else [NO_CONFLICT]
+    lines = _hunk_lines(model, hunk) if hunk is not None else [NO_CONFLICT, *_resolved_lines(model)]
     return boxed(
         view,
         crumb="Eä ▸ … ▸ Git ▸ Conflict",

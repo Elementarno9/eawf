@@ -49,7 +49,9 @@ def render(view: View) -> list[str]:
             model,
             steps=("Evidence", "Rung"),
             what="rung",
-            unstated=[spec.name for spec in model.unproduced()],
+            # no rung of the claim ran over a held record, so every field the card states
+            # is unknown here
+            unstated=[spec.name for spec in model.specs[1:]],
             keys=pick("evidence.digest", "close"),
         )
     fx = view.fixture

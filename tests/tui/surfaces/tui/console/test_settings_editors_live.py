@@ -46,8 +46,8 @@ def _keys(*names: str, shift: bool = False) -> tuple[tuple[str, bool], ...]:
 SCRIPTS: tuple[Script, ...] = (
     (
         "check",
-        "acceptance.required_before_ship",
-        _keys("Enter", "ArrowRight", "ArrowRight", "ArrowRight", "ArrowRight", " "),
+        "runtime.adapters",
+        _keys("Enter", "ArrowRight", " "),
         _keys("Enter", "Enter"),
     ),
     (
@@ -129,7 +129,7 @@ def test_ui053_every_editor_writes_its_value_through_the_live_daemon_at_80x30(
 
     frames, reread = asyncio.run(body())
 
-    assert "[×] tests" in frames["check"]  # noqa: RUF001
+    assert "[×] codex" in frames["check"]  # noqa: RUF001
     assert "1 [×] codex" in frames["order"]  # noqa: RUF001
     assert "cheap   gpt-5.3-codex-spark" in frames["tiers"]
     assert "WRITES   agents.extra_tools at repo" in frames["rows"]
@@ -138,7 +138,7 @@ def test_ui053_every_editor_writes_its_value_through_the_live_daemon_at_80x30(
     assert reread.leaf("runtime.preference").source_layer is Layer.REPO
     assert reread.leaf("runtime.preference").effective.value == "[codex, claude-code]"
     written = yaml.safe_load((root / ".ea" / "config.yaml").read_text(encoding="utf-8"))
-    assert written["acceptance"]["required_before_ship"] == ["state", "tests"]
+    assert written["runtime"]["adapters"] == ["claude-code", "codex"]
     assert written["runtime"]["preference"] == ["codex", "claude-code"]
     assert written["runtime"]["models"]["codex"] == ["gpt-5.3-codex-spark", "gpt-5.5", "gpt-5.5"]
     assert written["agents"]["extra_tools"] == {"executor": ["LSP"]}

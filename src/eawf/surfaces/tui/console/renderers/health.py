@@ -17,6 +17,7 @@ from types import MappingProxyType
 from eawf.kernel.projection.truth import TruthState
 from eawf.kernel.projection.verification import HealthReadModel
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console.format import clock_time
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, g_pad, thin
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.read_model import (
@@ -83,6 +84,10 @@ _RECORD_OUTCOME: Mapping[str, str] = MappingProxyType(
 #: What the ``REPAIR`` readout says for a check that passes.
 NOTHING_TO_REPAIR = "∅ Nothing to repair · this check passes"
 
+#: What the LAST RESULT cell says for a stored health record: it carries no check time,
+#: only the conformance runner's stage records do.
+NO_CHECK_TIME = "no check time on a stored record"
+
 #: Where a named repair runs: this route only names it.
 REPAIR_LIVES = "Naming it happens here; running it lives in settings."
 
@@ -96,12 +101,14 @@ class HealthCheck:
         outcome: One of :data:`OUTCOMES`.
         reason: Why it stands where it does, as its producer worded it.
         producer: Who answered for the check.
+        last_result: When the check last ran, or why no time is stated.
     """
 
     name: str
     outcome: str
     reason: str
     producer: str
+    last_result: str
 
 
 def checks_of(model: HealthReadModel) -> list[HealthCheck]:
@@ -112,6 +119,7 @@ def checks_of(model: HealthReadModel) -> list[HealthCheck]:
             outcome=_VERDICT_OUTCOME.get(row.status, "unknown"),
             reason=row.detail or UNKNOWN_WORD,
             producer=row.producer.value or UNKNOWN_WORD,
+            last_result=clock_time(row.checked_at),
         )
         for row in model.tuples
     ]
@@ -124,6 +132,7 @@ def checks_of(model: HealthReadModel) -> list[HealthCheck]:
                 outcome=_RECORD_OUTCOME.get(stated.upper(), "unknown"),
                 reason=f"stored {stated}" if stated else "no result recorded",
                 producer=status.producer,
+                last_result=NO_CHECK_TIME,
             )
         )
     return found
@@ -179,7 +188,7 @@ def health_frame(view: View, model: HealthReadModel) -> list[str]:
     body = [label("CHECKS", checks_line(checks)), grid.head(heads)]
     for i, check in enumerate(checks):
         result = UNKNOWN_WORD if check.outcome == "unknown" else check.outcome
-        cells = [check.name, result, f"{check.reason} · {UNKNOWN_WORD}"]
+        cells = [check.name, result, f"{check.reason} · {check.last_result}"]
         body.append(grid.row([*cells, check.producer] if wide else cells, i == s.sel, w))
     if not checks:
         body.append(f"   {UNKNOWN_WORD} · no declared check has reported to this scope")

@@ -1,7 +1,8 @@
-"""``eawf campaign new|run|cancel`` forward to the native Campaign verbs.
+"""``eawf campaign new|run|budget|cancel`` forward to the native Campaign verbs.
 
 Each verb is a dispatch: ``new`` sends the brief to ``runtime.campaign.start``, ``run``
-names the Campaign to ``runtime.campaign.run``, and ``cancel`` resolves the Campaign's
+names the Campaign to ``runtime.campaign.run``, ``budget`` sets its limits through
+``runtime.campaign.budget.set``, and ``cancel`` resolves the Campaign's
 reference, then closes it through ``runtime.campaign.close`` at the caller's
 revision rather than the one it read. The daemon is
 replaced by a recorder, so nothing here reaches a socket.
@@ -37,6 +38,7 @@ def sent(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, dict[str, Any]]]:
         "runtime.campaign.run": {"campaign_key": "CAM-0001", "driving": True},
         "projection.campaign.view": {"campaign_ref": CAMPAIGN, "revision": 7},
         "runtime.campaign.close": {"record": {"status": "cancelled"}, "committed": True},
+        "runtime.campaign.budget.set": {"record": {"key": "CAM-0001"}, "committed": True},
     }
 
     def answer(method: str, params: dict[str, Any], **_options: Any) -> dict[str, Any]:
@@ -117,3 +119,40 @@ def test_campaign_cancel_closes_against_the_callers_revision(
         "to_status": "cancelled",
         "reason": "superseded",
     }
+
+
+def test_campaign_budget_sets_the_limits_against_the_callers_revision(
+    tmp_path: Path, sent: list[tuple[str, dict[str, Any]]]
+) -> None:
+    result = _invoke(
+        tmp_path, "budget", "CAM-0001", "--actor", "OP-0001", "--rounds", "8",
+        "--tokens", "90000", "--expected-revision", "9",
+    )  # fmt: skip
+    assert result.exit_code == exit_codes.OK, result.output
+    assert [method for method, _params in sent] == [
+        "projection.campaign.view",
+        "runtime.campaign.budget.set",
+    ]
+    assert sent[1][1] == {
+        "actor": "OP-0001",
+        "urn": CAMPAIGN,
+        "expected_revision": 9,
+        "limits": {"rounds": 8, "tokens": 90000},
+    }
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("--expected-revision", "9"),
+        ("--rounds", "0", "--expected-revision", "9"),
+        ("--rounds", "3"),
+    ],
+    ids=["no-limit", "zero-limit", "no-revision"],
+)
+def test_campaign_budget_without_a_limit_or_revision_sends_nothing(
+    tmp_path: Path, sent: list[tuple[str, dict[str, Any]]], args: tuple[str, ...]
+) -> None:
+    result = _invoke(tmp_path, "budget", "CAM-0001", "--actor", "OP-0001", *args)
+    assert result.exit_code != exit_codes.OK
+    assert sent == []

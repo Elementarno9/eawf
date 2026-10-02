@@ -202,10 +202,22 @@ def test_integration_conflict_keeps_both_sides_of_a_two_hunk_conflict() -> None:
     assert conflict.cleared_at is None
 
 
+#: The delivery a cleared conflict names as its resolution.
+CLEARANCE = {"generation_id": "ING-000003", "head_sha": "c" * 40, "actor": "OP-0001"}
+
+
 def test_integration_conflict_records_the_cleared_case() -> None:
-    conflict = IntegrationConflict.model_validate(_conflict(cleared_at=LATER))
+    conflict = IntegrationConflict.model_validate(_conflict(cleared_at=LATER, cleared_by=CLEARANCE))
 
     assert conflict.cleared_at == LATER
+    assert conflict.cleared_by is not None
+    assert conflict.cleared_by.generation_id == "ING-000003"
+
+
+@pytest.mark.parametrize("half", [{"cleared_at": LATER}, {"cleared_by": CLEARANCE}])
+def test_integration_conflict_refuses_half_a_clearance(half: dict[str, object]) -> None:
+    with pytest.raises(ValidationError, match="cleared_at and cleared_by together"):
+        IntegrationConflict.model_validate(_conflict(**half))
 
 
 def test_integration_conflict_is_immutable() -> None:

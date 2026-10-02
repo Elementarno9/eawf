@@ -89,7 +89,7 @@ def test_apply_config_is_idempotent_and_keeps_backup_local(
 
     assert (status, changed) == ("applied", 1)
     migrated = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    assert migrated["flow"] == {"advance_after": {"research": True}}
+    assert "flow" not in migrated
     assert list((tmp_path / ".ea" / "local" / "config-backups").glob("*.bak.*"))
     assert build_repair_plan(tmp_path).actions == []
 

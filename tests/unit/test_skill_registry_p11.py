@@ -19,14 +19,6 @@ import pytest
 from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
 from eawf.surfaces.render.skills import SKILL_REGISTRY
 
-_FLOW_STAGES: tuple[str, ...] = (
-    "research",
-    "prep",
-    "audit",
-    "polish",
-)
-
-
 #: The runtime-option flag tokens each registry skill's ``argument_hint``
 #: MUST advertise, so the hint an operator reads names every option the
 #: body documents.
@@ -44,13 +36,8 @@ def _spec(name: str):
     return next(s for s in SKILL_REGISTRY if s.skill_name == name)
 
 
-def test_flow_advance_after_covers_every_transition_default_false() -> None:
-    flow = BUILT_IN_DEFAULTS["flow"]
-    assert "advance_after" in flow
-    advance_after = flow["advance_after"]
-    assert set(advance_after) == set(_FLOW_STAGES)
-    for stage, value in advance_after.items():
-        assert value is False, f"flow.advance_after.{stage} should default to False"
+def test_flow_retired_advance_after_knobs_are_absent() -> None:
+    assert "advance_after" not in BUILT_IN_DEFAULTS["flow"]
 
 
 def test_flow_removed_ask_on_decisions_knob_is_absent() -> None:

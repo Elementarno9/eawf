@@ -1,0 +1,39 @@
+{
+  "number": 43,
+  "reviewDecision": "",
+  "reviews": [],
+  "state": "MERGED",
+  "statusCheckRollup": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-27T13:48:45Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/example/repo/actions/runs/1/job/1",
+      "name": "Classify changes since the last green tree",
+      "startedAt": "2026-09-27T13:48:32Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-27T14:15:35Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/example/repo/actions/runs/1/job/1",
+      "name": "Classify changes since the last green tree",
+      "startedAt": "2026-09-27T14:15:21Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-27T13:49:50Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/example/repo/actions/runs/1/job/1",
+      "name": "Console golden contract replay",
+      "startedAt": "2026-09-27T13:48:32Z",
+      "status": "COMPLETED",
+      "workflowName": "Console replay"
+    }
+  ],
+  "url": "https://github.com/example/repo/pull/43"
+}

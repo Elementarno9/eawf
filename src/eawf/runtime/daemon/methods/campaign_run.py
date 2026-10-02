@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.config.layered import get_dotted, merge_config, resolve_runtime_tier_models
 from eawf.kernel.spec.research import ResearchDepth, resolve_default_research_depth
-from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
+from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, MeasurementStatus
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import NonEmptyStr, PrincipalKey
 from eawf.kernel.state.epoch2.campaign import ResearchBudget, StepTitle
@@ -168,7 +168,9 @@ class HostResearchAgent:
             round_prompt(assignment), model=model, cwd=str(self._repo)
         )
         metered = price_spawn_result(result)
-        return parse_round_report(result.text, tokens=metered.input_tokens + metered.output_tokens)
+        observed = result.measurement_status is MeasurementStatus.USAGE_OBSERVED
+        tokens = metered.input_tokens + metered.output_tokens if observed else None
+        return parse_round_report(result.text, tokens=tokens)
 
 
 def round_prompt(assignment: StepAssignment) -> str:
@@ -188,12 +190,13 @@ def round_prompt(assignment: StepAssignment) -> str:
     )
 
 
-def parse_round_report(text: str, *, tokens: int) -> StepReport:
+def parse_round_report(text: str, *, tokens: int | None) -> StepReport:
     """Return the report a round's session answered with.
 
     Args:
         text: The session's final text.
-        tokens: The tokens the session consumed, as metered.
+        tokens: The tokens the session consumed, as metered; ``None`` when no reading
+            metered them.
 
     Returns:
         The validated report.

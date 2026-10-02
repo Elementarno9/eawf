@@ -265,7 +265,7 @@ def test_doctor_real_yaml_normalizes_legacy_auto_accept_in_memory(
     assert body["repair"]["preview_command"].endswith("doctor --fix")
 
 
-def test_doctor_real_yaml_accepts_consumed_repair_cycle_value(
+def test_doctor_real_yaml_leaves_a_retired_repair_cycle_value_to_the_repair_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)

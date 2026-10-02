@@ -1,8 +1,3 @@
-flow:
-  advance_after:
-    audit: true
-    polish: false
-    research: true
 planning:
   max_parallel_waves: 10
 profiles:

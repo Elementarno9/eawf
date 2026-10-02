@@ -160,6 +160,10 @@ GENERATION_STATUS: Final = "selected"
 #: The status a conflict line records.
 CONFLICT_STATUS: Final = "blocked"
 
+#: The status of the line that files how a conflict was resolved. It is filed under the
+#: conflict's own key, so the newest line of that key is where the conflict stands.
+CLEARED_STATUS: Final = "cleared"
+
 #: Opens the tree one integration call runs in, for one root and one
 #: Batch. The context manager it returns removes the tree on exit.
 IntegrationWorkspaceFactory = Callable[
@@ -531,17 +535,77 @@ def _append_generation(session: RootSession, generation: IntegrationGeneration) 
 
 
 def _append_conflict(session: RootSession, conflict: IntegrationConflict, *, at: datetime) -> None:
-    """File one conflict frame as a line of the Batch ledger."""
+    """File one conflict frame as a line of the Batch ledger, standing or cleared."""
     commit_ledger_append(
         session,
         LedgerRecord(
             collection=Epoch2Collection.BATCH,
             record_key=f"{conflict.id}-{conflict.batch_ref.entity_key}",
-            status=CONFLICT_STATUS,
+            status=CONFLICT_STATUS if conflict.cleared_at is None else CLEARED_STATUS,
             recorded_at=at,
             payload=conflict.model_dump(mode="json"),
         ),
     )
+
+
+def read_conflict_frames(path: Path, batch_ref: BatchUrn) -> tuple[IntegrationConflict, ...]:
+    """Return every conflict the Batch ledger at *path* holds for *batch_ref*, as it stands.
+
+    A conflict is read off the newest line of its key, so one cleared by a later delivery
+    reads cleared and one that blocked again after that reads standing.
+
+    Raises:
+        pydantic.ValidationError: A conflict line does not validate, which means the
+            ledger is corrupt.
+    """
+    wanted = str(batch_ref)
+    newest: dict[str, IntegrationConflict] = {}
+    for item in read_ledger_records(path):
+        if item.status in (CONFLICT_STATUS, CLEARED_STATUS) and (
+            item.payload.get("batch_ref") == wanted
+        ):
+            newest[item.record_key] = IntegrationConflict.model_validate(item.payload)
+    return tuple(newest.values())
+
+
+def _clear_standing_conflicts(
+    context: Epoch2RootContext,
+    generation: IntegrationGeneration,
+    *,
+    actor: str,
+    now: datetime,
+) -> int:
+    """File every conflict still blocking the Batch as resolved by *generation*.
+
+    Called once every planned delivery has landed: no candidate of the Batch is blocked
+    any more, so each standing frame is resolved by the head the Batch now stands at.
+
+    Returns:
+        How many conflicts were cleared.
+    """
+    batch_ref = generation.batch_ref
+    clearance = {
+        "cleared_at": now,
+        "cleared_by": {
+            "generation_id": generation.id,
+            "head_sha": generation.integrated_revision.head_sha,
+            "actor": actor,
+        },
+    }
+    with context.session([str(batch_ref)]) as session:
+        standing = [
+            conflict
+            for conflict in read_conflict_frames(
+                session.ledger_path(Epoch2Collection.BATCH), batch_ref
+            )
+            if conflict.cleared_at is None
+        ]
+        for conflict in standing:
+            cleared = IntegrationConflict.model_validate(
+                conflict.model_dump(mode="json") | clearance
+            )
+            _append_conflict(session, cleared, at=now)
+    return len(standing)
 
 
 def _derived_key(prefix: str, *parts: str) -> str:
@@ -719,6 +783,7 @@ def _run_plans(
     generations: list[str] = []
     messages: list[str] = []
     landed: RevisionBinding | None = None
+    head: IntegrationGeneration | None = None
     for planned in plans:
         plan = planned if landed is None else planned.model_copy(update={"target_base": landed})
         try:
@@ -741,11 +806,15 @@ def _run_plans(
                 conflict=conflict.model_dump(mode="json"),
             )
         assert outcome.generation is not None, "a delivered outcome carries its generation"
+        head = outcome.generation
         landed = outcome.generation.integrated_revision
         generations.append(outcome.generation.id)
         messages.append(plan.delivery.message)
+    assert head is not None, "an integration plans at least one delivery"
+    cleared = _clear_standing_conflicts(context, head, actor=args.actor, now=now)
     logger.info(
-        f"integrate_delivery delivered batch={args.urn.entity_key} generations={len(generations)}"
+        f"integrate_delivery delivered batch={args.urn.entity_key} "
+        f"generations={len(generations)} cleared={cleared}"
     )
     return _answer(
         plans,
@@ -1111,6 +1180,8 @@ async def _verify_batch(
 
 
 __all__ = [
+    "CLEARED_STATUS",
+    "CONFLICT_STATUS",
     "DELIVERY_INTEGRATE_METHOD",
     "DELIVERY_VERIFY_BATCH_METHOD",
     "BatchVerifyAnswer",
@@ -1121,6 +1192,7 @@ __all__ = [
     "integrate_delivery",
     "keyed_answer",
     "keyed_call",
+    "read_conflict_frames",
     "sealed_bundles",
     "verify_batch",
 ]

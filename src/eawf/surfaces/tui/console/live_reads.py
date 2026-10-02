@@ -31,22 +31,29 @@ from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, RouteProjection
 from eawf.kernel.projection.connection import ReplayNote
 from eawf.kernel.projection.integration import GIT_PR_ROUTE, MERGE_CONFLICT_ROUTE
 from eawf.kernel.projection.liveness import HeldLiveness
+from eawf.kernel.projection.operations import CRASH_RECOVERY_ROUTE
 from eawf.kernel.projection.registers import COST_CEILING_ROUTE
 from eawf.kernel.projection.run_timeline import RunTimeline
 from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE, content_refs
 from eawf.kernel.projection.verification import HEALTH_ROUTE, RuntimeTupleVerdict
+from eawf.kernel.runtime.boot_recovery import BootRecovery
 from eawf.kernel.runtime.content import ResolvedContent
 from eawf.kernel.runtime.dispatch_queue import DispatchQueueView
 from eawf.kernel.runtime.events import ChildRunPayload, QuestionActionPayload, RunEventRecord
 from eawf.kernel.state.epoch2.transitions import AmbiguityLabel
+from eawf.kernel.store.changes import ChangePage
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.methods.campaign import CAMPAIGN_ARTIFACT_METHOD, CAMPAIGN_VIEW_METHOD
 from eawf.runtime.daemon.methods.console_records import (
+    BOOT_RECOVERY_READ_METHOD,
     CONFLICT_FRAMES_READ_METHOD,
     GENERATIONS_READ_METHOD,
     HEALTH_VERDICTS_READ_METHOD,
+    HISTORY_CHANGES_READ_METHOD,
     PROOF_RECEIPTS_READ_METHOD,
+    REPOSITORY_READ_METHOD,
     TARGET_RESOLVE_METHOD,
+    BootRecoveryAnswer,
     ConflictFramesAnswer,
     GenerationsAnswer,
     HealthVerdictsAnswer,
@@ -63,6 +70,7 @@ from eawf.runtime.daemon.methods.run_content import (
 )
 from eawf.runtime.daemon.methods.run_liveness import RUN_STALLS_READ_METHOD, RunStallsAnswer
 from eawf.runtime.daemon.methods.spend import RUN_USAGE_READ_METHOD, SPEND_CEILING_READ_METHOD
+from eawf.runtime.vcs.repository_read import RepositoryAnswer
 from eawf.surfaces.tui.console.decisions import ArtifactRecord, DecisionRecords, campaign_records
 from eawf.surfaces.tui.console.open_records import (
     ATTENTION_ROUTE,
@@ -497,9 +505,24 @@ async def _fetch_verdicts(host: LiveReadHost, _address: str) -> tuple[RuntimeTup
     """Read the newest conformance verdict of every runtime tuple."""
     answer = HealthVerdictsAnswer.model_validate(await host.call(HEALTH_VERDICTS_READ_METHOD, {}))
     return tuple(
-        RuntimeTupleVerdict(check=item.check, reason_code=item.reason_code)
+        RuntimeTupleVerdict(
+            check=item.check, reason_code=item.reason_code, checked_at=item.checked_at
+        )
         for item in answer.verdicts
     )
+
+
+def _recovery_address(host: LiveReadHost) -> str | None:
+    """Return the Recovery route once its rows are held: the last start is the daemon's."""
+    if host.route != CRASH_RECOVERY_ROUTE or host.projection_for(CRASH_RECOVERY_ROUTE) is None:
+        return None
+    return CRASH_RECOVERY_ROUTE
+
+
+async def _fetch_boot_recovery(host: LiveReadHost, _address: str) -> BootRecovery | None:
+    """Read what the daemon's last start repaired and what that cost."""
+    answer = BootRecoveryAnswer.model_validate(await host.call(BOOT_RECOVERY_READ_METHOD, {}))
+    return answer.last
 
 
 def _batch_address(route: str) -> Callable[[LiveReadHost], str | None]:
@@ -531,6 +554,16 @@ async def _fetch_conflicts(host: LiveReadHost, urn: str) -> tuple[IntegrationCon
         await host.call(CONFLICT_FRAMES_READ_METHOD, {"urn": urn})
     )
     return answer.conflicts
+
+
+def _repository_address(host: LiveReadHost) -> str | None:
+    """Return the tree while the Git surface is on screen: the checkout is the tree's."""
+    return _TREE if host.route == GIT_PR_ROUTE else None
+
+
+async def _fetch_repository(host: LiveReadHost, _address: str) -> RepositoryAnswer:
+    """Read the tree's branch and the pull request open for it."""
+    return RepositoryAnswer.model_validate(await host.call(REPOSITORY_READ_METHOD, {}))
 
 
 def _receipt_address(host: LiveReadHost) -> str | None:
@@ -570,8 +603,14 @@ async def _fetch_resolution(host: LiveReadHost, key: str) -> str | None:
 #: The read the health route draws its runtime tuple rows from.
 HEALTH_VERDICTS_READ: Final = HEALTH_VERDICTS_READ_METHOD
 
+#: The read the Recovery frame draws the daemon's last start from.
+BOOT_RECOVERY_READ: Final = BOOT_RECOVERY_READ_METHOD
+
 #: The read the Git surface draws a Batch's generations from.
 GENERATIONS_READ: Final = GENERATIONS_READ_METHOD
+
+#: The read the Git surface draws the tree's branch, review and checks from.
+REPOSITORY_READ: Final = REPOSITORY_READ_METHOD
 
 #: The read the conflict card draws its frames and hunks from.
 CONFLICTS_READ: Final = CONFLICT_FRAMES_READ_METHOD
@@ -585,6 +624,53 @@ RESOLUTION_READ: Final = TARGET_RESOLVE_METHOD
 
 #: The grammar of a record key, ``PREFIX-body``.
 ENTITY_KEY: Final = re.compile(r"[A-Z][A-Z0-9]*-[A-Za-z0-9.-]+")
+
+HISTORY_ROUTE: Final = "history"
+HISTORY_DIFF_ROUTE: Final = "history.diff"
+
+#: The read History lists the tree's newest changes from.
+HISTORY_READ: Final = HISTORY_CHANGES_READ_METHOD
+
+#: The read the diff draws one record's changes from.
+HISTORY_DIFF_READ: Final = f"{HISTORY_CHANGES_READ_METHOD}@{HISTORY_DIFF_ROUTE}"
+
+
+def _history_address(host: LiveReadHost) -> str | None:
+    """Return the tree once History's rows are held: its feed is the whole tree's."""
+    if host.route != HISTORY_ROUTE or host.projection_for(HISTORY_ROUTE) is None:
+        return None
+    return _TREE
+
+
+async def _fetch_history(host: LiveReadHost, _address: str) -> ChangePage:
+    """Read the newest page of the tree's change feed."""
+    return ChangePage.model_validate(await host.call(HISTORY_CHANGES_READ_METHOD, {}))
+
+
+def diff_subject(subject: str | None, rows_keys: list[str]) -> str | None:
+    """Return the key the diff is about: its subject, else the first record held."""
+    if subject and ENTITY_KEY.fullmatch(subject):
+        return subject
+    return rows_keys[0] if rows_keys else None
+
+
+def _history_diff_address(host: LiveReadHost) -> str | None:
+    """Return the key of the record the diff is about, once the route's rows are held."""
+    held = host.projection_for(HISTORY_DIFF_ROUTE)
+    if host.route != HISTORY_DIFF_ROUTE or held is None:
+        return None
+    return diff_subject(host.subject, [row.key for row in held.rows])
+
+
+async def _fetch_record_history(host: LiveReadHost, key: str) -> ChangePage:
+    """Read the newest page of one record's changes."""
+    return ChangePage.model_validate(await host.call(HISTORY_CHANGES_READ_METHOD, {"key": key}))
+
+
+def held_changes(live: Mapping[str, object], name: str) -> ChangePage | None:
+    """Return the change page live read *name* holds, or ``None`` before its read."""
+    page = live.get(name)
+    return page if isinstance(page, ChangePage) else None
 
 
 #: Every live read, by the name the seam owes it under.
@@ -610,10 +696,18 @@ LIVE_READS: Final[Mapping[str, LiveRead]] = MappingProxyType(
         HEALTH_VERDICTS_READ: LiveRead(
             routes=frozenset({HEALTH_ROUTE}), address=_health_address, fetch=_fetch_verdicts
         ),
+        BOOT_RECOVERY_READ: LiveRead(
+            routes=frozenset({CRASH_RECOVERY_ROUTE}),
+            address=_recovery_address,
+            fetch=_fetch_boot_recovery,
+        ),
         GENERATIONS_READ: LiveRead(
             routes=frozenset({GIT_PR_ROUTE}),
             address=_batch_address(GIT_PR_ROUTE),
             fetch=_fetch_generations,
+        ),
+        REPOSITORY_READ: LiveRead(
+            routes=frozenset({GIT_PR_ROUTE}), address=_repository_address, fetch=_fetch_repository
         ),
         CONFLICTS_READ: LiveRead(
             routes=frozenset({MERGE_CONFLICT_ROUTE}),
@@ -636,6 +730,14 @@ LIVE_READS: Final[Mapping[str, LiveRead]] = MappingProxyType(
         DISPATCH_QUEUE_READ: LiveRead(
             routes=frozenset({UNATTENDED_ROUTE}), address=_tree_address, fetch=_fetch_dispatch_queue
         ),
+        HISTORY_READ: LiveRead(
+            routes=frozenset({HISTORY_ROUTE}), address=_history_address, fetch=_fetch_history
+        ),
+        HISTORY_DIFF_READ: LiveRead(
+            routes=frozenset({HISTORY_DIFF_ROUTE}),
+            address=_history_diff_address,
+            fetch=_fetch_record_history,
+        ),
         # the questions and pauses the Attention rows open, with what the daemon projected
         OPEN_RECORDS_READ: LiveRead(
             routes=frozenset({ATTENTION_ROUTE}),
@@ -648,6 +750,7 @@ LIVE_READS: Final[Mapping[str, LiveRead]] = MappingProxyType(
 
 __all__ = [
     "ARTIFACT_READ",
+    "BOOT_RECOVERY_READ",
     "CAMPAIGN_READ",
     "CAMPAIGN_ROUTES",
     "CEILING_READ",
@@ -655,10 +758,13 @@ __all__ = [
     "DISPATCH_QUEUE_READ",
     "GENERATIONS_READ",
     "HEALTH_VERDICTS_READ",
+    "HISTORY_DIFF_READ",
+    "HISTORY_READ",
     "LIVENESS_READ",
     "LIVENESS_ROUTES",
     "LIVE_READS",
     "RECEIPTS_READ",
+    "REPOSITORY_READ",
     "RESOLUTION_READ",
     "RUN_TIMELINE_READ",
     "RUN_USAGE_ROUTE",
@@ -671,6 +777,8 @@ __all__ = [
     "LiveRead",
     "LiveReadHost",
     "counted_replay",
+    "diff_subject",
+    "held_changes",
     "held_queue",
     "held_records",
 ]

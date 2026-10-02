@@ -58,8 +58,8 @@ AGENT: Final[dict[str, Any]] = {
     "run_ref": RUN,
 }
 AXIS: Final[dict[str, Any]] = {
-    "key": "audit.default_level",
-    "values": {"ask": "quick", "auto": "deep"},
+    "key": "research.default_depth",
+    "values": {"ask": "shallow", "auto": "exhaustive"},
 }
 
 
@@ -71,7 +71,7 @@ def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tempfile, "tempdir", str(scratch))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.delenv("EAWF_PREFERENCES__AUTO_CHOOSE", raising=False)
-    monkeypatch.delenv("EAWF_AUDIT__DEFAULT_LEVEL", raising=False)
+    monkeypatch.delenv("EAWF_RESEARCH__DEFAULT_DEPTH", raising=False)
 
 
 @pytest.fixture
@@ -278,12 +278,12 @@ def test_surf_038_the_repository_configuration_picks_the_recommendation(
     canary: CanaryProvision, tmp_path: Path
 ) -> None:
     """The asker recommends ``auto``; the repository's value is ``ask``'s, so it is recommended."""
-    configure(canary, audit={"default_level": "quick"})
+    configure(canary, research={"default_depth": "shallow"})
     opened = open_decision(canary, tmp_path, config_axis=AXIS)
 
     row = filed(canary)["ACT-0001"]
     assert row["recommended_option_id"] == "ask"
-    assert "audit.default_level to quick" in row["recommendation_rationale"]
+    assert "research.default_depth to shallow" in row["recommendation_rationale"]
     first = opened["host_question"]["options"][0]
     assert first["option_id"] == "ask"
     assert first["description"].startswith("Recommended.")
@@ -292,8 +292,8 @@ def test_surf_038_the_repository_configuration_picks_the_recommendation(
 def test_surf_038_a_configured_value_no_option_honours_is_refused(
     canary: CanaryProvision, tmp_path: Path
 ) -> None:
-    """Error path: the configuration says ``standard``, which no option stands for."""
-    configure(canary, audit={"default_level": "standard"})
+    """Error path: the configuration says ``deep``, which no option stands for."""
+    configure(canary, research={"default_depth": "deep"})
 
     with pytest.raises(DaemonValidationError, match="config_value_unhonoured"):
         open_decision(canary, tmp_path, config_axis=AXIS)

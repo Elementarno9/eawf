@@ -32,6 +32,11 @@ from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, RECONNECT_ME
 from eawf.kernel.projection.run_timeline import reduce_timeline
 from eawf.kernel.runtime.dispatch_queue import DispatchControl, DispatchPlan, DispatchQueueView
 from eawf.kernel.runtime.events import RunEventRecord
+from eawf.kernel.store.changes import ChangePage
+from eawf.runtime.daemon.methods.console_records import (
+    BOOT_RECOVERY_READ_METHOD,
+    HISTORY_CHANGES_READ_METHOD,
+)
 from eawf.runtime.daemon.methods.dispatch_queue import DISPATCH_QUEUE_READ_METHOD
 from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
 from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD
@@ -198,6 +203,9 @@ class DocumentDaemon:
         """Answer a console live read the document settles, or ``None`` for any other call."""
         if method == RUN_STALLS_READ_METHOD:
             return {"stalls": [], "read_at": bodies.AT.isoformat()}
+        if method == BOOT_RECOVERY_READ_METHOD:
+            # no daemon start of this document recorded a recovery
+            return {"last": None}
         if method in (QUESTION_READ_METHOD, PAUSE_READ_METHOD):
             # the document holds no question or pause these journeys walk
             return {}
@@ -205,6 +213,9 @@ class DocumentDaemon:
             return self._run_usage(RunUsageReadParams.model_validate(params).urn.entity_key)
         if method == SPEND_CEILING_READ_METHOD:
             return self._ceiling()
+        if method == HISTORY_CHANGES_READ_METHOD:
+            # the document was written whole, never through a commit, so no change is on file
+            return ChangePage().model_dump(mode="json")
         if method == DISPATCH_QUEUE_READ_METHOD:
             # no Run of the document was ever dispatched, so none carries a sealed budget
             return DispatchQueueView(

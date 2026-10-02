@@ -14,8 +14,6 @@ Plus the C04a ship-pipeline gates:
 - Audit-verdict gate: a recorded ``major`` / missing verdict for the
   shipped phase blocks ship; ``pass`` / ``minor`` clears it.
 - Co-author trailer is appended to each commit-group message.
-- Merge-method gate: rebase / merge clear; ``squash`` is rejected unless
-  ``vcs.squash_allowed`` is set.
 """
 
 from __future__ import annotations
@@ -244,17 +242,6 @@ def _write_state_with_audit(
         "indexes": {},
     }
     (state_dir / "state.json").write_text(json.dumps(payload), encoding="utf-8")
-
-
-def _write_repo_config(state_dir: Path, *, vcs_overrides: dict) -> None:
-    """Write a ``.ea/config.yaml`` repo overlay carrying *vcs_overrides*.
-
-    Only the ``vcs`` leaves under test are written; the layered merge fills
-    every other leaf from the built-in defaults.
-    """
-    import yaml
-
-    (state_dir / "config.yaml").write_text(yaml.safe_dump({"vcs": vcs_overrides}), encoding="utf-8")
 
 
 def test_ship_default_no_commit_no_push_no_pr(state_dir: Path) -> None:
@@ -516,56 +503,22 @@ def test_ship_no_commit_group_when_commit_flag_absent(state_dir: Path) -> None:
     assert body.commit_groups == []
 
 
-# ---- C04a: merge-method gate ------------------------------------------------
-
-
-def test_ship_merge_method_default_merge_allowed(state_dir: Path) -> None:
-    """The built-in default (``merge``) clears the merge-method gate."""
-    env = run_skill(ShipSkill(), _ctx())
-    assert env.header.status == "ok"
-
-
-def test_ship_merge_method_rebase_allowed(state_dir: Path) -> None:
-    """An explicit ``rebase`` method clears the gate."""
-    _write_repo_config(state_dir, vcs_overrides={"pr_merge_method": "rebase"})
-    env = run_skill(ShipSkill(), _ctx())
-    assert env.header.status == "ok"
-
-
-def test_ship_merge_method_squash_rejected_when_not_allowed(state_dir: Path) -> None:
-    """``squash`` is rejected unless ``vcs.squash_allowed`` is set."""
-    _write_repo_config(
-        state_dir, vcs_overrides={"pr_merge_method": "squash", "squash_allowed": False}
-    )
-    env = run_skill(ShipSkill(), _ctx())
-    assert env.header.status == "failed"
-    assert env.footer.repair_commands == [
-        "set vcs.pr_merge_method to rebase (or enable vcs.squash_allowed)"
-    ]
-
-
-def test_ship_merge_method_squash_allowed_when_opted_in(state_dir: Path) -> None:
-    """``squash`` clears the gate when ``vcs.squash_allowed`` is true."""
-    _write_repo_config(
-        state_dir, vcs_overrides={"pr_merge_method": "squash", "squash_allowed": True}
-    )
-    env = run_skill(ShipSkill(), _ctx())
-    assert env.header.status == "ok"
-
-
 # ---- P27-I02-W15: gauntlet gate ---------------------------------------------
 
 
-def _write_acceptance_config(state_dir: Path, *, acceptance_overrides: dict) -> None:
-    """Write a ``.ea/config.yaml`` repo overlay carrying *acceptance_overrides*.
+def _use_acceptance(monkeypatch: pytest.MonkeyPatch, *, acceptance_overrides: dict) -> None:
+    """Hand the ship skill an ``acceptance`` surface carrying *acceptance_overrides*.
 
-    Only the ``acceptance`` leaves under test are written; the layered merge
-    fills every other leaf from the built-in defaults.
+    The ``acceptance`` leaves are retired from the layered config, so a layer file
+    stating them is stripped on load; the surface is injected at the loader instead.
     """
-    import yaml
+    from eawf.workflow.skills import ship as ship_module
+    from eawf.workflow.skills.ship import AcceptanceConfig
 
-    (state_dir / "config.yaml").write_text(
-        yaml.safe_dump({"acceptance": acceptance_overrides}), encoding="utf-8"
+    monkeypatch.setattr(
+        ship_module,
+        "_load_acceptance_config",
+        lambda _state_path: AcceptanceConfig.model_validate(acceptance_overrides),
     )
 
 
@@ -619,8 +572,8 @@ def test_action_gauntlet_all_green_proceeds(
     """All gates green → ship proceeds past the gauntlet (status=ok)."""
     from eawf.workflow.skills import ship as ship_module
 
-    _write_acceptance_config(
-        state_dir,
+    _use_acceptance(
+        monkeypatch,
         acceptance_overrides={"required_before_ship": ["pre-commit", "lint", "typecheck", "tests"]},
     )
     calls, runner = _stub_gate_runner()
@@ -637,8 +590,8 @@ def test_action_gauntlet_aborts_on_red_pytest(
     """An injected red ``tests`` gate aborts ship and is reported."""
     from eawf.workflow.skills import ship as ship_module
 
-    _write_acceptance_config(
-        state_dir,
+    _use_acceptance(
+        monkeypatch,
         acceptance_overrides={"required_before_ship": ["tests"]},
     )
     _calls, runner = _stub_gate_runner(fail={"tests"})
@@ -662,8 +615,8 @@ def test_action_gauntlet_each_gate_independently_reported(
         ("typecheck", "uv run mypy ."),
         ("tests", "uv run pytest"),
     ):
-        _write_acceptance_config(
-            state_dir,
+        _use_acceptance(
+            monkeypatch,
             acceptance_overrides={"required_before_ship": [gate]},
         )
         _calls, runner = _stub_gate_runner(fail={gate})
@@ -681,8 +634,8 @@ def test_action_gauntlet_red_gate_emits_gate_failure_payload(
     """A red gate emits a ``ship.gauntlet_gate`` event with the gate shape."""
     from eawf.workflow.skills import ship as ship_module
 
-    _write_acceptance_config(
-        state_dir,
+    _use_acceptance(
+        monkeypatch,
         acceptance_overrides={"required_before_ship": ["lint", "tests"]},
     )
     _calls, runner = _stub_gate_runner(fail={"tests"})
@@ -709,8 +662,8 @@ def test_action_gauntlet_uses_configured_command_override(
     """A configured ``acceptance.commands.tests`` override is the run command."""
     from eawf.workflow.skills import ship as ship_module
 
-    _write_acceptance_config(
-        state_dir,
+    _use_acceptance(
+        monkeypatch,
         acceptance_overrides={
             "commands": {"tests": "uv run pytest tests/fast -q"},
             "required_before_ship": ["tests"],
@@ -743,8 +696,8 @@ def test_run_gauntlet_runs_configured_build_gate(
     """
     from eawf.workflow.skills import ship as ship_module
 
-    _write_acceptance_config(
-        state_dir,
+    _use_acceptance(
+        monkeypatch,
         acceptance_overrides={
             "commands": {"build": "uv run python -m build"},
             "required_before_ship": ["build"],
@@ -763,8 +716,8 @@ def test_run_gauntlet_build_gate_uses_configured_command(
     """The resolved ``build`` command is the one passed to the runner."""
     from eawf.workflow.skills import ship as ship_module
 
-    _write_acceptance_config(
-        state_dir,
+    _use_acceptance(
+        monkeypatch,
         acceptance_overrides={
             "commands": {"build": "uv run python -m build --sdist"},
             "required_before_ship": ["build"],
@@ -790,8 +743,8 @@ def test_action_gauntlet_aborts_on_red_build_gate(
     """A failing ``build`` gate aborts the ship and surfaces its command."""
     from eawf.workflow.skills import ship as ship_module
 
-    _write_acceptance_config(
-        state_dir,
+    _use_acceptance(
+        monkeypatch,
         acceptance_overrides={
             "commands": {"build": "uv run python -m build"},
             "required_before_ship": ["build"],
@@ -817,8 +770,8 @@ def test_run_gauntlet_unconfigured_build_gate_is_dropped(
     """
     from eawf.workflow.skills import ship as ship_module
 
-    _write_acceptance_config(
-        state_dir,
+    _use_acceptance(
+        monkeypatch,
         acceptance_overrides={"required_before_ship": ["build"]},
     )
     calls, runner = _stub_gate_runner()
@@ -838,8 +791,8 @@ def test_run_gauntlet_defaults_lead_then_build(
     """
     from eawf.workflow.skills import ship as ship_module
 
-    _write_acceptance_config(
-        state_dir,
+    _use_acceptance(
+        monkeypatch,
         acceptance_overrides={
             "commands": {"build": "uv run python -m build"},
             "required_before_ship": ["build", "tests", "lint"],
@@ -983,15 +936,15 @@ def test_ship_gauntlet_scoped_flag_honoured(state_dir: Path) -> None:
     assert _ship_record_payload(state_dir)["gauntlet"] == "scoped"
 
 
-def test_ship_gauntlet_from_config_leaf(state_dir: Path) -> None:
-    """The ``ship.gauntlet`` config leaf drives the mode when no flag is set."""
+def test_ship_gauntlet_ignores_the_retired_config_leaf(state_dir: Path) -> None:
+    """A layer still stating the retired ``ship.gauntlet`` leaf is stripped on load."""
     import yaml
 
     (state_dir / "config.yaml").write_text(
         yaml.safe_dump({"ship": {"gauntlet": "scoped"}}), encoding="utf-8"
     )
     run_skill(ShipSkill(), _ctx())
-    assert _ship_record_payload(state_dir)["gauntlet"] == "scoped"
+    assert _ship_record_payload(state_dir)["gauntlet"] == "full"
 
 
 def test_ship_gauntlet_unknown_records_warning_and_falls_back(state_dir: Path) -> None:

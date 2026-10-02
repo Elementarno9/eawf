@@ -244,6 +244,13 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
         tier=StorageTier.LEDGER,
     ),
     _row(
+        ".ea/generations/gen-*/history/*.jsonl",
+        _YES,
+        "one generation's append-only change feed of committed definitions; the feed of "
+        "Runs and in-flight Task status sits under its local/",
+        tier=StorageTier.LEDGER,
+    ),
+    _row(
         ".ea/generations/gen-*/indexes/**",
         _NO,
         "one generation's offset indexes; they regenerate from its ledgers",

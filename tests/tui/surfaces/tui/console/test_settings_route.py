@@ -8,7 +8,7 @@ Requirement rows proved here, by id:
 - ``UI-053``: ``settings.stack`` renders every layer's value or absence with its kind and
   a template place, the winner, the lens and one sentence, then the second tier only
   when stated; the effective revision sits in its head and it is total at 80 columns.
-- ``UI-057``: Settings is one route whose rail lists six alphabetical categories filing
+- ``UI-057``: Settings is one route whose rail lists five alphabetical categories filing
   every catalog section exactly once, with the writable chain, the per-key glyph and a
   docked readout, Tab and Shift-Tab over sections, Escape leaving an edit first, and the
   packet's keybar.
@@ -84,7 +84,7 @@ SIZES = ((80, 24), (120, 30), (160, 40))
 #: A bool the catalog lets global, workspace and repo write, and no other layer.
 BOOL_KEY = "research.auto_save"
 #: A literal with three allowed values, writable at global, workspace and repo.
-LITERAL_KEY = "audit.default_level"
+LITERAL_KEY = "estimation.eu_basis"
 #: An int writable at global, workspace and repo, whose default has two digits.
 INT_KEY = "estimation.eu_minutes"
 #: A list writable at all five file layers.
@@ -281,7 +281,7 @@ def test_ui052_no_settings_frame_names_a_layer_the_enum_lacks(tree: Path, fixtur
     assert _layer_cells(rows) == list(LAYER_ORDER)
 
 
-# ---------- UI-057: one route, six categories, every catalog section once ----------
+# ---------- UI-057: one route, five categories, every catalog section once ----------
 
 
 def test_ui057_every_catalog_section_is_filed_exactly_once() -> None:
@@ -303,17 +303,19 @@ def test_ui057_the_assignment_lint_names_each_way_it_fails() -> None:
     )
 
 
-def test_ui057_the_rail_lists_six_alphabetical_categories_and_their_sections(tree: Path) -> None:
+def test_ui057_the_rail_lists_five_alphabetical_categories_and_their_sections(tree: Path) -> None:
     """Categories and sections are alphabetical, and every section appears once."""
     view = _view(tree)
     names = [category.name for category in view.rail]
 
-    assert names == ["execution", "identity", "interface", "quality", "safety", "system"]
+    assert names == ["execution", "identity", "interface", "quality", "system"]
     for category in view.rail:
         assert list(category.sections) == sorted(category.sections)
     sections = view.sections()
     assert len(sections) == len(set(sections))
-    assert set(sections) == {entry.domain for entry in LEAF_KEY_REGISTRY.values()}
+    assert set(sections) == {
+        entry.domain for entry in LEAF_KEY_REGISTRY.values() if not entry.reserved
+    }
 
 
 def test_ui057_a_rail_name_is_never_clipped(tree: Path, fixture: Fixture) -> None:
@@ -362,7 +364,7 @@ def test_ui057_the_readout_names_type_meaning_and_allowed_values(
     view = _view(tree)
     body = "\n".join(_frame(fixture, view, _on(_session(), view, LITERAL_KEY), w=120, h=30))
 
-    assert "default_level · literal · one of quick | standard | deep" in body
+    assert "eu_basis · literal · one of api_duration | tokens | wall_clock" in body
     assert LEAF_KEY_REGISTRY[LITERAL_KEY].description[:40] in body
 
 
@@ -556,9 +558,9 @@ def test_edit_the_chooser_previews_the_write_before_it_is_sent(
     body = "\n".join(_frame(fixture, view, session, w=120, h=30))
 
     assert f"WRITES   {LITERAL_KEY} at repo · <repo>/.ea/config.yaml" in body
-    assert "AFTER    deep from repo becomes the value in force" in body
-    assert "▸ ○ deep" in body
-    assert "● standard" in body
+    assert "AFTER    tokens from repo becomes the value in force" in body
+    assert "▸ ○ tokens" in body
+    assert "● api_duration" in body
     assert _frame(fixture, view, session, w=120, h=30)[-1].strip().startswith("↑↓ choose")
 
 
@@ -566,14 +568,14 @@ def test_edit_a_shadowed_write_says_it_changes_nothing_in_force(
     tree: Path, fixture: Fixture
 ) -> None:
     """A write under a higher layer is previewed as inert, not as a change."""
-    _write(tree / ".ea" / "local" / "config.yaml", "audit:\n  default_level: quick\n")
+    _write(tree / ".ea" / "local" / "config.yaml", "estimation:\n  eu_basis: wall_clock\n")
     view = _view(tree)
     session = _on(_session(), view, LITERAL_KEY)
 
     _press(fixture, view, session, ["Enter"])
     body = "\n".join(_frame(fixture, view, session, w=120, h=30))
 
-    assert "changes nothing in force · the local layer above repo holds quick" in body
+    assert "changes nothing in force · the local layer above repo holds wall_clock" in body
 
 
 def test_edit_enter_sends_a_typed_request_and_holds_no_optimistic_value(
@@ -613,7 +615,7 @@ def test_edit_a_value_the_type_refuses_is_not_sent(tree: Path, fixture: Fixture)
 
 def test_edit_x_unsets_only_what_the_lens_layer_states(tree: Path, fixture: Fixture) -> None:
     """Nothing at the lens is nothing to unset; a stated value is sent as an unset."""
-    _write(tree / ".ea" / "config.yaml", "audit:\n  default_level: deep\n")
+    _write(tree / ".ea" / "config.yaml", "estimation:\n  eu_basis: tokens\n")
     view = _view(tree)
     link = _Link()
     session = _on(_session(), view, LITERAL_KEY)
@@ -626,7 +628,7 @@ def test_edit_x_unsets_only_what_the_lens_layer_states(tree: Path, fixture: Fixt
     session.lens = "repo"
     _press(fixture, view, session, ["x", "Enter"], send=link)
     assert link.sent == [SettingRequest(target=LITERAL_KEY, layer="repo", unset=True)]
-    assert "falls back to built-in standard" in session.log[1].note
+    assert "falls back to built-in api_duration" in session.log[1].note
 
 
 def test_edit_without_a_daemon_link_writes_nothing_and_says_so(
@@ -742,21 +744,21 @@ def test_edit_end_to_end_the_daemon_writes_the_layer_and_the_frame_shows_its_rer
 
     assert result.status is OperationStatus.APPLIED
     assert yaml.safe_load((tree / ".ea" / "config.yaml").read_text()) == {
-        "audit": {"default_level": "deep"}
+        "estimation": {"eu_basis": "tokens"}
     }
     assert asked == [SETTINGS_READ_METHOD, SETTING_SET_METHOD, SETTINGS_READ_METHOD]
     held = seam.settings
     assert held is not None
     assert held.leaf(LITERAL_KEY).source_layer is Layer.REPO
-    row = next(r for r in _frame(fixture, held, session) if "default_level" in r)
-    assert "deep" in row
+    row = next(r for r in _frame(fixture, held, session) if "eu_basis" in r)
+    assert "tokens" in row
     assert "repo" in row
 
     _press(fixture, held, session, ["Escape", "x", "Enter"], send=link)
     removed = asyncio.run(seam.request(link.sent[1]))
 
     assert removed.status is OperationStatus.APPLIED
-    assert "audit" not in (yaml.safe_load((tree / ".ea" / "config.yaml").read_text()) or {})
+    assert "estimation" not in (yaml.safe_load((tree / ".ea" / "config.yaml").read_text()) or {})
     assert seam.settings is not None
     assert seam.settings.leaf(LITERAL_KEY).source_layer is Layer.BUILT_IN
 

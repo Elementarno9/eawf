@@ -18,17 +18,26 @@ A promotable claim clears rung 1 and rung 4 on the automated path and
 keeps the evidence rung 4 entailed it with. Rung 3 alone never promotes,
 and an attested rung 4 -- a sign-off with no automated check behind it --
 attests without certifying.
+
+What rungs 2 and 4 check is named on the claim itself: rung 2 checks the
+spans the claim anchors its references to, and rung 4 reads the gate
+receipt the claim names as its deterministic proof. A claim that names
+neither leaves those rungs with nothing to run, which is unknown rather
+than failed.
 """
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable, Mapping
 from enum import StrEnum
+from pathlib import PurePosixPath
 from types import MappingProxyType
 from typing import Annotated, Final, Literal, Self
 
-from pydantic import ConfigDict, Field, StringConstraints, model_validator
+from pydantic import AfterValidator, ConfigDict, Field, StringConstraints, model_validator
 
+from eawf.kernel.identity import EntityKind, validate_entity_key
 from eawf.kernel.state.epoch2.base import (
     Epoch2Model,
     Sha256DigestStr,
@@ -60,6 +69,38 @@ RUNG_QUESTIONS: Final[Mapping[int, str]] = MappingProxyType(
         4: "Does the reference entail the claim under the deterministic arm?",
     }
 )
+
+
+def _repo_path(value: str) -> str:
+    """Admit a repository-relative POSIX path that cannot leave the repository.
+
+    Raises:
+        ValueError: The path is absolute, carries a backslash or drive colon, or steps
+            up through ``..``.
+    """
+    if value.startswith("/") or "\\" in value or ":" in value:
+        raise ValueError(f"{value!r} is not a repository-relative POSIX path")
+    if ".." in PurePosixPath(value).parts:
+        raise ValueError(f"{value!r} steps out of the repository")
+    return value
+
+
+#: A repository-relative POSIX path, so a span can only ever be read from inside the
+#: repository.
+RepoPath = Annotated[
+    str,
+    StringConstraints(strict=True, min_length=1, max_length=400),
+    AfterValidator(_repo_path),
+]
+
+
+def _receipt_key(value: str) -> str:
+    """Admit only a canonical ``RCP-####`` receipt key."""
+    return validate_entity_key(EntityKind.RECEIPT, value)
+
+
+#: The ``RCP-####`` key of a filed gate receipt.
+ReceiptRef = Annotated[str, StringConstraints(strict=True), AfterValidator(_receipt_key)]
 
 #: The literal finding of a rung that started and has not returned.
 UNKNOWN_FINDING: Final = "no outcome yet - unknown, not failed"
@@ -205,6 +246,61 @@ class EvidenceRungRecord(Epoch2Model):
         return "refutes"
 
 
+def span_digest(text: str) -> str:
+    """Return the ``sha256:`` digest of a span's text, the form an anchor digest takes."""
+    return f"sha256:{hashlib.sha256(text.encode('utf-8')).hexdigest()}"
+
+
+class SpanAnchor(Epoch2Model):
+    """One span of a repository file a cited reference points into, and its digest.
+
+    Attributes:
+        evidence_ref: The cited evidence record the span belongs to.
+        path: The file, relative to the repository root.
+        start_line: The span's first line, counted from one.
+        end_line: The span's last line, inclusive.
+        anchor_digest: :func:`span_digest` of the span's lines joined by newlines, as
+            the claim's writer read them.
+
+    Raises:
+        pydantic.ValidationError: The span ends before it starts, or the path leaves
+            the repository.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    evidence_ref: EvidenceUrn
+    path: RepoPath
+    start_line: StrictPositiveInt
+    end_line: StrictPositiveInt
+    anchor_digest: Sha256DigestStr
+
+    @model_validator(mode="after")
+    def _span_runs_forward(self) -> Self:
+        """Refuse a span that ends before it starts.
+
+        Raises:
+            ValueError: ``end_line`` precedes ``start_line``.
+        """
+        if self.end_line < self.start_line:
+            raise ValueError(f"the span ends at line {self.end_line}, before {self.start_line}")
+        return self
+
+
+def require_cited_anchors(
+    evidence_refs: Iterable[EvidenceUrn], anchors: Iterable[SpanAnchor]
+) -> None:
+    """Refuse an anchor into a record the claim does not cite.
+
+    Raises:
+        ValueError: An anchor's evidence record is not among *evidence_refs*.
+    """
+    cited = {str(ref) for ref in evidence_refs}
+    for anchor in anchors:
+        if str(anchor.evidence_ref) not in cited:
+            raise ValueError(f"an anchor belongs to {anchor.evidence_ref}, which is not cited")
+
+
 #: The lifecycle a filed claim stands at: open until a promotion clears it.
 ClaimStatus = Literal["OPEN", "SUPPORTED"]
 
@@ -231,11 +327,15 @@ class ClaimFiling(Epoch2Model):
         implication: What the claim buys if it stands, printed as ``IT PROVES``.
         falsifier: What observation would take it away, printed as ``BREAKS IF``.
         evidence_refs: The evidence records the claim cites.
+        anchors: The spans the cited records point into, which rung 2 checks.
+        gate_receipt: The receipt of the gate whose result proves the claim, which
+            rung 4 reads; ``None`` for a claim no deterministic gate measures.
         recorded_at: When it was filed.
 
     Raises:
         pydantic.ValidationError: The key is not the address's entity key, the address
-            names a rung, or a prose field is over its bound.
+            names a rung, a prose field is over its bound, or an anchor belongs to a
+            record the claim does not cite.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -249,19 +349,23 @@ class ClaimFiling(Epoch2Model):
     implication: ClaimProse | None = None
     falsifier: ClaimProse | None = None
     evidence_refs: tuple[EvidenceUrn, ...] = ()
+    anchors: tuple[SpanAnchor, ...] = ()
+    gate_receipt: ReceiptRef | None = None
     recorded_at: UtcDatetime
 
     @model_validator(mode="after")
     def _key_is_the_address(self) -> Self:
-        """Refuse a filing whose key and address disagree.
+        """Refuse a filing whose key and address disagree, or that anchors an uncited record.
 
         Raises:
-            ValueError: The address names a rung, or keys another claim.
+            ValueError: The address names a rung, keys another claim, or an anchor
+                belongs to a record the claim does not cite.
         """
         if self.urn.rung is not None:
             raise ValueError("a claim is filed under its own address, not one of its rungs")
         if self.urn.entity_key != self.key:
             raise ValueError(f"{self.key} is filed under {self.urn.entity_key}'s address")
+        require_cited_anchors(self.evidence_refs, self.anchors)
         return self
 
 
@@ -346,8 +450,13 @@ __all__ = [
     "ClaimStatus",
     "EvidenceInput",
     "EvidenceRungRecord",
+    "ReceiptRef",
+    "RepoPath",
     "RungBasis",
     "RungOutcome",
+    "SpanAnchor",
     "latest_rungs",
     "promotion_blockers",
+    "require_cited_anchors",
+    "span_digest",
 ]

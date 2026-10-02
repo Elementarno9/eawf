@@ -98,8 +98,6 @@ class VcsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     checkpoint_requires_commit: bool
-    pr_merge_method: str
-    squash_allowed: bool
     integration_commit_unit: IntegrationCommitUnit = "batch"
     task_reference: TaskReference = "trailer"
     conventions: VcsConventionsConfig = Field(default_factory=VcsConventionsConfig)

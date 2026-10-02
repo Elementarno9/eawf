@@ -599,3 +599,42 @@ def test_campaign_drives_repro_same_key_in_two_trees_collide(
 
     assert [view.key for view in views] == ["CAM-0001", "CAM-0001"]
     assert [view.status.value for view in views] == ["converged", "converged"]
+
+
+class UnmeteredAgent(StubAgent):
+    """Works every round like the stub, but no reading metered its tokens."""
+
+    async def work(self, assignment: StepAssignment) -> StepReport:
+        report = await super().work(assignment)
+        return report.model_copy(update={"tokens": None})
+
+
+def test_a_round_no_reading_metered_charges_no_tokens_and_marks_the_axis_unmetered(
+    canary: CanaryProvision, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unmetered = UnmeteredAgent()
+    monkeypatch.setattr(campaign_run, "research_agent_for", lambda *_args: unmetered)
+    budget = {
+        "axes": [
+            {"axis_kind": "rounds", "limit": 5, "unit": "rounds"},
+            {"axis_kind": "tokens", "limit": 1000, "unit": "tokens"},
+        ]
+    }
+
+    async def body() -> CampaignView:
+        async with served(canary, tmp_path) as client:
+            started = await client.call(
+                CAMPAIGN_START_METHOD, **_start(canary.root, depth="shallow", budget=budget)
+            )
+            return await _settled(client, canary.root, started["record"]["key"])
+
+    view = asyncio.run(body())
+
+    rounds, tokens = view.evidence_budget.axes
+    assert (rounds.spent, rounds.spent_quality) == (2, "measured")
+    assert (tokens.spent, tokens.spent_quality) == (0, "unavailable")
+
+
+def test_a_round_report_without_a_metered_count_carries_none() -> None:
+    text = '```json\n{"report": "# R", "outcome": "held"}\n```'
+    assert parse_round_report(text, tokens=None).tokens is None

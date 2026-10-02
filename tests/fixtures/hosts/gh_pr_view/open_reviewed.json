@@ -1,0 +1,117 @@
+{
+  "number": 418,
+  "reviewDecision": "CHANGES_REQUESTED",
+  "reviews": [
+    {
+      "id": "PRR_1",
+      "author": {
+        "login": "reviewer-a"
+      },
+      "authorAssociation": "MEMBER",
+      "body": "",
+      "submittedAt": "2026-09-30T10:00:00Z",
+      "includesCreatedEdit": false,
+      "reactionGroups": [],
+      "state": "CHANGES_REQUESTED",
+      "commit": {
+        "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "PRR_2",
+      "author": {
+        "login": "reviewer-b"
+      },
+      "authorAssociation": "MEMBER",
+      "body": "lgtm",
+      "submittedAt": "2026-09-30T11:00:00Z",
+      "includesCreatedEdit": false,
+      "reactionGroups": [],
+      "state": "APPROVED",
+      "commit": {
+        "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "PRR_3",
+      "author": {
+        "login": "reviewer-c"
+      },
+      "authorAssociation": "CONTRIBUTOR",
+      "body": "nit",
+      "submittedAt": "2026-09-30T11:30:00Z",
+      "includesCreatedEdit": false,
+      "reactionGroups": [],
+      "state": "COMMENTED",
+      "commit": {
+        "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "PRR_4",
+      "author": {
+        "login": "reviewer-a"
+      },
+      "authorAssociation": "MEMBER",
+      "body": "",
+      "submittedAt": "2026-09-30T12:00:00Z",
+      "includesCreatedEdit": false,
+      "reactionGroups": [],
+      "state": "CHANGES_REQUESTED",
+      "commit": {
+        "oid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    }
+  ],
+  "state": "OPEN",
+  "statusCheckRollup": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-30T12:05:00Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/example/repo/actions/runs/1/job/1",
+      "name": "tests",
+      "startedAt": "2026-09-30T12:01:00Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-30T12:04:00Z",
+      "conclusion": "FAILURE",
+      "detailsUrl": "https://github.com/example/repo/actions/runs/1/job/2",
+      "name": "lint",
+      "startedAt": "2026-09-30T12:01:00Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "0001-01-01T00:00:00Z",
+      "conclusion": "",
+      "detailsUrl": "https://github.com/example/repo/actions/runs/1/job/3",
+      "name": "conformance",
+      "startedAt": "2026-09-30T12:01:00Z",
+      "status": "IN_PROGRESS",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-30T12:02:00Z",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/example/repo/actions/runs/1/job/4",
+      "name": "release",
+      "startedAt": "2026-09-30T12:02:00Z",
+      "status": "COMPLETED",
+      "workflowName": "Release"
+    },
+    {
+      "__typename": "StatusContext",
+      "context": "ci/external",
+      "startedAt": "2026-09-30T12:01:00Z",
+      "state": "PENDING",
+      "targetUrl": "https://ci.example.com/build/1"
+    }
+  ],
+  "url": "https://github.com/example/repo/pull/418"
+}

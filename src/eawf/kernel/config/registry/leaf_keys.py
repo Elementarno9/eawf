@@ -45,9 +45,8 @@ ConsumerKind = Literal["engine", "skill", "declarative", "deprecated", "reserved
 #: together, written in one write.
 EditorKind = Literal["check", "order", "tiers", "rows", "pin", "pair"]
 #: A value set that cannot be stated in the catalog because it is read per settings read:
-#: the discoverable profiles, the ship gates, and the digests a profile is trusted or
-#: certified under.
-ChoicesFrom = Literal["profiles", "ship_gates", "profile_trust", "profile_certification"]
+#: the discoverable profiles and the digests a profile is trusted or certified under.
+ChoicesFrom = Literal["profiles", "profile_trust", "profile_certification"]
 
 
 class LeafDeny(BaseModel):

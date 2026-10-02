@@ -363,8 +363,8 @@ def tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _stack(tree: Path, **leaf: Any) -> list[str]:
-    """Return the stack card of ``audit.default_level`` with ``leaf``'s tuple fields stated."""
-    provenance._write(tree / ".ea" / "config.yaml", "audit:\n  default_level: deep\n")
+    """Return the stack card of ``estimation.eu_basis`` with ``leaf``'s tuple fields stated."""
+    provenance._write(tree / ".ea" / "config.yaml", "estimation:\n  eu_basis: tokens\n")
     view = provenance._view(tree)
     changed = view.leaf(provenance.CATALOG_KEY).model_copy(update=leaf)
     view = view.model_copy(
@@ -399,7 +399,7 @@ def test_con_123_an_authority_denied_key_keeps_the_denied_token_in_its_value(tre
     frame = _stack(tree, deny_chain=("org.policy",))
     assert any(row.startswith("│ DENIED BY  org.policy") for row in frame)
     repo = next(row for row in frame if re.match(r"^│\s+.?\s*repo\s", row))
-    assert "⊘ deep" in repo
+    assert "⊘ tokens" in repo
 
 
 def test_con_123_a_capability_degraded_key_names_its_requirement_and_state(tree: Path) -> None:

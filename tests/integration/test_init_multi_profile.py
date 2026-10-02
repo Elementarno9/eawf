@@ -108,7 +108,7 @@ def test_template_research_writes_its_profiles_and_parallelism(tmp_path: Path) -
 
 
 def test_template_engineering_writes_its_profiles_and_parallelism(tmp_path: Path) -> None:
-    """``--template engineering`` writes its profiles, parallelism and gate commands."""
+    """``--template engineering`` writes its profiles and parallelism, and no retired leaf."""
     res = _invoke(tmp_path, "--template", "engineering")
     assert res.exit_code == 0, res.stdout
 
@@ -116,7 +116,7 @@ def test_template_engineering_writes_its_profiles_and_parallelism(tmp_path: Path
     assert cfg["profiles"]["enabled"] == ["core", "python"]
     assert "dispatch" not in cfg
     assert cfg["planning"]["max_parallel_waves"] == 4
-    assert cfg["acceptance"]["commands"]["tests"] == "uv run pytest"
+    assert "commands" not in cfg["acceptance"]
 
 
 def test_template_reverse_engineering_writes_its_profiles_and_parallelism(tmp_path: Path) -> None:

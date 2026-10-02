@@ -32,8 +32,8 @@ pytestmark = pytest.mark.unit
 RANGED_INT = "planning.max_parallel_waves"
 #: A float the registry holds to at least 1.0.
 RANGED_FLOAT = "flow.budget.multiplier"
-#: A choice among quick, standard and deep.
-CHOICE = "audit.default_level"
+#: A choice among shallow, medium, deep and exhaustive.
+CHOICE = "research.default_depth"
 #: A list whose items must be declared choices.
 MULTICHOICE = "tui.eu_view.fields"
 #: A bool.

@@ -34,7 +34,7 @@ from eawf.surfaces.cli.errors import ValidationError
 
 def test_migrate_payload_no_op_on_current_marker() -> None:
     """A body already at marker ``1.0`` returns ``changed=False``."""
-    payload = {"schema_version": "1.0", "review": {"default_level": "medium"}}
+    payload = {"schema_version": "1.0", "research": {"default_depth": "medium"}}
     upgraded, changed = migrate_config_payload(payload)
     assert changed is False
     assert upgraded == payload
@@ -42,7 +42,7 @@ def test_migrate_payload_no_op_on_current_marker() -> None:
 
 def test_migrate_payload_from_legacy_1_1_sets_current_marker() -> None:
     """Legacy ``1.1`` upgrades to ``1.0`` (the C08 canonical marker)."""
-    payload = {"schema_version": "1.1", "review": {"default_level": "medium"}}
+    payload = {"schema_version": "1.1", "research": {"default_depth": "medium"}}
     upgraded, changed = migrate_config_payload(payload)
     assert changed is True
     assert upgraded["schema_version"] == "1.0"
@@ -50,12 +50,12 @@ def test_migrate_payload_from_legacy_1_1_sets_current_marker() -> None:
 
 def test_migrate_payload_from_legacy_2_sets_current_marker() -> None:
     """Legacy ``"2"`` (interim experimental) upgrades to ``1.0``."""
-    payload = {"schema_version": "2", "review": {"default_level": "high"}}
+    payload = {"schema_version": "2", "research": {"default_depth": "deep"}}
     upgraded, changed = migrate_config_payload(payload)
     assert changed is True
     assert upgraded["schema_version"] == "1.0"
     # Operator value preserved.
-    assert upgraded["review"]["default_level"] == "high"
+    assert upgraded["research"]["default_depth"] == "deep"
 
 
 def test_migrate_payload_introduces_telemetry_section() -> None:
@@ -84,14 +84,14 @@ def test_migrate_payload_strips_retired_leaves_on_the_current_marker() -> None:
         "schema_version": "1.0",
         "project": {"code": "DEMO", "default_subproject": "COLLAR"},
         "memory": {"stores": ["project", "subproject", "user"]},
-        "vcs": {"auto_commit": "ask", "pr_merge_method": "merge"},
+        "vcs": {"auto_commit": "ask", "task_reference": "trailer"},
         "telemetry": {"enabled": True, "export": {"format": "prom", "endpoint": "x"}},
     }
     upgraded, changed = migrate_config_payload(payload)
     assert changed is True
     assert upgraded == {
         "schema_version": "1.0",
-        "vcs": {"pr_merge_method": "merge"},
+        "vcs": {"task_reference": "trailer"},
         "telemetry": {"enabled": True},
     }
 
@@ -135,11 +135,11 @@ def test_migrate_payload_preserves_existing_telemetry_overrides() -> None:
 
 def test_migrate_payload_missing_marker_normalizes_legacy_layer() -> None:
     """An absent marker identifies a schema-less legacy layer."""
-    upgraded, changed = migrate_config_payload({"review": {"default_level": "medium"}})
+    upgraded, changed = migrate_config_payload({"research": {"default_depth": "medium"}})
     assert changed is True
     assert upgraded == {
         "schema_version": "1.0",
-        "review": {"default_level": "medium"},
+        "research": {"default_depth": "medium"},
     }
 
 
@@ -151,7 +151,7 @@ def test_migrate_payload_unknown_marker_raises_validation_failed() -> None:
 
 def test_migrate_payload_idempotent_double_run() -> None:
     """Running twice on a legacy body is the same as running once + once on 1.0."""
-    payload = {"schema_version": "1.1", "review": {"default_level": "medium"}}
+    payload = {"schema_version": "1.1", "research": {"default_depth": "medium"}}
     first, _ = migrate_config_payload(payload)
     second, changed = migrate_config_payload(first)
     assert changed is False
@@ -174,14 +174,14 @@ def test_migrate_file_writes_backup_and_upgraded_yaml(tmp_path: Path) -> None:
     target = tmp_path / "config.yaml"
     target.write_text(
         yaml.safe_dump(
-            {"schema_version": "1.1", "review": {"default_level": "high"}},
+            {"schema_version": "1.1", "research": {"default_depth": "deep"}},
         ),
         encoding="utf-8",
     )
     upgraded, changed, backup_path = migrate_config_file(target)
     assert changed is True
     assert upgraded["schema_version"] == "1.0"
-    assert upgraded["review"]["default_level"] == "high"
+    assert upgraded["research"]["default_depth"] == "deep"
     # Backup written next to the file.
     assert backup_path is not None
     assert backup_path.exists()
@@ -196,7 +196,7 @@ def test_migrate_file_no_change_returns_no_backup(tmp_path: Path) -> None:
     """An already-1.0 body returns ``backup_path=None``."""
     target = tmp_path / "config.yaml"
     target.write_text(
-        yaml.safe_dump({"schema_version": "1.0", "review": {"default_level": "medium"}}),
+        yaml.safe_dump({"schema_version": "1.0", "research": {"default_depth": "medium"}}),
         encoding="utf-8",
     )
     _, changed, backup_path = migrate_config_file(target)
@@ -232,7 +232,7 @@ def test_migrate_file_from_marker_2_upgrades_in_place(tmp_path: Path) -> None:
     """Legacy ``"2"`` (interim experimental) marker upgrades."""
     target = tmp_path / "config.yaml"
     target.write_text(
-        yaml.safe_dump({"schema_version": "2", "review": {"default_level": "medium"}}),
+        yaml.safe_dump({"schema_version": "2", "research": {"default_depth": "medium"}}),
         encoding="utf-8",
     )
     upgraded, changed, backup_path = migrate_config_file(target)

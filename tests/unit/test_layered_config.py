@@ -114,10 +114,10 @@ def test_branch_config_path_rejects_slash_only_branch() -> None:
 
 def test_branch_layer_overrides_repo(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: repo_val\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: repo_val\n")
     _write_yaml(
         repo / ".ea" / "branches" / "main.yaml",
-        "review:\n  default_level: branch_val\n",
+        "research:\n  default_depth: branch_val\n",
     )
     merged, sources = merge_config(
         workspace=None,
@@ -126,17 +126,17 @@ def test_branch_layer_overrides_repo(tmp_path: Path) -> None:
         cli_overrides={},
         branch="main",
     )
-    assert merged["review"]["default_level"] == "branch_val"
-    assert sources["review.default_level"] == "branch"
+    assert merged["research"]["default_depth"] == "branch_val"
+    assert sources["research.default_depth"] == "branch"
 
 
 def test_branch_layer_subdir_form_loaded(tmp_path: Path) -> None:
     """Branch names containing ``/`` resolve to nested files."""
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: repo_val\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: repo_val\n")
     _write_yaml(
         repo / ".ea" / "branches" / "feature" / "x.yaml",
-        "review:\n  default_level: feature_x\n",
+        "research:\n  default_depth: feature_x\n",
     )
     merged, sources = merge_config(
         workspace=None,
@@ -145,14 +145,14 @@ def test_branch_layer_subdir_form_loaded(tmp_path: Path) -> None:
         cli_overrides={},
         branch="feature/x",
     )
-    assert merged["review"]["default_level"] == "feature_x"
-    assert sources["review.default_level"] == "branch"
+    assert merged["research"]["default_depth"] == "feature_x"
+    assert sources["research.default_depth"] == "branch"
 
 
 def test_branch_layer_missing_file_silently_skipped(tmp_path: Path) -> None:
     """Branch file absent → loader skips it, lower layer wins."""
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: repo_val\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: repo_val\n")
     merged, sources = merge_config(
         workspace=None,
         repo=repo,
@@ -160,16 +160,16 @@ def test_branch_layer_missing_file_silently_skipped(tmp_path: Path) -> None:
         cli_overrides={},
         branch="some-branch-with-no-file",
     )
-    assert merged["review"]["default_level"] == "repo_val"
-    assert sources["review.default_level"] == "repo"
+    assert merged["research"]["default_depth"] == "repo_val"
+    assert sources["research.default_depth"] == "repo"
 
 
 def test_branch_layer_loses_to_local(tmp_path: Path) -> None:
     """Local layer is higher precedence than branch."""
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: r\n")
-    _write_yaml(repo / ".ea" / "branches" / "main.yaml", "review:\n  default_level: b\n")
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "review:\n  default_level: l\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: r\n")
+    _write_yaml(repo / ".ea" / "branches" / "main.yaml", "research:\n  default_depth: b\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "research:\n  default_depth: l\n")
     merged, sources = merge_config(
         workspace=None,
         repo=repo,
@@ -177,8 +177,8 @@ def test_branch_layer_loses_to_local(tmp_path: Path) -> None:
         cli_overrides={},
         branch="main",
     )
-    assert merged["review"]["default_level"] == "l"
-    assert sources["review.default_level"] == "local"
+    assert merged["research"]["default_depth"] == "l"
+    assert sources["research.default_depth"] == "local"
 
 
 # --- Wave overlay -----------------------------------------------------------
@@ -187,16 +187,16 @@ def test_branch_layer_loses_to_local(tmp_path: Path) -> None:
 def test_wave_overlay_overrides_local(tmp_path: Path) -> None:
     """Wave layer sits above local; daemon RAM wins."""
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "review:\n  default_level: local\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "research:\n  default_depth: local\n")
     merged, sources = merge_config(
         workspace=None,
         repo=repo,
         env={},
         cli_overrides={},
-        wave_overlay={"review": {"default_level": "wave_val"}},
+        wave_overlay={"research": {"default_depth": "wave_val"}},
     )
-    assert merged["review"]["default_level"] == "wave_val"
-    assert sources["review.default_level"] == "wave"
+    assert merged["research"]["default_depth"] == "wave_val"
+    assert sources["research.default_depth"] == "wave"
 
 
 def test_wave_overlay_loses_to_env() -> None:
@@ -204,12 +204,12 @@ def test_wave_overlay_loses_to_env() -> None:
     merged, sources = merge_config(
         workspace=None,
         repo=None,
-        env={"EAWF_REVIEW__DEFAULT_LEVEL": "env_val"},
+        env={"EAWF_RESEARCH__DEFAULT_DEPTH": "env_val"},
         cli_overrides={},
-        wave_overlay={"review": {"default_level": "wave_val"}},
+        wave_overlay={"research": {"default_depth": "wave_val"}},
     )
-    assert merged["review"]["default_level"] == "env_val"
-    assert sources["review.default_level"] == "env"
+    assert merged["research"]["default_depth"] == "env_val"
+    assert sources["research.default_depth"] == "env"
 
 
 def test_wave_overlay_loses_to_cli() -> None:
@@ -217,17 +217,17 @@ def test_wave_overlay_loses_to_cli() -> None:
         workspace=None,
         repo=None,
         env={},
-        cli_overrides={"review": {"default_level": "cli_val"}},
-        wave_overlay={"review": {"default_level": "wave_val"}},
+        cli_overrides={"research": {"default_depth": "cli_val"}},
+        wave_overlay={"research": {"default_depth": "wave_val"}},
     )
-    assert merged["review"]["default_level"] == "cli_val"
-    assert sources["review.default_level"] == "cli"
+    assert merged["research"]["default_depth"] == "cli_val"
+    assert sources["research.default_depth"] == "cli"
 
 
 def test_empty_wave_overlay_noop(tmp_path: Path) -> None:
     """Falsy / empty wave_overlay is a no-op (no source map entry)."""
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: r\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: r\n")
     merged, sources = merge_config(
         workspace=None,
         repo=repo,
@@ -235,15 +235,15 @@ def test_empty_wave_overlay_noop(tmp_path: Path) -> None:
         cli_overrides={},
         wave_overlay={},
     )
-    assert merged["review"]["default_level"] == "r"
-    assert sources["review.default_level"] == "repo"
+    assert merged["research"]["default_depth"] == "r"
+    assert sources["research.default_depth"] == "repo"
 
 
 @pytest.mark.parametrize(
     "layer",
     ["global", "workspace", "repo", "branch", "local", "wave"],
 )
-def test_legacy_flow_transition_normalizes_in_memory_per_layer(
+def test_legacy_flow_transition_is_stripped_in_memory_per_layer(
     layer: str,
     tmp_path: Path,
 ) -> None:
@@ -271,9 +271,9 @@ def test_legacy_flow_transition_normalizes_in_memory_per_layer(
         wave_overlay=({"flow": {"auto_accept": {"audit": True}}} if layer == "wave" else None),
     )
 
-    assert merged["flow"]["advance_after"]["audit"] is True
+    assert "advance_after" not in merged["flow"]
     assert "auto_accept" not in merged["flow"]
-    assert sources["flow.advance_after.audit"] == layer
+    assert "flow.advance_after.audit" not in sources
     if source_path is not None:
         assert source_path.read_text(encoding="utf-8") == body
 
@@ -287,23 +287,23 @@ def test_full_stack_ordering_with_branch_and_wave(
     """All nine layers active; CLI wins, branch/wave correctly placed."""
     fake_global = tmp_path / "g.yaml"
     monkeypatch.setattr(layered, "global_config_path", lambda: fake_global)
-    _write_yaml(fake_global, "review:\n  default_level: g\n")
+    _write_yaml(fake_global, "research:\n  default_depth: g\n")
     workspace = tmp_path / "ws"
-    _write_yaml(workspace / ".ea" / "config.yaml", "review:\n  default_level: w\n")
+    _write_yaml(workspace / ".ea" / "config.yaml", "research:\n  default_depth: w\n")
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: r\n")
-    _write_yaml(repo / ".ea" / "branches" / "main.yaml", "review:\n  default_level: b\n")
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "review:\n  default_level: l\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: r\n")
+    _write_yaml(repo / ".ea" / "branches" / "main.yaml", "research:\n  default_depth: b\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "research:\n  default_depth: l\n")
     merged, sources = merge_config(
         workspace=workspace,
         repo=repo,
-        env={"EAWF_REVIEW__DEFAULT_LEVEL": "e"},
-        cli_overrides={"review": {"default_level": "c"}},
+        env={"EAWF_RESEARCH__DEFAULT_DEPTH": "e"},
+        cli_overrides={"research": {"default_depth": "c"}},
         branch="main",
-        wave_overlay={"review": {"default_level": "wv"}},
+        wave_overlay={"research": {"default_depth": "wv"}},
     )
-    assert merged["review"]["default_level"] == "c"
-    assert sources["review.default_level"] == "cli"
+    assert merged["research"]["default_depth"] == "c"
+    assert sources["research.default_depth"] == "cli"
 
 
 # --- Layer-path helper ------------------------------------------------------
@@ -389,7 +389,6 @@ def test_behavioral_config_leaves_have_exactly_one_binding() -> None:
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_SHIP = "eawf.workflow.skills.ship"
 _COAUTHOR = "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer"
 _LAYERED = "eawf.kernel.config.layered"
 _ECONOMICS = "eawf.kernel.economics.governor.economics_policy_from"
@@ -399,13 +398,7 @@ _EU_VIEW = "eawf.surfaces.render.plan_view._eu_view_config"
 #: leaf must appear in, so a leaf with no production reader fails here.
 _EXPECTED_CONSUMERS: dict[str, str] = {
     "schema_version": "eawf.kernel.config.migration.migrate_config_payload",
-    "acceptance.commands.build": f"{_SHIP}._resolve_gate_command",
-    "acceptance.commands.lint": f"{_SHIP}._resolve_gate_command",
-    "acceptance.commands.tests": f"{_SHIP}._resolve_gate_command",
-    "acceptance.commands.typecheck": f"{_SHIP}._resolve_gate_command",
-    "acceptance.required_before_ship": f"{_SHIP}._ordered_gauntlet_gates",
     "agents.extra_tools": f"{_LAYERED}.resolve_agent_extra_tools",
-    "audit.default_level": "eawf.workflow.skills.audit._resolve_level",
     "daemon.idle_timeout_seconds": "eawf.runtime.daemon.main._resolve_idle_timeout",
     "daemon.proxy_enabled": "eawf.surfaces.cli._mutation._proxy_enabled",
     "daemon.session_handle_ttl_seconds": "eawf.runtime.daemon.main._resolve_session_ttl_seconds",
@@ -415,25 +408,18 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "economics.prompt_budget": _ECONOMICS,
     "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
-    "flow.advance_after.audit": "eawf.workflow.skills.flow.FlowSkill._run_steps",
-    "flow.advance_after.polish": "eawf.workflow.skills.flow.FlowSkill._run_steps",
-    "flow.advance_after.prep": "eawf.workflow.skills.flow.FlowSkill._run_steps",
-    "flow.advance_after.research": "eawf.workflow.skills.flow.FlowSkill._run_steps",
     "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
     "flow.budget.multiplier": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
-    "flow.max_repair_cycles": "eawf.workflow.skills.flow._config_max_repair_cycles",
     "planning.max_parallel_waves": "eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves",
     "preferences.auto_choose": (
         "eawf.runtime.daemon.methods.question_decision.resolved_preferences"
     ),
-    "prep.auto_resume": "eawf.workflow.skills.prep.PrepSkill._resolve_auto_resume",
     "profiles.certified": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "profiles.enabled": "eawf.platform.profiles.selection.resolve_enabled_profiles",
     "profiles.trusted": "eawf.platform.profiles.trust.load_trust_ledger",
     "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
     "research.auto_save": "eawf.workflow.skills.research.ResearchSkill._gather",
     "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
-    "review.default_level": "eawf.workflow.skills.review.ReviewSkill.action",
     "runtime.adapters": f"{_LAYERED}.resolve_dispatch_provider_tuple",
     "runtime.claude.permission_wait_s": f"{_LAYERED}.resolve_permission_wait_seconds",
     "runtime.claude.stall_interval_s": f"{_LAYERED}.resolve_stall_interval_seconds",
@@ -443,7 +429,6 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "runtime.models.opencode": f"{_LAYERED}.resolve_runtime_tier_models",
     "runtime.opencode.stall_interval_s": f"{_LAYERED}.resolve_stall_interval_seconds",
     "runtime.preference": f"{_LAYERED}.resolve_dispatch_provider_tuple",
-    "ship.gauntlet": f"{_SHIP}._resolve_gauntlet",
     "telemetry.db_kind": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
     "telemetry.enabled": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
     "tui.eu_view.density": _EU_VIEW,
@@ -464,8 +449,6 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "vcs.conventions.release.cadence": "eawf.runtime.vcs.coauthor.requires_phase_release_preflight",
     "vcs.conventions.subject_style": "tools.commit_prefix_lint._configured_subject_style",
     "vcs.integration_commit_unit": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
-    "vcs.pr_merge_method": f"{_SHIP}.ShipSkill._gate_merge_method",
-    "vcs.squash_allowed": f"{_SHIP}.ShipSkill._gate_merge_method",
     "vcs.task_reference": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
     "verify.juror_wall_clock_seconds": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
     "verify.jury_max_brier": "eawf.runtime.daemon.verdict_observations.resolve_jury_thresholds",
@@ -514,25 +497,9 @@ def test_every_config_leaf_has_exact_consumer_classification() -> None:
         key for key, entry in LEAF_KEY_REGISTRY.items() if entry.consumer_kind == "deprecated"
     } == DEPRECATED_LEAF_KEYS & set(LEAF_KEY_REGISTRY)
     assert {key for key, entry in LEAF_KEY_REGISTRY.items() if entry.consumer_kind == "skill"} == {
-        "acceptance.commands.build",
-        "acceptance.commands.lint",
-        "acceptance.commands.tests",
-        "acceptance.commands.typecheck",
-        "acceptance.required_before_ship",
-        "audit.default_level",
-        "flow.advance_after.audit",
-        "flow.advance_after.polish",
-        "flow.advance_after.prep",
-        "flow.advance_after.research",
-        "flow.max_repair_cycles",
-        "prep.auto_resume",
         "research.agent_count",
         "research.auto_save",
         "research.default_depth",
-        "review.default_level",
-        "ship.gauntlet",
-        "vcs.pr_merge_method",
-        "vcs.squash_allowed",
     }
     for key, entry in LEAF_KEY_REGISTRY.items():
         if entry.consumer_kind in {"engine", "skill"}:
@@ -553,9 +520,6 @@ def test_reserved_config_leaf_set_is_exact() -> None:
         "runtime.adapter_catalog.codex.enabled",
         "runtime.adapter_catalog.opencode.enabled",
     } <= reserved
-    repair_cycles = leaf_key_lookup("flow.max_repair_cycles")
-    assert repair_cycles.consumer == "eawf.workflow.skills.flow._config_max_repair_cycles"
-    assert repair_cycles.reserved is False
     strict_audit = leaf_key_lookup("verify.require_iter_audit_accepted")
     assert strict_audit.consumer == "eawf.workflow.lifecycle.iter_.close_iter"
     assert strict_audit.reserved is False
@@ -682,7 +646,7 @@ def test_schema_version_is_locked() -> None:
 def test_resolve_runtime_tier_models_none_when_unconfigured(tmp_path: Path) -> None:
     """No ``runtime.models`` block resolves to ``None`` (built-in ladder wins)."""
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: high\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: high\n")
     assert resolve_runtime_tier_models(repo) is None
 
 

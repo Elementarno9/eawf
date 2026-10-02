@@ -1071,43 +1071,6 @@
    "local"
   ],
   "SECTIONS": {
-   "acceptance": [
-    [
-     "commands.tests",
-     "n",
-     null
-    ],
-    [
-     "commands.lint",
-     "n",
-     null
-    ],
-    [
-     "commands.typecheck",
-     "n",
-     null
-    ],
-    [
-     "commands.build",
-     "n",
-     null
-    ],
-    [
-     "required_before_ship",
-     "l",
-     [
-      "state"
-     ]
-    ]
-   ],
-   "audit": [
-    [
-     "default_level",
-     "e",
-     "standard",
-     "quick · standard · deep"
-    ]
-   ],
    "daemon": [
     [
      "proxy_enabled",
@@ -1151,26 +1114,6 @@
    ],
    "flow": [
     [
-     "advance_after.research",
-     "b",
-     false
-    ],
-    [
-     "advance_after.prep",
-     "b",
-     false
-    ],
-    [
-     "advance_after.audit",
-     "b",
-     false
-    ],
-    [
-     "advance_after.polish",
-     "b",
-     false
-    ],
-    [
      "budget.enforce",
      "e",
      "soft",
@@ -1181,12 +1124,6 @@
      "f",
      1.5,
      "1.0–4.0"
-    ],
-    [
-     "max_repair_cycles",
-     "i",
-     3,
-     "0–10"
     ]
    ],
    "planning": [
@@ -1203,13 +1140,6 @@
      "e",
      "off",
      "off · safe · all"
-    ]
-   ],
-   "prep": [
-    [
-     "auto_resume",
-     "b",
-     true
     ]
    ],
    "profiles": [
@@ -1245,14 +1175,6 @@
      "1–12"
     ]
    ],
-   "review": [
-    [
-     "default_level",
-     "e",
-     "medium",
-     "light · medium · deep"
-    ]
-   ],
    "runtime": [
     [
      "adapters",
@@ -1273,14 +1195,6 @@
      "fallback.enabled",
      "b",
      true
-    ]
-   ],
-   "ship": [
-    [
-     "gauntlet",
-     "e",
-     "full",
-     "full · scoped"
     ]
    ],
    "telemetry": [
@@ -1326,17 +1240,6 @@
      "checkpoint_requires_commit",
      "b",
      true
-    ],
-    [
-     "pr_merge_method",
-     "e",
-     "merge",
-     "merge · squash · rebase"
-    ],
-    [
-     "squash_allowed",
-     "b",
-     false
     ],
     [
      "coauthor.mode",
@@ -1400,10 +1303,6 @@
   },
   "UNSET": "‹unset›",
   "DOC": {
-   "audit.default_level": [
-    "how wide the default /audit check plan runs",
-    "quick narrows to a smoke set · standard is the full default set · deep is the widest"
-   ],
    "daemon.idle_timeout_seconds": [
     "how long the daemon stays resident with nothing to do"
    ],
@@ -1427,24 +1326,12 @@
    "flow.budget.multiplier": [
     "how much headroom the enforced cap adds over the base budget"
    ],
-   "flow.max_repair_cycles": [
-    "stop re-entering a failing flow stage past this many repair cycles"
-   ],
-   "flow.advance_after.research": [
-    "authorise advancing automatically once research completes"
-   ],
-   "flow.advance_after.prep": [
-    "authorise advancing automatically once prep completes"
-   ],
    "planning.max_parallel_waves": [
     "how many waves may run at once"
    ],
    "preferences.auto_choose": [
     "whether the planner answers its own questions",
     "off always asks · safe answers only reversible questions · all answers everything"
-   ],
-   "prep.auto_resume": [
-    "lead /prep with a dispatch resume so a leaked pause cannot reject the batch"
    ],
    "profiles.enabled": [
     "which profiles compose the active behaviour, in order"
@@ -1455,18 +1342,11 @@
    "research.agent_count": [
     "how many agents a research pass fans out to"
    ],
-   "review.default_level": [
-    "how thorough a review is by default"
-   ],
    "runtime.preference": [
     "failover order — the first healthy runtime wins"
    ],
    "runtime.fallback.enabled": [
     "fail over to the next runtime rather than stopping"
-   ],
-   "ship.gauntlet": [
-    "how much of the ship gauntlet runs",
-    "full runs every gate, mandatory for migration waves and iter close · scoped is legal only for re-runs"
    ],
    "telemetry.enabled": [
     "collect local telemetry · nothing leaves the machine either way"
@@ -1502,14 +1382,6 @@
    ]
   },
   "CHOICES": {
-   "acceptance.required_before_ship": [
-    "state",
-    "tests",
-    "lint",
-    "typecheck",
-    "docs",
-    "build"
-   ],
    "runtime.adapters": [
     "claude-code",
     "codex",
@@ -1528,10 +1400,8 @@
      "dispatch",
      "flow",
      "planning",
-     "prep",
      "research",
-     "runtime",
-     "ship"
+     "runtime"
     ]
    ],
    [
@@ -1550,17 +1420,13 @@
    [
     "QUALITY",
     [
-     "audit",
      "estimation",
-     "review",
      "verify"
     ]
    ],
    [
     "SAFETY",
-    [
-     "acceptance"
-    ]
+    []
    ],
    [
     "SYSTEM",
@@ -1588,19 +1454,11 @@
     "cat": "EXECUTION"
    },
    {
-    "section": "prep",
-    "cat": "EXECUTION"
-   },
-   {
     "section": "research",
     "cat": "EXECUTION"
    },
    {
     "section": "runtime",
-    "cat": "EXECUTION"
-   },
-   {
-    "section": "ship",
     "cat": "EXECUTION"
    },
    {
@@ -1625,15 +1483,7 @@
     "cat": "QUALITY"
    },
    {
-    "section": "audit",
-    "cat": "QUALITY"
-   },
-   {
     "section": "estimation",
-    "cat": "QUALITY"
-   },
-   {
-    "section": "review",
     "cat": "QUALITY"
    },
    {
@@ -1641,10 +1491,6 @@
     "cat": "QUALITY"
    },
    {
-    "cat": "SAFETY"
-   },
-   {
-    "section": "acceptance",
     "cat": "SAFETY"
    },
    {
@@ -1677,19 +1523,11 @@
     "cat": "EXECUTION"
    },
    {
-    "section": "prep",
-    "cat": "EXECUTION"
-   },
-   {
     "section": "research",
     "cat": "EXECUTION"
    },
    {
     "section": "runtime",
-    "cat": "EXECUTION"
-   },
-   {
-    "section": "ship",
     "cat": "EXECUTION"
    },
    {
@@ -1705,24 +1543,12 @@
     "cat": "INTERFACE"
    },
    {
-    "section": "audit",
-    "cat": "QUALITY"
-   },
-   {
     "section": "estimation",
-    "cat": "QUALITY"
-   },
-   {
-    "section": "review",
     "cat": "QUALITY"
    },
    {
     "section": "verify",
     "cat": "QUALITY"
-   },
-   {
-    "section": "acceptance",
-    "cat": "SAFETY"
    },
    {
     "section": "daemon",
@@ -1741,37 +1567,27 @@
    "dispatch",
    "flow",
    "planning",
-   "prep",
    "research",
    "runtime",
-   "ship",
    "preferences",
    "profiles",
    "ui",
-   "audit",
    "estimation",
-   "review",
    "verify",
-   "acceptance",
    "daemon",
    "telemetry",
    "vcs"
   ],
   "names": [
-   "acceptance",
-   "audit",
    "daemon",
    "dispatch",
    "estimation",
    "flow",
    "planning",
    "preferences",
-   "prep",
    "profiles",
    "research",
-   "review",
    "runtime",
-   "ship",
    "telemetry",
    "ui",
    "vcs",

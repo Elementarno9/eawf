@@ -228,6 +228,15 @@ def test_con_140_live_the_campaign_route_draws_the_plan_the_verbs_wrote(
     assert "held · promoted at" in _row(frame, "CFN-0001")
 
 
+def test_con_140_live_the_bounds_row_draws_the_budget_the_accountant_charged(
+    tree: tuple[Path, Path],
+) -> None:
+    (frame,) = _drive(*tree, _on())
+    bounds = _row(frame, "BOUNDS")
+    assert "wall time 1 of 6 h · ≈5 left" in bounds
+    assert "no bound is stated" not in frame
+
+
 def test_con_140_live_enter_on_a_step_opens_its_card_and_escape_returns_to_the_row(
     tree: tuple[Path, Path],
 ) -> None:

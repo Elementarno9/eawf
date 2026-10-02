@@ -82,6 +82,7 @@ from eawf.kernel.projection.settings import (
     EffectiveSettingsView,
     build_settings_view,
 )
+from eawf.kernel.projection.verification import LADDER_ROUTES, ladder_route_rows
 from eawf.kernel.runtime.delegation import ChildCeilingBreach
 from eawf.kernel.runtime.sandbox_decision import sandbox_decisions
 from eawf.kernel.state.enums import StoreKind
@@ -451,6 +452,18 @@ def _ledger_rows_for(
             route=route, authority=authority, document=document, key=key
         ).items():
             rows[collection] = (*rows.get(collection, ()), *found)
+    if route in LADDER_ROUTES:
+        # a claim's ladder lives beside it in the claim ledger, never in the document
+        document_file = document_path(authority)
+        return ladder_route_rows(
+            route=route,
+            rows=rows,
+            claim_lines=read_ledger_records(ledger_path(document_file, Epoch2Collection.CLAIM)),
+            evidence_lines=read_ledger_records(
+                ledger_path(document_file, Epoch2Collection.EVIDENCE)
+            ),
+            subject=key,
+        )
     return rows
 
 

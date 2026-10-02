@@ -25,10 +25,12 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from types import MappingProxyType
-from typing import Final
+from typing import Any, Final
 
-from eawf.kernel.projection.compute import RouteProjection
+from eawf.kernel.delivery.acceptance import EvidenceRow
+from eawf.kernel.projection.compute import FACTS_FIELD, RouteProjection
 from eawf.kernel.projection.route_view import (
     RouteFieldSpec,
     RouteReadModel,
@@ -38,10 +40,16 @@ from eawf.kernel.projection.route_view import (
     stated,
     status_and,
     unknown_field,
-    unstated,
 )
 from eawf.kernel.projection.truth import TruthField
 from eawf.kernel.runtime.certification import CertificationFailureCode, QuarantineTrigger
+from eawf.kernel.state.epoch2.evidence_rung import (
+    EvidenceRungRecord,
+    RungOutcome,
+    latest_rungs,
+)
+from eawf.kernel.store.ledger import LedgerRecord, effective_records
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.doctor.models import CheckResult, CheckStatus
 from eawf.runtime.runtimes.quarantine import TRIGGER_FAILURE_CODE
 
@@ -86,6 +94,22 @@ NO_CALIBRATION_REASON: Final = "the calibration row states no such value"
 #: Why a verdict names no Milestone: the Batch it was reached on is filed under none.
 NO_MILESTONE_REASON: Final = "the Batch this verdict was reached on is filed under no Milestone"
 
+#: Why an Evidence row states no ladder: only a claim is scored, and this one has no rung
+#: record yet -- or the row is an evidence record, which is scored through its claims.
+NOT_SCORED_REASON: Final = "no rung record scores this row; only a claim carries a ladder"
+
+#: Why a scored claim states no instant: no rung of its ladder has returned.
+NO_RUNG_RETURNED_REASON: Final = "no rung of this claim's ladder has returned yet"
+
+#: Why a rung card row states nothing: no rung of the claim ran over this record.
+NOT_RUN_OVER_REASON: Final = "no rung of the claim ran over this record"
+
+#: The routes whose rows carry what the claims' ladders state.
+LADDER_ROUTES: Final[tuple[str, ...]] = ("evidence", "evidence.digest")
+
+#: What separates a claim's key from the rung a record in its ledger scores.
+_RUNG_KEY_MARK: Final = "#rung-"
+
 #: The producer revision every verdict cell states. A conformance verdict is never
 #: revised: the next stage record supersedes it, so the first revision is the only one a
 #: single verdict ever stands at.
@@ -94,6 +118,8 @@ VERDICT_REVISION: Final = 1
 #: What each verification route renders per row, in column order. The first field of
 #: every route is the status the document states; the rest are declared columns whose
 #: producers are later items, so the console draws the unknown token in their place.
+#: When a health check last ran is no column of a row: it is stated on the tuple row,
+#: from the stage record the conformance runner wrote when the check completed.
 VERIFICATION_FIELDS: Final[Mapping[str, tuple[RouteFieldSpec, ...]]] = MappingProxyType(
     {
         "trust": status_and(
@@ -113,9 +139,16 @@ VERIFICATION_FIELDS: Final[Mapping[str, tuple[RouteFieldSpec, ...]]] = MappingPr
             stated("co_error", absent=NO_CALIBRATION_REASON),
             stated("authority", absent=NO_CALIBRATION_REASON),
         ),
-        "evidence": status_and(unstated("outcome"), unstated("checked"), unstated("as_of")),
-        "evidence.digest": status_and(unstated("found"), unstated("input_digest")),
-        "health": status_and(unstated("checked_at")),
+        "evidence": status_and(
+            stated("outcome", absent=NOT_SCORED_REASON),
+            stated("checked", absent=NOT_SCORED_REASON),
+            stated("as_of", absent=NO_RUNG_RETURNED_REASON),
+        ),
+        "evidence.digest": status_and(
+            stated("found", absent=NOT_RUN_OVER_REASON),
+            stated("input_digest", absent=NOT_RUN_OVER_REASON),
+        ),
+        "health": status_and(),
     }
 )
 
@@ -162,9 +195,11 @@ class RuntimeTupleVerdict:
             producing verb and the evidence artifact when one was recorded.
         reason_code: The failure code the stage record was filed under; ``None`` for a
             stage that passed, and for a verdict whose code was not carried through.
+        checked_at: When that stage completed, which is when the check last ran.
     """
 
     check: CheckResult
+    checked_at: datetime
     reason_code: CertificationFailureCode | None = None
 
 
@@ -175,6 +210,7 @@ class RuntimeTupleRow:
     Attributes:
         check: The check's stable name, which names the tuple by its digest.
         status: What the verdict grades as: ``ok``, ``warn`` or ``fail``.
+        checked_at: When the check last ran.
         detail: The check's own message, verbatim.
         stage: The conformance stage the verdict was reached at.
         producer: The daemon verb that wrote the stage record.
@@ -187,6 +223,7 @@ class RuntimeTupleRow:
 
     check: str
     status: CheckStatus
+    checked_at: datetime
     detail: str
     stage: TruthField[str]
     producer: TruthField[str]
@@ -234,6 +271,7 @@ def _tuple_row(verdict: RuntimeTupleVerdict) -> RuntimeTupleRow:
     return RuntimeTupleRow(
         check=check.name,
         status=check.status,
+        checked_at=verdict.checked_at,
         detail=check.detail or "",
         stage=_cell(provenance.stage if provenance else None, urn=urn, reason=NO_PROVENANCE_REASON),
         producer=_cell(
@@ -272,6 +310,116 @@ def build_runtime_tuple_rows(
     rows = tuple(_tuple_row(verdict) for verdict in verdicts)
     logger.debug(f"build_runtime_tuple_rows verdicts={len(rows)}")
     return rows
+
+
+def claim_ladder_facts(ladder: Sequence[EvidenceRungRecord]) -> dict[str, str]:
+    """Return what one claim's Evidence row states of its ladder.
+
+    Args:
+        ladder: The latest record of each rung scoring the claim, lowest rung first.
+
+    Returns:
+        ``outcome``, each rung's outcome by number; ``checked``, ``yes`` when every rung
+        has returned an outcome and ``no`` while one is open or waiting; and ``as_of``,
+        when the latest rung returned, absent while none has.
+    """
+    returned = [r.evaluated_at for r in ladder if r.evaluated_at is not None]
+    complete = all(r.outcome in (RungOutcome.PASSED, RungOutcome.FAILED) for r in ladder)
+    facts = {
+        "outcome": " · ".join(f"{r.rung} {r.outcome.value}" for r in ladder),
+        "checked": "yes" if ladder and complete else "no",
+    }
+    if returned:
+        facts["as_of"] = max(returned).isoformat()
+    return facts
+
+
+def _subject_key(subject: str) -> str:
+    """Return the record key a route subject names, whether a bare key or a URN."""
+    return subject.split("#", 1)[0].rsplit("/", 1)[-1]
+
+
+def _input_rows(
+    ladder: Sequence[EvidenceRungRecord], evidence: Mapping[str, LedgerRecord]
+) -> tuple[dict[str, Any], ...]:
+    """Return one row per held evidence record *ladder* ran over, with what it found there.
+
+    A record is drawn once, under the highest rung that ran over it; its digest is the one
+    rung 1 resolved it at.
+    """
+    found: dict[str, tuple[str, EvidenceRungRecord]] = {}
+    digests: dict[str, str] = {}
+    for record in ladder:
+        for item in record.input_refs:
+            found[item.ref.entity_key] = (str(item.ref), record)
+            if record.rung == 1 and item.digest is not None:
+                digests[item.ref.entity_key] = item.digest
+    rows: list[dict[str, Any]] = []
+    for key, (urn, record) in found.items():
+        line = evidence.get(key)
+        if line is None:
+            continue
+        facts = {"found": f"rung {record.rung} {record.outcome.value}: {record.finding}"}
+        if key in digests:
+            facts["input_digest"] = digests[key]
+        rows.append(
+            {
+                "key": key,
+                "urn": urn,
+                "revision": 1,
+                "status": line.status,
+                "title": EvidenceRow.model_validate(line.payload).summary,
+                FACTS_FIELD: facts,
+            }
+        )
+    return tuple(rows)
+
+
+def ladder_route_rows(
+    *,
+    route: str,
+    rows: Mapping[Epoch2Collection, Sequence[Mapping[str, Any]]],
+    claim_lines: Sequence[LedgerRecord],
+    evidence_lines: Sequence[LedgerRecord],
+    subject: str | None,
+) -> dict[Epoch2Collection, tuple[Mapping[str, Any], ...]]:
+    """Return *rows* with what the claims' ladders state carried on the rows they concern.
+
+    Each claim row carries its ladder's outcome, whether every rung returned, and when the
+    latest one did. The rung card of a claim lists the evidence records its rungs ran
+    over, each with what the highest of those rungs found there and the digest rung 1
+    resolved it at.
+
+    Args:
+        route: The route being built; one of :data:`LADDER_ROUTES`.
+        rows: The ledger rows the route already reads, by collection.
+        claim_lines: The claim ledger's lines, in file order.
+        evidence_lines: The evidence ledger's lines, in file order.
+        subject: The record the route was opened on, a key or a URN; the rung card
+            lists nothing without one.
+
+    Returns:
+        The rows by collection, the claim rows carrying their ladder facts.
+    """
+    scored: dict[str, list[EvidenceRungRecord]] = {}
+    for line in effective_records(tuple(claim_lines)):
+        if _RUNG_KEY_MARK in line.record_key:
+            record = EvidenceRungRecord.model_validate(line.payload)
+            scored.setdefault(record.claim_ref.entity_key, []).append(record)
+    ladders = {key: latest_rungs(records) for key, records in scored.items()}
+    merged = {collection: tuple(held) for collection, held in rows.items()}
+    merged[Epoch2Collection.CLAIM] = tuple(
+        {**row, FACTS_FIELD: claim_ladder_facts(ladders[row["key"]])}
+        if row.get("key") in ladders
+        else row
+        for row in rows.get(Epoch2Collection.CLAIM, ())
+    )
+    if route == "evidence.digest" and subject is not None:
+        evidence = {line.record_key: line for line in effective_records(tuple(evidence_lines))}
+        held = _input_rows(ladders.get(_subject_key(subject), ()), evidence)
+        merged[Epoch2Collection.EVIDENCE] = (*held, *rows.get(Epoch2Collection.EVIDENCE, ()))
+    logger.debug(f"ladder_route_rows route={route} claims={len(ladders)}")
+    return merged
 
 
 def build_verification_view(
@@ -313,11 +461,15 @@ def build_verification_view(
 __all__ = [
     "FAMILY",
     "HEALTH_ROUTE",
+    "LADDER_ROUTES",
     "NOT_QUARANTINED_REASON",
+    "NOT_RUN_OVER_REASON",
+    "NOT_SCORED_REASON",
     "NO_CALIBRATION_REASON",
     "NO_MILESTONE_REASON",
     "NO_OUTCOME_REASON",
     "NO_PROVENANCE_REASON",
+    "NO_RUNG_RETURNED_REASON",
     "NO_TRIGGER_REASON",
     "QUARANTINE_PRODUCER",
     "TRIGGERS_BY_FAILURE_CODE",
@@ -329,5 +481,7 @@ __all__ = [
     "RuntimeTupleVerdict",
     "build_runtime_tuple_rows",
     "build_verification_view",
+    "claim_ladder_facts",
+    "ladder_route_rows",
     "triggers_for_code",
 ]

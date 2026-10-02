@@ -130,6 +130,7 @@ ROOT_ENTRY_EXCEPTIONS: Final[tuple[RootEntryException, ...]] = (
     _entry("verbs", "tooling", "emits the introspectable verb catalog"),
     _entry("plan", "tooling", "plan revisions are Milestone verbs not yet regrouped"),
     _entry("record", "tooling", "ledger records belong to no entity group yet"),
+    _entry("claim", "tooling", "the Claim entity has no contract group yet"),
     _entry("repository", "tooling", "the Repository entity has no contract group yet"),
     _entry("hook", "tooling", "installed git and host hooks call these paths"),
     _entry("plugin", "tooling", "installs and checks the host plugin bundles"),
@@ -218,6 +219,11 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
         "release cancel",
         "revision_only",
         "the release record keeps no replay ledger; its revision guards a retry",
+    ),
+    _exempt(
+        "campaign budget",
+        "derived_key",
+        "limits the Campaign already holds are returned unwritten, so a retry writes nothing",
     ),
     _exempt(
         "campaign cancel",

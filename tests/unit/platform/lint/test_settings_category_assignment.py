@@ -2,9 +2,9 @@
 
 Requirement row proved here, by id:
 
-- ``LINT-042``: every catalog section is assigned to exactly one of the six orientation
+- ``LINT-042``: every catalog section is assigned to exactly one of the five orientation
   categories, and the lint reds when a section present in the catalog is unassigned,
-  assigned twice, or assigned to a category outside the six.
+  assigned twice, or assigned to a category outside the five.
 
 The fire-proof case is the defect that motivated the rule: the ``agents`` section reached
 the catalog before the category table filed it, which left its keys configurable and
@@ -36,11 +36,11 @@ def test_lint_042_the_shipped_table_files_every_catalog_section_exactly_once() -
     assert category_assignment_defects(catalog_sections()) == ()
 
 
-def test_lint_042_the_table_uses_exactly_the_six_orientation_categories() -> None:
-    """The six the rail lists are the closed set, each used once."""
+def test_lint_042_the_table_uses_exactly_the_five_orientation_categories() -> None:
+    """The five the rail lists are the closed set, each used once."""
     names = [name for name, _members in SETTINGS_CATEGORIES]
     assert sorted(names) == sorted(ORIENTATION_CATEGORIES)
-    assert len(ORIENTATION_CATEGORIES) == 6
+    assert len(ORIENTATION_CATEGORIES) == 5
 
 
 def test_lint_042_a_section_added_to_the_catalog_unassigned_reds() -> None:
@@ -66,8 +66,8 @@ def test_lint_042_a_section_assigned_twice_reds(monkeypatch: pytest.MonkeyPatch)
     assert category_assignment_defects(catalog_sections()) == ("section 'agents' is filed twice",)
 
 
-def test_lint_042_a_category_outside_the_six_reds(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A seventh heading is a category the rail does not declare."""
+def test_lint_042_a_category_outside_the_five_reds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A heading outside the set is a category the rail does not declare."""
     renamed = (("operations", SETTINGS_CATEGORIES[0][1]), *SETTINGS_CATEGORIES[1:])
     monkeypatch.setattr(eawf026, "SETTINGS_CATEGORIES", renamed)
     assert category_assignment_defects(catalog_sections()) == (

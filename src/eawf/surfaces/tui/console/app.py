@@ -761,12 +761,13 @@ class ConsoleApp(App[None]):
             verdicts = live(live_reads.HEALTH_VERDICTS_READ) or ()
             return build_verification_view(projection, verdicts=verdicts)
         if route in OPERATIONS_ROUTES:
-            return build_operations_view(projection)
+            return build_operations_view(projection, last_start=live(live_reads.BOOT_RECOVERY_READ))
         if route in INTEGRATION_ROUTES:
             return build_integration_view(
                 projection,
                 generations=live(live_reads.GENERATIONS_READ) or (),
                 conflicts=live(live_reads.CONFLICTS_READ) or (),
+                repository=live(live_reads.REPOSITORY_READ),
             )
         if route == TRANSCRIPT_ROUTE:
             lines = live(live_reads.TRANSCRIPT_READ)

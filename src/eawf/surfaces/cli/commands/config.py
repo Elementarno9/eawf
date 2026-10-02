@@ -107,17 +107,19 @@ class _ConfigSchema(BaseModel):
     research: dict[str, Any]
     planning: dict[str, Any]
     estimation: EstimationConfig
-    audit: dict[str, Any]
-    ship: dict[str, Any]
-    review: dict[str, Any]
     flow: dict[str, Any]
     vcs: VcsConfig
-    acceptance: dict[str, Any]
     # ``daemon`` section pairs with the ``state.mutate`` RPC. Treated as
     # ``dict[str, Any]`` until a later wave hardens the per-key contract
     # (see :mod:`eawf.kernel.config.defaults` for the shipped schema).
     daemon: dict[str, Any]
     telemetry: dict[str, Any] = Field(default_factory=dict)
+    # ``audit`` and ``ship`` hold only reserved compatibility leaves, which the
+    # built-in layer does not state; ``acceptance`` holds the gate answers
+    # ``eawf init`` records.
+    audit: dict[str, Any] = Field(default_factory=dict)
+    ship: dict[str, Any] = Field(default_factory=dict)
+    acceptance: dict[str, Any] = Field(default_factory=dict)
     dispatch: dict[str, Any] = Field(default_factory=dict)
     # ``economics`` has no shipped value: its consumer applies the shipped
     # policy when no layer states one, and validates the table itself.
@@ -132,11 +134,6 @@ class _ConfigSchema(BaseModel):
     # only needs to accept the section so a default-bearing merge does not
     # trip extra="forbid".
     preferences: dict[str, Any] = Field(default_factory=dict)
-    # ``prep`` carries the ``/prep`` runtime knobs (auto_resume). Value-shape
-    # validation lives in the leaf catalog; the composed schema only needs to
-    # accept the section so a default-bearing merge does not trip
-    # extra="forbid".
-    prep: dict[str, Any] = Field(default_factory=dict)
 
 
 # --- Sub-app construction ---------------------------------------------------
@@ -703,10 +700,6 @@ def config_unset(
 @config_app.command("validate")
 def config_validate(
     ctx: typer.Context,
-    scope: Annotated[
-        str | None,
-        typer.Option("--scope", help="(reserved) Restrict to one layer's contribution."),
-    ] = None,
     composed: Annotated[
         bool,
         typer.Option(
@@ -725,16 +718,10 @@ def config_validate(
     The composed view is deterministic (sorted lists, locked render-block
     order) so repeated invocations produce byte-identical JSON.
     """
-    from eawf.kernel.config.layered import LAYER_ORDER, merge_config
+    from eawf.kernel.config.layered import merge_config
 
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
-
-    # Argument validation (scope shape) before merge so unknown labels exit 3
-    # instead of bubbling up through the merge engine.
-    if scope is not None and scope not in LAYER_ORDER:
-        emit_error(UserError(f"unknown scope {scope!r}", kind="InvalidInput"), flags=flags)
-        return  # pragma: no cover
 
     try:
         merged, _sources = merge_config(workspace=workspace, repo=repo)
@@ -748,7 +735,7 @@ def config_validate(
         emit_error(ValidationError(f"config schema rejected: {exc}"), flags=flags)
         return  # pragma: no cover
 
-    payload: dict[str, Any] = {"ok": True, "scope": scope}
+    payload: dict[str, Any] = {"ok": True}
     text = "config: ok"
 
     if composed:

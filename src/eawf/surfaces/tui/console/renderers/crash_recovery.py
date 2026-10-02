@@ -7,16 +7,21 @@ leaves it on an ``OFFLINE SNAPSHOT``. What a door cannot recover is a span of se
 numbers from the cursor the console last held, and what it costs is counted in reads from
 that same cursor: one read of the head, every event after the cursor, or no read at all.
 Enter takes the door under the cursor through the seam, and nothing else takes one.
+
+The ``DAEMON`` line states the other half of a crash: what the daemon's own last start
+repaired before it answered, and how long that took, from the record that start wrote.
 """
 
 from __future__ import annotations
 
 from eawf.kernel.projection.connection import ConnectionValue
+from eawf.kernel.projection.operations import CrashRecoveryReadModel
 from eawf.kernel.projection.route_view import RouteReadModel
 from eawf.kernel.projection.truth import TruthState
+from eawf.kernel.runtime.boot_recovery import BootRecovery
 from eawf.kernel.state.epoch2.transitions import TERMINAL_STATUSES, LifecycleEntity
 from eawf.surfaces.tui.console import derive as dv
-from eawf.surfaces.tui.console.format import group
+from eawf.surfaces.tui.console.format import clock_time, group
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy
@@ -36,6 +41,30 @@ from eawf.surfaces.tui.console.tokens import Severity
 NO_LINK = "the console holds no daemon link · no door can be taken"
 
 _KEYS = route_pairs("crash.recovery")
+
+#: What the ``DAEMON`` line says when no start on this machine has recorded its recovery.
+NO_START_RECORDED = "no daemon start has recorded its recovery on this machine yet"
+
+#: What the ``DAEMON`` line says for a start that found nothing torn.
+CLEAN_START = "clean · nothing was torn, so nothing was repaired"
+
+
+def daemon_line(last: BootRecovery | None) -> str:
+    """Return what the daemon's last start repaired and what that cost, in words."""
+    if last is None:
+        return NO_START_RECORDED
+    repairs = [
+        f"cut {dv.plural(last.truncated_ledgers, 'torn ledger')}" if last.truncated_ledgers else "",
+        f"finished {dv.plural(last.finished_intents, 'intent')}" if last.finished_intents else "",
+        f"abandoned {dv.plural(last.abandoned_intents, 'intent')}"
+        if last.abandoned_intents
+        else "",
+        f"dropped {dv.plural(last.document_rows_dropped, 'compacted row')}"
+        if last.document_rows_dropped
+        else "",
+    ]
+    done = " · ".join(item for item in repairs if item) or CLEAN_START
+    return f"last start {clock_time(last.started_at)} · {done} · {last.duration_ms()} ms"
 
 
 def _doors(revision: int) -> tuple[list[str], ...]:
@@ -89,12 +118,13 @@ def _active(model: RouteReadModel) -> int:
     )
 
 
-def native_frame(view: View, model: RouteReadModel) -> list[str]:
+def native_frame(view: View, model: CrashRecoveryReadModel) -> list[str]:
     """Return the Recovery frame drawn from the read model the daemon served.
 
     Args:
         view: The render being built.
-        model: The route's read model at the cursor the console last held: the Runs.
+        model: The route's read model at the cursor the console last held: the Runs, and
+            the daemon's last start.
 
     Returns:
         The full frame, keybar last.
@@ -117,6 +147,7 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     body = [
         label("HAPPENED", f"The console lost its projection after event {group(cursor)}."),
         more(f"Agents kept working · {dv.plural(_active(model), 'run')} were active then"),
+        label("DAEMON", daemon_line(model.last_start)),
         thin(w),
         grid.head(heads),
     ]
@@ -138,7 +169,8 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
 def render(view: View) -> list[str]:
     """Return the Recovery frame, native when a read model is held."""
     model = native(view)
-    if model is not None:
+    # the Recovery route's read model always carries the daemon's last start
+    if isinstance(model, CrashRecoveryReadModel):
         return native_frame(view, model)
     s, w = view.session, view.w
     doors = _doors(view.fixture.proto.revision)

@@ -252,23 +252,11 @@ def _ensure_subkey(
 
 
 def _migrate_flow_transitions(payload: dict[str, Any]) -> bool:
-    """Rename legacy auto-accept stages to explicit completed-stage transitions."""
+    """Drop the legacy auto-accept stages, whose successor transitions are retired too."""
     flow = payload.get("flow")
     if not isinstance(flow, dict):
         return False
-    changed = False
-    legacy = flow.pop("auto_accept", None)
-    if legacy is not None:
-        changed = True
-    if isinstance(legacy, dict):
-        current = flow.get("advance_after")
-        if not isinstance(current, dict):
-            current = {}
-            flow["advance_after"] = current
-        for stage in ("research", "prep", "audit", "polish"):
-            value = legacy.get(stage)
-            if isinstance(value, bool) and stage not in current:
-                current[stage] = value
+    changed = flow.pop("auto_accept", None) is not None
     if "ask_on_decisions" in flow:
         del flow["ask_on_decisions"]
         changed = True

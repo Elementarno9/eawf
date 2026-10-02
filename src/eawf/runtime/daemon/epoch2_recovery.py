@@ -84,11 +84,13 @@ from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from eawf.kernel.fsync import fsync_parent_dir
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.runtime.boot_recovery import BootRecovery
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.io import state_version
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.append import append_json_line
+from eawf.kernel.store.changes import ChangeRecord, append_change_record_once
 from eawf.kernel.store.compaction import read_document, recover_store_tree
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import (
@@ -150,6 +152,10 @@ REASON_RECORD_UNREADABLE: Final = "native_record_unreadable"
 #: this module.
 LEDGER_LINE_KEY: Final = "ledger_line"
 
+#: The envelope payload key holding the change records a commit files, one
+#: rendered line each, journalled for the replay on the same grounds.
+CHANGE_LINES_KEY: Final = "change_lines"
+
 #: Version of the payload a ledger-tail repair row carries.
 TAIL_REPAIR_EVENT_SCHEMA_VERSION: Final = "1"
 
@@ -157,6 +163,11 @@ TAIL_REPAIR_EVENT_SCHEMA_VERSION: Final = "1"
 #: ``ledger`` namespace with the append rows, so a reader filtering one
 #: collection's ledger events sees the cut beside the lines it follows.
 TAIL_REPAIR_EVENT_SUFFIX: Final = "tail_truncated"
+
+#: The file the last start's recovery is recorded in, beside the daemon's WAL in its
+#: runtime directory. One file, replaced on every start: only the newest start is read,
+#: and the runtime directory is this machine's, never a tree's.
+BOOT_RECOVERY_FILENAME: Final = "boot-recovery.json"
 
 
 class IdempotencyReceipt(BaseModel):
@@ -663,6 +674,65 @@ def recover_native_store_trees(daemon_wal_dir: Path) -> NativeStoreRecoveryRepor
     return report
 
 
+def boot_recovery_path(daemon_wal_dir: Path) -> Path:
+    """Return where the last start's recovery is recorded, beside *daemon_wal_dir*."""
+    return daemon_wal_dir.parent / BOOT_RECOVERY_FILENAME
+
+
+def record_boot_recovery(
+    daemon_wal_dir: Path,
+    *,
+    started_at: datetime,
+    finished_at: datetime,
+    tails: LedgerTailRepairReport,
+    replay: NativeReplayReport,
+    store: NativeStoreRecoveryReport,
+) -> BootRecovery:
+    """Record what this start's native recovery passes repaired, replacing the last record.
+
+    Args:
+        daemon_wal_dir: The daemon's WAL directory; the record is written beside it.
+        started_at: When the first pass began.
+        finished_at: When the last pass ended.
+        tails: What the torn-tail pass cut.
+        replay: What the native WAL replay finished or abandoned.
+        store: What the compaction recovery dropped or cut.
+
+    Returns:
+        The record as written.
+    """
+    record = BootRecovery(
+        started_at=started_at,
+        finished_at=finished_at,
+        # a torn line the compaction recovery dropped is the same cut the tail pass makes
+        truncated_ledgers=tails.truncated_ledgers + store.repaired_ledgers,
+        finished_intents=replay.completed_count + replay.applied_count,
+        abandoned_intents=replay.abandoned_count,
+        document_rows_dropped=store.document_rows_dropped,
+    )
+    _atomic_write_bytes(
+        boot_recovery_path(daemon_wal_dir), orjson.dumps(record.model_dump(mode="json"))
+    )
+    logger.info(
+        f"record_boot_recovery passes={','.join(record.passes()) or 'clean'} "
+        f"ms={record.duration_ms()}"
+    )
+    return record
+
+
+def read_boot_recovery(daemon_wal_dir: Path) -> BootRecovery | None:
+    """Return the last start's recovery, or ``None`` when no start has recorded one.
+
+    Raises:
+        pydantic.ValidationError: The record does not validate, which means the file
+            was written by something other than :func:`record_boot_recovery`.
+    """
+    path = boot_recovery_path(daemon_wal_dir)
+    if not path.is_file():
+        return None
+    return BootRecovery.model_validate_json(path.read_bytes())
+
+
 def _native_documents(native: Path) -> tuple[Path, ...]:
     """Return each native tree's document once, in root order.
 
@@ -753,8 +823,9 @@ def _finish(
     known: dict[Path, set[str]],
     tally: _Tally,
 ) -> None:
-    """Append the missing ledger line and firehose row, then mark durable."""
+    """Append the missing ledger line, change records and firehose row, then mark durable."""
     _finish_ledger_line(record, record_id=record_id, tally=tally)
+    _finish_change_lines(record, record_id=record_id)
     firehose = store_path(tree_root / TREE_ANCHOR_FILENAME, StoreKind.EVENT)
     ids = known.get(firehose)
     if ids is None:
@@ -789,6 +860,24 @@ def _finish_ledger_line(record: wal.WalRecord, *, record_id: str, tally: _Tally)
             f"_finish_ledger_line replayed record={record_id!r} "
             f"collection={ledger_record.collection.value} key={ledger_record.record_key!r}"
         )
+
+
+def _finish_change_lines(record: wal.WalRecord, *, record_id: str) -> None:
+    """Append each change record a commit journalled that its feed does not hold.
+
+    Raises:
+        ValidationError: A journalled line is not a change record; as with a
+            ledger line, the digest already verified, so it fails loudly.
+    """
+    lines = record.envelope.payload.get(CHANGE_LINES_KEY)
+    if not isinstance(lines, list) or record.state_path is None:
+        return
+    for line in lines:
+        change = ChangeRecord.model_validate_json(line)
+        if append_change_record_once(Path(record.state_path), change):
+            logger.info(
+                f"_finish_change_lines replayed record={record_id!r} change={change.change_id!r}"
+            )
 
 
 def _load_record(root_dir: Path, path: Path) -> tuple[str, wal.WalRecord] | None:
@@ -908,6 +997,8 @@ def _atomic_write_bytes(target: Path, payload: bytes) -> None:
 
 
 __all__ = [
+    "BOOT_RECOVERY_FILENAME",
+    "CHANGE_LINES_KEY",
     "LEDGER_LINE_KEY",
     "PROJECTION_DEGRADED",
     "REASON_DOCUMENT_DIVERGED",
@@ -923,10 +1014,13 @@ __all__ = [
     "LedgerTailRepairReport",
     "NativeReplayReport",
     "NativeStoreRecoveryReport",
+    "boot_recovery_path",
     "canonical_params_digest",
     "idempotency_receipt_path",
     "publish_projection",
+    "read_boot_recovery",
     "read_idempotency_receipt",
+    "record_boot_recovery",
     "record_idempotency_receipt",
     "recover_native_store_trees",
     "repair_native_ledger_tails",

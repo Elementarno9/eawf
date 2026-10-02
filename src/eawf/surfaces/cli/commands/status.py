@@ -433,10 +433,6 @@ def status(
             help="Workspace root for state.json resolution (overrides pwd-upward).",
         ),
     ] = None,
-    scope: Annotated[
-        str | None,
-        typer.Option("--scope", help="Optional scope ID (informational; not yet filtered)."),
-    ] = None,
     json_output: Annotated[
         bool,
         typer.Option(
@@ -451,10 +447,6 @@ def status(
     from eawf.kernel.state.models import State
 
     flags: GlobalFlags = ctx.obj
-    # ``scope`` is captured for forward compatibility (per-command option) but
-    # not yet consumed by the rendering path — see :mod:`eawf.surfaces.cli.flags` for
-    # why ``--scope`` is intentionally not a global flag.
-    _ = scope
     effective_flags = GlobalFlags(
         json_output=flags.json_output or json_output,
         plain_output=flags.plain_output,

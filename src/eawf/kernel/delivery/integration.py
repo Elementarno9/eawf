@@ -537,13 +537,28 @@ class ConflictExit(_FrozenModel):
         return self
 
 
+class ConflictClearance(_FrozenModel):
+    """How a conflict stopped blocking its Batch: the delivery that landed past it.
+
+    Attributes:
+        generation_id: The generation the Batch head moved to.
+        head_sha: The commit that generation delivered.
+        actor: Who asked for the integration that landed it.
+    """
+
+    generation_id: IntegrationGenerationKey
+    head_sha: ShaStr
+    actor: PrincipalKey
+
+
 class IntegrationConflict(_FrozenModel):
     """The read-only conflict frame a blocked attempt leaves behind.
 
     The record exists so a surface can show a conflict without reading the
     isolated workspace, and ``exit`` is required so every frame names where
     resolution lands. ``ahead`` and ``behind`` count the candidate against
-    the selected Batch base at preparation.
+    the selected Batch base at preparation. ``cleared_at`` and ``cleared_by``
+    are set together, by the delivery that lands past the conflict.
     """
 
     id: IntegrationConflictKey
@@ -556,6 +571,7 @@ class IntegrationConflict(_FrozenModel):
     files: tuple[ConflictFile, ...] = Field(min_length=1)
     exit: ConflictExit
     cleared_at: UtcDatetime | None = None
+    cleared_by: ConflictClearance | None = None
 
     @model_validator(mode="after")
     def _record_is_coherent(self) -> Self:
@@ -563,8 +579,11 @@ class IntegrationConflict(_FrozenModel):
 
         Raises:
             ValueError: The Batch or a Task exit sits under another
-                repository, or a path is listed twice.
+                repository, a path is listed twice, or the conflict states
+                when it was cleared without how, or how without when.
         """
+        if (self.cleared_at is None) != (self.cleared_by is None):
+            raise ValueError("a conflict is cleared_at and cleared_by together, or neither")
         repository = self.repository_ref
         batch = self.batch_ref
         in_repository = (
@@ -609,6 +628,7 @@ __all__ = [
     "CandidateBundleKey",
     "ConflictAuthority",
     "ConflictClaimId",
+    "ConflictClearance",
     "ConflictExit",
     "ConflictExitKind",
     "ConflictFile",

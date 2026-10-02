@@ -40,7 +40,6 @@ from eawf.surfaces.tui.console.operations import SettingRequest, address_setting
 from eawf.surfaces.tui.console.overlays.mutation_card import preview_frame
 from eawf.surfaces.tui.console.renderers.provenance import refusal, step
 from eawf.surfaces.tui.console.session import Session
-from eawf.workflow.skills.ship import SHIP_GATES
 from tests.tui.surfaces.tui.console import test_settings_route as sr
 
 #: An enriched profile a repo overlays: its role-tier block reaches a dispatched agent, so
@@ -162,11 +161,8 @@ def test_ui053_check_sets_are_the_code_owned_sets_not_the_design_packs(tree: Pat
     view = _view(tree)
 
     assert view.leaf("runtime.adapters").allowed == get_args(RuntimeAdapterId)
-    assert view.leaf("acceptance.required_before_ship").allowed == SHIP_GATES
-    assert SHIP_GATES == ("state", "pre-commit", "lint", "typecheck", "tests", "build")
-    # the design pack offered ``local`` and ``docs``, neither of which any reader accepts
+    # the design pack offered ``local``, which no reader accepts
     assert "local" not in view.leaf("runtime.adapters").allowed
-    assert "docs" not in SHIP_GATES
 
 
 # ---------- UI-053: order, a ranked list ----------
@@ -528,7 +524,7 @@ def test_ui053_a_typed_j_or_k_is_text_in_an_editor_field_never_a_motion(
     tree: Path, fixture: Fixture
 ) -> None:
     view = _view(tree)
-    session = _on(view, "vcs.pr_merge_method")
+    session = _on(view, "vcs.coauthor.default_runtime")
 
     sr._press(fixture, view, session, ["Enter", "Backspace", *"jk"])
     edit = session.edit

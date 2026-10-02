@@ -1,6 +1,6 @@
 """The native Campaign writers and the Campaign read models the console opens.
 
-Six verbs write a Campaign, each through the native transaction so it lands
+Seven verbs write a Campaign, each through the native transaction so it lands
 with one WAL intent, one sequence and one firehose row, and a refusal writes
 nothing:
 
@@ -22,6 +22,9 @@ nothing:
   daemon measured, keeps its text beside the record, and lists the revision
   on the Campaign and on the step that wrote it. Recording unchanged content
   again writes no new revision.
+- ``runtime.campaign.budget.set`` sets the rounds or tokens limit, keeping the
+  spend, and moves pending step bounds and the budget stop to match. A retry
+  of a set that landed finds the limits held and writes nothing.
 - ``runtime.campaign.close`` moves an active Campaign to ``converged`` or
   ``cancelled`` and records why.
 - ``runtime.campaign.finding.promote`` promotes what a Campaign learned into a
@@ -74,10 +77,12 @@ from eawf.kernel.state.epoch2.campaign import (
     CampaignStop,
     NamedProgress,
     ResearchBudget,
+    SettableAxisKind,
     StepOutcome,
     StepState,
     StepTitle,
-    exhausted_axis,
+    budget_stop,
+    relimited,
     revision_ref,
     step_blockers,
 )
@@ -119,6 +124,7 @@ logger = logging.getLogger(__name__)
 CAMPAIGN_PLAN_APPROVE_METHOD: Final = "runtime.campaign.plan.approve"
 CAMPAIGN_PLAN_REVISE_METHOD: Final = "runtime.campaign.plan.revise"
 CAMPAIGN_CLOSE_METHOD: Final = "runtime.campaign.close"
+CAMPAIGN_BUDGET_SET_METHOD: Final = "runtime.campaign.budget.set"
 CAMPAIGN_STEP_UPDATE_METHOD: Final = "runtime.campaign.step.update"
 CAMPAIGN_ARTIFACT_RECORD_METHOD: Final = "runtime.campaign.artifact.record"
 CAMPAIGN_FINDING_PROMOTE_METHOD: Final = "runtime.campaign.finding.promote"
@@ -193,6 +199,25 @@ class PlanReviseParams(_Params):
     evidence_budget: ResearchBudget | None = None
 
 
+class BudgetSetParams(_Params):
+    """Params of :data:`CAMPAIGN_BUDGET_SET_METHOD`.
+
+    Attributes:
+        actor: Who set it.
+        urn: The Campaign.
+        expected_revision: The Campaign row revision the limits were decided against.
+        limits: The new limit per axis; an axis the Campaign does not bound yet is added.
+    """
+
+    actor: PrincipalKey
+    urn: CampaignUrn
+    expected_revision: Annotated[int, Field(gt=0, strict=True)]
+    limits: Annotated[
+        dict[SettableAxisKind, Annotated[int, Field(gt=0, strict=True)]],
+        Field(min_length=1),
+    ]
+
+
 class CloseParams(_Params):
     """Params of :data:`CAMPAIGN_CLOSE_METHOD`.
 
@@ -226,6 +251,8 @@ class StepUpdateParams(_Params):
         evidence_refs: Evidence the step produced, appended to what it produced.
         cleared_contradiction_refs: Contradictions resolved since the step was planned.
         spent: The observed spend per axis, never lower than what is recorded.
+        unmetered: The axes this change observed no reading for, whose spend is a floor
+            from now on.
         progress: The runner's named progress.
     """
 
@@ -241,6 +268,7 @@ class StepUpdateParams(_Params):
     spent: dict[BudgetAxisKind, Annotated[int, Field(ge=0, strict=True)]] = Field(
         default_factory=dict
     )
+    unmetered: tuple[BudgetAxisKind, ...] = ()
     progress: NamedProgress | None = None
 
 
@@ -833,6 +861,9 @@ def update_step(
         moved = _moved_step(step, args, campaign.plan_steps, now)
         spend = {axis.axis_kind: axis.spent for axis in step.bound.axes}
         budget = campaign.evidence_budget.model_dump(mode="json")
+        for axis in (*moved["bound"]["axes"], *budget["axes"]):
+            if axis["axis_kind"] in args.unmetered:
+                axis["spent_quality"] = "unavailable"
         for axis in budget["axes"]:
             for after in moved["bound"]["axes"]:
                 if after["axis_kind"] == axis["axis_kind"]:
@@ -842,18 +873,10 @@ def update_step(
             for other in campaign.plan_steps
         ]
         changes: dict[str, Any] = {"plan_steps": steps, "evidence_budget": budget}
-        exhausted = exhausted_axis(ResearchBudget.model_validate(budget))
         waiting = any(other["state"] == StepState.PENDING.value for other in steps)
-        if exhausted is not None and waiting and campaign.stop is None:
-            changes["stop"] = CampaignStop(
-                reason="budget_exhausted",
-                axis_kind=exhausted.axis_kind,
-                detail=(
-                    f"{exhausted.axis_kind} reached {exhausted.spent} of its hard "
-                    f"{exhausted.limit} {exhausted.unit}"
-                ),
-                stopped_at=now,
-            ).model_dump(mode="json")
+        stop = budget_stop(ResearchBudget.model_validate(budget), waiting=waiting, now=now)
+        if stop is not None and campaign.stop is None:
+            changes["stop"] = stop.model_dump(mode="json")
         try:
             updated = _bumped(campaign, now, **changes)
         except ValidationError as error:
@@ -1040,6 +1063,41 @@ def record_artifact(
 
 
 # ---------- status ----------
+
+
+def set_budget(
+    context: Epoch2RootContext, args: BudgetSetParams, *, now: datetime
+) -> tuple[CampaignCommit, tuple[Envelope, ...]]:
+    """Set an active Campaign's budget limits, as :func:`relimited` draws them.
+
+    Returns:
+        The Campaign under its new limits and the row to publish; the Campaign as
+        it stands, uncommitted, when it already holds them.
+
+    Raises:
+        TransactionRefusedError: No such Campaign, it left ``active``, or it moved
+            since *expected_revision* and does not already hold the limits.
+    """
+    with context.session([str(args.urn)]) as session:
+        campaign = _campaign(session.read_document(), args.urn)
+        _require_active(campaign, args.urn)
+        budget, steps, stop = relimited(campaign, args.limits, now=now)
+        # a retry of a set that landed finds its limits held, whatever revision it names
+        if (budget, steps, stop) == (campaign.evidence_budget, campaign.plan_steps, campaign.stop):
+            return CampaignCommit(record=campaign.model_dump(mode="json"), committed=False), ()
+        _require_revision(campaign, args.expected_revision, args.urn)
+        updated = _bumped(
+            campaign,
+            now,
+            evidence_budget=budget.model_dump(mode="json"),
+            plan_steps=[step.model_dump(mode="json") for step in steps],
+            stop=stop.model_dump(mode="json") if stop is not None else None,
+        )
+        envelope = _write_campaign(
+            session, updated, event_name="campaign.budget.set", actor=args.actor, now=now
+        )
+    logger.info(f"set_budget campaign={campaign.key} limits={args.limits}")
+    return CampaignCommit(record=updated.model_dump(mode="json"), committed=True), (envelope,)
 
 
 def close_campaign(
@@ -1271,6 +1329,7 @@ def _writer(method: str, model: type[BaseModel], write: _Write) -> None:
 _writer(CAMPAIGN_PLAN_APPROVE_METHOD, PlanApproveParams, approve_plan)
 _writer(CAMPAIGN_PLAN_REVISE_METHOD, PlanReviseParams, revise_plan)
 _writer(CAMPAIGN_CLOSE_METHOD, CloseParams, close_campaign)
+_writer(CAMPAIGN_BUDGET_SET_METHOD, BudgetSetParams, set_budget)
 _writer(CAMPAIGN_STEP_UPDATE_METHOD, StepUpdateParams, update_step)
 _writer(CAMPAIGN_ARTIFACT_RECORD_METHOD, ArtifactRecordParams, record_artifact)
 _writer(CAMPAIGN_FINDING_PROMOTE_METHOD, FindingPromoteParams, promote_finding)
@@ -1279,6 +1338,7 @@ _writer(CAMPAIGN_FINDING_PROMOTE_METHOD, FindingPromoteParams, promote_finding)
 __all__ = [
     "CAMPAIGN_ARTIFACT_METHOD",
     "CAMPAIGN_ARTIFACT_RECORD_METHOD",
+    "CAMPAIGN_BUDGET_SET_METHOD",
     "CAMPAIGN_CLOSE_METHOD",
     "CAMPAIGN_FINDING_PROMOTE_METHOD",
     "CAMPAIGN_PLAN_APPROVE_METHOD",
@@ -1294,5 +1354,6 @@ __all__ = [
     "promote_finding",
     "record_artifact",
     "revise_plan",
+    "set_budget",
     "update_step",
 ]

@@ -1816,7 +1816,7 @@ def eawf026_settings_categories(ctx: typer.Context) -> None:
 
     Runs the EAWF026 rule over the shipped leaf catalog and the settings
     category table: every catalog section must be filed under exactly one
-    of the six orientation categories. Exits 1 naming each unfiled,
+    of the five orientation categories. Exits 1 naming each unfiled,
     doubly filed or phantom section and each unknown category, 0 when
     the assignment is total.
     """
@@ -2066,7 +2066,6 @@ def _staged_added_lines(rel: str, *, cwd: Path) -> list[tuple[int, str]]:
 def eawf016_title_clarity(
     ctx: typer.Context,
     files: _FilesArg = None,
-    base: _BaseOpt = "origin/main",
 ) -> None:
     """Reject unclear entity titles added to the staged ``state.json`` delta.
 

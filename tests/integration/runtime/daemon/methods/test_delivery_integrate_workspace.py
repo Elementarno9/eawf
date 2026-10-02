@@ -20,7 +20,8 @@ from typing import Any, Final
 import pytest
 
 import eawf.runtime.daemon.methods.delivery as delivery_methods
-from eawf.kernel.delivery.integration import IntegrationGeneration
+from eawf.kernel.delivery.integration import IntegrationConflict, IntegrationGeneration
+from eawf.kernel.delivery.receipts import RevisionBinding
 from eawf.kernel.state.epoch2.urns import BatchUrn
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -32,6 +33,7 @@ from eawf.runtime.daemon.methods.candidate import (
     CANDIDATE_REPORT_BIND_METHOD,
     CANDIDATE_SUBMIT_METHOD,
 )
+from eawf.runtime.daemon.methods.console_records import BatchRecordsRead, read_conflict_frames
 from eawf.runtime.daemon.methods.delivery import DELIVERY_INTEGRATE_METHOD
 from eawf.runtime.integration.git_workspace import (
     GitIntegrationWorkspace,
@@ -133,10 +135,19 @@ def integrate_params(canary: CanaryProvision, *, base: str, candidate: str) -> d
 
 def seed_head(canary: CanaryProvision, runtime: Path, *, base: str, head: str) -> None:
     """File generation two of the Batch, delivered at commit *head*."""
+    seed_generation(
+        canary, runtime, ordinal=2, head=head, target=world.binding(generation=1, head_sha=base)
+    )
+
+
+def seed_generation(
+    canary: CanaryProvision, runtime: Path, *, ordinal: int, head: str, target: RevisionBinding
+) -> None:
+    """File generation *ordinal* of the Batch, delivered at commit *head* over *target*."""
     generation: IntegrationGeneration = world.generation(
-        ordinal=2,
+        ordinal=ordinal,
         head_sha=head,
-        target_base=world.binding(generation=1, head_sha=base),
+        target_base=target,
         tasks=(world.OTHER_TASK,),
         selected=True,
     )
@@ -171,6 +182,13 @@ def batch_lines(canary: CanaryProvision, runtime: Path) -> tuple[LedgerRecord, .
     """Return every line of the canary's Batch ledger."""
     with root_ctx(canary, runtime).session([world.BATCH]) as session:
         return read_ledger_records(session.ledger_path(Epoch2Collection.BATCH))
+
+
+def conflict_frames(canary: CanaryProvision, runtime: Path) -> tuple[IntegrationConflict, ...]:
+    """Return the canary Batch's conflict frames as the conflict card reads them."""
+    batch = BatchRecordsRead.model_validate({"urn": world.BATCH}).urn
+    with root_ctx(canary, runtime).session([world.BATCH]) as session:
+        return read_conflict_frames(session.ledger_path(Epoch2Collection.BATCH), batch)
 
 
 def assert_removed(canary: CanaryProvision, opened: Opened) -> None:
@@ -242,6 +260,53 @@ def test_a_conflicting_candidate_blocks_and_the_worktree_is_still_removed(
     assert [line.status for line in batch_lines(canary, runtime)] == ["selected", "blocked"]
     assert git(canary.root, "for-each-ref", "--format=%(refname) %(objectname)") == refs_before
     assert_removed(canary, opened)
+
+
+def test_a_later_delivery_clears_the_conflict_and_names_the_head_it_landed(
+    tmp_path: Path, opened: Opened
+) -> None:
+    """The delivery that lands past a conflict files how the conflict was resolved."""
+    canary, runtime, ctx, base, candidate = sealed_canary(tmp_path)
+    head = side_commit(canary, path="src/module.py", content="x = 9\n")
+    seed_head(canary, runtime, base=base, head=head)
+    blocked = call(
+        DELIVERY_INTEGRATE_METHOD, ctx, integrate_params(canary, base=base, candidate=candidate)
+    )
+    (standing,) = conflict_frames(canary, runtime)
+    assert standing.cleared_at is None and standing.cleared_by is None
+    # the Batch head moves back off the conflicting line, so the candidate now applies
+    root = canary.root
+    git(root, "checkout", "-q", "delivered-earlier")
+    (root / "src/module.py").write_text("x = 1\n", encoding="utf-8")
+    git(root, "commit", "-q", "-am", "revert the overlap")
+    reverted = git(root, "rev-parse", "HEAD")
+    git(root, "checkout", "-q", "main")
+    seed_generation(
+        canary, runtime, ordinal=3, head=reverted, target=world.binding(generation=2, head_sha=head)
+    )
+
+    params = {**integrate_params(canary, base=base, candidate=candidate), "idempotency_key": "i2"}
+    answer = call(DELIVERY_INTEGRATE_METHOD, ctx, params)
+
+    assert blocked["delivered"] is False and answer["delivered"] is True
+    (cleared,) = conflict_frames(canary, runtime)
+    assert cleared.id == standing.id
+    assert cleared.cleared_by is not None and cleared.cleared_at is not None
+    assert cleared.cleared_by.generation_id == answer["generation_ids"][-1]
+    delivered = git(root, "rev-parse", delivery_pin_ref(answer["manifest_ids"][-1]))
+    assert cleared.cleared_by.head_sha == delivered
+    assert cleared.cleared_by.actor == ACTOR
+    assert [line.status for line in batch_lines(canary, runtime)][-1] == "cleared"
+
+
+def test_a_delivery_with_no_standing_conflict_files_no_clearance(
+    tmp_path: Path, opened: Opened
+) -> None:
+    canary, runtime, ctx, base, candidate = sealed_canary(tmp_path)
+
+    call(DELIVERY_INTEGRATE_METHOD, ctx, integrate_params(canary, base=base, candidate=candidate))
+
+    assert [line.status for line in batch_lines(canary, runtime)] == ["selected"]
 
 
 def test_an_unpinned_candidate_is_refused_and_the_worktree_is_still_removed(

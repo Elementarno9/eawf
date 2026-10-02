@@ -42,15 +42,7 @@ _DEPRECATED_ADAPTER_KEYS: tuple[str, ...] = (
 )
 
 #: Newly wired interactive leaves must stay visible and consumed.
-_ACTIVE_CONSUMED_KEYS: tuple[str, ...] = (
-    "flow.advance_after.audit",
-    "flow.advance_after.polish",
-    "flow.advance_after.prep",
-    "flow.advance_after.research",
-    "flow.max_repair_cycles",
-    "research.auto_save",
-    "review.default_level",
-)
+_ACTIVE_CONSUMED_KEYS: tuple[str, ...] = ("research.auto_save",)
 
 
 def test_registry_non_empty() -> None:

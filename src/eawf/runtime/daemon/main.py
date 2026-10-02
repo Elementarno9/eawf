@@ -39,6 +39,7 @@ from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.churn import ChurnOp, lineage_born_at, record_churn
 from eawf.runtime.daemon.epoch2_recovery import (
+    record_boot_recovery,
     recover_native_store_trees,
     repair_native_ledger_tails,
     replay_native_wal,
@@ -1069,6 +1070,7 @@ def run(*, foreground: bool = True) -> int:
             # that would name its tree may already be swept. Cut each torn
             # tail back to its last complete line first, so a line the
             # replay re-appends lands on a clean boundary.
+            recovery_started = datetime.now(UTC)
             tail_report = repair_native_ledger_tails(
                 daemon_wal_dir, tree_roots=_native_tree_roots(project_state_path)
             )
@@ -1108,6 +1110,15 @@ def run(*, foreground: bool = True) -> int:
                 f"repaired={store_report.repaired_ledgers} "
                 f"dropped={store_report.document_rows_dropped} "
                 f"indexed={store_report.regenerated_indexes}"
+            )
+            # the Recovery frame states what this start repaired and what it cost
+            record_boot_recovery(
+                daemon_wal_dir,
+                started_at=recovery_started,
+                finished_at=datetime.now(UTC),
+                tails=tail_report,
+                replay=native_report,
+                store=store_report,
             )
 
             # Reconcile orphaned agent sessions: a prior daemon's spawned

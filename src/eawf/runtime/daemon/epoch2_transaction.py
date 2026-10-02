@@ -18,9 +18,10 @@ order, whichever entity it moves:
    with the mutation that carries it.
 6. Write one WAL intent, mutate the document once, file the receipt that
    answers a retry of this request, append one firehose row carrying one
-   ``domain.<entity>.<verb>`` event, move a record the edge made terminal
-   out of the document and into its ledger, and mark the WAL record
-   durable.
+   ``domain.<entity>.<verb>`` event, file the change feed's record of
+   every row the commit changed (:mod:`eawf.kernel.store.changes`), move
+   a record the edge made terminal out of the document and into its
+   ledger, and mark the WAL record durable.
 7. Publish after the commit, outside the locks, because a projection
    publish inside them would stall every other writer on the root. A
    publish that fails there degrades the answer and never the commit.
@@ -128,6 +129,7 @@ from eawf.kernel.store.ledger import (
 from eawf.kernel.store.paths import ledger_path, store_path
 from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, Epoch2Collection, StorageTier, tier_for
 from eawf.observability.logging.state_leak import state_leak_refusal
+from eawf.runtime.daemon.epoch2_changes import file_changes, journal_changes
 from eawf.runtime.daemon.epoch2_edges import batch_unlisting, edge_updates, locked_unmet
 from eawf.runtime.daemon.epoch2_recovery import (
     LEDGER_LINE_KEY,
@@ -579,9 +581,20 @@ def _persist(
     """
     _refuse_leaks(plan, request=request)
     document_path = session.document_path
+    envelope, changes = journal_changes(
+        context,
+        document_path=document_path,
+        before=plan.document,
+        after=plan.new_document,
+        envelope=plan.envelope,
+        event_name=plan.event_name,
+        sequence=plan.sequence,
+        actor_ref=request.actor,
+        now=now,
+    )
     wal_record = WalRecord(
         record_id=uuid.uuid4().hex,
-        envelope=plan.envelope,
+        envelope=envelope,
         idempotency_key=request.idempotency_key,
         written_at=now,
         before_state_version=state_version(plan.document),
@@ -602,6 +615,7 @@ def _persist(
     write_pending(context.wal_dir, wal_record)
     session.write_document(plan.new_document)
     mark_applied(context.wal_dir, wal_record.record_id)
+    file_changes(document_path, changes)
     record_idempotency_receipt(
         context,
         namespaced_key=context.idempotency_key(request.idempotency_key),
@@ -609,7 +623,7 @@ def _persist(
         receipt=receipt.model_dump(mode="json"),
         recorded_at=now,
     )
-    append_json_line(_firehose_path(context), plan.envelope.model_dump_json())
+    append_json_line(_firehose_path(context), envelope.model_dump_json())
     if plan.compaction is not None:
         _compact(context, document_path=document_path, record=plan.compaction)
     mark_fsynced(context.wal_dir, wal_record.record_id)
@@ -808,6 +822,18 @@ def commit_row_write(
                 **event_fields,
             },
         )
+        actor = event_fields.get("actor_ref", event_fields.get("actor"))
+        envelope, changes = journal_changes(
+            context,
+            document_path=session.document_path,
+            before=document,
+            after=new_document,
+            envelope=envelope,
+            event_name=event_name,
+            sequence=sequence,
+            actor_ref=actor if isinstance(actor, str) else None,
+            now=now,
+        )
         wal_record = WalRecord(
             record_id=uuid.uuid4().hex,
             envelope=envelope,
@@ -819,6 +845,7 @@ def commit_row_write(
         write_pending(context.wal_dir, wal_record)
         session.write_document(new_document)
         mark_applied(context.wal_dir, wal_record.record_id)
+        file_changes(session.document_path, changes)
         append_json_line(_firehose_path(context), envelope.model_dump_json())
         if compaction is not None:
             _compact(context, document_path=session.document_path, record=compaction)

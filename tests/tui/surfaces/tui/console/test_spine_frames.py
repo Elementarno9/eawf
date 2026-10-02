@@ -27,7 +27,7 @@ from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.paint import Part, paint
 from eawf.surfaces.tui.console.renderers import render_route
-from eawf.surfaces.tui.console.renderers.history import NO_FEED
+from eawf.surfaces.tui.console.renderers.history import UNREAD
 from eawf.surfaces.tui.console.renderers.run_detail import NO_EVENTS, TIMELINE_LEGEND, timeline_head
 from eawf.surfaces.tui.console.renderers.timeline import (
     DATED,
@@ -522,7 +522,7 @@ def test_history_draws_the_ledger_columns_and_no_record_list(w: int) -> None:
     head = next(row for row in frame if row.lstrip().startswith("FACT"))
     assert re.match(r"^\s+FACT\s+REVISION\s+SOURCE\s+WHEN$", head.rstrip())
     assert frame[1].startswith(" what changed, from what source, at which revision")
-    assert any(NO_FEED in row for row in frame)
+    assert any(UNREAD in row for row in frame)
     for key in ("TRK-CORE", "MLS-0100", "BAT-0100", "TSK-0001", "RUN-00000001"):
         assert not any(key in row for row in frame[3:]), key
 

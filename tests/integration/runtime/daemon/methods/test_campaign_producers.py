@@ -30,9 +30,11 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.epoch2_transaction import TransactionRefusedError
+from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.methods.campaign import (
     CAMPAIGN_ARTIFACT_METHOD,
     CAMPAIGN_ARTIFACT_RECORD_METHOD,
+    CAMPAIGN_BUDGET_SET_METHOD,
     CAMPAIGN_CLOSE_METHOD,
     CAMPAIGN_FINDING_PROMOTE_METHOD,
     CAMPAIGN_PLAN_APPROVE_METHOD,
@@ -494,3 +496,165 @@ def test_a_cancelled_campaign_records_its_reason_and_refuses_a_second_close(
     assert closed["stop"]["detail"] == "superseded by a narrower question"
     with pytest.raises(TransactionRefusedError, match="cancelled"):
         close(canary, tmp_path, "converged")
+
+
+# ---------- the Campaign's budget ----------
+
+
+def _rounds(limit: int) -> dict[str, Any]:
+    return {"axes": [{"axis_kind": "rounds", "limit": limit, "unit": "rounds"}]}
+
+
+def _rounds_step(ordinal: int, **extra: Any) -> dict[str, Any]:
+    return {**_step(ordinal, **extra), "bound": _rounds(1)}
+
+
+def approve_rounds(canary: CanaryProvision, tmp_path: Path, limit: int) -> None:
+    """Approve two independent steps under a Campaign bounded by *limit* rounds."""
+    approve(
+        canary,
+        tmp_path,
+        evidence_budget=_rounds(limit),
+        plan_steps=[_rounds_step(1), _rounds_step(2)],
+    )
+
+
+def set_budget(
+    canary: CanaryProvision, tmp_path: Path, revision: int | None = None, **limits: int
+) -> dict[str, Any]:
+    """Set the Campaign's limits against *revision*, its current one by default."""
+    current = read_document(document_path(canary))["campaign"]["CAM-0001"]["revision"]
+    return call(
+        canary,
+        tmp_path,
+        CAMPAIGN_BUDGET_SET_METHOD,
+        actor="OP-0001",
+        urn=CAMPAIGN,
+        expected_revision=current if revision is None else revision,
+        limits=limits,
+    )
+
+
+def test_a_budget_set_relimits_an_axis_and_keeps_what_was_spent(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    approve_rounds(canary, tmp_path, 2)
+    update(canary, tmp_path, ordinal=1, to_state="running", run_ref=RUN_A, spent={"rounds": 1})
+    record = set_budget(canary, tmp_path, rounds=5)["record"]
+    assert record["evidence_budget"]["axes"][0] == {
+        "axis_kind": "rounds",
+        "limit": 5,
+        "spent": 1,
+        "unit": "rounds",
+        "spent_quality": "measured",
+        "hard": True,
+    }
+    assert view(canary, tmp_path).evidence_budget.axis("rounds") is not None
+
+
+def test_a_budget_set_adds_a_token_axis_to_the_campaign_and_its_pending_steps(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    approve_rounds(canary, tmp_path, 2)
+    update(canary, tmp_path, ordinal=1, to_state="running", run_ref=RUN_A)
+    record = set_budget(canary, tmp_path, tokens=900)["record"]
+    tokens = [a for a in record["evidence_budget"]["axes"] if a["axis_kind"] == "tokens"]
+    assert [(a["limit"], a["spent"], a["unit"]) for a in tokens] == [(900, 0, "tokens")]
+    kinds = [[a["axis_kind"] for a in s["bound"]["axes"]] for s in record["plan_steps"]]
+    # a started step keeps the bound it started under; a pending one takes the new axis
+    assert kinds == [["rounds"], ["rounds", "tokens"]]
+
+
+def test_a_lowered_limit_clamps_each_pending_step_to_the_campaign(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    approve_rounds(canary, tmp_path, 4)
+    set_budget(canary, tmp_path, tokens=900)
+    record = set_budget(canary, tmp_path, tokens=300)["record"]
+    limits = [a["limit"] for s in record["plan_steps"] for a in s["bound"]["axes"]]
+    assert limits == [1, 300, 1, 300]
+
+
+def test_a_retried_budget_set_finds_its_limits_held_and_writes_nothing(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    approve_rounds(canary, tmp_path, 2)
+    decided_at = read_document(document_path(canary))["campaign"]["CAM-0001"]["revision"]
+    first = set_budget(canary, tmp_path, decided_at, rounds=3)
+    again = set_budget(canary, tmp_path, decided_at, rounds=3)
+    assert (first["committed"], again["committed"]) == (True, False)
+    assert again["record"]["revision"] == first["record"]["revision"]
+
+
+def test_a_budget_set_decided_against_a_stale_revision_is_refused(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    approve_rounds(canary, tmp_path, 2)
+    with pytest.raises(TransactionRefusedError, match="not 99"):
+        set_budget(canary, tmp_path, 99, rounds=3)
+
+
+def test_a_raised_limit_lifts_the_budget_stop_and_a_lowered_one_records_it(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    approve_rounds(canary, tmp_path, 1)
+    update(canary, tmp_path, ordinal=1, to_state="running", run_ref=RUN_A, spent={"rounds": 1})
+    stopped = read_document(document_path(canary))["campaign"]["CAM-0001"]["stop"]
+    assert (stopped["reason"], stopped["axis_kind"]) == ("budget_exhausted", "rounds")
+    assert set_budget(canary, tmp_path, rounds=2)["record"]["stop"] is None
+    update(canary, tmp_path, ordinal=2, to_state="running", run_ref=RUN_B)
+    lowered = set_budget(canary, tmp_path, rounds=1)["record"]
+    # step 2 runs and nothing waits, so the lowered limit stops nothing yet
+    assert lowered["stop"] is None
+    assert lowered["evidence_budget"]["axes"][0]["limit"] == 1
+
+
+def test_a_lowered_limit_under_the_spend_stops_a_campaign_with_steps_waiting(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    approve_rounds(canary, tmp_path, 2)
+    update(canary, tmp_path, ordinal=1, to_state="running", run_ref=RUN_A, spent={"rounds": 1})
+    stop = set_budget(canary, tmp_path, rounds=1)["record"]["stop"]
+    assert (stop["reason"], stop["axis_kind"]) == ("budget_exhausted", "rounds")
+    assert stop["detail"] == "rounds reached 1 of its hard 1 rounds"
+
+
+def test_a_closed_campaign_takes_no_budget(canary: CanaryProvision, tmp_path: Path) -> None:
+    approve_rounds(canary, tmp_path, 2)
+    close(canary, tmp_path, "cancelled")
+    with pytest.raises(TransactionRefusedError, match="takes no more changes"):
+        set_budget(canary, tmp_path, rounds=3)
+
+
+@pytest.mark.parametrize(
+    "limits",
+    [{}, {"rounds": 0}, {"wall_time": 2}, {"rounds": "3"}],
+    ids=["empty", "zero", "unsettable-kind", "not-an-int"],
+)
+def test_a_malformed_budget_set_is_refused_with_nothing_written(
+    canary: CanaryProvision, tmp_path: Path, limits: dict[str, Any]
+) -> None:
+    approve_rounds(canary, tmp_path, 2)
+    before = read_document(document_path(canary))["campaign"]["CAM-0001"]
+    with pytest.raises(DaemonValidationError):
+        call(
+            canary,
+            tmp_path,
+            CAMPAIGN_BUDGET_SET_METHOD,
+            actor="OP-0001",
+            urn=CAMPAIGN,
+            expected_revision=before["revision"],
+            limits=limits,
+        )
+    assert read_document(document_path(canary))["campaign"]["CAM-0001"] == before
+
+
+def test_a_round_no_reading_metered_marks_its_axis_unmetered(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    approve(canary, tmp_path)
+    update(canary, tmp_path, ordinal=1, to_state="running", run_ref=RUN_A)
+    record = update(canary, tmp_path, ordinal=1, unmetered=["wall_time"])["record"]
+    assert record["evidence_budget"]["axes"][0]["spent_quality"] == "unavailable"
+    assert record["plan_steps"][0]["bound"]["axes"][0]["spent_quality"] == "unavailable"
+    assert record["plan_steps"][1]["bound"]["axes"][0]["spent_quality"] == "measured"

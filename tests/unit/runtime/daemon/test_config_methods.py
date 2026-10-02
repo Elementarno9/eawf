@@ -125,7 +125,7 @@ def test_set_layer_value_mutates_yaml(tmp_path: Path) -> None:
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["flow", "advance_after", "audit"],
+                "key_path": ["verify", "odr_blocking"],
                 "value": True,
             },
         )
@@ -135,11 +135,11 @@ def test_set_layer_value_mutates_yaml(tmp_path: Path) -> None:
         # File on disk reflects the new value.
         assert config_yaml.exists()
         body_disk = yaml.safe_load(config_yaml.read_text())
-        assert body_disk == {"flow": {"advance_after": {"audit": True}}}
+        assert body_disk == {"verify": {"odr_blocking": True}}
 
         # Subsequent read reflects the new value.
         read_result: dict[str, Any] = await read(ctx, {"layer": "repo"})
-        assert read_result["config"] == {"flow": {"advance_after": {"audit": True}}}
+        assert read_result["config"] == {"verify": {"odr_blocking": True}}
 
     _run(body)
 
@@ -148,19 +148,19 @@ def test_set_layer_value_preserves_other_keys(tmp_path: Path) -> None:
     """Deep-set updates the named key without clobbering siblings."""
     ctx, repo = _build_ctx(tmp_path=tmp_path)
     config_yaml = repo / ".ea" / "config.yaml"
-    config_yaml.write_text("flow:\n  advance_after:\n    audit: false\n    polish: false\n")
+    config_yaml.write_text("verify:\n  odr_blocking: false\n  require_iter_audit_accepted: false\n")
 
     async def body() -> None:
         await set_layer_value(
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["flow", "advance_after", "audit"],
+                "key_path": ["verify", "odr_blocking"],
                 "value": True,
             },
         )
         body_disk = yaml.safe_load(config_yaml.read_text())
-        assert body_disk == {"flow": {"advance_after": {"audit": True, "polish": False}}}
+        assert body_disk == {"verify": {"odr_blocking": True, "require_iter_audit_accepted": False}}
 
     _run(body)
 
@@ -176,7 +176,7 @@ def test_set_layer_value_publishes_envelope(tmp_path: Path) -> None:
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["flow", "advance_after", "audit"],
+                "key_path": ["verify", "odr_blocking"],
                 "value": True,
             },
         )
@@ -184,7 +184,7 @@ def test_set_layer_value_publishes_envelope(tmp_path: Path) -> None:
         env = sub.queue[0]
         assert env.kind is StoreKind.CONFIG_UPDATED
         assert env.payload["layer"] == "repo"
-        assert env.payload["key_path"] == ["flow", "advance_after", "audit"]
+        assert env.payload["key_path"] == ["verify", "odr_blocking"]
         assert env.payload["value"] is True
 
     _run(body)
@@ -199,7 +199,7 @@ def test_set_layer_value_idempotency_replays(tmp_path: Path) -> None:
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["flow", "advance_after", "audit"],
+                "key_path": ["verify", "odr_blocking"],
                 "value": True,
                 "idempotency_key": "key-1",
             },
@@ -208,7 +208,7 @@ def test_set_layer_value_idempotency_replays(tmp_path: Path) -> None:
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["flow", "advance_after", "audit"],
+                "key_path": ["verify", "odr_blocking"],
                 "value": False,  # different value, same key
                 "idempotency_key": "key-1",
             },
@@ -245,7 +245,7 @@ def test_set_layer_value_rejects_unknown_layer(tmp_path: Path) -> None:
                 ctx,
                 {
                     "layer": "bogus",
-                    "key_path": ["flow", "advance_after", "audit"],
+                    "key_path": ["verify", "odr_blocking"],
                     "value": True,
                 },
             )
@@ -284,7 +284,7 @@ def test_set_layer_value_sequential_writes_preserve_both_keys(tmp_path: Path) ->
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["flow", "advance_after", "audit"],
+                "key_path": ["verify", "odr_blocking"],
                 "value": True,
             },
         )
@@ -292,7 +292,7 @@ def test_set_layer_value_sequential_writes_preserve_both_keys(tmp_path: Path) ->
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["flow", "advance_after", "polish"],
+                "key_path": ["verify", "require_iter_audit_accepted"],
                 "value": True,
             },
         )
@@ -301,7 +301,7 @@ def test_set_layer_value_sequential_writes_preserve_both_keys(tmp_path: Path) ->
 
     body_disk = yaml.safe_load(config_yaml.read_text())
     assert body_disk == {
-        "flow": {"advance_after": {"audit": True, "polish": True}},
+        "verify": {"odr_blocking": True, "require_iter_audit_accepted": True},
     }
 
 
@@ -438,7 +438,7 @@ def test_set_layer_value_rejects_leaf_not_writable_from_target_layer(tmp_path: P
 def test_set_layer_value_allows_leaf_writable_from_target_layer(tmp_path: Path) -> None:
     """A leaf whose allowlist includes the target layer still writes (no false positive).
 
-    ``flow.advance_after.audit`` is writable from ``repo``, so the gate must let the
+    ``verify.odr_blocking`` is writable from ``repo``, so the gate must let the
     write through -- the fix rejects only genuinely-unauthorized writes. The
     repo layer is anchored under the synthetic ``tmp_path`` repo, so no real
     config file is touched.
@@ -451,7 +451,7 @@ def test_set_layer_value_allows_leaf_writable_from_target_layer(tmp_path: Path) 
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["flow", "advance_after", "audit"],
+                "key_path": ["verify", "odr_blocking"],
                 "value": True,
             },
         )
@@ -496,7 +496,7 @@ def test_config_updated_payload_rejects_unknown_operation() -> None:
 def test_unset_layer_value_removes_leaf_and_prunes_empty_parent(tmp_path: Path) -> None:
     ctx, repo = _build_ctx(tmp_path=tmp_path)
     config_yaml = repo / ".ea" / "config.yaml"
-    config_yaml.write_text("flow:\n  advance_after:\n    audit: true\n    polish: false\n")
+    config_yaml.write_text("verify:\n  odr_blocking: true\n  require_iter_audit_accepted: false\n")
     bus = ctx.bus
     assert isinstance(bus, EventBus)
     sub = bus.register(connection_id="cfg-unset")
@@ -504,7 +504,7 @@ def test_unset_layer_value_removes_leaf_and_prunes_empty_parent(tmp_path: Path) 
     async def body() -> None:
         result = await unset_layer_value(
             ctx,
-            {"layer": "repo", "key_path": ["flow", "advance_after", "audit"]},
+            {"layer": "repo", "key_path": ["verify", "odr_blocking"]},
         )
         assert result["removed"] is True
         assert result["envelope"]["payload"]["operation"] == "unset"
@@ -514,18 +514,20 @@ def test_unset_layer_value_removes_leaf_and_prunes_empty_parent(tmp_path: Path) 
         assert envelope.kind is StoreKind.CONFIG_UPDATED
         payload = ConfigUpdatedPayload.model_validate(envelope.payload)
         assert payload.operation == "unset"
-        assert payload.key_path == ["flow", "advance_after", "audit"]
+        assert payload.key_path == ["verify", "odr_blocking"]
         assert payload.value is None
 
     _run(body)
 
-    assert yaml.safe_load(config_yaml.read_text()) == {"flow": {"advance_after": {"polish": False}}}
+    assert yaml.safe_load(config_yaml.read_text()) == {
+        "verify": {"require_iter_audit_accepted": False}
+    }
 
 
 def test_unset_layer_value_absent_is_noop_without_envelope(tmp_path: Path) -> None:
     ctx, repo = _build_ctx(tmp_path=tmp_path)
     config_yaml = repo / ".ea" / "config.yaml"
-    config_yaml.write_text("flow:\n  advance_after:\n    audit: false\n")
+    config_yaml.write_text("verify:\n  odr_blocking: false\n")
     before = config_yaml.read_bytes()
     bus = ctx.bus
     assert isinstance(bus, EventBus)
@@ -534,7 +536,7 @@ def test_unset_layer_value_absent_is_noop_without_envelope(tmp_path: Path) -> No
     async def body() -> None:
         result = await unset_layer_value(
             ctx,
-            {"layer": "repo", "key_path": ["flow", "advance_after", "polish"]},
+            {"layer": "repo", "key_path": ["verify", "require_iter_audit_accepted"]},
         )
         assert result["removed"] is False
         assert result["envelope"] is None
@@ -552,7 +554,7 @@ def test_unset_layer_value_missing_file_is_noop(tmp_path: Path) -> None:
     async def body() -> None:
         result = await unset_layer_value(
             ctx,
-            {"layer": "repo", "key_path": ["flow", "advance_after", "audit"]},
+            {"layer": "repo", "key_path": ["verify", "odr_blocking"]},
         )
         assert result["removed"] is False
         assert result["envelope"] is None
@@ -578,7 +580,7 @@ def test_unset_layer_value_removes_an_off_catalog_key_but_set_still_refuses_it(
     """CON-123: a key no code reads is removed from a layer file; it is never written."""
     ctx, repo = _build_ctx(tmp_path=tmp_path)
     config_yaml = repo / ".ea" / "config.yaml"
-    config_yaml.write_text("mcp:\n  enabled: []\nflow:\n  advance_after:\n    audit: true\n")
+    config_yaml.write_text("mcp:\n  enabled: []\nverify:\n  odr_blocking: true\n")
 
     async def body() -> None:
         result = await unset_layer_value(ctx, {"layer": "repo", "key_path": ["mcp", "enabled"]})
@@ -591,7 +593,7 @@ def test_unset_layer_value_removes_an_off_catalog_key_but_set_still_refuses_it(
             )
 
     _run(body)
-    assert yaml.safe_load(config_yaml.read_text()) == {"flow": {"advance_after": {"audit": True}}}
+    assert yaml.safe_load(config_yaml.read_text()) == {"verify": {"odr_blocking": True}}
 
 
 def test_unset_layer_value_removes_a_deprecated_leaf_from_any_file_layer(tmp_path: Path) -> None:
@@ -629,14 +631,14 @@ def test_unset_layer_value_rejects_nonwritable_layer(tmp_path: Path) -> None:
 def test_unset_layer_value_idempotency_replays_result(tmp_path: Path) -> None:
     ctx, repo = _build_ctx(tmp_path=tmp_path)
     config_yaml = repo / ".ea" / "config.yaml"
-    config_yaml.write_text("flow:\n  advance_after:\n    audit: true\n")
+    config_yaml.write_text("verify:\n  odr_blocking: true\n")
 
     async def body() -> None:
         first = await unset_layer_value(
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["flow", "advance_after", "audit"],
+                "key_path": ["verify", "odr_blocking"],
                 "idempotency_key": "unset-1",
             },
         )
@@ -644,7 +646,7 @@ def test_unset_layer_value_idempotency_replays_result(tmp_path: Path) -> None:
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["flow", "advance_after", "audit"],
+                "key_path": ["verify", "odr_blocking"],
                 "idempotency_key": "unset-1",
             },
         )
@@ -762,7 +764,7 @@ def test_set_wave_value_rejects_non_wave_writable_leaf(tmp_path: Path) -> None:
                 ctx,
                 {
                     "wave_id": "P25-W14",
-                    "key_path": ["flow", "advance_after", "audit"],
+                    "key_path": ["verify", "odr_blocking"],
                     "value": True,
                 },
             )

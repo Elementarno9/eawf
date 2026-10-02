@@ -112,7 +112,7 @@ UNSOURCED_REASON: Final = "no layer states this leaf"
 #: file layers between the built-in defaults and the runtime layers.
 LENS_LAYERS: Final[tuple[Layer, ...]] = tuple(Layer(layer) for layer in WRITABLE_LAYERS)
 
-#: The six orientation categories of the settings rail and the catalog sections each
+#: The five orientation categories of the settings rail and the catalog sections each
 #: holds. Nothing is configured at the category level; the table only files every
 #: catalog section under exactly one heading, alphabetical at both levels.
 SETTINGS_CATEGORIES: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
@@ -126,7 +126,6 @@ SETTINGS_CATEGORIES: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
             "economics",
             "flow",
             "planning",
-            "prep",
             "research",
             "runtime",
             "ship",
@@ -134,8 +133,7 @@ SETTINGS_CATEGORIES: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
     ),
     ("identity", ("preferences", "profiles")),
     ("interface", ("tui", "ui")),
-    ("quality", ("audit", "estimation", "review", "verify")),
-    ("safety", ("acceptance",)),
+    ("quality", ("audit", "estimation", "verify")),
     ("system", ("config", "daemon", "telemetry", "vcs")),
 )
 
@@ -302,7 +300,7 @@ class EffectiveSettingsView(_SettingsModel):
         lens_layers: The file layers the lens cycles, in precedence order: every one of
             them unless the workspace file is the repo file, when the workspace layer is
             not a separate place to write.
-        rail: The six categories and the sections each holds, in rail order.
+        rail: The five categories and the sections each holds, in rail order.
         leaves: Every catalog key, then every merged leaf outside the catalog, by key.
     """
 
@@ -643,7 +641,7 @@ _STRAY_CATEGORY: Final = "system"
 
 
 def _rail(sections: Iterable[str]) -> tuple[SettingsCategory, ...]:
-    """Return the six categories, each holding the table's sections the view has keys for.
+    """Return the five categories, each holding the table's sections the view has keys for.
 
     A section the table does not file, the first segment of a listed uncatalogued key,
     goes under :data:`_STRAY_CATEGORY`.
@@ -705,15 +703,9 @@ def _resolve_members(
     sources: Iterable[ChoicesFrom], *, workspace: Path | None, repo: Path | None
 ) -> dict[str, tuple[tuple[str, str], ...]]:
     """Return the members of every value set the catalog reads per view, keyed by source."""
-    resolved: dict[str, tuple[tuple[str, str], ...]] = {}
-    for source in set(sources):
-        if source == "ship_gates":
-            from eawf.workflow.skills.ship import SHIP_GATES
-
-            resolved[source] = tuple((gate, "") for gate in SHIP_GATES)
-        else:
-            resolved[source] = _profile_members(source, workspace=workspace, repo=repo)
-    return resolved
+    return {
+        source: _profile_members(source, workspace=workspace, repo=repo) for source in set(sources)
+    }
 
 
 def _lens_layers(*, workspace: Path | None, repo: Path | None) -> tuple[Layer, ...]:
@@ -735,9 +727,14 @@ def catalog_section_order() -> tuple[str, ...]:
     """Return every catalog section in rail order, the order a built view's rail lists them.
 
     The rail is filed from the catalog alone, so a console can place its section cursor
-    before the daemon has served a view.
+    before the daemon has served a view. A deprecated or reserved leaf is listed only while
+    a layer states it, so a section holding nothing else has no rail entry here either.
     """
-    rail = _rail(entry.domain for entry in LEAF_KEY_REGISTRY.values())
+    rail = _rail(
+        entry.domain
+        for entry in LEAF_KEY_REGISTRY.values()
+        if entry.consumer_kind not in ("deprecated", "reserved")
+    )
     return tuple(section for category in rail for section in category.sections)
 
 

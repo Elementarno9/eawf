@@ -433,8 +433,7 @@ def _load_vcs_config(state_path: Path) -> VcsConfig:
     The merge anchors on the repo root (``state.json`` lives at
     ``<repo>/.ea/state.json``) so the repo, branch, and local layers are
     consulted on top of the built-in defaults. The config registry already
-    owns ``vcs.pr_merge_method`` / ``vcs.squash_allowed`` / ``vcs.coauthor``;
-    this helper only reads them.
+    owns ``vcs.coauthor``; this helper only reads it.
 
     Args:
         state_path: Resolved path of the active ``state.json``.
@@ -783,7 +782,6 @@ class ShipSkill(SkillAction):
             self._gate_release,
             self._gate_artifacts,
             self._gate_audit,
-            self._gate_merge_method,
             self._gate_gauntlet,
         ):
             failure = gate(run, inputs)
@@ -929,24 +927,6 @@ class ShipSkill(SkillAction):
             {"audit_required": True, "passed": True, "verdict": verdict_label},
         )
         return None
-
-    def _gate_merge_method(self, run: ActionRun, inputs: _ShipInputs) -> SkillResult | None:
-        # Step 2b — gate on the configured PR merge method. Squash is rejected
-        # unless explicitly allowed; rebase / merge clear.
-        merge_method = inputs.vcs_config.pr_merge_method
-        if merge_method != "squash" or inputs.vcs_config.squash_allowed:
-            return None
-        self._trace(
-            run,
-            "ship.merge_method_gate",
-            "ship: merge-method gate blocked (squash not allowed)",
-            {"pr_merge_method": merge_method, "squash_allowed": False},
-        )
-        return self._ship_failure(
-            run,
-            rollback_notes="squash merge not permitted (set vcs.squash_allowed)",
-            repair_commands=["set vcs.pr_merge_method to rebase (or enable vcs.squash_allowed)"],
-        )
 
     def _gate_gauntlet(self, run: ActionRun, inputs: _ShipInputs) -> SkillResult | None:
         # Step 2c — run the local gauntlet. Each gate named in

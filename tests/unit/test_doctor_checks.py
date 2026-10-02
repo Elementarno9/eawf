@@ -171,7 +171,7 @@ def test_check_reserved_config_keys_fails_unsafe_deprecated_automation_claims(
     assert "have no effect" in (result.detail or "")
 
 
-def test_check_reserved_config_keys_accepts_consumed_repair_cycle_value(
+def test_check_reserved_config_keys_names_a_retired_repair_cycle_value(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
@@ -184,8 +184,8 @@ def test_check_reserved_config_keys_accepts_consumed_repair_cycle_value(
 
     result = checks.check_reserved_config_keys(workspace=tmp_path)
 
-    assert result.status == "ok"
-    assert "no reserved config keys" in (result.detail or "")
+    assert result.status == "warn"
+    assert "flow.max_repair_cycles=3 (repo)" in (result.detail or "")
 
 
 def test_check_reserved_config_keys_reports_all_unsafe_repo_values(

@@ -225,17 +225,7 @@ def _promote_to_artifact(
 
 
 @memory_app.command("compact")
-def memory_compact(
-    ctx: typer.Context,
-    scope: Annotated[
-        str | None,
-        typer.Option("--scope", help="Filter (no-op currently — compacts whole store)."),
-    ] = None,
-    budget: Annotated[
-        int | None,
-        typer.Option("--budget", help="Token budget hint (advisory only)."),
-    ] = None,
-) -> None:
+def memory_compact(ctx: typer.Context) -> None:
     """Compact ``memory.jsonl`` (dedup by content; idempotent)."""
     from eawf.kernel.store.compact import compact_store
     from eawf.runtime.session.store import append_event
@@ -258,7 +248,7 @@ def memory_compact(
                 f"compacted memory.jsonl: in={report.records_in} "
                 f"out={report.records_out} dedup={report.dedup_count}"
             ),
-            scope_id=scope,
+            scope_id=None,
             occurred_at=datetime.now(UTC),
         )
         emit_json_or_text(

@@ -11,7 +11,7 @@ contract under test:
 4. ``EAWF_*`` env vars become dotted overrides; double-underscore is the
    key separator.
 5. CLI overrides win over everything else.
-6. Source map keys are dotted-path-of-leaf (``review.default_level``), not
+6. Source map keys are dotted-path-of-leaf (``research.default_depth``), not
    nested-section keys.
 7. Layered merge is idempotent: calling :func:`merge_config` with the same
    inputs twice yields equal outputs.
@@ -75,13 +75,8 @@ def test_built_in_defaults_hold_a_section_for_every_catalogued_leaf_with_a_value
         "preferences",
         "verify",
         "estimation",
-        "audit",
-        "prep",
-        "ship",
-        "review",
         "flow",
         "vcs",
-        "acceptance",
         "daemon",
     }
     assert required == set(BUILT_IN_DEFAULTS) - {"schema_version"}
@@ -92,14 +87,14 @@ def test_only_builtin_layer_contributes_for_empty_stack() -> None:
     # Sample several keys.
     for dotted in (
         "estimation.eu_minutes",
-        "review.default_level",
+        "research.default_depth",
         "vcs.conventions.subject_style",
         "vcs.conventions.release.cadence",
     ):
         assert sources[dotted] == "built-in"
     # Default values match.
     assert merged["estimation"]["eu_minutes"] == 30
-    assert merged["review"]["default_level"] == "medium"
+    assert merged["research"]["default_depth"] == "medium"
     assert "project" not in merged
     assert "memory" not in merged
     assert merged["vcs"]["conventions"]["subject_style"] == "trailer"
@@ -133,31 +128,31 @@ def _write_yaml(path: Path, body: str) -> None:
 def test_global_layer_overrides_builtin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fake_global = tmp_path / "g.yaml"
     monkeypatch.setattr(layered, "global_config_path", lambda: fake_global)
-    _write_yaml(fake_global, "review:\n  default_level: auto\n")
+    _write_yaml(fake_global, "research:\n  default_depth: auto\n")
     merged, sources = merge_config(workspace=None, repo=None, env={}, cli_overrides={})
-    assert merged["review"]["default_level"] == "auto"
-    assert sources["review.default_level"] == "global"
+    assert merged["research"]["default_depth"] == "auto"
+    assert sources["research.default_depth"] == "global"
 
 
 def test_workspace_overrides_global(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fake_global = tmp_path / "g.yaml"
     monkeypatch.setattr(layered, "global_config_path", lambda: fake_global)
-    _write_yaml(fake_global, "review:\n  default_level: global_val\n")
+    _write_yaml(fake_global, "research:\n  default_depth: global_val\n")
     workspace = tmp_path / "ws"
-    _write_yaml(workspace / ".ea" / "config.yaml", "review:\n  default_level: ws_val\n")
+    _write_yaml(workspace / ".ea" / "config.yaml", "research:\n  default_depth: ws_val\n")
     merged, sources = merge_config(workspace=workspace, repo=None, env={}, cli_overrides={})
-    assert merged["review"]["default_level"] == "ws_val"
-    assert sources["review.default_level"] == "workspace"
+    assert merged["research"]["default_depth"] == "ws_val"
+    assert sources["research.default_depth"] == "workspace"
 
 
 def test_repo_overrides_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     workspace = tmp_path / "ws"
-    _write_yaml(workspace / ".ea" / "config.yaml", "review:\n  default_level: ws\n")
+    _write_yaml(workspace / ".ea" / "config.yaml", "research:\n  default_depth: ws\n")
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: repo\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: repo\n")
     merged, sources = merge_config(workspace=workspace, repo=repo, env={}, cli_overrides={})
-    assert merged["review"]["default_level"] == "repo"
-    assert sources["review.default_level"] == "repo"
+    assert merged["research"]["default_depth"] == "repo"
+    assert sources["research.default_depth"] == "repo"
 
 
 def test_verify_strict_leaves_report_source_layer(tmp_path: Path) -> None:
@@ -199,11 +194,11 @@ def test_verify_config_rejects_unknown_field() -> None:
 
 def test_local_overrides_repo(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: repo\n")
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "review:\n  default_level: local\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: repo\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "research:\n  default_depth: local\n")
     merged, sources = merge_config(workspace=None, repo=repo, env={}, cli_overrides={})
-    assert merged["review"]["default_level"] == "local"
-    assert sources["review.default_level"] == "local"
+    assert merged["research"]["default_depth"] == "local"
+    assert sources["research.default_depth"] == "local"
 
 
 def test_vcs_conventions_subject_style_overlays_across_repo_and_local(tmp_path: Path) -> None:
@@ -223,46 +218,46 @@ def test_vcs_conventions_subject_style_overlays_across_repo_and_local(tmp_path: 
 
 def test_env_overrides_local(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "review:\n  default_level: local\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "research:\n  default_depth: local\n")
     merged, sources = merge_config(
         workspace=None,
         repo=repo,
-        env={"EAWF_REVIEW__DEFAULT_LEVEL": "env_val"},
+        env={"EAWF_RESEARCH__DEFAULT_DEPTH": "env_val"},
         cli_overrides={},
     )
-    assert merged["review"]["default_level"] == "env_val"
-    assert sources["review.default_level"] == "env"
+    assert merged["research"]["default_depth"] == "env_val"
+    assert sources["research.default_depth"] == "env"
 
 
 def test_cli_overrides_env() -> None:
     merged, sources = merge_config(
         workspace=None,
         repo=None,
-        env={"EAWF_REVIEW__DEFAULT_LEVEL": "from_env"},
-        cli_overrides={"review": {"default_level": "from_cli"}},
+        env={"EAWF_RESEARCH__DEFAULT_DEPTH": "from_env"},
+        cli_overrides={"research": {"default_depth": "from_cli"}},
     )
-    assert merged["review"]["default_level"] == "from_cli"
-    assert sources["review.default_level"] == "cli"
+    assert merged["research"]["default_depth"] == "from_cli"
+    assert sources["research.default_depth"] == "cli"
 
 
 def test_full_stack_ordering(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """All seven layers active simultaneously — CLI wins, env loses, etc."""
     fake_global = tmp_path / "g.yaml"
     monkeypatch.setattr(layered, "global_config_path", lambda: fake_global)
-    _write_yaml(fake_global, "review:\n  default_level: g\n")
+    _write_yaml(fake_global, "research:\n  default_depth: g\n")
     workspace = tmp_path / "ws"
-    _write_yaml(workspace / ".ea" / "config.yaml", "review:\n  default_level: ws\n")
+    _write_yaml(workspace / ".ea" / "config.yaml", "research:\n  default_depth: ws\n")
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: r\n")
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "review:\n  default_level: l\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: r\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "research:\n  default_depth: l\n")
     merged, sources = merge_config(
         workspace=workspace,
         repo=repo,
-        env={"EAWF_REVIEW__DEFAULT_LEVEL": "e"},
-        cli_overrides={"review": {"default_level": "c"}},
+        env={"EAWF_RESEARCH__DEFAULT_DEPTH": "e"},
+        cli_overrides={"research": {"default_depth": "c"}},
     )
-    assert merged["review"]["default_level"] == "c"
-    assert sources["review.default_level"] == "cli"
+    assert merged["research"]["default_depth"] == "c"
+    assert sources["research.default_depth"] == "cli"
 
 
 # --- Deep-merge of maps -----------------------------------------------------
@@ -284,10 +279,10 @@ def test_lists_replace_not_concat(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _write_yaml(
         repo / ".ea" / "config.yaml",
-        "acceptance:\n  required_before_ship: [tests]\n",
+        "runtime:\n  preference: [codex]\n",
     )
     merged, _ = merge_config(workspace=None, repo=repo, env={}, cli_overrides={})
-    assert merged["acceptance"]["required_before_ship"] == ["tests"]
+    assert merged["runtime"]["preference"] == ["codex"]
 
 
 # --- Env coercion -----------------------------------------------------------
@@ -318,11 +313,11 @@ def test_env_unknown_prefix_ignored() -> None:
     merged, sources = merge_config(
         workspace=None,
         repo=None,
-        env={"NOT_EAWF_REVIEW__DEFAULT_LEVEL": "ignored"},
+        env={"NOT_EAWF_RESEARCH__DEFAULT_DEPTH": "ignored"},
         cli_overrides={},
     )
-    assert merged["review"]["default_level"] == "medium"
-    assert sources["review.default_level"] == "built-in"
+    assert merged["research"]["default_depth"] == "medium"
+    assert sources["research.default_depth"] == "built-in"
 
 
 def test_env_strips_prefix_only_no_value_segment() -> None:
@@ -334,7 +329,7 @@ def test_env_strips_prefix_only_no_value_segment() -> None:
         cli_overrides={},
     )
     # Built-ins still reachable.
-    assert sources["review.default_level"] == "built-in"
+    assert sources["research.default_depth"] == "built-in"
 
 
 def test_env_blitz_recursion_knobs_are_reserved() -> None:
@@ -356,7 +351,7 @@ def test_env_blitz_recursion_knobs_are_reserved() -> None:
     assert "blitz_depth_counter" not in merged
     assert "blitz_depth_counter" not in sources
     # Built-ins remain reachable — the reserved knobs did not poison the merge.
-    assert sources["review.default_level"] == "built-in"
+    assert sources["research.default_depth"] == "built-in"
 
 
 # --- Idempotence ------------------------------------------------------------
@@ -364,7 +359,7 @@ def test_env_blitz_recursion_knobs_are_reserved() -> None:
 
 def test_merge_is_idempotent_on_same_inputs(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "review:\n  default_level: x\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: x\n")
     a = merge_config(workspace=None, repo=repo, env={}, cli_overrides={})
     b = merge_config(workspace=None, repo=repo, env={}, cli_overrides={})
     assert a == b
@@ -376,8 +371,8 @@ def test_merge_does_not_mutate_built_in_defaults() -> None:
     merge_config(
         workspace=None,
         repo=None,
-        env={"EAWF_REVIEW__DEFAULT_LEVEL": "from_env"},
-        cli_overrides={"review": {"default_level": "from_cli"}},
+        env={"EAWF_RESEARCH__DEFAULT_DEPTH": "from_env"},
+        cli_overrides={"research": {"default_depth": "from_cli"}},
     )
     assert repr(BUILT_IN_DEFAULTS) == snapshot
 
