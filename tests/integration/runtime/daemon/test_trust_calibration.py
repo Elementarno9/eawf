@@ -286,3 +286,36 @@ def test_ui_020_a_batch_that_has_not_merged_still_reads_insufficient(tmp_path: P
 
     assert "INSUFFICIENT · Brier ∅ unavailable" in calibration
     assert "n 1 of 20 scored · authority refused · n" in calibration
+
+
+def _juror_row(frame: list[str]) -> str:
+    """Return the reviewer's track-record row."""
+    return next(row for row in frame if row.startswith(" reviewer · claude-code"))
+
+
+def test_ui_063_the_track_record_scores_the_juror_on_its_settled_verdicts(
+    merged: CanaryProvision, tmp_path: Path
+) -> None:
+    row = _juror_row(_served(merged, tmp_path))
+
+    assert row.split()[3:6] == ["20", "2", "~0.91"]
+    assert "~0.00 · 22 scored" in row
+
+
+def test_ui_063_gold_labels_move_the_jurors_own_brier(
+    merged: CanaryProvision, tmp_path: Path
+) -> None:
+    for criterion in CLEARING[:3]:
+        _label(merged, tmp_path, criterion)
+
+    assert "~0.14 · 22 scored" in _juror_row(_served(merged, tmp_path))
+
+
+def test_ui_020_a_juror_under_the_floor_has_no_brier(tmp_path: Path) -> None:
+    unsettled = cycle(audits=tuple(audit(criterion) for criterion in CLEARING))
+    canary = _reviewed(tmp_path, status="ACTIVE", lines=(unsettled,))
+    _label(canary, tmp_path, "CR-01")
+
+    row = _juror_row(_served(canary, tmp_path))
+
+    assert "∅ 1 of 20 scored" in row

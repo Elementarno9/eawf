@@ -115,10 +115,10 @@ def test_roadmap_emits_one_event_per_step(state_dir: Path) -> None:
     assert len(env.footer.persisted_store_records) == 6
 
 
-def test_roadmap_default_next_actions_present(state_dir: Path) -> None:
+def test_roadmap_default_next_actions_are_live_verbs(state_dir: Path) -> None:
     skill = RoadmapSkill()
     env = run_skill(skill, _ctx())
-    assert "eawf prep" in env.footer.next_valid_actions
+    assert env.footer.next_valid_actions == ["eawf plan show", "eawf campaign new"]
 
 
 # --- P27-I03-W15: apply prefills the wave DAG ---------------------------------

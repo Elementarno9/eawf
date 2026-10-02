@@ -6,12 +6,13 @@ probe registers for it, so a probe-free sweep is twelve open questions
 rather than a verdict. This module is the producer for the five facts a
 working copy can answer at tag time -- version consistency, the
 changelog section, the migration note, ancestry against the publishing
-remote, and tree cleanliness -- plus one fact it can only *refute*: a
-lint rule with no governing disposition, a rule the operator re-typed
-past the configured threshold with no triage, a console coverage grid
-that does not reconcile with the route registry, or a module-length
-exemption that has outlived its grant, reds the realization row, but a
-clean check leaves that row unproven rather than green.
+remote, and tree cleanliness -- plus the realization row, which conjoins
+the assertions of
+:mod:`~eawf.workflow.verify.realization_assertions`: a lint rule with no
+governing disposition, a rule the operator re-typed past the configured
+threshold with no triage, a console coverage grid that does not reconcile
+with the route registry, or a module-length exemption that has outlived
+its grant reds it beside the assertions decided there.
 
 The probes read their subject out of a frozen
 :class:`TagPreflightInputs` record instead of out of the running process
@@ -67,6 +68,14 @@ from eawf.workflow.evidence.migration_rehearsal import (
     rehearsal_evidence_refs,
     rehearsal_findings,
     summarise,
+)
+from eawf.workflow.verify.realization_assertions import (
+    RealizationAssertion,
+    cli_closure_outcome,
+    packet_run_outcome,
+    realization_outcome,
+    rendered_rules_outcome,
+    requirement_trace_outcome,
 )
 from eawf.workflow.verify.release_readiness import (
     ReleaseSignalContext,
@@ -519,10 +528,6 @@ def _probe_module_length_exclusion(
     carries is an extension nobody signed, and reds the row the same way
     a lapsed grant does.
 
-    A clean check reports ``unavailable`` rather than ``pass``: this is
-    one named component of the realization row, and the remaining
-    realization assertions still have no producer.
-
     Args:
         inputs: The chokepoint's inputs, naming the working copy and the
             date the grants are judged against.
@@ -530,8 +535,7 @@ def _probe_module_length_exclusion(
 
     Returns:
         A failing outcome naming each lapsed module or unratified
-        renewal, or an unavailable outcome recording that the component
-        is clean.
+        renewal, else a passing one counting the live grants.
 
     Raises:
         ExclusionConfigError: When the exclusion list itself is
@@ -570,11 +574,7 @@ def _probe_module_length_exclusion(
                 for entry in expired
             ),
         )
-    return _unproven(
-        f"module_length_exclusion: all {len(config.eawf010.exclusions)} EAWF010 exemption(s) are "
-        f"within their grant, but the remaining realization assertions have no producer at this "
-        f"checkpoint; register one or drop the requirement"
-    )
+    return _passing(f"module_length_exclusion:{len(config.eawf010.exclusions)}-grants-live")
 
 
 def _release_window_start(inputs: TagPreflightInputs) -> datetime | None:
@@ -624,7 +624,7 @@ def _retyped_listing(triage: RetypedTriage) -> str:
 def _probe_retyped_triage(
     inputs: TagPreflightInputs, context: ReleaseSignalContext
 ) -> ReleaseSignalOutcome:
-    """Red the realization row on a re-typed rule the release leaves in untriaged prose.
+    """Decide whether the release leaves a re-typed rule in untriaged prose.
 
     A rule the operator had to type again more often than the configured threshold
     since the previous release is a rule the harness does not carry, and restating it
@@ -640,8 +640,8 @@ def _probe_retyped_triage(
         context: The sweep's context for this signal.
 
     Returns:
-        A failing outcome listing every subject over the threshold, else the
-        coverage grid check's outcome.
+        A failing outcome listing every subject over the threshold, else a
+        passing one.
 
     Raises:
         RuleSourceError: The rule source fails to load, which the sweep converts into
@@ -652,7 +652,7 @@ def _probe_retyped_triage(
     since = _release_window_start(inputs)
     triage = triage_retyped_rules(inputs.repo_root, since=since)
     if not triage.untriaged:
-        return _probe_coverage_grid(inputs, context)
+        return _passing(f"retyped_rule_triage:{len(triage.over)}-over-threshold-triaged")
     stored = store_retyped_rows(inputs.repo_root / ".ea", triage.over, today=inputs.today)
     logger.warning(
         f"_probe_retyped_triage signal={context.signal.value!r} "
@@ -671,7 +671,7 @@ def _probe_retyped_triage(
 def _probe_coverage_grid(
     inputs: TagPreflightInputs, context: ReleaseSignalContext
 ) -> ReleaseSignalOutcome:
-    """Red the realization row on a console coverage grid the route registry disowns.
+    """Decide whether the console coverage grid reconciles with the route registry.
 
     The grid is total over the console's route registry only while the recorded file is
     its own regeneration. A release cut from a tree whose grid drifted ships a console
@@ -683,8 +683,7 @@ def _probe_coverage_grid(
         context: The sweep's context for this signal.
 
     Returns:
-        A failing outcome naming every refusal, else the module-length exclusion
-        check's outcome.
+        A failing outcome naming every refusal, else a passing one.
 
     Raises:
         pydantic.ValidationError: The recorded grid holds an unclassified cell, which the
@@ -692,10 +691,10 @@ def _probe_coverage_grid(
     """
     manifest = inputs.repo_root / COVERAGE_MANIFEST_PATH
     if not manifest.is_file():
-        return _probe_module_length_exclusion(inputs, context)
+        return _passing("coverage_grid:no-grid")
     refusals = checkpoint_refusals(json.loads(manifest.read_text(encoding="utf-8")))
     if not refusals:
-        return _probe_module_length_exclusion(inputs, context)
+        return _passing(f"coverage_grid:{COVERAGE_MANIFEST_PATH}")
     logger.warning(
         f"_probe_coverage_grid signal={context.signal.value!r} "
         f"refusals={len(refusals)} version={inputs.version!r}"
@@ -710,25 +709,23 @@ def _probe_coverage_grid(
 def _probe_lint_realization(
     inputs: TagPreflightInputs, context: ReleaseSignalContext
 ) -> ReleaseSignalOutcome:
-    """Red the realization row on a lint rule the disposition table does not govern.
+    """Decide whether every lint rule has a governing disposition.
 
     A rule shipping with no disposition, or still naming an epoch-1
     lifecycle identifier its row gives no reason for, is a suite nobody
-    decided the fate of; tagging would ship that undecided. A clean table
-    hands the row on to the re-typed rule triage.
+    decided the fate of; tagging would ship that undecided.
 
     Args:
         inputs: The chokepoint's inputs, naming the working copy.
         context: The sweep's context for this signal.
 
     Returns:
-        A failing outcome naming every disposition finding, else the
-        re-typed rule triage's outcome.
+        A failing outcome naming every disposition finding, else a passing
+        one.
 
     Raises:
         SyntaxError: A rule module does not parse, which the sweep
             converts into a blocked row.
-        ExclusionConfigError: When the exclusion list is malformed.
     """
     findings = disposition_findings(inputs.repo_root)
     if findings:
@@ -742,7 +739,47 @@ def _probe_lint_realization(
             f"eawf.platform.lint.dispositions before tagging {inputs.tag}",
             *(f"rule_disposition:{finding.rule}" for finding in findings),
         )
-    return _probe_retyped_triage(inputs, context)
+    return _passing("rule_disposition:governed")
+
+
+def _probe_perfect_realization(
+    inputs: TagPreflightInputs, context: ReleaseSignalContext
+) -> ReleaseSignalOutcome:
+    """Decide every realization assertion and conjoin them into the row.
+
+    Every assertion is decided, not only the first broken one, so a red
+    row names every repair the release needs at once.
+
+    Args:
+        inputs: The chokepoint's inputs, naming the working copy.
+        context: The sweep's context; its channel decides which
+            assertions the checkpoint requires.
+
+    Returns:
+        The conjoined outcome; see
+        :func:`~eawf.workflow.verify.realization_assertions.realization_outcome`.
+
+    Raises:
+        SyntaxError: A rule module does not parse.
+        ExclusionConfigError: The exclusion list is malformed.
+        RuleSourceError: The rule source fails to load.
+        pydantic.ValidationError: The re-typed triage, the threshold or the
+            coverage grid does not validate. The sweep converts each into a
+            blocked row.
+    """
+    verdicts = {
+        RealizationAssertion.RULE_DISPOSITION: _probe_lint_realization(inputs, context),
+        RealizationAssertion.RETYPED_RULE_TRIAGE: _probe_retyped_triage(inputs, context),
+        RealizationAssertion.COVERAGE_GRID: _probe_coverage_grid(inputs, context),
+        RealizationAssertion.MODULE_LENGTH_EXCLUSION: _probe_module_length_exclusion(
+            inputs, context
+        ),
+        RealizationAssertion.REQUIREMENT_TRACE: requirement_trace_outcome(inputs.repo_root),
+        RealizationAssertion.RENDERED_RULES: rendered_rules_outcome(inputs.repo_root),
+        RealizationAssertion.CLI_CLOSURE: cli_closure_outcome(),
+        RealizationAssertion.PACKET_RUN: packet_run_outcome(),
+    }
+    return realization_outcome(verdicts, channel=context.config.channel)
 
 
 def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, ReleaseSignalProbe]:
@@ -754,10 +791,7 @@ def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, Rele
     Returns:
         A registry over the six signals a working copy can speak to. The
         other six stay absent so the sweep reports them ``unavailable``
-        rather than silently green. The realization probe is the one
-        partial member: it can red the row on a lapsed module-length
-        exemption but never greens it, since the rest of the realization
-        assertions have no producer.
+        rather than silently green.
 
         ``credentials`` is deliberately not among them. Every target on
         this train authenticates by OIDC or the ambient workflow token,
@@ -775,7 +809,7 @@ def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, Rele
         ReleaseSignalName.ANCESTRY: partial(_probe_ancestry, inputs),
         ReleaseSignalName.TREE_CLEANLINESS: partial(_probe_tree_cleanliness, inputs),
         ReleaseSignalName.MIGRATION: partial(_probe_migration, inputs),
-        ReleaseSignalName.PERFECT_REALIZATION: partial(_probe_lint_realization, inputs),
+        ReleaseSignalName.PERFECT_REALIZATION: partial(_probe_perfect_realization, inputs),
     }
 
 

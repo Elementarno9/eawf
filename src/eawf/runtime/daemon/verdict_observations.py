@@ -11,7 +11,9 @@ Beside them Trust draws the jury's calibration: every verdict any cycle line eve
 joined to the outcome its subject went on to have -- the Batch merged, or a repair or a
 head move refuted it -- or to the gold label a principal pinned on the subject, and the
 labelled cohort is scored and held to the ``verify.jury_max_brier`` and
-``verify.jury_max_co_error`` ceilings the calibration gate reads.
+``verify.jury_max_co_error`` ceilings the calibration gate reads. Each juror's share of
+that cohort is scored the same way, so the track record states how many of a producer's
+verdicts were settled and how well they forecast what happened.
 
 Nothing is stored here. The rows are read off the ledgers each time a projection is
 built, so the Milestone a verdict is listed under holds no verdict of its own.
@@ -29,6 +31,8 @@ from eawf.kernel.delivery.batch_proof import BatchAudit, BatchVerificationCycle
 from eawf.kernel.delivery.gold_label import latest_gold_labels
 from eawf.kernel.projection.compute import (
     CALIBRATION_KEY,
+    JUROR_KEY_PREFIX,
+    JUROR_SCORE_KIND,
     JURY_CALIBRATION_KIND,
     VERDICT_OBSERVATION_KIND,
 )
@@ -41,7 +45,7 @@ from eawf.kernel.store.ledger import LedgerRecord, effective_records, read_ledge
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.eval.native_cohort import native_cohort, observe_verdict_outcomes
-from eawf.observability.eval.trust_projection import calibrate
+from eawf.observability.eval.trust_projection import calibrate, score_jurors
 from eawf.runtime.daemon.methods.delivery import CYCLE_KEY_PREFIX
 
 logger = logging.getLogger(__name__)
@@ -214,10 +218,10 @@ def resolve_jury_thresholds(repo_root: Path) -> tuple[float, float]:
     return verify.jury_max_brier, verify.jury_max_co_error
 
 
-def jury_calibration_row(
+def jury_calibration_rows(
     document_file: Path, document: dict[str, Any], *, max_brier: float, max_co_error: float
-) -> dict[str, Any] | None:
-    """Return the jury's calibration over every verdict the Batch ledger holds, as a row.
+) -> tuple[dict[str, Any], ...]:
+    """Return the jury's calibration and each juror's score over every verdict, as rows.
 
     Args:
         document_file: The selected generation's document, which the ledgers sit beside.
@@ -226,8 +230,9 @@ def jury_calibration_row(
         max_co_error: The co-error ceiling it holds the report to.
 
     Returns:
-        The report's cohort, metrics and the authority the gate returned, addressed to
-        the repository the verdicts were reached in; ``None`` when no Batch has filed a
+        The report's cohort, metrics and the authority the gate returned, then one row
+        per juror with its share of the cohort and its Brier score, every row addressed
+        to the repository the verdicts were reached in; empty when no Batch has filed a
         verification cycle, so there is no jury to calibrate.
 
     Raises:
@@ -237,7 +242,7 @@ def jury_calibration_row(
     batch_lines = read_ledger_records(ledger_path(document_file, Epoch2Collection.BATCH))
     lines = _cycle_lines(batch_lines)
     if not lines:
-        return None
+        return ()
     run_lines = read_ledger_records(ledger_path(document_file, Epoch2Collection.RUN))
     merged = frozenset(
         key
@@ -251,14 +256,16 @@ def jury_calibration_row(
     )
     group = calibrate(cohort, ballots, max_brier=max_brier, max_co_error=max_co_error)
     report = group.report
+    jurors = score_jurors(cohort, ballots)
     logger.debug(
-        f"jury_calibration_row n={report.n} status={report.status.value} "
-        f"authority={group.authority}"
+        f"jury_calibration_rows n={report.n} status={report.status.value} "
+        f"authority={group.authority} jurors={len(jurors)}"
     )
-    return {
+    urn = str(lines[-1].head.repository_ref)
+    calibration = {
         "payload_kind": JURY_CALIBRATION_KIND,
         "key": CALIBRATION_KEY,
-        "urn": str(lines[-1].head.repository_ref),
+        "urn": urn,
         "revision": 1,
         "status": report.status.value,
         "cohort": report.n,
@@ -268,12 +275,26 @@ def jury_calibration_row(
         "co_error": report.unanimous_pass_on_known_bad_rate,
         "authority": group.authority,
     }
+    return calibration, *(
+        {
+            "payload_kind": JUROR_SCORE_KIND,
+            "key": f"{JUROR_KEY_PREFIX}{juror.agent_role}-{juror.runtime}",
+            "urn": urn,
+            "revision": 1,
+            "status": juror.report.status.value,
+            "agent_role": juror.agent_role,
+            "runtime": juror.runtime,
+            "cohort": juror.report.n,
+            "brier": juror.report.brier,
+        }
+        for juror in jurors
+    )
 
 
 __all__ = [
     "MERGED_STATUSES",
     "VERIFICATION_SITE",
-    "jury_calibration_row",
+    "jury_calibration_rows",
     "jury_producers",
     "resolve_jury_thresholds",
     "verdict_observation_rows",

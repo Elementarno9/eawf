@@ -23,8 +23,6 @@ from eawf.kernel.spec.research import (
     RESEARCH_DEPTH_VALUES,
     ResearchDepth,
     coerce_research_depth,
-    research_depth_emits_fanout,
-    research_depth_question_slots,
 )
 
 # Ladder shape -----------------------------------------------------------
@@ -75,24 +73,6 @@ def test_research_depth_enum_rejects_invalid_token() -> None:
     """Direct construction with an invalid token raises — the closed-enum guarantee."""
     with pytest.raises(ValueError):
         ResearchDepth("normal")
-
-
-# Question-slot + fanout helpers --------------------------------------------
-
-
-def test_question_slots_increase_monotonically_with_depth() -> None:
-    """Deeper surveys pre-allocate at least as many question slots."""
-    slots = [research_depth_question_slots(d) for d in ResearchDepth]
-    assert slots == [1, 2, 3, 4]
-    assert slots == sorted(slots)
-
-
-def test_fanout_emitted_only_for_deep_and_exhaustive() -> None:
-    """The typed fan-out plan fires for the two deepest rungs only."""
-    assert not research_depth_emits_fanout(ResearchDepth.SHALLOW)
-    assert not research_depth_emits_fanout(ResearchDepth.MEDIUM)
-    assert research_depth_emits_fanout(ResearchDepth.DEEP)
-    assert research_depth_emits_fanout(ResearchDepth.EXHAUSTIVE)
 
 
 # Config wiring: the drift is collapsed to one source -----------------------

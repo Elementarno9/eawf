@@ -16,8 +16,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.harness import settle
 from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
@@ -301,11 +299,6 @@ def test_live_climbs_and_jumps_land_on_real_records(tmp_path: Path) -> None:
     assert not wrong, "\n".join(wrong)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="a finished Task leaves the document and no read holds it, so u from its "
-    "frame climbs to scope home instead of to its Batch",
-)
 def test_live_u_climbs_a_finished_run_to_its_track(tmp_path: Path) -> None:
     """From a finished Run, ``u`` climbs Task, Batch, Milestone and Track, then home."""
     require_epoch2_repository()
@@ -320,3 +313,56 @@ def test_live_u_climbs_a_finished_run_to_its_track(tmp_path: Path) -> None:
 
     wrong = asyncio.run(body())
     assert not wrong, "\n".join(wrong)
+
+
+#: A Batch every one of whose Tasks compacted into the Task ledger as it completed.
+CLOSED_BATCH = "BAT-0101"
+#: The fewest Tasks the committed Task ledger files under it.
+CLOSED_BATCH_TASKS = 123
+
+
+def test_live_a_closed_batch_lists_its_closed_tasks(tmp_path: Path) -> None:
+    """A completed Batch's frame holds every Task it filed, read back from the Task ledger."""
+    require_epoch2_repository()
+    root = committed_tree(tmp_path)
+
+    async def body() -> tuple[list[str], str]:
+        async with (
+            live_console(root, tmp_path / "runtime") as (app, seam),
+            app.run_test(size=SIZES[SIZE]) as pilot,
+        ):
+            text = await render_setup(
+                app, pilot, SessionSetup(route="batch.detail", size=SIZE, subjId=CLOSED_BATCH)
+            )
+            model = seam.projection_for("batch.detail")
+            rows = model.rows if model is not None else ()
+            return [r.key for r in rows if r.parent_key == CLOSED_BATCH], text
+
+    tasks, text = asyncio.run(body())
+    assert len(tasks) >= CLOSED_BATCH_TASKS
+    assert "EAWF-0101" in tasks
+    assert "EAWF-0101" in text
+
+
+def test_live_a_closed_task_opens_on_its_own_row(tmp_path: Path) -> None:
+    """A completed Task's frame is drawn from its ledger row, under the Batch it was filed in."""
+    require_epoch2_repository()
+    root = committed_tree(tmp_path)
+
+    async def body() -> tuple[Any, str]:
+        async with (
+            live_console(root, tmp_path / "runtime") as (app, seam),
+            app.run_test(size=SIZES[SIZE]) as pilot,
+        ):
+            text = await render_setup(
+                app, pilot, SessionSetup(route="task.detail", size=SIZE, subjId="EAWF-0101")
+            )
+            model = seam.projection_for("task.detail")
+            rows = model.rows if model is not None else ()
+            return next((r for r in rows if r.key == "EAWF-0101"), None), text
+
+    row, text = asyncio.run(body())
+    assert row is not None, "the Task frame holds no row for its own subject"
+    assert row.parent_key == CLOSED_BATCH
+    assert row.status.value == "COMPLETED"
+    assert "Close the console route registry" in text

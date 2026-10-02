@@ -11,18 +11,13 @@ default, and the runner all reference the same source.
 
 The ladder runs from the cheapest survey budget to the most exhaustive:
 
-- :attr:`ResearchDepth.SHALLOW` — minimal sweep (single question slot).
-- :attr:`ResearchDepth.MEDIUM` — default sweep (two slots).
-- :attr:`ResearchDepth.DEEP` — fan-out sweep (three slots; emits a typed
-  :class:`~eawf.workflow.skills.bodies.research.ResearchPlan` for the
-  runtime to dispatch).
-- :attr:`ResearchDepth.EXHAUSTIVE` — widest sweep (four slots; also
-  emits a fan-out plan).
+- :attr:`ResearchDepth.SHALLOW` — minimal sweep.
+- :attr:`ResearchDepth.MEDIUM` — default sweep.
+- :attr:`ResearchDepth.DEEP` — fan-out sweep.
+- :attr:`ResearchDepth.EXHAUSTIVE` — widest sweep.
 
 :data:`DEFAULT_RESEARCH_DEPTH` is the canonical default the
-``research.default_depth`` config leaf ships with, and
-:func:`research_depth_question_slots` maps a depth onto the synthetic
-question-slot count the skill's v0.1 synthesis path pre-allocates.
+``research.default_depth`` config leaf ships with.
 """
 
 from __future__ import annotations
@@ -55,19 +50,6 @@ DEFAULT_RESEARCH_DEPTH: ResearchDepth = ResearchDepth.MEDIUM
 #: validation and the config leaf's ``choices`` stay in lockstep with the
 #: single source.
 RESEARCH_DEPTH_VALUES: tuple[str, ...] = tuple(d.value for d in ResearchDepth)
-
-#: Depths that trigger the typed deep-research fan-out plan rather than the
-#: v0.1 placeholder synthesis path.
-_FANOUT_DEPTHS: frozenset[ResearchDepth] = frozenset({ResearchDepth.DEEP, ResearchDepth.EXHAUSTIVE})
-
-#: Synthetic question-slot count per depth — more depth pre-allocates more
-#: slots so a richer body falls out of the v0.1 synthesis path.
-_DEPTH_QUESTION_SLOTS: dict[ResearchDepth, int] = {
-    ResearchDepth.SHALLOW: 1,
-    ResearchDepth.MEDIUM: 2,
-    ResearchDepth.DEEP: 3,
-    ResearchDepth.EXHAUSTIVE: 4,
-}
 
 
 def coerce_research_depth(raw: str | None) -> ResearchDepth:
@@ -137,39 +119,11 @@ def resolve_default_research_depth(merged_config: Mapping[str, Any]) -> Research
         ) from None
 
 
-def research_depth_question_slots(depth: ResearchDepth) -> int:
-    """Return the synthetic question-slot count for *depth*.
-
-    Args:
-        depth: The resolved canonical depth.
-
-    Returns:
-        The number of placeholder question slots the v0.1 synthesis path
-        pre-allocates for this depth.
-    """
-    return _DEPTH_QUESTION_SLOTS[depth]
-
-
-def research_depth_emits_fanout(depth: ResearchDepth) -> bool:
-    """Return whether *depth* triggers the typed deep-research fan-out plan.
-
-    Args:
-        depth: The resolved canonical depth.
-
-    Returns:
-        ``True`` for :attr:`ResearchDepth.DEEP` and
-        :attr:`ResearchDepth.EXHAUSTIVE`; ``False`` otherwise.
-    """
-    return depth in _FANOUT_DEPTHS
-
-
 __all__ = [
     "DEFAULT_RESEARCH_DEPTH",
     "RESEARCH_DEFAULT_DEPTH_KEY",
     "RESEARCH_DEPTH_VALUES",
     "ResearchDepth",
     "coerce_research_depth",
-    "research_depth_emits_fanout",
-    "research_depth_question_slots",
     "resolve_default_research_depth",
 ]

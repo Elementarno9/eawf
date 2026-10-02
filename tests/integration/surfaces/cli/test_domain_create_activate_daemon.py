@@ -33,8 +33,10 @@ from typing import Any, Final
 import orjson
 import pytest
 
+from eawf.kernel.store.compaction import read_document
 from eawf.platform.install.canary import CanaryProvision, canary_ref, provision_canary
 from eawf.surfaces.cli import exit_codes
+from tests.integration.runtime.daemon._epoch2_transaction_fixtures import document_path
 
 pytestmark = pytest.mark.integration
 
@@ -290,3 +292,75 @@ def test_activate_of_an_absent_milestone_exits_state_conflict(sandbox: _Sandbox)
 
     assert refused.returncode == 3, refused.stdout + refused.stderr
     assert _json(refused)["status"] == "error"
+
+
+def _set_target(
+    sandbox: _Sandbox, urn: str, *args: str, revision: int, key: str
+) -> subprocess.CompletedProcess[str]:
+    return sandbox.eawf(
+        "--json",
+        "milestone",
+        "set-target",
+        urn,
+        *args,
+        "--expected-revision",
+        str(revision),
+        "--idempotency-key",
+        key,
+        "--actor",
+        _OPERATOR,
+        "--yes",
+    )
+
+
+def _stored_target(sandbox: _Sandbox, key: str) -> object:
+    row = read_document(document_path(sandbox.canary))["milestone"][key]
+    assert isinstance(row, dict)
+    return row.get("target_date")
+
+
+def test_milestone_create_with_date_then_set_target_and_clear(sandbox: _Sandbox) -> None:
+    track_urn = sandbox.urn("track", "TRK-DCA")
+    track = _create(sandbox, "track", track_urn, cursor=0, document=_track_document(sandbox))
+    assert track.returncode == exit_codes.OK, track.stdout + track.stderr
+    spec = sandbox.canary.root.parent / "milestone-dated.json"
+    spec.write_bytes(orjson.dumps(_milestone_document(track_urn)))
+    urn = sandbox.urn("milestone", "MLS-0001")
+    created = sandbox.eawf(
+        "--json", "milestone", "create", urn, "--expected-tree-revision", "1",
+        "--idempotency-key", "create-dated", "--actor", _OPERATOR,
+        "--from-spec", str(spec), "--date", "2026-10-02", "--yes",
+    )  # fmt: skip
+    assert created.returncode == exit_codes.OK, created.stdout + created.stderr
+    assert _stored_target(sandbox, "MLS-0001") == "2026-10-02"
+
+    moved = _set_target(sandbox, urn, "2026-10-05", revision=1, key="target-0001")
+    assert moved.returncode == exit_codes.OK, moved.stdout + moved.stderr
+    assert _json(moved)["operation"] == "domain.milestone.set_target"
+    assert _stored_target(sandbox, "MLS-0001") == "2026-10-05"
+
+    cleared = _set_target(sandbox, urn, "--clear", revision=2, key="target-0002")
+    assert cleared.returncode == exit_codes.OK, cleared.stdout + cleared.stderr
+    assert _stored_target(sandbox, "MLS-0001") is None
+
+
+def test_set_target_on_a_stale_revision_exits_state_conflict(sandbox: _Sandbox) -> None:
+    urn = _create_milestone(sandbox)
+
+    refused = _set_target(sandbox, urn, "2026-10-09", revision=2, key="target-stale")
+
+    assert refused.returncode == exit_codes.STATE_CONFLICT, refused.stdout + refused.stderr
+    assert _json(refused)["errors"][0]["code"] == "revision_conflict"
+    assert _stored_target(sandbox, "MLS-0001") is None
+
+
+@pytest.mark.parametrize("args", [("2026-02-30",), ("2026-W41-5",), (), ("2026-10-09", "--clear")])
+def test_set_target_refuses_a_malformed_request_before_the_wire(
+    sandbox: _Sandbox, args: tuple[str, ...]
+) -> None:
+    urn = _create_milestone(sandbox)
+
+    refused = _set_target(sandbox, urn, *args, revision=1, key="target-bad")
+
+    assert refused.returncode == exit_codes.USER_ERROR, refused.stdout + refused.stderr
+    assert _stored_target(sandbox, "MLS-0001") is None

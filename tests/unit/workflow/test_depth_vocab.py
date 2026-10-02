@@ -18,7 +18,6 @@ Pins the P30-I10-W13 acceptance contract:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
 
 import pytest
 
@@ -29,7 +28,6 @@ from eawf.kernel.spec.research import (
     coerce_research_depth,
     resolve_default_research_depth,
 )
-from eawf.workflow.skills.bodies.research import ResearchBody
 from eawf.workflow.skills.engine import SkillContext, run_skill
 from eawf.workflow.skills.research import ResearchSkill
 
@@ -125,11 +123,9 @@ def test_stage_reads_config_default_when_no_flag(
 ) -> None:
     _patch_merge(monkeypatch, {"research": {"default_depth": "shallow"}})
     env = run_skill(ResearchSkill(), _ctx())
-    assert env.header.status == "ok", env.body
-    body = ResearchBody.model_validate(cast(dict, env.body))
-    # shallow -> 1 question slot, proving the config leaf (not the bare
-    # medium constant) drove the resolution.
-    assert len(body.questions) == 1
+    assert env.header.status == "blocked", env.body
+    # The config leaf (not the bare medium constant) shapes the Campaign route.
+    assert "--depth shallow " in env.footer.repair_commands[0]
 
 
 def test_stage_flag_overrides_config_default(
@@ -139,10 +135,7 @@ def test_stage_flag_overrides_config_default(
     ctx = _ctx()
     ctx.args = {"depth": "exhaustive"}
     env = run_skill(ResearchSkill(), ctx)
-    assert env.header.status == "ok"
-    body = ResearchBody.model_validate(cast(dict, env.body))
-    # exhaustive flag wins over the shallow config default -> 4 slots.
-    assert len(body.questions) == 4
+    assert "--depth exhaustive " in env.footer.repair_commands[0]
 
 
 def test_stage_default_medium_when_config_absent(
@@ -150,8 +143,7 @@ def test_stage_default_medium_when_config_absent(
 ) -> None:
     _patch_merge(monkeypatch, {})
     env = run_skill(ResearchSkill(), _ctx())
-    body = ResearchBody.model_validate(cast(dict, env.body))
-    assert len(body.questions) == 2  # falls back to default depth=medium
+    assert "--depth medium " in env.footer.repair_commands[0]
 
 
 def test_stage_rejects_unknown_config_depth(

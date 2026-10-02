@@ -150,6 +150,7 @@ from eawf.workflow.lifecycle.epoch2 import (
 if TYPE_CHECKING:
     from eawf.runtime.daemon.epoch2_create import CreateRequest
     from eawf.runtime.daemon.methods.delivery_approval import ActionCommitRequest
+    from eawf.runtime.daemon.methods.milestone_target import MilestoneTargetRequest
 
 logger = logging.getLogger(__name__)
 
@@ -398,9 +399,11 @@ class CommittedTransaction:
 
 
 #: Every request shape that commits through :func:`_persist`. The alias is
-#: evaluated lazily, so the two shapes defined in modules that import this
+#: evaluated lazily, so the shapes defined in modules that import this
 #: one are named without an import cycle.
-type CommittingRequest = TransitionRequest | CreateRequest | ActionCommitRequest
+type CommittingRequest = (
+    TransitionRequest | CreateRequest | ActionCommitRequest | MilestoneTargetRequest
+)
 
 
 class Revisioned(Protocol):

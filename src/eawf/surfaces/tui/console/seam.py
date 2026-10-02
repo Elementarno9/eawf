@@ -93,6 +93,7 @@ from eawf.surfaces.tui.console.operations import (
     Operator,
     VerbRequest,
 )
+from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.seam_writes import SeamWrites
 from eawf.workflow.decision_question import QUESTION_DECISIONS_METHOD
 from eawf.workflow.evidence.claim_ladder import EVIDENCE_LADDER_METHOD
@@ -253,6 +254,8 @@ class ProjectionSeam:
         self._app_state = on_state
         self._app_degraded = on_degraded
         self._held: OrderedDict[str, RouteProjection] = OrderedDict()
+        # the record each held route was read for, since its closed rows are read per record
+        self._held_about: dict[str, str | None] = {}
         self._listeners: list[PatchListener] = []
         self._reading: set[str] = set()
         self._settings: EffectiveSettingsView | None = None
@@ -367,6 +370,11 @@ class ProjectionSeam:
         """
         wanted = [self._route, *sorted(PINNED_ROUTES - {self._route})]
         owed = [route for route in wanted if route in ROUTE_COLLECTIONS and route not in self._held]
+        # a route opened on another record holds that record's closed rows, not this one's
+        if self._route in self._held and self._held_about.get(self._route) != self._about(
+            self._route
+        ):
+            owed.insert(0, self._route)
         if self._route in SETTINGS_ROUTES and self._settings is None:
             owed.append(SETTINGS_ROUTE)
         subject = self._subject
@@ -409,6 +417,17 @@ class ProjectionSeam:
     def about(self, subject: str | None) -> None:
         """Record the record the visible route is about, so its per-subject reads are owed."""
         self._subject = subject
+
+    def _about(self, route: str) -> str | None:
+        """Return the record *route* is read for: the subject of a visible single-record route.
+
+        A list route's subject is only the row under its caret, which moves on every key and
+        changes nothing the route reads.
+        """
+        spec = REGISTRY.by_key.get(route)
+        if route != self._route or spec is None or not spec.subject_required:
+            return None
+        return self._subject
 
     def acceptance_for(self, key: str | None) -> MilestoneAcceptanceRecord | None:
         """Return the acceptance read held for Milestone *key*; ``None`` before its read."""
@@ -562,6 +581,9 @@ class ProjectionSeam:
     async def load(self, route: str | None = None) -> RouteProjection:
         """Read one whole route from the daemon and hold it.
 
+        The visible route is read for the record it is opened on, so a record that has
+        closed, and the closed records filed under it, are read back with it.
+
         Args:
             route: The route to read; the visible route when omitted.
 
@@ -569,8 +591,11 @@ class ProjectionSeam:
             The projection, at whatever cursor the tree stands at.
         """
         route = route or self._route
-        answer = await self._binding.call(READ_METHOD_TEMPLATE.format(route=route), self._params())
+        about = self._about(route)
+        params = self._params() if about is None else {**self._params(), "key": about}
+        answer = await self._binding.call(READ_METHOD_TEMPLATE.format(route=route), params)
         projection = self._hold(route, RouteProjection.model_validate(answer))
+        self._held_about[route] = about
         logger.debug(f"load route={route} cursor={projection.header.source_cursor}")
         return projection
 

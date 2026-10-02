@@ -7,16 +7,17 @@ the two can never disagree about what a marker commits to.
 
 The native frame is the same chart over the read model: one lane per Track across the
 weeks around now, then the Milestones no date places in the UNDATED region, then the
-release register. A Milestone is placed on its lane only by a date its record states; no
-producer states one yet, so every Milestone is listed as undated and each lane says so
-rather than drawing a marker nobody dated.
+release register. A Milestone is placed on its lane only by the target date its record
+states, in the ISO week of that date, and a closed one is drawn done; a date beyond the
+drawn weeks is named at the lane's end rather than dropped, and a Milestone with no date
+is listed as undated rather than drawn where nobody dated it.
 """
 
 from __future__ import annotations
 
 import re
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -69,7 +70,7 @@ _LABEL_OFFSET = 9
 _WEEKS = "            W26     W27     W28     W29  │  W30     W31     W32"
 _LEGEND = "● dated  ○ forecast  ┄ uncertain  │ now  ▣ release"
 # The native chart draws solid lanes crossed by a plain keyline, so it states no dotted run.
-_NATIVE_LEGEND = "● dated  ○ forecast  │ now  ▣ release"
+_NATIVE_LEGEND = "● dated  ✓ done  ○ forecast  │ now  ▣ release"
 UNDATED_ROWS: tuple[tuple[str, str, str], ...] = (
     ("MLS-0012", "Calibration follow-up", "no date proposed yet"),
     ("MLS-0014", "Snapshot retention review", "waits on MLS-0011"),
@@ -228,12 +229,32 @@ def _with_legend(view: View, rows: list[str], keys: str, legend: str) -> list[st
 _SPAN = 3
 #: The cells one week takes on the chart.
 _WEEK_W = 8
+#: Where in its week's cells a marker sits: under the middle of the week's label.
+_MARK_AT = 1
 #: What an undated Milestone's row says about its date.
 NO_DATE = "no date proposed yet"
+#: The marker of a closed Milestone: it is done, whichever way it closed.
+DONE = "✓"
+#: The fact a Milestone row states its target date in, as ``YYYY-MM-DD``.
+TARGET_FACT = "target_date"
+_CLOSED = frozenset({"COMPLETED", "CANCELLED"})
 
 
 def _of(spine: SpineView, collection: Epoch2Collection) -> list[SpineRow]:
     return [row for row in spine.rows if row.collection is collection]
+
+
+def target_of(row: SpineRow) -> date | None:
+    """Return the day a Milestone row is aimed at, or ``None`` when it states none."""
+    stated = row.facts.get(TARGET_FACT)
+    return None if stated is None else date.fromisoformat(stated)
+
+
+def week_offset(day: date, now: datetime) -> int:
+    """Return how many ISO weeks ``day`` lies after the week ``now`` falls in."""
+    today = now.date()
+    start = today - timedelta(days=today.weekday())
+    return (day - timedelta(days=day.weekday()) - start).days // 7
 
 
 def week_header(now: datetime, label_w: int) -> str:
@@ -245,8 +266,59 @@ def week_header(now: datetime, label_w: int) -> str:
     return " " * label_w + before + f"{cells[_SPAN]}  │  " + after
 
 
+def _beyond(days: list[date], arrow: str) -> str:
+    """Return the edge note for dates past one end of the chart: the nearest, then the rest."""
+    week = f"{arrow} W{days[0].isocalendar().week:02d}"
+    return week if len(days) == 1 else f"{week} +{len(days) - 1}"
+
+
+def _lane(
+    line: str, dated: list[tuple[date, SpineRow]], now: datetime | None
+) -> tuple[str, list[tuple[int, str]]]:
+    """Return a lane's line with its markers drawn, and each drawn marker's column and key.
+
+    A marker sits in the week of its date; two in one week share the cell, drawn open while
+    either is open, and its label names the earlier with a count. A date past either end of
+    the drawn weeks is named after the line, so it is stated rather than dropped.
+    """
+    if now is None or not dated:
+        return line, []
+    cells = list(line)
+    keys: dict[int, list[str]] = {}
+    early: list[date] = []
+    late: list[date] = []
+    for day, row in sorted(dated, key=lambda pair: (pair[0], pair[1].key)):
+        k = week_offset(day, now)
+        if k < -_SPAN:
+            early.append(day)
+        elif k > _SPAN:
+            late.append(day)
+        else:
+            col = _WEEK_W * (k + _SPAN) + _MARK_AT
+            if cells[col] != DATED:
+                cells[col] = DONE if status(row) in _CLOSED else DATED
+            keys.setdefault(col, []).append(row.key)
+    edges = [_beyond(sorted(early, reverse=True), "◂")] if early else []
+    edges += [_beyond(late, "▸")] if late else []
+    tail = "".join(f" {edge}" for edge in edges)
+    labels = [(col, f"{ks[0]}+{len(ks) - 1}" if len(ks) > 1 else ks[0]) for col, ks in keys.items()]
+    return "".join(cells) + tail, sorted(labels)
+
+
+def _label_row(labels: list[tuple[int, str]], note: str) -> str:
+    """Return the row under a lane: each marker's key under it where it fits, then the note.
+
+    A key that would run into the one before it is left out; the note still counts it.
+    """
+    out = ""
+    for col, key in labels:
+        if col >= cell_len(out) + (1 if out else 0):
+            out += " " * (col - cell_len(out)) + key
+    return f"{out}  {note}" if out else note
+
+
 def _native_lanes(view: View, spine: SpineView, now: datetime | None) -> list[str]:
-    """Return the week row and one lane per Track, each saying no Milestone on it is dated."""
+    """Return the week row and one lane per Track, its dated Milestones drawn on it."""
     s, w = view.session, view.w
     tracks = _of(spine, Epoch2Collection.TRACK)
     # the caret's slot, the key, and one cell before the lane
@@ -267,10 +339,12 @@ def _native_lanes(view: View, spine: SpineView, now: datetime | None) -> list[st
     milestones = _of(spine, Epoch2Collection.MILESTONE)
     for i, track in enumerate(tracks):
         on = on_lanes and i == s.sel
-        rows.append(Fixed(pad(("▸ " if on else "  ") + pad(track.key, label_w - 2) + line, w)))
-        undated = sum(1 for m in milestones if m.parent_key == track.key)
-        note = f"no Milestone on this lane states a date · {undated} undated below"
-        rows.append(Fixed(pad(" " * label_w + note, w)))
+        mine = [m for m in milestones if m.parent_key == track.key]
+        dated = [(day, m) for m in mine if (day := target_of(m)) is not None]
+        drawn, labels = _lane(line, dated, now)
+        rows.append(Fixed(pad(("▸ " if on else "  ") + pad(track.key, label_w - 2) + drawn, w)))
+        note = f"{len(dated)} dated · {len(mine) - len(dated)} undated below"
+        rows.append(Fixed(pad(" " * label_w + _label_row(labels, note), w)))
     return rows
 
 
@@ -279,7 +353,9 @@ def _native_regions(view: View, spine: SpineView) -> list[str]:
     s, w = view.session, view.w
     region = s.tl_reg or LANES
     milestones = _of(spine, Epoch2Collection.MILESTONE)
-    undated: list[tuple[str, ...]] = [(m.key, m.title or "", NO_DATE) for m in milestones]
+    undated: list[tuple[str, ...]] = [
+        (m.key, m.title or "", NO_DATE) for m in milestones if target_of(m) is None
+    ]
     releases: list[tuple[str, ...]] = [
         (r.key, r.title or "", UNKNOWN_WORD, status(r))
         for r in _of(spine, Epoch2Collection.RELEASE)
@@ -329,7 +405,8 @@ def roadmap_frame(view: View, spine: SpineView) -> list[str]:
         first, last = now - timedelta(weeks=_SPAN), now + timedelta(weeks=_SPAN)
         week = now.isocalendar().week
         span = f"W{first.isocalendar().week:02d} → W{last.isocalendar().week:02d} · now W{week:02d}"
-    dated = f"0 of {dv.plural(len(milestones), 'milestone')} dated"
+    stated = sum(1 for m in milestones if target_of(m) is not None)
+    dated = f"{stated} of {dv.plural(len(milestones), 'milestone')} dated"
     rows = [
         *native_head(
             view,
@@ -342,7 +419,7 @@ def roadmap_frame(view: View, spine: SpineView) -> list[str]:
     ]
     entries = native_keys("timeline", windowed=view.session.windowed)
     if (view.session.tl_reg or LANES) == LANES:
-        # a lane states no dated marker yet, so Enter has nothing to open until Tab moves on
+        # the lanes carry no marker cursor, so Enter has nothing to open until Tab moves on
         entries = tuple(e for e in entries if e.keys != ("Enter",))
     return _with_legend(view, rows, route_keys_bar(view, entries), _NATIVE_LEGEND)
 

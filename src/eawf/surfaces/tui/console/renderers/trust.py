@@ -7,10 +7,12 @@ The native frame is scoped to one Milestone and draws the three truth-field grou
 packet names from a :class:`~eawf.observability.eval.trust_projection.TrustView`: the
 verdict observations of the Milestone's Batches, each answered for by the producer
 ``(agent_role, runtime)`` that reached it, the jury-validation report with the authority
-the calibration gate returned, and each producer's tally. A subject no verdict has been
-recorded for reads ``? unknown · no outcome recorded``, never a negative; an
-``INSUFFICIENT`` report renders every numeric cell unavailable, and a rate over zero
-judged attempts renders unavailable rather than a number.
+the calibration gate returned, and each producer's tally beside its own Brier score as a
+juror. A subject no verdict has been recorded for reads ``? unknown · no outcome
+recorded``, never a negative; an ``INSUFFICIENT`` report renders every numeric cell
+unavailable, a rate over zero judged attempts renders unavailable rather than a number,
+and a juror whose scored verdicts are under the cohort floor states how far short it is
+rather than a Brier score.
 """
 
 from __future__ import annotations
@@ -50,10 +52,10 @@ GROUPS: tuple[str, ...] = ("verdicts", "calibration", "track record")
 NO_OUTCOME = "no outcome recorded"
 
 #: What a rate reads over zero judged attempts, which has no value.
-ZERO_JUDGED = f"{UNAVAILABLE} · 0 judged"
+ZERO_JUDGED = "∅ 0 judged"
 
 _VERDICTS = Grid([20, 16, 26, 0])
-_RECORD = Grid([27, 9, 9, 0], 0)
+_RECORD = Grid([27, 9, 9, 12, 0], 0)
 
 
 def _jury(row: RouteRecord) -> str:
@@ -98,14 +100,20 @@ def _calibration_rows(group: CalibrationGroup) -> list[str]:
     ]
 
 
-def _record_cells(row: TrackRecordRow) -> list[str]:
-    """Return one producer's tally, its rate unavailable over zero judged."""
+def _record_cells(row: TrackRecordRow, floor: int) -> list[str]:
+    """Return one producer's tally and its Brier score, each unavailable without a basis."""
     rate = row.rate
+    brier = (
+        f"∅ {row.scored} of {floor} scored"
+        if row.brier is None
+        else f"~{row.brier:.2f} · {row.scored} scored"
+    )
     return [
         f"{row.agent_role} · {row.runtime}",
         str(row.accepted),
         str(row.rejected),
         ZERO_JUDGED if rate is None else f"~{rate:.2f}",
+        brier,
     ]
 
 
@@ -163,8 +171,9 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
         _VERDICTS.row(_verdict_cells(rows[i]), i == cursor, w) for i in range(win.start, win.stop)
     )
     body.extend([thin(w), *_calibration_rows(trust.calibration), thin(w)])
-    body.append(_RECORD.head(["TRACK RECORD", "ACCEPTED", "REJECTED", "RATE"]))
-    body.extend(_RECORD.row(_record_cells(row), False, w) for row in record)
+    body.append(_RECORD.head(["TRACK RECORD", "ACCEPTED", "REJECTED", "RATE", "BRIER"]))
+    floor = trust.calibration.min_scored
+    body.extend(_RECORD.row(_record_cells(row, floor), False, w) for row in record)
     if not record:
         body.append(f"    {UNAVAILABLE} · no producer has answered for a verdict here")
     body.append(thin(w))

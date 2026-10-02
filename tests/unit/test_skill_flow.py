@@ -22,6 +22,7 @@ from hypothesis import strategies as st
 
 from eawf.surfaces.render.envelope import EnvelopeStatus
 from eawf.workflow.skills.bodies.flow import FlowBody
+from eawf.workflow.skills.bodies.research import ResearchBody
 from eawf.workflow.skills.engine import (
     ProbeOutcome,
     Skill,
@@ -35,8 +36,29 @@ from eawf.workflow.skills.flow import (
 )
 
 
+class _StubResearchSkill(Skill):
+    """Answers the ``/research`` step ok.
+
+    The headless ``/research`` body refuses with a Campaign route because it
+    has no agent; these tests pin the flow's orchestration, not that step.
+    """
+
+    name = "/research"  # type: ignore[assignment]
+
+    def probe(self, ctx: SkillContext) -> ProbeOutcome:
+        return ProbeOutcome(ok=True, instrument_probe={})
+
+    def action(self, ctx: SkillContext) -> SkillResult:
+        return SkillResult(status="ok", body=ResearchBody(brief_id="BR-STUB").model_dump())
+
+
 @pytest.fixture
 def state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    order = tuple(
+        (name, _StubResearchSkill if name == "/research" else cls)
+        for name, cls in FlowSkill.flow_order
+    )
+    monkeypatch.setattr(FlowSkill, "flow_order", order)
     state_dir = tmp_path / ".ea"
     state_dir.mkdir(parents=True, exist_ok=True)
     state_path = state_dir / "state.json"
@@ -189,11 +211,9 @@ def test_flow_emits_at_least_step_start_end_per_skill(state_dir: Path) -> None:
 
 def test_flow_args_per_step_are_forwarded(state_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``args_per_step`` overrides the per-step args."""
-    from eawf.workflow.skills.research import ResearchSkill
-
     captured: dict[str, object] = {}
 
-    class _CaptureResearch(ResearchSkill):
+    class _CaptureResearch(_StubResearchSkill):
         def action(self, ctx: SkillContext) -> SkillResult:
             captured["args"] = dict(ctx.args)
             return super().action(ctx)

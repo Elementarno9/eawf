@@ -178,13 +178,13 @@ def _realization_row(repo: Path) -> Any:
 
 
 def test_rel_036_the_tag_preflight_admits_the_recorded_grid(repo: Path) -> None:
-    """The committed grid reconciles, so the leg hands the row on unrefuted."""
+    """The committed grid reconciles, so its realization assertion holds."""
     _record(repo, _recorded())
 
     row = _realization_row(repo)
 
-    assert row.status is ReleaseSignalStatus.UNAVAILABLE
-    assert "coverage_grid" not in row.remediation
+    assert row.status is ReleaseSignalStatus.PASS
+    assert f"coverage_grid:{COVERAGE_MANIFEST_PATH}" in row.evidence_refs
 
 
 def test_rel_036_the_tag_preflight_reds_on_a_drifted_grid(repo: Path) -> None:
@@ -212,8 +212,8 @@ def test_rel_036_the_tag_preflight_blocks_on_an_unclassified_cell(repo: Path) ->
 
 
 def test_rel_036_a_working_copy_without_a_grid_has_none_to_check(repo: Path) -> None:
-    """Another project's tree records no console grid, so the leg hands the row on."""
+    """Another project's tree records no console grid, so it has none to reconcile."""
     row = _realization_row(repo)
 
-    assert row.status is ReleaseSignalStatus.UNAVAILABLE
-    assert "coverage_grid" not in row.remediation
+    assert row.status is ReleaseSignalStatus.PASS
+    assert "coverage_grid:no-grid" in row.evidence_refs

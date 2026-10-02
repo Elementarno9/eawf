@@ -18,7 +18,10 @@ verdicts; a projection that carries no such row has scored nothing, so the repor
 
 ``track_record`` tallies each producer's verdicts that cleared their criterion against
 those that did not. A producer that judged nothing has no rate: a rate over zero judged
-attempts is undefined, never zero.
+attempts is undefined, never zero. Beside the tally each producer carries its own score as
+a juror: how many of its verdicts the labelled cohort holds and their Brier score, which
+the daemon files as one row per juror and which is absent while the juror's share of the
+cohort is under the same floor the whole jury is held to.
 """
 
 from __future__ import annotations
@@ -29,7 +32,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from eawf.kernel.delivery.batch_proof import AuditVerdict
-from eawf.kernel.projection.compute import CALIBRATION_KEY
+from eawf.kernel.projection.compute import CALIBRATION_KEY, JUROR_KEY_PREFIX
 from eawf.kernel.projection.route_view import RouteReadModel, RouteRecord
 from eawf.kernel.projection.truth import TruthState
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -38,6 +41,7 @@ from eawf.observability.eval.jury_validation import (
     JuryValidationConfig,
     JuryValidationReport,
     JuryValidationStatus,
+    LabeledVerdict,
     ValidationCohort,
     validate_jury,
 )
@@ -86,12 +90,16 @@ class TrackRecordRow:
         runtime: The harness it ran under.
         accepted: Its verdicts that verified the criterion true.
         rejected: Its verdicts that verified the criterion false.
+        scored: Its verdicts the labelled cohort holds, across every Batch.
+        brier: Their Brier score; ``None`` while ``scored`` is under the cohort floor.
     """
 
     agent_role: str
     runtime: str
     accepted: int
     rejected: int
+    scored: int = 0
+    brier: float | None = None
 
     @property
     def judged(self) -> int:
@@ -102,6 +110,21 @@ class TrackRecordRow:
     def rate(self) -> float | None:
         """Return the accepted share of its judged verdicts; ``None`` over zero judged."""
         return self.accepted / self.judged if self.judged else None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class JurorScore:
+    """One juror's validation report over the labelled verdicts it cast.
+
+    Attributes:
+        agent_role: The role the juror ran as.
+        runtime: The harness it ran under.
+        report: The report over its share of the cohort, ``INSUFFICIENT`` under the floor.
+    """
+
+    agent_role: str
+    runtime: str
+    report: JuryValidationReport
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -188,6 +211,44 @@ def calibrate(
     return CalibrationGroup(report=report, min_scored=cfg.min_validation_n, authority=authority)
 
 
+def score_jurors(
+    cohort: ValidationCohort,
+    ballots: Mapping[str, tuple[JurorBallot, ...]],
+    config: JuryValidationConfig | None = None,
+) -> tuple[JurorScore, ...]:
+    """Return each juror's report over its own share of the labelled cohort.
+
+    A juror is the ``(agent_role, runtime)`` that answered for a verdict, and each share
+    is held to the same floor as the whole cohort, so a juror with too few settled
+    verdicts reads ``INSUFFICIENT`` rather than a score drawn from a handful.
+
+    Args:
+        cohort: The verdicts joined to their ground truth.
+        ballots: The ballots each labelled verdict cast, by the verdict's key.
+        config: The jury-validation config; ``None`` takes its defaults.
+
+    Returns:
+        One score per juror, in the order its first labelled verdict was listed, silver
+        rows before gold.
+
+    Raises:
+        ValueError: A labelled verdict cast no ballot.
+    """
+    shares: dict[tuple[str, str], tuple[list[LabeledVerdict], list[LabeledVerdict]]] = {}
+    for tier, rows in enumerate((cohort.silver, cohort.gold)):
+        for row in rows:
+            juror = (row.outcome.agent_role.value, row.outcome.runtime)
+            shares.setdefault(juror, ([], []))[tier].append(row)
+    return tuple(
+        JurorScore(
+            agent_role=role,
+            runtime=runtime,
+            report=validate_jury(ValidationCohort(silver=silver, gold=gold), ballots, config),
+        )
+        for (role, runtime), (silver, gold) in shares.items()
+    )
+
+
 def _number(row: RouteRecord, name: str) -> float | None:
     """Return a calibration row's stated metric, or ``None`` when it states none."""
     value = _stated(row, name)
@@ -232,10 +293,38 @@ def calibration_of(model: RouteReadModel) -> CalibrationGroup:
     )
 
 
-def track_record(verdicts: Iterable[RouteRecord]) -> tuple[TrackRecordRow, ...]:
+def juror_scores_of(model: RouteReadModel) -> Mapping[tuple[str, str], tuple[int, float | None]]:
+    """Return the scored count and Brier score the daemon filed for each juror.
+
+    Args:
+        model: The Trust route's read model.
+
+    Returns:
+        ``(scored, brier)`` by ``(agent_role, runtime)``, in the order the rows were filed.
+    """
+    return {
+        (
+            _stated(row, "agent_role") or UNSTATED_PART,
+            _stated(row, "runtime") or UNSTATED_PART,
+        ): (int(_stated(row, "cohort") or 0), _number(row, "brier"))
+        for row in model.rows
+        if row.collection is Epoch2Collection.BATCH and row.key.startswith(JUROR_KEY_PREFIX)
+    }
+
+
+def track_record(
+    verdicts: Iterable[RouteRecord],
+    scores: Mapping[tuple[str, str], tuple[int, float | None]],
+) -> tuple[TrackRecordRow, ...]:
     """Return each producer's tally over ``verdicts``, keyed ``(agent_role, runtime)``.
 
-    An unverified verdict judged nothing, so it counts toward neither side.
+    An unverified verdict judged nothing, so it counts toward neither side. A juror the
+    daemon scored but that answered for none of ``verdicts`` is listed after the rest with
+    nothing tallied, because its score covers every Batch rather than these verdicts.
+
+    Args:
+        verdicts: The verdict observations to tally.
+        scores: Each juror's scored count and Brier score, as :func:`juror_scores_of` reads.
     """
     tally: dict[tuple[str, str], list[int]] = {}
     for row in verdicts:
@@ -249,9 +338,19 @@ def track_record(verdicts: Iterable[RouteRecord]) -> tuple[TrackRecordRow, ...]:
             counts[0] += 1
         elif verdict == AuditVerdict.VERIFIED_FALSE.value:
             counts[1] += 1
+    for juror in scores:
+        tally.setdefault(juror, [0, 0])
     return tuple(
-        TrackRecordRow(agent_role=role, runtime=runtime, accepted=accepted, rejected=rejected)
+        TrackRecordRow(
+            agent_role=role,
+            runtime=runtime,
+            accepted=accepted,
+            rejected=rejected,
+            scored=scored,
+            brier=brier,
+        )
         for (role, runtime), (accepted, rejected) in tally.items()
+        for scored, brier in (scores.get((role, runtime), (0, None)),)
     )
 
 
@@ -274,6 +373,7 @@ def build_trust_view(
         for row in model.rows
         if row.collection is Epoch2Collection.BATCH
         and row.key != CALIBRATION_KEY
+        and not row.key.startswith(JUROR_KEY_PREFIX)
         and (milestone is None or _stated(row, "milestone") == milestone)
     )
     unobserved = tuple(row for row in model.rows if row.collection is Epoch2Collection.CLAIM)
@@ -282,7 +382,7 @@ def build_trust_view(
         verdicts=verdicts,
         unobserved=unobserved,
         calibration=calibration_of(model),
-        track_record=track_record(verdicts),
+        track_record=track_record(verdicts, juror_scores_of(model)),
     )
     logger.debug(f"build_trust_view milestone={milestone} verdicts={len(verdicts)}")
     return view
@@ -295,11 +395,14 @@ __all__ = [
     "EARNED_AUTHORITY",
     "UNSTATED_PART",
     "CalibrationGroup",
+    "JurorScore",
     "TrackRecordRow",
     "TrustView",
     "build_trust_view",
     "calibrate",
     "calibration_authority",
     "calibration_of",
+    "juror_scores_of",
+    "score_jurors",
     "track_record",
 ]

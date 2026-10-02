@@ -113,3 +113,8 @@ def test_differentiate_conclusions_carry_preset(state_dir: Path) -> None:
     body = DifferentiateBody.model_validate(cast(dict, env.body))
     assert body.conclusions
     assert "full" in body.conclusions[0]
+
+
+def test_differentiate_next_actions_are_live_verbs(state_dir: Path) -> None:
+    env = run_skill(DifferentiateSkill(), _ctx())
+    assert env.footer.next_valid_actions == ["eawf plan show", "eawf campaign new"]

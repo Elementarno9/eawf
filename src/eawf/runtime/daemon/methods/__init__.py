@@ -425,6 +425,7 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "mcp",
     "memory",
     "migration",
+    "milestone_target",
     "operation",
     "pause",
     "pending_action_disposition",

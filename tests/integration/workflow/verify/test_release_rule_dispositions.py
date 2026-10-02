@@ -2,9 +2,8 @@
 
 The tag chokepoint's realization probe reads the disposition table against
 the rules the tagged tree ships. A rule nobody decided the fate of reds
-the row and is named in it; a governed suite hands the row on to the
-module-length exclusion check, which leaves it unproven rather than
-claiming a pass.
+the row and is named in it; a governed suite holds the assertion, so the
+row passes when the other realization assertions hold too.
 """
 
 from __future__ import annotations
@@ -81,13 +80,13 @@ def test_lint_001_a_rule_with_no_disposition_reds_the_release_preflight(tmp_path
     assert row.evidence_refs == ("rule_disposition:EAWF099",)
 
 
-def test_lint_001_a_governed_suite_leaves_the_row_to_the_exclusion_check(tmp_path: Path) -> None:
+def test_lint_001_a_governed_suite_holds_the_disposition_assertion(tmp_path: Path) -> None:
     row = _sweep(_repo(tmp_path, {"eawf001.py": "EAWF001"})).row(
         ReleaseSignalName.PERFECT_REALIZATION
     )
 
-    assert row.status is ReleaseSignalStatus.UNAVAILABLE
-    assert "module_length_exclusion" in row.remediation
+    assert row.status is ReleaseSignalStatus.PASS
+    assert "rule_disposition:governed" in row.evidence_refs
 
 
 def test_lint_001_the_repository_itself_passes_the_disposition_leg() -> None:

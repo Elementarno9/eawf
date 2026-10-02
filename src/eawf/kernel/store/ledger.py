@@ -20,7 +20,9 @@ import hashlib
 import logging
 import os
 import secrets
+from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -222,6 +224,49 @@ def effective_records(records: tuple[LedgerRecord, ...]) -> tuple[LedgerRecord, 
     )
 
 
+#: Each ledger's latest rows, beside the size and modification time they were read at.
+#: A ledger only grows, so an unchanged size and stamp mean unchanged bytes, and a read
+#: of a several-megabyte ledger is paid once per append rather than once per request.
+_LATEST_ROWS: dict[Path, tuple[tuple[int, int], Mapping[str, dict[str, Any]]]] = {}
+
+
+def latest_rows(path: Path) -> Mapping[str, dict[str, Any]]:
+    """Return the latest standing row filed under each key of the ledger at *path*.
+
+    A row is a line whose payload names the line's own ``record_key`` as its ``key``:
+    a record that compacted out of the document. A line filed there for another
+    reason -- an imported legacy record, an acceptance-bundle revision, a notice --
+    carries no such key and is passed over.
+
+    Args:
+        path: The ledger file. A missing file reads as empty.
+
+    Returns:
+        The payload of the last standing row of each key, keyed by that key.
+
+    Raises:
+        LedgerTornTailError: The file ends mid-line.
+        ValidationError: A line does not satisfy :class:`LedgerRecord`.
+    """
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return MappingProxyType({})
+    stamp = (stat.st_size, stat.st_mtime_ns)
+    cached = _LATEST_ROWS.get(path)
+    if cached is not None and cached[0] == stamp:
+        return cached[1]
+    rows = MappingProxyType(
+        {
+            record.record_key: record.payload
+            for record in effective_records(read_ledger_records(path))
+            if record.payload.get("key") == record.record_key
+        }
+    )
+    _LATEST_ROWS[path] = (stamp, rows)
+    return rows
+
+
 def verify_append_only(before: bytes, after: bytes) -> None:
     """Refuse *after* unless it extends *before* byte for byte.
 
@@ -324,6 +369,7 @@ __all__ = [
     "content_digest",
     "effective_records",
     "guarded_ledger_write",
+    "latest_rows",
     "line_digest",
     "read_ledger_records",
     "render_ledger_line",

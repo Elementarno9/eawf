@@ -55,6 +55,7 @@ _ENVELOPE_MODULES = frozenset(
     {
         "eawf.surfaces.cli.commands.domain",
         "eawf.surfaces.cli.commands.domain_delivery",
+        "eawf.surfaces.cli.commands.domain_target",
     }
 )
 
@@ -63,6 +64,10 @@ _ENVELOPE_MODULES = frozenset(
 _ANCHORED_ELSEWHERE = frozenset(
     {("milestone", "seal-approval"), ("plan", "approve"), ("plan", "apply")}
 )
+
+#: Native writes in the envelope modules that set a field and move no status, so
+#: the registry has no edge for them; each still takes both anchors.
+_FIELD_WRITES = frozenset({("milestone", "set-target")})
 
 #: Every create command and the URN it admits, one per kind.
 _CREATES: tuple[tuple[str, str, str], ...] = (
@@ -173,7 +178,8 @@ def test_surf_080_lifecycle_moves_are_the_daemons_lifecycle_verbs() -> None:
         for verb in DOMAIN_LIFECYCLE_VERBS
     }
     exposed = {path for path, _ in _envelope_commands() if path[-1] != "create"}
-    assert exposed == registered
+    assert exposed - _FIELD_WRITES == registered
+    assert exposed >= _FIELD_WRITES, "a declared field write is exposed"
 
 
 def test_surf_080_every_lifecycle_group_is_an_entity_group() -> None:
@@ -210,7 +216,9 @@ def _anchored_commands() -> list[tuple[tuple[str, ...], click.Command]]:
 def test_surf_081_every_native_mutating_verb_requires_both_anchors() -> None:
     """``--expected-revision`` and ``--idempotency-key`` are required options."""
     commands = _anchored_commands()
-    assert len(commands) == len(DOMAIN_LIFECYCLE_VERBS) + len(_CREATES) + len(_ANCHORED_ELSEWHERE)
+    assert len(commands) == (
+        len(DOMAIN_LIFECYCLE_VERBS) + len(_CREATES) + len(_ANCHORED_ELSEWHERE) + len(_FIELD_WRITES)
+    )
     for path, command in commands:
         options = {opt: param for param in command.params for opt in param.opts}
         for flag in ("--expected-revision", "--idempotency-key"):

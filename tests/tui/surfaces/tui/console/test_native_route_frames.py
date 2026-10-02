@@ -329,7 +329,9 @@ def test_ui_020_a_producer_with_zero_judged_verdicts_has_no_rate() -> None:
     judged = next(r for r in frame if r.startswith(" reviewer · claude-code"))
     unjudged = next(r for r in frame if r.startswith(" ? unknown · ? unknown"))
     assert judged.split()[3:6] == ["1", "1", "~0.50"]
-    assert "∅ unavailable · 0 judged" in unjudged and "0.00" not in unjudged
+    assert "∅ 0 judged" in unjudged and "0.00" not in unjudged
+    # no juror row scored either producer, so neither has a Brier score
+    assert "∅ 0 of 20 scored" in judged and "∅ 0 of 20 scored" in unjudged
 
 
 # ---------- UI-021 / UI-064: the evidence route ----------

@@ -16,17 +16,23 @@ import pytest
 
 from eawf.kernel.projection.compute import build_route_projection
 from eawf.kernel.projection.verification import build_verification_view
+from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole
+from eawf.observability.eval.jury import JurorBallot
 from eawf.observability.eval.jury_validation import (
     JuryValidationConfig,
     JuryValidationReport,
     JuryValidationStatus,
+    LabeledVerdict,
+    LabelSource,
     ValidationCohort,
 )
+from eawf.observability.eval.reputation import VerdictOutcome
 from eawf.observability.eval.trust_projection import (
     TrackRecordRow,
     build_trust_view,
     calibrate,
     calibration_authority,
+    score_jurors,
 )
 
 ROOT = "eawf://EAWF/EAWF/EAWF"
@@ -240,3 +246,116 @@ def test_ui_063_no_milestone_named_lists_every_verdict() -> None:
 def test_ui_063_an_empty_projection_yields_empty_groups() -> None:
     view = build_trust_view(_model(), milestone="MLS-0001")
     assert (view.verdicts, view.unobserved, view.track_record) == ((), (), ())
+
+
+def _labelled(
+    base_id: str, role: AgentSessionRole, runtime: str, *, passed: bool, truth: bool
+) -> tuple[LabeledVerdict, tuple[JurorBallot, ...]]:
+    """Return one juror's labelled binary verdict and the one ballot it cast."""
+    verdict = AgentReportVerdict.PASS if passed else AgentReportVerdict.FAIL
+    outcome = VerdictOutcome(
+        base_id=base_id, agent_role=role, runtime=runtime, verdict=verdict, confidence=1.0
+    )
+    ballot = JurorBallot(
+        juror_id=f"{role.value}-{runtime}",
+        acceptance_style="binary",
+        verdict=verdict,
+        agent_role=role,
+        runtime=runtime,
+    )
+    return LabeledVerdict(outcome=outcome, ground_truth=truth, label_source=LabelSource.SILVER), (
+        ballot,
+    )
+
+
+def _cohort(
+    *rows: tuple[str, AgentSessionRole, str, bool, bool],
+) -> tuple[ValidationCohort, dict[str, tuple[JurorBallot, ...]]]:
+    labelled = {key: _labelled(key, role, rt, passed=p, truth=t) for key, role, rt, p, t in rows}
+    cohort = ValidationCohort(silver=[row for row, _ in labelled.values()], gold=[])
+    return cohort, {key: ballots for key, (_, ballots) in labelled.items()}
+
+
+REVIEWER = AgentSessionRole.REVIEWER
+AUDITOR = AgentSessionRole.AUDITOR
+
+
+def test_ui_063_each_juror_is_scored_on_its_own_verdicts_against_the_floor() -> None:
+    cohort, ballots = _cohort(
+        ("V-1", REVIEWER, "codex", True, True),
+        ("V-2", REVIEWER, "codex", True, False),
+        ("V-3", AUDITOR, "claude-code", True, True),
+    )
+
+    scores = score_jurors(cohort, ballots, JuryValidationConfig(min_validation_n=2))
+
+    by_juror = {(score.agent_role, score.runtime): score.report for score in scores}
+    assert list(by_juror) == [("reviewer", "codex"), ("auditor", "claude-code")]
+    scored = by_juror[("reviewer", "codex")]
+    assert (scored.status, scored.n) == (JuryValidationStatus.SCORED, 2)
+    assert scored.brier == pytest.approx(0.5)
+    starved = by_juror[("auditor", "claude-code")]
+    assert (starved.status, starved.n, starved.brier) == (
+        JuryValidationStatus.INSUFFICIENT,
+        1,
+        None,
+    )
+
+
+def test_ui_063_an_empty_cohort_scores_no_juror() -> None:
+    assert score_jurors(ValidationCohort(silver=[], gold=[]), {}) == ()
+
+
+def test_ui_063_a_labelled_verdict_with_no_ballot_is_refused() -> None:
+    cohort, _ballots = _cohort(("V-1", REVIEWER, "codex", True, True))
+    with pytest.raises(ValueError):
+        score_jurors(cohort, {}, JuryValidationConfig(min_validation_n=1))
+
+
+def _juror(role: str, runtime: str, **fields: Any) -> dict[str, Any]:
+    return {
+        "payload_kind": "juror_score",
+        "urn": f"{ROOT}/repository/REP-EAWF",
+        "revision": 1,
+        "agent_role": role,
+        "runtime": runtime,
+        **fields,
+    }
+
+
+def test_ui_063_the_track_record_carries_each_jurors_scored_count_and_brier() -> None:
+    document = {
+        "batch": {
+            "OBS-0": _observation("CR-01", "verified_true", "MLS-0001", "auditor"),
+            "jury-juror-auditor-codex": _juror(
+                "auditor", "codex", status="scored", cohort=24, brier=0.125
+            ),
+            "jury-juror-reviewer-claude-code": _juror(
+                "reviewer", "claude-code", status="insufficient", cohort=3, brier=None
+            ),
+        }
+    }
+    projection = build_route_projection(
+        route="trust",
+        document=document,
+        cursor=1,
+        scope_id="EAWF",
+        generated_at=datetime(2026, 9, 30, tzinfo=UTC),
+    )
+
+    view = build_trust_view(build_verification_view(projection), milestone="MLS-0001")
+
+    assert [row.key for row in view.verdicts] == ["OBS-0"]
+    by_producer = {(row.agent_role, row.runtime): row for row in view.track_record}
+    judged = by_producer[("auditor", "codex")]
+    assert (judged.accepted, judged.scored) == (1, 24)
+    assert judged.brier == pytest.approx(0.125)
+    # a juror scored elsewhere is listed though it answered for no verdict of this Milestone
+    starved = by_producer[("reviewer", "claude-code")]
+    assert (starved.judged, starved.scored, starved.brier) == (0, 3, None)
+
+
+def test_ui_063_a_producer_no_juror_row_scores_reads_zero_scored() -> None:
+    model = _model(_observation("CR-01", "verified_true", "MLS-0001", "auditor"))
+    (row,) = build_trust_view(model, milestone=None).track_record
+    assert (row.scored, row.brier) == (0, None)

@@ -134,7 +134,7 @@ wave_app.add_typer(wave_budget_app, name="budget")
 # ``domain`` module beside the Track verb that joins this app's own.
 milestone_app = typer.Typer(
     name="milestone",
-    help="Milestone lifecycle (activate, open-review, open-approval, accept, cancel).",
+    help="Milestone lifecycle (activate, open-review, open-approval, accept, cancel, set-target).",
     no_args_is_help=True,
 )
 batch_app = typer.Typer(

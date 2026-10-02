@@ -1,17 +1,17 @@
 """Unit tests for :class:`eawf.workflow.skills.research.ResearchSkill`.
 
-Pin the Phase 4 W02 acceptance contract for ``/research``:
+Pin the headless ``/research`` contract:
 
-- Happy path (probe ok + default depth) → ``status=ok`` envelope with a
-  populated :class:`ResearchBody`.
-- Probe-blocked path → ``status=blocked`` with non-empty
-  ``footer.repair_commands``.
-- ``--depth shallow|medium|deep|exhaustive`` flag honoured: question-slot
-  count scales with depth and the fan-out depths (``deep`` / ``exhaustive``)
-  emit a typed fan-out plan.
-- Body schema fields (``brief_id``, ``questions``, ``options``,
-  ``recommendation``) populated.
-- Each algorithm step writes one ``EVENT`` row to ``store/event.jsonl``.
+- A headless run has no agent to answer questions, so it refuses with
+  ``status=blocked``, a ``campaign_required`` warning, and a repair route
+  through ``eawf campaign new`` / ``eawf campaign run``.
+- It invents no placeholder rows: no synthetic question slots, options,
+  recommendation, fan-out plan or persisted brief, at any depth.
+- The scope's live OpenQuestion rows surface in the body and become the
+  route's ``--question`` values.
+- ``--depth`` / ``--agents`` (and their config leaves) shape the route;
+  ``--rounds`` / ``--budget`` are recorded on the resolve-scope trace.
+- Probe-blocked path → ``status=blocked`` with the probe's repair commands.
 
 The tests use ``EA_STATE`` to redirect the active state path under a
 ``tmp_path`` so the engine appends events into a sandbox.
@@ -25,7 +25,7 @@ from typing import cast
 import orjson
 import pytest
 
-from eawf.surfaces.render.envelope import EnvelopeWarning
+from eawf.surfaces.render.envelope import EnvelopeWarning, OutputEnvelope
 from eawf.workflow.skills.bodies.research import ResearchBody
 from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
 from eawf.workflow.skills.research import ResearchSkill
@@ -38,8 +38,6 @@ def state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     state_path = state_dir / "state.json"
     monkeypatch.setenv("EA_STATE", str(state_path))
     monkeypatch.setenv("EA_INSTRUMENT_PROBE", str(state_dir / "instrument-probe.json"))
-    monkeypatch.delenv("EAWF_BLITZ_DEPTH", raising=False)
-    monkeypatch.delenv("EAWF_BLITZ_DEPTH_COUNTER", raising=False)
     # Isolate the global config layer so the no-flag depth resolves to the
     # built-in ``medium`` default rather than the developer's machine-global
     # ``research.default_depth`` leaf (the stage now reads that leaf).
@@ -49,101 +47,84 @@ def state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return state_dir
 
 
-def _ctx() -> SkillContext:
+def _ctx(args: dict[str, object] | None = None) -> SkillContext:
     return SkillContext(
         scope="urn:eawf:v1:state:QR/P00",
         session="urn:eawf:v1:store:QR/sessions/SES-1",
+        args=dict(args or {}),
     )
 
 
-def test_research_happy_path_status_ok(state_dir: Path) -> None:
-    skill = ResearchSkill()
-    env = run_skill(skill, _ctx())
-    assert env.header.status == "ok", env.body
+def _body(env: OutputEnvelope) -> ResearchBody:
+    return ResearchBody.model_validate(cast(dict, env.body))
+
+
+def _route(env: OutputEnvelope) -> str:
+    """Return the ``eawf campaign new`` repair command of a refused run."""
+    assert env.footer.repair_commands
+    return env.footer.repair_commands[0]
+
+
+def test_research_headless_refuses_with_campaign_route(state_dir: Path) -> None:
+    env = run_skill(ResearchSkill(), _ctx({"topic": "dispatch planning"}))
+
     assert env.header.skill == "/research"
+    assert env.header.status == "blocked", env.body
+    refusal = next(w for w in env.footer.warnings if w.code == "campaign_required")
+    assert "eawf campaign new" in refusal.detail
+    assert env.footer.repair_commands == [
+        "eawf campaign new 'dispatch planning' --track <track-urn>"
+        " --question 'dispatch planning' --depth medium --agents 4"
+        " --actor <principal-key> --run",
+        "eawf campaign run <CAM-####> --actor <principal-key>",
+    ]
+    assert env.footer.next_valid_actions == ["eawf campaign new", "eawf campaign run"]
 
 
-def test_research_body_populated(state_dir: Path) -> None:
-    skill = ResearchSkill()
-    env = run_skill(skill, _ctx())
-    assert isinstance(env.body, dict)
-    body = ResearchBody.model_validate(env.body)
+@pytest.mark.parametrize("depth", ["shallow", "medium", "deep", "exhaustive"])
+def test_research_headless_invents_no_placeholder_rows(state_dir: Path, depth: str) -> None:
+    env = run_skill(ResearchSkill(), _ctx({"depth": depth}))
+
+    body = _body(env)
     assert body.brief_id.startswith("BR-")
-    assert len(body.brief_id) > 3
-    assert len(body.questions) == 2  # default depth=medium -> 2 slots
-    assert len(body.options) == 2
-    assert body.recommendation is not None
-    assert body.recommendation.choice == body.options[0].name
+    assert body.questions == []
+    assert body.options == []
+    assert body.recommendation is None
+    assert body.research_plan is None
+    assert body.persisted_brief is None
+    assert f"--depth {depth} " in _route(env)
 
 
-def test_research_shallow_depth_scales_questions(state_dir: Path) -> None:
-    skill = ResearchSkill()
-    ctx = _ctx()
-    ctx.args = {"depth": "shallow"}
-    env = run_skill(skill, ctx)
-    assert env.header.status == "ok"
-    body = ResearchBody.model_validate(cast(dict, env.body))
-    assert len(body.questions) == 1
+def test_research_names_no_retired_verb(state_dir: Path) -> None:
+    env = run_skill(ResearchSkill(), _ctx())
+    actions = [*env.footer.next_valid_actions, *env.footer.repair_commands]
+    assert not any(
+        a.startswith(("eawf prep", "eawf migrate", "eawf skill run /blitz")) for a in actions
+    )
 
 
-def test_research_deep_depth_returns_research_plan(state_dir: Path) -> None:
-    skill = ResearchSkill()
-    ctx = _ctx()
-    ctx.args = {"depth": "deep"}
-    env = run_skill(skill, ctx)
-    assert env.header.status == "ok"
-    body = ResearchBody.model_validate(cast(dict, env.body))
-    assert body.user_question is None
-    assert body.research_plan is not None
-    assert body.research_plan.section_heading == "## ResearchPlan"
-    assert body.research_plan.depth == "deep"
-    assert len(body.questions) == 3  # deep -> 3 slots
-    assert len(body.research_plan.fanout_envelopes) == len(body.questions)
+def test_research_save_persists_no_brief(state_dir: Path) -> None:
+    env = run_skill(ResearchSkill(), _ctx({"topic": "demo topic", "final": True}))
+    assert _body(env).persisted_brief is None
+    assert not (state_dir / "store" / "research.jsonl").exists()
 
 
-def test_research_plan_names_the_campaign_verb_that_fans_it_out(state_dir: Path) -> None:
-    skill = ResearchSkill()
-    ctx = _ctx()
-    ctx.args = {"depth": "deep"}
-    env = run_skill(skill, ctx)
-    assert env.footer.next_valid_actions[0] == "eawf campaign new"
-    assert "eawf agent dispatch" not in env.footer.next_valid_actions
-
-
-def test_research_exhaustive_depth_returns_research_plan(state_dir: Path) -> None:
-    skill = ResearchSkill()
-    ctx = _ctx()
-    ctx.args = {"depth": "exhaustive"}
-    env = run_skill(skill, ctx)
-    assert env.header.status == "ok"
-    body = ResearchBody.model_validate(cast(dict, env.body))
-    assert body.research_plan is not None
-    assert body.research_plan.depth == "exhaustive"
-    assert len(body.questions) == 4  # exhaustive -> 4 slots
-    assert len(body.research_plan.fanout_envelopes) == len(body.questions)
+def test_research_topic_defaults_to_scope(state_dir: Path) -> None:
+    route = _route(run_skill(ResearchSkill(), _ctx()))
+    assert route.startswith("eawf campaign new urn:eawf:v1:state:QR/P00 --track")
 
 
 def test_research_invalid_depth_falls_back_to_medium(state_dir: Path) -> None:
-    skill = ResearchSkill()
-    ctx = _ctx()
-    ctx.args = {"depth": "wat"}
-    env = run_skill(skill, ctx)
-    assert env.header.status == "ok"
-    body = ResearchBody.model_validate(cast(dict, env.body))
-    assert len(body.questions) == 2  # falls back to default depth=medium
+    route = _route(run_skill(ResearchSkill(), _ctx({"depth": "wat"})))
+    assert "--depth medium " in route
 
 
-def test_research_emits_one_event_per_step(state_dir: Path) -> None:
-    skill = ResearchSkill()
-    env = run_skill(skill, _ctx())
-    events_path = state_dir / "store" / "event.jsonl"
-    assert events_path.exists()
-    lines = events_path.read_text(encoding="utf-8").splitlines()
-    # Algorithm steps that emit: resolve_scope, start_brief,
-    # define_questions, synthesize_options, peer_review, recommend → 6
-    assert len(lines) == 6, f"expected 6 events, got {len(lines)}: {lines}"
-    # The footer's persisted_store_records should mirror the line count.
-    assert len(env.footer.persisted_store_records) == 6
+def test_research_emits_scope_and_refusal_events(state_dir: Path) -> None:
+    env = run_skill(ResearchSkill(), _ctx())
+    lines = (state_dir / "store" / "event.jsonl").read_text(encoding="utf-8").splitlines()
+    kinds = [orjson.loads(raw)["payload"]["event_type"] for raw in lines]
+    assert kinds == ["research.resolve_scope", "research.campaign_required"]
+    assert len(env.footer.persisted_store_records) == 2
 
 
 def test_research_probe_blocked_when_hard_tool_missing(
@@ -170,60 +151,6 @@ def test_research_probe_blocked_when_hard_tool_missing(
     assert not events_path.exists() or events_path.read_text(encoding="utf-8") == ""
 
 
-def test_research_default_next_actions_present(state_dir: Path) -> None:
-    skill = ResearchSkill()
-    env = run_skill(skill, _ctx())
-    assert "eawf prep" in env.footer.next_valid_actions
-
-
-def test_research_default_does_not_persist_research_brief(state_dir: Path) -> None:
-    skill = ResearchSkill()
-    env = run_skill(skill, _ctx())
-    body = ResearchBody.model_validate(cast(dict, env.body))
-    assert body.persisted_brief is None
-    assert not (state_dir / "store" / "research.jsonl").exists()
-
-
-def test_research_final_persists_research_brief(state_dir: Path) -> None:
-    skill = ResearchSkill()
-    ctx = _ctx()
-    ctx.args = {"topic": "demo topic", "final": True, "blitz": False}
-    env = run_skill(skill, ctx)
-    body = ResearchBody.model_validate(cast(dict, env.body))
-    assert body.persisted_brief == f"urn:eawf:v1:store:research/{body.brief_id}"
-    records = (state_dir / "store" / "research.jsonl").read_text(encoding="utf-8").splitlines()
-    assert len(records) == 1
-    record = orjson.loads(records[0])
-    assert record["id"] == body.brief_id
-    assert record["kind"] == "research"
-    assert record["payload"]["topic"] == "demo topic"
-    assert body.persisted_brief in env.footer.persisted_store_records
-
-
-def test_research_auto_chains_blitz_for_residual_unknowns(state_dir: Path) -> None:
-    skill = ResearchSkill()
-    env = run_skill(skill, _ctx())
-    assert "eawf skill run /blitz" in env.footer.next_valid_actions
-
-
-def test_research_can_disable_blitz_auto_chain(state_dir: Path) -> None:
-    skill = ResearchSkill()
-    ctx = _ctx()
-    ctx.args = {"blitz": False}
-    env = run_skill(skill, ctx)
-    assert "eawf skill run /blitz" not in env.footer.next_valid_actions
-
-
-def test_research_propagates_blitz_depth_exhaustion(
-    state_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("EAWF_BLITZ_DEPTH", "0")
-    skill = ResearchSkill()
-    env = run_skill(skill, _ctx())
-    assert env.header.status == "blocked"
-    assert env.footer.repair_commands
-
-
 def test_research_skill_registered_with_canonical_name() -> None:
     from eawf.workflow.skills import registry
 
@@ -231,7 +158,7 @@ def test_research_skill_registered_with_canonical_name() -> None:
     assert cls is ResearchSkill
 
 
-# --- P30-I23-W46: runtime options (rounds / agents / budget) ------------------
+# --- runtime options (rounds / agents / budget) ------------------------------
 
 
 def _event_payload(state_dir: Path, event_type: str) -> dict:
@@ -245,82 +172,81 @@ def _event_payload(state_dir: Path, event_type: str) -> dict:
 
 
 def test_research_agents_defaults_to_agent_count_leaf(state_dir: Path) -> None:
-    """No ``--agents`` resolves the previously-idle research.agent_count leaf (4)."""
+    """No ``--agents`` resolves the research.agent_count leaf (4)."""
     env = run_skill(ResearchSkill(), _ctx())
-    assert env.header.status == "ok"
     payload = _event_payload(state_dir, "research.resolve_scope")
     assert payload["agents"] == 4  # research.agent_count built-in default
+    assert " --agents 4 " in _route(env)
 
 
-def test_research_agents_flag_caps_fanout_width(state_dir: Path) -> None:
-    """``--agents`` below the question count trims the fan-out envelope list."""
-    ctx = _ctx()
-    ctx.args = {"depth": "deep", "agents": 2}
-    env = run_skill(ResearchSkill(), ctx)
-    body = ResearchBody.model_validate(cast(dict, env.body))
-    assert body.research_plan is not None
-    assert len(body.questions) == 3  # deep -> 3 slots
-    # agents=2 caps the fan-out below the question count.
-    assert len(body.research_plan.fanout_envelopes) == 2
-    payload = _event_payload(state_dir, "research.fanout_plan")
-    assert payload["agents"] == 2
-    assert payload["fanout_envelopes"] == 2
+def test_research_agents_flag_shapes_the_route(state_dir: Path) -> None:
+    env = run_skill(ResearchSkill(), _ctx({"depth": "deep", "agents": 2}))
+    assert "--depth deep --agents 2 " in _route(env)
+    assert _event_payload(state_dir, "research.campaign_required")["agents"] == 2
 
 
-def test_research_agents_flag_out_of_band_clamped(state_dir: Path) -> None:
-    """An ``--agents`` value above the leaf max clamps to 12."""
-    ctx = _ctx()
-    ctx.args = {"agents": 99}
-    run_skill(ResearchSkill(), ctx)
-    payload = _event_payload(state_dir, "research.resolve_scope")
-    assert payload["agents"] == 12
-
-
-def test_research_malformed_agents_falls_back_to_leaf(state_dir: Path) -> None:
-    """A non-numeric ``--agents`` degrades to the agent_count leaf (4)."""
-    ctx = _ctx()
-    ctx.args = {"agents": "wat"}
-    run_skill(ResearchSkill(), ctx)
-    payload = _event_payload(state_dir, "research.resolve_scope")
-    assert payload["agents"] == 4
+@pytest.mark.parametrize(("raw", "expected"), [(99, 12), (0, 1), ("wat", 4)])
+def test_research_agents_flag_clamped_or_defaulted(
+    state_dir: Path, raw: object, expected: int
+) -> None:
+    """An out-of-band ``--agents`` clamps to [1, 12]; a malformed one takes the leaf."""
+    env = run_skill(ResearchSkill(), _ctx({"agents": raw}))
+    assert _event_payload(state_dir, "research.resolve_scope")["agents"] == expected
+    assert f" --agents {expected} " in _route(env)
 
 
 def test_research_rounds_recorded_in_resolve_scope(state_dir: Path) -> None:
     """``--rounds`` is parsed and recorded on the resolve-scope trace."""
-    ctx = _ctx()
-    ctx.args = {"rounds": 3}
-    run_skill(ResearchSkill(), ctx)
+    run_skill(ResearchSkill(), _ctx({"rounds": 3}))
     payload = _event_payload(state_dir, "research.resolve_scope")
     assert payload["rounds"] == 3
 
 
 def test_research_rounds_below_floor_defaults_to_one(state_dir: Path) -> None:
     """A below-floor / malformed ``--rounds`` degrades to a single round."""
-    ctx = _ctx()
-    ctx.args = {"rounds": "nope"}
-    run_skill(ResearchSkill(), ctx)
+    run_skill(ResearchSkill(), _ctx({"rounds": "nope"}))
     payload = _event_payload(state_dir, "research.resolve_scope")
     assert payload["rounds"] == 1
 
 
 def test_research_budget_recorded_in_resolve_scope(state_dir: Path) -> None:
     """``--budget`` is parsed and recorded; absent it stays ``None`` (uncapped)."""
-    ctx = _ctx()
-    ctx.args = {"budget": 5000}
-    run_skill(ResearchSkill(), ctx)
+    run_skill(ResearchSkill(), _ctx({"budget": 5000}))
     payload = _event_payload(state_dir, "research.resolve_scope")
     assert payload["budget"] == 5000
 
 
 def test_research_budget_absent_is_none(state_dir: Path) -> None:
-    env = run_skill(ResearchSkill(), _ctx())
-    assert env.header.status == "ok"
+    run_skill(ResearchSkill(), _ctx())
     payload = _event_payload(state_dir, "research.resolve_scope")
     assert payload["budget"] is None
 
 
-def _write_state_with_open_questions(state_dir: Path) -> None:
-    """Write a valid state.json carrying two live questions + one dropped."""
+def _write_state_with_open_questions(state_dir: Path, *, live: int = 2) -> None:
+    """Write a valid state.json carrying *live* open questions plus one dropped."""
+    titles = ["which curve model fits the short tenor", "is the venue feed authoritative"]
+    titles += [f"extra question {i}" for i in range(live - len(titles))]
+    rows = {
+        f"OQ-{i + 1}": {
+            "id": f"OQ-{i + 1}",
+            "scope_id": "QR",
+            "title": title,
+            "status": "blocked" if i == 1 else "open",
+            "blocking": i == 1,
+            "urgency": "normal",
+            "created_at": "2026-06-11T12:00:00+00:00",
+        }
+        for i, title in enumerate(titles[:live])
+    }
+    rows["OQ-99"] = {
+        "id": "OQ-99",
+        "scope_id": "QR",
+        "title": "should we drop the stale source",
+        "status": "dropped",
+        "blocking": False,
+        "urgency": "low",
+        "created_at": "2026-06-11T12:00:00+00:00",
+    }
     payload = {
         "schema_version": "1.0",
         "scope_kind": "repo",
@@ -345,43 +271,13 @@ def _write_state_with_open_questions(state_dir: Path) -> None:
         "agent_sessions": {},
         "plugins": {},
         "indexes": {},
-        "open_questions": {
-            "OQ-1": {
-                "id": "OQ-1",
-                "scope_id": "QR",
-                "title": "which curve model fits the short tenor",
-                "status": "open",
-                "blocking": False,
-                "urgency": "normal",
-                "created_at": "2026-06-11T12:00:00+00:00",
-            },
-            "OQ-2": {
-                "id": "OQ-2",
-                "scope_id": "QR",
-                "title": "is the venue feed authoritative",
-                "status": "blocked",
-                "blocking": True,
-                "urgency": "urgent",
-                "created_at": "2026-06-11T12:00:00+00:00",
-            },
-            "OQ-3": {
-                "id": "OQ-3",
-                "scope_id": "QR",
-                "title": "should we drop the stale source",
-                "status": "dropped",
-                "blocking": False,
-                "urgency": "low",
-                "created_at": "2026-06-11T12:00:00+00:00",
-            },
-        },
+        "open_questions": rows,
     }
     (state_dir / "state.json").write_bytes(orjson.dumps(payload))
 
 
-def test_research_surfaces_live_open_questions_over_placeholders(
-    state_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A populated OpenQuestion ledger surfaces real rows, not placeholder slots."""
+@pytest.fixture
+def ok_probe(monkeypatch: pytest.MonkeyPatch) -> None:
     from eawf.workflow.skills import research as research_module
 
     def _ok_probe(self: object, ctx: SkillContext) -> ProbeOutcome:
@@ -390,16 +286,41 @@ def test_research_surfaces_live_open_questions_over_placeholders(
         )
 
     monkeypatch.setattr(research_module.ResearchSkill, "probe", _ok_probe)
+
+
+@pytest.mark.usefixtures("ok_probe")
+def test_research_surfaces_live_open_questions_into_the_route(state_dir: Path) -> None:
+    """Live OpenQuestion rows surface in the body and become the route's questions."""
     _write_state_with_open_questions(state_dir)
-    env = run_skill(ResearchSkill(), _ctx())
-    body = ResearchBody.model_validate(cast(dict, env.body))
-    # Only the two live (open / blocked) questions surface; the dropped one
-    # and the depth-scaled placeholder slots are absent.
-    titles = [q.q for q in body.questions]
-    assert titles == [
-        "which curve model fits the short tenor",
-        "is the venue feed authoritative",
+    env = run_skill(ResearchSkill(), _ctx({"topic": "curves"}))
+    body = _body(env)
+    assert [(q.q, q.answer) for q in body.questions] == [
+        ("which curve model fits the short tenor", "(open)"),
+        ("is the venue feed authoritative", "(blocking)"),
     ]
-    blocking = next(q for q in body.questions if q.q == "is the venue feed authoritative")
-    assert blocking.answer == "(blocking)"
-    assert not any(q.q.startswith("Open question #") for q in body.questions)
+    assert body.options == []
+    assert body.recommendation is None
+    assert (
+        "--question 'which curve model fits the short tenor'"
+        " --question 'is the venue feed authoritative' --depth"
+    ) in _route(env)
+    assert "--question curves" not in _route(env)
+
+
+@pytest.mark.usefixtures("ok_probe")
+def test_research_route_caps_questions_at_campaign_limit(state_dir: Path) -> None:
+    """A Campaign takes at most 12 questions; the body still lists every live row."""
+    _write_state_with_open_questions(state_dir, live=13)
+    env = run_skill(ResearchSkill(), _ctx())
+    assert len(_body(env).questions) == 13
+    assert _route(env).count("--question ") == 12
+
+
+@pytest.mark.usefixtures("ok_probe")
+def test_research_explicit_question_leads_the_route(state_dir: Path) -> None:
+    """The invocation's ``--question`` comes first, then the scope's live rows."""
+    _write_state_with_open_questions(state_dir, live=1)
+    env = run_skill(ResearchSkill(), _ctx({"topic": "caches", "question": "does LRU win"}))
+    assert (
+        "--question 'does LRU win' --question 'which curve model fits the short tenor' --depth"
+    ) in _route(env)

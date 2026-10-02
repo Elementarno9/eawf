@@ -263,7 +263,7 @@ class RoadmapSkill(Skill):
 
         persisted_records: list[str] = []
         state_mutations: list[str] = []
-        next_actions: list[str] = ["eawf prep", "eawf research", "eawf differentiate"]
+        next_actions: list[str] = ["eawf plan show", "eawf campaign new"]
 
         # Step 2 — resolve scope.
         evt_id = emit_event(

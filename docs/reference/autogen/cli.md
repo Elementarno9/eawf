@@ -244,7 +244,7 @@ Migrate state.json across schema versions (v1.0 -> v1.1 chain).
 
 ### `eawf milestone`
 
-Milestone lifecycle (activate, open-review, open-approval, accept, cancel).
+Milestone lifecycle (activate, open-review, open-approval, accept, cancel, set-target).
 
 | Verb | Summary |
 |---|---|
@@ -257,6 +257,7 @@ Milestone lifecycle (activate, open-review, open-approval, accept, cancel).
 | `open-approval` | Ask the operator to accept a Milestone in review on its acceptance bundle. |
 | `open-review` | Open acceptance review on an ACTIVE Milestone. |
 | `seal-approval` | Seal the operator's answer onto a waiting acceptance question. |
+| `set-target` | Set or clear the day an open Milestone is aimed at; its status does not move. |
 
 ### `eawf plan`
 

@@ -8,8 +8,9 @@ them by parent key, so a detail frame's list can be told apart from its register
 
 from __future__ import annotations
 
+import copy
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
@@ -28,7 +29,13 @@ from eawf.surfaces.tui.console.paint import Part, paint
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.history import NO_FEED
 from eawf.surfaces.tui.console.renderers.run_detail import NO_EVENTS, TIMELINE_LEGEND, timeline_head
-from eawf.surfaces.tui.console.renderers.timeline import NO_DATE, week_header
+from eawf.surfaces.tui.console.renderers.timeline import (
+    DATED,
+    DONE,
+    NO_DATE,
+    week_header,
+    week_offset,
+)
 from eawf.surfaces.tui.console.session import SIZES, Session
 from eawf.workflow.projection.acceptance import build_acceptance_view
 from tests.tui.surfaces.tui.console.overlay_support import Host
@@ -379,6 +386,88 @@ def test_an_undated_milestone_opens_on_enter() -> None:
     session = _session("timeline", None)
     _press(session, "timeline", "Tab", "Enter")
     assert (session.route, session.subj_id) == ("milestone", "MLS-0100")
+
+
+def _dated_document() -> dict[str, Any]:
+    """Return the probe tree with Milestones dated in, before, after and beyond the weeks."""
+    document = copy.deepcopy(DOCUMENT)
+    milestones = document["milestone"]
+    milestones["MLS-0100"]["target_date"] = "2026-09-18"
+    core, docs = _under("track", "TRK-CORE"), _under("track", "TRK-DOCS")
+    for key, status, day, track in (
+        ("MLS-0300", "COMPLETED", "2026-09-03", core),
+        ("MLS-0400", "PLANNED", "2026-11-06", docs),
+        ("MLS-0500", "PLANNED", "2026-07-01", docs),
+        ("MLS-0600", "CANCELLED", "2026-10-01", docs),
+    ):
+        milestones[key] = _row(
+            "milestone", key, status, title=f"Dated {key}", primary_track_ref=track, target_date=day
+        )
+    return document
+
+
+def _lane_rows(frame: list[str], key: str) -> tuple[str, str]:
+    at = next(i for i, row in enumerate(frame) if row[2:].startswith(f"{key} "))
+    return frame[at], frame[at + 1]
+
+
+def test_a_dated_milestone_is_a_marker_in_the_week_of_its_date() -> None:
+    frame = _frame("timeline", w=160, document=_dated_document())
+    weeks = next(row for row in frame if "│" in row and "W38" in row)
+    lane, labels = _lane_rows(frame, "TRK-CORE")
+    assert lane[weeks.index("W38") + 1] == DATED, "MLS-0100 sits under the week now falls in"
+    assert lane[weeks.index("│")] == "│", "the now keyline survives the markers"
+    assert labels[weeks.index("W38") + 1 :].startswith("MLS-0100"), "the key sits under it"
+    assert labels.rstrip().endswith("2 dated · 0 undated below")
+
+
+def test_a_closed_milestone_is_drawn_done_whichever_way_it_closed() -> None:
+    frame = _frame("timeline", w=160, document=_dated_document())
+    weeks = next(row for row in frame if "│" in row and "W38" in row)
+    core, _ = _lane_rows(frame, "TRK-CORE")
+    docs, _ = _lane_rows(frame, "TRK-DOCS")
+    assert core[weeks.index("W36") + 1] == DONE, "a COMPLETED Milestone is done"
+    assert docs[weeks.index("W40") + 1] == DONE, "a CANCELLED Milestone is done too"
+    assert DONE in frame[-1] or any(f"{DONE} done" in row for row in frame), "the legend keys it"
+
+
+def test_a_date_beyond_the_drawn_weeks_is_named_at_the_lane_end() -> None:
+    frame = _frame("timeline", w=160, document=_dated_document())
+    docs, labels = _lane_rows(frame, "TRK-DOCS")
+    assert docs.rstrip().endswith("◂ W27 ▸ W45"), "an early and a late date both say so"
+    assert labels.rstrip().endswith("3 dated · 1 undated below")
+
+
+def test_only_undated_milestones_land_in_the_undated_region() -> None:
+    frame = _frame("timeline", w=160, document=_dated_document())
+    assert _starts(frame, "UNDATED").rstrip().endswith("1 milestone with no date proposed")
+    undated = [row for row in frame if row.rstrip().endswith(NO_DATE)]
+    assert [row.split()[0] for row in undated] == ["MLS-0200"]
+    assert "5 of 6 milestones dated" in frame[1]
+
+
+def test_two_milestones_in_one_week_share_a_marker_and_count_on_its_label() -> None:
+    document = _dated_document()
+    document["milestone"]["MLS-0300"]["target_date"] = "2026-09-17"
+    frame = _frame("timeline", w=160, document=document)
+    weeks = next(row for row in frame if "│" in row and "W38" in row)
+    lane, labels = _lane_rows(frame, "TRK-CORE")
+    assert lane[weeks.index("W38") + 1] == DATED, "an open Milestone keeps the cell open"
+    assert labels[weeks.index("W38") + 1 :].startswith("MLS-0300+1")
+
+
+@pytest.mark.parametrize(
+    ("day", "offset"),
+    [
+        ("2026-09-14", 0),
+        ("2026-09-20", 0),
+        ("2026-09-13", -1),
+        ("2026-09-21", 1),
+        ("2027-01-04", 16),
+    ],
+)
+def test_week_offset_counts_iso_weeks_from_now(day: str, offset: int) -> None:
+    assert week_offset(date.fromisoformat(day), AT) == offset
 
 
 # ---------- the Run frame opens on its timeline ----------

@@ -12,6 +12,7 @@ declare a Milestone into existence already accepted.
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -332,3 +333,32 @@ def test_milestone_rejects_an_over_long_title() -> None:
 def test_milestone_accepts_a_maximum_length_title() -> None:
     milestone = Milestone.model_validate(_milestone_fields(title="x" * 80))
     assert len(milestone.title) == 80
+
+
+# ---- target date -------------------------------------------------------------
+
+
+def test_milestone_written_before_the_target_date_reads_as_undated() -> None:
+    assert "target_date" not in _milestone_fields()
+    assert Milestone.model_validate(_milestone_fields()).target_date is None
+
+
+def test_milestone_target_date_round_trips_through_its_canonical_form() -> None:
+    milestone = Milestone.model_validate(_milestone_fields(target_date="2026-10-09"))
+    dumped = milestone.model_dump(mode="json")
+    assert dumped["target_date"] == "2026-10-09"
+    assert Milestone.model_validate(dumped) == milestone
+    assert milestone.target_date == date(2026, 10, 9)
+
+
+@pytest.mark.parametrize("value", ["2026-02-30", "next friday", "2026-13-01"])
+def test_milestone_rejects_a_target_date_that_names_no_day(value: str) -> None:
+    with pytest.raises(ValidationError, match="target_date"):
+        Milestone.model_validate(_milestone_fields(target_date=value))
+
+
+def test_milestone_create_spec_carries_its_target_date() -> None:
+    document = _create_document()
+    assert MilestoneCreateSpec.model_validate(document).target_date is None
+    document["target_date"] = "2026-10-02"
+    assert MilestoneCreateSpec.model_validate(document).target_date == date(2026, 10, 2)

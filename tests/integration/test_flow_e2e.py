@@ -20,14 +20,36 @@ from pathlib import Path
 import pytest
 
 from eawf.workflow.skills.bodies.flow import FlowBody
-from eawf.workflow.skills.engine import SkillContext, run_skill
+from eawf.workflow.skills.bodies.research import ResearchBody
+from eawf.workflow.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult, run_skill
 from eawf.workflow.skills.flow import FlowSkill
+
+
+class _StubResearchSkill(Skill):
+    """Answers the ``/research`` step ok.
+
+    The headless ``/research`` body refuses with a Campaign route because it
+    has no agent; this test pins the flow's orchestration, not that step.
+    """
+
+    name = "/research"  # type: ignore[assignment]
+
+    def probe(self, ctx: SkillContext) -> ProbeOutcome:
+        return ProbeOutcome(ok=True, instrument_probe={})
+
+    def action(self, ctx: SkillContext) -> SkillResult:
+        return SkillResult(status="ok", body=ResearchBody(brief_id="BR-STUB").model_dump())
 
 
 @pytest.fixture
 def integration_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Build a minimal .ea/ skeleton so the meta skill's emit_event path
     can land its events.jsonl entries on disk."""
+    order = tuple(
+        (name, _StubResearchSkill if name == "/research" else cls)
+        for name, cls in FlowSkill.flow_order
+    )
+    monkeypatch.setattr(FlowSkill, "flow_order", order)
     repo = tmp_path / "repo"
     state_dir = repo / ".ea"
     store_dir = state_dir / "store"

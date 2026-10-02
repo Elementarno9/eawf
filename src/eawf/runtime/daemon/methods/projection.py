@@ -68,6 +68,7 @@ from eawf.kernel.projection.compute import (
     RouteProjection,
     build_route_projection,
     patches_for_event,
+    subject_ledger_rows,
 )
 from eawf.kernel.projection.connection import (
     READ_METHOD_TEMPLATE,
@@ -90,9 +91,9 @@ from eawf.kernel.state.epoch2.pending_action import PendingAction
 from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.ledger import effective_records, read_ledger_records
+from eawf.kernel.store.ledger import effective_records, latest_rows, read_ledger_records
 from eawf.kernel.store.paths import ledger_path, store_path
-from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.kernel.store.tiers import Epoch2Collection, StorageTier, tier_for
 from eawf.runtime.daemon.epoch2_root import RootIdentity
 from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY
 from eawf.runtime.daemon.methods import DaemonValidationError, Handler, MethodContext, register
@@ -102,7 +103,7 @@ from eawf.runtime.daemon.methods.permission import open_permission_rows
 from eawf.runtime.daemon.methods.run_liveness import stall_key, standing_stall_facts
 from eawf.runtime.daemon.native_guard import require_native_call
 from eawf.runtime.daemon.verdict_observations import (
-    jury_calibration_row,
+    jury_calibration_rows,
     resolve_jury_thresholds,
     verdict_observation_rows,
 )
@@ -165,6 +166,24 @@ LEDGER_MERGED_COLLECTIONS: Final = (
     Epoch2Collection.RUN,
     Epoch2Collection.CLAIM,
 )
+
+
+class RouteReadParams(BaseModel):
+    """The parameters one route read carries.
+
+    Attributes:
+        repo_root: The repository whose tree to answer for; the daemon's bound tree
+            when absent.
+        key: The key or URN of the record the route is opened on. The record and
+            everything filed under it are read back from their ledgers once they
+            have left the document; without one, a route reads only the most
+            recently closed handful.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    repo_root: str | None = None
+    key: NonEmptyStr | None = None
 
 
 class ReconnectParams(BaseModel):
@@ -370,22 +389,33 @@ def _decision_rows(authority: RootAuthority) -> tuple[dict[str, Any], ...]:
 
 
 def _trust_rows(authority: RootAuthority, document: dict[str, Any]) -> tuple[dict[str, Any], ...]:
-    """Return the verdicts the Batches' current cycles hold and the jury's calibration row.
+    """Return the verdicts the current cycles hold, the calibration row and juror scores.
 
     The calibration is held to the ceilings the tree's layered config states.
     """
     document_file = document_path(authority)
     max_brier, max_co_error = resolve_jury_thresholds(authority.root.parent)
-    calibration = jury_calibration_row(
+    calibration = jury_calibration_rows(
         document_file, document, max_brier=max_brier, max_co_error=max_co_error
     )
-    verdicts = verdict_observation_rows(document_file, document)
-    return verdicts if calibration is None else (*verdicts, calibration)
+    return (*verdict_observation_rows(document_file, document), *calibration)
+
+
+def _subject_rows(
+    *, route: str, authority: RootAuthority, document: dict[str, Any], key: str
+) -> dict[Epoch2Collection, tuple[Mapping[str, Any], ...]]:
+    """Return the ledger rows of the record *key* names and of the records filed under it."""
+    filed = {
+        collection: latest_rows(ledger_path(document_path(authority), collection))
+        for collection in ROUTE_COLLECTIONS.get(route, ())
+        if tier_for(collection) is StorageTier.LEDGER
+    }
+    return subject_ledger_rows(route=route, subject=key, document=document, filed=filed)
 
 
 def _ledger_rows_for(
-    *, route: str, authority: RootAuthority, document: dict[str, Any]
-) -> dict[Epoch2Collection, tuple[dict[str, Any], ...]]:
+    *, route: str, authority: RootAuthority, document: dict[str, Any], key: str | None
+) -> dict[Epoch2Collection, tuple[Mapping[str, Any], ...]]:
     """Return the ledger-held rows *route*'s merged collections contribute.
 
     A provider permission is filed on the run ledger rather than a ledger of its
@@ -394,9 +424,10 @@ def _ledger_rows_for(
     that lists notices reads them from the ledger they are filed on: the live ceiling
     breaches and the standing stalls from the run ledger, the sandbox decisions from the
     receipt ledger and the audit verdicts of the Batches' current cycles, with the jury's
-    calibration over every verdict, from the Batch ledger.
+    calibration over every verdict, from the Batch ledger. A route opened on a record
+    also reads that record and everything filed under it, however long ago they closed.
     """
-    rows: dict[Epoch2Collection, tuple[dict[str, Any], ...]] = {
+    rows: dict[Epoch2Collection, tuple[Mapping[str, Any], ...]] = {
         collection: _terminal_ledger_rows(authority=authority, collection=collection)
         for collection in ROUTE_COLLECTIONS.get(route, ())
         if collection in LEDGER_MERGED_COLLECTIONS
@@ -415,11 +446,21 @@ def _ledger_rows_for(
         rows[Epoch2Collection.RECEIPT] = _decision_rows(authority)
     if Epoch2Collection.BATCH in notices:
         rows[Epoch2Collection.BATCH] = _trust_rows(authority, document)
+    if key is not None:
+        for collection, found in _subject_rows(
+            route=route, authority=authority, document=document, key=key
+        ).items():
+            rows[collection] = (*rows.get(collection, ()), *found)
     return rows
 
 
-def _project(*, route: str, authority: RootAuthority) -> RouteProjection:
+def _project(*, route: str, authority: RootAuthority, key: str | None = None) -> RouteProjection:
     """Build one route's read model from the tree's committed document.
+
+    Args:
+        route: The console route to build.
+        authority: The fence-cleared tree.
+        key: The record the route is opened on, whose closed rows are read back.
 
     Raises:
         DaemonValidationError: The document states its high-water mark as something
@@ -434,7 +475,9 @@ def _project(*, route: str, authority: RootAuthority) -> RouteProjection:
             cursor=_document_cursor(document),
             scope_id=RootIdentity.of(authority.root).root_id,
             generated_at=datetime.now(UTC),
-            ledger_rows=_ledger_rows_for(route=route, authority=authority, document=document),
+            ledger_rows=_ledger_rows_for(
+                route=route, authority=authority, document=document, key=key
+            ),
         )
     except ValueError as error:
         raise DaemonValidationError(
@@ -647,18 +690,27 @@ def _route_reader(route: str) -> Handler:
 
         Args:
             ctx: Server context, whose bound state path is the tree fallback.
-            params: The request parameters; ``repo_root`` names the tree when the
-                caller does not want the one the daemon is bound to.
+            params: The request parameters, validated as :class:`RouteReadParams`.
 
         Returns:
             The route projection as a JSON-mode mapping.
 
         Raises:
             NativeAuthorityRefusedError: The request addresses no epoch-2 tree.
-            DaemonValidationError: The tree cannot be projected.
+            DaemonValidationError: The parameters are not a route read, or the tree
+                cannot be projected.
         """
+        try:
+            args = RouteReadParams.model_validate(params)
+        except ValidationError as error:
+            raise DaemonValidationError(
+                f"validation_failed: {PROJECTION_UNREADABLE}: {error.error_count()} bad "
+                f"parameter(s) for {READ_METHOD_TEMPLATE.format(route=route)}"
+            ) from error
         authority = require_native_call(ctx, params)
-        projection = await asyncio.to_thread(_project, route=route, authority=authority)
+        projection = await asyncio.to_thread(
+            _project, route=route, authority=authority, key=args.key
+        )
         logger.debug(f"read_route route={route} cursor={projection.header.source_cursor}")
         return projection.model_dump(mode="json")
 
@@ -858,6 +910,7 @@ __all__ = [
     "AcceptanceParams",
     "ExportParams",
     "ReconnectParams",
+    "RouteReadParams",
     "firehose_path",
     "read_export_report",
     "read_milestone_acceptance",

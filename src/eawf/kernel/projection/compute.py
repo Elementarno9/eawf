@@ -251,6 +251,13 @@ JURY_CALIBRATION_KIND: Final = "jury_calibration"
 #: The key the one jury calibration row is listed under among the verdicts.
 CALIBRATION_KEY: Final = "jury-calibration"
 
+#: The kind of one juror's score: the validation report over the labelled verdicts that
+#: one ``(agent_role, runtime)`` cast. It is scored beside the calibration and never stored.
+JUROR_SCORE_KIND: Final = "juror_score"
+
+#: The key prefix each juror score row is listed under among the verdicts.
+JUROR_KEY_PREFIX: Final = "jury-juror-"
+
 #: The kinds a notice row may be. Each is a line of a ledger a route lists from without
 #: binding the collection: a row of any other kind is a record of that collection.
 NOTICE_KINDS: Final = frozenset(
@@ -260,6 +267,7 @@ NOTICE_KINDS: Final = frozenset(
         SANDBOX_DECISION_KIND,
         VERDICT_OBSERVATION_KIND,
         JURY_CALIBRATION_KIND,
+        JUROR_SCORE_KIND,
     }
 )
 
@@ -675,6 +683,63 @@ def _collection_rows(
     return merged
 
 
+#: The containment chain from its top down, so a record is visited after the record it
+#: is filed under.
+_CONTAINMENT_ORDER: Final = (
+    Epoch2Collection.TRACK,
+    Epoch2Collection.MILESTONE,
+    Epoch2Collection.BATCH,
+    Epoch2Collection.TASK,
+    Epoch2Collection.RUN,
+)
+
+
+def subject_ledger_rows(
+    *,
+    route: str,
+    subject: str,
+    document: dict[str, Any],
+    filed: Mapping[Epoch2Collection, Mapping[str, Mapping[str, Any]]],
+) -> dict[Epoch2Collection, tuple[Mapping[str, Any], ...]]:
+    """Return the ledger rows of the record *subject* names and of everything filed under it.
+
+    A record leaves the document on the commit that ends it, so a frame opened on a
+    finished Task, or on a Batch whose Tasks finished, would otherwise hold no row for
+    them. The subject's descendants are found through the document and the ledgers
+    together, so a live Milestone still lists the finished Batches cut under it.
+
+    Args:
+        route: The console route the read is for; only its own collections are read.
+        subject: The key or URN of the record the route is opened on.
+        document: The epoch-2 document as the daemon read it.
+        filed: Each ledger's latest row per key, for the route's collections.
+
+    Returns:
+        The ledger-held rows to merge into the route, by collection. A key the document
+        holds is never among them, because its row there is the current one.
+    """
+    collections = ROUTE_COLLECTIONS.get(route, ())
+    about = {subject}
+    picked: dict[Epoch2Collection, tuple[Mapping[str, Any], ...]] = {}
+    for collection in _CONTAINMENT_ORDER:
+        if collection not in collections:
+            continue
+        held = document_rows(document, collection)
+        ledger = filed.get(collection, {})
+        found: list[Mapping[str, Any]] = []
+        for key in sorted(held.keys() | ledger.keys()):
+            row = held.get(key, ledger.get(key))
+            fields, _status = _stored_fields(collection, key, row)
+            named = key in about or fields.get("urn") in about
+            if named or _parent_key_of(collection, fields) in about:
+                about.add(key)
+                if key not in held:
+                    found.append(ledger[key])
+        if found:
+            picked[collection] = tuple(found)
+    return picked
+
+
 def _notice_kind(row: Any) -> str | None:
     """Return the notice kind a stored row is, or ``None`` when it is a record of its collection.
 
@@ -1074,6 +1139,24 @@ def _calibration_facts(fields: Mapping[str, Any]) -> dict[str, str]:
     return {name: value for name, value in facts.items() if value}
 
 
+def _juror_facts(fields: Mapping[str, Any]) -> dict[str, str]:
+    """Return what a juror score states: the juror, its scored count and its Brier score.
+
+    A juror under the cohort floor states no Brier score, never a zero one.
+    """
+    facts = {
+        "kind": JUROR_SCORE_KIND,
+        "agent_role": _text(fields.get("agent_role")),
+        "runtime": _text(fields.get("runtime")),
+        **{
+            name: str(value)
+            for name in ("cohort", "brier")
+            if isinstance(value := fields.get(name), int | float) and not isinstance(value, bool)
+        },
+    }
+    return {name: value for name, value in facts.items() if value}
+
+
 #: What each notice kind states about itself, by kind.
 _NOTICE_FACTS: Final[Mapping[str, Callable[[Mapping[str, Any]], dict[str, str]]]] = (
     MappingProxyType(
@@ -1083,6 +1166,7 @@ _NOTICE_FACTS: Final[Mapping[str, Callable[[Mapping[str, Any]], dict[str, str]]]
             SANDBOX_DECISION_KIND: _decision_facts,
             VERDICT_OBSERVATION_KIND: _verdict_facts,
             JURY_CALIBRATION_KIND: _calibration_facts,
+            JUROR_SCORE_KIND: _juror_facts,
         }
     )
 )
@@ -1236,10 +1320,25 @@ def _with_facts(row: ProjectionRow, stored: Any, links: _Links) -> ProjectionRow
     elif row.collection is Epoch2Collection.BATCH:
         facts.update(_batch_facts(fields))
     elif row.collection in (Epoch2Collection.TRACK, Epoch2Collection.MILESTONE):
-        runs = links.runs_under(row.key)
-        if runs or FACTS_FIELD not in (stored if isinstance(stored, dict) else {}):
-            facts["runs"] = str(runs)
+        facts.update(_placement_facts(row.key, fields, stored, links))
     return row.model_copy(update={"facts": facts}) if facts else row
+
+
+def _placement_facts(
+    key: str, fields: Mapping[str, Any], stored: Any, links: _Links
+) -> dict[str, str]:
+    """Return what a Track or Milestone states about where it sits: its Runs and its date.
+
+    A replayed row keeps the Run count it was projected with unless Runs are found again.
+    """
+    facts: dict[str, str] = {}
+    runs = links.runs_under(key)
+    if runs or FACTS_FIELD not in (stored if isinstance(stored, dict) else {}):
+        facts["runs"] = str(runs)
+    target = _text(fields.get("target_date"))
+    if target is not None:
+        facts["target_date"] = target
+    return facts
 
 
 def row_document(row: ProjectionRow) -> dict[str, Any]:
@@ -1315,6 +1414,8 @@ __all__ = [
     "CEILING_BREACH_KIND",
     "DIAGNOSTICS_CORPUS",
     "FACTS_FIELD",
+    "JUROR_KEY_PREFIX",
+    "JUROR_SCORE_KIND",
     "JURY_CALIBRATION_KIND",
     "MISSING_STATUS_REASON",
     "NOTICE_KINDS",
@@ -1335,4 +1436,5 @@ __all__ = [
     "build_route_projection",
     "patches_for_event",
     "row_document",
+    "subject_ledger_rows",
 ]

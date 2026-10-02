@@ -15,6 +15,7 @@ would assert both at once.
 
 from __future__ import annotations
 
+from datetime import date
 from enum import StrEnum
 from typing import Final, Literal, Self
 
@@ -235,6 +236,10 @@ class MilestoneCreateSpec(Epoch2Model):
     would let a caller declare a Milestone already accepted. Unknown keys
     are refused, so supplying one is a loader rejection rather than a
     silently dropped field.
+
+    ``target_date`` is optional because a Milestone is often shaped before
+    anyone can say when it lands; the appetite bounds effort, the date
+    places it on the calendar.
     """
 
     key: MilestoneKey
@@ -244,6 +249,7 @@ class MilestoneCreateSpec(Epoch2Model):
     description: NonEmptyStr | None = None
     outcome: OutcomeStr
     appetite: EffortBucket | DurationBudget
+    target_date: date | None = None
     exclusions: tuple[NonEmptyStr, ...]
     acceptance_journey: tuple[AcceptanceStep, ...]
     required_batch_refs: tuple[BatchUrn, ...] = ()
@@ -290,6 +296,10 @@ class Milestone(Epoch2Record):
     Placement is independent of identity: the Milestone keeps its key and
     URN when a contributing Track is added, when a required Batch is
     repaired, and when a Release packages it.
+
+    ``target_date`` is the calendar day the Milestone is aimed at. It stays
+    editable in every open status, so a record written before the field
+    existed reads as undated rather than failing.
     """
 
     key: MilestoneKey
@@ -300,6 +310,7 @@ class Milestone(Epoch2Record):
     description: NonEmptyStr | None = None
     outcome: OutcomeStr
     appetite: EffortBucket | DurationBudget
+    target_date: date | None = None
     exclusions: tuple[NonEmptyStr, ...]
     acceptance_journey: tuple[AcceptanceStep, ...]
     required_batch_refs: tuple[BatchUrn, ...] = ()

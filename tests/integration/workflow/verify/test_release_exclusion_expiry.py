@@ -6,8 +6,8 @@ already broken renews it by inaction, which is the failure the expiry
 date exists to stop. So the sweep must carry the finding: an expired
 grant makes the realization row red and names the module, the expiry
 date itself is still clean (the grant is inclusive), a malformed list
-becomes a blocked row rather than an exception, and a clean list leaves
-the row unproven rather than claiming the unmeasured assertions hold.
+becomes a blocked row rather than an exception, and a clean list holds
+its realization assertion, so the row passes when the others hold too.
 """
 
 from __future__ import annotations
@@ -118,26 +118,26 @@ def test_exclusion_expiry_names_every_lapsed_module(tmp_path: Path) -> None:
 def test_exclusion_expiry_is_clean_exactly_on_the_expiry_date(tmp_path: Path) -> None:
     readiness = _sweep(_repo(tmp_path, _grant()), today=_EXPIRES)
     row = readiness.row(ReleaseSignalName.PERFECT_REALIZATION)
-    assert row.status is ReleaseSignalStatus.UNAVAILABLE
+    assert row.status is ReleaseSignalStatus.PASS
 
 
 def test_exclusion_expiry_is_clean_the_day_before_the_expiry_date(tmp_path: Path) -> None:
     readiness = _sweep(_repo(tmp_path, _grant()), today=date(2027, 1, 30))
     row = readiness.row(ReleaseSignalName.PERFECT_REALIZATION)
-    assert row.status is ReleaseSignalStatus.UNAVAILABLE
+    assert row.status is ReleaseSignalStatus.PASS
 
 
-def test_exclusion_expiry_clean_row_never_claims_a_pass(tmp_path: Path) -> None:
+def test_exclusion_expiry_clean_row_counts_the_live_grants(tmp_path: Path) -> None:
     readiness = _sweep(_repo(tmp_path, _grant()), today=_EXPIRES)
     row = readiness.row(ReleaseSignalName.PERFECT_REALIZATION)
-    assert row.status is not ReleaseSignalStatus.PASS
-    assert "no producer" in row.remediation
+    assert "module_length_exclusion:1-grants-live" in row.evidence_refs
 
 
-def test_exclusion_expiry_empty_grant_list_leaves_the_row_unproven(tmp_path: Path) -> None:
+def test_exclusion_expiry_empty_grant_list_holds(tmp_path: Path) -> None:
     readiness = _sweep(_repo(tmp_path, ""), today=date(2030, 1, 1))
     row = readiness.row(ReleaseSignalName.PERFECT_REALIZATION)
-    assert row.status is ReleaseSignalStatus.UNAVAILABLE
+    assert row.status is ReleaseSignalStatus.PASS
+    assert "module_length_exclusion:0-grants-live" in row.evidence_refs
 
 
 def test_exclusion_expiry_malformed_grant_blocks_rather_than_raising(tmp_path: Path) -> None:
@@ -203,7 +203,7 @@ def test_exclusion_expiry_renewal_reds_before_the_grant_even_lapses(tmp_path: Pa
 def test_exclusion_expiry_renewal_against_a_recorded_decision_is_accepted(tmp_path: Path) -> None:
     repo = _with_decisions(_repo(tmp_path, _renewed("D-REAL", expires="2030-01-01")), "D-REAL")
     row = _sweep(repo, today=date(2027, 2, 1)).row(ReleaseSignalName.PERFECT_REALIZATION)
-    assert row.status is ReleaseSignalStatus.UNAVAILABLE
+    assert row.status is ReleaseSignalStatus.PASS
 
 
 def test_exclusion_expiry_renewal_needs_state_json_to_be_present(tmp_path: Path) -> None:
@@ -217,4 +217,4 @@ def test_exclusion_expiry_repo_grants_are_live_today() -> None:
     repo_root = Path(__file__).resolve().parents[4]
     readiness = _sweep(repo_root, today=datetime.now(UTC).date())
     row = readiness.row(ReleaseSignalName.PERFECT_REALIZATION)
-    assert row.status is not ReleaseSignalStatus.FAIL, row.remediation
+    assert "module_length_exclusion" not in row.remediation, row.remediation

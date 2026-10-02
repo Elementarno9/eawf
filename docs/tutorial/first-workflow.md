@@ -121,6 +121,8 @@ eawf task create eawf://DEMO/DEMO/DEMO/task/DEMO-0001 --expected-revision 2 --id
 eawf batch create eawf://DEMO/DEMO/DEMO/batch/BAT-0001 --expected-revision 3 --idempotency-key create-batch --actor OPERATOR --from-spec .ea/local/batch.json
 ```
 
+A Milestone may also carry a target date, the day it is aimed at, which places it on the console Timeline in that week. Pass `--date YYYY-MM-DD` to `eawf milestone create`, or set it later on any open Milestone with `eawf milestone set-target <urn> YYYY-MM-DD --expected-milestone-revision <N> --idempotency-key <key> --actor <principal>`; `--clear` removes it. The date moves no status, but it does move the revision, so this walkthrough leaves it unset.
+
 ## 3. Activate the plan and promote the task
 
 A batch activates only once the branch it integrates into is pinned. Save `.ea/local/batch-activate.json`:

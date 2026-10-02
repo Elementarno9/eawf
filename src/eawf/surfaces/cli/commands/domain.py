@@ -54,7 +54,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Final
 
@@ -202,6 +202,7 @@ _TREE_REVISION_HELP: Final = (
 )
 _CREATE_SPEC_HELP: Final = "JSON file carrying the entity's whole create document."
 _CORRELATION_HELP: Final = "Caller's thread of related requests."
+_DATE_HELP: Final = "The day the Milestone is aimed at, as YYYY-MM-DD."
 
 
 class DomainVerbSpec(BaseModel):
@@ -489,8 +490,8 @@ def _create_document_refusal(request: DomainCreateRequest) -> DomainEnvelope | N
     return None
 
 
-def _rpc_params(request: DomainVerbRequest, *, repo_root: str) -> dict[str, Any]:
-    """Return the wire parameters of one request.
+def _rpc_params(request: DomainVerbRequest) -> dict[str, Any]:
+    """Return the wire parameters of one request, less ``repo_root``.
 
     The approval reference is omitted rather than sent as null when the
     verb does not carry one: the request models forbid unknown fields, so
@@ -499,13 +500,11 @@ def _rpc_params(request: DomainVerbRequest, *, repo_root: str) -> dict[str, Any]
 
     Args:
         request: The resolved request.
-        repo_root: The tree the request addresses.
 
     Returns:
         The JSON-RPC parameters.
     """
     params: dict[str, Any] = {
-        "repo_root": repo_root,
         "urn": request.urn,
         "expected_revision": request.expected_revision,
         "idempotency_key": request.idempotency_key,
@@ -608,11 +607,15 @@ def _rpc_refusal(error: DaemonRpcError, *, method: str, urn: str) -> DomainEnvel
     )
 
 
-def _call_domain_verb(request: DomainVerbRequest, *, flags: GlobalFlags) -> DomainEnvelope:
-    """Send one request to the daemon and return the answer it stands for.
+def _call_envelope(
+    method: str, params: dict[str, Any], *, urn: str, flags: GlobalFlags
+) -> DomainEnvelope:
+    """Send one envelope-answered request to the daemon and return its answer.
 
     Args:
-        request: The resolved request.
+        method: The dotted JSON-RPC name to send.
+        params: The wire parameters, less ``repo_root``.
+        urn: The subject the request addresses, named in a fence refusal.
         flags: Resolved global flags (the workspace anchor and the
             ``--daemonless`` source).
 
@@ -633,55 +636,57 @@ def _call_domain_verb(request: DomainVerbRequest, *, flags: GlobalFlags) -> Doma
 
     repo_root = str((flags.workspace or Path.cwd()).resolve())
     try:
-        _dispatch.escalate_mutation(_operator_verb(request.method), flags=flags)
+        _dispatch.escalate_mutation(_operator_verb(method), flags=flags)
         with DaemonClient() as client:
-            answer = client.call(request.method, _rpc_params(request, repo_root=repo_root))
+            answer = client.call(method, {"repo_root": repo_root, **params})
     except DaemonRpcError as exc:
-        return _rpc_refusal(exc, method=request.method, urn=request.urn)
+        return _rpc_refusal(exc, method=method, urn=urn)
     except (OSError, RuntimeError, TimeoutError) as exc:
-        raise cli_errors.DaemonUnreachable(
-            f"daemon unavailable for {request.method}: {exc}"
-        ) from exc
+        raise cli_errors.DaemonUnreachable(f"daemon unavailable for {method}: {exc}") from exc
     try:
         return DomainEnvelope.model_validate(answer)
     except PydanticValidationError as exc:
         raise cli_errors.InternalError(
-            f"{request.method} answered something that is not a domain envelope: {exc}"
+            f"{method} answered something that is not a domain envelope: {exc}"
         ) from exc
+
+
+def _call_domain_verb(request: DomainVerbRequest, *, flags: GlobalFlags) -> DomainEnvelope:
+    """Send one lifecycle request to the daemon and return the answer it stands for.
+
+    Args:
+        request: The resolved request.
+        flags: Resolved global flags.
+
+    Returns:
+        The machine envelope, whether the mutation committed or was
+        refused.
+
+    Raises:
+        CliError: As :func:`_call_envelope` raises it.
+    """
+    return _call_envelope(request.method, _rpc_params(request), urn=request.urn, flags=flags)
 
 
 def _call_domain_create(request: DomainCreateRequest, *, flags: GlobalFlags) -> DomainEnvelope:
     """Send one create request to the daemon and return the answer it stands for.
 
-    Mirrors :func:`_call_domain_verb`'s dispatch shape -- the fence
-    refusal and a non-envelope answer are handled identically, because a
-    create is fenced and answered exactly as a lifecycle move is. What
-    differs is only the wire shape of the request: a create has no
-    existing record revision to address, and carries a whole document
-    rather than a move's update/observation fields.
+    A create has no existing record revision to address, and carries a
+    whole document rather than a move's update/observation fields; it is
+    fenced and answered exactly as a lifecycle move is.
 
     Args:
         request: The resolved create request.
-        flags: Resolved global flags (the workspace anchor and the
-            ``--daemonless`` source).
+        flags: Resolved global flags.
 
     Returns:
         The machine envelope, whether the create committed or was
         refused.
 
     Raises:
-        UserError: ``--daemonless`` was asked for.
-        DaemonUnreachable: The daemon could not be reached.
-        InternalError: The daemon answered something that is not an
-            envelope, which a client cannot branch on.
-        CliError: The daemon answered a transport-level failure.
+        CliError: As :func:`_call_envelope` raises it.
     """
-    from eawf.runtime.daemon.methods.domain_envelope import DomainEnvelope
-    from eawf.surfaces.cli import _dispatch
-
-    repo_root = str((flags.workspace or Path.cwd()).resolve())
     params: dict[str, Any] = {
-        "repo_root": repo_root,
         "urn": request.urn,
         "expected_revision": request.expected_revision,
         "idempotency_key": request.idempotency_key,
@@ -689,22 +694,7 @@ def _call_domain_create(request: DomainCreateRequest, *, flags: GlobalFlags) -> 
         "spec": dict(request.document),
         "correlation_id": request.correlation_id,
     }
-    try:
-        _dispatch.escalate_mutation(_operator_verb(request.method), flags=flags)
-        with DaemonClient() as client:
-            answer = client.call(request.method, params)
-    except DaemonRpcError as exc:
-        return _rpc_refusal(exc, method=request.method, urn=request.urn)
-    except (OSError, RuntimeError, TimeoutError) as exc:
-        raise cli_errors.DaemonUnreachable(
-            f"daemon unavailable for {request.method}: {exc}"
-        ) from exc
-    try:
-        return DomainEnvelope.model_validate(answer)
-    except PydanticValidationError as exc:
-        raise cli_errors.InternalError(
-            f"{request.method} answered something that is not a domain envelope: {exc}"
-        ) from exc
+    return _call_envelope(request.method, params, urn=request.urn, flags=flags)
 
 
 def _run_verb(
@@ -772,6 +762,7 @@ def _run_create_verb(
     correlation_id: str | None,
     dry_run: bool = False,
     yes: bool = False,
+    target_date: str | None = None,
 ) -> None:
     """Dispatch one native create verb and render its answer.
 
@@ -793,6 +784,7 @@ def _run_create_verb(
         correlation_id: The caller's thread of related requests.
         dry_run: Print the consequence only and send nothing.
         yes: Send after printing the consequence, without asking.
+        target_date: The ``--date`` a Milestone create carries, or ``None``.
     """
     flags: GlobalFlags = ctx.obj
     try:
@@ -805,6 +797,17 @@ def _run_create_verb(
             from_spec=from_spec,
             correlation_id=correlation_id,
         )
+        if target_date is not None:
+            from eawf.surfaces.cli.commands.domain_target import parse_target_date
+
+            day = parse_target_date(target_date).isoformat()
+            stated = request.document.get("target_date")
+            if stated is not None and stated != day:
+                raise cli_errors.UserError(
+                    f"--date {day} disagrees with the create document's target_date {stated!r}",
+                    kind="InvalidInput",
+                )
+            request = replace(request, document={**request.document, "target_date": day})
         refusal = _create_document_refusal(request)
         if refusal is None and not preview(
             method, urn, expected_revision, flags=flags, dry_run=dry_run, yes=yes
@@ -1122,6 +1125,7 @@ def milestone_create_cmd(
     correlation_id: Annotated[
         str | None, typer.Option("--correlation-id", help=_CORRELATION_HELP)
     ] = None,
+    target_date: Annotated[str | None, typer.Option("--date", help=_DATE_HELP)] = None,
     dry_run: DryRun = False,
     yes: Yes = False,
 ) -> None:
@@ -1137,6 +1141,7 @@ def milestone_create_cmd(
         correlation_id=correlation_id,
         dry_run=dry_run,
         yes=yes,
+        target_date=target_date,
     )
 
 
@@ -1352,6 +1357,7 @@ def task_create_cmd(
 # first of the two a process imports.
 from eawf.surfaces.cli.commands import domain_delivery as _domain_delivery  # noqa: E402, F401
 from eawf.surfaces.cli.commands import domain_legacy as _domain_legacy  # noqa: E402, F401
+from eawf.surfaces.cli.commands import domain_target as _domain_target  # noqa: E402, F401
 
 __all__ = [
     "CANDIDATE_SUBMIT",

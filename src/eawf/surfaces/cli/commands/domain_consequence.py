@@ -52,6 +52,10 @@ WRITE_CONSEQUENCES: Final[Mapping[str, tuple[tuple[str, ...], tuple[str, ...]]]]
             )
             for entity in ("track", "milestone", "batch", "task", "run", "repository")
         },
+        "domain.milestone.set_target": (
+            ("the milestone's target date is set or cleared, one revision on",),
+            ("its status does not move", "no batch, task or release is rescheduled by it"),
+        ),
         "runtime.pending_action.snooze": (
             ("hidden for you only until the deadline — other principals still see it",),
             ("it is not answered", "its revision does not move"),

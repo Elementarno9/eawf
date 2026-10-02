@@ -162,8 +162,8 @@ def test_surf_090_a_count_equal_to_the_threshold_is_not_over_it(repo: Path) -> N
 
     row = _row(repo)
 
-    assert row.status is ReleaseSignalStatus.UNAVAILABLE
-    assert "module_length_exclusion" in row.remediation
+    assert row.status is ReleaseSignalStatus.PASS
+    assert "retyped_rule_triage:0-over-threshold-triaged" in row.evidence_refs
 
 
 def test_surf_090_the_configured_threshold_moves_the_boundary(repo: Path) -> None:
@@ -171,7 +171,7 @@ def test_surf_090_the_configured_threshold_moves_the_boundary(repo: Path) -> Non
     (repo / ".ea").mkdir(exist_ok=True)
     (repo / ".ea" / "config.yaml").write_text("verify:\n  retyped_rule_threshold: 4\n")
 
-    assert _row(repo).status is ReleaseSignalStatus.UNAVAILABLE
+    assert _row(repo).status is ReleaseSignalStatus.PASS
 
 
 @pytest.mark.parametrize(
@@ -184,7 +184,7 @@ def test_surf_090_the_configured_threshold_moves_the_boundary(repo: Path) -> Non
         {"disposition": "argued_prose", "argument": "Phrased per task; no mechanism fits."},
     ],
 )
-def test_surf_090_a_triaged_subject_hands_the_row_on(
+def test_surf_090_a_triaged_subject_holds_the_assertion(
     repo: Path, disposition: dict[str, str]
 ) -> None:
     _history(repo, [INSTRUCTION] * 4)
@@ -193,8 +193,8 @@ def test_surf_090_a_triaged_subject_hands_the_row_on(
 
     row = _row(repo)
 
-    assert row.status is ReleaseSignalStatus.UNAVAILABLE
-    assert "retyped_rule_triage" not in row.remediation
+    assert row.status is ReleaseSignalStatus.PASS
+    assert "retyped_rule_triage:1-over-threshold-triaged" in row.evidence_refs
 
 
 def test_surf_090_a_malformed_triage_blocks_the_row_instead_of_passing(repo: Path) -> None:
@@ -207,6 +207,9 @@ def test_surf_090_a_malformed_triage_blocks_the_row_instead_of_passing(repo: Pat
 def test_surf_090_a_restated_compiled_rule_is_named_with_its_title(repo: Path) -> None:
     (repo / ".ea").mkdir(exist_ok=True)
     (repo / ".ea" / "rules.yaml").write_text("schema_version: 1\nmodules:\n  - eawf.core.vcs\n")
+    # A rule source also puts the rendered-rules assertion in play, which reads
+    # what git tracks.
+    _git(repo, "init", "-q")
     _history(repo, ["Run the pre-commit hooks before the commit, never skip them."] * 4)
 
     row = _row(repo)
@@ -230,7 +233,7 @@ def test_surf_090_turns_before_the_previous_release_tag_are_outside_the_window(
 
     row = _row(repo)
 
-    assert row.status is ReleaseSignalStatus.UNAVAILABLE
+    assert row.status is ReleaseSignalStatus.PASS
 
 
 def test_surf_090_the_tag_being_cut_does_not_open_the_window(repo: Path) -> None:
@@ -284,7 +287,7 @@ def test_surf_090_a_turn_in_both_the_history_and_a_run_counts_once(repo: Path) -
     )
     _history(repo, [INSTRUCTION] * 3)
 
-    assert _row(repo).status is ReleaseSignalStatus.UNAVAILABLE
+    assert _row(repo).status is ReleaseSignalStatus.PASS
 
 
 _REPO_ROOT: Final = Path(__file__).resolve().parents[4]
