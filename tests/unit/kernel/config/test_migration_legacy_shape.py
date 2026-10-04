@@ -149,9 +149,9 @@ def test_cleanup_all_three_signals_in_one_pass() -> None:
     assert "memory" not in upgraded
     assert upgraded["runtime"]["adapters"] == ["claude-code"]
     assert upgraded["runtime"]["preference"] == ["claude-code"]
-    # Operator-curated sections survive.
+    # Operator-curated sections survive; the wizard's gate answers are retired.
     assert upgraded["profiles"]["enabled"] == ["core", "python", "research"]
-    assert upgraded["acceptance"] == {"lint": True, "tests": True, "typecheck": True}
+    assert "acceptance" not in upgraded
 
 
 def test_cleanup_no_op_on_already_canonical_body() -> None:

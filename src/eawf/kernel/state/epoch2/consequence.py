@@ -271,6 +271,14 @@ CANONICAL_MUTATIONS: Final[tuple[CanonicalMutation, ...]] = (
         ("its identity does not change", "no other task in the batch moves"),
     ),
     CanonicalMutation(
+        "domain.task.drop",
+        _E.TASK,
+        (TaskStatus.DRAFT, TaskStatus.DEFERRED),
+        TaskStatus.DROPPED,
+        "drop",
+        ("its identity and history stay addressable", "no other task moves"),
+    ),
+    CanonicalMutation(
         "domain.task.claim",
         _E.TASK,
         (TaskStatus.PLANNED,),

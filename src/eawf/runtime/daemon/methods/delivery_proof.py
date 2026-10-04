@@ -40,7 +40,7 @@ import uuid
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict
@@ -347,6 +347,31 @@ def _proof_line(task_ref: TaskUrn, gate: GateSpec, receipt: ProofReceipt) -> Led
     )
 
 
+def _require_portable_argv(gates: Sequence[GateSpec]) -> None:
+    """Refuse a gate whose argv names an absolute path.
+
+    A proof receipt copies its gate into the committed receipt ledger, so an
+    absolute path in the argv, such as a resolved temp directory handed to
+    ``--basetemp``, would publish this machine's layout; a repository-relative
+    path runs the same inside the proof checkout.
+
+    Raises:
+        DaemonValidationError: A gate's argv carries an absolute path.
+    """
+    for gate in gates:
+        argv = gate.args.get("argv")
+        for token in argv if isinstance(argv, list) else ():
+            if not isinstance(token, str):
+                continue
+            value = token.partition("=")[2] if token.startswith("-") else token
+            if PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute():
+                raise DaemonValidationError(
+                    f"validation_failed: gate_argv_machine_path: gate {gate.id} names an "
+                    f"absolute path in its argv, which the receipt would commit; use a "
+                    f"repository-relative path such as --basetemp=.gate-basetemp"
+                )
+
+
 def _proof_legs(
     context: Epoch2RootContext, urn: TaskUrn, gates: Sequence[GateSpec]
 ) -> tuple[list[VerificationLeg], dict[str, FiledProof], tuple[GateSpec, ...]]:
@@ -395,8 +420,9 @@ def prove_task(
         Every leg's result, and whether all of them now pass.
 
     Raises:
-        DaemonValidationError: The legs cannot be computed, a commit
-            cannot be checked out, or a gate crashed.
+        DaemonValidationError: The legs cannot be computed, a gate's argv
+            names an absolute path, a commit cannot be checked out, or a gate
+            crashed.
     """
     params = args.model_dump(mode="json")
     replayed = keyed_answer(
@@ -405,7 +431,8 @@ def prove_task(
     if replayed is not None:
         logger.info(f"prove_task task={args.urn.entity_key} replayed=True")
         return TaskProveAnswer.model_validate(replayed)
-    legs, filed, _ = _proof_legs(context, args.urn, args.gates)
+    legs, filed, named = _proof_legs(context, args.urn, args.gates)
+    _require_portable_argv(named)
     repository = context.identity.tree_root.parent
     run_dir = context.identity.tree_root / "local" / _PROOF_DIRNAME / uuid.uuid4().hex
     gate_context = GateExecutionContext(

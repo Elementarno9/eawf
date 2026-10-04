@@ -309,7 +309,9 @@ def _probe_one(runtime_id: str, bin_name: str) -> RuntimeProbeRow:
     # body to stderr; combine both streams so the flag-collector always
     # sees the rendered text.
     help_text = out_h if out_h.strip() else err_h
-    if rc_h != 0 and not help_text.strip():
+    # ``_run`` reports a timeout or a failed spawn as rc -1 with its own
+    # message on stderr, which is not a help body to collect flags from.
+    if rc_h == -1 or (rc_h != 0 and not help_text.strip()):
         if error is None:
             error = f"--help rc={rc_h} stderr={err_h.strip()[:200]!r}"
         return RuntimeProbeRow(

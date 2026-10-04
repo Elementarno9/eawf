@@ -105,6 +105,7 @@ NATIVE_KEYS: Final[Mapping[str, str]] = MappingProxyType(
         "domain.batch.complete": "o",
         "domain.task.promote": "m",
         "domain.task.demote": "o",
+        "domain.task.drop": "d",
         "domain.task.claim": "l",
         "domain.task.release": "r",
         "domain.task.start": "s",

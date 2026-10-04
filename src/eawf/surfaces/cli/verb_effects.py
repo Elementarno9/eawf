@@ -72,6 +72,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     ),
     "task promote": _mutate("domain.task.promote"),
     "task demote": _mutate("domain.task.demote"),
+    "task drop": _mutate("domain.task.drop"),
     "task start": _mutate("domain.task.start"),
     "task create": _create("domain.task.create"),
     "task claim": _mutate("domain.task.claim"),

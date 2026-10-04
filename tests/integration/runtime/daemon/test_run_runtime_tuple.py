@@ -377,7 +377,7 @@ def test_a_control_on_an_expired_certification_is_refused_naming_both(
     _export(controlled.root, expires="2026-09-19T00:00:00Z")
 
     with pytest.raises(DaemonValidationError) as refused:
-        _ask(controlled, tmp_path)
+        _ask(controlled, tmp_path, control="steer")
 
     message = str(refused.value)
     assert message.startswith("validation_failed: runtime_certification_expired: ")
@@ -389,7 +389,29 @@ def test_a_control_on_an_uncertified_runtime_is_refused(tmp_path: Path) -> None:
     _export(controlled.root, expires="2999-01-01T00:00:00Z")
 
     with pytest.raises(DaemonValidationError, match=r"runtime_uncertified: claude-code 9\.9\.9"):
-        _ask(controlled, tmp_path)
+        _ask(controlled, tmp_path, control="steer")
+
+
+@pytest.mark.parametrize("control", ["cancel", "interrupt", "reconcile"])
+@pytest.mark.parametrize(
+    "runtime",
+    [
+        {"harness": "claude-code", "harness_version": "9.9.9"},
+        {"harness": "codex"},
+    ],
+    ids=["uncertified", "version-not-recorded"],
+)
+def test_a_stop_on_an_uncertified_runtime_is_recorded_with_the_gap_as_a_note(
+    tmp_path: Path, control: str, runtime: dict[str, Any]
+) -> None:
+    controlled = _controlled(tmp_path, runtime)
+    _export(controlled.root, expires="2999-01-01T00:00:00Z")
+
+    answer = _ask(controlled, tmp_path, control=control)
+
+    assert answer["disposition"] == "requesting"
+    (note,) = answer["warnings"]
+    assert note.startswith(f"{control} was admitted uncertified, as a stop always is: ")
 
 
 def test_a_control_needing_an_unsupported_capability_is_refused(tmp_path: Path) -> None:

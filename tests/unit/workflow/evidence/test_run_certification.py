@@ -146,9 +146,7 @@ def test_a_certified_runtime_admits_a_control_its_certification_covers(
 def test_an_expired_certification_refuses_and_names_its_expiry(
     certifications: tuple[CertificationRecord, ...],
 ) -> None:
-    admitted, code, reason = _decide(
-        CERTIFIED, ControlKind.CANCEL, certifications, now=AFTER_EXPIRY
-    )
+    admitted, code, reason = _decide(CERTIFIED, ControlKind.RETRY, certifications, now=AFTER_EXPIRY)
     assert (admitted, code) == (False, ControlGateCode.EXPIRED)
     assert "claude-code 2.1.274" in reason and "expired at 2026-12-17" in reason
 
@@ -157,7 +155,7 @@ def test_a_version_no_certification_covers_is_refused_by_name(
     certifications: tuple[CertificationRecord, ...],
 ) -> None:
     runtime = RunRuntimeTuple(harness="claude-code", harness_version="2.1.275")
-    admitted, code, reason = _decide(runtime, ControlKind.CANCEL, certifications)
+    admitted, code, reason = _decide(runtime, ControlKind.RETRY, certifications)
     assert (admitted, code) == (False, ControlGateCode.UNCERTIFIED)
     assert reason == "claude-code 2.1.275 holds no certification"
 
@@ -166,17 +164,22 @@ def test_a_runtime_with_no_certification_at_all_is_refused(
     certifications: tuple[CertificationRecord, ...],
 ) -> None:
     runtime = RunRuntimeTuple(harness="codex", harness_version="0.1.0")
-    assert _decide(runtime, ControlKind.CANCEL, certifications)[1] is ControlGateCode.UNCERTIFIED
-    assert _decide(runtime, ControlKind.CANCEL, ())[1] is ControlGateCode.UNCERTIFIED
+    assert _decide(runtime, ControlKind.RETRY, certifications)[:2] == (
+        False,
+        ControlGateCode.UNCERTIFIED,
+    )
+    assert _decide(runtime, ControlKind.RETRY, ())[:2] == (False, ControlGateCode.UNCERTIFIED)
 
 
 def test_an_unrecorded_version_is_refused_rather_than_matched(
     certifications: tuple[CertificationRecord, ...],
 ) -> None:
     runtime = RunRuntimeTuple(harness="claude-code", model="claude-sonnet-4-5")
-    admitted, code, reason = _decide(runtime, ControlKind.CANCEL, certifications)
+    admitted, code, reason = _decide(runtime, ControlKind.STEER, certifications)
     assert (admitted, code) == (False, ControlGateCode.VERSION_NOT_RECORDED)
     assert reason.startswith("claude-code ran at a version this Run did not record")
+    assert "steer is refused" in reason
+    assert "cancel, interrupt and reconcile stay available" in reason
 
 
 def test_a_control_whose_capability_is_unsupported_is_refused(
@@ -191,7 +194,7 @@ def test_a_quarantined_tuple_is_refused_even_while_its_certification_is_current(
     certifications: tuple[CertificationRecord, ...],
 ) -> None:
     admitted, code, _reason = _decide(
-        CERTIFIED, ControlKind.CANCEL, certifications, quarantined=True
+        CERTIFIED, ControlKind.RETRY, certifications, quarantined=True
     )
     assert (admitted, code) == (False, ControlGateCode.QUARANTINED)
 
@@ -207,9 +210,65 @@ def test_a_revoked_certification_is_refused(
             )
         }
     )
-    admitted, code, reason = _decide(CERTIFIED, ControlKind.CANCEL, (revoked,))
+    admitted, code, reason = _decide(CERTIFIED, ControlKind.RETRY, (revoked,))
     assert (admitted, code) == (False, ControlGateCode.NOT_VERIFIED)
     assert "is revoked, not verified" in reason
+
+
+STOPS = [ControlKind.CANCEL, ControlKind.INTERRUPT, ControlKind.RECONCILE]
+
+
+@pytest.mark.parametrize("control", STOPS)
+@pytest.mark.parametrize(
+    ("runtime", "now", "quarantined", "gap"),
+    [
+        (CERTIFIED, AFTER_EXPIRY, False, ControlGateCode.EXPIRED),
+        (CERTIFIED, BEFORE_EXPIRY, True, ControlGateCode.QUARANTINED),
+        (
+            RunRuntimeTuple(harness="claude-code", harness_version="2.1.275"),
+            BEFORE_EXPIRY,
+            False,
+            ControlGateCode.UNCERTIFIED,
+        ),
+        (
+            RunRuntimeTuple(harness="codex"),
+            BEFORE_EXPIRY,
+            False,
+            ControlGateCode.VERSION_NOT_RECORDED,
+        ),
+    ],
+    ids=["expired", "quarantined", "uncertified", "version-not-recorded"],
+)
+def test_a_stop_is_admitted_across_every_gap_and_keeps_the_gap_code(
+    certifications: tuple[CertificationRecord, ...],
+    control: ControlKind,
+    runtime: RunRuntimeTuple,
+    now: datetime,
+    quarantined: bool,
+    gap: ControlGateCode,
+) -> None:
+    admitted, code, reason = _decide(
+        runtime, control, certifications, now=now, quarantined=quarantined
+    )
+    assert (admitted, code) == (True, gap)
+    assert reason.startswith(f"{control.value} was admitted uncertified, as a stop always is: ")
+
+
+@pytest.mark.parametrize("control", [c for c in ControlKind if c not in STOPS])
+def test_every_other_control_is_still_refused_on_a_gap(
+    certifications: tuple[CertificationRecord, ...], control: ControlKind
+) -> None:
+    runtime = RunRuntimeTuple(harness="codex", harness_version="0.1.0")
+    admitted, code, _reason = _decide(runtime, control, certifications)
+    assert (admitted, code) == (False, ControlGateCode.UNCERTIFIED)
+
+
+def test_a_stop_on_a_certified_runtime_carries_no_uncertified_note(
+    certifications: tuple[CertificationRecord, ...],
+) -> None:
+    admitted, code, reason = _decide(CERTIFIED, ControlKind.RECONCILE, certifications)
+    assert (admitted, code) == (True, ControlGateCode.CERTIFIED)
+    assert "uncertified" not in reason
 
 
 def test_no_exports_mean_no_certifications(tmp_path: Path) -> None:

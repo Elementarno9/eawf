@@ -177,6 +177,30 @@ READ_METHOD_TEMPLATE: Final = "projection.{route}.read"
 RECONNECT_METHOD_TEMPLATE: Final = "projection.{route}.reconnect"
 
 
+def read_method(route: str) -> str:
+    """Return the wire name of *route*'s read verb, as :data:`READ_METHOD_TEMPLATE` spells it.
+
+    Args:
+        route: The route key.
+
+    Returns:
+        ``projection.<route>.read``.
+    """
+    return f"projection.{route}.read"
+
+
+def reconnect_method(route: str) -> str:
+    """Return the wire name of *route*'s reconnect verb.
+
+    Args:
+        route: The route key.
+
+    Returns:
+        ``projection.<route>.reconnect``.
+    """
+    return f"projection.{route}.reconnect"
+
+
 def _route_staleness_classes() -> Mapping[str, StalenessClass]:
     """Return the staleness class of every route a read model declares.
 
@@ -617,6 +641,8 @@ __all__ = [
     "connection_value",
     "negotiate_reconnect",
     "projection_now",
+    "read_method",
+    "reconnect_method",
     "replay_note",
     "retention_window",
     "staleness_target_seconds",

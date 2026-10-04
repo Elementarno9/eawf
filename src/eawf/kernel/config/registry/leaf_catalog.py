@@ -782,6 +782,9 @@ _RETIRED_KEYS: frozenset[str] = frozenset(
         # named /research as its reader, but no code ever read it
         "research.auto_save",
         # retired before this catalog tracked them: renamed or never consumed
+        "acceptance.lint",
+        "acceptance.tests",
+        "acceptance.typecheck",
         "estimation.buckets",
         "mcp.enabled",
         "preferences.scope_size",

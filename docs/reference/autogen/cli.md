@@ -483,6 +483,7 @@ Task lifecycle (promote, claim, start, submit, seal, prove, assess, ready, compl
 | `complete` | Complete a Task on the Batch head its passing assessment proves. |
 | `create` | Admit a new Task's create document into the addressed tree. |
 | `demote` | Hand a PLANNED Task that was never claimed back to the backlog as a DRAFT. |
+| `drop` | Drop a DRAFT or DEFERRED Task from the backlog, recording why. |
 | `promote` | Promote a DRAFT Task to PLANNED once its contract is complete. |
 | `prove` | Run a Task's gates at the generation each leg binds and file the receipts. |
 | `ready` | Declare a RUNNING Task ready to integrate on its bound report and evidence. |

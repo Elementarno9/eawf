@@ -7,18 +7,22 @@ own probe stage: the installed binary is asked for its version and its
 ``--help`` surface, the advertised flags are confronted with the capability
 matrix, and the stage record lands in the conformance journal under the
 version's tuple digest. A passed probe records a machine certification; a
-failed one records a quarantine naming what the probe did not find.
+failed one records a quarantine naming what the probe did not find. A probe
+that never read the binary's ``--help``, because the call timed out or could
+not be spawned, found nothing missing and records nothing, so it is retried.
 
 The probe runs no model. It executes the binary's ``--version`` and ``--help``
 (and ``codex features list``), each bounded by the probe's own subprocess
 timeout, so a certification costs no tokens.
 
 The daemon starts a probe on its own when a Run starts, or a host session is
-adopted as one, on a version that holds no current certification and no
-quarantine. Each version is probed at most once per daemon process, one probe
-at a time per tree, in the background; while it runs, a control on that
-version is refused as in progress. ``runtime.auto_certify: false`` turns the
-background probe off; ``eawf runtime certify`` still runs one on request.
+adopted as one, on a version that holds no current certification, or whose
+quarantine is older than :data:`REPROBE_BACKOFF`, since a harness can be fixed
+in place. One probe runs at a time per tree, in the background, and a version
+is queued again only after the back-off or after a probe that recorded
+nothing; while it runs, a control on that version other than a stop is refused
+as in progress. ``runtime.auto_certify: false`` turns the background probe
+off; ``eawf runtime certify`` still runs one on request.
 """
 
 from __future__ import annotations
@@ -28,7 +32,7 @@ import platform
 import re
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Final
 
@@ -76,12 +80,16 @@ _ARCHITECTURES: Final = {
 #: The gate codes that leave a version for the probe to certify.
 _PROBED_ON: Final = frozenset({ControlGateCode.UNCERTIFIED, ControlGateCode.EXPIRED})
 
+#: How long a quarantined or already-queued version waits before it is probed again.
+REPROBE_BACKOFF: Final = timedelta(hours=24)
+
 
 class RuntimeNotProbedError(ValueError):
     """The installed runtime could not be probed, so nothing was recorded.
 
     The message leads with the refusal code: ``runtime_not_installed``,
-    ``runtime_platform_unknown`` or ``runtime_capabilities_unruled``.
+    ``runtime_probe_incomplete``, ``runtime_platform_unknown`` or
+    ``runtime_capabilities_unruled``.
     """
 
 
@@ -157,8 +165,9 @@ def certify_installed(state_path: Path, runtime_id: str) -> MachineCertification
 
     Raises:
         RuntimeNotProbedError: The binary is absent or reports no version,
-            the platform cannot be named, or no capability of the runtime has
-            a probe rule; nothing was recorded.
+            its ``--help`` timed out or could not be run, the platform cannot
+            be named, or no capability of the runtime has a probe rule;
+            nothing was recorded.
     """
     observed = probe_runtime(runtime_id)
     version = installed_version(observed.version) if observed.installed else None
@@ -166,6 +175,13 @@ def certify_installed(state_path: Path, runtime_id: str) -> MachineCertification
         raise RuntimeNotProbedError(
             f"runtime_not_installed: {runtime_id} has no binary on the daemon's PATH that "
             f"reports a version"
+        )
+    # Without a help body every flag reads as absent, and quarantining on that
+    # would blame the harness for a slow or failed spawn.
+    if observed.help_excerpt_sha256 is None:
+        raise RuntimeNotProbedError(
+            f"runtime_probe_incomplete: {runtime_id} {version} printed no --help "
+            f"({observed.error}), so no capability could be judged"
         )
     flags = observed.advertised_sdk_flags
     rows = detect_drift(
@@ -281,7 +297,7 @@ def gate_run_control(
 
 
 class RuntimeCertifier:
-    """One tree's prober: one probe at a time, each version at most once.
+    """One tree's prober: one probe at a time, each version at most once per back-off.
 
     Attributes:
         tree_root: The tree's ``.ea`` directory.
@@ -298,8 +314,33 @@ class RuntimeCertifier:
         self._lock = threading.Lock()
         self._serial = threading.Lock()
         self._probing: set[tuple[str, str]] = set()
-        self._attempted: set[tuple[str, str]] = set()
+        self._attempted: dict[tuple[str, str], datetime] = {}
+        self._auto_certify: tuple[int | None, bool] | None = None
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="eawf-certify")
+
+    def auto_certify(self) -> bool:
+        """Return the tree's ``runtime.auto_certify``, composed again only when its config moves.
+
+        Every Run start asks, and composing the layered config spawns git, so
+        the answer is kept until the repository layer's file changes.
+
+        Returns:
+            Whether the daemon may probe a new version in the background.
+
+        Raises:
+            pydantic.ValidationError: A layer states the leaf as something
+                other than a boolean.
+        """
+        config = self.tree_root / "config.yaml"
+        stamp = config.stat().st_mtime_ns if config.is_file() else None
+        with self._lock:
+            cached = self._auto_certify
+        if cached is not None and cached[0] == stamp:
+            return cached[1]
+        enabled = resolve_auto_certify(self.tree_root.parent)
+        with self._lock:
+            self._auto_certify = (stamp, enabled)
+        return enabled
 
     def certifying(self, runtime_id: str, version: str) -> bool:
         """Report whether a background probe of *runtime_id* at *version* is pending.
@@ -329,40 +370,60 @@ class RuntimeCertifier:
         with self._serial:
             return certify_installed(self._state_path, runtime_id)
 
-    def ensure(self, runtime_id: str, version: str) -> Future[MachineCertification | None] | None:
+    def ensure(
+        self, runtime_id: str, version: str, *, now: datetime
+    ) -> Future[MachineCertification | None] | None:
         """Queue one background probe of *runtime_id* for a Run that reported *version*.
 
         The probe reads the installed binary, which may have moved on from the
         version the Run reported; it then certifies the installed version, and
-        the reported one is not probed again by this process.
+        the reported one is not queued again by this process until
+        :data:`REPROBE_BACKOFF` has passed, unless the probe recorded nothing.
 
         Args:
             runtime_id: The runtime.
             version: The version a Run reported.
+            now: The instant the back-off is measured from.
 
         Returns:
-            The queued probe, or ``None`` when this version was already queued
-            by this process.
+            The queued probe, or ``None`` when this process queued this version
+            within the back-off.
         """
         key = (runtime_id, version)
         with self._lock:
-            if key in self._attempted:
+            queued_at = self._attempted.get(key)
+            if queued_at is not None and now - queued_at < REPROBE_BACKOFF:
                 return None
-            self._attempted.add(key)
+            self._attempted[key] = now
             self._probing.add(key)
         logger.info(f"ensure queued runtime={runtime_id!r} version={version!r}")
         return self._executor.submit(self._probe, key)
 
     def _probe(self, key: tuple[str, str]) -> MachineCertification | None:
-        """Run one queued probe, and clear it as pending however it ends."""
+        """Run one queued probe, and clear it as pending however it ends.
+
+        A probe that recorded nothing leaves the version free to be queued by
+        the next Run start; an unexpected failure is logged here because the
+        Future it would surface through is never awaited.
+        """
         try:
             return self.certify(key[0])
         except RuntimeNotProbedError as error:
             logger.warning(f"_probe skipped runtime={key[0]!r} version={key[1]!r} cause={error}")
+            self._forget(key)
+            return None
+        except Exception:
+            logger.exception(f"_probe failed runtime={key[0]!r} version={key[1]!r}")
+            self._forget(key)
             return None
         finally:
             with self._lock:
                 self._probing.discard(key)
+
+    def _forget(self, key: tuple[str, str]) -> None:
+        """Let *key* be queued again, since its probe recorded nothing."""
+        with self._lock:
+            self._attempted.pop(key, None)
 
 
 #: Certifiers by resolved tree root: one per tree for the life of the process,
@@ -402,22 +463,36 @@ def start_auto_certification(
     Returns:
         The queued probe, or ``None`` when none was queued: the runtime is not
         one the probe knows, the Run reported no version, ``runtime.auto_certify``
-        is off, the version is already certified or quarantined, or this
-        process already probed it.
+        is off, the version is already certified, its quarantine is younger
+        than :data:`REPROBE_BACKOFF`, or this process queued it within the
+        back-off.
     """
     version = runtime.harness_version
     if runtime.harness not in RUNTIME_IDS or version is None:
         return None
-    if not resolve_auto_certify(tree_root.parent):
+    certifier = certifier_for(tree_root)
+    if not certifier.auto_certify():
         return None
     gate = gate_run_control(tree_root, runtime, ControlKind.CANCEL, now=now)
-    if gate.code not in _PROBED_ON:
+    if gate.code is ControlGateCode.QUARANTINED:
+        probed = [
+            row
+            for row in read_machine_certifications(tree_root / "state.json")
+            if row.runtime_id == runtime.harness and row.harness_version == version
+        ]
+        newest = max(probed, key=lambda row: row.verified_at, default=None)
+        if newest is None or newest.outcome != "quarantined":
+            return None
+        if now - newest.verified_at < REPROBE_BACKOFF:
+            return None
+    elif gate.code not in _PROBED_ON:
         return None
-    return certifier_for(tree_root).ensure(runtime.harness, version)
+    return certifier.ensure(runtime.harness, version, now=now)
 
 
 __all__ = [
     "CONFORMANCE_SUITE_VERSION",
+    "REPROBE_BACKOFF",
     "RuntimeCertifier",
     "RuntimeNotProbedError",
     "certifier_for",

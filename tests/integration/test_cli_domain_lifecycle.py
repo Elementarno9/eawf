@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ClassVar
 
+import click
 import orjson
 import pytest
 from typer.testing import CliRunner
@@ -247,7 +248,7 @@ def test_cli_methods_match_the_registered_domain_rpcs() -> None:
 
 def test_every_cli_verb_has_a_command_under_test() -> None:
     """The verb rows cover every CLI verb but completion, tested on its own."""
-    covered = {row[1] for row in _VERB_ROWS} | {domain_cmd.TASK_COMPLETE}
+    covered = {row[1] for row in _VERB_ROWS} | {domain_cmd.TASK_COMPLETE, domain_cmd.TASK_DROP}
     assert covered == set(domain_cmd.DOMAIN_CLI_METHODS)
 
 
@@ -678,6 +679,67 @@ def test_unreachable_daemon_is_a_daemon_unreachable_error(
 # ---- help panels ------------------------------------------------------------
 
 
+# ---- task drop ----------------------------------------------------------
+
+
+def _drop_args(tmp_path: Path, *extra: str) -> list[str]:
+    return [
+        "--workspace",
+        str(tmp_path),
+        *_base_args(["task", "drop"], "--expected-task-revision", _TASK_URN),
+        *extra,
+    ]
+
+
+def test_task_drop_forwards_the_reason_as_its_reason_code(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install(monkeypatch, result=_accepted(domain_cmd.TASK_DROP, _TASK_URN))
+    result = runner.invoke(app, _drop_args(tmp_path, "--reason", "no-longer-wanted"))
+    assert result.exit_code == exit_codes.OK, result.output
+    ((sent_method, params),) = _FakeClient.calls
+    assert sent_method == "domain.task.drop"
+    assert (params["urn"], params["expected_revision"]) == (_TASK_URN, 3)
+    assert params["reason_code"] == "no-longer-wanted"
+
+
+def test_task_drop_reason_wins_over_a_spec_reason(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    spec = tmp_path / "drop.json"
+    spec.write_bytes(orjson.dumps({"reason_code": "from-spec"}))
+    _install(monkeypatch, result=_accepted(domain_cmd.TASK_DROP, _TASK_URN))
+    result = runner.invoke(
+        app, _drop_args(tmp_path, "--reason", "from-flag", "--from-spec", str(spec))
+    )
+    assert result.exit_code == exit_codes.OK, result.output
+    assert _FakeClient.calls[0][1]["reason_code"] == "from-flag"
+
+
+def test_task_drop_without_a_reason_is_refused_before_the_wire(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install(monkeypatch, result=_accepted(domain_cmd.TASK_DROP, _TASK_URN))
+    result = runner.invoke(app, _drop_args(tmp_path))
+    assert result.exit_code != exit_codes.OK
+    assert "reason" in click.unstyle(result.output)
+    assert _FakeClient.calls == []
+
+
+def test_task_drop_refusal_surfaces_the_daemon_code(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    answer = _refused(
+        domain_cmd.TASK_DROP,
+        code=TransactionRefusalCode.ILLEGAL_TRANSITION,
+        entity_ref=_TASK_URN,
+    )
+    _install(monkeypatch, result=answer)
+    result = runner.invoke(app, _drop_args(tmp_path, "--reason", "no-longer-wanted"))
+    assert result.exit_code == domain_cmd.DOMAIN_REFUSAL_EXIT
+    assert DomainErrorCode.ILLEGAL_TRANSITION.value in result.output
+
+
 def test_new_nouns_render_in_the_help_listing() -> None:
     """The three native nouns appear on the root help, under a panel."""
     result = runner.invoke(app, ["--help"])
@@ -701,6 +763,7 @@ def test_operator_verb_spelling_of_each_method() -> None:
         "batch complete",
         "task promote",
         "task demote",
+        "task drop",
         "task claim",
         "task release",
         "task start",

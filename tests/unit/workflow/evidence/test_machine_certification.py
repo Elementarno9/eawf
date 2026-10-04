@@ -228,7 +228,7 @@ def test_a_machine_certification_refuses_a_control_it_records_unsupported() -> N
 
 
 def test_a_quarantined_version_is_refused_naming_what_the_probe_found() -> None:
-    gate = _decide(INSTALLED, ControlKind.CANCEL, machine=(quarantined(),))
+    gate = _decide(INSTALLED, ControlKind.STEER, machine=(quarantined(),))
     assert (gate.admitted, gate.code) == (False, ControlGateCode.QUARANTINED)
     assert gate.reason == (
         "claude-code 2.1.288 is quarantined: claude-code 2.1.288 failed the conformance "
@@ -254,11 +254,19 @@ def test_a_machine_certification_admits_until_the_instant_before_it_expires() ->
 
 
 def test_a_version_being_probed_is_in_progress_rather_than_uncertified() -> None:
-    gate = _decide(INSTALLED, ControlKind.CANCEL, probing=True)
+    gate = _decide(INSTALLED, ControlKind.STEER, probing=True)
     assert (gate.admitted, gate.code) == (False, ControlGateCode.IN_PROGRESS)
     assert gate.code.value == "runtime_certification_in_progress"
     assert gate.reason.startswith("claude-code 2.1.288 is being certified")
     assert _decide(INSTALLED, ControlKind.CANCEL).code is ControlGateCode.UNCERTIFIED
+
+
+def test_a_stop_on_a_version_being_probed_or_quarantined_is_admitted() -> None:
+    probing = _decide(INSTALLED, ControlKind.INTERRUPT, probing=True)
+    quarantine = _decide(INSTALLED, ControlKind.CANCEL, machine=(quarantined(),))
+    assert (probing.admitted, probing.code) == (True, ControlGateCode.IN_PROGRESS)
+    assert (quarantine.admitted, quarantine.code) == (True, ControlGateCode.QUARANTINED)
+    assert "failed the conformance probe" in quarantine.reason
 
 
 def test_an_expired_version_being_reprobed_is_in_progress() -> None:

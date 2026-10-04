@@ -265,11 +265,8 @@ def check_config_resolves(*, workspace: Path | None) -> CheckResult:
 
 def _reserved_value_is_unsupported(key: str, value: object) -> bool:
     """Return whether a reserved value claims unsafe automation behaviour."""
-    return (
-        (key == "planning.auto_plan" and value is True)
-        or (key == "planning.approval" and value == "auto")
-        or (key == "audit.fix_safe" and value is True)
-        or (key.startswith("flow.auto_accept.") and value is True)
+    return (key == "audit.fix_safe" and value is True) or (
+        key.startswith("flow.auto_accept.") and value is True
     )
 
 

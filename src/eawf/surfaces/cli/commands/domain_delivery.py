@@ -6,7 +6,8 @@ per daemon verb:
 
 - ``task claim``, ``task release``, ``task ready`` and ``task complete``
   send ``domain.task.claim``, ``domain.task.release``, ``domain.task.ready``
-  and ``domain.task.complete``;
+  and ``domain.task.complete``, and ``task drop`` ends a backlog Task with
+  ``domain.task.drop``;
 - ``run create``, ``run start``, ``run finish`` and ``run fail`` send
   ``domain.run.create`` and the three Run moves;
 - ``batch merge``, ``batch observe-merge`` and ``batch complete`` send the
@@ -42,6 +43,7 @@ from eawf.surfaces.cli.commands.domain import (
     RUN_START,
     TASK_CLAIM,
     TASK_COMPLETE,
+    TASK_DROP,
     TASK_READY,
     TASK_RELEASE,
     _run_create_verb,
@@ -57,6 +59,7 @@ _REVISION_HELP: Final = "Revision the record was read at (compare-and-swap token
 _KEY_HELP: Final = "Caller's name for this request; a retry replays its receipt."
 _ACTOR_HELP: Final = "Principal key the move is attributed to."
 _SPEC_HELP: Final = "JSON file carrying updates, observations, reason_code, binding_refs."
+_REASON_HELP: Final = "Stable reason code the move is recorded with, a lowercase slug."
 _CREATE_URN_HELP: Final = "URN of the Run to admit."
 _TREE_REVISION_HELP: Final = (
     "The tree's committed canonical sequence the caller read; 0 for a tree "
@@ -149,6 +152,33 @@ def task_release_cmd(
     """
     _move(
         ctx, TASK_RELEASE, urn, expected_revision, idempotency_key, actor, from_spec, dry_run, yes
+    )
+
+
+@task_app.command("drop")
+def task_drop_cmd(
+    ctx: typer.Context,
+    urn: _Urn,
+    reason: Annotated[str, typer.Option("--reason", help=_REASON_HELP)],
+    expected_revision: _TaskRevision,
+    idempotency_key: _Key,
+    actor: _Actor,
+    from_spec: _Spec = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
+) -> None:
+    """Drop a DRAFT or DEFERRED Task from the backlog, recording why."""
+    _run_verb(
+        ctx,
+        dry_run=dry_run,
+        yes=yes,
+        method=TASK_DROP,
+        urn=urn,
+        expected_revision=expected_revision,
+        idempotency_key=idempotency_key,
+        actor=actor,
+        from_spec=from_spec,
+        extra_params={"reason_code": reason},
     )
 
 

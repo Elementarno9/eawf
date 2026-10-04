@@ -284,11 +284,16 @@ def bind_run_capture(
             return normalized
         started = start_capture_updates(document, run=run, updates=normalized)
         if started["runtime_tuple"] is not None:
-            runtime_certifier.start_auto_certification(
-                context.identity.tree_root,
-                RunRuntimeTuple.model_validate(started["runtime_tuple"]),
-                now=datetime.now(UTC),
-            )
+            # The probe is a side errand of the start: a torn certification
+            # row or a bad config leaf must not keep the Run from starting.
+            try:
+                runtime_certifier.start_auto_certification(
+                    context.identity.tree_root,
+                    RunRuntimeTuple.model_validate(started["runtime_tuple"]),
+                    now=datetime.now(UTC),
+                )
+            except Exception:
+                logger.exception(f"auto_certification_skipped run={urn.entity_key!r}")
         return {**normalized, **started}
     if to_status in TERMINAL_RUN_STATUSES and "ended_at" in normalized:
         stop = terminal_capture_updates(run, ended_at=normalized["ended_at"])

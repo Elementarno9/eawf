@@ -115,8 +115,8 @@ class _ConfigSchema(BaseModel):
     daemon: dict[str, Any]
     telemetry: dict[str, Any] = Field(default_factory=dict)
     # ``audit`` and ``ship`` hold only reserved compatibility leaves, which the
-    # built-in layer does not state; ``acceptance`` holds the gate answers
-    # ``eawf init`` records.
+    # built-in layer does not state; ``acceptance`` holds no live leaf since the
+    # wizard's gate answers retired, and a layer may still state the block.
     audit: dict[str, Any] = Field(default_factory=dict)
     ship: dict[str, Any] = Field(default_factory=dict)
     acceptance: dict[str, Any] = Field(default_factory=dict)

@@ -14,8 +14,10 @@ recorded ``--version`` and ``--help``, so no real binary and no model is reached
 from __future__ import annotations
 
 import asyncio
+import logging
 import shutil
 import stat
+import threading
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -33,11 +35,13 @@ from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.methods.conformance import runner_for
 from eawf.runtime.daemon.methods.runtime_certification import RUNTIME_CERTIFY_METHOD
 from eawf.runtime.daemon.runtime_certifier import (
+    REPROBE_BACKOFF,
     RuntimeNotProbedError,
     certifier_for,
     certify_installed,
     installed_version,
 )
+from eawf.runtime.runtimes.probes import sdk_baseline
 from eawf.workflow.evidence.machine_certification import (
     CERTIFICATION_LIFETIME,
     read_machine_certifications,
@@ -192,7 +196,7 @@ def test_a_failing_probe_quarantines_and_the_control_names_the_findings(
         "tool_use: declared=supported but probe shows none of ['mcp'] in observed_flags",
     )
     with pytest.raises(DaemonValidationError) as refused:
-        _ask(canary, tmp_path, "cancel")
+        _ask(canary, tmp_path, "steer")
     assert str(refused.value) == (
         "validation_failed: runtime_quarantined: codex 0.159.2 is quarantined: codex 0.159.2 "
         "failed the conformance probe (capability_not_observed): tool_use"
@@ -279,7 +283,7 @@ def test_the_background_probe_holds_controls_in_progress_then_certifies(
     assert queued is not None
     try:
         with pytest.raises(DaemonValidationError) as held:
-            _ask(canary, tmp_path, "cancel")
+            _ask(canary, tmp_path, "steer")
         assert "runtime_certification_in_progress: claude-code 2.1.288 is being certified" in str(
             held.value
         )
@@ -381,3 +385,184 @@ def _await_rows(state_path: Path, *, within: float = 30.0) -> tuple[MachineCerti
             return rows
         time.sleep(0.05)
     raise AssertionError(f"no probe row was recorded within {within}s")
+
+
+# ---------- a probe that could not read the binary records nothing ----------
+
+
+def _help_times_out(monkeypatch: pytest.MonkeyPatch) -> threading.Event:
+    """Make every ``--help`` call time out, as a loaded machine's would, until the event is set."""
+    real = sdk_baseline._run
+    recovered = threading.Event()
+
+    def run(argv: list[str], **kwargs: Any) -> tuple[int, str, str]:
+        if argv[-1] == "--help" and not recovered.is_set():
+            return -1, "", "timeout after 10.0s"
+        return real(argv, **kwargs)
+
+    monkeypatch.setattr(sdk_baseline, "_run", run)
+    return recovered
+
+
+def test_a_help_timeout_records_no_quarantine(
+    tmp_path: Path, stubbed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    canary = _controlled(tmp_path, INSTALLED)
+    _help_times_out(monkeypatch)
+
+    with pytest.raises(
+        RuntimeNotProbedError, match=r"^runtime_probe_incomplete: claude-code 2\.1\.288"
+    ):
+        certify_installed(_state_path(canary), "claude-code")
+
+    assert read_machine_certifications(_state_path(canary)) == ()
+
+
+def test_a_help_that_fails_silently_records_no_quarantine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "silent"
+    directory.mkdir()
+    binary = directory / "claude"
+    binary.write_text(
+        "#!/bin/sh\n"
+        f'case "$1" in --version) echo "{CLAUDE_VERSION} (Claude Code)" ;; *) exit 3 ;; esac\n',
+        encoding="utf-8",
+    )
+    binary.chmod(binary.stat().st_mode | stat.S_IEXEC)
+    monkeypatch.setenv("PATH", str(directory))
+    canary = _controlled(tmp_path, INSTALLED)
+
+    with pytest.raises(RuntimeNotProbedError, match="runtime_probe_incomplete"):
+        certify_installed(_state_path(canary), "claude-code")
+
+    assert read_machine_certifications(_state_path(canary)) == ()
+
+
+def test_a_probe_that_recorded_nothing_is_queued_again_by_the_next_start(
+    tmp_path: Path, stubbed: Path, monkeypatch: pytest.MonkeyPatch, auto: None
+) -> None:
+    canary = _controlled(tmp_path, INSTALLED)
+    tree = canary.root / ".ea"
+    recovered = _help_times_out(monkeypatch)
+    now = datetime.now(UTC)
+
+    first = runtime_certifier.start_auto_certification(tree, _reported(), now=now)
+    assert first is not None and first.result(timeout=30) is None
+    assert read_machine_certifications(tree / "state.json") == ()
+    recovered.set()
+    again = runtime_certifier.start_auto_certification(tree, _reported(), now=now)
+
+    assert again is not None
+    row = again.result(timeout=30)
+    assert row is not None and row.outcome == "certified"
+
+
+# ---------- a quarantine is probed again after the back-off ----------
+
+
+def test_a_quarantine_is_probed_again_only_after_the_back_off(
+    tmp_path: Path, stubbed: Path, auto: None
+) -> None:
+    canary = _controlled(tmp_path, {"harness": "codex", "harness_version": CODEX_VERSION})
+    tree = canary.root / ".ea"
+    reported = RunRuntimeTuple(harness="codex", harness_version=CODEX_VERSION)
+    first = certify_installed(tree / "state.json", "codex")
+    assert first.outcome == "quarantined"
+
+    within = first.verified_at + REPROBE_BACKOFF - timedelta(seconds=1)
+    after = first.verified_at + REPROBE_BACKOFF
+
+    assert runtime_certifier.start_auto_certification(tree, reported, now=within) is None
+    queued = runtime_certifier.start_auto_certification(tree, reported, now=after)
+    assert queued is not None
+    assert queued.result(timeout=30) is not None
+    assert len(read_machine_certifications(tree / "state.json")) == 2
+    assert runtime_certifier.start_auto_certification(tree, reported, now=after) is None
+
+
+# ---------- an unexpected probe failure is logged and retried ----------
+
+
+def test_an_unexpected_probe_failure_is_logged_and_frees_the_version(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    certifier = certifier_for(tmp_path / "tree" / ".ea")
+    now = datetime.now(UTC)
+
+    def broken(_runtime_id: str) -> MachineCertification:
+        raise OSError("journal unreadable")
+
+    monkeypatch.setattr(certifier, "certify", broken)
+    with caplog.at_level(logging.ERROR, logger=runtime_certifier.__name__):
+        queued = certifier.ensure("claude-code", CLAUDE_VERSION, now=now)
+        assert queued is not None and queued.result(timeout=30) is None
+
+    (record,) = [r for r in caplog.records if r.message.startswith("_probe failed")]
+    assert record.exc_info is not None and "journal unreadable" in str(record.exc_info[1])
+    assert not certifier.certifying("claude-code", CLAUDE_VERSION)
+    assert certifier.ensure("claude-code", CLAUDE_VERSION, now=now) is not None
+
+
+def test_a_queued_version_is_not_queued_again_within_the_back_off(tmp_path: Path) -> None:
+    certifier = certifier_for(tmp_path / "tree" / ".ea")
+    now = datetime.now(UTC)
+    release = threading.Event()
+    certifier._executor.submit(release.wait)
+    try:
+        assert certifier.ensure("claude-code", CLAUDE_VERSION, now=now) is not None
+        later = now + REPROBE_BACKOFF - timedelta(seconds=1)
+        assert certifier.ensure("claude-code", CLAUDE_VERSION, now=later) is None
+        assert certifier.ensure("claude-code", CLAUDE_VERSION, now=now + REPROBE_BACKOFF)
+    finally:
+        release.set()
+
+
+# ---------- a Run start survives a broken probe trigger ----------
+
+
+def test_a_run_starts_when_the_auto_certification_trigger_raises(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    cli: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    _hosted(monkeypatch)
+    _transcript(cli, [{**row, "version": CLAUDE_VERSION} for row in _host_head()])
+    canary = _queued(tmp_path)
+
+    def torn(*_args: Any, **_kwargs: Any) -> None:
+        raise ValueError("torn runtime_certification.jsonl line")
+
+    monkeypatch.setattr(runtime_certifier, "start_auto_certification", torn)
+    with caplog.at_level(logging.ERROR):
+        _start(canary, tmp_path)
+
+    run = _stored_run(canary)
+    assert run.status == "RUNNING" and run.runtime_tuple is not None
+    assert any(r.message.startswith("auto_certification_skipped") for r in caplog.records)
+
+
+# ---------- the auto_certify switch is composed once per config change ----------
+
+
+def test_the_auto_certify_switch_is_read_again_only_when_the_config_moves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tree = tmp_path / "repo" / ".ea"
+    tree.mkdir(parents=True)
+    calls: list[Path] = []
+
+    def resolve(repo_root: Path) -> bool:
+        calls.append(repo_root)
+        return len(calls) == 1
+
+    monkeypatch.setattr(runtime_certifier, "resolve_auto_certify", resolve)
+    certifier = certifier_for(tree)
+
+    assert (certifier.auto_certify(), certifier.auto_certify()) == (True, True)
+    assert len(calls) == 1
+    (tree / "config.yaml").write_text("runtime:\n  auto_certify: false\n", encoding="utf-8")
+    assert certifier.auto_certify() is False
+    assert certifier.auto_certify() is False
+    assert len(calls) == 2

@@ -81,6 +81,8 @@ from eawf.kernel.projection.connection import (
     RECONNECT_METHOD_TEMPLATE,
     ReconnectDisposition,
     negotiate_reconnect,
+    read_method,
+    reconnect_method,
 )
 from eawf.kernel.projection.liveness import STALLED
 from eawf.kernel.projection.registers import ATTENTION_ROUTE
@@ -918,7 +920,7 @@ def _route_reader(route: str) -> Handler:
         except ValidationError as error:
             raise DaemonValidationError(
                 f"validation_failed: {PROJECTION_UNREADABLE}: {error.error_count()} bad "
-                f"parameter(s) for {READ_METHOD_TEMPLATE.format(route=route)}"
+                f"parameter(s) for {read_method(route)}"
             ) from error
         authority = require_native_call(ctx, params)
         projection = await asyncio.to_thread(
@@ -955,7 +957,7 @@ def _route_reconnector(route: str) -> Handler:
         except ValidationError as error:
             raise DaemonValidationError(
                 f"validation_failed: {RECONNECT_UNNEGOTIABLE}: {error.error_count()} bad "
-                f"parameter(s) for {RECONNECT_METHOD_TEMPLATE.format(route=route)}"
+                f"parameter(s) for {reconnect_method(route)}"
             ) from error
         authority = require_native_call(ctx, params)
         answer = await asyncio.to_thread(
@@ -971,11 +973,13 @@ def _route_reconnector(route: str) -> Handler:
     return reconnect_route
 
 
-def _register_route_verbs(template: str, build: Callable[[str], Handler]) -> tuple[str, ...]:
+def _register_route_verbs(
+    name_of: Callable[[str], str], build: Callable[[str], Handler]
+) -> tuple[str, ...]:
     """Register one verb per bound route and return the names, sorted.
 
     Args:
-        template: The wire-name template, formatted with the route key.
+        name_of: The verb's wire name for a route key.
         build: The handler factory for one route.
 
     Returns:
@@ -983,7 +987,7 @@ def _register_route_verbs(template: str, build: Callable[[str], Handler]) -> tup
     """
     names: list[str] = []
     for route in sorted(ROUTE_COLLECTIONS):
-        name = template.format(route=route)
+        name = name_of(route)
         register(name)(build(route))
         names.append(name)
     return tuple(names)
@@ -992,7 +996,7 @@ def _register_route_verbs(template: str, build: Callable[[str], Handler]) -> tup
 #: The verb the effective-settings view is read through. It is not in
 #: :data:`ROUTE_READ_METHODS`, because the route it serves binds no collection and its
 #: answer is not a row projection.
-SETTINGS_READ_METHOD: Final = READ_METHOD_TEMPLATE.format(route=SETTINGS_ROUTE)
+SETTINGS_READ_METHOD: Final = read_method(SETTINGS_ROUTE)
 
 
 @register(SETTINGS_READ_METHOD)
@@ -1098,15 +1102,13 @@ async def read_milestone_acceptance(ctx: MethodContext, params: dict[str, Any]) 
 
 
 #: The read verbs this module registered, one per bound route.
-ROUTE_READ_METHODS: Final[tuple[str, ...]] = _register_route_verbs(
-    READ_METHOD_TEMPLATE, _route_reader
-)
+ROUTE_READ_METHODS: Final[tuple[str, ...]] = _register_route_verbs(read_method, _route_reader)
 
 #: The reconnect verbs this module registered, one per bound route. A route with no
 #: document binding has neither verb: a console cannot reconnect to a projection
 #: that was never served.
 ROUTE_RECONNECT_METHODS: Final[tuple[str, ...]] = _register_route_verbs(
-    RECONNECT_METHOD_TEMPLATE, _route_reconnector
+    reconnect_method, _route_reconnector
 )
 
 

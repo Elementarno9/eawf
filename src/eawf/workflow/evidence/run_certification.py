@@ -23,6 +23,12 @@ close.
 A Run that records no runtime tuple predates every producer of one. Locking
 it out would turn a missing record into a refusal nobody can clear, so it
 keeps the controls it had, and the answer says the control was not gated.
+
+A stopping control is never refused. An operator has to be able to stop a
+runaway Run whatever its runtime's certification says, so a cancel, an
+interrupt or a reconcile is admitted even where the gate found a gap; the
+decision keeps the gap's code and names it in its reason, so the answer and
+the log still say the stop went to an uncertified runtime.
 """
 
 from __future__ import annotations
@@ -53,8 +59,7 @@ logger = logging.getLogger(__name__)
 #: The certified capability each control leans on beyond the runtime's own
 #: certification. A steer or an answer is delivered into the running
 #: session's stream; a resume or a fork reopens a session. The stopping
-#: controls ask the process to stop, which a certified runtime honours
-#: without any one capability, so they need the certification alone.
+#: controls ask the process to stop, which needs no one capability.
 CONTROL_CAPABILITIES: Final[Mapping[ControlKind, CapabilityId | None]] = MappingProxyType(
     {
         ControlKind.STEER: "streaming",
@@ -69,11 +74,18 @@ CONTROL_CAPABILITIES: Final[Mapping[ControlKind, CapabilityId | None]] = Mapping
 )
 
 
+#: The controls that stop a Run rather than steer it, admitted whatever the gate finds.
+_STOP_CONTROLS: Final = frozenset(
+    {ControlKind.CANCEL, ControlKind.INTERRUPT, ControlKind.RECONCILE}
+)
+
+
 class ControlGateCode(StrEnum):
     """Why a control was admitted or refused, one member per reason.
 
     ``NOT_RECORDED`` admits: the Run predates the runtime tuple. Every other
-    member but ``CERTIFIED`` refuses, and names the gap an operator closes.
+    member but ``CERTIFIED`` names the gap an operator closes, and refuses
+    every control but a stopping one.
     """
 
     CERTIFIED = "runtime_certified"
@@ -211,8 +223,41 @@ def decide_run_control(
         now: The instant a certification's expiry is judged at.
 
     Returns:
-        The decision; a refusal names the runtime and the certification gap.
+        The decision; a refusal names the runtime and the certification gap,
+        and a stopping control admitted across a gap keeps the gap's code.
     """
+    gate = _gated(
+        runtime,
+        control,
+        certifications=certifications,
+        machine=machine,
+        quarantined=quarantined,
+        certifying=certifying,
+        now=now,
+    )
+    if gate.admitted or control not in _STOP_CONTROLS:
+        return gate
+    return gate.model_copy(
+        update={
+            "admitted": True,
+            "reason": (
+                f"{control.value} was admitted uncertified, as a stop always is: {gate.reason}"
+            ),
+        }
+    )
+
+
+def _gated(
+    runtime: RunRuntimeTuple | None,
+    control: ControlKind,
+    *,
+    certifications: Sequence[CertificationRecord],
+    machine: Sequence[MachineCertification],
+    quarantined: Callable[[str], bool],
+    certifying: Callable[[str, str], bool],
+    now: datetime,
+) -> ControlGate:
+    """Decide *control* on the certification alone, before a stop is let through."""
     if runtime is None:
         return ControlGate(
             admitted=True,
@@ -228,7 +273,8 @@ def decide_run_control(
             runtime=named,
             reason=(
                 f"{runtime.harness} ran at a version this Run did not record, so no "
-                f"certification can be matched to it"
+                f"certification can be matched to it and {control.value} is refused; "
+                f"cancel, interrupt and reconcile stay available"
             ),
         )
     held = [

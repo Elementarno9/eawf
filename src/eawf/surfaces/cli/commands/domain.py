@@ -103,6 +103,7 @@ BATCH_OBSERVE_MERGE: Final = "domain.batch.observe_merge"
 BATCH_COMPLETE: Final = "domain.batch.complete"
 TASK_PROMOTE: Final = "domain.task.promote"
 TASK_DEMOTE: Final = "domain.task.demote"
+TASK_DROP: Final = "domain.task.drop"
 TASK_CLAIM: Final = "domain.task.claim"
 TASK_RELEASE: Final = "domain.task.release"
 TASK_START: Final = "domain.task.start"
@@ -129,6 +130,7 @@ DOMAIN_CLI_METHODS: Final[tuple[str, ...]] = (
     BATCH_COMPLETE,
     TASK_PROMOTE,
     TASK_DEMOTE,
+    TASK_DROP,
     TASK_CLAIM,
     TASK_RELEASE,
     TASK_START,

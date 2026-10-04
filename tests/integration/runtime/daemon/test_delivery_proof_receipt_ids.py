@@ -164,3 +164,44 @@ def test_assessment_takes_no_idempotency_key(tmp_path: Path) -> None:
             gates=[world.gate("CR-01").model_dump(mode="json")],
             proof_facts=world.facts().model_dump(mode="json"),
         )
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["uv", "run", "pytest", "-q", "--basetemp={temp}/eawf-gate-basetemp"],
+        ["git", "grep", "-q", "x = 2", "--", "{temp}/module.py"],
+    ],
+    ids=["option-value", "positional"],
+)
+def test_a_gate_naming_an_absolute_temp_path_is_refused_before_any_receipt(
+    tmp_path: Path, argv: list[str]
+) -> None:
+    """A receipt copies its gate's argv into the committed ledger, so a machine path never runs."""
+    path = _adopted(tmp_path)
+    temp = str(Path(tempfile.gettempdir()).resolve())
+    gates = [
+        {**gate, "args": {"argv": [token.format(temp=temp) for token in argv]}}
+        for gate in _gates(tmp_path)
+    ]
+
+    with pytest.raises(methods.DaemonValidationError, match="gate_argv_machine_path"):
+        _dispatch(PROVE, tmp_path, urn=TASK_URN, idempotency_key="p", gates=gates)
+
+    assert _filed_ids(path) == []
+    ledger = ledger_path(path, Epoch2Collection.RECEIPT)
+    assert not ledger.is_file() or temp not in ledger.read_text(encoding="utf-8")
+
+
+def test_a_gate_with_a_relative_basetemp_files_its_receipt(tmp_path: Path) -> None:
+    """Boundary: a repository-relative path is portable and runs as given."""
+    path = _adopted(tmp_path)
+    gates = [
+        {**gate, "args": {"argv": [*gate["args"]["argv"][:-1], "./src/module.py"]}}
+        for gate in _gates(tmp_path)
+    ]
+
+    answer = _dispatch(PROVE, tmp_path, urn=TASK_URN, idempotency_key="p", gates=gates)
+
+    assert answer["passed"] is True
+    assert len(_filed_ids(path)) == 2

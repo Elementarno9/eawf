@@ -334,6 +334,12 @@ DOMAIN_LIFECYCLE_VERBS: Final[tuple[LifecycleVerb, ...]] = (
         to_status=TaskStatus.DRAFT,
     ),
     LifecycleVerb(
+        method="domain.task.drop",
+        kind=EntityKind.TASK,
+        from_statuses=(TaskStatus.DRAFT, TaskStatus.DEFERRED),
+        to_status=TaskStatus.DROPPED,
+    ),
+    LifecycleVerb(
         method="domain.task.claim",
         kind=EntityKind.TASK,
         from_statuses=(TaskStatus.PLANNED,),

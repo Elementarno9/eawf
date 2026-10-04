@@ -233,6 +233,13 @@ COMMITTED_CASES: tuple[Case, ...] = (
         event_name="domain.task.demoted",
     ),
     Case(
+        method="domain.task.drop",
+        rows={"task": {"EAWF-0042": seed_row("task", "DRAFT")}},
+        urn=TASK_URN,
+        params={"reason_code": "no-longer-wanted"},
+        event_name="domain.task.dropped",
+    ),
+    Case(
         method="domain.task.claim",
         rows={"task": {"EAWF-0042": seed_row("task", "PLANNED")}},
         urn=TASK_URN,
@@ -416,6 +423,13 @@ REFUSED_CASES: tuple[Case, ...] = (
         params={"reason_code": "back-to-backlog"},
         code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
         guard="never_claimed",
+    ),
+    Case(
+        method="domain.task.drop",
+        rows={"task": {"EAWF-0042": seed_row("task", "PLANNED")}},
+        urn=TASK_URN,
+        params={"reason_code": "no-longer-wanted"},
+        code=DomainErrorCode.ILLEGAL_TRANSITION.value,
     ),
     Case(
         method="domain.task.claim",

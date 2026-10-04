@@ -13,12 +13,13 @@ EAWF_RUNTIME_DIR=~/.eawfd eawf daemon stop
 ## 1. Back up, then close every live session
 
 ```text
-git add -A && git commit --allow-empty -m "Record the tree before the 0.7 upgrade"
+git status
+git add .ea .gitignore AGENTS.md && git commit --allow-empty -m "Record the tree before the 0.7 upgrade"
 cp -R .ea ../PROJ-ea-before-epoch2
 eawf migrate status
 ```
 
-The commit is git's restore point; `--allow-empty` makes it even when everything is already committed. If `eawf migrate status` lists a pending schema step, run `eawf migrate` and commit the result. The cutover refuses while any agent session or worktree is still live, because a second writer could race it: stop your agent runtimes, read the live session ids with `eawf --json status` (the `active_sessions` list), close each one with `eawf session close <SES-id>`, and retire stale worktree rows with `eawf worktree reconcile`. Step 2 commits what these change.
+The commit is git's restore point; `--allow-empty` makes it even when everything is already committed. It stages only eawf's own files, so read `git status` first and commit or stash any other work of yours on its own. If `eawf migrate status` lists a pending schema step, run `eawf migrate` and commit the result. The cutover refuses while any agent session or worktree is still live, because a second writer could race it: stop your agent runtimes, read the live session ids with `eawf --json status` (the `active_sessions` list), close each one with `eawf session close <SES-id>`, and retire stale worktree rows with `eawf worktree reconcile`. Step 2 commits what these change.
 
 ## 2. Opt in, stage, register and plan
 
@@ -41,18 +42,19 @@ The opt-in takes an eawf backup of `.ea` (under `~/.eawf/backups/`) and writes `
 eawf migrate epoch2 --apply --plan-digest <approval digest> --target-root .ea --snapshot-root ../PROJ-stage --allowlist ../PROJ-allowlist.txt --workspace-key PROJ --project-key PROJ --repository-key PROJ --default-track-key TRK-PROJ-CORE
 eawf sync
 eawf plugin install claude
-git add -A && git commit -m "Cut the tree over to epoch 2"
+git status
+git add .ea .gitignore AGENTS.md docs/rules .claude/settings.json && git commit -m "Cut the tree over to epoch 2"
 eawf repo register . --yes
 eawf status
 ```
 
 The apply re-plans and refuses if the digest no longer matches or the live `.ea` differs from the staged copy; commit, stage and plan again. If the plan reports unresolved rows, pass each address it lists with `--accept-unresolved`. A stopped apply is finished or undone by `eawf migrate epoch2 --recover --target-root .ea`.
 
-The apply rewrites the managed `.gitignore` block so it ignores every machine-local path of the generation: `local/` (this machine's in-flight Task status), `indexes/` (rebuilt from the ledgers), the cutover journal and the restore copies of pre-cutover files git history already holds. Step 1 left the tree committed, so `git add -A` stages only what the upgrade wrote: the pointer to the selected generation, the epoch marker, the generation's document and its append-only ledgers, and the files `eawf sync` and `eawf plugin install claude` re-render. `.ea/state.json` stays as the frozen epoch-1 record. `eawf sync` re-renders `AGENTS.md`, the rules under `docs/rules/` and the `.gitignore` block if stale (`eawf doctor` warns when it is); `eawf plugin install claude` replaces the 0.6.8 Stop hook with the ten 0.7 hooks in `.claude/settings.json`. Review the rest with `git status`. Then run `eawf ui`; `eawf status` lists the open Tasks of the generation.
+The apply rewrites the managed `.gitignore` block so it ignores every machine-local path of the generation: `local/` (this machine's in-flight Task status), `indexes/` (rebuilt from the ledgers), the cutover journal and the restore copies of pre-cutover files git history already holds. The `git add` names only the paths the upgrade writes: under `.ea` the pointer to the selected generation, the epoch marker, the generation's document and its append-only ledgers, and the files `eawf sync` and `eawf plugin install claude` re-render. Check `git status` before it runs, drop `docs/rules` from the list if `eawf sync` wrote no rule there, and leave anything else it shows for a commit of your own. `.ea/state.json` stays as the frozen epoch-1 record. `eawf sync` re-renders `AGENTS.md`, the rules under `docs/rules/` and the `.gitignore` block if stale (`eawf doctor` warns when it is); `eawf plugin install claude` replaces the 0.6.8 Stop hook with the ten 0.7 hooks in `.claude/settings.json`. Then run `eawf ui`; `eawf status` lists the open Tasks of the generation.
 
 ## Remove retired config leaves
 
-A stock 0.6.8 `.ea/config.yaml` sets seven leaves 0.7 no longer reads: `estimation.buckets`, `mcp.enabled`, `project.code`, `project.domains`, `project.goals`, `project.slug` and `project.title`. They are ignored, so removing them only tidies the file. `eawf config unset` refuses them as unknown keys; delete the `estimation:`, `mcp:` and `project:` blocks from `.ea/config.yaml` by hand and check the file with `eawf config validate`. `eawf --no-input doctor --fix` previews the doctor's repair, whose `config.normalize` action names each retired leaf in each config layer; `eawf doctor --fix` applies every listed action after one confirmation, so read the whole list first, as it also stops stray daemons and makes any other repair the doctor found.
+A stock 0.6.8 `.ea/config.yaml` sets ten leaves 0.7 no longer reads: `acceptance.lint`, `acceptance.tests`, `acceptance.typecheck`, `estimation.buckets`, `mcp.enabled`, `project.code`, `project.domains`, `project.goals`, `project.slug` and `project.title`. They are ignored, so removing them only tidies the file. `eawf config unset` refuses them as unknown keys; delete the `acceptance:`, `estimation:`, `mcp:` and `project:` blocks from `.ea/config.yaml` by hand and check the file with `eawf config validate`. `eawf --no-input doctor --fix` previews the doctor's repair, whose `config.normalize` action names each retired leaf in each config layer; `eawf doctor --fix` applies every listed action after one confirmation, so read the whole list first, as it also stops stray daemons and makes any other repair the doctor found.
 
 ## Create your first Task
 

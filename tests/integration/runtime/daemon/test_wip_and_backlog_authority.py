@@ -354,6 +354,44 @@ def test_auth_021_a_deferred_draft_is_dropped_directly(tmp_path: Path) -> None:
     assert committed.receipt.event_name == "domain.task.dropped"
 
 
+@pytest.mark.parametrize("status", ["DRAFT", "DEFERRED"])
+def test_a_backlog_task_is_dropped_by_the_verb_and_leaves_the_backlog(
+    tmp_path: Path, status: str
+) -> None:
+    canary = _canary(tmp_path, {"task": {"EAWF-0042": seed_row("task", status)}})
+    before = copy.deepcopy(_rows(canary, "task")["EAWF-0042"])
+
+    answer = _call(
+        canary, tmp_path, "domain.task.drop", TASK_URN, 1, reason_code="no-longer-wanted"
+    )
+
+    assert answer["status"] == "ok", answer["errors"]
+    assert answer["result"]["event_name"] == "domain.task.dropped"
+    assert answer["result"]["entity_ref"] == before["urn"]
+    assert "EAWF-0042" not in _rows(canary, "task")
+
+
+def test_dropping_needs_a_reason(tmp_path: Path) -> None:
+    canary = _canary(tmp_path, {"task": {"EAWF-0042": seed_row("task", "DRAFT")}})
+
+    answer = _call(canary, tmp_path, "domain.task.drop", TASK_URN, 1)
+
+    assert answer["errors"][0]["guard"] == "reason_recorded"
+    assert _rows(canary, "task")["EAWF-0042"]["status"] == "DRAFT"
+
+
+@pytest.mark.parametrize("status", ["PLANNED", "CLAIMED"])
+def test_a_planned_or_claimed_task_is_not_dropped(tmp_path: Path, status: str) -> None:
+    canary = _canary(tmp_path, {"task": {"EAWF-0042": seed_row("task", status)}})
+
+    answer = _call(
+        canary, tmp_path, "domain.task.drop", TASK_URN, 1, reason_code="no-longer-wanted"
+    )
+
+    assert answer["errors"][0]["code"] == "illegal_transition"
+    assert _rows(canary, "task")["EAWF-0042"]["status"] == status
+
+
 def test_auth_021_a_backlog_row_carrying_a_claim_stamp_does_not_validate() -> None:
     row = {**seed_row("task", "DRAFT"), "first_claimed_at": "2026-09-01T00:00:00Z"}
     with pytest.raises(ValidationError, match="was never claimed"):
