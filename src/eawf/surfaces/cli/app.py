@@ -202,7 +202,8 @@ def _ui_cmd(
             "--actor",
             envvar="EAWF_ACTOR",
             help="Principal key the native console's writes are attributed to. "
-            "Without it the console acts as the operator who owns the tree's Tracks.",
+            "Without it the console acts as the operator.principal claimed in the user "
+            "config, else as nobody.",
         ),
     ] = None,
     receipt_ref: Annotated[

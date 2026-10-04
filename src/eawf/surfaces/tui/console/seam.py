@@ -267,8 +267,15 @@ class ProjectionSeam:
         self._held_about: dict[str, str | None] = {}
         # routes read ahead of the operator opening them, by route and the record read for
         self._prefetched: OrderedDict[tuple[str, str | None], RouteProjection] = OrderedDict()
+        # bumped by every patch and every break in the link, so a read ahead that began
+        # before one is known to be older than the feed it would be held beside
+        self._feed_epoch = 0
         self._listeners: list[PatchListener] = []
         self._reading: set[str] = set()
+        # each owed read that failed, by name and what it was read for; it is not owed
+        # again for that until a patch or a reconnect, so a read that always
+        # fails is not retried, nor the frame held for it, on every key
+        self._failed: set[tuple[str, str | None]] = set()
         self._settings: EffectiveSettingsView | None = None
         self._acceptance: dict[str, MilestoneAcceptanceRecord] = {}
         # each live read's answer, beside the address it was read for
@@ -378,7 +385,9 @@ class ProjectionSeam:
         The visible route is owed when the daemon serves a read for it, and the
         pinned routes always are. The settings routes are owed their one view,
         read under the settings route, until it arrives. A route already being read
-        is not owed again, so a quick run of navigations issues one read per route.
+        is not owed again, so a quick run of navigations issues one read per route, and a
+        read that failed is not owed again for the same subject until a patch or a
+        reconnect.
         """
         pinned = sorted(PINNED_ROUTES - {self._route})
         owed = [route for route in pinned if route in ROUTE_COLLECTIONS and route not in self._held]
@@ -403,7 +412,11 @@ class ProjectionSeam:
         claim = self._claim_subject()
         if claim is not None and claim not in self._ladders:
             owed.append(EVIDENCE_LADDER_METHOD)
-        return tuple(route for route in owed if route not in self._reading)
+        return tuple(
+            route
+            for route in owed
+            if route not in self._reading and (route, self._read_now(route)) not in self._failed
+        )
 
     def _acceptance_owed(self) -> bool:
         """Return whether the visible Milestone's acceptance is unread for its subject."""
@@ -414,9 +427,30 @@ class ProjectionSeam:
         """Return whether the visible route's frame still waits on a read it states as fact.
 
         Its own rows, and a Milestone's acceptance, whose absence the frame would draw as
-        "no bundle is sealed" rather than as not yet read.
+        "no bundle is sealed" rather than as not yet read. A read that failed for this
+        subject is not waited on: the frame says what it does not hold instead.
         """
-        return self.route_owed() or self._acceptance_owed()
+        due = (
+            (self._route, self.route_owed()),
+            (MILESTONE_ACCEPTANCE_METHOD, self._acceptance_owed()),
+        )
+        return any(owed and (name, self._read_now(name)) not in self._failed for name, owed in due)
+
+    def _read_now(self, name: str) -> str | None:
+        """Return what owed read *name* is read for now: its record, address or claim.
+
+        A failure is remembered by it, so a caret move that changes nothing the read
+        names does not owe the read again.
+        """
+        if name in ROUTE_COLLECTIONS:
+            return self._about(name)
+        if name == MILESTONE_ACCEPTANCE_METHOD:
+            return self._subject
+        if name in LIVE_READS:
+            return LIVE_READS[name].address(self)
+        if name == EVIDENCE_LADDER_METHOD:
+            return self._claim_subject()
+        return None
 
     def route_owed(self) -> bool:
         """Return whether the visible route's own projection is unread or read for another record.
@@ -523,9 +557,10 @@ class ProjectionSeam:
         which run together, so a slow repository read never delays a frame's own rows.
 
         A read that fails leaves its route unheld, so the frame keeps saying it holds
-        nothing rather than drawing a guess; the next navigation owes it again. The
-        failure is not raised, because one unreachable register must not stop the
-        other routes from loading.
+        nothing rather than drawing a guess; it is owed again after a patch or a
+        reconnect. The failure is not raised, because one unreachable register must not
+        stop the other routes from loading. A read is tried once per subject, so a route
+        whose subject moved while its read was in flight is read again for the new one.
 
         Args:
             on_projected: Called with the route projections each round read, when any.
@@ -535,13 +570,15 @@ class ProjectionSeam:
             the rest in the order they were owed.
         """
         loaded: list[str] = []
-        attempted: set[str] = set()
+        attempted: set[tuple[str, str | None]] = set()
         # a read can make another owed -- a Run's lines once its route's rows arrive -- so
         # the owed set is taken again until it holds nothing this call has not tried
-        while owed := tuple(route for route in self.owed() if route not in attempted):
+        while owed := tuple(
+            route for route in self.owed() if (route, self._read_now(route)) not in attempted
+        ):
             frames = [name for name in owed if name in ROUTE_COLLECTIONS or name == SETTINGS_ROUTE]
             if frames:
-                attempted.update(frames)
+                attempted.update((name, self._read_now(name)) for name in frames)
                 self._reading.update(frames)
                 projected = [name for name in frames if await self._read_one(name)]
                 loaded += projected
@@ -550,7 +587,7 @@ class ProjectionSeam:
                 # what hangs off the rows is owed by what they hold, and by the subject the
                 # listener read off them, so it is taken again once they are held
                 continue
-            attempted.update(owed)
+            attempted.update((name, self._read_now(name)) for name in owed)
             self._reading.update(owed)
             arrived = await asyncio.gather(*map(self._read_one, owed))
             loaded += [name for name, ok in zip(owed, arrived, strict=True) if ok]
@@ -558,6 +595,7 @@ class ProjectionSeam:
 
     async def _read_one(self, route: str) -> bool:
         """Read owed *route* once, holding what arrives; return whether it arrived."""
+        about = self._read_now(route)
         try:
             if route == SETTINGS_ROUTE:
                 await self.load_settings()
@@ -574,10 +612,12 @@ class ProjectionSeam:
             else:
                 await self.load(route)
         except Exception as exc:
-            logger.warning(f"sync read failed route={route} cause={exc!r}")
+            logger.warning(f"sync read failed route={route} about={about} cause={exc!r}")
+            self._failed.add((route, about))
             return False
         finally:
             self._reading.discard(route)
+        self._failed.discard((route, about))
         return True
 
     async def prefetch(self, route: str, subject: str | None) -> None:
@@ -603,9 +643,17 @@ class ProjectionSeam:
         await asyncio.gather(*reads)
 
     async def _read_ahead(self, route: str, about: str | None) -> None:
-        """Read *route* for record *about* into the read-ahead cache, dropping the oldest."""
+        """Read *route* for record *about* into the read-ahead cache, dropping the oldest.
+
+        An answer read across a patch or a break in the link is dropped: the feed moved
+        past it, and a read ahead is not kept current by the feed.
+        """
         params = self._params() if about is None else {**self._params(), "key": about}
+        epoch = self._feed_epoch
         answer = await self._binding.call(read_method(route), params)
+        if self._feed_epoch != epoch:
+            logger.debug(f"prefetch dropped route={route} about={about}: the feed moved")
+            return
         self._prefetched[(route, about)] = RouteProjection.model_validate(answer)
         while len(self._prefetched) > PREFETCH_CAPACITY:
             self._prefetched.popitem(last=False)
@@ -900,6 +948,7 @@ class ProjectionSeam:
             reconnect_method(self._route),
             {**self._params(), "cursor": self.cursor},
         )
+        self._failed.clear()
         negotiation = ReconnectNegotiation.model_validate(answer["negotiation"])
         patches = tuple(KeyedPatch.model_validate(row) for row in answer["patches"])
         self._connection = connection_for_disposition(negotiation.disposition)
@@ -1044,6 +1093,9 @@ class ProjectionSeam:
         held is skipped too, because there are no rows for the patch to replace; its
         first read will already include it. The watchers hear which routes changed.
         """
+        self._feed_epoch += 1
+        # what the patch moved may be what a failed read could not reach, so each is owed again
+        self._failed.clear()
         if any(entry.collection in _ACCEPTANCE_COLLECTIONS for entry in patch.entries):
             # a moved Milestone or sealed question may change what it was accepted at
             self._acceptance.clear()
@@ -1140,6 +1192,7 @@ class ProjectionSeam:
         self._acceptance.clear()
         self._live.clear()
         self._prefetched.clear()
+        self._feed_epoch += 1
 
     def _evict(self) -> None:
         """Drop the least recently shown unpinned routes until the cache fits.

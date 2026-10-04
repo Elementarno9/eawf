@@ -28,7 +28,6 @@ from types import MappingProxyType
 from typing import Final
 
 from eawf.kernel.delivery.bulk import BulkVerb
-from eawf.kernel.projection.attention import build_attention_view
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, ProjectionRow
 from eawf.kernel.projection.registers import build_register_view
 from eawf.kernel.runtime.control import ControlDisposition
@@ -40,7 +39,7 @@ from eawf.kernel.state.epoch2.consequence import (
 from eawf.kernel.state.epoch2.transitions import TERMINAL_STATUSES, LifecycleEntity
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb
-from eawf.surfaces.tui.console.attention import selected_open_row
+from eawf.surfaces.tui.console.attention import listed_items, selected_open_row
 from eawf.surfaces.tui.console.bulk import BulkRequest
 from eawf.surfaces.tui.console.cards import (
     CARD,
@@ -755,15 +754,25 @@ def select_key(ctx: Ctx, k: str) -> bool:
 
 
 def open_questions(ctx: Ctx) -> tuple[str, ...]:
-    """Return the keys of the questions the held Attention register lists as open."""
+    """Return the keys of the open questions the Attention list shows under its bucket."""
     held = ctx.attention
     if held is None:
         return ()
-    register = build_register_view(held)
-    if register.withheld:
-        return ()
     questions = {r.key for r in held.rows if r.collection is Epoch2Collection.OPEN_QUESTION}
-    return tuple(i.key for i in build_attention_view(register).items if i.key in questions)
+    listed = listed_items(build_register_view(held), ctx.s.bucket)
+    return tuple(item.key for item in listed if item.key in questions)
+
+
+def dismiss_targets(ctx: Ctx, target_id: str | None) -> tuple[str, ...]:
+    """Return the questions a dismiss answers: every marked one still listed, else the caret's.
+
+    Args:
+        ctx: The dispatch context whose marks and Attention register are read.
+        target_id: The question under the caret, answered when none is marked.
+    """
+    listed = open_questions(ctx)
+    marked = tuple(key for key in ctx.s.marked if key in listed)
+    return marked or tuple(key for key in (target_id,) if key in listed)
 
 
 def _mark_questions(ctx: Ctx, k: str, row: ProjectionRow | None) -> bool:
@@ -796,6 +805,7 @@ __all__ = [
     "adopt",
     "card_key",
     "confirm",
+    "dismiss_targets",
     "lifecycle_verbs",
     "menu_key",
     "open_questions",

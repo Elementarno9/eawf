@@ -75,9 +75,7 @@ CONTROL_CAPABILITIES: Final[Mapping[ControlKind, CapabilityId | None]] = Mapping
 
 
 #: The controls that stop a Run rather than steer it, admitted whatever the gate finds.
-_STOP_CONTROLS: Final = frozenset(
-    {ControlKind.CANCEL, ControlKind.INTERRUPT, ControlKind.RECONCILE}
-)
+STOP_CONTROLS: Final = frozenset({ControlKind.CANCEL, ControlKind.INTERRUPT, ControlKind.RECONCILE})
 
 
 class ControlGateCode(StrEnum):
@@ -235,7 +233,7 @@ def decide_run_control(
         certifying=certifying,
         now=now,
     )
-    if gate.admitted or control not in _STOP_CONTROLS:
+    if gate.admitted or control not in STOP_CONTROLS:
         return gate
     return gate.model_copy(
         update={
@@ -378,6 +376,7 @@ def _judged(
 
 __all__ = [
     "CONTROL_CAPABILITIES",
+    "STOP_CONTROLS",
     "ControlGate",
     "ControlGateCode",
     "decide_run_control",

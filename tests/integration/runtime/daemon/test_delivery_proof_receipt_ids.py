@@ -12,6 +12,7 @@ without running a gate again.
 
 from __future__ import annotations
 
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -171,8 +172,10 @@ def test_assessment_takes_no_idempotency_key(tmp_path: Path) -> None:
     [
         ["uv", "run", "pytest", "-q", "--basetemp={temp}/eawf-gate-basetemp"],
         ["git", "grep", "-q", "x = 2", "--", "{temp}/module.py"],
+        ["git", "grep", "-q", "x = 2", "-O{temp}/pager", "--", "src/module.py"],
+        ["git", "grep", "-q", "-e", "key={temp}/x", "--", "src/module.py"],
     ],
-    ids=["option-value", "positional"],
+    ids=["option-value", "positional", "short-option", "key-value"],
 )
 def test_a_gate_naming_an_absolute_temp_path_is_refused_before_any_receipt(
     tmp_path: Path, argv: list[str]
@@ -204,4 +207,45 @@ def test_a_gate_with_a_relative_basetemp_files_its_receipt(tmp_path: Path) -> No
     answer = _dispatch(PROVE, tmp_path, urn=TASK_URN, idempotency_key="p", gates=gates)
 
     assert answer["passed"] is True
+    assert len(_filed_ids(path)) == 2
+
+
+def _with_argv(tmp_path: Path, argv: list[str]) -> list[dict[str, Any]]:
+    """Return the landed change's gates, each running *argv*."""
+    return [{**gate, "args": {"argv": argv}} for gate in _gates(tmp_path)]
+
+
+def test_a_system_program_and_url_like_paths_are_portable(tmp_path: Path) -> None:
+    """Boundary: a path rooted outside a home or temp directory names nothing of this machine."""
+    path = _adopted(tmp_path)
+    argv = [
+        *("git", "grep", "-q", "-e", "x = 2", "-e", "/api/v1/", "-e", "pager=/usr/bin/less"),
+        *("--", "src/module.py"),
+    ]
+
+    answer = _dispatch(
+        PROVE, tmp_path, urn=TASK_URN, idempotency_key="p", gates=_with_argv(tmp_path, argv)
+    )
+
+    assert answer["passed"] is True
+    assert len(_filed_ids(path)) == 2
+
+
+def test_a_reused_leg_is_not_refused_for_the_gate_it_already_committed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only a leg that will run is checked: a passing receipt's gate runs nothing again."""
+    path = _adopted(tmp_path)
+    temp = str(Path(tempfile.gettempdir()).resolve())
+    argv = ["git", "grep", "-q", "-e", "x = 2", "-e", f"{temp}/x", "--", "src/module.py"]
+    gates = _with_argv(tmp_path, argv)
+    with monkeypatch.context() as patched:
+        patched.setattr(delivery_proof, "_MACHINE_PATH", re.compile(r"(?!)"))
+        first = _dispatch(PROVE, tmp_path, urn=TASK_URN, idempotency_key="p1", gates=gates)
+    assert first["passed"] is True
+
+    again = _dispatch(PROVE, tmp_path, urn=TASK_URN, idempotency_key="p2", gates=gates)
+
+    assert again["passed"] is True
+    assert {leg["result"] for leg in again["legs"]} == {"reused"}
     assert len(_filed_ids(path)) == 2

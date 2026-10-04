@@ -111,6 +111,7 @@ _HAPPY_CASES: tuple[_HappyCase, ...] = (
             "base": {"head_sha": "a" * 40},
             "exit": {"repair_task": "task-9", "rebase_task": "task-9"},
             "diagnostic": "evidence-1",
+            "expected_revision": 3,
         },
         answers={
             integrate_skill.DELIVERY_ASSEMBLE_METHOD: {

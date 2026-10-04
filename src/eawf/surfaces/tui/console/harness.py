@@ -16,6 +16,7 @@ normalisation map.
 
 from __future__ import annotations
 
+import contextlib
 import fnmatch
 import json
 import logging
@@ -27,6 +28,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 from textual.app import App
 from textual.pilot import Pilot
+from textual.worker import WorkerCancelled
 
 from eawf.surfaces.tui.console.app import TOOLKIT_KEYS, ConsoleApp
 from eawf.surfaces.tui.console.clock import FakeClock
@@ -226,6 +228,22 @@ def capture_cells(app: App[Any]) -> list[int]:
     return [strip.cell_length for strip in app.screen._compositor.render_strips()]
 
 
+async def _drain(app: App[Any]) -> None:
+    """Wait until no worker is running, a worker cancelled by a newer one included.
+
+    A group run exclusively -- the read ahead, the live re-reads -- cancels the worker a
+    newer one supersedes, and waiting on it raises; it was meant to end, so it counts as
+    ended. A worker started while another is awaited is waited for in the next round.
+    """
+    for _ in range(SETTLE_MAX_CYCLES):
+        running = [worker for worker in app.workers if not worker.is_finished]
+        if not running:
+            return
+        for worker in running:
+            with contextlib.suppress(WorkerCancelled):
+                await worker.wait()
+
+
 async def settle(pilot: Pilot[Any]) -> tuple[str, int]:
     """Wait for the screen to settle and return its capture and the cycles it took.
 
@@ -235,12 +253,12 @@ async def settle(pilot: Pilot[Any]) -> tuple[str, int]:
     Milestone's acceptance, say) whose worker starts only after the first one finished.
     """
     await pilot.pause()
-    await pilot.app.workers.wait_for_complete()
+    await _drain(pilot.app)
     previous = capture(pilot.app)
     cycles = 1
     while cycles < SETTLE_MAX_CYCLES:
         await pilot.pause()
-        await pilot.app.workers.wait_for_complete()
+        await _drain(pilot.app)
         current = capture(pilot.app)
         if current == previous:
             return current, cycles

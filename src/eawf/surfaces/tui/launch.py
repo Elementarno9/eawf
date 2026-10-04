@@ -182,6 +182,37 @@ def hand_over(state: EntryState) -> str:
     return "\n".join((f"eawf ui: {state.title}", *(f"  {c}" for c in state.commands if c)))
 
 
+def claimed_principal() -> str | None:
+    """Return the principal this machine's operator claims in the user config, if any.
+
+    Only the user layer is read: a claim of identity is the person's, and a principal
+    named in a repository's committed config would make everyone who clones it act as
+    that one principal.
+
+    Returns:
+        The claimed principal key; ``None`` when no claim is recorded.
+
+    Raises:
+        ValueError: The user layer cannot be parsed, or its claim is not a principal key.
+    """
+    from pydantic import ValidationError as PydValidationError
+
+    from eawf.kernel.config.layered import global_config_path
+    from eawf.kernel.config.loader import load_yaml_layer
+    from eawf.kernel.config.schema import OperatorConfig
+    from eawf.surfaces.cli.errors import ValidationError
+    from eawf.surfaces.tui.console.operations import CLAIM_COMMAND
+
+    try:
+        block = load_yaml_layer(global_config_path()).get("operator") or {}
+        return OperatorConfig.model_validate(block).principal
+    except (ValidationError, PydValidationError) as error:
+        raise ValueError(
+            f"operator.principal in the user config is not a principal key (e.g. OP-0001): "
+            f"{error}; set it again with {CLAIM_COMMAND}"
+        ) from error
+
+
 def resolve_operator(*, actor: str | None, receipt_ref: str | None) -> Operator | None:
     """Return who the console acts as, from the principal and receipt the operator named.
 
@@ -190,30 +221,40 @@ def resolve_operator(*, actor: str | None, receipt_ref: str | None) -> Operator 
     only that the resolver is that same actor and that the cited receipt is an evidence
     row the tree holds. So the console takes both from the operator at launch, as the
     ``domain`` seal command does, and checks their shape here so a typo fails before
-    the console opens rather than on the first answer.
+    the console opens rather than on the first answer. With no principal named, the
+    one this machine's operator claims in the user config (:func:`claimed_principal`)
+    is taken; a tree's Track owners are never assumed, since in a shared repository
+    the person at this console need not be the one who owns them.
 
     Args:
-        actor: The principal key the console's writes are attributed to; ``None`` for
-            a console that acts as nobody, whose writing verbs then refuse with why.
+        actor: The principal key the console's writes are attributed to; ``None``
+            takes the claimed one, and with no claim acts as nobody, whose writing
+            verbs then refuse naming the command that claims one.
         receipt_ref: The qualified evidence URN answers are recorded under; ``None``
             leaves Run controls bound and answers refused for want of a receipt.
 
     Returns:
-        The operator, or ``None`` when no principal was named.
+        The operator, or ``None`` when no principal was named or claimed.
 
     Raises:
-        ValueError: A receipt was named without a principal, or either value is
-            malformed.
+        ValueError: A receipt was named without a principal, either value is
+            malformed, or the user config's claim is unreadable.
     """
     from pydantic import TypeAdapter, ValidationError
 
     from eawf.kernel.state.epoch2.base import PrincipalKey
     from eawf.kernel.state.epoch2.urns import EvidenceUrn
-    from eawf.surfaces.tui.console.operations import Operator
+    from eawf.surfaces.tui.console.operations import CLAIM_COMMAND, Operator
 
     if actor is None:
+        actor = claimed_principal()
+        logger.info(f"resolve_operator claimed={actor}")
+    if actor is None:
         if receipt_ref is not None:
-            raise ValueError("a receipt needs a principal to record the answer under: name --actor")
+            raise ValueError(
+                f"a receipt needs a principal to record the answer under: name --actor "
+                f"or claim one with {CLAIM_COMMAND}"
+            )
         return None
     try:
         TypeAdapter(PrincipalKey).validate_python(actor)
@@ -225,46 +266,6 @@ def resolve_operator(*, actor: str | None, receipt_ref: str | None) -> Operator 
         except ValidationError as error:
             raise ValueError(f"receipt {receipt_ref!r} is not a qualified evidence URN") from error
     return Operator(principal=actor, receipt_ref=receipt_ref)
-
-
-def tree_operator(authority: RootAuthority) -> Operator | None:
-    """Return the operator the tree's own Tracks name as their owner, to act as by default.
-
-    Every Track policy records the principal that owns it, so a tree whose Tracks are all
-    owned by one operator already says who works it; a launch without ``--actor`` acts as
-    that operator rather than as nobody. A tree with no such Track, or with Tracks owned
-    by different operators, names no one to default to.
-
-    Args:
-        authority: The tree's resolved authority, whose selected generation is read.
-
-    Returns:
-        The single owning operator, with no receipt; ``None`` when the tree names none,
-        names several, or its document cannot be read.
-    """
-    from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
-    from eawf.kernel.state.epoch2.values import OwnerPrincipal
-    from eawf.kernel.store.compaction import read_document
-    from eawf.surfaces.tui.console.operations import Operator
-
-    target, generation = authority.target, authority.generation_id
-    if target is None or generation is None:
-        return None
-    try:
-        tracks = read_document(target.generation_path(generation) / GENERATION_DOCUMENT).get(
-            "track", {}
-        )
-        owners = {
-            OwnerPrincipal.model_validate(track["policy"]["ownership_principal"])
-            for track in tracks.values()
-        }
-    except (OSError, ValueError, KeyError) as error:
-        logger.info(f"tree_operator unreadable cause={error!s}")
-        return None
-    operators = {owner.principal_id for owner in owners if owner.principal_kind == "operator"}
-    if len(operators) != 1:
-        return None
-    return Operator(principal=operators.pop())
 
 
 def launch_tui(
@@ -283,9 +284,8 @@ def launch_tui(
         plain: Plain-output flag -- writes the plain frame instead of opening the app.
         verbose: Whether the console's ``--verbose`` key-trace row is shown (SURF-173).
         operator: Who the console's writes are attributed to, from
-            :func:`resolve_operator`; ``None`` acts as the operator the tree's Tracks
-            name as owner (:func:`tree_operator`), and a tree naming none leaves every
-            writing verb refused with that reason.
+            :func:`resolve_operator`; ``None`` acts as nobody, every writing verb
+            refused naming the command that claims one.
 
     Returns:
         Process exit code: ``0`` on a clean quit or a written frame,
@@ -341,7 +341,7 @@ def launch_tui(
             state_path=state_path,
             chrome=with_entry_state(chrome, resolving),
             verbose=verbose,
-            operator=operator if operator is not None else tree_operator(authority),
+            operator=operator,
         )
     finally:
         if saved is not None:
@@ -509,9 +509,9 @@ def _run_console(app: ConsoleApp, seam: ProjectionSeam | None) -> int:
 __all__ = [
     "TERMINAL_ENTRY_EXIT_CODE",
     "WORKSPACE_KEY_ENV",
+    "claimed_principal",
     "hand_over",
     "launch_tui",
     "project_name",
     "resolve_operator",
-    "tree_operator",
 ]

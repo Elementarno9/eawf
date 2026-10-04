@@ -36,6 +36,7 @@ from textual.widget import Widget
 from eawf.kernel.config.schema import ToastVerbosity
 from eawf.kernel.projection.attention import delivered_revisions, deliveries
 from eawf.kernel.projection.compute import RouteProjection
+from eawf.kernel.projection.connection import ConnectionValue
 from eawf.kernel.projection.integration import INTEGRATION_ROUTES, build_integration_view
 from eawf.kernel.projection.liveness import HeldLiveness
 from eawf.kernel.projection.operations import OPERATIONS_ROUTES, build_operations_view
@@ -137,6 +138,10 @@ PREFETCH_WORKERS = "prefetch"
 # How long the caret rests on a row before the route its Enter opens is read ahead; the
 # sweep checks it, so the read starts on the first tick past it.
 PREFETCH_REST_SECONDS = 0.1
+# The link values under which no daemon answers a read, so nothing is read ahead.
+UNANSWERED: frozenset[ConnectionValue] = frozenset(
+    {ConnectionValue.DISCONNECTED, ConnectionValue.DEGRADED, ConnectionValue.OFFLINE_SNAPSHOT}
+)
 # How long a route's own read may be in flight before the held frame gives way to a
 # frame naming what is loading; a read answered sooner paints with no frame between.
 LOADING_GRACE_SECONDS = 0.3
@@ -1046,6 +1051,7 @@ class ConsoleApp(App[None]):
 
         The held frame gives way to one naming what is loading; a caret that rested reads
         the route its Enter opens in the background, the latest rest replacing the last.
+        A console no daemon answers reads nothing ahead: the read could only fail.
         """
         grace = now - self._awaiting_since >= LOADING_GRACE_SECONDS
         if self._awaiting is not None and not self._loading and grace:
@@ -1053,6 +1059,10 @@ class ConsoleApp(App[None]):
             self.render_frame()
         rest = self._rest
         if rest is None or self._rest_read or now - self._rest_since < PREFETCH_REST_SECONDS:
+            return
+        seam = self.seam
+        assert seam is not None, "a caret rests only on a console with a seam"
+        if seam.connection in UNANSWERED:
             return
         self._rest_read = True
         self.run_worker(self._prefetch(*rest), group=PREFETCH_WORKERS, exclusive=True)

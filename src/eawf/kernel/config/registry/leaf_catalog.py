@@ -243,6 +243,21 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default="deferred",
         writable_layers=_WRITABLE_GWR,
     ),
+    # --- operator ----------------------------------------------------------
+    LeafKey(
+        key="operator.principal",
+        domain="operator",
+        type="str",
+        default=None,
+        # a claim of identity is the person's, never the repository's: a committed
+        # layer would make everyone who clones it act as one principal
+        writable_layers=("global",),
+        description=(
+            "Principal key this machine's operator claims (e.g. OP-0001); a console "
+            "launched without --actor acts as it, and as nobody without a claim."
+        ),
+        consumer="eawf.surfaces.tui.launch.claimed_principal",
+    ),
     # --- ui ----------------------------------------------------------------
     LeafKey(
         key="ui.theme",

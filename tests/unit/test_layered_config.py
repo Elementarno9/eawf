@@ -410,6 +410,7 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
     "flow.budget.multiplier": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
+    "operator.principal": "eawf.surfaces.tui.launch.claimed_principal",
     "planning.max_parallel_waves": "eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves",
     "preferences.auto_choose": (
         "eawf.runtime.daemon.methods.question_decision.resolved_preferences"

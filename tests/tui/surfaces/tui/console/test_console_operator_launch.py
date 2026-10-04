@@ -23,6 +23,7 @@ from typer.testing import CliRunner
 
 import eawf.surfaces.tui.chassis.state_binding as state_binding
 import eawf.surfaces.tui.launch as launch
+from eawf.kernel.config import layered
 from eawf.kernel.migration.epoch2.canary import (
     CANARY_DECLARATION_FILENAME,
     GENERATIONS_DIRNAME,
@@ -42,6 +43,7 @@ from eawf.runtime.daemon.methods.spend import RUN_USAGE_READ_METHOD
 from eawf.surfaces.cli.app import app as cli
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.operations import (
+    CLAIM_COMMAND,
     CONTROL_METHOD,
     NOTICE_LIST_METHOD,
     SEAL_METHOD,
@@ -153,6 +155,12 @@ class _Daemon:
         return {"disposition": "requesting"}
 
 
+@pytest.fixture(autouse=True)
+def no_claim(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Read the user layer from this test, so no principal the operator claimed leaks in."""
+    monkeypatch.setattr(layered, "global_config_path", lambda: tmp_path / "user" / "config.yaml")
+
+
 @pytest.fixture
 def launched(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[tuple[ConsoleApp, Any]]:
     """Put a TTY over an epoch-2 tree and catch the app and seam the launcher runs."""
@@ -250,12 +258,14 @@ def test_launch_tui_without_operator_refuses_with_the_reason(
     # nothing was requested, so the control is idle rather than refused by the daemon
     refusal = next(note for note in notes if note.startswith("idle"))
     assert "no operator principal" in refusal
+    assert CLAIM_COMMAND in refusal
     assert "--actor" in refusal
 
 
-def test_launch_tui_without_actor_acts_as_the_operator_owning_the_tracks(
+def test_launch_tui_without_operator_acts_as_nobody_though_one_operator_owns_the_tracks(
     launched: list[tuple[ConsoleApp, Any]], tmp_path: Path
 ) -> None:
+    """In a shared repository the person at this console need not be the Tracks' owner."""
     authority = resolve_authority(tmp_path / ".ea")
     assert authority.target is not None and authority.generation_id is not None
     folder = authority.target.generation_path(authority.generation_id)
@@ -267,7 +277,7 @@ def test_launch_tui_without_actor_acts_as_the_operator_owning_the_tracks(
 
     seam = _launch(launched, None)
 
-    assert seam.operator == Operator(principal=ACTOR)
+    assert seam.operator is None
 
 
 def test_launch_tui_named_actor_overrides_the_tree_owner(

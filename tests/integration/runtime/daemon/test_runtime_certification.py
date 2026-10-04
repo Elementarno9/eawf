@@ -44,6 +44,7 @@ from eawf.runtime.daemon.runtime_certifier import (
 from eawf.runtime.runtimes.probes import sdk_baseline
 from eawf.workflow.evidence.machine_certification import (
     CERTIFICATION_LIFETIME,
+    machine_certification_path,
     read_machine_certifications,
 )
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import method_context
@@ -543,26 +544,82 @@ def test_a_run_starts_when_the_auto_certification_trigger_raises(
     assert any(r.message.startswith("auto_certification_skipped") for r in caplog.records)
 
 
-# ---------- the auto_certify switch is composed once per config change ----------
+# ---------- the auto_certify switch is read from every layer, every time ----------
 
 
-def test_the_auto_certify_switch_is_read_again_only_when_the_config_moves(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def _switch_off(path: Path) -> None:
+    """Write ``runtime.auto_certify: false`` into the layer file at *path*."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("runtime:\n  auto_certify: false\n", encoding="utf-8")
+
+
+@pytest.mark.parametrize("layer", ["local", "global"])
+def test_turning_the_switch_off_in_any_layer_holds_without_a_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, auto: None, layer: str
 ) -> None:
-    tree = tmp_path / "repo" / ".ea"
-    tree.mkdir(parents=True)
+    from eawf.kernel.config import layered
+
+    global_file = tmp_path / "home" / "config.yaml"
+    monkeypatch.setattr(layered, "global_config_path", lambda: global_file)
+    canary = _controlled(tmp_path, INSTALLED)
+    tree = canary.root / ".ea"
+    queued: list[tuple[str, str]] = []
+
+    def ensure(runtime_id: str, version: str, *, now: datetime) -> None:
+        queued.append((runtime_id, version))
+
+    monkeypatch.setattr(certifier_for(tree), "ensure", ensure)
+    now = datetime.now(UTC)
+
+    runtime_certifier.start_auto_certification(tree, _reported(), now=now)
+    assert queued == [("claude-code", CLAUDE_VERSION)]
+    _switch_off(layered.local_config_path(canary.root) if layer == "local" else global_file)
+
+    assert runtime_certifier.start_auto_certification(tree, _reported(), now=now) is None
+    assert len(queued) == 1
+
+
+def test_a_certified_version_composes_no_config(
+    tmp_path: Path, stubbed: Path, monkeypatch: pytest.MonkeyPatch, auto: None
+) -> None:
+    """Boundary: a Run on a version already certified never pays for the config read."""
+    canary = _controlled(tmp_path, INSTALLED)
+    tree = canary.root / ".ea"
+    certify_installed(tree / "state.json", "claude-code")
     calls: list[Path] = []
+    monkeypatch.setattr(runtime_certifier, "resolve_auto_certify", calls.append)
+    now = datetime.now(UTC)
 
-    def resolve(repo_root: Path) -> bool:
-        calls.append(repo_root)
-        return len(calls) == 1
+    assert runtime_certifier.start_auto_certification(tree, _reported(), now=now) is None
+    assert calls == []
 
-    monkeypatch.setattr(runtime_certifier, "resolve_auto_certify", resolve)
-    certifier = certifier_for(tree)
 
-    assert (certifier.auto_certify(), certifier.auto_certify()) == (True, True)
-    assert len(calls) == 1
-    (tree / "config.yaml").write_text("runtime:\n  auto_certify: false\n", encoding="utf-8")
-    assert certifier.auto_certify() is False
-    assert certifier.auto_certify() is False
-    assert len(calls) == 2
+# ---------- a torn certification row never keeps a Run running ----------
+
+
+def _tear(canary: CanaryProvision) -> None:
+    """Append a line to this machine's probe rows that is not an envelope."""
+    path = machine_certification_path(_state_path(canary))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('{"torn": \n', encoding="utf-8")
+
+
+@pytest.mark.parametrize("control", ["cancel", "interrupt"])
+def test_a_stop_is_admitted_over_a_torn_certification_row(tmp_path: Path, control: str) -> None:
+    canary = _controlled(tmp_path, INSTALLED)
+    _tear(canary)
+
+    answer = _ask(canary, tmp_path, control)
+
+    (warning,) = answer["warnings"]
+    assert warning.startswith(f"{control} was admitted uncertified, as a stop always is: ")
+    assert "certification records could not be read" in warning
+
+
+def test_a_steer_over_a_torn_certification_row_is_still_refused(tmp_path: Path) -> None:
+    """The error path: only a stop is let through an unreadable record."""
+    canary = _controlled(tmp_path, INSTALLED)
+    _tear(canary)
+
+    with pytest.raises(ValueError, match="validation error"):
+        _ask(canary, tmp_path, "steer")

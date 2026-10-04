@@ -315,32 +315,7 @@ class RuntimeCertifier:
         self._serial = threading.Lock()
         self._probing: set[tuple[str, str]] = set()
         self._attempted: dict[tuple[str, str], datetime] = {}
-        self._auto_certify: tuple[int | None, bool] | None = None
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="eawf-certify")
-
-    def auto_certify(self) -> bool:
-        """Return the tree's ``runtime.auto_certify``, composed again only when its config moves.
-
-        Every Run start asks, and composing the layered config spawns git, so
-        the answer is kept until the repository layer's file changes.
-
-        Returns:
-            Whether the daemon may probe a new version in the background.
-
-        Raises:
-            pydantic.ValidationError: A layer states the leaf as something
-                other than a boolean.
-        """
-        config = self.tree_root / "config.yaml"
-        stamp = config.stat().st_mtime_ns if config.is_file() else None
-        with self._lock:
-            cached = self._auto_certify
-        if cached is not None and cached[0] == stamp:
-            return cached[1]
-        enabled = resolve_auto_certify(self.tree_root.parent)
-        with self._lock:
-            self._auto_certify = (stamp, enabled)
-        return enabled
 
     def certifying(self, runtime_id: str, version: str) -> bool:
         """Report whether a background probe of *runtime_id* at *version* is pending.
@@ -470,9 +445,6 @@ def start_auto_certification(
     version = runtime.harness_version
     if runtime.harness not in RUNTIME_IDS or version is None:
         return None
-    certifier = certifier_for(tree_root)
-    if not certifier.auto_certify():
-        return None
     gate = gate_run_control(tree_root, runtime, ControlKind.CANCEL, now=now)
     if gate.code is ControlGateCode.QUARANTINED:
         probed = [
@@ -487,7 +459,11 @@ def start_auto_certification(
             return None
     elif gate.code not in _PROBED_ON:
         return None
-    return certifier.ensure(runtime.harness, version, now=now)
+    # composed per call, every layer read afresh, so a switch turned off anywhere holds
+    # at once; only a Run on a version a probe would certify pays for the read
+    if not resolve_auto_certify(tree_root.parent):
+        return None
+    return certifier_for(tree_root).ensure(runtime.harness, version, now=now)
 
 
 __all__ = [

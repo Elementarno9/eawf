@@ -183,10 +183,14 @@ _UNBOUND_REASONS: Final[Mapping[str, str]] = MappingProxyType(
     }
 )
 
+#: The command that claims the principal a console launched without ``--actor`` acts as.
+CLAIM_COMMAND: Final = "eawf config set operator.principal <key> --scope global"
 #: Why every bound verb is refused on a console linked to a daemon but acting as nobody. The
 #: menu shows it before a verb is chosen, so a write that could never be attributed is not
-#: offered as though it could.
-NO_PRINCIPAL_REASON: Final = "no operator principal to act as · relaunch with --actor"
+#: offered as though it could; it names the command that claims an identity.
+NO_PRINCIPAL_REASON: Final = (
+    f"no operator principal to act as · claim one with {CLAIM_COMMAND} or relaunch with --actor"
+)
 
 #: How many random bytes an operation id carries.
 _ID_BYTES: Final = 8
@@ -1209,6 +1213,7 @@ __all__ = [
     "ANSWER_OPTIONS",
     "CAMPAIGN_CLOSE_METHOD",
     "CAMPAIGN_ROUTE",
+    "CLAIM_COMMAND",
     "CONTROL_METHOD",
     "DISMISS_REPLY",
     "DISMISS_VERB",

@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, KeyedPatch, PatchEntry
-from eawf.kernel.projection.connection import read_method
+from eawf.kernel.projection.connection import ConnectionValue, read_method
 from eawf.kernel.projection.liveness import HeldLiveness
 from eawf.kernel.projection.registers import ATTENTION_ROUTE
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -26,6 +26,7 @@ from eawf.surfaces.tui.console.app import (
     ConsoleApp,
 )
 from eawf.surfaces.tui.console.clock import FakeClock
+from eawf.surfaces.tui.console.harness import settle
 from eawf.surfaces.tui.console.renderers.milestone import NO_BUNDLE
 from eawf.surfaces.tui.console.seam import PREFETCH_CAPACITY, ProjectionSeam
 from eawf.surfaces.tui.console.session import SIZES, SessionSetup
@@ -39,6 +40,8 @@ from tests.tui.surfaces.tui.console.test_enter_opened_cards import _approval, _b
 
 #: The Milestone leaf scope home's caret lands on, and the route its Enter opens.
 LEAF = "MLS-0100"
+#: Another Milestone the operator opens while the first one's read is in flight.
+OTHER = "MLS-0101"
 TARGET = "milestone"
 NOT_HELD = "NOT HELD"
 AT = datetime(2026, 9, 18, 12, 0, tzinfo=UTC)
@@ -53,6 +56,7 @@ class _Daemon:
 
     Attributes:
         reads: The route of every route read answered, in order.
+        asked: Every route read asked for, answered or not, with the record it named.
         accepted: Whether the acceptance read has answered.
         refused: How many other reads have been refused.
     """
@@ -72,12 +76,14 @@ class _Daemon:
         self.slow = slow
         self.sealed = sealed
         self.reads: list[str] = []
+        self.asked: list[tuple[str, str | None]] = []
         self.accepted = False
         self.refused = 0
 
     async def __call__(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         route = _ROUTES.get(method)
         if route is not None:
+            self.asked.append((route, params.get("key")))
             if route in self.slow:
                 await asyncio.sleep(self.route_delay)
             if route in self.failing:
@@ -346,10 +352,9 @@ def test_a_held_or_unserved_route_is_not_read_ahead() -> None:
     assert not seam._prefetched
 
 
-def test_a_patch_to_a_route_read_ahead_drops_it() -> None:
-    seam = _seam(_Daemon())
-    asyncio.run(seam.prefetch(TARGET, LEAF))
-    patch = KeyedPatch(
+def _patch() -> KeyedPatch:
+    """Return a patch moving the Milestone the caret rests on."""
+    return KeyedPatch(
         schema_version="1.0",
         projection_kind=bodies._projection(TARGET).header.projection_kind,
         routes=(TARGET,),
@@ -365,8 +370,33 @@ def test_a_patch_to_a_route_read_ahead_drops_it() -> None:
             ),
         ),
     )
-    asyncio.run(seam.apply_patch(patch))
+
+
+def test_a_patch_to_a_route_read_ahead_drops_it() -> None:
+    seam = _seam(_Daemon())
+    asyncio.run(seam.prefetch(TARGET, LEAF))
+    asyncio.run(seam.apply_patch(_patch()))
     assert not seam._prefetched
+
+
+def test_a_read_ahead_answered_after_a_patch_is_not_kept() -> None:
+    """The read began before the patch, so its answer predates what the feed now states."""
+    seam = _seam(_Daemon(route_delay=0.05))
+
+    async def drive() -> None:
+        ahead = asyncio.ensure_future(seam.prefetch(TARGET, LEAF))
+        await asyncio.sleep(0.01)
+        await seam.apply_patch(_patch())
+        await ahead
+
+    asyncio.run(drive())
+    assert not seam._prefetched
+
+
+def test_a_read_ahead_with_no_patch_meanwhile_is_kept() -> None:
+    seam = _seam(_Daemon(route_delay=0.05))
+    asyncio.run(seam.prefetch(TARGET, LEAF))
+    assert list(seam._prefetched) == [(TARGET, LEAF)]
 
 
 def test_a_failed_read_ahead_is_raised_and_caches_nothing() -> None:
@@ -382,3 +412,164 @@ def test_a_failed_read_ahead_is_raised_and_caches_nothing() -> None:
 def test_a_stall_read_again_with_the_same_stalls_is_the_same_answer() -> None:
     first = HeldLiveness(stalls=(), read_at=AT)
     assert first == HeldLiveness(stalls=(), read_at=AT + timedelta(seconds=1))
+
+
+# ---------- a subject moved mid-read, a read that always fails, no daemon ----------
+
+
+def test_a_subject_moved_while_its_read_is_in_flight_is_read_again_for_the_new_one() -> None:
+    daemon = _Daemon(route_delay=0.05)
+    seam = _seam(daemon)
+    seam.retarget(TARGET)
+    seam.about(LEAF)
+
+    async def drive() -> None:
+        reading = asyncio.ensure_future(seam.sync())
+        await asyncio.sleep(0.01)
+        assert seam.is_reading(TARGET)
+        seam.about(OTHER)
+        await reading
+
+    asyncio.run(drive())
+    assert [asked for asked in daemon.asked if asked[0] == TARGET] == [
+        (TARGET, LEAF),
+        (TARGET, OTHER),
+    ]
+    assert not seam.frame_owed()
+    assert seam._held_about[TARGET] == OTHER
+
+
+def test_the_console_paints_the_record_opened_while_another_was_loading() -> None:
+    daemon = _Daemon(route_delay=0.05)
+
+    async def drive() -> tuple[str | None, bool, list[tuple[str, str | None]]]:
+        app = _app(daemon)
+        async with app.run_test(size=SIZES[1]) as pilot:
+            await _settle(app, pilot)
+            app.reset(SessionSetup(route=TARGET, subjId=LEAF))
+            await asyncio.sleep(0.01)
+            app.reset(SessionSetup(route=TARGET, subjId=OTHER))
+            await _settle(app, pilot)
+            seam = app.seam
+            assert seam is not None
+            return app._awaiting, seam.frame_owed(), list(daemon.asked)
+
+    awaiting, owed, asked = asyncio.run(drive())
+    assert awaiting is None
+    assert not owed
+    assert asked[-1] == (TARGET, OTHER)
+
+
+def test_a_route_whose_read_always_fails_is_not_held_or_read_again_on_every_key() -> None:
+    """The error path: once refused, the frame says so and every key acts at once."""
+    daemon = _Daemon(failing=frozenset({TARGET}))
+
+    async def drive() -> tuple[int, int, list[str], str | None, list[str], str]:
+        app = _app(daemon)
+        async with app.run_test(size=SIZES[1]) as pilot:
+            await _settle(app, pilot)
+            app.press_key("Enter")
+            await _settle(app, pilot)
+            first = len([asked for asked in daemon.asked if asked[0] == TARGET])
+            refused = list(app.frame_rows)
+            for key in ("Down", "Up"):
+                app.press_key(key)
+                await _settle(app, pilot)
+            again = len([asked for asked in daemon.asked if asked[0] == TARGET])
+            held = list(app.frame_rows)
+            # Enter is acted on rather than swallowed as a frame still loading
+            app.press_key("Enter")
+            await _settle(app, pilot)
+            head = app.session.log[0]
+            return first, again, refused, app._awaiting, held, f"{head.key} {head.note}"
+
+    first, again, refused, awaiting, held, acted = asyncio.run(drive())
+    assert first == 1
+    assert again == first, "a key read the refused route again"
+    assert awaiting is None
+    assert NOT_HELD in _text(refused)
+    assert NOT_HELD in _text(held)
+    assert acted.startswith("Enter ") and "is loading" not in acted
+
+
+def test_a_patch_owes_a_refused_read_again() -> None:
+    seam = _seam(_Daemon(failing=frozenset({TARGET})))
+    seam.retarget(TARGET)
+    seam.about(LEAF)
+    asyncio.run(seam.sync())
+    assert TARGET not in seam.owed()
+    assert not seam.frame_owed()
+
+    asyncio.run(seam.apply_patch(_patch()))
+
+    assert TARGET in seam.owed()
+    assert seam.frame_owed()
+
+
+def test_a_refused_read_is_owed_for_another_record() -> None:
+    """Boundary: the failure is remembered for the record it named, not the route."""
+    seam = _seam(_Daemon(failing=frozenset({TARGET})))
+    seam.retarget(TARGET)
+    seam.about(LEAF)
+    asyncio.run(seam.sync())
+    seam.about(OTHER)
+    assert TARGET in seam.owed()
+
+
+@pytest.mark.parametrize(
+    "value",
+    [ConnectionValue.DISCONNECTED, ConnectionValue.DEGRADED, ConnectionValue.OFFLINE_SNAPSHOT],
+)
+def test_a_console_no_daemon_answers_reads_nothing_ahead(value: ConnectionValue) -> None:
+    daemon = _Daemon()
+
+    async def drive() -> list[str]:
+        app = _app(daemon)
+        async with app.run_test(size=SIZES[1]) as pilot:
+            await _settle(app, pilot)
+            seam = app.seam
+            assert seam is not None
+            seam._connection = value
+            _lapse(app, PREFETCH_REST_SECONDS)
+            await _settle(app, pilot)
+            return list(daemon.reads)
+
+    assert TARGET not in asyncio.run(drive())
+
+
+# ---------- settling past a worker its group superseded ----------
+
+
+def test_settle_counts_a_worker_its_group_cancelled_as_ended() -> None:
+    """The error path: a superseded worker's wait raises, and settling must not."""
+
+    async def drive() -> tuple[bool, bool]:
+        app = _app(_Daemon())
+        async with app.run_test(size=SIZES[1]) as pilot:
+            await _settle(app, pilot)
+            first = app.run_worker(asyncio.sleep(5), group="ahead", exclusive=True)
+
+            def supersede() -> None:
+                app.run_worker(asyncio.sleep(0.01), group="ahead", exclusive=True)
+
+            # the newer worker starts while settling already waits on the first
+            app.set_timer(0.05, supersede)
+            await settle(pilot)
+            return first.is_cancelled, all(worker.is_finished for worker in app.workers)
+
+    cancelled, ended = asyncio.run(drive())
+    assert cancelled
+    assert ended
+
+
+def test_settle_with_no_worker_running_returns_at_once() -> None:
+    """Boundary: nothing to drain settles in the fewest cycles."""
+
+    async def drive() -> int:
+        app = _app(_Daemon())
+        async with app.run_test(size=SIZES[1]) as pilot:
+            await _settle(app, pilot)
+            _frame, cycles = await settle(pilot)
+            return cycles
+
+    assert asyncio.run(drive()) <= 2

@@ -21,7 +21,6 @@ from datetime import UTC, datetime
 from typing import Final
 
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.permission import expire_lapsed
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +43,17 @@ def sweep_once(ctx: MethodContext, *, now: datetime) -> tuple[str, ...]:
     Returns:
         The keys of every permission this sweep expired.
     """
+    roots = tuple(ctx.native_roots.items())
+    if not roots:
+        return ()
+    # imported on the first tree to sweep: the permission verbs pull in the Run and
+    # dispatch stack, which would otherwise delay a cold daemon's first answer
+    from eawf.runtime.daemon.methods import permission
+
     expired: list[str] = []
-    for root_id, context in tuple(ctx.native_roots.items()):
+    for root_id, context in roots:
         try:
-            expired.extend(expire_lapsed(context, now=now))
+            expired.extend(permission.expire_lapsed(context, now=now))
         except Exception as exc:
             logger.warning(f"permission expiry sweep skipped root={root_id} error={exc!r}")
     return tuple(expired)

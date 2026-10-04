@@ -504,7 +504,7 @@ jobs:
           }
           New-Item -ItemType Directory -Force -Path $initDir | Out-Null
           git -C $initDir init -q
-          uv run eawf --no-input init --project-code WIN --project-title "Windows smoke" --target $initDir --no-acceptance-tests --no-acceptance-lint --no-acceptance-typecheck
+          uv run eawf --no-input init --project-code WIN --project-title "Windows smoke" --target $initDir
           if (-not (Test-Path (Join-Path $initDir ".ea/state.json"))) {
             throw "eawf init did not create .ea/state.json"
           }
@@ -517,7 +517,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path (Join-Path $daemonlessDir ".ea") | Out-Null
           $env:EA_STATE = Join-Path $daemonlessDir ".ea/state.json"
           $env:EAWF_DAEMONLESS = "1"
-          uv run eawf --no-input init --project-code WSMK --project-title "Windows daemonless smoke" --target $daemonlessDir --no-acceptance-tests --no-acceptance-lint --no-acceptance-typecheck
+          uv run eawf --no-input init --project-code WSMK --project-title "Windows daemonless smoke" --target $daemonlessDir
           if (-not (Test-Path $env:EA_STATE)) {
             throw "daemonless eawf init did not create state"
           }

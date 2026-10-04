@@ -285,7 +285,7 @@ eawf task complete eawf://DEMO/DEMO/DEMO/task/DEMO-0001 --expected-task-revision
 eawf ui
 ```
 
-In a terminal, `eawf ui` opens the Eä console on the registered workspace; off a terminal it prints the console's plain frame and exits. Pass `--actor OPERATOR` to act from the console as well as read it. The [TUI tour](tui-tour.md) walks the console itself.
+In a terminal, `eawf ui` opens the Eä console on the registered workspace; off a terminal it prints the console's plain frame and exits. To act from the console as well as read it, claim who you are once with `eawf config set operator.principal OPERATOR --scope global`, which only your user config holds, or pass `--actor OPERATOR` for one launch. The [TUI tour](tui-tour.md) walks the console itself.
 
 ## What comes after
 

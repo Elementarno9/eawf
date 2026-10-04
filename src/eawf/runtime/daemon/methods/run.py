@@ -135,7 +135,7 @@ from eawf.runtime.daemon.run_events import (
 )
 from eawf.runtime.daemon.runtime_certifier import gate_run_control
 from eawf.runtime.hooks.event import HOST_HARNESSES
-from eawf.workflow.evidence.run_certification import ControlGate, ControlGateCode
+from eawf.workflow.evidence.run_certification import STOP_CONTROLS, ControlGate, ControlGateCode
 
 logger = logging.getLogger(__name__)
 
@@ -584,12 +584,31 @@ def _require_certified(
 ) -> ControlGate:
     """Decide whether the Run's runtime is certified for *control*.
 
+    A stop is admitted even when the certification records cannot be read, with
+    the read error named in its warning: a torn row must never keep a Run running.
+
     Raises:
         DaemonValidationError: The runtime holds no current certification for
             the control; the refusal code and sentence name the runtime and
             the certification that is missing, expired or short of it.
+        ValueError: The certification records cannot be read, for a control
+            that is not a stop.
     """
-    gate = gate_run_control(context.identity.tree_root, run.runtime_tuple, control, now=now)
+    try:
+        gate = gate_run_control(context.identity.tree_root, run.runtime_tuple, control, now=now)
+    except ValueError as error:
+        # a machine row that does not validate raises pydantic's ValidationError, a ValueError
+        if control not in STOP_CONTROLS:
+            raise
+        logger.warning(f"_require_certified run={run.key!r} unreadable cause={error!r}")
+        gate = ControlGate(
+            admitted=True,
+            code=ControlGateCode.NOT_VERIFIED,
+            reason=(
+                f"{control.value} was admitted uncertified, as a stop always is: the "
+                f"certification records could not be read ({error})"
+            ),
+        )
     logger.info(
         f"_require_certified run={run.key!r} control={control.value} code={gate.code.value} "
         f"admitted={gate.admitted}"

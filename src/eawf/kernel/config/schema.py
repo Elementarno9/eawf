@@ -8,6 +8,7 @@ from typing import Final, Literal, get_args
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
 from eawf.kernel.state.enums import AgentSessionRole
+from eawf.kernel.state.epoch2.base import PrincipalKey
 
 CommitSubjectStyle = Literal["bracket", "trailer"]
 
@@ -94,6 +95,18 @@ class PreferencesConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     auto_choose: AutoChoose = AutoChoose.OFF
+
+
+class OperatorConfig(BaseModel):
+    """Strict typed model for the ``operator`` config section, read from the user layer.
+
+    It names the principal this machine's operator claims to be, which a console
+    launched without ``--actor`` acts as; no claim acts as nobody.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    principal: PrincipalKey | None = None
 
 
 class VerifyConfig(BaseModel):
@@ -262,6 +275,7 @@ __all__ = [
     "EstimationConfig",
     "EuBasis",
     "IntegrationCommitUnit",
+    "OperatorConfig",
     "PreferencesConfig",
     "ReleaseCadence",
     "RuntimeAdapterId",

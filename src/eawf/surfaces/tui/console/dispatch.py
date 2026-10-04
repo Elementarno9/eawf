@@ -34,7 +34,7 @@ from eawf.surfaces.tui.console.header import CrumbRun
 from eawf.surfaces.tui.console.in_place import IN_PLACE
 from eawf.surfaces.tui.console.keybar import KEY
 from eawf.surfaces.tui.console.keymap import DISMISS, ENTRY_ALLOW, ENTRY_ROUTE, OVERLAY_KEYS, can
-from eawf.surfaces.tui.console.mutation import adopt, card_key, menu_key, select
+from eawf.surfaces.tui.console.mutation import adopt, card_key, dismiss_targets, menu_key, select
 from eawf.surfaces.tui.console.navigation import (
     NAV_KEY,
     Ctx,
@@ -53,6 +53,7 @@ from eawf.surfaces.tui.console.navigation import (
 )
 from eawf.surfaces.tui.console.notices import NOTICE_VERBS, notice_verb
 from eawf.surfaces.tui.console.operations import (
+    DISMISS_VERB,
     QUESTION_OPTIONS,
     AnswerRequest,
     QuestionAnswer,
@@ -573,6 +574,12 @@ def _menu_key(ctx: Ctx, k: str) -> bool:
             "effects": verb.effects,
             "not": verb.non_effects,
         }
+        if s.route == att.ATTENTION_ROUTE and verb.verb == DISMISS_VERB:
+            # the card names how many writes Enter sends, since the marks may be off screen
+            n = len(dismiss_targets(ctx, target))
+            s.c_target["effects"] = (
+                f"{dv.plural(n, 'question')} answered as no longer needing one, one write each"
+            )
     open_overlay(s, "consequence", subject=target)
     ctx.log(k, f"{verb.verb} → consequence preview")
     return True

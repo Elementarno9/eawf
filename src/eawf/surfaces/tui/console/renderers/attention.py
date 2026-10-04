@@ -39,6 +39,7 @@ from eawf.surfaces.tui.console.attention import (
     audience_refusal,
     bucket_count,
     bucket_label,
+    listed_items,
     open_count,
     top_bucket,
     verbs_for,
@@ -377,14 +378,6 @@ def _selected_lines(
     return lines
 
 
-def _in_bucket(item: AttentionItem, bucket: str | None) -> bool:
-    """Return whether ``item`` is listed under the chosen bucket; a need counts in its parent."""
-    if bucket is None:
-        return True
-    need = f"{item.bucket.value}.{item.need.value}" if item.need is not None else None
-    return bucket in (item.bucket.value, need)
-
-
 def _empty_lines(register: RegisterView, bucket: str | None) -> list[str]:
     """Return the body of a list with nothing open in it, and the next move.
 
@@ -421,17 +414,8 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     """
     s, w, principal = view.session, view.w, view.principal
     rd = reads(s)
-    items = build_attention_view(register).items if not register.withheld else ()
     by_key = {row.key: row for row in register.rows}
-    # a running Run needs nobody, so it is counted on the rail and listed only once its
-    # bucket is chosen: Activity is the list of work, this one of what needs someone
-    listed = [
-        item
-        for item in items
-        if _in_bucket(item, s.bucket)
-        and item.key in by_key
-        and (item.bucket is not AttentionBucket.ACTIVE or s.bucket == item.bucket.value)
-    ]
+    listed = listed_items(register, s.bucket)
     # a budget notice lands in the over-budget bucket, so a filter on another hides it
     notices = list(view.notices) if s.bucket in (None, AttentionBucket.OVER_BUDGET.value) else []
     # a pause is work held waiting, listed beside what it waits on and counted by neither

@@ -441,6 +441,58 @@ def test_dismissing_with_nothing_marked_or_selected_sends_nothing() -> None:
     assert link.sent == []
 
 
+def test_a_bucket_that_hides_the_questions_marks_and_dismisses_none_of_them() -> None:
+    """The error path: a question the chosen bucket hides is never marked or answered."""
+    projection = _attention_projection(questions=2, stall=True)
+    session, link = _session("attention"), Link()
+
+    _press(session, projection, link, ".", "*")
+    assert session.marked == ["QST-0001", "QST-0002"]
+    session.bucket = "stalled"
+    _press(session, projection, link, ".", "*")
+    assert session.marked == ["QST-0001", "QST-0002"], "a hidden question was selected"
+    _press(session, projection, link, ".", "c", "Enter")
+
+    assert link.sent == []
+
+
+def test_select_all_under_a_bucket_marks_only_what_it_shows() -> None:
+    projection = _attention_projection(questions=2, stall=True)
+    session, link = _session("attention", bucket="stalled"), Link()
+
+    _press(session, projection, link, ".", "*")
+
+    assert session.marked == []
+
+
+@pytest.mark.parametrize(
+    ("questions", "marked", "words"), [(1, 1, "1 question "), (3, 3, "3 questions ")]
+)
+def test_the_dismiss_card_names_how_many_questions_it_answers(
+    questions: int, marked: int, words: str
+) -> None:
+    """Boundary: one question reads singular, several plural, so Enter is never a surprise."""
+    projection = _attention_projection(questions=questions)
+    session, link = _session("attention"), Link()
+
+    _press(session, projection, link, ".", "*")
+    assert len(session.marked) == marked
+    _press(session, projection, link, ".", "c")
+
+    assert session.c_target is not None
+    assert session.c_target["effects"].startswith(words)
+
+
+def test_the_dismiss_card_counts_none_when_nothing_listed_is_marked() -> None:
+    projection = _attention_projection(questions=1)
+    session, link = _session("attention", sel_id="ACT-0001"), Link()
+
+    _press(session, projection, link, ".", "c")
+
+    assert session.c_target is not None
+    assert session.c_target["effects"].startswith("0 questions ")
+
+
 def test_the_dismiss_verb_is_carried_by_a_daemon_verb() -> None:
     assert binding_refusal("attention", DISMISS_VERB) == ""
 

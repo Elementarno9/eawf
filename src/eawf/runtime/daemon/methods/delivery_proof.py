@@ -33,14 +33,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import platform
+import re
 import shutil
 import subprocess
 import sys
 import uuid
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from pathlib import Path, PurePosixPath, PureWindowsPath
+from pathlib import Path
 from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict
@@ -347,27 +348,35 @@ def _proof_line(task_ref: TaskUrn, gate: GateSpec, receipt: ProofReceipt) -> Led
     )
 
 
-def _require_portable_argv(gates: Sequence[GateSpec]) -> None:
-    """Refuse a gate whose argv names an absolute path.
+#: A path rooted in a user's home or a temp directory: a token that is one, or carries
+#: one after ``=`` or a short option letter (``--basetemp=<temp>/x``, ``-I<home>/include``).
+#: A path rooted anywhere else, such as ``/usr/bin/python`` or a URL path like
+#: ``/api/v1``, names nothing about this machine's user and is left alone.
+_MACHINE_PATH: Final = re.compile(
+    r"(?:^|=|^-[A-Za-z])"
+    r"(?:/(?:Users|home|root|tmp|private|var/folders|var/tmp)(?:/|$)|[A-Za-z]:[\\/]Users(?:[\\/]|$))",
+    re.IGNORECASE,
+)
 
-    A proof receipt copies its gate into the committed receipt ledger, so an
-    absolute path in the argv, such as a resolved temp directory handed to
-    ``--basetemp``, would publish this machine's layout; a repository-relative
-    path runs the same inside the proof checkout.
+
+def _require_portable_argv(gates: Iterable[GateSpec]) -> None:
+    """Refuse a gate whose argv names a path in a user's home or a temp directory.
+
+    A proof receipt copies its gate into the committed receipt ledger, so such a
+    path in the argv, such as a resolved temp directory handed to ``--basetemp``,
+    would publish this machine's layout; a repository-relative path runs the same
+    inside the proof checkout.
 
     Raises:
-        DaemonValidationError: A gate's argv carries an absolute path.
+        DaemonValidationError: A gate's argv carries such a path.
     """
     for gate in gates:
         argv = gate.args.get("argv")
         for token in argv if isinstance(argv, list) else ():
-            if not isinstance(token, str):
-                continue
-            value = token.partition("=")[2] if token.startswith("-") else token
-            if PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute():
+            if isinstance(token, str) and _MACHINE_PATH.search(token):
                 raise DaemonValidationError(
-                    f"validation_failed: gate_argv_machine_path: gate {gate.id} names an "
-                    f"absolute path in its argv, which the receipt would commit; use a "
+                    f"validation_failed: gate_argv_machine_path: gate {gate.id} names a "
+                    f"home or temp path in its argv, which the receipt would commit; use a "
                     f"repository-relative path such as --basetemp=.gate-basetemp"
                 )
 
@@ -431,8 +440,17 @@ def prove_task(
     if replayed is not None:
         logger.info(f"prove_task task={args.urn.entity_key} replayed=True")
         return TaskProveAnswer.model_validate(replayed)
-    legs, filed, named = _proof_legs(context, args.urn, args.gates)
-    _require_portable_argv(named)
+    legs, filed, _ = _proof_legs(context, args.urn, args.gates)
+    standing = {
+        digest: item.receipt
+        for digest, item in filed.items()
+        if item.receipt.result is GateReceiptResult.PASS
+    }
+    deterministic = [leg for leg in legs if leg.contract.check is not None]
+    # a leg reused from a passing receipt runs nothing, and its gate is already committed
+    _require_portable_argv(
+        leg.contract.gate for leg in deterministic if leg.expected.digest() not in standing
+    )
     repository = context.identity.tree_root.parent
     run_dir = context.identity.tree_root / "local" / _PROOF_DIRNAME / uuid.uuid4().hex
     gate_context = GateExecutionContext(
@@ -440,12 +458,10 @@ def prove_task(
     )
     ran: list[tuple[VerificationLeg, ProofReceipt | CheckResult]] = []
     try:
-        for leg in legs:
-            if leg.contract.check is None:
-                continue
-            standing = filed.get(leg.expected.digest())
-            if standing is not None and standing.receipt.result is GateReceiptResult.PASS:
-                ran.append((leg, standing.receipt))
+        for leg in deterministic:
+            reused = standing.get(leg.expected.digest())
+            if reused is not None:
+                ran.append((leg, reused))
                 continue
             head = leg.expected.revision_binding.head_sha
             with _checkout(repository, head_sha=head, where=run_dir / head[:12]) as cwd:

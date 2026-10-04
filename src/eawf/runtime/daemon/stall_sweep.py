@@ -22,7 +22,6 @@ from datetime import UTC, datetime
 from typing import Final
 
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.run_liveness import detect_estimate_crossings, detect_stalls
 
 logger = logging.getLogger(__name__)
 
@@ -44,15 +43,22 @@ def sweep_once(ctx: MethodContext, *, now: datetime) -> tuple[str, ...]:
     Returns:
         The keys of every Run this sweep raised a stall for.
     """
+    roots = tuple(ctx.native_roots.items())
+    if not roots:
+        return ()
+    # imported on the first tree to sweep: the liveness reads pull in the Run and dispatch
+    # stack, which would otherwise delay a cold daemon's first answer
+    from eawf.runtime.daemon.methods import run_liveness
+
     raised: list[str] = []
-    for root_id, context in tuple(ctx.native_roots.items()):
+    for root_id, context in roots:
         try:
-            raised.extend(detect_stalls(context, now=now))
+            raised.extend(run_liveness.detect_stalls(context, now=now))
         except Exception as exc:
             logger.warning(f"stall sweep skipped root={root_id} error={exc!r}")
         # an estimate notice is its own observation, so a failed stall pass never withholds it
         try:
-            detect_estimate_crossings(context, now=now)
+            run_liveness.detect_estimate_crossings(context, now=now)
         except Exception as exc:
             logger.warning(f"estimate sweep skipped root={root_id} error={exc!r}")
     return tuple(raised)

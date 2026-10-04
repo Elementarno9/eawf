@@ -16,9 +16,14 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from eawf.kernel.projection.attention import build_attention_view, top_item
+from eawf.kernel.projection.attention import (
+    AttentionBucket,
+    AttentionItem,
+    build_attention_view,
+    top_item,
+)
 from eawf.kernel.projection.compute import STALL_KIND, ProjectionRow, RouteProjection
-from eawf.kernel.projection.registers import build_register_view
+from eawf.kernel.projection.registers import RegisterView, build_register_view
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb, VerbWeight
 from eawf.surfaces.tui.console.fixture import Action, Fixture
@@ -197,6 +202,37 @@ def selected_open_row(session: Session, held: RouteProjection) -> ProjectionRow 
     register = build_register_view(held)
     items = () if register.withheld else build_attention_view(register).items
     return row if any(item.key == row.key and not item.read_only for item in items) else None
+
+
+def _item_in_bucket(item: AttentionItem, bucket: str | None) -> bool:
+    """Return whether ``item`` is listed under the chosen bucket; a need counts in its parent."""
+    if bucket is None:
+        return True
+    need = f"{item.bucket.value}.{item.need.value}" if item.need is not None else None
+    return bucket in (item.bucket.value, need)
+
+
+def listed_items(register: RegisterView, bucket: str | None) -> list[AttentionItem]:
+    """Return the open items the Attention list shows under *bucket*, in its order.
+
+    A running Run needs nobody, so it is listed only once its bucket is chosen. The frame
+    and every key that acts on what it lists read this one list, so a key never reaches
+    an item the chosen bucket hides.
+
+    Args:
+        register: The Attention register the daemon served.
+        bucket: The chosen bucket; ``None`` lists every bucket.
+    """
+    if register.withheld:
+        return []
+    held = {row.key for row in register.rows}
+    return [
+        item
+        for item in build_attention_view(register).items
+        if _item_in_bucket(item, bucket)
+        and item.key in held
+        and (item.bucket is not AttentionBucket.ACTIVE or bucket == item.bucket.value)
+    ]
 
 
 def top_key(

@@ -18,7 +18,7 @@ from eawf.surfaces.tui.console import drill
 from eawf.surfaces.tui.console.attach import ONBOARDING
 from eawf.surfaces.tui.console.drill import HOME
 from eawf.surfaces.tui.console.keymap import ENTRY_ROUTE
-from eawf.surfaces.tui.console.mutation import open_questions
+from eawf.surfaces.tui.console.mutation import dismiss_targets
 from eawf.surfaces.tui.console.navigation import (
     Ctx,
     copied,
@@ -169,17 +169,13 @@ def _dismiss_questions(ctx: Ctx, target_id: str) -> None:
     Each is one write through the question answer verb, so each settles, or is refused,
     on its own; the marks are cleared once they are sent.
     """
-    s = ctx.s
-    listed = open_questions(ctx)
-    targets = [key for key in s.marked if key in listed] or [
-        key for key in (target_id,) if key in listed
-    ]
+    targets = dismiss_targets(ctx, target_id)
     if not targets:
         ctx.log("Enter", "nothing to dismiss · mark the questions with Space or * first")
         return
     for key in targets:
         send_verb(ctx, "Enter", QuestionAnswer(target=key, reply=DISMISS_REPLY), "dismiss")
-    s.marked = []
+    ctx.s.marked = []
 
 
 def _enter_overlay(ctx: Ctx) -> bool:

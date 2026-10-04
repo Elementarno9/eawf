@@ -242,7 +242,7 @@ def test_run_029_a_broken_tree_is_passed_over_and_the_sweep_goes_on(
     def refuse(*_args: Any, **_kwargs: Any) -> tuple[str, ...]:
         raise RuntimeError("the select is not whole")
 
-    monkeypatch.setattr("eawf.runtime.daemon.stall_sweep.detect_stalls", refuse)
+    monkeypatch.setattr("eawf.runtime.daemon.methods.run_liveness.detect_stalls", refuse)
     assert sweep_once(ctx, now=datetime.now(UTC)) == ()
 
 
