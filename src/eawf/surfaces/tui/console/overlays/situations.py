@@ -16,6 +16,7 @@ from typing import Final
 from eawf.kernel.spec.release import ReleaseStatus
 from eawf.kernel.state.epoch2.pause import PauseSituation
 from eawf.kernel.state.epoch2.question import QuestionSituation
+from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.surfaces.tui.console.decisions import (
     PERSON_REASONS,
     UNKNOWN_OUTCOME_REASONS,
@@ -41,6 +42,21 @@ LOST: Final = "LOST"
 SCREEN_RUNG: Final = 3
 #: The one rung whose pass certifies a claim.
 CERTIFYING_RUNG: Final = 4
+
+
+def stopped_answering(key: str | None, status: object, run_states: Mapping[str, str]) -> bool:
+    """Return whether a Run stored as running is known to have stopped answering.
+
+    The Run register carries no heartbeat, so this is read off the Run states the held
+    decision records carry -- the stall read's -- and only for a Run still stored as
+    running: every route that states a Run's condition asks this one question.
+
+    Args:
+        key: The Run's key; ``None`` for a frame about no Run.
+        status: The Run's stored status, as its row states it.
+        run_states: The Run states the held decision records carry, by Run key.
+    """
+    return key is not None and status == RunStatus.RUNNING.value and run_states.get(key) == LOST
 
 
 @dataclass(frozen=True, slots=True)

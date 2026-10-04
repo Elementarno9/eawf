@@ -574,7 +574,7 @@ def settings_frame(view: View, settings: EffectiveSettingsView) -> list[str]:
         f" · in {settings.category_of(section).upper()} ▸ {section}"
         + (" · editing" if session.edit is not None else "")
         + (
-            f" · {group(outside)} {'leaf' if outside == 1 else 'leaves'} off the catalog"
+            f" · {group(outside)} {'setting' if outside == 1 else 'settings'} eawf does not know"
             if outside
             else ""
         )

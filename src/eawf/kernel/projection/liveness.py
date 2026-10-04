@@ -14,7 +14,7 @@ it was taken -- which the caller holds; nothing here reads a ledger.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Final
 
@@ -46,11 +46,12 @@ class HeldLiveness:
 
     Attributes:
         stalls: Every stall standing when the read was answered.
-        read_at: When the daemon answered it.
+        read_at: When the daemon answered it. It takes no part in equality, so a re-read
+            that found the same stalls is the same answer and repaints nothing.
     """
 
     stalls: Sequence[RunStallFact]
-    read_at: datetime
+    read_at: datetime = field(compare=False)
 
     def stalled_keys(self) -> frozenset[str]:
         """Return the keys of the Runs a stall stands over."""

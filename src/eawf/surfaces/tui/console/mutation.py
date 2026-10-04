@@ -28,7 +28,9 @@ from types import MappingProxyType
 from typing import Final
 
 from eawf.kernel.delivery.bulk import BulkVerb
+from eawf.kernel.projection.attention import build_attention_view
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, ProjectionRow
+from eawf.kernel.projection.registers import build_register_view
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.state.epoch2.consequence import (
     CANONICAL_MUTATIONS,
@@ -36,6 +38,7 @@ from eawf.kernel.state.epoch2.consequence import (
     CanonicalMutation,
 )
 from eawf.kernel.state.epoch2.transitions import TERMINAL_STATUSES, LifecycleEntity
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb
 from eawf.surfaces.tui.console.attention import selected_open_row
 from eawf.surfaces.tui.console.bulk import BulkRequest
@@ -78,6 +81,7 @@ from eawf.surfaces.tui.console.operations import (
     LifecycleRequest,
     SettingRequest,
 )
+from eawf.surfaces.tui.console.overlays.situations import stopped_answering
 from eawf.surfaces.tui.console.session import Session
 
 logger = logging.getLogger(__name__)
@@ -168,6 +172,14 @@ def selection(session: Session, rows: Sequence[ProjectionRow]) -> tuple[Projecti
     return (row,) if row is not None else ()
 
 
+def _stopped_answering(
+    session: Session, rows: Sequence[ProjectionRow], run_states: Mapping[str, str]
+) -> bool:
+    """Return whether the record the cursor names is a Run that stopped answering."""
+    row = cursor_row(session, rows)
+    return row is not None and stopped_answering(row.key, row.status.value, run_states)
+
+
 def menu_entity(session: Session, rows: Sequence[ProjectionRow]) -> LifecycleEntity | None:
     """Return the entity whose verbs the route's menu offers now, or ``None``.
 
@@ -189,17 +201,27 @@ def menu_entity(session: Session, rows: Sequence[ProjectionRow]) -> LifecycleEnt
 
 
 def lifecycle_verbs(
-    session: Session, rows: Sequence[ProjectionRow], decided: Gate
+    session: Session,
+    rows: Sequence[ProjectionRow],
+    decided: Gate,
+    run_states: Mapping[str, str] | None,
 ) -> tuple[MenuVerb, ...]:
     """Return the lifecycle verbs the menu offers for the selection, none under transport loss.
+
+    A Run that stopped answering is offered none: it is recovered by a resume, and a
+    start, finish or fail would treat it as a Run that still answers.
 
     Args:
         session: The session whose route and selection are read.
         rows: The rows the link holds.
         decided: The write gate's decision.
+        run_states: The Run states the held decision records carry, by Run key; ``None``
+            before they are read.
     """
     entity = menu_entity(session, rows)
     if entity is None or decided.kind is GateKind.TRANSPORT:
+        return ()
+    if run_states and _stopped_answering(session, rows, run_states):
         return ()
     mark_all = MenuVerb(key=MARK_ALL, verb=MARK_ALL_VERB, available=True)
     return (
@@ -290,7 +312,8 @@ def menu_key(ctx: Ctx, k: str) -> bool:
             ctx.log(k, NOTHING_TO_MARK)
         return True
     mutation = native_mutation(s, ctx.rows, k)
-    if mutation is None:
+    states = ctx.decisions.run_states if ctx.decisions is not None else None
+    if mutation is None or (states and _stopped_answering(s, ctx.rows, states)):
         return False
     decided = _gate(ctx, mutation.action)
     if decided.kind is GateKind.TRANSPORT:
@@ -705,6 +728,8 @@ def select_key(ctx: Ctx, k: str) -> bool:
         return False
     s = ctx.s
     row = cursor_row(s, ctx.rows) if s.subj_id is None else _row(ctx.rows, s.sel_id)
+    if s.route == ATTENTION_ROUTE:
+        return _mark_questions(ctx, k, row)
     entity = entity_of(row) if row is not None else None
     if row is None or entity is None or s.route not in ENTITY_ROUTES.get(entity, frozenset()):
         return False
@@ -729,6 +754,43 @@ def select_key(ctx: Ctx, k: str) -> bool:
     return True
 
 
+def open_questions(ctx: Ctx) -> tuple[str, ...]:
+    """Return the keys of the questions the held Attention register lists as open."""
+    held = ctx.attention
+    if held is None:
+        return ()
+    register = build_register_view(held)
+    if register.withheld:
+        return ()
+    questions = {r.key for r in held.rows if r.collection is Epoch2Collection.OPEN_QUESTION}
+    return tuple(i.key for i in build_attention_view(register).items if i.key in questions)
+
+
+def _mark_questions(ctx: Ctx, k: str, row: ProjectionRow | None) -> bool:
+    """Mark the question under the cursor, every listed question, or clear the marks.
+
+    Returns:
+        Whether the key was claimed: only a listed question is marked.
+    """
+    s = ctx.s
+    listed = open_questions(ctx)
+    if k == ",":
+        s.marked = []
+        ctx.log(",", "selection cleared")
+    elif k == "*" and listed:
+        s.marked = list(listed)
+        note = f"every listed question · {len(s.marked)} selected"
+        ctx.notify(note, MARK_ALL_VERB)
+        ctx.log("*", note)
+    elif k == " " and row is not None and row.key in listed:
+        marked = [key for key in s.marked if key != row.key]
+        s.marked = marked if row.key in s.marked else [*marked, row.key]
+        ctx.log("space", f"{row.key} · {len(s.marked)} selected")
+    else:
+        return False
+    return True
+
+
 __all__ = [
     "NATIVE_KEYS",
     "adopt",
@@ -736,6 +798,7 @@ __all__ = [
     "confirm",
     "lifecycle_verbs",
     "menu_key",
+    "open_questions",
     "select_key",
     "verb_check",
 ]

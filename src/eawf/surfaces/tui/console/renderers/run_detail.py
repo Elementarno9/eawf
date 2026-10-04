@@ -28,7 +28,7 @@ from eawf.kernel.projection.registers import UNWRITTEN_REASON
 from eawf.kernel.projection.run_timeline import RunTimeline, TimelineGroup
 from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.projection.transcript import LANES
-from eawf.kernel.state.epoch2.run import RunRuntimeTuple, RunStatus
+from eawf.kernel.state.epoch2.run import RunRuntimeTuple
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
@@ -48,7 +48,7 @@ from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
 from eawf.surfaces.tui.console.lifecycle import ELAPSED_WORDS
 from eawf.surfaces.tui.console.live_reads import held_usage
 from eawf.surfaces.tui.console.navigation import Ctx, go
-from eawf.surfaces.tui.console.overlays.situations import LOST
+from eawf.surfaces.tui.console.overlays.situations import stopped_answering
 from eawf.surfaces.tui.console.renderers.budget_lines import cost_line, time_line, tokens_line
 from eawf.surfaces.tui.console.renderers.detail import state_of, subject_line, unknown_frame
 from eawf.surfaces.tui.console.renderers.read_model import (
@@ -240,12 +240,9 @@ def lost(view: View, run: SpineRow) -> bool:
     records the console holds -- the same Run states the pause detail reads -- and only for
     a Run whose stored status is the one the registry labels ambiguous.
     """
-    status = run.field("status")
     records = view.decisions
-    return (
-        records is not None
-        and status.value == RunStatus.RUNNING.value
-        and records.run_states.get(run.key) == LOST
+    return records is not None and stopped_answering(
+        run.key, run.field("status").value, records.run_states
     )
 
 

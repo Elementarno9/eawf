@@ -33,9 +33,9 @@ from eawf.kernel.projection.compute import (
     build_route_projection,
 )
 from eawf.kernel.projection.connection import (
-    READ_METHOD_TEMPLATE,
     ConnectionValue,
     ReconnectDisposition,
+    read_method,
 )
 from eawf.kernel.projection.registers import ATTENTION_ROUTE, build_register_view
 from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE
@@ -785,12 +785,11 @@ def test_prx_060_the_attention_strip_rail_summary_and_home_list_sum_alike() -> N
     narrow, wide, widest, home = _widths("attention")
     rail = _rail(wide)
     assert rail == _rail(widest)
-    assert len([k for k in rail if " > " not in k]) == 8
+    # every counted bucket; lost is no record's, so a stopped Run is counted under stalled
+    assert len([k for k in rail if " > " not in k]) == 7
     strip = _strip(narrow)
     assert all(rail[k] == v for k, v in strip.items() if k != "all"), strip
-    served = js.DocumentDaemon(bodies.DOCUMENT).answer(
-        READ_METHOD_TEMPLATE.format(route=ATTENTION_ROUTE), {}
-    )
+    served = js.DocumentDaemon(bodies.DOCUMENT).answer(read_method(ATTENTION_ROUTE), {})
     register = build_register_view(RouteProjection.model_validate(served))
     view = build_attention_view(register)
     items = view.items
@@ -815,7 +814,12 @@ def test_prx_060_the_attention_strip_rail_summary_and_home_list_sum_alike() -> N
 def test_prx_060_a_bucket_filter_changes_no_rail_count() -> None:
     journey = port("PJ05")
     rails = [_rail(frame) for frame in frames(journey)]
-    assert [step.after["bucket"] for step in journey.steps] == [None, "failed", "lost", None]
+    assert [step.after["bucket"] for step in journey.steps] == [
+        None,
+        "failed",
+        "needs operator",
+        None,
+    ]
     assert all(rail == rails[0] for rail in rails)
 
 
@@ -1149,9 +1153,7 @@ def test_prx_066_a_frame_is_drawn_under_replaying_before_the_replay_is_adopted()
 
 def test_the_fake_daemon_lists_runs_by_their_state_on_attention_as_the_daemon_does() -> None:
     """A failed Run still the newest attempt of an open Task is an Attention item."""
-    answer = js.DocumentDaemon(bodies.DOCUMENT).answer(
-        READ_METHOD_TEMPLATE.format(route=ATTENTION_ROUTE), {}
-    )
+    answer = js.DocumentDaemon(bodies.DOCUMENT).answer(read_method(ATTENTION_ROUTE), {})
     rows = RouteProjection.model_validate(answer).rows
     assert {row.key for row in rows if row.facts.get("kind") == RUN_STATE_KIND} == {"RUN-00000003"}
 

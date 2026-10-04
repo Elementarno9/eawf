@@ -33,7 +33,6 @@ ONLY_PRINCIPAL: Final = "you are the only principal"
 _ACTION_EFFECTS: Final[Mapping[str, str]] = MappingProxyType(
     {
         "snooze": "hidden for you only — other principals still see it",
-        "assign": "addressed to {assignee} — anyone eligible may still answer",
     }
 )
 
@@ -74,7 +73,7 @@ def action_request(
                 remediation="Answer it yourself, or wait until another principal is named.",
             )
             return None, refusal, ()
-        effects = (_ACTION_EFFECTS[name].format(assignee=others[0]),)
+        effects = (f"addressed to {others[0]} — anyone eligible may still answer",)
         return ActionDisposition(target=row.key, verb="assign", assignee=others[0]), None, effects
     why = binding_refusal(ATTENTION_ROUTE, name)
     return None, Refusal(code="unbound_verb", reason=why, remediation="Answer or deny instead."), ()

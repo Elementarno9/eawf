@@ -20,6 +20,7 @@ from dataclasses import dataclass
 
 from eawf.kernel.projection.attention import (
     CONSOLE_PRINCIPAL_CLASS,
+    AttentionBucket,
     AttentionItem,
     build_attention_view,
 )
@@ -51,7 +52,7 @@ from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.reads import attn_cell, prototype_attached, reads
 from eawf.surfaces.tui.console.registry import route_of
-from eawf.surfaces.tui.console.renderers.attention import NO_DEADLINE
+from eawf.surfaces.tui.console.renderers.attention import due_cell
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
     counts,
@@ -371,23 +372,38 @@ def attention_lines(
     elsewhere = f"   {dv.plural(others, 'action')} open to other principals" if others else ""
     if not mine:
         return [
-            " ATTENTION   nothing here opened itself",
+            " ATTENTION   nothing needs you",
             "   nothing is waiting on you · runs continue without you",
             *([elsewhere] if elsewhere else []),
         ]
     w = view.w
-    facts = {row.key: row.facts for row in register.rows}
-    lines = [" ATTENTION", f" NEEDS OPERATOR  {group(len(mine))}"]
+    rows = {row.key: row for row in register.rows}
+    now = view.now or register.generated_at
+    lines = [" ATTENTION"]
     first = 0 if focus is None else max(0, focus - _ATTENTION_ROWS + 1)
-    for at, item in enumerate(mine[first : first + _ATTENTION_ROWS], start=first):
-        fact = facts.get(item.key, {})
-        text = f"{fact.get('subject', item.key)} {fact.get('question', '')}".rstrip()
+    shown = range(first, min(len(mine), first + _ATTENTION_ROWS))
+    last: AttentionBucket | None = None
+    for at in shown:
+        item = mine[at]
+        if item.bucket is not last:
+            n = sum(1 for x in mine if x.bucket is item.bucket)
+            lines.append(f" {item.bucket.value.upper()}  {group(n)}")
+            last = item.bucket
+        row = rows[item.key]
+        text = f"{row.facts.get('subject', item.key)} {row.facts.get('question', '')}".rstrip()
         lead = " ▸ " if at == focus else "   "
-        line = lead + pad(text, w - 3 - _DUE_W - 1) + " " + NO_DEADLINE
+        due = due_cell(row, now)
+        line = lead + pad(text, w - 3 - max(_DUE_W, cell_len(due)) - 1) + " " + due
         lines.append(line if at == focus else Fixed(pad(line, w)))
-    rest = len(mine) - first - _ATTENTION_ROWS
-    if rest > 0:
-        lines.append(f"   … {rest} more on the Attention route")
+    hidden = [item for at, item in enumerate(mine) if at not in shown]
+    if hidden:
+        # every bucket is named, so a stalled Run behind a long list still reaches home
+        per = [
+            f"{group(n)} {bucket.value}"
+            for bucket in AttentionBucket
+            if (n := sum(1 for x in hidden if x.bucket is bucket))
+        ]
+        lines.append(f"   … {' · '.join(per)} more on the Attention route")
     if elsewhere:
         lines.append(elsewhere)
     return lines

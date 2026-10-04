@@ -55,7 +55,7 @@ from eawf.surfaces.tui.console.operations import (
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.activity import changed_since, ordered
 from eawf.surfaces.tui.console.renderers.scope_home import groups_of
-from eawf.surfaces.tui.console.renderers.spine import held
+from eawf.surfaces.tui.console.renderers.spine import DISMISS_VERBS, held
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import Session
 
@@ -133,7 +133,7 @@ def test_every_light_verb_acting_in_place_has_a_handler_and_every_handler_a_verb
     in_place = {
         (route, verb.verb)
         for route in LINKED.proto.actions
-        for verb in LINKED.menus.verbs(route)
+        for verb in (*LINKED.menus.verbs(route), *(DISMISS_VERBS if route == "attention" else ()))
         if outcome(verb, Availability(True)) is Outcome.IN_PLACE
     }
     assert in_place == set(IN_PLACE)

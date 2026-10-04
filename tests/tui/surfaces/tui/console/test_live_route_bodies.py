@@ -214,7 +214,8 @@ def test_the_attention_rail_stays_when_nothing_is_open() -> None:
     frame = _frame("attention", document=_nothing_open())
     rail = _rail(frame)
     assert rail[0].startswith("BUCKETS")
-    assert len([row for row in rail[1:] if row.strip() and "↳" not in row]) == 8
+    # every counted bucket stays; lost is no record's, so it is not drawn
+    assert len([row for row in rail[1:] if row.strip() and "↳" not in row]) == 7
     assert any(row.startswith(" NOTHING YET") for row in frame)
 
 
@@ -329,7 +330,7 @@ def test_an_unknown_readiness_signal_keeps_its_reason_whole() -> None:
     frame = _frame("release")
     row = next(row for row in frame if row.lstrip("▸ ").startswith("policy gate"))
     assert "…" not in row
-    assert "no producer observes" in row
+    assert "nothing in this tree checks" in row
 
 
 # ---------- search ----------
@@ -365,7 +366,7 @@ def test_a_card_route_holding_no_record_is_still_a_card(route: str, leaf: str, t
     assert route not in frame[0]
     assert any(row.startswith(f"┌─ {title} ") for row in frame)
     assert "ROW" not in text and "WINDOW" not in text
-    assert all(re.match(r"^│ [A-Z ]+ {2,}", row) for row in frame if "no producer" in row)
+    assert all(re.match(r"^│ [A-Z ]+ {2,}", row) for row in frame if "nothing in this tree" in row)
 
 
 # ---------- the readiness matrix ----------

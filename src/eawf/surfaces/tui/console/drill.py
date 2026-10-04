@@ -343,7 +343,8 @@ def offered_verb(ctx: Ctx, letter: str | None) -> MenuVerb | None:
     A finished subject's menu keeps only its light verbs, so a lifecycle letter finds
     nothing there, as the drawer lists nothing for it.
     """
-    verbs = offered_verbs(ctx.s, ctx.fixture, ctx.projection)
+    states = ctx.decisions.run_states if ctx.decisions is not None else None
+    verbs = offered_verbs(ctx.s, ctx.fixture, ctx.projection, states)
     return next((verb for verb in verbs if letter is None or verb.key == letter), None)
 
 

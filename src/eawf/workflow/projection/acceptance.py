@@ -97,7 +97,7 @@ MILESTONE_ACCEPTANCE_METHOD: Final = "projection.milestone.acceptance"
 
 #: Why a readiness signal of a release candidate is silent. The gates that would state
 #: it observe a published candidate, and nothing in this tree has published one.
-RC_GATE_REASON: Final = "no producer observes a release-candidate gate in this tree yet"
+RC_GATE_REASON: Final = "nothing in this tree checks a release-candidate gate yet"
 
 #: What a readiness signal says when the records in hand state it.
 READINESS_MET: Final = "met"

@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 import textwrap
 from collections.abc import Sequence
+from typing import Final
 
 from eawf.kernel.projection.truth import TruthState
 from eawf.kernel.spec.release import ReleaseStatus
@@ -185,9 +186,41 @@ def _answer_words(q: QuestionRecord, key: str | None) -> str:
     return option.label if option is not None else (q.reply or f"{UNKNOWN} unknown")
 
 
-def question_keys(q: QuestionRecord, session: Session, run_state: str | None) -> list[Pair]:
-    """Return the question detail's keybar, which is also every key it acts on."""
-    if not (answerable(q, run_state) and can_mutate(session)):
+#: A stored address in a reason, which a reader cannot act on in prose.
+_ADDRESS = re.compile(r"\b(?:urn:eawf:|eawf://)\S+")
+
+#: What a reason that names a stored address says instead: such reasons are the ones a
+#: migration wrote for a question carried over from the tree's earlier state format.
+CARRIED_OVER = "carried over from this tree's earlier state format"
+
+
+def _why_words(rationale: str) -> str:
+    """Return a question's reason in words, with no stored address in it."""
+    return CARRIED_OVER if _ADDRESS.search(rationale) else rationale
+
+
+#: The key prefix of a question the daemon's answer verb records an answer to; an
+#: operator decision is a pending action, answered through its own seal.
+QUESTION_PREFIX: Final = "QST-"
+
+
+def question_keys(
+    q: QuestionRecord, session: Session, run_state: str | None, principal_refusal: str
+) -> list[Pair]:
+    """Return the question detail's keybar: only the keys whose write would be sent.
+
+    An answer is sent only for a question the question verb records, by a console acting
+    as someone; a decline has no daemon verb, so it is never offered.
+
+    Args:
+        q: The question on screen.
+        session: The session whose connection state admits a write or not.
+        run_state: The state of the Run that asked it, when one did.
+        principal_refusal: Why every write is refused because the console acts as
+            nobody; empty when it acts as someone.
+    """
+    sendable = q.id.startswith(QUESTION_PREFIX) and not principal_refusal
+    if not (sendable and answerable(q, run_state) and can_mutate(session)):
         return [_ESC_BACK]
     pairs: list[Pair] = []
     if q.options:
@@ -195,7 +228,7 @@ def question_keys(q: QuestionRecord, session: Session, run_state: str | None) ->
         pairs.append(("1" if last == 1 else f"1..{last}", "pick an answer"))
     if reply_legal(q, run_state):
         pairs.append(("w", "reply"))
-    pairs += [("x", "decline"), ("Esc", "back — it stays open")]
+    pairs.append(("Esc", "back — it stays open"))
     return pairs
 
 
@@ -247,7 +280,7 @@ def render_question(view: View, q: QuestionRecord, decisions: DecisionRecords) -
     situation = question_situation(q, principal=decisions.principal, run_state=run_state)
     body = [lab("QUESTION", q.question)]
     if q.rationale:
-        body.append(lab("WHY", q.rationale))
+        body.append(lab("WHY", _why_words(q.rationale)))
     body.append(thin(view.w))
     for i, option in enumerate(q.options, start=1):
         marks = " · recommended · not consent" if option.recommended else ""
@@ -272,7 +305,7 @@ def render_question(view: View, q: QuestionRecord, decisions: DecisionRecords) -
         subject=q.id,
         context=f"asked by {q.run or 'a person'} under {q.scope} · {short_time(q.asked_at)}",
         body=body,
-        keys=question_keys(q, view.session, run_state),
+        keys=question_keys(q, view.session, run_state, view.principal_refusal),
         situation=situation,
     )
 
@@ -280,11 +313,14 @@ def render_question(view: View, q: QuestionRecord, decisions: DecisionRecords) -
 # ---------- the pause detail ----------
 
 
-def pause_keys(p: PauseRecord, session: Session, run_state: str | None) -> list[Pair]:
-    """Return the pause detail's keybar, which is also every key it acts on."""
+def pause_keys(
+    p: PauseRecord, session: Session, run_state: str | None, principal_refusal: str
+) -> list[Pair]:
+    """Return the pause detail's keybar: only the keys whose write would be sent."""
     back: Pair = ("Esc", "back — the pause stays as it is")
-    if unknown_outcome(p, run_state) and can_mutate(session):
-        return [("n", "reconcile"), ("c", "let go"), back]
+    # let go has no daemon verb, so only the reconcile that is sent is offered
+    if unknown_outcome(p, run_state) and can_mutate(session) and not principal_refusal:
+        return [("n", "reconcile"), back]
     return [back]
 
 
@@ -345,7 +381,7 @@ def render_pause(view: View, p: PauseRecord, decisions: DecisionRecords) -> list
         subject=p.scope,
         context=REASON_WORDS[p.reason],
         body=body,
-        keys=pause_keys(p, view.session, run_state),
+        keys=pause_keys(p, view.session, run_state, view.principal_refusal),
         situation=pause_situation(p, run_state),
     )
 

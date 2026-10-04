@@ -205,7 +205,7 @@ def test_the_task_frame_draws_each_criterion_with_its_newest_receipt() -> None:
     frame = _frame("task.detail", "TSK-0001", build_spine_view(projection))
     assert "CR-001 · behavioral · gates G-01 · pass RCP-0002 · the replay is bounded" in frame
     assert "CR-002 · behavioral · no gate · ∅ no receipt · the digest is equal" in frame
-    assert "2 receipts · 1 pass · 1 not pass" in frame
+    assert "1 of 2 criteria pass on their newest receipt · 2 receipts filed" in frame
     assert "LAST RUN" in frame and "RUN-00000002" in frame
     assert "INTEGRATED   8634be4" in frame
     assert NO_CANDIDATE_REASON in frame
@@ -305,7 +305,7 @@ def test_attention_counts_failed_active_over_budget_and_rejected_from_their_reco
     assert counts[AttentionBucket.LOST].reason == LOST_HOLE_REASON
 
 
-def test_the_rail_states_counts_and_a_hole_never_reads_as_unknown() -> None:
+def test_the_rail_states_counts_and_draws_no_hole() -> None:
     rail = attention_renderer.rail_lines(_attention(), None, notices=2)
     by_label = {line[1:25].strip(): line[25:].strip() for line in rail[1:]}
     assert by_label["failed"] == "1"
@@ -313,7 +313,8 @@ def test_the_rail_states_counts_and_a_hole_never_reads_as_unknown() -> None:
     assert by_label["rejected"] == "1"
     # a ceiling breach and two budget notices are all over budget
     assert by_label["over budget"] == "3"
-    assert by_label["lost"] == attention_renderer.NO_RECORD
+    # a Run that stopped answering is counted under stalled, never under a second name
+    assert "lost" not in by_label
     assert UNKNOWN_WORD not in "".join(by_label.values())
 
 
@@ -333,8 +334,10 @@ def _attention_frame(bucket: str | None) -> str:
     return "\n".join(render_route(view))
 
 
-def test_the_lost_bucket_says_in_words_why_nothing_is_in_it() -> None:
-    assert LOST_HOLE_REASON[:60] in _attention_frame(AttentionBucket.LOST.value)
+def test_the_frame_offers_no_lost_bucket_beside_stalled() -> None:
+    frame = _attention_frame(None)
+    assert "stalled" in frame
+    assert "lost" not in frame
 
 
 def test_a_running_run_is_listed_only_once_its_bucket_is_chosen() -> None:

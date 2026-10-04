@@ -44,7 +44,7 @@ from eawf.kernel.projection.compute import (
     RouteProjection,
     build_route_projection,
 )
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, RECONNECT_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method, reconnect_method
 from eawf.kernel.projection.operations import build_operations_view
 from eawf.kernel.projection.transcript import (
     BLOCK_REVISION,
@@ -271,8 +271,8 @@ def test_the_console_holds_no_transcript_model_for_another_route() -> None:
 
 def test_the_route_has_both_projection_verbs() -> None:
     """A route a console draws natively is one the daemon both reads and reconnects."""
-    assert READ_METHOD_TEMPLATE.format(route=TRANSCRIPT_ROUTE) in ROUTE_READ_METHODS
-    assert RECONNECT_METHOD_TEMPLATE.format(route=TRANSCRIPT_ROUTE) in ROUTE_RECONNECT_METHODS
+    assert read_method(TRANSCRIPT_ROUTE) in ROUTE_READ_METHODS
+    assert reconnect_method(TRANSCRIPT_ROUTE) in ROUTE_RECONNECT_METHODS
     assert ROUTE_COLLECTIONS[TRANSCRIPT_ROUTE]
     assert set(TRANSCRIPT_FIELDS) == set(TRANSCRIPT_ROUTES)
 
@@ -623,7 +623,7 @@ def test_this_waves_routes_are_listed_bound_and_served(route: str) -> None:
     assert row.binding == "bound"
     assert row.bound_by is None
     assert REGISTRY.by_id[route].key in ROUTE_COLLECTIONS
-    assert READ_METHOD_TEMPLATE.format(route=route) in ROUTE_READ_METHODS
+    assert read_method(route) in ROUTE_READ_METHODS
 
 
 def test_no_route_is_left_owed_to_a_later_wave() -> None:

@@ -86,7 +86,7 @@ from eawf.surfaces.tui.console.clock import (
 )
 from eawf.surfaces.tui.console.dispatch import activate_crumb, dispatch
 from eawf.surfaces.tui.console.drawers import DRAWERS
-from eawf.surfaces.tui.console.drill import say_why
+from eawf.surfaces.tui.console.drill import ROW_DRILLS, destination, say_why
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, paint_rack, thin, unheld
 from eawf.surfaces.tui.console.header import CrumbRun, crumb_at
@@ -102,7 +102,7 @@ from eawf.surfaces.tui.console.operations import (
 from eawf.surfaces.tui.console.overlays import is_overlay, render_overlay
 from eawf.surfaces.tui.console.paint import Part, Stroke, paint
 from eawf.surfaces.tui.console.registry import REGISTRY
-from eawf.surfaces.tui.console.renderers import render_route
+from eawf.surfaces.tui.console.renderers import loading_frame, render_route
 from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup, conn_label
 from eawf.surfaces.tui.console.token_map import SURFACES, TOKEN_MAP, render_css
 from eawf.surfaces.tui.console.tokens import CARET, Severity
@@ -132,6 +132,14 @@ LIVE_WORKERS = "live"
 LIVE_REFRESH_SECONDS = 1.0
 # The worker group the console's writes run in, apart from the reads so neither waits.
 WRITE_WORKERS = "writes"
+# The worker group the read ahead of the caret's drill target runs in; the latest wins.
+PREFETCH_WORKERS = "prefetch"
+# How long the caret rests on a row before the route its Enter opens is read ahead; the
+# sweep checks it, so the read starts on the first tick past it.
+PREFETCH_REST_SECONDS = 0.1
+# How long a route's own read may be in flight before the held frame gives way to a
+# frame naming what is loading; a read answered sooner paints with no frame between.
+LOADING_GRACE_SECONDS = 0.3
 # The key-log key a daemon answer to a sent verb is recorded under.
 DAEMON_KEY = "daemon"
 # The style-metadata key a painted span's mark travels under.
@@ -508,6 +516,18 @@ class ConsoleApp(App[None]):
         self._delivered: set[tuple[str, int]] | None = None
         # the arrival of the key before this one, while that key was an Escape
         self._escape_at: float | None = None
+        # the route whose own read is in flight while the frame before it stays painted,
+        # when on the console clock it began and whether it has outlasted the grace
+        self._awaiting: str | None = None
+        self._awaiting_since = 0.0
+        self._loading = False
+        # how many seam reads are scheduled or running; a route still unread when the
+        # last of them ends was refused, not slow
+        self._syncing = 0
+        # the drill target the caret rests on, since when, and whether it was read ahead
+        self._rest: tuple[str, str] | None = None
+        self._rest_since = 0.0
+        self._rest_read = False
         self.reset(None)
         self.frame_rows: list[str] = []
         self.render_count = 0
@@ -555,8 +575,9 @@ class ConsoleApp(App[None]):
     def _follow_route(self) -> None:
         """Point the seam at the session's route and read whatever it now owes.
 
-        The read runs off the key path, so the frame shows what is held until the
-        answer arrives and then repaints; a console not yet running only retargets.
+        The read runs off the key path. While a route's own rows are being read, the
+        frame painted before it stays on screen, so a navigation paints once, when they
+        arrive; a console not yet running only retargets.
         """
         seam = self.seam
         if seam is None:
@@ -564,20 +585,71 @@ class ConsoleApp(App[None]):
         seam.retarget(self.route_key)
         seam.about(self.subject)
         seam.page_history(self.session.history_cursor)
-        if self.is_running and seam.owed():
+        if not self.is_running:
+            return
+        # before the first answer the entry layer's resolving frame is what is painted
+        awaiting = self.route_key if seam.frame_owed() and seam.held_routes else None
+        if awaiting != self._awaiting:
+            self._await(awaiting)
+        if seam.owed():
+            self._syncing += 1
             self.run_worker(self._load_owed(), group=SEAM_WORKERS)
 
+    def _await(self, route: str | None) -> None:
+        """Hold the painted frame while *route*'s own read is in flight; ``None`` releases it."""
+        self._awaiting = route
+        self._awaiting_since = self.console_clock.now()
+        self._loading = False
+
     async def _load_owed(self) -> None:
-        """Read the owed routes and repaint once any of them arrived."""
+        """Read the owed routes, repainting when the projections arrive and again after.
+
+        A route still unread when the last read ends was refused, so its frame is released
+        to say it holds nothing.
+        """
         seam = self.seam
         assert seam is not None, "only started with a seam"
-        if loaded := await seam.sync():
-            self.deliver_attention()
-            self._open_resolution(loaded)
+        painted: list[str] = []
+
+        def projected(routes: tuple[str, ...]) -> None:
+            painted.extend(routes)
+            self._land(routes)
+
+        try:
+            loaded = await seam.sync(on_projected=projected)
+            rest = tuple(name for name in loaded if name not in painted)
+            if rest:
+                self._land(rest)
+            elif not loaded and not seam.held_routes and seam.settings is None and self.is_running:
+                self._land_offline()
+        finally:
+            self._syncing -= 1
+        if self._syncing == 0 and self._awaiting is not None:
+            self._await(None)
             if self.is_running:
                 self.arrive()
-        elif not seam.held_routes and seam.settings is None and self.is_running:
-            self._land_offline()
+
+    def _land(self, loaded: tuple[str, ...]) -> None:
+        """Take what one read delivered and repaint once the frame holds what it states.
+
+        A route opened on no subject is about the row its caret lands on, which only a
+        compose places; the seam learns it here, so the reads owed for that row are taken
+        in the same sync and the frame stays held until they land.
+        """
+        seam = self.seam
+        assert seam is not None, "only called with a seam"
+        self.deliver_attention()
+        self._open_resolution(loaded)
+        if not self.is_running:
+            return
+        if self.session.subj_id is None:
+            compose_frame(self.view())
+            seam.about(self.subject)
+        if self._awaiting is not None and not seam.frame_owed():
+            self._await(None)
+        elif self._awaiting is None and seam.frame_owed() and self.frame_rows:
+            self._await(self.route_key)
+        self.arrive()
 
     def _open_resolution(self, loaded: tuple[str, ...]) -> None:
         """Open the resolution card when the key the operator navigated to names nothing.
@@ -856,6 +928,9 @@ class ConsoleApp(App[None]):
             liveness=liveness,
             timeline=timeline,
             principal=self.principal(),
+            sealable=self.seam is not None
+            and self.seam.operator is not None
+            and self.seam.operator.receipt_ref is not None,
             # a held clock reads no wall time, so a held frame is its authored instant
             now=self.console_clock.wall() if self.seam is not None and not self.held else None,
             scope_name=self.seam.scope_name if self.seam is not None else "",
@@ -921,10 +996,27 @@ class ConsoleApp(App[None]):
         notify(self.session, self.console_clock, text=text, title=title, sev=sev)
 
     def render_frame(self) -> None:
-        """Sweep the rack, compose the frame and paint it."""
+        """Sweep the rack, compose the frame and paint it.
+
+        While the route's own read is in flight the frame painted before it stays, so a
+        navigation never flashes a frame that holds nothing; past the grace a frame naming
+        the record being loaded is painted instead.
+        """
         sweep_toasts(self.session, self.console_clock)
+        subject = self.subject
         view = self.view()
         rows = compose_frame(view)
+        if self.subject != subject:
+            # a route on no subject is about the row its caret lands on, which only the
+            # compose places; the frame is drawn again for that row, and its reads owed
+            self._follow_route()
+            view = self.view()
+            rows = compose_frame(view)
+        s = self.session
+        if self._awaiting == self.route_key and s.overlay is None and s.prefix != "g":
+            if not self._loading:
+                return
+            rows = loading_frame(view)
         if self.glyphs == "ascii":
             # plain mode renders through compose_frame, so it can only be imported here
             from eawf.surfaces.tui.console.plain import plain_rows
@@ -935,18 +1027,58 @@ class ConsoleApp(App[None]):
         self.query_one("#header", ProjectionHeader).set_rows(rows[:1])
         self.query_one("#body", Body).set_rows(rows[1 : view.h - 1])
         self.query_one("#keybar", KeybarRow).set_rows(rows[view.h - 1 :])
+        self._rest_caret()
+
+    def _rest_caret(self) -> None:
+        """Note the route Enter would open from the row under the caret, and since when."""
+        s, seam = self.session, self.seam
+        if seam is None or not self.is_running:
+            return
+        key = s.sel_id
+        target = None
+        if key is not None and s.overlay is None and s.route in ROW_DRILLS:
+            target = (destination(self._ctx(), key), key)
+        if target != self._rest:
+            self._rest, self._rest_since, self._rest_read = target, self.console_clock.now(), False
+
+    def _lapse(self, now: float) -> None:
+        """Act on what waited long enough: a held frame past its grace, a caret at rest.
+
+        The held frame gives way to one naming what is loading; a caret that rested reads
+        the route its Enter opens in the background, the latest rest replacing the last.
+        """
+        grace = now - self._awaiting_since >= LOADING_GRACE_SECONDS
+        if self._awaiting is not None and not self._loading and grace:
+            self._loading = True
+            self.render_frame()
+        rest = self._rest
+        if rest is None or self._rest_read or now - self._rest_since < PREFETCH_REST_SECONDS:
+            return
+        self._rest_read = True
+        self.run_worker(self._prefetch(*rest), group=PREFETCH_WORKERS, exclusive=True)
+
+    async def _prefetch(self, route: str, subject: str) -> None:
+        """Read *route* onto *subject* ahead of Enter; a failed read is the navigation's."""
+        seam = self.seam
+        assert seam is not None, "only started with a seam"
+        try:
+            await seam.prefetch(route, subject)
+        except Exception as exc:
+            logger.warning(f"prefetch failed route={route} subject={subject} cause={exc!r}")
 
     def tick(self) -> None:
         """Expire toasts and the go prefix on the live clock, repainting on a change.
 
         The live reads of the route on screen are read again every
         :data:`LIVE_REFRESH_SECONDS`, so what lands behind them -- a Run's appended
-        events -- appears while the operator watches.
+        events -- appears while the operator watches. A held frame past its grace and a
+        caret at rest are acted on here too, so the app keeps its one interval.
         """
         changed = bool(sweep_toasts(self.session, self.console_clock))
         if expire_prefix(self.session, self.console_clock) or changed:
             self.render_frame()
         seam, now = self.seam, self.console_clock.now()
+        self._lapse(now)
         if seam is None or now - self._live_read_at < LIVE_REFRESH_SECONDS:
             return
         names = seam.live_on_screen()
@@ -1067,13 +1199,22 @@ class ConsoleApp(App[None]):
             shift: Whether Shift was held.
             at: When the key arrived, on the console clock; ``None`` reads the clock.
         """
+        if key == "Enter" and self._awaiting is not None and self.session.overlay is None:
+            # the frame on screen is not the one Enter would act on until its rows arrive
+            self.session.log_key(key, f"{self.subject or self.session.route} is loading")
+            return
         before, head, toasts = self.frame_rows, self.session.log[:1], len(self.session.toasts)
-        focus = focus_of(self.session)
+        focus, place = focus_of(self.session), stance(self.session)
         ctx = self._ctx(at)
         dispatch(ctx, key, shift)
         self._follow_route()
         self.render_frame()
-        still = self.frame_rows == before and focus_of(self.session) == focus
+        # a navigation whose frame is held still moved, though no row of it has changed
+        still = (
+            self.frame_rows == before
+            and focus_of(self.session) == focus
+            and stance(self.session) == place
+        )
         if say_why(ctx, key, head=head, toasts=toasts, still=still):
             self.render_frame()
 

@@ -440,11 +440,11 @@ def test_con_166_no_native_frame_draws_an_em_dash_as_a_cell(
     assert _found(native, em_dash_cells) == {}
 
 
-def test_con_166_a_native_attention_row_with_no_deadline_reads_due_en_dash(
+def test_con_166_a_native_attention_row_with_no_deadline_reads_its_age(
     native: dict[str, list[str]],
 ) -> None:
     row = next(row for row in native["held attention@120"] if "ACT-0001" in row)
-    assert "due –" in row  # noqa: RUF001
+    assert re.search(r" \d+(d|h|m|s)[^│]* old ", row)
 
 
 def test_con_167_every_glyph_a_native_frame_draws_is_a_table_row(

@@ -18,6 +18,7 @@ from eawf.surfaces.tui.console import drill
 from eawf.surfaces.tui.console.attach import ONBOARDING
 from eawf.surfaces.tui.console.drill import HOME
 from eawf.surfaces.tui.console.keymap import ENTRY_ROUTE
+from eawf.surfaces.tui.console.mutation import open_questions
 from eawf.surfaces.tui.console.navigation import (
     Ctx,
     copied,
@@ -30,12 +31,16 @@ from eawf.surfaces.tui.console.notices import notice_of, short_key
 from eawf.surfaces.tui.console.onboarding import ONBOARDING_KIND, WORKSPACE_VERB
 from eawf.surfaces.tui.console.operations import (
     ANSWER_OPTIONS,
+    ATTENTION_ROUTE,
+    DISMISS_REPLY,
+    DISMISS_VERB,
     PERMISSION_VERBS,
     RUN_CONTROLS,
     RUN_KINDS,
     AnswerRequest,
     ControlRequest,
     PermissionDecision,
+    QuestionAnswer,
     VerbRequest,
 )
 from eawf.surfaces.tui.console.overlays.bound_keys import open_held_row
@@ -147,12 +152,34 @@ def _confirm_target(ctx: Ctx, target: Mapping[str, str]) -> None:
         note = "sent to the daemon · waiting for its answer" if started else NO_LINK
         ctx.log("Enter", f"{verb} {target_id} {note}")
         return
+    if kind == ATTENTION_ROUTE and verb == DISMISS_VERB:
+        _dismiss_questions(ctx, target_id)
+        return
     refusal = write_refusal(ctx.s, ctx.fixture, verb=verb, kind=kind)
     control = RUN_CONTROLS.get(verb) if kind in RUN_KINDS else None
     if refusal or control is None:
         ctx.log("Enter", f"{verb} on {target_id} — nothing was written · {refusal}")
         return
     send_verb(ctx, "Enter", ControlRequest(target=target_id, control=control), verb)
+
+
+def _dismiss_questions(ctx: Ctx, target_id: str) -> None:
+    """Answer every marked question, else the one under the cursor, as no longer needed.
+
+    Each is one write through the question answer verb, so each settles, or is refused,
+    on its own; the marks are cleared once they are sent.
+    """
+    s = ctx.s
+    listed = open_questions(ctx)
+    targets = [key for key in s.marked if key in listed] or [
+        key for key in (target_id,) if key in listed
+    ]
+    if not targets:
+        ctx.log("Enter", "nothing to dismiss · mark the questions with Space or * first")
+        return
+    for key in targets:
+        send_verb(ctx, "Enter", QuestionAnswer(target=key, reply=DISMISS_REPLY), "dismiss")
+    s.marked = []
 
 
 def _enter_overlay(ctx: Ctx) -> bool:

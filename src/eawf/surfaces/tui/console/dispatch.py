@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping
 from types import MappingProxyType
+from typing import Final
 
 from eawf.surfaces.tui.console import attention as att
 from eawf.surfaces.tui.console import derive as dv
@@ -149,6 +150,7 @@ def _frame_keys(ctx: Ctx, key: str, shift: bool) -> bool:
     if key == "Tab" and shift and s.route != "settings" and not drill.is_native(ctx):
         return False
     k = key if enters_text(s) else km.ALIASES.get(key, key)
+    _close_for_global(ctx, k)
     if s.absent_frame and not s.overlay and _ABSENT_KEYS.match(k):
         ctx.log(k, "nothing is recorded here — Esc goes back")
         return True
@@ -247,6 +249,21 @@ def _console_keys(ctx: Ctx, k: str, shift: bool) -> None:
     if _surface_claims(ctx, k):
         return
     _route_independent(ctx, k, pane=s.overlay == "actions")
+
+
+#: The overlays a global key passes through, closing them first: help lists ``g``, ``/``
+#: and ``?`` as acting everywhere, so a card that swallowed them would contradict it. A
+#: card the operator types into or confirms keeps every key it binds.
+_PASS_THROUGH: Final = frozenset(OVERLAY_KEYS) - {"help", "palette", "consequence", "draft"}
+_PASSED_GLOBALS: Final = frozenset({"g", "/", "?"})
+
+
+def _close_for_global(ctx: Ctx, k: str) -> None:
+    """Close a reading overlay so the global key ``k`` acts on the route beneath it."""
+    s = ctx.s
+    if s.overlay in _PASS_THROUGH and k in _PASSED_GLOBALS and s.reply is None:
+        closed = close_overlay(s)
+        ctx.log(k, f"close {closed} · it stays as it was")
 
 
 def _quit_press(s: Session) -> bool:

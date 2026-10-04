@@ -84,7 +84,7 @@ FEED = _page(
 def test_history_lists_each_change_newest_first() -> None:
     frame = _frame({HISTORY_READ: FEED})
     rows = [row for row in frame if "TSK-000" in row]
-    assert rows[0].lstrip(" ▸").startswith("TSK-0003 batch_ref, status")
+    assert rows[0].lstrip(" ▸").startswith("TSK-0003 batch ref, status")
     assert "rev 2" in rows[0] and "OP-0001" in rows[0] and "Oct 2 12:34" in rows[0]
     assert rows[1].lstrip().startswith("TSK-0001 status")
     assert "no change feed" not in "\n".join(frame)
@@ -93,7 +93,8 @@ def test_history_lists_each_change_newest_first() -> None:
 def test_the_source_pane_names_the_change_under_the_caret() -> None:
     frame = _frame({HISTORY_READ: FEED})
     source = next(row for row in frame if row.startswith(" SOURCE"))
-    assert "domain.task.planned" in source and "OP-0001" in source and "sequence 12" in source
+    # the event is named in words, and the ledger sequence is not prose
+    assert "task planned · by OP-0001" in source and "sequence" not in source
     assert "2 fields changed" in frame[frame.index(source) + 1]
     assert frame[-1].split()[-2:] == ["Esc", "back"]
     assert "Enter" in frame[-1].split()

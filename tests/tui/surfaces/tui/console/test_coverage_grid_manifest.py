@@ -35,7 +35,7 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method
 from eawf.kernel.projection.operations import OPERATIONS_ROUTES
 from eawf.kernel.projection.read_models import READ_MODEL_BY_KIND, ReadModelKind
 from eawf.kernel.projection.verification import VERIFICATION_ROUTES
@@ -238,7 +238,7 @@ def test_this_waves_routes_are_listed_bound_and_served(route: str) -> None:
     """The seven routes this wave binds moved out of the hole list in the same commit."""
     row = next(r for r in load_manifest().routes if r.route == route)
     assert row.binding == "bound"
-    assert READ_METHOD_TEMPLATE.format(route=route) in ROUTE_READ_METHODS
+    assert read_method(route) in ROUTE_READ_METHODS
 
 
 def test_the_off_document_rows_are_the_routes_a_read_verb_serves_without_a_collection() -> None:

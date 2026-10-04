@@ -227,6 +227,46 @@ def resolve_operator(*, actor: str | None, receipt_ref: str | None) -> Operator 
     return Operator(principal=actor, receipt_ref=receipt_ref)
 
 
+def tree_operator(authority: RootAuthority) -> Operator | None:
+    """Return the operator the tree's own Tracks name as their owner, to act as by default.
+
+    Every Track policy records the principal that owns it, so a tree whose Tracks are all
+    owned by one operator already says who works it; a launch without ``--actor`` acts as
+    that operator rather than as nobody. A tree with no such Track, or with Tracks owned
+    by different operators, names no one to default to.
+
+    Args:
+        authority: The tree's resolved authority, whose selected generation is read.
+
+    Returns:
+        The single owning operator, with no receipt; ``None`` when the tree names none,
+        names several, or its document cannot be read.
+    """
+    from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+    from eawf.kernel.state.epoch2.values import OwnerPrincipal
+    from eawf.kernel.store.compaction import read_document
+    from eawf.surfaces.tui.console.operations import Operator
+
+    target, generation = authority.target, authority.generation_id
+    if target is None or generation is None:
+        return None
+    try:
+        tracks = read_document(target.generation_path(generation) / GENERATION_DOCUMENT).get(
+            "track", {}
+        )
+        owners = {
+            OwnerPrincipal.model_validate(track["policy"]["ownership_principal"])
+            for track in tracks.values()
+        }
+    except (OSError, ValueError, KeyError) as error:
+        logger.info(f"tree_operator unreadable cause={error!s}")
+        return None
+    operators = {owner.principal_id for owner in owners if owner.principal_kind == "operator"}
+    if len(operators) != 1:
+        return None
+    return Operator(principal=operators.pop())
+
+
 def launch_tui(
     *,
     workspace: Path | None,
@@ -243,8 +283,9 @@ def launch_tui(
         plain: Plain-output flag -- writes the plain frame instead of opening the app.
         verbose: Whether the console's ``--verbose`` key-trace row is shown (SURF-173).
         operator: Who the console's writes are attributed to, from
-            :func:`resolve_operator`; ``None`` leaves every writing verb refused with
-            that reason.
+            :func:`resolve_operator`; ``None`` acts as the operator the tree's Tracks
+            name as owner (:func:`tree_operator`), and a tree naming none leaves every
+            writing verb refused with that reason.
 
     Returns:
         Process exit code: ``0`` on a clean quit or a written frame,
@@ -300,7 +341,7 @@ def launch_tui(
             state_path=state_path,
             chrome=with_entry_state(chrome, resolving),
             verbose=verbose,
-            operator=operator,
+            operator=operator if operator is not None else tree_operator(authority),
         )
     finally:
         if saved is not None:
@@ -472,4 +513,5 @@ __all__ = [
     "launch_tui",
     "project_name",
     "resolve_operator",
+    "tree_operator",
 ]

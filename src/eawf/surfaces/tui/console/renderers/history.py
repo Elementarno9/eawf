@@ -102,7 +102,7 @@ def none_since(since: date) -> str:
 
 def _change_cells(record: ChangeRecord) -> list[str]:
     """Return one ledger row: the record and its fields, the revision, the actor, the time."""
-    fields = ", ".join(change.field for change in record.changes)
+    fields = ", ".join(change.field.replace("_", " ") for change in record.changes)
     revision = f"rev {record.revision_after}" if record.revision_after is not None else NO_VALUE
     return [
         f"{record.record_key} {fields}",
@@ -112,12 +112,21 @@ def _change_cells(record: ChangeRecord) -> list[str]:
     ]
 
 
+def _event_words(event_name: str) -> str:
+    """Return a change's event name as words: ``domain.run.completed`` reads ``run completed``.
+
+    The family prefix and the dotted spelling are how the ledger files the event, not
+    what happened.
+    """
+    parts = event_name.split(".")
+    return " ".join(parts[1:] if len(parts) > 1 else parts).replace("_", " ")
+
+
 def _source(record: ChangeRecord) -> list[str]:
     """Return the source pane of the change under the caret."""
     count = len(record.changes)
     return [
-        f" {'SOURCE':<12}{record.event_name} · by {record.actor_ref or UNKNOWN_WORD} "
-        f"· sequence {record.canonical_sequence}",
+        f" {'SOURCE':<12}{_event_words(record.event_name)} · by {record.actor_ref or UNKNOWN_WORD}",
         f" {'':<12}{count} field{'s' if count != 1 else ''} changed · Enter shows them "
         "before and after",
     ]

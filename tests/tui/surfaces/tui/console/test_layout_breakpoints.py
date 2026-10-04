@@ -185,13 +185,15 @@ def test_clipped_names_end_at_one_cell(columns: int) -> None:
 # ---------- a Batch's Task rows keep their state ----------
 
 
-def test_a_task_row_keeps_its_state_and_only_the_caret_row_its_title() -> None:
+def test_a_task_row_keeps_its_state_and_every_row_its_title_cut_to_fit() -> None:
     document = copy.deepcopy(sp.DOCUMENT)
     document["task"]["TSK-0001"]["intent"] = sp.LONG * 2
     frame = sp._frame("batch.detail", "BAT-0100", w=80, document=document)
     caret = next(row for row in frame if "▸ TSK-0001" in row)
     assert "TSK-0001 · RUNNING" in caret
-    assert any(row.rstrip().endswith("TSK-0002 · COMPLETED") for row in frame)
+    assert caret.rstrip().endswith("…")
+    assert cell_len(caret.rstrip()) <= 80
+    assert any("TSK-0002 · COMPLETED  Seal the ledger" in row for row in frame)
 
 
 # ---------- the Activity rail and its window ----------

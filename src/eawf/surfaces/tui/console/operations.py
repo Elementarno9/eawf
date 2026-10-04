@@ -126,6 +126,7 @@ RUN_CONTROLS: Final[Mapping[str, ControlKind]] = MappingProxyType(
         "interrupt": ControlKind.INTERRUPT,
         "cancel": ControlKind.CANCEL,
         "reconcile": ControlKind.RECONCILE,
+        "resume": ControlKind.RESUME,
         "cancel selected": ControlKind.CANCEL,
         "reconcile selected": ControlKind.RECONCILE,
     }
@@ -164,6 +165,13 @@ DROP_REASON: Final = "dropped by the operator from the console"
 #: The route whose undated Milestones the operator proposes a target date for, and the verb.
 TIMELINE_ROUTE: Final = "timeline"
 PROPOSE_DATE_VERB: Final = "propose date"
+
+#: The Attention verb that closes every marked question as no longer needing an answer:
+#: each is answered through the question answer verb with one fixed reply, one write per
+#: question, so a backlog of stale questions is cleared in one decision.
+DISMISS_VERB: Final = "dismiss selected"
+#: The reply a dismissed question is answered with, so its record says why it closed.
+DISMISS_REPLY: Final = "dismissed from the console: it no longer needs an answer"
 
 #: Why a writing verb with no daemon mutator is refused; the reason the menu shows.
 UNBOUND_REASON: Final = "no daemon verb carries this yet"
@@ -227,7 +235,9 @@ def binding_refusal(kind: str, verb: str) -> str:
         An empty string when a daemon mutator carries the verb; otherwise the reason the
         verb is refused.
     """
-    if kind == ATTENTION_ROUTE and (verb in ANSWER_OPTIONS or verb in ACTION_VERBS):
+    if kind == ATTENTION_ROUTE and (
+        verb in ANSWER_OPTIONS or verb in ACTION_VERBS or verb == DISMISS_VERB
+    ):
         return ""
     if kind in RUN_KINDS and verb in RUN_CONTROLS:
         return ""
@@ -1200,6 +1210,8 @@ __all__ = [
     "CAMPAIGN_CLOSE_METHOD",
     "CAMPAIGN_ROUTE",
     "CONTROL_METHOD",
+    "DISMISS_REPLY",
+    "DISMISS_VERB",
     "DISPATCH_CONTROL_METHOD",
     "DISPATCH_KINDS",
     "DISPATCH_QUEUE_TARGET",

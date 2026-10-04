@@ -15,10 +15,10 @@ from typing import Any
 import pytest
 
 from eawf.kernel.projection.connection import (
-    READ_METHOD_TEMPLATE,
-    RECONNECT_METHOD_TEMPLATE,
     ConnectionValue,
     ReconnectDisposition,
+    read_method,
+    reconnect_method,
 )
 from eawf.surfaces.tui.console.harness import settle
 from eawf.surfaces.tui.console.renderers.crash_recovery import NO_LINK
@@ -89,9 +89,9 @@ def _take(door_index: int) -> tuple[str, str, list[str]]:
 @pytest.mark.parametrize(
     ("index", "value", "verb"),
     [
-        (0, ConnectionValue.GAP, READ_METHOD_TEMPLATE.format(route=ROUTE)),
+        (0, ConnectionValue.GAP, read_method(ROUTE)),
         # the replay closes its exact gap inside the door, so it lands live
-        (1, ConnectionValue.LIVE_COMPLETE, RECONNECT_METHOD_TEMPLATE.format(route=ROUTE)),
+        (1, ConnectionValue.LIVE_COMPLETE, reconnect_method(ROUTE)),
         (2, ConnectionValue.OFFLINE_SNAPSHOT, None),
     ],
 )

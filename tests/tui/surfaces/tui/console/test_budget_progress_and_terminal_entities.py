@@ -4,7 +4,7 @@ Each test names the packet row it proves. CON-077: a budget is spent, limit and 
 estimated remainder, and the time basis is elapsed, limit and a derived typical value,
 never a remaining time. CON-078: progress is a named numerator with its marker, never a
 bare percentage. CON-081: a finished entity drops the connection line, says nothing is
-wrong, ages informationally and offers no lifecycle control.
+wrong, says nothing can change it now and offers no lifecycle control.
 """
 
 from __future__ import annotations
@@ -201,7 +201,7 @@ def test_con_081_a_finished_run_says_nothing_is_wrong(
     body = rows[1:-1]
     final = next(row for row in body if row.startswith(" FINAL"))
     assert f"RUN-9e3779b1 {status} · finished, nothing is wrong" in final
-    assert any("ages informationally after 30s" in row for row in body)
+    assert any("a reading up to 30s old is still exact" in row for row in body)
     assert not any(row.startswith(" ATTACHED") for row in body)
     glyphs = {glyph.unicode for glyph in CONNECTION.values()}
     assert not any(ch in glyphs for row in body[2:] for ch in row)
@@ -211,7 +211,7 @@ def test_con_081_a_finished_run_says_nothing_is_wrong(
 
 def test_con_081_the_finished_rows_carry_no_truth_mark(fixture: Fixture) -> None:
     rows = _frame(fixture, _run_spine(_status("FAILED")), subject="RUN-9e3779b1", conn="LIVE")
-    final = [row for row in rows if row.startswith(" FINAL") or "informationally" in row]
+    final = [row for row in rows if row.startswith(" FINAL") or "still exact" in row]
     assert len(final) == 2
     assert not any(span.mark for row in final for span in spans(row))
 

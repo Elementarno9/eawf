@@ -467,7 +467,7 @@ def test_ui_065_the_repair_is_named_at_the_foot_and_never_run() -> None:
     frame = _frame("health", verdicts=VERDICTS, sel=2)
     repair = _starts(frame, " REPAIR")
     assert frame.index(repair) == len(frame) - 3
-    assert "tuple_fail" in repair
+    assert "tuple fail" in repair
     assert "running it lives in settings" in frame[-2]
     passing = _starts(_frame("health", verdicts=VERDICTS, sel=0), " REPAIR")
     assert NOTHING_TO_REPAIR in passing
@@ -951,7 +951,7 @@ def test_home_attention_region_states_why_it_has_no_count() -> None:
     frame = _frame("scope.home")
     assert "has not been read" in _starts(frame, " ATTENTION")
     quiet = _frame("scope.home", attention=_model("attention"))
-    assert _starts(quiet, " ATTENTION").startswith(" ATTENTION   nothing here opened itself")
+    assert _starts(quiet, " ATTENTION").startswith(" ATTENTION   nothing needs you")
 
 
 def test_home_cursor_never_rests_on_the_group_heading() -> None:

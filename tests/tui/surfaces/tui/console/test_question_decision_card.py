@@ -26,7 +26,7 @@ from eawf.kernel.projection.compute import (
     PatchEntry,
     build_route_projection,
 )
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method
 from eawf.kernel.state.epoch2.pending_action import PendingAction
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.methods.question_decision import QUESTION_OPEN_DECISION_METHOD
@@ -142,7 +142,7 @@ class _Daemon:
     def __init__(self, decisions: list[dict[str, Any]]) -> None:
         self.decisions = decisions
         self.decision_reads = 0
-        self._reads = {READ_METHOD_TEMPLATE.format(route=r): r for r in ROUTE_COLLECTIONS}
+        self._reads = {read_method(r): r for r in ROUTE_COLLECTIONS}
 
     def client(self) -> _Client:
         return _Client(self)

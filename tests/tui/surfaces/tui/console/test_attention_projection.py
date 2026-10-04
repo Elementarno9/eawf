@@ -51,7 +51,7 @@ from eawf.kernel.projection.compute import (
     build_route_projection,
     patches_for_event,
 )
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method
 from eawf.kernel.projection.read_models import ReadModelKind
 from eawf.kernel.projection.registers import (
     ATTENTION_ROUTE,
@@ -301,7 +301,8 @@ def test_ui_062_the_strip_the_rail_and_the_summary_are_one_derivation() -> None:
     assert "3 all principals" in attention_renderer.counts_line(register, principal="OP-0002")
     assert any(line.startswith("   ↳ answer") and line.endswith("2") for line in rail)
     assert any(line.startswith(" failed") and line.rstrip().endswith("0") for line in rail)
-    assert any(line.startswith(" lost") and line.rstrip().endswith("∅") for line in rail)
+    # a bucket no record feeds is not drawn: a stopped Run is counted under stalled
+    assert not any(line.startswith(" lost") for line in rail)
 
 
 def test_ui_062_a_bucket_filter_never_changes_a_rail_count() -> None:
@@ -549,7 +550,7 @@ class _StaleDaemon:
         return None
 
     def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        if method == READ_METHOD_TEMPLATE.format(route=ATTENTION_ROUTE):
+        if method == read_method(ATTENTION_ROUTE):
             self.reads += 1
             revision = 1 if self.reads == 1 else 2
             row = {"urn": ACTION_URN, "revision": revision, "status": "WAITING"}

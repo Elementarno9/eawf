@@ -846,14 +846,15 @@ def test_con_125_resolve_on_a_pending_action_is_refused_naming_what_closes_it() 
     assert "closes only by its answer" in item.why
 
 
-def test_con_125_the_selected_row_names_its_kind_and_eligibility_and_an_absent_deadline() -> None:
+def test_con_125_the_selected_row_names_its_kind_and_eligibility_and_its_age() -> None:
     single = {
         **bodies.DOCUMENT,
         "pending_action": {"ACT-0001": bodies.DOCUMENT["pending_action"]["ACT-0001"]},
     }
     frame = render_route(bodies._view("attention", document=single))
     at = next(i for i, row in enumerate(frame) if row.lstrip().startswith("▸ ACT-0001"))
-    assert "due –" in frame[at]  # noqa: RUF001
+    # an item with no deadline states how long it has waited instead
+    assert re.search(r"WAITING +\d+[dhms][^│]* old ", frame[at])
     detail = frame[at + 1].split("│")[0].strip()
     assert detail == "decision · you are the only eligible answer"
 

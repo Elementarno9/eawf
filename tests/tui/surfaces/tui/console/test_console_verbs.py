@@ -24,7 +24,7 @@ from eawf.kernel.projection.compute import (
     RouteProjection,
     build_route_projection,
 )
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, negotiate_reconnect
+from eawf.kernel.projection.connection import negotiate_reconnect, read_method
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.runtime.provider import ControlKind
 from eawf.runtime.daemon.methods.campaign import (
@@ -503,7 +503,7 @@ class _Daemon:
     def __init__(self) -> None:
         self.writes: list[tuple[str, dict[str, Any]]] = []
         self.fail_with: Exception | None = None
-        self._reads = {READ_METHOD_TEMPLATE.format(route=r): r for r in ROUTE_COLLECTIONS}
+        self._reads = {read_method(r): r for r in ROUTE_COLLECTIONS}
 
     def client(self) -> _Client:
         return _Client(self)

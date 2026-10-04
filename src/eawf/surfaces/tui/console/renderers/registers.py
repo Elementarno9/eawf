@@ -88,7 +88,7 @@ def _attention_block(view: View, register: RegisterView) -> list[str]:
         spell=lambda n: group(int(n)),
         exempt=True,
     )
-    rows = [f" MINE      {mine.slot} · nothing here opened itself"]
+    rows = [f" MINE      {mine.slot}"]
     if mine.reason:
         rows.append(f"           {mine.reason}")
     return rows

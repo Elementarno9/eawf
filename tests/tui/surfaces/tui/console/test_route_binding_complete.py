@@ -36,7 +36,7 @@ from pathlib import Path
 import pytest
 
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, RECONNECT_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method, reconnect_method
 from eawf.kernel.projection.read_models import (
     READ_MODEL_BY_KIND,
     READ_MODELS,
@@ -112,8 +112,8 @@ def unserved_bound_routes() -> tuple[str, ...]:
     for spec in REGISTRY.routes:
         if spec.key not in ROUTE_COLLECTIONS:
             continue
-        read = READ_METHOD_TEMPLATE.format(route=spec.key)
-        reconnect = RECONNECT_METHOD_TEMPLATE.format(route=spec.key)
+        read = read_method(spec.key)
+        reconnect = reconnect_method(spec.key)
         if read not in registered or reconnect not in registered:
             unserved.append(spec.id)
     return tuple(sorted(unserved))
@@ -173,7 +173,7 @@ def test_every_collection_bound_route_has_a_registered_read_and_reconnect_verb()
 
 def test_the_registered_route_verbs_are_exactly_the_bound_routes() -> None:
     """The verb tables and the collection table agree on which routes are served."""
-    expected = {READ_METHOD_TEMPLATE.format(route=route) for route in ROUTE_COLLECTIONS}
+    expected = {read_method(route) for route in ROUTE_COLLECTIONS}
     assert set(ROUTE_READ_METHODS) == expected
     assert len(ROUTE_RECONNECT_METHODS) == len(ROUTE_READ_METHODS)
 
@@ -189,7 +189,7 @@ def test_the_unprojectable_route_is_served_by_nothing_and_that_is_correct() -> N
     """No projection exists before a session does, so the entry layer has no verb."""
     spec = REGISTRY.by_id[UNPROJECTABLE_ROUTE]
     assert spec.key not in ROUTE_COLLECTIONS
-    assert READ_METHOD_TEMPLATE.format(route=spec.key) not in registered_methods()
+    assert read_method(spec.key) not in registered_methods()
     assert not READ_MODEL_BY_KIND[REGISTRY.read_models[UNPROJECTABLE_ROUTE]].projection_backed
 
 

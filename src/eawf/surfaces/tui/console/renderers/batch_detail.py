@@ -31,6 +31,7 @@ from eawf.surfaces.tui.console.live_reads import (
     HeldBranchReviews,
 )
 from eawf.surfaces.tui.console.renderers.children import (
+    LABEL_W,
     Record,
     child_cursor,
     child_rows,
@@ -48,6 +49,7 @@ from eawf.surfaces.tui.console.renderers.spine import (
     held,
     native_frame,
 )
+from eawf.surfaces.tui.console.width import clip
 
 OWN = "BAT-0001"
 
@@ -64,13 +66,18 @@ def _task_rows(view: View, bid: str) -> list[tuple[str, str, str]]:
     return rows
 
 
-def _task_line(task: Record, *, focused: bool) -> str:
-    """Return one Task row: its key and state, the title only on the row under the caret.
+def _task_line(task: Record, w: int) -> str:
+    """Return one Task row: its key, its state, then its title cut to the row.
 
-    The state leads the title so a long title can never clip it off the row.
+    Every row names its Task, so a list reads without walking the caret down it; the
+    state leads the title so a long title is what is cut, never the state.
+
+    Args:
+        task: The Task.
+        w: The cells the row's value may take.
     """
     line = f"{task.key} · {status(task)}"
-    return f"{line}  {task.title}" if focused and task.title else line
+    return clip(f"{line}  {task.title}", w) if task.title else line
 
 
 #: What the base, review and checks rows say of a Batch that names no branch yet.
@@ -199,7 +206,7 @@ def batch_frame(view: View, spine: SpineView) -> list[str]:
     listed = child_rows(
         view,
         "TASKS",
-        [_task_line(task, focused=index == cursor) for index, task in enumerate(tasks)],
+        [_task_line(task, view.w - LABEL_W - 3) for task in tasks],
         cursor,
         chrome=len(top) + len(below),
         empty="∅ no Task is filed under this Batch",

@@ -67,7 +67,7 @@ import eawf.runtime.daemon.methods.run_budget
 import eawf.runtime.daemon.methods.semantic  # noqa: F401  (registers the semantic verbs)
 from eawf.kernel.delivery.acceptance import MilestoneAcceptanceBundle
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method
 from eawf.kernel.projection.registers import UNWRITTEN_COLLECTIONS
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.methods import ensure_all_methods_registered, registered_methods
@@ -393,7 +393,7 @@ def derived_readers(record: str) -> tuple[str, ...]:
     """
     return tuple(
         sorted(
-            READ_METHOD_TEMPLATE.format(route=route)
+            read_method(route)
             for route, bound in ROUTE_COLLECTIONS.items()
             if any(collection.value == record for collection in bound)
         )

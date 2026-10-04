@@ -19,7 +19,7 @@ from typing import Any, Final
 import pytest
 
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method
 from eawf.kernel.state.epoch2.evidence_rung import ClaimLadder
 from eawf.kernel.store.compaction import read_document
 from eawf.platform.install.canary import CanaryProvision
@@ -232,7 +232,7 @@ class _Daemon:
         self.ladder = ladder
         self.claim_row = claim_row
         self.ladder_reads = 0
-        self._reads = {READ_METHOD_TEMPLATE.format(route=r): r for r in ROUTE_COLLECTIONS}
+        self._reads = {read_method(r): r for r in ROUTE_COLLECTIONS}
 
     def client(self) -> _Client:
         return _Client(self)

@@ -336,7 +336,8 @@ def test_con_131_the_header_run_options_and_recommendation(size: int) -> None:
 
 def test_con_131_the_keybar_is_the_allowlist_of_an_open_question() -> None:
     rows = _question("QST-0001")
-    assert ds.keys(rows) == [" 1..3 pick an answer", "x decline", "Esc back — it stays open"]
+    # decline has no daemon verb, so the bar never offers it
+    assert ds.keys(rows) == [" 1..3 pick an answer", "Esc back — it stays open"]
     session = ds.opened("attention", "question", "QST-0001")
     ds.press(session, "w", "4", "a", "Enter", decisions=QUESTIONS)
     assert session.reply is None
@@ -520,7 +521,8 @@ def test_con_132_the_unknown_outcome_card(size: int) -> None:
     assert "2 of 3 attempts used" in body
     assert "retry is not offered while the" in body
     assert ds.row(rows, "UNKNOWN") and ds.row(rows, "NOT")
-    assert ds.keys(rows) == [" n reconcile", "c let go", _BACK_PAUSE]
+    # let go has no daemon verb, so the bar offers only the reconcile that is sent
+    assert ds.keys(rows) == [" n reconcile", _BACK_PAUSE]
     assert "cancel" not in rows[-1] and "retry" not in rows[-1]
 
 
@@ -819,7 +821,7 @@ def test_con_135_a_signal_nothing_observes_names_why() -> None:
     rows = _readiness("candidate")
     gate = next(r for r in rows if "policy gate" in r)
     assert "? unknown" in gate
-    assert "no producer" in gate
+    assert "nothing in this tree checks" in gate
 
 
 def test_con_135_the_cursor_walks_the_signals() -> None:

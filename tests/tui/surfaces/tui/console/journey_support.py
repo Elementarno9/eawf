@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict
 
 from eawf.kernel.economics.spend import CostCeilingView, RunUsageView
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, RECONNECT_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method, reconnect_method
 from eawf.kernel.projection.registers import ATTENTION_ROUTE
 from eawf.kernel.projection.run_timeline import reduce_timeline
 from eawf.kernel.runtime.dispatch_queue import DispatchControl, DispatchPlan, DispatchQueueView
@@ -176,12 +176,8 @@ class DocumentDaemon:
         self.reconnect_answer: dict[str, Any] | None = None
         self.run_events: dict[str, tuple[RunEventRecord, ...]] = {}
         self.writes: list[tuple[str, dict[str, Any]]] = []
-        self._routes = {
-            READ_METHOD_TEMPLATE.format(route=route): route for route in ROUTE_COLLECTIONS
-        }
-        self._reconnects = {
-            RECONNECT_METHOD_TEMPLATE.format(route=route) for route in ROUTE_COLLECTIONS
-        }
+        self._routes = {read_method(route): route for route in ROUTE_COLLECTIONS}
+        self._reconnects = {reconnect_method(route) for route in ROUTE_COLLECTIONS}
 
     def _run_events(self, urn: str) -> dict[str, Any]:
         """Answer a run-events read as the daemon does, or fail for an unreadable Run."""

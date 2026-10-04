@@ -40,7 +40,7 @@ from eawf.kernel.projection.compute import (
     RouteProjection,
     build_route_projection,
 )
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, RECONNECT_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method, reconnect_method
 from eawf.kernel.projection.read_models import READ_MODEL_BY_KIND, ReadModelKind
 from eawf.kernel.projection.spine import (
     ENTRY_ROUTE,
@@ -151,8 +151,8 @@ def test_spine_routes_are_the_five_a_projection_carries() -> None:
 @pytest.mark.parametrize("route", SPINE_ROUTES)
 def test_every_spine_route_has_both_projection_verbs(route: str) -> None:
     """A route a console draws natively is one the daemon both reads and reconnects."""
-    assert READ_METHOD_TEMPLATE.format(route=route) in ROUTE_READ_METHODS
-    assert RECONNECT_METHOD_TEMPLATE.format(route=route) in ROUTE_RECONNECT_METHODS
+    assert read_method(route) in ROUTE_READ_METHODS
+    assert reconnect_method(route) in ROUTE_RECONNECT_METHODS
     assert ROUTE_COLLECTIONS[route]
 
 
@@ -161,7 +161,7 @@ def test_entry_layer_has_no_read_verb_at_all() -> None:
     kind = REGISTRY.read_models[ENTRY_ROUTE]
     assert kind is ReadModelKind.PROCESS_FRAME
     assert not READ_MODEL_BY_KIND[kind].projection_backed
-    assert READ_METHOD_TEMPLATE.format(route=ENTRY_ROUTE) not in ROUTE_READ_METHODS
+    assert read_method(ENTRY_ROUTE) not in ROUTE_READ_METHODS
     assert ENTRY_ROUTE not in ROUTE_COLLECTIONS
 
 

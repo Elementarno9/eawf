@@ -51,6 +51,7 @@ from eawf.surfaces.tui.console.overlays.cards import (
 )
 from eawf.surfaces.tui.console.overlays.decision import (
     CLAIM_ROWS,
+    QUESTION_PREFIX,
     acceptance_copy,
     claim_copy,
     evidence_rows,
@@ -64,9 +65,6 @@ from eawf.surfaces.tui.console.reads import can_mutate, write_refusal
 from eawf.surfaces.tui.console.tokens import Severity
 from eawf.workflow.projection.acceptance import AcceptanceBundleView, ReleaseReadinessView
 
-#: The key prefix of a question the daemon's answer verb records an answer to; an
-#: operator decision is a pending action, answered through its own seal.
-QUESTION_PREFIX: Final = "QST-"
 _UP: Final = frozenset({"ArrowUp", "k"})
 _DOWN: Final = frozenset({"ArrowDown", "j"})
 #: The keys a card on a sub-surface claims; every other key acts as it does on any route.

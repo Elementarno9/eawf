@@ -388,7 +388,7 @@ def test_live_a_closed_task_draws_its_criteria_proof_and_commit(tmp_path: Path) 
 
     task, batch = asyncio.run(body())
     assert "CR-001 · behavioral · gates G-01 · pass RCP-6605" in task
-    assert "1 receipt · 1 pass · 0 not pass" in task
+    assert "criteria pass on their newest receipt · 1 receipt filed" in task
     assert "no epoch-2 producer states this field yet" not in task
     assert "no epoch-2 producer states this field yet" not in batch
     assert re.search(r"RUNS\s+\d+ runs? · \d+ running · newest RUN-", batch)

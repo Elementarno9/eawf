@@ -45,6 +45,7 @@ returns to it.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Mapping
@@ -60,8 +61,6 @@ from eawf.kernel.projection.compute import (
     RouteProjection,
 )
 from eawf.kernel.projection.connection import (
-    READ_METHOD_TEMPLATE,
-    RECONNECT_METHOD_TEMPLATE,
     UNAVAILABLE_COUNT,
     ConnectionValue,
     ReconnectDisposition,
@@ -71,6 +70,8 @@ from eawf.kernel.projection.connection import (
     connection_for_disposition,
     connection_value,
     projection_now,
+    read_method,
+    reconnect_method,
     replay_note,
     staleness_target_seconds,
     vouches_for_counts,
@@ -122,6 +123,10 @@ PINNED_ROUTES: frozenset[str] = frozenset({ATTENTION_ROUTE})
 #: session's memory flat; eight covers a working set of back-and-forth navigation.
 DEFAULT_ROUTE_CAPACITY = 8
 
+#: How many routes read ahead of the operator opening them are kept. Each is one detail
+#: frame an Enter is likely to open, so a handful covers the rows the caret just crossed.
+PREFETCH_CAPACITY = 4
+
 #: The collections whose moves can change what a Milestone was accepted at or by: the
 #: Milestone itself, whose accepted revision moves, and the question an approval seals.
 _ACCEPTANCE_COLLECTIONS: frozenset[Epoch2Collection] = frozenset(
@@ -134,6 +139,10 @@ EVIDENCE_ROUTES: tuple[str, ...] = ("evidence", "evidence.digest")
 #: Called with the routes one pushed patch changed, so the app can repaint when the
 #: route on screen is among them.
 PatchListener = Callable[[tuple[str, ...]], None]
+
+#: Called with the route projections one sync read, before it reads what hangs off them,
+#: so the frame is drawn from its own rows while the slower per-record reads run.
+ProjectedListener = Callable[[tuple[str, ...]], None]
 
 
 #: The Recovery doors, the reconnect protocol's three paths back into a lost projection.
@@ -256,6 +265,8 @@ class ProjectionSeam:
         self._held: OrderedDict[str, RouteProjection] = OrderedDict()
         # the record each held route was read for, since its closed rows are read per record
         self._held_about: dict[str, str | None] = {}
+        # routes read ahead of the operator opening them, by route and the record read for
+        self._prefetched: OrderedDict[tuple[str, str | None], RouteProjection] = OrderedDict()
         self._listeners: list[PatchListener] = []
         self._reading: set[str] = set()
         self._settings: EffectiveSettingsView | None = None
@@ -369,17 +380,13 @@ class ProjectionSeam:
         read under the settings route, until it arrives. A route already being read
         is not owed again, so a quick run of navigations issues one read per route.
         """
-        wanted = [self._route, *sorted(PINNED_ROUTES - {self._route})]
-        owed = [route for route in wanted if route in ROUTE_COLLECTIONS and route not in self._held]
-        # a route opened on another record holds that record's closed rows, not this one's
-        if self._route in self._held and self._held_about.get(self._route) != self._about(
-            self._route
-        ):
+        pinned = sorted(PINNED_ROUTES - {self._route})
+        owed = [route for route in pinned if route in ROUTE_COLLECTIONS and route not in self._held]
+        if self.route_owed():
             owed.insert(0, self._route)
         if self._route in SETTINGS_ROUTES and self._settings is None:
             owed.append(SETTINGS_ROUTE)
-        subject = self._subject
-        if self._route == MILESTONE_ROUTE and subject and subject not in self._acceptance:
+        if self._acceptance_owed():
             owed.append(MILESTONE_ACCEPTANCE_METHOD)
         # a live read is owed once it can be addressed, and again when its address moves
         for name, read in LIVE_READS.items():
@@ -397,6 +404,33 @@ class ProjectionSeam:
         if claim is not None and claim not in self._ladders:
             owed.append(EVIDENCE_LADDER_METHOD)
         return tuple(route for route in owed if route not in self._reading)
+
+    def _acceptance_owed(self) -> bool:
+        """Return whether the visible Milestone's acceptance is unread for its subject."""
+        subject = self._subject
+        return self._route == MILESTONE_ROUTE and bool(subject) and subject not in self._acceptance
+
+    def frame_owed(self) -> bool:
+        """Return whether the visible route's frame still waits on a read it states as fact.
+
+        Its own rows, and a Milestone's acceptance, whose absence the frame would draw as
+        "no bundle is sealed" rather than as not yet read.
+        """
+        return self.route_owed() or self._acceptance_owed()
+
+    def route_owed(self) -> bool:
+        """Return whether the visible route's own projection is unread or read for another record.
+
+        A route opened on another record holds that record's closed rows, not this one's.
+        """
+        route = self._route
+        if route not in ROUTE_COLLECTIONS:
+            return False
+        return route not in self._held or self._held_about.get(route) != self._about(route)
+
+    def is_reading(self, name: str) -> bool:
+        """Return whether owed read *name* is in flight."""
+        return name in self._reading
 
     def retarget(self, route: str) -> None:
         """Make *route* the visible one.
@@ -416,8 +450,19 @@ class ProjectionSeam:
             self._connection = self._value_of(held)
 
     def about(self, subject: str | None) -> None:
-        """Record the record the visible route is about, so its per-subject reads are owed."""
+        """Record the record the visible route is about, so its per-subject reads are owed.
+
+        A route read ahead for that record is held at once, so opening it owes no read.
+        """
         self._subject = subject
+        if not self.route_owed():
+            return
+        about = self._about(self._route)
+        ahead = self._prefetched.pop((self._route, about), None)
+        if ahead is not None:
+            self._hold(self._route, ahead)
+            self._held_about[self._route] = about
+            logger.debug(f"prefetch adopted route={self._route} about={about}")
 
     def page_history(self, cursor: int | None) -> None:
         """Record the feed cursor History reads its page from; ``None`` reads the newest."""
@@ -434,10 +479,13 @@ class ProjectionSeam:
         A list route's subject is only the row under its caret, which moves on every key and
         changes nothing the route reads.
         """
+        return self._read_for(route, self._subject) if route == self._route else None
+
+    @staticmethod
+    def _read_for(route: str, subject: str | None) -> str | None:
+        """Return the record *route* is read for when it is opened onto *subject*."""
         spec = REGISTRY.by_key.get(route)
-        if route != self._route or spec is None or not spec.subject_required:
-            return None
-        return self._subject
+        return subject if spec is not None and spec.subject_required else None
 
     def acceptance_for(self, key: str | None) -> MilestoneAcceptanceRecord | None:
         """Return the acceptance read held for Milestone *key*; ``None`` before its read."""
@@ -467,53 +515,101 @@ class ProjectionSeam:
         """Call *listener* with the routes every applied patch changed."""
         self._listeners.append(listener)
 
-    async def sync(self) -> tuple[str, ...]:
+    async def sync(self, on_projected: ProjectedListener | None = None) -> tuple[str, ...]:
         """Read every owed route once, and hold what arrives.
+
+        The route projections are read first and one at a time, and *on_projected* hears
+        them before the reads that hang off them -- acceptance, live reads, notices --
+        which run together, so a slow repository read never delays a frame's own rows.
 
         A read that fails leaves its route unheld, so the frame keeps saying it holds
         nothing rather than drawing a guess; the next navigation owes it again. The
         failure is not raised, because one unreachable register must not stop the
         other routes from loading.
 
+        Args:
+            on_projected: Called with the route projections each round read, when any.
+
         Returns:
-            The routes this call read, in the order they were read.
+            The routes this call read: the projections in the order they were read, then
+            the rest in the order they were owed.
         """
         loaded: list[str] = []
         attempted: set[str] = set()
         # a read can make another owed -- a Run's lines once its route's rows arrive -- so
         # the owed set is taken again until it holds nothing this call has not tried
         while owed := tuple(route for route in self.owed() if route not in attempted):
+            frames = [name for name in owed if name in ROUTE_COLLECTIONS or name == SETTINGS_ROUTE]
+            if frames:
+                attempted.update(frames)
+                self._reading.update(frames)
+                projected = [name for name in frames if await self._read_one(name)]
+                loaded += projected
+                if projected and on_projected is not None:
+                    on_projected(tuple(projected))
+                # what hangs off the rows is owed by what they hold, and by the subject the
+                # listener read off them, so it is taken again once they are held
+                continue
             attempted.update(owed)
-            loaded.extend(await self._read_owed(owed))
+            self._reading.update(owed)
+            arrived = await asyncio.gather(*map(self._read_one, owed))
+            loaded += [name for name, ok in zip(owed, arrived, strict=True) if ok]
         return tuple(loaded)
 
-    async def _read_owed(self, owed: tuple[str, ...]) -> list[str]:
-        """Read each of *owed* once, holding what arrives; return the ones that arrived."""
-        loaded: list[str] = []
-        self._reading.update(owed)
-        for route in owed:
-            try:
-                if route == SETTINGS_ROUTE:
-                    await self.load_settings()
-                elif route == MILESTONE_ACCEPTANCE_METHOD:
-                    await self.load_acceptance()
-                elif route in LIVE_READS:
-                    await self.load_live(route)
-                elif route == NOTICE_LIST_METHOD:
-                    await self.load_notices()
-                elif route == QUESTION_DECISIONS_METHOD:
-                    await self.load_decisions()
-                elif route == EVIDENCE_LADDER_METHOD:
-                    await self.load_ladder()
-                else:
-                    await self.load(route)
-            except Exception as exc:
-                logger.warning(f"sync read failed route={route} cause={exc!r}")
+    async def _read_one(self, route: str) -> bool:
+        """Read owed *route* once, holding what arrives; return whether it arrived."""
+        try:
+            if route == SETTINGS_ROUTE:
+                await self.load_settings()
+            elif route == MILESTONE_ACCEPTANCE_METHOD:
+                await self.load_acceptance()
+            elif route in LIVE_READS:
+                await self.load_live(route)
+            elif route == NOTICE_LIST_METHOD:
+                await self.load_notices()
+            elif route == QUESTION_DECISIONS_METHOD:
+                await self.load_decisions()
+            elif route == EVIDENCE_LADDER_METHOD:
+                await self.load_ladder()
             else:
-                loaded.append(route)
-            finally:
-                self._reading.discard(route)
-        return loaded
+                await self.load(route)
+        except Exception as exc:
+            logger.warning(f"sync read failed route={route} cause={exc!r}")
+            return False
+        finally:
+            self._reading.discard(route)
+        return True
+
+    async def prefetch(self, route: str, subject: str | None) -> None:
+        """Read *route* as it would open onto *subject*, before the operator opens it.
+
+        The answer is kept apart from the held routes until :meth:`about` opens it, so a
+        row the caret only crossed never becomes the route on screen. A route already
+        held or read ahead for that record is not read again, and a route the daemon
+        serves no read for is not read at all. A Milestone's acceptance is read with it,
+        because its frame waits for that too.
+
+        Args:
+            route: The route the row would open.
+            subject: The record it would open onto.
+        """
+        about = self._read_for(route, subject)
+        reads: list[Awaitable[object]] = []
+        if route == MILESTONE_ROUTE and about and about not in self._acceptance:
+            reads.append(self.load_acceptance(about))
+        held = route in self._held and self._held_about.get(route) == about
+        if route in ROUTE_COLLECTIONS and not held and (route, about) not in self._prefetched:
+            reads.append(self._read_ahead(route, about))
+        await asyncio.gather(*reads)
+
+    async def _read_ahead(self, route: str, about: str | None) -> None:
+        """Read *route* for record *about* into the read-ahead cache, dropping the oldest."""
+        params = self._params() if about is None else {**self._params(), "key": about}
+        answer = await self._binding.call(read_method(route), params)
+        self._prefetched[(route, about)] = RouteProjection.model_validate(answer)
+        while len(self._prefetched) > PREFETCH_CAPACITY:
+            self._prefetched.popitem(last=False)
+        logger.debug(f"prefetch route={route} about={about}")
 
     @property
     def settings(self) -> EffectiveSettingsView | None:
@@ -603,7 +699,7 @@ class ProjectionSeam:
         route = route or self._route
         about = self._about(route)
         params = self._params() if about is None else {**self._params(), "key": about}
-        answer = await self._binding.call(READ_METHOD_TEMPLATE.format(route=route), params)
+        answer = await self._binding.call(read_method(route), params)
         projection = self._hold(route, RouteProjection.model_validate(answer))
         self._held_about[route] = about
         logger.debug(f"load route={route} cursor={projection.header.source_cursor}")
@@ -619,9 +715,7 @@ class ProjectionSeam:
         Returns:
             The view, with every leaf's effective value, winning layer and stack.
         """
-        answer = await self._binding.call(
-            READ_METHOD_TEMPLATE.format(route=SETTINGS_ROUTE), self._params()
-        )
+        answer = await self._binding.call(read_method(SETTINGS_ROUTE), self._params())
         view = EffectiveSettingsView.model_validate(answer)
         self._settings = view
         logger.debug(f"load_settings leaves={len(view.leaves)}")
@@ -803,7 +897,7 @@ class ProjectionSeam:
                 "a console with no revision cold-loads rather than reconnecting"
             )
         answer = await self._binding.call(
-            RECONNECT_METHOD_TEMPLATE.format(route=self._route),
+            reconnect_method(self._route),
             {**self._params(), "cursor": self.cursor},
         )
         negotiation = ReconnectNegotiation.model_validate(answer["negotiation"])
@@ -956,6 +1050,9 @@ class ProjectionSeam:
         if any(entry.collection is Epoch2Collection.PENDING_ACTION for entry in patch.entries):
             # a filed or answered decision changes which ones wait
             self._decisions = None
+        # a route read ahead is not kept current by the feed, so a patch to it drops it
+        for ahead in [key for key in self._prefetched if key[0] in patch.routes]:
+            del self._prefetched[ahead]
         patched = self._fan_out(patch)
         if not patched:
             return
@@ -1042,6 +1139,7 @@ class ProjectionSeam:
             del self._held[route]
         self._acceptance.clear()
         self._live.clear()
+        self._prefetched.clear()
 
     def _evict(self) -> None:
         """Drop the least recently shown unpinned routes until the cache fits.
@@ -1147,11 +1245,13 @@ __all__ = [
     "DEFAULT_ROUTE_CAPACITY",
     "KNOWN_COUNT_LABEL",
     "PINNED_ROUTES",
+    "PREFETCH_CAPACITY",
     "READ_ONLY_DOOR",
     "REATTACH_DOOR",
     "RECOVERY_DOORS",
     "REPLAY_DOOR",
     "PatchListener",
+    "ProjectedListener",
     "ProjectionSeam",
     "ReconnectOutcome",
     "SeamCursor",

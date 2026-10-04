@@ -21,7 +21,7 @@ from eawf.kernel.projection.compute import (
     ProjectionRow,
     build_route_projection,
 )
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.state.epoch2.consequence import MUTATIONS_BY_METHOD
 from eawf.runtime.daemon.methods import bulk as daemon_bulk
@@ -281,7 +281,7 @@ class _Daemon:
     def __init__(self, *, fail: Exception | None = None) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.fail = fail
-        self._reads = {READ_METHOD_TEMPLATE.format(route=r): r for r in ROUTE_COLLECTIONS}
+        self._reads = {read_method(r): r for r in ROUTE_COLLECTIONS}
 
     def client(self) -> _Client:
         return _Client(self)

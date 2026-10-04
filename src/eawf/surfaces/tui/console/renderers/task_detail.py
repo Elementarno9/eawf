@@ -75,6 +75,20 @@ def _run_line(run: SpineRow) -> str:
     return f"{run.key} · {status(run)}" + (f" · started {at(started)}" if started else "")
 
 
+def _newest_proofs(
+    facts: Mapping[str, str], proofs: Sequence[SpineRow]
+) -> list[tuple[str, SpineRow | None]]:
+    """Return each criterion the Task states, in order, beside its newest receipt, if any."""
+    newest: list[tuple[str, SpineRow | None]] = []
+    place = 1
+    while (stated := facts.get(f"{CRITERION_FACT}{place}")) is not None:
+        ident = stated.split(" · ", 1)[0]
+        named = [p for p in proofs if ident in p.facts.get("criteria", "").split(",")]
+        newest.append((ident, max(named, key=lambda p: p.facts.get("ended_at", ""), default=None)))
+        place += 1
+    return newest
+
+
 def _criterion_lines(facts: Mapping[str, str], proofs: Sequence[SpineRow]) -> list[str]:
     """Return one line per criterion the Task states, each with its newest proof.
 
@@ -82,27 +96,53 @@ def _criterion_lines(facts: Mapping[str, str], proofs: Sequence[SpineRow]) -> li
     reached, or that none is filed; its text comes last, so a narrow frame clips it first.
     """
     lines: list[str] = []
-    place = 1
-    while (stated := facts.get(f"{CRITERION_FACT}{place}")) is not None:
-        ident, kind, gates, text = stated.split(" · ", 3)
-        named = [p for p in proofs if ident in p.facts.get("criteria", "").split(",")]
-        newest = max(named, key=lambda p: p.facts.get("ended_at", ""), default=None)
+    for place, (_ident, newest) in enumerate(_newest_proofs(facts, proofs), start=1):
+        ident, kind, gates, text = facts[f"{CRITERION_FACT}{place}"].split(" · ", 3)
         proof = (
             f"{newest.facts.get('result', UNKNOWN_WORD)} {newest.facts.get('receipt', newest.key)}"
             if newest is not None
             else "∅ no receipt"
         )
         lines.append(" · ".join(part for part in (ident, kind, gates, proof, text) if part))
-        place += 1
     return lines
 
 
-def _proof_text(proofs: Sequence[SpineRow]) -> str:
-    """Return how many receipts are filed for the Task and how they ended."""
+def _proof_text(facts: Mapping[str, str], proofs: Sequence[SpineRow]) -> str:
+    """Return how the Task's criteria stand on their newest receipts, and how many are filed.
+
+    A criterion re-run until it passes leaves its earlier failures on file, so only the
+    newest receipt of each criterion says whether it is proven; the count of every
+    receipt follows, so the earlier ones are not hidden.
+    """
     if not proofs:
         return "∅ no proof receipt is filed for this Task"
-    passed = sum(1 for p in proofs if p.facts.get("result") == "pass")
-    return f"{dv.plural(len(proofs), 'receipt')} · {passed} pass · {len(proofs) - passed} not pass"
+    newest = [proof for _ident, proof in _newest_proofs(facts, proofs)]
+    filed = dv.plural(len(proofs), "receipt")
+    if not newest:
+        return f"{filed} filed · the Task states no criterion they prove"
+    passed = sum(1 for p in newest if p is not None and p.facts.get("result") == "pass")
+    return f"{passed} of {len(newest)} criteria pass on their newest receipt · {filed} filed"
+
+
+def _due_text(view: View, key: str) -> str:
+    """Return when a Task is due: its Milestone's target date, else with that Milestone.
+
+    A Task is due with the Milestone it is scoped to, so the Milestone's own date is the
+    answer, and its title names it where it states no date.
+    """
+    milestone = next(
+        (
+            row
+            for row in view.rows
+            if row.key == key and row.collection is Epoch2Collection.MILESTONE
+        ),
+        None,
+    )
+    if milestone is None:
+        return f"with {key}"
+    named = f"{key} {milestone.title}" if milestone.title else key
+    target = milestone.facts.get("target_date")
+    return f"{target} · with {named}" if target else f"with {named}"
 
 
 def task_frame(view: View, spine: SpineView) -> list[str]:
@@ -138,10 +178,10 @@ def task_frame(view: View, spine: SpineView) -> list[str]:
         lrow("INTEGRATED", facts["integrated"][:7] if "integrated" in facts else NOT_INTEGRATED),
         lrow("CRITERIA", criteria or cell(subject.field("criteria"))),
         *(lrow("", line) for line in _criterion_lines(facts, proofs)),
-        lrow("PROOF", _proof_text(proofs)),
+        lrow("PROOF", _proof_text(facts, proofs)),
         lrow("CANDIDATES", cell(subject.field("candidates"))),
         *([lrow("PRIORITY", facts["priority"])] if "priority" in facts else []),
-        *([lrow("DUE", facts["due"])] if "due" in facts else []),
+        *([lrow("DUE", _due_text(view, facts["due"]))] if "due" in facts else []),
     ]
     top = detail_head(view, spine, subject)
     cursor = child_cursor(session, [run.key for run in runs], subject=subject.key)

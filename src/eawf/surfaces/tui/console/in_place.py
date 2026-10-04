@@ -85,6 +85,7 @@ IN_PLACE: Final[Mapping[tuple[str, str], Callable[[Ctx, str], None]]] = MappingP
         ("activity", "sort"): _sort,
         ("activity", "pause display"): _pause,
         ("activity", "select all shown"): _mark_all,
+        ("attention", "select all shown"): _mark_all,
         ("scope.home", "pin outcome"): _pin,
         ("timeline", "propose date"): propose,
         ("history", "open target"): open_target,

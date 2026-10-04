@@ -120,10 +120,11 @@ GLOBAL_KEYS: tuple[GlobalKey, ...] = (
     GlobalKey(",", "clear the marks", (",",), Where.SELECTION),
     GlobalKey("Ctrl+C", "quit · guarded, press again within 1.5s", ("ctrl+c",)),
 )
-# The routes that list lifecycle records a bulk preview can act on.
+# The routes that list records a bulk verb can act on: lifecycle records, and the questions
+# the Attention route lists, which are dismissed together.
 SELECTION_ROUTES: frozenset[str] = frozenset(
     {"scope.home", "track", "milestone", "batch.detail", "task.detail", "backlog", "activity"}
-    | {"run.detail"}
+    | {"run.detail", "attention"}
 )
 # The keys a linked consequence card binds: confirm, cancel, walk its result rows and
 # reconcile the unknown one.

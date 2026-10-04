@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method
 from eawf.runtime.budget.notices import BudgetThresholdNotice, notice_key_for
 from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
 from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD
@@ -256,7 +256,7 @@ class _Daemon:
     def __init__(self, notices: list[BudgetThresholdNotice]) -> None:
         self.notices = notices
         self.calls: list[tuple[str, dict[str, Any]]] = []
-        self._reads = {READ_METHOD_TEMPLATE.format(route=r): r for r in ROUTE_COLLECTIONS}
+        self._reads = {read_method(r): r for r in ROUTE_COLLECTIONS}
 
     def client(self) -> _Client:
         return _Client(self)

@@ -39,7 +39,7 @@ from eawf.kernel.projection.compute import (
     RouteProjection,
     build_route_projection,
 )
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method
 from eawf.kernel.projection.registers import (
     ATTENTION_ROUTE,
     REGISTER_ROUTES,
@@ -168,7 +168,7 @@ def test_register_routes_are_the_four_the_console_draws_from_a_register() -> Non
 @pytest.mark.parametrize("route", REGISTER_ROUTES)
 def test_every_register_route_is_served_by_its_own_read_verb(route: str) -> None:
     """A route the console draws natively is one the daemon reads at a cursor."""
-    assert READ_METHOD_TEMPLATE.format(route=route) in ROUTE_READ_METHODS
+    assert read_method(route) in ROUTE_READ_METHODS
     assert ROUTE_COLLECTIONS[route]
 
 

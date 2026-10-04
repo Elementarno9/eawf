@@ -294,7 +294,10 @@ def test_a_leaf_off_the_catalog_is_counted_rather_than_dropped(tree: Path) -> No
 
     outside = [leaf.key for leaf in view.uncatalogued()]
     assert PROBE_KEY in outside
-    assert f"{len(outside)} leaves off the catalog" in _frame("settings", view, key=CATALOG_KEY)[1]
+    assert (
+        f"{len(outside)} settings eawf does not know"
+        in _frame("settings", view, key=CATALOG_KEY)[1]
+    )
 
 
 def test_the_stack_card_draws_the_focused_keys_whole_ladder(tree: Path) -> None:

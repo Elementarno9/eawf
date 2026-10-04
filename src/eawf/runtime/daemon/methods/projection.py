@@ -77,8 +77,6 @@ from eawf.kernel.projection.compute import (
     subject_ledger_rows,
 )
 from eawf.kernel.projection.connection import (
-    READ_METHOD_TEMPLATE,
-    RECONNECT_METHOD_TEMPLATE,
     ReconnectDisposition,
     negotiate_reconnect,
     read_method,
@@ -1116,8 +1114,6 @@ __all__ = [
     "EXPORT_REPORT_METHOD",
     "EXPORT_UNREPORTABLE",
     "PROJECTION_UNREADABLE",
-    "READ_METHOD_TEMPLATE",
-    "RECONNECT_METHOD_TEMPLATE",
     "RECONNECT_UNNEGOTIABLE",
     "ROUTE_READ_METHODS",
     "ROUTE_RECONNECT_METHODS",
@@ -1128,7 +1124,9 @@ __all__ = [
     "RouteReadParams",
     "firehose_path",
     "read_export_report",
+    "read_method",
     "read_milestone_acceptance",
     "read_settings",
+    "reconnect_method",
     "run_state_rows",
 ]

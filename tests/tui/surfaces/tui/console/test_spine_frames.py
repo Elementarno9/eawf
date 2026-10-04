@@ -250,7 +250,7 @@ def test_the_batch_frame_lists_its_own_tasks_and_no_sibling() -> None:
     assert "TSK-0003" not in text, "a Task of another Batch is not listed"
     assert _starts(frame, "TASKS").startswith(" TASKS      ▸ TSK-0001 · RUNNING  Bound the replay")
     assert "TSK-0002 · COMPLETED" in text
-    assert "Seal the ledger" not in text, "only the row under the caret carries its title"
+    assert "TSK-0002 · COMPLETED  Seal the ledger" in text, "every row names its Task"
     assert "2 tasks · 1 completed" in _starts(frame, "COUNT")
     assert not any(row.startswith((" REGIONS", "   ROW ")) for row in frame)
 

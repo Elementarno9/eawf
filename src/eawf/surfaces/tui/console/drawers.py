@@ -118,9 +118,10 @@ def action_rows(view: View) -> list[str]:
     its reason.
     """
     s, fx, refusal = view.session, view.fixture, view.principal_refusal
-    chrome = offered_verbs(s, fx, view.projection)
+    states = view.decisions.run_states if view.decisions is not None else None
+    chrome = offered_verbs(s, fx, view.projection, states)
     decided = gate(s, fx, verb="lifecycle move", linked=view.linked, principal_refusal=refusal)
-    native = () if fx.prototype else lifecycle_verbs(s, view.rows, decided)
+    native = () if fx.prototype else lifecycle_verbs(s, view.rows, decided, states)
     native_keys = {verb.key for verb in native}
     rows = menu_rows(
         (*chrome_kept(chrome, native), *native),

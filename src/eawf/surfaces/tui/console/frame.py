@@ -125,6 +125,8 @@ class View:
             frame is about; ``None`` before their read or off the Run frame.
         principal: Who the console acts as, whose own attention items the header counts;
             ``None`` when it acts as nobody, which has no ``mine`` to count.
+        sealable: Whether the console holds the evidence receipt an answer to a pending
+            action is sealed under, so the answer verbs are offered on one.
         now: The wall-clock instant the frame is drawn at, which an age or a running
             elapsed time is measured to; ``None`` states those as of the read instead.
         scope_name: The name the header gives the attached scope, such as the project's
@@ -155,6 +157,7 @@ class View:
     liveness: HeldLiveness | None = None
     timeline: RunTimeline | None = None
     principal: str | None = None
+    sealable: bool = False
     now: datetime | None = None
     scope_name: str = ""
     gutter: int = 0
@@ -355,6 +358,7 @@ def header(view: View, crumb: str) -> str:
         needs=needs_count(view),
         w=view.w,
         prototype=view.fixture.prototype,
+        actor=view.principal if view.linked else None,
     )
 
 

@@ -202,7 +202,7 @@ def _ui_cmd(
             "--actor",
             envvar="EAWF_ACTOR",
             help="Principal key the native console's writes are attributed to. "
-            "Without it every writing verb is refused.",
+            "Without it the console acts as the operator who owns the tree's Tracks.",
         ),
     ] = None,
     receipt_ref: Annotated[

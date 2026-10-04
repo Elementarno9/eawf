@@ -34,10 +34,8 @@ NOTICE_VERBS: Final[Mapping[str, Literal["snooze", "acknowledge", "resolve"]]] =
     "n": "acknowledge",
 }
 
+
 #: Why a notice refuses an answer or a denial: it asks nothing.
-NOTHING_TO_ANSWER: Final = "a notice has nothing to {verb} — snooze or resolve it"
-
-
 def notice_of(
     notices: Sequence[BudgetThresholdNotice], key: str | None
 ) -> BudgetThresholdNotice | None:
@@ -141,7 +139,7 @@ def notice_verb(ctx: Ctx, key: str) -> bool:
         return False
     if key not in NOTICE_VERBS:
         verb = "answer" if key == "a" else "deny"
-        ctx.log(key, NOTHING_TO_ANSWER.format(verb=verb))
+        ctx.log(key, f"a notice has nothing to {verb} — snooze or resolve it")
         return True
     s.verb = key
     s.c_target = None
@@ -151,7 +149,6 @@ def notice_verb(ctx: Ctx, key: str) -> bool:
 
 
 __all__ = [
-    "NOTHING_TO_ANSWER",
     "NOTICE_BUCKET",
     "NOTICE_VERBS",
     "detail_view",

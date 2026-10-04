@@ -20,8 +20,9 @@ opens against the prototype registers, and the tracked golden contract is that m
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from typing import Final
 
 from eawf.kernel.projection.connection import staleness_target_seconds
 from eawf.kernel.projection.route_view import RouteReadModel
@@ -45,6 +46,13 @@ from eawf.surfaces.tui.console.frame import (
 from eawf.surfaces.tui.console.keybar import KEY, KeyEntry
 from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.lifecycle import ELAPSED_WORDS, Layout
+from eawf.surfaces.tui.console.operations import (
+    ATTENTION_ROUTE,
+    DISMISS_VERB,
+    UNBOUND_REASON,
+    linked_refusal,
+)
+from eawf.surfaces.tui.console.overlays.situations import stopped_answering
 from eawf.surfaces.tui.console.reads import attached, reads
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers.children import Record, lrow, status
@@ -131,30 +139,84 @@ def finished_rows(route: str, row: Record, labelled: Callable[[str, str], str]) 
     ages = seconds(staleness_target_seconds(route, terminal=True))
     return [
         labelled("FINAL", f"{row.key} {row.field('status').value} · finished, nothing is wrong"),
-        labelled("", f"it ages informationally after {ages} · no lifecycle left"),
+        labelled("", f"nothing can change it now · a reading up to {ages} old is still exact"),
     ]
 
 
-def offered_verbs(session: Session, fixture: Fixture, model: object) -> tuple[MenuVerb, ...]:
+#: The one recovery a Run that stopped answering is offered from its menu, named as its
+#: recovery pane names it: the stall the daemon raised over it is answered by a resume.
+RESUME_VERB: Final = MenuVerb(
+    key="r",
+    verb="resume",
+    available=True,
+    authority="control",
+    effects="the same Run is asked to continue from where it went quiet",
+    non_effects="it does not restart the work and does not fail the task",
+)
+
+
+#: The verbs a linked Attention menu adds: mark every listed question, then dismiss the
+#: marked ones (or the one under the cursor) in one decision.
+DISMISS_VERBS: Final = (
+    MenuVerb(key="*", verb="select all shown", available=True, weight=VerbWeight.LIGHT),
+    MenuVerb(
+        key="c",
+        verb=DISMISS_VERB,
+        available=True,
+        authority="answer",
+        effects="each marked question is answered as no longer needing one, one write each",
+        non_effects="nothing is dispatched, and an action or a stalled Run is left as it is",
+    ),
+)
+
+
+def offered_verbs(
+    session: Session,
+    fixture: Fixture,
+    model: object,
+    run_states: Mapping[str, str] | None = None,
+) -> tuple[MenuVerb, ...]:
     """Return the verbs the route's action menu offers on the frame's subject.
 
     A finished subject has no lifecycle left, so its menu keeps only the light verbs --
     the ones that open another surface of the record, such as its Git -- and none that
-    would move it.
+    would move it. A Run that stopped answering keeps its light verbs and the resume its
+    recovery names, and nothing that would treat it as running. On a linked console a
+    writing verb no daemon verb carries is left out rather than listed refused, so the
+    menu only offers what can act.
 
     Args:
         session: The session whose route and subject the menu is for.
         fixture: The registers holding the route's menu.
         model: The read model the frame draws; only a projected model states a finished
             subject.
+        run_states: The Run states the held decision records carry, by Run key, which
+            say whether the subject stopped answering; ``None`` before they are read.
     """
     verbs = fixture.menus.verbs(session.route)
-    if (
-        isinstance(model, SpineView | RouteReadModel)
-        and finished_subject(session, model) is not None
-    ):
-        return tuple(verb for verb in verbs if verb.weight is VerbWeight.LIGHT)
-    return verbs
+    if isinstance(model, SpineView | RouteReadModel):
+        light = tuple(verb for verb in verbs if verb.weight is VerbWeight.LIGHT)
+        if finished_subject(session, model) is not None:
+            return light
+        if run_states and isinstance(model, SpineView) and _stopped(session, model, run_states):
+            return (*light, RESUME_VERB)
+    if fixture.prototype:
+        return verbs
+    bound = tuple(
+        verb
+        for verb in verbs
+        if not (verb.mutates and linked_refusal(session.route, verb.verb) == UNBOUND_REASON)
+    )
+    return (*bound, *DISMISS_VERBS) if session.route == ATTENTION_ROUTE else bound
+
+
+def _stopped(session: Session, model: SpineView, run_states: Mapping[str, str]) -> bool:
+    """Return whether the frame's subject is a Run that stopped answering."""
+    found = model.index_of(session.subj_id)
+    if found is None:
+        return False
+    row = model.rows[found]
+    return stopped_answering(row.key, row.field("status").value, run_states)
 
 
 def detail_keys(view: View, spine: SpineView) -> list[KeyEntry]:
@@ -164,7 +226,8 @@ def detail_keys(view: View, spine: SpineView) -> list[KeyEntry]:
     is left and neither offered nor bound once none is.
     """
     session = view.session
-    offered = bool(offered_verbs(session, view.fixture, spine))
+    states = view.decisions.run_states if view.decisions is not None else None
+    offered = bool(offered_verbs(session, view.fixture, spine, states))
     return [
         e
         for e in native_keys(session.route, windowed=session.windowed)

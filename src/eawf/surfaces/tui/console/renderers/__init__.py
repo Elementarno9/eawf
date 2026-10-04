@@ -174,6 +174,18 @@ def unknown_frame(view: View) -> list[str]:
     return build(view, rows, keybar([("Esc", "back")], w))
 
 
+def loading_frame(view: View) -> list[str]:
+    """Return the frame of a route whose own read is still in flight, naming what it reads.
+
+    It is not the unknown frame: nothing has been refused, the answer is on its way.
+    """
+    s = view.session
+    named = s.subj_id or s.route
+    crumb = f" Eä ▸ {view.fixture.scope} ▸ {s.route}" + (f" ▸ {s.subj_id}" if s.subj_id else "")
+    rows = [header(view, crumb), f" Loading {named}…", bar(view.w)]
+    return build(view, rows, keybar([("Esc", "back")], view.w))
+
+
 def render_route(view: View) -> list[str]:
     """Return the frame of the session's route, the unknown frame when nothing is held.
 

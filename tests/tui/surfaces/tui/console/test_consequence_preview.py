@@ -566,7 +566,8 @@ def test_con_061_the_word_superseded_is_left_unpainted() -> None:
 def test_con_056_the_selection_keys_are_declared_where_the_menu_offers_bulk() -> None:
     from eawf.surfaces.tui.console.keymap import GLOBAL_KEYS, SELECTION_ROUTES, acts_here
 
-    assert frozenset().union(*ENTITY_ROUTES.values()) == SELECTION_ROUTES
+    # the Attention route marks its questions for one dismissal, beside the lifecycle routes
+    assert frozenset().union(*ENTITY_ROUTES.values()) | {"attention"} == SELECTION_ROUTES
     selection = [key for key in GLOBAL_KEYS if set(key.keys) & {" ", "*", ","}]
     assert {k for key in selection for k in key.keys} == {" ", ","}
     assert all(acts_here(key, "backlog", linked=True) for key in selection)

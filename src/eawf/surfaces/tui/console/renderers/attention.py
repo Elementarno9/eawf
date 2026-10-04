@@ -13,11 +13,11 @@ rather than drawing an empty register as ``nothing needs you``.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from types import MappingProxyType
 from typing import Final
 
 from eawf.kernel.projection.attention import (
-    LOST_HOLE_REASON,
     AttentionBucket,
     AttentionItem,
     AttentionNeedKind,
@@ -47,6 +47,7 @@ from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.decisions import PauseRecord, PauseStatus
 from eawf.surfaces.tui.console.fixture import Action
 from eawf.surfaces.tui.console.format import group as group_n
+from eawf.surfaces.tui.console.format import instant, span
 from eawf.surfaces.tui.console.frame import (
     RowWindow,
     Table,
@@ -83,8 +84,6 @@ from eawf.surfaces.tui.console.width import cell_len, pad
 
 RAIL_W = 29
 
-#: What a bucket no record feeds shows in place of a count.
-NO_RECORD = "∅"
 _KIND_INDENT = " " * 14
 _LEDGER_LEAD = " " * 14 + "ledger  "
 _LEDGER_CONT = " " * 22
@@ -203,6 +202,12 @@ NOTICE_LINE = "a notice · nothing answers it, and it counts toward no one"
 #: What a stalled Run's second line says in place of who may answer it.
 STALL_LINE = "Enter opens the pause over this Run: resume or let go"
 
+#: Why a pending action's answer keys are not offered: an answer is sealed under a receipt.
+NO_RECEIPT_LINE = "answering is sealed under an evidence receipt · relaunch with --receipt-ref"
+
+#: Seconds in a day, the grain an age is stated in from a day on.
+_DAY: Final = 86_400
+
 #: What an absent deadline renders as: the register states none, which is not a zero.
 NO_DEADLINE = "due –"  # noqa: RUF001
 
@@ -244,14 +249,14 @@ def counts_line(register: RegisterView, *, principal: str | None, complete: bool
     )
     every_n = group_n(int(every.value or 0)) if not register.withheld else UNKNOWN_WORD
     label = "all principals" if complete else "known"
-    return f"{mine_n} mine · {every_n} {label} · nothing here opened itself"
+    return f"{mine_n} mine · {every_n} {label}"
 
 
 def bucket_items(register: RegisterView, *, notices: int) -> list[dv.StripItem]:
-    """Return ``all`` then the eight buckets, each ``needs operator`` need after it.
+    """Return ``all`` then the counted buckets, each ``needs operator`` need after it.
 
     One derivation feeds the strip and the rail, and a bucket filter never changes it; a
-    bucket no record feeds states the no-record token, never a zero that reads as counted.
+    bucket no record feeds is not drawn, so no zero reads as counted.
     ``all`` is the filter that lists every bucket, so it counts every item they list,
     notices included; who must answer is the summary line's count, not this one.
 
@@ -262,15 +267,16 @@ def bucket_items(register: RegisterView, *, notices: int) -> list[dv.StripItem]:
     """
     view = build_attention_view(register)
     items = [dv.StripItem(None, "all", len(view.items) + notices)]
+    # a bucket no record feeds is left off: a Run that stopped answering is counted under
+    # stalled, as its Run frame and Activity call it, never under a second name
     items.extend(
         dv.StripItem(
             f"{c.bucket.value}.{c.need.value}" if c.need else c.bucket.value,
             c.label,
-            NO_RECORD
-            if c.source is BucketSource.HOLE
-            else c.count + (notices if c.bucket is AttentionBucket.OVER_BUDGET else 0),
+            c.count + (notices if c.bucket is AttentionBucket.OVER_BUDGET else 0),
         )
         for c in view.bucket_counts()
+        if c.source is not BucketSource.HOLE
     )
     return items
 
@@ -307,10 +313,28 @@ def eligibility_line(row: ProjectionRow, principal: str | None, holders: int) ->
     return "you are the only eligible answer" if holders <= 1 else "you may answer"
 
 
-def due_cell(row: ProjectionRow) -> str:
-    """Return the due cell: a permission's provider deadline as UTC hours and minutes."""
+def due_cell(row: ProjectionRow, now: datetime | None) -> str:
+    """Return the due cell: a permission's provider deadline, else how long it has waited.
+
+    A record with no deadline is not due at any time, so the cell says how old it is
+    instead, which is what tells a stale item from a fresh one.
+
+    Args:
+        row: The register row.
+        now: The instant its age is measured to; ``None`` states no age.
+    """
     deadline = row.facts.get("deadline_at")
-    return deadline[11:16] if deadline and len(deadline) >= 16 else NO_DEADLINE
+    if deadline and len(deadline) >= 16:
+        return deadline[11:16]
+    asked = instant(row.facts.get("created_at"))
+    if asked is None or now is None:
+        return NO_DEADLINE
+    return f"{age_words(max(0, int((now - asked).total_seconds())))} old"
+
+
+def age_words(total: int) -> str:
+    """Return a non-negative age in whole seconds: days from a day on, else a span."""
+    return f"{total // _DAY}d" if total >= _DAY else span(total)
 
 
 def permission_lines(row: ProjectionRow) -> list[str]:
@@ -334,9 +358,13 @@ def permission_lines(row: ProjectionRow) -> list[str]:
 
 
 def _selected_lines(
-    row: ProjectionRow, item: AttentionItem, principal: str | None, holders: int
+    row: ProjectionRow, item: AttentionItem, principal: str | None, holders: int, sealable: bool
 ) -> list[str]:
-    """Return the selected row's second lines: its kind and who may act, then any authority."""
+    """Return the selected row's second lines: its kind and who may act, then any authority.
+
+    A pending action whose answer the console holds no receipt to seal under says so, in
+    place of the answer keys the keybar leaves out.
+    """
     if item.read_only:
         return [_KIND_INDENT + f"{kind_word(row)} · {NOTICE_LINE}"]
     if item.bucket is AttentionBucket.STALLED:
@@ -344,6 +372,8 @@ def _selected_lines(
     lines = [_KIND_INDENT + f"{kind_word(row)} · {eligibility_line(row, principal, holders)}"]
     if item.need is AttentionNeedKind.PERMISSION:
         lines.extend(_KIND_INDENT + line for line in permission_lines(row))
+    if row.collection is Epoch2Collection.PENDING_ACTION and principal and not sealable:
+        lines.append(_KIND_INDENT + NO_RECEIPT_LINE)
     return lines
 
 
@@ -363,8 +393,6 @@ def _empty_lines(register: RegisterView, bucket: str | None) -> list[str]:
         bucket: The chosen bucket; a filtered-out list says so rather than calling the
             register empty.
     """
-    if bucket == AttentionBucket.LOST.value:
-        return [label("LOST", f"{NO_RECORD} {LOST_HOLE_REASON}")]
     if bucket is not None:
         return ["   nothing in this bucket needs you"]
     revision = group_n(int(register.source_cursor))
@@ -452,10 +480,11 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
                 last = item.bucket
             subject = row.facts.get("subject", UNKNOWN_WORD)
             question = row.facts.get("question") or row.title or row.urn
-            cells = [row.key, f"{subject} {question}", value_cell(row.status).slot, due_cell(row)]
+            due = due_cell(row, view.now or register.generated_at)
+            cells = [row.key, f"{subject} {question}", value_cell(row.status).slot, due]
             body.append(table.row(cells, index == cursor))
             if index == cursor:
-                body.extend(_selected_lines(row, item, principal, holders))
+                body.extend(_selected_lines(row, item, principal, holders, view.sealable))
         body.extend(_pause_lines(view, pauses, table, first=len(listed), win=win, cursor=cursor))
         body.extend(
             _notice_lines(
@@ -589,14 +618,24 @@ def _bar_keys(view: View, selected: ProjectionRow | None, *, on_notice: bool) ->
     offered = (
         writable and selected is not None and not audience_refusal(selected.assignee_ref, principal)
     )
+    # an answer to a pending action is sealed under an evidence receipt, so without one
+    # its answer keys would only refuse; a permission is decided without one
+    unsealable = (
+        selected is not None
+        and selected.collection is Epoch2Collection.PENDING_ACTION
+        and not view.sealable
+    )
     verbs = set(_VERB_KEYS.values())
     # acknowledge is offered on the action menu alone, so only the row's own keys show
     row_keys = (_VERB_KEYS[key] for key in NOTICE_VERBS if key in _VERB_KEYS)
     notice_verbs = set(row_keys) if writable and on_notice else set()
+    answers = {_VERB_KEYS["a"], _VERB_KEYS["x"]}
     return [
         key
         for key in native_keys(s.route, windowed=s.windowed)
-        if offered or key not in verbs or key in notice_verbs
+        if key not in verbs
+        or key in notice_verbs
+        or (offered and not (unsealable and key in answers))
     ]
 
 

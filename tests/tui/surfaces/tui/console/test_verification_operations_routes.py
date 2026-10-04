@@ -37,7 +37,7 @@ from eawf.kernel.projection.compute import (
     RouteProjection,
     build_route_projection,
 )
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, RECONNECT_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method, reconnect_method
 from eawf.kernel.projection.operations import (
     DISPATCH_QUEUE_PRODUCER,
     NOT_A_DECISION,
@@ -274,8 +274,8 @@ def test_the_two_families_name_exactly_the_routes_this_wave_binds() -> None:
 @pytest.mark.parametrize("route", BOUND_ROUTES)
 def test_every_bound_route_has_both_projection_verbs(route: str) -> None:
     """A route a console draws natively is one the daemon both reads and reconnects."""
-    assert READ_METHOD_TEMPLATE.format(route=route) in ROUTE_READ_METHODS
-    assert RECONNECT_METHOD_TEMPLATE.format(route=route) in ROUTE_RECONNECT_METHODS
+    assert read_method(route) in ROUTE_READ_METHODS
+    assert reconnect_method(route) in ROUTE_RECONNECT_METHODS
     assert ROUTE_COLLECTIONS[route]
 
 

@@ -28,14 +28,17 @@ from eawf.kernel.migration.epoch2.canary import (
     GENERATIONS_DIRNAME,
     MARKER_FILENAME,
 )
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method
 from eawf.kernel.runtime.provider import ControlKind
+from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.runtime.daemon.methods.dispatch_queue import DISPATCH_QUEUE_READ_METHOD
 from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
 from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD
 from eawf.runtime.daemon.methods.run import RUN_EVENTS_READ_METHOD
 from eawf.runtime.daemon.methods.run_liveness import RUN_STALLS_READ_METHOD
+from eawf.runtime.daemon.methods.spend import RUN_USAGE_READ_METHOD
 from eawf.surfaces.cli.app import app as cli
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.operations import (
@@ -109,7 +112,7 @@ def _projection(route: str) -> dict[str, Any]:
 #: Every write the stand-in daemon was sent, in order; cleared per launch.
 WRITES: list[tuple[str, dict[str, Any]]] = []
 
-_READS = {READ_METHOD_TEMPLATE.format(route=r): r for r in ROUTE_COLLECTIONS}
+_READS = {read_method(r): r for r in ROUTE_COLLECTIONS}
 
 
 class _Daemon:
@@ -140,7 +143,7 @@ class _Daemon:
                 "control": {},
                 "read_at": AT.isoformat(),
             }
-        if method == RUN_EVENTS_READ_METHOD:
+        if method in (RUN_EVENTS_READ_METHOD, RUN_USAGE_READ_METHOD):
             raise ConnectionError(f"{method} is not served")
         if method in (QUESTION_READ_METHOD, PAUSE_READ_METHOD):
             return {}
@@ -248,6 +251,31 @@ def test_launch_tui_without_operator_refuses_with_the_reason(
     refusal = next(note for note in notes if note.startswith("idle"))
     assert "no operator principal" in refusal
     assert "--actor" in refusal
+
+
+def test_launch_tui_without_actor_acts_as_the_operator_owning_the_tracks(
+    launched: list[tuple[ConsoleApp, Any]], tmp_path: Path
+) -> None:
+    authority = resolve_authority(tmp_path / ".ea")
+    assert authority.target is not None and authority.generation_id is not None
+    folder = authority.target.generation_path(authority.generation_id)
+    folder.mkdir(parents=True, exist_ok=True)
+    owner = {"principal_kind": "operator", "principal_id": ACTOR}
+    (folder / GENERATION_DOCUMENT).write_text(
+        json.dumps({"track": {"TRK-CORE": {"policy": {"ownership_principal": owner}}}})
+    )
+
+    seam = _launch(launched, None)
+
+    assert seam.operator == Operator(principal=ACTOR)
+
+
+def test_launch_tui_named_actor_overrides_the_tree_owner(
+    launched: list[tuple[ConsoleApp, Any]],
+) -> None:
+    seam = _launch(launched, Operator(principal="OP-0009"))
+
+    assert seam.operator == Operator(principal="OP-0009")
 
 
 def test_tui_command_passes_the_named_operator_to_the_launcher(

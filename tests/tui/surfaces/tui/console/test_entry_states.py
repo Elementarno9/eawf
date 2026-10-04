@@ -40,7 +40,7 @@ from eawf.kernel.migration.epoch2.canary import (
 )
 from eawf.kernel.migration.epoch2.journal import CutoverStage
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method
 from eawf.surfaces.cli.app import app as cli_app
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.attach import (
@@ -802,7 +802,7 @@ class _Daemon:
         return None
 
     def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        reads = {READ_METHOD_TEMPLATE.format(route=r): r for r in ROUTE_COLLECTIONS}
+        reads = {read_method(r): r for r in ROUTE_COLLECTIONS}
         if method not in reads:
             _WRITES.append(method)
             return {}

@@ -389,13 +389,13 @@ def test_a_runs_reason_is_read_off_its_facts_or_is_unknown(
 
 def test_con_085_the_attention_counts_are_mine_and_all_principals() -> None:
     frame = _frame("attention")
-    assert frame[1].startswith(" 1 mine · 2 all principals · nothing here opened itself")
+    assert frame[1].rstrip() == " 1 mine · 2 all principals"
     assert "fleet" not in frame[1]
 
 
 def test_con_085_an_incomplete_read_labels_the_second_count_known() -> None:
     frame = _frame("attention", conn="GAP DETECTED")
-    assert frame[1].startswith(" 1 mine · 2 known · nothing here opened itself")
+    assert frame[1].startswith(" 1 mine · 2 known")
 
 
 def test_con_085_home_names_the_principal_under_more_than_one() -> None:
@@ -443,10 +443,10 @@ def test_con_084_the_empty_attention_route_names_its_revision_and_the_next_move(
     assert frame[1].startswith(f" {NOTHING_NEEDS_YOU}")
     nothing = _starts(frame, " NOTHING YET")
     assert "revision 41,208" in nothing
-    # the eight buckets stay on the rail: a count the register takes reads 0, the one no
-    # record feeds its no-record mark, and none of them is drawn as a body row
+    # the counted buckets stay on the rail, each reading 0; the one no record feeds is not
+    # drawn, and none of them is drawn as a body row
     buckets = [row for row in frame if re.search(r"│ [ ▸][a-z][a-z ]+\s+(0|∅)\s*$", row)]
-    assert len(buckets) == 8
+    assert len(buckets) == 7
     assert not [row for row in frame if re.match(r"^   [a-z ]+\s+(0|∅)\s*$", row)]
     assert re.search(r"needs operator\s+0", _text(frame))
     assert ATTENTION_NEXT in _starts(frame, " WHAT TO DO")
@@ -461,7 +461,7 @@ def test_con_084_the_empty_attention_route_withdraws_its_verbs_and_the_badge() -
 
 def test_con_084_home_says_nothing_needs_you_in_its_own_words() -> None:
     frame = _frame("scope.home", document=_no_open_actions())
-    at = frame.index(_starts(frame, " ATTENTION   nothing here opened itself"))
+    at = frame.index(_starts(frame, " ATTENTION   nothing needs you"))
     assert frame[at + 1].strip() == "nothing is waiting on you · runs continue without you"
 
 

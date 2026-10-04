@@ -535,7 +535,7 @@ def _permission_facts(fields: Mapping[str, Any]) -> dict[str, str]:
 
 
 def _question_facts(fields: Mapping[str, Any]) -> dict[str, str]:
-    """Return what an open question states: what it was asked under and what it offers."""
+    """Return what an open question states: what it was asked under, when, and what it offers."""
     options = fields.get("options")
     facts = {
         "kind": "question",
@@ -543,6 +543,7 @@ def _question_facts(fields: Mapping[str, Any]) -> dict[str, str]:
         "question": _text(fields.get("question")),
         "blocking": "yes" if fields.get("blocking") is True else None,
         "options": str(len(options)) if isinstance(options, list | tuple) and options else None,
+        "created_at": _text(fields.get("created_at")),
     }
     return {name: value for name, value in facts.items() if value}
 

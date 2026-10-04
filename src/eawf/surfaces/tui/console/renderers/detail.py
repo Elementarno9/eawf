@@ -229,7 +229,8 @@ def unknown_frame(
         what = "MERGING · host outcome unknown"
     elif family is Family.RUN:
         true, unknown, recovery = _run_panes(row)
-        what = "LOST · stopped responding"
+        # the same words Activity and Needs you use for a Run whose stall stands
+        what = "RUNNING · stalled · stopped responding"
     else:
         raise ValueError(f"{row.key} is not a record whose outcome the registry calls unknown")
     session.sel_id = row.key

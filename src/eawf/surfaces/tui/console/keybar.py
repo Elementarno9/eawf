@@ -492,6 +492,8 @@ def _compose(pairs: Sequence[Pair]) -> str:
 # The global pairs in the order they leave a bar too wide for its budget; the copy,
 # dismiss and inspect pairs go after these, from the tail.
 GLOBAL_DROP_ORDER: tuple[str, ...] = ("?", "/", ".", "Esc", "g")
+#: The help pair's token, which a frame drawn from a read model pins last.
+HELP_TOKEN = GLOBAL_DROP_ORDER[0]
 GLOBAL_TOKENS: frozenset[str] = frozenset({*GLOBAL_DROP_ORDER, "-", "y", "Y", "i"})
 
 # The paging pairs only repeat what the arrows do a screen at a time, so a bar that would
@@ -530,7 +532,8 @@ def keybar(pairs: Sequence[Pair], w: int, *, keep_actions: bool = False) -> str:
         keep_actions: Whether the action menu's pair is worth the paging pairs. A frame
             drawn from a read model keeps it, because its menu is where the verbs of the
             record on screen are refused or offered; the prototype replay drops it first,
-            as its tracked bars do.
+            as its tracked bars do. Such a frame also pins its help pair last, so the one
+            key that explains every other is never the one a narrow terminal loses.
 
     Raises:
         ValueError: a token fails :func:`assert_full_key_names`, or ``w`` fails :func:`budget`.
@@ -539,7 +542,10 @@ def keybar(pairs: Sequence[Pair], w: int, *, keep_actions: bool = False) -> str:
         assert_full_key_names(token)
     room = budget(w)
     cheap = _CHEAP_GLOBALS - {KEY["actions"].token} if keep_actions else _CHEAP_GLOBALS
-    kept = list(pairs)
+    pinned = [p for p in pairs if p[0] == HELP_TOKEN] if keep_actions else []
+    kept = [p for p in pairs if p not in pinned]
+    if pinned and kept:
+        room -= cell_len(GAP + _compose(pinned).lstrip())
     bar = _compose(kept)
     while cell_len(bar) > room and len(kept) > 1:
         at = _drop_at(kept)
@@ -548,10 +554,11 @@ def keybar(pairs: Sequence[Pair], w: int, *, keep_actions: bool = False) -> str:
             _without_paging(kept, room) if token in GLOBAL_TOKENS and token not in cheap else None
         )
         if spared is not None:
-            return pad(_compose(spared), w)
+            kept = spared
+            break
         del kept[at]
         bar = _compose(kept)
-    return pad(bar, w)
+    return pad(_compose([*kept, *pinned]), w)
 
 
 def _without_paging(pairs: Sequence[Pair], room: int) -> list[Pair] | None:

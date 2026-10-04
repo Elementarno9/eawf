@@ -168,17 +168,13 @@ _DISPOSITION_VALUES: Final[Mapping[ReconnectDisposition, ConnectionValue]] = Map
 #: Distinct from a zero, which is a count that was taken and came out empty.
 UNAVAILABLE_COUNT: Final = "∅ unavailable"
 
-#: How a route's read verb is spelled on the wire. The name lives beside the shapes
-#: it carries rather than in the daemon module that registers it, so the console can
-#: address the verb without importing the daemon's dispatch graph.
-READ_METHOD_TEMPLATE: Final = "projection.{route}.read"
-
-#: How a route's reconnect verb is spelled on the wire.
-RECONNECT_METHOD_TEMPLATE: Final = "projection.{route}.reconnect"
-
 
 def read_method(route: str) -> str:
-    """Return the wire name of *route*'s read verb, as :data:`READ_METHOD_TEMPLATE` spells it.
+    """Return the wire name of *route*'s read verb.
+
+    The name lives beside the shapes it carries rather than in the daemon module
+    that registers it, so the console can address the verb without importing the
+    daemon's dispatch graph.
 
     Args:
         route: The route key.
@@ -624,8 +620,6 @@ def apply_patches(
 
 
 __all__ = [
-    "READ_METHOD_TEMPLATE",
-    "RECONNECT_METHOD_TEMPLATE",
     "ROUTE_STALENESS_CLASS",
     "STALENESS_TARGET_SECONDS",
     "UNAVAILABLE_COUNT",

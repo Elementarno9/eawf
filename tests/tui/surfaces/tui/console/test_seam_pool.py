@@ -26,9 +26,9 @@ from eawf.kernel.projection.compute import (
     build_route_projection,
 )
 from eawf.kernel.projection.connection import (
-    READ_METHOD_TEMPLATE,
     ReconnectDisposition,
     negotiate_reconnect,
+    read_method,
 )
 from eawf.kernel.projection.registers import ATTENTION_ROUTE
 from eawf.kernel.projection.settings import SETTINGS_ROUTE
@@ -115,9 +115,7 @@ class FakeDaemon:
         self.reads: list[str] = []
         self.failing = failing
         self.reconnect_answer: dict[str, Any] | None = None
-        self._routes = {
-            READ_METHOD_TEMPLATE.format(route=route): route for route in ROUTE_COLLECTIONS
-        }
+        self._routes = {read_method(route): route for route in ROUTE_COLLECTIONS}
 
     def client(self) -> _Client:
         """Return one client over this daemon, as the binding's factory does."""

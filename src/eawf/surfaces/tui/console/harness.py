@@ -230,7 +230,9 @@ async def settle(pilot: Pilot[Any]) -> tuple[str, int]:
     """Wait for the screen to settle and return its capture and the cycles it took.
 
     The pilot's pause is idle-based, so one pause is never taken as a finished frame:
-    workers are drained, then captures are pumped until two agree.
+    workers are drained, then captures are pumped until two agree. Workers are drained
+    again on every cycle because a route's paint can owe a follow-up read (its
+    Milestone's acceptance, say) whose worker starts only after the first one finished.
     """
     await pilot.pause()
     await pilot.app.workers.wait_for_complete()
@@ -238,6 +240,7 @@ async def settle(pilot: Pilot[Any]) -> tuple[str, int]:
     cycles = 1
     while cycles < SETTLE_MAX_CYCLES:
         await pilot.pause()
+        await pilot.app.workers.wait_for_complete()
         current = capture(pilot.app)
         if current == previous:
             return current, cycles

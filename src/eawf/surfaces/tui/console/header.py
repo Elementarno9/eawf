@@ -257,6 +257,7 @@ def header_row(
     process: ProcessValue | None = None,
     registry: RouteRegistry = REGISTRY,
     prototype: bool = False,
+    actor: str | None = None,
 ) -> str:
     """Return the header row, exactly ``w`` cells.
 
@@ -272,6 +273,9 @@ def header_row(
         registry: The route rows the history steps are named from.
         prototype: Whether the frame replays the prototype registers; see
             :func:`crumb_from_history`.
+        actor: The principal key the console's writes go out as, named beside the count
+            so the operator sees whose inbox and whose name every write carries; ``None``
+            for a console that acts as nobody.
 
     Raises:
         ValueError: ``process`` is given off the entry layer or missing on it, ``needs``
@@ -283,7 +287,8 @@ def header_row(
     if process is not None:
         slot = f"{process.glyph} {process.label}"
         return pad(crumb, w - cell_len(slot)) + slot
-    slot = attention_count(needs) + state_slot(session.conn)
+    acting = f"as {actor}  " if actor else ""
+    slot = attention_count(needs) + acting + state_slot(session.conn)
     room = w - cell_len(slot)
     full = crumb.replace(SCOPE_SLOT, f"{CRUMB_SEP}{scope}{CRUMB_SEP}")
     if cell_len(full) <= room:

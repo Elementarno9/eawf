@@ -22,7 +22,6 @@ from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, g_pad, th
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
-    counts,
     finish,
     label,
     more,
@@ -144,17 +143,25 @@ def checks_line(checks: list[HealthCheck]) -> str:
     return f"{dv.plural(len(checks), 'check')} · {' · '.join(tally)}"
 
 
+def _check_words(name: str) -> str:
+    """Return a check's stable name as words: ``runtime_tuple_1fb4`` reads ``runtime tuple 1fb4``.
+
+    The name stays the check's id, which the cursor is kept by; only the cell reads it.
+    """
+    return name.replace("_", " ")
+
+
 def _repair(check: HealthCheck | None) -> list[str]:
     """Return the ``REPAIR`` readout docked at the foot: what repairs the focused check."""
     if check is None:
         return [label("REPAIR", "∅ no check is focused · nothing declared is held")]
     if check.outcome == "passed":
         return [
-            label("REPAIR", f"{check.name} · {NOTHING_TO_REPAIR}"),
+            label("REPAIR", f"{_check_words(check.name)} · {NOTHING_TO_REPAIR}"),
             more("Its last result stands until the next sweep."),
         ]
     return [
-        label("REPAIR", f"{check.name} · check {check.outcome}"),
+        label("REPAIR", f"{_check_words(check.name)} · check {check.outcome}"),
         more(f"{UNKNOWN_WORD} · no remediation is declared for it · {REPAIR_LIVES}"),
     ]
 
@@ -180,7 +187,8 @@ def health_frame(view: View, model: HealthReadModel) -> list[str]:
         view,
         model,
         crumb_text=route_crumb(view, model, "Health"),
-        summary=f"Fleet health · every declared check · {counts(model)}",
+        # the list counts the tuple verdicts beside the stored records, so the summary does
+        summary=f"Fleet health · every declared check · {dv.plural(len(checks), 'check')}",
     )
     # a column that folds the reason and the time names both in its head
     grid = Grid([30, 11, w - 3 - 30 - 11 - 26, 0] if wide else [30, 11, 0])
@@ -188,7 +196,7 @@ def health_frame(view: View, model: HealthReadModel) -> list[str]:
     body = [label("CHECKS", checks_line(checks)), grid.head(heads)]
     for i, check in enumerate(checks):
         result = UNKNOWN_WORD if check.outcome == "unknown" else check.outcome
-        cells = [check.name, result, f"{check.reason} · {check.last_result}"]
+        cells = [_check_words(check.name), result, f"{check.reason} · {check.last_result}"]
         body.append(grid.row([*cells, check.producer] if wide else cells, i == s.sel, w))
     if not checks:
         body.append(f"   {UNKNOWN_WORD} · no declared check has reported to this scope")

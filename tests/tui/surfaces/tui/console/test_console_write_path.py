@@ -30,7 +30,7 @@ from eawf.kernel.projection.compute import (
     RouteProjection,
     build_route_projection,
 )
-from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
+from eawf.kernel.projection.connection import read_method
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.tui.console import enter_keys
 from eawf.surfaces.tui.console import frame as frame_mod
@@ -125,7 +125,7 @@ class _Daemon:
     def __init__(self) -> None:
         self.writes: list[tuple[str, dict[str, Any]]] = []
         self.refuse_next: DaemonRpcError | None = None
-        self._reads = {READ_METHOD_TEMPLATE.format(route=r): r for r in ROUTE_COLLECTIONS}
+        self._reads = {read_method(r): r for r in ROUTE_COLLECTIONS}
 
     def client(self) -> _Client:
         return _Client(self)
