@@ -264,9 +264,18 @@ ALREADY_BROKEN: tuple[tuple[str, dict[str, Any], str, Any, str], ...] = (
     ("preferences", {"preferences": {"stray": 1}}, "preferences.auto_choose", "always", "stray"),
 )
 
+#: Sections writable only from the global layer, held to the same rule there.
+GLOBAL_ONLY_BROKEN: tuple[tuple[str, dict[str, Any], str, Any, str], ...] = (
+    ("operator", {"operator": {"stray": 1}}, "operator.principal", "OP-0001", "stray"),
+)
+
 
 def test_every_section_model_has_a_breaking_write_below() -> None:
-    covered = {row[0] for row in BREAKING} | {row[0] for row in ALREADY_BROKEN}
+    covered = (
+        {row[0] for row in BREAKING}
+        | {row[0] for row in ALREADY_BROKEN}
+        | {row[0] for row in GLOBAL_ONLY_BROKEN}
+    )
     assert covered == {section for section, _model in SECTION_MODELS}
 
 
@@ -291,6 +300,17 @@ def test_a_write_into_a_section_a_layer_already_breaks_is_refused(
     with pytest.raises(ValueError, match=f"{section}.{field}: .*\\(section {section}\\)"):
         _set(repo, key, value)
     assert not _file(repo).exists()
+
+
+@pytest.mark.parametrize(("section", "body", "key", "value", "field"), GLOBAL_ONLY_BROKEN)
+def test_a_global_write_into_a_section_the_global_layer_breaks_is_refused(
+    repo: Path, section: str, body: dict[str, Any], key: str, value: Any, field: str
+) -> None:
+    _global(body)
+
+    with pytest.raises(ValueError, match=f"{section}.{field}: .*\\(section {section}\\)"):
+        _set(repo, key, value, layer="global")
+    assert yaml.safe_load(layered.global_config_path().read_text(encoding="utf-8")) == body
 
 
 def test_a_write_to_another_section_is_not_held_to_a_broken_one(repo: Path) -> None:
