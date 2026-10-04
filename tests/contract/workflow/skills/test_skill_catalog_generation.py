@@ -200,6 +200,15 @@ def test_surf_079_hand_edited_bundle_fails_the_render_check(claude_bundle: Path)
         page.write_bytes(original)
 
 
+def test_surf_079_a_bundle_named_by_a_relative_root_checks_clean(
+    claude_bundle: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The release workflow names the bundle relative to the checkout, never absolutely.
+    monkeypatch.chdir(claude_bundle.parent)
+
+    assert publication_findings(Path(claude_bundle.name)) == ()
+
+
 # ---- SURF-101 ----------------------------------------------------------------
 
 

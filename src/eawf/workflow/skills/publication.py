@@ -277,7 +277,7 @@ def publication_findings(root: Path) -> tuple[str, ...]:
             f"the bundle targets epoch {recorded.target_epoch}, this build epoch"
             f" {BUNDLE_TARGET_EPOCH}"
         )
-    present = [root / row.path for row in recorded.files if (root / row.path).is_file()]
+    present = [Path(row.path) for row in recorded.files if (root / row.path).is_file()]
     findings.extend(
         f"{row.path} is missing" for row in recorded.files if not (root / row.path).is_file()
     )
