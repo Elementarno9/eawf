@@ -36,7 +36,7 @@ from eawf.kernel.projection.truth import (
 )
 from eawf.kernel.runtime.events import RunEventKind
 from eawf.kernel.state.enums import MeasurementQuality
-from eawf.surfaces.tui.console.app import MARK_META, Body, ConsoleApp, compose_frame
+from eawf.surfaces.tui.console.app import Body, ConsoleApp, compose_frame
 from eawf.surfaces.tui.console.cells import (
     NO_VALUE,
     QUALITY_WORD,
@@ -57,6 +57,7 @@ from eawf.surfaces.tui.console.registry import REGISTRY, RouteGroup
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.read_model import counts
 from eawf.surfaces.tui.console.renderers.transcript import NATIVE_GLYPH, TR_GLYPH
+from eawf.surfaces.tui.console.rows import MARK_META
 from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup
 from eawf.surfaces.tui.console.tokens import (
     CONNECTION,

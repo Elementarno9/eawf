@@ -30,12 +30,12 @@ from eawf.surfaces.tui.console.app import (
     ConsoleApp,
     KeybarRow,
     ProjectionHeader,
-    RowsWidget,
 )
 from eawf.surfaces.tui.console.cells import Mark
 from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.paint import MARK_SURFACE, Part, Stroke, paint
+from eawf.surfaces.tui.console.rows import RowsWidget
 from eawf.surfaces.tui.console.session import SIZES, SessionSetup
 from eawf.surfaces.tui.console.token_map import SURFACES, TOKEN_MAP, render_css
 from eawf.surfaces.tui.console.tokens import QUALITY, TRUTH

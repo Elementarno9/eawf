@@ -87,7 +87,7 @@ def test_every_sampled_frame_was_already_the_settled_frame(
 def test_a_profile_splits_into_a_floor_and_an_increment(profile: ConsoleLatencyProfile) -> None:
     cost = profile.key_cost()
     assert cost.floor_runs == min(FLEET_SIZES)
-    assert cost.span_runs == max(FLEET_SIZES) - min(FLEET_SIZES)
+    assert cost.span_runs == sorted(FLEET_SIZES)[-1] - sorted(FLEET_SIZES)[-2]
     assert cost.floor_ms == profile.by_runs()[min(FLEET_SIZES)].p50_ms
     assert cost.floor_tail_ms == profile.by_runs()[min(FLEET_SIZES)].p99_ms
 

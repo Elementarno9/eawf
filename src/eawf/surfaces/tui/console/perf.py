@@ -26,9 +26,13 @@ needed, and one cycle means every captured frame was already the settled frame.
 :meth:`ConsoleLatencyProfile.key_cost` splits the profile into the two figures a budget
 gates apart. The **floor** is what one key costs when the fleet cannot be the reason: the
 median at the smallest recorded fleet. The **increment** is what one extra run adds: the
-median slope across the recorded span. They are budgeted apart because they regress for
-different reasons -- a heavier dispatch path lifts the floor, an accidental per-row scan
-lifts the increment -- and one number lets either hide inside the other.
+median slope between the two largest recorded fleets. Both of those overfill the viewport,
+so a key repaints the same screen at each and only the register work differs; a slope
+taken from the smallest fleet would charge the first full-screen repaint -- a key that
+moves nothing on a near-empty register, then scrolls a full one -- to every row. They
+are budgeted apart because they regress for different reasons -- a heavier dispatch path
+lifts the floor, an accidental per-row scan lifts the increment -- and one number lets
+either hide inside the other.
 
 Both gated figures are medians. The tail of a sub-millisecond operation on a host running
 anything else is a scheduler spike: measured here, the median held inside a five per cent
@@ -245,8 +249,9 @@ class KeyCost(BaseModel):
             small to be the reason a key is slow.
         floor_tail_ms: The p99 at ``floor_runs``. Recorded, not gated: at this scale the
             tail is a scheduler spike rather than a property of the console.
-        span_runs: How many runs separate the smallest and largest recorded fleets.
-        increment_us: The per-row increment: the median slope in microseconds per run.
+        span_runs: How many runs separate the two largest recorded fleets.
+        increment_us: The per-row increment: the median slope between the two largest
+            recorded fleets, in microseconds per run.
             Negative when the larger fleet measured no slower than the smaller one, which
             is what a console doing no per-row work looks like under noise.
     """
@@ -289,12 +294,12 @@ class ConsoleLatencyProfile(BaseModel):
         Raises:
             ValueError: the profile records one fleet size only, so no slope exists.
         """
-        smallest = min(self.fleet, key=lambda record: record.runs)
-        largest = max(self.fleet, key=lambda record: record.runs)
-        span = largest.runs - smallest.runs
-        if span <= 0:
+        ordered = sorted(self.fleet, key=lambda record: record.runs)
+        if len(ordered) < 2:
             raise ValueError("a key-cost split needs two different fleet sizes")
-        rise_ms = largest.key.p50_ms - smallest.key.p50_ms
+        smallest, below, largest = ordered[0], ordered[-2], ordered[-1]
+        span = largest.runs - below.runs
+        rise_ms = largest.key.p50_ms - below.key.p50_ms
         return KeyCost(
             floor_runs=smallest.runs,
             floor_ms=smallest.key.p50_ms,

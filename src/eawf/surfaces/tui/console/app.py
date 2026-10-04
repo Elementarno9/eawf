@@ -22,16 +22,12 @@ import sys
 from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any
 
-from rich.segment import Segment
-from rich.style import Style
 from textual._time import get_time
 from textual.app import App, ComposeResult
 from textual.constants import ESCAPE_DELAY
 from textual.events import Click, Key, Resize
-from textual.strip import Strip
-from textual.widget import Widget
 
 from eawf.kernel.config.schema import ToastVerbosity
 from eawf.kernel.projection.attention import delivered_revisions, deliveries
@@ -101,9 +97,10 @@ from eawf.surfaces.tui.console.operations import (
     VerbRequest,
 )
 from eawf.surfaces.tui.console.overlays import is_overlay, render_overlay
-from eawf.surfaces.tui.console.paint import Part, Stroke, paint
+from eawf.surfaces.tui.console.paint import Part
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import loading_frame, render_route
+from eawf.surfaces.tui.console.rows import RowsWidget, row_classes
 from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup, conn_label
 from eawf.surfaces.tui.console.token_map import SURFACES, TOKEN_MAP, render_css
 from eawf.surfaces.tui.console.tokens import CARET, Severity
@@ -147,8 +144,6 @@ UNANSWERED: frozenset[ConnectionValue] = frozenset(
 LOADING_GRACE_SECONDS = 0.3
 # The key-log key a daemon answer to a sent verb is recorded under.
 DAEMON_KEY = "daemon"
-# The style-metadata key a painted span's mark travels under.
-MARK_META = "mark"
 # How loudly each control outcome is announced; the toast title is the outcome's own word.
 # Only a confirmed effect speaks as success, because requesting and accepted are facts
 # about the request channel; a superseded answer is a loss, never a warning or an error.
@@ -325,65 +320,6 @@ def stance(session: Session) -> dict[str, object]:
     return {name: getattr(session, name) for name in _STANCE_FIELDS}
 
 
-def _classes(*surfaces: str) -> str:
-    """Return the stylesheet classes that give a widget these surfaces' colours."""
-    return " ".join(SURFACES[surface].css_class for surface in surfaces)
-
-
-class RowsWidget(Widget):
-    """A widget that paints precomposed rows verbatim, one strip per line.
-
-    A row is never wrapped and never parsed as markup, and nothing here takes focus: the
-    app dispatches every key itself. Each run of a row is drawn as the surface the row
-    painter reads off its words, in the colour the token map's stylesheet gives that
-    surface under the active theme.
-    """
-
-    can_focus = False
-    DEFAULT_CSS = """
-    RowsWidget { padding: 0; margin: 0; border: none; }
-    """
-    COMPONENT_CLASSES: ClassVar[set[str]] = {row.css_class for row in TOKEN_MAP}
-    ROW_STYLE = Style()
-    PART: ClassVar[Part] = Part.BODY
-
-    def __init__(self, *, id: str | None = None) -> None:
-        super().__init__(id=id)
-        self.rows: list[str] = []
-
-    def set_rows(self, rows: list[str]) -> None:
-        """Replace the rows and repaint."""
-        self.rows = rows
-        self.refresh()
-
-    def render_line(self, y: int) -> Strip:
-        """Return row ``y`` as one strip of the widget's width, one segment per span.
-
-        A marked span carries its mark in the segment's style metadata under
-        :data:`MARK_META`, so the theme that colours a token reads what the cell is rather
-        than guessing it from the glyph.
-        """
-        text = self.rows[y] if y < len(self.rows) else ""
-        base = self.rich_style + self.ROW_STYLE
-        segments = [
-            Segment(stroke.text, self._stroke_style(base, stroke))
-            for stroke in paint(text, self.PART)
-        ]
-        return Strip(segments).adjust_cell_length(self.size.width)
-
-    def _stroke_style(self, base: Style, stroke: Stroke) -> Style:
-        """Return the style one run is drawn in: the band's, then its surfaces over it."""
-        style = base
-        for surface in (stroke.ground, stroke.surface):
-            if surface is not None:
-                style += self.get_component_rich_style(SURFACES[surface].css_class, partial=True)
-        if stroke.bold or stroke.underline:
-            style += Style(bold=stroke.bold or None, underline=stroke.underline or None)
-        if stroke.mark is not None:
-            style += Style(meta={MARK_META: stroke.mark.value})
-        return style
-
-
 class ProjectionHeader(RowsWidget):
     """The header row: the row painter styles its typed crumb runs, and a click walks them.
 
@@ -394,7 +330,7 @@ class ProjectionHeader(RowsWidget):
     DEFAULT_CSS = """
     ProjectionHeader { height: 1; dock: top; }
     """
-    DEFAULT_CLASSES = _classes("band", "text")
+    DEFAULT_CLASSES = row_classes("band", "text")
     PART = Part.HEADER
 
     def on_click(self, event: Click) -> None:
@@ -411,7 +347,7 @@ class Body(RowsWidget):
     DEFAULT_CSS = """
     Body { height: 1fr; }
     """
-    DEFAULT_CLASSES = _classes("canvas", "text")
+    DEFAULT_CLASSES = row_classes("canvas", "text")
 
     def on_click(self, event: Click) -> None:
         """Select the row under the pointer, as the arrow keys would; any other click is none."""
@@ -426,7 +362,7 @@ class KeybarRow(RowsWidget):
     DEFAULT_CSS = """
     KeybarRow { height: 1; dock: bottom; }
     """
-    DEFAULT_CLASSES = _classes("band", "text")
+    DEFAULT_CLASSES = row_classes("band", "text")
     PART = Part.KEYBAR
 
 

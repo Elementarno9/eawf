@@ -69,7 +69,7 @@ def test_per_key_floor_within_budget(measured: KeyCost) -> None:
 
 @_skip_perf
 def test_per_row_increment_within_budget(measured: KeyCost) -> None:
-    assert measured.span_runs == max(FLEET_SIZES) - min(FLEET_SIZES)
+    assert measured.span_runs == sorted(FLEET_SIZES)[-1] - sorted(FLEET_SIZES)[-2]
     assert measured.increment_us < ROW_INCREMENT_CEILING_US, (
         f"per-row increment {measured.increment_us:.3f}us/run over {measured.span_runs} runs "
         f"exceeds the budget {ROW_INCREMENT_CEILING_US:.1f}us/run - likely a new scan over "
