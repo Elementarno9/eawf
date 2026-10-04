@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Eä-managed hook wrapper for subagent_start (codex runtime).
+# Eä-managed hook wrapper for pre_tool_use (codex runtime).
 # Generator: eawf plugin install codex (managed file — re-render via
 # `eawf plugin update codex`; hand-edits are detected by `eawf plugin doctor`).
 set -euo pipefail
@@ -58,12 +58,20 @@ else
     _eawf_arg3="$(_eawf_json_escape "${3-}")"
     _eawf_arg4="$(_eawf_json_escape "${4-}")"
     _eawf_payload=$(printf '{"hook_event_name":"%s","claude_event_name":"%s","args":["%s","%s","%s","%s"]}' \
-        "SubagentStart" \
-        "subagent_start" \
+        "PreToolUse" \
+        "pre_tool_use" \
         "${_eawf_arg1}" \
         "${_eawf_arg2}" \
         "${_eawf_arg3}" \
         "${_eawf_arg4}")
 fi
 
-printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run subagent_start --runtime codex --target-epoch 2 >/dev/null
+set +e
+_eawf_out="$(printf '%s' "${_eawf_payload}" | "${_eawf_uv}" run eawf hook run pre_tool_use --runtime codex --target-epoch 2)"
+_eawf_status=$?
+set -e
+if [ "${_eawf_status}" -ne 0 ] && printf '%s' "${_eawf_payload}" | grep -Eq '"tool_name"[[:space:]]*:[[:space:]]*"(Agent|Bash|Edit|EnterWorktree|MultiEdit|NotebookEdit|Task|Write|apply_patch|exec_command|local_shell|shell)"'; then
+    printf 'Eä data-loss guard could not run (exit %s), so the call is refused\n' "${_eawf_status}" >&2
+    exit 2
+fi
+printf '%s' "${_eawf_out}"
