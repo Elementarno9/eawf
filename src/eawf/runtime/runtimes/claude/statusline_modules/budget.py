@@ -18,13 +18,10 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from eawf.kernel.projection.truth import Precision, TruthKind
-from eawf.kernel.runtime.control import RunBinding
-from eawf.kernel.runtime.usage import UsagePayload, UsageQuality, aggregate_usage
 from eawf.kernel.state.enums import MeasurementQuality
-from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.store.ledger import LedgerError, LedgerRecord, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -39,6 +36,10 @@ from eawf.surfaces.render.statusline import (
     budget_segment,
     budget_unavailable_segment,
 )
+
+if TYPE_CHECKING:
+    from eawf.kernel.runtime.usage import UsagePayload, UsageQuality
+    from eawf.kernel.state.epoch2.run import Run
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,10 @@ _RANK: Final = tuple(_QUALITY)
 
 def _token_cap(records: tuple[LedgerRecord, ...], run: Run) -> int | None:
     """Return the token cap the Run's binding sealed, or ``None`` when unbound or uncapped."""
+    # The binding model pulls in the runtime control and semantic models; only
+    # a redraw that found the session's Run pays for them.
+    from eawf.kernel.runtime.control import RunBinding
+
     for item in records:
         if item.payload.get("payload_kind") != "run_binding":
             continue
@@ -80,6 +85,8 @@ def _readings(records: tuple[LedgerRecord, ...], run: Run) -> list[UsagePayload]
     the full event model costs the statusline's cold start more than its
     whole budget, and the line itself was validated as a ledger record.
     """
+    from eawf.kernel.runtime.usage import UsagePayload
+
     run_ref = str(run.urn)
     return [
         UsagePayload.model_validate(line["payload"])
@@ -121,6 +128,8 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
         return budget_unavailable_segment("run-ledger-unreadable", _RUN_SOURCE)
     if cap is None:
         return budget_unavailable_segment("no-token-cap", _RUN_SOURCE)
+    from eawf.kernel.runtime.usage import aggregate_usage
+
     spent = aggregate_usage(readings).tokens
     if spent is None:
         return budget_unavailable_segment("no-usage-reading", _RUN_SOURCE)

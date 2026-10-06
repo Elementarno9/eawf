@@ -33,7 +33,7 @@ import shutil
 from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, Final, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Final, Literal
 
 from pydantic import Field
 
@@ -42,12 +42,6 @@ from eawf.kernel.migration.epoch2.canary import (
     SELECTION_FILENAME,
     DisposableTarget,
 )
-from eawf.kernel.migration.epoch2.cutover import (
-    DOCUMENT_COUNTED_COLLECTIONS,
-    document_record_count,
-    require_document_holds_only_work_in_flight,
-    stage_cutover,
-)
 from eawf.kernel.migration.epoch2.errors import (
     MigrationDualAuthorityError,
     MigrationReadSmokeFailedError,
@@ -55,16 +49,16 @@ from eawf.kernel.migration.epoch2.errors import (
     MigrationRuleError,
     MigrationValidationDivergedError,
 )
-from eawf.kernel.migration.epoch2.manifest import MigrationManifest
-from eawf.kernel.migration.epoch2.plan_mode import MigrationPlan
-from eawf.kernel.migration.epoch2.rows import SourceShape
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel, rule_digest
-from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot
-from eawf.kernel.migration.epoch2.validation import ATTEMPT_RUN_SOURCE_KIND
-from eawf.kernel.store.compaction import document_rows, read_document
-from eawf.kernel.store.ledger import LedgerError, read_ledger_records
-from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, Epoch2Collection, StorageTier
+
+# The build, smoke and reconcile steps import the cutover, the store readers
+# and the manifest models where they run: every reader resolving a tree's
+# authority (a statusline redraw among them) imports this module for the
+# marker alone.
+if TYPE_CHECKING:
+    from eawf.kernel.migration.epoch2.manifest import MigrationManifest
+    from eawf.kernel.migration.epoch2.plan_mode import MigrationPlan
 
 logger = logging.getLogger(__name__)
 
@@ -252,6 +246,8 @@ def _stage_once(
     recorded_at: datetime,
 ) -> MigrationManifest:
     """Build one complete generation into an empty staging directory."""
+    from eawf.kernel.migration.epoch2.cutover import stage_cutover
+
     if staging_root.exists():
         shutil.rmtree(staging_root)
     return stage_cutover(
@@ -504,6 +500,14 @@ def read_smoke(*, target: DisposableTarget, generation_id: str, manifest: Migrat
             that is not work in flight.
         LedgerTornTailError: A ledger ends mid-line.
     """
+    from eawf.kernel.migration.epoch2.cutover import (
+        document_record_count,
+        require_document_holds_only_work_in_flight,
+    )
+    from eawf.kernel.store.compaction import read_document
+    from eawf.kernel.store.ledger import read_ledger_records
+    from eawf.kernel.store.paths import ledger_path
+
     placement = manifest.tier_placement
     if placement is None:
         raise MigrationReadSmokeFailedError(
@@ -580,6 +584,14 @@ def verify_selected_generation(target: DisposableTarget, *, generation_id: str) 
             asks one question and acts on one answer.
         ValueError: The identifier is not a plain directory name.
     """
+    from eawf.kernel.migration.epoch2.cutover import (
+        document_record_count,
+        require_document_holds_only_work_in_flight,
+    )
+    from eawf.kernel.store.compaction import read_document
+    from eawf.kernel.store.ledger import LedgerError, read_ledger_records
+    from eawf.kernel.store.paths import ledger_path
+
     state_path = target.generation_path(generation_id) / GENERATION_DOCUMENT
     if not state_path.is_file():
         raise MigrationReadSmokeFailedError(
@@ -667,9 +679,6 @@ def _require_counts_agree(
 #: the rest, so a collection that lost thousands of rows stays readable.
 RECONCILED_KEYS_SHOWN: Final = 10
 
-#: The source collection every minted Run counts against.
-RUN_SOURCE: Final = ATTEMPT_RUN_SOURCE_KIND.split(".", 1)[0]
-
 #: The source collection a written record that cites no origin counts
 #: against. No mapping counts rows under it, so such a record always reds.
 UNCITED_SOURCE: Final = "-"
@@ -678,10 +687,13 @@ UNCITED_SOURCE: Final = "-"
 def _source_of(collection: Epoch2Collection, payload: Mapping[str, Any]) -> tuple[str, str | None]:
     """Return the source collection and source id one written record cites."""
     if collection is Epoch2Collection.RUN:
+        from eawf.kernel.migration.epoch2.validation import ATTEMPT_RUN_SOURCE_KIND
+
         # A Run is minted from a wave's attempt entry and carries no origin
         # of its own; its plan counts it against the wave that minted it.
         wave_id = payload.get("wave_id")
-        return RUN_SOURCE, wave_id if isinstance(wave_id, str) else None
+        run_source = ATTEMPT_RUN_SOURCE_KIND.split(".", 1)[0]
+        return run_source, wave_id if isinstance(wave_id, str) else None
     origin = payload.get("origin")
     if not isinstance(origin, Mapping) or not isinstance(origin.get("source_kind"), str):
         return UNCITED_SOURCE, None
@@ -703,6 +715,11 @@ def _written_sources(state_path: Path) -> dict[str, list[str | None]]:
         the epoch-1 collection its origin cites, so a row written twice
         counts twice.
     """
+    from eawf.kernel.migration.epoch2.cutover import DOCUMENT_COUNTED_COLLECTIONS
+    from eawf.kernel.store.compaction import document_rows, read_document
+    from eawf.kernel.store.ledger import read_ledger_records
+    from eawf.kernel.store.paths import ledger_path
+
     document = read_document(state_path)
     payloads: list[tuple[Epoch2Collection, Mapping[str, Any]]] = [
         (collection, row.get("payload", {}))
@@ -760,6 +777,9 @@ def reconcile_generation(
             target, the source ids no written row carries and the written
             ids the source does not hold.
     """
+    from eawf.kernel.migration.epoch2.rows import SourceShape
+    from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot
+
     counted = {row.source_collection: row for row in manifest.row_mappings}
     written = _written_sources(target.generation_path(generation_id) / GENERATION_DOCUMENT)
     document = SourceSnapshot.read(snapshot_root).document

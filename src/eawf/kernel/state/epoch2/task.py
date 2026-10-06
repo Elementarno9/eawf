@@ -41,6 +41,7 @@ from eawf.kernel.state.epoch2.base import (
     StrictPositiveInt,
 )
 from eawf.kernel.state.epoch2.run import WriteSetPath
+from eawf.kernel.state.epoch2.task_status import TERMINAL_TASK_STATUSES, TaskStatus
 from eawf.kernel.state.epoch2.urns import BatchUrn, DueScopeUrn, RunUrn, TaskUrn
 from eawf.kernel.state.epoch2.values import Epoch2Record, ExactRevisionBinding
 from eawf.kernel.state.types import UtcDatetime
@@ -60,21 +61,6 @@ class TaskPriority(StrEnum):
     P3 = "P3"
 
 
-class TaskStatus(StrEnum):
-    """The stored lifecycle states of a Task, draft head included."""
-
-    DRAFT = "DRAFT"
-    DEFERRED = "DEFERRED"
-    DROPPED = "DROPPED"
-    PLANNED = "PLANNED"
-    CLAIMED = "CLAIMED"
-    RUNNING = "RUNNING"
-    READY_TO_INTEGRATE = "READY_TO_INTEGRATE"
-    COMPLETED = "COMPLETED"
-    CANCELLED = "CANCELLED"
-    FAILED = "FAILED"
-
-
 #: The backlog states: the Task is unplaced by definition, so it holds no
 #: Batch and no criteria. ``DROPPED`` belongs here because it is reachable
 #: only from ``DRAFT`` and ``DEFERRED``, so a dropped row never had the
@@ -85,14 +71,6 @@ _DRAFT_HEAD: Final = frozenset({TaskStatus.DRAFT, TaskStatus.DEFERRED, TaskStatu
 #: inherits its Batch's Milestone when the field was left null, so from
 #: ``PLANNED`` onward the due scope is always a recorded fact.
 _UNDATED: Final = frozenset({TaskStatus.DRAFT, TaskStatus.DEFERRED, TaskStatus.DROPPED})
-
-#: The three states a Task never leaves, and therefore the three from
-#: which its record moves out of the document and into the ledger. The
-#: draft-head states are not here: a ``DROPPED`` Task never entered
-#: delivery, so it carries no history a ledger line would preserve.
-TERMINAL_TASK_STATUSES: Final[frozenset[TaskStatus]] = frozenset(
-    {TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.FAILED}
-)
 
 
 class TaskCreateSpec(Epoch2Model):

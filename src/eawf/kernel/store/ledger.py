@@ -27,9 +27,7 @@ from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.spec.release import Sha256DigestStr
-from eawf.kernel.state.types import UtcDatetime
-from eawf.kernel.store.append import append_json_line
+from eawf.kernel.state.types import Sha256DigestStr, UtcDatetime
 from eawf.kernel.store.tiers import Epoch2Collection, StorageTier, tier_for
 
 logger = logging.getLogger(__name__)
@@ -151,6 +149,10 @@ def append_ledger_record(path: Path, record: LedgerRecord, *, timeout: float = 5
             f"{record.collection.value!r} is declared at the "
             f"{tier_for(record.collection).value} tier, so it has no ledger"
         )
+    # The append lock and its CLI error type load only on a write; most
+    # importers of this module only read.
+    from eawf.kernel.store.append import append_json_line
+
     return append_json_line(path, render_ledger_line(record), timeout=timeout)
 
 

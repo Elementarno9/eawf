@@ -41,7 +41,7 @@ from pydantic import ConfigDict, Field, model_validator
 
 from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.state.models import ShaStr
-from eawf.kernel.state.types import UtcDatetime
+from eawf.kernel.state.types import Sha256DigestStr, UtcDatetime
 
 logger = logging.getLogger(__name__)
 
@@ -230,9 +230,6 @@ ReleaseKeyStr = Annotated[str, Field(pattern=r"^REL-\d+\.\d+\.\d+(?:rc\d+|\.dev\
 
 #: Release-train id: ``TRAIN-`` plus the stable target version.
 ReleaseTrainIdStr = Annotated[str, Field(pattern=r"^TRAIN-\d+\.\d+\.\d+$")]
-
-#: A ``sha256:``-prefixed content digest.
-Sha256DigestStr = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 
 #: A reference string (URN, receipt locator, artifact pointer) carried
 #: opaquely at ``dev1``. The typed URN leaf objects land with the

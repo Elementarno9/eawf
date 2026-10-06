@@ -472,7 +472,7 @@ def test_meas_043_no_segment_renders_a_bare_unknown_token(tmp_path: Path, state:
 
     segments = orchestrator._build_segments({"cwd": str(tmp_path / "gone")}, state_path)
 
-    assert len(segments) == len(orchestrator._MODULE_ORDER)
+    assert len(segments) == len(orchestrator._module_order())
     for segment in segments:
         assert_truthful(segment)
 
@@ -544,7 +544,7 @@ def test_prx_043_every_segment_renders_from_a_producer_with_a_freshness(tmp_path
 
     segments = orchestrator._build_segments({"cwd": str(tmp_path)}, state_path)
 
-    assert len(segments) == len(orchestrator._MODULE_ORDER)
+    assert len(segments) == len(orchestrator._module_order())
     for segment in segments:
         assert_truthful(segment)
         tokens = segment.text.replace(":", " ").split()

@@ -13,8 +13,9 @@ renders ``plugins:n/a(<reason>)``.
 The count is *informational only*: it reports how many files sit on disk, not
 whether any of them ran or exited cleanly. The module never reads a hook exit
 code, so it must not paint the segment ``status="ok"`` (a health claim it
-cannot back). The readable path therefore reports ``status="degraded"`` — the
-count is shown, but the segment does not assert health it never measured.
+cannot back), and a count is no fault either, so it reports ``status="info"``.
+Only an install record that exists but cannot be read is ``degraded``; an
+absent record is ``missing``, the same as any value with no producer.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ from eawf.runtime.runtimes.claude.statusline_modules._spine import NO_STATE
 from eawf.surfaces.render.statusline import (
     UNAVAILABLE_MARK,
     SegmentSource,
+    SegmentStatus,
     StatuslineSegment,
     sourced_segment,
     unavailable_segment,
@@ -54,6 +56,8 @@ _PLUGINS_SOURCE: Final = SegmentSource(
 #: The install scope that reaches every workspace of the user.
 _USER_SCOPE: Final = "user"
 
+_NO_PLUGIN_RECORD: Final = "no-plugin-record"
+
 
 def _reaches(record: object, workspace: Path) -> bool:
     """Return whether one install *record* is active for *workspace*."""
@@ -71,7 +75,7 @@ def _installed_plugins(workspace: Path) -> int | str:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        return "no-plugin-record"
+        return _NO_PLUGIN_RECORD
     except (OSError, ValueError) as exc:
         logger.debug(f"_installed_plugins plugin-record-unreadable error={exc}")
         return "plugin-record-unreadable"
@@ -114,9 +118,10 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
 
     Returns:
         A :class:`StatuslineSegment` with ``module="hooks_plugins"``.
-        ``status="missing"`` when no workspace resolves; ``status="degraded"``
-        for any other case (the counts are informational — never a health
-        claim — because the module never inspects a hook exit code). A counted
+        ``status="missing"`` when no workspace resolves or the host keeps no
+        install record, ``status="degraded"`` when that record is unreadable,
+        and ``status="info"`` for the counts, which claim no health because the
+        module never inspects a hook exit code. A counted
         plugin half names the host's install record as the producer, with the
         hooks directory as a second provenance.
     """
@@ -127,11 +132,12 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
     installed = _installed_plugins(state_path.parent.parent)
     if isinstance(installed, str):
         plugins = f"{UNAVAILABLE_MARK}({installed})"
+        status: SegmentStatus = "missing" if installed == _NO_PLUGIN_RECORD else "degraded"
         return sourced_segment(
-            _MODULE, _LABEL, f"{hooks} plugins:{plugins}", _HOOKS_SOURCE, status="degraded"
+            _MODULE, _LABEL, f"{hooks} plugins:{plugins}", _HOOKS_SOURCE, status=status
         )
     segment = sourced_segment(
-        _MODULE, _LABEL, f"{hooks} plugins:{installed}", _PLUGINS_SOURCE, status="degraded"
+        _MODULE, _LABEL, f"{hooks} plugins:{installed}", _PLUGINS_SOURCE, status="info"
     )
     refs = (*segment.truth.provenance_refs, _HOOKS_PROVENANCE)
     return replace(segment, truth=segment.truth.model_copy(update={"provenance_refs": refs}))

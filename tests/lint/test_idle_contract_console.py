@@ -158,6 +158,34 @@ def test_fixture_tree_reds_when_the_launcher_module_is_missing_entirely(tmp_path
     assert find_unconstructed_console_apps(repo_root=root) == ["ConsoleApp"]
 
 
+_DISPATCHER_PYPROJECT = """
+[project.scripts]
+eawf = "eawf.__main__:main"
+""".lstrip()
+
+_DISPATCHER_MODULE = """
+def main():
+    from eawf.surfaces.cli.app import main as cli_main
+
+    cli_main()
+""".lstrip()
+
+
+@pytest.mark.parametrize(
+    ("launcher", "expected"),
+    [(_LAUNCHER_WITH_CONSTRUCTION, []), (_LAUNCHER_WITHOUT_CONSTRUCTION, ["ConsoleApp"])],
+)
+def test_a_dispatcher_entry_in_front_of_the_cli_app_is_followed(
+    tmp_path: Path, launcher: str, expected: list[str]
+) -> None:
+    # The console script names a thin dispatcher outside the TUI package; the
+    # walk follows its import of the CLI app and still finds (or misses) the
+    # construction behind it.
+    root = _seed_tree(tmp_path, pyproject=_DISPATCHER_PYPROJECT, launcher=launcher)
+    _write(root, "src/eawf/__main__.py", _DISPATCHER_MODULE)
+    assert find_unconstructed_console_apps(repo_root=root) == expected
+
+
 # --------------------------------------------------------------------------- #
 # Boundary: no App subclass at all is not a finding.
 # --------------------------------------------------------------------------- #

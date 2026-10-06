@@ -24,12 +24,12 @@ from typing import Any, Final
 
 from eawf.kernel.projection.truth import TruthKind
 from eawf.kernel.state.enums import McpStatus
-from eawf.kernel.store.compaction import read_document
+from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.runtime.mcp.book import read_servers
 from eawf.runtime.runtimes.claude.statusline_modules._spine import (
     NO_STATE,
     SPINE_PRODUCER,
+    read_generation,
     selected_generation,
 )
 from eawf.surfaces.render.statusline import (
@@ -68,7 +68,14 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
     if isinstance(document_path, str):
         return unavailable_segment(_MODULE, _LABEL, document_path, _SOURCE)
     try:
-        standing = read_servers(read_document(document_path))
+        document = read_generation(document_path)
+        if not document_rows(document, Epoch2Collection.CAPABILITY):
+            return unavailable_segment(_MODULE, _LABEL, "no-mcp-servers", _SOURCE)
+        # The registry reader loads the epoch-1 state models its rows validate
+        # against, so it is imported only once there is a row to read.
+        from eawf.runtime.mcp.book import read_servers
+
+        standing = read_servers(document)
     except (OSError, ValueError) as exc:
         # McpRowError and pydantic's ValidationError are both ValueErrors.
         logger.debug(f"build mcp-registry-unreadable error={exc}")

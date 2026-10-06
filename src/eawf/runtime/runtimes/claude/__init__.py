@@ -1,30 +1,14 @@
 """Claude Code runtime adapter for Eä.
 
-Phase 4 W04 establishes this package skeleton with the hook router
-(:mod:`~eawf.runtime.runtimes.claude.hooks_router`). W05 extends it with the
-plugin install/update/doctor commands and the SKILL/agent/hook
-template renderers; W06 adds the statusline modules. Phase 6 W05 adds
-:func:`~eawf.runtime.runtimes.claude.plugin_package.package_plugin`, which
-emits a standalone CC-plugin-marketplace-installable tree (separate
-from the per-repo ``.claude/`` install path).
+The package holds the hook router, the plugin install/update/doctor
+commands, the SKILL/agent/hook template renderers, the statusline
+modules and :mod:`~eawf.runtime.runtimes.claude.plugin_package`, which
+emits a standalone CC-plugin-marketplace-installable tree.
 
-The convenience re-exports below pull from
-:mod:`~eawf.runtime.runtimes.claude.plugin_package`, so importing
-``eawf.runtime.runtimes.claude`` eagerly loads the renderer dependencies
-(jinja2, tomllib, the skill / agent registries). Callers that need a
-lighter import path should reach into the relevant submodule directly.
+The package init deliberately imports nothing: Claude Code spawns
+``eawf cc statusline`` on every redraw, and an eager re-export here would
+pull the plugin installer (and through it the daemon admission and
+config stack) into that hot path. Import from the submodule you need.
 """
 
 from __future__ import annotations
-
-from eawf.runtime.runtimes.claude.plugin_package import (
-    PackageResult,
-    PublishSource,
-    package_plugin,
-)
-
-__all__ = [
-    "PackageResult",
-    "PublishSource",
-    "package_plugin",
-]

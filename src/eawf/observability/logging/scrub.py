@@ -218,3 +218,33 @@ class SensitiveScrubber(logging.Filter):
         record.msg = self.scrub(record.getMessage())
         record.args = ()
         return True
+
+
+def configure_cli_logging() -> None:
+    """Install a scrubbed stderr log sink for a CLI process.
+
+    Attaches a :class:`SensitiveScrubber` to the root handler so any library
+    log line the CLI emits (error details, resolved state paths) is redacted
+    before it reaches the terminal -- the CLI is the operator-facing surface
+    and would otherwise print raw machine paths and secret-shaped tokens.
+    Skips installation when the root logger already has handlers so a caller
+    (test harness, embedding process) that configured logging first is not
+    clobbered. The level is WARNING because the INFO stream is daemon and
+    library chatter an operator does not act on.
+
+    It lives here rather than beside the Typer app so the console entry point
+    can install the same sink for a statusline render without importing the
+    app.
+    """
+    import sys
+
+    root = logging.getLogger()  # noqa: EAWF003 (root-logger handler config, not library acquisition)
+    if root.handlers:
+        return
+    handler = logging.StreamHandler(stream=sys.stderr)
+    # Lead with the timestamp (matching the daemon file log) so arm / drive
+    # latency is measurable from the inline console, not only from eawfd.log.
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    handler.addFilter(SensitiveScrubber())
+    root.addHandler(handler)
+    root.setLevel(logging.WARNING)

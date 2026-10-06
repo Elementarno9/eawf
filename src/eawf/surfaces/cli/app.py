@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Annotated
 
 import typer
 
+from eawf.observability.logging.scrub import configure_cli_logging
 from eawf.surfaces.cli._version_display import compose_display_version
 from eawf.surfaces.cli.flag_day_gate import FlagDayTyperGroup
 from eawf.surfaces.cli.flags import GlobalFlags
@@ -239,34 +240,6 @@ def _ui_cmd(
 register_commands(app)
 
 
-def _configure_logging() -> None:
-    """Install a scrubbed stderr log sink for the CLI process.
-
-    Attaches a :class:`~eawf.observability.logging.scrub.SensitiveScrubber` to the
-    root handler so any library log line the CLI emits (error details,
-    resolved state paths) is redacted before it reaches the terminal —
-    the CLI is the operator-facing surface and would otherwise print raw
-    machine paths and secret-shaped tokens. Skips installation when the
-    root logger already has handlers so a caller (test harness, embedding
-    process) that configured logging first is not clobbered.
-    """
-    import logging
-    import sys
-
-    from eawf.observability.logging.scrub import SensitiveScrubber
-
-    root = logging.getLogger()  # noqa: EAWF003 (root-logger handler config, not library acquisition)
-    if root.handlers:
-        return
-    handler = logging.StreamHandler(stream=sys.stderr)
-    # Lead with the timestamp (matching the daemon file log) so arm / drive
-    # latency is measurable from the inline console, not only from eawfd.log.
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
-    handler.addFilter(SensitiveScrubber())
-    root.addHandler(handler)
-    root.setLevel(logging.INFO)
-
-
 def _ensure_utf8_console() -> None:
     """Make stdout/stderr UTF-8-safe so the Eä brand never crashes on Windows.
 
@@ -293,7 +266,7 @@ def _ensure_utf8_console() -> None:
 
 def main() -> None:
     _ensure_utf8_console()
-    _configure_logging()
+    configure_cli_logging()
     # Pin the program name: Click otherwise derives it from argv[0], which is
     # ``eawf.exe`` on win32, so shell completion listened for
     # ``_EAWF.EXE_COMPLETE`` instead of the ``_EAWF_COMPLETE`` the completion

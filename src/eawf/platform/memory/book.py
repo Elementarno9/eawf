@@ -21,13 +21,13 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from eawf.kernel.migration.epoch2.envelopes import ImportedLedgerRow, LedgerCollection
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.migration.epoch2.memory import MEMORY_STORE_SOURCE
 from eawf.kernel.state.enums import MemoryStatus, MemoryTier
 from eawf.kernel.state.epoch2.authority import resolve_authority
-from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.memory import MEMORY_NOTE_KIND, MemoryNote, MemoryPayload
 from eawf.kernel.store.ledger import (
@@ -41,6 +41,9 @@ from eawf.kernel.store.ledger import (
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.memory.store import read_envelopes
+
+if TYPE_CHECKING:
+    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 

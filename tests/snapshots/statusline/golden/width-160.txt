@@ -1,0 +1,1 @@
+scope:EAWF-0403 | budget:1.2M/4.0M | git:feature/eawf-v0.7-rc2* | model:Opus ses:3f2a cwd:eawf | ctx:84.1k/200.0k | rate:n/a(no-rate-limits) | cost:$1.92

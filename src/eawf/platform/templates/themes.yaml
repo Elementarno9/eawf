@@ -8,7 +8,12 @@
 #     null/empty to disable color for that status). The renderer prepends
 #     the literal ESC byte () to every non-empty value at runtime so
 #     YAML can keep the values printable.
+#     `info` marks a value that claims no health either way and stays
+#     uncoloured; `degraded` (red) is kept for a real fault.
 #   - glyph: per-module prefix glyph (or null/"" for no glyph).
+#
+# When `COLUMNS` names a width, the renderer drops the segments least worth
+# keeping that no longer fit; colour escapes never count against it.
 #
 # Themes referenced by `EAWF_STATUSLINE_THEME` env var or `--theme` flag.
 # The orchestrator falls back to `default` if the requested theme is
@@ -19,6 +24,7 @@ default:
   skip_failed: false
   colors:
     ok: "[32m"        # green
+    info: ""          # uncoloured
     warn: "[33m"      # yellow
     missing: "[90m"   # bright black (grey)
     degraded: "[31m"  # red
@@ -39,6 +45,7 @@ powerline:
   skip_failed: false
   colors:
     ok: "[38;5;82m"
+    info: ""
     warn: "[38;5;220m"
     missing: "[38;5;245m"
     degraded: "[38;5;196m"
@@ -59,6 +66,7 @@ ascii-fallback:
   skip_failed: true
   colors:
     ok: ""
+    info: ""
     warn: ""
     missing: ""
     degraded: ""

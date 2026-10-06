@@ -76,7 +76,7 @@ def test_surf_117_an_unparseable_reset_keeps_the_fraction() -> None:
 
 
 def test_surf_117_the_orchestrator_renders_the_rate_window_segment() -> None:
-    assert rate_window in orchestrator._MODULE_ORDER
+    assert rate_window in orchestrator._module_order()
 
 
 def _referenced_names(root: Path, *, skip: Path) -> set[str]:

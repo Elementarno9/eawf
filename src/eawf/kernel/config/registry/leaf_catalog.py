@@ -27,7 +27,9 @@ Public API:
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 
+from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
 from eawf.kernel.config.registry.config_keys import CONFIG_REGISTRY
 from eawf.kernel.config.registry.leaf_keys import (
     _WRITABLE_ALL_DURABLE,
@@ -119,6 +121,29 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
             "Probe a runtime version no certification covers in the background when a "
             "Run first reports it."
         ),
+    ),
+    LeafKey(
+        key="runtime.profiles",
+        domain="runtime",
+        type="list_any",
+        default=deepcopy(BUILT_IN_DEFAULTS["runtime"]["profiles"]),
+        writable_layers=_WRITABLE_GWR,
+        description=(
+            "Provider profiles: whole records on the global and workspace layers; "
+            "narrowing patches only on the repository layer."
+        ),
+        consumer="eawf.runtime.daemon.provider_facts.installed_provider_facts",
+    ),
+    LeafKey(
+        key="runtime.routes",
+        domain="runtime",
+        type="list_any",
+        default=deepcopy(BUILT_IN_DEFAULTS["runtime"]["routes"]),
+        # routes are operator configuration; the provider loader refuses one
+        # on the repository layer, so the catalog does not offer that layer
+        writable_layers=("global", "workspace"),
+        description="Provider routes choosing the profiles a Run may bind to.",
+        consumer="eawf.runtime.daemon.provider_facts.installed_provider_facts",
     ),
     LeafKey(
         key="runtime.models.claude",
@@ -388,7 +413,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="mapping",
         default=None,
         writable_layers=_WRITABLE_GWR,
-        description="When a Run's budget notice fires, as a fraction of its estimate.",
+        description="When a Run at its hard ceiling opens a budget notice: the no-event grace.",
         consumer="eawf.kernel.economics.governor.economics_policy_from",
     ),
     # --- research ----------------------------------------------------------
@@ -806,6 +831,15 @@ _RETIRED_KEYS: frozenset[str] = frozenset(
         "vcs.squash_allowed",
         # named /research as its reader, but no code ever read it
         "research.auto_save",
+        # the wave trailer name is fixed in the commit lint and the wave-SHA reader
+        "vcs.conventions.wave_trailer",
+        # the statusline fits its width from COLUMNS with a fixed segment order and takes
+        # its colours and glyphs from the theme named by --theme or EAWF_STATUSLINE_THEME
+        "statusline.color_mode",
+        "statusline.glyph_mode",
+        "statusline.modules_available",
+        "statusline.modules_default",
+        "statusline.rows",
         # retired before this catalog tracked them: renamed or never consumed
         "acceptance.lint",
         "acceptance.tests",
@@ -897,11 +931,6 @@ _RETIRED_KEYS: frozenset[str] = frozenset(
         "ship.use_vcs_policy",
         "state_schema.id_padding",
         "state_schema.strictness",
-        "statusline.color_mode",
-        "statusline.glyph_mode",
-        "statusline.modules_available",
-        "statusline.modules_default",
-        "statusline.rows",
         "storage.artifacts_dir",
         "storage.commit_jsonl",
         "storage.content_addressed_blobs",

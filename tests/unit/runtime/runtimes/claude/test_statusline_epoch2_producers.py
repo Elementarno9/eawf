@@ -194,7 +194,7 @@ def test_plugins_epoch2_count_user_and_this_projects_installs(
     segment = hooks_plugins.build({}, state_path)
 
     assert segment.text == "hooks:0 plugins:3"
-    assert segment.status == "degraded"
+    assert segment.status == "info"
 
 
 @pytest.mark.parametrize(

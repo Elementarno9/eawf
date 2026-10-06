@@ -16,10 +16,9 @@ that does not validate.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from eawf.kernel.projection.truth import TruthKind
-from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.runtimes.claude.statusline_modules._spine import (
     SPINE_PRODUCER,
@@ -32,6 +31,9 @@ from eawf.surfaces.render.statusline import (
     sourced_segment,
     unavailable_segment,
 )
+
+if TYPE_CHECKING:
+    from eawf.kernel.state.epoch2.run import Run
 
 _MODULE = "scope"
 _SPINE_SOURCE = SegmentSource(

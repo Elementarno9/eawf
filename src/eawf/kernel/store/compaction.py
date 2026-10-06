@@ -62,13 +62,12 @@ import secrets
 import shutil
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any, Final
+from typing import TYPE_CHECKING, Annotated, Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.spec.release import Sha256DigestStr
-from eawf.kernel.state.epoch2.task import TERMINAL_TASK_STATUSES, Task, TaskStatus
-from eawf.kernel.state.types import UtcDatetime
+from eawf.kernel.state.epoch2.task_status import TERMINAL_TASK_STATUSES, TaskStatus
+from eawf.kernel.state.types import Sha256DigestStr, UtcDatetime
 from eawf.kernel.store.index import regenerate_indexes, write_ledger_index
 from eawf.kernel.store.ledger import (
     LedgerRecord,
@@ -94,6 +93,9 @@ from eawf.kernel.store.tiers import (
     StorageTier,
     tier_for,
 )
+
+if TYPE_CHECKING:
+    from eawf.kernel.state.epoch2.task import Task
 
 logger = logging.getLogger(__name__)
 

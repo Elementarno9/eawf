@@ -1,9 +1,9 @@
 """Tests for the stale-while-revalidate statusline cache.
 
 Pins the SWR contract: a fresh hit serves the cached line with no render, a
-stale hit serves the cached line immediately AND hands a freshly-rendered
-line to the refresh sink, and a true miss renders synchronously then writes.
-Covers the inclusive TTL boundary, a corrupt-cache miss, and the
+stale hit serves the cached line immediately, re-stamps it AND triggers a
+background refresh, and a true miss renders synchronously then writes
+atomically. Covers the inclusive TTL boundary, a corrupt-cache miss, and the
 non-positive-TTL constructor error path. The clock is injected so the
 staleness boundary is deterministic.
 """
@@ -124,6 +124,132 @@ def test_get_returns_stale_hit(tmp_path: Path) -> None:
     assert cache.get() == CacheLookup(value="stale line", present=True, stale=True)
 
 
+# --- atomic write ------------------------------------------------------------
+
+
+def test_write_leaves_only_the_entry_behind(tmp_path: Path) -> None:
+    # The write goes through a temporary sibling that is renamed away.
+    cache = _cache(tmp_path, _Clock())
+    cache.write("one")
+    cache.write("two")
+    assert [path.name for path in tmp_path.iterdir()] == ["statusline.json"]
+    assert cache.read_entry() == CacheEntry(value="two", written_at=1000.0)
+
+
+def test_write_creates_a_missing_cache_directory(tmp_path: Path) -> None:
+    cache = StatuslineCache(tmp_path / "a" / "b" / "c.json", clock=_Clock())
+    cache.write("line")
+    assert cache.read_entry() == CacheEntry(value="line", written_at=1000.0)
+
+
+def test_failed_rename_keeps_the_old_entry_and_drops_the_temporary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # error-path: a reader must never see a torn entry, and a failed write
+    # must not leave its temporary file in the cache directory.
+    clock = _Clock(start=100.0)
+    cache = _cache(tmp_path, clock)
+    cache.write("old")
+
+    def _refuse(_src: object, _dst: object) -> None:
+        raise OSError("rename refused")
+
+    monkeypatch.setattr("eawf.runtime.statusline_cache.os.replace", _refuse)
+    clock.now = 200.0
+    cache.write("new")
+
+    assert cache.read_entry() == CacheEntry(value="old", written_at=100.0)
+    assert [path.name for path in tmp_path.iterdir()] == ["statusline.json"]
+
+
+def test_write_into_an_unwritable_location_is_swallowed(tmp_path: Path) -> None:
+    # error-path: the cache root is a file, so mkdir fails; the write degrades.
+    (tmp_path / "blocked").write_text("not a directory")
+    cache = StatuslineCache(tmp_path / "blocked" / "c.json", clock=_Clock())
+    cache.write("line")
+    assert cache.read_entry() is None
+
+
+def test_write_round_trips_a_long_line(tmp_path: Path) -> None:
+    # boundary: a line far past any terminal width still round-trips intact.
+    cache = _cache(tmp_path, _Clock())
+    line = "seg:" + "x" * 100_000
+    cache.write(line)
+    entry = cache.read_entry()
+    assert entry is not None
+    assert entry.value == line
+
+
+# --- serve_cached (hit-only SWR) ---------------------------------------------
+
+
+class _Refresh:
+    """Counts refresh triggers."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self) -> None:
+        self.calls += 1
+
+
+def test_serve_cached_miss_returns_none_without_refresh(tmp_path: Path) -> None:
+    refresh = _Refresh()
+    assert _cache(tmp_path, _Clock()).serve_cached(refresh) is None
+    assert refresh.calls == 0
+
+
+def test_serve_cached_fresh_hit_does_not_refresh(tmp_path: Path) -> None:
+    clock = _Clock(start=100.0)
+    cache = _cache(tmp_path, clock, ttl=5.0)
+    cache.write("cached")
+    clock.now = 105.0  # boundary: age == TTL is still fresh
+    refresh = _Refresh()
+    assert cache.serve_cached(refresh) == "cached"
+    assert refresh.calls == 0
+
+
+def test_entry_past_ttl_triggers_one_refresh(tmp_path: Path) -> None:
+    # Injected clock: an entry just past its TTL is served and refreshed.
+    clock = _Clock(start=100.0)
+    cache = _cache(tmp_path, clock, ttl=5.0)
+    cache.write("old line")
+    clock.now = 105.001
+    refresh = _Refresh()
+
+    assert cache.serve_cached(refresh) == "old line"
+    assert refresh.calls == 1
+    # The stale entry is re-stamped, so a redraw during the refresh does not
+    # start a second one.
+    assert cache.read_entry() == CacheEntry(value="old line", written_at=105.001)
+    clock.now = 106.0
+    assert cache.serve_cached(refresh) == "old line"
+    assert refresh.calls == 1
+
+
+def test_refresh_retries_after_another_ttl_when_the_worker_never_writes(
+    tmp_path: Path,
+) -> None:
+    clock = _Clock(start=100.0)
+    cache = _cache(tmp_path, clock, ttl=5.0)
+    cache.write("old line")
+    refresh = _Refresh()
+    clock.now = 110.0
+    cache.serve_cached(refresh)
+    clock.now = 115.5
+    cache.serve_cached(refresh)
+    assert refresh.calls == 2
+
+
+def test_serve_cached_treats_a_retired_format_entry_as_a_miss(tmp_path: Path) -> None:
+    # error-path: an entry in the retired per-session format is a miss.
+    path = tmp_path / "statusline.json"
+    path.write_bytes(b'{"session_id": "s", "line": "old format"}')
+    refresh = _Refresh()
+    assert StatuslineCache(path, clock=_Clock()).serve_cached(refresh) is None
+    assert refresh.calls == 0
+
+
 # --- serve (SWR loop) --------------------------------------------------------
 
 
@@ -138,45 +264,48 @@ def test_serve_fresh_hit_does_not_render(tmp_path: Path) -> None:
         calls.append("rendered")
         return "fresh"
 
-    assert cache.serve(_render) == "cached"
+    assert cache.serve(_render, refresh=_Refresh()) == "cached"
     assert calls == []  # a fresh hit never renders
 
 
 def test_serve_miss_renders_and_writes(tmp_path: Path) -> None:
     clock = _Clock(start=100.0)
     cache = _cache(tmp_path, clock, ttl=5.0)
-    assert cache.serve(lambda: "rendered line") == "rendered line"
+    refresh = _Refresh()
+    assert cache.serve(lambda: "rendered line", refresh=refresh) == "rendered line"
     # The cold render is persisted for the next reader.
     assert cache.read_entry() == CacheEntry(value="rendered line", written_at=100.0)
+    assert refresh.calls == 0
 
 
-def test_serve_stale_hit_serves_cached_and_signals_refresh(tmp_path: Path) -> None:
-    # SWR core: a stale hit serves the cached line immediately and hands the
-    # freshly-rendered line to the refresh sink for off-hot-path persistence.
-    clock = _Clock(start=100.0)
-    cache = _cache(tmp_path, clock, ttl=5.0)
-    cache.write("old line")
-    clock.now = 110.0
-    refreshed: list[str] = []
-
-    served = cache.serve(lambda: "new line", refresh=refreshed.append)
-
-    assert served == "old line"  # cached value served immediately
-    assert refreshed == ["new line"]  # fresh render handed to the sink
-
-
-def test_serve_stale_hit_without_refresh_serves_cached_only(tmp_path: Path) -> None:
-    # boundary: with no refresh sink, a stale hit still serves the cached
-    # line and does not render.
+def test_serve_stale_hit_serves_cached_and_triggers_refresh_without_rendering(
+    tmp_path: Path,
+) -> None:
+    # SWR core: a stale hit serves the cached line immediately and leaves the
+    # render to the background refresh.
     clock = _Clock(start=100.0)
     cache = _cache(tmp_path, clock, ttl=5.0)
     cache.write("old line")
     clock.now = 110.0
     calls: list[str] = []
+    refresh = _Refresh()
 
     def _render() -> str:
         calls.append("rendered")
-        return "new"
+        return "new line"
 
-    assert cache.serve(_render) == "old line"
+    assert cache.serve(_render, refresh=refresh) == "old line"
+    assert refresh.calls == 1
     assert calls == []
+
+
+def test_serve_propagates_a_render_error_on_a_miss(tmp_path: Path) -> None:
+    # error-path: the cache does not hide a render failure, and writes nothing.
+    cache = _cache(tmp_path, _Clock())
+
+    def _render() -> str:
+        raise RuntimeError("render failed")
+
+    with pytest.raises(RuntimeError, match="render failed"):
+        cache.serve(_render, refresh=_Refresh())
+    assert cache.read_entry() is None

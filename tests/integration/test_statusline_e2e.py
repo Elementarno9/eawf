@@ -8,16 +8,19 @@ stdin and asserts:
    ``model:``, ``ses:``, ``cwd:``, ``ctx:``, ``cost:``, ``mcp:``, ``hooks:``,
    ``mem:``, ``save:``), each unavailable one naming why.
 3. ``--theme ascii-fallback`` honors the env var precedence (flag wins).
-4. ``eawf cc statusline prewarm`` writes a cache file at the expected
+4. ``eawf cc statusline prewarm`` writes a cache entry at the expected
    path; subsequent ``statusline`` invocations with the same session id
-   use the cached line.
+   use the cached line while it is fresh.
 5. Any module exception is contained — the orchestrator never crashes.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +51,8 @@ def test_statusline_e2e_emits_single_line_with_zero_exit(
 ) -> None:
     monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(tmp_path / "cache"))
     monkeypatch.delenv("EAWF_STATUSLINE_THEME", raising=False)
+    # A terminal width would drop segments this test expects to see.
+    monkeypatch.delenv("COLUMNS", raising=False)
     # The plugin count reads the host's install record under $HOME.
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     _stub_no_git(monkeypatch)
@@ -170,13 +175,12 @@ def test_statusline_prewarm_writes_cache_and_subsequent_run_hits_cache(
     assert cache_path.exists(), "prewarm should write the cache file"
     cached = orjson.loads(cache_path.read_bytes())
     assert isinstance(cached, dict)
-    assert cached["session_id"] == "ses-cache-001"
-    assert "model:haiku" in cached["line"]
+    assert "model:haiku" in cached["value"]
 
     # 2. Subsequent statusline call: cache hit. Tamper the cache with a
-    # sentinel string so we can verify the cached value is what's
-    # printed, not a fresh render.
-    cache_path.write_bytes(orjson.dumps({"session_id": "ses-cache-001", "line": "SENTINEL"}))
+    # sentinel string (keeping the fresh write stamp) so we can verify the
+    # cached value is what's printed, not a fresh render.
+    cache_path.write_bytes(orjson.dumps({**cached, "value": "SENTINEL"}))
 
     result = runner.invoke(
         app,
@@ -185,3 +189,29 @@ def test_statusline_prewarm_writes_cache_and_subsequent_run_hits_cache(
     )
     assert result.exit_code == 0, result.output
     assert result.stdout.rstrip("\n") == "SENTINEL"
+
+
+@pytest.mark.integration
+def test_statusline_healthy_call_fits_columns_and_keeps_stderr_empty(tmp_path: Path) -> None:
+    """A real process: the line fits ``COLUMNS`` and nothing reaches stderr."""
+    env = {
+        **os.environ,
+        "HOME": str(tmp_path / "home"),
+        "EAWF_STATUSLINE_CACHE": str(tmp_path / "cache"),
+        "COLUMNS": "80",
+    }
+    env.pop("EAWF_STATUSLINE_THEME", None)
+    payload = {"session_id": "ses-quiet", "model": "haiku", "cwd": str(tmp_path)}
+    proc = subprocess.run(
+        [sys.executable, "-m", "eawf", "--workspace", str(tmp_path), "cc", "statusline"],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stderr == ""
+    visible = re.sub(r"\x1b\[[0-9;]*m", "", proc.stdout.rstrip("\n"))
+    assert 0 < len(visible) <= 80

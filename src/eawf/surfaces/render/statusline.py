@@ -36,7 +36,9 @@ don't want to decorate.
 from __future__ import annotations
 
 import logging
+import os
 import re
+import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -59,9 +61,11 @@ from eawf.surfaces.render.units import format_tokens
 logger = logging.getLogger(__name__)
 
 
-SegmentStatus = Literal["ok", "warn", "missing", "degraded", "failed"]
+SegmentStatus = Literal["ok", "info", "warn", "missing", "degraded", "failed"]
 """Status carried on each :class:`StatuslineSegment`.
 
+``info`` marks a value that is shown but makes no health claim either way, so
+themes leave it uncoloured rather than painting it green or red.
 ``failed`` is reserved for modules that raised during render — the
 orchestrator wraps any module exception in a ``status="failed"`` segment so
 the renderer can decide whether to skip it or render its
@@ -379,15 +383,94 @@ def resolve_theme(name: str | None, themes: dict[str, StatuslineTheme]) -> Statu
     return StatuslineTheme(name=_DEFAULT_THEME_NAME)
 
 
-def _decorate_segment(segment: StatuslineSegment, theme: StatuslineTheme) -> str:
-    """Return the rendered string for one segment under *theme*.
+_COLUMNS_ENV: Final = "COLUMNS"
 
-    Wraps :attr:`StatuslineSegment.text` with the per-module glyph (prefix)
-    and the per-status colour (with an explicit reset suffix). Missing glyph
-    or colour entries are dropped silently.
+#: Modules from most to least worth keeping when the line must shrink. What the
+#: operator steers by (scope, spend, context, model) outlives the ambient counts.
+#: A module not listed here, such as a failed segment's module, goes first.
+_KEEP_PRIORITY: Final = (
+    "scope",
+    "budget",
+    "context_tokens",
+    "model_session_cwd",
+    "git",
+    "rate_window",
+    "cost",
+    "mcp_health",
+    "hooks_plugins",
+    "memory",
+    "token_saving",
+)
+
+_ELLIPSIS: Final = "…"
+
+
+def _cells(text: str) -> int:
+    """Return the terminal cells *text* occupies; wide glyphs take two, marks none."""
+    total = 0
+    for char in text:
+        if unicodedata.combining(char):
+            continue
+        total += 2 if unicodedata.east_asian_width(char) in {"W", "F"} else 1
+    return total
+
+
+def _clip(text: str, width: int) -> str:
+    """Return *text* cut to *width* cells, ending in an ellipsis when cut."""
+    if _cells(text) <= width:
+        return text
+    kept = ""
+    for char in text:
+        if _cells(kept) + _cells(char) > width - 1:
+            break
+        kept += char
+    return f"{kept}{_ELLIPSIS}"
+
+
+def _columns() -> int | None:
+    """Return the terminal width ``COLUMNS`` names, or ``None`` when it names none.
+
+    Without a positive integer there is no width to fit against, and a
+    guessed width would cut a line the terminal could show, so the line
+    renders whole.
     """
-    glyph_prefix = theme.glyph.get(segment.module, "")
-    body = f"{glyph_prefix} {segment.text}" if glyph_prefix else segment.text
+    raw = os.environ.get(_COLUMNS_ENV, "").strip()
+    if not raw.isdigit():
+        return None
+    columns = int(raw)
+    return columns if columns > 0 else None
+
+
+def _fit(bodies: list[tuple[StatuslineSegment, str]], separator: str, width: int) -> list[int]:
+    """Return the indices of *bodies* that fit *width*, in their original order.
+
+    Segments claim the width in keep order, leftmost first among equals, so a
+    segment is dropped only when everything worth more already took the room
+    it needs; a smaller, lower one may still fill the space left. When not even
+    the first segment fits, it is kept alone and the caller clips it.
+    """
+
+    def rank(index: int) -> tuple[int, int]:
+        module = bodies[index][0].module
+        order = _KEEP_PRIORITY.index(module) if module in _KEEP_PRIORITY else len(_KEEP_PRIORITY)
+        return (order, index)
+
+    by_rank = sorted(range(len(bodies)), key=rank)
+    kept: list[int] = []
+    used = 0
+    gap = _cells(separator)
+    for index in by_rank:
+        need = _cells(bodies[index][1]) + (gap if kept else 0)
+        if used + need <= width:
+            kept.append(index)
+            used += need
+    if not kept and by_rank:
+        kept.append(by_rank[0])
+    return sorted(kept)
+
+
+def _colour(segment: StatuslineSegment, body: str, theme: StatuslineTheme) -> str:
+    """Wrap *body* in the theme's colour for the segment's status, if it has one."""
     color = theme.colors.get(segment.status, "")
     if color:
         reset = theme.colors.get("reset", "")
@@ -402,17 +485,32 @@ def render_segments(segments: list[StatuslineSegment], theme: StatuslineTheme) -
 
     1. Drop segments with ``status="failed"`` when ``theme.skip_failed`` is
        true.
-    2. Decorate every remaining segment via :func:`_decorate_segment`.
-    3. Join with ``theme.separator``.
+    2. Prefix each remaining segment with its module glyph.
+    3. When ``COLUMNS`` names a width, let segments claim it in keep order
+       and drop each that no longer fits; when none fits, keep the first
+       alone, clipped.
+    4. Colour each segment by status and join with ``theme.separator``.
 
-    The output never ends in a trailing newline — the orchestrator decides
-    how to write it to stdout.
+    Width is measured on the visible text, so colour escapes never count
+    against it. The output never ends in a trailing newline — the
+    orchestrator decides how to write it to stdout.
     """
-    visible: list[StatuslineSegment] = [
-        s for s in segments if not (theme.skip_failed and s.status == "failed")
-    ]
-    decorated = [_decorate_segment(s, theme) for s in visible]
-    return theme.separator.join(decorated)
+    bodies: list[tuple[StatuslineSegment, str]] = []
+    for segment in segments:
+        if theme.skip_failed and segment.status == "failed":
+            continue
+        glyph_prefix = theme.glyph.get(segment.module, "")
+        body = f"{glyph_prefix} {segment.text}" if glyph_prefix else segment.text
+        bodies.append((segment, body))
+    width = _columns()
+    if width is None:
+        kept = list(range(len(bodies)))
+    else:
+        kept = _fit(bodies, theme.separator, width)
+        if len(kept) == 1:
+            segment, body = bodies[kept[0]]
+            bodies[kept[0]] = (segment, _clip(body, width))
+    return theme.separator.join(_colour(*bodies[i], theme) for i in kept)
 
 
 _RATE_WINDOW_MODULE: str = "rate_window"

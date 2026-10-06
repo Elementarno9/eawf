@@ -23,7 +23,7 @@ from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.spec.release import Sha256DigestStr
+from eawf.kernel.state.types import Sha256DigestStr
 from eawf.kernel.store.generated import guard_generated_write
 from eawf.kernel.store.ledger import (
     LedgerRecord,

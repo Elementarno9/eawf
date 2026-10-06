@@ -9,7 +9,7 @@ def swap_root_logging_to_textual() -> list[logging.Handler]:
     """Detach terminal-bound root handlers, install a :class:`TextualHandler`.
 
     The CLI installs a :class:`logging.StreamHandler` on the root logger
-    (:func:`eawf.surfaces.cli.app._configure_logging`) so non-TUI commands get
+    (:func:`eawf.observability.logging.scrub.configure_cli_logging`) so non-TUI commands get
     scrubbed stderr logs. That handler keeps writing to the terminal after
     Textual owns the screen, corrupting the live TUI. This swaps the root
     logger for the duration of the Textual run: every root handler whose

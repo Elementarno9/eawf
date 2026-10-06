@@ -1,21 +1,16 @@
 # Source map
 
-A one-line-per-package index of `src/eawf/`, grouped by the architectural
-layer each package belongs to. The layer grouping mirrors the target
-super-package structure (kernel → workflow → runtime → surfaces →
-observability → platform); a package's layer is a stable property even
-while the on-disk path is flat.
+A one-line-per-package index of `src/eawf/`, grouped by the architectural layer each package belongs to. The layer grouping mirrors the target super-package structure (kernel → workflow → runtime → surfaces → observability → platform); a package's layer is a stable property even while the on-disk path is flat.
 
-For the narrative architecture, read `overview.md`; for the CLI surface,
-`cli-surface.md`; for the state entities, `state-model.md`.
+For the narrative architecture, read `overview.md`; for the CLI surface, `cli-surface.md`; for the state entities, `state-model.md`.
 
 ## Entry points
 
 | Console script | Target | Purpose |
 |---|---|---|
-| `eawf` / `ea` | `eawf.surfaces.cli.app:main` | Operator CLI (Typer dispatch). |
+| `eawf` / `ea` | `eawf.__main__:main` | Operator CLI: answers a cached `cc statusline` line itself, otherwise dispatches to `eawf.surfaces.cli.app:main` (Typer). |
 | `eawfd` | `eawf.runtime.daemon.main:main` | Background daemon — sole canonical mutator. |
-| `python -m eawf` | `eawf.__main__` | Module entry; re-exports `cli.app:main`. |
+| `python -m eawf` | `eawf.__main__` | Module entry; runs the same `main` as the `eawf` script. |
 
 ## Kernel — typed state, storage, config, validation
 

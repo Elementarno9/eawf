@@ -1,21 +1,24 @@
-"""``eawf cc`` Typer subapp — Claude Code adapter surface (Phase 4 W06).
+"""``eawf cc`` Typer subapp — Claude Code adapter surface.
 
-Two surfaces today:
+Three surfaces today:
 
 - ``eawf cc statusline`` — read Claude stdin JSON, render one line of
   statusline text to stdout. Honors ``--theme`` flag and the
-  ``EAWF_STATUSLINE_THEME`` env var.
-- ``eawf cc statusline prewarm`` — run the same render pipeline, write
-  the rendered line to ``~/.claude/statusline-cache/<session-id>.json``,
-  exit ``0``. The cache is consulted by subsequent ``statusline`` runs
-  when the same ``session_id`` is on stdin.
+  ``EAWF_STATUSLINE_THEME`` env var. The line is cached for each Claude
+  session id, stale-while-revalidate: a hit is printed at once (a stale
+  one also starts a background refresh), a miss renders and caches.
+  The console entry point (:mod:`eawf.__main__`) answers the plain
+  invocation, hit or miss, without importing this app; this command
+  handles every other form (``--workspace``, a TTY stdin, Windows).
+- ``eawf cc statusline prewarm`` — render, write the line to the
+  session's cache entry, exit ``0``. The background refresh runs this.
 - ``eawf cc statusline install`` — wire the statusline into the global
   Claude Code ``settings.json`` (the wizard in
   :mod:`eawf.surfaces.cli.commands.statusline`).
 
-Both commands always exit ``0`` from a successful pipeline; they never
-raise on a malformed Claude payload (decode/empty stdin → empty dict;
-modules degrade independently per the W06 contract).
+The render commands always exit ``0`` from a successful pipeline; they
+never raise on a malformed Claude payload (decode/empty stdin → empty
+dict; modules degrade independently).
 """
 
 from __future__ import annotations

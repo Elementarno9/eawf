@@ -44,9 +44,8 @@ def test_no_plugin_record_names_why_and_claims_no_health(tmp_path: Path) -> None
     state_path = _seed_state(tmp_path, {})
     seg = hooks_plugins.build({}, state_path)
     assert seg.text == "hooks:0 plugins:n/a(no-plugin-record)"
-    # The count is informational only (no hook exit code is read), so the
-    # segment must not claim health it never measured.
-    assert seg.status == "degraded"
+    # An absent record is a value with no producer, not a fault: grey, not red.
+    assert seg.status == "missing"
 
 
 def test_the_host_record_counts_plugins_not_the_document(tmp_path: Path, home: Path) -> None:
@@ -54,7 +53,9 @@ def test_the_host_record_counts_plugins_not_the_document(tmp_path: Path, home: P
     _plugin_record(home, {"claude-core@m": [{"scope": "user"}], "research@m": [{"scope": "user"}]})
     seg = hooks_plugins.build({}, state_path)
     assert seg.text == "hooks:0 plugins:2"
-    assert seg.status == "degraded"
+    # The count is informational only (no hook exit code is read), so the
+    # segment claims neither health nor a fault.
+    assert seg.status == "info"
 
 
 def test_hooks_directory_count_added(tmp_path: Path, home: Path) -> None:
@@ -74,4 +75,22 @@ def test_malformed_state_keeps_the_hook_count(tmp_path: Path) -> None:
     state_path.write_bytes(b"not-json")
     seg = hooks_plugins.build({}, state_path)
     assert seg.text == "hooks:0 plugins:n/a(no-plugin-record)"
+    assert seg.status == "missing"
+
+
+def test_unreadable_plugin_record_is_the_only_degraded_case(tmp_path: Path, home: Path) -> None:
+    state_path = _seed_state(tmp_path, {})
+    record = home / ".claude" / "plugins" / "installed_plugins.json"
+    record.parent.mkdir(parents=True)
+    record.write_text("{not json", encoding="utf-8")
+    seg = hooks_plugins.build({}, state_path)
+    assert seg.text == "hooks:0 plugins:n/a(plugin-record-unreadable)"
+    assert seg.status == "degraded"
+
+
+def test_plugin_record_of_the_wrong_shape_is_degraded(tmp_path: Path, home: Path) -> None:
+    state_path = _seed_state(tmp_path, {})
+    _plugin_record(home, [])  # type: ignore[arg-type]
+    seg = hooks_plugins.build({}, state_path)
+    assert seg.text == "hooks:0 plugins:n/a(plugin-record-unreadable)"
     assert seg.status == "degraded"

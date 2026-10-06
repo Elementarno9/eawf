@@ -31,8 +31,7 @@ from typing import Annotated, Final
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, StringConstraints
 
 from eawf.kernel.identity import EntityKind, validate_entity_key
-from eawf.kernel.spec.release import Sha256DigestStr
-from eawf.kernel.state.models import ShaStr
+from eawf.kernel.state.types import Sha256DigestStr, ShaStr
 
 
 class Epoch2Model(BaseModel):

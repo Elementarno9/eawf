@@ -146,11 +146,11 @@ def _reachable_modules(root: Path, *, entry_dotted: str, boundary_prefix: str) -
     """BFS the ``eawf.*`` import graph from ``entry_dotted``, bounded to ``boundary_prefix``.
 
     The entry module is always included even though it sits outside the
-    boundary (the CLI dispatcher, not the TUI package) -- it is the known
-    first hop of the console-script chain. Every module it imports that lies
-    inside *boundary_prefix* is then walked transitively; an import outside
-    the boundary is not followed, so the walk cannot wander into the rest of
-    the codebase.
+    boundary -- it is the known first hop of the console-script chain. It is
+    a thin dispatcher in front of the CLI app, so every module it imports is
+    a hop of the chain too, wherever it lives. Past those, only imports that
+    lie inside *boundary_prefix* are walked transitively, so the walk cannot
+    wander into the rest of the codebase.
     """
     entry_path = _module_path(root, entry_dotted)
     if entry_path is None:
@@ -160,7 +160,8 @@ def _reachable_modules(root: Path, *, entry_dotted: str, boundary_prefix: str) -
     while frontier:
         current = frontier.pop()
         for dotted in _dotted_imports(reachable[current]):
-            if dotted in reachable or not dotted.startswith(boundary_prefix):
+            in_chain = current == entry_dotted or dotted.startswith(boundary_prefix)
+            if dotted in reachable or not in_chain:
                 continue
             path = _module_path(root, dotted)
             if path is None:

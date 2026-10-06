@@ -81,6 +81,7 @@ from eawf.kernel.state.ids import (
     RE_WAVE,
     natural_key,
 )
+from eawf.kernel.state.types import ShaStr as ShaStr
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.state.urn import URN_KINDS
 from eawf.runtime.sandbox.policy import SandboxPolicy
@@ -106,7 +107,6 @@ HypothesisIdStr = Annotated[
     Field(pattern=f"^(?:{RE_HYPOTHESIS.pattern[1:-1]}|{RE_HYPOTHESIS_SCOPED.pattern[1:-1]})$"),
 ]
 IdStr = Annotated[str, Field(min_length=1, pattern=r"^\S+$")]
-ShaStr = Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
 DigestStr = Annotated[str, Field(min_length=1, max_length=128)]
 #: A ``vMAJOR.MINOR.PATCH`` release label (e.g. ``v0.5.0``). The semver core
 #: is required; an optional PEP-440 pre-release segment (``a`` / ``b`` /

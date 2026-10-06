@@ -1,4 +1,4 @@
-"""Stale-while-revalidate file cache for the rendered statusline (B018 W40).
+"""Stale-while-revalidate file cache for the rendered statusline.
 
 Claude Code asks for the statusline on a hot path (every prompt redraw), but
 the full render pipeline walks every module and shells out to git, so a cold
@@ -9,9 +9,11 @@ entry is past its time-to-live (TTL). The next redraw then picks up the
 freshly-written line.
 
 This module owns only the cache read/write + staleness decision; it carries
-no rendering and no threading. The orchestrator threads the render callable
-and decides how to run the refresh (background worker / next-tick prewarm).
-The clock is injectable so the TTL boundary is deterministic under test.
+no rendering and no process management. The orchestrator supplies the render
+callable and the refresh trigger (a detached background render). Writes are
+atomic (temporary file + rename) because the refresh worker writes while
+other redraws read. The clock is injectable so the TTL boundary is
+deterministic under test.
 
 Public surface:
 
@@ -22,16 +24,30 @@ Public surface:
 
 from __future__ import annotations
 
-import logging
+import contextlib
+import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import orjson
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    import logging
+
+
+def _logger() -> logging.Logger:
+    """Return this module's logger, importing :mod:`logging` on first use.
+
+    ``logging`` costs about a third of a cached statusline redraw, and a
+    cache hit logs nothing, so the import waits for the first log line.
+    """
+    import logging
+
+    return logging.getLogger(__name__)
+
 
 _DEFAULT_TTL_SECONDS: float = 5.0
 """Default freshness window: a line older than this is served stale and a
@@ -120,14 +136,14 @@ class StatuslineCache:
         try:
             raw = self._path.read_bytes()
         except OSError as exc:
-            logger.debug(f"read_entry cache-read-failed path={self._path!r} error={exc}")
+            _logger().debug(f"read_entry cache-read-failed path={self._path!r} error={exc}")
             return None
         if not raw.strip():
             return None
         try:
             decoded: Any = orjson.loads(raw)
         except orjson.JSONDecodeError as exc:
-            logger.debug(f"read_entry cache-json-decode-failed path={self._path!r} error={exc}")
+            _logger().debug(f"read_entry cache-json-decode-failed path={self._path!r} error={exc}")
             return None
         if not isinstance(decoded, dict):
             return None
@@ -140,16 +156,27 @@ class StatuslineCache:
     def write(self, value: str) -> None:
         """Write *value* to the cache, stamping it with the current clock.
 
-        Best-effort: a write failure is logged at debug and swallowed so a
-        read-only cache directory degrades to an always-cold render rather
-        than crashing the statusline.
+        The bytes land in a sibling temporary file that is then renamed over
+        the entry, so a concurrent reader sees either the old entry or the
+        new one, never a torn write. The temporary name carries the process
+        id so two writers never share one.
+
+        Best-effort: a write failure is logged at debug and swallowed (and
+        the temporary file removed) so a read-only cache directory degrades
+        to an always-cold render rather than crashing the statusline.
         """
         entry = {_VALUE_KEY: value, _WRITTEN_AT_KEY: self._clock()}
+        tmp = self._path.with_name(f".{self._path.name}.{os.getpid()}.tmp")
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._path.write_bytes(orjson.dumps(entry))
+            tmp.write_bytes(orjson.dumps(entry))
+            os.replace(tmp, self._path)
         except OSError as exc:
-            logger.debug(f"write cache-write-failed path={self._path!r} error={exc}")
+            _logger().debug(f"write cache-write-failed path={self._path!r} error={exc}")
+            # The temporary may never have been created (missing or blocked
+            # directory), so its removal fails the same way the write did.
+            with contextlib.suppress(OSError):
+                tmp.unlink()
 
     def is_stale(self, entry: CacheEntry) -> bool:
         """Return ``True`` when *entry* is older than the TTL.
@@ -175,36 +202,50 @@ class StatuslineCache:
             return CacheLookup(value=None, present=False, stale=False)
         return CacheLookup(value=entry.value, present=True, stale=self.is_stale(entry))
 
-    def serve(
-        self,
-        render: Callable[[], str],
-        *,
-        refresh: Callable[[str], None] | None = None,
-    ) -> str:
-        """Serve the cached line under the SWR contract.
+    def serve_cached(self, refresh: Callable[[], None]) -> str | None:
+        """Serve a cache hit without rendering; ``None`` on a miss.
 
-        On a fresh hit the cached line is returned with no render. On a stale
-        hit the cached line is returned immediately and, when *refresh* is
-        supplied, the caller is handed the freshly-rendered line to persist
-        in the background (this method does not spawn threads). On a true
-        miss the line is rendered synchronously, written, and returned.
+        A fresh hit returns the cached line. A stale hit re-stamps the
+        entry, calls *refresh* and returns the cached line: the re-stamp
+        makes the redraws that arrive while the refresh runs read a fresh
+        entry, so they do not each start another refresh. Should the
+        refresh die, the entry goes stale again after one TTL and the next
+        redraw retries.
+
+        Args:
+            refresh: Zero-arg trigger that starts a background render which
+                writes the new line to this cache. It must not block on the
+                render.
+
+        Returns:
+            The cached line, or ``None`` when there is no usable entry and
+            the caller has to render.
+        """
+        lookup = self.get()
+        if lookup.value is None:
+            return None
+        if lookup.stale:
+            self.write(lookup.value)
+            refresh()
+        return lookup.value
+
+    def serve(self, render: Callable[[], str], *, refresh: Callable[[], None]) -> str:
+        """Serve the line under the SWR contract, rendering only on a miss.
+
+        A hit is handled by :meth:`serve_cached`; on a true miss the line is
+        rendered synchronously, written, and returned.
 
         Args:
             render: Zero-arg callable producing the statusline line.
-            refresh: Optional sink invoked with the freshly-rendered line on
-                a stale hit so the caller can write it off the hot path. When
-                ``None``, a stale hit serves the cached line and skips the
-                refresh (the next miss re-renders).
+            refresh: Background refresh trigger, see :meth:`serve_cached`.
 
         Returns:
             The line to display now -- cached on a hit, freshly rendered on a
             miss.
         """
-        lookup = self.get()
-        if lookup.present and lookup.value is not None:
-            if lookup.stale and refresh is not None:
-                refresh(render())
-            return lookup.value
+        cached = self.serve_cached(refresh)
+        if cached is not None:
+            return cached
         fresh = render()
         self.write(fresh)
         return fresh

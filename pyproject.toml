@@ -70,8 +70,8 @@ docs = [
 ]
 
 [project.scripts]
-eawf = "eawf.surfaces.cli.app:main"
-ea = "eawf.surfaces.cli.app:main"
+eawf = "eawf.__main__:main"
+ea = "eawf.__main__:main"
 eawfd = "eawf.runtime.daemon.main:main"
 
 [tool.uv]

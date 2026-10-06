@@ -24,7 +24,8 @@ Design notes:
   nothing heavy at load time: the modules, the theme renderer, the state
   resolver and the counter sidecar load only when a render actually runs.
   The console entry point serves cache hits through
-  :func:`serve_cached_line` before the CLI app is imported at all.
+  :func:`serve_cached_line` and renders misses through
+  :func:`run_with_cache` without importing the CLI app at all.
 - The runtime counter sidecar is written whenever a render runs (a miss or
   a background refresh), so it trails the live payload by at most one TTL.
 
@@ -176,27 +177,43 @@ def _build_segments(
     claude_payload: dict[str, Any],
     state_path: Path | None,
 ) -> list[StatuslineSegment]:
-    """Call every module, wrapping exceptions into a ``failed`` segment."""
+    """Call every module, wrapping exceptions into a ``failed`` segment.
+
+    The ``git`` segment spends its time waiting on ``git`` subprocesses, so
+    it is built on a worker thread from the start and its wait overlaps the
+    other modules' imports and reads; its place in the line is unchanged.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    from eawf.runtime.runtimes.claude.statusline_modules import git
+    from eawf.runtime.runtimes.claude.statusline_modules._spine import one_read_per_render
     from eawf.surfaces.render.statusline import SegmentSource, unavailable_segment
 
     segments: list[StatuslineSegment] = []
-    for module in _module_order():
-        module_name = module.__name__.rsplit(".", 1)[-1]
-        try:
-            segment = module.build(claude_payload, state_path)
-        except Exception as exc:
-            # Orchestrator must never crash — every module exception
-            # collapses to a ``failed`` segment so the theme can decide
-            # whether to skip or render its ``n/a(render-failed)`` marker.
-            _logger().warning(f"_build_segments module-raised module={module_name!r} error={exc}")
-            source = SegmentSource(producer="eawf.statusline", provenance=module.__name__)
-            segments.append(
-                unavailable_segment(
-                    module_name, module_name, "render-failed", source, status="failed"
+    with ThreadPoolExecutor(max_workers=1) as pool, one_read_per_render():
+        git_segment = pool.submit(git.build, claude_payload, state_path)
+        for module in _module_order():
+            module_name = module.__name__.rsplit(".", 1)[-1]
+            try:
+                if module is git:
+                    segment = git_segment.result()
+                else:
+                    segment = module.build(claude_payload, state_path)
+            except Exception as exc:
+                # Orchestrator must never crash — every module exception
+                # collapses to a ``failed`` segment so the theme can decide
+                # whether to skip or render its ``n/a(render-failed)`` marker.
+                _logger().warning(
+                    f"_build_segments module-raised module={module_name!r} error={exc}"
                 )
-            )
-            continue
-        segments.append(segment)
+                source = SegmentSource(producer="eawf.statusline", provenance=module.__name__)
+                segments.append(
+                    unavailable_segment(
+                        module_name, module_name, "render-failed", source, status="failed"
+                    )
+                )
+                continue
+            segments.append(segment)
     return segments
 
 
