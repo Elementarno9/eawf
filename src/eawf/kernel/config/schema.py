@@ -24,7 +24,6 @@ IntegrationCommitUnit = Literal["batch", "task"]
 #: How a delivery commit names its Task: a ``Task:`` trailer, an in-subject
 #: identifier, or nothing beyond the provenance manifest.
 TaskReference = Literal["trailer", "subject", "none"]
-ReleaseCadence = Literal["manual", "per-phase"]
 VerifyWaiverMode = Literal["A", "B", "C", "disabled"]
 #: How many toasts a console raises for state changes nobody keyed (``ui.toasts``).
 ToastVerbosity = Literal["off", "important", "all"]
@@ -58,22 +57,12 @@ class EuBasis(StrEnum):
     WALL_CLOCK = "wall_clock"
 
 
-class VcsReleaseConventionsConfig(BaseModel):
-    """Release cadence conventions under ``vcs.conventions``."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    cadence: ReleaseCadence = "manual"
-
-
 class VcsConventionsConfig(BaseModel):
     """VCS commit-message convention preferences."""
 
     model_config = ConfigDict(extra="forbid")
 
     subject_style: CommitSubjectStyle = "trailer"
-    wave_trailer: str = Field(default="Eawf-Wave", min_length=1)
-    release: VcsReleaseConventionsConfig = Field(default_factory=VcsReleaseConventionsConfig)
 
 
 class EstimationConfig(BaseModel):
@@ -277,14 +266,12 @@ __all__ = [
     "IntegrationCommitUnit",
     "OperatorConfig",
     "PreferencesConfig",
-    "ReleaseCadence",
     "RuntimeAdapterId",
     "RuntimeLivenessConfig",
     "RuntimeModelsConfig",
     "TaskReference",
     "ToastVerbosity",
     "VcsConventionsConfig",
-    "VcsReleaseConventionsConfig",
     "VerifyConfig",
     "VerifyWaiverMode",
 ]

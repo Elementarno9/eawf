@@ -302,6 +302,104 @@ def test_validate_rejects_non_string_verify_waiver_mode(repo_root: Path) -> None
     assert "waiver_mode" in result.output
 
 
+@pytest.mark.parametrize(
+    ("body", "named"),
+    [
+        ("ui:\n  theme: purple\n", "ui.theme"),
+        ("planning:\n  max_parallel_waves: -3\n", "planning.max_parallel_waves"),
+        ("preferences:\n  auto_choose: sometimes\n", "preferences.auto_choose"),
+        ("runtime:\n  claude:\n    stall_interval_s: -5\n", "runtime.claude.stall_interval_s"),
+        ("ui:\n  tehme: dark\n", "ui.tehme"),
+    ],
+)
+def test_validate_refuses_a_file_leaf_its_catalog_refuses(
+    repo_root: Path, body: str, named: str
+) -> None:
+    (repo_root / ".ea" / "config.yaml").write_text(body, encoding="utf-8")
+
+    result = runner.invoke(app, ["config", "validate"])
+
+    assert result.exit_code == 2, result.output
+    assert named in result.output
+
+
+@pytest.mark.parametrize("layer", ["global", "repo", "local"])
+def test_validate_refuses_an_unknown_key_in_every_file_layer(
+    repo_root: Path, tmp_path: Path, layer: str
+) -> None:
+    target = {
+        "global": tmp_path / "global.yaml",
+        "repo": repo_root / ".ea" / "config.yaml",
+        "local": repo_root / ".ea" / "local" / "config.yaml",
+    }[layer]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("ui:\n  tehme: dark\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["config", "validate"])
+
+    assert result.exit_code == 2, result.output
+    assert f"{layer}: ui.tehme: unknown config key" in result.output
+
+
+def test_validate_reports_a_bad_value_a_later_layer_overrides(
+    repo_root: Path, tmp_path: Path
+) -> None:
+    (tmp_path / "global.yaml").write_text("ui:\n  theme: purple\n", encoding="utf-8")
+    (repo_root / ".ea" / "config.yaml").write_text("ui:\n  theme: dark\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["config", "validate"])
+
+    assert result.exit_code == 2, result.output
+    assert "global: ui.theme" in result.output
+
+
+def test_validate_accepts_catalogued_values_in_range(repo_root: Path) -> None:
+    (repo_root / ".ea" / "config.yaml").write_text(
+        "schema_version: '1.0'\n"
+        "ui:\n  theme: light\n"
+        "planning:\n  max_parallel_waves: 16\n"
+        "preferences:\n  auto_choose: always\n"
+        "runtime:\n  claude:\n    stall_interval_s: 0\n"
+        "agents:\n  extra_tools: {}\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["config", "validate"])
+
+    assert result.exit_code == 0, result.output
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ({}, []),
+        ({"ui": {"theme": "cb"}}, []),
+        ({"planning": {"max_parallel_waves": 1}}, []),
+        ({"planning": {"max_parallel_waves": 0}}, ["planning.max_parallel_waves"]),
+        ({"planning": {"max_parallel_waves": 17}}, ["planning.max_parallel_waves"]),
+        ({"planning": {"max_parallel_waves": True}}, ["planning.max_parallel_waves"]),
+        ({"planning": {"max_parallel_waves": "4"}}, ["planning.max_parallel_waves"]),
+        ({"planning": "not_a_mapping"}, ["planning"]),
+        ({"planning": None}, []),
+        ({"ui": {"theme": None}}, ["ui.theme"]),
+        ({"runtime": {"models": {"claude": None}}}, []),
+        ({"runtime": {"models": {"claude": ["a", 2, "c"]}}}, ["runtime.models.claude"]),
+        ({"verify": {"jury_max_brier": 1}}, []),
+        ({"agents": {"extra_tools": {"executor": ["Bash"]}}}, []),
+        ({"agents": {"extra_tools": ["Bash"]}}, ["agents.extra_tools"]),
+        ({"nosuch": {"leaf": 1}}, ["nosuch"]),
+    ],
+)
+def test_layer_leaf_problems_names_each_refused_leaf(
+    body: dict[str, object], expected: list[str]
+) -> None:
+    from eawf.kernel.config.sections import layer_leaf_problems
+
+    problems = layer_leaf_problems(body)
+
+    assert [problem.split(":", 1)[0] for problem in problems] == expected
+
+
 # --- profile enable ---------------------------------------------------------
 
 
@@ -386,11 +484,30 @@ def test_profile_enable_renders_rule_projections(repo_root: Path) -> None:
 def test_env_var_takes_precedence_over_repo(
     repo_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    runner.invoke(app, ["config", "set", "ui.theme", "cb", "--scope", "repo"])
+    monkeypatch.setenv("EAWF_UI__THEME", "light")
+    result = runner.invoke(app, ["--json", "config", "get", "ui.theme"])
+    body = json.loads(result.output)["result"]
+    assert body == {"key": "ui.theme", "value": "light", "source": "env"}
+
+
+def test_env_var_cannot_override_a_leaf_not_env_writable(
+    repo_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     runner.invoke(app, ["config", "set", "estimation.eu_minutes", "60", "--scope", "repo"])
     monkeypatch.setenv("EAWF_ESTIMATION__EU_MINUTES", "90")
     result = runner.invoke(app, ["--json", "config", "get", "estimation.eu_minutes"])
     body = json.loads(result.output)["result"]
-    assert body == {"key": "estimation.eu_minutes", "value": 90, "source": "env"}
+    assert body == {"key": "estimation.eu_minutes", "value": 60, "source": "repo"}
+
+
+def test_env_var_with_a_refused_value_exits_with_a_validation_envelope(
+    repo_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EAWF_UI__THEME", "zzz")
+    result = runner.invoke(app, ["--json", "config", "get", "ui.theme"])
+    assert result.exit_code == 2
+    assert "config_env_override_invalid: EAWF_UI__THEME" in result.output
 
 
 # --- malformed-YAML envelope handling (RX-B regression) ---------------------

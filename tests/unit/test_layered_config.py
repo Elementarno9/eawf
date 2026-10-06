@@ -13,8 +13,10 @@ Covers the wave's success criteria 1, 2, and 3:
 
 from __future__ import annotations
 
+import ast
 import pydoc
-from collections.abc import Iterator
+from collections import defaultdict
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 
 import pytest
@@ -368,14 +370,11 @@ def test_leaf_key_registry_includes_canonical_c08_keys() -> None:
         "runtime.preference",
         "telemetry.enabled",
         "telemetry.db_kind",
-        "vcs.conventions.release.cadence",
         "daemon.idle_timeout_seconds",
         "daemon.session_handle_ttl_seconds",
         "economics.prompt_budget",
         "economics.governor",
         "economics.notice_policy",
-        "tui.eu_view.density",
-        "tui.eu_view.fields",
     }
     missing = must_have - set(LEAF_KEY_REGISTRY)
     assert not missing, f"missing canonical C08 leaf keys: {sorted(missing)}"
@@ -392,7 +391,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _COAUTHOR = "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer"
 _LAYERED = "eawf.kernel.config.layered"
 _ECONOMICS = "eawf.kernel.economics.governor.economics_policy_from"
-_EU_VIEW = "eawf.surfaces.render.plan_view._eu_view_config"
+_CAMPAIGN_RUN = "eawf.runtime.daemon.methods.campaign_run"
 
 #: The callable that reads each catalogued leaf's resolved value; the census every
 #: leaf must appear in, so a leaf with no production reader fails here.
@@ -418,8 +417,8 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "profiles.certified": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "profiles.enabled": "eawf.platform.profiles.selection.resolve_enabled_profiles",
     "profiles.trusted": "eawf.platform.profiles.trust.load_trust_ledger",
-    "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
-    "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
+    "research.agent_count": f"{_CAMPAIGN_RUN}.resolve_agent_count",
+    "research.default_depth": f"{_CAMPAIGN_RUN}.resolve_default_research_depth",
     "runtime.adapters": f"{_LAYERED}.resolve_dispatch_provider_tuple",
     "runtime.auto_certify": f"{_LAYERED}.resolve_auto_certify",
     "runtime.claude.permission_wait_s": f"{_LAYERED}.resolve_permission_wait_seconds",
@@ -437,8 +436,6 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "runtime.routes": "eawf.runtime.daemon.provider_facts.installed_provider_facts",
     "telemetry.db_kind": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
     "telemetry.enabled": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
-    "tui.eu_view.density": _EU_VIEW,
-    "tui.eu_view.fields": _EU_VIEW,
     "ui.glyphs": "eawf.surfaces.tui.launch.persisted_glyphs",
     "ui.theme": "eawf.surfaces.tui.chassis.theme.persisted_theme",
     "ui.toasts": "eawf.surfaces.tui.launch.persisted_toast_verbosity",
@@ -452,7 +449,6 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "vcs.coauthor.trailers.claude.name": _COAUTHOR,
     "vcs.coauthor.trailers.codex.email": _COAUTHOR,
     "vcs.coauthor.trailers.codex.name": _COAUTHOR,
-    "vcs.conventions.release.cadence": "eawf.runtime.vcs.coauthor.requires_phase_release_preflight",
     "vcs.conventions.subject_style": "tools.commit_prefix_lint._configured_subject_style",
     "vcs.integration_commit_unit": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
     "vcs.task_reference": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
@@ -498,16 +494,269 @@ def test_config_consumer_set_is_exact_and_importable() -> None:
         assert callable(resolved), (key, consumer, resolved)
 
 
+#: The trees whose code counts as a production caller; a test never vouches for a reader.
+_PRODUCTION_TREES = ("src", "tools")
+
+#: Live leaves whose named reader nothing in production calls, so setting them changes
+#: nothing. Pinned exactly: a newly uncalled consumer reds, and wiring or retiring one
+#: of these must drop it from the set.
+_UNCALLED_CONSUMER_GAPS = frozenset(
+    {
+        "dispatch.role_tier_token_cap",
+        "flow.budget.enforce",
+        "flow.budget.multiplier",
+        "profiles.certified",
+    }
+)
+
+
+class _ReferenceIndex(ast.NodeVisitor):
+    """Record every loaded name in one module with the definitions enclosing it.
+
+    Annotations are skipped: naming a type in a signature never reads a leaf.
+    """
+
+    def __init__(self, module: str, *, is_package: bool) -> None:
+        self.package = module if is_package else module.rpartition(".")[0]
+        self.scope: list[str] = []
+        self.references: dict[str, list[tuple[str, ...]]] = defaultdict(list)
+        self.imported: set[str] = set()
+
+    def _visit_definition(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
+    ) -> None:
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        if isinstance(node, ast.ClassDef):
+            for base in (*node.bases, *node.keywords):
+                self.visit(base)
+        else:
+            self.visit(node.args)
+        self.scope.append(node.name)
+        for statement in node.body:
+            self.visit(statement)
+        self.scope.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_definition(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_definition(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._visit_definition(node)
+
+    def visit_arg(self, node: ast.arg) -> None:
+        return None
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        if node.value is not None:
+            self.visit(node.value)
+
+    def visit_Name(self, node: ast.Name) -> None:
+        if isinstance(node.ctx, ast.Load):
+            self.references[node.id].append(tuple(self.scope))
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        if isinstance(node.ctx, ast.Load):
+            self.references[node.attr].append(tuple(self.scope))
+        self.visit(node.value)
+
+    def visit_Import(self, node: ast.Import) -> None:
+        self.imported.update(alias.name for alias in node.names)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        base = node.module or ""
+        if node.level:
+            anchor = self.package.split(".")
+            anchor = anchor[: len(anchor) - (node.level - 1)]
+            base = ".".join([*anchor, *([node.module] if node.module else [])])
+        self.imported.update(f"{base}.{alias.name}" for alias in node.names)
+
+
+def _production_reference_index(repo_root: Path) -> dict[str, _ReferenceIndex]:
+    """Index every module under the production trees of *repo_root* by dotted name."""
+    index: dict[str, _ReferenceIndex] = {}
+    for tree in _PRODUCTION_TREES:
+        for path in sorted((repo_root / tree).rglob("*.py")):
+            parts = path.relative_to(repo_root).with_suffix("").parts
+            parts = parts[1:] if parts[0] == "src" else parts
+            is_package = parts[-1] == "__init__"
+            module = ".".join(parts[:-1] if is_package else parts)
+            visitor = _ReferenceIndex(module, is_package=is_package)
+            visitor.visit(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)))
+            index[module] = visitor
+    return index
+
+
+def _uncalled_consumers(
+    consumers: Mapping[str, str], index: Mapping[str, _ReferenceIndex]
+) -> set[str]:
+    """Return the leaves of *consumers* whose reader no production module references.
+
+    A reference inside the reader's own definition is recursion, not a caller. Outside
+    its defining module a reference counts only where that module, or the reader's
+    top-level name from it or a package re-exporting it, is imported, so an unrelated
+    namesake never vouches for it.
+
+    Raises:
+        ValueError: a consumer names no module of *index*.
+    """
+    uncalled: set[str] = set()
+    for key, consumer in consumers.items():
+        parts = consumer.split(".")
+        cut = max(i for i in range(1, len(parts)) if ".".join(parts[:i]) in index)
+        module, qualname = ".".join(parts[:cut]), tuple(parts[cut:])
+        owners = [".".join(parts[:i]) for i in range(1, cut + 1)]
+        bindings = {module, *(f"{owner}.{qualname[0]}" for owner in owners)}
+        called = any(
+            any(scope[: len(qualname)] != qualname for scope in refs.references[qualname[-1]])
+            if caller == module
+            else bool(refs.references.get(qualname[-1])) and bool(bindings & refs.imported)
+            for caller, refs in index.items()
+        )
+        if not called:
+            uncalled.add(key)
+    return uncalled
+
+
+@pytest.fixture(scope="module")
+def production_index() -> dict[str, _ReferenceIndex]:
+    return _production_reference_index(_REPO_ROOT)
+
+
+def test_every_live_consumer_has_a_production_caller(
+    production_index: dict[str, _ReferenceIndex],
+) -> None:
+    """A declared reader must be referenced by src or tools code, never only by a test.
+
+    Retired and deprecated leaves name no consumer, so they are exempt.
+    """
+    live = {
+        key: entry.consumer
+        for key, entry in LEAF_KEY_REGISTRY.items()
+        if entry.consumer is not None
+    }
+
+    assert _uncalled_consumers(live, production_index) == _UNCALLED_CONSUMER_GAPS
+
+
+def test_research_leaves_name_the_campaign_runner(
+    production_index: dict[str, _ReferenceIndex],
+) -> None:
+    for key in ("research.agent_count", "research.default_depth"):
+        consumer = leaf_key_lookup(key).consumer
+        assert consumer is not None, key
+        assert consumer.startswith(f"{_CAMPAIGN_RUN}."), (key, consumer)
+        assert not _uncalled_consumers({key: consumer}, production_index), key
+
+
+def _index_tree(root: Path, files: Mapping[str, str]) -> dict[str, _ReferenceIndex]:
+    for relative, body in files.items():
+        _write_yaml(root / relative, body)
+    for tree in _PRODUCTION_TREES:
+        (root / tree).mkdir(parents=True, exist_ok=True)
+    return _production_reference_index(root)
+
+
+#: The reader the tui.eu_view leaves named before they were retired: defined, never called.
+_EU_VIEW_READER = "eawf.surfaces.render.plan_view._eu_view_config"
+_EU_VIEW_ROWS = {"tui.eu_view.density": _EU_VIEW_READER, "tui.eu_view.fields": _EU_VIEW_READER}
+_EU_VIEW_MODULE = (
+    '"""Plan view; :func:`_eu_view_config` reads the tui.eu_view leaves."""\n'
+    "def _eu_view_config(config: Mapping[str, Any] | None) -> EuViewConfig:\n"
+    "    if config is None:\n"
+    "        return _eu_view_config({})\n"
+    "    return EuViewConfig()\n"
+)
+
+
+def test_gate_flags_the_uncalled_eu_view_reader(tmp_path: Path) -> None:
+    index = _index_tree(tmp_path, {"src/eawf/surfaces/render/plan_view.py": _EU_VIEW_MODULE})
+
+    assert _uncalled_consumers(_EU_VIEW_ROWS, index) == set(_EU_VIEW_ROWS)
+
+
+def test_gate_ignores_test_and_unbound_namesake_callers(tmp_path: Path) -> None:
+    index = _index_tree(
+        tmp_path,
+        {
+            "src/eawf/surfaces/render/plan_view.py": _EU_VIEW_MODULE,
+            "src/eawf/other.py": "def run() -> None:\n    _eu_view_config(None)\n",
+            "tests/test_plan_view.py": (
+                "from eawf.surfaces.render.plan_view import _eu_view_config\n"
+                "_eu_view_config(None)\n"
+            ),
+            "src/eawf/typed.py": (
+                "from eawf.surfaces.render.plan_view import _eu_view_config\n"
+                "def f(reader: _eu_view_config) -> _eu_view_config:\n"
+                "    x: _eu_view_config\n"
+            ),
+        },
+    )
+
+    assert _uncalled_consumers(_EU_VIEW_ROWS, index) == set(_EU_VIEW_ROWS)
+
+
+@pytest.mark.parametrize(
+    "caller",
+    [
+        "from eawf.surfaces.render.plan_view import _eu_view_config\n_eu_view_config(None)\n",
+        "from eawf.surfaces.render import plan_view\nplan_view._eu_view_config(None)\n",
+        "import eawf.surfaces.render.plan_view\neawf.surfaces.render.plan_view._eu_view_config\n",
+        "from .render.plan_view import _eu_view_config\nhooks = [_eu_view_config]\n",
+        "from eawf.surfaces import _eu_view_config\n_eu_view_config(None)\n",
+    ],
+)
+def test_gate_accepts_a_bound_production_caller(tmp_path: Path, caller: str) -> None:
+    index = _index_tree(
+        tmp_path,
+        {
+            "src/eawf/surfaces/render/plan_view.py": _EU_VIEW_MODULE,
+            "src/eawf/surfaces/__init__.py": "",
+            "src/eawf/surfaces/caller.py": caller,
+        },
+    )
+
+    assert _uncalled_consumers(_EU_VIEW_ROWS, index) == set()
+
+
+def test_gate_counts_a_method_called_on_self_and_a_tools_script(tmp_path: Path) -> None:
+    index = _index_tree(
+        tmp_path,
+        {
+            "src/eawf/skill.py": (
+                "class Skill:\n"
+                "    def run(self) -> int:\n"
+                "        return self._resolve()\n"
+                "    def _resolve(self) -> int:\n"
+                "        return 1\n"
+            ),
+            "tools/lint.py": "def _style() -> str:\n    return ''\nprint(_style())\n",
+        },
+    )
+    consumers = {"a.leaf": "eawf.skill.Skill._resolve", "b.leaf": "tools.lint._style"}
+
+    assert _uncalled_consumers(consumers, index) == set()
+
+
+def test_gate_boundaries_and_unknown_module(tmp_path: Path) -> None:
+    index = _index_tree(tmp_path, {"src/eawf/surfaces/render/plan_view.py": _EU_VIEW_MODULE})
+
+    assert _uncalled_consumers({}, index) == set()
+    assert _uncalled_consumers({"tui.eu_view.density": _EU_VIEW_READER}, index) == {
+        "tui.eu_view.density"
+    }
+    with pytest.raises(ValueError):
+        _uncalled_consumers({"a.leaf": "nowhere.module.reader"}, index)
+
+
 def test_every_config_leaf_has_exact_consumer_classification() -> None:
     kinds = {entry.consumer_kind for entry in LEAF_KEY_REGISTRY.values()}
-    assert kinds == {"engine", "skill", "deprecated"}
+    assert kinds == {"engine", "deprecated"}
     assert {
         key for key, entry in LEAF_KEY_REGISTRY.items() if entry.consumer_kind == "deprecated"
     } == DEPRECATED_LEAF_KEYS & set(LEAF_KEY_REGISTRY)
-    assert {key for key, entry in LEAF_KEY_REGISTRY.items() if entry.consumer_kind == "skill"} == {
-        "research.agent_count",
-        "research.default_depth",
-    }
     for key, entry in LEAF_KEY_REGISTRY.items():
         if entry.consumer_kind in {"engine", "skill"}:
             assert entry.consumer is not None, key

@@ -18,8 +18,8 @@ import pytest
 import yaml
 
 from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
+from eawf.kernel.config.layered import Layer, get_dotted
 from eawf.kernel.config.layered import _set_dotted as set_dotted
-from eawf.kernel.config.layered import get_dotted
 from eawf.kernel.config.migration import migrate_config_payload
 from eawf.kernel.config.registry.config_keys import CONFIG_REGISTRY
 from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS, LEAF_KEY_REGISTRY
@@ -64,6 +64,10 @@ SKILL_ONLY = (
 
 #: Leaves the catalog named a reader for that never read them.
 UNREAD = ("research.auto_save",)
+
+#: Leaves whose reader no production path called: no release verb or Milestone close
+#: consults a release cadence. The console prototype fixture still draws them.
+UNCALLED = ("vcs.conventions.release.cadence",)
 
 
 def _nested(key: str, value: Any) -> dict[str, Any]:
@@ -125,7 +129,7 @@ def test_the_drifted_defaults_now_agree() -> None:
 # ---------- a leaf only a retired skill read is retired ----------
 
 
-@pytest.mark.parametrize("key", (*SKILL_ONLY, *UNREAD))
+@pytest.mark.parametrize("key", (*SKILL_ONLY, *UNREAD, *UNCALLED))
 def test_a_skill_only_leaf_is_retired_everywhere_it_was_offered(key: str) -> None:
     assert key in DEPRECATED_LEAF_KEYS
     assert key not in LEAF_KEY_REGISTRY
@@ -168,14 +172,6 @@ def test_an_economics_table_is_a_mapping_leaf_the_policy_reader_consumes(key: st
     assert entry.default is None
     assert entry.consumer == "eawf.kernel.economics.governor.economics_policy_from"
     assert entry.writable_layers == ("global", "workspace", "repo")
-
-
-def test_the_eu_view_leaves_carry_their_model_choices() -> None:
-    density = LEAF_KEY_REGISTRY["tui.eu_view.density"]
-    fields = LEAF_KEY_REGISTRY["tui.eu_view.fields"]
-    assert (density.type, density.choices) == ("literal", ("full", "compact"))
-    assert fields.type == "list_str"
-    assert fields.choices == ("work_sum", "critical_path", "queue", "realistic")
 
 
 # ---------- the migration strips every retired leaf ----------
@@ -303,3 +299,54 @@ def test_the_console_fixture_lists_no_unread_leaf() -> None:
     sections = orjson.loads(fixture.read_bytes())["SECTIONS"]
     listed = {f"{section}.{row[0]}" for section, rows in sections.items() for row in rows}
     assert listed.isdisjoint(UNREAD)
+
+
+# ---------- the built-in layer ships no leaf without a reader ----------
+
+
+def _empty_view(repo: Path) -> Any:
+    """Return the settings view of ``repo`` with no layer but the built-in one."""
+    return build_settings_view(
+        workspace=repo,
+        repo=repo,
+        scope_id="P01",
+        cursor=0,
+        generated_at=datetime(2026, 10, 6, tzinfo=UTC),
+        env={},
+        branch=None,
+    )
+
+
+def test_the_settings_view_lists_no_built_in_leaf_without_a_consumer(repo: Path) -> None:
+    """Every leaf the built-in layer puts in force is a catalogued leaf some code reads."""
+    built_in = [leaf for leaf in _empty_view(repo).leaves if leaf.source_layer is Layer.BUILT_IN]
+    assert built_in, "the built-in layer puts no leaf in force"
+    stray = [
+        leaf.key
+        for leaf in built_in
+        if leaf.value_type is None or leaf.consumer_kind in ("deprecated", "reserved")
+    ]
+    assert stray == []
+
+
+def test_the_wave_trailer_is_gone_from_the_defaults_and_the_view(repo: Path) -> None:
+    """The trailer name is fixed in code, so no layer offers it as a setting."""
+    assert "wave_trailer" not in BUILT_IN_DEFAULTS["vcs"]["conventions"]
+    assert "vcs.conventions.wave_trailer" not in {leaf.key for leaf in _empty_view(repo).leaves}
+
+
+def test_a_layer_still_stating_the_wave_trailer_is_named_for_repair(repo: Path) -> None:
+    """Error path: a stale layer statement is retired, so repair names it and migration drops it."""
+    _write(repo / ".ea" / "config.yaml", "vcs:\n  conventions:\n    wave_trailer: Eawf-Wave\n")
+    (action,) = _config_actions(repo)
+    assert action.detail.endswith(": vcs.conventions.wave_trailer")
+    body = {
+        "schema_version": "1.0",
+        "vcs": {"conventions": {"subject_style": "trailer", "wave_trailer": "Eawf-Wave"}},
+    }
+    upgraded, changed = migrate_config_payload(body)
+    assert changed is True
+    assert upgraded == {
+        "schema_version": "1.0",
+        "vcs": {"conventions": {"subject_style": "trailer"}},
+    }

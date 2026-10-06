@@ -125,7 +125,9 @@ _CALLER_ROOTS = [_REPO_ROOT / "tools"]
 #: ``render_wave_prompt`` stays: the committed dispatch goldens pin its
 #: bytes and ``eawf snapshot update --kind dispatch`` regenerates them
 #: through it. 226.
-IDLE_CEILING = 226
+#:
+#: Retiring the release cadence leaf removed its uncalled reader. 225.
+IDLE_CEILING = 225
 
 
 def _load_tool() -> Any:

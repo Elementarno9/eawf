@@ -50,6 +50,7 @@ nav:
       - Installation: architecture/installation.md
   - Reference:
       - Overview: reference/index.md
+      - Configuration: reference/config.md
       - Doctor: reference/doctor.md
       - Enums: reference/enums.md
       - Exit codes: reference/exit-codes.md

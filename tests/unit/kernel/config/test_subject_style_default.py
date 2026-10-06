@@ -99,7 +99,6 @@ def test_conventions_model_defaults_to_trailer() -> None:
     conventions = VcsConventionsConfig()
 
     assert conventions.subject_style == "trailer"
-    assert conventions.wave_trailer == "Eawf-Wave"
 
 
 def test_conventions_model_rejects_an_unknown_subject_style() -> None:

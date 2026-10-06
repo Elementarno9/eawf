@@ -229,24 +229,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         description="Telemetry is on by default and strict-local; no data leaves the machine.",
     ),
     ConfigKey(
-        tab="tui",
-        key="tui.eu_view.density",
-        label="Roadmap EU/hour rollup density",
-        type="choice",
-        default="full",
-        description="full = with a detail column (default); compact = EU and hours only.",
-        choices=("full", "compact"),
-    ),
-    ConfigKey(
-        tab="tui",
-        key="tui.eu_view.fields",
-        label="Roadmap EU/hour rollup metrics",
-        type="multichoice",
-        default=("work_sum", "critical_path", "queue", "realistic"),
-        description="The metrics the rollup lists per phase, in this order.",
-        choices=("work_sum", "critical_path", "queue", "realistic"),
-    ),
-    ConfigKey(
         tab="ui",
         key="ui.glyphs",
         label="Glyph rendering mode",
@@ -278,18 +260,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
             "needs-user (default); all = more verbose. Answers to a key always show."
         ),
         choices=("off", "important", "all"),
-    ),
-    ConfigKey(
-        tab="vcs",
-        key="vcs.conventions.release.cadence",
-        label="Release cadence",
-        type="choice",
-        default="manual",
-        description=(
-            "manual = releases ride explicit operator action; "
-            "per-phase = phase close prepares release."
-        ),
-        choices=("manual", "per-phase"),
     ),
     ConfigKey(
         tab="vcs",

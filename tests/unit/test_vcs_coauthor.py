@@ -48,21 +48,16 @@ def test_vcs_config_defaults_subject_style_to_trailer() -> None:
         }
     )
     assert config.conventions.subject_style == "trailer"
-    assert config.conventions.release.cadence == "manual"
 
 
-def test_vcs_config_rejects_extra_release_convention_key() -> None:
+def test_vcs_config_refuses_the_retired_release_cadence_block() -> None:
     with pytest.raises(ValidationError, match="extra"):
         VcsConfig.model_validate(
             {
                 "checkpoint_requires_commit": True,
                 "conventions": {
                     "subject_style": "bracket",
-                    "wave_trailer": "Eawf-Wave",
-                    "release": {
-                        "cadence": "manual",
-                        "extra": "nope",
-                    },
+                    "release": {"cadence": "per-phase"},
                 },
             }
         )

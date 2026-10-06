@@ -11,11 +11,16 @@ section is refused before any file changes.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from pathlib import Path
 from typing import Any, Final
 
 from pydantic import BaseModel
 from pydantic import ValidationError as PydValidationError
 
+from eawf.kernel.config import layered
+from eawf.kernel.config.loader import load_yaml_layer
+from eawf.kernel.config.migration import migrate_config_payload
+from eawf.kernel.config.registry import LEAF_KEY_REGISTRY, LeafKey
 from eawf.kernel.config.schema import (
     STALL_INTERVAL_RUNTIMES,
     AgentsConfig,
@@ -111,4 +116,130 @@ def check_sections(merged: Mapping[str, Any], keys: Iterable[str]) -> None:
             ) from exc
 
 
-__all__ = ["SECTION_MODELS", "ConfigSectionError", "check_sections", "section_of"]
+#: Python types a value of each catalog shape may hold. ``bool`` is an ``int`` subclass,
+#: so the number shapes refuse it separately.
+_SHAPE_TYPES: Final[dict[str, tuple[type, ...]]] = {
+    "bool": (bool,),
+    "int": (int,),
+    "float": (int, float),
+    "str": (str,),
+    "list_str": (list,),
+    "list_any": (list,),
+    "mapping": (dict,),
+}
+
+
+def _catalog_blocks() -> frozenset[str]:
+    """Return every dotted block that holds a catalog leaf, such as ``ui`` or ``runtime.claude``."""
+    return frozenset(
+        key.rsplit(".", depth)[0]
+        for key in LEAF_KEY_REGISTRY
+        for depth in range(1, key.count(".") + 1)
+    )
+
+
+def _leaf_problem(entry: LeafKey, value: Any) -> str | None:
+    """Return why ``value`` is not one ``entry`` may hold, or ``None`` when it is."""
+    if value is None:
+        return None if entry.default is None else "must not be null"
+    if entry.type == "literal":
+        if entry.choices is not None and value not in entry.choices:
+            return f"{value!r} is not one of {list(entry.choices)}"
+        return None
+    allowed = _SHAPE_TYPES.get(entry.type)
+    if allowed is not None and (
+        not isinstance(value, allowed) or (entry.type in {"int", "float"} and type(value) is bool)
+    ):
+        return f"{value!r} is not of type {entry.type}"
+    if entry.type == "list_str" and not all(isinstance(item, str) for item in value):
+        return f"{value!r} is not a list of strings"
+    if entry.value_range is not None and entry.type in {"int", "float"}:
+        low, high = entry.value_range
+        if (low is not None and value < low) or (high is not None and value > high):
+            return f"{value!r} is outside the range [{low}, {high}]"
+    return None
+
+
+def layer_leaf_problems(body: Mapping[str, Any]) -> list[str]:
+    """Return every leaf of one config layer's body the leaf catalog refuses.
+
+    A key is refused when the catalog names no leaf and no block at its path, so a
+    misspelt key such as ``ui.tehme`` is reported rather than silently ignored; a
+    catalogued leaf is refused when its value is not of the leaf's type, not one of its
+    choices or outside its range. A value set by its block's strict model, such as a
+    liveness interval's bounds, is held there by :func:`check_sections`.
+
+    Args:
+        body: One layer file's parsed body.
+
+    Returns:
+        One ``"<dotted key>: <reason>"`` line per refused leaf, in body order; empty when
+        every leaf is valid.
+    """
+    blocks = _catalog_blocks()
+    problems: list[str] = []
+
+    def walk(node: Mapping[str, Any], prefix: str) -> None:
+        for name, value in node.items():
+            dotted = f"{prefix}.{name}" if prefix else str(name)
+            entry = LEAF_KEY_REGISTRY.get(dotted)
+            if entry is not None:
+                problem = _leaf_problem(entry, value)
+                if problem is not None:
+                    problems.append(f"{dotted}: {problem}")
+            elif dotted not in blocks:
+                problems.append(f"{dotted}: unknown config key")
+            elif isinstance(value, Mapping):
+                walk(value, dotted)
+            elif value is not None:
+                problems.append(f"{dotted}: {value!r} is not a mapping")
+
+    walk(body, "")
+    return problems
+
+
+def file_layer_problems(*, repo: Path, workspace: Path | None) -> list[str]:
+    """Return every leaf a config file layer states that the leaf catalog refuses.
+
+    Each layer is held on its own, so a bad value a later layer overrides is still
+    reported against the file that states it.
+
+    Args:
+        repo: Repository root anchoring the repo, branch and local layers.
+        workspace: Workspace root, or ``None`` when no workspace layer applies.
+
+    Returns:
+        One ``"<layer>: <dotted key>: <reason>"`` line per refused leaf.
+
+    Raises:
+        ValidationError: A layer file is malformed YAML or states an unknown
+            schema marker.
+    """
+    layers: list[tuple[str, Path]] = [("global", layered.global_config_path())]
+    if workspace is not None:
+        layers.append(("workspace", layered.workspace_config_path(workspace)))
+    layers.append(("repo", layered.repo_config_path(repo)))
+    branch = layered.detect_current_branch(repo)
+    if branch is not None:
+        layers.append(("branch", layered.branch_config_path(repo, branch)))
+    layers.append(("local", layered.local_config_path(repo)))
+
+    problems: list[str] = []
+    for label, path in layers:
+        body = load_yaml_layer(path)
+        if not body:
+            continue
+        # The merge drops legacy keys on read, so they are not refused here either.
+        normalised, _changed = migrate_config_payload(body)
+        problems.extend(f"{label}: {problem}" for problem in layer_leaf_problems(normalised))
+    return problems
+
+
+__all__ = [
+    "SECTION_MODELS",
+    "ConfigSectionError",
+    "check_sections",
+    "file_layer_problems",
+    "layer_leaf_problems",
+    "section_of",
+]

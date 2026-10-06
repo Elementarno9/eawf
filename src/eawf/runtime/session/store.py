@@ -378,15 +378,22 @@ def _emit_session_closed(events_path: Path, session: AgentSession) -> None:
     secondary to the terminal outcome the caller is persisting, exactly as
     :func:`terminalize_session` already treats its own close-event write.
 
+    The telemetry projection is this event's only consumer, so nothing is
+    appended when ``telemetry.enabled`` is false.
+
     Args:
-        events_path: Path to ``event.jsonl``.
+        events_path: Path to ``<repo>/.ea/store/event.jsonl``.
         session: The terminalized session row.
     """
     # Imported lazily: ``dispatch_runner`` transitively imports this module,
     # so a module-level import here is a boot-time circular import.
+    from eawf.observability.telemetry.gate import telemetry_enabled
     from eawf.runtime.daemon.dispatch_runner import emit_session_closed
 
     try:
+        if not telemetry_enabled(events_path.parent.parent.parent):
+            logger.debug(f"_emit_session_closed id={session.id} skip reason=telemetry-disabled")
+            return
         emit_session_closed(events_path, session=session)
     except Exception as exc:
         logger.warning(f"_emit_session_closed id={session.id} event_status=failed error={exc!r}")

@@ -1,21 +1,13 @@
-"""Typed models of the iter plan view and the ``tui.eu_view`` config.
+"""Typed models of the iter plan view.
 
 :class:`PlanView` and its parts are the closed shape that
 ``src/eawf/schemas/plan-view.schema.json`` is generated from, so the
-committed schema keeps a typed source. :func:`_eu_view_config` reads the
-``tui.eu_view`` leaves of the layered config.
+committed schema keeps a typed source.
 """
 
 from __future__ import annotations
 
-import logging
-from collections.abc import Mapping
-from typing import Any, Literal
-
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
-
-logger = logging.getLogger(__name__)
-
+from pydantic import BaseModel, ConfigDict, Field
 
 # ---- View models -----------------------------------------------------------
 
@@ -134,66 +126,3 @@ class PlanView(_StrictModel):
     checks: list[CheckView]
     risks: list[RiskView]
     summary: SummaryView
-
-
-EuRollupField = Literal["work_sum", "critical_path", "queue", "realistic"]
-EuRollupDensity = Literal["full", "compact"]
-
-_DEFAULT_EU_ROLLUP_FIELDS: tuple[EuRollupField, ...] = (
-    "work_sum",
-    "critical_path",
-    "queue",
-    "realistic",
-)
-_EU_ROLLUP_FIELD_ALIASES: dict[str, EuRollupField] = {
-    "work-sum": "work_sum",
-    "work_sum": "work_sum",
-    "critical-path": "critical_path",
-    "critical_path": "critical_path",
-    "queue": "queue",
-    "queued": "queue",
-    "realistic": "realistic",
-    "realistic-wall-clock": "realistic",
-    "realistic_wall_clock": "realistic",
-}
-
-
-class EuViewConfig(_StrictModel):
-    """Config consumed from ``tui.eu_view`` for roadmap EU rollups."""
-
-    density: EuRollupDensity = "full"
-    fields: tuple[EuRollupField, ...] = Field(default=_DEFAULT_EU_ROLLUP_FIELDS, min_length=1)
-
-
-def _coerce_eu_rollup_fields(raw: Any) -> Any:
-    """Normalise comma strings and hyphenated aliases before strict validation."""
-    if isinstance(raw, str):
-        values: list[Any] = [item.strip() for item in raw.split(",") if item.strip()]
-    elif isinstance(raw, list | tuple):
-        values = list(raw)
-    else:
-        return raw
-    return [_EU_ROLLUP_FIELD_ALIASES.get(str(item), item) for item in values]
-
-
-def _eu_view_config(config: Mapping[str, Any] | None) -> EuViewConfig:
-    """Return strict ``tui.eu_view`` config with a safe default fallback."""
-    raw: Any = None
-    if isinstance(config, Mapping):
-        tui = config.get("tui")
-        if isinstance(tui, Mapping):
-            raw = tui.get("eu_view")
-    if raw is None:
-        return EuViewConfig()
-    if not isinstance(raw, Mapping):
-        logger.warning(f"eu_view_config invalid_shape={type(raw).__name__!r}; using defaults")
-        return EuViewConfig()
-    normalised = dict(raw)
-    if "fields" in normalised:
-        normalised["fields"] = _coerce_eu_rollup_fields(normalised["fields"])
-    try:
-        return EuViewConfig.model_validate(normalised)
-    except ValidationError as exc:
-        err_type = exc.errors()[0]["type"]
-        logger.warning(f"eu_view_config validation_error={err_type!r}; using defaults")
-        return EuViewConfig()

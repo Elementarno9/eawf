@@ -66,7 +66,6 @@ def test_built_in_defaults_hold_a_section_for_every_catalogued_leaf_with_a_value
         "profiles",
         "runtime",
         "ui",
-        "tui",
         "telemetry",
         "dispatch",
         "agents",
@@ -89,7 +88,6 @@ def test_only_builtin_layer_contributes_for_empty_stack() -> None:
         "estimation.eu_minutes",
         "research.default_depth",
         "vcs.conventions.subject_style",
-        "vcs.conventions.release.cadence",
     ):
         assert sources[dotted] == "built-in"
     # Default values match.
@@ -98,7 +96,6 @@ def test_only_builtin_layer_contributes_for_empty_stack() -> None:
     assert "project" not in merged
     assert "memory" not in merged
     assert merged["vcs"]["conventions"]["subject_style"] == "trailer"
-    assert merged["vcs"]["conventions"]["release"] == {"cadence": "manual"}
     assert merged["verify"] == {
         "jury_max_brier": 0.25,
         "jury_max_co_error": 0.10,
@@ -216,48 +213,48 @@ def test_vcs_conventions_subject_style_overlays_across_repo_and_local(tmp_path: 
     assert sources["vcs.conventions.subject_style"] == "local"
 
 
-def test_env_overrides_local(tmp_path: Path) -> None:
+def test_env_overrides_repo(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "research:\n  default_depth: local\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "ui:\n  theme: cb\n")
     merged, sources = merge_config(
         workspace=None,
         repo=repo,
-        env={"EAWF_RESEARCH__DEFAULT_DEPTH": "env_val"},
+        env={"EAWF_UI__THEME": "light"},
         cli_overrides={},
     )
-    assert merged["research"]["default_depth"] == "env_val"
-    assert sources["research.default_depth"] == "env"
+    assert merged["ui"]["theme"] == "light"
+    assert sources["ui.theme"] == "env"
 
 
 def test_cli_overrides_env() -> None:
     merged, sources = merge_config(
         workspace=None,
         repo=None,
-        env={"EAWF_RESEARCH__DEFAULT_DEPTH": "from_env"},
-        cli_overrides={"research": {"default_depth": "from_cli"}},
+        env={"EAWF_UI__THEME": "light"},
+        cli_overrides={"ui": {"theme": "cb"}},
     )
-    assert merged["research"]["default_depth"] == "from_cli"
-    assert sources["research.default_depth"] == "cli"
+    assert merged["ui"]["theme"] == "cb"
+    assert sources["ui.theme"] == "cli"
 
 
 def test_full_stack_ordering(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """All seven layers active simultaneously — CLI wins, env loses, etc."""
     fake_global = tmp_path / "g.yaml"
     monkeypatch.setattr(layered, "global_config_path", lambda: fake_global)
-    _write_yaml(fake_global, "research:\n  default_depth: g\n")
+    _write_yaml(fake_global, "ui:\n  theme: dark\n")
     workspace = tmp_path / "ws"
-    _write_yaml(workspace / ".ea" / "config.yaml", "research:\n  default_depth: ws\n")
+    _write_yaml(workspace / ".ea" / "config.yaml", "ui:\n  theme: light\n")
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: r\n")
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "research:\n  default_depth: l\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "ui:\n  theme: cb\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "ui:\n  theme: light\n")
     merged, sources = merge_config(
         workspace=workspace,
         repo=repo,
-        env={"EAWF_RESEARCH__DEFAULT_DEPTH": "e"},
-        cli_overrides={"research": {"default_depth": "c"}},
+        env={"EAWF_UI__THEME": "auto"},
+        cli_overrides={"ui": {"theme": "cb"}},
     )
-    assert merged["research"]["default_depth"] == "c"
-    assert sources["research.default_depth"] == "cli"
+    assert merged["ui"]["theme"] == "cb"
+    assert sources["ui.theme"] == "cli"
 
 
 # --- Deep-merge of maps -----------------------------------------------------
@@ -292,21 +289,19 @@ def test_env_double_underscore_is_separator() -> None:
     merged, sources = merge_config(
         workspace=None,
         repo=None,
-        env={"EAWF_ESTIMATION__EU_MINUTES": "60"},
+        env={"EAWF_UI__GLYPHS": "ascii"},
         cli_overrides={},
     )
-    assert merged["estimation"]["eu_minutes"] == 60
-    assert sources["estimation.eu_minutes"] == "env"
+    assert merged["ui"]["glyphs"] == "ascii"
+    assert sources["ui.glyphs"] == "env"
 
 
-def test_env_boolean_coercion() -> None:
-    merged, _ = merge_config(
-        workspace=None,
-        repo=None,
-        env={"EAWF_TELEMETRY__ENABLED": "false"},
-        cli_overrides={},
-    )
-    assert merged["telemetry"]["enabled"] is False
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [("true", True), ("FALSE", False), ("null", None), ("60", 60), ("1.5", 1.5), ("x", "x")],
+)
+def test_env_scalar_coercion(raw: str, expected: object) -> None:
+    assert layered._coerce_scalar(raw) == expected
 
 
 def test_env_unknown_prefix_ignored() -> None:
@@ -318,6 +313,132 @@ def test_env_unknown_prefix_ignored() -> None:
     )
     assert merged["research"]["default_depth"] == "medium"
     assert sources["research.default_depth"] == "built-in"
+
+
+# --- Env overrides held to the leaf catalog ---------------------------------
+
+
+@pytest.fixture
+def _fresh_env_warnings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Forget which variables this process already warned about."""
+    monkeypatch.setattr(layered, "_WARNED_ENV_VARS", set())
+
+
+@pytest.mark.usefixtures("_fresh_env_warnings")
+def test_env_override_of_a_leaf_not_env_writable_is_ignored_with_a_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level("WARNING", logger=layered.__name__):
+        merged, sources = merge_config(
+            workspace=None,
+            repo=None,
+            env={"EAWF_PLANNING__MAX_PARALLEL_WAVES": "9"},
+            cli_overrides={},
+        )
+    assert merged["planning"]["max_parallel_waves"] == 4
+    assert sources["planning.max_parallel_waves"] == "built-in"
+    assert "EAWF_PLANNING__MAX_PARALLEL_WAVES" in caplog.text
+    assert "not writable from the env layer" in caplog.text
+
+
+@pytest.mark.usefixtures("_fresh_env_warnings")
+def test_env_override_warning_is_logged_once_per_variable(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    env = {"EAWF_PLANNING__MAX_PARALLEL_WAVES": "9"}
+    with caplog.at_level("WARNING", logger=layered.__name__):
+        merge_config(workspace=None, repo=None, env=env, cli_overrides={})
+        merge_config(workspace=None, repo=None, env=env, cli_overrides={})
+    assert caplog.text.count("EAWF_PLANNING__MAX_PARALLEL_WAVES") == 1
+
+
+@pytest.mark.usefixtures("_fresh_env_warnings")
+@pytest.mark.parametrize("variable", ["EAWF_UI__TEHME", "EAWF_NOT_A_SECTION", "EAWF_RUNTIME__KIND"])
+def test_env_override_of_an_unknown_key_is_ignored_with_a_warning(
+    variable: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level("WARNING", logger=layered.__name__):
+        merged, sources = merge_config(
+            workspace=None, repo=None, env={variable: "light"}, cli_overrides={}
+        )
+    assert not [key for key, layer in sources.items() if layer == "env"]
+    assert "not_a_section" not in merged
+    assert "unknown config key" in caplog.text
+
+
+@pytest.mark.usefixtures("_fresh_env_warnings")
+def test_env_override_reserved_control_var_is_skipped_silently(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level("WARNING", logger=layered.__name__):
+        _merged, sources = merge_config(
+            workspace=None, repo=None, env={"EAWF_VERBOSE": "1", "EAWF_": "x"}, cli_overrides={}
+        )
+    assert "env" not in sources.values()
+    assert caplog.text == ""
+
+
+@pytest.mark.parametrize(
+    ("variable", "raw", "reason"),
+    [
+        ("EAWF_UI__THEME", "zzz", "is not one of"),
+        ("EAWF_UI__THEME", "null", "must not be null"),
+        ("EAWF_UI__THEME", "7", "is not one of"),
+        ("EAWF_RUNTIME__PREFERENCE", "codex", "is not of type list_str"),
+    ],
+)
+def test_env_override_with_a_value_its_leaf_refuses_is_refused(
+    variable: str, raw: str, reason: str
+) -> None:
+    with pytest.raises(layered.EnvOverrideError) as excinfo:
+        merge_config(workspace=None, repo=None, env={variable: raw}, cli_overrides={})
+    assert excinfo.value.variable == variable
+    assert reason in excinfo.value.reason
+    assert str(excinfo.value).startswith(f"config_env_override_invalid: {variable}: ")
+
+
+def test_env_override_error_is_the_cli_validation_error() -> None:
+    from eawf.surfaces.cli.errors import ValidationError as CliValidationError
+
+    assert issubclass(layered.EnvOverrideError, CliValidationError)
+
+
+@pytest.mark.parametrize("theme", ["dark", "light", "cb", "auto"])
+def test_env_override_accepts_every_choice_of_an_env_writable_leaf(theme: str) -> None:
+    merged, sources = merge_config(
+        workspace=None, repo=None, env={"EAWF_UI__THEME": theme}, cli_overrides={}
+    )
+    assert merged["ui"]["theme"] == theme
+    assert sources["ui.theme"] == "env"
+
+
+@pytest.mark.usefixtures("_fresh_env_warnings")
+def test_env_override_cannot_loosen_a_verify_gate(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    repo = tmp_path / "repo"
+    _write_yaml(repo / ".ea" / "config.yaml", "verify:\n  odr_blocking: true\n")
+    with caplog.at_level("WARNING", logger=layered.__name__):
+        merged, sources = merge_config(
+            workspace=None,
+            repo=repo,
+            env={"EAWF_VERIFY__ODR_BLOCKING": "false"},
+            cli_overrides={},
+        )
+    assert merged["verify"]["odr_blocking"] is True
+    assert sources["verify.odr_blocking"] == "repo"
+    assert "EAWF_VERIFY__ODR_BLOCKING" in caplog.text
+
+
+def test_no_verify_leaf_is_env_writable() -> None:
+    from eawf.kernel.config.registry import LEAF_KEY_REGISTRY
+
+    env_writable = [
+        key
+        for key, entry in LEAF_KEY_REGISTRY.items()
+        if key.startswith("verify.") and "env" in entry.writable_layers
+    ]
+    assert env_writable == []
 
 
 def test_env_strips_prefix_only_no_value_segment() -> None:
@@ -371,7 +492,7 @@ def test_merge_does_not_mutate_built_in_defaults() -> None:
     merge_config(
         workspace=None,
         repo=None,
-        env={"EAWF_RESEARCH__DEFAULT_DEPTH": "from_env"},
+        env={"EAWF_UI__THEME": "light"},
         cli_overrides={"research": {"default_depth": "from_cli"}},
     )
     assert repr(BUILT_IN_DEFAULTS) == snapshot

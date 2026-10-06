@@ -987,17 +987,6 @@
      "bracket · conventional"
     ],
     [
-     "conventions.wave_trailer",
-     "s",
-     "Eawf-Wave"
-    ],
-    [
-     "conventions.release.cadence",
-     "e",
-     "manual",
-     "manual · per-phase · continuous"
-    ],
-    [
      "checkpoint_requires_commit",
      "b",
      true

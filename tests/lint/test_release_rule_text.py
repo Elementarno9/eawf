@@ -1,20 +1,17 @@
-"""The release-process rule text agrees with the release cadence config.
+"""The release-process rule text spells its cadences consistently.
 
-The core profile renders this rule into every managed repo, so a cadence
-spelling the config rejects, a wrong default, or a setting no config model
-defines sends each reader to a configuration that fails validation.
+The core profile renders this rule into every managed repo, so a misspelled
+cadence, a wrong default, or a setting no config model defines sends each
+reader to a configuration that fails validation.
 """
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import get_args
 
 import pytest
 import yaml
-
-from eawf.kernel.config.schema import ReleaseCadence, VcsReleaseConventionsConfig
 
 pytestmark = pytest.mark.unit
 
@@ -26,6 +23,10 @@ _RENDERED_SHIP_RULE = _REPO_ROOT / "docs" / "rules" / "ship-process.md"
 _CADENCE_LIST_LEAD = "supported cadences:"
 _CADENCE_BULLET = re.compile(r"^- ``([^`]+)``(.*)$")
 _MISSPELLED_CADENCE = "``per_phase``"
+#: The cadence vocabulary and default the rule text documents; no config leaf
+#: carries them, so the rule text is held to its own published spelling.
+_CADENCES = frozenset({"manual", "per-phase"})
+_DEFAULT_CADENCE = "manual"
 
 #: The pre-correction rule text, trimmed to the lines the check reads.
 _OLD_RULE_TEXT = (
@@ -80,10 +81,9 @@ def cadence_rule_mismatches(body: str) -> list[str]:
     """
     problems: list[str] = []
     bullets = _cadence_bullets(body)
-    allowed = set(get_args(ReleaseCadence))
-    if set(bullets) != allowed:
-        problems.append(f"cadence bullets {sorted(bullets)} != config literals {sorted(allowed)}")
-    default = VcsReleaseConventionsConfig().cadence
+    if set(bullets) != _CADENCES:
+        problems.append(f"cadence bullets {sorted(bullets)} != cadences {sorted(_CADENCES)}")
+    default = _DEFAULT_CADENCE
     if "default" not in bullets.get(default, ""):
         problems.append(f"the {default!r} bullet does not name it the default")
     problems.extend(

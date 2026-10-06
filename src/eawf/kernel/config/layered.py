@@ -49,7 +49,9 @@ from typing import Any
 
 from eawf.kernel.config.defaults import built_in_defaults
 from eawf.kernel.config.loader import load_yaml_layer
+from eawf.kernel.config.registry import LEAF_KEY_REGISTRY
 from eawf.platform.subprocess_detach import no_window_kwargs
+from eawf.surfaces.cli.errors import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -353,6 +355,36 @@ _RESERVED_ENV_PREFIXES: tuple[str, ...] = (
 )
 
 
+class EnvOverrideError(ValidationError):
+    """An ``EAWF_<SECTION>__<KEY>`` override whose value its catalog leaf refuses.
+
+    It shares the malformed-layer-file error's class so every caller that already
+    reports a bad config file reports a bad override the same way.
+
+    Attributes:
+        variable: The environment variable that states the value.
+        reason: The catalog's reason for refusing it.
+    """
+
+    def __init__(self, *, variable: str, reason: str) -> None:
+        self.variable = variable
+        self.reason = reason
+        super().__init__(f"config_env_override_invalid: {variable}: {reason}")
+
+
+#: Variables already warned about in this process; :func:`merge_config` runs many
+#: times per command, and one warning per ignored variable is enough.
+_WARNED_ENV_VARS: set[str] = set()
+
+
+def _warn_ignored_env_var(variable: str, reason: str) -> None:
+    """Log once per process that ``variable`` is ignored, and why."""
+    if variable in _WARNED_ENV_VARS:
+        return
+    _WARNED_ENV_VARS.add(variable)
+    logger.warning(f"_warn_ignored_env_var variable={variable} reason={reason!r}")
+
+
 def _collect_env_overrides(env: Mapping[str, str]) -> dict[str, Any]:
     """Translate ``EAWF_FOO__BAR=baz`` env vars into ``{foo: {bar: "baz"}}``.
 
@@ -365,8 +397,18 @@ def _collect_env_overrides(env: Mapping[str, str]) -> dict[str, Any]:
 
     Reserved control vars (:data:`_RESERVED_ENV_VARS`, plus any
     :data:`_RESERVED_ENV_PREFIXES` family) are skipped — they name runtime
-    knobs, not config keys.
+    knobs, not config keys. An override is held to the leaf catalog as a file
+    layer is, and to the layers its leaf names as writable: otherwise an
+    environment variable could set a key no reader knows, or loosen a gate the
+    repository holds, without any file recording it. A variable naming no leaf,
+    or a leaf the ``env`` layer may not write, is ignored with a warning.
+
+    Raises:
+        EnvOverrideError: A variable names an env-writable leaf with a value the
+            leaf's type, choices or range refuses.
     """
+    from eawf.kernel.config.sections import layer_leaf_problems
+
     out: dict[str, Any] = {}
     for raw_key, raw_val in env.items():
         if not raw_key.startswith(_ENV_PREFIX):
@@ -377,7 +419,20 @@ def _collect_env_overrides(env: Mapping[str, str]) -> dict[str, Any]:
         if not stripped:
             continue
         dotted = stripped.replace("__", ".").lower()
-        _set_dotted(out, dotted, _coerce_scalar(raw_val))
+        entry = LEAF_KEY_REGISTRY.get(dotted)
+        if entry is None:
+            _warn_ignored_env_var(raw_key, f"unknown config key {dotted!r}")
+            continue
+        if Layer.ENV.value not in entry.writable_layers:
+            _warn_ignored_env_var(raw_key, f"{dotted} is not writable from the env layer")
+            continue
+        value = _coerce_scalar(raw_val)
+        leaf: dict[str, Any] = {}
+        _set_dotted(leaf, dotted, value)
+        problems = layer_leaf_problems(leaf)
+        if problems:
+            raise EnvOverrideError(variable=raw_key, reason=problems[0])
+        _set_dotted(out, dotted, value)
     return out
 
 
@@ -500,6 +555,10 @@ def merge_config(
         canonical layer label that contributed the leaf's final value.
         Layers that contribute no values (empty/missing files) leave no
         entries.
+
+    Raises:
+        EnvOverrideError: An ``EAWF_<SECTION>__<KEY>`` variable sets an
+            env-writable leaf to a value its catalog entry refuses.
     """
     effective_env = env if env is not None else os.environ
     overrides = cli_overrides if cli_overrides is not None else {}

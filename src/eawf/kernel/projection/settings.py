@@ -132,7 +132,7 @@ SETTINGS_CATEGORIES: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
         ),
     ),
     ("identity", ("operator", "preferences", "profiles")),
-    ("interface", ("tui", "ui")),
+    ("interface", ("ui",)),
     ("quality", ("audit", "estimation", "verify")),
     ("system", ("config", "daemon", "telemetry", "vcs")),
 )

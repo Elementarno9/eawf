@@ -103,7 +103,9 @@ class _ConfigSchema(BaseModel):
     profiles: dict[str, Any]
     runtime: dict[str, Any]
     ui: dict[str, Any]
-    tui: dict[str, Any]
+    # No shipped leaf lives under ``tui`` any more; an older layer may still
+    # carry the section.
+    tui: dict[str, Any] = Field(default_factory=dict)
     research: dict[str, Any]
     planning: dict[str, Any]
     estimation: EstimationConfig
@@ -713,6 +715,10 @@ def config_validate(
 ) -> None:
     """Validate the merged config against the minimal Pydantic schema.
 
+    Every leaf each file layer states is also held to its catalog type, choices and
+    range, a key the catalog does not name is refused, and every strict section model
+    is held against the merged config.
+
     With ``--composed``, additionally compose every profile listed in
     ``profiles.enabled`` and include the merged view in the output envelope.
     The composed view is deterministic (sorted lists, locked render-block
@@ -733,6 +739,24 @@ def config_validate(
         _ConfigSchema.model_validate(merged)
     except PydValidationError as exc:
         emit_error(ValidationError(f"config schema rejected: {exc}"), flags=flags)
+        return  # pragma: no cover
+
+    from eawf.kernel.config.sections import (
+        SECTION_MODELS,
+        ConfigSectionError,
+        check_sections,
+        file_layer_problems,
+    )
+
+    problems = file_layer_problems(repo=repo, workspace=workspace)
+    if problems:
+        emit_error(ValidationError(f"config leaves rejected: {'; '.join(problems)}"), flags=flags)
+        return  # pragma: no cover
+
+    try:
+        check_sections(merged, [section for section, _model in SECTION_MODELS])
+    except ConfigSectionError as exc:
+        emit_error(ValidationError(str(exc)), flags=flags)
         return  # pragma: no cover
 
     payload: dict[str, Any] = {"ok": True}

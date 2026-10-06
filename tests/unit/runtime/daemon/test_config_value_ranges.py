@@ -34,8 +34,6 @@ RANGED_INT = "planning.max_parallel_waves"
 RANGED_FLOAT = "flow.budget.multiplier"
 #: A choice among shallow, medium, deep and exhaustive.
 CHOICE = "research.default_depth"
-#: A list whose items must be declared choices.
-MULTICHOICE = "tui.eu_view.fields"
 #: A bool.
 BOOL = "telemetry.enabled"
 #: A leaf the interactive registry does not describe, so no range or choices apply.
@@ -83,8 +81,6 @@ def _written(repo: Path) -> dict[str, Any]:
         (RANGED_FLOAT, 1.0),
         (RANGED_FLOAT, 2.5),
         (CHOICE, "deep"),
-        (MULTICHOICE, []),
-        (MULTICHOICE, ["queue"]),
         (BOOL, False),
     ],
 )
@@ -130,7 +126,6 @@ def test_ui_053_a_float_just_below_its_minimum_is_refused(tmp_path: Path) -> Non
     ("key", "value", "reason"),
     [
         (CHOICE, "lax", "not in choices"),
-        (MULTICHOICE, ["queue", "nope"], "not in choices"),
         (RANGED_INT, "fast", "cannot coerce 'fast' to int"),
         (RANGED_INT, 2.5, "cannot coerce 2.5 to int"),
         (RANGED_INT, True, "cannot coerce True to int"),

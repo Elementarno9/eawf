@@ -67,6 +67,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="list_str",
         default=("core",),
         writable_layers=_WRITABLE_ALL_DURABLE,
+        description="Rule profiles enabled for this repository, rendered into its agent policy.",
         editor="check",
         choices_from="profiles",
     ),
@@ -86,7 +87,10 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="mapping",
         default={},
         writable_layers=("repo", "branch"),
-        description="Profile id → digest an enriched profile is certified as managed under.",
+        description=(
+            "Profile id → digest an enriched profile is certified as managed under; "
+            "no dispatch reads it yet, so setting it changes nothing."
+        ),
         editor="pin",
         choices_from="profile_certification",
     ),
@@ -97,7 +101,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="list_str",
         default=("claude-code",),
         writable_layers=_WRITABLE_GWR,
-        description="Legacy v1.1 selector; superseded by runtime.preference.",
+        description="Older runtime list, read only when runtime.preference is unset.",
         editor="check",
         choices=RUNTIME_ADAPTER_IDS,
     ),
@@ -107,7 +111,10 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="list_str",
         default=("claude-code",),
         writable_layers=_WRITABLE_RUNTIME_PREFERENCE,
-        description="C08-canonical fallback ladder; first entry is primary.",
+        description=(
+            "Runtimes a dispatch may use, in fallback order; the first entry is the "
+            "default provider."
+        ),
         editor="order",
         choices=RUNTIME_ADAPTER_IDS,
     ),
@@ -310,6 +317,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default="auto",
         writable_layers=("global", "workspace", "repo", "env"),
         choices=("auto", "ascii", "unicode"),
+        description="Console glyph set: unicode, ascii, or auto to follow the terminal encoding.",
     ),
     LeafKey(
         key="ui.toasts",
@@ -324,27 +332,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         ),
         consumer="eawf.surfaces.tui.launch.persisted_toast_verbosity",
     ),
-    # --- tui ---------------------------------------------------------------
-    LeafKey(
-        key="tui.eu_view.density",
-        domain="tui",
-        type="literal",
-        default="full",
-        writable_layers=_WRITABLE_GWR,
-        choices=("full", "compact"),
-        description="Roadmap EU/hour rollup table: full adds a detail column; compact omits it.",
-        consumer="eawf.surfaces.render.plan_view._eu_view_config",
-    ),
-    LeafKey(
-        key="tui.eu_view.fields",
-        domain="tui",
-        type="list_str",
-        default=("work_sum", "critical_path", "queue", "realistic"),
-        writable_layers=_WRITABLE_GWR,
-        choices=("work_sum", "critical_path", "queue", "realistic"),
-        description="Roadmap EU/hour rollup metrics, in row order; at least one.",
-        consumer="eawf.surfaces.render.plan_view._eu_view_config",
-    ),
     # --- telemetry (C09 surface) ------------------------------------------
     LeafKey(
         key="telemetry.enabled",
@@ -352,6 +339,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="bool",
         default=True,
         writable_layers=_WRITABLE_GWR,
+        description="Whether the eawf metrics commands open the machine-local telemetry store.",
     ),
     LeafKey(
         key="telemetry.db_kind",
@@ -360,6 +348,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default="sqlite",
         writable_layers=("global",),
         choices=("duckdb", "sqlite"),
+        description="Database engine of the machine-local telemetry store.",
     ),
     # --- dispatch ----------------------------------------------------------
     LeafKey(
@@ -368,7 +357,10 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="int",
         default=2400,
         writable_layers=_WRITABLE_GWR,
-        description="Token ceiling per injected role-tier dispatch block (raise, never truncate).",
+        description=(
+            "Intended token ceiling per injected role-tier dispatch block; no "
+            "dispatch reads it yet, so setting it changes nothing."
+        ),
     ),
     # --- agents ------------------------------------------------------------
     LeafKey(
@@ -424,6 +416,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=DEFAULT_RESEARCH_DEPTH.value,
         writable_layers=_WRITABLE_GWR,
         choices=RESEARCH_DEPTH_VALUES,
+        description="Survey depth a research campaign runs at when none is given.",
     ),
     LeafKey(
         key="research.agent_count",
@@ -431,6 +424,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="int",
         default=4,
         writable_layers=_WRITABLE_GWR,
+        description="Researchers a campaign round fans out to when none is given; clamped to 1-12.",
     ),
     # --- planning ----------------------------------------------------------
     LeafKey(
@@ -521,6 +515,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="int",
         default=30,
         writable_layers=_WRITABLE_GWR,
+        description="Minutes of agent-driven work one effort unit (EU) stands for.",
     ),
     LeafKey(
         key="estimation.eu_basis",
@@ -564,9 +559,8 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default="soft",
         writable_layers=_WRITABLE_GWR,
         description=(
-            "Token-budget enforcement mode. soft (default) warns and lets "
-            "the wave continue past its cap; hard halts the wave at the cap "
-            "via the SIGTERM->SIGKILL ladder."
+            "Intended token-budget enforcement mode, soft (warn) or hard (halt at "
+            "the cap); no budget check reads it yet, so setting it changes nothing."
         ),
         choices=("soft", "hard"),
     ),
@@ -577,8 +571,8 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=1.5,
         writable_layers=_WRITABLE_GWR,
         description=(
-            "Safety multiplier applied to a wave's base budget to derive the "
-            "enforced cap (1.5 == 50% headroom)."
+            "Intended multiplier from a base token budget to its enforced cap; no "
+            "budget check reads it yet, so setting it changes nothing."
         ),
     ),
     # --- vcs ---------------------------------------------------------------
@@ -588,6 +582,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="bool",
         default=True,
         writable_layers=_WRITABLE_GWR,
+        description="Whether a scope close's checkpoint ref must name a commit that exists.",
     ),
     LeafKey(
         key="vcs.integration_commit_unit",
@@ -627,19 +622,15 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         ),
     ),
     LeafKey(
-        key="vcs.conventions.release.cadence",
-        domain="vcs",
-        type="literal",
-        default="manual",
-        writable_layers=_WRITABLE_GWR,
-        choices=("manual", "per-phase"),
-    ),
-    LeafKey(
         key="vcs.coauthor.mode",
         domain="vcs",
         type="str",
         default="runtime",
         writable_layers=_WRITABLE_GWR,
+        description=(
+            "Co-author trailer policy: runtime names the agent runtime, project names "
+            "the project identity, disabled writes none."
+        ),
     ),
     LeafKey(
         key="vcs.coauthor.default_runtime",
@@ -647,6 +638,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="str",
         default="claude",
         writable_layers=_WRITABLE_GWR,
+        description="Runtime a runtime-mode trailer names when none is detected.",
     ),
     LeafKey(
         key="vcs.coauthor.project.name",
@@ -672,6 +664,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="str",
         default="Claude",
         writable_layers=_WRITABLE_GWR,
+        description="Co-author name a Claude runtime trailer names.",
     ),
     LeafKey(
         key="vcs.coauthor.trailers.claude.email",
@@ -679,6 +672,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="str",
         default="noreply@anthropic.com",
         writable_layers=_WRITABLE_GWR,
+        description="Co-author email a Claude runtime trailer names.",
     ),
     LeafKey(
         key="vcs.coauthor.trailers.codex.name",
@@ -686,6 +680,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="str",
         default="Codex",
         writable_layers=_WRITABLE_GWR,
+        description="Co-author name a Codex runtime trailer names.",
     ),
     LeafKey(
         key="vcs.coauthor.trailers.codex.email",
@@ -693,6 +688,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="str",
         default="noreply@openai.com",
         writable_layers=_WRITABLE_GWR,
+        description="Co-author email a Codex runtime trailer names.",
     ),
     LeafKey(
         key="vcs.coauthor.require_trailer",
@@ -700,6 +696,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="bool",
         default=True,
         writable_layers=_WRITABLE_GWR,
+        description="Whether a runtime with no configured trailer identity is an error.",
     ),
     # --- daemon ------------------------------------------------------------
     LeafKey(
@@ -716,6 +713,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="int",
         default=300,
         writable_layers=_WRITABLE_GWR,
+        description="Seconds the daemon stays up with no client request before it shuts down.",
     ),
     LeafKey(
         key="daemon.session_handle_ttl_seconds",
@@ -723,6 +721,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="int",
         default=86400,
         writable_layers=_WRITABLE_GWR,
+        description="Seconds after an agent session ends before the daemon prunes its handle.",
     ),
 )
 
@@ -742,8 +741,10 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "profiles.certified": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "profiles.enabled": "eawf.platform.profiles.selection.resolve_enabled_profiles",
     "profiles.trusted": "eawf.platform.profiles.trust.load_trust_ledger",
-    "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
-    "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
+    "research.agent_count": "eawf.runtime.daemon.methods.campaign_run.resolve_agent_count",
+    "research.default_depth": (
+        "eawf.runtime.daemon.methods.campaign_run.resolve_default_research_depth"
+    ),
     "runtime.adapters": "eawf.kernel.config.layered.resolve_dispatch_provider_tuple",
     "runtime.auto_certify": "eawf.kernel.config.layered.resolve_auto_certify",
     "runtime.claude.permission_wait_s": (
@@ -772,7 +773,6 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "vcs.coauthor.trailers.claude.name": "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer",
     "vcs.coauthor.trailers.codex.email": "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer",
     "vcs.coauthor.trailers.codex.name": "eawf.runtime.vcs.coauthor.resolve_coauthor_trailer",
-    "vcs.conventions.release.cadence": "eawf.runtime.vcs.coauthor.requires_phase_release_preflight",
     "vcs.conventions.subject_style": "tools.commit_prefix_lint._configured_subject_style",
     "vcs.integration_commit_unit": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
     "vcs.task_reference": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
@@ -841,6 +841,12 @@ _RETIRED_KEYS: frozenset[str] = frozenset(
         "statusline.modules_available",
         "statusline.modules_default",
         "statusline.rows",
+        # no surface renders the roadmap EU/hour rollup the view leaves shaped
+        "tui.eu_view.density",
+        "tui.eu_view.fields",
+        # release checkpoints are swept and tagged only through the explicit release
+        # verbs, and no Milestone close waits on a release, so no cadence is read
+        "vcs.conventions.release.cadence",
         # retired before this catalog tracked them: renamed or never consumed
         "acceptance.lint",
         "acceptance.tests",

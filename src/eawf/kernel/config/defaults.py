@@ -55,9 +55,11 @@ def _built_in_profile(
 ) -> dict[str, Any]:
     """Return one built-in profile running Task work on one shipped launcher.
 
-    Only the capabilities a machine certification can attest are required,
-    and writes are confined to the leased workspace with no network, so the
-    profile asks for nothing a fresh machine's certification cannot back.
+    Only the capabilities a machine probe can attest are required, and writes
+    are confined to the leased workspace with no network, so the profile asks
+    for nothing a fresh machine's certification cannot back. The semantic
+    tools are optional: only a certification canary observes them, and until
+    one has, a Run compiles with no tool granted rather than not at all.
     """
     return {
         "profile_id": profile_id,
@@ -65,6 +67,7 @@ def _built_in_profile(
         "auth_profile_ref": auth_profile_ref,
         "model_policy": {"allowed": models, "default": models[0]},
         "required_capabilities": ["streaming", "tool_use"],
+        "optional_capabilities": ["semantic_tools"],
         "tool_policy": {"allow": list(_TASK_TOOLS)},
         "limits": {"wall_seconds": 3600, "output_bytes": 1_048_576},
         "sandbox": {
@@ -120,8 +123,9 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "opencode": {"stall_interval_s": DEFAULT_STALL_INTERVAL_SECONDS},
         # Days a Run's full message text stays in the machine-local store.
         "transcript": {"retention_days": 30},
-        # One profile per shipped launcher and one route that sends Task
-        # Runs to them, so a fresh tree compiles a Run with nothing written.
+        # One profile per shipped launcher and the routes that send Task Runs
+        # and Campaign rounds to them, so a fresh tree compiles a Run with
+        # nothing written.
         # The provider loader files these under the global layer, beneath
         # the operator's own records; a repository layer can only narrow.
         "profiles": [
@@ -148,20 +152,26 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
                 "revision": 1,
                 "source_ref": BUILT_IN_PROVIDER_SOURCE,
             },
+            # A Campaign round reads the repository and writes nothing; the
+            # compiler's safe baseline narrows the shared profiles to a
+            # read-only sandbox and workspace for it.
+            {
+                "route_id": "campaign-research",
+                "match": {
+                    "scope_kind": "campaign",
+                    "purpose": ["research"],
+                    "requires_mutation": False,
+                },
+                "allowed_profiles": ["claude-default", "codex-default"],
+                "revision": 1,
+                "source_ref": BUILT_IN_PROVIDER_SOURCE,
+            },
         ],
     },
     "ui": {
         "theme": "dark",
         "glyphs": "auto",
         "toasts": "important",
-    },
-    # Roadmap EU/hour rollup view; mirrors the defaults of
-    # :class:`eawf.surfaces.render.plan_view.EuViewConfig`.
-    "tui": {
-        "eu_view": {
-            "density": "full",
-            "fields": ["work_sum", "critical_path", "queue", "realistic"],
-        },
     },
     # C09 (telemetry) projector reads these keys. Ingestion is ON by
     # default because an off-by-default projector never runs in CI or
@@ -234,9 +244,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     "vcs": {
         "conventions": {
             "subject_style": "trailer",
-            "release": {
-                "cadence": "manual",
-            },
         },
         "checkpoint_requires_commit": True,
         "integration_commit_unit": "batch",
