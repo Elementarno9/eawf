@@ -2,103 +2,133 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import TYPE_CHECKING, Any
 
-from eawf.kernel.runtime.certification import ConformanceStageRecord
-from eawf.kernel.spec.publication import PublicationOperation
-from eawf.kernel.spec.release import Release
 from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.epoch2.regime import RegimeBinding, VerificationDebt
-from eawf.kernel.store.kinds.actual import ActualPayload
-from eawf.kernel.store.kinds.agent_report import AgentReportPayload
-from eawf.kernel.store.kinds.audit import AuditPayload
-from eawf.kernel.store.kinds.commit_repin import CommitRepinProvenance
-from eawf.kernel.store.kinds.conduct_deviation import ConductDeviation
-from eawf.kernel.store.kinds.config_updated import ConfigUpdatedPayload
-from eawf.kernel.store.kinds.decision import DecisionPayload
-from eawf.kernel.store.kinds.estimate import EstimatePayload
-from eawf.kernel.store.kinds.event import EventPayload
-from eawf.kernel.store.kinds.evidence import EvidenceRecord
-from eawf.kernel.store.kinds.flow import FlowPayload
-from eawf.kernel.store.kinds.gate_receipt import GateReceipt
-from eawf.kernel.store.kinds.gate_rereceipt import GateRereceiptBinding
-from eawf.kernel.store.kinds.incident import IncidentPayload
-from eawf.kernel.store.kinds.jury_ballot import JuryBallotPayload
-from eawf.kernel.store.kinds.legacy_audit_disposition import LegacyAuditDisposition
-from eawf.kernel.store.kinds.memory import MemoryPayload
-from eawf.kernel.store.kinds.operation import OperationRecord
-from eawf.kernel.store.kinds.operator_input import OperatorInputPayload
-from eawf.kernel.store.kinds.registry_updated import RegistryUpdatedPayload
-from eawf.kernel.store.kinds.research import ResearchPayload
-from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
-from eawf.kernel.store.kinds.research_round import ResearchRoundPayload
-from eawf.kernel.store.kinds.runtime_certification import MachineCertification
-from eawf.kernel.store.kinds.spec_updated import SpecUpdatedPayload
-from eawf.kernel.store.kinds.subscription_lag import SubscriptionLagPayload
-from eawf.workflow.release.advance import CheckpointGateReceipt, TrainAdvanceRecord
 
-PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
-    StoreKind.RESEARCH: ResearchPayload,
-    StoreKind.AUDIT: AuditPayload,
-    StoreKind.INCIDENT: IncidentPayload,
-    StoreKind.MEMORY: MemoryPayload,
-    StoreKind.DECISION: DecisionPayload,
-    StoreKind.ESTIMATE: EstimatePayload,
-    StoreKind.ACTUAL: ActualPayload,
-    StoreKind.FLOW: FlowPayload,
-    StoreKind.EVENT: EventPayload,
-    StoreKind.EVIDENCE: EvidenceRecord,
-    StoreKind.RESEARCHER_REPORT: AgentReportPayload,
-    StoreKind.PLANNER_REPORT: AgentReportPayload,
-    StoreKind.EXECUTOR_REPORT: AgentReportPayload,
-    StoreKind.AUDITOR_REPORT: AgentReportPayload,
-    StoreKind.REVIEWER_REPORT: AgentReportPayload,
-    StoreKind.POLISHER_REPORT: AgentReportPayload,
-    StoreKind.OPERATOR_REPORT: AgentReportPayload,
-    StoreKind.DOMAIN_SPECIALIST_REPORT: AgentReportPayload,
-    StoreKind.SUBSCRIPTION_LAG: SubscriptionLagPayload,
-    StoreKind.CONFIG_UPDATED: ConfigUpdatedPayload,
-    StoreKind.REGISTRY_UPDATED: RegistryUpdatedPayload,
-    StoreKind.SPEC_UPDATED: SpecUpdatedPayload,
-    StoreKind.RESEARCH_CAMPAIGN: ResearchCampaignPayload,
-    StoreKind.RESEARCH_ROUND: ResearchRoundPayload,
-    StoreKind.OPERATOR_INPUT: OperatorInputPayload,
-    StoreKind.JURY_BALLOT: JuryBallotPayload,
-    StoreKind.GATE_RECEIPT: GateReceipt,
-    # The re-receipt binding keeps its own kind rather than riding the
-    # receipt store: a receipt is addressed by freshness key, a binding by
-    # the wave and the landed commit its run replayed.
-    StoreKind.GATE_RERECEIPT: GateRereceiptBinding,
-    StoreKind.LEGACY_AUDIT_DISPOSITION: LegacyAuditDisposition,
-    StoreKind.COMMIT_REPIN: CommitRepinProvenance,
-    # The publication ledger reuses the kernel record rather than
-    # restating its shape here: a second copy could only drift.
-    StoreKind.RELEASE: PublicationOperation,
-    # The checkpoint record keeps its own kind rather than sharing the
-    # ledger's: ledger rows are addressed by idempotency key, record rows
-    # by release revision, and one id namespace could collide the two.
-    StoreKind.RELEASE_RECORD: Release,
-    # Receipts and advances are the two facts the train walks on. Each
-    # keeps its own kind because each is read back on its own: receipts
-    # by checkpoint and gate, advances by train.
-    # One conformance stage, filed under the digest of the runtime tuple
-    # it ran for. The envelope carries the tuple; the payload carries only
-    # what the stage concluded, so a stage record is the same shape here
-    # as it is inside the certification that cites it.
-    StoreKind.CONFORMANCE_STAGE: ConformanceStageRecord,
-    StoreKind.RELEASE_CHECKPOINT_RECEIPT: CheckpointGateReceipt,
-    StoreKind.RELEASE_TRAIN_ADVANCE: TrainAdvanceRecord,
-    # Registered like every kind so its envelopes validate on read, but its
-    # rows live in the machine-local tier; see ``local_store_path``.
-    StoreKind.CONDUCT_DEVIATION: ConductDeviation,
-    # One row per debt revision, filed under the debt key: an open debt
-    # and its discharge are two rows, and the newest one is the debt.
-    StoreKind.VERIFICATION_DEBT: VerificationDebt,
-    # One row per binding a scope was delivered under; a successor binding
-    # is a new row that names the one it replaces.
-    StoreKind.REGIME_BINDING: RegimeBinding,
-    # One row per state a submitted operation reaches, machine-local.
-    StoreKind.OPERATION: OperationRecord,
-    # One row per conformance probe of an installed runtime version, machine-local.
-    StoreKind.RUNTIME_CERTIFICATION: MachineCertification,
-}
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+
+    PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]]
+
+
+def _payload_models() -> dict[StoreKind, type[BaseModel]]:
+    """Import every payload model and map its kind to it.
+
+    Built on first access to :data:`PAYLOAD_MODELS` rather than at import,
+    so a reader that needs one kind's model (the statusline reads memory
+    rows on every redraw) does not build all of them.
+    """
+    from eawf.kernel.runtime.certification import ConformanceStageRecord
+    from eawf.kernel.spec.publication import PublicationOperation
+    from eawf.kernel.spec.release import Release
+    from eawf.kernel.state.epoch2.regime import RegimeBinding, VerificationDebt
+    from eawf.kernel.store.kinds.actual import ActualPayload
+    from eawf.kernel.store.kinds.agent_report import AgentReportPayload
+    from eawf.kernel.store.kinds.audit import AuditPayload
+    from eawf.kernel.store.kinds.commit_repin import CommitRepinProvenance
+    from eawf.kernel.store.kinds.conduct_deviation import ConductDeviation
+    from eawf.kernel.store.kinds.config_updated import ConfigUpdatedPayload
+    from eawf.kernel.store.kinds.decision import DecisionPayload
+    from eawf.kernel.store.kinds.estimate import EstimatePayload
+    from eawf.kernel.store.kinds.event import EventPayload
+    from eawf.kernel.store.kinds.evidence import EvidenceRecord
+    from eawf.kernel.store.kinds.flow import FlowPayload
+    from eawf.kernel.store.kinds.gate_receipt import GateReceipt
+    from eawf.kernel.store.kinds.gate_rereceipt import GateRereceiptBinding
+    from eawf.kernel.store.kinds.incident import IncidentPayload
+    from eawf.kernel.store.kinds.jury_ballot import JuryBallotPayload
+    from eawf.kernel.store.kinds.legacy_audit_disposition import LegacyAuditDisposition
+    from eawf.kernel.store.kinds.memory import MemoryPayload
+    from eawf.kernel.store.kinds.operation import OperationRecord
+    from eawf.kernel.store.kinds.operator_input import OperatorInputPayload
+    from eawf.kernel.store.kinds.registry_updated import RegistryUpdatedPayload
+    from eawf.kernel.store.kinds.research import ResearchPayload
+    from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
+    from eawf.kernel.store.kinds.research_round import ResearchRoundPayload
+    from eawf.kernel.store.kinds.runtime_certification import MachineCertification
+    from eawf.kernel.store.kinds.spec_updated import SpecUpdatedPayload
+    from eawf.kernel.store.kinds.subscription_lag import SubscriptionLagPayload
+    from eawf.runtime.daemon.run_events import RunEventsAppendedPayload
+    from eawf.workflow.release.advance import CheckpointGateReceipt, TrainAdvanceRecord
+
+    return {
+        StoreKind.RESEARCH: ResearchPayload,
+        StoreKind.AUDIT: AuditPayload,
+        StoreKind.INCIDENT: IncidentPayload,
+        StoreKind.MEMORY: MemoryPayload,
+        StoreKind.DECISION: DecisionPayload,
+        StoreKind.ESTIMATE: EstimatePayload,
+        StoreKind.ACTUAL: ActualPayload,
+        StoreKind.FLOW: FlowPayload,
+        StoreKind.EVENT: EventPayload,
+        StoreKind.EVIDENCE: EvidenceRecord,
+        StoreKind.RESEARCHER_REPORT: AgentReportPayload,
+        StoreKind.PLANNER_REPORT: AgentReportPayload,
+        StoreKind.EXECUTOR_REPORT: AgentReportPayload,
+        StoreKind.AUDITOR_REPORT: AgentReportPayload,
+        StoreKind.REVIEWER_REPORT: AgentReportPayload,
+        StoreKind.POLISHER_REPORT: AgentReportPayload,
+        StoreKind.OPERATOR_REPORT: AgentReportPayload,
+        StoreKind.DOMAIN_SPECIALIST_REPORT: AgentReportPayload,
+        StoreKind.SUBSCRIPTION_LAG: SubscriptionLagPayload,
+        StoreKind.CONFIG_UPDATED: ConfigUpdatedPayload,
+        StoreKind.REGISTRY_UPDATED: RegistryUpdatedPayload,
+        StoreKind.SPEC_UPDATED: SpecUpdatedPayload,
+        StoreKind.RESEARCH_CAMPAIGN: ResearchCampaignPayload,
+        StoreKind.RESEARCH_ROUND: ResearchRoundPayload,
+        StoreKind.OPERATOR_INPUT: OperatorInputPayload,
+        StoreKind.JURY_BALLOT: JuryBallotPayload,
+        StoreKind.GATE_RECEIPT: GateReceipt,
+        # The re-receipt binding keeps its own kind rather than riding the
+        # receipt store: a receipt is addressed by freshness key, a binding by
+        # the wave and the landed commit its run replayed.
+        StoreKind.GATE_RERECEIPT: GateRereceiptBinding,
+        StoreKind.LEGACY_AUDIT_DISPOSITION: LegacyAuditDisposition,
+        StoreKind.COMMIT_REPIN: CommitRepinProvenance,
+        # The publication ledger reuses the kernel record rather than
+        # restating its shape here: a second copy could only drift.
+        StoreKind.RELEASE: PublicationOperation,
+        # The checkpoint record keeps its own kind rather than sharing the
+        # ledger's: ledger rows are addressed by idempotency key, record rows
+        # by release revision, and one id namespace could collide the two.
+        StoreKind.RELEASE_RECORD: Release,
+        # Receipts and advances are the two facts the train walks on. Each
+        # keeps its own kind because each is read back on its own: receipts
+        # by checkpoint and gate, advances by train.
+        # One conformance stage, filed under the digest of the runtime tuple
+        # it ran for. The envelope carries the tuple; the payload carries only
+        # what the stage concluded, so a stage record is the same shape here
+        # as it is inside the certification that cites it.
+        StoreKind.CONFORMANCE_STAGE: ConformanceStageRecord,
+        StoreKind.RELEASE_CHECKPOINT_RECEIPT: CheckpointGateReceipt,
+        StoreKind.RELEASE_TRAIN_ADVANCE: TrainAdvanceRecord,
+        # Registered like every kind so its envelopes validate on read, but its
+        # rows live in the machine-local tier; see ``local_store_path``.
+        StoreKind.CONDUCT_DEVIATION: ConductDeviation,
+        # One row per debt revision, filed under the debt key: an open debt
+        # and its discharge are two rows, and the newest one is the debt.
+        StoreKind.VERIFICATION_DEBT: VerificationDebt,
+        # One row per binding a scope was delivered under; a successor binding
+        # is a new row that names the one it replaces.
+        StoreKind.REGIME_BINDING: RegimeBinding,
+        # One row per state a submitted operation reaches, machine-local.
+        StoreKind.OPERATION: OperationRecord,
+        # One row per conformance probe of an installed runtime version, machine-local.
+        StoreKind.RUNTIME_CERTIFICATION: MachineCertification,
+        # A feed notice that one Run's stream moved; published live, never stored.
+        StoreKind.RUN_EVENTS_APPENDED: RunEventsAppendedPayload,
+    }
+
+
+def __getattr__(name: str) -> Any:
+    """Build :data:`PAYLOAD_MODELS` on first access.
+
+    Raises:
+        AttributeError: *name* is not ``PAYLOAD_MODELS``.
+    """
+    if name != "PAYLOAD_MODELS":
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = _payload_models()
+    globals()[name] = value
+    return value

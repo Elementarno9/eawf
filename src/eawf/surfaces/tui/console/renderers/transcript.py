@@ -45,7 +45,7 @@ from eawf.surfaces.tui.console.frame import (
     strip_chips,
     thin,
 )
-from eawf.surfaces.tui.console.keybar import keybar, route_pairs
+from eawf.surfaces.tui.console.keybar import KeyEntry, keybar, route_pairs
 from eawf.surfaces.tui.console.live_reads import held_usage
 from eawf.surfaces.tui.console.navigation import Ctx, busy, copied
 from eawf.surfaces.tui.console.renderers.budget_lines import cost_line
@@ -77,6 +77,7 @@ TR_GLYPH: Mapping[str, str] = MappingProxyType(
 # Cells the time, glyph and kind columns of a block head take before its text.
 _HEAD_W = len(" 00:00:00  ¶ " + " " * 9)
 _KEYS = route_pairs("transcript")
+_NEWEST = KeyEntry("newest", ("End",)).pair()
 Block = Mapping[str, Any]
 
 
@@ -559,10 +560,23 @@ def native_context(view: View, model: TranscriptReadModel) -> str:
     parts = [f"Run {run}", state]
     if background:
         parts.append(f"{background} running in the background")
-    parts.append("following" if s.follow else "held")
+    parts.append(follow_word(s, len(model.blocks)))
     if view.wide:
         parts.append(plural(len(model.blocks), "block"))
     return " · ".join(parts)
+
+
+def follow_word(session: Session, total: int) -> str:
+    """Return ``following``, or ``held · N new`` counting the blocks that arrived since.
+
+    Args:
+        session: The session whose follow flag and hold point are read.
+        total: How many blocks the frame draws now.
+    """
+    if session.follow:
+        return "following"
+    since = total if session.tr_held_from is None else session.tr_held_from
+    return f"held · {max(0, total - since)} new"
 
 
 def _state_rows(model: TranscriptReadModel, w: int) -> list[str]:
@@ -680,6 +694,10 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
     # and y copies it, so a Run with no block offers no copy
     held = model.block_at(sel) is not None
     pairs = [pair for pair in _KEYS if (folded or pair[0] != "Enter") and (held or pair[0] != "y")]
+    # a live Run's blocks grow under a held view, so End, back to the newest block and
+    # following it, sits beside f; the prototype's golden bars stay the table's own
+    after_follow = next(i for i, pair in enumerate(pairs) if pair[0] == "f") + 1
+    pairs.insert(after_follow, _NEWEST)
     return build(view, rows, keybar(acting_pairs(view, pairs), w))
 
 
@@ -699,16 +717,37 @@ _EMPTY_ANSWERS: Mapping[str, str] = MappingProxyType(
     }
 )
 
+#: What End answers when the cursor already follows the newest block.
+_ALREADY_NEWEST = "already on the newest block · following the tail"
+
+
+def _hold(s: Session, total: int) -> None:
+    """Stop following, counting arrivals from the *total* blocks drawn now."""
+    if s.follow or s.tr_held_from is None:
+        s.tr_held_from = total
+    s.follow = False
+
+
+def _resume(s: Session, total: int) -> None:
+    """Follow the tail again, the cursor on the newest of *total* blocks."""
+    s.follow = True
+    s.tr_held_from = None
+    s.tr_sel = max(0, total - 1)
+
 
 def _native_seam(ctx: Ctx, key: str, model: TranscriptReadModel) -> bool:
-    """Walk, fold, follow and copy the blocks of a held read model."""
+    """Walk, fold, hold, follow and copy the blocks of a held read model.
+
+    ``Space`` and ``f`` toggle between holding the cursor where it is and following the
+    newest block, ``End`` jumps to the newest block and follows it, and the arrows hold.
+    """
     s = ctx.s
     total = len(model.blocks)
     sel = max(0, total - 1) if s.tr_sel is None else s.tr_sel
     s.tr_sel = sel
     if key in ("ArrowDown", "ArrowUp"):
         s.tr_sel = max(0, min(total - 1, sel + (1 if key == "ArrowDown" else -1)))
-        s.follow = False
+        _hold(s, total)
         block = model.block_at(s.tr_sel)
         ctx.log(key, f"{block.lane} · {clock_time(block.at)}" if block else "no block")
         return True
@@ -727,11 +766,21 @@ def _native_seam(ctx: Ctx, key: str, model: TranscriptReadModel) -> bool:
         fold[sel] = not fold.get(sel)
         ctx.log("Enter", ("opened " if fold[sel] else "folded ") + f"{n} lines")
         return True
-    if key == "f":
-        s.follow = not s.follow
+    if key in ("f", " "):
         if s.follow:
-            s.tr_sel = max(0, total - 1)
-        ctx.log("f", "following the tail" if s.follow else "held where you are")
+            _hold(s, total)
+        else:
+            _resume(s, total)
+        named = "Space" if key == " " else key
+        ctx.log(named, "following the tail" if s.follow else "held where you are")
+        return True
+    if key == "End":
+        if s.follow and sel == max(0, total - 1):
+            ctx.notify(_ALREADY_NEWEST, "End")
+            ctx.log("End", _ALREADY_NEWEST)
+            return True
+        _resume(s, total)
+        ctx.log("End", "the newest block · following the tail")
         return True
     if key == "y" and block is not None:
         what = f"{block.lane} at {clock_time(block.at)}"

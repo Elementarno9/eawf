@@ -39,8 +39,10 @@ from the control ledger's effect truth rather than from the stored Run
 record, because those two legitimately disagree between a confirmed
 effect and the transition that follows it, and an event arriving inside
 that window must be quarantined rather than admitted.
-``runtime.run.events.read`` reports the ordered stream, the holes in it
-and how long the Run has been quiet.
+Every append that commits a line publishes one ``run_events_appended``
+notice naming the Run and its new tail, whichever writer made it.
+``runtime.run.events.read`` reports the ordered stream past a caller's
+cursor, the holes in it and how long the Run has been quiet.
 """
 
 from __future__ import annotations
@@ -48,6 +50,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import secrets
+import weakref
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -80,6 +84,7 @@ from eawf.kernel.runtime.handshake import (
 from eawf.kernel.runtime.provider import ControlKind, Digest, reject_repeats
 from eawf.kernel.runtime.semantic import SemanticToolId
 from eawf.kernel.runtime.stall import RunStallFact, standing_stall
+from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictNonNegativeInt, StrictPositiveInt
 from eawf.kernel.state.epoch2.run import Run, RunStatus
@@ -122,6 +127,7 @@ from eawf.runtime.daemon.run_capture_updates import terminal_capture_updates
 from eawf.runtime.daemon.run_events import (
     AppendDisposition,
     RunEventAppend,
+    RunEventsAppendedPayload,
     RunEventsRead,
     RunLiveness,
     assess_stall,
@@ -133,6 +139,7 @@ from eawf.runtime.daemon.run_events import (
     runtime_of,
     stall_facts_of,
 )
+from eawf.runtime.daemon.run_supervisor import sweep_after_boot
 from eawf.runtime.daemon.runtime_certifier import gate_run_control
 from eawf.runtime.hooks.event import HOST_HARNESSES
 from eawf.workflow.evidence.run_certification import STOP_CONTROLS, ControlGate, ControlGateCode
@@ -863,6 +870,46 @@ def _append_event_line(session: RootSession, event: RunEventRecord, *, now: date
     )
 
 
+#: The subscription bus each fenced tree's appends are announced on. The appenders run
+#: in worker threads holding only the tree's context, so the bus is found through the
+#: context rather than threaded through every writer of the stream.
+_EVENT_BUSES: Final[weakref.WeakKeyDictionary[Epoch2RootContext, Any]] = weakref.WeakKeyDictionary()
+
+
+def bind_run_event_bus(context: Epoch2RootContext, bus: Any) -> None:
+    """Announce the appends committed through ``context`` on ``bus``.
+
+    Args:
+        context: A fenced tree's native context.
+        bus: The daemon's subscription bus, or ``None`` on a daemon with no fan-out.
+    """
+    _EVENT_BUSES[context] = bus
+
+
+def _announce_append(
+    context: Epoch2RootContext, urn: QualifiedUrn, *, event_ref: str, tail: int
+) -> None:
+    """Publish that one Run's stream moved, never failing the append that moved it.
+
+    The notice is built for a subscriber that reads by cursor, so it names only the
+    Run and its tail; a publish the fan-out refuses is logged by the publisher and
+    the committed line stands. The envelope is named by the line the request now
+    stands as, which a duplicate never reaches, so one commit is one notice id.
+    """
+    notice = RunEventsAppendedPayload(run_ref=urn, tail_sequence=tail)
+    publish_projection(
+        _EVENT_BUSES.get(context),
+        Envelope(
+            id=f"run-events-appended-{event_ref}",
+            kind=StoreKind.RUN_EVENTS_APPENDED,
+            scope_id=str(urn),
+            created_at=datetime.now(UTC),
+            summary=f"run_events_appended run={urn.entity_key} tail={tail}",
+            payload=notice.model_dump(mode="json"),
+        ),
+    )
+
+
 def _mint_gap_ref() -> EventGapId:
     """Return a fresh identity for a hole the daemon is about to record."""
     return f"GAP-{secrets.token_hex(_GAP_ENTROPY_BYTES)}"
@@ -1030,6 +1077,13 @@ def append_run_event_in_session(
     for line in plan.lines:
         _append_event_line(session, line, now=now)
     state = reduce_run_events((*events, *plan.lines))
+    if plan.disposition is not AppendDisposition.DUPLICATE:
+        _announce_append(
+            session.context,
+            args.urn,
+            event_ref=plan.event.event_ref,
+            tail=state.last_contiguous_sequence,
+        )
     return RunEventAnswer(
         event=plan.event.model_dump(mode="json"),
         disposition=plan.disposition,
@@ -1044,7 +1098,11 @@ def append_run_event_in_session(
 def _read_events(
     context: Epoch2RootContext, args: RunEventsRead, *, now: datetime
 ) -> RunEventsAnswer:
-    """Report one Run's ordered stream, its holes, and its liveness."""
+    """Report one Run's ordered stream past the caller's cursor, its holes, and its liveness.
+
+    Only the event list honours the cursor: the holes, quarantined lines, timeline and
+    stall are facts of the whole stream, so they are reported whole.
+    """
     with context.session([args.urn]) as session:
         records = read_ledger_records(_ledger(session))
         run = _stored_run(session, records, args.urn)
@@ -1061,7 +1119,11 @@ def _read_events(
     stall = assess_stall(state=state, now=now, interval_seconds=interval)
     stalled = stall.verdict is RunLiveness.STALLED
     derived = sorted(
-        (event for event in events if event.quarantine is None),
+        (
+            event
+            for event in events
+            if event.quarantine is None and event.run_sequence > args.after_sequence
+        ),
         key=lambda item: item.run_sequence,
     )
     return RunEventsAnswer(
@@ -1235,7 +1297,8 @@ async def _append_run_event(
     The append writes ledger lines and commits no canonical transition:
     an observation of a Run is not a change to one, and a late event that
     could move a status is exactly the thing the quarantine exists to
-    stop. Nothing is published for it either, because nothing moved.
+    stop. A committed line is announced as a ``run_events_appended``
+    notice rather than a patch, because no record moved.
     """
     args = _params(RunEventAppend, params)
     context = ctx.native_root_context(authority.root)
@@ -1261,21 +1324,40 @@ async def _dispatch_run(
 
     The driver is awaited rather than threaded: it has to await the
     launcher, and each of its locked passes over the tree is opened and
-    closed around that await rather than held across it.
+    closed around that await rather than held across it. It answers once
+    the worker is announced; the turn runs on under the root's supervisor.
+    The first Run verb this daemon serves for a root sweeps it for Runs a
+    previous daemon left running with nobody awaiting their turn.
     """
     args = _params(DispatchParams, params)
     context = ctx.native_root_context(authority.root)
-    answer = await dispatch_run(context, args, now=datetime.now(UTC))
+    publish = _publisher(ctx)
+    await sweep_after_boot(context, actor=args.actor, publish=publish)
+    answer = await dispatch_run(context, args, now=datetime.now(UTC), publish=publish)
     return answer.model_dump(mode="json")
+
+
+def _publisher(ctx: MethodContext) -> Callable[[Envelope], bool]:
+    """Return where a Run verb's background transitions are published on this daemon."""
+
+    def publish(envelope: Envelope) -> bool:
+        return publish_projection(ctx.bus, envelope)
+
+    return publish
 
 
 @native_mutator(RUN_RETRY_METHOD)
 async def _retry_run(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
-    """Decide whether a retry keeps this Run or links a new one to it."""
+    """Decide whether a retry keeps this Run or links a new one to it.
+
+    A Run a previous daemon left running is failed as lost first, so the
+    retry judges a Run that has stopped rather than one nobody is watching.
+    """
     args = _params(RetryParams, params)
     context = ctx.native_root_context(authority.root)
+    await sweep_after_boot(context, actor=args.actor, publish=_publisher(ctx))
     answer = await asyncio.to_thread(retry_run, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")
 
@@ -1298,5 +1380,6 @@ __all__ = [
     "WorkerHelloAnswer",
     "append_run_event",
     "append_run_event_in_session",
+    "bind_run_event_bus",
     "run_stall_interval",
 ]

@@ -204,12 +204,12 @@ def test_wave_overlay_loses_to_env() -> None:
     merged, sources = merge_config(
         workspace=None,
         repo=None,
-        env={"EAWF_RESEARCH__DEFAULT_DEPTH": "env_val"},
+        env={"EAWF_UI__THEME": "light"},
         cli_overrides={},
-        wave_overlay={"research": {"default_depth": "wave_val"}},
+        wave_overlay={"ui": {"theme": "cb"}},
     )
-    assert merged["research"]["default_depth"] == "env_val"
-    assert sources["research.default_depth"] == "env"
+    assert merged["ui"]["theme"] == "light"
+    assert sources["ui.theme"] == "env"
 
 
 def test_wave_overlay_loses_to_cli() -> None:
@@ -287,23 +287,23 @@ def test_full_stack_ordering_with_branch_and_wave(
     """All nine layers active; CLI wins, branch/wave correctly placed."""
     fake_global = tmp_path / "g.yaml"
     monkeypatch.setattr(layered, "global_config_path", lambda: fake_global)
-    _write_yaml(fake_global, "research:\n  default_depth: g\n")
+    _write_yaml(fake_global, "ui:\n  theme: dark\n")
     workspace = tmp_path / "ws"
-    _write_yaml(workspace / ".ea" / "config.yaml", "research:\n  default_depth: w\n")
+    _write_yaml(workspace / ".ea" / "config.yaml", "ui:\n  theme: light\n")
     repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: r\n")
-    _write_yaml(repo / ".ea" / "branches" / "main.yaml", "research:\n  default_depth: b\n")
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "research:\n  default_depth: l\n")
+    _write_yaml(repo / ".ea" / "config.yaml", "ui:\n  theme: cb\n")
+    _write_yaml(repo / ".ea" / "branches" / "main.yaml", "ui:\n  theme: auto\n")
+    _write_yaml(repo / ".ea" / "local" / "config.yaml", "ui:\n  theme: light\n")
     merged, sources = merge_config(
         workspace=workspace,
         repo=repo,
-        env={"EAWF_RESEARCH__DEFAULT_DEPTH": "e"},
-        cli_overrides={"research": {"default_depth": "c"}},
+        env={"EAWF_UI__THEME": "dark"},
+        cli_overrides={"ui": {"theme": "cb"}},
         branch="main",
-        wave_overlay={"research": {"default_depth": "wv"}},
+        wave_overlay={"ui": {"theme": "auto"}},
     )
-    assert merged["research"]["default_depth"] == "c"
-    assert sources["research.default_depth"] == "cli"
+    assert merged["ui"]["theme"] == "cb"
+    assert sources["ui.theme"] == "cli"
 
 
 # --- Layer-path helper ------------------------------------------------------
@@ -430,6 +430,11 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "runtime.models.opencode": f"{_LAYERED}.resolve_runtime_tier_models",
     "runtime.opencode.stall_interval_s": f"{_LAYERED}.resolve_stall_interval_seconds",
     "runtime.preference": f"{_LAYERED}.resolve_dispatch_provider_tuple",
+    "runtime.transcript.retention_days": (
+        "eawf.runtime.daemon.transcript_store.resolve_retention_days"
+    ),
+    "runtime.profiles": "eawf.runtime.daemon.provider_facts.installed_provider_facts",
+    "runtime.routes": "eawf.runtime.daemon.provider_facts.installed_provider_facts",
     "telemetry.db_kind": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
     "telemetry.enabled": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
     "tui.eu_view.density": _EU_VIEW,

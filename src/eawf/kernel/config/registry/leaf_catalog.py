@@ -185,6 +185,16 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         description="Seconds an opencode Run may produce nothing before it is flagged stalled.",
         runtime="opencode",
     ),
+    LeafKey(
+        key="runtime.transcript.retention_days",
+        domain="runtime",
+        type="int",
+        default=30,
+        writable_layers=_WRITABLE_GWR,
+        description="Days a Run's full message text stays in the machine-local store.",
+        value_range=(1, 365),
+        consumer="eawf.runtime.daemon.transcript_store.resolve_retention_days",
+    ),
     # Per-adapter sub-keys (claude / codex / opencode).
     LeafKey(
         key="runtime.adapter_catalog.claude.enabled",

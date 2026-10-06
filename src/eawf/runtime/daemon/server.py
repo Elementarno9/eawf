@@ -41,6 +41,7 @@ import orjson
 # ``ensure_all_methods_registered``.
 import eawf.runtime.daemon.methods.daemon  # noqa: F401  — registers daemon.ping/status
 from eawf.kernel.projection.compute import patches_for_event
+from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.auth import UnauthorizedError, verify_peer_credential
 from eawf.runtime.daemon.bus import CatchUpTooLargeError, EventBus, Subscriber
@@ -206,8 +207,12 @@ def _projection_frames(envelope: Envelope) -> tuple[bytes, ...]:
     projection subscriber sees only patches on a bus that carries every kind.
     A transition that cannot be turned into a patch is logged and dropped
     rather than raised: one malformed payload must not end the feed of every
-    projection subscriber on the daemon.
+    projection subscriber on the daemon. A Run's append notice moves no projection
+    row, so it rides the feed as its raw ``event.push`` for a console following
+    that Run's transcript.
     """
+    if envelope.kind is StoreKind.RUN_EVENTS_APPENDED:
+        return (_push_frame(envelope),)
     try:
         patches = patches_for_event(envelope)
     except ValueError as exc:

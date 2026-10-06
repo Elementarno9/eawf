@@ -28,6 +28,8 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any, Final, Literal
 
+from pydantic import Field
+
 from eawf.kernel.runtime.events import ChildRunPayload, MessageSummaryPayload
 from eawf.observability.logging.state_leak import default_allowed_emails, scan_state_leaks
 
@@ -47,6 +49,21 @@ _DELEGATION_TOOLS: Final = frozenset({"Task", "Agent"})
 
 #: How many hex characters of a digest name a delegation request.
 _DELEGATION_DIGEST_CHARS: Final = 32
+
+
+class SpokenMessage(MessageSummaryPayload):
+    """A message payload that also carries the whole of what was said.
+
+    The whole text never reaches a stream line: it is excluded from every dump, so the
+    payload serialises exactly as the summary it extends. Only the dispatch sink reads
+    it, to keep the full message in the machine-local transcript store.
+
+    Attributes:
+        text: The message, stripped but neither cut nor withheld.
+    """
+
+    text: str = Field(exclude=True, repr=False)
+
 
 BridgedPayload = MessageSummaryPayload | ChildRunPayload
 
@@ -74,10 +91,12 @@ def _message(
     if not stripped:
         return None
     if scan_state_leaks(stripped, allowed_emails=allowed):
-        return MessageSummaryPayload(message_role=role, summary=WITHHELD_TEXT, truncated=True)
+        return SpokenMessage(
+            message_role=role, summary=WITHHELD_TEXT, truncated=True, text=stripped
+        )
     cut = stripped[:SUMMARY_LIMIT].strip()
-    return MessageSummaryPayload(
-        message_role=role, summary=cut, truncated=len(stripped) > SUMMARY_LIMIT
+    return SpokenMessage(
+        message_role=role, summary=cut, truncated=len(stripped) > SUMMARY_LIMIT, text=stripped
     )
 
 
@@ -212,6 +231,7 @@ __all__ = [
     "WITHHELD_TEXT",
     "BridgedPayload",
     "HostHarness",
+    "SpokenMessage",
     "claude_record_payloads",
     "read_host_transcript",
     "scrubbed_words",

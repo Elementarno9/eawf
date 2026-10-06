@@ -768,6 +768,7 @@ class StoreKind(StrEnum):
     REGIME_BINDING = "regime_binding"
     OPERATION = "operation"
     RUNTIME_CERTIFICATION = "runtime_certification"
+    RUN_EVENTS_APPENDED = "run_events_appended"
 
 
 class ArtifactKind(StrEnum):

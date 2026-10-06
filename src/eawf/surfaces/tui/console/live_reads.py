@@ -7,8 +7,10 @@ no patch ever carries it. Such a read is declared here once, as a :class:`LiveRe
 route that draws it, how the seam finds what it is about, and how it is fetched. The seam
 owes every declared read of the route on screen as soon as it can be addressed, and the
 console reads it again while the route stays on screen, so what is appended lands without
-a relaunch. A new read is one more entry in :data:`LIVE_READS`; neither the seam nor the
-console names any read itself.
+a relaunch. A read that declares a ``follow`` is not read again on a timer: the daemon
+announces each append to a Run's stream, and the console asks only for what lies past the
+cursor it holds. A new read is one more entry in :data:`LIVE_READS`; neither the seam nor
+the console names any read itself.
 """
 
 from __future__ import annotations
@@ -141,11 +143,15 @@ class LiveRead:
             it cannot be addressed yet, such as before the route's rows arrive. A held
             answer is shown only while its address is still the current one.
         fetch: Reads the answer for an address.
+        follow: Reads what was appended past a held answer and returns the answer grown
+            by it, or ``None`` for a read the console re-reads whole on its timer. A
+            read that follows is read again only when the daemon announces an append.
     """
 
     routes: frozenset[str]
     address: Callable[[LiveReadHost], str | None]
     fetch: Callable[[LiveReadHost, str], Awaitable[Any]]
+    follow: Callable[[LiveReadHost, str, Any], Awaitable[Any]] | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -161,12 +167,15 @@ class HeldTranscript:
         deadlines: The provider's deadline of each permission the Run's approval lines
             name, by permission URN. A permission whose read failed is absent, and its
             block says its deadline went unread.
+        through: The highest sequence among ``events``, the cursor the next read asks
+            past; ``0`` before the Run has a line.
     """
 
     events: tuple[RunEventRecord, ...] = ()
     children: Mapping[str, tuple[RunEventRecord, ...]] = field(default_factory=dict)
     contents: Mapping[str, ResolvedContent] = field(default_factory=dict)
     deadlines: Mapping[str, datetime] = field(default_factory=dict)
+    through: int = 0
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -208,10 +217,20 @@ def _transcript_address(host: LiveReadHost) -> str | None:
     return next((row.urn for row in held.rows if row.key == subject), None)
 
 
-async def _run_events(host: LiveReadHost, urn: str) -> tuple[RunEventRecord, ...]:
-    """Read one Run's derived stream, in sequence order."""
-    answer = RunEventsAnswer.model_validate(await host.call(RUN_EVENTS_READ_METHOD, {"urn": urn}))
+async def _run_events(
+    host: LiveReadHost, urn: str, *, after: int = 0
+) -> tuple[RunEventRecord, ...]:
+    """Read one Run's derived stream past sequence *after*, in sequence order."""
+    params: dict[str, Any] = {"urn": urn}
+    if after:
+        params["after_sequence"] = after
+    answer = RunEventsAnswer.model_validate(await host.call(RUN_EVENTS_READ_METHOD, params))
     return tuple(RunEventRecord.model_validate(line) for line in answer.events)
+
+
+def _through(events: tuple[RunEventRecord, ...]) -> int:
+    """Return the highest sequence among *events*; ``0`` for none."""
+    return max((line.run_sequence for line in events), default=0)
 
 
 async def _contents(
@@ -276,6 +295,24 @@ async def _fetch_transcript(host: LiveReadHost, urn: str) -> HeldTranscript:
     events = await _run_events(host, urn)
     contents = await _contents(host, urn, events)
     deadlines = await _permission_deadlines(host, urn, events)
+    children = await _children(host, events)
+    logger.debug(
+        f"fetch_transcript events={len(events)} children={len(children)} "
+        f"contents={len(contents)} deadlines={len(deadlines)}"
+    )
+    return HeldTranscript(
+        events=events,
+        children=children,
+        contents=contents,
+        deadlines=deadlines,
+        through=_through(events),
+    )
+
+
+async def _children(
+    host: LiveReadHost, events: tuple[RunEventRecord, ...]
+) -> dict[str, tuple[RunEventRecord, ...]]:
+    """Read the lines of every child Run *events* name; an unreadable child is left out."""
     children: dict[str, tuple[RunEventRecord, ...]] = {}
     for child in dict.fromkeys(
         str(line.payload.child_run_ref)
@@ -286,11 +323,38 @@ async def _fetch_transcript(host: LiveReadHost, urn: str) -> HeldTranscript:
             children[child] = await _run_events(host, child)
         except Exception as exc:
             logger.warning(f"transcript child unreadable cause={exc!r}")
-    logger.debug(
-        f"fetch_transcript events={len(events)} children={len(children)} "
-        f"contents={len(contents)} deadlines={len(deadlines)}"
+    return children
+
+
+async def _follow_transcript(host: LiveReadHost, urn: str, held: HeldTranscript) -> HeldTranscript:
+    """Grow a held transcript by the lines appended past its cursor.
+
+    Only the new lines are read, with what they hang off: the content they unfold to,
+    the deadlines of the permissions they name, and the whole of each child Run they
+    name, since a delegation's later lines are what its new parent line reports.
+
+    Args:
+        host: The seam the read goes through.
+        urn: The Run the transcript is about.
+        held: The transcript as last read; its ``through`` is the cursor.
+
+    Returns:
+        *held* itself when nothing was appended past it, else the grown transcript.
+    """
+    new = await _run_events(host, urn, after=held.through)
+    if not new:
+        return held
+    contents = await _contents(host, urn, new)
+    deadlines = await _permission_deadlines(host, urn, new)
+    children = await _children(host, new)
+    logger.debug(f"follow_transcript after={held.through} events={len(new)}")
+    return HeldTranscript(
+        events=(*held.events, *new),
+        children={**held.children, **children},
+        contents={**held.contents, **contents},
+        deadlines={**held.deadlines, **deadlines},
+        through=_through(new),
     )
-    return HeldTranscript(events=events, children=children, contents=contents, deadlines=deadlines)
 
 
 #: The read the transcript route draws its blocks from.
@@ -772,6 +836,7 @@ LIVE_READS: Final[Mapping[str, LiveRead]] = MappingProxyType(
             routes=frozenset({TRANSCRIPT_ROUTE}),
             address=_transcript_address,
             fetch=_fetch_transcript,
+            follow=_follow_transcript,
         ),
         CAMPAIGN_READ: LiveRead(
             routes=CAMPAIGN_ROUTES, address=_campaign_address, fetch=_fetch_campaign

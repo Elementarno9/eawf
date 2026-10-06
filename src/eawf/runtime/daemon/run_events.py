@@ -139,9 +139,31 @@ class RunEventsRead(RunScopedParams):
             is flagged. ``None`` resolves ``runtime.<name>.stall_interval_s``
             for the runtime the Run's accepted hello named, because a pause
             that is routine on one runtime is pathological on another.
+        after_sequence: The cursor a subscriber already holds: only events
+            past it are returned, so a reader told the tail moved fetches
+            the new lines rather than the whole stream again. Zero reads the
+            stream from its start.
     """
 
     stall_interval_seconds: Annotated[StrictInt, Field(ge=0, le=86_400)] | None = None
+    after_sequence: Annotated[StrictInt, Field(ge=0)] = 0
+
+
+class RunEventsAppendedPayload(BaseModel):
+    """The feed notice one committed append publishes.
+
+    It carries no event body: a subscriber re-reads the stream from its own
+    cursor, so a notice dropped by a lagging queue loses nothing durable.
+
+    Attributes:
+        run_ref: The Run whose stream moved.
+        tail_sequence: The stream's last contiguous sequence after the append.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_ref: RunUrn
+    tail_sequence: Annotated[StrictInt, Field(ge=0)]
 
 
 @dataclass(frozen=True, slots=True)
@@ -718,6 +740,7 @@ __all__ = [
     "AppendPlan",
     "RunEventAppend",
     "RunEventState",
+    "RunEventsAppendedPayload",
     "RunEventsRead",
     "RunLiveness",
     "RunScopedParams",

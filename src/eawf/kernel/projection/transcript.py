@@ -18,8 +18,10 @@ sequences are missing. A transcript that silently renumbered around the hole wou
 shorter than the episode it claims to show, and nothing on the frame would say so.
 
 *The thinking state says whether it was observed or derived.* What exists is a
-reasoning turn that opened and has not been summarized. When the provider marked the
-opening itself, the turn is carried as a
+reasoning turn that opened and has not yet closed. A turn closes when it is summarized,
+and equally at the Run's next message, tool or terminal line: a provider that never
+summarizes its reasoning has stopped thinking once it says or does anything else.
+When the provider marked the opening itself, the turn is carried as a
 :class:`~eawf.kernel.projection.truth.TruthField` whose kind is
 :attr:`~eawf.kernel.projection.truth.TruthKind.OBSERVED`; when eawf inferred the opening
 for a provider with no start marker, the kind is
@@ -80,6 +82,8 @@ from eawf.kernel.runtime.events import (
     EventGapPayload,
     FileChangePayload,
     MessageSummaryPayload,
+    ProviderLossPayload,
+    ProviderToolPayload,
     QuestionActionPayload,
     ReasoningSummaryPayload,
     RunEventKind,
@@ -206,9 +210,10 @@ class TranscriptBlock:
             the console knows precisely what is missing.
         purged: The range this block stands for, or ``None`` for an observed event.
         lane: What sort of work the block records, as the transcript names it: one of
-            :data:`LANES`, read off the event kind.
+            :data:`LANES`, read off the event kind, or ``file`` for a provider tool
+            that edits files.
         in_flight: Whether the work the block opened is still going: a command with no
-            result yet, or a reasoning turn not yet summarized.
+            result yet, or a reasoning turn not yet closed.
         background: Whether the block is a command detached into the background, which
             works elsewhere rather than holding the Run.
         typical_seconds: How long this kind of work usually takes -- a command family,
@@ -342,19 +347,24 @@ RETRY_WORDS: Final[Mapping[str, str]] = MappingProxyType(
 
 
 def _gateway_text(payload: object) -> str | None:
-    """Return the first line of a tool, file, question or error block; ``None`` otherwise."""
+    """Return the first line of a tool, file, question, error or loss block; else ``None``."""
     if isinstance(payload, ToolPayload):
         outcome = ""
         if payload.phase == "result":
             outcome = " · succeeded" if payload.error_code is None else " · failed"
         return f"{payload.tool_id} · {payload.phase}{outcome}"
+    if isinstance(payload, ProviderToolPayload):
+        outcome = ""
+        if payload.outcome is not None:
+            outcome = " · succeeded" if payload.outcome == "ok" else " · failed"
+        return f"{payload.tool_name} · {payload.phase}{outcome}"
     if isinstance(payload, FileChangePayload):
         first, *rest = payload.changed_paths
         return first + (f" and {_more_paths(len(rest))}" if rest else "")
     if isinstance(payload, QuestionActionPayload):
         chosen = f" · {payload.choice_key}" if payload.choice_key is not None else ""
         return f"{payload.subject_ref.entity_key} · {payload.phase}{chosen}"
-    if isinstance(payload, ErrorPayload):
+    if isinstance(payload, ErrorPayload | ProviderLossPayload):
         return payload.message
     if isinstance(payload, ContextBoundaryPayload):
         return _boundary_text(payload)
@@ -518,10 +528,31 @@ def _purged_range(payload: EventGapPayload) -> PurgedRange:
     )
 
 
+#: The kinds that end an open reasoning turn besides its summary: the Run said something,
+#: reached for a tool, or ended on an error, a lost provider or an exhausted budget. A
+#: command line is not among them, since a turn may go on thinking while a command it
+#: started runs; a heartbeat or a usage reading says nothing about the turn.
+ENDS_REASONING: Final = frozenset(
+    {
+        RunEventKind.MESSAGE_SUMMARIZED,
+        RunEventKind.TOOL_REQUESTED,
+        RunEventKind.TOOL_ACCEPTED,
+        RunEventKind.TOOL_RESULT,
+        RunEventKind.ERROR_OBSERVED,
+        RunEventKind.PROVIDER_LOST,
+        RunEventKind.BUDGET_EXHAUSTED,
+    }
+)
+
+_CLOSES_REASONING: Final = ENDS_REASONING | {RunEventKind.REASONING_SUMMARIZED}
+
+
 def open_reasoning_turn(events: Sequence[RunEventRecord]) -> RunEventRecord | None:
     """Return the event that opened the reasoning turn still open, or ``None``.
 
-    A turn opens on ``reasoning_started`` and closes on ``reasoning_summarized``. The
+    A turn opens on ``reasoning_started`` and closes on ``reasoning_summarized`` or on
+    the next line of a kind in :data:`ENDS_REASONING`, since a provider that never
+    summarizes its reasoning would otherwise read as thinking until the Run ended. The
     walk is over the stream in sequence order rather than in arrival order, and it skips
     quarantined lines, so a repudiated line neither opens a turn nor closes one.
 
@@ -536,7 +567,7 @@ def open_reasoning_turn(events: Sequence[RunEventRecord]) -> RunEventRecord | No
     for event in _ordered(events):
         if event.event_kind is RunEventKind.REASONING_STARTED:
             opened = event
-        elif event.event_kind is RunEventKind.REASONING_SUMMARIZED:
+        elif event.event_kind in _CLOSES_REASONING:
             opened = None
     return opened
 
@@ -585,6 +616,7 @@ LANES: Final[Mapping[RunEventKind, str]] = MappingProxyType(
         RunEventKind.APPROVAL_REQUESTED: "question",
         RunEventKind.APPROVAL_RESOLVED: "question",
         RunEventKind.ERROR_OBSERVED: "error",
+        RunEventKind.PROVIDER_LOST: "error",
         RunEventKind.REASONING_STARTED: "thinking",
         RunEventKind.REASONING_SUMMARIZED: "thinking",
         RunEventKind.CHILD_RUN_REQUESTED: "subagent",
@@ -597,6 +629,27 @@ LANES: Final[Mapping[RunEventKind, str]] = MappingProxyType(
 
 #: The lane an event kind the table does not name is drawn in.
 EVENT_LANE: Final = "event"
+
+#: The lane a provider tool that edits files is drawn in, beside the file changes.
+_EDIT_LANE: Final = "file"
+
+
+def _block_lane(event: RunEventRecord) -> str:
+    """Return the lane one event line is drawn in.
+
+    The kind names the lane, except that a provider tool which edits files is drawn
+    with the file changes rather than with the other tools.
+
+    Args:
+        event: One live event line.
+
+    Returns:
+        One of the :data:`LANES` values, or :data:`EVENT_LANE` for a kind they omit.
+    """
+    payload = event.payload
+    if isinstance(payload, ProviderToolPayload) and payload.tool_class == "edit":
+        return _EDIT_LANE
+    return LANES.get(event.event_kind, EVENT_LANE)
 
 
 def _median(values: Sequence[int]) -> int:
@@ -634,6 +687,8 @@ def _span(payload: object) -> tuple[str, str, bool] | None:
         return payload.command_ref, payload.command_family_ref, payload.phase == "started"
     if isinstance(payload, ToolPayload) and payload.phase != "requested":
         return payload.call_ref, payload.tool_id, payload.phase == "accepted"
+    if isinstance(payload, ProviderToolPayload):
+        return payload.call_ref, payload.tool_name, payload.phase == "requested"
     if isinstance(payload, QuestionActionPayload):
         return str(payload.subject_ref), _QUESTION_KEY, payload.phase != "resolved"
     return None
@@ -644,13 +699,16 @@ def _in_flight(events: tuple[RunEventRecord, ...]) -> tuple[set[str], dict[str, 
 
     A command is in flight from its start until a result names the same execution, a
     child Run from its start until its terminal line names the same delegation, and a
-    reasoning turn until it is summarized. The typical time of a kind of work is the
-    median of its finished instances in the stream: per command family, and one each for
-    reasoning turns and delegations.
+    reasoning turn until it is summarized or a line in :data:`ENDS_REASONING` follows.
+    The typical time of a kind of work is the median of its finished instances in the
+    stream: per command family, and one each for reasoning turns and delegations.
     """
     opened: dict[str, RunEventRecord] = {}
     durations: dict[str, list[int]] = {}
     for event in events:
+        if event.event_kind in ENDS_REASONING and _THINKING_KEY in opened:
+            begun = opened.pop(_THINKING_KEY)
+            durations.setdefault(_THINKING_KEY, []).append(_elapsed(begun, event))
         span = _span(event.payload)
         if span is None:
             continue
@@ -674,6 +732,8 @@ def _typical_key(payload: object) -> str | None:
         return _SUBAGENT_KEY
     if isinstance(payload, ToolPayload):
         return payload.tool_id
+    if isinstance(payload, ProviderToolPayload):
+        return payload.tool_name
     if isinstance(payload, QuestionActionPayload):
         return _QUESTION_KEY
     return None
@@ -785,7 +845,7 @@ def build_transcript_blocks(
                 kind=event.event_kind,
                 at=event.recorded_at,
                 text=block_text(event),
-                lane=LANES.get(event.event_kind, EVENT_LANE),
+                lane=_block_lane(event),
                 in_flight=event.event_ref in going,
                 background=isinstance(payload, CommandPayload)
                 and payload.execution == "background",
@@ -860,6 +920,7 @@ def build_transcript_view(
 __all__ = [
     "BLOCK_REVISION",
     "EMPTY_CONTENT",
+    "ENDS_REASONING",
     "EVENT_LANE",
     "FAMILY",
     "LANES",

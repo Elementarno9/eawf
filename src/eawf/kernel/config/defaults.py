@@ -33,6 +33,56 @@ BUILT_IN_LAYER: str = "built-in"
 CONFIG_SCHEMA_VERSION: str = "1.0"
 
 
+#: Where every built-in provider profile and route says it came from, so a
+#: compiled Run's source map tells a shipped default from an operator record.
+BUILT_IN_PROVIDER_SOURCE: str = "config://built-in/runtime"
+
+#: The semantic tools a built-in profile lets a Task Run ask for; a Run's
+#: capsule may grant fewer, never more.
+_TASK_TOOLS: list[str] = [
+    "repo_read",
+    "repo_search",
+    "diff_read",
+    "workspace_apply_patch",
+    "report_progress",
+    "attach_evidence",
+    "submit_report",
+]
+
+
+def _built_in_profile(
+    profile_id: str, driver_ref: str, auth_profile_ref: str, models: list[str], kind: str
+) -> dict[str, Any]:
+    """Return one built-in profile running Task work on one shipped launcher.
+
+    Only the capabilities a machine certification can attest are required,
+    and writes are confined to the leased workspace with no network, so the
+    profile asks for nothing a fresh machine's certification cannot back.
+    """
+    return {
+        "profile_id": profile_id,
+        "driver_ref": driver_ref,
+        "auth_profile_ref": auth_profile_ref,
+        "model_policy": {"allowed": models, "default": models[0]},
+        "required_capabilities": ["streaming", "tool_use"],
+        "tool_policy": {"allow": list(_TASK_TOOLS)},
+        "limits": {"wall_seconds": 3600, "output_bytes": 1_048_576},
+        "sandbox": {
+            "mode": "workspace_write",
+            "network": "deny",
+            "filesystem_policy_ref": "policy://filesystem/task-workspace",
+        },
+        "authority_ceiling": {
+            "state": "proposal_only",
+            "workspace": "scoped_write",
+            "git": "read_metadata",
+        },
+        "provider_options": {"provider_kind": kind},
+        "revision": 1,
+        "source_ref": BUILT_IN_PROVIDER_SOURCE,
+    }
+
+
 _BUILT_IN_DEFAULTS: dict[str, Any] = {
     "schema_version": CONFIG_SCHEMA_VERSION,
     "profiles": {
@@ -68,6 +118,37 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         },
         "codex": {"stall_interval_s": DEFAULT_STALL_INTERVAL_SECONDS},
         "opencode": {"stall_interval_s": DEFAULT_STALL_INTERVAL_SECONDS},
+        # Days a Run's full message text stays in the machine-local store.
+        "transcript": {"retention_days": 30},
+        # One profile per shipped launcher and one route that sends Task
+        # Runs to them, so a fresh tree compiles a Run with nothing written.
+        # The provider loader files these under the global layer, beneath
+        # the operator's own records; a repository layer can only narrow.
+        "profiles": [
+            _built_in_profile(
+                "claude-default",
+                "driver://claude-agent-sdk/v1",
+                "auth://local-session/claude",
+                ["claude-sonnet-4-6", "claude-opus-4-8", "claude-haiku-4-5"],
+                "claude",
+            ),
+            _built_in_profile(
+                "codex-default",
+                "driver://codex-python-sdk/v1",
+                "auth://local-session/codex",
+                ["gpt-5.5", "gpt-5.3-codex-spark"],
+                "codex",
+            ),
+        ],
+        "routes": [
+            {
+                "route_id": "task",
+                "match": {"scope_kind": "task"},
+                "allowed_profiles": ["claude-default", "codex-default"],
+                "revision": 1,
+                "source_ref": BUILT_IN_PROVIDER_SOURCE,
+            },
+        ],
     },
     "ui": {
         "theme": "dark",
@@ -153,7 +234,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     "vcs": {
         "conventions": {
             "subject_style": "trailer",
-            "wave_trailer": "Eawf-Wave",
             "release": {
                 "cadence": "manual",
             },

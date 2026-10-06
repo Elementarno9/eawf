@@ -78,11 +78,14 @@ from eawf.kernel.projection.connection import (
 )
 from eawf.kernel.projection.registers import ATTENTION_ROUTE
 from eawf.kernel.projection.settings import SETTINGS_ROUTE, SETTINGS_ROUTES, EffectiveSettingsView
+from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.evidence_rung import ClaimLadder
 from eawf.kernel.state.epoch2.pending_action import PendingAction
+from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.budget.notices import BudgetThresholdNotice
 from eawf.runtime.daemon.methods.state_subscribe import PROJECTION_SUBSCRIBE_METHOD
+from eawf.runtime.daemon.run_events import RunEventsAppendedPayload
 from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
 from eawf.surfaces.tui.console.bulk import BulkRequest
 from eawf.surfaces.tui.console.decisions import ClaimRecord, DecisionRecords, QuestionRecord
@@ -143,6 +146,10 @@ PatchListener = Callable[[tuple[str, ...]], None]
 #: Called with the route projections one sync read, before it reads what hangs off them,
 #: so the frame is drawn from its own rows while the slower per-record reads run.
 ProjectedListener = Callable[[tuple[str, ...]], None]
+
+#: Called with the Run URN and stream tail of each append the daemon announces, so the
+#: app can follow the transcript on screen by cursor.
+AppendListener = Callable[[str, int], None]
 
 
 #: The Recovery doors, the reconnect protocol's three paths back into a lost projection.
@@ -271,6 +278,7 @@ class ProjectionSeam:
         # before one is known to be older than the feed it would be held beside
         self._feed_epoch = 0
         self._listeners: list[PatchListener] = []
+        self._append_listeners: list[AppendListener] = []
         self._reading: set[str] = set()
         # each owed read that failed, by name and what it was read for; it is not owed
         # again for that until a patch or a reconnect, so a read that always
@@ -298,6 +306,7 @@ class ProjectionSeam:
             StateBindingCallbacks(
                 on_state=self._on_state,
                 on_degraded=self._on_degraded,
+                on_event=self.take_notice,
                 on_patch=self.apply_patch,
             ),
             subscribe_method=PROJECTION_SUBSCRIBE_METHOD,
@@ -548,6 +557,26 @@ class ProjectionSeam:
     def watch(self, listener: PatchListener) -> None:
         """Call *listener* with the routes every applied patch changed."""
         self._listeners.append(listener)
+
+    def watch_appends(self, listener: AppendListener) -> None:
+        """Call *listener* with the Run and tail of every append the daemon announces."""
+        self._append_listeners.append(listener)
+
+    async def take_notice(self, envelope: Envelope) -> None:
+        """Hand an announced Run append to the append watchers; ignore any other envelope.
+
+        A notice whose payload does not validate is dropped rather than raised: the feed
+        carries every subscriber's notices, so one bad frame must not end it.
+        """
+        if envelope.kind is not StoreKind.RUN_EVENTS_APPENDED:
+            return
+        try:
+            notice = RunEventsAppendedPayload.model_validate(envelope.payload)
+        except ValueError as exc:
+            logger.debug(f"take_notice skip event={envelope.id} cause={exc!r}")
+            return
+        for listener in self._append_listeners:
+            listener(str(notice.run_ref), notice.tail_sequence)
 
     async def sync(self, on_projected: ProjectedListener | None = None) -> tuple[str, ...]:
         """Read every owed route once, and hold what arrives.
@@ -820,6 +849,32 @@ class ProjectionSeam:
         self._live[name] = (address, value)
         logger.debug(f"load_live name={name}")
         return value
+
+    async def follow_live(self, name: str) -> Any:
+        """Grow live read *name*'s held answer by what was appended past its cursor.
+
+        The grown answer is held only while the answer it grew from still is: a whole
+        read, or a move to another record, that landed meanwhile is newer and is kept.
+
+        Args:
+            name: The read's name in :data:`LIVE_READS`; it must declare a ``follow``.
+
+        Returns:
+            The answer held once the read lands.
+
+        Raises:
+            ValueError: The read declares no follow, or holds no answer for what the
+                visible route is about now.
+        """
+        read = LIVE_READS[name]
+        address = read.address(self) if self._route in read.routes else None
+        held = self._live.get(name)
+        if read.follow is None or address is None or held is None or held[0] != address:
+            raise ValueError(f"live read {name} holds nothing to follow")
+        value = await read.follow(self, address, held[1])
+        if self._live.get(name) is held:
+            self._live[name] = (address, value)
+        return self._live[name][1]
 
     @property
     def notices(self) -> tuple[BudgetThresholdNotice, ...]:
@@ -1303,6 +1358,7 @@ __all__ = [
     "REATTACH_DOOR",
     "RECOVERY_DOORS",
     "REPLAY_DOOR",
+    "AppendListener",
     "PatchListener",
     "ProjectedListener",
     "ProjectionSeam",

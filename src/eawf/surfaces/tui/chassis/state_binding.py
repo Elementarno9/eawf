@@ -49,7 +49,10 @@ from eawf.kernel.projection.compute import KeyedPatch
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
-from eawf.runtime.daemon.methods.state_subscribe import PROJECTION_PUSH_METHOD
+from eawf.runtime.daemon.methods.state_subscribe import (
+    PROJECTION_PUSH_METHOD,
+    PROJECTION_SUBSCRIBE_METHOD,
+)
 from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.surfaces.cli._daemon_client import DaemonClient
 
@@ -397,7 +400,12 @@ class StateBinding:
         re-reads ``state.json`` on any push regardless of scope, so it needs
         no server-side narrowing either.
         """
-        params: dict[str, object] = {"kinds": [StoreKind.EVENT.value]}
+        kinds = [StoreKind.EVENT.value]
+        if self._subscribe_method == PROJECTION_SUBSCRIBE_METHOD:
+            # a Run's appended lines move no projection row, so the projection feed
+            # takes their notice beside its patches to follow a live transcript
+            kinds.append(StoreKind.RUN_EVENTS_APPENDED.value)
+        params: dict[str, object] = {"kinds": kinds}
         # Resume from the last delivered event so a reconnect continues the
         # stream instead of re-requesting the full backlog (since_event_id=None).
         if self._last_event_id is not None:
@@ -516,6 +524,11 @@ class StateBinding:
         except (orjson.JSONDecodeError, ValidationError, ValueError) as exc:
             logger.debug(f"_handle_push_line skip cause={exc!r}")
             return
+        if self._subscribe_method == PROJECTION_SUBSCRIBE_METHOD:
+            # a notice on the projection feed is no state change: it reaches the event
+            # sink alone, and the resume cursor stays the patch ordinal
+            asyncio.run_coroutine_threadsafe(self._deliver_notice(envelope), loop)
+            return
         # Advance the resume cursor so a later reconnect resumes past this event.
         self._last_event_id = envelope.id
         asyncio.run_coroutine_threadsafe(self._handle_push(envelope), loop)
@@ -537,6 +550,11 @@ class StateBinding:
             return
         self._last_canonical_sequence = max(self._last_canonical_sequence, patch.canonical_sequence)
         asyncio.run_coroutine_threadsafe(self._deliver_patch(patch), loop)
+
+    async def _deliver_notice(self, envelope: Envelope) -> None:
+        """Hand one notice from the projection feed to the event callback, if one is set."""
+        if self._callbacks.on_event is not None:
+            await self._callbacks.on_event(envelope)
 
     async def _deliver_patch(self, patch: KeyedPatch) -> None:
         """Hand one keyed patch to the projection callback, if one is registered."""

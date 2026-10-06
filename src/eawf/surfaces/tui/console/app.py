@@ -126,9 +126,11 @@ GO_DRAWER = "go"
 SEAM_WORKERS = "seam"
 # The worker group the live reads' re-reads run in; one at a time, the latest wins.
 LIVE_WORKERS = "live"
-# How often the live reads of the route on screen are read again. What they return is
-# appended with no patch published, so the frame follows it by reading, not by being told.
+# How often the live reads of the route on screen are read again: what they return moves
+# with no patch published. A read that follows announced appends is not among them.
 LIVE_REFRESH_SECONDS = 1.0
+# The worker group the transcript's cursor reads run in, one at a time.
+TAIL_WORKERS = "tail"
 # The worker group the console's writes run in, apart from the reads so neither waits.
 WRITE_WORKERS = "writes"
 # The worker group the read ahead of the caret's drill target runs in; the latest wins.
@@ -450,8 +452,14 @@ class ConsoleApp(App[None]):
         self.first_run = first_run
         if seam is not None:
             seam.watch(self._on_seam_patched)
+            seam.watch_appends(self._on_run_appended)
         # when the live reads of the route on screen were last read, on the console clock
         self._live_read_at = 0.0
+        # the transcript's Run as last followed, a cursor read in flight, and one owed
+        self._tail_run: str | None = None
+        self._tail_reading = False
+        self._tail_due = False
+        self._tail_owed = False
         self.session = Session()
         # the attention revisions already announced to this principal; ``None`` until the
         # first read, which seeds it so nothing already open is toasted after a restart
@@ -529,6 +537,7 @@ class ConsoleApp(App[None]):
         seam.page_history(self.session.history_cursor)
         if not self.is_running:
             return
+        self._catch_up_tail()
         # before the first answer the entry layer's resolving frame is what is painted
         awaiting = self.route_key if seam.frame_owed() and seam.held_routes else None
         if awaiting != self._awaiting:
@@ -584,6 +593,11 @@ class ConsoleApp(App[None]):
         self._open_resolution(loaded)
         if not self.is_running:
             return
+        # its rows may make the transcript's Run known; its whole read may predate an append
+        self._catch_up_tail()
+        if self._tail_owed:
+            self._tail_owed = False
+            self._follow_tail()
         if self.session.subj_id is None:
             compose_frame(self.view())
             seam.about(self.subject)
@@ -637,6 +651,62 @@ class ConsoleApp(App[None]):
             self.arrive()
         # a patch may have dropped a per-subject read the frame draws; read it again
         self._follow_route()
+
+    def _transcript_tail(self) -> tuple[str | None, Any]:
+        """Return the URN of the Run the transcript on screen is about, and what it holds."""
+        from eawf.surfaces.tui.console.live_reads import LIVE_READS, TRANSCRIPT_READ
+
+        if self.seam is None or self.route_key != TRANSCRIPT_ROUTE:
+            return None, None
+        return LIVE_READS[TRANSCRIPT_READ].address(self.seam), self.seam.live(TRANSCRIPT_READ)
+
+    def _catch_up_tail(self) -> None:
+        """Read past the held cursor when the transcript's Run comes back on screen."""
+        run, held = self._transcript_tail()
+        if run != self._tail_run:
+            self._tail_run = run
+            if held is not None:
+                self._follow_tail()
+
+    def _on_run_appended(self, run: str, _tail: int) -> None:
+        """Follow an append to the Run on screen; reading past the held cursor, not to
+        *_tail*, misses no append past a hole."""
+        if run == self._transcript_tail()[0]:
+            self._follow_tail()
+
+    def _follow_tail(self) -> None:
+        """Start one cursor read, or one more after the read in flight; a transcript not
+        yet read whole owes one for when it is, as that read may predate the append."""
+        run, held = self._transcript_tail()
+        if run is None or self.seam is None or not self.is_running:
+            return
+        if held is None:
+            self._tail_owed = True
+        elif self._tail_reading:
+            self._tail_due = True
+        else:
+            self._tail_reading = True
+            self.run_worker(self._read_tail(self.seam), group=TAIL_WORKERS)
+
+    async def _read_tail(self, seam: ProjectionSeam) -> None:
+        """Read past the transcript's cursor until no append waits, repainting what grew."""
+        from eawf.surfaces.tui.console.live_reads import TRANSCRIPT_READ
+
+        try:
+            while True:
+                self._tail_due, before = False, seam.live(TRANSCRIPT_READ)
+                try:
+                    grown = await seam.follow_live(TRANSCRIPT_READ) is not before
+                except Exception as exc:
+                    # the frame keeps what it holds; the next append asks again
+                    logger.warning(f"transcript tail read failed cause={exc!r}")
+                    return
+                if grown and self.is_running:
+                    self.arrive()
+                if not self._tail_due:
+                    return
+        finally:
+            self._tail_reading = False
 
     def arrive(self) -> None:
         """Repaint for a projection event, which may never open, focus or navigate.
@@ -1016,10 +1086,10 @@ class ConsoleApp(App[None]):
     def tick(self) -> None:
         """Expire toasts and the go prefix on the live clock, repainting on a change.
 
-        The live reads of the route on screen are read again every
-        :data:`LIVE_REFRESH_SECONDS`, so what lands behind them -- a Run's appended
-        events -- appears while the operator watches. A held frame past its grace and a
-        caret at rest are acted on here too, so the app keeps its one interval.
+        The live reads of the route on screen, bar those following announced appends, are
+        read again every :data:`LIVE_REFRESH_SECONDS`, so a Run's spend or a stall appears
+        while the operator watches. A held frame past its grace and a caret at rest are
+        acted on here too, so the app keeps its one interval.
         """
         changed = bool(sweep_toasts(self.session, self.console_clock))
         if expire_prefix(self.session, self.console_clock) or changed:
@@ -1028,7 +1098,9 @@ class ConsoleApp(App[None]):
         self._lapse(now)
         if seam is None or now - self._live_read_at < LIVE_REFRESH_SECONDS:
             return
-        names = seam.live_on_screen()
+        from eawf.surfaces.tui.console.live_reads import LIVE_READS
+
+        names = tuple(name for name in seam.live_on_screen() if LIVE_READS[name].follow is None)
         if names or self.route_key == ATTENTION_ROUTE:
             self._live_read_at = now
             self.run_worker(self._reload_live(names), group=LIVE_WORKERS, exclusive=True)

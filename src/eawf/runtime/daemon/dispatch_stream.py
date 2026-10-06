@@ -2,11 +2,14 @@
 
 A Run the host harness spawned gets its transcript from the host's hooks; a Run Eawf
 starts itself has no hook, so the dispatch path is the producer. The launcher hands
-each message the worker says to :func:`message_sink` as it arrives, each usage reading
+each transcript item of the turn -- a message, the thinking marker, a provider tool's
+request or result, a delegation -- to :func:`message_sink` as it arrives, each usage reading
 to :func:`usage_sink`, and a worker that fails to start is stated by
 :func:`state_spawn_failure`, its full cause filed as the error's trace. Every line takes
 the stream's tail, because the Run's hooks write the same stream, and its id is derived
-from the attempt, so a replay repeats it.
+from the attempt, so a replay repeats it. A message keeps only its summary on the
+stream; its whole text, redacted line by line, goes to the machine-local transcript
+store, and the line names it through ``content_artifact_ref``.
 """
 
 from __future__ import annotations
@@ -15,18 +18,28 @@ import asyncio
 import hashlib
 import itertools
 import logging
-from collections.abc import Awaitable, Callable
+from collections import defaultdict
+from collections.abc import Awaitable, Callable, Iterator, Mapping
 from datetime import UTC, datetime
+from types import MappingProxyType
+from typing import Final
 
 from eawf.kernel.identity import QualifiedUrn
-from eawf.kernel.runtime.events import ErrorPayload, MessageSummaryPayload, RunEventKind
+from eawf.kernel.runtime.events import (
+    ErrorPayload,
+    MessageSummaryPayload,
+    RunEventKind,
+    RunEventPayload,
+    TranscriptItem,
+)
 from eawf.kernel.runtime.usage import UsagePayload
 from eawf.runtime.daemon.content_store import file_content
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.methods.run_budget import InFlightRunMeter
 from eawf.runtime.daemon.run_events import RunEventAppend
-from eawf.runtime.runtimes.host_transcript import scrubbed_words
+from eawf.runtime.daemon.transcript_store import keep_message
+from eawf.runtime.runtimes.host_transcript import SpokenMessage, scrubbed_words
 from eawf.runtime.runtimes.metering import UsageSample
 
 logger = logging.getLogger(__name__)
@@ -39,7 +52,7 @@ def _append(
     actor: str,
     event_ref: str,
     kind: RunEventKind,
-    payload: MessageSummaryPayload | ErrorPayload | UsagePayload,
+    payload: RunEventPayload,
 ) -> None:
     """State one line the worker's turn produced on the Run's own stream.
 
@@ -74,10 +87,55 @@ def _event_ref(attempt_ref: str, label: str) -> str:
     return f"EVT-{hashlib.sha256(body.encode('utf-8')).hexdigest()[:32]}"
 
 
+#: The event kind each transcript item is stated as, by its payload kind and phase.
+_ITEM_KINDS: Final[Mapping[tuple[str, str | None], RunEventKind]] = MappingProxyType(
+    {
+        ("message_summary", None): RunEventKind.MESSAGE_SUMMARIZED,
+        ("reasoning_summary", "started"): RunEventKind.REASONING_STARTED,
+        ("reasoning_summary", "summarized"): RunEventKind.REASONING_SUMMARIZED,
+        ("provider_tool", "requested"): RunEventKind.TOOL_REQUESTED,
+        ("provider_tool", "result"): RunEventKind.TOOL_RESULT,
+        ("child_run", "requested"): RunEventKind.CHILD_RUN_REQUESTED,
+        ("child_run", "started"): RunEventKind.CHILD_RUN_STARTED,
+        ("child_run", "terminal"): RunEventKind.CHILD_RUN_TERMINAL,
+    }
+)
+
+
+def _item_kind(item: TranscriptItem) -> RunEventKind:
+    """Return the event kind *item* is stated as on the Run's stream."""
+    phase = None if isinstance(item, MessageSummaryPayload) else item.phase
+    return _ITEM_KINDS[(item.payload_kind, phase)]
+
+
+def _kept(
+    context: Epoch2RootContext, urn: QualifiedUrn, message: SpokenMessage, *, event_ref: str
+) -> MessageSummaryPayload:
+    """Keep the whole of *message* in the local store and return its stream line's payload.
+
+    The stream line keeps the summary it was given and names the kept text. A store
+    that cannot be written costs only the link: the summary is still stated.
+    """
+    summary = MessageSummaryPayload.model_validate(message.model_dump())
+    try:
+        ref = keep_message(
+            context, urn, event_ref=event_ref, text=message.text, now=datetime.now(UTC)
+        )
+    except OSError as error:
+        logger.warning(f"dispatch_stream unkept run={urn.entity_key!r} cause={error!r}")
+        return summary
+    if ref is None:
+        return summary
+    return summary.model_copy(update={"content_artifact_ref": ref})
+
+
 def message_sink(
     context: Epoch2RootContext, urn: QualifiedUrn, *, actor: str, attempt_ref: str
-) -> Callable[[MessageSummaryPayload], Awaitable[None]]:
-    """Return where the launcher hands each message the worker says, in order.
+) -> Callable[[TranscriptItem], Awaitable[None]]:
+    """Return where the launcher hands each transcript item of the turn, in order.
+
+    Each kind keeps its own count, so a message's line id is the one it had before
+    any other item was stated, and a replay of the same turn repeats every id.
 
     Args:
         context: The tree the Run lives in.
@@ -86,19 +144,25 @@ def message_sink(
         attempt_ref: The dispatch attempt the worker was started under.
 
     Returns:
-        A sink stating each message as ``message_summarized`` on the Run's stream.
+        A sink stating each item as the event kind :func:`_item_kind` names.
     """
-    said = itertools.count()
+    counts: defaultdict[RunEventKind, Iterator[int]] = defaultdict(itertools.count)
 
-    async def sink(message: MessageSummaryPayload) -> None:
+    async def sink(item: TranscriptItem) -> None:
+        kind = _item_kind(item)
+        label = "message" if kind is RunEventKind.MESSAGE_SUMMARIZED else kind.value
+        event_ref = _event_ref(attempt_ref, f"{label}:{next(counts[kind])}")
+        payload: RunEventPayload = item
+        if isinstance(item, SpokenMessage):
+            payload = await asyncio.to_thread(_kept, context, urn, item, event_ref=event_ref)
         await asyncio.to_thread(
             _append,
             context,
             urn,
             actor=actor,
-            event_ref=_event_ref(attempt_ref, f"message:{next(said)}"),
-            kind=RunEventKind.MESSAGE_SUMMARIZED,
-            payload=message,
+            event_ref=event_ref,
+            kind=kind,
+            payload=payload,
         )
 
     return sink

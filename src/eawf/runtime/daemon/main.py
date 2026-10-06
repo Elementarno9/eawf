@@ -71,6 +71,7 @@ from eawf.runtime.daemon.stale_wave import (
     run_sweep_loop as run_stale_wave_loop,
 )
 from eawf.runtime.daemon.stall_sweep import run_stall_loop
+from eawf.runtime.daemon.transcript_store import prune_tree_transcripts
 from eawf.runtime.daemon.wal import (
     resolve_wal_gc_interval_seconds,
     resolve_wal_retention_seconds,
@@ -736,6 +737,30 @@ def _remove_entity_lock_files(tree_roots: tuple[Path, ...]) -> int:
     return removed
 
 
+def _prune_transcripts(tree_roots: tuple[Path, ...], *, now: datetime) -> int:
+    """Remove each tree's transcript files older than its configured retention.
+
+    A tree that cannot be pruned costs only its own files, so one unreadable
+    transcript directory does not stop the daemon from booting.
+
+    Args:
+        tree_roots: The candidate tree roots, as :func:`_native_tree_roots`
+            returns them.
+        now: The daemon's clock.
+
+    Returns:
+        How many transcript files were removed across every tree.
+    """
+    removed = 0
+    for tree_root in tree_roots:
+        try:
+            removed += prune_tree_transcripts(tree_root, now=now)
+        except OSError as error:
+            logger.warning(f"_prune_transcripts tree={tree_root.name} error={error!r}")
+    logger.info(f"run transcript-prune trees={len(tree_roots)} removed={removed}")
+    return removed
+
+
 def _boot_touched_names(pid_file: Path, sock_path: Path | None) -> tuple[str, ...]:
     """Return the runtime-dir entries a booting daemon creates or replaces.
 
@@ -1101,6 +1126,7 @@ def run(*, foreground: bool = True) -> int:
             recovery_started = datetime.now(UTC)
             native_tree_roots = _native_tree_roots(project_state_path)
             _remove_entity_lock_files(native_tree_roots)
+            _prune_transcripts(native_tree_roots, now=recovery_started)
             tail_report = repair_native_ledger_tails(daemon_wal_dir, tree_roots=native_tree_roots)
             logger.info(
                 f"run ledger-tail-repair trees={tail_report.tree_count} "

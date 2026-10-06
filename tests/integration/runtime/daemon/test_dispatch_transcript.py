@@ -3,14 +3,14 @@
 RUN-062 names the runtime adapters the producers of a Run's transcript lines, and
 CON-170 draws a message block for each thing the runner says. A Run the host harness
 spawned gets its lines from the host's hooks; a Run Eawf starts itself has no hook, so
-the dispatch path is the producer: the launcher reads the worker's stream-json stdout
-as it arrives and hands each message to the dispatch's sink, which states it on the
+the dispatch path is the producer: the launcher reads the worker's messages as they
+arrive and hands each one to the dispatch's sink, which states it on the
 Run's stream, and a worker that fails to start leaves an ``error_observed`` line
 saying why.
 
 The launcher cases drive the real
 :class:`~eawf.runtime.runtimes.claude.adapter.ClaudeNativeLauncher` against a fake
-``claude`` CLI printing a scripted stream-json turn; the dispatch cases drive the real
+``claude`` CLI playing a scripted turn; the dispatch cases drive the real
 dispatch driver into a disposable canary and read the Run's lines back off its ledger.
 """
 
@@ -28,8 +28,10 @@ from eawf.kernel.projection.transcript import build_transcript_blocks
 from eawf.kernel.runtime.events import (
     ErrorPayload,
     MessageSummaryPayload,
+    ProviderToolPayload,
     RunEventKind,
     RunEventRecord,
+    TranscriptItem,
 )
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon.methods import DaemonValidationError
@@ -44,6 +46,7 @@ from eawf.runtime.runtimes.claude import adapter as claude_adapter
 from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter, ClaudeNativeLauncher
 from eawf.runtime.runtimes.stream_json import stream_message_payloads
 from eawf.surfaces.tui.console.renderers.transcript import NATIVE_GLYPH, native_word
+from tests.fixtures.runtime.fake_claude_cli import install_fake_claude
 from tests.integration.runtime.daemon.test_native_dispatch import (
     LedgerReadingLauncher,
     dispatch,
@@ -55,8 +58,8 @@ from tests.integration.runtime.daemon.test_native_dispatch import (
 from tests.integration.runtime.test_run_meter_claude_usage import (
     _bypass_jail,
     _claude_spec,
+    _launch_and_turn,
     _request,
-    _write_fake_claude_cli,
 )
 
 pytestmark = pytest.mark.integration
@@ -153,21 +156,29 @@ def test_run_062_the_claude_launcher_relays_each_message_as_it_arrives(
     monkeypatch.setattr(claude_adapter, "_maybe_jail_argv", _bypass_jail)
     workspace = tmp_path / "ws"
     workspace.mkdir()
-    _write_fake_claude_cli(workspace, STREAM)
-    relayed: list[MessageSummaryPayload] = []
+    # The fake announces the session itself, so the turn is what follows init.
+    turn = [json.loads(line) if line.startswith("{") else line for line in STREAM[1:]]
+    script = {"session_id": "sess-dispatch", "lines": turn}
+    relayed: list[TranscriptItem] = []
 
-    async def sink(message: MessageSummaryPayload) -> None:
-        relayed.append(message)
+    async def sink(item: TranscriptItem) -> None:
+        relayed.append(item)
 
     request = _request(spec=_claude_spec(), workspace=workspace, usage_sink=None)
     request = request.model_copy(update={"message_sink": sink})
     adapter = ClaudeAdapter()
-    adapter.cli_binary = str(workspace / "claude")
+    adapter.cli_binary = str(install_fake_claude(workspace, script))
 
-    outcome = asyncio.run(ClaudeNativeLauncher(adapter=adapter).launch(request))
+    outcome = asyncio.run(_launch_and_turn(ClaudeNativeLauncher(adapter=adapter), request))
 
     assert outcome.provider_session_ref == "sess-dispatch"
-    assert [(m.message_role, m.summary) for m in relayed] == [("assistant", s) for s in SAID]
+    said = [item for item in relayed if isinstance(item, MessageSummaryPayload)]
+    assert [(m.message_role, m.summary) for m in said] == [("assistant", s) for s in SAID]
+    tools = [item for item in relayed if isinstance(item, ProviderToolPayload)]
+    assert [(t.tool_name, t.tool_class, t.phase, t.outcome) for t in tools] == [
+        ("read", "read", "requested", None),
+        ("read", "read", "result", "ok"),
+    ]
 
 
 def test_run_062_con_170_a_dispatched_turn_draws_message_blocks(tmp_path: Path) -> None:

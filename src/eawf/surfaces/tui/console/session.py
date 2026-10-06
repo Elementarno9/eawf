@@ -277,6 +277,9 @@ class Session(BaseModel):
     step_reg: str = "HISTORY"
     hist_sel: int = 0
     tr_sel: int | None = None
+    # how many blocks the transcript drew when it was held, so a held view counts what
+    # arrived since; ``None`` while it follows
+    tr_held_from: int | None = None
     tr_fold: dict[int, bool] | None = None
     tr_t0: float | None = None
     rec_at: Any = None

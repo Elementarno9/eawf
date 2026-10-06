@@ -6,7 +6,9 @@ reading those references back here. Every answer is read through the scrubbed st
 stored content was bounded and scrubbed when it was filed, and a brokered call's typed
 output, which the gateway keeps on its receipt, is bounded and scrubbed as it is read.
 A reference this Run holds nothing under is named as missing rather than failing the
-read, so one unreadable block never blanks the rest.
+read, so one unreadable block never blanks the rest. A message's whole text is read
+from the machine-local transcript store; once that store has pruned the Run's file, the
+reference is refused as ``content_pruned`` rather than reported missing.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Annotated, Any, Final
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -27,6 +29,7 @@ from eawf.runtime.daemon.host_calls import HostCallReceipt, host_receipts
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.daemon.native_guard import native_params, require_native_call
 from eawf.runtime.daemon.semantic_gateway import SemanticCallReceipt, run_receipts
+from eawf.runtime.daemon.transcript_store import TRANSCRIPT_REF_PREFIX, read_message
 
 logger = logging.getLogger(__name__)
 
@@ -53,18 +56,35 @@ class RunContentRead(BaseModel):
     refs: Annotated[tuple[_Ref, ...], Field(min_length=1, max_length=CONTENT_READ_REFS)]
 
 
+class ContentRefusal(BaseModel):
+    """A reference the read refuses to resolve, and why.
+
+    Attributes:
+        ref: The reference asked for.
+        code: ``content_pruned`` when the text it named was kept once and the local
+            store has since pruned it.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    ref: _Ref
+    code: Literal["content_pruned"]
+
+
 class RunContentAnswer(BaseModel):
     """What the read answers with.
 
     Attributes:
         contents: The content each resolved reference names, in the order asked.
         missing: The references this Run holds nothing under.
+        refused: The references whose content the read cannot give, each with its code.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     contents: tuple[ResolvedContent, ...] = ()
     missing: tuple[str, ...] = ()
+    refused: tuple[ContentRefusal, ...] = ()
 
 
 def _stored(ref: str, content: StoredContent) -> ResolvedContent:
@@ -121,9 +141,16 @@ def resolve_contents(context: Epoch2RootContext, args: RunContentRead) -> RunCon
             results[receipt.call_id] = results[receipt.receipt_id] = receipt.result
     contents: list[ResolvedContent] = []
     missing: list[str] = []
+    refused: list[ContentRefusal] = []
     for ref in dict.fromkeys(args.refs):
-        if ref in stored:
-            resolved: ResolvedContent | None = _stored(ref, stored[ref])
+        if ref.startswith(TRANSCRIPT_REF_PREFIX):
+            kept = read_message(context, args.urn, ref)
+            if kept.pruned:
+                refused.append(ContentRefusal(ref=ref, code="content_pruned"))
+                continue
+            resolved: ResolvedContent | None = kept.content
+        elif ref in stored:
+            resolved = _stored(ref, stored[ref])
         elif ref in results:
             resolved = _from_result(ref, results[ref], stored)
         else:
@@ -133,9 +160,12 @@ def resolve_contents(context: Epoch2RootContext, args: RunContentRead) -> RunCon
         else:
             contents.append(resolved)
     logger.debug(
-        f"resolve_contents run={args.urn.entity_key} held={len(contents)} missing={len(missing)}"
+        f"resolve_contents run={args.urn.entity_key} held={len(contents)} "
+        f"missing={len(missing)} refused={len(refused)}"
     )
-    return RunContentAnswer(contents=tuple(contents), missing=tuple(missing))
+    return RunContentAnswer(
+        contents=tuple(contents), missing=tuple(missing), refused=tuple(refused)
+    )
 
 
 @register(RUN_CONTENT_READ_METHOD)
@@ -151,6 +181,7 @@ async def _read_run_content(ctx: MethodContext, params: dict[str, Any]) -> dict[
 __all__ = [
     "CONTENT_READ_REFS",
     "RUN_CONTENT_READ_METHOD",
+    "ContentRefusal",
     "RunContentAnswer",
     "RunContentRead",
     "resolve_contents",

@@ -147,6 +147,7 @@ class EventPayloadKind(StrEnum):
     REASONING_SUMMARY = "reasoning_summary"
     CHILD_RUN = "child_run"
     TOOL = "tool"
+    PROVIDER_TOOL = "provider_tool"
     COMMAND = "command"
     FILE_CHANGE = "file_change"
     QUESTION_ACTION = "question_action"
@@ -193,6 +194,7 @@ _PAYLOAD_PHASES: Final[Mapping[EventPayloadKind, tuple[str, ...]]] = {
     EventPayloadKind.REASONING_SUMMARY: ("started", "summarized"),
     EventPayloadKind.CHILD_RUN: ("requested", "started", "terminal"),
     EventPayloadKind.TOOL: ("requested", "accepted", "result"),
+    EventPayloadKind.PROVIDER_TOOL: ("requested", "result"),
     EventPayloadKind.COMMAND: ("started", "output", "result"),
     EventPayloadKind.FILE_CHANGE: (),
     EventPayloadKind.QUESTION_ACTION: ("raised", "requested", "resolved"),
@@ -215,13 +217,25 @@ class EventContract:
     """What one event kind is allowed to carry.
 
     Attributes:
-        payload_kind: The one payload shape the kind admits.
+        payload_kind: The payload shape the kind carries.
         phase: The payload phase the kind pins, or ``None`` when the
             payload carries no phase.
+        provider_payload_kind: The second shape the kind admits when the
+            provider itself, rather than eawf, observed the fact, or
+            ``None`` when only ``payload_kind`` is admitted.
     """
 
     payload_kind: EventPayloadKind
     phase: str | None
+    provider_payload_kind: EventPayloadKind | None = None
+
+    def admits(self, payload_kind: str) -> bool:
+        """Return whether a payload of *payload_kind* may ride on this kind."""
+        if payload_kind == self.payload_kind.value:
+            return True
+        return self.provider_payload_kind is not None and (
+            payload_kind == self.provider_payload_kind.value
+        )
 
 
 #: Which payload each kind carries and which phase of it, as declared.
@@ -270,10 +284,21 @@ _DECLARED_EVENT_CONTRACTS: Final[Mapping[RunEventKind, tuple[EventPayloadKind, s
 }
 
 
+#: The provider-native shape a gateway-observed kind also admits. A tool
+#: the provider runs itself has no gateway call and no receipt, so it rides
+#: on the same kinds under its own payload rather than loosening the
+#: gateway's.
+_PROVIDER_PAYLOADS: Final[Mapping[RunEventKind, EventPayloadKind]] = {
+    RunEventKind.TOOL_REQUESTED: EventPayloadKind.PROVIDER_TOOL,
+    RunEventKind.TOOL_RESULT: EventPayloadKind.PROVIDER_TOOL,
+}
+
+
 def compile_event_contracts(
     declared: Mapping[RunEventKind, tuple[EventPayloadKind, str | None]],
     *,
     phases: Mapping[EventPayloadKind, Iterable[str]],
+    provider_payloads: Mapping[RunEventKind, EventPayloadKind] = MappingProxyType({}),
 ) -> Mapping[RunEventKind, EventContract]:
     """Compile *declared* into the total kind-to-payload-and-phase map.
 
@@ -281,6 +306,9 @@ def compile_event_contracts(
         declared: The payload kind and pinned phase of each event kind.
         phases: The phase vocabulary of each payload kind, empty for a
             payload that carries no phase.
+        provider_payloads: The provider-native payload kind an event kind
+            admits beside its declared one; its phases must admit the
+            kind's pinned phase too.
 
     Returns:
         A read-only mapping covering every event kind.
@@ -291,7 +319,8 @@ def compile_event_contracts(
             has no phase vocabulary, so the pinning is unchecked; a row
             pins a phase its payload does not admit; or a row pins no
             phase for a payload that has one, which would let a phase-
-            bearing payload say something the kind contradicts.
+            bearing payload say something the kind contradicts. The same
+            pinning is checked against each provider-native payload.
     """
     missing_phase_rows = sorted(kind.value for kind in EventPayloadKind if kind not in phases)
     if missing_phase_rows:
@@ -314,14 +343,22 @@ def compile_event_contracts(
                 f"event kind {kind.value!r} pins phase {phase!r}, which payload "
                 f"{payload_kind.value!r} does not admit"
             )
-        table[kind] = EventContract(payload_kind=payload_kind, phase=phase)
+        provider = provider_payloads.get(kind)
+        if provider is not None and phase not in tuple(phases[provider]):
+            raise ValueError(
+                f"event kind {kind.value!r} pins phase {phase!r}, which provider payload "
+                f"{provider.value!r} does not admit"
+            )
+        table[kind] = EventContract(
+            payload_kind=payload_kind, phase=phase, provider_payload_kind=provider
+        )
     return MappingProxyType(table)
 
 
 #: The total, import-checked map every Run event record is validated
 #: against.
 EVENT_CONTRACTS: Final[Mapping[RunEventKind, EventContract]] = compile_event_contracts(
-    _DECLARED_EVENT_CONTRACTS, phases=_PAYLOAD_PHASES
+    _DECLARED_EVENT_CONTRACTS, phases=_PAYLOAD_PHASES, provider_payloads=_PROVIDER_PAYLOADS
 )
 
 #: The payload kind of each event kind, for a reader that wants the
@@ -516,6 +553,47 @@ class ToolPayload(RuntimeRecord):
         return self
 
 
+#: What sort of work a provider-native tool does, as the transcript lanes it.
+ProviderToolClass = Literal["edit", "command", "read", "search", "delegate", "other"]
+
+
+class ProviderToolPayload(RuntimeRecord):
+    """One tool the provider ran itself, at one phase of it.
+
+    The provider's own tools never pass the gateway, so there is no receipt
+    to name; what the call took and what it returned are the provider's and
+    are not recorded, only that it was asked for and how it ended.
+
+    Attributes:
+        payload_kind: The payload discriminator.
+        call_ref: The call this event reports on; both phases of one call share it.
+        tool_name: The provider's tool name, lower-cased, an ``mcp__`` prefix kept.
+        tool_class: What sort of work the tool does.
+        phase: ``requested`` or ``result``.
+        outcome: ``ok`` or ``error``, at ``result`` only.
+    """
+
+    payload_kind: Literal["provider_tool"] = "provider_tool"
+    call_ref: CallId
+    tool_name: ToolCapabilityId
+    tool_class: ProviderToolClass
+    phase: Literal["requested", "result"]
+    outcome: Literal["ok", "error"] | None = None
+
+    @model_validator(mode="after")
+    def _outcome_belongs_to_the_result_phase(self) -> Self:
+        """Require the outcome exactly where the phase makes it a fact.
+
+        Raises:
+            ValueError: A result names no outcome, or a request names one.
+        """
+        if self.phase == "result" and self.outcome is None:
+            raise ValueError("a provider tool result names its outcome")
+        if self.phase == "requested" and self.outcome is not None:
+            raise ValueError("a requested provider tool has no outcome yet")
+        return self
+
+
 class FileChangePayload(RuntimeRecord):
     """A change to the repository's files, bound to the trees on either side of it.
 
@@ -660,6 +738,18 @@ class ContextBoundaryPayload(RuntimeRecord):
         return self
 
 
+class ProviderLossPayload(RuntimeRecord):
+    """The daemon lost the provider process a Run's turn was running in.
+
+    Attributes:
+        payload_kind: The payload discriminator.
+        message: How the loss was noticed and what it leaves the Run, bounded.
+    """
+
+    payload_kind: Literal["provider_loss"] = "provider_loss"
+    message: BoundedText
+
+
 class EventGapPayload(RuntimeRecord):
     """A range of sequences the daemon never received.
 
@@ -704,15 +794,24 @@ RunEventPayload = Annotated[
     | ChildRunPayload
     | CommandPayload
     | ToolPayload
+    | ProviderToolPayload
     | FileChangePayload
     | QuestionActionPayload
     | ErrorPayload
     | EventGapPayload
     | UsagePayload
     | BudgetPayload
-    | ContextBoundaryPayload,
+    | ContextBoundaryPayload
+    | ProviderLossPayload,
     Field(discriminator="payload_kind"),
 ]
+
+#: What a native worker's launcher hands the Run's stream as its turn goes: its
+#: words, the thinking marker, the tools the provider runs and the delegations
+#: they request.
+TranscriptItem = (
+    MessageSummaryPayload | ReasoningSummaryPayload | ProviderToolPayload | ChildRunPayload
+)
 
 #: The payload kinds a record can actually be built with.
 _IMPLEMENTED_PAYLOAD_KINDS: Final[frozenset[EventPayloadKind]] = frozenset(
@@ -722,6 +821,7 @@ _IMPLEMENTED_PAYLOAD_KINDS: Final[frozenset[EventPayloadKind]] = frozenset(
         EventPayloadKind.CHILD_RUN,
         EventPayloadKind.COMMAND,
         EventPayloadKind.TOOL,
+        EventPayloadKind.PROVIDER_TOOL,
         EventPayloadKind.FILE_CHANGE,
         EventPayloadKind.QUESTION_ACTION,
         EventPayloadKind.ERROR,
@@ -729,6 +829,7 @@ _IMPLEMENTED_PAYLOAD_KINDS: Final[frozenset[EventPayloadKind]] = frozenset(
         EventPayloadKind.USAGE,
         EventPayloadKind.BUDGET,
         EventPayloadKind.CONTEXT_BOUNDARY,
+        EventPayloadKind.PROVIDER_LOSS,
     }
 )
 
@@ -789,7 +890,7 @@ class RunEventRecord(RuntimeRecord):
                 render as a finished thought with nothing in it.
         """
         contract = EVENT_CONTRACTS[self.event_kind]
-        if self.payload.payload_kind != contract.payload_kind.value:
+        if not contract.admits(self.payload.payload_kind):
             raise ValueError(
                 f"event kind {self.event_kind.value!r} carries payload "
                 f"{contract.payload_kind.value!r}, not {self.payload.payload_kind!r}"
@@ -821,6 +922,9 @@ __all__ = [
     "EventProvenance",
     "FileChangePayload",
     "MessageSummaryPayload",
+    "ProviderLossPayload",
+    "ProviderToolClass",
+    "ProviderToolPayload",
     "QuarantineReason",
     "QuestionActionPayload",
     "ReasoningSummaryPayload",
@@ -829,5 +933,6 @@ __all__ = [
     "RunEventPayload",
     "RunEventRecord",
     "ToolPayload",
+    "TranscriptItem",
     "compile_event_contracts",
 ]

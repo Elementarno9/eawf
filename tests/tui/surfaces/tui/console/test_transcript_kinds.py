@@ -14,15 +14,21 @@ from __future__ import annotations
 import asyncio
 import re
 from collections.abc import Sequence
-from typing import Any, Final
+from typing import Any, Final, get_args
 
-from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE
+import pytest
+
+from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE, build_transcript_blocks
 from eawf.kernel.runtime.events import (
     ChildRunPayload,
     ErrorPayload,
     FileChangePayload,
     MessageSummaryPayload,
+    ProviderLossPayload,
+    ProviderToolClass,
+    ProviderToolPayload,
     QuestionActionPayload,
+    ReasoningSummaryPayload,
     RunEventKind,
     RunEventRecord,
     ToolPayload,
@@ -215,3 +221,126 @@ def test_con_170_an_error_opens_on_its_code_retry_class_and_trace() -> None:
 
 def test_con_170_a_question_opens_on_what_it_waits_on() -> None:
     assert re.search(r"WAITS ON +an answer to QST-0001", _opened("question"))
+
+
+# ---- provider-native tools: edits in the file lane, the rest in the tool lane ----------
+
+EDIT_CALL: Final = "call-00000000000000b1"
+BASH_CALL: Final = "call-00000000000000b2"
+GREP_CALL: Final = "call-00000000000000b3"
+
+
+def _provider(
+    call: str, name: str, tool_class: str, phase: str, outcome: str | None = None
+) -> ProviderToolPayload:
+    return ProviderToolPayload.model_validate(
+        {
+            "call_ref": call,
+            "tool_name": name,
+            "tool_class": tool_class,
+            "phase": phase,
+            "outcome": outcome,
+        }
+    )
+
+
+def provider_tools() -> tuple[RunEventRecord, ...]:
+    """Return provider tools: an edit and a command that ended, then a search still going."""
+    lines = (
+        (RunEventKind.TOOL_REQUESTED, _provider(EDIT_CALL, "edit", "edit", "requested"), 0),
+        (RunEventKind.TOOL_RESULT, _provider(EDIT_CALL, "edit", "edit", "result", "ok"), 1),
+        (RunEventKind.TOOL_REQUESTED, _provider(BASH_CALL, "bash", "command", "requested"), 2),
+        (RunEventKind.TOOL_RESULT, _provider(BASH_CALL, "bash", "command", "result", "error"), 5),
+        (RunEventKind.TOOL_REQUESTED, _provider(GREP_CALL, "grep", "search", "requested"), 6),
+    )
+    return tuple(_line(n, kind, payload, at) for n, (kind, payload, at) in enumerate(lines, 1))
+
+
+@pytest.mark.parametrize("tool_class", get_args(ProviderToolClass))
+@pytest.mark.parametrize("phase", ["requested", "result"])
+def test_a_provider_tool_is_laned_by_its_class(tool_class: str, phase: str) -> None:
+    kind = RunEventKind.TOOL_REQUESTED if phase == "requested" else RunEventKind.TOOL_RESULT
+    outcome = "ok" if phase == "result" else None
+    payload = _provider(EDIT_CALL, "x", tool_class, phase, outcome)
+
+    blocks, _ = build_transcript_blocks([_line(1, kind, payload, 0)])
+
+    assert [block.lane for block in blocks] == ["file" if tool_class == "edit" else "tool"]
+
+
+def test_an_empty_stream_draws_no_provider_tool_block() -> None:
+    assert build_transcript_blocks([]) == ((), ())
+
+
+def test_provider_tools_render_edits_as_file_and_the_rest_as_tool_at_every_width() -> None:
+    expected = ["file", "file", "tool", "tool", "running"]
+    for shot in frames(provider_tools()):
+        drawn = _kinds(shot)
+        assert drawn, "every width draws at least one block"
+        assert [word for _glyph, word in drawn][-len(expected) :] == expected[-len(drawn) :]
+        for glyph, word in drawn:
+            assert glyph == transcript.NATIVE_GLYPH[word]
+
+
+def test_a_provider_tool_block_states_its_name_phase_and_outcome() -> None:
+    blocks, _ = build_transcript_blocks(provider_tools())
+
+    assert [block.text.value for block in blocks] == [
+        "edit · requested",
+        "edit · result · succeeded",
+        "bash · requested",
+        "bash · result · failed",
+        "grep · requested",
+    ]
+    # a request opens the call and its result closes it; the typical time is per tool
+    assert [block.in_flight for block in blocks] == [False, False, False, False, True]
+    assert blocks[2].typical_seconds == 3
+    assert blocks[4].typical_seconds is None
+
+
+# ---- a native turn's thinking closes on what follows; a lost provider is an error ------
+
+LOST: Final = "the provider process was lost"
+
+
+def _thought_then(kind: RunEventKind, payload: Any) -> tuple[RunEventRecord, ...]:
+    started = _line(1, RunEventKind.REASONING_STARTED, tb._event(1).payload, 0)
+    return (started, _line(2, kind, payload, 4))
+
+
+_FOLLOWERS: Final[dict[str, tuple[RunEventKind, Any]]] = {
+    "message": (
+        RunEventKind.MESSAGE_SUMMARIZED,
+        MessageSummaryPayload(message_role="assistant", summary="Done reading."),
+    ),
+    "tool": (RunEventKind.TOOL_REQUESTED, _provider(GREP_CALL, "grep", "search", "requested")),
+    "end": (RunEventKind.PROVIDER_LOST, ProviderLossPayload(message=LOST)),
+    "summary": (
+        RunEventKind.REASONING_SUMMARIZED,
+        ReasoningSummaryPayload(phase="summarized", summary="read the loader"),
+    ),
+}
+
+
+@pytest.mark.parametrize("follower", sorted(_FOLLOWERS))
+def test_thinking_closes_at_the_next_message_tool_end_or_summary(follower: str) -> None:
+    events = _thought_then(*_FOLLOWERS[follower])
+    blocks, _ = build_transcript_blocks(events)
+    assert blocks[0].lane == "thinking"
+    assert blocks[0].in_flight is False
+    for shot in frames(events):
+        assert "THINKING" not in shot.split("\n")[1]
+
+
+def test_a_thought_with_nothing_after_it_is_still_thinking() -> None:
+    events = (_line(1, RunEventKind.REASONING_STARTED, tb._event(1).payload, 0),)
+    for shot in frames(events):
+        assert "THINKING for" in shot.split("\n")[1]
+
+
+def test_a_lost_provider_renders_as_an_error_with_its_message_at_every_width() -> None:
+    events = (_line(1, RunEventKind.PROVIDER_LOST, ProviderLossPayload(message=LOST), 0),)
+    for shot in frames(events):
+        assert _kinds(shot) == [(transcript.NATIVE_GLYPH["error"], "error")]
+        row = next(r for r in shot.split("\n") if BLOCK_HEAD.match(r))
+        assert LOST[:16] in row

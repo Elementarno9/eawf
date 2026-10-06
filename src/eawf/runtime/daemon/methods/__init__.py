@@ -216,6 +216,11 @@ class MethodContext:
                 migrate_needs_user_pauses(context)
             except Exception as exc:
                 logger.warning(f"native_root_context pause migration failed error={exc!r}")
+        # Every writer of a Run's stream reaches it through this context, most of them
+        # from a worker thread with no daemon context in hand, so the bus rides on it.
+        from eawf.runtime.daemon.methods.run import bind_run_event_bus
+
+        bind_run_event_bus(context, self.bus)
         return context
 
     def mutation_started(self, mutation_id: str, kind: str) -> None:

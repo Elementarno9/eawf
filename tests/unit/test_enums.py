@@ -543,6 +543,8 @@ def test_store_kind_values() -> None:
         "operation",
         # Machine-local certification of each installed runtime version.
         "runtime_certification",
+        # Live feed notice that a Run's event stream moved; never stored.
+        "run_events_appended",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

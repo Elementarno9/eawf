@@ -13,33 +13,53 @@ same daemon.
 Nothing here reaches the operator's daemon: ``EAWF_RUNTIME_DIR`` points at a directory
 this suite owns, and both the hook runner and the console's binding are handed a client
 for this suite's socket, so no call can auto-spawn a daemon for any other tree.
+
+The last sections follow a live Run by its append notices against a document daemon that
+counts every run-events read: one cursor read per notice for the Run on screen, none for
+another Run or another route, none on the refresh timer; then the hold and follow keys,
+and the feed wiring that carries the notice from the daemon bus to the seam.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import sys
 import tempfile
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, Final
 
+import orjson
 import pytest
 from typer.testing import CliRunner
 
+from eawf.kernel.runtime.events import CommandPayload, RunEventKind, RunEventRecord
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.server import handle_connection
+from eawf.runtime.daemon.methods.run import RUN_EVENTS_READ_METHOD
+from eawf.runtime.daemon.methods.spend import RUN_USAGE_READ_METHOD
+from eawf.runtime.daemon.methods.state_subscribe import (
+    PROJECTION_SUBSCRIBE_METHOD,
+)
+from eawf.runtime.daemon.server import _projection_frames, handle_connection
 from eawf.runtime.session.vendor_id import hash_vendor_session_id
 from eawf.surfaces.cli.app import app as cli
 from eawf.surfaces.tui import launch
-from eawf.surfaces.tui.console.app import ConsoleApp
+from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
+from eawf.surfaces.tui.console.app import LIVE_REFRESH_SECONDS, ConsoleApp
+from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.harness import settle
+from eawf.surfaces.tui.console.live_reads import TRANSCRIPT_READ, HeldTranscript
+from eawf.surfaces.tui.console.renderers.transcript import follow_word
 from eawf.surfaces.tui.console.seam import ProjectionSeam
-from eawf.surfaces.tui.console.session import SessionSetup
+from eawf.surfaces.tui.console.session import Session, SessionSetup
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     method_context,
     provision,
@@ -47,6 +67,8 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     seed_row,
 )
 from tests.integration.runtime.daemon.test_host_subagent_adoption import repository_row
+from tests.tui.surfaces.tui.console import journey_support as js
+from tests.tui.surfaces.tui.console import test_native_route_bodies as bodies
 from tests.tui.surfaces.tui.console.test_console_live_smoke import _LoopbackClient, _socket_dir
 
 #: The subagent's own transcript, as Claude Code writes it under the session's folder.
@@ -331,3 +353,413 @@ def test_con_067_a_live_transcript_in_ascii_mode_draws_the_twins(
         assert "} subagent" in frame
 
     _launch(repo, monkeypatch, scenario, (80, 24))
+
+
+# ---------- following a live Run by its append notices ----------
+
+#: The Run the transcript is opened on, a Run beside it, and a Run with no line yet.
+FOLLOWED: Final = "RUN-00000002"
+FOLLOWED_URN: Final = f"{bodies.ROOT}/run/{FOLLOWED}"
+BESIDE_URN: Final = f"{bodies.ROOT}/run/RUN-00000001"
+QUIET_RUN: Final = "RUN-00000003"
+QUIET_URN: Final = f"{bodies.ROOT}/run/{QUIET_RUN}"
+
+#: How many times the refresh timer is let to fire while the reads are counted.
+TIMER_FIRINGS: Final = 3
+
+
+def _line(urn: str, sequence: int) -> RunEventRecord:
+    """Return one started foreground command at *sequence*: one block of its own."""
+    return RunEventRecord.model_validate(
+        {
+            "event_ref": f"EVT-{sequence:08x}",
+            "run_ref": urn,
+            "run_sequence": sequence,
+            "event_kind": RunEventKind.COMMAND_STARTED,
+            "provenance": "provider_native",
+            "payload": CommandPayload(
+                command_family_ref="shell",
+                command_ref=f"CMD-{sequence:08x}",
+                phase="started",
+                execution="foreground",
+            ),
+            "actor": bodies.ME,
+            "recorded_at": bodies.AT + timedelta(seconds=sequence),
+        }
+    )
+
+
+class _CountingDaemon(js.DocumentDaemon):
+    """A document daemon that answers run-events reads by cursor and counts each one.
+
+    Attributes:
+        reads: Every run-events read, as the Run URN and the cursor it asked past.
+        usage_reads: How many usage reads were answered, which the refresh timer makes.
+        refuse_events: Whether a run-events read fails, as an unreachable daemon's would.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(bodies.DOCUMENT)
+        self.reads: list[tuple[str, int]] = []
+        self.usage_reads = 0
+        self.refuse_events = False
+        self.run_events = {
+            FOLLOWED_URN: tuple(_line(FOLLOWED_URN, n) for n in (1, 2, 3)),
+            BESIDE_URN: (_line(BESIDE_URN, 1),),
+            QUIET_URN: (),
+        }
+
+    def append(self, urn: str, count: int = 1) -> int:
+        """Append *count* lines to Run *urn*'s stream; return its new tail."""
+        held = self.run_events[urn]
+        tail = held[-1].run_sequence if held else 0
+        grown = tuple(_line(urn, tail + n) for n in range(1, count + 1))
+        self.run_events[urn] = (*held, *grown)
+        return tail + count
+
+    def answer(self, method: str, params: Mapping[str, Any]) -> dict[str, Any]:
+        """Answer one call, a run-events read past its cursor as the daemon does."""
+        if method == RUN_USAGE_READ_METHOD:
+            self.usage_reads += 1
+        if method != RUN_EVENTS_READ_METHOD:
+            return super().answer(method, params)
+        after = int(params.get("after_sequence", 0))
+        self.reads.append((str(params["urn"]), after))
+        if self.refuse_events:
+            raise ConnectionError("the daemon went away")
+        answer = super().answer(method, params)
+        answer["events"] = [line for line in answer["events"] if line["run_sequence"] > after]
+        return answer
+
+
+def _notice(urn: str, tail: int, *, kind: StoreKind = StoreKind.RUN_EVENTS_APPENDED) -> Envelope:
+    """Return the envelope the daemon publishes for one committed append."""
+    return Envelope(
+        id=f"run-events-appended-{urn.rsplit('/', 1)[-1]}-{tail}",
+        kind=kind,
+        scope_id=urn,
+        created_at=bodies.AT,
+        summary=f"run_events_appended tail={tail}",
+        payload={"run_ref": urn, "tail_sequence": tail},
+    )
+
+
+def _strip(app: ConsoleApp) -> str:
+    """Return the status strip under the header."""
+    return app.frame_rows[1]
+
+
+def _sequences(app: ConsoleApp) -> list[int]:
+    """Return the sequences of the lines the transcript on screen holds, in order."""
+    assert app.seam is not None
+    held = app.seam.live(TRANSCRIPT_READ)
+    assert isinstance(held, HeldTranscript)
+    return [line.run_sequence for line in held.events]
+
+
+async def _announce(daemon: _CountingDaemon, app: ConsoleApp, pilot: Any, urn: str) -> None:
+    """Append one line to *urn*, announce it as the daemon does, and let the console settle."""
+    tail = daemon.append(urn)
+    assert app.seam is not None
+    await app.seam.take_notice(_notice(urn, tail))
+    await settle(pilot)
+
+
+async def _open_followed(app: ConsoleApp, pilot: Any, run: str = FOLLOWED) -> None:
+    app.reset(SessionSetup(route="transcript", subjId=run))
+    await settle(pilot)
+
+
+def _drive(daemon: _CountingDaemon, scenario: Callable[[ConsoleApp, Any], Any]) -> None:
+    """Drive *scenario* in a console whose seam reads *daemon*."""
+
+    async def body() -> None:
+        async with js.driven(js.held_app(daemon), size=1) as harness:
+            await scenario(harness.app, harness.pilot)
+
+    asyncio.run(body())
+
+
+def test_a_notice_for_the_run_on_screen_reads_past_the_held_cursor_once() -> None:
+    """One run-events read per notice, asking past the last sequence held; nothing re-read."""
+    daemon = _CountingDaemon()
+
+    async def scenario(app: ConsoleApp, pilot: Any) -> None:
+        await _open_followed(app, pilot)
+        assert daemon.reads == [(FOLLOWED_URN, 0)], "the transcript opens on one whole read"
+        assert _sequences(app) == [1, 2, 3]
+        await _announce(daemon, app, pilot, FOLLOWED_URN)
+        assert daemon.reads[1:] == [(FOLLOWED_URN, 3)]
+        assert _sequences(app) == [1, 2, 3, 4], "the new line is appended to what was held"
+        await _announce(daemon, app, pilot, FOLLOWED_URN)
+        await _announce(daemon, app, pilot, FOLLOWED_URN)
+        assert daemon.reads[1:] == [(FOLLOWED_URN, 3), (FOLLOWED_URN, 4), (FOLLOWED_URN, 5)]
+        assert _sequences(app) == [1, 2, 3, 4, 5, 6]
+        assert app.session.tr_sel == 5, "following keeps the cursor on the newest block"
+        assert "· following" in _strip(app)
+
+    _drive(daemon, scenario)
+
+
+def test_the_refresh_timer_reads_no_transcript() -> None:
+    """Over three timer firings the usage read is repeated and the transcript is not."""
+    daemon = _CountingDaemon()
+
+    async def scenario(app: ConsoleApp, pilot: Any) -> None:
+        await _open_followed(app, pilot)
+        reads, usage = len(daemon.reads), daemon.usage_reads
+        assert isinstance(app.console_clock, FakeClock)
+        for _ in range(TIMER_FIRINGS):
+            app.console_clock.advance(LIVE_REFRESH_SECONDS)
+            app.tick()
+            await settle(pilot)
+        assert len(daemon.reads) == reads, "the timer re-read the transcript"
+        assert daemon.usage_reads == usage + TIMER_FIRINGS, "the timer did not fire"
+
+    _drive(daemon, scenario)
+
+
+def test_a_run_with_no_line_yet_reads_its_first_line_from_the_start() -> None:
+    """An empty stream holds cursor zero, so its first notice reads from the start."""
+    daemon = _CountingDaemon()
+
+    async def scenario(app: ConsoleApp, pilot: Any) -> None:
+        await _open_followed(app, pilot, QUIET_RUN)
+        assert _sequences(app) == []
+        await _announce(daemon, app, pilot, QUIET_URN)
+        assert daemon.reads == [(QUIET_URN, 0), (QUIET_URN, 0)]
+        assert _sequences(app) == [1]
+        assert app.session.tr_sel == 0
+
+    _drive(daemon, scenario)
+
+
+def test_a_notice_for_another_run_reads_nothing() -> None:
+    daemon = _CountingDaemon()
+
+    async def scenario(app: ConsoleApp, pilot: Any) -> None:
+        await _open_followed(app, pilot)
+        reads = len(daemon.reads)
+        await _announce(daemon, app, pilot, BESIDE_URN)
+        assert len(daemon.reads) == reads
+        assert _sequences(app) == [1, 2, 3]
+
+    _drive(daemon, scenario)
+
+
+def test_a_notice_while_another_route_is_on_screen_reads_nothing() -> None:
+    """Off the transcript no notice reads; coming back reads once, past the held cursor."""
+    daemon = _CountingDaemon()
+
+    async def scenario(app: ConsoleApp, pilot: Any) -> None:
+        await _open_followed(app, pilot)
+        app.reset(SessionSetup(route="activity"))
+        await settle(pilot)
+        reads = len(daemon.reads)
+        await _announce(daemon, app, pilot, FOLLOWED_URN)
+        await _announce(daemon, app, pilot, FOLLOWED_URN)
+        assert len(daemon.reads) == reads, "a notice read while the transcript was away"
+        await _open_followed(app, pilot)
+        assert daemon.reads[reads:] == [(FOLLOWED_URN, 3)], "the return catches up once"
+        assert _sequences(app) == [1, 2, 3, 4, 5]
+
+    _drive(daemon, scenario)
+
+
+def test_a_notice_that_is_no_append_or_does_not_validate_reads_nothing(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    daemon = _CountingDaemon()
+
+    async def scenario(app: ConsoleApp, pilot: Any) -> None:
+        await _open_followed(app, pilot)
+        seam = app.seam
+        assert seam is not None
+        reads = len(daemon.reads)
+        await seam.take_notice(_notice(FOLLOWED_URN, 4, kind=StoreKind.EVENT))
+        malformed = _notice(FOLLOWED_URN, 4).model_copy(update={"payload": {"run_ref": "x"}})
+        with caplog.at_level(logging.DEBUG, logger="eawf.surfaces.tui.console.seam"):
+            await seam.take_notice(malformed)
+        await settle(pilot)
+        assert len(daemon.reads) == reads
+        assert "take_notice skip" in caplog.text
+
+    _drive(daemon, scenario)
+
+
+def test_a_failed_cursor_read_keeps_the_frame_and_the_next_notice_reads_again(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    daemon = _CountingDaemon()
+
+    async def scenario(app: ConsoleApp, pilot: Any) -> None:
+        await _open_followed(app, pilot)
+        daemon.refuse_events = True
+        with caplog.at_level(logging.WARNING, logger="eawf.surfaces.tui.console.app"):
+            await _announce(daemon, app, pilot, FOLLOWED_URN)
+        assert "transcript tail read failed" in caplog.text
+        assert _sequences(app) == [1, 2, 3], "the frame keeps what it held"
+        daemon.refuse_events = False
+        await _announce(daemon, app, pilot, FOLLOWED_URN)
+        assert daemon.reads[-1] == (FOLLOWED_URN, 3)
+        assert _sequences(app) == [1, 2, 3, 4, 5]
+
+    _drive(daemon, scenario)
+
+
+def test_following_a_read_that_holds_nothing_is_refused() -> None:
+    """The seam follows only an answer it holds for what the route on screen is about."""
+    daemon = _CountingDaemon()
+
+    async def scenario(app: ConsoleApp, pilot: Any) -> None:
+        seam = app.seam
+        assert seam is not None
+        with pytest.raises(ValueError, match="holds nothing to follow"):
+            await seam.follow_live(TRANSCRIPT_READ)
+        await _open_followed(app, pilot)
+        with pytest.raises(KeyError):
+            await seam.follow_live("no.such.read")
+
+    _drive(daemon, scenario)
+
+
+# ---------- holding and following with the keys ----------
+
+
+def test_space_end_and_the_arrows_hold_and_follow_while_blocks_arrive() -> None:
+    """Space toggles, End resumes on the newest block, the arrows hold, f still toggles."""
+    daemon = _CountingDaemon()
+
+    async def scenario(app: ConsoleApp, pilot: Any) -> None:
+        await _open_followed(app, pilot)
+        s = app.session
+        assert (s.tr_sel, s.follow) == (2, True)
+        await pilot.press("up")
+        await settle(pilot)
+        assert (s.tr_sel, s.follow) == (1, False)
+        assert "· held · 0 new" in _strip(app)
+        assert daemon.reads == [(FOLLOWED_URN, 0)], "a key on the open transcript reads nothing"
+        # held: the cursor stays where it is while blocks arrive, and counts them
+        await _announce(daemon, app, pilot, FOLLOWED_URN)
+        await _announce(daemon, app, pilot, FOLLOWED_URN)
+        assert s.tr_sel == 1
+        assert "· held · 2 new" in _strip(app)
+        await pilot.press("down")
+        await settle(pilot)
+        assert s.tr_sel == 2 and "· held · 2 new" in _strip(app), "an arrow keeps the count"
+        await pilot.press("space")
+        await settle(pilot)
+        assert (s.tr_sel, s.follow) == (4, True)
+        assert "· following" in _strip(app) and "new" not in _strip(app)
+        # following: the cursor rides the newest block
+        await _announce(daemon, app, pilot, FOLLOWED_URN)
+        assert s.tr_sel == 5
+        await pilot.press("space")
+        await settle(pilot)
+        assert (s.tr_sel, s.follow) == (5, False)
+        assert s.log[0].key == "Space"
+        await _announce(daemon, app, pilot, FOLLOWED_URN)
+        assert s.tr_sel == 5 and "· held · 1 new" in _strip(app)
+        await pilot.press("end")
+        await settle(pilot)
+        assert (s.tr_sel, s.follow) == (6, True)
+        assert "· following" in _strip(app)
+        assert s.log[0].key == "End"
+        await pilot.press("f")
+        await settle(pilot)
+        assert "· held · 0 new" in _strip(app)
+        await pilot.press("f")
+        await settle(pilot)
+        assert (s.tr_sel, s.follow) == (6, True)
+        # End on the newest block it already follows moves nothing and says so
+        await pilot.press("end")
+        await settle(pilot)
+        assert (s.tr_sel, s.follow) == (6, True)
+        assert "already on the newest block" in s.toasts[-1].text
+
+    _drive(daemon, scenario)
+
+
+@pytest.mark.parametrize(
+    ("follow", "held_from", "total", "word"),
+    [
+        (True, None, 0, "following"),
+        (True, None, 9, "following"),
+        (False, None, 0, "held · 0 new"),
+        (False, 0, 1, "held · 1 new"),
+        (False, 3, 3, "held · 0 new"),
+        (False, 3, 4, "held · 1 new"),
+        # a hold kept from a longer Run counts nothing rather than below zero
+        (False, 7, 2, "held · 0 new"),
+    ],
+    ids=["following-empty", "following", "held-empty", "single", "none-new", "one-new", "longer"],
+)
+def test_the_strip_says_following_or_how_many_arrived_while_held(
+    follow: bool, held_from: int | None, total: int, word: str
+) -> None:
+    session = Session(follow=follow, tr_held_from=held_from)
+    assert follow_word(session, total) == word
+
+
+def test_a_hold_point_of_the_wrong_type_is_refused() -> None:
+    session = Session()
+    with pytest.raises(ValueError, match="tr_held_from"):
+        session.tr_held_from = "three"  # type: ignore[assignment]
+
+
+# ---------- the feed carries the notice from the bus to the seam ----------
+
+
+def test_the_projection_feed_writes_an_append_notice_as_its_raw_push() -> None:
+    (frame,) = _projection_frames(_notice(FOLLOWED_URN, 4))
+    pushed = orjson.loads(frame)
+    assert pushed["method"] == "event.push"
+    assert pushed["params"]["event"]["payload"] == {"run_ref": FOLLOWED_URN, "tail_sequence": 4}
+
+
+def test_only_the_projection_feed_subscribes_to_append_notices() -> None:
+    async def nothing(_value: object) -> None:
+        return None
+
+    callbacks = StateBindingCallbacks(on_state=nothing, on_degraded=nothing)
+    projection = StateBinding(None, callbacks, subscribe_method=PROJECTION_SUBSCRIBE_METHOD)
+    epoch_one = StateBinding(None, callbacks)
+    assert projection._subscribe_params()["kinds"] == [
+        StoreKind.EVENT.value,
+        StoreKind.RUN_EVENTS_APPENDED.value,
+    ]
+    assert epoch_one._subscribe_params()["kinds"] == [StoreKind.EVENT.value]
+
+
+def test_a_pushed_notice_reaches_the_event_sink_without_a_state_read() -> None:
+    """The projection feed hands a notice to its event sink alone; no resume id is taken."""
+    heard: list[Envelope] = []
+    states: list[object] = []
+
+    async def on_event(envelope: Envelope) -> None:
+        heard.append(envelope)
+
+    async def on_state(state: object) -> None:
+        states.append(state)
+
+    async def on_degraded(_flag: bool) -> None:
+        return None
+
+    async def body() -> None:
+        binding = StateBinding(
+            None,
+            StateBindingCallbacks(on_state=on_state, on_degraded=on_degraded, on_event=on_event),
+            subscribe_method=PROJECTION_SUBSCRIBE_METHOD,
+        )
+        loop = asyncio.get_running_loop()
+        (frame,) = _projection_frames(_notice(FOLLOWED_URN, 4))
+        binding._handle_push_line(loop, frame)
+        # an undecodable frame is dropped, never raised into the feed
+        binding._handle_push_line(loop, b"not json\n")
+        for _ in range(3):
+            await asyncio.sleep(0)
+        assert "since_event_id" not in binding._subscribe_params()
+
+    asyncio.run(body())
+    assert [envelope.kind for envelope in heard] == [StoreKind.RUN_EVENTS_APPENDED]
+    assert states == []

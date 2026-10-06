@@ -13,8 +13,9 @@ becomes a block of its own saying how many sequences are missing, in the positio
 occupies, so the transcript is never quietly shorter than the episode it claims to show.
 
 *The thinking state says how it is known.* What exists is a reasoning turn that opened
-and has not been summarized. A provider's own start marker states the turn, so the state
-is observed; where eawf inferred the opening for a provider with no marker, the state is
+and has not closed, by its summary or by the Run's next message, tool or end. A
+provider's own start marker states the turn, so the state is observed; where eawf
+inferred the opening for a provider with no marker, the state is
 a derived truth field and the frame prints the label beside it, so it never presents the
 inference as an observation.
 
@@ -65,7 +66,11 @@ from eawf.kernel.projection.transcript import (
 from eawf.kernel.projection.truth import TruthKind, TruthState
 from eawf.kernel.runtime.events import (
     CommandPayload,
+    ErrorPayload,
     EventGapPayload,
+    MessageSummaryPayload,
+    ProviderLossPayload,
+    ProviderToolPayload,
     QuarantineReason,
     ReasoningSummaryPayload,
     RunEventKind,
@@ -479,6 +484,97 @@ def test_a_quarantined_open_turn_neither_opens_nor_closes_one() -> None:
     """A repudiated line derives nothing, including the state of a thought."""
     late = _event(2, quarantine=QuarantineReason.SEQUENCE_CONFLICT)
     assert open_reasoning_turn([_event(1), _summarized(1), late]) is None
+
+
+def _said(sequence: int) -> RunEventRecord:
+    return _event(
+        sequence,
+        event_kind=RunEventKind.MESSAGE_SUMMARIZED,
+        payload=MessageSummaryPayload(message_role="assistant", summary="the loader is fine"),
+    )
+
+
+def _reached(sequence: int) -> RunEventRecord:
+    return _event(
+        sequence,
+        event_kind=RunEventKind.TOOL_REQUESTED,
+        payload=ProviderToolPayload(
+            call_ref=f"call-{sequence:016x}", tool_name="read", tool_class="read", phase="requested"
+        ),
+    )
+
+
+def _failed(sequence: int) -> RunEventRecord:
+    return _event(
+        sequence,
+        event_kind=RunEventKind.ERROR_OBSERVED,
+        payload=ErrorPayload(code="worker_exited", retry_class="never", message="it exited"),
+    )
+
+
+def _lost(sequence: int, message: str = "the provider process was lost") -> RunEventRecord:
+    return _event(
+        sequence,
+        event_kind=RunEventKind.PROVIDER_LOST,
+        payload=ProviderLossPayload(message=message),
+    )
+
+
+@pytest.mark.parametrize("closer", [_said, _reached, _failed, _lost])
+def test_a_native_turn_closes_at_the_next_message_tool_or_end_of_its_run(closer: Any) -> None:
+    """A provider that never summarizes its reasoning has stopped thinking once it acts."""
+    events = (_event(1), closer(2))
+    model = _view(events)
+    assert not model.is_thinking()
+    assert open_reasoning_turn(events) is None
+    assert model.blocks[0].in_flight is False
+    assert model.blocks[0].typical_seconds == 1
+
+
+def test_a_summarized_turn_after_a_message_stays_closed_and_keeps_the_first_close() -> None:
+    """A provider that summarizes after speaking closes nothing twice."""
+    model = _view((_event(1), _said(2), _summarized(3)))
+    assert not model.is_thinking()
+    # the turn is timed to the message that closed it, 1s, not to the later summary, 2s
+    assert model.blocks[0].typical_seconds == 1
+
+
+def test_a_turn_opened_after_a_message_is_open_again() -> None:
+    model = _view((_event(1), _said(2), _event(3)))
+    assert model.is_thinking()
+    assert [block.in_flight for block in model.blocks] == [False, False, True]
+
+
+def test_a_command_line_leaves_the_turn_open() -> None:
+    """A turn may go on thinking while a command it started runs."""
+    assert _view((_event(1), _command(2))).is_thinking()
+
+
+def test_an_empty_stream_opens_no_turn() -> None:
+    assert open_reasoning_turn([]) is None
+
+
+def test_a_lost_provider_is_an_error_block_stating_its_message() -> None:
+    (block,) = _view((_lost(1),)).blocks
+    assert block.lane == "error"
+    assert block.text.value == "the provider process was lost"
+    assert block.body == ()
+
+
+@pytest.mark.parametrize("size", [1, 500])
+def test_a_lost_providers_message_is_drawn_whole_up_to_its_bound(size: int) -> None:
+    assert block_text(_lost(1, "x" * size)).value == "x" * size
+
+
+@pytest.mark.parametrize("message", ["", "   ", "x" * 501])
+def test_a_lost_providers_message_outside_its_bound_is_refused(message: str) -> None:
+    with pytest.raises(ValidationError):
+        ProviderLossPayload(message=message)
+
+
+def test_a_lost_providers_message_of_the_wrong_type_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        ProviderLossPayload.model_validate({"message": 7})
 
 
 def test_the_frame_labels_an_inferred_thinking_state_as_derived() -> None:
