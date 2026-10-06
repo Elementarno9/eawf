@@ -83,6 +83,11 @@ DEFAULT_SUBSCRIBE_METHOD: str = "state.subscribe"
 #: ``EAWF_RECONNECT_MIN_INTERVAL_S`` so a test can drive a tight loop.
 DEFAULT_RECONNECT_MIN_INTERVAL_S: float = 5.0
 
+#: Seconds ``disconnect`` waits for the subscription thread to return after
+#: its socket is shut down. The woken read returns at once, so this bounds
+#: only a thread stuck elsewhere; past it the task is cancelled regardless.
+_SUBSCRIPTION_EXIT_GRACE_S: float = 0.5
+
 
 @dataclass(frozen=True)
 class StateBindingCallbacks:
@@ -187,6 +192,10 @@ class StateBinding:
         # ``CancelIoEx`` (CloseHandle alone does not unblock it), so the
         # handle is retained here for teardown.
         self._win_pipe: Any = None
+        # POSIX: the subscription thread parks in ``readline()`` on this socket,
+        # which cancelling the asyncio task cannot interrupt, so ``disconnect``
+        # shuts it down to wake the read instead of waiting out the call timeout.
+        self._subscription_sock: socket.socket | None = None
         self._daemon_failure_threshold = max(1, int(daemon_failure_threshold))
         env_interval = os.environ.get("EAWF_POLL_INTERVAL_S")
         probe_env = os.environ.get("EAWF_DAEMON_PROBE_INTERVAL_S")
@@ -401,20 +410,28 @@ class StateBinding:
             self._run_subscription_windows(loop)
             return
         with self._client_factory() as client:
-            client.call(self._subscribe_method, self._subscribe_params())
-            self._consecutive_failures = 0
-            asyncio.run_coroutine_threadsafe(self._on_subscription_connected(), loop)
-            while not self._stopping:
-                reader = getattr(client, "_reader", None)
-                if reader is None:
-                    raise RuntimeError("daemon reader unavailable")
-                try:
-                    line = reader.readline()
-                except TimeoutError:
-                    continue
-                if not line:
-                    raise RuntimeError("daemon subscribe stream ended")
-                self._handle_push_line(loop, line)
+            self._subscription_sock = getattr(client, "_sock", None)
+            try:
+                # Published before this check so a ``disconnect`` racing the
+                # connect either sees the socket to shut down or is seen here.
+                if self._stopping:
+                    return
+                client.call(self._subscribe_method, self._subscribe_params())
+                self._consecutive_failures = 0
+                asyncio.run_coroutine_threadsafe(self._on_subscription_connected(), loop)
+                while not self._stopping:
+                    reader = getattr(client, "_reader", None)
+                    if reader is None:
+                        raise RuntimeError("daemon reader unavailable")
+                    try:
+                        line = reader.readline()
+                    except TimeoutError:
+                        continue
+                    if not line:
+                        raise RuntimeError("daemon subscribe stream ended")
+                    self._handle_push_line(loop, line)
+            finally:
+                self._subscription_sock = None
 
     def _run_subscription_windows(self, loop: asyncio.AbstractEventLoop) -> None:
         """Stream ``state.subscribe`` pushes over a persistent named pipe.
@@ -605,18 +622,40 @@ class StateBinding:
         with contextlib.suppress(Exception):
             cancel_pending_read(pipe)
 
+    def _shutdown_subscription_sock(self) -> bool:
+        """Shut the POSIX subscription socket down to wake its blocked read.
+
+        Returns:
+            Whether a socket was open to shut down. ``False`` on Windows and
+            when no subscription holds a socket. A socket the subscription
+            thread already closed raises ``OSError``, which is ignored: the
+            read it would have woken has already ended.
+        """
+        sock = self._subscription_sock
+        if sock is None:
+            return False
+        with contextlib.suppress(OSError):
+            sock.shutdown(socket.SHUT_RDWR)
+        return True
+
     async def disconnect(self) -> None:
         """Cancel background tasks on app teardown.
 
-        On Windows the live subscription thread is parked in a blocking
-        ``ReadFile`` on the streaming pipe; cancelling the asyncio task
-        does NOT unblock that read, so this first ``CancelIoEx``-cancels
-        the pending read (via :func:`cancel_pending_read`) so the read
-        returns promptly and the thread exits, then cancels the task.
+        The live subscription thread is parked in a blocking read that
+        cancelling the asyncio task does NOT unblock: a ``ReadFile`` on the
+        Windows streaming pipe, a ``readline()`` on the POSIX socket. So
+        this first ``CancelIoEx``-cancels the pending pipe read (via
+        :func:`cancel_pending_read`) or shuts the socket down, so the read
+        returns promptly and the thread exits, then cancels the task. After
+        a socket shutdown the task is given a moment to finish on its own,
+        so the thread has exited by the time this returns.
         """
         self._stopping = True
         self._cancel_win_pipe_read()
+        woken = self._shutdown_subscription_sock()
         if self._subscribe_task is not None:
+            if woken:
+                await asyncio.wait({self._subscribe_task}, timeout=_SUBSCRIPTION_EXIT_GRACE_S)
             self._subscribe_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._subscribe_task

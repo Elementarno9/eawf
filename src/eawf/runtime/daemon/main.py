@@ -37,13 +37,14 @@ from eawf.observability.logging.scrub import SensitiveScrubber
 from eawf.platform.registry.models import RegistryReadError, read_registry
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.churn import ChurnOp, lineage_born_at, record_churn
+from eawf.runtime.daemon.churn import ChurnOp, record_churn
 from eawf.runtime.daemon.epoch2_recovery import (
     record_boot_recovery,
     recover_native_store_trees,
     repair_native_ledger_tails,
     replay_native_wal,
 )
+from eawf.runtime.daemon.epoch2_root import remove_entity_lock_files
 from eawf.runtime.daemon.idle import IdleTimeoutWatchdog
 from eawf.runtime.daemon.limits import (
     MUTATION_HARD_LIMIT_SECONDS,
@@ -75,7 +76,6 @@ from eawf.runtime.daemon.wal import (
     resolve_wal_retention_seconds,
     run_wal_gc_loop,
 )
-from eawf.runtime.session.store import reconcile_orphaned_sessions
 
 logger = logging.getLogger(__name__)
 
@@ -713,6 +713,29 @@ def _native_tree_roots(project_state_path: Path) -> tuple[Path, ...]:
     return tuple(roots)
 
 
+def _remove_entity_lock_files(tree_roots: tuple[Path, ...]) -> int:
+    """Delete the per-entity lock files earlier releases leaked into each tree.
+
+    A tree that cannot be swept costs only its own files, so one unreadable
+    lock directory does not stop the daemon from booting.
+
+    Args:
+        tree_roots: The candidate tree roots, as :func:`_native_tree_roots`
+            returns them.
+
+    Returns:
+        How many lock files were removed across every tree.
+    """
+    removed = 0
+    for tree_root in tree_roots:
+        try:
+            removed += remove_entity_lock_files(tree_root)
+        except OSError as error:
+            logger.warning(f"_remove_entity_lock_files tree={tree_root.name} error={error!r}")
+    logger.info(f"run entity-lock-sweep trees={len(tree_roots)} removed={removed}")
+    return removed
+
+
 def _boot_touched_names(pid_file: Path, sock_path: Path | None) -> tuple[str, ...]:
     """Return the runtime-dir entries a booting daemon creates or replaces.
 
@@ -1041,8 +1064,9 @@ def run(*, foreground: bool = True) -> int:
             # the next pass is a no-op.
             #
             # A tree carrying the epoch marker has frozen its epoch-1 surfaces,
-            # so every epoch-1 pass of the sweep (this replay and the orphan
-            # reconcile below) leaves it alone; the native passes still run.
+            # so this epoch-1 replay leaves it alone; the native passes still
+            # run. On an unmarked tree the replay may run: it reads the
+            # document and appends only to the uncommitted event log.
             legacy_frozen = epoch_marker_present(project_state_path.parent)
             if legacy_frozen:
                 logger.info("run epoch1-boot-sweep skipped reason=epoch_marker_present")
@@ -1071,9 +1095,9 @@ def run(*, foreground: bool = True) -> int:
             # tail back to its last complete line first, so a line the
             # replay re-appends lands on a clean boundary.
             recovery_started = datetime.now(UTC)
-            tail_report = repair_native_ledger_tails(
-                daemon_wal_dir, tree_roots=_native_tree_roots(project_state_path)
-            )
+            native_tree_roots = _native_tree_roots(project_state_path)
+            _remove_entity_lock_files(native_tree_roots)
+            tail_report = repair_native_ledger_tails(daemon_wal_dir, tree_roots=native_tree_roots)
             logger.info(
                 f"run ledger-tail-repair trees={tail_report.tree_count} "
                 f"truncated={tail_report.truncated_ledgers} "
@@ -1121,24 +1145,12 @@ def run(*, foreground: bool = True) -> int:
                 store=store_report,
             )
 
-            # Reconcile orphaned agent sessions: a prior daemon's spawned
-            # children died with it, but their AgentSession rows stay ACTIVE in
-            # state.json and render as zombie live agents on the Watch surface.
-            # A fresh daemon owns no live children, so every ACTIVE session its
-            # runtime-dir lineage opened is orphaned -- flip those to STALE.
-            # Sessions older than the lineage belong to another daemon: a gate
-            # proof on a fresh runtime dir must not rewrite a checkout's
-            # committed state. Single-threaded here, pre-listener, so there is
-            # no contention on the state lock.
-            if not legacy_frozen:
-                orphaned = reconcile_orphaned_sessions(
-                    project_state_path,
-                    project_event_path,
-                    opened_since=lineage_born_at(rt_dir),
-                )
-                if orphaned:
-                    logger.info(f"run reconciled-orphan-sessions flipped={orphaned}")
-
+            # No boot pass flips orphaned agent sessions to STALE. A marked
+            # tree has frozen its epoch-1 sessions, and an unmarked one is
+            # read-only until its cutover: a boot rewrite of its document
+            # would make the cutover's apply refuse on a diverged live state.
+            # A live session there is closed by the operator, which the
+            # cutover's quiescence refusal names.
             ctx = MethodContext(
                 started_at=started_at,
                 pid=pid,

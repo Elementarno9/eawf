@@ -379,6 +379,67 @@ def test_serve_unix_socket_is_owner_only() -> None:
     _with_server(sock, body)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="UDS perms semantics differ on windows")
+def test_serve_unix_binds_owner_only_without_the_chmod(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The node is ``0o600`` from bind itself, so no window precedes the chmod.
+
+    ``os.chmod`` is a no-op here: any mode wider than ``0o600`` would mean
+    the node was briefly reachable before the tightening chmod.
+    """
+    monkeypatch.setattr(os, "chmod", lambda *_args, **_kwargs: None)
+    original_umask = os.umask(0o022)
+    try:
+
+        async def bind_many() -> None:
+            ctx = _build_ctx()
+            for _ in range(100):
+                sock = _short_sock_path()
+                before = os.umask(0o022)
+                os.umask(before)
+                srv = await serve_unix(str(sock), ctx)
+                try:
+                    assert _mode(sock) == 0o600
+                    after = os.umask(0o022)
+                    os.umask(after)
+                    assert after == before == 0o022
+                finally:
+                    srv.close()
+                    await srv.wait_closed()
+                    with contextlib.suppress(FileNotFoundError):
+                        sock.unlink()
+
+        asyncio.run(bind_many())
+    finally:
+        os.umask(original_umask)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="UDS perms semantics differ on windows")
+def test_serve_unix_owner_only_bind_failure_restores_umask() -> None:
+    """A failed bind surfaces the OS error and leaves the umask as it was."""
+    original_umask = os.umask(0o022)
+    try:
+        missing_parent = _short_sock_path().with_suffix("") / "d.sock"
+        with pytest.raises(FileNotFoundError):
+            asyncio.run(serve_unix(str(missing_parent), _build_ctx()))
+        restored = os.umask(0o022)
+        assert restored == 0o022
+    finally:
+        os.umask(original_umask)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="UDS perms semantics differ on windows")
+def test_serve_unix_owner_only_rejects_a_live_path() -> None:
+    """Binding over a live socket raises and leaves the first node owner-only."""
+    sock = _short_sock_path()
+
+    async def body(_ctx: MethodContext) -> None:
+        with pytest.raises(OSError):
+            await serve_unix(str(sock), _build_ctx())
+        assert _mode(sock) == 0o600
+
+    _with_server(sock, body)
+
+
 def _repo_root() -> Path:
     """Return the worktree root (two levels above ``tests/daemon/``)."""
     return Path(__file__).resolve().parents[4]

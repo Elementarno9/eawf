@@ -1,13 +1,11 @@
-"""The daemon-boot orphan sweep only flips its own lineage's sessions.
+"""A daemon boot never rewrites the agent sessions of an epoch-1 tree.
 
 A daemon's runtime directory is its lineage: every daemon that boots on
 the same directory is a restart of the one before, and the first boot
-record in the churn ledger marks when that lineage was born. The release
-pipeline proves gates with a daemon on a fresh ``EAWF_RUNTIME_DIR`` inside
-a release checkout whose committed ``state.json`` carries ACTIVE sessions
-some other daemon opened. That boot must leave ``state.json`` byte for
-byte, while a restart on the same directory still flips every session its
-lineage opened.
+record in the churn ledger marks when that lineage was born. An epoch-1
+tree is read-only until its cutover, so whatever lineage boots over it --
+fresh, restarted or rotated past its first boot -- leaves ``state.json``
+byte for byte and its ACTIVE sessions for the operator to close.
 
 Each test runs the daemon's real synchronous boot prologue (the event loop
 is stubbed out, so no socket is bound) against a tmp repository.
@@ -19,6 +17,7 @@ import hashlib
 import shutil
 import sys
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Final
@@ -128,93 +127,43 @@ def _digest(path: Path) -> str | None:
     return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
 
 
-def _committed_session_repo(repo: Path) -> None:
-    """Seed the sessions a release checkout carries from the operator's daemon."""
-    now = datetime.now(UTC)
-    _seed_sessions(repo, {"SA": now - timedelta(days=3), "SB": now - timedelta(minutes=1)})
+# ---- daemon boot never rewrites an epoch-1 tree -----------------------------
 
 
-# ---- foreign lineage: the gate-proof daemon --------------------------------
+def _fresh(rt_dir: Path) -> None:
+    rt_dir.mkdir(parents=True)
 
 
-def test_fresh_runtime_dir_boot_leaves_state_bytes_unchanged(
-    tmp_path: Path, repo: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A daemon born on a fresh runtime dir owns none of the committed sessions."""
-    _committed_session_repo(repo)
-    before = _digest(_state_path(repo))
-    _boot(tmp_path / "rt", monkeypatch)
-    assert _digest(_state_path(repo)) == before
-    assert set(_statuses(repo).values()) == {AgentSessionStatus.ACTIVE}
-
-
-def test_planted_blanket_sweep_rewrites_the_committed_state(
-    tmp_path: Path, repo: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The gate fires: a sweep that ignores lineage dirties the checkout."""
-    _committed_session_repo(repo)
-    before = _digest(_state_path(repo))
-    monkeypatch.setattr(daemon_main, "lineage_born_at", lambda _rt_dir: None)
-    _boot(tmp_path / "rt", monkeypatch)
-    assert _digest(_state_path(repo)) != before
-    assert set(_statuses(repo).values()) == {AgentSessionStatus.STALE}
-
-
-# ---- same lineage: a restart ------------------------------------------------
-
-
-def test_same_lineage_restart_flips_each_orphan(
-    tmp_path: Path, repo: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Every session opened since the lineage's first boot goes STALE."""
-    rt_dir = tmp_path / "rt"
+def _restarted(rt_dir: Path) -> None:
     _plant_boot(rt_dir, LINEAGE_BIRTH)
-    _seed_sessions(
-        repo,
-        {
-            "S1": LINEAGE_BIRTH + timedelta(minutes=5),
-            "S2": LINEAGE_BIRTH + timedelta(minutes=50),
-            "S3": LINEAGE_BIRTH,
-        },
-    )
-    _boot(rt_dir, monkeypatch)
-    assert _statuses(repo) == {
-        "S1": AgentSessionStatus.STALE,
-        "S2": AgentSessionStatus.STALE,
-        "S3": AgentSessionStatus.STALE,
-    }
 
 
-def test_same_lineage_restart_spares_sessions_older_than_the_lineage(
-    tmp_path: Path, repo: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A session opened before the lineage first booted is another daemon's."""
-    rt_dir = tmp_path / "rt"
-    _plant_boot(rt_dir, LINEAGE_BIRTH)
-    _seed_sessions(
-        repo,
-        {
-            "OLD": LINEAGE_BIRTH - timedelta(microseconds=1),
-            "OURS": LINEAGE_BIRTH + timedelta(minutes=1),
-        },
-    )
-    _boot(rt_dir, monkeypatch)
-    assert _statuses(repo) == {
-        "OLD": AgentSessionStatus.ACTIVE,
-        "OURS": AgentSessionStatus.STALE,
-    }
-
-
-def test_rotated_ledger_lineage_flips_every_active_session(
-    tmp_path: Path, repo: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A lineage older than its retained boot records may own any session."""
-    rt_dir = tmp_path / "rt"
+def _rotated(rt_dir: Path) -> None:
     _plant_boot(rt_dir, LINEAGE_BIRTH, ledger=CHURN_LEDGER_ROTATED_NAME)
     _plant_boot(rt_dir, LINEAGE_BIRTH + timedelta(hours=1))
-    _seed_sessions(repo, {"ANCIENT": LINEAGE_BIRTH - timedelta(days=30)})
+
+
+@pytest.mark.parametrize("lineage", [_fresh, _restarted, _rotated], ids=lambda f: f.__name__[1:])
+def test_boot_leaves_epoch1_sessions_and_state_bytes_unchanged(
+    tmp_path: Path,
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    lineage: Callable[[Path], None],
+) -> None:
+    """No lineage, however old, lets a boot flip the tree's ACTIVE sessions."""
+    rt_dir = tmp_path / "rt"
+    lineage(rt_dir)
+    _seed_sessions(
+        repo,
+        {
+            "ANCIENT": LINEAGE_BIRTH - timedelta(days=30),
+            "OURS": LINEAGE_BIRTH + timedelta(minutes=5),
+        },
+    )
+    before = _digest(_state_path(repo))
     _boot(rt_dir, monkeypatch)
-    assert _statuses(repo) == {"ANCIENT": AgentSessionStatus.STALE}
+    assert _digest(_state_path(repo)) == before
+    assert set(_statuses(repo).values()) == {AgentSessionStatus.ACTIVE}
 
 
 # ---- lineage_born_at --------------------------------------------------------

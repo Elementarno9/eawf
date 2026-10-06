@@ -7,23 +7,25 @@ refused before anything -- a lock file included -- is written into it.
 The selection pointer must then name the same generation the epoch
 marker does, because the document a session reads is that generation's,
 and a tree whose two halves disagree cannot say which one it means. Only
-then are the locks taken, and the authority is asked again before every
+then is the lock taken, and the authority is asked again before every
 read and write, because a rollback can remove the marker while a session
 is open.
 
-Locks are taken in sorted order of the canonical entity URN. A URN is
-parsed and rendered again, without any rung fragment, before it is
-sorted: two spellings of one address would otherwise be two locks that
-exclude nothing, or would sort apart and let two sessions take the same
-pair of locks in opposite orders. The document lock comes last. It is
-held for the whole session, so two sessions over disjoint entities still
-cannot interleave their read and rewrite of the one document and lose an
-update.
+A session holds one lock: the document lock, for its whole length. Every
+session reads and rewrites the one document, so two sessions over
+disjoint entities could not run side by side anyway, and a lock per
+entity would add no concurrency -- only a lock file per URN ever touched.
+The entities a session names are still its subjects: each URN is parsed
+and rendered again, without any rung fragment, and the distinct spellings
+are sorted, so two spellings of one address are one subject and the
+first subject is the same whatever order the caller named them in.
+Entity lock files an earlier release left behind are removed at daemon
+boot by :func:`remove_entity_lock_files`.
 
 A root is identified by a digest of its resolved tree path, never by
 anything spelled inside it. Two trees can hold records whose keys, and
 even whose full URNs, read the same; what keeps them apart is that each
-root's lock files live in its own tree, its WAL records in a directory
+root's lock file lives in its own tree, its WAL records in a directory
 named by its root id, and its idempotency keys under that id in a cache
 of its own. The WAL namespace is a subdirectory of the daemon's WAL, and
 the epoch-1 replay and sweep list only that directory's top level, so a
@@ -34,7 +36,7 @@ it is handed out, so a new file family has to be declared before a
 session can write its first byte.
 
 Every native mutation commits inside a session, so the session's close is
-where the first one is noticed: before its locks are released, a session
+where the first one is noticed: before its lock is released, a session
 over a cut-over tree seals the activation once the published generation
 has moved off its activation digest, which closes the simple rollback
 window for good. A seal that fails is recorded under the tree's local
@@ -47,8 +49,9 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import logging
+import re
 from collections.abc import Iterable, Iterator
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final, Self
@@ -87,13 +90,17 @@ ROOT_ID_WIDTH: Final = 16
 #: The directory under the daemon's WAL that holds one namespace per root.
 NATIVE_WAL_DIRNAME: Final = "native"
 
-#: Where a root's lock files live, relative to its tree root. Outside the
+#: Where a root's lock file lives, relative to its tree root. Outside the
 #: generation, so taking a lock never changes the bytes a rollback
 #: compares the generation against.
 LOCK_LOCATOR: Final = "locks/epoch2"
 
 #: The lock that serialises every read and rewrite of one root's document.
 DOCUMENT_LOCK_NAME: Final = "document"
+
+#: The file name of a per-entity lock an earlier release took: the sha256
+#: hex digest of the entity URN plus the sibling lock suffix.
+ENTITY_LOCK_FILE_PATTERN: Final = re.compile(r"^[0-9a-f]{64}\.lock$")
 
 
 def root_id_for(tree_root: Path) -> str:
@@ -155,8 +162,8 @@ def canonical_entity_urn(urn: QualifiedUrn | str) -> str:
     return str(dataclasses.replace(parsed, rung=None))
 
 
-def entity_lock_order(urns: Iterable[QualifiedUrn | str]) -> tuple[str, ...]:
-    """Return the order a session takes its entity locks in.
+def session_subjects(urns: Iterable[QualifiedUrn | str]) -> tuple[str, ...]:
+    """Return the entities a session is about, in their one order.
 
     Args:
         urns: The entities the session touches, in any order and spelling.
@@ -165,14 +172,45 @@ def entity_lock_order(urns: Iterable[QualifiedUrn | str]) -> tuple[str, ...]:
         The distinct canonical entity URNs, sorted.
 
     Raises:
-        ValueError: No entity was named. A session that locks nothing
-            would read and write the document unguarded by any entity.
+        ValueError: No entity was named. A native mutation is recorded
+            against its first subject, so a session about nothing has no
+            entity to record it against.
         IdentityError: A string is not a qualified URN.
     """
     order = tuple(sorted({canonical_entity_urn(urn) for urn in urns}))
     if not order:
-        raise ValueError("a native session names at least one entity to lock")
+        raise ValueError("a native session names at least one entity")
     return order
+
+
+def remove_entity_lock_files(tree_root: Path) -> int:
+    """Delete the per-entity lock files an earlier release left in a tree.
+
+    Only names an entity lock could have -- a 64-character hex digest plus
+    the lock suffix -- are removed, so the document lock and any other
+    file in the lock directory stay. No session takes an entity lock any
+    more, so nothing can hold one of these files when the daemon boots.
+
+    Args:
+        tree_root: The tree's root directory.
+
+    Returns:
+        How many lock files were removed; zero when the tree has no lock
+        directory.
+
+    Raises:
+        OSError: The lock directory could not be listed or a file could
+            not be removed.
+    """
+    lock_dir = Path(tree_root) / LOCK_LOCATOR
+    if not lock_dir.is_dir():
+        return 0
+    removed = 0
+    for entry in lock_dir.iterdir():
+        if ENTITY_LOCK_FILE_PATTERN.match(entry.name) and entry.is_file():
+            entry.unlink(missing_ok=True)
+            removed += 1
+    return removed
 
 
 class Epoch2RootContext:
@@ -250,7 +288,8 @@ class Epoch2RootContext:
         """Return the lock file one lock name is held through.
 
         Args:
-            name: A canonical entity URN, or :data:`DOCUMENT_LOCK_NAME`.
+            name: :data:`DOCUMENT_LOCK_NAME`, or a canonical entity URN for
+                the file an earlier release locked that entity through.
 
         Returns:
             The declared lock file under this root's lock directory.
@@ -263,8 +302,8 @@ class Epoch2RootContext:
     def _lock_target(self, name: str) -> Path:
         """Return the path whose sibling lock file holds ``name``.
 
-        An entity lock is named by its URN's digest, since a URN holds
-        characters a file name cannot, and no digest can spell the
+        An entity lock file was named by its URN's digest, since a URN
+        holds characters a file name cannot, and no digest can spell the
         document lock's name.
         """
         stem = name if name == DOCUMENT_LOCK_NAME else hashlib.sha256(name.encode()).hexdigest()
@@ -301,17 +340,17 @@ class Epoch2RootContext:
 
     @contextmanager
     def session(self, urns: Iterable[QualifiedUrn | str]) -> Iterator[RootSession]:
-        """Open a session over the selected document with its locks held.
+        """Open a session over the selected document with its lock held.
 
-        The call blocks while another session holds a lock it needs, so an
-        asyncio caller runs it off the event loop.
+        The call blocks while another session holds the document lock, so
+        an asyncio caller runs it off the event loop.
 
         Args:
             urns: The entities the session touches.
 
         Yields:
-            The open session. Its locks are released, last taken first,
-            when the block exits.
+            The open session. The document lock is released when the
+            block exits.
 
         Raises:
             NativeAuthorityRequiredError: The tree resolves to epoch 1;
@@ -319,22 +358,20 @@ class Epoch2RootContext:
             MigrationDualAuthorityError: The select is not whole.
             ValueError: No entity was named.
             IdentityError: An entity URN does not parse.
-            LockTimeout: A lock stayed held past the lock timeout.
+            LockTimeout: The document lock stayed held past the lock timeout.
             MigrationActivationSealFailedError: The block finished and its
                 mutation committed, but the activation seal failed; the
                 fault is recorded for the operator.
         """
         authority = self.require_selected_generation()
-        order = entity_lock_order(urns)
-        with ExitStack() as held:
-            for name in (*order, DOCUMENT_LOCK_NAME):
-                target = self._lock_target(name)
-                self.declared_path(sibling.lock_path(target))
-                held.enter_context(portalock.acquire(target))
-            session = RootSession(context=self, authority=authority, locked_urns=order)
+        subjects = session_subjects(urns)
+        target = self._lock_target(DOCUMENT_LOCK_NAME)
+        self.declared_path(sibling.lock_path(target))
+        with portalock.acquire(target):
+            session = RootSession(context=self, authority=authority, locked_urns=subjects)
             logger.debug(
                 f"session root={self.identity.root_id} generation={authority.generation_id} "
-                f"locks={len(order)}"
+                f"subjects={len(subjects)}"
             )
             try:
                 yield session
@@ -401,8 +438,9 @@ class RootSession:
 
     Attributes:
         authority: The epoch-2 answer the session was opened under.
-        locked_urns: The canonical entity URNs held, in acquisition order.
-        closed: Whether the session's locks have been released.
+        locked_urns: The session's subjects: the canonical entity URNs it
+            names, sorted.
+        closed: Whether the session's lock has been released.
     """
 
     def __init__(
@@ -412,12 +450,12 @@ class RootSession:
         authority: RootAuthority,
         locked_urns: tuple[str, ...],
     ) -> None:
-        """Bind a session to the locks its context has just taken.
+        """Bind a session to the document lock its context has just taken.
 
         Args:
             context: The root context that opened the session.
             authority: The epoch-2 answer the session was opened under.
-            locked_urns: The canonical entity URNs held.
+            locked_urns: The session's sorted canonical entity URNs.
         """
         self._context = context
         self.authority = authority
@@ -492,7 +530,7 @@ class RootSession:
     def _require_current(self) -> None:
         """Refuse a closed session, or one whose tree moved under it."""
         if self.closed:
-            raise RuntimeError("the native session is closed and its locks are released")
+            raise RuntimeError("the native session is closed and its lock is released")
         current = self._context.require_selected_generation()
         if current.generation_id != self.authority.generation_id:
             raise MigrationDualAuthorityError(
@@ -535,6 +573,7 @@ def attach_root_context(
 
 __all__ = [
     "DOCUMENT_LOCK_NAME",
+    "ENTITY_LOCK_FILE_PATTERN",
     "LOCK_LOCATOR",
     "NATIVE_WAL_DIRNAME",
     "ROOT_ID_PATTERN",
@@ -544,6 +583,7 @@ __all__ = [
     "RootSession",
     "attach_root_context",
     "canonical_entity_urn",
-    "entity_lock_order",
+    "remove_entity_lock_files",
     "root_id_for",
+    "session_subjects",
 ]

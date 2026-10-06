@@ -11,26 +11,28 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 import os
 import sys
 import tempfile
 import threading
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
+import typer
 
 from eawf import __version__
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.lifecycle import DaemonLifecycleError, DaemonLifecycleResult
+from eawf.runtime.daemon.lifecycle import DaemonLifecycleResult
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.server import serve_unix
 from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError, release_order
 from eawf.surfaces.cli.errors import DaemonVersionMismatch
+from eawf.surfaces.cli.flags import GlobalFlags
 
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),
@@ -234,48 +236,39 @@ def stale_server() -> Iterator[_ServerHandle]:
         handle.stop()
 
 
-def _restart_into(handle: _ServerHandle, version: str) -> Callable[..., DaemonLifecycleResult]:
-    """Return a ``restart_daemon`` double that swaps *handle* for a *version* daemon."""
+@pytest.fixture
+def restarts(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    """Record every ``lifecycle.restart_daemon`` call instead of performing it."""
+    calls: list[dict[str, Any]] = []
 
-    def _restart(*, runtime_dir: Path | None = None, **_: Any) -> DaemonLifecycleResult:
-        assert runtime_dir == handle.runtime_dir
-        handle.stop()
-        handle.version = version
-        handle.start()
-        return DaemonLifecycleResult(
-            action="restarted", pid=os.getpid(), previous_pid=os.getpid(), supervisor="none"
-        )
+    def _record(**kwargs: Any) -> DaemonLifecycleResult:
+        calls.append(kwargs)
+        raise AssertionError("the client must never restart the daemon itself")
 
-    return _restart
+    monkeypatch.setattr("eawf.runtime.daemon.lifecycle.restart_daemon", _record)
+    return calls
 
 
-def test_client_restarts_an_older_daemon_before_the_call(
-    stale_server: _ServerHandle,
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+def test_client_refuses_an_older_daemon_without_restarting(
+    stale_server: _ServerHandle, restarts: list[dict[str, Any]]
 ) -> None:
-    """A 0.6.8 daemon is replaced before the first call reaches it."""
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.lifecycle.restart_daemon",
-        _restart_into(stale_server, __version__),
-    )
-    with caplog.at_level(logging.INFO), DaemonClient(runtime_dir=stale_server.runtime_dir) as c:
-        result = c.call("daemon.ping")
-    assert result["version"] == __version__
-    assert "daemon_version='0.6.8'" in caplog.text
-    assert "restarted" in caplog.text
+    """An older daemon may serve live Runs, so the client names the restart verb instead."""
+    with pytest.raises(DaemonVersionMismatch) as excinfo:
+        DaemonClient(runtime_dir=stale_server.runtime_dir).__enter__()
+    message = str(excinfo.value)
+    assert "0.6.8" in message
+    assert __version__ in message
+    assert "older than" in message
+    assert "eawf daemon restart" in message
+    assert restarts == []
 
 
 def test_client_refuses_a_newer_daemon_without_restarting(
-    monkeypatch: pytest.MonkeyPatch,
+    restarts: list[dict[str, Any]],
 ) -> None:
     """A daemon from a later release is refused, never replaced by an older one."""
     handle = _ServerHandle(_short_runtime_dir(), version="99.0.0")
     handle.start()
-    restarts: list[object] = []
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.lifecycle.restart_daemon", lambda **kw: restarts.append(kw)
-    )
     try:
         with pytest.raises(DaemonVersionMismatch) as excinfo:
             DaemonClient(runtime_dir=handle.runtime_dir).__enter__()
@@ -284,48 +277,128 @@ def test_client_refuses_a_newer_daemon_without_restarting(
     message = str(excinfo.value)
     assert "99.0.0" in message
     assert __version__ in message
+    assert "older than" not in message
     assert "eawf daemon restart" in message
     assert restarts == []
 
 
-def test_client_refuses_when_the_restart_fails(
-    stale_server: _ServerHandle, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("version", ["", "test"])
+def test_client_refuses_an_unorderable_daemon_version(
+    version: str, restarts: list[dict[str, Any]]
 ) -> None:
-    """A failed replacement surfaces both versions instead of calling the old daemon."""
-
-    def _fail(**_: Any) -> DaemonLifecycleResult:
-        raise DaemonLifecycleError("daemon did not stop within 30.0s pid=1")
-
-    monkeypatch.setattr("eawf.runtime.daemon.lifecycle.restart_daemon", _fail)
-    with pytest.raises(DaemonVersionMismatch) as excinfo:
-        DaemonClient(runtime_dir=stale_server.runtime_dir).__enter__()
-    message = str(excinfo.value)
-    assert "0.6.8" in message
-    assert __version__ in message
-    assert "did not stop" in message
-    assert "eawf daemon restart" in message
+    """An empty or non-release version is a mismatch too, never mistaken for current."""
+    handle = _ServerHandle(_short_runtime_dir(), version=version)
+    handle.start()
+    try:
+        with pytest.raises(DaemonVersionMismatch, match="eawf daemon restart"):
+            DaemonClient(runtime_dir=handle.runtime_dir).__enter__()
+    finally:
+        handle.stop()
+    assert restarts == []
 
 
-def test_client_refuses_when_the_restarted_daemon_is_still_stale(
-    stale_server: _ServerHandle, monkeypatch: pytest.MonkeyPatch
+def test_read_only_attach_also_refuses_an_older_daemon(
+    stale_server: _ServerHandle, restarts: list[dict[str, Any]]
 ) -> None:
-    """A supervisor that restarts the old binary again is refused, not looped on."""
+    """A read verb that only attaches never talks to a stale daemon either."""
+    with pytest.raises(DaemonVersionMismatch, match="eawf daemon restart"):
+        DaemonClient(runtime_dir=stale_server.runtime_dir, spawn=False).__enter__()
+    assert restarts == []
+
+
+def test_refused_client_holds_no_connection(
+    stale_server: _ServerHandle, restarts: list[dict[str, Any]]
+) -> None:
+    """After the refusal no call can reach the older daemon through the client."""
+    client = DaemonClient(runtime_dir=stale_server.runtime_dir)
+    with pytest.raises(DaemonVersionMismatch):
+        client.__enter__()
+    with pytest.raises(RuntimeError, match="not connected"):
+        client.call("daemon.ping")
+
+
+def test_unchecked_client_talks_to_an_older_daemon(
+    stale_server: _ServerHandle, restarts: list[dict[str, Any]]
+) -> None:
+    """``check_version=False`` attaches to the older daemon as it is."""
+    with DaemonClient(runtime_dir=stale_server.runtime_dir, check_version=False) as client:
+        assert client.call("daemon.ping")["version"] == "0.6.8"
+    assert restarts == []
+
+
+@pytest.fixture
+def daemon_cli_env(stale_server: _ServerHandle, monkeypatch: pytest.MonkeyPatch) -> _ServerHandle:
+    """Point the ``eawf daemon`` verbs at the older daemon, with no OS supervisor."""
+    from eawf.runtime.daemon.service_install import SupervisedAgentReport
+
+    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(stale_server.runtime_dir))
     monkeypatch.setattr(
-        "eawf.runtime.daemon.lifecycle.restart_daemon", _restart_into(stale_server, "0.6.8")
+        "eawf.runtime.daemon.service_install.detect_supervised_agent",
+        lambda **_: SupervisedAgentReport(
+            supervisor="none",
+            label="",
+            installed=False,
+            loaded=False,
+            program=None,
+            drift=False,
+            rival_pid=None,
+        ),
     )
-    with pytest.raises(DaemonVersionMismatch, match=r"0\.6\.8"):
-        DaemonClient(runtime_dir=stale_server.runtime_dir).__enter__()
+    return stale_server
 
 
-def test_read_only_attach_also_replaces_an_older_daemon(
-    stale_server: _ServerHandle, monkeypatch: pytest.MonkeyPatch
+def _daemon_ctx() -> typer.Context:
+    """Return the context a ``daemon`` verb reads: only ``obj`` carries flags."""
+    return cast(typer.Context, SimpleNamespace(obj=GlobalFlags()))
+
+
+def test_daemon_stop_reaches_an_older_daemon(
+    daemon_cli_env: _ServerHandle, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A read verb that only attaches still never talks to a stale daemon."""
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.lifecycle.restart_daemon",
-        _restart_into(stale_server, __version__),
-    )
-    with DaemonClient(runtime_dir=stale_server.runtime_dir, spawn=False) as client:
+    """``eawf daemon stop`` shuts an older daemon down instead of refusing it."""
+    from eawf.surfaces.cli.commands.daemon import stop_cmd
+
+    stop_cmd(_daemon_ctx(), no_drain=True, timeout=1, evict_service=False)
+    out = capsys.readouterr()
+    assert "daemon shutting down" in out.out
+    assert "eawf daemon restart" not in out.out + out.err
+
+
+def test_pipe_transport_shutdown_reaches_an_older_daemon(daemon_cli_env: _ServerHandle) -> None:
+    """The win32 transport of the daemon verbs skips the version check too."""
+    from eawf.surfaces.cli.commands.daemon import _rpc_call_pipe
+
+    response = _rpc_call_pipe("daemon.shutdown", {"drain": False, "timeout_seconds": 1}, spawn=True)
+    assert "error" not in response
+    assert "shutdown_at" in response["result"]
+
+
+def test_daemon_restart_replaces_an_older_daemon(
+    daemon_cli_env: _ServerHandle,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``eawf daemon restart`` shuts the older daemon down and brings this release up."""
+    from eawf.surfaces.cli.commands.daemon import restart_cmd
+
+    handle = daemon_cli_env
+    new_pid = os.getpid() + 1
+
+    def _stopped(runtime_dir: Path, **_: Any) -> None:
+        assert runtime_dir == handle.runtime_dir
+        handle.stop()
+
+    def _spawn(runtime_dir: Path) -> int:
+        assert runtime_dir == handle.runtime_dir
+        handle.version = __version__
+        handle.start()
+        return new_pid
+
+    monkeypatch.setattr("eawf.runtime.daemon.lifecycle.wait_for_daemon_stopped", _stopped)
+    monkeypatch.setattr("eawf.runtime.daemon.lifecycle.auto_spawn_daemon", _spawn)
+    restart_cmd(_daemon_ctx(), no_drain=False, timeout=1)
+    assert f"daemon restarted pid={new_pid}" in capsys.readouterr().out
+    with DaemonClient(runtime_dir=handle.runtime_dir) as client:
         assert client.call("daemon.ping")["version"] == __version__
 
 

@@ -148,8 +148,8 @@ class DaemonVersionMismatch(StateConflict):
     A daemon from another release serves another wire surface: an older
     one lacks the current methods and rejects the current payloads, so
     every call it answers would fail or, worse, apply the old rules. The
-    client replaces an older daemon itself; this is raised when the daemon
-    is newer, its version cannot be ordered, or the replacement failed.
+    client never replaces it implicitly, since it may be serving live Runs;
+    the operator does, with ``eawf daemon restart``.
     """
 
 

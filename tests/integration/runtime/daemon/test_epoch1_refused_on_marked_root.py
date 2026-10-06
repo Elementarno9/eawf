@@ -207,26 +207,17 @@ def test_state_mutate_lands_on_an_unmarked_root(tmp_path: Path, repo: Path) -> N
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="boot path needs the POSIX runtime")
-def test_daemon_boot_writes_nothing_on_a_marked_root(
-    tmp_path: Path, repo: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("marked", [True, False], ids=["marked", "unmarked"])
+def test_daemon_boot_writes_nothing_to_the_epoch1_document(
+    tmp_path: Path, repo: Path, monkeypatch: pytest.MonkeyPatch, marked: bool
 ) -> None:
-    """The orphan reconcile would flip the ACTIVE session; on a marked root it does not."""
-    _mark(repo)
+    """The ACTIVE session survives the boot, with or without the marker."""
+    if marked:
+        _mark(repo)
     before = _epoch1_digests(repo)
     _boot(tmp_path, repo, monkeypatch)
     assert _epoch1_digests(repo) == before
     assert _active_sessions(repo) == [SESSION_ID]
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="boot path needs the POSIX runtime")
-def test_daemon_boot_reconciles_an_unmarked_root(
-    tmp_path: Path, repo: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The control: without the marker the boot sweep does rewrite state.json."""
-    before = _epoch1_digests(repo)
-    _boot(tmp_path, repo, monkeypatch)
-    assert _epoch1_digests(repo)[0] != before[0]
-    assert _active_sessions(repo) == []
 
 
 def test_schedule_sweeps_skip_a_marked_root(tmp_path: Path, repo: Path) -> None:

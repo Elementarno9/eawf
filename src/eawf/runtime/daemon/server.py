@@ -69,6 +69,11 @@ logger = logging.getLogger(__name__)
 # local users. POSIX-only — Windows uses the named-pipe transport.
 SOCKET_FILE_MODE: int = 0o600
 
+# Umask applied around ``bind``: it masks every group/other bit and the
+# owner execute bit, so the node is born no wider than ``SOCKET_FILE_MODE``
+# instead of briefly existing at ``0o777 & ~umask`` until a later chmod.
+_SOCKET_BIND_UMASK: Final[int] = 0o177
+
 
 # JSON-RPC 2.0 error codes (reserved range -32768..-32000) plus the
 # daemon-specific extensions in the -32000..-32099 server-error band.
@@ -704,17 +709,29 @@ async def serve_unix(
     async def _on_connect(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         await handle_connection(reader, writer, ctx, expected_uid=expected_uid)
 
-    server = await asyncio.start_unix_server(_on_connect, path=socket_path, limit=MAX_FRAME_BYTES)
-    # ``start_unix_server`` creates the socket node under the prevailing
-    # umask, which may leave it group/world-accessible. Tighten it to
-    # owner-only before any peer connects so the filesystem node is
-    # unreachable by other local users (the peer-cred check gates *who*
-    # may issue RPCs; this gates *who can reach the node at all*). The
-    # holding directory is hardened at its creation point in
-    # :func:`eawf.runtime.daemon.runtime_dir.ensure_runtime_dir`, not here —
-    # ``serve_unix`` does not own the socket's parent (tests + operators
-    # may bind under a shared dir such as ``$TMPDIR``).
-    if os.name != "nt":
+    # Bind here rather than through ``start_unix_server(path=...)`` so the
+    # umask swap brackets only the synchronous ``bind``: the umask is
+    # process-wide, and holding it across an await would leak it to other
+    # tasks. Binding under the tight umask means the node never exists
+    # wider than owner-only, so no peer can reach it in a window before
+    # the chmod below (the peer-cred check gates *who* may issue RPCs;
+    # this gates *who can reach the node at all*).
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        previous_umask = os.umask(_SOCKET_BIND_UMASK)
+        try:
+            sock.bind(socket_path)
+        finally:
+            os.umask(previous_umask)
+        # Kept as a second line in case a platform ignores the umask for
+        # socket nodes. The holding directory is hardened at its creation
+        # point in :func:`eawf.runtime.daemon.runtime_dir.ensure_runtime_dir`,
+        # not here — ``serve_unix`` does not own the socket's parent (tests
+        # and operators may bind under a shared dir such as ``$TMPDIR``).
         os.chmod(socket_path, SOCKET_FILE_MODE)
+        server = await asyncio.start_unix_server(_on_connect, sock=sock, limit=MAX_FRAME_BYTES)
+    except BaseException:
+        sock.close()
+        raise
     logger.info(f"serve_unix bound socket={socket_path!r}")
     return server

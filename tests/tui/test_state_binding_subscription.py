@@ -18,11 +18,21 @@ dropped flooded the daemon with ~2 subscribes/second. These tests pin the fixes:
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import os
+import socket
+import threading
+import time
+from typing import TYPE_CHECKING, Any, cast
 
 import orjson
+import pytest
 
 from eawf.kernel.state.enums import StoreKind
 from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
+
+if TYPE_CHECKING:
+    from eawf.surfaces.cli._daemon_client import DaemonClient
 
 
 def _binding() -> StateBinding:
@@ -180,3 +190,130 @@ def test_start_subscribe_loop_reconnects_after_interval() -> None:
         assert len(started) == 2
 
     asyncio.run(body())
+
+
+class _BlockingClient:
+    """A daemon client whose subscription read blocks until its socket is shut down.
+
+    The peer end of a socket pair is held open and never written, and the socket
+    carries no timeout, so ``readline()`` returns only once ``disconnect`` wakes it.
+    """
+
+    def __init__(self) -> None:
+        self._sock, self._peer = socket.socketpair()
+        self._reader: Any = None
+        self.subscribed = threading.Event()
+        self.calls: list[str] = []
+
+    def __enter__(self) -> _BlockingClient:
+        self._reader = self._sock.makefile("rb")
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    def call(self, method: str, _params: dict[str, Any] | None = None) -> dict[str, Any]:
+        self.calls.append(method)
+        self.subscribed.set()
+        return {}
+
+    def close(self) -> None:
+        # The peer goes first: its EOF ends a still-blocked read, which holds
+        # the buffered reader's lock that closing the reader would wait on.
+        self._peer.close()
+        if self._reader is not None:
+            with contextlib.suppress(OSError):
+                self._reader.close()
+        self._sock.close()
+
+
+def _blocking_binding(client: _BlockingClient) -> tuple[StateBinding, threading.Event]:
+    """Bind ``client`` and report when the subscription thread has returned."""
+
+    async def _noop_state(_s: object) -> None:
+        return None
+
+    async def _noop_degraded(_d: bool) -> None:
+        return None
+
+    callbacks = StateBindingCallbacks(on_state=_noop_state, on_degraded=_noop_degraded)
+    binding = StateBinding(
+        None, callbacks, daemon_client_factory=lambda: cast("DaemonClient", client)
+    )
+    exited = threading.Event()
+    run = binding._run_subscription
+
+    def _tracked(loop: asyncio.AbstractEventLoop) -> None:
+        try:
+            run(loop)
+        finally:
+            exited.set()
+
+    binding._run_subscription = _tracked  # type: ignore[method-assign]
+    return binding, exited
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the POSIX socket read; Windows uses CancelIoEx")
+def test_disconnect_wakes_a_read_that_blocks_indefinitely() -> None:
+    """``disconnect`` returns in under a second and the subscription thread has exited."""
+    client = _BlockingClient()
+
+    async def body() -> None:
+        binding, exited = _blocking_binding(client)
+        try:
+            binding._subscribe_task = asyncio.create_task(binding._subscribe_loop())
+            assert await asyncio.to_thread(client.subscribed.wait, 5.0)
+            await asyncio.sleep(0.05)  # let the thread park in readline()
+            assert not exited.is_set()
+
+            started = time.monotonic()
+            await binding.disconnect()
+            elapsed = time.monotonic() - started
+
+            assert elapsed < 1.0
+            assert exited.is_set()
+            assert binding._subscription_sock is None
+            assert binding._subscribe_task is None
+        finally:
+            # A regression must fail the test, not hang the executor shutdown.
+            client.close()
+
+    asyncio.run(body())
+
+
+def test_disconnect_without_subscription_has_no_socket_to_shut() -> None:
+    """With no subscription running, there is no socket and nothing to wait on."""
+
+    async def body() -> None:
+        binding = _binding()
+        assert binding._shutdown_subscription_sock() is False
+        started = time.monotonic()
+        await binding.disconnect()
+        assert time.monotonic() - started < 0.5
+
+    asyncio.run(body())
+
+
+def test_shutdown_tolerates_a_socket_the_thread_already_closed() -> None:
+    """A socket closed by the thread's own teardown is ignored, not raised."""
+    binding = _binding()
+    sock, peer = socket.socketpair()
+    sock.close()
+    peer.close()
+    binding._subscription_sock = sock
+    assert binding._shutdown_subscription_sock() is True
+
+
+def test_subscription_stopped_before_subscribe_never_calls() -> None:
+    """A disconnect that lands while connecting stops the thread before it subscribes."""
+    client = _BlockingClient()
+    binding, exited = _blocking_binding(client)
+    binding._stopping = True
+    loop = asyncio.new_event_loop()
+    try:
+        binding._run_subscription(loop)
+    finally:
+        loop.close()
+    assert client.calls == []
+    assert exited.is_set()
+    assert binding._subscription_sock is None

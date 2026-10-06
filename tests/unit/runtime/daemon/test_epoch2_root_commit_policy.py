@@ -153,8 +153,6 @@ def test_session_write_leaves_only_declared_files_behind(
             document_path,
             # The projection names the committed bytes it belongs to.
             status_projection_path(document_path),
-            context.lock_path(MILESTONE),
-            context.lock_path(BATCH),
             context.lock_path(DOCUMENT_LOCK_NAME),
         )
     )

@@ -1,4 +1,4 @@
-"""A native session touches the selected document only under epoch 2 and sorted locks.
+"""A native session touches the selected document only under epoch 2 and its one lock.
 
 Every canary is provisioned through the production provisioning path under
 ``tmp_path``, so the authority resolver reads the same declaration, pointer
@@ -6,8 +6,8 @@ and marker a real canary carries. A refused call is checked against the
 whole tree afterwards, lock directory included, because "refused" means
 nothing was written -- not merely that the handler raised.
 
-The lock-order cases record the lock targets the session hands to the lock
-primitive, so the order is asserted as taken rather than as computed.
+The lock cases record the lock targets the session hands to the lock
+primitive, so the lock set is asserted as taken rather than as computed.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ from eawf.runtime.daemon.epoch2_root import (
     Epoch2RootContext,
     attach_root_context,
     canonical_entity_urn,
-    entity_lock_order,
+    session_subjects,
 )
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.lock import portalock, sibling
@@ -261,15 +261,11 @@ def test_write_document_refused_when_the_generation_moves_mid_session(
         assert session.document_path.read_bytes() == before
 
 
-def test_session_takes_entity_locks_in_sorted_urn_order(
+def test_session_takes_only_the_document_lock(
     context: Epoch2RootContext, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     urns = [CLAIM, MILESTONE, BATCH]
-    by_urn = sorted(urns)
-    # Lock files are named by digest; a session that sorted by file name
-    # instead of by URN must fail here, so the two orders have to differ.
-    assert sorted(urns, key=lambda urn: hashlib.sha256(urn.encode()).hexdigest()) != by_urn
-    assert urns != by_urn
+    assert urns != sorted(urns)
     taken: list[Path] = []
     real_acquire = portalock.acquire
 
@@ -279,9 +275,53 @@ def test_session_takes_entity_locks_in_sorted_urn_order(
 
     monkeypatch.setattr(portalock, "acquire", recording)
     with context.session(urns) as session:
-        assert session.locked_urns == tuple(by_urn)
-    expected = [context.lock_path(name) for name in (*by_urn, DOCUMENT_LOCK_NAME)]
-    assert [sibling.lock_path(target) for target in taken] == expected
+        assert session.locked_urns == tuple(sorted(urns))
+    assert [sibling.lock_path(target) for target in taken] == [
+        context.lock_path(DOCUMENT_LOCK_NAME)
+    ]
+
+
+def test_twenty_sessions_over_distinct_urns_leave_only_the_document_lock(
+    context: Epoch2RootContext, canary: Path
+) -> None:
+    for index in range(1, 21):
+        milestone = f"eawf://WSP-{CODE}/PRJ-{CODE}/REP-{CODE}/milestone/MLS-{index:04d}"
+        claim = f"eawf://WSP-{CODE}/PRJ-{CODE}/_/claim/CLM-{index:04d}"
+        with context.session([claim, f"{claim}#rung-1", milestone]) as session:
+            assert session.locked_urns == tuple(sorted([claim, milestone]))
+            assert session.locked_urns[0] == milestone
+    lock_dir = canary / epoch2_root.LOCK_LOCATOR
+    assert [entry.name for entry in lock_dir.iterdir()] == ["document.lock"]
+
+
+def test_remove_entity_lock_files_without_a_lock_directory_removes_none(canary: Path) -> None:
+    assert epoch2_root.remove_entity_lock_files(canary) == 0
+    assert not (canary / "locks").exists()
+
+
+@pytest.mark.parametrize("count", [1, 2])
+def test_remove_entity_lock_files_counts_each_removed_file(canary: Path, count: int) -> None:
+    lock_dir = canary / epoch2_root.LOCK_LOCATOR
+    lock_dir.mkdir(parents=True)
+    (lock_dir / "document.lock").write_bytes(b"")
+    for index in range(count):
+        digest = hashlib.sha256(f"{MILESTONE}-{index}".encode()).hexdigest()
+        (lock_dir / f"{digest}.lock").write_bytes(b"")
+    assert epoch2_root.remove_entity_lock_files(canary) == count
+    assert [entry.name for entry in lock_dir.iterdir()] == ["document.lock"]
+
+
+def test_remove_entity_lock_files_unlistable_directory_raises(
+    canary: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (canary / epoch2_root.LOCK_LOCATOR).mkdir(parents=True)
+
+    def unlistable(self: Path) -> Any:
+        raise PermissionError(f"cannot list {self.name}")
+
+    monkeypatch.setattr(Path, "iterdir", unlistable)
+    with pytest.raises(PermissionError):
+        epoch2_root.remove_entity_lock_files(canary)
 
 
 def test_session_takes_one_lock_for_two_spellings_of_one_entity(
@@ -291,22 +331,22 @@ def test_session_takes_one_lock_for_two_spellings_of_one_entity(
         assert session.locked_urns == (CLAIM,)
 
 
-def test_entity_lock_order_is_independent_of_input_order() -> None:
+def test_session_subjects_is_independent_of_input_order() -> None:
     orders = {
-        entity_lock_order(permutation)
+        session_subjects(permutation)
         for permutation in itertools.permutations([CLAIM, MILESTONE, BATCH])
     }
     assert orders == {tuple(sorted([CLAIM, MILESTONE, BATCH]))}
 
 
-def test_entity_lock_order_folds_spellings_to_one_entity() -> None:
+def test_session_subjects_folds_spellings_to_one_entity() -> None:
     spellings: list[QualifiedUrn | str] = [
         f"{CLAIM}#rung-01",
         f"{CLAIM}#rung-1",
         CLAIM,
         parse_qualified_urn(f"{CLAIM}#rung-4"),
     ]
-    assert entity_lock_order(spellings) == (CLAIM,)
+    assert session_subjects(spellings) == (CLAIM,)
 
 
 def test_canonical_entity_urn_single_spelling_is_unchanged() -> None:
@@ -318,9 +358,9 @@ def test_canonical_entity_urn_drops_a_padded_rung() -> None:
     assert canonical_entity_urn(f"{CLAIM}#rung-004") == CLAIM
 
 
-def test_entity_lock_order_empty_rejected() -> None:
+def test_session_subjects_empty_rejected() -> None:
     with pytest.raises(ValueError, match="at least one entity"):
-        entity_lock_order([])
+        session_subjects([])
 
 
 @pytest.mark.parametrize(
@@ -332,9 +372,9 @@ def test_entity_lock_order_empty_rejected() -> None:
         pytest.param(f"eawf://WSP-{CODE}/PRJ-{CODE}/_/milestone/MLS-0001", id="reserved-slot"),
     ],
 )
-def test_entity_lock_order_malformed_urn_rejected(raw: str) -> None:
+def test_session_subjects_malformed_urn_rejected(raw: str) -> None:
     with pytest.raises(IdentityError):
-        entity_lock_order([MILESTONE, raw])
+        session_subjects([MILESTONE, raw])
 
 
 def test_session_without_entities_refused_with_zero_writes(
@@ -348,15 +388,15 @@ def test_session_without_entities_refused_with_zero_writes(
 
 
 @pytest.mark.usefixtures("lock_timeout")
-def test_session_holds_its_entity_lock_until_it_exits(context: Epoch2RootContext) -> None:
-    lock_file = context.lock_path(MILESTONE)
+def test_session_holds_the_document_lock_until_it_exits(context: Epoch2RootContext) -> None:
+    lock_file = context.lock_path(DOCUMENT_LOCK_NAME)
     held_target = lock_file.with_name(lock_file.stem)
     with (
         context.session([MILESTONE]),
         pytest.raises(portalock.LockTimeout),
         portalock.acquire(held_target),
     ):
-        pytest.fail("the entity lock must be held while the session is open")
+        pytest.fail("the document lock must be held while the session is open")
     with portalock.acquire(held_target):
         pass
 

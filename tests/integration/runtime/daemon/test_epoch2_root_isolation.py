@@ -9,19 +9,24 @@ keep them apart; only the root id each context derives from its own
 resolved tree can.
 
 Each namespace is checked twice: by path, and by behaviour with a negative
-control. Both roots hold the same entity lock at once, where a second
+control. Both roots hold their document lock at once, where a second
 session on the same root cannot; both write a WAL record under the same id,
 where a second write into one namespace is refused; and one root's cached
 replay is invisible to the other.
+
+A daemon boot sweeps the per-entity lock files earlier releases leaked into
+every tree it can reach, and leaves each tree's document lock in place.
 """
 
 from __future__ import annotations
 
+import hashlib
 import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+import orjson
 import pytest
 
 from eawf.kernel.migration.epoch2.generation import tree_digests
@@ -34,7 +39,13 @@ from eawf.platform.install.canary import (
     register_canary,
 )
 from eawf.platform.registry.models import Registry, RegistryRepoEntry
-from eawf.runtime.daemon.epoch2_root import NATIVE_WAL_DIRNAME, canonical_entity_urn
+from eawf.runtime.daemon import main as daemon_main
+from eawf.runtime.daemon.epoch2_root import (
+    DOCUMENT_LOCK_NAME,
+    LOCK_LOCATOR,
+    NATIVE_WAL_DIRNAME,
+    canonical_entity_urn,
+)
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.state_context import resolve_mutator_paths
 from eawf.runtime.daemon.wal import WalRecord, list_records, write_pending
@@ -139,11 +150,12 @@ def test_twin_roots_resolve_to_two_contexts(ctx: MethodContext, twins: Twins) ->
 
 
 @pytest.mark.usefixtures("lock_timeout")
-def test_twin_roots_hold_the_same_entity_lock_at_once(ctx: MethodContext, twins: Twins) -> None:
+def test_twin_roots_hold_their_document_locks_at_once(ctx: MethodContext, twins: Twins) -> None:
     first = ctx.native_root_context(twins.first_tree)
     second = ctx.native_root_context(twins.second_tree)
     entity = canonical_entity_urn(MILESTONE)
-    first_lock, second_lock = first.lock_path(entity), second.lock_path(entity)
+    first_lock = first.lock_path(DOCUMENT_LOCK_NAME)
+    second_lock = second.lock_path(DOCUMENT_LOCK_NAME)
     assert first_lock != second_lock
     assert first_lock.is_relative_to(twins.first_tree)
     assert second_lock.is_relative_to(twins.second_tree)
@@ -151,6 +163,8 @@ def test_twin_roots_hold_the_same_entity_lock_at_once(ctx: MethodContext, twins:
         assert held.locked_urns == (entity,)
         assert first_lock.exists()
         assert second_lock.exists()
+    assert not first.lock_path(entity).exists()
+    assert not second.lock_path(entity).exists()
 
 
 @pytest.mark.usefixtures("lock_timeout")
@@ -257,3 +271,100 @@ def test_native_roots_leave_epoch1_resolution_unchanged(tmp_path: Path, twins: T
     assert resolve_mutator_paths(repo_root=str(production), ctx=ctx) == routed_before
     assert bound_before == (state_path, state_path.parent / "store" / "event.jsonl", wal_dir)
     assert (ctx.state_path, ctx.wal_dir, ctx.idempotency_cache) == (state_path, wal_dir, None)
+
+
+def _leak_entity_locks(tree: Path, count: int) -> list[Path]:
+    """Write the per-entity lock files an earlier release left behind."""
+    lock_dir = tree / LOCK_LOCATOR
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    leaked = []
+    for index in range(count):
+        digest = hashlib.sha256(f"{MILESTONE}-{index}".encode()).hexdigest()
+        path = lock_dir / f"{digest}.lock"
+        path.write_bytes(b"")
+        leaked.append(path)
+    return leaked
+
+
+def _boot(tmp_path: Path, registry: Registry, mp: pytest.MonkeyPatch) -> None:
+    """Boot the daemon through ``run`` with only its listener stubbed out.
+
+    The daemon is bound to a placeholder project and reaches the twins only
+    through the registry, so the sweep is shown to cover registered trees.
+    """
+    runtime_root = tmp_path / "boot-runtime"
+    runtime_root.mkdir(exist_ok=True)
+    project = tmp_path / "project" / ".ea"
+    project.mkdir(parents=True, exist_ok=True)
+    (project / "state.json").write_bytes(orjson.dumps({"placeholder": True}))
+    registry_path = tmp_path / "registry.json"
+    registry_path.write_text(registry.model_dump_json(), encoding="utf-8")
+    mp.setenv("EA_STATE", str(project / "state.json"))
+    mp.setenv("EAWF_REGISTRY_PATH", str(registry_path))
+    mp.setattr(daemon_main, "ensure_runtime_dir", lambda: runtime_root)
+    mp.setattr(daemon_main, "pid_path", lambda: runtime_root / "eawfd.pid")
+    mp.setattr(daemon_main, "log_path", lambda: runtime_root / "eawfd.log")
+    mp.setattr(daemon_main, "socket_path", lambda: runtime_root / "eawfd.sock")
+    mp.setattr(daemon_main.asyncio, "run", lambda coro: coro.close())
+    assert daemon_main.run(foreground=True) == 0
+
+
+def test_daemon_boot_removes_leaked_entity_locks_and_keeps_the_document_lock(
+    ctx: MethodContext, twins: Twins, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for tree in (twins.first_tree, twins.second_tree):
+        with ctx.native_root_context(tree).session([MILESTONE]):
+            pass
+    first_leaked = _leak_entity_locks(twins.first_tree, 499)
+    second_leaked = _leak_entity_locks(twins.second_tree, 1)
+    assert all(path.exists() for path in (*first_leaked, *second_leaked))
+    _boot(tmp_path, twins.registry, monkeypatch)
+    for tree in (twins.first_tree, twins.second_tree):
+        names = sorted(entry.name for entry in (tree / LOCK_LOCATOR).iterdir())
+        assert names == ["document.lock"]
+
+
+def test_daemon_boot_leaves_files_that_are_not_entity_locks(
+    twins: Twins, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lock_dir = twins.first_tree / LOCK_LOCATOR
+    lock_dir.mkdir(parents=True)
+    kept = [
+        lock_dir / "document.lock",
+        lock_dir / f"{'a' * 63}.lock",
+        lock_dir / f"{'a' * 65}.lock",
+        lock_dir / f"{'A' * 64}.lock",
+        lock_dir / f"{'a' * 64}.lock.tmp",
+        lock_dir / f"{'a' * 64}",
+    ]
+    for path in kept:
+        path.write_bytes(b"")
+    nested = lock_dir / f"{'b' * 64}.lock"
+    nested.mkdir()
+    _leak_entity_locks(twins.first_tree, 1)
+    _boot(tmp_path, twins.registry, monkeypatch)
+    assert sorted(lock_dir.iterdir()) == sorted([*kept, nested])
+
+
+def test_daemon_boot_with_no_lock_directory_creates_none(
+    twins: Twins, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _boot(tmp_path, twins.registry, monkeypatch)
+    assert not (twins.first_tree / LOCK_LOCATOR).exists()
+    assert not (twins.second_tree / LOCK_LOCATOR).exists()
+
+
+def test_daemon_boot_sweeps_the_other_trees_when_one_cannot_be_swept(
+    twins: Twins, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    leaked = _leak_entity_locks(twins.second_tree, 2)
+    real = daemon_main.remove_entity_lock_files
+
+    def failing(tree_root: Path) -> int:
+        if tree_root == twins.first_tree:
+            raise PermissionError("lock directory unreadable")
+        return real(tree_root)
+
+    monkeypatch.setattr(daemon_main, "remove_entity_lock_files", failing)
+    _boot(tmp_path, twins.registry, monkeypatch)
+    assert not any(path.exists() for path in leaked)

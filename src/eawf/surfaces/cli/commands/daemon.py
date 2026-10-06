@@ -147,7 +147,9 @@ def _rpc_call_pipe(method: str, params: dict[str, Any], *, spawn: bool) -> dict[
     client raises :class:`DaemonRpcError` on an error envelope; this
     helper re-wraps it into the ``{"error": {...}}`` shape
     :func:`_emit_or_fail` expects so the two transports share one
-    formatter.
+    formatter. The version check is off, as it is on the UDS path: these
+    verbs are how the operator inspects and stops a daemon from another
+    release, so refusing that daemon here would leave no way to act on it.
 
     Args:
         method: JSON-RPC method name.
@@ -161,7 +163,7 @@ def _rpc_call_pipe(method: str, params: dict[str, Any], *, spawn: bool) -> dict[
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
     try:
-        with DaemonClient(runtime_dir=runtime_dir(), spawn=spawn) as client:
+        with DaemonClient(runtime_dir=runtime_dir(), spawn=spawn, check_version=False) as client:
             result = client.call(method, params)
         return {"result": result}
     except DaemonRpcError as exc:

@@ -46,6 +46,20 @@ logger = logging.getLogger(__name__)
 #: directly; this only bounds the round-trip RPC.
 DEFAULT_CALL_TIMEOUT_SECONDS: float = 30.0
 
+#: Win32 status codes a peer that went away raises on the client's read:
+#: ERROR_BROKEN_PIPE, ERROR_NO_DATA, ERROR_PIPE_NOT_CONNECTED.
+PIPE_CLOSED_CODES: frozenset[int] = frozenset({109, 232, 233})
+
+
+def _pipe_closed_code(exc: BaseException) -> int | None:
+    """Return the win32 code when *exc* reports a peer that closed the pipe."""
+    code = getattr(exc, "winerror", None)
+    if code is None and exc.args and isinstance(exc.args[0], int):
+        code = exc.args[0]
+    if isinstance(code, int) and code in PIPE_CLOSED_CODES:
+        return code
+    return None
+
 
 #: The public-release subset of PEP 440 that eawf versions are cut in:
 #: ``0.6.8``, ``0.7.0.dev5``, ``0.7.0rc1``, ``0.7.0rc1.dev2``.
@@ -131,6 +145,9 @@ class DaemonClient:
     A read verb passes ``spawn=False``: inspecting the surface must not be
     what starts a daemon, so enter then only attaches to a running one and
     raises :class:`DaemonNotRunningError` when none answers.
+    Enter refuses a daemon from another release unless ``check_version`` is
+    off, which only the ``eawf daemon`` verbs pass so the operator can always
+    inspect, stop or replace a mismatched daemon.
     The connection is a single socket; multiple ``client.call``
     invocations multiplex over it sequentially (one in-flight request
     at a time per the JSON-RPC 2.0 ordering contract).
@@ -142,12 +159,14 @@ class DaemonClient:
         runtime_dir: Path | None = None,
         call_timeout_seconds: float = DEFAULT_CALL_TIMEOUT_SECONDS,
         spawn: bool = True,
+        check_version: bool = True,
     ) -> None:
         if runtime_dir is None:
             runtime_dir = default_runtime_dir()
         self._runtime_dir = runtime_dir
         self._call_timeout_seconds = float(call_timeout_seconds)
         self._spawn = spawn
+        self._check_version = check_version
         self._sock: socket.socket | None = None
         self._reader: Any = None  # makefile("rb") for newline-framed reads
         self._pid: int = 0
@@ -181,13 +200,13 @@ class DaemonClient:
         if sys.platform == "win32":
             # Windows named-pipe transport: connectionless request/response.
             # Each ``call`` opens its own pipe handle through
-            # ``pipe_client_call`` (the per-user pipe is a singleton
+            # ``pipe_client_call`` (the per-tree pipe is a singleton
             # listener, so a long-held client handle would block other
-            # callers). Resolve the per-user pipe name once here so the
+            # callers). Resolve the per-tree pipe name once here so the
             # client carries it for every call.
             from eawf.runtime.daemon.windows_pipe import default_pipe_name
 
-            self._pipe_name = default_pipe_name()
+            self._pipe_name = default_pipe_name(self._runtime_dir)
             self._entered = True
             logger.debug(
                 f"__enter__ pipe pid={self._pid} pipe={self._pipe_name!r} "
@@ -211,62 +230,32 @@ class DaemonClient:
         logger.debug(f"__enter__ connected pid={self._pid} runtime={self._runtime_dir.name!r}")
 
     def _ensure_current_daemon(self) -> None:
-        """Replace a daemon from an older release before any call reaches it.
+        """Refuse a daemon from another release before any call reaches it.
 
         A daemon outlives the install that started it, so after an upgrade
         the CLI finds the previous release still serving: it lacks the
         current methods and validates payloads against the old schemas.
-        An older daemon is restarted through the same path as
-        ``eawf daemon restart``; a newer or unorderable one is refused, as
-        replacing it would downgrade whoever started it.
+        Replacing it here would kill whatever Runs it is serving on the
+        side effect of an unrelated command, so even an older daemon is
+        only refused; the operator replaces it with ``eawf daemon restart``.
 
         Raises:
-            DaemonVersionMismatch: When the daemon is newer, its version
-                cannot be ordered, the restart fails, or the restarted
-                daemon still reports another release.
+            DaemonVersionMismatch: When the daemon reports any release
+                other than this CLI's.
         """
-        from eawf.runtime.daemon import lifecycle
-
+        if not self._check_version:
+            return
         daemon_version = str(self.call("daemon.ping").get("version", ""))
         if daemon_version == __version__:
             return
-        order = release_order(daemon_version, __version__)
-        if order is None or order > 0:
-            self.__exit__(None, None, None)
-            raise DaemonVersionMismatch(
-                f"the running daemon is eawf {daemon_version}, not this eawf {__version__}; "
-                "run `eawf daemon restart` to replace it with this release"
-            )
-        previous_pid = self._pid
         self.__exit__(None, None, None)
-        try:
-            result = lifecycle.restart_daemon(runtime_dir=self._runtime_dir)
-        except lifecycle.DaemonLifecycleError as exc:
-            raise DaemonVersionMismatch(
-                f"the running daemon is eawf {daemon_version}, older than this eawf "
-                f"{__version__}, and restarting it failed: {exc}; "
-                "run `eawf daemon restart`"
-            ) from exc
-        logger.info(
-            f"daemon restarted stale previous_pid={previous_pid} pid={result.pid} "
-            f"daemon_version={daemon_version!r} client_version={__version__!r}"
+        order = release_order(daemon_version, __version__)
+        relation = "older than" if order is not None and order < 0 else "not"
+        raise DaemonVersionMismatch(
+            f"the running daemon is eawf {daemon_version}, {relation} this eawf {__version__}; "
+            "it may be serving live Runs, so it is not replaced implicitly; "
+            "run `eawf daemon restart` to replace it with this release"
         )
-        self._pid = result.pid
-        if sys.platform == "win32":
-            from eawf.runtime.daemon.windows_pipe import default_pipe_name
-
-            self._pipe_name = default_pipe_name()
-            self._entered = True
-        else:
-            self._connect_socket()
-        restarted_version = str(self.call("daemon.ping").get("version", ""))
-        if restarted_version != __version__:
-            self.__exit__(None, None, None)
-            raise DaemonVersionMismatch(
-                f"the restarted daemon is eawf {restarted_version}, not this eawf "
-                f"{__version__}; its supervisor still starts the old release; "
-                "reinstall the daemon service, then run `eawf daemon restart`"
-            )
 
     def __exit__(
         self,
@@ -372,7 +361,11 @@ class DaemonClient:
             The response frame bytes.
 
         Raises:
-            RuntimeError: When the pipe round-trip fails.
+            ConnectionResetError: When the daemon closed the pipe before the
+                reply was read. ``daemon.shutdown`` races this by
+                construction, so the caller decides whether a lost reply is
+                a failure.
+            RuntimeError: When the pipe round-trip fails for any other reason.
         """
         from eawf.runtime.daemon.windows_pipe import pipe_client_call
 
@@ -381,8 +374,24 @@ class DaemonClient:
         try:
             response: bytes = pipe_client_call(self._pipe_name, line, wait_ms=wait_ms)
         except OSError as exc:
-            raise RuntimeError(f"daemon pipe round-trip failed method={method!r}: {exc}") from exc
+            raise self._pipe_failure(exc, method=method) from exc
+        except Exception as exc:
+            # pywintypes.error carries the win32 status but subclasses Exception,
+            # not OSError, so the clause above never sees it and an unhandled one
+            # reaches the operator as a bare ``(109, 'ReadFile', ...)`` tuple.
+            if type(exc).__module__ != "pywintypes":
+                raise
+            raise self._pipe_failure(exc, method=method) from exc
         return response
+
+    @staticmethod
+    def _pipe_failure(exc: BaseException, *, method: str) -> Exception:
+        """Return the typed error for a failed pipe round-trip."""
+        if _pipe_closed_code(exc) is not None:
+            return ConnectionResetError(
+                f"daemon closed the pipe before replying method={method!r}: {exc}"
+            )
+        return RuntimeError(f"daemon pipe round-trip failed method={method!r}: {exc}")
 
     @staticmethod
     def _parse_response(response_bytes: bytes) -> dict[str, Any]:
