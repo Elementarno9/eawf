@@ -164,38 +164,6 @@ def _project_slug(cwd: Path) -> str:
     return re.sub(r"[^A-Za-z0-9]", "-", str(cwd))
 
 
-def transcript_path_for_session(session_id: str, *, cwd: Path | None = None) -> Path | None:
-    """Return the session-transcript path for *session_id*, or ``None``.
-
-    Resolves the per-project transcript directory from *cwd* first (the common
-    case: the claiming session runs inside the repo), then falls back to a glob
-    across every project directory so a session started from a different working
-    directory -- a worktree, say -- still resolves.
-
-    Args:
-        session_id: The Claude Code session id (a UUID) whose transcript is
-            wanted.
-        cwd: Working directory the session ran in. ``None`` skips the
-            direct-path probe and goes straight to the glob.
-
-    Returns:
-        The transcript path when a readable file exists, else ``None``.
-    """
-    if not session_id:
-        return None
-    root = projects_root()
-    if cwd is not None:
-        direct = root / _project_slug(cwd) / f"{session_id}.jsonl"
-        if direct.is_file():
-            return direct
-    try:
-        matches = sorted(root.glob(f"*/{session_id}.jsonl"))
-    except OSError as exc:
-        logger.debug(f"transcript_path_for_session session={session_id!r} err={exc!r}")
-        return None
-    return matches[0] if matches else None
-
-
 def _read_rows(transcript_path: Path) -> list[dict[str, Any]]:
     """Return decoded transcript rows, skipping malformed lines."""
     rows: list[dict[str, Any]] = []
@@ -751,5 +719,4 @@ __all__ = [
     "aggregate_transcript_counters",
     "projects_root",
     "read_transcript",
-    "transcript_path_for_session",
 ]

@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 
 #: JSON-RPC error code the server emits when a mutation is rejected by a
 #: lifecycle guard or by post-mutation invariant validation. Single
-#: source of truth shared by :class:`DaemonValidationError` raisers in
-#: :mod:`eawf.runtime.daemon.methods.state` and the wire-mapping in
+#: source of truth shared by :class:`DaemonValidationError` raisers and the
+#: wire-mapping in
 #: :func:`eawf.runtime.daemon.server._process_frame`; the CLI client maps it to
 #: :class:`eawf.surfaces.cli.errors.ValidationError` (exit code 2).
 VALIDATION_FAILED: Final[int] = -32002
@@ -136,12 +136,11 @@ class MethodContext:
             rows + mutate state. ``None`` when the daemon runs without
             an on-disk state (unit tests; daemonless paths).
         wal_dir: Filesystem path to the daemon's outcome-WAL directory
-            (typically ``<runtime_dir>/wal/``). Owned by
-            :mod:`eawf.runtime.daemon.methods.state` for the
-            ``state.mutate`` algorithm. ``None`` when the daemon
+            (typically ``<runtime_dir>/wal/``) the epoch-1 upkeep
+            writers journal through. ``None`` when the daemon
             runs without an on-disk WAL (unit tests; daemonless paths).
-        idempotency_cache: In-memory cache for ``state.mutate``
-            idempotency replay (TTL 60 s). The cache is attached
+        idempotency_cache: In-memory cache for mutation idempotency
+            replay (TTL 60 s). The cache is attached
             lazily by the mutator on first access; legacy contexts
             without the field get one added on demand. The durable
             replay guarantee lives in the WAL.
@@ -389,15 +388,12 @@ def register(name: str) -> Callable[[Handler], Handler]:
 #: adding an entry module is a visible edit and a stray file cannot quietly
 #: become part of the surface.
 _METHOD_MODULES: Final[tuple[str, ...]] = (
-    "agent",
     "bulk",
     "campaign",
     "campaign_run",
     "daemon",
     "budget_notice",
     "candidate",
-    "close",
-    "close_hosted",
     "config",
     "conformance",
     "console_records",
@@ -417,7 +413,6 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "effort_mapping",
     "event",
     "evidence_ladder",
-    "fleet",
     "host_context",
     "host_deny",
     "host_error",
@@ -454,7 +449,6 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "run_liveness",
     "runtime_certification",
     "semantic",
-    "spec",
     "spend",
     "state",
     "state_subscribe",

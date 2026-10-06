@@ -306,20 +306,15 @@ def _build_watchdog(ctx: MethodContext, idle_timeout_seconds: float) -> IdleTime
 
     def _in_flight() -> int:
         # Count live background work the RPC dispatcher never refreshes
-        # last_activity for: a headless fleet drive (or a research Campaign
-        # drive) runs in the background, neither bumping last_activity nor incrementing
-        # in_flight_mutations, so without counting it here the watchdog
-        # self-kills a subscriber-less headless drive mid-spawn at the idle
-        # timeout. Function-local imports keep the fleet/research modules off
-        # main's import path (they never import main; this stays cycle-free).
+        # last_activity for: a research Campaign drive runs in the background,
+        # neither bumping last_activity nor incrementing in_flight_mutations, so
+        # without counting it here the watchdog self-kills a subscriber-less
+        # drive mid-round at the idle timeout. The function-local import keeps
+        # the research module off main's import path (it never imports main;
+        # this stays cycle-free).
         from eawf.runtime.daemon.methods.campaign_run import campaign_drive_in_flight
-        from eawf.runtime.daemon.methods.fleet import drive_in_flight
 
-        return (
-            ctx.in_flight_mutations
-            + (1 if drive_in_flight() else 0)
-            + (1 if campaign_drive_in_flight() else 0)
-        )
+        return ctx.in_flight_mutations + (1 if campaign_drive_in_flight() else 0)
 
     return IdleTimeoutWatchdog(
         idle_timeout_seconds=idle_timeout_seconds,
@@ -327,23 +322,6 @@ def _build_watchdog(ctx: MethodContext, idle_timeout_seconds: float) -> IdleTime
         has_subscribers=_has_subscribers,
         in_flight=_in_flight,
     )
-
-
-def _shutdown_background_drives() -> None:
-    """Signal + join any background fleet drive on daemon shutdown.
-
-    The fleet drive runs on a daemon thread that is not an asyncio task, so the
-    serve loop's task-cancel teardown never reaps it. Cancel + join it here so a
-    mid-drive shutdown stops claiming new waves and does not exit while a drain
-    is mid-write. A research Campaign drive is an asyncio task the serve loop's
-    teardown cancels; a round it leaves running is returned to pending by the
-    next drive. The idle-watchdog interlock keeps the daemon alive while either
-    is in flight. Function-local import stays
-    cycle-free (fleet never imports main).
-    """
-    from eawf.runtime.daemon.methods.fleet import shutdown_drive
-
-    shutdown_drive()
 
 
 #: Soft alarm ceiling for one in-flight mutation (seconds). Mirrors the
@@ -899,16 +877,9 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
     loop_lag_task = _schedule_loop_lag_monitor(ctx)
-    from eawf.runtime.daemon.methods.close import (
-        resume_durable_close_attempts,
-        shutdown_close_attempts,
-    )
-
-    resume_durable_close_attempts(ctx)
     try:
         await ctx.shutdown_event.wait()
     finally:
-        await shutdown_close_attempts()
         watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await watchdog_task
@@ -938,7 +909,6 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
             loop_lag_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await loop_lag_task
-        _shutdown_background_drives()
         server.close()
         await server.wait_closed()
 
@@ -995,16 +965,9 @@ async def _run_windows_server(ctx: MethodContext, rt_dir: Path) -> None:
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
     loop_lag_task = _schedule_loop_lag_monitor(ctx)
-    from eawf.runtime.daemon.methods.close import (
-        resume_durable_close_attempts,
-        shutdown_close_attempts,
-    )
-
-    resume_durable_close_attempts(ctx)
     try:
         await ctx.shutdown_event.wait()
     finally:
-        await shutdown_close_attempts()
         watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await watchdog_task
@@ -1034,7 +997,6 @@ async def _run_windows_server(ctx: MethodContext, rt_dir: Path) -> None:
             loop_lag_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await loop_lag_task
-        _shutdown_background_drives()
         pipe_server.stop()
 
 

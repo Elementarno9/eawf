@@ -1358,8 +1358,8 @@ def task_create_cmd(
 # there they would run against a partial module whenever this module is the
 # first of the two a process imports.
 from eawf.surfaces.cli.commands import domain_delivery as _domain_delivery  # noqa: E402, F401
-from eawf.surfaces.cli.commands import domain_legacy as _domain_legacy  # noqa: E402, F401
 from eawf.surfaces.cli.commands import domain_target as _domain_target  # noqa: E402, F401
+from eawf.surfaces.cli.commands import record as _record  # noqa: E402, F401
 
 __all__ = [
     "CANDIDATE_SUBMIT",

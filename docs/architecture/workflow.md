@@ -72,7 +72,7 @@ Every skill performs `Probe instruments → Resolve scope → Action → Envelop
 4. Define objective and non-goals.
 5. Build task DAG: task ID, deps, file scope, success criteria, `agent_role`, `effort_bucket`, commands, evidence, risk, expected artifact.
 6. Partition into waves: parallel only for disjoint / controlled scopes; assign worktree policy.
-7. Estimate each wave at the one effort constant and roll up `sum_wave_eu` / `critical_path_eu`; a size label changes no figure.
+7. Estimate each wave at the one effort constant; a size label changes no figure.
 8. Allocate IDs: `eawf batch create` auto-allocates next `P13-Ixx`; explicit `P13-I04` infers parent.
 9. Write plan / spec artifact, state wave stubs, and estimate records.
 10. Ask approval if `approval=ask`, risky, destructive, ambiguous, or budget exceeds threshold.

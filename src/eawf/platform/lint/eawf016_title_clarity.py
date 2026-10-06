@@ -31,17 +31,10 @@ a live-state measurement found it matched ~309 legitimate backlog refs
 (``B0NN``), decision codes (``V1``), and cluster ids — a false-positive storm
 that would train operators to ignore the lint.
 
-Enforcement points (per the doc-clarity ownership matrix):
-
-- The **mutation boundary** — :func:`assert_title_clarity` is called by the
-  ``plan_wave`` / ``plan_iter`` / ``open_iter`` / ``plan_phase`` /
-  ``open_phase`` lifecycle transitions and the ``add_decision`` evidence
-  mutator, so a new title is rejected at author time. Existing persisted
-  titles are never re-validated, so they are grandfathered for free.
-- A **diff-scoped pre-commit backstop** — :func:`check_state_title_lines`
-  parses only the *added* ``"title":`` lines of the staged ``state.json``
-  delta, catching anything that bypasses the boundary without flooding on
-  legacy titles.
+Enforcement point: a **diff-scoped pre-commit backstop** --
+:func:`check_state_title_lines` parses only the *added* ``"title":`` lines of
+the staged ``state.json`` delta, so existing persisted titles are never
+re-validated and stay grandfathered for free.
 """
 
 from __future__ import annotations
@@ -152,31 +145,6 @@ def check_title(title: str, *, lineno: int = 0) -> list[TitleClarityViolation]:
     return out
 
 
-def assert_title_clarity(title: str, *, entity_kind: str, entity_id: str) -> None:
-    """Raise when *title* violates the EAWF016 entity-title clarity rules.
-
-    The mutation-boundary gate: the lifecycle plan / open transitions call
-    this with the new title so a bad label is rejected at author time. A
-    clean title is a no-op.
-
-    Args:
-        title: The candidate entity title.
-        entity_kind: Human label for the entity kind (``"wave"`` / ``"iter"``
-            / ``"phase"`` / ``"decision"``), interpolated into the error.
-        entity_id: The entity id, interpolated into the error so the operator
-            can locate the offending row.
-
-    Raises:
-        ValueError: when *title* trips one or more title-clarity rules. The
-            message names the entity, the title, and every rule it failed.
-    """
-    violations = check_title(title)
-    if not violations:
-        return
-    reasons = "; ".join(v.reason for v in violations)
-    raise ValueError(f"{entity_kind} {entity_id!r} title {title!r} fails title-clarity: {reasons}")
-
-
 # Matches a JSON ``"title": "..."`` member on one physical line, capturing the
 # string value. Title values are bounded ≤72 chars and never contain an
 # unescaped quote, so a single non-greedy capture is sufficient for the
@@ -229,7 +197,6 @@ def check_state_title_lines(
 __all__ = [
     "RULE_CODE",
     "TitleClarityViolation",
-    "assert_title_clarity",
     "check_state_title_lines",
     "check_title",
 ]

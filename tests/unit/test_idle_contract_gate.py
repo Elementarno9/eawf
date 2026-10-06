@@ -13,8 +13,7 @@ spec-jury QC gate against the B091 idle-verifier regression:
   is stubbed to enforce for a non-UI wave -- the fleet-wide-flip detection;
 - the happy path (producer wired + band present + band-scoped resolver) passes
   explicitly;
-- the split gate modules and the doctor checks stay under the EAWF010 cap, and
-  the ``eu_capture`` dynamic leg counts the actual row a wave close writes.
+- the split gate modules and the doctor checks stay under the EAWF010 cap.
 
 It also covers the :func:`detect_idle_contracts` meta-gate that generalizes
 the B091 lesson: parse the contract-family symbols a diff adds, then flag any
@@ -37,11 +36,9 @@ from pathlib import Path
 
 import pytest
 
-from eawf.kernel.state.enums import ActualStatus
-from eawf.kernel.state.models import ActualSummary, State, Wave
+from eawf.kernel.state.models import Wave
 from eawf.platform.lint import eawf010
 from eawf.platform.profiles.models import ProfileBody, VerifyBlock
-from eawf.runtime.daemon.methods.state_close import append_wave_close_actual
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _GATE_PATH = _REPO_ROOT / "tools" / "idle_contract_gate.py"
@@ -193,37 +190,14 @@ def test_probe_wave_id_title_carry_no_band_token(mod) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# I03 contract probes -- required intent, UI require-gate, mockup golden tier.
+# I03 contract probe -- mockup golden tier.
 # --------------------------------------------------------------------------- #
-
-
-def _no_intent_guard_plan_wave(*args, **kwargs):
-    """A ``plan_wave`` stand-in that accepts ``intent=None`` without raising."""
-    del args, kwargs
-    return None
 
 
 def test_i03_contracts_pass_on_current_tree(mod) -> None:
     result = mod.check_i03_contracts()
     assert result.passed is True
     assert result.failure is None
-
-
-def test_i03_contracts_fail_when_required_intent_guard_idle(mod) -> None:
-    result = mod.check_i03_contracts(plan_wave_fn=_no_intent_guard_plan_wave)
-    assert result.passed is False
-    assert result.failure is mod.GateFailure.REQUIRED_INTENT_IDLE
-    assert "required-intent guard is idle" in result.message
-
-
-def test_main_returns_nonzero_when_required_intent_guard_idle(mod, monkeypatch, capsys) -> None:
-    # End-to-end proof for W10 success criterion 2: neutralizing the imported
-    # plan_wave guard makes main() fail and names the idled contract on stderr.
-    monkeypatch.setattr(mod, "_plan_wave", _no_intent_guard_plan_wave)
-    code = mod.main(["idle_contract_gate.py"])
-    captured = capsys.readouterr()
-    assert code != 0
-    assert "required-intent guard is idle" in captured.err
 
 
 def test_i03_contracts_fail_when_mockup_golden_diff_tier_missing(mod) -> None:
@@ -878,79 +852,3 @@ def test_split_modules_keep_the_gate_surface(mod) -> None:
     assert mod.detect_idle_contracts is meta.detect_idle_contracts
     assert mod.GateFailure is wiring.GateFailure
     assert mod.MissingDischarge is meta.MissingDischarge
-
-
-# --------------------------------------------------------------------------- #
-# eu_capture: a wave close writes the actual row the dynamic leg counts.
-# --------------------------------------------------------------------------- #
-
-
-def _eu_capture(mod):
-    return [c for c in mod._I22_BOUND_CONTRACTS if c.name == "eu_capture"]
-
-
-def _close_written_actual(root: Path, *, wave_id: str, elapsed_eu: float) -> None:
-    """Append the actual row a close writes for a close-created summary under *root*."""
-    state_path = root / ".ea" / "state.json"
-    state = State.model_construct(
-        actuals={
-            wave_id: ActualSummary(
-                id=f"ACT-{wave_id}",
-                scope_id=wave_id,
-                status=ActualStatus.DONE,
-                elapsed_eu=elapsed_eu,
-                current_store_record_id=f"REC-{wave_id}",
-                updated_at=datetime(2026, 9, 1, tzinfo=UTC),
-            )
-        }
-    )
-    append_wave_close_actual(state, wave_id=wave_id, state_path=state_path)
-
-
-def test_check_contract_exercised_passes_eu_capture_after_a_wave_close(
-    mod, tmp_path: Path, monkeypatch
-) -> None:
-    _close_written_actual(tmp_path, wave_id="P01-I01-W01", elapsed_eu=0.5)
-    monkeypatch.setattr(mod, "_REPO_ROOT", tmp_path)
-    findings = mod.check_contract_exercised(
-        store_rows_fn=mod._default_store_rows,
-        jury_convened_fn=lambda: False,
-        contracts=_eu_capture(mod),
-    )
-    assert findings == []
-
-
-def test_check_contract_exercised_reds_eu_capture_before_any_wave_close(
-    mod, tmp_path: Path, monkeypatch
-) -> None:
-    monkeypatch.setattr(mod, "_REPO_ROOT", tmp_path)
-    findings = mod.check_contract_exercised(
-        store_rows_fn=mod._default_store_rows,
-        jury_convened_fn=lambda: False,
-        contracts=_eu_capture(mod),
-    )
-    assert [finding.symbol for finding in findings] == ["eu_capture"]
-
-
-def test_check_contract_exercised_reds_eu_capture_on_a_zero_eu_close(
-    mod, tmp_path: Path, monkeypatch
-) -> None:
-    # Boundary: an honest zero-EU close is written but measured nothing.
-    _close_written_actual(tmp_path, wave_id="P01-I01-W01", elapsed_eu=0.0)
-    monkeypatch.setattr(mod, "_REPO_ROOT", tmp_path)
-    findings = mod.check_contract_exercised(
-        store_rows_fn=mod._default_store_rows,
-        jury_convened_fn=lambda: False,
-        contracts=_eu_capture(mod),
-    )
-    assert [finding.missing for finding in findings] == [mod.MissingDischarge.NO_RUNTIME_OUTPUT]
-
-
-def test_append_wave_close_actual_raises_without_a_summary(tmp_path: Path) -> None:
-    with pytest.raises(KeyError):
-        append_wave_close_actual(
-            State.model_construct(actuals={}),
-            wave_id="P01-I01-W01",
-            state_path=tmp_path / ".ea" / "state.json",
-        )
-    assert not (tmp_path / ".ea" / "store" / "actual.jsonl").exists()

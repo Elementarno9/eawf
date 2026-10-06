@@ -10,7 +10,7 @@ Covers the standalone gate in ``tools/coverage_gate.py``:
   files (a typo'd path);
 - ``evaluate_tui_behavioural`` counts the console's recorded golden frames and
   journeys and fires when either count falls below its floor;
-- the seven previously-ungated packages named by P30-I10-W06 are all present in
+- the previously-ungated packages named by P30-I10-W06 are all present in
   ``[tool.eawf.coverage.gates]`` and the TUI carries a behavioural floor instead
   of a line/branch ratchet;
 - the real ``pyproject.toml`` floors are GREEN against the real ``coverage.xml``
@@ -48,12 +48,11 @@ _GATE_PATH = _REPO_ROOT / "tools" / "coverage_gate.py"
 _PYPROJECT = _REPO_ROOT / "pyproject.toml"
 _COVERAGE_XML = _REPO_ROOT / "coverage.xml"
 
-#: The seven packages P30-I10-W06 brings under a per-package ratchet.
+#: The packages P30-I10-W06 brought under a per-package ratchet that still exist.
 _W06_PACKAGES = (
     "verify",
     "dispatch",
     "evidence",
-    "lifecycle",
     "eval",
     "runtimes",
     "sandbox",

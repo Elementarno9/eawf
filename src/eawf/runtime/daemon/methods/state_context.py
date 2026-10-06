@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 import orjson
-from pydantic import ValidationError
 
 from eawf.kernel.state.enums import (
     StoreKind,
@@ -70,13 +69,6 @@ def idempotency_cache(ctx: MethodContext) -> dict[str, CachedMutation]:
     fresh: dict[str, CachedMutation] = {}
     ctx.idempotency_cache = fresh
     return fresh
-
-
-def evict_expired(cache: dict[str, CachedMutation], *, now: float) -> None:
-    """Drop entries whose age exceeds :data:`IDEMPOTENCY_TTL_SECONDS`."""
-    expired = [k for k, v in cache.items() if now - v.cached_at > IDEMPOTENCY_TTL_SECONDS]
-    for k in expired:
-        cache.pop(k, None)
 
 
 # ---- Per-request repo anchor resolution -----------------------------------
@@ -226,53 +218,7 @@ def read_state(state_path: Path) -> tuple[State, dict[str, Any]]:
     return report.state, payload
 
 
-def digest_snapshot(state_path: Path) -> tuple[str, State | None]:
-    """Hash and validate the on-disk state, returning ``(version, state)``.
-
-    Callers run this on a worker thread: ``state.json`` grows into the
-    multi-megabyte range, and reading, parsing and validating it is
-    blocking work that would otherwise stall the daemon event loop for
-    the whole duration of a digest poll.
-
-    Args:
-        state_path: Path of the repo's ``state.json``.
-
-    Returns:
-        The 16-hex-char digest of the raw bytes plus the validated state.
-        The state is ``None`` when the file is absent or fails to parse
-        or validate, which lets the poll path degrade to a bare digest
-        instead of faulting; an absent file digests as empty bytes so an
-        uninitialised project still answers.
-    """
-    try:
-        raw = state_path.read_bytes()
-    except FileNotFoundError:
-        return hashlib.sha256(b"").hexdigest()[:16], None
-    version = hashlib.sha256(raw).hexdigest()[:16]
-    try:
-        state = State.model_validate(orjson.loads(raw))
-    except (orjson.JSONDecodeError, ValidationError) as exc:
-        logger.warning(f"digest_elapsed_update status='skip' err={exc!r}")
-        return version, None
-    return version, state
-
-
 def args_hash(mutation: Mutation) -> str:
     """Stable 16-hex-char digest of the mutation params."""
     raw = orjson.dumps(mutation.params, option=orjson.OPT_SORT_KEYS)
     return hashlib.sha256(raw).hexdigest()[:16]
-
-
-def config_root_for_state_path(state_path: Path) -> Path:
-    """Return the root that owns ``.ea/config.yaml`` for *state_path*."""
-    return state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
-
-
-def event_store_path_for(state_path: Path) -> Path:
-    """Return the ``event.jsonl`` path that pairs with *state_path*.
-
-    Thin wrapper around :func:`eawf.kernel.store.paths.store_path` so callers
-    in :mod:`eawf.runtime.daemon.main` keep a single import surface for the
-    canonical pairing.
-    """
-    return store_path(state_path, StoreKind.EVENT)

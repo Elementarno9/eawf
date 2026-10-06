@@ -25,7 +25,7 @@ ea_skill_output:
     persisted_store_records: [urn:eawf:v1:store:QR/research/...]
     state_mutations: [phases.P13.status=active]
     evidence_refs: [urn:eawf:v1:audit:..., urn:eawf:v1:commit:QR/abc123]
-    next_valid_actions: [eawf plan show, /verify]
+    next_valid_actions: [eawf status, /verify]
     warnings:
       - { code: instrument_missing, detail: "gh not installed; PR open skipped" }
 ```

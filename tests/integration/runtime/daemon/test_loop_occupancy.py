@@ -42,7 +42,7 @@ from eawf.kernel.state.models import State
 from eawf.runtime.daemon.limits import READINESS_BUDGET_SECONDS
 from eawf.runtime.daemon.methods import MethodContext, MethodNotFoundError
 from eawf.runtime.daemon.server import handle_connection
-from tests.integration.runtime.daemon.test_close_lock_split import _build_ctx, _write_state
+from tests.integration.runtime.daemon._epoch1_state_fixtures import build_ctx, write_state
 
 pytestmark = pytest.mark.integration
 
@@ -161,14 +161,14 @@ def install_read_hold(
     Stands in for the blocking IO + Pydantic validation the real handler
     does, scaled up so the stall is unambiguous.
     """
-    real_read_state = state_mod._read_state
+    real_read_state = state_mod.read_state
 
     def _held_read_state(state_path: Path) -> tuple[State, dict[str, Any]]:
         started.set()
         time.sleep(hold_seconds)
         return real_read_state(state_path)
 
-    monkeypatch.setattr(state_mod, "_read_state", _held_read_state)
+    monkeypatch.setattr(state_mod, "read_state", _held_read_state)
 
 
 def _ping_latency_during_hold(
@@ -203,8 +203,8 @@ def test_inline_handler_stalls_an_unrelated_ping(
     connection waits out the whole hold — head-of-line blocking, and the
     reason a busy daemon reads as an absent one."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
-    ctx = _build_ctx(tmp_path, state_path)
+    write_state(state_path)
+    ctx = build_ctx(tmp_path, state_path)
     monkeypatch.setattr(server_mod, "OFFLOADED_METHODS", frozenset())
 
     latency, read_response_payload = _ping_latency_during_hold(ctx, monkeypatch, "occ-inline")
@@ -224,8 +224,8 @@ def test_offloaded_handler_leaves_the_ping_within_budget(
     """CR RUN-054: the same two-second hold, offloaded, no longer stalls the
     ping — it answers inside the shared readiness budget."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
-    ctx = _build_ctx(tmp_path, state_path)
+    write_state(state_path)
+    ctx = build_ctx(tmp_path, state_path)
     assert "state.read" in server_mod.OFFLOADED_METHODS
 
     latency, read_response_payload = _ping_latency_during_hold(ctx, monkeypatch, "occ-offload")
@@ -243,8 +243,8 @@ def test_offloaded_read_returns_the_same_payload_as_an_inline_read(
 ) -> None:
     """Offloading changes where the handler runs, not what it answers."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
-    ctx = _build_ctx(tmp_path, state_path)
+    write_state(state_path)
+    ctx = build_ctx(tmp_path, state_path)
 
     offloaded = asyncio.run(server_mod._dispatch_method("state.read", ctx, {}))
     monkeypatch.setattr(server_mod, "OFFLOADED_METHODS", frozenset())
@@ -259,8 +259,8 @@ def test_dispatch_method_raises_method_not_found_for_an_unknown_method(
 ) -> None:
     """Error path: an unknown method faults the same way on either route."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
-    ctx = _build_ctx(tmp_path, state_path)
+    write_state(state_path)
+    ctx = build_ctx(tmp_path, state_path)
 
     with pytest.raises(MethodNotFoundError):
         asyncio.run(server_mod._dispatch_method("state.no_such_method", ctx, {}))
@@ -273,13 +273,13 @@ def test_dispatch_method_propagates_handler_errors_across_the_thread(
     """Error path: a handler exception raised on the worker thread reaches
     the loop unchanged, so the server still maps it to its wire code."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
-    ctx = _build_ctx(tmp_path, state_path)
+    write_state(state_path)
+    ctx = build_ctx(tmp_path, state_path)
 
     def _corrupt_read_state(state_path: Path) -> tuple[State, dict[str, Any]]:
         raise ValueError("state schema invalid: injected")
 
-    monkeypatch.setattr(state_mod, "_read_state", _corrupt_read_state)
+    monkeypatch.setattr(state_mod, "read_state", _corrupt_read_state)
 
     with pytest.raises(ValueError, match="state schema invalid"):
         asyncio.run(server_mod._dispatch_method("state.read", ctx, {}))

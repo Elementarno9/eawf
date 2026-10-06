@@ -502,21 +502,6 @@ def build_narrative(
     raise NarrativeNotFoundError(f"scope not found: {scope_id!r}")
 
 
-def render_narrative_bundle(bundle: NarrativeBundle) -> str:
-    """Render a bundle as What/Why/Validation/Risks markdown sections."""
-    lines: list[str] = []
-    for heading, bullets in (
-        ("What", bundle.what),
-        ("Why", bundle.why),
-        ("Validation", bundle.validation),
-        ("Risks", bundle.risks),
-    ):
-        lines.extend([f"## {heading}", ""])
-        lines.extend(f"- {bullet}" for bullet in bullets)
-        lines.append("")
-    return "\n".join(lines).rstrip()
-
-
 def generated_changelog_lines(bundle: NarrativeBundle) -> list[str]:
     """Return changelog bullets generated from a narrative bundle."""
     return [f"- {item}" for item in bundle.changelog]
@@ -527,5 +512,4 @@ __all__ = [
     "NarrativeNotFoundError",
     "build_narrative",
     "generated_changelog_lines",
-    "render_narrative_bundle",
 ]

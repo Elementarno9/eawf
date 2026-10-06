@@ -30,11 +30,12 @@ from typing import Any
 import pytest
 
 from eawf.kernel.spec.release import Release, ReleaseStatus, ReleaseTargetStatus
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import burn, show
 from eawf.runtime.daemon.methods.release_disposition import adopt
 from eawf.surfaces.cli.commands.release import RELEASE_RPC_METHODS, release_app
-from eawf.workflow.evidence._io import atomic_write_state, load_state
+from eawf.workflow.evidence._io import load_state
 from eawf.workflow.release.admission import required_contract_ids
 from eawf.workflow.release.adoption import adopt_publication
 from eawf.workflow.release.advance import (
@@ -85,7 +86,7 @@ def state_path(tmp_path: Path) -> Path:
     """Return a throwaway state root the drive may record into."""
     path = tmp_path / ".ea" / "state.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_state(path, load_state(_EMPTY_STATE))
+    write_state_unlocked(path, load_state(_EMPTY_STATE).model_dump(mode="json"))
     return path
 
 

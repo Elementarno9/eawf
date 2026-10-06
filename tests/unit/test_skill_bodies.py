@@ -18,27 +18,18 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from eawf.workflow.skills.bodies import (
-    AgentDispatchBody,
     AuditBody,
-    BlitzBody,
-    CoauthorBody,
-    CompressBody,
-    DifferentiateBody,
     FlowBody,
     InitBody,
     MemoryBody,
     MockupBody,
     MockupVariant,
     PolishBody,
-    PrepBody,
     ResearchBody,
     ReviewBody,
-    RoadmapBody,
-    SecurityReviewBody,
     ShipBody,
     UserQuestion,
     UserQuestionOption,
-    WaveSpecBody,
 )
 
 
@@ -81,67 +72,6 @@ def test_research_body_carries_no_fan_out_or_option_field(field: str) -> None:
     """Nothing produces options, a recommendation or a fan-out plan, so the body has none."""
     with pytest.raises(ValidationError, match="Extra inputs"):
         ResearchBody.model_validate({"brief_id": "BR-001", field: None})
-
-
-def test_blitz_body_minimal_construction_and_round_trip() -> None:
-    body = BlitzBody(depth=1, depth_cap=8, residual_unknowns=2)
-    _round_trip(body)
-
-
-def test_blitz_body_rejects_extra_field() -> None:
-    with pytest.raises(ValidationError, match="Extra inputs"):
-        BlitzBody.model_validate(
-            {"depth": 1, "depth_cap": 8, "residual_unknowns": 2, "unexpected": True}
-        )
-
-
-def test_prep_body_minimal_construction_and_round_trip() -> None:
-    # A minimal body carries no DAG, so it must mark the no_op exemption to
-    # satisfy the planning-DAG invariant.
-    body = PrepBody(iter_id="P00-I01", objective="ship something", no_op=True)
-    _round_trip(body)
-
-
-def test_prep_body_full_payload_round_trip() -> None:
-    body = PrepBody.model_validate(
-        {
-            "iter_id": "P00-I01",
-            "objective": "ship something",
-            "non_goals": ["docs only"],
-            "dag": [
-                {
-                    "task_id": "T1",
-                    "deps": [],
-                    "file_scope": ["src/foo.py"],
-                    "commands": ["uv run pytest"],
-                    "evidence": ["events.jsonl"],
-                    "risk": "low",
-                }
-            ],
-            "waves": [
-                {
-                    "wave_id": "P00-I01-W01",
-                    "tasks": ["T1"],
-                    "worktree_policy": "isolate",
-                    "estimate_eu": 2.0,
-                }
-            ],
-            "acceptance": {"checks": ["pytest"], "baselines": ["green CI"]},
-            "approval_required": True,
-        }
-    )
-    _round_trip(body)
-
-
-def test_prep_body_rejects_extra_field() -> None:
-    with pytest.raises(ValidationError, match="Extra inputs"):
-        PrepBody.model_validate(
-            {
-                "iter_id": "P00-I01",
-                "objective": "ship",
-                "unexpected": "x",
-            }
-        )
 
 
 def test_audit_body_round_trip_with_full_payload() -> None:
@@ -308,47 +238,6 @@ def test_init_body_minimal_round_trip_and_extra_rejected() -> None:
         InitBody.model_validate({"unexpected": 1})
 
 
-def test_roadmap_body_round_trip() -> None:
-    body = RoadmapBody.model_validate(
-        {
-            "horizon": "Q3",
-            "candidates": [
-                {
-                    "item_id": "R1",
-                    "title": "Add X",
-                    "rationale": "users want it",
-                    "priority": "P1",
-                    "estimate_eu": 5.0,
-                }
-            ],
-            "chosen_order": ["R1"],
-        }
-    )
-    _round_trip(body)
-    with pytest.raises(ValidationError, match="Extra inputs"):
-        RoadmapBody.model_validate({"unexpected": 1})
-
-
-def test_differentiate_body_round_trip() -> None:
-    body = DifferentiateBody.model_validate(
-        {
-            "target_scope": "PROJECT",
-            "axes": [
-                {
-                    "name": "speed",
-                    "current": "fast",
-                    "peers": ["slow"],
-                    "advantage": "yes",
-                }
-            ],
-            "conclusions": ["we are faster"],
-        }
-    )
-    _round_trip(body)
-    with pytest.raises(ValidationError, match="Extra inputs"):
-        DifferentiateBody.model_validate({"unexpected": 1})
-
-
 def test_flow_body_round_trip_with_step_dicts() -> None:
     """``steps`` accepts a list of envelope dicts (back-compat with §15.2)."""
     body = FlowBody.model_validate(
@@ -511,16 +400,6 @@ def test_mockup_variant_requires_non_empty_layout() -> None:
 # --- C04b bodies -------------------------------------------------
 
 
-def test_coauthor_body_round_trip_and_mode_literal() -> None:
-    body = CoauthorBody(mode="runtime", trailer="Co-Authored-By: Claude <noreply@anthropic.com>")
-    _round_trip(body)
-    assert body.kind == "coauthor_resolution"
-    with pytest.raises(ValidationError, match="Input should be"):
-        CoauthorBody.model_validate({"mode": "auto"})
-    with pytest.raises(ValidationError, match="Extra inputs"):
-        CoauthorBody.model_validate({"mode": "disabled", "unexpected": 1})
-
-
 def test_memory_body_round_trip_and_verb_literal() -> None:
     body = MemoryBody(verb="save", name="prefs", tier="working")
     _round_trip(body)
@@ -529,75 +408,3 @@ def test_memory_body_round_trip_and_verb_literal() -> None:
         MemoryBody.model_validate({"verb": "drop", "tier": "working"})
     with pytest.raises(ValidationError, match="Extra inputs"):
         MemoryBody.model_validate({"verb": "list", "tier": "working", "unexpected": 1})
-
-
-def test_agent_dispatch_body_round_trip_and_extra_rejected() -> None:
-    body = AgentDispatchBody(
-        wave_id="P26-I01-W26",
-        runtime_preference=["codex", "claude-code"],
-        resolved_runtime="codex",
-    )
-    _round_trip(body)
-    assert body.kind == "agent_dispatch"
-    with pytest.raises(ValidationError, match="Extra inputs"):
-        AgentDispatchBody.model_validate({"wave_id": "X", "unexpected": 1})
-
-
-def test_compress_body_round_trip_and_extra_rejected() -> None:
-    body = CompressBody(
-        tokens_before=1000,
-        tokens_after=250,
-        ratio=0.25,
-        runtime="claude-code",
-        cache_control_applied=True,
-    )
-    _round_trip(body)
-    assert body.kind == "compression_result"
-    with pytest.raises(ValidationError, match="Extra inputs"):
-        CompressBody.model_validate({"tokens_before": 10, "unexpected": 1})
-
-
-def test_wave_spec_body_round_trip_and_verb_literal() -> None:
-    body = WaveSpecBody(verb="validate", wave_id="P26-I01-W26")
-    _round_trip(body)
-    assert body.kind == "wave_spec_operation"
-    with pytest.raises(ValidationError, match="Input should be"):
-        WaveSpecBody.model_validate({"verb": "scaffold", "wave_id": "X"})
-    with pytest.raises(ValidationError, match="Extra inputs"):
-        WaveSpecBody.model_validate({"verb": "init", "wave_id": "X", "unexpected": 1})
-
-
-def test_wave_spec_body_carries_mockup_golden_path() -> None:
-    """The mockup_golden_path field round-trips and defaults to None."""
-    bare = WaveSpecBody(verb="init", wave_id="P30-I04-W07")
-    assert bare.mockup_golden_path is None
-    stamped = WaveSpecBody(
-        verb="init",
-        wave_id="P30-I04-W07",
-        mockup_golden_path="tests/snapshots/tui/golden/mockup_P30-I04-W07.txt",
-    )
-    _round_trip(stamped)
-    assert stamped.mockup_golden_path == ("tests/snapshots/tui/golden/mockup_P30-I04-W07.txt")
-
-
-def test_security_review_body_round_trip_and_extra_rejected() -> None:
-    body = SecurityReviewBody.model_validate(
-        {
-            "scope_id": "urn:eawf:v1:state:QR/P26",
-            "spec_path": "audit.yaml",
-            "checks_run": 1,
-            "findings": [{"name": "spec-present", "passed": True, "details": None}],
-        }
-    )
-    _round_trip(body)
-    assert body.kind == "security_review_report"
-    with pytest.raises(ValidationError, match="Extra inputs"):
-        SecurityReviewBody.model_validate({"scope_id": "X", "unexpected": 1})
-    # Nested finding also forbids extras.
-    with pytest.raises(ValidationError, match="Extra inputs"):
-        SecurityReviewBody.model_validate(
-            {
-                "scope_id": "X",
-                "findings": [{"name": "n", "passed": True, "unexpected": 1}],
-            }
-        )

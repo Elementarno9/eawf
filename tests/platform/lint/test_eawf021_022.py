@@ -11,8 +11,6 @@ chokepoint with the existing fail-open / fail-closed switch.
 
 from __future__ import annotations
 
-import pytest
-
 from eawf.kernel.spec.common import (
     CriterionSpec,
     DeferredDeliverable,
@@ -21,12 +19,10 @@ from eawf.kernel.spec.common import (
     QualityDimension,
     ResponseClause,
     SourceUnit,
-    grandfather_criterion,
 )
 from eawf.platform.lint.eawf021_measurable_criterion import (
     BANNED_VAGUE_TOKENS,
     check_criterion,
-    check_criterion_spec,
 )
 from eawf.platform.lint.eawf021_measurable_criterion import (
     RULE_CODE as EAWF021_CODE,
@@ -45,10 +41,6 @@ from eawf.platform.lint.eawf022_propose_coverage import (
     check_source as check_eawf022_source,
 )
 from eawf.platform.lint.validate_prose import COMPOSED_RULES, validate_prose
-from eawf.workflow.lifecycle._errors import (
-    LifecycleError,
-    check_criteria_measurability,
-)
 from eawf.workflow.propose.generator import extract_units
 
 
@@ -150,55 +142,6 @@ def _spec(text: str, signal: str, *, response: ResponseClause | None = None) -> 
         measurable_signal=signal,
         response=response,
     )
-
-
-def test_check_criterion_spec_flags_vague_signal() -> None:
-    spec = _spec(
-        "returns 200 for a valid request",
-        "the endpoint is performant under load",
-        response=ResponseClause(observe=ObserveVerb.RETURNS, object="200", locus=ProofLocus.PYTEST),
-    )
-    violations = check_criterion_spec(spec)
-    assert any("banned vague token" in r for r in _reasons(violations))
-
-
-def test_check_criterion_spec_clean_for_measurable_row() -> None:
-    spec = _spec(
-        "returns 200 for a valid request; pytest tests/x.py::test_ok",
-        "exit code 0 on a clean corpus; cli_exit",
-        response=ResponseClause(observe=ObserveVerb.RETURNS, object="200", locus=ProofLocus.PYTEST),
-    )
-    assert check_criterion_spec(spec) == []
-
-
-# ---- EAWF021 binding at the wave-plan boundary (check_criteria_measurability) -
-
-
-def test_check_criteria_measurability_flags_unmeasurable_authored_row() -> None:
-    # An authored (non-legacy) row with no observation contract raises, naming
-    # the EAWF021 finding body.
-    spec = _spec("the widget works properly", "the widget works properly under load")
-    with pytest.raises(LifecycleError, match="unmeasurable success criteria") as exc:
-        check_criteria_measurability([spec], entity_kind="wave", entity_id="P01-I01-W01")
-    assert EAWF021_CODE in str(exc.value)
-
-
-def test_check_criteria_measurability_exempts_grandfathered_legacy_row() -> None:
-    # A grandfathered legacy row carries no observation contract by
-    # construction, yet the exemption keeps it clean so existing waves
-    # round-trip (no raise).
-    legacy = grandfather_criterion("ship the thing", index=1)
-    assert legacy.kind == "legacy"
-    check_criteria_measurability([legacy], entity_kind="wave", entity_id="P01-I01-W01")
-
-
-def test_check_criteria_measurability_clean_for_measurable_authored_row() -> None:
-    spec = _spec(
-        "returns 200 for a valid request; pytest tests/x.py::test_ok",
-        "exit code 0 on a clean corpus; cli_exit",
-        response=ResponseClause(observe=ObserveVerb.RETURNS, object="200", locus=ProofLocus.PYTEST),
-    )
-    check_criteria_measurability([spec], entity_kind="wave", entity_id="P01-I01-W01")
 
 
 # ---- EAWF022: propose coverage gate -----------------------------------------

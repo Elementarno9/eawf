@@ -1,17 +1,12 @@
-"""A cut-over tree with work still in flight, and a way to drive it.
+"""A cut-over tree with work still in flight, and a way to call the daemon on it.
 
 The pinned corpus closed every phase before it was frozen, so a real apply
 over it leaves nothing for a continuation to move. The suites here need
 what the live repository will hold at its cut: an active phase, an active
 iter inside it, and waves in each of the states a cut can catch -- planned,
 claimed, running -- with the gates their epoch-1 specs declared. The seed
-edits a copy of the corpus before the apply, so every row the suites move
+edits a copy of the corpus before the apply, so every row the suites read
 was written by the production importer rather than by hand.
-
-The gates are real ``pytest`` runs over two files planted at the
-repository root, one that passes and one that fails, so a completion's
-gate outcome is decided by a child interpreter exactly as a live close's
-is.
 """
 
 from __future__ import annotations
@@ -36,8 +31,6 @@ from tests.integration.kernel.migration._cutover_harness import (
     staged_corpus,
 )
 
-ACTOR: Final = "OP-0001"
-ADVANCE: Final = "domain.legacy.advance"
 APPEND: Final = "domain.record.append"
 
 #: The seeded scope: one active phase with one active iter holding three
@@ -185,29 +178,6 @@ def call(tree: CutoverTree, method: str, ctx: MethodContext, **params: Any) -> d
     """Dispatch one native verb against *tree* and return its envelope."""
     wire = {"repo_root": str(tree.target_root.parent), **params}
     return asyncio.run(methods.dispatch(method, ctx, wire))
-
-
-def advance(
-    tree: CutoverTree,
-    ctx: MethodContext,
-    *,
-    key: str,
-    collection: str,
-    to: str,
-    evidence_refs: tuple[str, ...] = (),
-) -> dict[str, Any]:
-    """Ask for one legacy move on behalf of the test operator."""
-    return call(
-        tree,
-        ADVANCE,
-        ctx,
-        key=key,
-        collection=collection,
-        to=to,
-        reason="continue the imported record after the cutover",
-        evidence_refs=list(evidence_refs),
-        actor=ACTOR,
-    )
 
 
 def document_path(tree: CutoverTree) -> Path:

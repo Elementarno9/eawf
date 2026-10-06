@@ -448,3 +448,135 @@ def test_surf_081_several_registry_ops_each_get_a_distinct_key(
     }
     repo._persist_registry_via_daemon(Registry(repos=entries), registry, idempotency_key="k")
     assert sorted(p["idempotency_key"] for p in registry_wire) == ["k:0", "k:1"]
+
+
+# ---- record append and the retired legacy verbs -----------------------------
+
+#: The ``record append`` surface an operator scripts against: the verb, its
+#: two required flags, and the daemon method it forwards to.
+_RECORD_APPEND_OPTIONS: Final = {"--kind": True, "--from-spec": True}
+_RECORD_APPEND_METHOD: Final = "domain.record.append"
+_RETIRED_LEGACY: Final = (
+    ("task", "advance-legacy", "P01-I01-W01", "--to", "CLAIMED"),
+    ("batch", "close-legacy", "P01-I01"),
+    ("milestone", "close-legacy", "P01"),
+    ("milestone", "cancel-legacy", "P01"),
+)
+
+
+def test_surf_081_the_exemptions_hold_their_pinned_count() -> None:
+    verbs = {row.verb for row in verb_closure.ANCHOR_EXEMPTIONS}
+    assert len(verb_closure.ANCHOR_EXEMPTIONS) == 93
+    assert "record append" in verbs
+    assert not any(verb.endswith("-legacy") for verb in verbs)
+
+
+def test_record_group_keeps_append_and_evidence(leaves: dict[str, click.Command]) -> None:
+    assert sorted(p for p in leaves if p.startswith("record ")) == [
+        "record append",
+        "record evidence",
+    ]
+
+
+def test_record_append_keeps_its_flags(leaves: dict[str, click.Command]) -> None:
+    command = leaves["record append"]
+    options = {
+        opt: param.required
+        for param in command.params
+        if isinstance(param, click.Option)
+        for opt in param.opts
+    }
+    assert options == _RECORD_APPEND_OPTIONS
+    assert [p for p in command.params if isinstance(p, click.Argument)] == []
+
+
+def _fake_record_daemon(
+    monkeypatch: pytest.MonkeyPatch, leaves: dict[str, click.Command], answer: dict[str, Any]
+) -> list[tuple[str, dict[str, Any]]]:
+    """Point ``record append`` at a daemon double, whichever module defines it."""
+    sent: list[tuple[str, dict[str, Any]]] = []
+
+    class _Client:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> _Client:
+            return self
+
+        def __exit__(self, *_exc: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+            sent.append((method, dict(params)))
+            return answer
+
+    callback = leaves["record append"].callback
+    assert callback is not None
+    module = sys.modules[callback.__module__]
+    monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
+    monkeypatch.setattr("eawf.surfaces.cli._dispatch.escalate_mutation", lambda *_a, **_k: 0)
+    monkeypatch.setattr(module, "DaemonClient", _Client)
+    return sent
+
+
+def test_record_append_sends_the_spec_and_prints_the_one_envelope(
+    leaves: dict[str, click.Command], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    record = {"id": "A900", "scope_id": "P04-I01", "kind": "evaluation"}
+    receipt = {"collection": "audit", "record_key": "A900", "event_id": "EV-1"}
+    answer = DomainEnvelope.model_validate(
+        {
+            "schema_version": "1.0",
+            "status": "ok",
+            "operation": _RECORD_APPEND_METHOD,
+            "result": receipt,
+        }
+    ).model_dump(mode="json")
+    sent = _fake_record_daemon(monkeypatch, leaves, answer)
+    spec = tmp_path / "audit.json"
+    spec.write_bytes(orjson.dumps(record))
+
+    result = CliRunner().invoke(
+        app,
+        ["--json", "-w", str(tmp_path), "record", "append", "--kind", "audit", "--from-spec",
+         str(spec)],
+    )  # fmt: skip
+
+    assert result.exit_code == 0, result.output
+    [(method, params)] = sent
+    assert method == _RECORD_APPEND_METHOD
+    assert params == {"repo_root": str(tmp_path.resolve()), "kind": "audit", "record": record}
+    printed = orjson.loads(result.stdout)
+    assert (printed["status"], printed["operation"]) == ("ok", _RECORD_APPEND_METHOD)
+    assert printed["result"] == receipt
+
+
+def test_record_append_with_a_missing_spec_sends_nothing(
+    leaves: dict[str, click.Command], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Error path: an unreadable ``--from-spec`` is refused before the daemon is called."""
+    sent = _fake_record_daemon(monkeypatch, leaves, {})
+    result = CliRunner().invoke(
+        app,
+        ["-w", str(tmp_path), "record", "append", "--kind", "audit", "--from-spec",
+         str(tmp_path / "absent.json")],
+    )  # fmt: skip
+    assert result.exit_code != 0
+    assert sent == []
+
+
+def test_record_append_without_its_kind_is_a_usage_error(tmp_path: Path) -> None:
+    """Boundary: dropping one required flag is click's usage error, exit 2."""
+    spec = tmp_path / "audit.json"
+    spec.write_bytes(b"{}")
+    result = CliRunner().invoke(app, ["record", "append", "--from-spec", str(spec)])
+    assert result.exit_code == 2
+
+
+@pytest.mark.parametrize("argv", _RETIRED_LEGACY, ids=lambda argv: " ".join(argv[:2]))
+def test_a_retired_legacy_verb_exits_two(
+    leaves: dict[str, click.Command], argv: tuple[str, ...]
+) -> None:
+    assert " ".join(argv[:2]) not in leaves
+    result = CliRunner().invoke(app, [*argv, "--actor", "OPERATOR", "--reason", "done"])
+    assert result.exit_code == 2, result.output

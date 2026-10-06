@@ -21,10 +21,11 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
-from pydantic import ValidationError
+from pydantic import Field, TypeAdapter, ValidationError
 
+from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
 from eawf.kernel.config.layered import get_dotted, merge_config
 from eawf.kernel.config.registry import LEAF_KEY_REGISTRY
 from eawf.kernel.state.resolve import resolve_with_reason
@@ -864,71 +865,6 @@ def check_recent_actuals(*, workspace: Path | None) -> CheckResult:
     )
 
 
-def check_iter_audit_links(*, workspace: Path | None) -> CheckResult:
-    """Validate CLOSED iter audit links with the production close policy."""
-    name = "iter_audit_links"
-    if workspace is None:
-        return CheckResult(name=name, status="ok", detail="no workspace anchor")
-    loaded = _load_state_for_check(workspace, name=name)
-    if isinstance(loaded, CheckResult):
-        return loaded
-    state, state_path = loaded
-
-    from eawf.kernel.state.enums import AuditKind, IterStatus
-    from eawf.workflow.lifecycle._audit_acceptance import (
-        ITER_CLOSE_AUDIT_CHECK_ORDER,
-        assess_close_audit,
-    )
-    from eawf.workflow.lifecycle.legacy_audit import (
-        disposition_matches,
-        load_legacy_audit_dispositions,
-    )
-
-    invalid: list[str] = []
-    closed_count = 0
-    acknowledged_count = 0
-    dispositions = load_legacy_audit_dispositions(state_path)
-    for iter_id, iter_row in sorted(state.iters.items()):
-        if iter_row.status is not IterStatus.CLOSED:
-            continue
-        closed_count += 1
-        assessment = assess_close_audit(
-            state,
-            audit_id=iter_row.audit_id,
-            allowed_scope_ids=frozenset({iter_id}),
-            required_kind=AuditKind.EVALUATION,
-            check_order=ITER_CLOSE_AUDIT_CHECK_ORDER,
-            require_passing_check=True,
-        )
-        if assessment.issue is not None:
-            issue = assessment.issue.value
-            if disposition_matches(
-                dispositions,
-                iter_id=iter_id,
-                audit_id=iter_row.audit_id,
-                issue=issue,
-            ):
-                acknowledged_count += 1
-            else:
-                invalid.append(f"{iter_id}={issue}")
-    if invalid:
-        shown = ", ".join(invalid[:5])
-        suffix = f" (+{len(invalid) - 5} more)" if len(invalid) > 5 else ""
-        return CheckResult(
-            name=name,
-            status="warn",
-            detail=f"{len(invalid)} invalid closed-iter audit link(s): {shown}{suffix}",
-        )
-    return CheckResult(
-        name=name,
-        status="ok",
-        detail=(
-            f"{closed_count - acknowledged_count} closed iter audit link(s) accepted; "
-            f"{acknowledged_count} acknowledged legacy-unverified"
-        ),
-    )
-
-
 def check_cli_daemon_version(
     *,
     probe_version: Callable[[], str | None] | None = None,
@@ -939,14 +875,39 @@ def check_cli_daemon_version(
     )
 
 
+_MAX_PARALLEL_WAVES_ADAPTER: TypeAdapter[int] = TypeAdapter(
+    Annotated[int, Field(strict=True, ge=1, le=16)]
+)
+
+
+def resolve_max_parallel_waves(repo_root: Path | None) -> int:
+    """Return the validated ``planning.max_parallel_waves`` value.
+
+    Args:
+        repo_root: Repository root supplying the layered configuration, or
+            ``None`` for the built-in default.
+
+    Returns:
+        The resolved cap.
+
+    Raises:
+        pydantic.ValidationError: When the resolved leaf is not an integer in
+            the supported ``1..16`` range.
+    """
+    if repo_root is None:
+        raw: object = BUILT_IN_DEFAULTS["planning"]["max_parallel_waves"]
+    else:
+        merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
+        raw = get_dotted(merged, "planning.max_parallel_waves")
+    return _MAX_PARALLEL_WAVES_ADAPTER.validate_python(raw)
+
+
 def check_parallel_cap_enforcement(
     *,
     workspace: Path | None,
     resolver: Callable[[Path | None], int] | None = None,
 ) -> CheckResult:
-    """Report the effective cap and this version's enforcement capability."""
-    from eawf.workflow.lifecycle._capacity import resolve_max_parallel_waves
-
+    """Report whether the configured parallel-wave cap resolves to a valid value."""
     name = "parallel_cap_enforcement"
     anchor = _resolve_anchor(workspace)
     resolver = resolver or resolve_max_parallel_waves
@@ -961,7 +922,7 @@ def check_parallel_cap_enforcement(
     return CheckResult(
         name=name,
         status="ok",
-        detail=f"planning.max_parallel_waves={cap}; claim and fleet paths enforce this cap",
+        detail=f"planning.max_parallel_waves={cap}",
     )
 
 

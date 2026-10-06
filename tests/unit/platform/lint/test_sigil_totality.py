@@ -1,14 +1,13 @@
 """Unit tests for the sigil-totality gate.
 
-Covers the structural gate that proves every TUI-render status enum value (and
-every lifecycle FSM terminal) resolves to a REAL glyph through the single
+Covers the structural gate that proves every TUI-render status enum value
+resolves to a REAL glyph through the single
 resolver :func:`eawf.surfaces.tui.chassis.sigils.status_sigil` -- never a bare
 ``.value`` word, never a ``?`` fallthrough:
 
 - the gate PASSES on the REAL resolver: every covered status value resolves to
   a real glyph in both the unicode and ascii columns;
-- the coverage union spans ``list(EnumCls)`` for every render enum AND the FSM
-  terminal keys (so a status that exists only as an FSM state is covered);
+- the coverage union spans ``list(EnumCls)`` for every render enum;
 - the NEGATIVE control: a stub resolver that returns a bare ``.value`` for one
   deliberately-unmapped value makes the gate FAIL and CITE the offending member
   -- proving the gate is not idle;
@@ -67,14 +66,14 @@ def test_gate_passes_on_the_real_resolver() -> None:
     assert result.checked > 0
 
 
-def test_coverage_spans_every_render_enum_and_fsm_terminal() -> None:
-    # The coverage union includes every render-enum member AND the FSM terminal
-    # keys; the four ABANDONED/ARCHIVED extended states are present.
+def test_coverage_spans_every_render_enum() -> None:
+    # The coverage union includes every render-enum member, terminals included;
+    # the four ABANDONED/ARCHIVED extended states are present.
     members = set(covered_members())
     assert WaveStatus.ABANDONED in members
     assert AgentReportVerdict.PASS_WITH_FOLLOWUPS in members
     assert AuditVerdict.MINOR in members
-    # The FSM terminals (e.g. WaveStatus.CLOSED / FAILED) are covered too.
+    # The terminal statuses (e.g. WaveStatus.CLOSED / FAILED) are covered too.
     assert WaveStatus.CLOSED in members
     assert WaveStatus.FAILED in members
 

@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from eawf.kernel.spec.common import CriterionSpec, ResponseClause
+    from eawf.kernel.spec.common import ResponseClause
 
 RULE_CODE = "EAWF021"
 
@@ -316,25 +316,6 @@ def check_criterion(
     return violations
 
 
-def check_criterion_spec(criterion: CriterionSpec) -> list[MeasurabilityViolation]:
-    """Return EAWF021 violations for a typed :class:`CriterionSpec`.
-
-    Thin adapter over :func:`check_criterion` that reads ``text``,
-    ``response``, and ``measurable_signal`` straight off the typed row.
-
-    Args:
-        criterion: The typed success-criterion row to inspect.
-
-    Returns:
-        Violations in source order (see :func:`check_criterion`).
-    """
-    return check_criterion(
-        criterion.text,
-        response=criterion.response,
-        measurable_signal=criterion.measurable_signal,
-    )
-
-
 def check_source(source: str) -> list[MeasurabilityViolation]:
     """Return EAWF021 vague-token violations over a Markdown prose surface.
 
@@ -370,7 +351,6 @@ __all__ = [
     "RULE_CODE",
     "MeasurabilityViolation",
     "check_criterion",
-    "check_criterion_spec",
     "check_source",
     "extract_observation",
 ]

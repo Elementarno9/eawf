@@ -24,20 +24,9 @@ exits non-zero:
   binding regress to idle, the drifted body would emit silently and this probe
   stops raising -- failing the gate. This is the meta-binding that keeps the
   emit-validation binding from silently going dead.
-- :func:`check_i03_contracts` -- two in-process probes for the I03 contracts:
-  the authored-wave intent guard must reject ``intent=None``, and
+- :func:`check_i03_contracts` -- an in-process probe for the I03 contract:
   ``mockup_golden_diff`` must be a registered ``CheckKind`` with a mapped
   ``OracleTier``.
-- :func:`check_resolve_routing_wired` -- a source-scan probe asserting the live
-  wave-spawn dispatch (``agent.py``) calls ``resolve_routing`` directly, so the
-  per-role tier table selects the spawn model instead of a hardcoded default.
-  If a later refactor drops the direct call, the source no longer matches and
-  this gate reds -- un-idling the routing contract.
-- :func:`check_spec_jury_ballot_fn_wired` -- a source-scan probe asserting the
-  daemon close path binds the LIVE per-item spec-jury ballot fn:
-  ``_spec_jury_ballot_fn`` returns ``live_per_item_ballot_fn(...)`` and the gate
-  consults it. A regression that reverts the builder to a bare ``return None``
-  re-idles the producer and reds this row.
 - :func:`check_jury_reliability_map_wired` -- a source-scan probe asserting the
   live convener threads the reputation reliability map into the jury reducer
   (I09-W06): ``reliability=reliability`` flows into
@@ -50,21 +39,6 @@ exits non-zero:
 - :func:`check_validate_jury_cli_wired` -- a source-scan probe asserting
   ``validate_jury`` has a live CLI caller: the ``eawf metrics
   jury-validation`` command binds it directly. Orphaning the reducer reds this
-  row.
-- :func:`check_phase_track_tag_wired` -- a source-scan probe asserting
-  ``open_phase`` silently stamps each phase with ``track_id=state.current.track_id``
-  (I11-W03), so phases tag their owning Track. Dropping the stamp re-idles the
-  silent phase-tag binding and reds this row.
-- :func:`check_drive_ladders_wired` -- a source-scan probe asserting the live
-  drive (``start_background_drive``) arms ``arm_drive`` with both
-  ``classify=_live_lane_error_classifier`` and ``repair=repair_hook``,
-  so the bounded spawn ladder (DL-11) and the grounded repair ladder (DL-7) fire
-  on a real autopilot run instead of staying dormant until a test injects them.
-  Dropping either kwarg reds this row.
-- :func:`check_live_output_text_wired` -- a source-scan probe asserting the live
-  wave spawn (``_spawn_and_dispatch``) threads ``output_text=spawn_result.text``
-  into ``run_dispatch``, so the W08 stdout producer fires on a real
-  spawn and the agent-watch live tail is not empty. Dropping the thread reds this
   row.
 - :func:`check_runtime_gate_is_not_idle` -- verifies this always-run
   pre-commit gate stays enabled so the runtime close gate cannot ship idle.
@@ -156,7 +130,6 @@ from eawf.workflow.dispatch.spec_jury import (
     SPEC_JURY_FINDINGSET_EVENT_TYPE,
     produce_spec_jury_verdict,  # noqa: F401
 )
-from eawf.workflow.lifecycle.wave import plan_wave as _plan_wave
 from eawf.workflow.skills.engine import run_skill as _run_skill
 from eawf.workflow.verify.readiness import (
     resolve_wave_verify_block,
@@ -213,17 +186,12 @@ from idle_contract_wiring import (  # noqa: E402
     check_campaign_producer_class_non_stub,
     check_console_app_construction_wired,
     check_coverage_gate_helpers_wired,
-    check_drive_ladders_wired,
     check_eawf023_artifact_placement_wired,
     check_eawf024_test_tier_wired,
     check_eawf025_test_placement_wired,
     check_jury_block_authority_wired,
     check_jury_reliability_map_wired,
-    check_live_output_text_wired,
-    check_phase_track_tag_wired,
-    check_resolve_routing_wired,
     check_runtime_gate_is_not_idle,
-    check_spec_jury_ballot_fn_wired,
     check_validate_jury_cli_wired,
 )
 
@@ -464,38 +432,15 @@ def _row_has_cast_verdict(record: Mapping[str, Any]) -> bool:
     return isinstance(verdict, str) and bool(verdict)
 
 
-def _row_has_positive_elapsed_eu(record: Mapping[str, Any]) -> bool:
-    """Count an actuals record only when it captured a positive ``elapsed_eu``.
-
-    EU capture is the canonical "wired but writes nothing" blind spot: a row
-    could exist with ``elapsed_eu == 0`` and still have measured nothing, so the
-    contract is exercised only by a strictly-positive elapsed-EU row.
-
-    Args:
-        record: A parsed store record (the unwrapped actuals payload).
-
-    Returns:
-        ``True`` when the record carries a numeric ``elapsed_eu`` greater than 0.
-    """
-    value = record.get("elapsed_eu", 0.0)
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0.0
-
-
-#: The three I22 bound contracts the dynamic leg enforces at phase close: the
-#: verdict producer (an ``auditor_report`` row with an authored verdict), EU
-#: capture (an ``actual`` row with a positive ``elapsed_eu``), and calibration (a
-#: ``gold_label`` row pinning a boolean ground truth). The
+#: The I22 bound contracts the dynamic leg enforces at phase close: the
+#: verdict producer (an ``auditor_report`` row with an authored verdict) and
+#: calibration (a ``gold_label`` row pinning a boolean ground truth). The
 #: juror-ballot contract is deliberately absent -- see :data:`_BALLOT_CONTRACT`.
 _I22_BOUND_CONTRACTS: tuple[_BoundContract, ...] = (
     _BoundContract(
         name="verdict_producer",
         store_stem="auditor_report",
         counts_row=_row_has_authored_verdict,
-    ),
-    _BoundContract(
-        name="eu_capture",
-        store_stem="actual",
-        counts_row=_row_has_positive_elapsed_eu,
     ),
     _BoundContract(
         name="calibration",
@@ -704,17 +649,12 @@ def main(argv: list[str]) -> int:
 
     The original B091 single-contract check (:func:`check_idle_contract`) runs
     first, then the emit-validation binding-proof probe
-    (:func:`check_skill_body_binding`), then the I03 contract probes
-    (:func:`check_i03_contracts`), then the resolve_routing wiring probe
-    (:func:`check_resolve_routing_wired`), then the four I09 jury-validation
-    binding probes (:func:`check_spec_jury_ballot_fn_wired`,
-    :func:`check_jury_reliability_map_wired`,
+    (:func:`check_skill_body_binding`), then the I03 contract probe
+    (:func:`check_i03_contracts`), then the three I09 jury-validation
+    binding probes (:func:`check_jury_reliability_map_wired`,
     :func:`check_jury_block_authority_wired`,
-    :func:`check_validate_jury_cli_wired`), then the I11 phase-track-tag binding
-    probe (:func:`check_phase_track_tag_wired`), then the
-    two I17 live-autopilot binding probes (:func:`check_drive_ladders_wired`,
-    :func:`check_live_output_text_wired`), then the
-    runtime-gate binding check (:func:`check_runtime_gate_is_not_idle`), then the
+    :func:`check_validate_jury_cli_wired`), then the runtime-gate binding
+    check (:func:`check_runtime_gate_is_not_idle`), then the
     console-app construction-reachability check
     (:func:`check_console_app_construction_wired`), then the
     registry-wide audit-DSL wired-on sweep
@@ -753,40 +693,23 @@ def main(argv: list[str]) -> int:
 
     failed |= _report_result(
         check_i03_contracts(
-            plan_wave_fn=_plan_wave,
             registry=CHECK_REGISTRY,
             tier_for_gate_kind_fn=_tier_for_gate_kind,
         )
     )
 
-    # The live-dispatch module is read off the working tree (not the
-    # monkeypatchable _default_read), so this gate stays immune to the
-    # meta-gate's injected reader stub -- mirroring check_runtime_gate_is_not_idle.
-    failed |= _report_result(check_resolve_routing_wired())
-
-    # The four I09 jury-validation bindings each read their live call-site off
-    # the working tree (immune to the meta-gate's reader stub, like the routing
-    # probe above): the spec-jury ballot fn, the reputation reliability map
+    # The three I09 jury-validation bindings each read their live call-site off
+    # the working tree (not the monkeypatchable _default_read, so they stay
+    # immune to the meta-gate's reader stub): the reputation reliability map
     # (W06), the earned block authority, and the validate_jury CLI caller
     # (W07). Any re-idle of one fails its row and reds the gate.
-    #
-    # The I11 Track binding reads its live source off the working tree the same
-    # way: the silent open_phase track-tag stamp. A re-idle fails its row.
-    #
-    # The two I17 live-autopilot bindings read their live source off the working
-    # tree the same way: the drive-arming classify + repair kwargs and the
-    # live-spawn output_text fan. Either re-dormant fails its row.
     #
     # The P30-I20 campaign producer class seam is checked opportunistically: W06
     # owns adding the class, and this row reds it if it lands as a stub.
     for source_scan_check in (
-        check_spec_jury_ballot_fn_wired(),
         check_jury_reliability_map_wired(),
         check_jury_block_authority_wired(),
         check_validate_jury_cli_wired(),
-        check_phase_track_tag_wired(),
-        check_drive_ladders_wired(),
-        check_live_output_text_wired(),
         check_campaign_producer_class_non_stub(),
     ):
         failed |= _report_result(source_scan_check)

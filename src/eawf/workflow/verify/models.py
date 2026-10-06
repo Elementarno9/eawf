@@ -114,7 +114,7 @@ class CloseReadiness(_StrictModel):
             **logged + counted** but never blocks the close path. When
             the active ``profile.verify.enforce`` is ``true`` the flip
             to gating is live: a non-ready result raises
-            :class:`~eawf.workflow.lifecycle._errors.LifecycleError` so
+            :class:`~eawf.kernel.errors.lifecycle.LifecycleError` so
             the close seam rejects the mutation.
         criteria: One :class:`CriterionView` per criterion attached to
             the scope. Includes both typed-spec criteria and legacy

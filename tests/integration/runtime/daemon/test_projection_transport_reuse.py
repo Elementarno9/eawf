@@ -42,11 +42,11 @@ from eawf.runtime.daemon.methods.state_subscribe import (
 )
 from eawf.runtime.daemon.server import handle_connection
 from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
+from tests.integration.runtime.daemon._epoch1_state_fixtures import state_payload, write_state
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     MILESTONE_URN,
     method_context,
 )
-from tests.integration.runtime.daemon.test_close_lock_split import _state_payload, _write_state
 
 pytestmark = pytest.mark.integration
 
@@ -206,7 +206,7 @@ def _rewrite_state(state_path: Path) -> None:
     mtime-gated, and two writes inside one filesystem tick would otherwise be
     indistinguishable on a coarse-grained mount.
     """
-    payload = _state_payload()
+    payload = state_payload()
     payload["phases"]["P30"]["title"] = REFRESHED_TITLE
     state_path.write_text(State.model_validate(payload).model_dump_json(), encoding="utf-8")
     stamp = state_path.stat().st_mtime + 10.0
@@ -218,7 +218,7 @@ def test_poll_backstop_refreshes_a_client_whose_push_stream_drops(
 ) -> None:
     """The console keeps one socket: when its push dies, the backstop carries it."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
+    write_state(state_path)
     attempts: list[str] = []
     degraded: list[bool] = []
 

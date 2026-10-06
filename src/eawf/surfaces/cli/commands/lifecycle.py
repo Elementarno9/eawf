@@ -37,7 +37,7 @@ Each handler follows the canonical mutation pattern:
    for the entire transaction so concurrent claimers see exactly-once
    semantics.
 3. Load + parse + Pydantic-validate the current state.
-4. Apply the transition / allocator from :mod:`eawf.workflow.lifecycle`.
+4. Apply the transition or allocator.
 5. Run :func:`validate_state` over the candidate state — schema and
    cross-entity invariants must pass before we persist.
 6. Append a single ``EVENT``-kind record to

@@ -16,29 +16,18 @@ Covers the three wave success criteria:
   runtime (no switch).
 
 Plus the V5 reactive-switchover ladder (error-class -> action, next-runtime
-selection), boundary cases (preference-less wave, disjoint manifest /
-preference), and the wired ``agent.dispatch`` RPC path so the handshake is
-proven end to end at the daemon boundary.
+selection) and boundary cases (preference-less wave, disjoint manifest /
+preference).
 """
 
 from __future__ import annotations
 
-import asyncio
-import os
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
 
-import orjson
 import pytest
 
-from eawf import __version__
 from eawf.kernel.state.enums import DispatchNote
-from eawf.kernel.state.models import Wave
-from eawf.runtime.daemon import PROTOCOL_VERSION
-from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.agent import dispatch
 from eawf.runtime.runtimes.adapter import ALL_ERROR_CLASSES, RuntimeAdapter
 from eawf.runtime.runtimes.dispatch import (
     AdapterManifestMismatchError,
@@ -377,141 +366,3 @@ def test_switch_runtime_annotation_records_switch_on_error() -> None:
     assert annotation.runtime_from == "claude-code"
     assert annotation.runtime_to == "codex"
     assert annotation.attempt == 2
-
-
-# ---------------------------------------------------------------------------
-# Wired agent.dispatch RPC path (handshake at the daemon boundary)
-# ---------------------------------------------------------------------------
-
-
-def _build_ctx(*, state_path: Path | None = None) -> MethodContext:
-    return MethodContext(
-        started_at="2026-05-20T00:00:00+00:00",
-        pid=os.getpid(),
-        protocol_version=PROTOCOL_VERSION,
-        version=__version__,
-        shutdown_event=asyncio.Event(),
-        state_path=state_path,
-    )
-
-
-def _run(body: Callable[[], Awaitable[None]]) -> None:
-    asyncio.run(body())
-
-
-def _write_state_with_wave(
-    path: Path,
-    *,
-    wave_id: str,
-    runtime_preference: list[str] | None,
-) -> None:
-    wave = Wave.model_validate(
-        {
-            "id": wave_id,
-            "iter_id": "P26-I01",
-            "title": "handshake-test",
-            "status": "in_progress",
-            "opened_at": _now().isoformat(),
-            "sessions": {},
-            "runtime_preference": runtime_preference,
-        }
-    )
-    payload: dict[str, object] = {
-        "schema_version": "1.0",
-        "scope_kind": "repo",
-        "urn": "urn:eawf:v1:state:QR",
-        "updated_at": _now().isoformat(),
-        "project": {
-            "code": "QR",
-            "slug": "qr",
-            "title": "QR",
-            "description": None,
-            "domains": ["x"],
-            "default_branch": "main",
-            "status": "active",
-            "repo_urn": "urn:eawf:v1:repo:QR",
-        },
-        "current": {"project_code": "QR"},
-        "workspace": None,
-        "phases": {},
-        "iters": {},
-        "waves": {wave_id: wave.model_dump(mode="json")},
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {},
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(orjson.dumps(payload))
-
-
-def test_dispatch_rpc_runs_manifest_handshake(tmp_path: Path) -> None:
-    """``agent.dispatch`` with a manifest picks the hostable preferred runtime."""
-    state_path = tmp_path / "state.json"
-    _write_state_with_wave(
-        state_path,
-        wave_id="P26-I01-W13",
-        runtime_preference=["codex", "claude-code"],
-    )
-    ctx = _build_ctx(state_path=state_path)
-    manifest = _manifest(runtime=["claude-code", "codex"])
-
-    async def body() -> None:
-        result: dict[str, Any] = await dispatch(
-            ctx,
-            {
-                "wave_id": "P26-I01-W13",
-                "session_policy": "fresh",
-                "skill_manifest": manifest.model_dump(mode="json"),
-            },
-        )
-        # codex is the highest preference the manifest can host.
-        assert result["runtime"] == "codex"
-
-    _run(body)
-
-
-def test_dispatch_rpc_rejects_off_manifest_override(tmp_path: Path) -> None:
-    """``agent.dispatch`` rejects an override the manifest does not list (F-d01)."""
-    state_path = tmp_path / "state.json"
-    _write_state_with_wave(
-        state_path,
-        wave_id="P26-I01-W13",
-        runtime_preference=["claude-code"],
-    )
-    ctx = _build_ctx(state_path=state_path)
-    manifest = _manifest(runtime=["claude-code"])
-
-    async def body() -> None:
-        with pytest.raises(AdapterManifestMismatchError, match="not in skill manifest"):
-            await dispatch(
-                ctx,
-                {
-                    "wave_id": "P26-I01-W13",
-                    "runtime": "codex",
-                    "session_policy": "fresh",
-                    "skill_manifest": manifest.model_dump(mode="json"),
-                },
-            )
-
-    _run(body)
-
-
-def test_dispatch_rpc_without_manifest_keeps_legacy_pick(tmp_path: Path) -> None:
-    """Omitting the manifest preserves the W07 override-or-preference pick."""
-    state_path = tmp_path / "state.json"
-    _write_state_with_wave(
-        state_path,
-        wave_id="P26-I01-W13",
-        runtime_preference=["claude-code"],
-    )
-    ctx = _build_ctx(state_path=state_path)
-
-    async def body() -> None:
-        result: dict[str, Any] = await dispatch(
-            ctx,
-            {"wave_id": "P26-I01-W13", "session_policy": "fresh"},
-        )
-        assert result["runtime"] == "claude-code"
-
-    _run(body)

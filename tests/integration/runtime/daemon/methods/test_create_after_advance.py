@@ -26,11 +26,12 @@ import pytest
 
 from eawf.kernel.spec.release import Release, ReleaseChannel, ReleaseStatus
 from eawf.kernel.spec.release_config import load_release_config
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import create, show
 from eawf.runtime.daemon.methods.release_receipts import advance
-from eawf.workflow.evidence._io import atomic_write_state, load_state
+from eawf.workflow.evidence._io import load_state
 from eawf.workflow.evidence.measured_contract import (
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -132,7 +133,7 @@ def context(
     """
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_state(state_path, state)
+    write_state_unlocked(state_path, state.model_dump(mode="json"))
     stage_canary_export(tmp_path, accepted_canary_export())
     for record in records:
         record_release(state_path, record, recorded_at=datetime.now(UTC), summary="seed")

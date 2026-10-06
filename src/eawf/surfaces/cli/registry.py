@@ -102,7 +102,7 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("repository", "eawf.surfaces.cli.commands.lifecycle", "repository_app"),
     # Evidence nouns.
     # Post-cutover ledger records (audit / decision / artifact).
-    GroupRow("record", "eawf.surfaces.cli.commands.domain_legacy", "record_app"),
+    GroupRow("record", "eawf.surfaces.cli.commands.record", "record_app"),
     # The checks behind a filed claim's evidence rungs.
     GroupRow("claim", "eawf.surfaces.cli.commands.claim", "claim_app"),
     # Estimation nouns.
@@ -130,10 +130,8 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("doc", "eawf.surfaces.cli.commands.doc", "doc_app"),
     # Schema dump + autogen reference.
     GroupRow("schema", "eawf.surfaces.cli.commands.schema", "schema_app"),
-    # PR body / release / wiki renderers.
-    GroupRow("pr", "eawf.surfaces.cli.commands.pr", "pr_app"),
+    # Release artifacts.
     GroupRow("release", "eawf.surfaces.cli.commands.release", "release_app"),
-    GroupRow("wiki", "eawf.surfaces.cli.commands.wiki", "wiki_app"),
     # Repository init (born at epoch 2).
     CommandRow(
         "init",
@@ -170,7 +168,7 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("skill", "eawf.surfaces.cli.commands.skill", "skill_app"),
     # Worktree dispatch + flow loop + headless dispatch pause/resume.
     GroupRow("worktree", "eawf.surfaces.cli.commands.worktree", "worktree_app"),
-    # MCP servers, plan render, research, draft.
+    # MCP servers, plan revisions, research, draft.
     GroupRow("mcp", "eawf.surfaces.cli.commands.mcp", "mcp_app"),
     GroupRow("plan", "eawf.surfaces.cli.commands.plan", "plan_app"),
     # The campaign and question entity groups, beside the research reads.

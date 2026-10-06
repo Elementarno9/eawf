@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+from eawf.kernel.errors.lifecycle import LifecycleError
 from eawf.kernel.state.enums import (
     BacklogPriority,
     BacklogStatus,
@@ -28,12 +29,10 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.models import BacklogItem, CurrentPointers, Project, State
 from eawf.platform.profiles.models import VerifyBlock
 from eawf.workflow.audit_dsl.registry import registered_audit_dsl_kinds
-from eawf.workflow.lifecycle._errors import LifecycleError
-from eawf.workflow.lifecycle.transitions import open_iter, open_phase
-from eawf.workflow.lifecycle.wave import plan_wave
 from eawf.workflow.verify import readiness as readiness_mod
 from eawf.workflow.verify.readiness import wired_audit_dsl_kinds
 from tests._criteria_helpers import legacy_criteria
+from tests._epoch1_seed import seed_iter, seed_phase, seed_wave
 from tests._session_helpers import claim_wave_with_session as claim_wave
 from tests.conftest import make_floor_waiver, make_intent
 
@@ -71,9 +70,9 @@ def _empty_state() -> State:
 
 
 def _seed_wave(state: State) -> None:
-    open_phase(state, phase_id="P30", title="phase")
-    open_iter(state, iter_id="P30-I10", phase_id="P30", title="iter")
-    plan_wave(
+    seed_phase(state, phase_id="P30", title="phase")
+    seed_iter(state, iter_id="P30-I10", phase_id="P30", title="iter")
+    seed_wave(
         state,
         wave_id=WAVE_ID,
         iter_id="P30-I10",

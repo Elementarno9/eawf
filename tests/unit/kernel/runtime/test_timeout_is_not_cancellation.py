@@ -3,8 +3,8 @@
 Cancellation is what a principal asked for; a timeout is what a clock
 did. The two are kept apart by type at each place a runtime outcome is
 recorded: the control vocabulary that ends a Run, the command result a
-Run reports, the scoped-command output the gateway returns, the lapse of
-a provider permission and the durable close attempt. A timeout folded
+Run reports, the scoped-command output the gateway returns and the lapse of
+a provider permission. A timeout folded
 into ``cancelled`` at any one of them would read as an operator decision
 nobody made.
 """
@@ -22,9 +22,7 @@ from eawf.kernel.runtime.events import CommandPayload
 from eawf.kernel.runtime.permission import PermissionResolution
 from eawf.kernel.runtime.provider import ControlKind
 from eawf.kernel.runtime.semantic import RunScopedCommandOutput
-from eawf.kernel.state.enums import CloseAttemptStatus, CloseFailureKind
 from eawf.kernel.state.epoch2.run import RunStatus
-from eawf.runtime.daemon.methods import close as close_module
 
 AT: Final = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
 
@@ -84,16 +82,3 @@ def test_del_005_a_principal_s_denial_cannot_be_filed_as_a_lapse() -> None:
             decided_by="provider",
             decided_at=AT + timedelta(seconds=1),
         )
-
-
-@pytest.mark.parametrize(
-    "fault",
-    [TimeoutError("close stage exceeded its budget"), close_module.CloseTimedOutError("wall")],
-)
-def test_del_005_a_timed_out_close_is_filed_timed_out_not_operator_cancelled(
-    fault: Exception,
-) -> None:
-    assert close_module._failure_status(fault) == (
-        CloseAttemptStatus.FAILED,
-        CloseFailureKind.TIMED_OUT,
-    )

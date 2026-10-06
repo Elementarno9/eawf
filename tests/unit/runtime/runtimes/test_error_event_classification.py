@@ -8,10 +8,8 @@ collapsed onto the conservative ``RUNTIME_API_ERROR`` default -- a switch
 signal -- when the real class was ``RUNTIME_AUTH_ERROR`` (a HALT) or
 ``RUNTIME_RATE_LIMIT``.
 
-These tests pin the fix end-to-end through the production seam: the parse
-raises, and :func:`_live_lane_error_classifier` (the module-level classifier
-the live spawn ladder and the single-wave dispatch ``_classify`` closure both
-resolve through) maps the raised error to its canonical class. Boundary and
+These tests pin the fix end-to-end: the parse raises, and the resolved
+adapter's ``parse_error`` maps the raised error to its canonical class. Boundary and
 error-path fixtures pin that an event with no readable detail degrades to an
 empty stderr + the ``RUNTIME_API_ERROR`` default rather than crashing the
 parse.
@@ -24,7 +22,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from eawf.runtime.daemon.methods.fleet import _live_lane_error_classifier
 from eawf.runtime.runtimes.adapter import (
     RUNTIME_API_ERROR,
     RUNTIME_AUTH_ERROR,
@@ -34,6 +31,7 @@ from eawf.runtime.runtimes.adapter import (
 )
 from eawf.runtime.runtimes.codex.adapter import _parse_codex_result
 from eawf.runtime.runtimes.opencode.adapter import _parse_opencode_result
+from eawf.runtime.runtimes.selector import select_adapter
 
 _T0 = datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)
 _T1 = datetime(2026, 9, 1, 12, 0, 5, tzinfo=UTC)
@@ -84,8 +82,9 @@ def _opencode_failure(events: list[dict[str, object]]) -> RuntimeSpawnError:
 
 
 def _classify(exc: RuntimeSpawnError, runtime: str) -> ErrorClass:
-    """Classify *exc* through the production lane classifier."""
-    return _live_lane_error_classifier(exc, runtime)
+    """Classify *exc* through the resolved adapter's ``parse_error``."""
+    exit_status = exc.exit_status if exc.exit_status is not None else -1
+    return select_adapter(runtime).parse_error(exit_status, exc.stderr)
 
 
 # ---------------------------------------------------------------------------

@@ -696,14 +696,12 @@ def make_intent(
     problem: str = "test wave lacks a typed intent",
     desired_outcome: str = "the test wave carries a populated IntentBrief",
 ) -> IntentBrief:
-    """Build a fully-populated :class:`IntentBrief` for plan_wave call sites.
+    """Build a fully-populated :class:`IntentBrief` for seeded test waves.
 
-    The authoring guard on :func:`eawf.workflow.lifecycle.wave.plan_wave`
-    rejects an intent of ``None``, so every test that stages a wave needs a
-    populated brief. This shared factory keeps the 150+ call sites DRY and
-    returns a brief that also carries a non-empty ``priority_rationale``,
-    one ``planned_steps`` entry, and one ``risks`` entry so the fixture
-    survives a future authoring gate that requires non-blank body fields.
+    This shared factory keeps the call sites DRY and returns a brief that
+    also carries a non-empty ``priority_rationale``, one ``planned_steps``
+    entry, and one ``risks`` entry so the fixture satisfies any authoring
+    gate that requires non-blank body fields.
 
     Args:
         problem: The brief's ``problem`` line (1-200 chars).

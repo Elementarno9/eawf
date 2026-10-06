@@ -137,26 +137,6 @@ def find_agent_report(
     return None
 
 
-def operator_rollup(state_path: Path, phase_id: str) -> dict[str, object]:
-    """Return a phase-oriented rollup over all reports scoped below *phase_id*."""
-    rows = [
-        row
-        for row in iter_agent_reports(state_path)
-        if row.payload.header.scope_id == phase_id
-        or row.payload.header.scope_id.startswith(f"{phase_id}-")
-        or row.payload.header.base_id == phase_id
-        or row.payload.header.base_id.startswith(f"{phase_id}-")
-    ]
-    by_role = Counter(row.payload.header.role.value for row in rows)
-    latest = [row.as_summary() for row in rows[-10:]]
-    return {
-        "phase_id": phase_id,
-        "report_count": len(rows),
-        "by_role": dict(sorted(by_role.items())),
-        "latest": latest,
-    }
-
-
 @dataclass(frozen=True)
 class RetroWaveRow:
     """One wave joined to its latest agent report in a phase-retro digest."""
@@ -509,6 +489,5 @@ __all__ = [
     "error_kind_by_attempt_from_store",
     "find_agent_report",
     "iter_agent_reports",
-    "operator_rollup",
     "per_wave_attempt_rollup",
 ]

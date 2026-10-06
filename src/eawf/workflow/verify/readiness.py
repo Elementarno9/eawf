@@ -23,7 +23,7 @@ of three inputs:
   string list (still load-bearing in v0.4.0);
 * :class:`~eawf.kernel.store.kinds.evidence.EvidenceRecord` rows in
   ``<store_dir>/evidence.jsonl`` whose ``scope_id`` matches the wave's
-  derived SHA (see :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`).
+  derived SHA (see :func:`eawf.runtime.vcs.wave_sha.derive_wave_sha`).
 
 W08 layers the **deterministic floor** on top of W06: criteria whose
 ``evidence_kind == "deterministic"`` have their gates compiled via
@@ -49,6 +49,7 @@ rejection.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from collections.abc import Collection, Mapping
 from pathlib import Path, PurePosixPath
@@ -57,6 +58,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import orjson
 
 from eawf.kernel.config.schema import VerifyConfig, VerifyWaiverMode
+from eawf.kernel.errors.lifecycle import LifecycleError, check_disabled_waiver_policy
 from eawf.kernel.spec.common import (
     GATE_RUN_EVIDENCE_KINDS,
     GRANDFATHERED_KIND,
@@ -68,13 +70,12 @@ from eawf.kernel.state.models import State, Wave
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.platform.profiles.models import FloorCheck, VerifyBlock
+from eawf.runtime.vcs.wave_sha import derive_wave_sha
 from eawf.workflow.audit_dsl.kinds.backlog_resolution import (
     BACKLOG_RESOLUTION_KIND,
     check_backlog_resolution,
 )
 from eawf.workflow.audit_dsl.models import CheckSpec, GateFreshnessInput
-from eawf.workflow.lifecycle._errors import LifecycleError, check_disabled_waiver_policy
-from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 from eawf.workflow.verify.compile import compile_floor_pack, compile_gate
 from eawf.workflow.verify.models import (
     CloseReadiness,
@@ -227,7 +228,7 @@ def _is_stale_waiver(row: EvidenceRecord, *, current_sha: str | None) -> bool:
     Args:
         row: One scope-filtered :class:`EvidenceRecord`.
         current_sha: Current wave SHA derived via
-            :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`.
+            :func:`eawf.runtime.vcs.wave_sha.derive_wave_sha`.
             ``None`` (git unavailable, no commit yet) makes every waiver
             stale: absence is not proof of freshness.
 
@@ -944,38 +945,6 @@ def load_active_verify_block(
     )
 
 
-def load_active_waiver_mode(
-    scope_id: str,
-    state: State | None,
-    *,
-    repo_root: Path,
-    config_root: Path | None = None,
-) -> VerifyWaiverMode:
-    """Resolve the effective waiver policy through strict layered config.
-
-    Unlike the advisory verify loader, this security boundary never converts
-    malformed config or a broken enabled profile into permissive mode B.
-
-    Args:
-        scope_id: Wave whose policy is being resolved.
-        state: Optional validated state snapshot. Current profile resolution
-            is scope-independent, so non-state stores may pass ``None``.
-        repo_root: Repository root for profile discovery.
-        config_root: Optional layered-config anchor.
-
-    Returns:
-        Effective waiver mode; ``B`` when no verify block contributes one.
-    """
-    block = _load_active_verify_block(
-        scope_id,
-        state,
-        repo_root=repo_root,
-        config_root=config_root,
-        strict_config=True,
-    )
-    return "B" if block is None else block.waiver_mode
-
-
 def resolve_wave_verify_block(
     verify_block: VerifyBlock | None,
     wave: Wave,
@@ -1628,6 +1597,45 @@ def _enforce_readiness(
     raise LifecycleError(f"readiness enforcement failed for wave {scope_id!r}: {details}")
 
 
+def gate_freshness_inputs(state: State, *, attempt_id: str) -> dict[str, GateFreshnessInput]:
+    """Return a durable close attempt's frozen facts keyed by required gate id.
+
+    Args:
+        state: Validated state carrying the attempt row.
+        attempt_id: The close attempt whose frozen facts are read.
+
+    Returns:
+        One freshness input per required gate of the attempt; empty when
+        *state* holds no attempt with *attempt_id*.
+    """
+    attempt = state.close_attempts.get(attempt_id)
+    if attempt is None:
+        return {}
+    return {
+        gate_id: GateFreshnessInput(
+            scope_id=attempt.wave_id,
+            integration_id=attempt.integration_id,
+            integrated_commit=attempt.integrated_sha,
+            tree_digest=attempt.tree_sha,
+            contract_digest=attempt.spec_digest,
+            criteria_digest=attempt.criteria_digest,
+            gate_manifest_digest=attempt.gate_manifest_digest,
+            policy_digest=attempt.policy_digest,
+            dependency_binding_digest=attempt.dependency_binding_digest,
+            runner_environment_digest=attempt.runner_environment_digest,
+            full_log_ref=(
+                PurePosixPath(".ea")
+                / "local"
+                / "gate-diagnostics"
+                / "incoming"
+                / attempt.id
+                / f"gate-{hashlib.sha256(gate_id.encode()).hexdigest()[:16]}.log"
+            ).as_posix(),
+        )
+        for gate_id in attempt.required_gate_ids
+    }
+
+
 def _bound_gate_context(
     state: State,
 ) -> tuple[GateExecutionContext | None, dict[str, GateFreshnessInput]]:
@@ -1653,7 +1661,6 @@ def _bound_gate_context(
         A bound attempt absent from *state* yields an empty mapping.
     """
     from eawf.runtime.daemon.gate_execution import current_gate_context
-    from eawf.runtime.daemon.methods.close_evidence import gate_freshness_inputs
 
     context = current_gate_context()
     if context is None:
@@ -1708,7 +1715,7 @@ def compute(
     floor pack does NOT render when the wave already carries typed
     CriterionSpec rows — typed specs are authoritative when present.
     When the active profile sets ``verify.enforce=true``, a non-ready
-    result raises :class:`~eawf.workflow.lifecycle._errors.LifecycleError`
+    result raises :class:`~eawf.kernel.errors.lifecycle.LifecycleError`
     so close seams reject the mutation. With the default ``False``,
     non-ready results stay advisory and are returned normally.
 
@@ -1718,7 +1725,7 @@ def compute(
         store_dir: ``<state_dir>/store/`` — the JSONL store root the
             EvidenceRecord rows live under.
         repo_root: Repository root, forwarded to
-            :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha` so
+            :func:`eawf.runtime.vcs.wave_sha.derive_wave_sha` so
             the SHA-bound freshness lookup runs in the right git tree.
             Also forwarded as the deterministic-floor subprocess cwd
             so wave-anchored ``diff_base`` + scope resolution land in
@@ -1897,7 +1904,6 @@ __all__ = [
     "compute",
     "legacy_criterion_count",
     "load_active_verify_block",
-    "load_active_waiver_mode",
     "resolve_wave_verify_block",
     "wired_audit_dsl_kinds",
 ]

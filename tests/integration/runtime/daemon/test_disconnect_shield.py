@@ -23,9 +23,8 @@ import orjson
 import pytest
 
 import eawf.runtime.daemon.server as server_mod
-from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.runtime.daemon.server import handle_connection
-from tests.integration.runtime.daemon.test_close_lock_split import _build_ctx, _write_state
+from tests.integration.runtime.daemon._epoch1_state_fixtures import build_ctx, write_state
 
 pytestmark = pytest.mark.integration
 
@@ -61,18 +60,12 @@ class _RecordingWriter:
         return None
 
 
-def _mutation_frame() -> bytes:
-    mutation = Mutation(
-        kind=MutationKind.ROADMAP_REVISE,
-        scope_id="P30",
-        mutation_id=uuid.uuid4().hex,
-        params={"op": "retitle", "wave_id": "P30-I23-W99", "title": "retitled by shield test"},
-    )
+def _mutation_frame(repo_root: Path) -> bytes:
     frame = {
         "jsonrpc": "2.0",
         "id": "shield-1",
-        "method": "state.mutate",
-        "params": {"mutation": mutation.model_dump(mode="json")},
+        "method": "state.session_recover",
+        "params": {"repo_root": str(repo_root), "age_minutes": 0},
     }
     return orjson.dumps(frame) + b"\n"
 
@@ -85,8 +78,9 @@ def test_mutation_survives_client_disconnect(
     """CR: the peer leaves mid-mutation; the daemon still lands the commit
     and the undeliverable response is logged rather than lost."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
-    ctx = _build_ctx(tmp_path, state_path)
+    write_state(state_path)
+    ctx = build_ctx(tmp_path, state_path)
+    written_at = orjson.loads(state_path.read_bytes())["updated_at"]
 
     stalled = asyncio.Event()
     release = asyncio.Event()
@@ -107,7 +101,7 @@ def test_mutation_survives_client_disconnect(
         )
         try:
             _reader, writer = await asyncio.open_unix_connection(sock_path)
-            writer.write(_mutation_frame())
+            writer.write(_mutation_frame(tmp_path))
             await writer.drain()
             await asyncio.wait_for(stalled.wait(), timeout=5)
 
@@ -119,7 +113,7 @@ def test_mutation_survives_client_disconnect(
             # The shielded dispatch must still land the commit.
             for _ in range(50):
                 payload = orjson.loads(state_path.read_bytes())
-                if payload["waves"]["P30-I23-W99"]["title"] == "retitled by shield test":
+                if payload["updated_at"] != written_at:
                     return
                 await asyncio.sleep(0.1)
             raise AssertionError(
@@ -141,8 +135,8 @@ def test_mutation_survives_client_disconnect(
 def test_delivered_response_logs_nothing(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """Boundary: a connected client gets its response; no warning fires."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
-    ctx = _build_ctx(tmp_path, state_path)
+    write_state(state_path)
+    ctx = build_ctx(tmp_path, state_path)
 
     sock_path = _short_socket_path()
 
@@ -152,7 +146,7 @@ def test_delivered_response_logs_nothing(tmp_path: Path, caplog: pytest.LogCaptu
         )
         try:
             reader, writer = await asyncio.open_unix_connection(sock_path)
-            writer.write(_mutation_frame())
+            writer.write(_mutation_frame(tmp_path))
             await writer.drain()
             line = await asyncio.wait_for(reader.readline(), timeout=10)
             response = orjson.loads(line)
@@ -180,8 +174,8 @@ def test_abandoned_probe_leaves_no_undeliverable_warning(
     caller loses nothing it cannot get by asking again, and the volume is
     the point: abandoned probes alone produced 1,724 of these warnings."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
-    ctx = _build_ctx(tmp_path, state_path)
+    write_state(state_path)
+    ctx = build_ctx(tmp_path, state_path)
 
     stalled = asyncio.Event()
     release = asyncio.Event()
@@ -273,7 +267,7 @@ def test_abandoned_probe_severity_is_method_scoped(caplog: pytest.LogCaptureFixt
             record.levelno for record in caplog.records if "undeliverable" in record.message
         }
         caplog.clear()
-        asyncio.run(body("state.mutate"))
+        asyncio.run(body("state.session_recover"))
         mutation_levels = {
             record.levelno for record in caplog.records if "undeliverable" in record.message
         }

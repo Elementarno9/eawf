@@ -40,6 +40,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
 
+from eawf.kernel.errors.lifecycle import LifecycleError
 from eawf.kernel.spec.common import (
     GATE_RUN_EVIDENCE_KINDS,
     CriterionSpec,
@@ -62,7 +63,6 @@ from eawf.workflow.dispatch.verdict import (
     verdict_requirement,
     verify_wave_verdict_gate,
 )
-from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.verify.compile import compile_gate
 from eawf.workflow.verify.gate_receipts import (
     append_gate_execution_receipt,

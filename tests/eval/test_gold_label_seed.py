@@ -19,12 +19,9 @@ import pytest
 
 from eawf.kernel.state.models import State
 from eawf.observability.eval.jury_validation import (
-    BlockAuthority,
     GoldLabel,
     build_jury_validation_cohort,
 )
-from eawf.platform.profiles.models import VerifyBlock
-from eawf.runtime.daemon.methods.state import _resolve_jury_block_authority
 
 pytestmark = pytest.mark.unit
 
@@ -85,10 +82,8 @@ def test_gold_label_waves_all_present_in_state() -> None:
         assert row.wave_id in waves, f"label anchors on unknown wave {row.wave_id}"
 
 
-def test_cohort_reads_non_empty_and_authority_stays_advisory() -> None:
-    """CR-02: the validation cohort is no longer honest-empty, yet the seed
-    alone does not flip the block-authority floor -- BLOCKING stays earned,
-    never seeded (P31 calibration scope)."""
+def test_cohort_reads_non_empty() -> None:
+    """CR-02: the validation cohort is no longer honest-empty."""
     state = State.model_validate_json(_STATE_PATH.read_text(encoding="utf-8"))
     cohort = build_jury_validation_cohort(state, _STATE_PATH)
     # Cohort rows are the JOIN of gold labels with observed verdict
@@ -96,11 +91,6 @@ def test_cohort_reads_non_empty_and_authority_stays_advisory() -> None:
     # row. The seed makes the join non-empty; the 20-row floor on the raw
     # store is CR-01's assertion above.
     assert len(cohort.gold) >= 1
-
-    authority = _resolve_jury_block_authority(
-        state, state_path=_STATE_PATH, verify_block=VerifyBlock()
-    )
-    assert authority is BlockAuthority.ADVISORY
 
 
 def test_metrics_cli_survives_ballotless_labelled_cohort(tmp_path: Path) -> None:

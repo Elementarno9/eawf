@@ -8,7 +8,7 @@ maps onto exactly one apply function inside
 
 Every kind in :class:`MutationKind` resolves to a real apply function in
 :mod:`eawf.runtime.daemon.methods.state` — the wave / phase / iter kinds delegate
-to :mod:`eawf.workflow.lifecycle.transitions`; the roadmap kinds map onto the
+to the epoch-1 lifecycle transitions; the roadmap kinds map onto the
 planner transitions (``plan_wave`` / ``remove_wave_plan`` /
 ``set_wave_deps`` / ``edit_wave_plan`` / ``archive_phase``); and
 ``EVENT_APPEND`` is an append-only audit row with no structural state
@@ -61,7 +61,7 @@ class MutationKind(StrEnum):
 
     Each variant names exactly one CLI verb that mutates ``state.json``;
     the daemon's :func:`state.mutate` apply table maps each kind onto
-    the corresponding :mod:`eawf.workflow.lifecycle.transitions` function. Every
+    the corresponding epoch-1 lifecycle transition function. Every
     kind now resolves to a real apply function — the roadmap kinds
     (:attr:`ROADMAP_REVISE`, :attr:`ROADMAP_APPLY`, :attr:`ROADMAP_DROP`)
     dispatch to the planner transitions, :attr:`WAVE_RELEASE` un-claims a

@@ -31,34 +31,17 @@ from eawf.kernel.migration.epoch2.plan_mode import (
     plan_cutover,
 )
 from eawf.kernel.state import enums
-from eawf.kernel.state.enums import EffortBucket, WaveStatus
-from eawf.kernel.state.models import Track, Wave
+from eawf.kernel.state.models import Track
 from eawf.runtime.budget import policy
 from eawf.runtime.budget.policy import BLOCK_TAG, classify
 from eawf.surfaces.cli.registry import COMMAND_REGISTRY, GroupRow
-from eawf.workflow.estimation.buckets import critical_path_eu, sum_wave_eu
 from eawf.workflow.estimation.mapping import CURRENT_EFFORT_MAPPING
-
-WAVE_EU = CURRENT_EFFORT_MAPPING.effort_eu
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "migration"
 FULL_SNAPSHOT = FIXTURES / "epoch1-full" / "snapshot"
 ALLOWLIST = FIXTURES / "allowed_legacy_symbols.txt"
 DEAD_PREFERENCE_LEAVES = ("preferences.solution_bias", "preferences.scope_size")
-
-
-def _wave(wave_id: str, bucket: EffortBucket | None, deps: list[str] | None = None) -> Wave:
-    """Return a minimal wave carrying *bucket* as its size label."""
-    return Wave(
-        id=wave_id,
-        iter_id="P01-I01",
-        title=wave_id,
-        status=WaveStatus.PENDING,
-        effort_bucket=bucket,
-        deps=deps or [],
-        opened_at=datetime(2026, 1, 1, tzinfo=UTC),
-    )
 
 
 # --- AUTH-023 / AUTH-057: the dead preference leaves are deleted ------------
@@ -149,51 +132,6 @@ def test_auth_041_effort_is_one_constant_with_its_measured_dispersion() -> None:
     assert pytest.approx(30.0) == mapping.eu_minutes
     assert pytest.approx(24.0) == mapping.effort_minutes
     assert mapping.dispersion.model_dump() == pytest.approx({"p10": 8.8, "p50": 23.9, "p90": 123.1})
-
-
-def test_auth_041_the_serial_sum_ignores_every_size_label() -> None:
-    """An XS wave and an XL wave cost the same; an unlabelled one too."""
-    labels: list[EffortBucket | None] = [*EffortBucket, None]
-    waves = [_wave(f"P01-I01-W{index:02d}", bucket) for index, bucket in enumerate(labels, 1)]
-
-    assert sum_wave_eu(waves) == pytest.approx(len(labels) * WAVE_EU)
-    assert sum_wave_eu([_wave("P01-I01-W01", EffortBucket.XS)]) == sum_wave_eu(
-        [_wave("P01-I01-W01", EffortBucket.XL)]
-    )
-
-
-def test_auth_041_the_critical_path_counts_waves_not_labels() -> None:
-    """A three-wave chain costs three constants whatever its labels say."""
-    chain = [
-        _wave("P01-I01-W01", EffortBucket.XL),
-        _wave("P01-I01-W02", EffortBucket.XS, deps=["P01-I01-W01"]),
-        _wave("P01-I01-W03", None, deps=["P01-I01-W02"]),
-        _wave("P01-I01-W04", EffortBucket.XL),
-    ]
-
-    assert critical_path_eu(chain) == pytest.approx(3 * WAVE_EU)
-
-
-@pytest.mark.parametrize(
-    ("waves", "expected"),
-    [([], 0.0), ([_wave("P01-I01-W01", EffortBucket.L)], WAVE_EU)],
-)
-def test_auth_041_roll_ups_at_the_empty_and_single_boundaries(
-    waves: list[Wave], expected: float
-) -> None:
-    """No waves cost nothing; one wave costs exactly the constant."""
-    assert sum_wave_eu(waves) == pytest.approx(expected)
-    assert critical_path_eu(waves) == pytest.approx(expected)
-
-
-def test_auth_041_a_dependency_cycle_is_cut_rather_than_followed() -> None:
-    """A cyclic graph returns a finite path; the closing wave counts once more."""
-    cycle = [
-        _wave("P01-I01-W01", None, deps=["P01-I01-W02"]),
-        _wave("P01-I01-W02", None, deps=["P01-I01-W01"]),
-    ]
-
-    assert critical_path_eu(cycle) == pytest.approx(3 * WAVE_EU)
 
 
 def test_auth_041_the_ladder_calibration_config_is_retired() -> None:

@@ -2,10 +2,9 @@
 
 The ``flow.budget`` table is the only place a ceiling is derived from. A
 second ceiling declared beside it is refused rather than silently ignored,
-the daemon's live accrual stops a hard-enforced scope at exactly its ceiling,
-the notice opens there and never before it, and a native Run metered past its
-sealed ceiling ends cancelled. The statusline draws only a Run's sealed
-ceiling, never the frozen epoch-1 document's.
+and a native Run metered past its sealed ceiling ends cancelled. The
+statusline draws only a Run's sealed ceiling, never the frozen epoch-1
+document's.
 """
 
 from __future__ import annotations
@@ -27,10 +26,8 @@ from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
-from eawf.runtime.budget.notices import load_notice_ledger, notices_path
 from eawf.runtime.budget.policy import (
     SEALED_BUDGET,
-    BudgetAction,
     BudgetConfig,
     DuplicateCeilingError,
     PromptBudgetCeiling,
@@ -38,17 +35,12 @@ from eawf.runtime.budget.policy import (
 )
 from eawf.runtime.budget.service import (
     TerminationResult,
-    consume_against_ceiling,
     load_budget_config,
 )
-from eawf.runtime.daemon import dispatch_runner
 from eawf.runtime.daemon.budget_interlock import (
     InFlightBudgetOutcome,
-    InterlockOutcome,
-    enforce_token_cap,
     guard_in_flight_budget,
 )
-from eawf.runtime.daemon.dispatch_runner import DispatchTokens, accrue_tokens_consumed
 from eawf.runtime.daemon.methods import run_budget
 from eawf.runtime.daemon.methods.run_budget import InFlightRunMeter
 from eawf.runtime.runtimes.claude import statusline as statusline_orchestrator
@@ -60,11 +52,6 @@ from eawf.surfaces.render.statusline import (
     budget_segment,
     budget_unavailable_segment,
 )
-from eawf.workflow.lifecycle._claim_guards import (
-    CLAIM_BUDGET_CEILING_REACHED,
-    validate_claim_budget,
-)
-from eawf.workflow.lifecycle._errors import LifecycleGuardError
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     document_path,
     provision,
@@ -72,9 +59,8 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     seed,
     seed_row,
 )
-from tests.integration.runtime.daemon.test_dispatch_cost_accrual import (
+from tests.unit.runtime.budget._wave_payload import (
     _WAVE_ID,
-    _ctx,
     _state_payload,
 )
 
@@ -106,33 +92,6 @@ def write_repo(tmp_path: Path, *, budget: int | None, config: str | None = None)
     if config is not None:
         (state_dir / "config.yaml").write_text(config, encoding="utf-8")
     return state_path
-
-
-def tokens(total: int) -> DispatchTokens:
-    """Return a dispatch tally of *total* input tokens."""
-    return DispatchTokens(
-        input_tokens=total,
-        output_tokens=0,
-        cache_creation_input_tokens=0,
-        cache_read_input_tokens=0,
-    )
-
-
-def fake_ladder(monkeypatch: pytest.MonkeyPatch) -> list[int]:
-    """Replace the kill ladder under the accrual; return the pgids it was driven at."""
-    reaped: list[int] = []
-
-    def cancel(pgid: int) -> TerminationResult:
-        reaped.append(pgid)
-        return TerminationResult(
-            sigterm_sent=True, sigkill_sent=False, exited_on_term=True, waited_seconds=0.0
-        )
-
-    def interlock(**kwargs: Any) -> InterlockOutcome:
-        return enforce_token_cap(**kwargs, cancel=cancel)
-
-    monkeypatch.setattr(dispatch_runner, "enforce_token_cap", interlock)
-    return reaped
 
 
 # ---------- the one ceiling and its duplicate refusal ----------
@@ -206,47 +165,6 @@ def test_load_budget_config_second_ceiling_in_a_layer_is_refused(tmp_path: Path)
 
 
 # ---------- the governor stops the metered work at the ceiling ----------
-
-
-def test_accrue_tokens_consumed_stops_at_the_configured_ceiling(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    state_path = write_repo(
-        tmp_path, budget=1000, config="flow:\n  budget:\n    enforce: hard\n    multiplier: 2.0\n"
-    )
-    reaped = fake_ladder(monkeypatch)
-    budget = load_budget_config(state_path.parent.parent)
-    ctx = _ctx(state_path)
-
-    below = accrue_tokens_consumed(
-        ctx, wave_id=_WAVE_ID, tokens=tokens(1999), pgid=77, budget=budget
-    )
-    assert below is not None and not below.terminated
-    assert not notices_path(state_path).exists()
-
-    at = accrue_tokens_consumed(ctx, wave_id=_WAVE_ID, tokens=tokens(1), pgid=77, budget=budget)
-    assert at is not None and at.terminated
-    assert reaped == [77]
-    notice = next(iter(load_notice_ledger(notices_path(state_path)).notices.values()))
-    assert (notice.highest_band, notice.basis, notice.budget_value) == (
-        "limit_reached",
-        "hard_limit",
-        2000,
-    )
-
-
-def test_accrue_tokens_consumed_soft_ceiling_notices_but_never_reaps(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    state_path = write_repo(tmp_path, budget=1000)
-    reaped = fake_ladder(monkeypatch)
-    outcome = accrue_tokens_consumed(
-        _ctx(state_path), wave_id=_WAVE_ID, tokens=tokens(1500), pgid=77, budget=BudgetConfig()
-    )
-    assert outcome is not None and not outcome.terminated
-    assert reaped == []
-    notice = next(iter(load_notice_ledger(notices_path(state_path)).notices.values()))
-    assert (notice.basis, notice.budget_value) == ("estimate", 1500)
 
 
 @pytest.fixture
@@ -365,45 +283,3 @@ def test_plugin_settings_wire_the_statusline_and_keep_a_foreign_one(tmp_path: Pa
     foreign = tmp_path / "foreign.json"
     foreign.write_text('{"statusLine": {"type": "command", "command": "mine"}}', encoding="utf-8")
     assert b'"command": "mine"' in _patch_settings_json(foreign, {}, governor=DEFAULT_GOVERNOR)
-
-
-# ---------- the claim guard and consume agree at the ceiling ----------
-
-
-def budgeted_state(consumed: int = 0) -> State:
-    """Return the accrual fixture with its wave at budget 1000 and *consumed*."""
-    payload = _state_payload(tokens_consumed=consumed)
-    payload["waves"][_WAVE_ID]["token_budget"] = 1000
-    return State.model_validate(payload)
-
-
-def claim_refused(state: State, budget: BudgetConfig) -> bool:
-    """Return whether the claim guard refuses the accrual fixture's wave."""
-    try:
-        validate_claim_budget(state.waves[_WAVE_ID], budget=budget)
-    except LifecycleGuardError as exc:
-        assert exc.code == CLAIM_BUDGET_CEILING_REACHED
-        return True
-    return False
-
-
-@pytest.mark.parametrize("enforce", ["soft", "hard"])
-@pytest.mark.parametrize("consumed", [0, 1499, 1500, 1501, 10**6])
-def test_claim_guard_refuses_exactly_where_consume_halts(enforce: str, consumed: int) -> None:
-    budget = BudgetConfig.model_validate({"enforce": enforce})
-    state = budgeted_state()
-    outcome = consume_against_ceiling(state, _WAVE_ID, consumed, budget=budget)
-    halted = outcome.decision.action is BudgetAction.HALT
-    assert claim_refused(state, budget) is halted
-
-
-def test_soft_ceiling_reached_still_admits_the_claim() -> None:
-    """Soft enforce lets consume run past the ceiling, so the claim must pass too."""
-    state = budgeted_state(1500)
-    assert BudgetConfig().ceiling(1000) == PromptBudgetCeiling(tokens=1500, enforce="soft")
-    assert claim_refused(state, BudgetConfig()) is False
-
-
-def test_hard_ceiling_reached_refuses_the_claim() -> None:
-    state = budgeted_state(1500)
-    assert claim_refused(state, BudgetConfig(enforce="hard")) is True

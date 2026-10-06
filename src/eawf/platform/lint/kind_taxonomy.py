@@ -133,7 +133,6 @@ GRANDFATHERED_MARKER_CONFLICTS: frozenset[str] = frozenset(
         "tests/integration/test_cli_research_question_status.py",
         "tests/integration/test_mcp_owner_gate.py",
         "tests/integration/test_pricing.py",
-        "tests/integration/test_spec_writer.py",
         "tests/perf/test_turn_cost_harness.py",
         "tests/perf/test_turn_cost_producer.py",
         "tests/tui/test_research_round_progress.py",

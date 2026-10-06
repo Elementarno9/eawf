@@ -39,10 +39,7 @@ from eawf.runtime.runtimes.selector import select_adapter
 logger = logging.getLogger(__name__)
 
 
-#: Dispatch session policy resolved off a skill manifest. Mirrors
-#: :data:`eawf.runtime.daemon.methods.agent.SessionPolicy`; kept as a local
-#: literal so this module does not import the daemon (the daemon imports
-#: the handshake, not the other way round).
+#: Dispatch session policy resolved off a skill manifest.
 DEFAULT_SESSION_POLICY = "hybrid"
 
 

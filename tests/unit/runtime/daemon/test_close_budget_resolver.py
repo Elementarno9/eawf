@@ -4,10 +4,7 @@ Boundary + error-path coverage for the public surface introduced to replace the
 per-consumer budget literals:
 :func:`~eawf.kernel.state.models.resolve_close_budget`,
 :class:`~eawf.kernel.state.models.CloseBudget` and
-:func:`~eawf.kernel.state.models.latest_close_attempt`. The wiring assertions
-(daemon seeding, receipt emission, TUI display) live in
-``tests/integration/runtime/daemon/test_durable_close.py`` and
-``tests/tui/test_autopilot_repair_budget.py``.
+:func:`~eawf.kernel.state.models.latest_close_attempt`.
 """
 
 from __future__ import annotations

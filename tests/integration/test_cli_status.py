@@ -20,8 +20,17 @@ from typer.testing import CliRunner
 
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.state.epoch2.decision import Decision, ratify, supersede
 from eawf.kernel.state.epoch2.task import Task, TaskPriority, TaskStatus
 from eawf.kernel.store.compaction import read_document, write_document
+from eawf.kernel.store.ledger import (
+    LedgerRecord,
+    append_ledger_record,
+    line_digest,
+    render_ledger_line,
+)
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.cli.app import app
 from tests._epoch2_helpers import lay_epoch2_tree
 
@@ -242,45 +251,6 @@ def test_status_lists_last_closed_waves(
     assert "P01-I01-W00" in payload["last_closed_waves"]
 
 
-def test_status_drift_summary_honors_repo_ack_file(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``eawf status`` uses ``.eawf/drift-acks.json`` before counting drift."""
-    state = json.loads(json.dumps(_VALID_STATE))  # deep copy
-    state["waves"]["P01-I01-W00"] = {
-        "id": "P01-I01-W00",
-        "iter_id": "P01-I01",
-        "title": "W0",
-        "status": "closed",
-        "deps": [],
-        "file_scopes": [],
-        "claim_session_id": None,
-        "worktree_id": None,
-        "outcome": "ok",
-        "commit": "a" * 40,
-        "opened_at": "2026-05-07T00:00:00Z",
-        "closed_at": "2026-05-07T01:00:00Z",
-    }
-    state["iters"]["P01-I01"]["wave_ids"].append("P01-I01-W00")
-    (tmp_path / ".git").mkdir()
-    state_path = _seed(tmp_path, state)
-    ack_dir = tmp_path / ".eawf"
-    ack_dir.mkdir()
-    (ack_dir / "drift-acks.json").write_text(
-        json.dumps({"acked_wave_ids": ["P01-I01-W00"]}),
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    _stub_no_git(monkeypatch)
-
-    result = runner.invoke(app, ["--json", "status"])
-
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.stdout)
-    assert payload["drift"] == {"count": 0, "tier": "ok"}
-
-
 def test_status_payload_keys_documented_set(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -304,7 +274,6 @@ def test_status_payload_keys_documented_set(
         "open_backlog",
         "open_backlog_count",
         "git",
-        "drift",
         "authority",
         "native",
         "blockers",
@@ -574,6 +543,49 @@ def test_status_says_an_epoch2_tree_with_no_open_task_has_none(
     assert "open tasks: none" in result.stdout
 
 
+def _state_with_closed_wave() -> dict[str, Any]:
+    """Deep-copy the base fixture and add one closed, pinned wave."""
+    state: dict[str, Any] = json.loads(json.dumps(_VALID_STATE))
+    state["waves"]["P01-I01-W00"] = {
+        **state["waves"]["P01-I01-W01"],
+        "id": "P01-I01-W00",
+        "status": "closed",
+        "claim_session_id": None,
+        "outcome": "ok",
+        "commit": "a" * 40,
+        "closed_at": "2026-05-08T01:00:00Z",
+    }
+    state["iters"]["P01-I01"]["wave_ids"].append("P01-I01-W00")
+    return state
+
+
+@pytest.mark.parametrize("epoch", [1, 2])
+def test_status_resolves_no_wave_commit_from_git(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    epoch: int,
+) -> None:
+    """Status reads git once for its head and never per closed or active wave."""
+    state = _state_with_closed_wave()
+    state_path = _seed(tmp_path, state) if epoch == 1 else lay_epoch2_tree(tmp_path, state=state)
+
+    def _raise(*_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("status must not resolve a wave commit from git")
+
+    monkeypatch.setattr("eawf.runtime.vcs.wave_sha.derive_wave_sha", _raise)
+    monkeypatch.setattr("eawf.runtime.vcs.wave_sha.build_wave_sha_index", _raise)
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    _stub_no_git(monkeypatch)
+    result = runner.invoke(app, ["--json", "status"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert "drift" not in payload
+    assert all("commit" not in wave for wave in payload["active_waves"])
+    text = runner.invoke(app, ["status"])
+    assert text.exit_code == 0, text.output
+    assert "drift:" not in text.stdout
+
+
 def test_status_refuses_a_generation_document_that_is_not_an_object(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -589,3 +601,184 @@ def test_status_refuses_a_generation_document_that_is_not_an_object(
     assert result.exit_code == 1, result.output
     envelope = json.loads(result.stdout)
     assert "generation document unreadable" in envelope["message"]
+
+
+_DECISION_SCOPE = "eawf://WSP-MAIN/PRJ-QR/REP-QR/milestone/MLS-0001"
+
+
+def _native_decision(key: str, created_at: str, **overrides: Any) -> Decision:
+    """Return an active native decision filed at ``created_at``."""
+    fields: dict[str, Any] = {
+        "key": key,
+        "scope_ref": _DECISION_SCOPE,
+        "title": f"Native verdict {key}",
+        "decision": "Do the thing.",
+        "rationale": "It is the thing to do.",
+        "alternatives": [{"key": "do", "label": "Do it"}, {"key": "skip", "label": "Skip it"}],
+        "chosen_option_key": "do",
+        "consequences": ["The thing is done"],
+        "evidence_refs": ["eawf://WSP-MAIN/PRJ-QR/REP-QR/evidence/EVD-0001"],
+        "effective_policy_revision": 1,
+        "created_at": created_at,
+    }
+    fields.update(overrides)
+    proposed = Decision.model_validate(fields)
+    return ratify(proposed, by="OP-0001", at=proposed.created_at)
+
+
+def _decision_ledger(state_path: Path) -> Path:
+    authority = resolve_authority(state_path.parent)
+    assert authority.target is not None and authority.generation_id is not None
+    document_path = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    return ledger_path(document_path, Epoch2Collection.DECISION)
+
+
+def _file_decision(
+    state_path: Path, decision: Decision, *, replaces: LedgerRecord | None = None
+) -> LedgerRecord:
+    """Append ``decision``'s ledger line, as a successor of ``replaces`` when given."""
+    record = LedgerRecord(
+        collection=Epoch2Collection.DECISION,
+        record_key=decision.key,
+        status=decision.status.value,
+        recorded_at=decision.created_at,
+        supersedes=None if replaces is None else line_digest(render_ledger_line(replaces)),
+        payload={"payload": decision.model_dump(mode="json")},
+    )
+    append_ledger_record(_decision_ledger(state_path), record)
+    return record
+
+
+def _status_decisions(state_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[dict[str, str]]:
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    _stub_no_git(monkeypatch)
+    result = runner.invoke(app, ["--json", "status"])
+    assert result.exit_code == 0, result.output
+    decisions: list[dict[str, str]] = json.loads(result.stdout)["recent_decisions"]
+    return decisions
+
+
+def test_status_lists_a_native_decision_of_an_epoch2_tree_beside_the_imported_ones(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A native decision appears once, newest first, and an imported row is not doubled."""
+    state = _state_with_decisions_and_backlog()
+    state_path = lay_epoch2_tree(tmp_path, state=state)
+    # The cutover files each epoch-1 decision into the ledger verbatim, under
+    # its own status, so the epoch-1 record would otherwise be read twice.
+    imported = LedgerRecord(
+        collection=Epoch2Collection.DECISION,
+        record_key="D02",
+        status="imported",
+        recorded_at=datetime(2026, 5, 9, tzinfo=UTC),
+        payload={"origin": {"kind": "legacy"}, "payload": state["decisions"]["D02"]},
+    )
+    append_ledger_record(_decision_ledger(state_path), imported)
+    _file_decision(state_path, _native_decision("D03", "2026-05-10T00:00:00Z"))
+    assert _status_decisions(state_path, monkeypatch) == [
+        {"id": "D03", "title": "Native verdict D03", "status": "active"},
+        {
+            "id": "D02",
+            "title": "Adopt Pydantic v2 strict models at every boundary",
+            "status": "active",
+        },
+        {
+            "id": "D01",
+            "title": "Pick portalocker for cross-platform file locks",
+            "status": "active",
+        },
+    ]
+
+
+def test_status_orders_a_native_decision_older_than_an_epoch1_one_after_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = lay_epoch2_tree(tmp_path, state=_state_with_decisions_and_backlog())
+    _file_decision(state_path, _native_decision("D00", "2026-05-08T12:00:00Z"))
+    assert [d["id"] for d in _status_decisions(state_path, monkeypatch)] == ["D02", "D00", "D01"]
+
+
+def test_status_caps_the_merged_decisions_at_five(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = lay_epoch2_tree(tmp_path, state=_state_with_decisions_and_backlog())
+    for day in range(10, 14):
+        _file_decision(state_path, _native_decision(f"D{day}", f"2026-05-{day}T00:00:00Z"))
+    decisions = _status_decisions(state_path, monkeypatch)
+    assert [d["id"] for d in decisions] == ["D13", "D12", "D11", "D10", "D02"]
+
+
+def test_status_lists_no_decision_for_an_epoch2_tree_with_an_empty_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = lay_epoch2_tree(tmp_path, state=_VALID_STATE)
+    assert _status_decisions(state_path, monkeypatch) == []
+
+
+def test_status_shows_a_superseded_native_decision_as_superseded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = lay_epoch2_tree(tmp_path, state=_VALID_STATE)
+    old = _native_decision("D10", "2026-05-10T00:00:00Z")
+    old_line = _file_decision(state_path, old)
+    new = _native_decision("D11", "2026-05-11T00:00:00Z", supersedes="D10")
+    _file_decision(state_path, supersede(old, new), replaces=old_line)
+    _file_decision(state_path, new)
+    assert _status_decisions(state_path, monkeypatch) == [
+        {"id": "D11", "title": "Native verdict D11", "status": "active"},
+        {"id": "D10", "title": "Native verdict D10", "status": "superseded"},
+    ]
+
+
+def test_status_leaves_the_decisions_of_an_epoch1_tree_unchanged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An epoch-1 tree never reads a decision ledger."""
+    state_path = _seed(tmp_path, _state_with_decisions_and_backlog())
+
+    def _raise(*_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("an epoch-1 tree must not read native decisions")
+
+    monkeypatch.setattr("eawf.observability.reflect.decisions.read_native_decisions", _raise)
+    assert [d["id"] for d in _status_decisions(state_path, monkeypatch)] == ["D02", "D01"]
+
+
+def test_status_refuses_a_torn_decision_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = lay_epoch2_tree(tmp_path, state=_VALID_STATE)
+    ledger = _decision_ledger(state_path)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text('{"schema_version":"2.0"')
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    _stub_no_git(monkeypatch)
+    result = runner.invoke(app, ["--json", "status"])
+    assert result.exit_code == 1, result.output
+    assert "decision ledger unreadable" in json.loads(result.stdout)["message"]
+
+
+def test_status_refuses_a_native_decision_line_its_model_rejects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = lay_epoch2_tree(tmp_path, state=_VALID_STATE)
+    record = LedgerRecord(
+        collection=Epoch2Collection.DECISION,
+        record_key="D10",
+        status="ACTIVE",
+        recorded_at=datetime(2026, 5, 10, tzinfo=UTC),
+        payload={"payload": {"key": "D10"}},
+    )
+    append_ledger_record(_decision_ledger(state_path), record)
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    _stub_no_git(monkeypatch)
+    result = runner.invoke(app, ["--json", "status"])
+    assert result.exit_code == 1, result.output
+    assert "decision ledger unreadable" in json.loads(result.stdout)["message"]

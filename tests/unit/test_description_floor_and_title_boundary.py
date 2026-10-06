@@ -1,14 +1,8 @@
-"""Tests for the description-floor model validator and the title-clarity
-mutation boundary.
+"""Tests for the description-floor model validator.
 
-Two surfaces:
-
-- The ``_DescribedEntity`` ``model_validator`` that floors a *present*
-  ``description`` on Phase / Iter / Wave / Decision (grandfathering ``None``)
-  and rejects a description that merely restates the title.
-- The EAWF016 title-clarity gate wired into ``plan_wave`` (the
-  mutation-boundary rejection the contract requires), re-raised as a
-  ``LifecycleError``.
+The ``_DescribedEntity`` ``model_validator`` floors a *present*
+``description`` on Phase / Iter / Wave / Decision (grandfathering ``None``)
+and rejects a description that merely restates the title.
 """
 
 from __future__ import annotations
@@ -22,26 +16,14 @@ from eawf.kernel.state.enums import (
     DecisionStatus,
     IterStatus,
     PhaseStatus,
-    ProjectStatus,
-    ScopeKind,
     WaveStatus,
 )
 from eawf.kernel.state.models import (
-    CurrentPointers,
     Decision,
     Iter,
     Phase,
-    Project,
-    State,
     Wave,
 )
-from eawf.workflow.lifecycle.transitions import (
-    LifecycleError,
-    open_iter,
-    open_phase,
-    plan_wave,
-)
-from tests.conftest import make_intent
 
 _NOW = datetime.now(UTC)
 
@@ -183,100 +165,3 @@ def test_wave_description_preserving_truncated_title_is_accepted() -> None:
         opened_at=_NOW,
     )
     assert wave.description is not None
-
-
-# ---- mutation boundary: plan_wave rejects unclear titles --------------------
-
-
-def _seed_iter() -> State:
-    state = State.model_validate(
-        {
-            "schema_version": "1.0",
-            "scope_kind": ScopeKind.REPO.value,
-            "urn": "urn:eawf:v1:state:QR",
-            "updated_at": _NOW.isoformat(),
-            "project": Project(
-                code="QR",
-                slug="qr",
-                title="QR",
-                description=None,
-                domains=["x"],
-                default_branch="main",
-                status=ProjectStatus.ACTIVE,
-                repo_urn="urn:eawf:v1:repo:QR",
-            ).model_dump(mode="json"),
-            "current": CurrentPointers(project_code="QR").model_dump(mode="json"),
-            "workspace": None,
-            "phases": {},
-            "iters": {},
-            "waves": {},
-            "artifacts": {},
-            "agent_sessions": {},
-            "plugins": {},
-            "indexes": {},
-        }
-    )
-    open_phase(state, phase_id="P01", title="Bootstrap")
-    open_iter(state, iter_id="P01-I01", phase_id="P01", title="First iter")
-    return state
-
-
-def test_plan_wave_rejects_conventional_commit_prefix_title() -> None:
-    state = _seed_iter()
-    with pytest.raises(LifecycleError, match="title-clarity"):
-        plan_wave(
-            state,
-            wave_id="P01-I01-W01",
-            iter_id="P01-I01",
-            title="feat: add the lint",
-            file_scopes=["src/"],
-            effort_bucket="M",
-            intent=make_intent(),
-        )
-    # Rejected at the boundary: nothing persisted.
-    assert "P01-I01-W01" not in state.waves
-
-
-def test_plan_wave_rejects_bare_id_title() -> None:
-    state = _seed_iter()
-    with pytest.raises(LifecycleError, match="bare id"):
-        plan_wave(
-            state,
-            wave_id="P01-I01-W01",
-            iter_id="P01-I01",
-            title="W01",
-            file_scopes=["src/"],
-            effort_bucket="M",
-            intent=make_intent(),
-        )
-
-
-def test_plan_wave_accepts_clear_title() -> None:
-    state = _seed_iter()
-    wave = plan_wave(
-        state,
-        wave_id="P01-I01-W01",
-        iter_id="P01-I01",
-        title="Add the title-clarity gate",
-        file_scopes=["src/"],
-        effort_bucket="M",
-        intent=make_intent(),
-    )
-    assert wave.title == "Add the title-clarity gate"
-
-
-def test_plan_wave_structural_guard_precedes_title_check() -> None:
-    # A self-dep is a structural DAG error; it reports before the title gate
-    # even when the title is also bad, so the DAG guard precedence is kept.
-    state = _seed_iter()
-    with pytest.raises(LifecycleError, match="cannot depend on itself"):
-        plan_wave(
-            state,
-            wave_id="P01-I01-W01",
-            iter_id="P01-I01",
-            title="W01",
-            file_scopes=["src/"],
-            deps=["P01-I01-W01"],
-            effort_bucket="M",
-            intent=make_intent(),
-        )

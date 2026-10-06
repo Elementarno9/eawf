@@ -140,11 +140,9 @@ COMMAND_PANELS: dict[str, str] = {
     "rules": "runtime",
     "runtime": "runtime",
     "skill": "runtime",
-    # ship: PR / wiki / release artifacts and the sync renderer.
-    "pr": "ship",
+    # ship: release artifacts and the sync renderer.
     "release": "ship",
     "sync": "ship",
-    "wiki": "ship",
     # ui: surfaces that drive the terminal display.
     "completion": "ui",
     "help": "ui",

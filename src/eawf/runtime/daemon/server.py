@@ -40,6 +40,7 @@ import orjson
 # Every other method module registers on first need; see
 # ``ensure_all_methods_registered``.
 import eawf.runtime.daemon.methods.daemon  # noqa: F401  — registers daemon.ping/status
+from eawf.kernel.errors.lifecycle import LifecycleGuardError
 from eawf.kernel.projection.compute import patches_for_event
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
@@ -58,7 +59,6 @@ from eawf.runtime.daemon.methods.state_subscribe import (
     PROJECTION_SUBSCRIBE_METHOD,
     SUBSCRIBE_METHODS,
 )
-from eawf.workflow.lifecycle._errors import LifecycleGuardError
 from eawf.workflow.verify.dispatch_close import DispatchCloseBlockedError
 
 logger = logging.getLogger(__name__)
@@ -105,9 +105,6 @@ DISPATCH_CLOSE_BLOCKED = -32011
 #: Membership is deliberately narrow: a handler is only safe to run off the
 #: loop when it touches no loop-bound object. ``state.read`` qualifies -- it
 #: takes no lock, mutates no ``ctx`` field and publishes nothing.
-#: ``state.digest`` does NOT, despite comparable occupancy: its elapsed-update
-#: publisher does a check-then-set against a ``ctx``-resident cache that is
-#: atomic only while every caller runs on the one loop.
 OFFLOADED_METHODS: frozenset[str] = frozenset({"state.read"})
 
 #: Methods whose response is a liveness signal rather than an outcome.

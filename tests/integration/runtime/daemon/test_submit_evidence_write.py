@@ -29,7 +29,7 @@ from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon.epoch2_transaction import TransactionRefusalCode, TransactionRefusedError
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.semantic_handlers import EVIDENCE_SPIKE_REPORT_FILE_METHOD
-from eawf.workflow.evidence._io import atomic_write_state, load_state
+from eawf.workflow.evidence._io import load_state
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import root_context
 from tests.integration.runtime.daemon.test_semantic_tool_handlers import (
     PROJECT_SCOPE,
@@ -197,7 +197,7 @@ def test_submit_evidence_files_its_promotion_through_one_ledger_append(
 def test_a_marked_tree_refuses_every_v1_document_writer(
     task_canary: CanaryProvision, tmp_path: Path
 ) -> None:
-    """CR-1: neither v1 writer has a carve-out left, so a marked tree refuses both."""
+    """CR-1: the v1 writer has no carve-out left, so a marked tree refuses it."""
     plain = tmp_path / "plain" / "state.json"
     plain.parent.mkdir()
     plain.write_text(V1_STATE_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
@@ -205,13 +205,10 @@ def test_a_marked_tree_refuses_every_v1_document_writer(
     target = Path(task_canary.root) / ".ea" / "state.json"
 
     with pytest.raises(LegacyOperationRemovedError):
-        atomic_write_state(target, state)
-    with pytest.raises(LegacyOperationRemovedError):
         write_state_unlocked(target, state.model_dump(mode="json"))
 
     assert not target.exists()
     assert "native_authority" not in inspect.signature(write_state_unlocked).parameters
-    assert "native_authority" not in inspect.signature(atomic_write_state).parameters
 
 
 def test_an_unmarked_tree_still_takes_a_v1_document_write(tmp_path: Path) -> None:
@@ -221,7 +218,7 @@ def test_an_unmarked_tree_still_takes_a_v1_document_write(tmp_path: Path) -> Non
     plain.write_text(V1_STATE_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
     state = load_state(plain)
 
-    atomic_write_state(plain, state)
+    write_state_unlocked(plain, state.model_dump(mode="json"))
 
     assert load_state(plain).project == state.project
 

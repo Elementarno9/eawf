@@ -394,7 +394,6 @@ _MANAGED_GOLDEN_DIRS = (
     "tests/golden/spec/",
     "tests/golden/state/",
     "tests/golden/surfaces/cli/scenarios/",
-    "tests/golden/surfaces/render/plan_view/",
     "tests/golden/telemetry/",
     "tests/snapshots/svg/golden/",
 )

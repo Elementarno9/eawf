@@ -16,7 +16,7 @@ Coverage:
   ``agent_role -> body`` map, last-declared-wins.
 - Criterion 1: a profile carrying an executor role-tier block yields a
   dispatched ``system_prompt`` containing that block body for an executor
-  wave (asserted against the rendered envelope text).
+  wave (asserted against the rendered prompt text).
 - Criterion 2: a wave whose ``agent_role`` has NO role-tier block renders
   the byte-identical static ``RoleSpec.system_prompt`` with no injection and
   no empty-header artifact.
@@ -26,7 +26,9 @@ Coverage:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -44,9 +46,14 @@ from eawf.platform.render_block import (
     DEFAULT_ROLE_TIER_TOKEN_CAP,
     DISPATCH_SYSTEM_PROMPT_TARGET,
 )
+from eawf.workflow.agents.specs.models import RoleContract
 from eawf.workflow.agents.specs.roles import get_role_spec
-from eawf.workflow.dispatch import RoleTierBudgetError, render_dispatch_envelope
-from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
+from eawf.workflow.dispatch import (
+    RoleTierBudgetError,
+    build_subagent_spec,
+    render_wave_prompt,
+)
+from tests._epoch1_seed import seed_iter, seed_phase, seed_wave
 from tests.conftest import make_intent
 
 _EXECUTOR_BLOCK_BODY = (
@@ -56,6 +63,23 @@ _EXECUTOR_BLOCK_BODY = (
 
 
 # ---- Builders ---------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _Rendered:
+    """The rendered prompt and the typed role contract it was built from."""
+
+    prompt: str
+    role_contract: RoleContract | None
+
+
+def _render(state: State, wave_id: str, **kwargs: Any) -> _Rendered:
+    """Render *wave_id* the way a dispatch does: the prompt plus its role contract."""
+    spec = build_subagent_spec(state, wave_id, **kwargs)
+    return _Rendered(
+        prompt=render_wave_prompt(state, wave_id, **kwargs),
+        role_contract=spec.role_contract,
+    )
 
 
 def _empty_state() -> State:
@@ -91,9 +115,9 @@ def _empty_state() -> State:
 
 def _seed_wave_with_role(state: State, *, role: AgentSessionRole) -> str:
     """Seed P01 -> P01-I01 -> P01-I01-W01 carrying *role* as ``agent_role``."""
-    open_phase(state, phase_id="P01", title="Bootstrap")
-    open_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    plan_wave(
+    seed_phase(state, phase_id="P01", title="Bootstrap")
+    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
+    seed_wave(
         state,
         wave_id="P01-I01-W01",
         iter_id="P01-I01",
@@ -108,9 +132,9 @@ def _seed_wave_with_role(state: State, *, role: AgentSessionRole) -> str:
 
 def _seed_roleless_wave(state: State) -> str:
     """Seed P01 -> P01-I01 -> P01-I01-W01 with no ``agent_role``."""
-    open_phase(state, phase_id="P01", title="Bootstrap")
-    open_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    plan_wave(
+    seed_phase(state, phase_id="P01", title="Bootstrap")
+    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
+    seed_wave(
         state,
         wave_id="P01-I01-W01",
         iter_id="P01-I01",
@@ -223,7 +247,7 @@ def test_executor_role_block_injected_into_dispatch_system_prompt() -> None:
     Criterion 1: a profile carrying a role-tier block for
     ``agent_role=executor`` yields a dispatched ``system_prompt`` CONTAINING
     that block's body for an executor wave (asserted against the rendered
-    envelope text).
+    rendered text).
     """
     state = _empty_state()
     wave_id = _seed_wave_with_role(state, role=AgentSessionRole.EXECUTOR)
@@ -231,18 +255,16 @@ def test_executor_role_block_injected_into_dispatch_system_prompt() -> None:
         _role_tier_block(role="executor", body=_EXECUTOR_BLOCK_BODY),
     )
 
-    envelope = render_dispatch_envelope(
-        state, wave_id, "claude-code", role_blocks=composed.role_tier_blocks()
-    )
+    rendered = _render(state, wave_id, role_blocks=composed.role_tier_blocks())
 
     # The injected block body is present in both the typed contract and the
     # rendered prompt text.
-    assert envelope.role_contract is not None
-    assert _EXECUTOR_BLOCK_BODY in envelope.role_contract.system_prompt
-    assert "Always cite a file:line for every claim" in envelope.prompt
+    assert rendered.role_contract is not None
+    assert _EXECUTOR_BLOCK_BODY in rendered.role_contract.system_prompt
+    assert "Always cite a file:line for every claim" in rendered.prompt
     # The static role body still leads the injected prompt — the block is
     # additive, not a replacement.
-    assert "You implement what the planner specified." in envelope.prompt
+    assert "You implement what the planner specified." in rendered.prompt
 
 
 # ---- Criterion 2: absent block is a byte-identical no-op -------------------
@@ -257,14 +279,13 @@ def test_roleless_wave_renders_static_prompt_byte_identical() -> None:
     """
     baseline_state = _empty_state()
     wave_id = _seed_roleless_wave(baseline_state)
-    baseline = render_dispatch_envelope(baseline_state, wave_id, "claude-code")
+    baseline = _render(baseline_state, wave_id)
 
     injected_state = _empty_state()
     _seed_roleless_wave(injected_state)
-    injected = render_dispatch_envelope(
+    injected = _render(
         injected_state,
         wave_id,
-        "claude-code",
         role_blocks={"executor": _EXECUTOR_BLOCK_BODY},
     )
 
@@ -285,7 +306,7 @@ def test_unconfigured_role_renders_static_system_prompt_byte_identical() -> None
     # Baseline: no role_blocks at all.
     baseline_state = _empty_state()
     wave_id = _seed_wave_with_role(baseline_state, role=AgentSessionRole.EXECUTOR)
-    baseline = render_dispatch_envelope(baseline_state, wave_id, "claude-code")
+    baseline = _render(baseline_state, wave_id)
     assert baseline.role_contract is not None
     # The contract carries the static prompt verbatim — no injection.
     assert baseline.role_contract.system_prompt == static_prompt
@@ -293,10 +314,9 @@ def test_unconfigured_role_renders_static_system_prompt_byte_identical() -> None
     # Variant: role_blocks present, but only for a DIFFERENT role (auditor).
     variant_state = _empty_state()
     _seed_wave_with_role(variant_state, role=AgentSessionRole.EXECUTOR)
-    variant = render_dispatch_envelope(
+    variant = _render(
         variant_state,
         wave_id,
-        "claude-code",
         role_blocks={"auditor": "## Auditor rules\n\nBe skeptical."},
     )
     assert variant.role_contract is not None
@@ -322,13 +342,11 @@ def test_executor_block_does_not_leak_into_auditor_prompt() -> None:
 
     baseline_state = _empty_state()
     wave_id = _seed_wave_with_role(baseline_state, role=AgentSessionRole.AUDITOR)
-    baseline = render_dispatch_envelope(baseline_state, wave_id, "claude-code")
+    baseline = _render(baseline_state, wave_id)
 
     injected_state = _empty_state()
     _seed_wave_with_role(injected_state, role=AgentSessionRole.AUDITOR)
-    injected = render_dispatch_envelope(
-        injected_state, wave_id, "claude-code", role_blocks=role_blocks
-    )
+    injected = _render(injected_state, wave_id, role_blocks=role_blocks)
 
     assert injected.prompt == baseline.prompt
     assert _EXECUTOR_BLOCK_BODY not in injected.prompt
@@ -348,11 +366,9 @@ def test_blank_role_block_body_is_no_op() -> None:
 
     state = _empty_state()
     wave_id = _seed_wave_with_role(state, role=AgentSessionRole.EXECUTOR)
-    envelope = render_dispatch_envelope(
-        state, wave_id, "claude-code", role_blocks={"executor": "   \n  "}
-    )
-    assert envelope.role_contract is not None
-    assert envelope.role_contract.system_prompt == static_prompt
+    rendered = _render(state, wave_id, role_blocks={"executor": "   \n  "})
+    assert rendered.role_contract is not None
+    assert rendered.role_contract.system_prompt == static_prompt
 
 
 # ---- FLEET-6 criterion 1: per-role injection isolation ---------------------
@@ -389,19 +405,17 @@ def test_role_tier_block_lands_only_in_its_own_role_prompt(
 
     state = _empty_state()
     wave_id = _seed_wave_with_role(state, role=role)
-    envelope = render_dispatch_envelope(
-        state, wave_id, "claude-code", role_blocks=_ISOLATION_BLOCKS
-    )
+    rendered = _render(state, wave_id, role_blocks=_ISOLATION_BLOCKS)
 
-    assert envelope.role_contract is not None
+    assert rendered.role_contract is not None
     # The role's OWN block is injected into its contract + rendered prompt.
-    assert own_body in envelope.role_contract.system_prompt
-    assert own_body in envelope.prompt
+    assert own_body in rendered.role_contract.system_prompt
+    assert own_body in rendered.prompt
     # The SIBLING role's block never leaks into this role's prompt.
-    assert sibling_body not in envelope.role_contract.system_prompt
-    assert sibling_body not in envelope.prompt
+    assert sibling_body not in rendered.role_contract.system_prompt
+    assert sibling_body not in rendered.prompt
     # The static role body still leads — the block is additive, not a replacement.
-    assert get_role_spec(role).system_prompt.splitlines()[0] in envelope.prompt
+    assert get_role_spec(role).system_prompt.splitlines()[0] in rendered.prompt
 
 
 # ---- FLEET-6 criterion 2: over-cap block RAISES (never truncates) ----------
@@ -431,7 +445,7 @@ def test_over_cap_role_block_raises_and_emits_no_truncated_prompt(
     assert count_tokens(body) > DEFAULT_ROLE_TIER_TOKEN_CAP
 
     with pytest.raises(RoleTierBudgetError) as excinfo:
-        render_dispatch_envelope(state, wave_id, "claude-code", role_blocks={role.value: body})
+        _render(state, wave_id, role_blocks={role.value: body})
 
     message = str(excinfo.value)
     # The error names the offending role and the cap that was breached.
@@ -454,18 +468,15 @@ def test_under_cap_block_passes_but_over_lower_override_raises() -> None:
     assert block_tokens < DEFAULT_ROLE_TIER_TOKEN_CAP
 
     # Default cap: the small block injects without error.
-    clean = render_dispatch_envelope(
-        state, wave_id, "claude-code", role_blocks={"executor": _EXECUTOR_BLOCK_BODY}
-    )
+    clean = _render(state, wave_id, role_blocks={"executor": _EXECUTOR_BLOCK_BODY})
     assert clean.role_contract is not None
     assert _EXECUTOR_BLOCK_BODY in clean.role_contract.system_prompt
 
     # Override below the block's token weight: the same block now RAISES.
     with pytest.raises(RoleTierBudgetError) as excinfo:
-        render_dispatch_envelope(
+        _render(
             state,
             wave_id,
-            "claude-code",
             role_blocks={"executor": _EXECUTOR_BLOCK_BODY},
             role_tier_token_cap=block_tokens - 1,
         )

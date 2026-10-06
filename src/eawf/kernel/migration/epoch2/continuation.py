@@ -1,36 +1,21 @@
-"""The closed route an imported lifecycle row takes after the cutover.
+"""How an imported lifecycle row reads after the cutover, and what may be appended.
 
 An imported Milestone, Batch or Task is stored as a ``{status,
 recorded_at, payload}`` wrapper keyed by its epoch-1 id. It does not
-validate as a native record, and the native transition reducer refuses
-every legacy origin, so without this module the work that was in flight
-at the cut -- a claimed wave, the iter around it, the phase around that --
-has no way to finish.
+validate as a native record, so :func:`read_legacy_row` reads it through
+the import's own model, together with the :class:`ContinuationEvent` rows
+earlier releases appended beside the payload when they moved it.
 
-The route here is deliberately narrow. It admits only the edges an
-in-flight epoch-1 record still needs to reach an end, each one declared in
-:data:`LEGACY_EDGES`; everything else is refused as
-``legacy_edge_refused``. The imported payload is never edited: a move
-changes the row's status and appends one :class:`ContinuationEvent` beside
-the payload, so the record still says exactly what the source said and the
-continuation says, separately, what happened to it afterwards.
-
-Completing a Task is where an epoch-1 wave close used to run its gates, so
-the edge that completes one names the Task's decisive gates -- the
-required, blocking gates its source wave declared -- and the caller has to
-bind a passing receipt for every one of them. A Task that declares none
-cannot be completed here at all: a receipt the caller merely presents
-proves nothing about the tree, and there is no gate left to run.
+An operator still files audits and artifacts against that imported work:
+:func:`appended_record_line` builds the ledger line one becomes, and
+:func:`ledger_ids` names every id a line answers to.
 
 This module decides; it does not write. The daemon runner reads the
-document and the ledgers under its locks, asks these functions whether the
-move stands, and commits the row it is handed back.
+ledgers under its locks and commits the lines it is handed back.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -39,23 +24,11 @@ from typing import Annotated, Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from eawf.kernel.migration.epoch2.criteria import (
-    CRITERION_FIELD_ROUTES,
-    FieldDisposition,
-    ImportedCriterion,
-)
 from eawf.kernel.migration.epoch2.cutover import (
-    COMPACTING_STATUSES,
     ROW_PAYLOAD_FIELD,
-    ROW_RECORDED_AT_FIELD,
     ROW_STATUS_FIELD,
 )
 from eawf.kernel.migration.epoch2.lifecycle import ImportedLifecycleRecord
-from eawf.kernel.spec.common import CriterionSpec, GateSpec
-from eawf.kernel.state.epoch2.batch import BatchStatus
-from eawf.kernel.state.epoch2.milestone import MilestoneStatus
-from eawf.kernel.state.epoch2.task import TaskStatus
-from eawf.kernel.state.epoch2.transitions import TERMINAL_STATUSES, LifecycleEntity
 from eawf.kernel.state.models import Artifact, Audit
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.ledger import LedgerRecord
@@ -66,16 +39,8 @@ from eawf.kernel.store.tiers import Epoch2Collection
 #: record and stays byte-for-byte what the import wrote.
 ROW_CONTINUATION_FIELD: Final = "continuation"
 
-#: The payload key a compacted row's continuation travels under. A ledger
-#: line has one free mapping, so the events join the payload there; every
-#: key the import wrote is still present and unchanged.
-LEDGER_CONTINUATION_KEY: Final = "continuation"
-
 #: The ledger status a record appended after the cutover is filed under.
 APPENDED_RECORD_STATUS: Final = "recorded"
-
-#: The gate policy that makes a required gate decisive for a close.
-_BLOCKING_POLICY: Final = "block"
 
 
 class ContinuationRefusal(StrEnum):
@@ -115,74 +80,6 @@ class LegacyContinuationRefusedError(ValueError):
         self.detail = detail
         self.guard = guard
         self.remediation = remediation
-
-
-@dataclass(frozen=True, slots=True)
-class LegacyEdge:
-    """One move an imported row may make, and what it needs to make it.
-
-    Attributes:
-        collection: The collection the row is stored under.
-        from_status: The status the row must be in.
-        to_status: The status the move lands it in.
-        runs_gates: Whether the move needs a passing receipt for every
-            decisive gate the row's source declared.
-        children_field: The record field listing the children that must
-            all be terminal first, or ``None``.
-        children: The collection those children are stored under.
-        proof: The ledgers one of the request's evidence refs must resolve
-            in; empty when the move needs no evidence.
-    """
-
-    collection: Epoch2Collection
-    from_status: str
-    to_status: str
-    runs_gates: bool = False
-    children_field: str | None = None
-    children: Epoch2Collection | None = None
-    proof: frozenset[Epoch2Collection] = frozenset()
-
-
-#: Every move an imported row may make. The table is closed: an edge that is
-#: not here is refused, whatever the native machine would allow.
-LEGACY_EDGES: Final[tuple[LegacyEdge, ...]] = (
-    LegacyEdge(Epoch2Collection.TASK, TaskStatus.PLANNED.value, TaskStatus.CLAIMED.value),
-    LegacyEdge(Epoch2Collection.TASK, TaskStatus.CLAIMED.value, TaskStatus.RUNNING.value),
-    LegacyEdge(
-        Epoch2Collection.TASK, TaskStatus.RUNNING.value, TaskStatus.COMPLETED.value, runs_gates=True
-    ),
-    LegacyEdge(
-        Epoch2Collection.TASK, TaskStatus.CLAIMED.value, TaskStatus.COMPLETED.value, runs_gates=True
-    ),
-    LegacyEdge(Epoch2Collection.TASK, TaskStatus.DRAFT.value, TaskStatus.DROPPED.value),
-    LegacyEdge(
-        Epoch2Collection.BATCH,
-        BatchStatus.ACTIVE.value,
-        BatchStatus.COMPLETED.value,
-        children_field="task_refs",
-        children=Epoch2Collection.TASK,
-    ),
-    LegacyEdge(
-        Epoch2Collection.MILESTONE,
-        MilestoneStatus.ACTIVE.value,
-        MilestoneStatus.COMPLETED.value,
-        children_field="required_batch_refs",
-        children=Epoch2Collection.BATCH,
-        proof=frozenset({Epoch2Collection.AUDIT}),
-    ),
-    LegacyEdge(
-        Epoch2Collection.MILESTONE,
-        MilestoneStatus.PLANNED.value,
-        MilestoneStatus.CANCELLED.value,
-        proof=frozenset({Epoch2Collection.DECISION, Epoch2Collection.ARTIFACT}),
-    ),
-)
-
-#: Which lifecycle machine's terminal set judges each collection's children.
-_CHILD_ENTITIES: Final[Mapping[Epoch2Collection, LifecycleEntity]] = {
-    Epoch2Collection.TASK: LifecycleEntity.TASK,
-    Epoch2Collection.BATCH: LifecycleEntity.DELIVERY_BATCH,
-}
 
 
 class GateReceiptBinding(BaseModel):
@@ -251,19 +148,6 @@ class LegacyRow:
     continuation: tuple[ContinuationEvent, ...]
 
 
-@dataclass(frozen=True, slots=True)
-class DecisiveGate:
-    """One gate the Task's source wave declared required and blocking.
-
-    Attributes:
-        gate: The epoch-1 gate, as the wave recorded it.
-        criterion: The criterion it scores, rebuilt from the import.
-    """
-
-    gate: GateSpec
-    criterion: CriterionSpec
-
-
 def entity_ref(collection: Epoch2Collection, key: str) -> str:
     """Return the name a refusal and an event give one imported row."""
     return f"legacy:{collection.value}/{key}"
@@ -316,255 +200,6 @@ def read_legacy_row(collection: Epoch2Collection, key: str, row: Any) -> LegacyR
         raw=row,
         record=record,
         continuation=continuation,
-    )
-
-
-def edge_for(collection: Epoch2Collection, from_status: str, to_status: str) -> LegacyEdge:
-    """Return the declared edge from *from_status* to *to_status*.
-
-    Raises:
-        LegacyContinuationRefusedError: The table declares no such edge.
-    """
-    for edge in LEGACY_EDGES:
-        if (edge.collection, edge.from_status, edge.to_status) == (
-            collection,
-            from_status,
-            to_status,
-        ):
-            return edge
-    admitted = ", ".join(
-        f"{edge.from_status}->{edge.to_status}"
-        for edge in LEGACY_EDGES
-        if edge.collection is collection
-    )
-    raise LegacyContinuationRefusedError(
-        f"an imported {collection.value} does not move {from_status} -> {to_status}; "
-        f"admitted: {admitted or 'none'}",
-        remediation="Request one of the admitted legacy edges.",
-    )
-
-
-def child_refs(edge: LegacyEdge, row: LegacyRow) -> tuple[str, ...]:
-    """Return the children the edge requires terminal, as the source listed them.
-
-    Raises:
-        LegacyContinuationRefusedError: The record lists them as something
-            other than a list of ids.
-    """
-    if edge.children_field is None:
-        return ()
-    refs = row.record.record.get(edge.children_field, [])
-    if not isinstance(refs, list) or not all(isinstance(ref, str) for ref in refs):
-        raise LegacyContinuationRefusedError(
-            f"{entity_ref(row.collection, row.key)} lists {edge.children_field} as something "
-            "other than ids",
-            code=ContinuationRefusal.SCHEMA_VALIDATION_FAILED,
-            remediation="Repair the imported record before closing it.",
-        )
-    return tuple(refs)
-
-
-def require_children_terminal(
-    edge: LegacyEdge, row: LegacyRow, statuses: Mapping[str, str | None]
-) -> None:
-    """Refuse the move while any child is still open.
-
-    Args:
-        edge: The edge being taken.
-        row: The row being moved.
-        statuses: Each child's current status, ``None`` when neither the
-            document nor the ledger holds it.
-
-    Raises:
-        LegacyContinuationRefusedError: A child is absent or not terminal.
-    """
-    if edge.children is None:
-        return
-    terminal = TERMINAL_STATUSES[_CHILD_ENTITIES[edge.children]]
-    open_children = sorted(
-        f"{ref}={statuses.get(ref) or 'absent'}"
-        for ref in statuses
-        if statuses.get(ref) not in terminal
-    )
-    if open_children:
-        raise LegacyContinuationRefusedError(
-            f"{entity_ref(row.collection, row.key)} cannot reach {edge.to_status} while "
-            f"{edge.children.value} children are open: {', '.join(open_children)}",
-            code=ContinuationRefusal.TRANSITION_GUARD_FAILED,
-            guard=f"{edge.children.value}_terminal",
-            remediation=f"Finish or drop every {edge.children.value} first.",
-        )
-
-
-def require_proof(edge: LegacyEdge, row: LegacyRow, resolved: frozenset[Epoch2Collection]) -> None:
-    """Refuse the move unless an evidence ref resolves in a ledger the edge names.
-
-    Args:
-        edge: The edge being taken.
-        row: The row being moved.
-        resolved: The ledgers at least one of the request's evidence refs
-            resolved in.
-
-    Raises:
-        LegacyContinuationRefusedError: The edge needs evidence and none of
-            the cited refs is a record of the kind it needs.
-    """
-    if not edge.proof or edge.proof & resolved:
-        return
-    wanted = " or ".join(sorted(collection.value for collection in edge.proof))
-    raise LegacyContinuationRefusedError(
-        f"{entity_ref(row.collection, row.key)} reaches {edge.to_status} only against a "
-        f"recorded {wanted}, and no evidence ref resolves to one",
-        code=ContinuationRefusal.TRANSITION_GUARD_FAILED,
-        guard=f"{wanted.replace(' or ', '_or_')}_ref",
-        remediation=f"Append the {wanted} record, then cite its id as an evidence ref.",
-    )
-
-
-def _criterion_spec(criterion: ImportedCriterion) -> CriterionSpec:
-    """Rebuild the epoch-1 criterion the import converted, field for field.
-
-    The criteria disposition routes every epoch-1 field either to a native
-    field or to ``legacy_refs``, and the routes are checked total, so the
-    inverse is exact.
-
-    Raises:
-        ValidationError: The rebuilt row does not validate.
-    """
-    fields: dict[str, Any] = {
-        "id": criterion.id,
-        "text": criterion.text,
-        "gate_ids": list(criterion.gate_ids),
-        "waiver_reason": criterion.waiver_reason,
-    }
-    for name, route in CRITERION_FIELD_ROUTES.items():
-        if route.disposition is FieldDisposition.LEGACY_REF:
-            fields[name] = criterion.legacy_refs.get(route.target_key)
-    return CriterionSpec.model_validate(fields)
-
-
-def decisive_gates(row: LegacyRow) -> tuple[DecisiveGate, ...]:
-    """Return the gates a Task's source wave declared required and blocking.
-
-    Args:
-        row: The Task being completed.
-
-    Returns:
-        One entry per decisive gate, in the order the wave declared them.
-
-    Raises:
-        LegacyContinuationRefusedError: A gate row, or the criterion a
-            decisive gate scores, does not validate or is missing -- a
-            decisive gate nobody can run is a close nobody can prove.
-    """
-    raw_gates = row.record.legacy_refs.get("gates") or []
-    criteria = {criterion.id: criterion for criterion in row.record.criteria}
-    gates: list[DecisiveGate] = []
-    for raw in raw_gates:
-        try:
-            gate = GateSpec.model_validate(raw)
-        except ValidationError as error:
-            raise LegacyContinuationRefusedError(
-                f"{entity_ref(row.collection, row.key)} carries a gate row that does not validate",
-                code=ContinuationRefusal.TRANSITION_GUARD_FAILED,
-                guard="decisive_gate_unreadable",
-                remediation="Repair the imported gate before completing the Task.",
-            ) from error
-        if not gate.required or gate.policy != _BLOCKING_POLICY:
-            continue
-        criterion = criteria.get(gate.criterion_id)
-        try:
-            spec = None if criterion is None else _criterion_spec(criterion)
-        except ValidationError:
-            spec = None
-        if spec is None:
-            raise LegacyContinuationRefusedError(
-                f"decisive gate {gate.id} scores criterion {gate.criterion_id}, which "
-                f"{entity_ref(row.collection, row.key)} does not carry in a readable form",
-                code=ContinuationRefusal.TRANSITION_GUARD_FAILED,
-                guard=gate.id,
-                remediation="Repair the imported criterion before completing the Task.",
-            )
-        gates.append(DecisiveGate(gate=gate, criterion=spec))
-    if not gates:
-        raise LegacyContinuationRefusedError(
-            f"{entity_ref(row.collection, row.key)} declares no decisive gate, so completing "
-            "it would rest on caller-supplied receipts alone",
-            code=ContinuationRefusal.TRANSITION_GUARD_FAILED,
-            guard="decisive_gates_absent",
-            remediation="Complete the Task through a scope that declares a gate the daemon "
-            "can run; a presented receipt is never accepted in place of one.",
-        )
-    return tuple(gates)
-
-
-def require_gates_passed(row: LegacyRow, bindings: tuple[GateReceiptBinding, ...]) -> None:
-    """Refuse the completion unless every decisive gate's receipt passed.
-
-    Raises:
-        LegacyContinuationRefusedError: A gate did not pass. The first one
-            is named as the guard and every one is listed in the detail.
-    """
-    failed = [binding for binding in bindings if binding.status != "pass"]
-    if not failed:
-        return
-    listed = ", ".join(f"{item.gate_id}={item.status} ({item.receipt_id})" for item in failed)
-    raise LegacyContinuationRefusedError(
-        f"{entity_ref(row.collection, row.key)} stays {row.status}: decisive gate "
-        f"{failed[0].gate_id} did not pass; {listed}",
-        code=ContinuationRefusal.TRANSITION_GUARD_FAILED,
-        guard=failed[0].gate_id,
-        remediation="Fix what the gate reports and complete the Task again.",
-    )
-
-
-def receipt_digest(payload: Mapping[str, Any]) -> str:
-    """Return the digest a binding names one receipt line's payload by."""
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
-    return f"sha256:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
-
-
-def advanced_row(row: LegacyRow, event: ContinuationEvent) -> dict[str, Any]:
-    """Return the stored row after one move: new status, same payload, one more event."""
-    return {
-        **row.raw,
-        ROW_STATUS_FIELD: event.to_status,
-        ROW_RECORDED_AT_FIELD: event.at.isoformat(),
-        ROW_CONTINUATION_FIELD: [
-            *(item.model_dump(mode="json") for item in row.continuation),
-            event.model_dump(mode="json"),
-        ],
-    }
-
-
-def compaction_line(
-    row: LegacyRow, advanced: Mapping[str, Any], *, at: datetime
-) -> LedgerRecord | None:
-    """Return the ledger line a row moved to a compacting status becomes, else ``None``.
-
-    Args:
-        row: The row before the move.
-        advanced: The row after it.
-        at: When the move committed.
-
-    Returns:
-        The line, whose payload is the imported payload plus the row's
-        continuation, or ``None`` when the new status stays in the
-        document -- a dropped Task never entered delivery, so the tier
-        rules keep it there.
-    """
-    status = advanced[ROW_STATUS_FIELD]
-    if status not in COMPACTING_STATUSES.get(row.collection, frozenset()):
-        return None
-    return LedgerRecord(
-        collection=row.collection,
-        record_key=row.key,
-        status=status,
-        recorded_at=at,
-        payload={
-            **advanced[ROW_PAYLOAD_FIELD],
-            LEDGER_CONTINUATION_KEY: advanced[ROW_CONTINUATION_FIELD],
-        },
     )
 
 
@@ -636,30 +271,17 @@ def ledger_ids(record: LedgerRecord) -> frozenset[str]:
 
 
 __all__ = [
-    "LEDGER_CONTINUATION_KEY",
-    "LEGACY_EDGES",
     "RECORD_COLLECTIONS",
     "RECORD_MODELS",
     "ROW_CONTINUATION_FIELD",
     "ContinuationEvent",
     "ContinuationRefusal",
-    "DecisiveGate",
     "GateReceiptBinding",
     "LegacyContinuationRefusedError",
-    "LegacyEdge",
     "LegacyRow",
     "RecordKind",
-    "advanced_row",
     "appended_record_line",
-    "child_refs",
-    "compaction_line",
-    "decisive_gates",
-    "edge_for",
     "entity_ref",
     "ledger_ids",
     "read_legacy_row",
-    "receipt_digest",
-    "require_children_terminal",
-    "require_gates_passed",
-    "require_proof",
 ]

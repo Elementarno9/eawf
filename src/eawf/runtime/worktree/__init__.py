@@ -47,12 +47,6 @@ from eawf.runtime.worktree.merge_back import (
     MergeBackResult,
     merge_back,
 )
-from eawf.runtime.worktree.wave_land import (
-    WaveLandBatchResult,
-    WaveLandResult,
-    wave_land,
-    wave_land_batch,
-)
 from eawf.surfaces.cli import errors as cli_errors
 
 # Module alias so callers can `except WorktreeError` without importing
@@ -129,8 +123,6 @@ __all__ = [
     "MergeBackResult",
     "WaveAutolandResult",
     "WaveAutolandRow",
-    "WaveLandBatchResult",
-    "WaveLandResult",
     "WorktreeError",
     "WorktreeListing",
     "cleanup_worktree",
@@ -138,7 +130,5 @@ __all__ = [
     "list_worktrees",
     "merge_back",
     "wave_autoland",
-    "wave_land",
-    "wave_land_batch",
     "worktree_registry_lock",
 ]

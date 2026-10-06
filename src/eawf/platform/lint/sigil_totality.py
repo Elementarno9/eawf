@@ -11,12 +11,8 @@ member lands without a row.
 This module is that proof. :func:`check_sigil_totality` is parametrized over
 ``list(EnumCls)`` for every TUI-render status enum (WaveStatus, IterStatus,
 PhaseStatus, AgentReportVerdict, AgentSessionStatus, AuditVerdict,
-OutcomeStatus, BacklogStatus, ClaimStatus, OpenQuestionStatus) PLUS the
-lifecycle FSM terminals -- the keys of ``WAVE_TRANSITIONS`` /
-``PHASE_TRANSITIONS`` / ``ITER_TRANSITIONS`` in
-:mod:`eawf.workflow.lifecycle.spec`, so a status that exists only as an FSM
-state (never as a rendered row yet) is still covered. For each member it asserts
-the resolver returns a glyph that is:
+OutcomeStatus, BacklogStatus, ClaimStatus, OpenQuestionStatus). For each
+member it asserts the resolver returns a glyph that is:
 
 - present -- :func:`~eawf.surfaces.tui.chassis.sigils.status_sigil` resolves it
   rather than raising (no enum drifted past the map);
@@ -39,7 +35,7 @@ delegates here too.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -56,11 +52,6 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.surfaces.tui.chassis.sigils import ResolvedSigil, status_sigil
-from eawf.workflow.lifecycle.spec import (
-    ITER_TRANSITIONS,
-    PHASE_TRANSITIONS,
-    WAVE_TRANSITIONS,
-)
 
 #: A resolver with the shape of
 #: :func:`eawf.surfaces.tui.chassis.sigils.status_sigil`. Injected so the
@@ -118,14 +109,7 @@ class GateResult:
 def covered_members() -> tuple[StrEnum, ...]:
     """Return every status member the gate must prove resolves, de-duplicated.
 
-    The union of ``list(EnumCls)`` for every enum in :data:`_RENDER_ENUMS`
-    PLUS the lifecycle FSM terminal keys (the keys of ``WAVE_TRANSITIONS`` /
-    ``PHASE_TRANSITIONS`` / ``ITER_TRANSITIONS``). The FSM keys are members of
-    the same status enums, so they are already in the render-enum sweep; they
-    are unioned in explicitly so a status that exists ONLY as an FSM state
-    (never as a rendered enum the gate listed) is still covered, and the
-    coverage stays correct if the FSM tables ever name a status the render
-    list misses.
+    The union of ``list(EnumCls)`` for every enum in :data:`_RENDER_ENUMS`.
 
     Returns:
         Every distinct status member to check, ordered by ``(enum-name,
@@ -135,13 +119,6 @@ def covered_members() -> tuple[StrEnum, ...]:
     for enum_cls in _RENDER_ENUMS:
         for member in enum_cls:
             members[(enum_cls.__name__, member.name)] = member
-    fsm_keys: Iterable[StrEnum] = (
-        *WAVE_TRANSITIONS.keys(),
-        *PHASE_TRANSITIONS.keys(),
-        *ITER_TRANSITIONS.keys(),
-    )
-    for member in fsm_keys:
-        members[(type(member).__name__, member.name)] = member
     return tuple(value for _key, value in sorted(members.items()))
 
 

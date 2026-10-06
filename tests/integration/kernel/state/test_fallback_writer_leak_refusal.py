@@ -348,7 +348,6 @@ _NON_STATE_WRITERS = frozenset(
         "runtime/daemon/methods/registry_workspace.py",
         "surfaces/cli/commands/repo.py",
         "surfaces/cli/commands/workspace.py",
-        "kernel/spec/writer.py",
         # A machine-local staged binding row, written under the root's session.
         "workflow/integration/publish_binding.py",
     }
@@ -362,8 +361,7 @@ def test_ast_census_finds_no_unlisted_bypass_writer() -> None:
     first found uncovered (fleet.py, agent.py, research.py, spec.py,
     spec_convert.py, spec_repoint.py, state_jury.py) plus the first-run
     wizard (platform/install/wizard.py,
-    surfaces/tui/screens/overlays/init_wizard_render.py) and the test-fixture
-    helper ``workflow.evidence._io.atomic_write_state`` are all routed now,
+    surfaces/tui/screens/overlays/init_wizard_render.py) are all routed now,
     so ``_NON_STATE_WRITERS`` (a different document family entirely) is the
     only allowlist left.
     """

@@ -1375,7 +1375,7 @@ class ActualSummary(_StrictModel):
     exists. ``actual_tokens`` mirrors :attr:`Wave.tokens_consumed` so the
     M26 variance / cost view has the close-time token tally without
     re-reading the wave record. ``actual_cost_usd`` is the per-token cost
-    rollup (see :func:`eawf.workflow.lifecycle.wave.close_wave`). Both are
+    rollup the epoch-1 wave close wrote. Both are
     nullable and default to ``None``: an unpriced or uncounted row reads
     unknown, never a zero that would join every sum it meets. A zero on
     either field is a measured zero. Rows written before the fields became

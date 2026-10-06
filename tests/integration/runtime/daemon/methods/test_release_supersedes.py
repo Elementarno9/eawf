@@ -27,11 +27,12 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.spec.release import Release, ReleaseStatus, release_key
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.release import _superseding, create
 from eawf.runtime.daemon.methods.release_candidate import candidate
-from eawf.workflow.evidence._io import atomic_write_state, load_state
+from eawf.workflow.evidence._io import load_state
 from eawf.workflow.evidence.measured_contract import (
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -129,7 +130,7 @@ def context(tmp_path: Path, *, state: State, records: Sequence[Release] = ()) ->
     git(repo_root, "commit", "--quiet", "-m", "seed")
     state_path = repo_root / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_state(state_path, state)
+    write_state_unlocked(state_path, state.model_dump(mode="json"))
     for record in records:
         record_release(state_path, record, recorded_at=datetime.now(UTC), summary="seed")
     return MethodContext(

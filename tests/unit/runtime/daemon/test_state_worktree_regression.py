@@ -3,8 +3,8 @@
 A ``git checkout`` (or a pre-commit stash restore) over ``state.json`` puts
 back a file whose ``updated_at`` predates the daemon's own latest write. A
 daemon writer that built on that copy would silently discard every daemon
-write the copy predates, so ``commit_worktree_state``, both ``state.mutate``
-commit paths and the dispatch-pause toggle refuse it with ``state_regressed``
+write the copy predates, so ``commit_worktree_state`` and the dispatch-pause
+toggle refuse it with ``state_regressed``
 and write nothing: the state bytes, the WAL and the event log all stay as
 they were. Successive daemon writes, CLI fallback writes landing in between,
 and a restarted daemon (a fresh context) are all accepted.
@@ -18,8 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import uuid
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -29,7 +27,6 @@ import pytest
 from eawf import __version__
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State
-from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
@@ -39,11 +36,8 @@ from eawf.runtime.daemon.methods import (
     MethodContext,
     StateRegressedError,
 )
-from eawf.runtime.daemon.methods import state as daemon_state
-from eawf.runtime.daemon.methods.state import mutate
 from eawf.runtime.daemon.methods.state_worktree import commit_worktree_state
 from eawf.surfaces.cli import _mutation
-from eawf.workflow.verify.preflight import ClosePreflight
 
 pytestmark = pytest.mark.unit
 
@@ -146,44 +140,6 @@ def _build_ctx(tmp_path: Path, state_path: Path) -> MethodContext:
         wal_dir=wal_dir,
         idempotency_cache={},
     )
-
-
-def _run(coro_fn: Callable[[], Awaitable[dict[str, Any]]]) -> dict[str, Any]:
-    return asyncio.run(coro_fn())
-
-
-def _mutation_params(kind: MutationKind, wave_id: str, **params: Any) -> dict[str, Any]:
-    return {
-        "mutation": Mutation(
-            kind=kind,
-            scope_id=wave_id,
-            mutation_id=uuid.uuid4().hex,
-            params={"wave_id": wave_id, **params},
-        ).model_dump(mode="json")
-    }
-
-
-def _fail(ctx: MethodContext, wave_id: str) -> dict[str, Any]:
-    """Drive the single-lock ``state.mutate`` commit path."""
-    params = _mutation_params(MutationKind.WAVE_FAIL, wave_id, reason="a gate went red")
-    return _run(lambda: mutate(ctx, params))
-
-
-def _close(ctx: MethodContext, wave_id: str) -> dict[str, Any]:
-    """Drive the split pre-flight / commit ``state.mutate`` close path."""
-    params = _mutation_params(
-        MutationKind.WAVE_CLOSE, wave_id, outcome="ok", no_runtime_waiver=True
-    )
-    return _run(lambda: mutate(ctx, params))
-
-
-def _stub_close_preflight(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Replace the lock-free close pre-flight with a no-op pass."""
-
-    async def _preflight(*args: Any, **kwargs: Any) -> ClosePreflight:
-        return ClosePreflight(evidence=[], readiness=None)
-
-    monkeypatch.setattr(daemon_state, "run_close_preflight", _preflight)
 
 
 def _commit(
@@ -377,72 +333,6 @@ def test_commit_worktree_state_tracks_each_state_path_separately(tmp_path: Path)
 
     assert _updated_at(other_path) > _SEEDED_AT
     assert set(ctx.state_written_at) == {bound_path.resolve(), other_path.resolve()}
-
-
-# ---- state.mutate ------------------------------------------------------------
-
-
-def test_mutate_single_lock_refuses_regressed_state_file(tmp_path: Path) -> None:
-    state_path = _seed_state(tmp_path)
-    restored = state_path.read_bytes()
-    ctx = _build_ctx(tmp_path, state_path)
-    _fail(ctx, _WAVE)
-    state_path.write_bytes(restored)
-    before = _snapshot(state_path, tmp_path / "wal")
-
-    with pytest.raises(StateRegressedError) as excinfo:
-        _fail(ctx, _SIBLING)
-
-    _assert_regressed(excinfo)
-    assert _snapshot(state_path, tmp_path / "wal") == before
-
-
-def test_mutate_single_lock_accepts_successive_writes(tmp_path: Path) -> None:
-    state_path = _seed_state(tmp_path)
-    ctx = _build_ctx(tmp_path, state_path)
-
-    _fail(ctx, _WAVE)
-    _cli_write(state_path, stamp=True)
-    _fail(ctx, _SIBLING)
-
-    waves = State.model_validate_json(state_path.read_bytes()).waves
-    assert (waves[_WAVE].status.value, waves[_SIBLING].status.value) == ("failed", "failed")
-
-
-def test_mutate_wave_close_refuses_regressed_state_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    state_path = _seed_state(tmp_path)
-    restored = state_path.read_bytes()
-    ctx = _build_ctx(tmp_path, state_path)
-    _stub_close_preflight(monkeypatch)
-    _fail(ctx, _SIBLING)
-    state_path.write_bytes(restored)
-    before = _snapshot(state_path, tmp_path / "wal")
-
-    with pytest.raises(StateRegressedError) as excinfo:
-        _close(ctx, _WAVE)
-
-    _assert_regressed(excinfo)
-    assert ctx.active_lock_handle is None
-    assert _snapshot(state_path, tmp_path / "wal") == before
-
-
-def test_mutate_wave_close_records_its_write(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    state_path = _seed_state(tmp_path)
-    restored = state_path.read_bytes()
-    ctx = _build_ctx(tmp_path, state_path)
-    _stub_close_preflight(monkeypatch)
-    _close(ctx, _WAVE)
-    assert State.model_validate_json(state_path.read_bytes()).waves[_WAVE].status.value == "closed"
-    state_path.write_bytes(restored)
-
-    with pytest.raises(StateRegressedError):
-        _fail(ctx, _SIBLING)
-
-    assert state_path.read_bytes() == restored
 
 
 # ---- agent.pause / agent.resume ----------------------------------------------

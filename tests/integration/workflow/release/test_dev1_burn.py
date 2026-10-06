@@ -60,6 +60,7 @@ from eawf.kernel.spec.release import (
     ReleaseTrain,
 )
 from eawf.kernel.spec.release_config import ReleaseConfig
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import State
 from eawf.platform.artifacts.validation import (
     REQUIRED_CHASSIS_HEADINGS,
@@ -68,7 +69,7 @@ from eawf.platform.artifacts.validation import (
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import burn, show
 from eawf.surfaces.cli.app import app
-from eawf.workflow.evidence._io import atomic_write_state, load_state
+from eawf.workflow.evidence._io import load_state
 from eawf.workflow.evidence.measured_contract import (
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -334,7 +335,7 @@ def state_path(tmp_path: Path) -> Path:
     """Return a throwaway state root the burn may record into."""
     path = tmp_path / ".ea" / "state.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_state(path, load_state(_EMPTY_STATE))
+    write_state_unlocked(path, load_state(_EMPTY_STATE).model_dump(mode="json"))
     return path
 
 
@@ -873,7 +874,7 @@ def test_train_create_admits_dev2_against_the_promoted_state_json(tmp_path: Path
 
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_state(state_path, state_with_dev2_contracts())
+    write_state_unlocked(state_path, state_with_dev2_contracts().model_dump(mode="json"))
     dev2_ctx = MethodContext(
         started_at="2026-09-11T00:00:00+00:00",
         pid=7712,

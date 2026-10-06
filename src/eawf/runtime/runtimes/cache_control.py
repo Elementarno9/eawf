@@ -18,12 +18,6 @@ prompt caching is automatic at the ≥1024-token threshold) and
 the OAuth path strips the marker per upstream ``#17910``) are **no-op
 paths** — the prompt is returned unchanged.
 
-The ``/compress`` skill wires to this module via
-:func:`compression_directive`: the skill records the requested token
-deltas and the per-runtime cache-control applicability so the telemetry
-projector can correlate a compression pass with the runtime's caching
-behaviour.
-
 Boundaries
 ----------
 
@@ -34,11 +28,6 @@ Boundaries
 * :func:`inject_cache_control` — the adapter-boundary injection. Returns
   the (possibly marker-augmented) cache prefix; a no-op for runtimes
   whose matrix cell is ``unsupported``.
-* :class:`CompressionDirective` — the typed ``/compress`` -> cache
-  hook product the skill folds into its ``compression_emitted`` event
-  payload.
-* :func:`compression_directive` — build a :class:`CompressionDirective`
-  from token deltas + the dispatch runtime.
 """
 
 from __future__ import annotations
@@ -46,7 +35,7 @@ from __future__ import annotations
 import logging
 from typing import Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from eawf.runtime.runtimes.selector import runtime_supports
 
@@ -166,81 +155,11 @@ def inject_cache_control(
     return injected
 
 
-class CompressionDirective(BaseModel):
-    """``/compress`` -> cache-control hook product.
-
-    The typed bridge between the ``/compress`` skill body and the
-    per-runtime cache-control layer. The skill computes the token deltas
-    of a compression pass; this directive records them plus the
-    per-runtime cache-control applicability so the
-    ``compression_emitted`` event payload carries enough context for the
-    telemetry projector to correlate context pressure with the runtime's
-    caching behaviour.
-
-    Attributes:
-        runtime_id: Canonical runtime id the compression pass targets.
-        tokens_before: Context token count prior to compression.
-        tokens_after: Context token count after compression
-            (``<= tokens_before``).
-        cache_control_applied: Whether a caller-side cache-control
-            marker applies for ``runtime_id`` (``True`` for
-            ``claude-code``; ``False`` for the no-op runtimes). The
-            telemetry projector reads this to know whether the post-
-            compression prefix carried an explicit breakpoint.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    runtime_id: str = Field(min_length=1)
-    tokens_before: int = Field(ge=0)
-    tokens_after: int = Field(ge=0)
-    cache_control_applied: bool
-
-
-def compression_directive(
-    *,
-    runtime_id: str,
-    tokens_before: int,
-    tokens_after: int,
-) -> CompressionDirective:
-    """Build the ``/compress`` -> cache-control directive.
-
-    Resolves the per-runtime cache-control applicability off the YAML
-    matrix and packages it with the token deltas. The skill body folds
-    the result into its ``compression_emitted`` event payload so the
-    cache-control side is wired without the skill knowing the
-    per-runtime convention (the adapter / this module owns the marker
-    decision, not the skill body).
-
-    Args:
-        runtime_id: Canonical runtime id the compression pass targets.
-        tokens_before: Context token count prior to compression.
-        tokens_after: Context token count after compression. The caller
-            (the skill) clamps this to ``<= tokens_before`` before
-            handing it here.
-
-    Returns:
-        A frozen :class:`CompressionDirective`.
-
-    Raises:
-        ValueError: ``runtime_id`` is not a canonical runtime id, or the
-            token deltas violate the model field constraints.
-    """
-    return CompressionDirective(
-        runtime_id=runtime_id,
-        tokens_before=tokens_before,
-        tokens_after=tokens_after,
-        cache_control_applied=runtime_accepts_marker(runtime_id),
-    )
-
-
 __all__ = [
     "CACHE_CONTROL_CAPABILITY",
     "DEFAULT_MARKER",
     "CacheControlMarker",
-    "CompressionDirective",
     "MarkerType",
-    "compression_directive",
     "inject_cache_control",
     "runtime_accepts_marker",
 ]

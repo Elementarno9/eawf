@@ -114,7 +114,6 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "active_phase_without_iter",
         "stale_session_count",
         "recent_actuals",
-        "iter_audit_links",
         "incident_fold_parity",
         "backlog_fold_parity",
         "cli_daemon_version",
@@ -127,7 +126,6 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "agents_override_byte_cap",
         "branch_currency",
         "project_record_present",
-        "git_state_drift",
         "plugin_cross_scope_dup",
     }
     statuses = {c["name"]: c["status"] for c in payload["checks"]}
@@ -138,7 +136,6 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
     assert statuses["mcp_drift"] == "ok"
     assert statuses["state_scale_ceiling"] == "ok"
     assert statuses["project_record_present"] == "ok"
-    assert statuses["git_state_drift"] == "ok"
     assert statuses["plugin_cross_scope_dup"] == "ok"
 
 

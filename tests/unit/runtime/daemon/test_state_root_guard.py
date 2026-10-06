@@ -15,7 +15,6 @@ import asyncio
 import json
 import logging
 import os
-import uuid
 from collections.abc import Callable, Coroutine
 from pathlib import Path
 from typing import Any
@@ -23,14 +22,13 @@ from typing import Any
 import pytest
 
 from eawf import __version__
-from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import (
     MethodContext,
     note_cross_root_serve,
 )
-from eawf.runtime.daemon.methods.state import mutate
+from eawf.runtime.daemon.methods.state_upkeep import session_recover_rpc
 
 pytestmark = pytest.mark.unit
 
@@ -138,20 +136,12 @@ def test_mutation_rpc_cross_root_served_against_target(tmp_path: Path) -> None:
     other_state = _write_valid_state(other_repo)
     other_before = other_state.read_bytes()
     ctx = _ctx(bound, tmp_path)
-    params = {
-        "mutation": Mutation(
-            kind=MutationKind.EVENT_APPEND,
-            scope_id="ABC",
-            mutation_id=uuid.uuid4().hex,
-            params={"event_type": "probe"},
-        ).model_dump(mode="json"),
-        "repo_root": str(other_repo),
-    }
+    params = {"repo_root": str(other_repo), "age_minutes": 0}
     bound_before = bound.read_bytes()
 
     async def body() -> None:
-        result = await mutate(ctx, params)
-        assert result["idempotent_replay"] is False
+        result = await session_recover_rpc(ctx, params)
+        assert "refusal" not in result
 
     _run(body)
     # The boot root the daemon is bound to was never touched.

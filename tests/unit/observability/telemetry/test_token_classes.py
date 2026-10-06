@@ -9,6 +9,7 @@ reasoning class and the source end to end.
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -17,6 +18,9 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.append import append_envelope
+from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.events import DispatchCostPayload
 from eawf.observability import telemetry
 from eawf.observability.telemetry import turn_cost
@@ -38,9 +42,6 @@ from eawf.observability.telemetry.pricing import (
 )
 from eawf.observability.telemetry.sources.dispatch_cost import DispatchCostSessionSource
 from eawf.observability.telemetry.store import SqliteMetricsStore
-from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.dispatch_runner import DispatchTokens, emit_dispatch_cost
-from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.runtimes.adapter import SpawnResult
 from eawf.runtime.runtimes.metering import price_spawn_result
 
@@ -119,19 +120,6 @@ def _spawn(**overrides: Any) -> SpawnResult:
     }
     base.update(overrides)
     return SpawnResult(**base)
-
-
-def _ctx(tmp_path: Path) -> tuple[MethodContext, Path]:
-    event_path = tmp_path / "store" / "event.jsonl"
-    ctx = MethodContext(
-        started_at="2026-09-01T00:00:00+00:00",
-        pid=4321,
-        protocol_version="1",
-        version="0.7.0",
-        bus=EventBus(),
-        event_path=event_path,
-    )
-    return ctx, event_path
 
 
 # -- check_token_identity ---------------------------------------------------
@@ -431,93 +419,84 @@ def test_price_spawn_result_reasoning_above_output_dropped() -> None:
     assert metered.reasoning_tokens is None
 
 
-# -- producer chain: spawn -> dispatch_cost event -> telemetry row -> metrics
+# -- recorded chain: dispatch_cost event -> telemetry row -> metrics
 
 
-def _emit_from_spawn(ctx: MethodContext, spawn: SpawnResult) -> None:
+def _append_dispatch_cost(
+    event_path: Path,
+    *,
+    runtime: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_input_tokens: int = 0,
+    reasoning_tokens: int | None = None,
+    cost_usd: Decimal | None,
+    price_source: PriceSourceKind | None = None,
+) -> None:
+    """Append one ``dispatch_cost`` row shaped like the ones event stores already hold."""
+    source = price_source if price_source is not None else resolve_price_source(model)[0]
+    payload = DispatchCostPayload.model_validate(
+        {
+            "event_type": "dispatch_cost",
+            "timestamp": _TS,
+            "wave_id": None,
+            "attempt_id": None,
+            "runtime": runtime,
+            "model": model,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": cache_read_input_tokens,
+            "reasoning_tokens": reasoning_tokens,
+            "total_tokens": input_tokens + output_tokens + cache_read_input_tokens,
+            "cost_usd": cost_usd,
+            "price_source": source,
+            "rate_table_version": (
+                PRICING_VERSION if source is PriceSourceKind.LIST_RECONSTRUCTED else None
+            ),
+            "pricing_version": PRICING_VERSION,
+        }
+    )
+    envelope = Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=None,
+        created_at=_TS,
+        updated_at=None,
+        summary=f"dispatch_cost model={model}",
+        payload=payload.model_dump(mode="json"),
+        blob_refs=[],
+        artifact_ids=[],
+    )
+    append_envelope(event_path, envelope)
+
+
+def _append_from_spawn(event_path: Path, spawn: SpawnResult) -> None:
     metered = price_spawn_result(spawn)
-    emit_dispatch_cost(
-        ctx,
-        wave_id="P01-I01-W01",
-        attempt_id="a-1",
+    _append_dispatch_cost(
+        event_path,
         runtime="codex",
         model=metered.model,
-        tokens=DispatchTokens(
-            input_tokens=metered.input_tokens,
-            output_tokens=metered.output_tokens,
-            cache_creation_input_tokens=metered.cache_creation_input_tokens,
-            cache_read_input_tokens=metered.cache_read_input_tokens,
-            reasoning_tokens=metered.reasoning_tokens,
-        ),
+        input_tokens=metered.input_tokens,
+        output_tokens=metered.output_tokens,
+        cache_read_input_tokens=metered.cache_read_input_tokens,
+        reasoning_tokens=metered.reasoning_tokens,
         cost_usd=metered.cost_usd,
-        pricing_version=metered.pricing_version,
         price_source=metered.price_source,
     )
 
 
-def test_emit_dispatch_cost_records_five_classes_and_source(tmp_path: Path) -> None:
-    ctx, event_path = _ctx(tmp_path)
-    _emit_from_spawn(ctx, _spawn())
-    rows = list(DispatchCostSessionSource().iter_rows(event_path))
-    assert len(rows) == 1
-    row = rows[0]
-    assert (row.input_tokens, row.output_tokens, row.reasoning_tokens) == (100, 40, 10)
-    assert row.total_tokens == 1140
-    assert row.price_source is PriceSourceKind.LIST_RECONSTRUCTED
-    assert row.rate_table_version == PRICING_VERSION
-
-
-def test_emit_dispatch_cost_unpriced_spawn_records_null_cost(tmp_path: Path) -> None:
-    ctx, event_path = _ctx(tmp_path)
-    _emit_from_spawn(ctx, _spawn(model="claude-opus-5-5"))
-    assert '"cost_usd":null' in event_path.read_text(encoding="utf-8")
-    (row,) = DispatchCostSessionSource().iter_rows(event_path)
-    assert row.price_source is PriceSourceKind.UNPRICED
-    assert row.cost_usd is None
-
-
-def test_emit_dispatch_cost_unpriced_model_without_source_resolves(tmp_path: Path) -> None:
-    ctx, event_path = _ctx(tmp_path)
-    emit_dispatch_cost(
-        ctx,
-        wave_id=None,
-        attempt_id=None,
-        runtime="claude",
-        model="claude-sonnet-5",
-        tokens=DispatchTokens(1, 1, 0, 0),
-        cost_usd=Decimal("0"),
-        pricing_version=PRICING_VERSION,
-    )
-    (row,) = DispatchCostSessionSource().iter_rows(event_path)
-    assert row.price_source is PriceSourceKind.UNPRICED
-
-
-def test_emit_dispatch_cost_nonzero_cost_for_unpriced_model_raises(tmp_path: Path) -> None:
-    ctx, _ = _ctx(tmp_path)
-    with pytest.raises(ValidationError, match="records a null cost_usd"):
-        emit_dispatch_cost(
-            ctx,
-            wave_id=None,
-            attempt_id=None,
-            runtime="claude",
-            model="claude-opus-5-5",
-            tokens=DispatchTokens(1, 1, 0, 0),
-            cost_usd=Decimal("0.5"),
-            pricing_version=PRICING_VERSION,
-        )
-
-
 def test_dispatch_cost_source_legacy_line_derives_source(tmp_path: Path) -> None:
-    ctx, event_path = _ctx(tmp_path)
-    emit_dispatch_cost(
-        ctx,
-        wave_id=None,
-        attempt_id=None,
+    event_path = tmp_path / "store" / "event.jsonl"
+    _append_dispatch_cost(
+        event_path,
         runtime="claude",
         model="claude-opus-4-7",
-        tokens=DispatchTokens(10, 5, 0, 0),
+        input_tokens=10,
+        output_tokens=5,
         cost_usd=Decimal("0.2"),
-        pricing_version=PRICING_VERSION,
     )
     line = event_path.read_text(encoding="utf-8")
     for key in ('"total_tokens":15,', '"price_source":"list-reconstructed",'):
@@ -534,9 +513,9 @@ def test_dispatch_cost_source_legacy_line_derives_source(tmp_path: Path) -> None
 
 
 def test_build_snapshot_emits_token_class_and_price_source_families(tmp_path: Path) -> None:
-    ctx, event_path = _ctx(tmp_path)
-    _emit_from_spawn(ctx, _spawn())
-    _emit_from_spawn(ctx, _spawn(model="claude-opus-5-5", reasoning_output_tokens=None))
+    event_path = tmp_path / "store" / "event.jsonl"
+    _append_from_spawn(event_path, _spawn())
+    _append_from_spawn(event_path, _spawn(model="claude-opus-5-5", reasoning_output_tokens=None))
     store = SqliteMetricsStore(tmp_path / "telemetry.db")
     store.init_schema()
     for row in DispatchCostSessionSource().iter_rows(event_path):

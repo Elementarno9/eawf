@@ -142,7 +142,6 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "active_phase_without_iter",
         "stale_session_count",
         "recent_actuals",
-        "iter_audit_links",
         "incident_fold_parity",
         "backlog_fold_parity",
         "cli_daemon_version",
@@ -156,7 +155,6 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "branch_currency",
         "project_record_present",
         "plugin_cross_scope_dup",
-        "git_state_drift",
     }
 
 

@@ -22,7 +22,7 @@ CHAIN_MODULES: tuple[str, ...] = (
     "eawf.surfaces.cli.commands.domain",
     "eawf.surfaces.cli.commands.domain_delivery",
     "eawf.surfaces.cli.commands.domain_integration",
-    "eawf.surfaces.cli.commands.domain_legacy",
+    "eawf.surfaces.cli.commands.record",
 )
 
 

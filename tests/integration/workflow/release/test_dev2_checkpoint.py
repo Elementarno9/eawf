@@ -50,10 +50,11 @@ from eawf.kernel.spec.release import (
     ReleaseStatus,
 )
 from eawf.kernel.spec.release_config import ReleaseConfig, ReleaseGateName, load_release_config
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import approve, create
-from eawf.workflow.evidence._io import atomic_write_state, load_state
+from eawf.workflow.evidence._io import load_state
 from eawf.workflow.evidence.measured_contract import (
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -272,7 +273,7 @@ def state_path(tmp_path: Path) -> Path:
     """Return a state root dev2 may be admitted and recorded against."""
     path = tmp_path / ".ea" / "state.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_state(path, _admitting_state())
+    write_state_unlocked(path, _admitting_state().model_dump(mode="json"))
     return path
 
 

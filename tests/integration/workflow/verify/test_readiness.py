@@ -50,14 +50,10 @@ from eawf.workflow.audit_dsl.kinds.transition_coverage import (
     check_transition_coverage,
     table_edges,
 )
-from eawf.workflow.lifecycle.transitions import (
-    open_iter,
-    open_phase,
-    plan_wave,
-)
 from eawf.workflow.verify import readiness as readiness_mod
 from eawf.workflow.verify.models import CloseReadiness
 from tests._criteria_helpers import legacy_criteria
+from tests._epoch1_seed import seed_iter, seed_phase, seed_wave
 from tests._session_helpers import (
     claim_wave_with_session as claim_wave,
 )
@@ -108,9 +104,9 @@ def _seed_wave(state: State, *, success_criteria: list[str] | None = None) -> No
     criteria mirror what the ``1.6 -> 1.7`` migration produces.
     """
     historical_criteria = legacy_criteria(*(success_criteria or []))
-    open_phase(state, phase_id="P01", title="phase")
-    open_iter(state, iter_id="P01-I01", phase_id="P01", title="iter")
-    plan_wave(
+    seed_phase(state, phase_id="P01", title="phase")
+    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="iter")
+    seed_wave(
         state,
         wave_id=WAVE_ID,
         iter_id="P01-I01",
@@ -333,36 +329,6 @@ def test_spec_wave_all_gates_pass(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert result.waived_gate_ids == []
 
 
-def test_load_active_waiver_mode_disabled_is_absorbing_across_composition(
-    tmp_path: Path,
-) -> None:
-    """A permissive repo overlay cannot weaken a disabled enabled profile."""
-    profile_dir = tmp_path / ".ea" / "profiles"
-    profile_dir.mkdir(parents=True)
-    (tmp_path / ".ea" / "config.yaml").write_text(
-        "profiles:\n  enabled: [permissive, locked]\nverify:\n  waiver_mode: A\n",
-        encoding="utf-8",
-    )
-    profile_dir.joinpath("permissive.yaml").write_text(
-        "name: permissive\nverify:\n  waiver_mode: C\n",
-        encoding="utf-8",
-    )
-    profile_dir.joinpath("locked.yaml").write_text(
-        "name: locked\nverify:\n  waiver_mode: disabled\n",
-        encoding="utf-8",
-    )
-    state = _empty_state()
-
-    mode = readiness_mod.load_active_waiver_mode(
-        WAVE_ID,
-        state,
-        repo_root=tmp_path,
-        config_root=tmp_path,
-    )
-
-    assert mode == "disabled"
-
-
 def test_readiness_does_not_fall_back_on_invalid_verify_config(tmp_path: Path) -> None:
     """Malformed strict policy config rejects instead of defaulting to mode B."""
     from pydantic import ValidationError
@@ -387,36 +353,6 @@ def test_readiness_does_not_fall_back_on_invalid_verify_config(tmp_path: Path) -
         )
 
     assert state.model_dump_json() == before
-
-
-@pytest.mark.parametrize(
-    ("config_body", "message"),
-    [
-        ("profiles: disabled\n", "profiles config must be a mapping"),
-        ("profiles:\n  enabled: disabled\n", "profiles.enabled must be a list"),
-        (
-            "profiles:\n  enabled: [7]\n",
-            "profiles.enabled entries must be strings",
-        ),
-    ],
-)
-def test_load_active_waiver_mode_rejects_invalid_profile_shape(
-    tmp_path: Path,
-    config_body: str,
-    message: str,
-) -> None:
-    """Malformed profile selection cannot silently fall back to mode B."""
-    config_dir = tmp_path / ".ea"
-    config_dir.mkdir()
-    config_dir.joinpath("config.yaml").write_text(config_body, encoding="utf-8")
-
-    with pytest.raises(ValueError, match=message):
-        readiness_mod.load_active_waiver_mode(
-            WAVE_ID,
-            _empty_state(),
-            repo_root=tmp_path,
-            config_root=tmp_path,
-        )
 
 
 def test_spec_wave_one_gate_fail_flips_ready(
@@ -893,7 +829,7 @@ def test_disabled_mode_rejects_historical_raw_criterion_waiver(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Disabled mode rejects raw reasons regardless of row age."""
-    from eawf.workflow.lifecycle._errors import LifecycleGuardError
+    from eawf.kernel.errors.lifecycle import LifecycleGuardError
 
     state = _empty_state()
     _seed_wave(state)
@@ -987,7 +923,7 @@ def _init_test_repo(repo_root: Path) -> None:
     """Initialise *repo_root* as a minimal git repo with one commit.
 
     The W08 deterministic floor invokes the W15-hardened runner which
-    in turn calls :func:`eawf.workflow.lifecycle.wave_sha.derive_diff_base`
+    in turn calls :func:`eawf.runtime.vcs.wave_sha.derive_diff_base`
     + :func:`eawf.platform.lint._conditional.changed_files`; both expect
     a real git tree under *repo_root*. The seed commit + ``main``
     branch lets ``git merge-base HEAD main`` succeed so the runner

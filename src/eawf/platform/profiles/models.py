@@ -351,18 +351,16 @@ class VerifyBlock(BaseModel):
             deterministic canned-ballot gate is what proves the gate
             discriminates. Recording the panel here keeps the intent typed
             and ready for the live binding without enabling a spawn.
-        odr_floor: Advisory Oracle-Determinism-Ratio floor consulted at
-            iter-close by
-            :func:`eawf.observability.metrics.odr.odr_below_floor`. The
-            ODR is the fraction of a scope's required criteria gated by a
+        odr_floor: Advisory Oracle-Determinism-Ratio floor the epoch-1
+            iter close consulted. The ODR is the fraction of a scope's required criteria gated by a
             deterministic oracle (tiers T1..T5) rather than a judgment
             oracle (T6/T7); when the computed ratio falls below this
             floor the close seam surfaces an ADVISORY finding (log only)
             but never blocks. Defaults to ``0.80``.
         odr_blocking: When ``True``, a below-:attr:`odr_floor` ODR at iter
             close is a HARD gate:
-            :func:`eawf.workflow.lifecycle.iter_.close_iter` raises
-            :class:`~eawf.workflow.lifecycle._errors.LifecycleError`
+            the epoch-1 iter close raises
+            :class:`~eawf.kernel.errors.lifecycle.LifecycleError`
             instead of surfacing the sub-floor ratio as an advisory
             (log-only) finding. Defaults ``False`` so every existing
             profile keeps the advisory-only ODR behaviour; a profile opts

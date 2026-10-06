@@ -193,7 +193,7 @@ def test_check_contract_exercised_flags_zero_output_contract(mod: Any) -> None:
         store_rows_fn=_fixed_store({}),
         jury_convened_fn=lambda: False,
     )
-    assert {f.symbol for f in findings} == {"verdict_producer", "eu_capture", "calibration"}
+    assert {f.symbol for f in findings} == {"verdict_producer", "calibration"}
     assert all(f.missing is mod.MissingDischarge.NO_RUNTIME_OUTPUT for f in findings)
 
 
@@ -202,26 +202,11 @@ def test_check_contract_exercised_passes_once_rows_exist(mod: Any) -> None:
     store = _fixed_store(
         {
             "auditor_report": [_AUTHORED_REPORT],
-            "actual": [{"elapsed_eu": 1.5}],
             "gold_label": [_GOLD_LABEL],
         }
     )
     findings = mod.check_contract_exercised(store_rows_fn=store, jury_convened_fn=lambda: False)
     assert findings == []
-
-
-def test_check_contract_exercised_ignores_zero_elapsed_eu_row(mod: Any) -> None:
-    """Boundary: an actuals row that measured nothing (elapsed_eu == 0) does not count."""
-    store = _fixed_store(
-        {
-            "auditor_report": [_AUTHORED_REPORT],
-            "actual": [{"elapsed_eu": 0.0}],
-            "gold_label": [_GOLD_LABEL],
-        }
-    )
-    findings = mod.check_contract_exercised(store_rows_fn=store, jury_convened_fn=lambda: False)
-    assert [f.symbol for f in findings] == ["eu_capture"]
-    assert findings[0].missing is mod.MissingDischarge.NO_RUNTIME_OUTPUT
 
 
 def test_check_contract_exercised_skips_ballot_until_jury_convenes(mod: Any) -> None:
@@ -264,9 +249,9 @@ def test_default_jury_convened_matches_only_findingset_rows(mod: Any) -> None:
 
 
 def test_i22_bound_contracts_exclude_the_ballot(mod: Any) -> None:
-    """The enforced I22 set is the three bound contracts; the ballot is excluded."""
+    """The enforced I22 set is the two bound contracts; the ballot is excluded."""
     stems = {c.store_stem for c in mod._I22_BOUND_CONTRACTS}
-    assert stems == {"auditor_report", "actual", "gold_label"}
+    assert stems == {"auditor_report", "gold_label"}
     assert "ballot" not in stems
     assert mod._BALLOT_CONTRACT.gated_by_jury is True
 
@@ -320,7 +305,6 @@ def test_main_phase_close_passes_when_every_contract_exercised(
     monkeypatch.setattr(mod, "_default_read", lambda _p: "")
     rows = {
         "auditor_report": [_AUTHORED_REPORT],
-        "actual": [{"elapsed_eu": 3.0}],
         "gold_label": [_GOLD_LABEL],
     }
     monkeypatch.setattr(mod, "_default_store_rows", lambda stem: rows.get(stem, []))

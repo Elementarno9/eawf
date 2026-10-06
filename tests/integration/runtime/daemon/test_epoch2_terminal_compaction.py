@@ -33,6 +33,7 @@ from typing import Any
 import orjson
 import pytest
 
+from eawf.kernel.state.epoch2.lifecycle import GuardContext, TransitionAccepted, apply_transition
 from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
 from eawf.kernel.store import compaction
 from eawf.kernel.store.compaction import (
@@ -54,7 +55,6 @@ from eawf.runtime.daemon.epoch2_transaction import (
     run_transaction,
 )
 from eawf.runtime.daemon.wal import WalStatus, list_records
-from eawf.workflow.lifecycle.epoch2 import GuardContext, TransitionAccepted, apply_transition
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     AT,
     MILESTONE_URN,

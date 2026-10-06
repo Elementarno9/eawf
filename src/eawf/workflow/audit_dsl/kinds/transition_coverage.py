@@ -1,11 +1,11 @@
 """``transition_coverage`` audit-DSL kind (Fidelity Spine FS08).
 
 Closes the transition-coverage half of the FSM-per-element spine: the
-lifecycle FSM tables in :mod:`eawf.workflow.lifecycle.spec`
-(:data:`~eawf.workflow.lifecycle.spec.WAVE_TRANSITIONS`,
-:data:`~eawf.workflow.lifecycle.spec.PHASE_TRANSITIONS`,
-:data:`~eawf.workflow.lifecycle.spec.ITER_TRANSITIONS`, and the unguarded
-:data:`~eawf.workflow.lifecycle.spec.SPEC_TRANSITIONS`) declare the legal
+lifecycle FSM tables in :mod:`eawf.workflow.audit_dsl.transition_tables`
+(:data:`~eawf.workflow.audit_dsl.transition_tables.WAVE_TRANSITIONS`,
+:data:`~eawf.workflow.audit_dsl.transition_tables.PHASE_TRANSITIONS`,
+:data:`~eawf.workflow.audit_dsl.transition_tables.ITER_TRANSITIONS`, and the unguarded
+:data:`~eawf.workflow.audit_dsl.transition_tables.SPEC_TRANSITIONS`) declare the legal
 status moves, but a unit test that walks a hand-picked path proves only
 the path it walks -- a table edge with no covering rule slips through.
 
@@ -67,6 +67,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from eawf.kernel.errors.lifecycle import LifecycleError
 from eawf.kernel.state.enums import (
     IterStatus,
     PhaseStatus,
@@ -74,8 +75,7 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
-from eawf.workflow.lifecycle._errors import LifecycleError
-from eawf.workflow.lifecycle.spec import (
+from eawf.workflow.audit_dsl.transition_tables import (
     ITER_TRANSITIONS,
     PHASE_TRANSITIONS,
     SPEC_TRANSITIONS,

@@ -6,14 +6,13 @@ import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# The four release-automation contracts (commit-lint / phase-close-preflight /
-# version-coupling / release-notes) are pinned by these four test files. They
-# used to also run in a dedicated `release-readiness` matrix job in ci.yaml,
-# but that job was pure duplication: the main `test` job already collects the
-# whole tests/ tree, so it runs these four files too.
+# The three release-automation contracts (commit-lint / version-coupling /
+# release-notes) are pinned by these three test files. They used to also run
+# in a dedicated `release-readiness` matrix job in ci.yaml, but that job was
+# pure duplication: the main `test` job already collects the whole tests/
+# tree, so it runs these three files too.
 _RELEASE_CONTRACT_TESTS = (
     "tests/unit/test_commit_prefix_lint.py",
-    "tests/unit/test_lifecycle_phase_prepare_close.py",
     "tests/unit/test_version_coupling.py",
     "tests/unit/test_render_release_notes.py",
 )

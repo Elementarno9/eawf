@@ -20,7 +20,6 @@ import yaml
 pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_STATE_PATH = _REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot" / "state.json"
 _CONFIG_PATH = _REPO_ROOT / ".ea" / "config.yaml"
 
 
@@ -51,31 +50,3 @@ def test_repo_overlay_tightens_the_merged_verify_block(tmp_path: Path) -> None:
     # No verify section leaves the block untouched.
     untouched = _overlay_repo_verify_leaves(base, {})
     assert untouched is base
-
-
-def test_daemon_iter_close_threads_the_odr_leaves() -> None:
-    """The absorbed W23 follow-up: _apply_iter_close consumes the threaded
-    params instead of dropping them at close_iter's defaults."""
-    from unittest.mock import patch
-
-    from eawf.kernel.state.models import State
-    from eawf.kernel.state.mutations import Mutation, MutationKind
-    from eawf.runtime.daemon.methods.state import _apply_iter_close
-
-    state = State.model_validate_json(_STATE_PATH.read_text(encoding="utf-8"))
-    mutation = Mutation(
-        kind=MutationKind.ITER_CLOSE,
-        scope_id="P30-I23",
-        mutation_id="m" * 32,
-        params={
-            "iter_id": "P30-I23",
-            "audit_id": "A-P30-i22",
-            "odr_floor": 0.85,
-            "odr_blocking": True,
-        },
-    )
-    with patch("eawf.runtime.daemon.methods.state.close_iter") as close_iter_mock:
-        _apply_iter_close(state, mutation)
-    kwargs = close_iter_mock.call_args.kwargs
-    assert kwargs["odr_floor"] == pytest.approx(0.85)
-    assert kwargs["odr_blocking"] is True

@@ -38,7 +38,7 @@ an **advisory** call by default: warnings surface in operator output +
 envelope extras, but no close path blocks on a non-ready readiness. A
 profile that sets ``verify.enforce: true`` flips the advisory to
 gating: ``compute`` then raises
-:class:`~eawf.workflow.lifecycle._errors.LifecycleError` on a non-ready
+:class:`~eawf.kernel.errors.lifecycle.LifecycleError` on a non-ready
 result via :func:`~eawf.workflow.verify.readiness._enforce_readiness`,
 and the close seams reject the mutation. No shipped profile enables
 ``enforce`` — the bit defaults ``False`` so existing repos keep the

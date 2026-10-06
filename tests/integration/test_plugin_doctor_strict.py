@@ -51,8 +51,8 @@ from eawf.runtime.runtimes.claude.plugin_doctor import (
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.exit_codes import STATE_CONFLICT
 from eawf.workflow.dispatch import render_wave_prompt
-from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 from tests._criteria_helpers import legacy_criteria
+from tests._epoch1_seed import seed_iter, seed_phase, seed_wave
 from tests.conftest import make_floor_waiver, make_intent
 
 runner = CliRunner()
@@ -326,10 +326,10 @@ def _build_dispatch_state() -> State:
             "indexes": {},
         }
     )
-    open_phase(state, phase_id="P07", title="Surfaces")
-    open_iter(state, iter_id="P07-I01", phase_id="P07", title="Iter1")
+    seed_phase(state, phase_id="P07", title="Surfaces")
+    seed_iter(state, iter_id="P07-I01", phase_id="P07", title="Iter1")
     for surface, role, bucket, files, crit in _SURFACES:
-        plan_wave(
+        seed_wave(
             state,
             wave_id=_SURFACE_WAVE_ID[surface],
             iter_id="P07-I01",

@@ -17,7 +17,6 @@ import pytest
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AgentSessionRole,
-    AgentSessionStatus,
     AuditKind,
     AuditStatus,
     AuditVerdict,
@@ -32,7 +31,6 @@ from eawf.kernel.state.enums import (
     WorktreeStatus,
 )
 from eawf.kernel.state.models import (
-    AgentSession,
     Audit,
     CurrentPointers,
     Decision,
@@ -45,15 +43,10 @@ from eawf.kernel.state.models import (
 from eawf.workflow.agents.specs.models import SubagentSpec
 from eawf.workflow.dispatch import (
     build_subagent_spec,
-    render_dispatch_envelope,
     render_wave_prompt,
 )
-from eawf.workflow.lifecycle.transitions import (
-    open_iter,
-    open_phase,
-    plan_wave,
-)
 from tests._criteria_helpers import legacy_criteria
+from tests._epoch1_seed import seed_iter, seed_phase, seed_wave
 from tests.conftest import make_floor_waiver, make_intent
 
 _T0 = datetime(2026, 1, 1, tzinfo=UTC)
@@ -99,9 +92,9 @@ def _empty_state() -> State:
 
 def _seed_chain(state: State) -> None:
     """Seed P01 → P01-I01 → P01-I01-W01..W03 (linear chain)."""
-    open_phase(state, phase_id="P01", title="Bootstrap")
-    open_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    plan_wave(
+    seed_phase(state, phase_id="P01", title="Bootstrap")
+    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
+    seed_wave(
         state,
         wave_id="P01-I01-W01",
         iter_id="P01-I01",
@@ -110,7 +103,7 @@ def _seed_chain(state: State) -> None:
         effort_bucket="M",
         intent=make_intent(),
     )
-    plan_wave(
+    seed_wave(
         state,
         wave_id="P01-I01-W02",
         iter_id="P01-I01",
@@ -152,9 +145,9 @@ def _seam_wave_state() -> State:
     not, whose rationales alone outweigh the whole prompt budget.
     """
     state = _empty_state()
-    open_phase(state, phase_id="P09", title="Seam repairs")
-    open_iter(state, iter_id="P09-I01", phase_id="P09", title="Wire the dispatch seams")
-    plan_wave(
+    seed_phase(state, phase_id="P09", title="Seam repairs")
+    seed_iter(state, iter_id="P09-I01", phase_id="P09", title="Wire the dispatch seams")
+    seed_wave(
         state,
         wave_id=_SEAM_WAVE_ID,
         iter_id="P09-I01",
@@ -340,9 +333,9 @@ def test_render_wave_prompt_omits_description_section_when_absent() -> None:
 def test_render_minimal_wave_prompt() -> None:
     """A wave with no deps/decisions/hypotheses/audits still emits all headers."""
     state = _empty_state()
-    open_phase(state, phase_id="P01", title="Bootstrap")
-    open_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    plan_wave(
+    seed_phase(state, phase_id="P01", title="Bootstrap")
+    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
+    seed_wave(
         state,
         wave_id="P01-I01-W01",
         iter_id="P01-I01",
@@ -425,30 +418,6 @@ def test_meas_013_014_render_wave_prompt_estimate_unavailable(
     assert f"- expected_eu: unavailable ({reason})" in block
     assert f"- expected_minutes: unavailable ({reason})" in block
     assert "3.0" not in block
-
-
-def test_render_wave_prompt_includes_ceremony_recommendation() -> None:
-    """Operator-confirmed history renders the read-only ceremony section."""
-    state = _empty_state()
-    _seed_chain(state)
-    state.agent_sessions["SES-operator"] = AgentSession(
-        id="SES-operator",
-        role=AgentSessionRole.OPERATOR,
-        runtime="claude",
-        scope_id="QR",
-        status=AgentSessionStatus.ACTIVE,
-        started_at=_T0,
-    )
-    state.waves["P01-I01-W01"].status = WaveStatus.CLOSED
-    state.waves["P01-I01-W01"].closed_at = _T0
-    state.waves["P01-I01-W01"].claim_session_id = "SES-operator"
-
-    out = render_wave_prompt(state, "P01-I01-W02")
-
-    block = out.split("## Ceremony", 1)[1].split("## ", 1)[0]
-    assert "- recommendation: mode B" in block
-    assert "- operator_confirmed_counter: 1" in block
-    assert "- latest_operator_confirmed_wave: P01-I01-W01" in block
 
 
 def test_render_includes_dependencies_with_status() -> None:
@@ -774,17 +743,6 @@ def test_render_intent_section_lands_between_wave_tags_and_scope() -> None:
     out = render_wave_prompt(state, "P01-I01-W01")
 
     assert out.index("## Wave tags") < out.index("## Intent") < out.index("## Scope")
-
-
-def test_dispatch_envelope_prompt_carries_the_intent_section() -> None:
-    """The typed dispatch envelope ships the same intent block as the prompt."""
-    state = _empty_state()
-    _seed_chain(state)
-
-    envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-code")
-
-    assert "## Intent" in envelope.prompt
-    assert "- problem: test wave lacks a typed intent" in envelope.prompt
 
 
 def test_render_intent_section_unknown_wave_raises_key_error() -> None:

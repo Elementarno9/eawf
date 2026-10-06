@@ -78,6 +78,7 @@ from eawf.kernel.store.kinds.agent_report import (
     CriterionVerdict,
 )
 from eawf.runtime.session.store import SessionConflict, start_session, terminalize_session
+from eawf.runtime.vcs.wave_sha import derive_diff_base
 from eawf.workflow.agent_report.rollup import iter_agent_reports
 from eawf.workflow.agent_report.store import (
     AgentReportAppendResult,
@@ -96,7 +97,6 @@ from eawf.workflow.dispatch.verdict_schema import (
     reorder_criterion_rows,
     strip_deterministic_annotation,
 )
-from eawf.workflow.lifecycle.wave_sha import derive_diff_base
 
 logger = logging.getLogger(__name__)
 
@@ -1078,11 +1078,9 @@ def _resolve_auditor_session(
     On the append-only **retry** path the ACTIVE auditor session already
     exists, so the store raises
     :class:`~eawf.runtime.session.store.SessionConflict`; this helper catches
-    it and reuses the existing auditor session as the author -- mirroring
-    active-session reuse in
-    :func:`eawf.runtime.daemon.methods.agent._claim_live_session`.
-    Reusing the auditor session keeps the verdict author fresh-context
-    relative to the executor (it is never the executor's session) while the
+    it and reuses the existing auditor session as the author. Reusing the
+    auditor session keeps the verdict author fresh-context relative to the
+    executor (it is never the executor's session) while the
     report layer still records attempt 2 as a distinct append.
 
     Args:
@@ -1165,7 +1163,7 @@ async def produce_wave_verdict(
        is fresh-context (never the executor's session); the helper refuses a
        non-auditor author fail-fast.
     2. Resolve the diff base via
-       :func:`eawf.workflow.lifecycle.wave_sha.derive_diff_base` and render
+       :func:`eawf.runtime.vcs.wave_sha.derive_diff_base` and render
        the auditor-only prompt (:func:`build_auditor_prompt`) carrying solely
        the diff range + the wave's success criteria.
     3. Drive the bounded re-ask loop

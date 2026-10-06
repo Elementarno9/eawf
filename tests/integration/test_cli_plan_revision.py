@@ -1,8 +1,8 @@
 """CLI tests for the plan-revision verbs, plus the cross-module native-verb census.
 
-:mod:`eawf.surfaces.cli.commands.plan` adds three verbs beside the
-read-only ``plan show``: ``submit``, ``approve`` and ``apply``, each
-dispatch over one ``planning.plan_revision.*`` RPC. These tests drive the
+:mod:`eawf.surfaces.cli.commands.plan` carries three verbs:
+``submit``, ``approve`` and ``apply``, each dispatch over one
+``planning.plan_revision.*`` RPC. These tests drive the
 real Typer app with a stand-in daemon client, mirroring the shape
 ``tests/integration/test_cli_domain_lifecycle.py`` already proved for the
 lifecycle and create verbs.

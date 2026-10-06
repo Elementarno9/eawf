@@ -208,7 +208,7 @@ Storage:
 
 Actuals are append-only segment records. Never overwrite prior measured session time. If a session stops, the runtime crashes, or the PC powers off, close the current segment as `interrupted` when the next Eä process can observe it. Calibration uses `done` scopes only; interrupted, blocked, abandoned, failed, and superseded scopes feed risk / fallback statistics.
 
-Estimation by scope: wave (direct, highest quality) → iter (rollup of waves) → phase (rollup of iters). Every wave is costed at one effort constant of 0.8 EU (24 minutes, measured p10 8.8, p50 23.9, p90 123.1 minutes), so plan renderers can show both `sum_wave_eu` and `critical_path_eu`. A wave's `effort_bucket` label is a narrative annotation with no scheduling meaning: nothing multiplies by it. Closed wave timestamps derive a provisional `actual_elapsed_eu` until richer actual-segment instrumentation is present. Roadmap-level shows directional envelopes only.
+Estimation by scope: wave (direct, highest quality) → iter (rollup of waves) → phase (rollup of iters). Every wave is costed at one effort constant of 0.8 EU (24 minutes, measured p10 8.8, p50 23.9, p90 123.1 minutes). A wave's `effort_bucket` label is a narrative annotation with no scheduling meaning: nothing multiplies by it. Closed wave timestamps derive a provisional `actual_elapsed_eu` until richer actual-segment instrumentation is present. Roadmap-level shows directional envelopes only.
 
 ## Large entity handling
 

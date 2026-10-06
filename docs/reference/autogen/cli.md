@@ -53,7 +53,6 @@ Delivery-batch lifecycle (activate, integrate, adopt-landed, ready, merge, recon
 |---|---|
 | `activate` | Move a PLANNED delivery Batch to ACTIVE. |
 | `adopt-landed` | Adopt work that already landed on the Batch's target branch. |
-| `close-legacy` | Complete an imported ACTIVE Batch (iter) once every Task in it is terminal. |
 | `complete` | Complete a merged Batch whose landed commit matches the head it pinned. |
 | `create` | Admit a new delivery Batch's create document into the addressed tree. |
 | `integrate` | Integrate a Batch's sealed candidates into its next generation. |
@@ -265,8 +264,6 @@ Milestone lifecycle (activate, open-review, open-approval, accept, cancel, set-t
 | `accept` | Accept a Milestone in review against a sealed approval receipt. |
 | `activate` | Move a PLANNED Milestone to ACTIVE under an active Track. |
 | `cancel` | Cancel a Milestone that has not completed. |
-| `cancel-legacy` | Cancel an imported PLANNED Milestone against a recorded decision or artifact. |
-| `close-legacy` | Complete an imported ACTIVE Milestone (phase) against a recorded audit. |
 | `create` | Admit a new Milestone's create document into the addressed tree. |
 | `open-approval` | Ask the operator to accept a Milestone in review on its acceptance bundle. |
 | `open-review` | Open acceptance review on an ACTIVE Milestone. |
@@ -275,13 +272,12 @@ Milestone lifecycle (activate, open-review, open-approval, accept, cancel, set-t
 
 ### `eawf plan`
 
-Iter plan view (read-only: DAG, waves, checks, risks) plus the submit/approve/apply plan-revision verbs.
+Submit, approve and apply plan revisions.
 
 | Verb | Summary |
 |---|---|
 | `apply` | Materialise one APPROVED plan revision into its Milestone. |
 | `approve` | Seal a human principal's approval onto a VALIDATED plan revision. |
-| `show` | Print the active iter plan view (markdown or JSON). |
 | `submit` | Record one planner proposal as a VALIDATED plan revision. |
 
 ### `eawf plugin`
@@ -295,14 +291,6 @@ Install, update, or diagnose runtime plugins (claude, codex, opencode). Use 'ins
 | `package` | Emit an installable runtime plugin tree. |
 | `sync` | Regenerate per-runtime plugin artifacts deterministically. |
 | `update` | Re-render a runtime plugin tree, aborting on hand-edits. |
-
-### `eawf pr`
-
-Render a phase PR body from state.json.
-
-| Verb | Summary |
-|---|---|
-| `render` | Render the PR body for a phase or iter as Markdown (or JSON envelope). |
 
 ### `eawf profile`
 
@@ -480,7 +468,6 @@ Task lifecycle (promote, claim, start, submit, seal, prove, assess, ready, compl
 
 | Verb | Summary |
 |---|---|
-| `advance-legacy` | Move an imported Task (wave or backlog row) along the legacy edge table. |
 | `assess` | Judge a Task for completion and print the document task complete needs. |
 | `claim` | Claim a PLANNED Task for the actor that will run it. |
 | `complete` | Complete a Task on the Batch head its passing assessment proves. |
@@ -529,14 +516,6 @@ Inspect the daemon write-ahead log (read-only: status, list, show).
 | `list` | List WAL records (id, status, envelope kind + summary, timestamp). |
 | `show` | Dump one WAL record's decoded envelope by record id. |
 | `status` | Summarise the WAL: per-status counts, newest/oldest, total size. |
-
-### `eawf wiki`
-
-Render a per-phase narrative project wiki from state.json.
-
-| Verb | Summary |
-|---|---|
-| `render` | Render the project wiki as Markdown (or JSON envelope). |
 
 ### `eawf workspace`
 

@@ -11,7 +11,7 @@ order, whichever entity it moves:
 3. Re-read the guard inputs from the locked document rather than trusting
    what the request said about them.
 4. Evaluate the guarded transition registry through
-   :func:`~eawf.workflow.lifecycle.epoch2.apply_transition`, which returns
+   :func:`~eawf.kernel.state.epoch2.lifecycle.apply_transition`, which returns
    the successor record or a typed denial.
 5. Allocate the workspace-global ``canonical_sequence`` inside the
    committing transaction, so a sequence only becomes durable together
@@ -99,6 +99,13 @@ from eawf.kernel.state.canonical_sequence import CanonicalSequenceAllocator
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.base import PrincipalKey, SlugStr, StrictPositiveInt
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
+from eawf.kernel.state.epoch2.lifecycle import (
+    ENTITY_OF_RECORD,
+    GuardContext,
+    LifecycleRecord,
+    TransitionDenied,
+    apply_transition,
+)
 from eawf.kernel.state.epoch2.measurement import DAEMON_READ_RUN_FIELDS
 from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.kernel.state.epoch2.transitions import (
@@ -141,13 +148,6 @@ from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.wal import WalRecord, mark_applied, mark_fsynced, write_pending
 from eawf.surfaces.cli.errors import StateConflict
-from eawf.workflow.lifecycle.epoch2 import (
-    ENTITY_OF_RECORD,
-    GuardContext,
-    LifecycleRecord,
-    TransitionDenied,
-    apply_transition,
-)
 
 if TYPE_CHECKING:
     from eawf.runtime.daemon.epoch2_create import CreateRequest

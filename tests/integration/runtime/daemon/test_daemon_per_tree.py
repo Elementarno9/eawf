@@ -27,7 +27,7 @@ from eawf.kernel.state.models import State
 from eawf.observability.doctor import daemon_strays
 from eawf.runtime.daemon.runtime_dir import runtime_base_dir
 from eawf.runtime.daemon.spawn import daemon_pid_if_ready, request_daemon_shutdown
-from tests.integration.runtime.daemon.test_close_lock_split import _state_payload
+from tests.integration.runtime.daemon._epoch1_state_fixtures import state_payload
 
 pytestmark = [
     pytest.mark.integration,
@@ -64,7 +64,7 @@ class ClientReply:
 
 
 def _write_tree(root: Path, title: str) -> Path:
-    payload = _state_payload()
+    payload = state_payload()
     payload["project"]["title"] = title
     state_path = root / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True)

@@ -1,4 +1,4 @@
-"""Subagent prompt renderer (B025) + dispatch envelope (P10 W03).
+"""Subagent prompt renderer.
 
 The renderer takes a validated :class:`~eawf.kernel.state.models.State` and a
 target wave id and returns a self-contained Markdown prompt suitable
@@ -25,17 +25,6 @@ The chain is ``wave.iter_id`` → :class:`~eawf.kernel.state.models.Iter` →
 ``iter.phase_id`` → :class:`~eawf.kernel.state.models.Phase` → ``phase.scope_id``.
 A broken link surfaces as a :class:`KeyError` so callers can map the
 missing edge to the canonical NOT_FOUND exit code.
-
-P10 W03 adds :func:`render_dispatch_envelope`, a pure dispatch adapter
-that wraps the wave prompt in a typed :class:`DispatchEnvelope` for
-either the ``claude-code`` runtime (single-string prompt) or the
-``claude-agent-sdk`` runtime (SDK invocation block with ``mcp_servers``
-and ``allowed_tools`` projected from :attr:`State.mcp_grants`). No new
-runtime dependency on the SDK package — render-only. P27-I03-W21 hardens
-the SDK ``allowed_tools`` projection into an enforcement seam: tools the
-dispatched wave's :class:`~eawf.runtime.sandbox.policy.SandboxPolicy` deny-list
-names are intersected out, so a wave with a denied tool cannot dispatch
-it.
 
 P20 W14 adds spike-brief surfacing: when ``repo_root`` is supplied, the
 renderer scans ``<repo_root>/.ea/local/`` and
@@ -69,9 +58,8 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from eawf.kernel.state.enums import AgentSessionRole, DecisionStatus, StoreKind
 from eawf.kernel.state.ids import natural_key
@@ -101,7 +89,6 @@ from eawf.workflow.agents.specs.models import (
 )
 from eawf.workflow.agents.specs.roles import RoleSpec, get_role_spec
 from eawf.workflow.estimation.mapping import CURRENT_EFFORT_MAPPING, estimate_unavailable_reason
-from eawf.workflow.lifecycle.ceremony import compute_ceremony
 
 logger = logging.getLogger(__name__)
 
@@ -184,247 +171,9 @@ def resolve_role_blocks(repo_root: Path | None, *, unattended: bool = False) -> 
     return ResolvedRoleBlocks(role_blocks=composed.role_tier_blocks(), token_cap=token_cap)
 
 
-# CLI-facing runtime names. The installer's ``_SUPPORTED_RUNTIMES`` uses
-# the internal canonical name ``"claude"`` for back-compat with v0.1
-# settings.json writes; the dispatch adapter exposes ``"claude-code"``
-# at the CLI surface so the two SDK-vs-CLI cousins read symmetrically.
-# This tuple is the source of truth — the CLI layer imports it directly
-# rather than re-declaring the allow-list. ``codex`` (D12) and ``opencode``
-# share the claude-code envelope shape: ``prompt`` carries the full Markdown
-# body and MCP wiring rides through the runtime's own config file rather than
-# the envelope, so the dispatch surface stays symmetric across the three
-# vendor families.
-_CLI_RUNTIME_CLAUDE_CODE: str = "claude-code"
-_CLI_RUNTIME_CLAUDE_AGENT_SDK: str = "claude-agent-sdk"
-_CLI_RUNTIME_CODEX: str = "codex"
-_CLI_RUNTIME_OPENCODE: str = "opencode"
-DISPATCH_RUNTIMES: tuple[str, ...] = (
-    _CLI_RUNTIME_CLAUDE_CODE,
-    _CLI_RUNTIME_CLAUDE_AGENT_SDK,
-    _CLI_RUNTIME_CODEX,
-    _CLI_RUNTIME_OPENCODE,
-)
 _HIDDEN_DECISION_STATUSES: frozenset[DecisionStatus] = frozenset(
     {DecisionStatus.OBSOLETE, DecisionStatus.SUPERSEDED}
 )
-
-
-# ---- Public API -------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class DispatchEnvelope:
-    """Typed return value of :func:`render_dispatch_envelope`.
-
-    The same shape covers both runtimes — only the per-field contents
-    differ:
-
-    - ``claude-code``: ``prompt`` carries the full Markdown prompt from
-      :func:`render_wave_prompt`; ``mcp_servers`` and ``allowed_tools``
-      are empty lists (the claude-code agent reads MCP wiring from the
-      runtime config on disk, not the envelope).
-    - ``claude-agent-sdk``: ``prompt`` carries the same Markdown body
-      (the SDK consumer slots it into the system prompt); ``mcp_servers``
-      is a list of per-server invocation dicts projected from
-      :attr:`State.mcp_servers`; ``allowed_tools`` is a list of
-      ``mcp__<server_id>__*`` glob strings projected from
-      :attr:`State.mcp_grants`, with any tool the wave's
-      :class:`~eawf.runtime.sandbox.policy.SandboxPolicy` deny-list names
-      intersected out — empty when ``mcp_grants`` is absent, has no
-      grant for the dispatched wave, or every projected tool is denied.
-
-    Attributes:
-        runtime: CLI-facing runtime name (``"claude-code"`` or
-            ``"claude-agent-sdk"``).
-        wave_id: The wave the envelope was rendered for.
-        prompt: The Markdown prompt body (shared across both runtimes).
-        mcp_servers: SDK-side MCP wiring (empty on the claude-code
-            branch). Each entry is a dict with ``id``, ``command``,
-            ``args``, ``env_refs`` mirroring :class:`McpServer` fields.
-        allowed_tools: SDK ``allowed_tools`` allow-list (empty on the
-            claude-code branch). Each entry is a
-            ``"mcp__<server_id>__*"`` glob string; entries the wave's
-            sandbox-policy deny-list names are removed before projection.
-        role_contract: Typed projection of the dispatched wave's role
-            (P28-I01-W13). When set, the caller forwards this contract
-            to the spawn seam (``RuntimeAdapter.open_session`` accepts a
-            matching ``role_contract`` keyword) so the freshly-spawned
-            runtime receives the role registry's body without
-            re-walking the registry. ``None`` for waves without
-            ``agent_role`` so the dispatch stays byte-equivalent to
-            the pre-W13 envelope shape.
-    """
-
-    runtime: str
-    wave_id: str
-    prompt: str
-    mcp_servers: list[dict[str, Any]] = field(default_factory=list)
-    allowed_tools: list[str] = field(default_factory=list)
-    role_contract: RoleContract | None = None
-
-
-def render_dispatch_envelope(
-    state: State,
-    wave_id: str,
-    runtime: str,
-    *,
-    repo_root: Path | None = None,
-    role_blocks: Mapping[str, str] | None = None,
-    role_tier_token_cap: int = DEFAULT_ROLE_TIER_TOKEN_CAP,
-    headless: bool = False,
-    role_override: AgentSessionRole | None = None,
-) -> DispatchEnvelope:
-    """Return a typed :class:`DispatchEnvelope` for *wave_id* and *runtime*.
-
-    Pure function — no I/O, no logging side-effects beyond the module
-    logger. The CLI handler owns stdout/file writes; this function only
-    produces the typed envelope.
-
-    Args:
-        state: Validated, read-only state snapshot.
-        wave_id: Target wave id (must exist in ``state.waves``).
-        runtime: CLI-facing runtime name. Must be one of
-            :data:`DISPATCH_RUNTIMES` (``"claude-code"`` /
-            ``"claude-agent-sdk"`` / ``"codex"`` / ``"opencode"``); anything
-            else raises :class:`ValueError` with the canonical
-            ``unknown runtime ...; expected one of [...]`` format that
-            matches :func:`eawf.runtime.mcp.installer._validate_runtime`.
-        repo_root: Optional repo root used for spike-brief discovery and
-            memory-body lookup under ``.ea/store/memory.jsonl``.
-        role_blocks: Optional ``agent_role -> body`` map of per-role
-            dispatch render blocks (the "Zone 3" role tier, FLEET-5). When
-            the dispatched wave's ``agent_role`` has an entry, the body is
-            injected into the role's ``system_prompt``; a role absent from
-            the map (or ``None`` / empty) is a true no-op and the static
-            ``RoleSpec.system_prompt`` renders byte-for-byte. Callers
-            populate this from
-            :meth:`~eawf.platform.profiles.models.ComposedProfile.role_tier_blocks`.
-        role_tier_token_cap: Maximum token weight one injected role-tier
-            block may carry (FLEET-6). An over-cap block is rejected by
-            raising :class:`~eawf.workflow.agents.specs.models.RoleTierBudgetError`,
-            never truncated, mirroring the AGENTS.md tier-0 budget gate.
-            Defaults to
-            :data:`~eawf.platform.render_block.DEFAULT_ROLE_TIER_TOKEN_CAP`.
-        headless: ``True`` for the live-spawn (daemon) dispatch path, whose
-            downstream reads the spawned model's final message as a JSON
-            role-specific report body. When set and the wave carries an
-            ``agent_role``, the rendered prompt carries a trailing ``## Report
-            output`` section pinning that role's JSON schema so the model emits
-            a parseable report on the first try. ``False`` (default) keeps the
-            prompt byte-equivalent to the interactive render an operator-facing
-            Claude Code session sees.
-        role_override: Authoritative live-session role. When supplied, the
-            prompt tags, role contract, workflow, and headless report schema
-            use it instead of ``Wave.agent_role``.
-
-    Returns:
-        :class:`DispatchEnvelope` with ``runtime``, ``wave_id``,
-        ``prompt`` populated for every runtime, plus ``mcp_servers`` and
-        ``allowed_tools`` populated on the ``claude-agent-sdk`` branch.
-
-    Raises:
-        ValueError: ``runtime`` is unsupported.
-        KeyError: ``wave_id`` is missing or the wave → iter → phase →
-            scope chain has a broken link (propagated from
-            :func:`render_wave_prompt`).
-        RoleTierBudgetError: The dispatched wave's role-tier block exceeds
-            ``role_tier_token_cap`` tokens.
-    """
-    if runtime not in DISPATCH_RUNTIMES:
-        raise ValueError(f"unknown runtime {runtime!r}; expected one of {list(DISPATCH_RUNTIMES)}")
-    # Build the typed spec once: its rendered output IS the prompt body,
-    # and its `role_contract` IS the typed projection the spawn seam reads
-    # (P28-I01-W13). Building the spec once avoids the previous
-    # render-then-re-walk pattern where the renderer projected the role
-    # registry inside `render_wave_prompt` and the envelope would have to
-    # re-project it. The shared spec keeps the two surfaces aligned.
-    spec = build_subagent_spec(
-        state,
-        wave_id,
-        repo_root=repo_root,
-        role_blocks=role_blocks,
-        role_tier_token_cap=role_tier_token_cap,
-        role_override=role_override,
-    )
-    prompt = _render_spec_prompt(
-        state, spec, wave_id=wave_id, repo_root=repo_root, headless=headless
-    )
-    if runtime in {_CLI_RUNTIME_CLAUDE_CODE, _CLI_RUNTIME_CODEX, _CLI_RUNTIME_OPENCODE}:
-        # codex + opencode share the claude-code envelope shape: ``prompt``
-        # carries the full Markdown body and the runtime reads MCP wiring from
-        # its own config file (codex ``.codex/config.toml`` per D12, opencode
-        # ``opencode.json``) rather than the envelope, mirroring how the
-        # claude-code agent reads ``settings.json`` on disk.
-        return DispatchEnvelope(
-            runtime=runtime,
-            wave_id=wave_id,
-            prompt=prompt,
-            role_contract=spec.role_contract,
-        )
-    # claude-agent-sdk branch: project MCP servers + grant-derived tools.
-    mcp_servers = _project_mcp_servers(state)
-    allowed_tools = _project_allowed_tools(state, wave_id=wave_id)
-    return DispatchEnvelope(
-        runtime=runtime,
-        wave_id=wave_id,
-        prompt=prompt,
-        mcp_servers=mcp_servers,
-        allowed_tools=allowed_tools,
-        role_contract=spec.role_contract,
-    )
-
-
-def _project_mcp_servers(state: State) -> list[dict[str, Any]]:
-    """Return the SDK-side ``mcp_servers`` list from :attr:`State.mcp_servers`.
-
-    The shape is intentionally a list of dicts (not :class:`McpServer`
-    instances) because the SDK consumer expects JSON-safe primitives.
-    Returns ``[]`` when ``state.mcp_servers`` is ``None`` or empty.
-    """
-    pool = state.mcp_servers or {}
-    out: list[dict[str, Any]] = []
-    for server_id in sorted(pool):
-        server = pool[server_id]
-        out.append(
-            {
-                "id": server.id,
-                "command": server.command,
-                "args": list(server.args),
-                "env_refs": list(server.env_refs),
-            }
-        )
-    return out
-
-
-def _project_allowed_tools(state: State, *, wave_id: str) -> list[str]:
-    """Project grants from ``state.mcp_grants`` to SDK ``allowed_tools`` globs.
-
-    For every grant whose ``scope_kind == "wave"`` and ``scope_id ==
-    wave_id``, emit ``"mcp__<server_id>__*"``. The result is sorted and
-    de-duplicated so identical grants collapse to one allow-list entry.
-    ``state.mcp_grants`` is the nullable map W02 added to :class:`State`;
-    ``None`` or an empty map yield ``[]``.
-
-    Sandbox enforcement: any projected tool that the wave's
-    :class:`~eawf.runtime.sandbox.policy.SandboxPolicy` deny-list names is
-    intersected out before returning, so a wave with a denied tool cannot
-    dispatch it. The deny set is resolved by
-    :func:`~eawf.runtime.sandbox.policy.resolve_denied_tools` from wave-scoped and
-    global policies on ``state.sandbox_policies``.
-    """
-    grants = state.mcp_grants or {}
-    tools: set[str] = set()
-    for grant in grants.values():
-        if grant.scope_kind == "wave" and grant.scope_id == wave_id:
-            tools.add(f"mcp__{grant.server_id}__*")
-    denied = resolve_denied_tools(state.sandbox_policies, wave_id=wave_id)
-    allowed = tools - denied
-    if denied & tools:
-        logger.debug(
-            f"_project_allowed_tools wave={wave_id!r} "
-            f"projected={len(tools)} denied={len(denied & tools)} allowed={len(allowed)}"
-        )
-    return sorted(allowed)
 
 
 def _enforce_role_tier_budget(role_value: str, body: str, *, cap: int) -> None:
@@ -519,10 +268,8 @@ def build_role_contract(
     Sandbox enforcement: when ``state`` and ``wave_id`` are supplied,
     the wave's :class:`~eawf.runtime.sandbox.policy.SandboxPolicy`
     deny-list is unioned into the contract's ``denied_tools`` and any
-    intersecting ``allowed_tools`` are dropped. This mirrors the
-    SDK-envelope projection in
-    :func:`_project_allowed_tools` — a role's tool grant cannot leak
-    past the per-wave sandbox.
+    intersecting ``allowed_tools`` are dropped, so a role's tool grant
+    cannot leak past the per-wave sandbox.
 
     Role-tier injection (FLEET-5): when ``role_block_body`` is supplied and
     non-blank, it is appended to the contract's ``system_prompt`` (the
@@ -841,21 +588,9 @@ def _render_spec_prompt(
     *,
     wave_id: str,
     repo_root: Path | None,
-    headless: bool = False,
 ) -> str:
-    """Render *spec* and splice in read-only dispatch context when present.
-
-    *headless* forwards to :meth:`SubagentSpec.render` so the live-spawn
-    path gets the trailing ``## Report output`` schema block; the
-    interactive default leaves the prompt byte-equivalent.
-    """
-    prompt = spec.render(headless=headless)
-    ceremony = _render_ceremony_section(state, wave_id=wave_id)
-    if ceremony is not None:
-        prompt = _insert_section_after_heading(prompt, ceremony, heading="## Wave tags")
-    # Inserted after the ceremony block so the intent lands first: each
-    # insert goes immediately before the next section, so the last insert
-    # anchored on the same heading ends up closest to it.
+    """Render *spec* and splice in read-only dispatch context when present."""
+    prompt = spec.render()
     intent = _render_intent_section(state, wave_id=wave_id)
     if intent is not None:
         prompt = _insert_section_after_heading(prompt, intent, heading="## Wave tags")
@@ -863,29 +598,6 @@ def _render_spec_prompt(
     if section is None:
         return prompt
     return _insert_section_after_heading(prompt, section, heading="## Recent audits")
-
-
-def _render_ceremony_section(state: State, *, wave_id: str) -> str | None:
-    """Return the dispatch ``## Ceremony`` section when history exists."""
-    recommendation = compute_ceremony(state, wave_id=wave_id)
-    if recommendation.closed_wave_count == 0:
-        return None
-    latest = (
-        recommendation.operator_confirmed_wave_ids[0]
-        if recommendation.operator_confirmed_wave_ids
-        else "none"
-    )
-    return "\n".join(
-        [
-            "## Ceremony",
-            "",
-            f"- recommendation: mode {recommendation.mode}",
-            f"- operator_confirmed_counter: {recommendation.operator_confirmed_counter}",
-            f"- closed_wave_count: {recommendation.closed_wave_count}",
-            f"- latest_operator_confirmed_wave: {latest}",
-            f"- basis: {recommendation.reason}",
-        ]
-    )
 
 
 def _render_intent_section(state: State, *, wave_id: str) -> str | None:
@@ -1219,10 +931,7 @@ def _phase_wave_commit_prefix(wave_id: str) -> tuple[str, str]:
 
 
 __all__ = [
-    "DISPATCH_RUNTIMES",
-    "DispatchEnvelope",
     "build_role_contract",
     "build_subagent_spec",
-    "render_dispatch_envelope",
     "render_wave_prompt",
 ]

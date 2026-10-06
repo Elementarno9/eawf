@@ -15,8 +15,6 @@ from eawf.kernel.config.migration import migrate_config_file
 from eawf.kernel.identity import EntityKind, format_qualified_urn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.state.epoch2.authority import resolve_authority
-from eawf.kernel.state.io import write_state_unlocked
-from eawf.kernel.state.models import State
 from eawf.kernel.store.compaction import (
     document_rows,
     plan_legacy_seal,
@@ -25,7 +23,6 @@ from eawf.kernel.store.compaction import (
 )
 from eawf.kernel.store.ledger import ledger_snapshot
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.kernel.validate.strict import validate_state
 from eawf.observability.doctor.artifact_digests import (
     ARTIFACT_DIGEST_ACTION,
     artifact_digest_preview,
@@ -55,13 +52,6 @@ from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.gate_receipt_hygiene import scrub_gate_receipt_store
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
-from eawf.runtime.lock import portalock
-from eawf.workflow.lifecycle.legacy_audit import acknowledge_invalid_iter_audits
-from eawf.workflow.lifecycle.repin_provenance import (
-    append_commit_repin_provenance,
-    complete_commit_repin_provenance,
-)
-from eawf.workflow.lifecycle.wave_sha import repair_commit_pins, scan_commit_pins
 
 
 class DoctorApplyParams(BaseModel):
@@ -117,48 +107,6 @@ def _apply_config(workspace: Path, action: DoctorRepairAction) -> tuple[str, int
 def _apply_receipts(state_path: Path) -> tuple[str, int]:
     report = scrub_gate_receipt_store(state_path)
     return ("applied" if report.changed else "noop"), report.migrated_count
-
-
-def _apply_audits(state_path: Path) -> tuple[str, int]:
-    appended, _existing = acknowledge_invalid_iter_audits(
-        state_path,
-        reason=(
-            "historical close predates the current audit-link contract; "
-            "preserved without asserting a pass"
-        ),
-    )
-    return ("applied" if appended else "noop"), appended
-
-
-def _apply_pins(workspace: Path, state_path: Path) -> tuple[str, int]:
-    with portalock.acquire(state_path, timeout=5.0):
-        state = State.model_validate_json(state_path.read_bytes())
-        issues = scan_commit_pins(state, repo_root=workspace)
-        repaired, _skipped = repair_commit_pins(state, issues)
-        if not repaired:
-            completed = complete_commit_repin_provenance(state_path, state)
-            return ("applied" if completed else "noop"), completed
-        state.updated_at = datetime.now(UTC)
-        payload = state.model_dump(mode="json")
-        report = validate_state(payload, strict_optional=False)
-        if report.state is None or report.violations:
-            details = list(report.schema_errors[:3])
-            details.extend(row.code for row in report.violations[:3])
-            raise DaemonValidationError(
-                "doctor commit repair failed validation: " + "; ".join(details)
-            )
-        append_commit_repin_provenance(
-            state_path,
-            repaired,
-            status="planned",
-        )
-        write_state_unlocked(state_path, payload)
-    append_commit_repin_provenance(
-        state_path,
-        repaired,
-        status="applied",
-    )
-    return "applied", len(repaired)
 
 
 def _apply_sync(workspace: Path) -> tuple[str, int]:
@@ -380,10 +328,6 @@ def _apply_action(
         return _apply_config(workspace, action)
     if action.action_id == "receipts.scrub":
         return _apply_receipts(state_path)
-    if action.action_id == "audits.acknowledge-legacy":
-        return _apply_audits(state_path)
-    if action.action_id == "commits.repin":
-        return _apply_pins(workspace, state_path)
     if action.action_id == "lifecycle.sync":
         return _apply_sync(workspace)
     raise DaemonValidationError(f"unsupported doctor repair action: {action.action_id!r}")

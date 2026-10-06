@@ -23,11 +23,7 @@ from pydantic import ValidationError
 
 from eawf.kernel.state.enums import ProjectStatus, ScopeKind, WaveStatus
 from eawf.kernel.state.models import CurrentPointers, Principal, Project, RuntimeLatest, State
-from eawf.workflow.lifecycle.transitions import (
-    open_iter,
-    open_phase,
-    plan_wave,
-)
+from tests._epoch1_seed import seed_iter, seed_phase, seed_wave
 from tests.conftest import make_claim_criterion, make_intent
 
 
@@ -64,9 +60,9 @@ def _empty_state() -> State:
 def _seed_chain() -> State:
     """Seed a linear chain W01 -> W02 -> W03 under P01-I01."""
     state = _empty_state()
-    open_phase(state, phase_id="P01", title="Bootstrap")
-    open_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    plan_wave(
+    seed_phase(state, phase_id="P01", title="Bootstrap")
+    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
+    seed_wave(
         state,
         wave_id="P01-I01-W01",
         iter_id="P01-I01",
@@ -76,7 +72,7 @@ def _seed_chain() -> State:
         success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
-    plan_wave(
+    seed_wave(
         state,
         wave_id="P01-I01-W02",
         iter_id="P01-I01",
@@ -87,7 +83,7 @@ def _seed_chain() -> State:
         success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
-    plan_wave(
+    seed_wave(
         state,
         wave_id="P01-I01-W03",
         iter_id="P01-I01",
@@ -104,9 +100,9 @@ def _seed_chain() -> State:
 def _seed_diamond() -> State:
     """Seed a diamond W01 -> {W02, W03} -> W04 under P01-I01."""
     state = _empty_state()
-    open_phase(state, phase_id="P01", title="Bootstrap")
-    open_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    plan_wave(
+    seed_phase(state, phase_id="P01", title="Bootstrap")
+    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
+    seed_wave(
         state,
         wave_id="P01-I01-W01",
         iter_id="P01-I01",
@@ -116,7 +112,7 @@ def _seed_diamond() -> State:
         success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
-    plan_wave(
+    seed_wave(
         state,
         wave_id="P01-I01-W02",
         iter_id="P01-I01",
@@ -127,7 +123,7 @@ def _seed_diamond() -> State:
         success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
-    plan_wave(
+    seed_wave(
         state,
         wave_id="P01-I01-W03",
         iter_id="P01-I01",
@@ -138,7 +134,7 @@ def _seed_diamond() -> State:
         success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
-    plan_wave(
+    seed_wave(
         state,
         wave_id="P01-I01-W04",
         iter_id="P01-I01",
@@ -180,9 +176,9 @@ def test_state_rejects_non_bool_dispatch_paused() -> None:
 def test_wave_runtime_latest_defaults_none_and_forbids_extra_keys() -> None:
     """``Wave.runtime_latest`` is optional and strictly shaped when present."""
     state = _empty_state()
-    open_phase(state, phase_id="P01", title="Bootstrap")
-    open_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    plan_wave(
+    seed_phase(state, phase_id="P01", title="Bootstrap")
+    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
+    seed_wave(
         state,
         wave_id="P01-I01-W01",
         iter_id="P01-I01",

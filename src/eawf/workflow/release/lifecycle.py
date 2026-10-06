@@ -1,12 +1,12 @@
 """The Release status machine: guarded edges plus their named denials.
 
 The lifecycle entities of the workflow (wave, phase, iter, spec) share
-one table shape in :mod:`eawf.workflow.lifecycle.spec`. A Release needs
+one table shape in :mod:`eawf.workflow.audit_dsl.transition_tables`. A Release needs
 a different guard vocabulary -- manifest completeness, gate greenness,
 approval freshness, independent observation -- and, unlike those tables,
 each denied edge carries a *named error code* that the operator surface
 and the daemon both quote. Rather than widening the shared
-:class:`~eawf.workflow.lifecycle.spec.GuardContext` with release-only
+:class:`~eawf.workflow.audit_dsl.transition_tables.GuardContext` with release-only
 booleans, the release machine owns its own table here.
 
 Two rules shape the table and are worth stating before reading it:

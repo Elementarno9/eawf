@@ -45,7 +45,7 @@ The check kinds frozen for v0.3:
 * ``transition_coverage`` — ``args = {table: str, covered_edges:
   list[list[str]] = <auto>}``. Compares the full edge set of a
   lifecycle FSM table (``wave`` / ``phase`` / ``iter`` / ``spec`` from
-  :mod:`eawf.workflow.lifecycle.spec`) against the edge set a
+  :mod:`eawf.workflow.audit_dsl.transition_tables`) against the edge set a
   Hypothesis ``RuleBasedStateMachine`` exploration actually exercised.
   Passes iff every table edge was covered; fails naming the uncovered
   edges. When ``covered_edges`` is omitted the kind runs the machine

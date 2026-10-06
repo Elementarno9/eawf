@@ -19,15 +19,12 @@ import pytest
 from eawf.kernel.projection.compute import ProjectionRow, build_route_projection
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.runtime.daemon.methods import MethodContext
 from tests.integration.kernel.migration._cutover_harness import CutoverTree
 from tests.integration.kernel.migration._legacy_continuation import (
     BACKLOG_ROW,
     ITER,
     PHASE,
-    advance,
     document_path,
-    method_context,
     seeded_applied_tree,
 )
 
@@ -78,18 +75,23 @@ def test_an_imported_row_projects_under_its_legacy_ref(
     assert row.status.value == stored["status"]
 
 
-def test_a_continuation_move_advances_the_imported_revision(
-    tree: CutoverTree, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    runtime = tmp_path / "runtime"
-    runtime.mkdir(mode=0o700)
-    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(runtime))
-    ctx: MethodContext = method_context(runtime)
+def test_a_continuation_event_advances_the_imported_revision(tree: CutoverTree) -> None:
+    """A row an earlier release moved carries its event, and counts it."""
+    document = _document(tree)
+    stored = document_rows(document, Epoch2Collection.TASK)[BACKLOG_ROW]
+    stored["status"] = "DROPPED"
+    stored["continuation"] = [
+        {
+            "from_status": "DRAFT",
+            "to_status": "DROPPED",
+            "at": "2026-09-26T12:00:00Z",
+            "actor": "OP-0001",
+            "reason": "settled before the cutover",
+        }
+    ]
 
-    answer = advance(tree, ctx, key=BACKLOG_ROW, collection="task", to="DROPPED")
-    assert answer["status"] == "ok", answer
+    row = _row("backlog", document, BACKLOG_ROW)
 
-    row = _row("backlog", _document(tree), BACKLOG_ROW)
     assert row.revision == 2
     assert row.status.value == "DROPPED"
 

@@ -2,7 +2,7 @@
 
 The daemon ``spec.promote`` handler (``runtime/daemon/methods/spec.py``)
 flips a spec from DRAFT to READY via the
-:func:`eawf.workflow.lifecycle.spec.validate_spec_transition` DAG. Before
+forward-only spec status DAG. Before
 the READY flip lands on disk this module runs the
 *persistence-layer* argv-policy check: every :class:`GateSpec` whose
 ``kind`` is in :data:`ARGV_BEARING_GATE_KINDS` has its ``args["argv"]``

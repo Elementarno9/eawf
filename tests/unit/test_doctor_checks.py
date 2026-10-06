@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from eawf.observability.doctor import checks
 from eawf.surfaces.cli.errors import UserError
@@ -355,7 +356,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "eawfd"))
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 24
+    assert len(results) == 23
     assert {r.name for r in results} == {
         "branch_currency",
         "tools_available",
@@ -370,7 +371,6 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         "active_phase_without_iter",
         "stale_session_count",
         "recent_actuals",
-        "iter_audit_links",
         "incident_fold_parity",
         "backlog_fold_parity",
         "cli_daemon_version",
@@ -522,12 +522,10 @@ def test_run_all_detects_sanitized_workflow_failure_shape(
     assert by_name["recent_actuals"].status == "ok"
     assert "1 metrics unavailable" in (by_name["recent_actuals"].detail or "")
     assert "1 measured zero-use" in (by_name["recent_actuals"].detail or "")
-    assert by_name["iter_audit_links"].status == "warn"
-    assert "not_found" in (by_name["iter_audit_links"].detail or "")
     assert by_name["cli_daemon_version"].status == "warn"
     assert "version skew" in (by_name["cli_daemon_version"].detail or "")
     assert by_name["parallel_cap_enforcement"].status == "ok"
-    assert "claim and fleet paths enforce" in (by_name["parallel_cap_enforcement"].detail or "")
+    assert "planning.max_parallel_waves=" in (by_name["parallel_cap_enforcement"].detail or "")
 
 
 @pytest.mark.parametrize(
@@ -536,7 +534,6 @@ def test_run_all_detects_sanitized_workflow_failure_shape(
         checks.check_active_phase_without_iter,
         checks.check_stale_session_count,
         checks.check_recent_actuals,
-        checks.check_iter_audit_links,
     ],
 )
 def test_state_diagnostic_without_workspace_is_ok(check: Any) -> None:
@@ -617,6 +614,31 @@ def test_check_parallel_cap_enforcement_reports_cap_and_resolution_error(
     )
     assert failed.status == "warn"
     assert "cap invalid" in (failed.detail or "")
+
+
+def test_resolve_max_parallel_waves_without_root_is_the_built_in_default() -> None:
+    assert checks.resolve_max_parallel_waves(None) == 4
+
+
+@pytest.mark.parametrize("cap", [1, 16])
+def test_resolve_max_parallel_waves_accepts_the_range_bounds(tmp_path: Path, cap: int) -> None:
+    (tmp_path / ".ea").mkdir()
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        f"planning:\n  max_parallel_waves: {cap}\n", encoding="utf-8"
+    )
+    assert checks.resolve_max_parallel_waves(tmp_path) == cap
+
+
+@pytest.mark.parametrize("raw", ["0", "17", "'four'"])
+def test_resolve_max_parallel_waves_rejects_out_of_range_or_mistyped(
+    tmp_path: Path, raw: str
+) -> None:
+    (tmp_path / ".ea").mkdir()
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        f"planning:\n  max_parallel_waves: {raw}\n", encoding="utf-8"
+    )
+    with pytest.raises(ValidationError):
+        checks.resolve_max_parallel_waves(tmp_path)
 
 
 # ---- P30-I16-W22: anchor resolution (pwd-upward) ---------------------------

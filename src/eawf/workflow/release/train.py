@@ -380,9 +380,10 @@ bindings:
 #:
 #: ``hosted_gate_runner`` and ``schema_strictness`` are proof commands
 #: for the same reason the ``dev1`` three are -- there is no fact about
-#: a checkout that settles them, only a run. The first drives a close
-#: with no attached session through the daemon and watches it run the
-#: gates rather than waive them; the second is the strictness census
+#: a checkout that settles them, only a run. The first has the daemon
+#: run a repository's own test suite as a gate in a sandboxed child with
+#: no attached session, and checks it passes there exactly as outside,
+#: so gates are run rather than waived; the second is the strictness census
 #: over the whole epoch-2 entity package, which is a property of the
 #: package rather than of the models somebody remembered to check.
 #:
@@ -399,7 +400,7 @@ DEV2_GATE_BINDINGS_YAML: Final[str] = (
     kind: proof_command
     proof:
       command_id: hosted_close_runs_the_gates
-      argv: [uv, run, pytest, tests/integration/runtime/daemon/test_headless_close.py, -q]
+      argv: [uv, run, pytest, tests/integration/runtime/daemon/test_gate_suite_parity.py, -q]
       timeout_seconds: 900
   - gate: schema_strictness
     kind: proof_command

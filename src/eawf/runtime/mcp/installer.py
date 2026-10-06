@@ -167,8 +167,7 @@ def _settings_path(runtime: str, target_dir: Path) -> Path:
     _validate_runtime(runtime)
     if runtime == "claude-agent-sdk":
         raise NotImplementedError(
-            f"runtime {runtime!r} has no on-disk settings file; "
-            "dispatch via render_dispatch_envelope, not install_runtime_entry"
+            f"runtime {runtime!r} has no on-disk settings file to install into"
         )
     if runtime == "opencode":
         return target_dir / "opencode.json"

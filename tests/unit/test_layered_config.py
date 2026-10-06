@@ -406,12 +406,12 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "economics.governor": _ECONOMICS,
     "economics.notice_policy": _ECONOMICS,
     "economics.prompt_budget": _ECONOMICS,
-    "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
-    "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
-    "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
-    "flow.budget.multiplier": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
+    "estimation.eu_basis": "eawf.kernel.config.schema.EstimationConfig",
+    "estimation.eu_minutes": "eawf.kernel.config.schema.EstimationConfig",
+    "flow.budget.enforce": "eawf.runtime.budget.service.load_budget_config",
+    "flow.budget.multiplier": "eawf.runtime.budget.service.load_budget_config",
     "operator.principal": "eawf.surfaces.tui.launch.claimed_principal",
-    "planning.max_parallel_waves": "eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves",
+    "planning.max_parallel_waves": "eawf.observability.doctor.checks.resolve_max_parallel_waves",
     "preferences.auto_choose": (
         "eawf.runtime.daemon.methods.question_decision.resolved_preferences"
     ),
@@ -462,7 +462,9 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
         "eawf.runtime.daemon.verdict_observations.resolve_jury_thresholds"
     ),
     "verify.odr_blocking": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
-    "verify.require_iter_audit_accepted": "eawf.workflow.lifecycle.iter_.close_iter",
+    "verify.require_iter_audit_accepted": (
+        "eawf.workflow.verify.readiness._overlay_repo_verify_leaves"
+    ),
     "verify.retyped_rule_threshold": (
         "eawf.observability.reflect.retyped.resolve_retyped_rule_threshold"
     ),
@@ -526,7 +528,7 @@ def test_reserved_config_leaf_set_is_exact() -> None:
         "runtime.adapter_catalog.opencode.enabled",
     } <= reserved
     strict_audit = leaf_key_lookup("verify.require_iter_audit_accepted")
-    assert strict_audit.consumer == "eawf.workflow.lifecycle.iter_.close_iter"
+    assert strict_audit.consumer == "eawf.workflow.verify.readiness._overlay_repo_verify_leaves"
     assert strict_audit.reserved is False
 
 

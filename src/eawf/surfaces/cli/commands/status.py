@@ -20,7 +20,6 @@ Output payload (JSON envelope, all keys always present):
       "git": {"head": "<sha>" | null,
               "branch": "<name>" | null,
               "dirty": true | false | null},
-      "drift": {"count": <int>, "tier": "ok"|"warn"},
       "authority": {"epoch": 1 | 2,
                     "gap": "undeclared"|"marker_absent"|"marker_unreadable" | null,
                     "generation_id": "<gen-id>" | null},
@@ -33,7 +32,8 @@ On an epoch-2 tree ``state.json`` is frozen at the cutover, so ``native``
 carries the work in flight from the selected generation and the text
 branch prints it in place of the frozen pointers and backlog; ``native``
 is ``null`` on an epoch-1 tree, and on an epoch-2 tree whose generation
-document does not exist.
+document does not exist. Status reads git once for ``git`` and never per
+wave.
 
 Exit codes:
 
@@ -65,6 +65,7 @@ from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 
 if TYPE_CHECKING:
+    from eawf.kernel.state.epoch2.decision import Decision
     from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
@@ -179,8 +180,6 @@ def _active_waves(state: State) -> list[dict[str, Any]]:
     ``state.current.active_wave_ids`` but missing from ``state.waves`` are
     skipped silently — the validator will surface them.
     """
-    from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
-
     out: list[dict[str, Any]] = []
     for wave_id in state.current.active_wave_ids:
         wave = state.waves.get(wave_id)
@@ -193,7 +192,6 @@ def _active_waves(state: State) -> list[dict[str, Any]]:
                 "title": wave.title,
                 "status": wave.status.value,
                 "claim_session_id": wave.claim_session_id,
-                "commit": derive_wave_sha(wave.id),
             }
         )
     return out
@@ -234,29 +232,40 @@ def _last_closed_waves(state: State, limit: int = 10) -> list[str]:
     return [wave_id for _, wave_id in pairs[:limit]]
 
 
-def _recent_decisions(state: State, limit: int = 5) -> list[dict[str, str]]:
+def _recent_decisions(
+    state: State, native: tuple[Decision, ...] = (), limit: int = 5
+) -> list[dict[str, str]]:
     """Return up to *limit* most-recent decisions, newest first by ``created_at``.
 
     A read-only projection of :attr:`~eawf.kernel.state.models.State.decisions`
-    so the operator sees the latest architectural / process verdicts without
-    opening ``state.json``. The full rationale + alternatives stay in the
-    Decision record; the status line carries only the id, the bounded title,
-    and the lifecycle status (so a superseded decision is visibly historical).
+    merged with the decisions an epoch-2 tree files in its generation's
+    ledger, so the operator sees the latest verdicts without opening
+    ``state.json`` or the ledger. The status line carries only the id, the
+    bounded title and the lifecycle status, lower-cased so both epochs spell
+    it alike and a superseded decision is visibly historical.
 
-    Decisions are sorted by ``created_at`` descending with the id as a stable
-    tiebreaker so two decisions stamped in the same instant order
-    deterministically across renders.
+    Args:
+        state: The loaded epoch-1 state.
+        native: The selected generation's native decisions; a native key
+            replaces an epoch-1 decision of the same id.
+        limit: How many decisions to list.
+
+    Returns:
+        One ``{"id", "title", "status"}`` row each, sorted by ``created_at``
+        descending with the id as a stable tiebreaker so two decisions
+        stamped in the same instant order deterministically across renders.
     """
-    pairs: list[tuple[datetime, str, dict[str, str]]] = [
-        (
-            d.created_at,
-            d.id,
-            {"id": d.id, "title": d.title, "status": d.status.value},
-        )
+    merged: dict[str, tuple[datetime, dict[str, str]]] = {
+        d.id: (d.created_at, {"id": d.id, "title": d.title, "status": d.status.value})
         for d in state.decisions.values()
-    ]
-    pairs.sort(key=lambda p: (p[0], p[1]), reverse=True)
-    return [projection for _, _, projection in pairs[:limit]]
+    }
+    for n in native:
+        merged[n.key] = (
+            n.created_at,
+            {"id": n.key, "title": n.title, "status": n.status.value.lower()},
+        )
+    ranked = sorted(merged.items(), key=lambda item: (item[1][0], item[0]), reverse=True)
+    return [projection for _, (_, projection) in ranked[:limit]]
 
 
 def _open_backlog(state: State, limit: int = 10) -> list[dict[str, str]]:
@@ -447,6 +456,7 @@ def status(
     from pydantic import ValidationError
 
     from eawf.kernel.state.models import State
+    from eawf.kernel.store.ledger import LedgerError
 
     flags: GlobalFlags = ctx.obj
     effective_flags = GlobalFlags(
@@ -503,6 +513,14 @@ def status(
             flags=effective_flags,
         )
         return
+    try:
+        native_decisions = _native_decisions(state_path) if authority["epoch"] == 2 else ()
+    except (LedgerError, ValueError) as exc:
+        errors.emit_error(
+            errors.UserError(f"decision ledger unreadable: {exc}", kind="InvalidInput"),
+            flags=effective_flags,
+        )
+        return
 
     payload: dict[str, Any] = {
         "project": _project_summary(state),
@@ -513,11 +531,10 @@ def status(
         "active_waves": _active_waves(state),
         "active_sessions": _active_sessions(state),
         "last_closed_waves": _last_closed_waves(state),
-        "recent_decisions": _recent_decisions(state),
+        "recent_decisions": _recent_decisions(state, native_decisions),
         "open_backlog": _open_backlog(state),
         "open_backlog_count": _open_backlog_count(state),
         "git": _git_info(cwd=_find_git_root(state_path.parent)),
-        "drift": _drift_summary(state, repo_root=_find_git_root(state_path.parent)),
         "authority": authority,
         "native": native,
         "blockers": _blockers(state),
@@ -581,23 +598,16 @@ def _native_summary(state_path: Path, limit: int = 10) -> dict[str, Any]:
     }
 
 
-def _drift_summary(state: State, *, repo_root: Path) -> dict[str, Any]:
-    """Return the git/state drift count + tier for the status envelope.
+def _native_decisions(state_path: Path) -> tuple[Decision, ...]:
+    """Return the native decisions the epoch-2 tree holding *state_path* files.
 
-    The reconciler runs lazily — we only call into ``detect_git_state_drift``
-    when there is at least one CLOSED wave to compare against. The
-    returned shape ``{"count": <int>, "tier": "ok"|"warn"}`` is the
-    minimum the operator needs in the status line; the full per-wave
-    detail stays behind ``eawf doctor``.
+    Raises:
+        LedgerTornTailError: The decision ledger ends mid-line.
+        ValueError: A decision ledger line does not satisfy its model.
     """
-    from eawf.workflow.lifecycle.wave_sha import detect_git_state_drift
+    from eawf.observability.reflect.decisions import read_native_decisions
 
-    closed_count = sum(1 for w in state.waves.values() if w.status == WaveStatus.CLOSED)
-    if closed_count == 0:
-        return {"count": 0, "tier": "ok"}
-    drifts = detect_git_state_drift(state, repo_root=repo_root)
-    tier = "warn" if drifts else "ok"
-    return {"count": len(drifts), "tier": tier}
+    return read_native_decisions(state_path.parent)
 
 
 def _format_text(payload: dict[str, Any]) -> str:
@@ -620,8 +630,6 @@ def _format_text(payload: dict[str, Any]) -> str:
     git = payload["git"]
     branch = git["branch"] or "<unknown>"
     git_line = f"git: head={(git['head'] or '<unknown>')[:12]} branch={branch}"
-    drift = payload.get("drift") or {"count": 0, "tier": "ok"}
-    drift_line = f"drift: {drift['count']} ({drift['tier']})"
     authority = payload.get("authority")
     if authority is None:
         authority_line = "authority: <unknown>"
@@ -657,7 +665,6 @@ def _format_text(payload: dict[str, Any]) -> str:
         proj_line,
         *pointer_lines,
         git_line,
-        drift_line,
         authority_line,
         decisions_line,
         *backlog_lines,

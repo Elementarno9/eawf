@@ -54,6 +54,7 @@ from eawf.kernel.state.canonical_sequence import CanonicalSequenceAllocator
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.base import Epoch2Model, PrincipalKey, StrictNonNegativeInt
 from eawf.kernel.state.epoch2.batch import BatchCreateSpec, BatchStatus
+from eawf.kernel.state.epoch2.lifecycle import LifecycleRecord
 from eawf.kernel.state.epoch2.milestone import MilestoneCreateSpec, MilestoneStatus
 from eawf.kernel.state.epoch2.repository import Repository, RepositoryCreateSpec
 from eawf.kernel.state.epoch2.run import RunCreateSpec, RunStatus
@@ -83,7 +84,6 @@ from eawf.runtime.daemon.epoch2_transaction import (
     _replayed_receipt,
     commit_ledger_append,
 )
-from eawf.workflow.lifecycle.epoch2 import LifecycleRecord
 
 logger = logging.getLogger(__name__)
 

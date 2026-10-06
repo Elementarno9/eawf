@@ -1,60 +1,8 @@
-"""Wave effort roll-up and realized-EU accessors.
-
-Every wave is costed at the effort constant of the mapping in force,
-:data:`~eawf.workflow.estimation.mapping.CURRENT_EFFORT_MAPPING`. The five
-size labels it replaced were measured non-monotonic, with a declared span
-of 14x against a measured 1.31x, and no size proxy separated them, so a
-label left on a wave is a narrative annotation: nothing multiplies by it
-and no schedule or capacity figure derives from it.
-"""
+"""Realized-EU accessors over the actual rows of waves, iters and phases."""
 
 from __future__ import annotations
 
-from eawf.kernel.state.models import ActualSummary, State, Wave
-from eawf.workflow.estimation.mapping import CURRENT_EFFORT_MAPPING
-
-
-def sum_wave_eu(waves: list[Wave]) -> float:
-    """Return the serial effort of *waves* in EU.
-
-    Args:
-        waves: The waves to sum.
-
-    Returns:
-        The wave count times the mapping's effort constant, rounded to 2 dp.
-    """
-    return round(len(waves) * CURRENT_EFFORT_MAPPING.effort_eu, 2)
-
-
-def critical_path_eu(waves: list[Wave]) -> float:
-    """Return the effort of the longest dependency chain through *waves*, in EU.
-
-    A dependency outside *waves* is ignored, and a cycle is cut where it
-    closes rather than followed forever.
-
-    Args:
-        waves: The waves forming one dependency graph.
-
-    Returns:
-        The longest chain's wave count times the mapping's effort constant,
-        rounded to 2 dp; ``0.0`` for no waves.
-    """
-    by_id = {wave.id: wave for wave in waves}
-    memo: dict[str, int] = {}
-
-    def _depth(wave: Wave, seen: set[str]) -> int:
-        if wave.id in memo:
-            return memo[wave.id]
-        if wave.id in seen:
-            return 1
-        dep_depths = [_depth(by_id[dep], seen | {wave.id}) for dep in wave.deps if dep in by_id]
-        depth = 1 + (max(dep_depths) if dep_depths else 0)
-        memo[wave.id] = depth
-        return depth
-
-    if not waves:
-        return 0.0
-    return round(max(_depth(wave, set()) for wave in waves) * CURRENT_EFFORT_MAPPING.effort_eu, 2)
+from eawf.kernel.state.models import ActualSummary, State
 
 
 def resolve_wave_actual(state: State, wave_id: str) -> ActualSummary | None:

@@ -16,7 +16,6 @@ Everything operational is available from `eawf` reading the active Eä state: wo
 
 ```bash
 eawf status                  # Shows current project / subproject / phase / iter / waves, blockers, next actions.
-eawf plan show               # Shows active generated plan / spec from state-backed records (incl. backlog).
 
 # Backlog items live in state; query directly when no dedicated CLI verb fits:
 jq '.backlog' .ea/state.json

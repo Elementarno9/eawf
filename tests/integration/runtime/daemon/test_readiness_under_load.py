@@ -32,7 +32,7 @@ import eawf.runtime.daemon.main as main_mod
 import eawf.runtime.daemon.server as server_mod
 import eawf.runtime.daemon.spawn as spawn_mod
 from eawf.runtime.daemon.limits import READINESS_BUDGET_SECONDS
-from tests.integration.runtime.daemon.test_close_lock_split import _build_ctx, _write_state
+from tests.integration.runtime.daemon._epoch1_state_fixtures import build_ctx, write_state
 from tests.integration.runtime.daemon.test_loop_occupancy import (
     CLIENT_TIMEOUT_SECONDS,
     client,
@@ -79,8 +79,8 @@ def _probe_under_read_load(
         ``(probe_result, elapsed_seconds)``.
     """
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
-    ctx = _build_ctx(tmp_path, state_path)
+    write_state(state_path)
+    ctx = build_ctx(tmp_path, state_path)
     # Hold the loop rather than a worker thread: the probe has to face a
     # daemon that cannot answer, which is what "under load" meant in the
     # incident.

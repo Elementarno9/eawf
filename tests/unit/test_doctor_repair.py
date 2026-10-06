@@ -7,16 +7,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from eawf.kernel.state.enums import WaveStatus
-from eawf.kernel.state.models import State, Wave
 from eawf.observability.doctor.checks import CheckResult
 from eawf.observability.doctor.repair import build_repair_plan
 from eawf.runtime.daemon.methods.doctor import _apply_config
-from eawf.workflow.lifecycle.repin_provenance import (
-    append_commit_repin_provenance,
-    complete_commit_repin_provenance,
-)
-from eawf.workflow.lifecycle.wave_sha import RepairAction
 
 
 def _quiet_host_checks(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -125,61 +118,3 @@ def test_apply_config_rejects_changed_preview(
 
     with pytest.raises(DaemonValidationError, match="preview changed"):
         _apply_config(tmp_path, action)
-
-
-def test_commit_repin_provenance_is_typed_and_idempotent(tmp_path: Path) -> None:
-    state_path = tmp_path / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True)
-    action = RepairAction(
-        wave_id="P02-I01-W01",
-        kind="pinned_mismatch",
-        old_commit="a" * 40,
-        new_commit="b" * 40,
-        identity_digest=f"sha256:{'c' * 64}",
-    )
-
-    assert append_commit_repin_provenance(state_path, [action]) == 1
-    assert append_commit_repin_provenance(state_path, [action]) == 0
-    path = state_path.parent / "store" / "commit_repin.jsonl"
-    rows = path.read_text(encoding="utf-8").splitlines()
-    assert len(rows) == 1
-    assert '"disposition":"historical_repin"' in rows[0]
-    assert '"status":"applied"' in rows[0]
-
-
-def test_commit_repin_intent_completes_after_state_write(tmp_path: Path) -> None:
-    state_path = tmp_path / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True)
-    action = RepairAction(
-        wave_id="P02-I01-W01",
-        kind="pinned_mismatch",
-        old_commit="a" * 40,
-        new_commit="b" * 40,
-        identity_digest=f"sha256:{'c' * 64}",
-    )
-    state = State.model_construct(
-        waves={
-            action.wave_id: Wave.model_construct(
-                id=action.wave_id,
-                status=WaveStatus.CLOSED,
-                commit=action.new_commit,
-            )
-        }
-    )
-
-    assert (
-        append_commit_repin_provenance(
-            state_path,
-            [action],
-            status="planned",
-        )
-        == 1
-    )
-    assert complete_commit_repin_provenance(state_path, state) == 1
-    assert complete_commit_repin_provenance(state_path, state) == 0
-    rows = (
-        (state_path.parent / "store" / "commit_repin.jsonl")
-        .read_text(encoding="utf-8")
-        .splitlines()
-    )
-    assert len(rows) == 2

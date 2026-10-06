@@ -2,8 +2,8 @@
 
 The v1.6 schema delta adds the top-level :attr:`~eawf.kernel.state.models.State.dispatch_paused`
 flag — the cooperative dispatch-gate marker the ``agent.pause`` / ``agent.resume``
-RPCs persist and :func:`eawf.workflow.lifecycle.wave.claim_wave` reads to block a
-claim while dispatch is paused.
+RPCs persist and the epoch-1 wave claim read to block a claim while dispatch
+is paused.
 
 Adding a field with a model default is purely additive: no existing state row
 carries ``dispatch_paused`` (the field is brand new), and the

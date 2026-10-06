@@ -1,7 +1,7 @@
 """Structural pins for the split ``state.*`` daemon method family.
 
-The state-method module used to be one 5,286-line file. It is now a facade plus
-nine collaborators, and these tests pin the three properties that make the split
+The state-method module used to be one 5,286-line file. It is now a set of
+small collaborators, and these tests pin the three properties that make the split
 worth having rather than a rename:
 
 * every module under ``runtime/daemon/methods`` fits the EAWF010 budget on its
@@ -36,7 +36,7 @@ MAX_LOC = 1400
 #: ``# noqa: EAWF010 <rationale>`` waiver. Each is a cohesive command surface
 #: whose split is its own piece of work; the set is frozen here so a NEW module
 #: cannot join it silently -- an addition has to edit this list in review.
-WAIVERED_MODULES = frozenset({"agent.py", "fleet.py"})
+WAIVERED_MODULES: frozenset[str] = frozenset()
 
 
 def _method_modules() -> list[Path]:
@@ -48,12 +48,7 @@ def _method_modules() -> list[Path]:
 #: modules the split did not touch. They are frozen here rather than silently
 #: tolerated: the gate below still refuses any NEW one, and shrinking this set is
 #: its own piece of hygiene work on those two module pairs.
-LEGACY_PRIVATE_SIBLING_IMPORTS = frozenset(
-    {
-        ("close.py", "close_evidence", "_digest"),
-        ("close.py", "close_evidence", "_load_state"),
-    }
-)
+LEGACY_PRIVATE_SIBLING_IMPORTS: frozenset[tuple[str, str, str]] = frozenset()
 
 
 def _sibling_imports(tree: ast.Module, *, module_level_only: bool = False) -> list[tuple[str, str]]:
@@ -199,17 +194,8 @@ def test_methods_import_graph_is_acyclic_at_module_scope() -> None:
 @pytest.mark.parametrize(
     ("module_name", "symbol"),
     [
-        ("state_apply", "build_apply_registry"),
-        ("state_apply", "apply_mutation_under_lock"),
-        ("state_close", "score_required_criteria"),
-        ("state_close", "build_close_attempt_hooks"),
-        ("state_close", "enforce_wave_verdict_gate"),
-        ("state_close", "compute_wave_close_readiness"),
         ("state_context", "read_state"),
-        ("state_events", "mutation_event_extras"),
-        ("state_jury", "jury_spawn_factory"),
         ("state_models", "CachedMutation"),
-        ("state_runtime", "merge_runtime_latest"),
         ("state_worktree", "commit_worktree_state"),
     ],
 )

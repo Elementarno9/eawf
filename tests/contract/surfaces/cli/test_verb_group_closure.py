@@ -9,7 +9,7 @@
 - SURF-082: ``question add``, ``campaign new``, ``decision add`` and
   ``release create`` read ``--from-spec <path>`` or ``-`` and parse it
   through a closed model before anything is sent.
-- SURF-083: the integration, legacy and release verbs answer with the one
+- SURF-083: the integration, record and release verbs answer with the one
   machine envelope, rendered by the shared renderer in both modes.
 """
 
@@ -33,7 +33,7 @@ from eawf.surfaces.cli import exit_codes, verb_contract
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import domain_integration as integration_cmd
-from eawf.surfaces.cli.commands import domain_legacy as legacy_cmd
+from eawf.surfaces.cli.commands import record as record_cmd
 from eawf.surfaces.cli.commands import release as release_cmd
 from tests._epoch2_helpers import lay_epoch2_tree
 from tests.contract.surfaces.cli.conftest import FakeDaemon
@@ -353,30 +353,32 @@ def test_surf_083_a_raised_refusal_becomes_an_envelope_row(
     assert verb_contract.envelope_exit_code(envelope) == exit_codes.STATE_CONFLICT
 
 
-def test_surf_083_a_legacy_verb_prints_through_the_shared_renderer(
+def test_surf_083_a_record_append_prints_through_the_shared_renderer(
     daemon: FakeDaemon, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from eawf.runtime.daemon.methods.domain_envelope import DomainEnvelope
 
-    monkeypatch.setattr(legacy_cmd, "DaemonClient", daemon)
+    monkeypatch.setattr(record_cmd, "DaemonClient", daemon)
+    spec = tmp_path / "audit.json"
+    spec.write_text(json.dumps({"id": "A900"}), encoding="utf-8")
 
     daemon.result = verb_contract.answer_envelope(
-        {"from_status": "RUNNING", "to_status": "COMPLETED"},
-        operation=legacy_cmd.LEGACY_ADVANCE,
-        urn="legacy:task/P01-W01",
+        {"collection": "audit", "record_key": "A900", "event_id": "EV-1"},
+        operation=record_cmd.RECORD_APPEND,
+        urn="audit/A900",
         revision_before=None,
         revision_after=None,
     ).model_dump(mode="json")
     result = runner.invoke(
         app,
         [
-            "--workspace", str(tmp_path), "task", "advance-legacy", "P01-W01",
-            "--to", "COMPLETED", "--actor", "OPERATOR", "--reason", "done",
+            "--workspace", str(tmp_path), "record", "append", "--kind", "audit",
+            "--from-spec", str(spec),
         ],
     )  # fmt: skip
     assert result.exit_code == exit_codes.OK, result.output
     expected = verb_contract.envelope_text(
-        DomainEnvelope.model_validate(daemon.result), urn="legacy:task/P01-W01"
+        DomainEnvelope.model_validate(daemon.result), urn="audit/A900"
     )
     assert result.stdout.rstrip("\n") == expected
 

@@ -25,6 +25,12 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from eawf.kernel.state.epoch2.batch import BatchStatus
+from eawf.kernel.state.epoch2.lifecycle import (
+    GuardContext,
+    TransitionDenied,
+    apply_transition,
+    evaluate_edge,
+)
 from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.kernel.state.epoch2.transitions import (
     AMBIGUOUS_STATES,
@@ -39,12 +45,6 @@ from eawf.kernel.state.epoch2.transitions import (
     LifecycleStatus,
     ambiguity_label,
     rows_from,
-)
-from eawf.workflow.lifecycle.epoch2 import (
-    GuardContext,
-    TransitionDenied,
-    apply_transition,
-    evaluate_edge,
 )
 from tests.unit.kernel.state._epoch2_transition_fixtures import AT, seed_record
 

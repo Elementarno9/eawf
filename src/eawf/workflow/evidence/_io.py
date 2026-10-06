@@ -87,28 +87,6 @@ def load_state(state_path: Path) -> State:
     return report.state
 
 
-def atomic_write_state(state_path: Path, state: State) -> None:
-    """Persist *state* via the LOCKED, leak-refusing atomic writer.
-
-    Caller MUST already hold ``portalock(state_path)``. Use this only inside
-    a :func:`eawf.surfaces.cli._mutation.state_transaction` (or an equivalent
-    explicit ``with portalock.acquire(state_path):`` block).
-
-    Args:
-        state_path: The ``state.json`` to persist.
-        state: The state to write.
-
-    Raises:
-        StateValidationError: When a string *state* adds or changes relative
-            to the on-disk payload at *state_path* carries a leak shape, or
-            (``legacy_operation_removed``) the tree carries the epoch marker.
-    """
-    from eawf.kernel.state.io import write_state_unlocked
-
-    payload = json.loads(state.model_dump_json())
-    write_state_unlocked(state_path, payload)
-
-
 def _promoted_contracts(*, artifact_ledger: Path, evidence_ledger: Path) -> dict[str, Artifact]:
     """Return every measured contract a generation holds, keyed by contract id.
 

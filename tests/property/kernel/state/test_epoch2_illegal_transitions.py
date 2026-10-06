@@ -15,6 +15,11 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from eawf.kernel.state.epoch2.lifecycle import (
+    TransitionDenied,
+    apply_transition,
+    evaluate_edge,
+)
 from eawf.kernel.state.epoch2.transitions import (
     DENIAL_REMEDIATION,
     ENTITY_STATUS_ENUM,
@@ -24,11 +29,6 @@ from eawf.kernel.state.epoch2.transitions import (
     LifecycleEntity,
     LifecycleStatus,
     row_for,
-)
-from eawf.workflow.lifecycle.epoch2 import (
-    TransitionDenied,
-    apply_transition,
-    evaluate_edge,
 )
 from tests.unit.kernel.state._epoch2_transition_fixtures import (
     AT,

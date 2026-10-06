@@ -1,12 +1,9 @@
-"""P30-I21-W31 (G3): idle watchdog interlock with background drive / research.
+"""The idle watchdog counts a live research Campaign drive as in-flight work.
 
-A headless fleet drive (or research campaign) runs on a daemon thread that never
-refreshes ``ctx.last_activity`` nor increments ``in_flight_mutations``. Before
-this wave, a subscriber-less headless drive tripped the idle watchdog and the
-daemon self-killed mid-spawn at the default 300s. This wave counts live drive +
-research-run threads as in-flight so the watchdog never trips while background
-work runs, and wires ``shutdown_drive`` into the serve-loop teardown so a
-mid-drive shutdown cancel+joins the drive instead of abandoning it.
+A research Campaign drive runs in the background without refreshing
+``ctx.last_activity`` or incrementing ``in_flight_mutations``; without the
+interlock a subscriber-less drive trips the idle watchdog and the daemon exits
+mid-round.
 """
 
 from __future__ import annotations
@@ -16,7 +13,7 @@ from typing import cast
 
 import pytest
 
-from eawf.runtime.daemon.main import _build_watchdog, _shutdown_background_drives
+from eawf.runtime.daemon.main import _build_watchdog
 from eawf.runtime.daemon.methods import MethodContext
 
 
@@ -31,56 +28,32 @@ def _ctx(*, in_flight_mutations: int = 0) -> MethodContext:
     return cast(MethodContext, stub)
 
 
-def test_in_flight_counts_live_drive(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A live background drive counts as in-flight so the watchdog holds off."""
-    monkeypatch.setattr("eawf.runtime.daemon.methods.fleet.drive_in_flight", lambda: True)
+def _campaign_live(monkeypatch: pytest.MonkeyPatch, *, live: bool) -> None:
     monkeypatch.setattr(
         "eawf.runtime.daemon.methods.campaign_run.campaign_drive_in_flight",
-        lambda campaign_key=None: False,
+        lambda campaign_key=None: live,
     )
-    watchdog = _build_watchdog(_ctx(), 60.0)
-    assert watchdog.in_flight() == 1
 
 
 def test_in_flight_counts_live_campaign_drive(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A live research Campaign drive counts as in-flight (parity with the drive)."""
-    monkeypatch.setattr("eawf.runtime.daemon.methods.fleet.drive_in_flight", lambda: False)
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.campaign_run.campaign_drive_in_flight",
-        lambda campaign_key=None: True,
-    )
-    watchdog = _build_watchdog(_ctx(), 60.0)
-    assert watchdog.in_flight() == 1
+    """A live research Campaign drive counts as one in-flight unit."""
+    _campaign_live(monkeypatch, live=True)
+    assert _build_watchdog(_ctx(), 60.0).in_flight() == 1
 
 
-def test_in_flight_sums_mutations_drive_and_research(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The probe adds live drive + research atop the mutation counter."""
-    monkeypatch.setattr("eawf.runtime.daemon.methods.fleet.drive_in_flight", lambda: True)
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.campaign_run.campaign_drive_in_flight",
-        lambda campaign_key=None: True,
-    )
-    watchdog = _build_watchdog(_ctx(in_flight_mutations=2), 60.0)
-    assert watchdog.in_flight() == 4
+def test_in_flight_sums_mutations_and_campaign_drive(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The probe adds the live drive atop the mutation counter."""
+    _campaign_live(monkeypatch, live=True)
+    assert _build_watchdog(_ctx(in_flight_mutations=2), 60.0).in_flight() == 3
+
+
+def test_in_flight_counts_mutations_without_a_drive(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A single mutation with no drive reports exactly one unit."""
+    _campaign_live(monkeypatch, live=False)
+    assert _build_watchdog(_ctx(in_flight_mutations=1), 60.0).in_flight() == 1
 
 
 def test_in_flight_is_zero_when_idle(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No background work + no mutations reports zero so the watchdog can trip."""
-    monkeypatch.setattr("eawf.runtime.daemon.methods.fleet.drive_in_flight", lambda: False)
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.campaign_run.campaign_drive_in_flight",
-        lambda campaign_key=None: False,
-    )
-    watchdog = _build_watchdog(_ctx(), 60.0)
-    assert watchdog.in_flight() == 0
-
-
-def test_shutdown_background_drives_calls_shutdown_drive(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The serve-loop teardown signals + joins the active drive on shutdown."""
-    called: list[bool] = []
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.fleet.shutdown_drive",
-        lambda *a, **k: called.append(True),
-    )
-    _shutdown_background_drives()
-    assert called == [True]
+    """No background work and no mutations reports zero so the watchdog can trip."""
+    _campaign_live(monkeypatch, live=False)
+    assert _build_watchdog(_ctx(), 60.0).in_flight() == 0

@@ -14,26 +14,9 @@ Subcommands:
 - ``worktree reconcile`` — retire active worktree rows git no longer
   lists and session rows whose holder is gone (``--dry-run`` reports).
 
-This module also wires the wave-centric automation verbs onto the
-``wave`` noun-group (imported from
-:mod:`eawf.surfaces.cli.commands.lifecycle`):
-
-- ``wave land`` — cherry-pick a wave's worktree commits onto the
-  parent branch, then close the wave with the resulting SHA. This is
-  the AGENTS.md-discipline-compliant entry point (cherry-pick only,
-  never merge).
-- ``wave land-batch`` — apply ``wave land`` to every eligible wave in
-  dep order; stop on the first failure.
-- ``wave autoland`` — the land back-half: cherry-pick *already-closed*
-  waves' worktree commits onto the parent branch in dep order, stopping
-  on the first conflict. Unlike ``wave land`` / ``wave land-batch`` it
-  never drives a close (the wave is closed already); it only replays
-  commits and tears the worktree down.
-
 The mutating handlers write through the daemon: ``worktree merge-back``
 and ``worktree cleanup`` route to ``state.worktree_merge_back`` /
-``state.worktree_cleanup``, and the land and reconcile verbs to
-``state.wave_land`` / ``state.wave_land_batch`` / ``state.wave_autoland`` /
+``state.worktree_cleanup``, and ``worktree reconcile`` to
 ``state.worktree_reconcile``. Each takes the git-side
 :func:`eawf.runtime.worktree.locks.worktree_registry_lock` before the state
 lock; the two guard disjoint paths. The in-process writer runs only under
@@ -368,14 +351,6 @@ def _reconcile_daemonless(*, params: dict[str, Any], flags: GlobalFlags) -> dict
     }
 
 
-# ---- wave land --------------------------------------------------------------
-# These verbs hang off ``wave_app`` (defined in lifecycle.py). We register
-# them here because the implementation depends on the worktree subsystem.
-# Importing ``wave_app`` rather than mutating ``lifecycle.py`` keeps the
-# parallel-wave discipline intact: W01 owns lifecycle.py, this wave owns
-# worktree.py.
-
-
 def _call_worktree_daemon(
     *,
     method: str,
@@ -388,9 +363,9 @@ def _call_worktree_daemon(
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
     if _dispatch.daemonless_requested(flags):
-        if method == "state.worktree_reconcile":
-            return _reconcile_daemonless(params=params, flags=flags)
-        return _call_worktree_daemonless(method=method, params=params, flags=flags)
+        # Reconcile is the only verb routed here; merge-back and cleanup
+        # carry their own daemonless writers.
+        return _reconcile_daemonless(params=params, flags=flags)
 
     try:
         _dispatch.escalate_mutation(verb, flags=flags)
@@ -402,112 +377,3 @@ def _call_worktree_daemon(
         raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
     except (OSError, RuntimeError, TimeoutError) as exc:
         raise cli_errors.DaemonUnreachable(f"daemon unavailable for {method}: {exc}") from exc
-
-
-def _wave_land_payload(result: Any) -> dict[str, Any]:
-    """Return the JSON-mode result shape for one wave-land result."""
-    return {
-        "wave": result.wave_id,
-        "commits": list(result.commits),
-        "outcome": result.outcome,
-        "closed": result.closed,
-        "worktree_cleaned": result.worktree_cleaned,
-        "merged_commit": result.merged_commit,
-        "integration_id": result.integration_id,
-        "close_attempt": None,
-        "close_backgrounded": False,
-    }
-
-
-def _wave_land_batch_payload(result: Any) -> dict[str, Any]:
-    """Return explicit synchronous-compatibility daemonless batch output."""
-    return {
-        "landed": [_wave_land_payload(row) for row in result.landed],
-        "failed_wave": result.failed_wave,
-        "error": result.error,
-        "skipped": list(result.skipped),
-        "barrier_requirements": {
-            wave_id: list(stages) for wave_id, stages in result.barrier_requirements.items()
-        },
-        "close_mode": "daemonless_synchronous",
-    }
-
-
-def _wave_autoland_row_payload(row: Any) -> dict[str, Any]:
-    """Return the JSON-mode result shape for one autoland row."""
-    return {
-        "wave": row.wave_id,
-        "commits": list(row.commits),
-        "merged_commit": row.merged_commit,
-        "worktree_cleaned": row.worktree_cleaned,
-    }
-
-
-def _wave_autoland_payload(result: Any) -> dict[str, Any]:
-    """Return the JSON-mode result shape for one wave-autoland result."""
-    return {
-        "order": list(result.order),
-        "landed": [_wave_autoland_row_payload(row) for row in result.landed],
-        "failed_wave": result.failed_wave,
-        "error": result.error,
-        "remaining": list(result.remaining),
-        "dry_run": result.dry_run,
-    }
-
-
-def _call_worktree_daemonless(
-    *,
-    method: str,
-    params: dict[str, Any],
-    flags: GlobalFlags,
-) -> dict[str, Any]:
-    """Run the worktree mutator locally under the legacy daemonless carve-out."""
-    from eawf.runtime.worktree import (
-        wave_autoland,
-        wave_land,
-        wave_land_batch,
-        worktree_registry_lock,
-    )
-    from eawf.surfaces.cli._mutation import state_transaction
-    from eawf.workflow.lifecycle.transitions import LifecycleError
-
-    state_path = _resolve_state_path(flags)
-    repo_root = Path(str(params["repo_root"]))
-    try:
-        with (
-            worktree_registry_lock(repo_root, timeout=5.0),
-            state_transaction(state_path) as state,
-        ):
-            if method == "state.wave_land":
-                return _wave_land_payload(
-                    wave_land(
-                        state,
-                        repo_root=repo_root,
-                        wave_id=str(params["wave_id"]),
-                        outcome=params.get("outcome"),
-                        keep_worktree=bool(params.get("keep_worktree", False)),
-                    )
-                )
-            if method == "state.wave_land_batch":
-                return _wave_land_batch_payload(
-                    wave_land_batch(
-                        state,
-                        repo_root=repo_root,
-                        iter_id=params.get("iter_id"),
-                        ready_only=bool(params.get("ready_only", False)),
-                        keep_worktree=bool(params.get("keep_worktree", False)),
-                    )
-                )
-            if method == "state.wave_autoland":
-                return _wave_autoland_payload(
-                    wave_autoland(
-                        state,
-                        repo_root=repo_root,
-                        iter_id=params.get("iter_id"),
-                        keep_worktree=bool(params.get("keep_worktree", False)),
-                        dry_run=bool(params.get("dry_run", False)),
-                    )
-                )
-    except LifecycleError as exc:
-        raise cli_errors.ValidationError(str(exc)) from exc
-    raise cli_errors.UserError(f"unknown worktree daemon method: {method}", kind="InvalidInput")

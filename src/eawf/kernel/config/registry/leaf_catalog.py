@@ -440,7 +440,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=4,
         writable_layers=_WRITABLE_GWR,
         description="Repo-wide hard cap for CLAIMED and IN_PROGRESS waves.",
-        consumer="eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves",
     ),
     # --- verify --------------------------------------------------------------
     LeafKey(
@@ -734,11 +733,11 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "daemon.proxy_enabled": "eawf.surfaces.cli._mutation._proxy_enabled",
     "daemon.session_handle_ttl_seconds": "eawf.runtime.daemon.main._resolve_session_ttl_seconds",
     "dispatch.role_tier_token_cap": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
-    "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
-    "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
-    "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
-    "flow.budget.multiplier": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
-    "planning.max_parallel_waves": "eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves",
+    "estimation.eu_basis": "eawf.kernel.config.schema.EstimationConfig",
+    "estimation.eu_minutes": "eawf.kernel.config.schema.EstimationConfig",
+    "flow.budget.enforce": "eawf.runtime.budget.service.load_budget_config",
+    "flow.budget.multiplier": "eawf.runtime.budget.service.load_budget_config",
+    "planning.max_parallel_waves": "eawf.observability.doctor.checks.resolve_max_parallel_waves",
     "preferences.auto_choose": "eawf.runtime.daemon.methods.question_decision.resolved_preferences",
     "profiles.certified": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "profiles.enabled": "eawf.platform.profiles.selection.resolve_enabled_profiles",
@@ -777,7 +776,9 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "vcs.conventions.subject_style": "tools.commit_prefix_lint._configured_subject_style",
     "vcs.integration_commit_unit": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
     "vcs.task_reference": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
-    "verify.require_iter_audit_accepted": "eawf.workflow.lifecycle.iter_.close_iter",
+    "verify.require_iter_audit_accepted": (
+        "eawf.workflow.verify.readiness._overlay_repo_verify_leaves"
+    ),
     "verify.waiver_mode": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
 }
 

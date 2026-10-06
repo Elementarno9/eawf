@@ -39,12 +39,12 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.errors.lifecycle import LifecycleError
 from eawf.kernel.spec.common import CriterionSpec, GateSpec, OracleTier
 from eawf.kernel.state.models import Wave
 from eawf.observability.eval.jury import JuryAggregateOutcome
 from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
-from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.verify import oracle
 from eawf.workflow.verify.oracle import (
     DETAIL_MAX_CHARS,

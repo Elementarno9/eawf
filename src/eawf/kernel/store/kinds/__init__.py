@@ -26,7 +26,6 @@ def _payload_models() -> dict[StoreKind, type[BaseModel]]:
     from eawf.kernel.store.kinds.actual import ActualPayload
     from eawf.kernel.store.kinds.agent_report import AgentReportPayload
     from eawf.kernel.store.kinds.audit import AuditPayload
-    from eawf.kernel.store.kinds.commit_repin import CommitRepinProvenance
     from eawf.kernel.store.kinds.conduct_deviation import ConductDeviation
     from eawf.kernel.store.kinds.config_updated import ConfigUpdatedPayload
     from eawf.kernel.store.kinds.decision import DecisionPayload
@@ -85,7 +84,6 @@ def _payload_models() -> dict[StoreKind, type[BaseModel]]:
         # the wave and the landed commit its run replayed.
         StoreKind.GATE_RERECEIPT: GateRereceiptBinding,
         StoreKind.LEGACY_AUDIT_DISPOSITION: LegacyAuditDisposition,
-        StoreKind.COMMIT_REPIN: CommitRepinProvenance,
         # The publication ledger reuses the kernel record rather than
         # restating its shape here: a second copy could only drift.
         StoreKind.RELEASE: PublicationOperation,

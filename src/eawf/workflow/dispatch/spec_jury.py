@@ -62,6 +62,7 @@ from typing import Literal
 
 from pydantic import ValidationError
 
+from eawf.kernel.errors.lifecycle import LifecycleError
 from eawf.kernel.spec.heuristics import is_ui_scope
 from eawf.kernel.spec.rubric import rubric_items
 from eawf.kernel.spec.wave import WaveBehavior, WaveSpec
@@ -87,6 +88,7 @@ from eawf.observability.eval.cross_vendor_jury import (
 )
 from eawf.observability.eval.jury import JuryAggregateOutcome
 from eawf.observability.eval.jury_validation import BlockAuthority
+from eawf.runtime.vcs.wave_sha import derive_diff_base
 from eawf.workflow.agent_report.store import (
     AgentReportAppendResult,
     append_agent_report,
@@ -96,8 +98,6 @@ from eawf.workflow.dispatch.llm_assist import (
     SchemaAttemptFailure,
 )
 from eawf.workflow.dispatch.verdict import build_auditor_prompt
-from eawf.workflow.lifecycle._errors import LifecycleError
-from eawf.workflow.lifecycle.wave_sha import derive_diff_base
 
 logger = logging.getLogger(__name__)
 

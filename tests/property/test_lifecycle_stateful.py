@@ -1,6 +1,6 @@
 """Stateful + coverage tests for the lifecycle FSM tables (FS08).
 
-The lifecycle FSM tables in :mod:`eawf.workflow.lifecycle.spec`
+The lifecycle FSM tables in :mod:`eawf.workflow.audit_dsl.transition_tables`
 (``WAVE_TRANSITIONS`` / ``PHASE_TRANSITIONS`` / ``ITER_TRANSITIONS`` /
 ``SPEC_TRANSITIONS``) declare the legal status moves. This module pins two
 things about them:
@@ -8,7 +8,7 @@ things about them:
 * CR-2 (holds-for-all) -- a Hypothesis
   :class:`~hypothesis.stateful.RuleBasedStateMachine` explores the wave FSM
   and an ``@invariant`` asserts every applied transition is table-legal via
-  :func:`~eawf.workflow.lifecycle.spec.validate_transition`, so the machine
+  :func:`~eawf.workflow.audit_dsl.transition_tables.validate_transition`, so the machine
   never reaches an illegal status (:class:`WaveMachine` below).
 * CR-1 / CR-3 (returns) -- the ``transition_coverage`` audit-DSL kind passes
   iff the machine-exercised edge set equals the table's declared edge set,
@@ -16,7 +16,7 @@ things about them:
 
 The ``@precondition`` on :meth:`WaveMachine.advance` honours the guard shape
 of the table edges: the wave guards are held satisfied through the
-all-open :class:`~eawf.workflow.lifecycle.spec.GuardContext` so the machine
+all-open :class:`~eawf.workflow.audit_dsl.transition_tables.GuardContext` so the machine
 drives the *structural* status moves rather than the orthogonal
 guard-predicate plumbing.
 """
@@ -37,7 +37,7 @@ from eawf.workflow.audit_dsl.kinds.transition_coverage import (
     collect_covered_edges,
     table_edges,
 )
-from eawf.workflow.lifecycle.spec import (
+from eawf.workflow.audit_dsl.transition_tables import (
     WAVE_TRANSITIONS,
     GuardContext,
     GuardName,

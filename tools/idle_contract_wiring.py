@@ -33,83 +33,9 @@ from eawf.workflow.verify.readiness import (
 )
 
 # =========================================================================== #
-# resolve_routing wiring: the live dispatch path must call resolve_routing.
+# I09 jury-validation bindings: each of the three must stay wired, not idle.
 # =========================================================================== #
 
-#: The live dispatch module that must call ``resolve_routing`` directly so the
-#: per-role tier table selects the spawn model instead of a hardcoded default.
-#: The pre-commit gate reads this file off the working tree; a test injects the
-#: text to exercise both the wired and idle outcomes.
-_LIVE_DISPATCH_MODULE = "src/eawf/runtime/daemon/methods/agent.py"
-
-#: A direct ``resolve_routing(...)`` call (not a docstring / import mention).
-#: The trailing ``(`` is what distinguishes a live call from a bare reference,
-#: so a comment or ``:func:`` cross-link in prose does not satisfy the gate.
-_RESOLVE_ROUTING_CALL_RE = re.compile(r"\bresolve_routing\s*\(")
-
-
-def check_resolve_routing_wired(
-    *,
-    module_text: str | None = None,
-    module_path: str = _LIVE_DISPATCH_MODULE,
-) -> GateResult:
-    """Assert the live dispatch path calls :func:`resolve_routing` directly.
-
-    The ``(agent_role, effort_bucket) -> model`` routing table is built but was
-    only reachable through the per-vendor wrapper; this contract pins that the
-    live wave-spawn dispatch (:func:`eawf.runtime.daemon.methods.agent._resolve_spawn_model`)
-    calls :func:`eawf.workflow.dispatch.routing.resolve_routing` itself, so role
-    + effort selects the model tier rather than a hardcoded default. If a later
-    refactor drops the direct call (reverting to a single hardcoded model), the
-    source no longer matches :data:`_RESOLVE_ROUTING_CALL_RE` and this gate
-    fails :attr:`GateFailure.RESOLVE_ROUTING_IDLE`.
-
-    The probe reads source only -- it never mutates state, never writes a file,
-    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
-    test can drive both the wired and the regressed (idle) outcomes; when it is
-    ``None`` the module is read off the working tree via :data:`_REPO_ROOT`
-    (mirroring :func:`check_runtime_gate_is_not_idle`, so this gate is immune to
-    the meta-gate's injected reader stub).
-
-    Args:
-        module_text: The live dispatch module source. ``None`` reads
-            *module_path* off the working tree under :data:`_REPO_ROOT`.
-        module_path: Repo-relative path of the live dispatch module to scan.
-
-    Returns:
-        A :class:`GateResult` whose ``passed`` is ``True`` only when the live
-        dispatch module carries a direct ``resolve_routing(`` call; otherwise
-        ``failure`` is :attr:`GateFailure.RESOLVE_ROUTING_IDLE`.
-    """
-    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
-    if _RESOLVE_ROUTING_CALL_RE.search(text) is not None:
-        return GateResult(
-            passed=True,
-            failure=None,
-            message=(
-                "idle-contract gate: ok (live dispatch calls resolve_routing -- "
-                "role/effort selects the model tier, not a hardcoded default)"
-            ),
-        )
-    return GateResult(
-        passed=False,
-        failure=GateFailure.RESOLVE_ROUTING_IDLE,
-        message=(
-            "resolve_routing is idle in live dispatch: "
-            f"{module_path} carries no direct resolve_routing(...) call, so the "
-            "per-role tier table never selects the spawn model (the path "
-            "regressed to a hardcoded default)"
-        ),
-    )
-
-
-# =========================================================================== #
-# I09 jury-validation bindings: each of the four must stay wired, not idle.
-# =========================================================================== #
-
-#: The daemon close path that binds the per-item spec-jury ballot fn
-#: and consults the earned block authority. Read off the working tree.
-_SPEC_JURY_GATE_MODULE = "src/eawf/runtime/daemon/methods/state.py"
 
 #: The live convener that threads the reputation reliability map into the jury
 #: reducer. Read off the working tree.
@@ -123,14 +49,6 @@ _ORACLE_MODULE = "src/eawf/workflow/verify/oracle.py"
 #: the working tree.
 _METRICS_CLI_MODULE = "src/eawf/surfaces/cli/commands/metrics.py"
 
-#: ``_spec_jury_ballot_fn`` returns a LIVE ballot fn by binding
-#: ``live_per_item_ballot_fn(...)``; a regression that reverts the body to a bare
-#: ``return None`` (re-idling the producer) drops this call.
-_LIVE_BALLOT_FN_CALL_RE = re.compile(r"\blive_per_item_ballot_fn\s*\(")
-
-#: The gate consults ``_spec_jury_ballot_fn(...)`` and degrades when it is None.
-#: A regression that stops calling the builder leaves the producer unreachable.
-_BALLOT_FN_CONSULT_RE = re.compile(r"\bballot_fn\s*=\s*_spec_jury_ballot_fn\s*\(")
 
 #: The convener threads ``reliability=`` into the jury reducer; a regression that
 #: drops the kwarg re-idles the reputation-weighting seam.
@@ -151,61 +69,6 @@ _JURY_VETO_RAISE_RE = re.compile(r"\braise\s+LifecycleError\b")
 #: The CLI command binds ``validate_jury(...)`` directly, giving it a live caller
 #: (the moment a labelled cohort lands the CLI surfaces a scored report).
 _VALIDATE_JURY_CALL_RE = re.compile(r"\bvalidate_jury\s*\(")
-
-
-def check_spec_jury_ballot_fn_wired(
-    *,
-    module_text: str | None = None,
-    module_path: str = _SPEC_JURY_GATE_MODULE,
-) -> GateResult:
-    """Assert the spec-jury close gate binds a live per-item ballot fn.
-
-    The TRUST-5 binding: :func:`_spec_jury_ballot_fn` returns a non-``None`` live
-    ballot fn by binding
-    :func:`eawf.workflow.dispatch.spec_jury.live_per_item_ballot_fn` (when a
-    cross-vendor quorum resolves), and :func:`_enforce_spec_jury_gate` consults
-    that builder before routing the close through the producer. If a later
-    refactor reverts the builder body to a bare ``return None`` (re-idling the
-    producer) or stops consulting it, the source no longer matches and this gate
-    fails :attr:`GateFailure.SPEC_JURY_BALLOT_FN_IDLE`.
-
-    The probe reads source only -- it never mutates state, never writes a file,
-    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
-    test can drive both the wired and the re-idled (``return None``) outcomes.
-
-    Args:
-        module_text: The spec-jury gate module source. ``None`` reads
-            *module_path* off the working tree under :data:`_REPO_ROOT`.
-        module_path: Repo-relative path of the spec-jury gate module to scan.
-
-    Returns:
-        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
-        both binds ``live_per_item_ballot_fn(`` and consults
-        ``ballot_fn = _spec_jury_ballot_fn(``; otherwise ``failure`` is
-        :attr:`GateFailure.SPEC_JURY_BALLOT_FN_IDLE`.
-    """
-    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
-    binds_live = _LIVE_BALLOT_FN_CALL_RE.search(text) is not None
-    consults = _BALLOT_FN_CONSULT_RE.search(text) is not None
-    if binds_live and consults:
-        return GateResult(
-            passed=True,
-            failure=None,
-            message=(
-                "idle-contract gate: ok (spec-jury gate binds the live per-item "
-                "ballot fn -- the producer is reachable, not idle)"
-            ),
-        )
-    return GateResult(
-        passed=False,
-        failure=GateFailure.SPEC_JURY_BALLOT_FN_IDLE,
-        message=(
-            "spec-jury per-item ballot fn is idle: "
-            f"{module_path} binds_live={binds_live} consults={consults} (expected "
-            "both True); _spec_jury_ballot_fn must bind live_per_item_ballot_fn(...) "
-            "and the gate must consult it -- the producer regressed to return None"
-        ),
-    )
 
 
 def check_jury_reliability_map_wired(
@@ -275,7 +138,7 @@ def check_jury_block_authority_wired(
     The TRUST-4 binding: the ordered-oracle jury tier
     (:func:`eawf.workflow.verify.oracle.run_oracle`) tests
     ``block_authority is BlockAuthority.BLOCKING`` BEFORE it raises
-    :class:`~eawf.workflow.lifecycle.transitions.LifecycleError`, so a
+    :class:`~eawf.kernel.errors.lifecycle.LifecycleError`, so a
     non-pass jury outcome blocks the close only once the jury has EARNED blocking
     authority -- an uncalibrated jury's veto stays advisory. If a later refactor
     drops the authority gate (making the veto raise unconditionally, or never),
@@ -372,103 +235,6 @@ def check_validate_jury_cli_wired(
         ),
     )
 
-
-# =========================================================================== #
-# I11 Track binding: the silent phase-tag stamp.
-# =========================================================================== #
-
-#: The lifecycle module whose ``open_phase`` silently stamps every phase with the
-#: current Track id. Read off the working tree; if the stamp stops
-#: firing, phases stop tagging their owning Track and the binding is idle.
-_PHASE_TRACK_TAG_MODULE = "src/eawf/workflow/lifecycle/phase.py"
-
-#: The silent phase-tag stamp: ``open_phase`` constructs each ``Phase`` with
-#: ``track_id=state.current.track_id``. A regression that drops the keyword
-#: (constructing the phase with no Track tag) leaves phases untagged and reds
-#: this row.
-_PHASE_TRACK_TAG_RE = re.compile(r"\btrack_id\s*=\s*state\.current\.track_id\b")
-
-
-def check_phase_track_tag_wired(
-    *,
-    module_text: str | None = None,
-    module_path: str = _PHASE_TRACK_TAG_MODULE,
-) -> GateResult:
-    """Assert ``open_phase`` silently stamps each phase with the Track id.
-
-    The TRACK-3 binding: :func:`eawf.workflow.lifecycle.phase.open_phase`
-    constructs every :class:`~eawf.kernel.state.models.Phase` with
-    ``track_id=state.current.track_id``, so a phase opened while a Track is in
-    focus is silently tagged with its owning Track. If a later refactor drops the
-    stamp (constructing the phase with no Track tag), phases stop tagging their
-    Track and the silent phase-tag binding regresses to idle -- the source no
-    longer matches and this gate fails :attr:`GateFailure.PHASE_TRACK_TAG_IDLE`.
-
-    The probe reads source only -- it never mutates state, never writes a file,
-    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
-    test can drive both the wired and the re-idled (stamp-dropped) outcomes.
-
-    Args:
-        module_text: The lifecycle phase module source. ``None`` reads
-            *module_path* off the working tree under :data:`_REPO_ROOT`.
-        module_path: Repo-relative path of the phase module to scan.
-
-    Returns:
-        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
-        carries a ``track_id=state.current.track_id`` phase-construction stamp;
-        otherwise ``failure`` is :attr:`GateFailure.PHASE_TRACK_TAG_IDLE`.
-    """
-    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
-    if _PHASE_TRACK_TAG_RE.search(text) is not None:
-        return GateResult(
-            passed=True,
-            failure=None,
-            message=(
-                "idle-contract gate: ok (open_phase stamps track_id=state.current."
-                "track_id -- phases silently tag their owning Track, not idle)"
-            ),
-        )
-    return GateResult(
-        passed=False,
-        failure=GateFailure.PHASE_TRACK_TAG_IDLE,
-        message=(
-            "phase track-tag stamp is idle: "
-            f"{module_path} carries no 'track_id=state.current.track_id' phase "
-            "construction stamp, so open_phase no longer tags phases with their "
-            "owning Track (the silent phase-tag binding regressed)"
-        ),
-    )
-
-
-# =========================================================================== #
-# P30-I17 live-autopilot bindings: the drive ladders + the live stdout fan.
-# =========================================================================== #
-
-#: The daemon fleet module whose ``start_background_drive`` arms the LIVE drive
-#: (I17-W11). Read off the working tree; the two production ``arm_drive`` calls
-#: must each pass ``classify`` + ``repair`` so the bounded spawn ladder (DL-11)
-#: and the grounded repair ladder (DL-7) fire on a real autopilot run -- without
-#: the kwargs ``classify is None`` / ``repair is None`` and both ladders stay
-#: dormant (they only fire when a test injects the hooks).
-_LIVE_DRIVE_MODULE = "src/eawf/runtime/daemon/methods/fleet.py"
-
-#: The live wave-spawn dispatch module whose ``_spawn_and_dispatch`` threads the
-#: captured agent answer into the W08 stdout producer. Read off the
-#: working tree; without ``output_text=spawn_result.text`` the producer is wired
-#: into ``run_dispatch`` but no live caller supplies it, so the agent-watch live
-#: tail stays empty on a real spawn.
-_LIVE_OUTPUT_MODULE = "src/eawf/runtime/daemon/methods/agent.py"
-
-#: The live drive arms ``arm_drive`` with the production error classifier so the
-#: bounded spawn ladder fires; a regression that drops the kwarg re-dormants it.
-_DRIVE_CLASSIFY_RE = re.compile(r"\bclassify\s*=\s*_live_lane_error_classifier\b")
-
-#: The live drive arms ``arm_drive`` with the live grounded-repair hook so the
-#: bounded repair ladder fires; a regression that drops the kwarg re-dormants it.
-_DRIVE_REPAIR_RE = re.compile(r"\brepair\s*=\s*repair_hook\b")
-
-#: The live spawn threads its captured answer text into the stdout producer.
-_LIVE_OUTPUT_TEXT_RE = re.compile(r"\boutput_text\s*=\s*spawn_result\.text\b")
 
 # ===========================================================================
 # P30-I20 honest-close binding checks: new gate/helpers must be live.
@@ -853,121 +619,6 @@ def check_campaign_producer_class_non_stub(
         passed=True,
         failure=None,
         message=("idle-contract gate: ok (campaign producer class seams carry no stub markers)"),
-    )
-
-
-def check_drive_ladders_wired(
-    *,
-    module_text: str | None = None,
-    module_path: str = _LIVE_DRIVE_MODULE,
-) -> GateResult:
-    """Assert the LIVE drive enables the spawn + repair ladders.
-
-    The W11 binding: :func:`eawf.runtime.daemon.methods.fleet.start_background_drive`
-    arms ``arm_drive`` with the production
-    :func:`~eawf.runtime.daemon.methods.fleet._live_lane_error_classifier`
-    (``classify=``) and the live
-    :func:`~eawf.runtime.daemon.methods.fleet._build_live_lane_repair_hook` hook
-    (``repair=``), so the bounded spawn ladder (DL-11, :func:`spawn_lane_or_fork`)
-    and the bounded grounded repair ladder (DL-7, :func:`repair_lane_or_fork`)
-    FIRE on a real autopilot run. With either kwarg dropped the loop takes the
-    direct-spawn / terminal-fork path -- the ladders ship built-but-dormant on
-    the live path (they fire only when a test injects the hooks). If a later
-    refactor drops either binding the source no longer matches and this gate
-    fails :attr:`GateFailure.DRIVE_LADDERS_IDLE`.
-
-    The probe reads source only -- it never mutates state, never writes a file,
-    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
-    test can drive both the wired and the re-dormant outcomes.
-
-    Args:
-        module_text: The fleet module source. ``None`` reads *module_path* off
-            the working tree under :data:`_REPO_ROOT`.
-        module_path: Repo-relative path of the fleet module to scan.
-
-    Returns:
-        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
-        arms the drive with BOTH ``classify=_live_lane_error_classifier`` and
-        ``repair=repair_hook``; otherwise ``failure`` is
-        :attr:`GateFailure.DRIVE_LADDERS_IDLE`.
-    """
-    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
-    wires_classify = _DRIVE_CLASSIFY_RE.search(text) is not None
-    wires_repair = _DRIVE_REPAIR_RE.search(text) is not None
-    if wires_classify and wires_repair:
-        return GateResult(
-            passed=True,
-            failure=None,
-            message=(
-                "idle-contract gate: ok (live drive arms classify + repair -- the "
-                "bounded spawn ladder (DL-11) + grounded repair ladder (DL-7) fire "
-                "on a real run, not just under test)"
-            ),
-        )
-    return GateResult(
-        passed=False,
-        failure=GateFailure.DRIVE_LADDERS_IDLE,
-        message=(
-            "live drive ladders are idle: "
-            f"{module_path} wires_classify={wires_classify} wires_repair={wires_repair} "
-            "(expected both True); start_background_drive must arm arm_drive with "
-            "classify=_live_lane_error_classifier AND repair=repair_hook -- a dropped "
-            "kwarg re-dormants the spawn / repair ladder on the live autopilot run"
-        ),
-    )
-
-
-def check_live_output_text_wired(
-    *,
-    module_text: str | None = None,
-    module_path: str = _LIVE_OUTPUT_MODULE,
-) -> GateResult:
-    """Assert the live wave spawn supplies ``output_text`` to the stdout producer.
-
-    The W11 binding: the live wave-spawn dispatch
-    (:func:`eawf.runtime.daemon.methods.agent._spawn_and_dispatch`) threads the
-    spawned agent's OWN captured answer (``spawn_result.text``) into
-    :func:`~eawf.runtime.daemon.dispatch_runner.run_dispatch` as
-    ``output_text=``, so the W08 stdout producer emits an ``agent.output`` event
-    the agent-watch live tail renders. Without the thread the producer is wired
-    into ``run_dispatch`` but no live caller supplies it, so ``emit_agent_output``
-    never fires on a real spawn and the tail stays empty. If a later refactor
-    drops the binding the source no longer matches and this gate fails
-    :attr:`GateFailure.LIVE_OUTPUT_TEXT_IDLE`.
-
-    The probe reads source only -- it never mutates state, never writes a file,
-    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
-    test can drive both the wired and the re-dormant outcomes.
-
-    Args:
-        module_text: The live dispatch module source. ``None`` reads
-            *module_path* off the working tree under :data:`_REPO_ROOT`.
-        module_path: Repo-relative path of the live dispatch module to scan.
-
-    Returns:
-        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
-        threads ``output_text=spawn_result.text`` into the live dispatch;
-        otherwise ``failure`` is :attr:`GateFailure.LIVE_OUTPUT_TEXT_IDLE`.
-    """
-    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
-    if _LIVE_OUTPUT_TEXT_RE.search(text) is not None:
-        return GateResult(
-            passed=True,
-            failure=None,
-            message=(
-                "idle-contract gate: ok (live spawn threads output_text=spawn_result.text "
-                "-- the stdout producer fires on a real spawn, the live tail is not empty)"
-            ),
-        )
-    return GateResult(
-        passed=False,
-        failure=GateFailure.LIVE_OUTPUT_TEXT_IDLE,
-        message=(
-            "live output_text fan is idle: "
-            f"{module_path} carries no 'output_text=spawn_result.text' thread into "
-            "run_dispatch, so the W08 stdout producer never fires on a real spawn "
-            "(the agent-watch live tail stays empty -- the producer is wired but unfed)"
-        ),
     )
 
 

@@ -31,7 +31,7 @@ These tests pin the per-subprocess isolation contract:
   passes ``stdin=subprocess.DEVNULL`` AND ``start_new_session=True`` (POSIX) to
   ``subprocess.run``;
 * the per-wave ``git log`` drift scan
-  (:func:`eawf.workflow.lifecycle.wave_sha.build_wave_sha_index`), the merge-base
+  (:func:`eawf.runtime.vcs.wave_sha.build_wave_sha_index`), the merge-base
   lookup, and the ``git log --grep`` derive all pass ``stdin=subprocess.DEVNULL``
   AND ``start_new_session=True`` (POSIX) to ``subprocess.run``;
 * the shared :func:`detached_subprocess_kwargs` helper returns the
@@ -53,7 +53,7 @@ from eawf.observability.doctor import checks
 from eawf.platform.install import instrument_probe
 from eawf.platform.install.instrument_probe import InstrumentSpec, probe_one
 from eawf.platform.subprocess_detach import detached_subprocess_kwargs
-from eawf.workflow.lifecycle import wave_sha
+from eawf.runtime.vcs import wave_sha
 
 
 class _FakeProc:
@@ -133,7 +133,7 @@ def test_wave_sha_drift_scan_passes_devnull_stdin(monkeypatch: pytest.MonkeyPatc
 def test_wave_sha_merge_base_passes_detach_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
     """The ``git merge-base`` diff-base lookup runs detached + with dead stdin.
 
-    :func:`eawf.workflow.lifecycle.wave_sha.derive_diff_base` falls back to a
+    :func:`eawf.runtime.vcs.wave_sha.derive_diff_base` falls back to a
     ``git merge-base HEAD main`` shell-out; that child fans out from the same
     Doctor gather, so it must also be detached from the controlling terminal.
     """
@@ -159,7 +159,7 @@ def test_wave_sha_merge_base_passes_detach_kwargs(monkeypatch: pytest.MonkeyPatc
 def test_wave_sha_derive_grep_passes_detach_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
     """The ``git log --grep`` wave-SHA derive runs detached + with dead stdin.
 
-    :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha` shells out a
+    :func:`eawf.runtime.vcs.wave_sha.derive_wave_sha` shells out a
     ``git log --grep=[P##-W##]`` lookup per candidate prefix; each child must be
     detached from the controlling terminal like the other Doctor-gather probes.
     """

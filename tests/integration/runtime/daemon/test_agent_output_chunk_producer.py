@@ -8,9 +8,9 @@ assertions cover:
 - the typed :class:`~eawf.kernel.store.kinds.events.AgentOutputChunkPayload`
   round-trips through :data:`~eawf.kernel.store.kinds.events.C09EventPayloadUnion`,
   and an unknown discriminator over the chunk shape is rejected;
-- :func:`~eawf.runtime.daemon.dispatch_runner.emit_agent_output_chunk` appends
-  one ``agent.output.chunk`` envelope keyed on ``scope_id == wave_id``, publishes
-  it to the bus, and is a no-op on empty output / a stateless context;
+- :func:`~eawf.runtime.daemon.dispatch_runner.persist_agent_output_chunk` appends
+  one ``agent.output.chunk`` envelope keyed on the caller's scope and is a no-op
+  on empty output;
 - ordered ``seq`` is reconstructible from the persisted rows.
 """
 
@@ -27,46 +27,17 @@ from eawf.kernel.store.kinds.events import (
     AgentOutputChunkPayload,
     C09EventPayloadUnion,
 )
-from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.dispatch_runner import (
     _CHUNK_BATCH_LINES,
     _CHUNK_FLUSH_INTERVAL_S,
-    AGENT_OUTPUT_CHUNK_EVENT_TYPE,
     _chunk_should_flush,
-    emit_agent_output_chunk,
     persist_agent_output_chunk,
 )
-from eawf.runtime.daemon.methods import MethodContext
 
 pytestmark = pytest.mark.integration
 
 _WAVE_ID = "P30-I20-W45"
-
-
-def _ctx(tmp_path: Path | None, *, bus: EventBus | None = None) -> MethodContext:
-    event_path = None
-    if tmp_path is not None:
-        store = tmp_path / "store"
-        store.mkdir(parents=True, exist_ok=True)
-        event_path = store / "event.jsonl"
-    return MethodContext(
-        started_at="2026-06-16T00:00:00+00:00",
-        pid=4321,
-        protocol_version="1",
-        version="0.6.0",
-        bus=bus,
-        event_path=event_path,
-        state_path=None,
-    )
-
-
-def _chunk_rows(sub: Any) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    while sub.queue:
-        env = sub.queue.popleft()
-        if env.payload.get("event_type") == AGENT_OUTPUT_CHUNK_EVENT_TYPE:
-            rows.append(env.payload)
-    return rows
+_CHUNK_EVENT_TYPE = "agent.output.chunk"
 
 
 # ---- payload round-trips through the union ----------------------------------
@@ -119,7 +90,7 @@ def test_agent_output_chunk_unknown_discriminator_rejected() -> None:
     than silently accepted -- the discriminator-emit invariant.
     """
     bad = {
-        "event_type": AGENT_OUTPUT_CHUNK_EVENT_TYPE,
+        "event_type": _CHUNK_EVENT_TYPE,
         "timestamp": "2026-06-16T00:00:00Z",
         "wave_id": _WAVE_ID,
         "session_id": None,
@@ -129,67 +100,6 @@ def test_agent_output_chunk_unknown_discriminator_rejected() -> None:
     }
     with pytest.raises(ValidationError):
         validate_event_payload(bad)
-
-
-# ---- emit_agent_output_chunk publishes + persists ---------------------------
-
-
-def test_emit_agent_output_chunk_persists_and_publishes(tmp_path: Path) -> None:
-    """The emit helper appends one chunk envelope keyed on the wave + publishes it."""
-    bus = EventBus()
-    sub = bus.register(connection_id="watch-tail")
-    ctx = _ctx(tmp_path, bus=bus)
-
-    envelope_id = emit_agent_output_chunk(
-        ctx, wave_id=_WAVE_ID, session_id="sess-1", seq=0, text="hello world\nsecond line"
-    )
-    assert envelope_id is not None
-    rows = _chunk_rows(sub)
-    assert len(rows) == 1
-    assert rows[0]["wave_id"] == _WAVE_ID
-    assert rows[0]["seq"] == 0
-    assert rows[0]["lines"] == "hello world\nsecond line"
-    # The envelope is keyed on the wave's scope_id so the Watch filter routes it.
-    log = (tmp_path / "store" / "event.jsonl").read_text(encoding="utf-8")
-    assert AGENT_OUTPUT_CHUNK_EVENT_TYPE in log
-    assert f'"scope_id":"{_WAVE_ID}"' in log.replace(" ", "")
-
-
-def test_emit_agent_output_chunk_seq_is_ordered(tmp_path: Path) -> None:
-    """Successive emits carry the caller's monotonic seq, in order."""
-    bus = EventBus()
-    sub = bus.register(connection_id="watch-tail")
-    ctx = _ctx(tmp_path, bus=bus)
-
-    emit_agent_output_chunk(ctx, wave_id=_WAVE_ID, session_id="s", seq=0, text="a")
-    emit_agent_output_chunk(ctx, wave_id=_WAVE_ID, session_id="s", seq=1, text="b")
-    emit_agent_output_chunk(ctx, wave_id=_WAVE_ID, session_id="s", seq=2, text="c")
-
-    rows = _chunk_rows(sub)
-    assert [row["seq"] for row in rows] == [0, 1, 2]
-    assert [row["lines"] for row in rows] == ["a", "b", "c"]
-
-
-def test_emit_agent_output_chunk_empty_is_noop(tmp_path: Path) -> None:
-    """A chunk with no capturable text emits no event (no empty row)."""
-    bus = EventBus()
-    sub = bus.register(connection_id="watch-tail")
-    ctx = _ctx(tmp_path, bus=bus)
-
-    assert (
-        emit_agent_output_chunk(ctx, wave_id=_WAVE_ID, session_id="s", seq=0, text="   \n\n")
-        is None
-    )
-    assert not sub.queue
-
-
-def test_emit_agent_output_chunk_stateless_context_is_noop() -> None:
-    """A context with no event store fans nothing (no crash)."""
-    ctx = _ctx(None, bus=EventBus())
-    assert (
-        emit_agent_output_chunk(ctx, wave_id=_WAVE_ID, session_id="s", seq=0, text="some output")
-        is None
-    )
 
 
 # ---- W21: the bus-less, context-less persist variant ------------------------
@@ -208,7 +118,7 @@ def _persisted_chunk_rows(event_path: Path) -> list[dict[str, Any]]:
         if not line.strip():
             continue
         env = json.loads(line)
-        if env.get("payload", {}).get("event_type") == AGENT_OUTPUT_CHUNK_EVENT_TYPE:
+        if env.get("payload", {}).get("event_type") == _CHUNK_EVENT_TYPE:
             rows.append(env)
     return rows
 

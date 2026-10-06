@@ -23,7 +23,7 @@ from eawf.observability.doctor.checks import (
     check_backlog_fold_parity,
     check_incident_fold_parity,
 )
-from tests.integration.runtime.daemon.test_close_lock_split import _state_payload
+from tests.integration.runtime.daemon._epoch1_state_fixtures import state_payload
 
 pytestmark = pytest.mark.unit
 
@@ -98,7 +98,7 @@ def test_doctor_payload_carries_both_fold_parity_checks(
 
 
 def _seed_tmp_repo(tmp_path: Path, *, incidents: dict[str, Any]) -> Path:
-    payload = _state_payload()
+    payload = state_payload()
     payload["incidents"] = incidents
     state = State.model_validate(payload)
     state_path = tmp_path / ".ea" / "state.json"

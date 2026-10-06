@@ -42,9 +42,9 @@ from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import create as real_release_create
 from eawf.runtime.daemon.methods.release import show as real_release_show
 from eawf.runtime.daemon.methods.release_candidate import candidate as real_release_candidate
+from eawf.runtime.vcs.trailer_repin import TrailerRepin
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import release_pipeline as cli_module
-from eawf.workflow.lifecycle.wave_trailer_repin import TrailerRepin
 from eawf.workflow.release import pipeline as pipeline_module
 from eawf.workflow.release import pipeline_host as host_module
 from eawf.workflow.release.advance import TrainAdvanceRecord
@@ -719,6 +719,10 @@ def test_run_post_merge_pipeline_still_refuses_a_drifted_pin_acked_for_another_w
     with pytest.raises(PipelineRefusal) as refused:
         world.run()
     assert refused.value.code is PipelineRefusalCode.TRAILER_REPIN_PENDING
+    # The remedy names the acknowledgement this step honours, not a repair
+    # `doctor` no longer offers.
+    assert ".eawf/drift-acks.json" in refused.value.remedy
+    assert "doctor" not in refused.value.remedy
 
 
 def test_run_post_merge_pipeline_refuses_a_phase_with_no_wave_pins(world: World) -> None:

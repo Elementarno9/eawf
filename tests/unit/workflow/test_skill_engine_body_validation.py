@@ -34,7 +34,7 @@ class _StubSkill(Skill):
     """Test-only skill returning a prefab probe-ok + action result.
 
     The ``name`` is caller-supplied so a single stub can stand in for a
-    registered skill (``/coauthor``) or an unregistered one.
+    registered skill (``/memory``) or an unregistered one.
     """
 
     def __init__(self, name: str, action_result: SkillResult) -> None:
@@ -58,20 +58,20 @@ def _ctx() -> SkillContext:
 
 def test_validate_body_conforming_dict_emits_normal_envelope() -> None:
     """A dict that conforms to the registered model emits unchanged."""
-    body = {"kind": "coauthor_resolution", "mode": "project", "trailer": "Co-Authored-By: x"}
-    skill = _StubSkill("/coauthor", SkillResult(status="ok", body=body))
+    body = {"kind": "memory_operation", "verb": "list", "tier": "working"}
+    skill = _StubSkill("/memory", SkillResult(status="ok", body=body))
 
     env = run_skill(skill, _ctx())
 
-    assert env.header.skill == "/coauthor"
+    assert env.header.skill == "/memory"
     assert env.header.status == "ok"
     assert env.body == body
 
 
 def test_validate_body_drifted_dict_raises_on_emit_path() -> None:
     """A drifted dict (extra-forbid key) raises ValidationError before emit."""
-    body = {"mode": "project", "bogus_extra": "drift"}
-    skill = _StubSkill("/coauthor", SkillResult(status="ok", body=body))
+    body = {"verb": "list", "tier": "working", "bogus_extra": "drift"}
+    skill = _StubSkill("/memory", SkillResult(status="ok", body=body))
 
     with pytest.raises(ValidationError) as excinfo:
         run_skill(skill, _ctx())
@@ -82,8 +82,8 @@ def test_validate_body_drifted_dict_raises_on_emit_path() -> None:
 
 def test_validate_body_markdown_str_body_is_ungated() -> None:
     """A raw markdown string body bypasses validation (str branch ungated)."""
-    markdown = "# Coauthor\n\nresolved trailer policy"
-    skill = _StubSkill("/coauthor", SkillResult(status="ok", body=markdown))
+    markdown = "# Memory\n\nlisted working-tier entries"
+    skill = _StubSkill("/memory", SkillResult(status="ok", body=markdown))
 
     env = run_skill(skill, _ctx())
 

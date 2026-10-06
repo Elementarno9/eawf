@@ -114,9 +114,7 @@ def resolve_denied_tools(
 
     Profile-scoped policies are not resolved here: the dispatcher does not
     yet know the dispatched wave's profile, so profile deny-lists stay out
-    of the wave-dispatch projection (the same scoping ladder the grant
-    projection in :func:`eawf.workflow.dispatch.renderer._project_allowed_tools`
-    uses for wave-scoped grants).
+    of the wave-dispatch projection.
 
     Args:
         policies: The ``state.sandbox_policies`` map, or ``None`` when no

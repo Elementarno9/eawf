@@ -1,6 +1,6 @@
-"""Tests for C04d per-runtime cache-control injection + /compress wiring.
+"""Tests for C04d per-runtime cache-control injection.
 
-Covers the three wave success criteria:
+Covers:
 
 * **(a) marker injection at adapter boundary** —
   :func:`~eawf.runtime.runtimes.cache_control.inject_cache_control` appends the
@@ -8,15 +8,12 @@ Covers the three wave success criteria:
   ``claude-code`` (the only runtime with a caller-side marker per §5.6),
   and the Claude adapter's ``open_session`` routes its ``cache_prefix``
   through that gate.
-* **(b) /compress event emit** — the ``/compress`` skill emits the
-  ``compression_emitted`` event carrying the token deltas + the wired
-  per-runtime cache-control applicability.
 * **(c) codex no-op path** — ``codex`` (and ``opencode``) return the
   cache prefix unchanged: their matrix ``cache_control`` cell is
   ``unsupported`` so no caller-side marker is injected.
 
 Plus boundary cases (``None`` prefix, empty prefix, unknown runtime),
-the typed marker/directive models, and the matrix-driven decision view.
+the typed marker model, and the matrix-driven decision view.
 """
 
 from __future__ import annotations
@@ -24,7 +21,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import cast
 
 import pytest
@@ -33,16 +29,12 @@ from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.runtime.runtimes.cache_control import (
     DEFAULT_MARKER,
     CacheControlMarker,
-    CompressionDirective,
-    compression_directive,
     inject_cache_control,
     runtime_accepts_marker,
 )
 from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter
 from eawf.runtime.runtimes.codex.adapter import CodexAdapter
 from eawf.runtime.runtimes.opencode.adapter import OpenCodeAdapter
-from eawf.workflow.skills.compress import CompressSkill
-from eawf.workflow.skills.engine import SkillContext, run_skill
 
 pytestmark = pytest.mark.unit
 
@@ -211,142 +203,3 @@ def test_cache_control_marker_rejects_unknown_type() -> None:
     """A non-ephemeral marker type is rejected by the closed Literal."""
     with pytest.raises(Exception):  # noqa: B017 — ValidationError on bad Literal
         CacheControlMarker(marker_type="persistent")  # type: ignore[arg-type]
-
-
-# ---------------------------------------------------------------------------
-# CompressionDirective model + builder
-# ---------------------------------------------------------------------------
-
-
-def test_compression_directive_claude_applies_cache_control() -> None:
-    """A claude-code compression pass records cache_control_applied=True."""
-    directive = compression_directive(
-        runtime_id="claude-code",
-        tokens_before=1000,
-        tokens_after=250,
-    )
-    assert isinstance(directive, CompressionDirective)
-    assert directive.cache_control_applied is True
-    assert directive.tokens_before == 1000
-    assert directive.tokens_after == 250
-
-
-@pytest.mark.parametrize("runtime_id", _NO_OP_RUNTIMES)
-def test_compression_directive_no_op_runtime_no_cache_control(runtime_id: str) -> None:
-    """codex / opencode passes record cache_control_applied=False."""
-    directive = compression_directive(
-        runtime_id=runtime_id,
-        tokens_before=800,
-        tokens_after=400,
-    )
-    assert directive.cache_control_applied is False
-
-
-def test_compression_directive_unknown_runtime_raises() -> None:
-    """An unknown runtime id raises ValueError (caller degrades to needs_user)."""
-    with pytest.raises(ValueError, match="unknown runtime"):
-        compression_directive(runtime_id="aider", tokens_before=10, tokens_after=5)
-
-
-def test_compression_directive_is_frozen() -> None:
-    """The directive model is frozen (immutable telemetry record)."""
-    directive = compression_directive(
-        runtime_id="codex",
-        tokens_before=10,
-        tokens_after=5,
-    )
-    with pytest.raises(Exception):  # noqa: B017 — pydantic frozen raises ValidationError
-        directive.tokens_after = 1  # type: ignore[misc]
-
-
-# ---------------------------------------------------------------------------
-# (b) /compress event emit + cache-control wiring
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    ea_dir = tmp_path / ".ea"
-    ea_dir.mkdir(parents=True, exist_ok=True)
-    state_path = ea_dir / "state.json"
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    monkeypatch.setenv("EA_INSTRUMENT_PROBE", str(ea_dir / "instrument-probe.json"))
-    return ea_dir
-
-
-def _ctx() -> SkillContext:
-    return SkillContext(
-        scope="urn:eawf:v1:state:QR/P26",
-        session="urn:eawf:v1:store:QR/sessions/SES-1",
-    )
-
-
-def test_compress_emits_event_with_cache_control_default_runtime(state_dir: Path) -> None:
-    """The /compress happy path emits compression_emitted + wires cache-control."""
-    ctx = _ctx()
-    ctx.args = {"tokens_before": 1000, "tokens_after": 250}
-    env = run_skill(CompressSkill(), ctx)
-    assert env.header.status == "ok"
-    body = cast(dict, env.body)
-    assert body["tokens_before"] == 1000
-    assert body["tokens_after"] == 250
-    assert body["ratio"] == 0.25
-    # Default runtime is claude-code, which carries the caller-side marker.
-    assert body["runtime"] == "claude-code"
-    assert body["cache_control_applied"] is True
-    # The skill persisted exactly one event record (compression_emitted).
-    assert len(env.footer.persisted_store_records) == 1
-
-
-def test_compress_event_persisted_to_store(state_dir: Path) -> None:
-    """The compression_emitted event lands in the event store with the payload."""
-    import orjson
-
-    ctx = _ctx()
-    ctx.args = {"tokens_before": 2000, "tokens_after": 500}
-    run_skill(CompressSkill(), ctx)
-    events_path = state_dir / "store" / "event.jsonl"
-    assert events_path.exists()
-    rows = [orjson.loads(line) for line in events_path.read_bytes().splitlines() if line.strip()]
-    compress_rows = [r for r in rows if r["payload"].get("event_type") == "compression_emitted"]
-    assert len(compress_rows) == 1
-    payload = compress_rows[0]["payload"]
-    assert payload["tokens_before"] == 2000
-    assert payload["tokens_after"] == 500
-    assert payload["runtime"] == "claude-code"
-    assert payload["cache_control_applied"] is True
-
-
-def test_compress_no_op_runtime_records_cache_control_false(state_dir: Path) -> None:
-    """A /compress pass on codex records cache_control_applied=False (criterion c)."""
-    ctx = _ctx()
-    ctx.args = {"tokens_before": 1000, "tokens_after": 600, "runtime": "codex"}
-    env = run_skill(CompressSkill(), ctx)
-    assert env.header.status == "ok"
-    body = cast(dict, env.body)
-    assert body["runtime"] == "codex"
-    assert body["cache_control_applied"] is False
-
-
-def test_compress_unknown_runtime_degrades_to_needs_user(state_dir: Path) -> None:
-    """An unknown runtime id degrades the skill to needs_user (no crash)."""
-    ctx = _ctx()
-    ctx.args = {"tokens_before": 1000, "tokens_after": 600, "runtime": "goose"}
-    env = run_skill(CompressSkill(), ctx)
-    assert env.header.status == "needs_user"
-    body = cast(dict, env.body)
-    assert "unknown runtime" in body["reason"]
-    # No compression event on the degraded path; the only record is the
-    # practice trigger the engine evaluates when a run asks the operator.
-    import orjson
-
-    events_path = state_dir / "store" / "event.jsonl"
-    rows = [orjson.loads(line) for line in events_path.read_bytes().splitlines() if line.strip()]
-    assert [r["payload"]["event_type"] for r in rows] == ["practice_trigger"]
-    assert [r["id"] for r in rows] == env.footer.persisted_store_records
-
-
-def test_compress_missing_tokens_before_needs_user(state_dir: Path) -> None:
-    """The missing-required-arg path still degrades to needs_user."""
-    env = run_skill(CompressSkill(), _ctx())
-    assert env.header.status == "needs_user"

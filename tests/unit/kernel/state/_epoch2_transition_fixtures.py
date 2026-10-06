@@ -23,6 +23,7 @@ from typing import Any, Final
 import yaml
 
 from eawf.kernel.state.epoch2.batch import DeliveryBatch
+from eawf.kernel.state.epoch2.lifecycle import LifecycleRecord
 from eawf.kernel.state.epoch2.milestone import Milestone
 from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.state.epoch2.task import Task
@@ -34,7 +35,6 @@ from eawf.kernel.state.epoch2.transitions import (
     ObservedFact,
     TransitionRow,
 )
-from eawf.workflow.lifecycle.epoch2 import LifecycleRecord
 
 #: ``tests/fixtures/epoch2/transitions`` - four levels up lands on ``tests/``.
 FIXTURES: Final = Path(__file__).resolve().parents[3] / "fixtures" / "epoch2" / "transitions"

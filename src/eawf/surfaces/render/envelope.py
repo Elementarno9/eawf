@@ -55,27 +55,17 @@ EnvelopeStatus = Literal["ok", "needs_user", "blocked", "failed", "partial"]
 # Canonical builtin skill names. Workspace/user overlays may also emit
 # envelopes, so ``SkillName`` is intentionally open while this tuple preserves
 # deterministic builtin ordering for CLI tables and plugin rendering.
-# The eleven core/meta + /blitz skills are followed by the six
-# skill-surface bodies and then the three lifecycle skills that drive the
-# native Task, Run, candidate and Batch path.
+# The lifecycle skills that drive the native Task, Run, candidate and
+# Batch path come last.
 CANONICAL_SKILL_NAMES: tuple[str, ...] = (
     "/research",
-    "/prep",
     "/audit",
     "/ship",
     "/review",
     "/polish",
     "/init",
-    "/roadmap",
-    "/differentiate",
     "/flow",
-    "/blitz",
-    "/coauthor",
     "/memory",
-    "/agent-dispatch",
-    "/compress",
-    "/wave-spec",
-    "/security-review",
     "/dispatch",
     "/integrate",
     "/verify",

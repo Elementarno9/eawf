@@ -23,6 +23,7 @@ from typing import Any
 
 import pytest
 
+from eawf.kernel.errors.lifecycle import LifecycleError
 from eawf.kernel.spec.wave import QualityDimension, WaveBehavior, WaveSpec
 from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, AgentSessionStatus
 from eawf.kernel.state.models import State, Wave
@@ -37,7 +38,6 @@ from eawf.workflow.dispatch.spec_jury import (
     produce_spec_jury_verdict,
     wave_in_uiux_band,
 )
-from eawf.workflow.lifecycle._errors import LifecycleError
 from tests._criteria_helpers import legacy_criteria
 
 _WAVE_ID = "P29-I08-W05"

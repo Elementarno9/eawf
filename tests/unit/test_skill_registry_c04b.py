@@ -1,18 +1,11 @@
-"""C04b acceptance: the 6 missing skills + 17-skill catalog.
+"""The ``/memory`` skill registers, declares its manifest and emits a typed envelope.
 
-Pins the C04b §5 contract for the six skills landed inline per D-b4
-(``/coauthor``, ``/memory``, ``/agent-dispatch``, ``/compress``,
-``/wave-spec``, ``/security-review``):
-
-- After import-side-effect bootstrap, the skill registry holds all 17
-  canonical skills (11 original + 6 new) — closing the C00 17-skill
-  catalog drift.
-- Each new skill registers under its canonical slashed name.
-- Each new skill declares a :class:`SkillManifest` (typed, ``runtime``
+- After import-side-effect bootstrap the registry binds ``/memory`` to
+  :class:`MemorySkill`.
+- The module declares a :class:`SkillManifest` (typed, ``runtime``
   non-empty, ``output_envelope_kind`` set).
-- Each new skill emits a typed envelope (no placeholder ``pass`` body):
-  the happy path returns ``ok``/``partial`` with a populated dict body,
-  and the missing-required-arg path degrades to ``needs_user``.
+- The happy path returns ``ok`` with a populated dict body, and the
+  missing-required-arg path degrades to ``needs_user``.
 """
 
 from __future__ import annotations
@@ -26,37 +19,10 @@ from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.workflow.skills import (
     _bootstrap as _skills_bootstrap,  # noqa: F401 — registers all skills
 )
+from eawf.workflow.skills import memory as memory_module
 from eawf.workflow.skills import registry
-from eawf.workflow.skills.agent_dispatch import AgentDispatchSkill
-from eawf.workflow.skills.coauthor import CoauthorSkill
-from eawf.workflow.skills.compress import CompressSkill
-from eawf.workflow.skills.engine import Skill, SkillContext, run_skill
+from eawf.workflow.skills.engine import SkillContext, run_skill
 from eawf.workflow.skills.memory import MemorySkill
-from eawf.workflow.skills.security_review import SecurityReviewSkill
-from eawf.workflow.skills.wave_spec import WaveSpecSkill
-
-# The six C04b skills landed by P26-W11, keyed by canonical name.
-_C04B_SKILLS: dict[str, type[Skill]] = {
-    "/coauthor": CoauthorSkill,
-    "/memory": MemorySkill,
-    "/agent-dispatch": AgentDispatchSkill,
-    "/compress": CompressSkill,
-    "/wave-spec": WaveSpecSkill,
-    "/security-review": SecurityReviewSkill,
-}
-
-# The 6 skills that predate C04b and still have an engine class; the
-# /prep, /audit, /ship, /review and /flow bodies are deleted.
-_ORIGINAL_SKILLS: frozenset[str] = frozenset(
-    {
-        "/research",
-        "/polish",
-        "/init",
-        "/roadmap",
-        "/differentiate",
-        "/blitz",
-    }
-)
 
 
 @pytest.fixture
@@ -76,47 +42,16 @@ def _ctx() -> SkillContext:
     )
 
 
-def test_registry_holds_all_twelve_skills() -> None:
-    """Each of the 12 legacy engine classes registers when its module loads.
-
-    The bootstrap imports only catalog skills, so the legacy modules are
-    imported here; their lookups refuse retired names, which the registry
-    retirement contract test pins.
-    """
-    import importlib
-
-    for name in _ORIGINAL_SKILLS | set(_C04B_SKILLS):
-        importlib.import_module(f"eawf.workflow.skills.{name[1:].replace('-', '_')}")
-    registered = set(registry.list_registered())
-    expected = _ORIGINAL_SKILLS | set(_C04B_SKILLS)
-    assert len(expected) == 12
-    assert expected <= registered, f"missing from registry: {expected - registered}"
+def test_memory_skill_registered_under_canonical_name() -> None:
+    assert registry.list_registered()["/memory"] is MemorySkill
 
 
-@pytest.mark.parametrize("name", sorted(_C04B_SKILLS))
-def test_c04b_skill_registered_under_canonical_name(name: str) -> None:
-    assert registry.list_registered()[name] is _C04B_SKILLS[name]
-
-
-@pytest.mark.parametrize("name", sorted(_C04B_SKILLS))
-def test_c04b_skill_declares_manifest(name: str) -> None:
-    import importlib
-
-    module = importlib.import_module(_C04B_SKILLS[name].__module__)
-    manifest = module.MANIFEST
+def test_memory_skill_declares_manifest() -> None:
+    manifest = memory_module.MANIFEST
     assert isinstance(manifest, SkillManifest)
-    assert manifest.name == name
+    assert manifest.name == "/memory"
     assert manifest.runtime, "manifest runtime list must be non-empty"
     assert manifest.output_envelope_kind
-
-
-def test_coauthor_happy_path(state_dir: Path) -> None:
-    env = run_skill(CoauthorSkill(), _ctx())
-    assert env.header.status == "ok"
-    body = cast(dict, env.body)
-    assert body["kind"] == "coauthor_resolution"
-    # Default runtime mode resolves the Claude trailer.
-    assert body["trailer"] == "Co-Authored-By: Claude <noreply@anthropic.com>"
 
 
 def test_memory_save_requires_name(state_dir: Path) -> None:
@@ -135,138 +70,3 @@ def test_memory_list_happy_path(state_dir: Path) -> None:
     assert body["verb"] == "list"
     assert body["tier"] == "working"
     assert len(env.footer.persisted_store_records) == 1
-
-
-def test_agent_dispatch_resolves_ladder_head(state_dir: Path) -> None:
-    ctx = _ctx()
-    ctx.args = {"wave_id": "P26-I01-W11", "runtime_preference": ["codex", "claude-code"]}
-    env = run_skill(AgentDispatchSkill(), ctx)
-    assert env.header.status == "ok"
-    body = cast(dict, env.body)
-    assert body["resolved_runtime"] == "codex"
-    assert body["wave_id"] == "P26-I01-W11"
-
-
-def test_agent_dispatch_missing_wave_id_needs_user(state_dir: Path) -> None:
-    env = run_skill(AgentDispatchSkill(), _ctx())
-    assert env.header.status == "needs_user"
-
-
-def test_agent_dispatch_no_ladder_is_partial(state_dir: Path) -> None:
-    ctx = _ctx()
-    ctx.args = {"wave_id": "P26-I01-W11"}
-    env = run_skill(AgentDispatchSkill(), ctx)
-    assert env.header.status == "partial"
-    assert cast(dict, env.body)["resolved_runtime"] is None
-
-
-def test_agent_dispatch_headless_routes_to_daemon_spawn(state_dir: Path) -> None:
-    """W46: --headless shapes next_valid_actions onto the live-spawn verb."""
-    ctx = _ctx()
-    ctx.args = {"wave_id": "P26-I01-W11", "runtime_preference": ["codex"], "headless": True}
-    env = run_skill(AgentDispatchSkill(), ctx)
-    assert env.header.status == "ok"
-    assert env.footer.next_valid_actions == ["eawf run create"]
-    assert cast(dict, env.body)["headless"] is True
-
-
-def test_agent_dispatch_model_threads_into_spawn_command(state_dir: Path) -> None:
-    """W46: --model implies the spawn path and rides its command."""
-    ctx = _ctx()
-    ctx.args = {"wave_id": "P26-I01-W11", "runtime_preference": ["codex"], "model": "gpt-5.5"}
-    env = run_skill(AgentDispatchSkill(), ctx)
-    assert env.footer.next_valid_actions == ["eawf run create --model gpt-5.5"]
-    assert cast(dict, env.body)["model"] == "gpt-5.5"
-
-
-def test_agent_dispatch_interactive_default_unchanged(state_dir: Path) -> None:
-    ctx = _ctx()
-    ctx.args = {"wave_id": "P26-I01-W11", "runtime_preference": ["codex"]}
-    env = run_skill(AgentDispatchSkill(), ctx)
-    assert env.footer.next_valid_actions == ["eawf run create"]
-    assert cast(dict, env.body)["headless"] is False
-
-
-def test_compress_records_token_ratio(state_dir: Path) -> None:
-    ctx = _ctx()
-    ctx.args = {"tokens_before": 1000, "tokens_after": 250}
-    env = run_skill(CompressSkill(), ctx)
-    assert env.header.status == "ok"
-    body = cast(dict, env.body)
-    assert body["tokens_before"] == 1000
-    assert body["tokens_after"] == 250
-    assert body["ratio"] == 0.25
-
-
-def test_compress_requires_tokens_before(state_dir: Path) -> None:
-    env = run_skill(CompressSkill(), _ctx())
-    assert env.header.status == "needs_user"
-
-
-def test_compress_clamps_growth_to_no_op(state_dir: Path) -> None:
-    """A reported tokens_after above tokens_before clamps to a 1.0 ratio."""
-    ctx = _ctx()
-    ctx.args = {"tokens_before": 100, "tokens_after": 500}
-    env = run_skill(CompressSkill(), ctx)
-    body = cast(dict, env.body)
-    assert body["tokens_after"] == 100
-    assert body["ratio"] == 1.0
-
-
-def test_wave_spec_init_requires_wave_id(state_dir: Path) -> None:
-    env = run_skill(WaveSpecSkill(), _ctx())
-    assert env.header.status == "needs_user"
-
-
-def test_wave_spec_validate_happy_path(state_dir: Path) -> None:
-    ctx = _ctx()
-    ctx.args = {"verb": "validate", "wave_id": "P26-I01-W11"}
-    env = run_skill(WaveSpecSkill(), ctx)
-    assert env.header.status == "ok"
-    body = cast(dict, env.body)
-    assert body["verb"] == "validate"
-    assert body["wave_id"] == "P26-I01-W11"
-    assert env.footer.next_valid_actions == ["eawf migrate epoch2 --plan P26-I01-W11"]
-
-
-def test_security_review_missing_spec_needs_user(state_dir: Path) -> None:
-    env = run_skill(SecurityReviewSkill(), _ctx())
-    assert env.header.status == "needs_user"
-
-
-def test_security_review_runs_passing_spec(state_dir: Path, tmp_path: Path) -> None:
-    spec = tmp_path / "audit.yaml"
-    spec.write_text(
-        "schema_version: '1.0'\n"
-        "checks:\n"
-        "  - kind: file_exists\n"
-        "    name: spec-present\n"
-        "    args:\n"
-        f"      path: {spec.name}\n",
-        encoding="utf-8",
-    )
-    ctx = _ctx()
-    ctx.args = {"spec_path": str(spec), "cwd": str(tmp_path)}
-    env = run_skill(SecurityReviewSkill(), ctx)
-    assert env.header.status == "ok"
-    body = cast(dict, env.body)
-    assert body["checks_run"] == 1
-    assert body["findings"][0]["passed"] is True
-
-
-def test_security_review_failing_spec_is_failed(state_dir: Path, tmp_path: Path) -> None:
-    spec = tmp_path / "audit.yaml"
-    spec.write_text(
-        "schema_version: '1.0'\n"
-        "checks:\n"
-        "  - kind: file_exists\n"
-        "    name: missing-file\n"
-        "    args:\n"
-        "      path: does-not-exist.txt\n",
-        encoding="utf-8",
-    )
-    ctx = _ctx()
-    ctx.args = {"spec_path": str(spec), "cwd": str(tmp_path)}
-    env = run_skill(SecurityReviewSkill(), ctx)
-    assert env.header.status == "failed"
-    assert env.footer.repair_commands  # failing checks surface repair commands

@@ -19,9 +19,8 @@ from eawf.kernel.config.layered import get_dotted, global_config_path
 from eawf.kernel.config.migration import migrate_config_payload
 from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS, LEAF_KEY_REGISTRY
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
-from eawf.kernel.state.enums import AuditKind, IterStatus, StoreKind
+from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.authority import resolve_authority
-from eawf.kernel.state.models import State
 from eawf.kernel.store.compaction import LegacySealPlan, plan_legacy_seal
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.gate_receipt import GateReceipt, LegacyGateReceipt
@@ -62,24 +61,11 @@ from eawf.platform.lint.ledger_history import (
     scan_ledger_history,
 )
 from eawf.platform.subprocess_detach import no_window_kwargs
-from eawf.workflow.lifecycle._audit_acceptance import (
-    ITER_CLOSE_AUDIT_CHECK_ORDER,
-    assess_close_audit,
-)
-from eawf.workflow.lifecycle.legacy_audit import (
-    disposition_matches,
-    load_legacy_audit_dispositions,
-)
-from eawf.workflow.lifecycle.wave_sha import (
-    CommitPinIssue,
-    commit_identity_digest,
-    scan_commit_pins,
-)
+from eawf.runtime.vcs.wave_sha import commit_identity_digest
 
 DoctorRepairMutationClass = Literal[
     "local_diagnostics",
     "committed_config",
-    "committed_state",
     "committed_store",
     "managed_rules",
     "user_service",
@@ -259,88 +245,6 @@ def _receipt_action(workspace: Path, state_path: Path) -> DoctorRepairAction | N
         record_count=records,
         detail="move raw gate diagnostics local and rewrite minimal receipts",
         target=str(path),
-    )
-
-
-def _invalid_audit_count(state_path: Path, state: State) -> int:
-    dispositions = load_legacy_audit_dispositions(state_path)
-    invalid = 0
-    for iter_id, iter_row in state.iters.items():
-        if iter_row.status is not IterStatus.CLOSED:
-            continue
-        assessment = assess_close_audit(
-            state,
-            audit_id=iter_row.audit_id,
-            allowed_scope_ids=frozenset({iter_id}),
-            required_kind=AuditKind.EVALUATION,
-            check_order=ITER_CLOSE_AUDIT_CHECK_ORDER,
-            require_passing_check=True,
-        )
-        if assessment.issue is None:
-            continue
-        if disposition_matches(
-            dispositions,
-            iter_id=iter_id,
-            audit_id=iter_row.audit_id,
-            issue=assessment.issue.value,
-        ):
-            continue
-        invalid += 1
-    return invalid
-
-
-def _audit_action(state_path: Path, state: State) -> DoctorRepairAction | None:
-    count = _invalid_audit_count(state_path, state)
-    if not count:
-        return None
-    disposition_path = store_path(state_path, StoreKind.LEGACY_AUDIT_DISPOSITION)
-    input_bytes = state_path.read_bytes()
-    if disposition_path.is_file():
-        input_bytes += disposition_path.read_bytes()
-    return DoctorRepairAction(
-        action_id="audits.acknowledge-legacy",
-        scope="repo",
-        preview_digest=_digest_bytes(input_bytes),
-        mutation_class="committed_store",
-        record_count=count,
-        detail="append unverified legacy dispositions without changing audit verdicts",
-        target=str(disposition_path),
-    )
-
-
-def _pin_action(
-    workspace: Path,
-    state_path: Path,
-    issues: list[CommitPinIssue],
-) -> DoctorRepairAction | None:
-    repairable = [issue for issue in issues if issue.repairable]
-    if not repairable:
-        return None
-    preview = [
-        {
-            "wave_id": issue.wave_id,
-            "old": issue.state_commit,
-            "new": issue.git_commit,
-            "identity": issue.git_identity_digest,
-            "basis": issue.repair_basis,
-        }
-        for issue in repairable
-    ]
-    basis_counts: dict[str, int] = {}
-    for issue in repairable:
-        basis = issue.repair_basis or "unknown"
-        basis_counts[basis] = basis_counts.get(basis, 0) + 1
-    basis_summary = ", ".join(f"{basis}={count}" for basis, count in sorted(basis_counts.items()))
-    return DoctorRepairAction(
-        action_id="commits.repin",
-        scope="repo",
-        preview_digest=_digest_json(
-            {"state": _digest_bytes(state_path.read_bytes()), "repairs": preview}
-        ),
-        mutation_class="committed_state",
-        record_count=len(repairable),
-        detail=(f"re-pin uniquely resolved first-parent successors; {basis_summary}"),
-        target=str(state_path),
     )
 
 
@@ -886,25 +790,9 @@ def build_repair_plan(workspace: Path) -> DoctorRepairPlan:
     actions = _config_actions(root)
     unresolved: list[str] = []
     if state_path.is_file():
-        state = State.model_validate_json(state_path.read_bytes())
-        # An epoch-2 tree froze state.json at the cutover, so its wave
-        # pins can no longer drift and re-pinning them would rewrite a
-        # frozen file.
-        pin_issues = (
-            []
-            if resolve_authority(state_path.parent).epoch == 2
-            else scan_commit_pins(state, repo_root=root)
-        )
-        unresolved_pins = [issue for issue in pin_issues if not issue.repairable]
-        if unresolved_pins:
-            unresolved.append(f"commits.unresolved={len(unresolved_pins)}")
-        for action in (
-            _receipt_action(root, state_path),
-            _audit_action(state_path, state),
-            _pin_action(root, state_path, pin_issues),
-        ):
-            if action is not None:
-                actions.append(action)
+        receipt = _receipt_action(root, state_path)
+        if receipt is not None:
+            actions.append(receipt)
     ledger_actions, ledger_findings = _ledger_actions(root)
     actions.extend(ledger_actions)
     unresolved.extend(ledger_findings)

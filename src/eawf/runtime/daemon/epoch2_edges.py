@@ -14,12 +14,12 @@ from datetime import datetime
 from typing import Any
 
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
+from eawf.kernel.state.epoch2.lifecycle import LifecycleRecord
 from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.kernel.state.epoch2.transitions import LifecycleStatus, TransitionGuard
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.methods.domain_guards import batch_activation_admitted, task_run_open
-from eawf.workflow.lifecycle.epoch2 import LifecycleRecord
 
 
 def locked_unmet(

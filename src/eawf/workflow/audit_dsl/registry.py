@@ -88,6 +88,7 @@ from eawf.runtime.sandbox.env_scrub import (
     build_child_env,
     resolve_binary_dir,
 )
+from eawf.runtime.vcs.wave_sha import derive_diff_base
 from eawf.workflow.audit_dsl.kinds.backlog_resolution import BACKLOG_RESOLUTION_KIND
 from eawf.workflow.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
 from eawf.workflow.audit_dsl.kinds.journal_chain import check_journal_chain
@@ -108,7 +109,6 @@ from eawf.workflow.audit_dsl.models import (
     Scope,
     TimeoutClass,
 )
-from eawf.workflow.lifecycle.wave_sha import derive_diff_base
 
 logger = logging.getLogger(__name__)
 

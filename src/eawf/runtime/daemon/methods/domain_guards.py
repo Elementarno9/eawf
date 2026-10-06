@@ -26,6 +26,7 @@ from pydantic import ValidationError
 
 from eawf.kernel.identity import EntityKind, IdentityError, parse_qualified_urn
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
+from eawf.kernel.state.epoch2.lifecycle import LifecycleRecord
 from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
 from eawf.kernel.state.epoch2.policy import TrackPolicy
 from eawf.kernel.state.epoch2.run import RunStatus
@@ -41,7 +42,6 @@ from eawf.workflow.integration.reconcile import (
     MergeOutcome,
     MergeReconciliation,
 )
-from eawf.workflow.lifecycle.epoch2 import LifecycleRecord
 
 logger = logging.getLogger(__name__)
 

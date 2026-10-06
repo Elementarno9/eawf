@@ -18,11 +18,12 @@ from typing import Any
 import pytest
 
 from eawf.kernel.spec.release import Release, ReleaseStatus, release_key
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import burn, create
 from eawf.runtime.daemon.methods.release_disposition import adopt
-from eawf.workflow.evidence._io import atomic_write_state, load_state
+from eawf.workflow.evidence._io import load_state
 from eawf.workflow.evidence.measured_contract import (
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -64,7 +65,7 @@ def ctx(tmp_path: Path) -> MethodContext:
     """Return a context whose store holds the pinned dev1 candidate."""
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_state(state_path, dev2_admitted_state())
+    write_state_unlocked(state_path, dev2_admitted_state().model_dump(mode="json"))
     record_release(state_path, release_record(), recorded_at=datetime.now(UTC), summary="seed")
     return MethodContext(
         started_at="2026-09-26T00:00:00+00:00",

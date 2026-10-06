@@ -4,10 +4,6 @@ Exercises :func:`eawf.workflow.verify.dispatch_close.verify_close_readiness`
 against hand-built typed report bodies. The gate is pure — no I/O, no
 state mutation — so each test builds a body in memory and inspects the
 returned :class:`~eawf.workflow.verify.dispatch_close.VerifyResult`.
-
-The companion runner-side integration that wires the gate into
-:func:`eawf.runtime.daemon.dispatch_runner.emit_agent_end_report` is
-covered by :mod:`tests.integration.runtime.daemon.test_dispatch_close_gate`.
 """
 
 from __future__ import annotations

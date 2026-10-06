@@ -46,8 +46,8 @@ RootEntryKind = Literal["cross_cutting", "tooling"]
 #:   ``--idempotency-key`` and passes it to the route when given.
 #: - ``spec_anchored``: the retry key travels inside the ``--from-spec``
 #:   document the route validates.
-#: - ``epoch1_state``: writes epoch-1 state or moves an imported epoch-1 row,
-#:   neither of which carries a row revision.
+#: - ``epoch1_state``: writes epoch-1 state or files a record for imported
+#:   work, neither of which carries a row revision.
 #: - ``unversioned_store``: writes a store that keeps no revision to compare.
 #: - ``host_event``: records a host hook event as it fires; the host names
 #:   neither a revision nor a retry key.
@@ -156,8 +156,6 @@ ROOT_ENTRY_EXCEPTIONS: Final[tuple[RootEntryException, ...]] = (
     _entry("rules", "tooling", "reads and migrates the rendered rule set"),
     _entry("profile", "tooling", "scaffolds and validates rule profiles"),
     _entry("coauthor", "tooling", "resolves the commit trailer policy"),
-    _entry("pr", "tooling", "renders a pull request body"),
-    _entry("wiki", "tooling", "renders the wiki pages"),
     _entry("render-output", "tooling", "converts an output envelope between forms"),
     _entry("impact", "tooling", "renders the file impact graph"),
     _entry("metrics", "tooling", "reports rolling workflow metrics"),
@@ -241,24 +239,6 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
         "question open-decision",
         "spec_anchored",
         "the document carries the idempotency key the route replays on",
-    ),
-    _exempt(
-        "milestone close-legacy",
-        "epoch1_state",
-        "moves an imported epoch-1 row, which has no revision",
-    ),
-    _exempt(
-        "milestone cancel-legacy",
-        "epoch1_state",
-        "moves an imported epoch-1 row, which has no revision",
-    ),
-    _exempt(
-        "batch close-legacy", "epoch1_state", "moves an imported epoch-1 row, which has no revision"
-    ),
-    _exempt(
-        "task advance-legacy",
-        "epoch1_state",
-        "moves an imported epoch-1 row, which has no revision",
     ),
     _exempt(
         "record append", "epoch1_state", "files a record for imported work, which has no revision"

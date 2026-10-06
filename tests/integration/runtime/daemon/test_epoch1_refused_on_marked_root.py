@@ -3,7 +3,7 @@
 A cut-over tree keeps its epoch-1 ``state.json`` as the frozen source the
 cutover digested, while native writes go to ``generations/``. Every
 epoch-1 writer therefore has to refuse there -- the CLI's in-process
-path, the daemon's ``state.mutate`` and the daemon's boot sweep -- or the
+path, the daemon's epoch-1 upkeep verbs and the daemon's boot sweep -- or the
 tree has two writers. Each test digests ``state.json`` and the event log
 before the attempt and compares after, so "refused" means nothing moved.
 
@@ -131,16 +131,8 @@ def _epoch1_digests(repo: Path) -> tuple[str | None, str | None]:
 
 
 def _mutate(ctx: MethodContext, repo: Path) -> dict[str, Any]:
-    params: dict[str, Any] = {
-        "repo_root": str(repo),
-        "mutation": {
-            "kind": "wave_claim",
-            "scope_id": WAVE_ID,
-            "mutation_id": "m-0001",
-            "params": {"wave_id": WAVE_ID, "session_id": SESSION_ID},
-        },
-    }
-    return asyncio.run(methods.dispatch("state.mutate", ctx, params))
+    params: dict[str, Any] = {"repo_root": str(repo), "age_minutes": 0}
+    return asyncio.run(methods.dispatch("state.session_recover", ctx, params))
 
 
 def _boot(tmp_path: Path, repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -178,10 +170,10 @@ def _active_sessions(repo: Path) -> list[str]:
 # ---- CLI: eawf wave claim ---------------------------------------------------
 
 
-# ---- daemon: state.mutate ---------------------------------------------------
+# ---- daemon: epoch-1 upkeep -------------------------------------------------
 
 
-def test_state_mutate_refused_on_a_marked_root(tmp_path: Path, repo: Path) -> None:
+def test_epoch1_upkeep_refused_on_a_marked_root(tmp_path: Path, repo: Path) -> None:
     """The daemon refuses before the WAL, the lock or the event log."""
     _mark(repo)
     ctx = method_context(tmp_path / "runtime")
@@ -194,7 +186,7 @@ def test_state_mutate_refused_on_a_marked_root(tmp_path: Path, repo: Path) -> No
     assert not ctx.wal_dir.exists() or not any(ctx.wal_dir.iterdir())
 
 
-def test_state_mutate_lands_on_an_unmarked_root(tmp_path: Path, repo: Path) -> None:
+def test_epoch1_upkeep_lands_on_an_unmarked_root(tmp_path: Path, repo: Path) -> None:
     """The control: the same mutation commits without the marker."""
     ctx = method_context(tmp_path / "runtime")
     before = _epoch1_digests(repo)

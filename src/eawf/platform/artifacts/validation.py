@@ -108,17 +108,6 @@ class ArtifactValidationReport:
     errors: list[str] = field(default_factory=list)
 
 
-TextSurfaceKind = str
-
-
-@dataclass(frozen=True)
-class TextSurfaceValidationReport:
-    """PR/coauthor/release text validation result."""
-
-    ok: bool
-    errors: list[str] = field(default_factory=list)
-
-
 def _citation_errors_for_text(
     text: str,
     references: list[Citation] | None,
@@ -143,22 +132,6 @@ def _citation_errors_for_text(
         if missing_rows:
             errors.append(f"citation references missing rows: {missing_rows}")
     return errors
-
-
-def validate_text_surface(
-    text: str,
-    *,
-    surface: TextSurfaceKind,
-    references: list[Citation] | None = None,
-) -> TextSurfaceValidationReport:
-    """Validate outbound PR/coauthor/release prose for scrub + citations."""
-    errors: list[str] = []
-    findings = scan_text(text)
-    if findings:
-        kinds = sorted({finding.kind for finding in findings})
-        errors.append(f"{surface} scrub findings present: {kinds}")
-    errors.extend(_citation_errors_for_text(text, references))
-    return TextSurfaceValidationReport(ok=not errors, errors=errors)
 
 
 def validate_markdown_artifact(

@@ -520,7 +520,6 @@ def test_store_kind_values() -> None:
         # landed commit; distinct from the receipts it names.
         "gate_rereceipt",
         "legacy_audit_disposition",
-        "commit_repin",
         # P31-I01-W27 -- publication operations + per-target attempt ledger.
         "release",
         # The checkpoint record itself, kept apart from the publication

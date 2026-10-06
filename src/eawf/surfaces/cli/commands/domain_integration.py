@@ -60,9 +60,9 @@ from eawf.surfaces.cli.commands.domain import (
     _check_idempotency_key,
     _native_answer,
 )
-from eawf.surfaces.cli.commands.domain_legacy import record_app
 from eawf.surfaces.cli.commands.lifecycle import batch_app, milestone_app, task_app
 from eawf.surfaces.cli.commands.operation import OPERATION_SUBMIT, operation_answer
+from eawf.surfaces.cli.commands.record import record_app
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.verb_contract import (
     answer_envelope,

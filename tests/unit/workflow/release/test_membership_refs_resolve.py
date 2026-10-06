@@ -19,11 +19,12 @@ from uuid import UUID
 import pytest
 
 from eawf.kernel.spec.release import Release, ReleaseStatus
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import create
 from eawf.surfaces.cli.errors import UserError
-from eawf.workflow.evidence._io import atomic_write_state, load_state
+from eawf.workflow.evidence._io import load_state
 from eawf.workflow.evidence.measured_contract import (
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -202,7 +203,7 @@ def _context(tmp_path: Path, document: dict[str, Any] | str | None) -> MethodCon
     """
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_state(state_path, dev3_state())
+    write_state_unlocked(state_path, dev3_state().model_dump(mode="json"))
     adopted = adopt_publication(dev1_draft(), dev1_config(), adoption=dev1_adoption())
     burned, _operation = burn_release(adopted, dev1_config(), None)
     record_release(state_path, burned, recorded_at=NOW, summary=f"burn {burned.key}")

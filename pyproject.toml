@@ -281,14 +281,11 @@ max-complexity = 10
 "src/eawf/kernel/config/layered.py" = ["C901"]
 "src/eawf/runtime/daemon/methods/state.py" = ["C901"]
 "src/eawf/observability/doctor/checks.py" = ["C901"]
-"src/eawf/workflow/lifecycle/wave.py" = ["C901"]
 "src/eawf/platform/memory/promotion.py" = ["C901"]
 "src/eawf/platform/memory/prune.py" = ["C901"]
 "src/eawf/platform/memory/store.py" = ["C901"]
 "src/eawf/platform/profiles/compose.py" = ["C901"]
 "src/eawf/surfaces/render/agent_report.py" = ["C901"]
-"src/eawf/surfaces/render/plan_view.py" = ["C901"]
-"src/eawf/surfaces/render/pr_body.py" = ["C901"]
 "src/eawf/surfaces/render/regions.py" = ["C901"]
 "src/eawf/runtime/runtimes/claude/plugin_package.py" = ["C901"]
 "src/eawf/runtime/runtimes/codex/plugin_install.py" = ["C901"]
@@ -516,7 +513,7 @@ line = 95
 branch = 88
 
 # --- P30-I10-W06: previously-ungated load-bearing packages ---
-# These seven packages carried no per-package ratchet before P30-I10 (the
+# These packages carried no per-package ratchet before P30-I10 (the
 # ~103k/182k ungated LOC: the verify spine, dispatch, evidence, lifecycle,
 # eval projection, runtime adapters, and the spawn sandbox). Each threshold
 # is set just below the line/branch rate measured on the 2026-06-10
@@ -544,12 +541,6 @@ branch = 85
 path = "src/eawf/workflow/evidence/"
 line = 93
 branch = 88
-
-[tool.eawf.coverage.gates.lifecycle]
-# Phase / iter / wave state transitions (PLANNED -> ACTIVE -> CLOSED).
-path = "src/eawf/workflow/lifecycle/"
-line = 91
-branch = 81
 
 [tool.eawf.coverage.gates.eval]
 # Telemetry-to-EU projection + the self-eval experiment harness.

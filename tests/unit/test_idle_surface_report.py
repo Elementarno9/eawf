@@ -47,7 +47,7 @@ _CALLER_ROOTS = [_REPO_ROOT / "tools"]
 #: (``kernel/state/epoch2/transitions.py``). The staged importer and the
 #: Task-specific compaction sugar are what call them; lower this again as
 #: each producer lands. Two rows have left the list: ``apply_transition``
-#: (``workflow/lifecycle/epoch2.py``) is called by the native mutation
+#: (``kernel/state/epoch2/lifecycle.py``) is called by the native mutation
 #: transaction, and ``recover_store_tree``
 #: (``kernel/store/compaction.py``) by the daemon's start-up pass over
 #: every native tree.
@@ -73,7 +73,59 @@ _CALLER_ROOTS = [_REPO_ROOT / "tools"]
 #: lifecycle tests build their fixtures from. The question and pause reads
 #: then wired ``project_question``, ``project_pause`` and
 #: ``answer_with_reply`` and removed ``clarify.py``, which leaves 209.
-IDLE_CEILING = 209
+#:
+#: 209 was slack by then (the tree measured 202), and later work idled eight
+#: more. Six were removed with their callers gone: ``baseline_evidence``
+#: (evidence stays local, so nothing is baselined), ``stream_message_payloads``
+#: (the Claude launcher reads SDK messages, not stream-json lines),
+#: ``certify_installed`` (the certifier probes through its own lock), and
+#: ``reconcile_orphaned_sessions`` with ``lineage_born_at`` (the daemon boot
+#: no longer reconciles sessions). The ``urn_rekey`` handler went private like
+#: every other daemon method handler. Three rows stay: ``publish_cmd`` is
+#: reached by name through the CLI registry, as the other ``*_cmd`` rows are;
+#: ``read_churn_records`` is read by the suite's runtime-dir guard; and
+#: ``atomic_write_state`` is now only the tests' v1 state writer. 205.
+#:
+#: Deleting the epoch-1 fleet, close and agent daemon methods strands 24
+#: helpers their RPCs were the last callers of (close workspace, gate
+#: claims, dispatch retry, the dispatch-close gate), which the epoch-1
+#: residue sweep removes; until then the measured surface is 228.
+#:
+#: Deleting the epoch-1 state and spec daemon methods took the
+#: spec writer and cache, the close pre-flight, the gate conventions and
+#: receipt floor, the waiver-mode loader, the band classifier and four
+#: state-context helpers with them, and strands 28 more: 14 in
+#: ``workflow/lifecycle`` (deleted whole by the lifecycle-package sweep) and
+#: 14 the epoch-1 residue sweep removes -- the memory and decision appliers,
+#: the spec-jury producer, the session-log registry, the verbosity probe, the
+#: wave-session rollup, ``grandfather_criterion``, ``validate_argv_gates``,
+#: ``durable_auditor_json_schema`` and ``load_budget_config``, which the
+#: ``flow.budget`` config leaves still name as their reader. 255.
+#:
+#: Deleting the pr, wiki and plan show renderers took ``render_phase_markdown``
+#: with them and the five helpers only they called (the two wave EU roll-ups,
+#: the operator rollup, the narrative bundle renderer and the text-surface
+#: validator). 254.
+#:
+#: Deleting the lifecycle package and the v1 drift check took 28 idle
+#: helpers with it, 14 of them in ``workflow/lifecycle``, and deleted the
+#: stranded wrappers its transitions were the last callers of (the ODR
+#: advisory and drift pulse, the criterion-spec and title-clarity adapters,
+#: the authoring-body predicate, the session transcript lookup). Four
+#: strand: ``apply_memory_add`` with the memory appliers the epoch-1
+#: residue sweep removes, the lint core ``check_criterion``, the
+#: ``oracle_determinism_ratio`` metric and ``checkpoint_commit_blocker``,
+#: which the ``vcs.checkpoint_requires_commit`` leaf's reader module still
+#: hosts. 230.
+#:
+#: The epoch-1 residue sweep removed four helpers whose only callers were
+#: tests: ``atomic_write_state`` (the tests now call the v1 writer
+#: directly), ``compression_directive``, ``render_dispatch_envelope`` and
+#: the ``spec.sync`` verb resolver, whose daemon method was already gone.
+#: ``render_wave_prompt`` stays: the committed dispatch goldens pin its
+#: bytes and ``eawf snapshot update --kind dispatch`` regenerates them
+#: through it. 226.
+IDLE_CEILING = 226
 
 
 def _load_tool() -> Any:

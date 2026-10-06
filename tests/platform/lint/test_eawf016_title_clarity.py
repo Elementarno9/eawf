@@ -2,17 +2,14 @@
 
 Covers each title rule (a flagging case and a clean case), the
 false-positive guards for the deliberately-dropped leading-``[A-Z]\\d`` rule
-(legitimate ``B0NN`` / ``V1`` / ``C++`` shapes), the ``assert_title_clarity``
-mutation-boundary helper, and the ``state.json`` delta scan.
+(legitimate ``B0NN`` / ``V1`` / ``C++`` shapes), and the ``state.json`` delta
+scan.
 """
 
 from __future__ import annotations
 
-import pytest
-
 from eawf.platform.lint.eawf016_title_clarity import (
     RULE_CODE,
-    assert_title_clarity,
     check_state_title_lines,
     check_title,
 )
@@ -124,26 +121,6 @@ def test_check_title_collects_multiple_findings() -> None:
     reasons = _reasons("feat: a.")
     assert any("conventional-commit type prefix" in r for r in reasons)
     assert any("trailing period" in r for r in reasons)
-
-
-# ---- assert_title_clarity ---------------------------------------------------
-
-
-def test_assert_title_clarity_is_a_noop_for_clean_titles() -> None:
-    assert assert_title_clarity("Add the gate", entity_kind="wave", entity_id="W01") is None
-
-
-def test_assert_title_clarity_raises_with_entity_context() -> None:
-    with pytest.raises(ValueError, match="wave 'P01-I01-W01' title"):
-        assert_title_clarity("feat: x", entity_kind="wave", entity_id="P01-I01-W01")
-
-
-def test_assert_title_clarity_message_names_every_failed_rule() -> None:
-    with pytest.raises(ValueError) as excinfo:
-        assert_title_clarity("feat: x.", entity_kind="decision", entity_id="D17")
-    message = str(excinfo.value)
-    assert "conventional-commit type prefix" in message
-    assert "trailing period" in message
 
 
 # ---- state.json delta scan --------------------------------------------------

@@ -1,8 +1,8 @@
 """In-process binding probes for the idle-contract gate.
 
-The emit-time body-validation probe and the I03 contract probes (intent guard,
-UI require-gate, mockup golden-diff tier) drive the live functions with
-deliberately defective input and red when a guard stops rejecting it.
+The emit-time body-validation probe and the I03 mockup golden-diff tier probe
+drive the live functions with deliberately defective input and red when a
+guard stops rejecting it.
 """
 
 from __future__ import annotations
@@ -12,24 +12,14 @@ from typing import get_args
 
 import pydantic
 from idle_contract_common import (
-    _NON_UI_SCOPE,
-    _PROBE_OPENED_AT,
     GateFailure,
     GateResult,
 )
 
 from eawf.kernel.spec.common import OracleTier, _tier_for_gate_kind
-from eawf.kernel.state.enums import (
-    EffortBucket,
-    ProjectStatus,
-    ScopeKind,
-)
-from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.surfaces.render.envelope import OutputEnvelope
 from eawf.workflow.audit_dsl.models import CheckKind
 from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY
-from eawf.workflow.lifecycle.transitions import LifecycleError, open_iter, open_phase
-from eawf.workflow.lifecycle.wave import plan_wave as _plan_wave
 from eawf.workflow.skills.engine import (
     ProbeOutcome,
     Skill,
@@ -155,95 +145,13 @@ def check_skill_body_binding(
 
 
 # =========================================================================== #
-# I03 contract probes: intent guard, mockup golden tier.
+# I03 contract probe: mockup golden tier.
 # =========================================================================== #
-
-#: A ``plan_wave``-shaped callable. ``Callable[..., object]`` is intentional:
-#: the real function is keyword-only after ``state``, and tests inject a
-#: no-op stand-in to prove the gate fails when the guard stops rejecting.
-type PlanWaveFn = Callable[..., object]
 
 #: A ``_tier_for_gate_kind``-shaped callable.
 type TierForGateKindFn = Callable[[str], OracleTier]
 
-_I03_PHASE_ID = "P00"
-_I03_ITER_ID = "P00-I01"
-_I03_INTENT_PROBE_WAVE_ID = "P00-I01-W01"
 _MOCKUP_GOLDEN_DIFF_KIND = "mockup_golden_diff"
-
-
-def _make_i03_probe_state() -> State:
-    """Build a pure in-process state with one open phase + iter.
-
-    Returns:
-        A validated :class:`State` that is sufficient for
-        :func:`eawf.workflow.lifecycle.wave.plan_wave` to reach the authored
-        wave guards. No files are read or written.
-    """
-    state = State.model_validate(
-        {
-            "schema_version": "1.8",
-            "scope_kind": ScopeKind.REPO.value,
-            "urn": "urn:eawf:v1:state:QR",
-            "updated_at": _PROBE_OPENED_AT.isoformat(),
-            "project": Project(
-                code="QR",
-                slug="qr",
-                title="QR",
-                description=None,
-                domains=["probe"],
-                default_branch="main",
-                status=ProjectStatus.ACTIVE,
-                repo_urn="urn:eawf:v1:repo:QR",
-            ).model_dump(mode="json"),
-            "current": CurrentPointers(project_code="QR").model_dump(mode="json"),
-            "workspace": None,
-            "phases": {},
-            "iters": {},
-            "waves": {},
-            "artifacts": {},
-            "agent_sessions": {},
-            "plugins": {},
-            "indexes": {},
-        }
-    )
-    open_phase(state, phase_id=_I03_PHASE_ID, title="Probe phase")
-    open_iter(state, iter_id=_I03_ITER_ID, phase_id=_I03_PHASE_ID, title="Probe iter")
-    return state
-
-
-def _probe_required_intent_guard(plan_wave_fn: PlanWaveFn) -> GateResult | None:
-    """Return a failure when the authored-wave ``intent=None`` guard is idle."""
-    try:
-        plan_wave_fn(
-            _make_i03_probe_state(),
-            wave_id=_I03_INTENT_PROBE_WAVE_ID,
-            iter_id=_I03_ITER_ID,
-            title="Intent probe wave",
-            file_scopes=[_NON_UI_SCOPE],
-            effort_bucket=EffortBucket.M,
-            intent=None,
-        )
-    except LifecycleError as exc:
-        if "has no intent" in str(exc):
-            return None
-        return GateResult(
-            passed=False,
-            failure=GateFailure.REQUIRED_INTENT_IDLE,
-            message=(
-                "required-intent guard did not fire cleanly: expected "
-                f"{_I03_INTENT_PROBE_WAVE_ID!r} with intent=None to raise the "
-                f"'has no intent' LifecycleError, got {exc!r}"
-            ),
-        )
-    return GateResult(
-        passed=False,
-        failure=GateFailure.REQUIRED_INTENT_IDLE,
-        message=(
-            "required-intent guard is idle: a None-intent probe wave planned "
-            "without raising LifecycleError"
-        ),
-    )
 
 
 def _probe_mockup_golden_diff_registration(
@@ -297,24 +205,19 @@ def _probe_mockup_golden_diff_registration(
 
 def check_i03_contracts(
     *,
-    plan_wave_fn: PlanWaveFn = _plan_wave,
     registry: Mapping[str, object] = CHECK_REGISTRY,
     tier_for_gate_kind_fn: TierForGateKindFn = _tier_for_gate_kind,
 ) -> GateResult:
     """Assert every I03 contract fires through a pure in-process probe.
 
     Args:
-        plan_wave_fn: Authored-wave planner under test. Defaults to the live
-            :func:`eawf.workflow.lifecycle.wave.plan_wave`; tests inject a
-            no-op to prove the required-intent guard is not idle.
         registry: Audit-DSL check registry under test.
         tier_for_gate_kind_fn: Gate-kind to oracle-tier mapper under test.
 
     Returns:
-        A passing :class:`GateResult` only when both I03 probes fire.
+        A passing :class:`GateResult` only when the I03 probe fires.
     """
     for failure in (
-        _probe_required_intent_guard(plan_wave_fn),
         _probe_mockup_golden_diff_registration(
             registry=registry,
             tier_for_gate_kind_fn=tier_for_gate_kind_fn,
@@ -325,8 +228,5 @@ def check_i03_contracts(
     return GateResult(
         passed=True,
         failure=None,
-        message=(
-            "idle-contract gate: ok (I03 required-intent guard and "
-            "mockup_golden_diff tier mapping fired)"
-        ),
+        message=("idle-contract gate: ok (I03 mockup_golden_diff tier mapping fired)"),
     )

@@ -757,7 +757,6 @@ class StoreKind(StrEnum):
     GATE_RECEIPT = "gate_receipt"
     GATE_RERECEIPT = "gate_rereceipt"
     LEGACY_AUDIT_DISPOSITION = "legacy_audit_disposition"
-    COMMIT_REPIN = "commit_repin"
     RELEASE = "release"
     RELEASE_RECORD = "release_record"
     RELEASE_CHECKPOINT_RECEIPT = "release_checkpoint_receipt"

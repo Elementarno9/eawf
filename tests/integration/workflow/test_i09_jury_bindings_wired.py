@@ -1,13 +1,10 @@
-"""Tests: the four I09 jury-validation bindings stay wired in the idle gate.
+"""Tests: the three I09 jury-validation bindings stay wired in the idle gate.
 
-P30-I09 wired four jury-validation bindings that this repo has a history of
+P30-I09 wired jury-validation bindings that this repo has a history of
 shipping built-but-idle (the B091 idle-verifier regression). P30-I09-W08 registers
 each in the idle-contract meta-gate (``tools/idle_contract_gate.py``) so a future
 change that re-idles any of them fails the gate:
 
-- **W05 / TRUST-5** -- :func:`check_spec_jury_ballot_fn_wired`: the daemon close
-  path binds the LIVE per-item ballot fn (``_spec_jury_ballot_fn`` returns
-  ``live_per_item_ballot_fn(...)``, not ``None``) and consults it.
 - **W06 / TRUST-6** -- :func:`check_jury_reliability_map_wired`: the live convener
   threads the reputation reliability map into ``aggregate_jury(..., reliability=...)``.
 - **W04 / TRUST-4** -- :func:`check_jury_block_authority_wired`: the ordered-oracle
@@ -16,13 +13,12 @@ change that re-idles any of them fails the gate:
 - **W07 / TRUST-7** -- :func:`check_validate_jury_cli_wired`: ``validate_jury`` has a
   live CLI caller (the ``eawf metrics jury-validation`` command).
 
-Each binding asserts two contracts, mirroring ``test_resolve_routing_wired``:
+Each binding asserts two contracts:
 
 - **pass on the real tree** -- the check passes against the live source.
 - **red on a re-idled fixture** -- an injected ``module_text`` that drops the
-  binding (the ballot fn reverts to ``return None``, the reliability map goes
-  ``None``, the block-authority gate is bypassed, or the CLI caller is removed)
-  fails the check with the matching :class:`GateFailure`.
+  binding (the reliability map goes ``None``, the block-authority gate is
+  bypassed, or the CLI caller is removed) fails the check with the matching :class:`GateFailure`.
 
 The gate module is loaded by path because ``tools/`` is excluded from the package
 and so is not importable by name (mirrors ``tests/unit/test_idle_contract_gate.py``).
@@ -68,67 +64,6 @@ def _load_gate_module() -> Any:
 def gate() -> Any:
     """Return the freshly loaded gate module."""
     return _load_gate_module()
-
-
-# --------------------------------------------------------------------------- #
-# W05 / TRUST-5: the spec-jury close gate binds a live per-item ballot fn.
-# --------------------------------------------------------------------------- #
-
-
-def test_spec_jury_ballot_fn_passes_for_real_source(gate: Any) -> None:
-    """check_spec_jury_ballot_fn_wired passes against the real state.py source."""
-    result = gate.check_spec_jury_ballot_fn_wired()
-    assert result.passed, result.message
-    assert result.failure is None
-
-
-def test_spec_jury_ballot_fn_reds_when_builder_returns_none(gate: Any) -> None:
-    """Reverting the builder to a bare ``return None`` reds the gate.
-
-    A re-idled builder no longer binds ``live_per_item_ballot_fn(...)``, so the
-    producer is unreachable and the gate must fail SPEC_JURY_BALLOT_FN_IDLE.
-    """
-    idle_text = (
-        "def _spec_jury_ballot_fn(state, wave, *, repo_root):\n"
-        "    return None  # reverted: the producer is idle again\n"
-        "\n"
-        "async def _enforce_spec_jury_gate(state, wave, *, state_path, repo_root):\n"
-        "    ballot_fn = _spec_jury_ballot_fn(state, wave, repo_root=repo_root)\n"
-        "    return False\n"
-    )
-    result = gate.check_spec_jury_ballot_fn_wired(module_text=idle_text)
-    assert not result.passed
-    assert result.failure is gate.GateFailure.SPEC_JURY_BALLOT_FN_IDLE
-    assert "spec-jury per-item ballot fn is idle" in result.message
-
-
-def test_spec_jury_ballot_fn_reds_when_gate_stops_consulting(gate: Any) -> None:
-    """Dropping the ``ballot_fn = _spec_jury_ballot_fn(`` consult reds the gate.
-
-    Boundary: the builder still binds the live fn, but no caller consults it, so
-    the producer is never reached -- the gate must still red.
-    """
-    idle_text = (
-        "def _spec_jury_ballot_fn(state, wave, *, repo_root):\n"
-        "    return live_per_item_ballot_fn(spawn_factory=sf, rubric=rb)\n"
-        "\n"
-        "async def _enforce_spec_jury_gate(state, wave, *, state_path, repo_root):\n"
-        "    return False  # the builder is never consulted now\n"
-    )
-    result = gate.check_spec_jury_ballot_fn_wired(module_text=idle_text)
-    assert not result.passed
-    assert result.failure is gate.GateFailure.SPEC_JURY_BALLOT_FN_IDLE
-
-
-def test_spec_jury_ballot_fn_passes_for_minimal_wired_text(gate: Any) -> None:
-    """A boundary text carrying both the bind + the consult satisfies the gate."""
-    wired_text = (
-        "    return live_per_item_ballot_fn(spawn_factory=sf, rubric=rb)\n"
-        "    ballot_fn = _spec_jury_ballot_fn(state, wave, repo_root=repo_root)\n"
-    )
-    result = gate.check_spec_jury_ballot_fn_wired(module_text=wired_text)
-    assert result.passed
-    assert result.failure is None
 
 
 # --------------------------------------------------------------------------- #

@@ -37,7 +37,6 @@ _STEER_CLAIM = "never reach"
 
 #: Source files whose boundary prose must carry :data:`_EGRESS_CLAIM`.
 _BOUNDARY_FILES: tuple[str, ...] = (
-    "runtime/daemon/dispatch_runner.py",
     "runtime/sandbox/env_scrub.py",
     "runtime/sandbox/jail.py",
 )

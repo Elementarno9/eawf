@@ -12,7 +12,7 @@ Covers the three behaviours W15 layered onto ``_check_command_exit_zero``:
   even when the resolved set is empty so the child can distinguish
   "scope evaluated to empty" from "scope=all".
 * ``diff_base`` is derived from
-  :func:`eawf.workflow.lifecycle.wave_sha.derive_diff_base` so wave-anchored
+  :func:`eawf.runtime.vcs.wave_sha.derive_diff_base` so wave-anchored
   gates compare against the wave's own delta, with a
   ``git merge-base HEAD main`` fallback when the wave SHA cannot be
   resolved.
@@ -980,7 +980,7 @@ def test_diff_base_from_wave_id_uses_derive_wave_sha(
         "deadbeef" + "cafebabe" + "12345678" + "90abcdef" + "12345678"
     )  # pragma: allowlist secret
     monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha.derive_wave_sha",
+        "eawf.runtime.vcs.wave_sha.derive_wave_sha",
         lambda wid, repo_root=None: fake_sha if wid == "P28-I01-W15" else None,
     )
     captured: dict[str, str] = {}
@@ -1007,10 +1007,10 @@ def test_diff_base_falls_back_to_merge_base_when_wave_sha_missing(
 ) -> None:
     """Unknown wave => diff_base falls back to merge-base helper."""
     monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha.derive_wave_sha", lambda wid, repo_root=None: None
+        "eawf.runtime.vcs.wave_sha.derive_wave_sha", lambda wid, repo_root=None: None
     )
     monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha._git_merge_base_head_main",
+        "eawf.runtime.vcs.wave_sha._git_merge_base_head_main",
         lambda *, repo_root=None, fallback="origin/main": "MERGEBASESHA",
     )
     captured: dict[str, str] = {}
@@ -1037,7 +1037,7 @@ def test_diff_base_without_wave_id_uses_merge_base(
 ) -> None:
     """No wave_id => skip derive_wave_sha entirely; merge-base only."""
     monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha._git_merge_base_head_main",
+        "eawf.runtime.vcs.wave_sha._git_merge_base_head_main",
         lambda *, repo_root=None, fallback="origin/main": "JUSTMERGEBASE",
     )
     captured: dict[str, str] = {}
@@ -1062,7 +1062,7 @@ def test_command_exit_zero_back_compat_no_new_kwargs(
 ) -> None:
     """Pre-W15 YAML (only ``argv``) still works — defaults pick up the rest."""
     monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha._git_merge_base_head_main",
+        "eawf.runtime.vcs.wave_sha._git_merge_base_head_main",
         lambda *, repo_root=None, fallback="origin/main": "BASE",
     )
     with patch("eawf.workflow.audit_dsl.registry.changed_files", return_value=[]):

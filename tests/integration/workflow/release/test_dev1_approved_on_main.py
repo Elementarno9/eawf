@@ -59,12 +59,13 @@ from eawf.kernel.release.signals import ReleaseSignalName, ReleaseSignalStatus
 from eawf.kernel.spec.release import Release, ReleaseStatus
 from eawf.kernel.spec.release_config import ReleaseConfig, load_release_config
 from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import approve, create, show
 from eawf.surfaces.cli.app import app
-from eawf.workflow.evidence._io import atomic_write_state, load_state
+from eawf.workflow.evidence._io import load_state
 from eawf.workflow.release.advance import draft_release_for
 from eawf.workflow.release.dependencies import (
     LicenseDisposition,
@@ -238,7 +239,7 @@ def state_path(tmp_path: Path) -> Path:
     """Return a state root the release verbs may record into."""
     path = tmp_path / ".ea" / "state.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_state(path, load_state(_EMPTY_STATE))
+    write_state_unlocked(path, load_state(_EMPTY_STATE).model_dump(mode="json"))
     return path
 
 

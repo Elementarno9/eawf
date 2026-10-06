@@ -48,7 +48,7 @@ graph (:class:`WaveFrontierItem` rows -- id, status, deps, iter) into the
 dependency frontier: the PENDING waves whose deps are all CLOSED and that
 are not blocked by a lower-numbered ready sibling under the same iter. The
 predicate mirrors the claim-time gate
-(:func:`eawf.workflow.lifecycle.wave.claim_wave`) but is computed purely off
+(the epoch-1 wave claim) but is computed purely off
 the injected view -- it never constructs or mutates a
 :class:`~eawf.kernel.state.models.State`. :func:`drain_frontier` is the
 driver: it walks the ready frontier in claim order and, for each wave a
@@ -533,7 +533,7 @@ def compute_ready_frontier(items: Iterable[WaveFrontierItem]) -> DrainableFronti
 
     Pure: the same view always yields the same frontier; no I/O, no mutation.
     A wave is on the ready frontier when it satisfies the claim-time gate
-    (:func:`eawf.workflow.lifecycle.wave.claim_wave`), computed read-only off
+    (the epoch-1 wave claim), computed read-only off
     the injected view:
 
     1. its status is :attr:`~eawf.kernel.state.enums.WaveStatus.PENDING`;
@@ -612,7 +612,7 @@ def _lower_sibling_ready(
 
     A sibling shares *item*'s ``iter_id``; "lower-numbered" compares the wave
     ids by :func:`~eawf.kernel.state.ids.natural_key`. Mirrors
-    :func:`eawf.workflow.lifecycle.wave._lower_w_sibling_pending` -- a wave is
+    the epoch-1 claim-order guard -- a wave is
     held off the frontier while a lower-numbered sibling under the same iter
     is ready to claim, so the monotonic claim order holds.
     """

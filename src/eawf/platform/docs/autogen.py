@@ -154,7 +154,7 @@ def generate_plan_view_schema() -> dict[str, Any]:
     """Return the JSON Schema for :class:`PlanView` as a plain dict.
 
     Uses ``mode="serialization"`` so the schema mirrors the wire format
-    emitted by ``eawf plan show --json``. ``$schema`` and ``title`` are
+    of a dumped :class:`PlanView`. ``$schema`` and ``title`` are
     injected so consumers can rely on them.
     """
     schema: dict[str, Any] = PlanView.model_json_schema(mode="serialization", by_alias=True)

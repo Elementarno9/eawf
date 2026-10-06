@@ -12,12 +12,15 @@ on purpose, so neither is scanned.
 from __future__ import annotations
 
 import ast
+import json
 import re
 from collections.abc import Iterator
 from pathlib import Path
 
 import click
+import pytest
 import typer
+from typer.testing import CliRunner
 
 from eawf.surfaces.cli.app import app
 
@@ -183,3 +186,103 @@ def test_the_milestone_try_section_names_a_live_verb() -> None:
     row = _section("try", "MS-01", 80)[0]
     command = row.split("eawf ", 1)[1].strip()
     assert _unknown(command, _root()) is None
+
+
+# --- Migration hints run on the tree they are shown for ---------------------
+
+_HINT_SOURCES = (
+    _SRC / "surfaces" / "cli" / "errors.py",
+    _SRC / "surfaces" / "cli" / "flag_day.py",
+)
+
+
+def _migration_hint_commands() -> list[str]:
+    """Return every command the migration hints name, without the leading ``eawf``."""
+    from eawf.surfaces.cli import errors
+    from eawf.surfaces.cli.flag_day import RETIRED_VERBS, replacement_guidance
+
+    unreplaced = next(verb for verb, replacement in RETIRED_VERBS.items() if replacement is None)
+    hints = [
+        errors._DEFAULT_HINTS["MigrationRequired"],
+        errors._KIND_HINTS[errors.MIGRATION_REFUSED_KIND],
+        replacement_guidance(unreplaced),
+    ]
+    commands = {match.group(1) for hint in hints for match in _SPAN.finditer(hint)}
+    # the guidance quotes the retired verb it answers; that one is named, not advised
+    return sorted(commands - {unreplaced})
+
+
+def test_the_migration_hints_name_the_status_verb_and_the_upgrade_guide() -> None:
+    assert _migration_hint_commands() == ["help upgrade-from-0.6", "migrate status"]
+
+
+def test_no_hint_source_names_the_plan_mode_that_needs_a_snapshot_root() -> None:
+    for path in _HINT_SOURCES:
+        assert "migrate epoch2 --plan" not in path.read_text(encoding="utf-8"), path
+
+
+@pytest.fixture
+def epoch1_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A plain epoch-1 tree the CLI addresses through ``EA_STATE`` and the working directory."""
+    root = tmp_path / "repo"
+    state_path = root / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text(json.dumps({"schema_version": "1.0", "scope_kind": "repo"}))
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    monkeypatch.setenv("EAWF_REGISTRY_PATH", str(tmp_path / "registry.json"))
+    monkeypatch.chdir(root)
+    return root
+
+
+@pytest.mark.parametrize("command", _migration_hint_commands())
+def test_every_migration_hint_command_exits_zero_on_an_epoch1_tree(
+    epoch1_tree: Path, command: str
+) -> None:
+    before = (epoch1_tree / ".ea" / "state.json").read_bytes()
+    result = CliRunner().invoke(app, command.split())
+    assert result.exit_code == 0, result.output
+    assert (epoch1_tree / ".ea" / "state.json").read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "migration_count_mismatch: a source row reached no arm",
+        "validation_failed: migration_plan_digest_stale: the plan is stale",
+        "workspace_not_registered: no workspace",
+    ],
+)
+def test_a_migration_refusal_carries_the_migration_kind_and_hint(message: str) -> None:
+    from eawf.surfaces.cli import errors
+
+    envelope = errors.build_envelope(errors.ValidationError(message))
+    assert envelope.data["kind"] == errors.MIGRATION_REFUSED_KIND
+    assert envelope.suggested_next_step is not None
+    assert "eawf validate" not in envelope.suggested_next_step
+    assert "`eawf migrate status`" in envelope.suggested_next_step
+    assert "`eawf help upgrade-from-0.6`" in envelope.suggested_next_step
+
+
+@pytest.mark.parametrize("message", ["", "x", "schema mismatch: field missing"])
+def test_a_validation_error_naming_no_migration_rule_keeps_the_validate_hint(
+    message: str,
+) -> None:
+    from eawf.surfaces.cli import errors
+
+    envelope = errors.build_envelope(errors.ValidationError(message))
+    assert "kind" not in envelope.data
+    assert envelope.suggested_next_step == errors._DEFAULT_HINTS["ValidationError"]
+
+
+def test_a_threaded_kind_or_another_bucket_is_not_reclassified() -> None:
+    from eawf.surfaces.cli import errors
+
+    threaded = errors.ValidationError(
+        "migration_not_quiescent: a session is live", kind="MigrationNotQuiescent"
+    )
+    assert errors.build_envelope(threaded).data["kind"] == "MigrationNotQuiescent"
+    user = errors.UserError("migration_count_mismatch: not a validation refusal")
+    assert "kind" not in errors.build_envelope(user).data
+    # the code alone, without its separator, is not a refusal message
+    bare = errors.ValidationError("migration_count_mismatch")
+    assert "kind" not in errors.build_envelope(bare).data

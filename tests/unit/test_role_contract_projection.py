@@ -29,7 +29,7 @@ from eawf.workflow.dispatch import (
     build_subagent_spec,
     render_wave_prompt,
 )
-from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
+from tests._epoch1_seed import seed_iter, seed_phase, seed_wave
 from tests.conftest import make_intent
 
 
@@ -66,9 +66,9 @@ def _empty_state() -> State:
 
 def _seed_wave_with_role(state: State, *, role: AgentSessionRole) -> str:
     """Seed P01 → P01-I01 → P01-I01-W01 carrying *role* as ``agent_role``."""
-    open_phase(state, phase_id="P01", title="Bootstrap")
-    open_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    plan_wave(
+    seed_phase(state, phase_id="P01", title="Bootstrap")
+    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
+    seed_wave(
         state,
         wave_id="P01-I01-W01",
         iter_id="P01-I01",
@@ -215,9 +215,9 @@ def test_build_subagent_spec_attaches_role_contract_for_role_bearing_wave() -> N
 def test_build_subagent_spec_role_contract_none_when_no_role() -> None:
     """A wave without ``agent_role`` keeps ``role_contract`` at ``None``."""
     state = _empty_state()
-    open_phase(state, phase_id="P01", title="Bootstrap")
-    open_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    plan_wave(
+    seed_phase(state, phase_id="P01", title="Bootstrap")
+    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
+    seed_wave(
         state,
         wave_id="P01-I01-W01",
         iter_id="P01-I01",
@@ -301,9 +301,9 @@ def test_render_wave_prompt_no_role_omits_role_contract_section() -> None:
     that have not yet plumbed the role registry through.
     """
     state = _empty_state()
-    open_phase(state, phase_id="P01", title="Bootstrap")
-    open_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    plan_wave(
+    seed_phase(state, phase_id="P01", title="Bootstrap")
+    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
+    seed_wave(
         state,
         wave_id="P01-I01-W01",
         iter_id="P01-I01",

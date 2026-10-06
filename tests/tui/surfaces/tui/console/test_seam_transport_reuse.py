@@ -45,8 +45,8 @@ from eawf.surfaces.tui.chassis.state_binding import (
     StateBindingCallbacks,
 )
 from eawf.surfaces.tui.console.seam import ProjectionSeam
+from tests.integration.runtime.daemon._epoch1_state_fixtures import state_payload, write_state
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import MILESTONE_URN
-from tests.integration.runtime.daemon.test_close_lock_split import _state_payload, _write_state
 
 #: How long a delivery that is already in flight is waited for. A failure guard,
 #: never the thing that orders the run.
@@ -163,7 +163,7 @@ def _rewrite_state(state_path: Path) -> None:
     mtime-gated, and two writes inside one filesystem tick would otherwise be
     indistinguishable on a coarse-grained mount.
     """
-    payload = _state_payload()
+    payload = state_payload()
     payload["phases"]["P30"]["title"] = REFRESHED_TITLE
     state_path.write_text(State.model_validate(payload).model_dump_json(), encoding="utf-8")
     stamp = state_path.stat().st_mtime + 10.0
@@ -219,7 +219,7 @@ def test_the_seam_subscribes_with_the_projection_verb_on_the_one_binder(
 ) -> None:
     """One socket, one subscribe, and the verb that makes it a projection feed."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
+    write_state(state_path)
     calls: list[str] = []
 
     async def body() -> None:
@@ -273,7 +273,7 @@ def test_the_poll_backstop_still_refreshes_the_seam_when_push_drops(
 ) -> None:
     """When the projection push dies, the backstop the binder already ran carries on."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
+    write_state(state_path)
     calls: list[str] = []
     delivered: list[State] = []
     degraded: list[bool] = []
@@ -425,7 +425,7 @@ def test_the_epoch_one_feed_still_subscribes_with_its_own_verb(
 ) -> None:
     """A binder built the way the app builds it is exactly where it was."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
+    write_state(state_path)
     calls: list[str] = []
     delivered: list[State] = []
 
@@ -461,7 +461,7 @@ def test_the_epoch_one_feed_still_subscribes_with_its_own_verb(
 def test_the_epoch_one_feed_still_refreshes_from_an_event_push(tmp_path: Path) -> None:
     """The event leg is untouched: same frame, same refresh, same resume cursor."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
+    write_state(state_path)
     delivered: list[State] = []
     calls: list[str] = []
 
@@ -495,7 +495,7 @@ def test_the_epoch_one_feed_still_refreshes_from_an_event_push(tmp_path: Path) -
 def test_an_epoch_one_binder_drops_a_projection_patch_frame(tmp_path: Path) -> None:
     """A binder that registered no patch sink is not reached by a patch."""
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
+    write_state(state_path)
     delivered: list[State] = []
     calls: list[str] = []
 

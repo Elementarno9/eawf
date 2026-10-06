@@ -22,8 +22,6 @@ import pytest
 
 from eawf.runtime.runtimes.claude.transcript_counters import (
     aggregate_transcript_counters,
-    projects_root,
-    transcript_path_for_session,
 )
 
 _TRANSCRIPT_FIXTURE = (
@@ -328,42 +326,6 @@ def test_aggregate_unreadable_transcript_returns_none(tmp_path: Path) -> None:
     (tmp_path / "dir.jsonl").mkdir()
 
     assert aggregate_transcript_counters(tmp_path / "dir.jsonl") is None
-
-
-def test_transcript_path_for_session_resolves_via_cwd(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("EAWF_CLAUDE_PROJECTS_DIR", str(tmp_path))
-    project = tmp_path / "-workspace-proj"
-    project.mkdir()
-    transcript = project / "sess-01.jsonl"
-    transcript.write_text("{}\n", encoding="utf-8")
-
-    assert projects_root() == tmp_path
-    assert transcript_path_for_session("sess-01", cwd=Path("/workspace/proj")) == transcript
-
-
-def test_transcript_path_for_session_globs_when_cwd_misses(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("EAWF_CLAUDE_PROJECTS_DIR", str(tmp_path))
-    project = tmp_path / "-workspace-other"
-    project.mkdir()
-    transcript = project / "sess-01.jsonl"
-    transcript.write_text("{}\n", encoding="utf-8")
-
-    # The session ran from a different working directory (a worktree, say); the
-    # glob still finds it.
-    assert transcript_path_for_session("sess-01", cwd=Path("/workspace/proj")) == transcript
-
-
-def test_transcript_path_for_session_none_when_absent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("EAWF_CLAUDE_PROJECTS_DIR", str(tmp_path))
-
-    assert transcript_path_for_session("sess-missing", cwd=Path("/workspace/proj")) is None
-    assert transcript_path_for_session("") is None
 
 
 # --- P30-I25-W43: Claude measures its own turns; stop re-deriving wall clock --

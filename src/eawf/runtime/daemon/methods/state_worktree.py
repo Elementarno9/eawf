@@ -1,6 +1,6 @@
 """Daemon-owned worktree landing, reconcile and ``track.*`` mutators.
 
-``wave land`` / ``wave autoland`` / ``track sync`` mutate ``state.json``
+``wave autoland`` / ``track sync`` mutate ``state.json``
 through a generic commit wrapper rather than the ``state.mutate``
 transaction: each runs an arbitrary in-process mutator under the same
 portalock + WAL + event-append discipline the canonical mutator uses.
@@ -16,7 +16,7 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import orjson
 
@@ -54,49 +54,12 @@ from eawf.runtime.daemon.methods.state_models import (
     TrackSyncRpcResult,
     WaveAutolandParams,
     WaveAutolandRpcResult,
-    WaveLandBatchParams,
-    WaveLandBatchRpcResult,
-    WaveLandParams,
-    WaveLandRpcResult,
     WorktreeReconcileParams,
     WorktreeReconcileRow,
     WorktreeReconcileRpcResult,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _wave_land_payload(result: Any) -> dict[str, Any]:
-    """Return the JSON-mode result shape for one wave-land result."""
-    return WaveLandRpcResult(
-        wave=result.wave_id,
-        commits=list(result.commits),
-        outcome=result.outcome,
-        closed=result.closed,
-        worktree_cleaned=result.worktree_cleaned,
-        merged_commit=result.merged_commit,
-        integration_id=result.integration_id,
-        close_attempt=None,
-        close_backgrounded=False,
-    ).model_dump(mode="json")
-
-
-def _wave_land_batch_payload(
-    result: Any,
-    *,
-    close_mode: Literal["durable_async", "daemonless_synchronous"],
-) -> dict[str, Any]:
-    """Return the JSON-mode result shape for a wave-land-batch result."""
-    return WaveLandBatchRpcResult(
-        landed=[WaveLandRpcResult.model_validate(_wave_land_payload(row)) for row in result.landed],
-        failed_wave=result.failed_wave,
-        error=result.error,
-        skipped=list(result.skipped),
-        barrier_requirements={
-            wave_id: list(stages) for wave_id, stages in result.barrier_requirements.items()
-        },
-        close_mode=close_mode,
-    ).model_dump(mode="json")
 
 
 def _wave_autoland_row_payload(row: Any) -> dict[str, Any]:
@@ -135,19 +98,7 @@ def _build_worktree_event_envelope(
     summary = f"{command} scope={scope_id}"
     args_raw = orjson.dumps(params, option=orjson.OPT_SORT_KEYS)
     extras: dict[str, str | int | float | bool] = {}
-    if command == "state.wave_land":
-        extras = {
-            "closed": bool(result.get("closed", False)),
-            "worktree_cleaned": bool(result.get("worktree_cleaned", False)),
-            "commit_count": len(result.get("commits", [])),
-        }
-    elif command == "state.wave_land_batch":
-        extras = {
-            "landed_count": len(result.get("landed", [])),
-            "failed": result.get("failed_wave") is not None,
-            "skipped_count": len(result.get("skipped", [])),
-        }
-    elif command == "state.wave_autoland":
+    if command == "state.wave_autoland":
         extras = {
             "landed_count": len(result.get("landed", [])),
             "failed": result.get("failed_wave") is not None,
@@ -275,92 +226,6 @@ def commit_worktree_state(
             return result
     finally:
         ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
-
-
-@register("state.wave_land")
-async def wave_land_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Daemon-owned implementation of ``eawf batch integrate``."""
-    args = WaveLandParams.model_validate(params)
-    repo_root = Path(args.repo_root)
-
-    from eawf.runtime.worktree import wave_land, worktree_registry_lock
-
-    with worktree_registry_lock(repo_root, timeout=5.0):
-        landed = commit_worktree_state(
-            ctx=ctx,
-            repo_root=repo_root,
-            params=params,
-            command="state.wave_land",
-            scope_id=args.wave_id,
-            apply_func=lambda state: _wave_land_payload(
-                wave_land(
-                    state,
-                    repo_root=repo_root,
-                    wave_id=args.wave_id,
-                    outcome=args.outcome,
-                    keep_worktree=args.keep_worktree,
-                    defer_close=True,
-                )
-            ),
-        )
-    from eawf.runtime.daemon.methods.close import submit as submit_close
-
-    submitted = await submit_close(
-        ctx,
-        {
-            "wave_id": args.wave_id,
-            "outcome": landed["outcome"],
-            "commit": landed["merged_commit"],
-            "repo_root": str(repo_root),
-        },
-    )
-    landed["close_attempt"] = submitted["attempt"]
-    landed["close_backgrounded"] = submitted["backgrounded"]
-    return WaveLandRpcResult.model_validate(landed).model_dump(mode="json")
-
-
-@register("state.wave_land_batch")
-async def wave_land_batch_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Integrate a batch, then submit each durable close outside the state lock."""
-    args = WaveLandBatchParams.model_validate(params)
-    repo_root = Path(args.repo_root)
-
-    from eawf.runtime.worktree import wave_land_batch, worktree_registry_lock
-
-    with worktree_registry_lock(repo_root, timeout=5.0):
-        landed = commit_worktree_state(
-            ctx=ctx,
-            repo_root=repo_root,
-            params=params,
-            command="state.wave_land_batch",
-            scope_id=args.iter_id,
-            apply_func=lambda state: _wave_land_batch_payload(
-                wave_land_batch(
-                    state,
-                    repo_root=repo_root,
-                    iter_id=args.iter_id,
-                    ready_only=args.ready_only,
-                    keep_worktree=args.keep_worktree,
-                    defer_close=True,
-                ),
-                close_mode="durable_async",
-            ),
-        )
-    from eawf.runtime.daemon.methods.close import submit as submit_close
-
-    for row in landed["landed"]:
-        submitted = await submit_close(
-            ctx,
-            {
-                "wave_id": row["wave"],
-                "outcome": row["outcome"],
-                "commit": row["merged_commit"],
-                "repo_root": str(repo_root),
-            },
-        )
-        row["close_attempt"] = submitted["attempt"]
-        row["close_backgrounded"] = submitted["backgrounded"]
-    return WaveLandBatchRpcResult.model_validate(landed).model_dump(mode="json")
 
 
 @register("state.wave_autoland")

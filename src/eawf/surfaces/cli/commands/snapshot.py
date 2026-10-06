@@ -90,12 +90,6 @@ SNAPSHOT_SURFACES: dict[str, SnapshotSurface] = {
             description="Dispatch envelope per runtime x skill.",
         ),
         SnapshotSurface(
-            kind="plan_view",
-            golden_dir="tests/golden/surfaces/render/plan_view",
-            regen_target="tests/golden/surfaces/render/test_golden_plan_view.py",
-            description="`eawf plan show` ASCII render per fixture (small/medium/large).",
-        ),
-        SnapshotSurface(
             kind="spec",
             golden_dir="tests/golden/spec",
             regen_target="tests/golden/spec",

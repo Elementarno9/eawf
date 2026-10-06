@@ -1,19 +1,10 @@
 """Integration: spawn-safety wiring.
 
-Pins the three seams this wave wired together so the safety floor is no
-longer idle:
-
-C1 -- a spawned jailed child's outbound is routed through the egress
-proxy (a denied host is refused and recorded), AND a hard token-cap
-breach terminates the live wave through the *threaded pgid*
-(``terminated=True``), proven by driving
-:func:`eawf.runtime.daemon.dispatch_runner.accrue_tokens_consumed` with a
-real pgid + ``enforce="hard"`` and an injected kill ladder.
-
-C2 -- each sandbox enforcement event (argv-deny / egress-block /
-env-scrub / cwd-guard) is persisted to the event feed with the five named
-fields (``ts``, ``session``, ``kind``, ``target``, ``severity``) so a TUI
-denial-timeline surface can read the denial sequence off the feed.
+Pins the seams that keep the safety floor from going idle: a spawned
+jailed child's outbound is routed through the egress proxy (a denied host
+is refused and recorded), and a sandbox enforcement event carries the
+five named fields (``ts``, ``session``, ``kind``, ``target``,
+``severity``) and rejects any other shape.
 
 Boundary + error paths: the concurrent-spawn cap fails fast at the
 ceiling; the env-scrub recorder names how many cred vars were dropped.
@@ -26,7 +17,6 @@ touches the real network -- the outbound connector is always a fake.
 from __future__ import annotations
 
 import asyncio
-import json
 import shutil
 import sys
 import tempfile
@@ -36,18 +26,9 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.state.models import State
-from eawf.runtime.budget.policy import BudgetConfig, classify_enforcement
+from eawf.runtime.budget.policy import classify_enforcement
 from eawf.runtime.budget.service import TerminationResult
-from eawf.runtime.daemon import dispatch_runner
-from eawf.runtime.daemon.budget_interlock import InterlockOutcome, enforce_token_cap
-from eawf.runtime.daemon.dispatch_runner import (
-    DispatchTokens,
-    accrue_tokens_consumed,
-    enforcement_sink,
-    persist_enforcement_event,
-)
-from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.budget_interlock import enforce_token_cap
 from eawf.runtime.runtimes import adapter as shared_adapter
 from eawf.runtime.runtimes.claude import adapter as claude_adapter
 from eawf.runtime.runtimes.claude.adapter import (
@@ -63,142 +44,8 @@ from eawf.runtime.sandbox.egress_proxy import (
 
 pytestmark = pytest.mark.integration
 
-_WAVE_ID = "P30-I10-W04"
 _SESSION_ID = "SES-executor"
 _CLAUDE = "claude"
-
-
-# ---------------------------------------------------------------------------
-# State + ctx fixtures (mirrors test_dispatch_runner_budget_halt)
-# ---------------------------------------------------------------------------
-
-
-def _state_payload(*, token_budget: int | None) -> dict[str, Any]:
-    return {
-        "schema_version": "1.0",
-        "scope_kind": "repo",
-        "urn": "urn:eawf:v1:state:EAWF",
-        "updated_at": "2026-06-10T00:00:00Z",
-        "project": {
-            "code": "EAWF",
-            "slug": "eawf",
-            "title": "Eawf",
-            "description": "",
-            "domains": ["workflow"],
-            "default_branch": "main",
-            "status": "active",
-            "repo_urn": "urn:eawf:v1:repo:EAWF",
-        },
-        "current": {
-            "project_code": "EAWF",
-            "track_id": None,
-            "phase_id": "P30",
-            "iter_id": "P30-I10",
-            "active_wave_ids": [_WAVE_ID],
-            "active_session_ids": [_SESSION_ID],
-        },
-        "workspace": None,
-        "phases": {
-            "P30": {
-                "id": "P30",
-                "scope_id": "EAWF",
-                "title": "Binding pass",
-                "status": "active",
-                "iter_ids": ["P30-I10"],
-                "outcome_ids": [],
-                "opened_at": "2026-06-10T00:00:00Z",
-                "closed_at": None,
-                "audit_id": None,
-            }
-        },
-        "iters": {
-            "P30-I10": {
-                "id": "P30-I10",
-                "phase_id": "P30",
-                "title": "Substrate",
-                "status": "active",
-                "wave_ids": [_WAVE_ID],
-                "estimate_id": None,
-                "audit_id": None,
-                "opened_at": "2026-06-10T00:00:00Z",
-                "closed_at": None,
-            }
-        },
-        "waves": {
-            _WAVE_ID: {
-                "id": _WAVE_ID,
-                "iter_id": "P30-I10",
-                "title": "Spawn-safety wiring",
-                "status": "in_progress",
-                "deps": [],
-                "blocks": [],
-                "file_scopes": ["src/eawf/runtime/sandbox/egress_proxy.py"],
-                "success_criteria": [],
-                "agent_role": "executor",
-                "effort_bucket": "M",
-                "claim_session_id": _SESSION_ID,
-                "worktree_id": None,
-                "token_budget": token_budget,
-                "tokens_consumed": 0,
-                "outcome": None,
-                "opened_at": "2026-06-10T00:00:00Z",
-                "closed_at": None,
-            }
-        },
-        "artifacts": {},
-        "agent_sessions": {
-            _SESSION_ID: {
-                "id": _SESSION_ID,
-                "role": "executor",
-                "runtime": "claude",
-                "scope_id": _WAVE_ID,
-                "status": "active",
-                "claimed_wave_ids": [_WAVE_ID],
-                "worktree_ids": [],
-                "artifact_ids": [],
-                "started_at": "2026-06-10T00:00:00Z",
-                "ended_at": None,
-                "summary": None,
-            }
-        },
-        "plugins": {},
-        "indexes": {},
-    }
-
-
-def _write_state(tmp_path: Path, *, token_budget: int | None) -> Path:
-    state = State.model_validate(_state_payload(token_budget=token_budget))
-    state_dir = tmp_path / ".ea"
-    state_dir.mkdir()
-    path = state_dir / "state.json"
-    path.write_text(state.model_dump_json(), encoding="utf-8")
-    return path
-
-
-def _ctx(state_path: Path) -> MethodContext:
-    event_path = state_path.parent / "store" / "event.jsonl"
-    return MethodContext(
-        started_at="2026-06-10T00:00:00+00:00",
-        pid=4321,
-        protocol_version="1",
-        version="0.6.0",
-        bus=None,
-        event_path=event_path,
-        state_path=state_path,
-    )
-
-
-def _tokens(total: int) -> DispatchTokens:
-    return DispatchTokens(
-        input_tokens=total,
-        output_tokens=0,
-        cache_creation_input_tokens=0,
-        cache_read_input_tokens=0,
-    )
-
-
-def _read_events(event_path: Path) -> list[dict[str, Any]]:
-    return [json.loads(line) for line in event_path.read_text().splitlines() if line.strip()]
 
 
 @pytest.fixture
@@ -323,171 +170,6 @@ def test_jailed_child_egress_allows_listed_host_no_block_recorded(
     assert status.startswith(b"OK")
     assert calls == [("api.anthropic.com", 443)]
     assert recorded == []  # an allowed host is not a denial
-
-
-# ---------------------------------------------------------------------------
-# C1b: a hard token-cap breach terminates the live wave via the threaded pgid
-# ---------------------------------------------------------------------------
-
-
-def test_hard_cap_breach_terminates_via_threaded_pgid(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A hard-enforce cap breach reaps the threaded pgid (terminated=True).
-
-    Drives the accrual with a real pgid + ``enforce="hard"`` over a budget
-    the burn crosses. The kill ladder is injected so no real signal is
-    delivered; the load-bearing assertion is that the THREADED pgid reached
-    the ladder and the interlock reports ``terminated=True``.
-    """
-    state_path = _write_state(tmp_path, token_budget=1000)
-    ctx = _ctx(state_path)
-    captured_pgid: list[int] = []
-
-    def _fake_cancel(pgid: int) -> TerminationResult:
-        captured_pgid.append(pgid)
-        return TerminationResult(
-            sigterm_sent=True,
-            sigkill_sent=False,
-            exited_on_term=True,
-            waited_seconds=0.0,
-        )
-
-    def _enforce_with_fake_cancel(**kwargs: Any) -> InterlockOutcome:
-        # Drive the REAL interlock so the real classifier produces the HALT
-        # verdict; only the kill ladder is faked (no live signal).
-        return enforce_token_cap(**kwargs, cancel=_fake_cancel)
-
-    monkeypatch.setattr(dispatch_runner, "enforce_token_cap", _enforce_with_fake_cancel)
-
-    outcome = accrue_tokens_consumed(
-        ctx, wave_id=_WAVE_ID, tokens=_tokens(2000), pgid=4242, budget=BudgetConfig(enforce="hard")
-    )
-
-    assert outcome is not None
-    assert outcome.terminated is True
-    assert outcome.decision.over_cap is True
-    # The THREADED pgid is the one the ladder reaped.
-    assert captured_pgid == [4242]
-
-
-def test_soft_cap_breach_does_not_terminate_even_with_pgid(
-    tmp_path: Path,
-) -> None:
-    """Under soft enforce a cap breach never reaps the group (terminated=False)."""
-    state_path = _write_state(tmp_path, token_budget=1000)
-    ctx = _ctx(state_path)
-
-    outcome = accrue_tokens_consumed(
-        ctx, wave_id=_WAVE_ID, tokens=_tokens(5000), pgid=4242, budget=BudgetConfig(enforce="soft")
-    )
-
-    assert outcome is not None
-    assert outcome.terminated is False
-
-
-def test_hard_cap_breach_with_no_pgid_logs_but_does_not_terminate(
-    tmp_path: Path,
-) -> None:
-    """A hard breach with no addressable pgid computes the HALT but signals nothing."""
-    state_path = _write_state(tmp_path, token_budget=1000)
-    ctx = _ctx(state_path)
-
-    outcome = accrue_tokens_consumed(
-        ctx, wave_id=_WAVE_ID, tokens=_tokens(2000), pgid=None, budget=BudgetConfig(enforce="hard")
-    )
-
-    assert outcome is not None
-    assert outcome.terminated is False  # no addressable group to reap
-    assert outcome.decision.over_cap is True
-
-
-# ---------------------------------------------------------------------------
-# C2: every enforcement event is persisted to the feed with the 5 named fields
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("kind", "target", "severity"),
-    [
-        ("argv-deny", "Bash WebFetch", "block"),
-        ("egress-block", "evil.test:443", "block"),
-        ("env-scrub", "dropped=7", "block"),
-        ("cwd-guard", "/outside/repo", "warn"),
-    ],
-)
-def test_enforcement_event_persisted_with_five_fields(
-    tmp_path: Path, kind: str, target: str, severity: str
-) -> None:
-    """Each enforcement kind lands on the feed with ts/session/kind/target/severity."""
-    state_path = _write_state(tmp_path, token_budget=None)
-    ctx = _ctx(state_path)
-    event = make_enforcement_event(
-        session=_SESSION_ID,
-        kind=kind,  # type: ignore[arg-type]
-        target=target,
-        severity=severity,  # type: ignore[arg-type]
-    )
-
-    envelope_id = persist_enforcement_event(ctx, event)
-
-    rows = _read_events(ctx.event_path)
-    assert len(rows) == 1
-    row = rows[0]
-    assert row["id"] == envelope_id
-    assert row["kind"] == "event"
-    assert row["scope_id"] == _SESSION_ID
-    extras = row["payload"]["extras"]
-    # The five named C2 fields ride the payload extras for the TUI timeline.
-    assert set(extras) >= {"ts", "session", "kind", "target", "severity"}
-    assert extras["session"] == _SESSION_ID
-    assert extras["kind"] == kind
-    assert extras["target"] == target
-    assert extras["severity"] == severity
-    # ts round-trips as an ISO-8601 string.
-    assert extras["ts"] == event.ts.isoformat()
-
-
-def test_enforcement_sink_persists_each_event_through_ctx(tmp_path: Path) -> None:
-    """The ctx-bound sink persists every event a sandbox boundary hands it."""
-    state_path = _write_state(tmp_path, token_budget=None)
-    ctx = _ctx(state_path)
-    sink = enforcement_sink(ctx)
-
-    for kind, target in (
-        ("argv-deny", "Bash"),
-        ("egress-block", "evil.test:443"),
-        ("env-scrub", "dropped=3"),
-        ("cwd-guard", "/outside"),
-    ):
-        sink(
-            make_enforcement_event(
-                session=_SESSION_ID,
-                kind=kind,  # type: ignore[arg-type]
-                target=target,
-            )
-        )
-
-    rows = _read_events(ctx.event_path)
-    kinds = [row["payload"]["extras"]["kind"] for row in rows]
-    assert kinds == ["argv-deny", "egress-block", "env-scrub", "cwd-guard"]
-
-
-def test_persist_enforcement_event_without_event_path_raises(tmp_path: Path) -> None:
-    """A ctx with no event_path fails fast rather than silently dropping the row."""
-    ctx = MethodContext(
-        started_at="2026-06-10T00:00:00+00:00",
-        pid=1,
-        protocol_version="1",
-        version="0.6.0",
-        bus=None,
-        event_path=None,
-        state_path=None,
-    )
-    event = make_enforcement_event(session=_SESSION_ID, kind="argv-deny", target="Bash")
-
-    with pytest.raises(RuntimeError, match="event_path not configured"):
-        persist_enforcement_event(ctx, event)
 
 
 # ---------------------------------------------------------------------------

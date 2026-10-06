@@ -1,8 +1,7 @@
-"""Workflow layer: lifecycle, evidence, skills, and dispatch packages.
+"""Workflow layer: evidence, skills, audit and dispatch packages.
 
 The workflow super-package groups the packages that drive the agent-driven
 delivery loop on top of the kernel data model:
-:mod:`~eawf.workflow.lifecycle` (phase/iter/wave transitions),
 :mod:`~eawf.workflow.evidence` (hypotheses, audits, backlog, incidents),
 :mod:`~eawf.workflow.skills` (skill flow + context),
 :mod:`~eawf.workflow.agents` and :mod:`~eawf.workflow.agent_report`

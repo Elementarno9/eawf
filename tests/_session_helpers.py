@@ -1,16 +1,15 @@
-"""Test helpers for lifecycle paths that require a live claim session."""
+"""Test helpers that seed live claim sessions into epoch-1 state."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import orjson
 
 from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus
 from eawf.kernel.state.models import AgentSession, State, Wave
-from eawf.workflow.lifecycle.transitions import claim_wave
+from tests._epoch1_seed import seed_claim
 
 
 def seed_active_session(
@@ -41,16 +40,13 @@ def claim_wave_with_session(
     *,
     wave_id: str,
     session_id: str,
-    **kwargs: Any,
 ) -> Wave:
-    """Seed a matching broad-scope session, then call the real transition."""
-    wave = state.waves.get(wave_id)
-    if wave is None:
-        return claim_wave(state, wave_id=wave_id, session_id=session_id, **kwargs)
+    """Seed a matching broad-scope session, then mark the wave CLAIMED by it."""
+    wave = state.waves[wave_id]
     role = wave.agent_role or AgentSessionRole.EXECUTOR
     if session_id not in state.agent_sessions:
         seed_active_session(state, session_id=session_id, role=role)
-    return claim_wave(state, wave_id=wave_id, session_id=session_id, **kwargs)
+    return seed_claim(state, wave_id=wave_id, session_id=session_id)
 
 
 def seed_active_session_on_disk(

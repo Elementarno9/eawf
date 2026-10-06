@@ -3,34 +3,26 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.state.enums import AgentReportVerdict, Confidence
-from eawf.kernel.state.models import State
-from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import (
-    AgentReportPayload,
     ExecutorReportBody,
     ExecutorTestRun,
     PlannerReportBody,
 )
 from eawf.platform.lint.kind_taxonomy import REPRO_TEST_NAME
-from eawf.runtime.daemon.dispatch_runner import emit_agent_end_report
-from eawf.runtime.daemon.methods import MethodContext
 from eawf.surfaces.render.agents import _EXECUTOR_BODY
 from eawf.workflow.agents.specs.models import SubagentSpec
 from eawf.workflow.verify.dispatch_close import (
-    DispatchCloseBlockedError,
     verify_close_readiness,
 )
 from eawf.workflow.verify.red_to_green import red_to_green_close_findings
 
 _WAVE_ID = "P01-I01-W01"
-_SESSION_ID = "SES-executor-w01"
 _UNIT_TEST = "tests/unit/test_x.py::test_x"
 _REPRO_TEST = "tests/unit/test_x.py::test_x_repro_42"
 
@@ -182,147 +174,6 @@ def test_verify_close_readiness_clean_pair_has_no_advisory() -> None:
     result = verify_close_readiness(_WAVE_ID, report)
     assert result.passed
     assert result.advisories == ()
-
-
-# ---- dispatch close path ---------------------------------------------------
-
-
-def _write_state(tmp_path: Path) -> Path:
-    stamp = "2026-09-25T00:00:00Z"
-    payload: dict[str, Any] = {
-        "schema_version": "1.0",
-        "scope_kind": "repo",
-        "urn": "urn:eawf:v1:state:EAWF",
-        "updated_at": stamp,
-        "project": {
-            "code": "EAWF",
-            "slug": "eawf",
-            "title": "Eawf",
-            "description": "",
-            "domains": ["workflow"],
-            "default_branch": "main",
-            "status": "active",
-            "repo_urn": "urn:eawf:v1:repo:EAWF",
-        },
-        "current": {
-            "project_code": "EAWF",
-            "track_id": None,
-            "phase_id": "P01",
-            "iter_id": "P01-I01",
-            "active_wave_ids": [],
-            "active_session_ids": [_SESSION_ID],
-        },
-        "workspace": None,
-        "phases": {
-            "P01": {
-                "id": "P01",
-                "scope_id": "EAWF",
-                "title": "Phase",
-                "status": "active",
-                "iter_ids": ["P01-I01"],
-                "outcome_ids": [],
-                "opened_at": stamp,
-                "closed_at": None,
-                "audit_id": None,
-            }
-        },
-        "iters": {
-            "P01-I01": {
-                "id": "P01-I01",
-                "phase_id": "P01",
-                "title": "Iter",
-                "status": "active",
-                "wave_ids": [_WAVE_ID],
-                "estimate_id": None,
-                "audit_id": None,
-                "opened_at": stamp,
-                "closed_at": None,
-            }
-        },
-        "waves": {
-            _WAVE_ID: {
-                "id": _WAVE_ID,
-                "iter_id": "P01-I01",
-                "title": "Fix a defect",
-                "status": "in_progress",
-                "deps": [],
-                "blocks": [],
-                "file_scopes": ["src/x.py"],
-                "success_criteria": [],
-                "agent_role": "executor",
-                "effort_bucket": "S",
-                "claim_session_id": _SESSION_ID,
-                "worktree_id": None,
-                "token_budget": None,
-                "tokens_consumed": 0,
-                "outcome": None,
-                "opened_at": stamp,
-                "closed_at": None,
-            }
-        },
-        "artifacts": {},
-        "agent_sessions": {
-            _SESSION_ID: {
-                "id": _SESSION_ID,
-                "role": "executor",
-                "runtime": "claude",
-                "scope_id": _WAVE_ID,
-                "status": "active",
-                "claimed_wave_ids": [_WAVE_ID],
-                "worktree_ids": [],
-                "artifact_ids": [],
-                "started_at": stamp,
-                "ended_at": None,
-                "summary": None,
-            }
-        },
-        "plugins": {},
-        "indexes": {},
-    }
-    state_dir = tmp_path / ".ea"
-    state_dir.mkdir()
-    path = state_dir / "state.json"
-    path.write_text(State.model_validate(payload).model_dump_json(), encoding="utf-8")
-    return path
-
-
-def _emit(state_path: Path, report: ExecutorReportBody) -> str:
-    ctx = MethodContext(
-        started_at="2026-09-25T00:00:00+00:00",
-        pid=4321,
-        protocol_version="1",
-        version="0.7.0",
-        bus=None,
-        event_path=state_path.parent / "store" / "event.jsonl",
-        state_path=state_path,
-    )
-    return emit_agent_end_report(
-        ctx,
-        session_id=_SESSION_ID,
-        wave_id=_WAVE_ID,
-        commit_sha="abcdef1",
-        outcome="done",
-        runtime="claude",
-        report_body=report,
-    )
-
-
-def test_emit_agent_end_report_blocks_repro_test_that_never_ran_red(tmp_path: Path) -> None:
-    state_path = _write_state(tmp_path)
-    with pytest.raises(DispatchCloseBlockedError, match="red-to-green"):
-        _emit(state_path, _report(_run(_REPRO_TEST, "green")))
-
-
-def test_emit_agent_end_report_persists_test_runs_and_closes_on_advisory(
-    tmp_path: Path,
-) -> None:
-    state_path = _write_state(tmp_path)
-    assert _emit(state_path, _report(_run(_UNIT_TEST, "green")))
-    store = state_path.parent / "store" / "executor_report.jsonl"
-    line = store.read_text(encoding="utf-8").splitlines()[-1]
-    payload = AgentReportPayload.model_validate(Envelope.model_validate_json(line).payload)
-    assert isinstance(payload.body, ExecutorReportBody)
-    assert [run.outcome for run in payload.body.test_runs] == ["green"]
 
 
 # ---- executor prompt contract ----------------------------------------------

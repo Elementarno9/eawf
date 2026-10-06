@@ -13,7 +13,6 @@ from eawf.surfaces.render.narrative import (
     NarrativeNotFoundError,
     build_narrative,
     generated_changelog_lines,
-    render_narrative_bundle,
 )
 
 
@@ -130,10 +129,6 @@ def test_build_narrative_emits_required_sections() -> None:
         "1 wave commit(s) pinned in state.",
     ]
     assert bundle.risks == ["No open risks recorded."]
-
-    rendered = render_narrative_bundle(bundle)
-    for heading in ("## What", "## Why", "## Validation", "## Risks"):
-        assert heading in rendered
 
 
 def test_build_narrative_unknown_scope_raises() -> None:
