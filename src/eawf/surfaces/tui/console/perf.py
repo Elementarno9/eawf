@@ -73,6 +73,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.fixture import Detail, Fixture, FleetRow, load_fixture
@@ -396,6 +397,7 @@ def _run_child(argv: Sequence[str], env: Mapping[str, str]) -> subprocess.Comple
             text=True,
             check=False,
             timeout=_COLD_PAINT_TIMEOUT_S,
+            **no_window_kwargs(),
         )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"the cold-paint child outlived {_COLD_PAINT_TIMEOUT_S:.0f}s") from exc

@@ -44,6 +44,7 @@ from eawf.kernel.release.signals import (
     ReleaseSignalStatus,
 )
 from eawf.kernel.spec.common import _StrictModel
+from eawf.platform.subprocess_detach import no_window_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -279,6 +280,7 @@ def source_date_epoch(repo_root: Path, source_sha: str) -> int:
         text=True,
         timeout=GIT_TIMEOUT_SECONDS,
         check=False,
+        **no_window_kwargs(),
     )
     if completed.returncode != 0:
         raise ValueError(
@@ -497,6 +499,7 @@ def uv_build(repo_root: Path, out_dir: Path, epoch: int) -> None:
         text=True,
         env={**os.environ, SOURCE_DATE_EPOCH_ENV: str(epoch)},
         check=False,
+        **no_window_kwargs(),
     )
     if completed.returncode != 0:
         raise ValueError(

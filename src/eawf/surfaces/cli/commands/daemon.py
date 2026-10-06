@@ -452,6 +452,19 @@ def stop_cmd(
     params: dict[str, Any] = {"drain": not no_drain, "timeout_seconds": timeout}
     try:
         response = _run_rpc("daemon.shutdown", params)
+    except ConnectionResetError as exc:
+        # Only the win32 pipe client turns the daemon's exit-as-it-answers
+        # race (pipe errors 109/232) into a reset; on a Unix socket a reset
+        # is a genuine fault and must not read as a clean shutdown.
+        if sys.platform != "win32":
+            typer.echo(f"daemon shutdown failed: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        emit_json_or_text(
+            {"shutdown_at": None, "drained": None, "reply_lost": True},
+            "daemon shutting down (closed the transport before replying)",
+            flags=flags,
+        )
+        return
     except (ConnectionRefusedError, FileNotFoundError, DaemonSpawnTimeoutError) as exc:
         typer.echo(f"daemon not reachable: {exc}", err=True)
         raise typer.Exit(code=1) from exc

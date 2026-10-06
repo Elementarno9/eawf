@@ -294,4 +294,8 @@ def _ensure_utf8_console() -> None:
 def main() -> None:
     _ensure_utf8_console()
     _configure_logging()
-    app()
+    # Pin the program name: Click otherwise derives it from argv[0], which is
+    # ``eawf.exe`` on win32, so shell completion listened for
+    # ``_EAWF.EXE_COMPLETE`` instead of the ``_EAWF_COMPLETE`` the completion
+    # scripts export, and a completion request launched the TUI instead.
+    app(prog_name="eawf")

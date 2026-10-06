@@ -59,6 +59,7 @@ import typer
 
 from eawf.kernel.state.enums import BacklogStatus, WaveStatus
 from eawf.kernel.state.resolve import resolve_with_reason
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.cli import errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
@@ -88,6 +89,7 @@ def _run_git(args: list[str], cwd: Path) -> str | None:
             capture_output=True,
             text=True,
             timeout=_GIT_TIMEOUT_SECONDS,
+            **no_window_kwargs(),
         )
     except subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired:
         return None

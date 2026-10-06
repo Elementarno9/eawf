@@ -36,6 +36,7 @@ import logging
 import os
 import re
 import shlex
+import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
@@ -296,9 +297,24 @@ def _judge_patch(patch: str, *, cwd: Path) -> DataLossDenial | None:
 # --- paths -----------------------------------------------------------------
 
 
+#: Drive-letter spellings a POSIX shell on win32 uses for ``X:\``: Git Bash /
+#: MSYS2 (``/c/...``), Cygwin (``/cygdrive/c/...``) and WSL (``/mnt/c/...``).
+_WIN32_SHELL_DRIVE = re.compile(r"^/(?:cygdrive/|mnt/)?([A-Za-z])(?=/|$)")
+
+
 def _resolve(base: Path, raw: str) -> Path:
-    """Resolve *raw* against *base* the way a shell would, without touching the disk."""
+    """Resolve *raw* against *base* the way a shell would, without touching the disk.
+
+    On win32 a POSIX shell's drive spelling is mapped to its drive first: the
+    Claude Code Bash tool there is Git Bash, where ``/c/work/x`` is
+    ``C:\\work\\x``. Left as is, it has no drive, so it resolved under the
+    current drive as ``C:\\c\\work\\x`` and slipped past every check.
+    """
     expanded = os.path.expanduser(raw)
+    if sys.platform == "win32":
+        expanded = _WIN32_SHELL_DRIVE.sub(lambda m: f"{m.group(1).upper()}:", expanded, count=1)
+        if len(expanded) == 2 and expanded[1] == ":":
+            expanded += "/"
     path = Path(expanded)
     return Path(os.path.normpath(path if path.is_absolute() else base / path))
 

@@ -44,6 +44,7 @@ from typing import TYPE_CHECKING, Annotated
 
 import typer
 
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.commands.release import release_app
@@ -214,6 +215,7 @@ def _head_revision(repo_root: Path) -> str | None:
         capture_output=True,
         text=True,
         check=False,
+        **no_window_kwargs(),
     )
     return result.stdout.strip() or None
 
@@ -386,6 +388,7 @@ def release_tag(
             capture_output=True,
             text=True,
             check=True,
+            **no_window_kwargs(),
         )
         tag_exists = bool(listing.stdout.strip())
         plan: dict[str, object] = {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import subprocess
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,14 +12,27 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.config.migration import migrate_config_file
+from eawf.kernel.identity import EntityKind, format_qualified_urn
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import State
+from eawf.kernel.store.compaction import document_rows, read_document
+from eawf.kernel.store.ledger import guarded_ledger_write, render_ledger_line
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.kernel.validate.strict import validate_state
 from eawf.observability.doctor.repair import (
+    ARCHIVE_REF_PREFIX,
+    LEDGER_SUPERSEDE_ACTION,
     DoctorRepairAction,
     build_repair_plan,
     digest_repair_actions,
+    ledger_supersession_digest,
+    plan_ledger_supersessions,
+    superseding_record,
 )
+from eawf.platform.subprocess_detach import no_window_kwargs
+from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.gate_receipt_hygiene import scrub_gate_receipt_store
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 from eawf.runtime.lock import portalock
@@ -157,11 +171,81 @@ def _apply_sync(workspace: Path) -> tuple[str, int]:
     return ("applied" if changed else "noop"), changed
 
 
+def _project_lock_urn(context: Epoch2RootContext) -> str:
+    """Return the URN of the tree's one project, the lock a tree-wide append holds.
+
+    Raises:
+        DaemonValidationError: The document does not hold exactly one project.
+    """
+    authority = context.require_selected_generation()
+    assert authority.target is not None and authority.generation_id is not None
+    document = read_document(
+        authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    )
+    projects = sorted(document_rows(document, Epoch2Collection.PROJECT))
+    if len(projects) != 1:
+        raise DaemonValidationError(
+            f"ledger repair needs one project row; the selected document holds {len(projects)}"
+        )
+    return format_qualified_urn(
+        workspace_key=projects[0],
+        project_key=projects[0],
+        repository_key=None,
+        kind=EntityKind.PROJECT,
+        entity_key=projects[0],
+        single_key=True,
+    )
+
+
+def _apply_ledger_supersede(
+    ctx: MethodContext, workspace: Path, action: DoctorRepairAction
+) -> tuple[str, int]:
+    """Append the previewed superseding rows under the tree's session locks.
+
+    The plan is taken again under the locks and must match the preview, so
+    no row lands that the operator did not see. Ledgers are only extended,
+    through the guarded writer; a commit the rows declare unreachable is
+    pinned under its archive ref first, so the declaration never names a
+    ref that does not exist.
+    """
+    authority = resolve_authority(workspace / ".ea")
+    if authority.epoch != 2:
+        raise DaemonValidationError("ledger repair needs an epoch-2 tree")
+    context = ctx.native_root_context(authority.root)
+    with context.session([_project_lock_urn(context)]):
+        rows, _unrepairable = plan_ledger_supersessions(workspace)
+        if ledger_supersession_digest(workspace, rows) != action.preview_digest:
+            raise DaemonValidationError(
+                f"doctor repair preview changed: {action.action_id!r}; rerun `eawf doctor --fix`"
+            )
+        recorded_at = datetime.now(UTC)
+        appends: dict[str, bytes] = {}
+        for row in rows:
+            for entry in row.unreachable:
+                if entry.archive_ref.startswith(ARCHIVE_REF_PREFIX):
+                    subprocess.run(
+                        ["git", "update-ref", entry.archive_ref, entry.sha],
+                        cwd=workspace,
+                        capture_output=True,
+                        check=True,
+                        **no_window_kwargs(),
+                    )
+            line = render_ledger_line(superseding_record(workspace, row, recorded_at=recorded_at))
+            appends[row.path] = appends.get(row.path, b"") + f"{line}\n".encode()
+        for path, appended in appends.items():
+            ledger = workspace / path
+            guarded_ledger_write(ledger, ledger.read_bytes() + appended)
+    return ("applied" if rows else "noop"), len(rows)
+
+
 def _apply_action(
+    ctx: MethodContext,
     workspace: Path,
     state_path: Path,
     action: DoctorRepairAction,
 ) -> tuple[str, int]:
+    if action.action_id == LEDGER_SUPERSEDE_ACTION:
+        return _apply_ledger_supersede(ctx, workspace, action)
     if action.action_id.startswith("config.normalize."):
         return _apply_config(workspace, action)
     if action.action_id == "receipts.scrub":
@@ -245,7 +329,7 @@ async def apply_repair(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
             continue
         if action.mutation_class in {"user_service", "user_process"}:
             continue
-        status, records = _apply_action(workspace, state_path, action)
+        status, records = _apply_action(ctx, workspace, state_path, action)
         results.append(
             {
                 **action.model_dump(mode="json"),

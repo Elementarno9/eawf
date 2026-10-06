@@ -312,7 +312,9 @@ def create_worktree(
         id=record_id,
         wave_id=wave_id,
         branch=chosen_branch,
-        path=str(rel_path),
+        # POSIX separators: the record is committed state read on every host,
+        # and a win32 ``.ea\worktrees\x`` is one odd filename on POSIX.
+        path=rel_path.as_posix(),
         base_branch=chosen_base,
         status=WorktreeStatus.ACTIVE,
         owner_session_id=session_id,

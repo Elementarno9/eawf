@@ -44,6 +44,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 
 logger = logging.getLogger(__name__)
@@ -121,6 +122,7 @@ def check_svg_well_formed(spec: CheckSpec, cwd: Path) -> CheckResult:
                 capture_output=True,
                 text=True,
                 cwd=str(cwd),
+                **no_window_kwargs(),
             )
         except FileNotFoundError:
             logger.info(f"check_svg_well_formed blocked name={spec.name!r} reason=no-xmllint")

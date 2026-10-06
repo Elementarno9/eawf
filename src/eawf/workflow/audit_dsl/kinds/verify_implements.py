@@ -61,6 +61,7 @@ import yaml
 from pydantic import ValidationError
 
 from eawf.kernel.spec.wave import WaveSpec
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 
 logger = logging.getLogger(__name__)
@@ -163,6 +164,7 @@ def _git_diff_files(cwd: Path, diff_base: str) -> set[str]:
         capture_output=True,
         text=True,
         cwd=str(cwd),
+        **no_window_kwargs(),
     )
     if proc.returncode != 0:
         logger.debug(

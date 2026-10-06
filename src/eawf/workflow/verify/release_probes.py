@@ -59,6 +59,7 @@ from eawf.platform.lint.exclusion_expiry import (
     expired_exclusions,
     validate_renewals,
 )
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.tui.console.coverage_grid import (
     COVERAGE_MANIFEST_PATH,
     checkpoint_refusals,
@@ -194,6 +195,7 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         text=True,
         check=False,
         timeout=GIT_TIMEOUT_SECONDS,
+        **no_window_kwargs(),
     )
 
 

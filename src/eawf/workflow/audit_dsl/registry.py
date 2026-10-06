@@ -81,6 +81,7 @@ from eawf.platform.artifacts.references import (
 )
 from eawf.platform.artifacts.validation import REFERENCE_ROW_RE
 from eawf.platform.lint._conditional import changed_files
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, resolve_command_family
 from eawf.runtime.sandbox.env_scrub import (
     GATE_RUNTIME_LANE,
@@ -781,7 +782,10 @@ def _check_command_exit_zero(
             cwd=str(cwd),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             env=child_env,
+            **no_window_kwargs(),
         )
     except subprocess.TimeoutExpired as exc:
         _write_full_log(

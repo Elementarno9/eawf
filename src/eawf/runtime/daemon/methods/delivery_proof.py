@@ -57,6 +57,7 @@ from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.urns import TaskUrn
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.gate_execution import (
@@ -263,6 +264,7 @@ def _checkout(repository: Path, *, head_sha: str, where: Path) -> Iterator[Path]
         capture_output=True,
         text=True,
         check=False,
+        **no_window_kwargs(),
     )
     if added.returncode != 0:
         raise DaemonValidationError(
@@ -276,6 +278,7 @@ def _checkout(repository: Path, *, head_sha: str, where: Path) -> Iterator[Path]
             ["git", "-C", str(repository), "worktree", "remove", "--force", str(where)],
             capture_output=True,
             check=False,
+            **no_window_kwargs(),
         )
         shutil.rmtree(where, ignore_errors=True)
 

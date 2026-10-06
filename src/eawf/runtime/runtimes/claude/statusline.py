@@ -1,4 +1,4 @@
-"""Orchestrator for ``eawf cc statusline`` (Phase 4 W06).
+"""Orchestrator for ``eawf cc statusline``.
 
 Reads Claude's stdin JSON, calls each statusline module in fixed order,
 applies the configured theme, writes one line to stdout. Modules degrade
@@ -8,92 +8,100 @@ as a ``status="failed"`` segment so the whole pipeline never crashes.
 Design notes:
 
 - Module order is fixed (left-to-right): ``scope``, ``budget``, ``git``,
-  ``model_session_cwd``, ``context_tokens``, ``cost``, ``mcp_health``,
-  ``hooks_plugins``, ``memory``, ``token_saving``.
+  ``model_session_cwd``, ``context_tokens``, ``rate_window``, ``cost``,
+  ``mcp_health``, ``hooks_plugins``, ``memory``, ``token_saving``.
 - Every segment carries a truth field naming its producer, freshness and
   measurement quality; a value a module cannot source renders
   ``<label>:n/a(<reason>)``, never a bare ``?`` or ``-``.
 - Every module signature is uniform: ``build(claude_payload, state_path) ->
-  StatuslineSegment``. The orchestrator iterates the call list to keep the
-  cold path tight (no introspection, no plugin loop).
-- Cache hit path: when a per-session cache file exists at
-  ``~/.claude/statusline-cache/<session-id>.json`` and is fresh, the
-  orchestrator returns its cached line directly. The prewarm worker
-  (:func:`prewarm`) writes that file in the background so subsequent
-  ``statusline`` invocations skip the full module call list.
-- Cache freshness: a cache entry is considered fresh for the session id
-  for which it was written; staleness checks beyond that are reserved for
-  Phase 5.
+  StatuslineSegment``.
+- Caching is stale-while-revalidate through
+  :class:`~eawf.runtime.statusline_cache.StatuslineCache`, one entry for
+  each Claude session id. A hit (fresh or stale) is served without rendering; a
+  stale hit also starts a detached ``eawf cc statusline prewarm`` that
+  renders and rewrites the entry. Only a miss renders on the caller's time.
+- Claude Code runs the statusline on every redraw, so this module imports
+  nothing heavy at load time: the modules, the theme renderer, the state
+  resolver and the counter sidecar load only when a render actually runs.
+  The console entry point serves cache hits through
+  :func:`serve_cached_line` before the CLI app is imported at all.
+- The runtime counter sidecar is written whenever a render runs (a miss or
+  a background refresh), so it trails the live payload by at most one TTL.
 
 Public surface:
 
 - :func:`render_pipeline` — full module call + theme apply (always cold).
+- :func:`serve_cached_line` — hit-only path for the console entry point.
 - :func:`run_with_cache` — cache-aware entry point used by the CLI.
-- :func:`prewarm` — write the rendered line to the cache, exit silently.
-- :func:`cache_path_for` — cache-path resolver (exposed so the CLI can
-  echo it under ``--json``).
+- :func:`prewarm` — render, write the cache entry, exit silently.
+- :func:`cache_path_for` — cache-path resolver, shared with the counter
+  sidecar readers.
 """
 
 from __future__ import annotations
 
-import logging
 import os
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import orjson
 
-from eawf.runtime.runtime_counter_sidecar import (
-    RuntimeCounterSidecar,
-    sidecar_path_for_statusline_cache,
-)
-from eawf.runtime.runtimes.claude.runtime_counters import parse_runtime_counters
-from eawf.runtime.runtimes.claude.statusline_modules import (
-    budget,
-    context_tokens,
-    cost,
-    git,
-    hooks_plugins,
-    mcp_health,
-    memory,
-    model_session_cwd,
-    rate_window,
-    scope,
-    token_saving,
-)
-from eawf.surfaces.cli.scope import resolve_state_path
-from eawf.surfaces.render.statusline import (
-    SegmentSource,
-    StatuslineSegment,
-    StatuslineTheme,
-    load_themes,
-    render_segments,
-    resolve_theme,
-    unavailable_segment,
-)
+from eawf.runtime.statusline_cache import StatuslineCache
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    import logging
+    from types import ModuleType
+
+    from eawf.surfaces.render.statusline import StatuslineSegment, StatuslineTheme
 
 
-_MODULE_ORDER: list[Any] = [
-    scope,
-    budget,
-    git,
-    model_session_cwd,
-    context_tokens,
-    rate_window,
-    cost,
-    mcp_health,
-    hooks_plugins,
-    memory,
-    token_saving,
-]
-"""Ordered list of statusline modules. Each must expose a ``build``
-function with the signature
-``build(claude_payload: dict[str, Any], state_path: Path | None) -> StatuslineSegment``.
-"""
+def _logger() -> logging.Logger:
+    """Return this module's logger, importing :mod:`logging` on first use.
+
+    ``logging`` costs about a third of a cached statusline redraw, and a
+    cache hit logs nothing, so the import waits for the first log line.
+    """
+    import logging
+
+    return logging.getLogger(__name__)
+
+
+def _module_order() -> list[ModuleType]:
+    """Return the statusline modules in render order.
+
+    Each exposes ``build(claude_payload: dict[str, Any], state_path: Path |
+    None) -> StatuslineSegment``. Imported here, not at module load, so a
+    cache hit never pays for them.
+    """
+    from eawf.runtime.runtimes.claude.statusline_modules import (
+        budget,
+        context_tokens,
+        cost,
+        git,
+        hooks_plugins,
+        mcp_health,
+        memory,
+        model_session_cwd,
+        rate_window,
+        scope,
+        token_saving,
+    )
+
+    return [
+        scope,
+        budget,
+        git,
+        model_session_cwd,
+        context_tokens,
+        rate_window,
+        cost,
+        mcp_health,
+        hooks_plugins,
+        memory,
+        token_saving,
+    ]
 
 
 _CACHE_DIR_ENV: str = "EAWF_STATUSLINE_CACHE"
@@ -126,29 +134,38 @@ def cache_path_for(session_id: str) -> Path:
     return _cache_root() / f"{safe}.json"
 
 
-def _read_payload_from_stdin() -> dict[str, Any]:
+def _decode_payload(raw: str) -> dict[str, Any]:
     """Decode Claude's stdin JSON into a dict.
 
-    Empty stdin → empty dict. Decode errors → empty dict (logged at debug
+    Empty input → empty dict. Decode errors → empty dict (logged at debug
     level). The orchestrator must never raise here — a bad upstream
     payload is a degradation, not a crash.
     """
-    raw = sys.stdin.read()
     if not raw.strip():
         return {}
     try:
         decoded: Any = orjson.loads(raw)
     except orjson.JSONDecodeError as exc:
-        logger.debug(f"_read_payload_from_stdin stdin-json-decode-failed error={exc}")
+        _logger().debug(f"_decode_payload stdin-json-decode-failed error={exc}")
         return {}
     if not isinstance(decoded, dict):
-        logger.debug(f"_read_payload_from_stdin stdin-not-mapping got={type(decoded).__name__}")
+        _logger().debug(f"_decode_payload stdin-not-mapping got={type(decoded).__name__}")
         return {}
     return decoded
 
 
+def _session_id(claude_payload: dict[str, Any]) -> str | None:
+    """Return the payload's non-empty string ``session_id``, else ``None``."""
+    session_id = claude_payload.get("session_id")
+    if isinstance(session_id, str) and session_id:
+        return session_id
+    return None
+
+
 def _safe_resolve_state_path(workspace: Path | None) -> Path | None:
-    """Best-effort wrapper around :func:`resolve_state_path` returning ``None``."""
+    """Best-effort wrapper around ``resolve_state_path`` returning ``None``."""
+    from eawf.surfaces.cli.scope import resolve_state_path
+
     try:
         return resolve_state_path(workspace)
     except FileNotFoundError:
@@ -160,8 +177,10 @@ def _build_segments(
     state_path: Path | None,
 ) -> list[StatuslineSegment]:
     """Call every module, wrapping exceptions into a ``failed`` segment."""
+    from eawf.surfaces.render.statusline import SegmentSource, unavailable_segment
+
     segments: list[StatuslineSegment] = []
-    for module in _MODULE_ORDER:
+    for module in _module_order():
         module_name = module.__name__.rsplit(".", 1)[-1]
         try:
             segment = module.build(claude_payload, state_path)
@@ -169,7 +188,7 @@ def _build_segments(
             # Orchestrator must never crash — every module exception
             # collapses to a ``failed`` segment so the theme can decide
             # whether to skip or render its ``n/a(render-failed)`` marker.
-            logger.warning(f"_build_segments module-raised module={module_name!r} error={exc}")
+            _logger().warning(f"_build_segments module-raised module={module_name!r} error={exc}")
             source = SegmentSource(producer="eawf.statusline", provenance=module.__name__)
             segments.append(
                 unavailable_segment(
@@ -189,9 +208,10 @@ def render_pipeline(
 ) -> str:
     """Run every module + apply the theme; return the joined statusline string.
 
-    No caching — the cold path. Used directly by :func:`prewarm` and as the
-    fallback inside :func:`run_with_cache`.
+    No caching — the cold path, used for a cache miss and by :func:`prewarm`.
     """
+    from eawf.surfaces.render.statusline import render_segments
+
     state_path = _safe_resolve_state_path(workspace)
     segments = _build_segments(claude_payload, state_path)
     theme = _resolve_active_theme(theme_name)
@@ -200,6 +220,8 @@ def render_pipeline(
 
 def _resolve_active_theme(theme_name: str | None) -> StatuslineTheme:
     """Resolve the active theme honoring CLI flag + env var."""
+    from eawf.surfaces.render.statusline import load_themes, resolve_theme
+
     name = theme_name
     if not name:
         env_name = os.environ.get("EAWF_STATUSLINE_THEME")
@@ -209,62 +231,82 @@ def _resolve_active_theme(theme_name: str | None) -> StatuslineTheme:
     return resolve_theme(name, themes)
 
 
-def _read_cached_line(session_id: str) -> str | None:
-    """Return the cached statusline for *session_id*, or ``None`` on miss.
-
-    Cache miss reasons (any of which collapses to ``None``): file doesn't
-    exist, file is empty, file fails JSON decode, the JSON is not a
-    mapping, or the mapping has no ``line`` field.
-    """
-    if not session_id:
-        return None
-    path = cache_path_for(session_id)
-    if not path.exists():
-        return None
-    try:
-        raw = path.read_bytes()
-    except OSError as exc:
-        logger.debug(f"_read_cached_line cache-read-failed session={session_id!r} error={exc}")
-        return None
-    if not raw.strip():
-        return None
-    try:
-        decoded: Any = orjson.loads(raw)
-    except orjson.JSONDecodeError as exc:
-        logger.debug(
-            f"_read_cached_line cache-json-decode-failed session={session_id!r} error={exc}"
-        )
-        return None
-    if not isinstance(decoded, dict):
-        return None
-    line = decoded.get("line")
-    if not isinstance(line, str):
-        return None
-    return line
-
-
-def _write_cached_line(session_id: str, line: str) -> None:
-    """Write *line* to the cache file for *session_id* (best-effort)."""
-    if not session_id:
-        return
-    path = cache_path_for(session_id)
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        body = orjson.dumps({"session_id": session_id, "line": line})
-        path.write_bytes(body)
-    except OSError as exc:
-        logger.debug(f"_write_cached_line cache-write-failed session={session_id!r} error={exc}")
-
-
 def _write_runtime_counter_sidecar(session_id: str, claude_payload: dict[str, Any]) -> None:
     """Persist parsed runtime counters beside the statusline cache, best-effort."""
-    if not session_id:
-        return
+    from eawf.runtime.runtime_counter_sidecar import (
+        RuntimeCounterSidecar,
+        sidecar_path_for_statusline_cache,
+    )
+    from eawf.runtime.runtimes.claude.runtime_counters import parse_runtime_counters
+
     counters = parse_runtime_counters(claude_payload)
     if counters is None:
         return
     path = sidecar_path_for_statusline_cache(cache_path_for(session_id))
     RuntimeCounterSidecar(path).write(counters)
+
+
+def _render_session(
+    claude_payload: dict[str, Any],
+    session_id: str,
+    *,
+    workspace: Path | None,
+    theme_name: str | None,
+) -> str:
+    """Record the session's counters, then render its line."""
+    _write_runtime_counter_sidecar(session_id, claude_payload)
+    return render_pipeline(claude_payload, workspace=workspace, theme_name=theme_name)
+
+
+def _spawn_refresh(raw: str, *, workspace: Path | None, theme_name: str | None) -> None:
+    """Start a detached ``eawf cc statusline prewarm`` fed *raw* on stdin.
+
+    The payload goes through an unlinked temporary file rather than a pipe
+    so the caller never blocks on a child that is still importing. The
+    child gets its own session so it outlives the redraw that started it.
+    A failed spawn is logged at debug; the entry stays stale and the next
+    redraw past the TTL tries again.
+    """
+    import subprocess
+    import tempfile
+
+    from eawf.platform.subprocess_detach import no_window_kwargs
+
+    argv = [sys.executable, "-m", "eawf"]
+    if workspace is not None:
+        argv += ["--workspace", str(workspace)]
+    argv += ["cc", "statusline", "prewarm"]
+    if theme_name:
+        argv += ["--theme", theme_name]
+    try:
+        with tempfile.TemporaryFile() as payload:
+            payload.write(raw.encode("utf-8"))
+            payload.seek(0)
+            subprocess.Popen(
+                argv,
+                stdin=payload,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+                **no_window_kwargs(),
+            )
+    except OSError as exc:
+        _logger().debug(f"_spawn_refresh spawn-failed error={exc}")
+
+
+def serve_cached_line(raw: str, *, theme_name: str | None) -> str | None:
+    """Return the cached line for the payload in *raw*, or ``None`` to render.
+
+    The hit-only half of :func:`run_with_cache`, for the console entry
+    point: it renders nothing, so it loads none of the render stack. A
+    stale hit starts the background refresh. ``None`` means the caller must
+    take the full render path (no session id, or no usable entry).
+    """
+    session_id = _session_id(_decode_payload(raw))
+    if session_id is None:
+        return None
+    cache = StatuslineCache(cache_path_for(session_id))
+    return cache.serve_cached(lambda: _spawn_refresh(raw, workspace=None, theme_name=theme_name))
 
 
 def run_with_cache(
@@ -274,23 +316,23 @@ def run_with_cache(
 ) -> str:
     """Cache-aware entry point: read Claude stdin → return one statusline.
 
-    Strategy:
-
-    1. Decode Claude stdin (empty/garbage → empty dict; never raises).
-    2. If the payload carries a ``session_id`` and the cache hit succeeds,
-       return the cached line verbatim.
-    3. Otherwise run the full :func:`render_pipeline` and return its output.
-       (We do **not** populate the cache from the cold path — prewarm is
-       the only writer per the W06 acceptance contract.)
+    A payload without a session id renders uncached. Otherwise the session's
+    entry is served stale-while-revalidate: a hit returns the cached line
+    (a stale one also starts the background refresh) and a miss renders
+    synchronously and writes the entry.
     """
-    claude_payload = _read_payload_from_stdin()
-    session_id = claude_payload.get("session_id")
-    if isinstance(session_id, str) and session_id:
-        _write_runtime_counter_sidecar(session_id, claude_payload)
-        cached = _read_cached_line(session_id)
-        if cached is not None:
-            return cached
-    return render_pipeline(claude_payload, workspace=workspace, theme_name=theme_name)
+    raw = sys.stdin.read()
+    claude_payload = _decode_payload(raw)
+    session_id = _session_id(claude_payload)
+    if session_id is None:
+        return render_pipeline(claude_payload, workspace=workspace, theme_name=theme_name)
+    cache = StatuslineCache(cache_path_for(session_id))
+    return cache.serve(
+        lambda: _render_session(
+            claude_payload, session_id, workspace=workspace, theme_name=theme_name
+        ),
+        refresh=lambda: _spawn_refresh(raw, workspace=workspace, theme_name=theme_name),
+    )
 
 
 def prewarm(
@@ -298,20 +340,19 @@ def prewarm(
     workspace: Path | None,
     theme_name: str | None,
 ) -> str:
-    """Run the full render pipeline and write the line to the cache.
+    """Render the line from Claude stdin and write it to the session's cache.
 
-    Reads Claude stdin (the same shape ``run_with_cache`` consumes),
-    renders, and writes ``{"session_id": <id>, "line": <statusline>}`` to
-    ``cache_path_for(session_id)``. Returns the rendered line so the CLI
-    can echo it on demand. When ``session_id`` is missing or not a
-    string, the line is rendered but not cached.
+    This is the background refresh worker :func:`run_with_cache` spawns, and
+    a manual way to warm the cache. Returns the rendered line. When
+    ``session_id`` is missing or not a string, the line is rendered but not
+    cached.
     """
-    claude_payload = _read_payload_from_stdin()
-    line = render_pipeline(claude_payload, workspace=workspace, theme_name=theme_name)
-    session_id = claude_payload.get("session_id")
-    if isinstance(session_id, str) and session_id:
-        _write_runtime_counter_sidecar(session_id, claude_payload)
-        _write_cached_line(session_id, line)
+    claude_payload = _decode_payload(sys.stdin.read())
+    session_id = _session_id(claude_payload)
+    if session_id is None:
+        return render_pipeline(claude_payload, workspace=workspace, theme_name=theme_name)
+    line = _render_session(claude_payload, session_id, workspace=workspace, theme_name=theme_name)
+    StatuslineCache(cache_path_for(session_id)).write(line)
     return line
 
 
@@ -320,4 +361,5 @@ __all__ = [
     "prewarm",
     "render_pipeline",
     "run_with_cache",
+    "serve_cached_line",
 ]

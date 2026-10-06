@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import ntpath
 import os
 import shutil
 import socket
@@ -289,6 +290,63 @@ def backup_home_isolation(runtime_dir_isolation: RuntimeDirIsolation) -> Iterato
         yield home
     finally:
         monkeypatch.undo()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def registry_isolation(backup_home_isolation: Path) -> Iterator[Path]:
+    """Keep the registry row every ``eawf init`` writes out of the operator's ``~/.eawf``.
+
+    Init registers the repository and its workspace, so without this every
+    test that inits a tree would grow the real registry. The file sits
+    under the isolated backup home; a test that sets its own
+    ``EAWF_REGISTRY_PATH`` or passes an explicit path still wins.
+
+    Yields:
+        The isolated registry file.
+    """
+    registry = backup_home_isolation / ".eawf" / "registry.json"
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setenv("EAWF_REGISTRY_PATH", str(registry))
+    try:
+        yield registry
+    finally:
+        monkeypatch.undo()
+
+
+#: The variables Windows reads the home directory from instead of ``HOME``.
+WINDOWS_HOME_VARIABLES: tuple[str, ...] = ("USERPROFILE", "HOMEDRIVE", "HOMEPATH")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def home_mirror() -> Iterator[None]:
+    """Make a test-set ``HOME`` also govern the Windows home variables.
+
+    Tests isolate the home directory with ``monkeypatch.setenv("HOME", ...)``,
+    but on Windows ``Path.home()`` and ``os.path.expanduser`` read
+    ``USERPROFILE``, so without the mirror those tests would write the
+    operator's real ``~/.eawf``. The mirror rides on the same ``MonkeyPatch``
+    instance, so its undo restores the Windows variables with ``HOME``.
+    Session scope patches the class before any function fixture can set
+    ``HOME``. Deleting ``HOME`` is not mirrored: the Windows variables keep
+    whatever value they had.
+    """
+    original_setenv = pytest.MonkeyPatch.setenv
+
+    def setenv(self: pytest.MonkeyPatch, name: str, value: str, prepend: str | None = None) -> None:
+        original_setenv(self, name, value, prepend)
+        if name != "HOME":
+            return
+        home = os.environ["HOME"]
+        drive, path = ntpath.splitdrive(home)
+        for variable, mirrored in zip(WINDOWS_HOME_VARIABLES, (home, drive, path), strict=True):
+            original_setenv(self, variable, mirrored)
+
+    patcher = pytest.MonkeyPatch()
+    patcher.setattr(pytest.MonkeyPatch, "setenv", setenv)
+    try:
+        yield
+    finally:
+        patcher.undo()
 
 
 @pytest.fixture(scope="session", autouse=True)

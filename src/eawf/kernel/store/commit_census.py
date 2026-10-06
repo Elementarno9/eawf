@@ -29,6 +29,7 @@ from eawf.kernel.store.commit_policy import (
     census_findings,
     probe_paths,
 )
+from eawf.platform.subprocess_detach import no_window_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +67,11 @@ def _git(
             input=stdin,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             timeout=GIT_TIMEOUT_SECONDS,
+            **no_window_kwargs(),
         )
     except FileNotFoundError as exc:
         raise GitUnavailableError("the git binary is not on PATH") from exc
@@ -109,10 +113,14 @@ def _ignored_probes(repo_root: Path, probes: tuple[str, ...]) -> tuple[str, ...]
     """
     if not probes:
         return ()
-    result = _git(repo_root, "check-ignore", "--no-index", "--stdin", stdin="\n".join(probes))
+    # NUL-delimited both ways: a text-mode pipe rewrites "\n" as "\r\n" on
+    # win32, which hands git probe paths ending in "\r" that no rule matches.
+    result = _git(
+        repo_root, "check-ignore", "--no-index", "--stdin", "-z", stdin="\0".join(probes) + "\0"
+    )
     if result.returncode not in (0, 1):
         raise GitUnavailableError(f"git check-ignore failed: {result.stderr.strip()}")
-    return tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
+    return tuple(path for path in result.stdout.split("\0") if path)
 
 
 def run_census(repo_root: Path) -> tuple[CensusFinding, ...]:

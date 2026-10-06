@@ -21,12 +21,14 @@ identity + credential-absence + gate-files pair.
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from eawf.runtime.sandbox import env_scrub
 from eawf.runtime.sandbox.argv_policy import ArgvPolicyError
 from eawf.runtime.sandbox.env_scrub import (
     GATE_RUNTIME_LANE,
@@ -237,7 +239,7 @@ def test_command_gate_child_env_pins_path_floor(
     _run_gate(["ruff", "check"], tmp_path)
 
     child_path = spawn.calls[0]["env"]["PATH"]
-    assert child_path.endswith("/usr/bin:/bin:/usr/sbin:/sbin")
+    assert child_path.endswith(env_scrub.pinned_path(sys.platform, os.environ))
     assert "/attacker/bin" not in child_path
 
 

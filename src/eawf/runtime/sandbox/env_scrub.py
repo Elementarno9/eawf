@@ -102,6 +102,46 @@ _DEFAULT_LANG: str = "C.UTF-8"
 #: account name, not a secret -- as benign as ``HOME``.
 _FLOOR_EXACT_KEYS: frozenset[str] = frozenset({"HOME", "TERM", "USER", "LOGNAME"})
 
+#: win32-only floor keys, carried in addition to :data:`_FLOOR_EXACT_KEYS`.
+#: A Windows process cannot start without some of them: with no ``SYSTEMROOT``
+#: Winsock fails to initialise (``WinError 10106``), so a Python gate child
+#: dies before running a line. ``COMSPEC`` / ``PATHEXT`` let a child resolve
+#: ``.cmd`` / ``.exe`` launchers (npm-installed CLIs are ``.cmd`` shims), and
+#: ``USERPROFILE`` / ``APPDATA`` / ``LOCALAPPDATA`` are where Node and Python
+#: resolve the home directory and the vendor CLIs keep their stored login,
+#: the win32 analogue of ``HOME``. ``TEMP`` / ``TMP`` pass through because
+#: win32 has no FS jail to confine temp writes to a pinned path. None of
+#: these carries a credential. Matched case-insensitively, as win32 env
+#: names are.
+_FLOOR_EXACT_KEYS_WIN32: frozenset[str] = frozenset(
+    {
+        "SYSTEMROOT",
+        "WINDIR",
+        "SYSTEMDRIVE",
+        "COMSPEC",
+        "PATHEXT",
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "USERNAME",
+        "USERDOMAIN",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "PROGRAMDATA",
+        "PROGRAMFILES",
+        "PROGRAMFILES(X86)",
+        "COMMONPROGRAMFILES",
+        "TEMP",
+        "TMP",
+        "OS",
+        "PROCESSOR_ARCHITECTURE",
+        "NUMBER_OF_PROCESSORS",
+    }
+)
+
+#: ``SystemRoot`` assumed when the base env names none.
+_DEFAULT_SYSTEMROOT: str = "C:\\Windows"
+
 #: Prefix whose every variable is a floor locale carry-through (``LC_ALL``,
 #: ``LC_CTYPE``, ...). ``LANG`` itself is seeded separately with a default.
 _FLOOR_PREFIXES: tuple[str, ...] = ("LC_",)
@@ -189,6 +229,47 @@ def pinned_tmpdir(platform: str) -> str | None:
     if platform == "darwin":
         return _PINNED_TMPDIR_DARWIN
     return _PINNED_TMPDIR_POSIX
+
+
+def pinned_path(platform: str, base_env: Mapping[str, str]) -> str:
+    """Return the pinned ``PATH`` floor for *platform*.
+
+    Args:
+        platform: The :data:`sys.platform` string to resolve for.
+        base_env: The parent environment, read on win32 for ``SYSTEMROOT``.
+
+    Returns:
+        :data:`_PINNED_PATH` on POSIX. On win32 the system directories under
+        ``SYSTEMROOT`` joined with ``;``: the POSIX floor names nothing that
+        exists there and its ``:`` separators corrupt a Windows ``PATH``.
+    """
+    if platform != "win32":
+        return _PINNED_PATH
+    root = _get_ci(base_env, "SYSTEMROOT") or _DEFAULT_SYSTEMROOT
+    return ";".join(
+        (
+            f"{root}\\System32",
+            root,
+            f"{root}\\System32\\Wbem",
+            f"{root}\\System32\\WindowsPowerShell\\v1.0",
+        )
+    )
+
+
+def _get_ci(source: Mapping[str, str], key: str) -> str | None:
+    """Return *source*'s value for *key*, matching the name case-insensitively."""
+    if key in source:
+        return source[key]
+    wanted = key.upper()
+    for name, value in source.items():
+        if name.upper() == wanted:
+            return value
+    return None
+
+
+def _copy_present_ci(source: Mapping[str, str], keys: frozenset[str]) -> dict[str, str]:
+    """Return the pairs of *source* whose upper-cased name is in *keys*."""
+    return {name: value for name, value in source.items() if name.upper() in keys}
 
 
 def _lane_allowlist(runtime: str) -> tuple[frozenset[str], tuple[str, ...]]:
@@ -289,6 +370,8 @@ def build_child_env(
     # from whichever process launched it, so stripping them there would
     # silently return a sandboxed gate to the live tree.
     child: dict[str, str] = _copy_present(source, _FLOOR_EXACT_KEYS)
+    if sys.platform == "win32":
+        child.update(_copy_present_ci(source, _FLOOR_EXACT_KEYS_WIN32))
     if runtime == GATE_RUNTIME_LANE:
         child.update(_copy_present(source, _GATE_CONTAINMENT_KEYS))
 
@@ -296,10 +379,11 @@ def build_child_env(
     # extra_path_dir (the resolved spawn binary's own directory) is
     # PREPENDED so the scrubbed child can still exec a CLI installed outside
     # the pinned floor; the parent PATH is still never passed through.
-    if extra_path_dir and extra_path_dir not in _PINNED_PATH.split(os.pathsep):
-        child["PATH"] = extra_path_dir + os.pathsep + _PINNED_PATH
+    floor_path = pinned_path(sys.platform, source)
+    if extra_path_dir and extra_path_dir not in floor_path.split(os.pathsep):
+        child["PATH"] = extra_path_dir + os.pathsep + floor_path
     else:
-        child["PATH"] = _PINNED_PATH
+        child["PATH"] = floor_path
 
     # Floor LANG is seeded with a default when the parent has none.
     child["LANG"] = source.get("LANG", _DEFAULT_LANG)

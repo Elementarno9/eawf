@@ -33,6 +33,7 @@ from typing import Final
 from eawf.kernel.release.signals import ReleaseSignalOutcome, ReleaseSignalStatus
 from eawf.kernel.spec.release import ReleaseChannel
 from eawf.platform.rules.render import plan_rule_projections, projection_drift, rule_source_present
+from eawf.platform.subprocess_detach import no_window_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +129,7 @@ def requirement_trace_outcome(repo_root: Path) -> ReleaseSignalOutcome:
         text=True,
         check=False,
         timeout=REQUIREMENT_TRACE_TIMEOUT_SECONDS,
+        **no_window_kwargs(),
     )
     if checked.returncode:
         report = "; ".join(
@@ -148,6 +150,7 @@ def _tracked(repo_root: Path, targets: tuple[str, ...]) -> tuple[str, ...]:
         capture_output=True,
         text=True,
         check=True,
+        **no_window_kwargs(),
     )
     tracked = set(listed.stdout.splitlines())
     return tuple(target for target in targets if target in tracked)

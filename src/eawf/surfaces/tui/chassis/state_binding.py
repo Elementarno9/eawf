@@ -251,14 +251,14 @@ class StateBinding:
     def _daemon_socket_available(self) -> bool:
         """Return whether a daemon transport is up for a cheap push attempt.
 
-        On Windows there is no UDS, so this probes the per-user named pipe
+        On Windows there is no UDS, so this probes the per-tree named pipe
         via ``pipe_ready`` (a ``WaitNamedPipe`` check that never consumes a
         pipe instance). On POSIX it probes the UDS socket.
         """
         if os.name == "nt":
             from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_ready
 
-            ready = pipe_ready(default_pipe_name(), 0)
+            ready = pipe_ready(default_pipe_name(runtime_dir()), 0)
             logger.debug(f"_daemon_socket_available win-pipe ready={ready}")
             return ready
         sock_path = runtime_dir() / "eawfd.sock"
@@ -462,7 +462,9 @@ class StateBinding:
                 "params": self._subscribe_params(),
             }
         )
-        handle = open_subscription_pipe(default_pipe_name(), request + b"\n", wait_ms=1000)
+        handle = open_subscription_pipe(
+            default_pipe_name(runtime_dir()), request + b"\n", wait_ms=1000
+        )
         self._win_pipe = handle
         reader = PipeReader(handle)
         try:

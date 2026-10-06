@@ -52,6 +52,7 @@ import orjson
 import typer
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.flags import GlobalFlags
@@ -629,6 +630,7 @@ def _pure_relocation_destinations(*, cwd: Path) -> frozenset[str]:
         capture_output=True,
         text=True,
         timeout=5,
+        **no_window_kwargs(),
     )
     if proc.returncode != 0:
         return frozenset()
@@ -660,6 +662,7 @@ def _staged_diff_pathspec(rel: str, *, cwd: Path) -> list[str]:
         capture_output=True,
         text=True,
         timeout=5,
+        **no_window_kwargs(),
     )
     if proc.returncode == 0:
         for line in proc.stdout.splitlines():
@@ -687,6 +690,7 @@ def _staged_added_line_candidates(rel: str, *, cwd: Path) -> set[int]:
         capture_output=True,
         text=True,
         timeout=5,
+        **no_window_kwargs(),
     )
     if proc.returncode != 0:
         return set()
@@ -1771,6 +1775,7 @@ def _git_tracked_artifacts(*, cwd: Path) -> list[str]:
         capture_output=True,
         text=True,
         timeout=5,
+        **no_window_kwargs(),
     )
     if proc.returncode != 0:
         return []
@@ -1916,6 +1921,7 @@ def _git_tracked_tests(*, cwd: Path) -> list[str]:
         capture_output=True,
         text=True,
         timeout=5,
+        **no_window_kwargs(),
     )
     if proc.returncode != 0:
         return []
@@ -1985,6 +1991,7 @@ def _staged_added_tests(*, cwd: Path) -> list[str]:
         capture_output=True,
         text=True,
         timeout=5,
+        **no_window_kwargs(),
     )
     if proc.returncode != 0:
         return []
@@ -2040,6 +2047,7 @@ def _staged_added_lines(rel: str, *, cwd: Path) -> list[tuple[int, str]]:
         capture_output=True,
         text=True,
         timeout=5,
+        **no_window_kwargs(),
     )
     if proc.returncode != 0:
         return []
@@ -2210,6 +2218,7 @@ def _run_vale_json(targets: list[Path], *, cwd: Path) -> dict[str, Any]:
         capture_output=True,
         text=True,
         timeout=60,
+        **no_window_kwargs(),
     )
     # Vale writes the alert map to stdout on a normal run, but writes its
     # error-object JSON (E100 etc.) to stderr with a non-zero exit. Check

@@ -115,6 +115,8 @@ def test_module_exports_both_helpers_and_the_flag() -> None:
     """``__all__`` names the public surface call sites are allowed to import."""
     assert set(subprocess_detach.__all__) == {
         "CREATE_NO_WINDOW",
+        "DetachKwargs",
+        "NoWindowKwargs",
         "detached_subprocess_kwargs",
         "no_window_kwargs",
     }

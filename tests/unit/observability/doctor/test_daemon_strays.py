@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import signal
+import sys
 from pathlib import Path
 
 import pytest
@@ -186,3 +188,24 @@ def test_stray_model_refuses_unknown_fields() -> None:
         StrayDaemon.model_validate(
             {"pid": 1, "started": "x", "reason": "unbound", "tree": "/somewhere"}
         )
+
+
+def test_stop_returns_before_any_signal_on_win32(monkeypatch: pytest.MonkeyPatch) -> None:
+    """win32 has no SIGKILL; the stop must return before os.kill is reached."""
+    kills: list[tuple[int, int]] = []
+
+    def _no_kill(pid: int, sig: int) -> None:
+        kills.append((pid, sig))
+        raise AssertionError("os.kill reached on win32")
+
+    def _no_process_table(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("process table read on win32")
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.delattr(signal, "SIGKILL", raising=False)
+    monkeypatch.setattr(daemon_strays.os, "kill", _no_kill)
+    monkeypatch.setattr(daemon_strays.subprocess, "run", _no_process_table)
+    stray = StrayDaemon(pid=77, started="Sat Sep 26 20:43:50 2026", reason="address_gone")
+
+    assert daemon_strays.stop_stray_daemon(stray) is False
+    assert kills == []

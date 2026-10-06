@@ -46,6 +46,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 
 logger = logging.getLogger(__name__)
@@ -146,6 +147,7 @@ def check_svg_pixel_diff(spec: CheckSpec, cwd: Path) -> CheckResult:
             capture_output=True,
             text=True,
             cwd=str(cwd),
+            **no_window_kwargs(),
         )
         if completed.returncode != 0 or not rendered.is_file():
             diagnostic = completed.stderr.strip() or completed.stdout.strip() or "render failed"

@@ -51,6 +51,7 @@ from eawf.kernel.spec.release_config import (
     ReleaseConfig,
     ReleaseTargetConfig,
 )
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.workflow.release.boundaries import PublicationBoundary, durable_boundary
 from eawf.workflow.release.lifecycle import ReleaseGuardContext, advance_release
 from eawf.workflow.release.observation import (
@@ -329,6 +330,7 @@ def resolve_source_tree(repo_root: Path, source_sha: str) -> str:
         text=True,
         check=False,
         timeout=GIT_TIMEOUT_SECONDS,
+        **no_window_kwargs(),
     )
     tree = result.stdout.strip()
     if result.returncode != 0 or not tree:

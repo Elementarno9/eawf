@@ -42,6 +42,7 @@ from pathlib import Path
 import orjson
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 
 logger = logging.getLogger(__name__)
@@ -191,6 +192,7 @@ def run_checks_out_of_process(
                 text=True,
                 check=False,
                 env=gate_child_env(sandbox, live_state_path=state_path),
+                **no_window_kwargs(),
             )
         response = _read_child_response(response_path)
     if response is None:

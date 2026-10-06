@@ -5,7 +5,7 @@ PID file, builds the asyncio loop, and serves JSON-RPC until
 ``daemon.shutdown`` is received or the OS signals graceful stop.
 
 POSIX listens on a Unix domain socket. Windows listens on the
-per-user named pipe ``\\\\.\\pipe\\eawfd-<username>`` via
+per-tree named pipe ``\\\\.\\pipe\\eawfd-<user>-<key>`` via
 :class:`eawf.runtime.daemon.windows_pipe.WindowsPipeServer`, bridged into the
 shared JSON-RPC dispatcher.
 """
@@ -918,7 +918,7 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
         await server.wait_closed()
 
 
-async def _run_windows_server(ctx: MethodContext) -> None:
+async def _run_windows_server(ctx: MethodContext, rt_dir: Path) -> None:
     """Start the named-pipe listener and wait for shutdown (Windows).
 
     The :class:`eawf.runtime.daemon.windows_pipe.WindowsPipeServer` owns a
@@ -929,12 +929,15 @@ async def _run_windows_server(ctx: MethodContext) -> None:
 
     Args:
         ctx: Server context (with wired ``shutdown_event``).
+        rt_dir: The runtime directory the daemon resolved, which keys the
+            per-tree pipe name.
     """
     # The Windows transport lives behind the import-guarded module so
     # the POSIX dev loop is not contaminated. The outer ``run()``
     # already gates on ``sys.platform`` before reaching here.
     from eawf.runtime.daemon.windows_pipe import (
         WindowsPipeServer,
+        default_pipe_name,
         make_bus_subscribe_router,
     )
 
@@ -949,6 +952,7 @@ async def _run_windows_server(ctx: MethodContext) -> None:
     pipe_server = WindowsPipeServer(
         loop,
         _handler,
+        pipe_name=default_pipe_name(rt_dir),
         subscribe_router=make_bus_subscribe_router(loop, ctx),
     )
     pipe_server.start()
@@ -1167,7 +1171,7 @@ def run(*, foreground: bool = True) -> int:
             logger.info(f"run boot pid={pid} version={__version__!r} protocol={PROTOCOL_VERSION!r}")
             try:
                 if sys.platform == "win32":
-                    asyncio.run(_run_windows_server(ctx))
+                    asyncio.run(_run_windows_server(ctx, rt_dir))
                 else:
                     assert sock_path is not None
                     if sock_path.exists():

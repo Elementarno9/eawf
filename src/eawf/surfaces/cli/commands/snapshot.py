@@ -36,6 +36,7 @@ from typing import Annotated
 
 import typer
 
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
@@ -232,6 +233,7 @@ def run_regen(
         capture_output=True,
         text=True,
         check=False,
+        **no_window_kwargs(),
     )
 
 

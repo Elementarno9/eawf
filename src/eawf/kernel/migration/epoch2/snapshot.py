@@ -35,6 +35,7 @@ from eawf.kernel.migration.epoch2.errors import (
 from eawf.kernel.migration.epoch2.rows import with_epoch1_defaults
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel, rule_digest
 from eawf.kernel.store.commit_policy import CommitPolicy, classify_path
+from eawf.platform.subprocess_detach import no_window_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -498,6 +499,7 @@ def _git(repo_root: Path, *args: str) -> bytes:
             capture_output=True,
             check=False,
             timeout=GIT_TIMEOUT_SECONDS,
+            **no_window_kwargs(),
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         raise MigrationSourceUnreadableError(

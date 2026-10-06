@@ -52,10 +52,16 @@ class LockHandle:
     on_event: Callable[[dict[str, object]], None] | None = field(default=None)
 
     def heartbeat(self) -> None:
-        """Refresh *heartbeat_at* in the lockfile body, preserving identity fields."""
+        """Refresh *heartbeat_at* in the lockfile body, preserving identity fields.
+
+        The body is read back through the held handle, not by re-opening
+        :attr:`path`: on win32 the byte-range lock refuses every other handle,
+        the holder's own included, so a by-path read failed and the refresh
+        rewrote the body without ``pid`` / ``hostname`` / ``started_at``.
+        """
         try:
-            raw = self.path.read_text(encoding="utf-8")
-            body: dict[str, object] = json.loads(raw)
+            self.fh.seek(0)
+            body: dict[str, object] = json.loads(self.fh.read())
         except Exception:
             body = {}
 
@@ -239,7 +245,7 @@ def acquire(
     # after acquiring the stable inode, then overwrite it in place.
     fh.seek(0)
     previous_raw = fh.read()
-    if previous_raw and stale.is_stale(lock_path):
+    if previous_raw and stale.is_stale(lock_path, raw=previous_raw):
         prev_holder: object = None
         with contextlib.suppress(Exception):
             prev_holder = json.loads(previous_raw)

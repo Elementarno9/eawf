@@ -26,6 +26,7 @@ mutator in this package expects to be called inside a
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -102,7 +103,13 @@ def list_worktrees(
         # If git is missing / repo is broken, surface git_present=False
         # for every row rather than failing the listing.
         git_entries = []
-    git_paths = {entry.get("worktree", "") for entry in git_entries}
+    # git prints ``C:/...`` on win32 while ``str(Path)`` is ``C:\...``, so
+    # compare normalised paths rather than strings.
+    git_paths = {
+        os.path.normcase(os.path.normpath(entry["worktree"]))
+        for entry in git_entries
+        if entry.get("worktree")
+    }
     repo_root_resolved = repo_root.resolve()
     for record in state.worktrees.values():
         if not include_terminal and record.status.value in {"merged", "abandoned"}:
@@ -111,7 +118,7 @@ def list_worktrees(
         abs_record = candidate if candidate.is_absolute() else (repo_root_resolved / candidate)
         yield WorktreeListing(
             record=record,
-            git_present=str(abs_record) in git_paths,
+            git_present=os.path.normcase(os.path.normpath(abs_record)) in git_paths,
         )
 
 

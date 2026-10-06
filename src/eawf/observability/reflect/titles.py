@@ -45,6 +45,7 @@ from eawf.kernel.state.epoch2.measurement import (
 from eawf.kernel.state.types import UtcDatetime
 from eawf.observability.reflect.runs import RunReading
 from eawf.platform.scrub.scan import redact_text
+from eawf.platform.subprocess_detach import no_window_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -205,6 +206,7 @@ class ClaudeTitleProvider:
                 text=True,
                 timeout=PROVIDER_TIMEOUT_SECONDS,
                 check=False,
+                **no_window_kwargs(),
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             logger.warning(f"title_for provider={self.name} err={exc.__class__.__name__}")

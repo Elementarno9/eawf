@@ -41,6 +41,7 @@ from typing import Annotated
 
 import typer
 
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.commands.snapshot import (
     SnapshotSurface,
@@ -87,6 +88,7 @@ def golden_dir_has_diff(surface: SnapshotSurface, *, workspace: Path | None) -> 
         capture_output=True,
         text=True,
         check=False,
+        **no_window_kwargs(),
     )
     has_diff = completed.returncode != 0
     logger.info(

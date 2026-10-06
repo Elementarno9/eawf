@@ -40,6 +40,8 @@ from xml.parsers.expat import ExpatError
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from eawf.platform.process_liveness import pid_alive
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.runtime_dir import pid_path, runtime_dir
 from eawf.runtime.daemon.spawn import DaemonSpawnTimeoutError, wait_for_daemon_ready
 
@@ -107,7 +109,9 @@ def _default_service_runner(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     """Run *cmd* capturing output; never raise on non-zero or missing binary."""
     logger.info(f"_default_service_runner cmd={cmd!r}")
     try:
-        return subprocess.run(cmd, check=False, capture_output=True, text=True)
+        return subprocess.run(
+            cmd, check=False, capture_output=True, text=True, **no_window_kwargs()
+        )
     except FileNotFoundError:
         return subprocess.CompletedProcess(args=cmd, returncode=127, stdout="", stderr="")
 
@@ -339,6 +343,7 @@ def _run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[s
         check=False,
         capture_output=True,
         text=True,
+        **no_window_kwargs(),
     )
     if check and result.returncode != 0:
         raise ServiceInstallError(
@@ -864,6 +869,9 @@ def _pid_is_alive(pid: int) -> bool:
     """Return True when *pid* refers to a live process (POSIX ``kill(0)``)."""
     if pid <= 0:
         return False
+    if sys.platform == "win32":
+        # ``os.kill(pid, 0)`` is a console Ctrl+C on win32 (CTRL_C_EVENT == 0).
+        return pid_alive(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:

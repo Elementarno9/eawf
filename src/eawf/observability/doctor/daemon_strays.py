@@ -27,6 +27,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.observability.doctor.models import CheckResult
+from eawf.platform.process_liveness import pid_alive
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.runtime_dir import TREES_DIRNAME, runtime_base_dir, runtime_dir
 from eawf.runtime.daemon.spawn import daemon_pid_if_ready
 
@@ -105,6 +107,7 @@ def _run(argv: list[str]) -> str | None:
             text=True,
             timeout=_SCAN_TIMEOUT_SECONDS,
             stdin=subprocess.DEVNULL,
+            **no_window_kwargs(),
         )
     except OSError, subprocess.TimeoutExpired:
         return None
@@ -241,6 +244,9 @@ def find_stray_daemons() -> list[StrayDaemon] | None:
 def _pid_alive(pid: int) -> bool:
     """Return whether *pid* still names a live process of this user."""
     try:
+        if sys.platform == "win32":
+            # ``os.kill(pid, 0)`` is a console Ctrl+C on win32 (CTRL_C_EVENT == 0).
+            return pid_alive(pid)
         os.kill(pid, 0)
     except ProcessLookupError:
         return False

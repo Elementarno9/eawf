@@ -19,10 +19,16 @@ The output is a small POSIX-bash wrapper that:
    ``{"hook_event_name": <claude-name>, "claude_event_name":
    <eawf-event>, "args": [<arg1>, <arg2>, <arg3>, <arg4>]}`` from up to
    four positional arguments (``$1..$4``).
-3. Pipes the payload to ``uv run eawf hook run <event_type> --runtime
-   <runtime>`` (``<runtime>`` is ``claude`` by default, ``codex`` for the
-   Codex install/doctor/package surfaces). The CLI's exit code (0 ok, 9
-   blocked) is the wrapper's exit code.
+3. Pipes the payload to ``uv run [--no-project] eawf hook run <event_type>
+   --runtime <runtime>`` (``<runtime>`` is ``claude`` by default, ``codex``
+   for the Codex install/doctor/package surfaces). The CLI's exit code (0
+   ok, 9 blocked) is the wrapper's exit code. ``--no-project`` keeps uv from
+   discovering, creating or syncing the host repository's own environment:
+   a sync there costs seconds per hook and fails outright on Windows while
+   one of that environment's executables is running, which would make the
+   fail-closed pre-tool guard refuse every judged tool call. The flag is
+   passed only when an ``eawf`` executable is on PATH; otherwise plain
+   ``uv run eawf`` resolves eawf from the host project's environment.
 
 The read is fail-open: a hook that dies breaks the operator's session,
 so an unreadable / empty stdin degrades to the positional-arg fallback

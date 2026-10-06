@@ -57,6 +57,7 @@ from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.kinds.gate_receipt import GateIdentityStr
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
@@ -208,7 +209,11 @@ def _refused(code: str, detail: str) -> DaemonValidationError:
 def _git(repository: Path, *args: str) -> str | None:
     """Return the trimmed output of one read-only git command, or ``None`` on failure."""
     done = subprocess.run(
-        ["git", "-C", str(repository), *args], capture_output=True, text=True, check=False
+        ["git", "-C", str(repository), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        **no_window_kwargs(),
     )
     return done.stdout.strip() if done.returncode == 0 else None
 
@@ -231,6 +236,7 @@ def _ancestor(repository: Path, older: str, newer: str) -> bool:
         ["git", "-C", str(repository), "merge-base", "--is-ancestor", older, newer],
         capture_output=True,
         check=False,
+        **no_window_kwargs(),
     )
     return done.returncode == 0
 
@@ -368,6 +374,7 @@ def _read_repository(
         ["git", "-C", str(repository), "diff", "--binary", base, head],
         capture_output=True,
         check=False,
+        **no_window_kwargs(),
     ).stdout
     return (
         _git(repository, "rev-parse", f"{head}^{{tree}}") or "",

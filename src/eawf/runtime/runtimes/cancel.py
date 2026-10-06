@@ -44,10 +44,14 @@ from __future__ import annotations
 import logging
 import os
 import signal
+import subprocess
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from eawf.platform.process_liveness import held_process_active, pid_alive
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.budget.service import (
     DEFAULT_GRACE_SECONDS,
     TerminationResult,
@@ -91,14 +95,64 @@ def _unsupported_getpgid(pid: int) -> int:
     raise NotImplementedError("process-group lookup (os.getpgid) is POSIX-only")
 
 
-#: Module-bound group-signal syscall. ``os.killpg`` on POSIX; a fail-fast
-#: stub on Windows so the module imports there (the default-argument
-#: bindings below read this at def time).
-_KILLPG: Callable[[int, int], None] = getattr(os, "killpg", _unsupported_killpg)
+#: ``taskkill`` exit status for "no such process".
+_TASKKILL_NOT_FOUND: int = 128
 
-#: Module-bound group-liveness probe. ``os.getpgid`` on POSIX; a fail-fast
-#: stub on Windows for the same import-time reason as :data:`_KILLPG`.
-_GETPGID: Callable[[int], int] = getattr(os, "getpgid", _unsupported_getpgid)
+
+def _win32_killpg(pgid: int, sig: int) -> None:
+    """Signal the process tree rooted at *pgid* on win32 via ``taskkill /T``.
+
+    win32 has no process groups; the spawn seam records the child's own pid
+    as its pgid, and ``taskkill /T`` reaches the whole tree under it. The hard
+    rung adds ``/F`` (``TerminateProcess``); the soft rung asks politely,
+    which a windowless console child may ignore until the grace expires.
+
+    The kill runs only while this process holds a still-active handle to
+    *pgid*: a liveness probe by PID alone would let ``taskkill`` reach an
+    unrelated tree once the child exited and Windows reused its PID.
+
+    Raises:
+        ProcessLookupError: When no handle is held for *pgid*, the held
+            handle's process has exited, or no process holds *pgid*.
+    """
+    if not held_process_active(pgid):
+        raise ProcessLookupError(pgid)
+    argv = ["taskkill", "/PID", str(pgid), "/T"]
+    if sig == _HARD_SIGNAL:
+        argv.append("/F")
+    result = subprocess.run(
+        argv, capture_output=True, check=False, stdin=subprocess.DEVNULL, **no_window_kwargs()
+    )
+    if result.returncode == _TASKKILL_NOT_FOUND:
+        raise ProcessLookupError(pgid)
+
+
+def _win32_getpgid(pid: int) -> int:
+    """Return *pid* while it runs: win32's stand-in for ``os.getpgid``.
+
+    Raises:
+        ProcessLookupError: When *pid* has exited.
+    """
+    if not pid_alive(pid):
+        raise ProcessLookupError(pid)
+    return pid
+
+
+#: Signal sent for a ``hard`` cancel — force-kill the group. ``SIGKILL``
+#: is POSIX-only; win32 reads the POSIX number (9) so the hard rung stays
+#: distinguishable from the soft ``SIGTERM`` one in :func:`_win32_killpg`.
+_HARD_SIGNAL: int = int(getattr(signal, "SIGKILL", 9))
+
+#: Module-bound group-signal syscall: ``os.killpg`` on POSIX, ``taskkill /T``
+#: on win32, and a fail-fast stub anywhere else without process groups.
+_KILLPG: Callable[[int, int], None] = getattr(
+    os, "killpg", _win32_killpg if sys.platform == "win32" else _unsupported_killpg
+)
+
+#: Module-bound group-liveness probe, bound the same way as :data:`_KILLPG`.
+_GETPGID: Callable[[int], int] = getattr(
+    os, "getpgid", _win32_getpgid if sys.platform == "win32" else _unsupported_getpgid
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,12 +177,6 @@ class CancelResult:
 
 #: Signal sent for a ``soft`` cancel — request the group terminate.
 _SOFT_SIGNAL: int = signal.SIGTERM
-
-#: Signal sent for a ``hard`` cancel — force-kill the group. ``SIGKILL``
-#: is POSIX-only; on Windows it is absent, so this falls back to
-#: ``SIGTERM`` purely to let the module import (the group-signal stub
-#: rejects any actual call on that platform before the value is used).
-_HARD_SIGNAL: int = getattr(signal, "SIGKILL", signal.SIGTERM)
 
 
 def cancel_process_group(

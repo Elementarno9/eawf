@@ -22,6 +22,7 @@ The live round-trip + DACL rejection cases live in the sibling
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import importlib.util
 import sys
 import threading
@@ -114,19 +115,6 @@ def test_windows_pipe_server_constructor_wires_queue_and_thread() -> None:
         assert server._dispatch_task is None  # type: ignore[attr-defined]
 
     asyncio.run(runner())
-
-
-def test_windows_pipe_server_default_pipe_name_uses_username() -> None:
-    """Default pipe name includes the resolved username."""
-    pytest.importorskip("win32pipe")
-
-    import getpass
-
-    from eawf.runtime.daemon.windows_pipe import default_pipe_name
-
-    name = default_pipe_name()
-    assert name.startswith(r"\\.\pipe\eawfd-")
-    assert getpass.getuser() in name
 
 
 def test_windows_pipe_server_start_twice_rejected() -> None:
@@ -345,3 +333,125 @@ def test_the_win32_subscribe_literal_equals_the_dispatch_set(
     module = _load_windows_pipe_with_fakes(monkeypatch)
 
     assert module._SUBSCRIBE_METHODS == SUBSCRIBE_METHODS
+
+
+def _expected_key(runtime_dir: Path) -> str:
+    return hashlib.sha256(str(runtime_dir.resolve()).encode("utf-8")).hexdigest()[:16]
+
+
+def test_default_pipe_name_is_per_user_and_per_runtime_dir(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The name carries the user and a 16-hex key of the resolved runtime dir."""
+    module = _load_windows_pipe_with_fakes(monkeypatch)
+    runtime_dir = tmp_path / "trees" / "abc"
+
+    name = module.default_pipe_name(runtime_dir, username="alice")
+
+    assert name == rf"\\.\pipe\eawfd-alice-{_expected_key(runtime_dir)}"
+
+
+def test_default_pipe_name_reads_the_current_login(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Without an override the user part is the current login."""
+    module = _load_windows_pipe_with_fakes(monkeypatch)
+    monkeypatch.setattr(module.getpass, "getuser", lambda: "bob")
+
+    name = module.default_pipe_name(tmp_path)
+
+    assert name == rf"\\.\pipe\eawfd-bob-{_expected_key(tmp_path)}"
+
+
+def test_default_pipe_name_separates_two_trees_of_one_user(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Two runtime dirs give two names; the same dir gives the same name."""
+    module = _load_windows_pipe_with_fakes(monkeypatch)
+    tree_a = tmp_path / "trees" / "a"
+    tree_b = tmp_path / "trees" / "b"
+
+    name_a = module.default_pipe_name(tree_a, username="alice")
+    name_b = module.default_pipe_name(tree_b, username="alice")
+
+    assert name_a != name_b
+    assert module.default_pipe_name(tree_a, username="alice") == name_a
+
+
+def test_default_pipe_name_resolves_the_runtime_dir(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Two spellings of one directory key to one pipe."""
+    module = _load_windows_pipe_with_fakes(monkeypatch)
+    runtime_dir = tmp_path / "trees" / "a"
+    runtime_dir.mkdir(parents=True)
+    detour = tmp_path / "trees" / "a" / ".." / "a"
+
+    assert module.default_pipe_name(detour, username="alice") == module.default_pipe_name(
+        runtime_dir, username="alice"
+    )
+
+
+@pytest.mark.parametrize("extra", [-1, 0, 1, 500])
+def test_default_pipe_name_stays_within_the_win32_cap(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    extra: int,
+) -> None:
+    """A user name at, below or past the budget never pushes the name past 256."""
+    module = _load_windows_pipe_with_fakes(monkeypatch)
+    budget = 256 - len(r"\\.\pipe\eawfd-") - 1 - 16
+    username = "u" * (budget + extra)
+
+    name = module.default_pipe_name(tmp_path, username=username)
+
+    assert len(name) == min(256, 256 + extra)
+    assert name.endswith(f"-{_expected_key(tmp_path)}")
+
+
+def test_default_pipe_name_with_empty_user_keeps_the_key(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """An empty user still yields the tree key, so trees stay apart."""
+    module = _load_windows_pipe_with_fakes(monkeypatch)
+
+    assert module.default_pipe_name(tmp_path, username="") == (
+        rf"\\.\pipe\eawfd--{_expected_key(tmp_path)}"
+    )
+
+
+def test_default_pipe_name_rejects_a_string_runtime_dir(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The key needs a resolvable path; a bare string is a caller error."""
+    module = _load_windows_pipe_with_fakes(monkeypatch)
+
+    with pytest.raises(AttributeError):
+        module.default_pipe_name(str(tmp_path), username="alice")
+
+
+def test_windows_pipe_server_defaults_to_the_resolved_runtime_dir_pipe(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A server built without a pipe name binds the pipe of its runtime dir."""
+    module = _load_windows_pipe_with_fakes(monkeypatch)
+    monkeypatch.setattr(module.getpass, "getuser", lambda: "alice")
+    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path))
+    loop = asyncio.new_event_loop()
+    try:
+
+        async def _handler(_payload: bytes) -> bytes:
+            return b""
+
+        server = module.WindowsPipeServer(loop, _handler, verify_sid_enabled=False)
+    finally:
+        loop.close()
+
+    assert server.pipe_path == rf"\\.\pipe\eawfd-alice-{_expected_key(tmp_path)}"

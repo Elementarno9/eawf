@@ -31,6 +31,7 @@ from typing import Annotated
 import typer
 
 from eawf.kernel.state.ids import is_project_code, normalize_to_project_code
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 
@@ -133,7 +134,9 @@ def _git_clone(
     args.extend([url, str(target_dir)])
     logger.info(f"_git_clone invoking args={args}")
     try:
-        res = subprocess.run(args, capture_output=True, text=True, check=False, timeout=300.0)
+        res = subprocess.run(
+            args, capture_output=True, text=True, check=False, timeout=300.0, **no_window_kwargs()
+        )
     except subprocess.TimeoutExpired as exc:
         raise cli_errors.StateConflict(
             f"git clone timed out after 300s: {url}", kind="LockConflict"

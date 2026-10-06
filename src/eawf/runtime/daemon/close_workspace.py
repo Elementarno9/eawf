@@ -11,6 +11,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from eawf.platform.subprocess_detach import no_window_kwargs
+
 logger = logging.getLogger(__name__)
 
 _ATTEMPT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -45,6 +47,7 @@ def _git(
             text=True,
             check=False,
             timeout=timeout_seconds,
+            **no_window_kwargs(),
         )
     except subprocess.TimeoutExpired as exc:
         raise CloseWorkspaceError(

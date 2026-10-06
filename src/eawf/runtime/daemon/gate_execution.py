@@ -56,6 +56,7 @@ from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.gate_receipt import GateReceipt
 from eawf.kernel.store.paths import store_path
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.gate_receipt_hygiene import (
     diagnostic_log_path,
     load_gate_diagnostic,
@@ -711,6 +712,7 @@ def run_gate_out_of_process(
                 text=True,
                 check=False,
                 env=gate_child_env(sandbox, live_state_path=context.state_path),
+                **no_window_kwargs(),
             )
         response = _read_child_response(response_path)
         if response is None:

@@ -45,6 +45,7 @@ from eawf.observability.doctor.models import CheckStatus as CheckStatus
 from eawf.platform.install.instrument_probe import probe
 from eawf.platform.profiles.discovery import discover_profile
 from eawf.platform.profiles.loader import list_profiles
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.render.drift import detect_drift
 from eawf.surfaces.render.envelope import OutputEnvelope, from_markdown, to_markdown
 from eawf.surfaces.render.manifest import Manifest
@@ -662,6 +663,7 @@ def _git_output(cwd: Path, *args: str) -> str | None:
             text=True,
             check=False,
             timeout=5,
+            **no_window_kwargs(),
         )
     except OSError, subprocess.SubprocessError:
         return None

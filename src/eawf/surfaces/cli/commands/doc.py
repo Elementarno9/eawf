@@ -22,6 +22,7 @@ import orjson
 import typer
 
 from eawf.kernel.state.resolve import resolve_with_reason
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.flags import GlobalFlags
@@ -79,6 +80,7 @@ def _mkdocs_build(repo_root: Path) -> tuple[str, str]:
         capture_output=True,
         text=True,
         check=False,
+        **no_window_kwargs(),
     )
     if completed.returncode == 0:
         return "ok", "mkdocs build --strict passed"

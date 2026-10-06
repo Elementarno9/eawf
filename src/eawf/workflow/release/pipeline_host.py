@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -36,8 +37,19 @@ from typing import Any, Final
 
 from pydantic import ValidationError
 
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.epoch2.authority import (
+    NativeAuthorityRequiredError,
+    require_native_authority,
+)
+from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
 from eawf.kernel.state.models import State
+from eawf.kernel.store.compaction import document_rows, read_document
+from eawf.kernel.store.ledger import LedgerError
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.methods.domain_envelope import DomainEnvelope
 from eawf.workflow.release.pipeline import PUBLISH_WORKFLOWS, PipelineHostError
 from eawf.workflow.release.pipeline_receipts import RECEIPT_FILENAMES
@@ -64,6 +76,9 @@ COMMAND_TIMEOUT_SECONDS: Final[float] = 120.0
 #: Wall budget of the gate proofs: the stabilization proof runs the full
 #: suite, about an hour.
 PROOF_TIMEOUT_SECONDS: Final[float] = 3.0 * 3600
+
+#: One ``Batch:`` trailer line, the form ``eawf publish`` writes.
+_BATCH_TRAILER_RE: Final[re.Pattern[str]] = re.compile(r"^Batch:\s+(\S+)\s*$", re.MULTILINE)
 
 
 def isolated_proof_path(path: str, *, shim_dir: Path) -> str:
@@ -112,7 +127,8 @@ class GitHubReleaseHost:
 
         Args:
             repo_root: The checkout the pipeline runs in.
-            state_path: The ``state.json`` wave pins are read from.
+            state_path: The ``state.json`` wave pins are read from; its
+                directory is the native tree Milestone Batches are read from.
             remote: The remote ``main`` and the tags live on.
             sleep: How the host waits between polls.
         """
@@ -135,6 +151,7 @@ class GitHubReleaseHost:
                 text=True,
                 check=False,
                 timeout=timeout,
+                **no_window_kwargs(),
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise PipelineHostError(f"{argv[0]} {argv[1]} failed: {exc}") from exc
@@ -232,6 +249,7 @@ class GitHubReleaseHost:
             capture_output=True,
             text=True,
             check=False,
+            **no_window_kwargs(),
         ).stdout.strip()
         if existing and existing != revision:
             raise PipelineHostError(
@@ -318,6 +336,7 @@ class GitHubReleaseHost:
                 text=True,
                 check=False,
                 timeout=PROOF_TIMEOUT_SECONDS,
+                **no_window_kwargs(),
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise PipelineHostError(f"release receipts failed: {exc}") from exc
@@ -343,6 +362,58 @@ class GitHubReleaseHost:
             and wave.status == WaveStatus.CLOSED
             and wave.commit is not None
         }
+
+    def milestone_batch_heads(self, milestone_key: str) -> dict[str, str | None]:
+        """Return Batch key -> bound head for the COMPLETED Batches of *milestone_key*.
+
+        Read from the native tree beside ``state_path``: the head is the
+        commit the Batch's selected integration generation binds, which
+        ``eawf publish`` files, or ``None`` when none binds one.
+
+        Raises:
+            PipelineHostError: The tree is not native, or a Batch row or
+                its generation ledger cannot be read or does not validate.
+        """
+        from eawf.runtime.daemon.methods.delivery import read_generation_ledger
+
+        tree_root = self._state_path.parent
+        try:
+            authority = require_native_authority(tree_root)
+            assert authority.target is not None and authority.generation_id is not None
+            document = authority.target.generation_path(authority.generation_id) / (
+                GENERATION_DOCUMENT
+            )
+            ledger = ledger_path(document, Epoch2Collection.BATCH)
+            batches = [
+                DeliveryBatch.model_validate(row)
+                for row in document_rows(read_document(document), Epoch2Collection.BATCH).values()
+            ]
+            heads: dict[str, str | None] = {}
+            for batch in batches:
+                if (
+                    batch.milestone_ref.entity_key != milestone_key
+                    or batch.status is not BatchStatus.COMPLETED
+                ):
+                    continue
+                head = read_generation_ledger(ledger, batch.urn).head
+                heads[batch.key] = None if head is None else head.integrated_revision.head_sha
+        except (NativeAuthorityRequiredError, LedgerError, ValueError, OSError) as exc:
+            raise PipelineHostError(f"milestone {milestone_key} batches: {exc}") from exc
+        return heads
+
+    def batch_trailer_commits(self, ref: str) -> dict[str, tuple[str, ...]]:
+        """Return Batch key -> the commits reachable from *ref* carrying its ``Batch:`` trailer.
+
+        The whole message is matched rather than git's trailer block, which
+        misses a trailer set apart by a blank line.
+        """
+        listing = self._run(["git", "log", "-E", "--grep=^Batch:", "--format=%H%x00%B%x1e", ref])
+        found: dict[str, list[str]] = {}
+        for entry in listing.split("\x1e"):
+            sha, _, message = entry.strip().partition("\x00")
+            for key in _BATCH_TRAILER_RE.findall(message):
+                found.setdefault(key, []).append(sha)
+        return {key: tuple(shas) for key, shas in found.items()}
 
     def sleep(self, seconds: float) -> None:
         """Wait *seconds*."""

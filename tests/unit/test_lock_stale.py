@@ -10,6 +10,17 @@ import pytest
 from eawf.runtime.lock import portalock, stale
 
 
+def _held_body(lock: portalock.LockHandle) -> dict[str, object]:
+    """Return the held lockfile body, read through the lock's own handle.
+
+    A by-path read of a held lockfile is refused on win32: the byte-range lock
+    covers every other handle, so tests read the body the way the holder does.
+    """
+    lock.fh.seek(0)
+    body: dict[str, object] = json.loads(lock.fh.read())
+    return body
+
+
 def test_dead_pid_detected_as_stale(tmp_path: Path) -> None:
     lock_path = tmp_path / "state.json.lock"
     lock_path.write_text(
@@ -62,7 +73,7 @@ def test_acquire_recovers_stale_lock_with_optional_event(
     events: list[dict[str, object]] = []
     on_event = events.append if with_callback else None
     with portalock.acquire(target, timeout=1.0, on_event=on_event) as lock:
-        body = json.loads(lock.path.read_text())
+        body = _held_body(lock)
         assert body["pid"] == os.getpid()
     if with_callback:
         assert [event["event_type"] for event in events] == ["lock_stolen"]
@@ -134,7 +145,7 @@ def test_live_holder_with_stale_metadata_stays_unstealable(tmp_path: Path) -> No
     with portalock.acquire(
         target, timeout=1.0, heartbeat_interval=3_600.0, hold_ceiling=7_200.0
     ) as lock:
-        body = json.loads(lock.path.read_text())
+        body = _held_body(lock)
         body["heartbeat_at"] = (datetime.now(UTC) - timedelta(seconds=600)).isoformat()
         lock.fh.seek(0)
         lock.fh.truncate()
@@ -148,3 +159,25 @@ def test_live_holder_with_stale_metadata_stays_unstealable(tmp_path: Path) -> No
             portalock.acquire(target, timeout=0.1),
         ):
             pass
+
+
+def test_acquire_over_a_fresh_body_emits_no_lock_stolen(tmp_path: Path) -> None:
+    """A previous body that is not stale must not be reported as stolen.
+
+    The steal check runs while this process already holds the lock. On win32
+    a by-path re-read of the held file is refused, so the check has to judge
+    the body it read through the held handle; judging the path instead made
+    every acquire over a non-empty body look like a steal.
+    """
+    target = tmp_path / "state.json"
+    target.write_text("{}")
+    fresh = datetime.now(UTC).isoformat()
+    (tmp_path / "state.json.lock").write_text(
+        json.dumps(
+            {"pid": os.getpid(), "hostname": "h", "started_at": fresh, "heartbeat_at": fresh}
+        )
+    )
+    events: list[dict[str, object]] = []
+    with portalock.acquire(target, timeout=1.0, on_event=events.append):
+        pass
+    assert [event["event_type"] for event in events] == []

@@ -52,7 +52,7 @@ def probe_running_daemon_version() -> str | None:
 
         try:
             response = pipe_client_call(
-                default_pipe_name(),
+                default_pipe_name(runtime_dir()),
                 request,
                 wait_ms=max(1, int(DAEMON_VERSION_PROBE_TIMEOUT_SECONDS * 1000)),
             )

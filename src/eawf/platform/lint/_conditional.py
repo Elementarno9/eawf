@@ -34,6 +34,8 @@ import re
 import subprocess
 from pathlib import Path
 
+from eawf.platform.subprocess_detach import no_window_kwargs
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_DIFF_BASE = "origin/main"
@@ -92,6 +94,7 @@ def _run_git_name_only(
             text=True,
             cwd=str(cwd) if cwd is not None else None,
             timeout=timeout,
+            **no_window_kwargs(),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         logger.debug(f"_run_git_name_only git-failed scope={context} reason={exc!r}")

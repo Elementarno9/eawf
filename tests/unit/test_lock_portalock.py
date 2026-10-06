@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 import threading
 import time
 from pathlib import Path
@@ -12,11 +13,22 @@ import pytest
 from eawf.runtime.lock import portalock
 
 
+def _held_body(lock: portalock.LockHandle) -> dict[str, object]:
+    """Return the held lockfile body, read through the lock's own handle.
+
+    A by-path read of a held lockfile is refused on win32: the byte-range lock
+    covers every other handle, so tests read the body the way the holder does.
+    """
+    lock.fh.seek(0)
+    body: dict[str, object] = json.loads(lock.fh.read())
+    return body
+
+
 def test_acquire_writes_holder_metadata(tmp_path: Path) -> None:
     target = tmp_path / "state.json"
     target.write_text("{}")
     with portalock.acquire(target, timeout=1.0) as lock:
-        body = json.loads(lock.path.read_text())
+        body = _held_body(lock)
         assert body["pid"] == os.getpid()
         assert body["hostname"]
         assert "started_at" in body
@@ -38,10 +50,10 @@ def test_heartbeat_updates_during_long_hold(tmp_path: Path) -> None:
     target = tmp_path / "state.json"
     target.write_text("{}")
     with portalock.acquire(target, timeout=1.0) as lock:
-        first = json.loads(lock.path.read_text())["heartbeat_at"]
+        first = _held_body(lock)["heartbeat_at"]
         time.sleep(0.3)
         lock.heartbeat()
-        second = json.loads(lock.path.read_text())["heartbeat_at"]
+        second = _held_body(lock)["heartbeat_at"]
         assert second > first
 
 
@@ -81,10 +93,10 @@ def test_heartbeat_preserves_identity_fields(tmp_path: Path) -> None:
     target = tmp_path / "state.json"
     target.write_text("{}")
     with portalock.acquire(target, timeout=1.0) as lock:
-        before = json.loads(lock.path.read_text())
+        before = _held_body(lock)
         time.sleep(0.05)
         lock.heartbeat()
-        after = json.loads(lock.path.read_text())
+        after = _held_body(lock)
     assert after["pid"] == before["pid"]
     assert after["hostname"] == before["hostname"]
     assert after["started_at"] == before["started_at"]
@@ -164,6 +176,11 @@ def test_poll_heartbeat_change_raises_when_heartbeat_never_changes(tmp_path: Pat
         _poll_heartbeat_change(lockfile, "2026-09-16T00:00:00+00:00", deadline_s=0.05)
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="observes the held lockfile through a second handle, which the win32 "
+    "byte-range lock refuses",
+)
 def test_ticker_refreshes_heartbeat_during_hold(tmp_path: Path) -> None:
     target = tmp_path / "state.json"
     target.write_text("{}")

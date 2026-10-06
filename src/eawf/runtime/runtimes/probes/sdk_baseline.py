@@ -200,6 +200,8 @@ def _run(argv: list[str], *, timeout: float = _DEFAULT_TIMEOUT_S) -> tuple[int, 
             argv,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             check=False,
             **no_window_kwargs(),
@@ -210,6 +212,11 @@ def _run(argv: list[str], *, timeout: float = _DEFAULT_TIMEOUT_S) -> tuple[int, 
     except FileNotFoundError as exc:
         logger.warning(f"probe_run not_found argv={argv!r} err={exc!r}")
         return -1, "", f"binary disappeared: {exc!s}"
+    except OSError as exc:
+        # A win32 App Execution Alias on PATH resolves but cannot be launched
+        # (WinError 5); it degrades this one probe rather than the whole run.
+        logger.warning(f"probe_run launch_failed argv={argv!r} err={exc!r}")
+        return -1, "", f"could not launch: {exc!s}"
     return result.returncode, result.stdout, result.stderr
 
 

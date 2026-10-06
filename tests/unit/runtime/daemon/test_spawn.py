@@ -320,8 +320,14 @@ def test_win32_ping_daemon_once_round_trips_over_pipe(
         calls.append((name, payload, wait_ms))
         return b'{"jsonrpc":"2.0","id":"spawn-readiness","result":{"pid":4321}}\n'
 
+    keyed_dirs: list[Path] = []
+
+    def _fake_default_pipe_name(runtime_dir: Path) -> str:
+        keyed_dirs.append(runtime_dir)
+        return pipe_name
+
     fake_windows_pipe = types.SimpleNamespace(
-        default_pipe_name=lambda: pipe_name,
+        default_pipe_name=_fake_default_pipe_name,
         pipe_client_call=_fake_pipe_client_call,
     )
 
@@ -333,6 +339,7 @@ def test_win32_ping_daemon_once_round_trips_over_pipe(
     monkeypatch.setitem(sys.modules, "eawf.runtime.daemon.windows_pipe", fake_windows_pipe)
 
     assert spawn_mod._ping_daemon_once(tmp_path) == 4321
+    assert keyed_dirs == [tmp_path]
     assert calls == [(pipe_name, calls[0][1], 50)]
     request = json.loads(calls[0][1].decode("utf-8"))
     assert request["method"] == "daemon.ping"
@@ -350,10 +357,93 @@ def test_win32_ping_daemon_once_rejects_non_pid_pipe_response(
         return b'{"jsonrpc":"2.0","id":"spawn-readiness","result":{"ok":true}}\n'
 
     fake_windows_pipe = types.SimpleNamespace(
-        default_pipe_name=lambda: r"\\.\pipe\eawfd-test",
+        default_pipe_name=lambda _runtime_dir: r"\\.\pipe\eawfd-test",
         pipe_client_call=_fake_pipe_client_call,
     )
     monkeypatch.setattr(spawn_mod.sys, "platform", "win32")
     monkeypatch.setitem(sys.modules, "eawf.runtime.daemon.windows_pipe", fake_windows_pipe)
 
     assert spawn_mod._ping_daemon_once(tmp_path) is None
+
+
+def test_win32_wait_for_pipe_probes_the_runtime_dir_pipe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The readiness poll probes the pipe keyed by the runtime dir it was given."""
+    probed: list[tuple[str, int]] = []
+
+    def _fake_pipe_ready(name: str, wait_ms: int) -> bool:
+        probed.append((name, wait_ms))
+        return True
+
+    fake_windows_pipe = types.SimpleNamespace(
+        default_pipe_name=lambda runtime_dir: f"pipe-for-{runtime_dir.name}",
+        pipe_ready=_fake_pipe_ready,
+    )
+    monkeypatch.setitem(sys.modules, "eawf.runtime.daemon.windows_pipe", fake_windows_pipe)
+
+    deadline = spawn_mod.time.monotonic() + 5.0
+    assert spawn_mod._wait_for_pipe(tmp_path / "tree-a", deadline) is True
+    assert probed == [("pipe-for-tree-a", 0)]
+
+
+def test_win32_wait_for_pipe_returns_false_at_expired_deadline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An already-expired deadline never probes and reports not ready."""
+
+    def _fail_pipe_ready(_name: str, _wait_ms: int) -> bool:
+        raise AssertionError("no probe after the deadline")
+
+    fake_windows_pipe = types.SimpleNamespace(
+        default_pipe_name=lambda runtime_dir: f"pipe-for-{runtime_dir.name}",
+        pipe_ready=_fail_pipe_ready,
+    )
+    monkeypatch.setitem(sys.modules, "eawf.runtime.daemon.windows_pipe", fake_windows_pipe)
+
+    assert spawn_mod._wait_for_pipe(tmp_path, spawn_mod.time.monotonic() - 1.0) is False
+
+
+def test_win32_request_daemon_shutdown_dials_the_runtime_dir_pipe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Shutdown reaches the daemon of the given tree, not a per-user pipe."""
+    calls: list[tuple[str, int]] = []
+
+    def _fake_pipe_client_call(name: str, _payload: bytes, *, wait_ms: int) -> bytes:
+        calls.append((name, wait_ms))
+        return b'{"jsonrpc":"2.0","id":"x","result":{"accepted":true}}\n'
+
+    fake_windows_pipe = types.SimpleNamespace(
+        default_pipe_name=lambda runtime_dir: f"pipe-for-{runtime_dir.name}",
+        pipe_client_call=_fake_pipe_client_call,
+    )
+    monkeypatch.setattr(spawn_mod.sys, "platform", "win32")
+    monkeypatch.setitem(sys.modules, "eawf.runtime.daemon.windows_pipe", fake_windows_pipe)
+
+    result = spawn_mod.request_daemon_shutdown(tmp_path / "tree-b", drain=False, timeout_seconds=0)
+
+    assert result == {"accepted": True}
+    assert calls == [("pipe-for-tree-b", 1)]
+
+
+def test_win32_request_daemon_shutdown_absent_pipe_returns_none(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tree whose pipe is not bound reports no daemon instead of raising."""
+
+    def _absent(_name: str, _payload: bytes, *, wait_ms: int) -> bytes:
+        raise FileNotFoundError(2, "pipe not bound")
+
+    fake_windows_pipe = types.SimpleNamespace(
+        default_pipe_name=lambda runtime_dir: f"pipe-for-{runtime_dir.name}",
+        pipe_client_call=_absent,
+    )
+    monkeypatch.setattr(spawn_mod.sys, "platform", "win32")
+    monkeypatch.setitem(sys.modules, "eawf.runtime.daemon.windows_pipe", fake_windows_pipe)
+
+    assert spawn_mod.request_daemon_shutdown(tmp_path, drain=True, timeout_seconds=600) is None

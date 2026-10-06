@@ -6,8 +6,10 @@ import hashlib
 import shlex
 import subprocess
 import tempfile
+from collections.abc import Iterable
+from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Final, Literal
 
 import orjson
 import yaml
@@ -17,9 +19,16 @@ from eawf.kernel.config.layered import get_dotted, global_config_path
 from eawf.kernel.config.migration import migrate_config_payload
 from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS, LEAF_KEY_REGISTRY
 from eawf.kernel.state.enums import AuditKind, IterStatus, StoreKind
+from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.gate_receipt import GateReceipt, LegacyGateReceipt
+from eawf.kernel.store.ledger import (
+    LedgerRecord,
+    content_digest,
+    line_digest,
+    split_ledger_lines,
+)
 from eawf.kernel.store.paths import store_path
 from eawf.observability.doctor.checks import (
     check_launchd_agent,
@@ -30,6 +39,14 @@ from eawf.observability.doctor.daemon_strays import (
     describe_stray,
     find_stray_daemons,
 )
+from eawf.platform.lint.ledger_history import (
+    UNREACHABLE_KEY,
+    LedgerHistoryError,
+    UnreachableFinding,
+    UnreachableSha,
+    scan_ledger_history,
+)
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.workflow.lifecycle._audit_acceptance import (
     ITER_CLOSE_AUDIT_CHECK_ORDER,
     assess_close_audit,
@@ -38,7 +55,11 @@ from eawf.workflow.lifecycle.legacy_audit import (
     disposition_matches,
     load_legacy_audit_dispositions,
 )
-from eawf.workflow.lifecycle.wave_sha import CommitPinIssue, scan_commit_pins
+from eawf.workflow.lifecycle.wave_sha import (
+    CommitPinIssue,
+    commit_identity_digest,
+    scan_commit_pins,
+)
 
 DoctorRepairMutationClass = Literal[
     "local_diagnostics",
@@ -111,6 +132,7 @@ def _current_branch(workspace: Path) -> str | None:
             text=True,
             timeout=5,
             stdin=subprocess.DEVNULL,
+            **no_window_kwargs(),
         )
     except OSError, subprocess.TimeoutExpired:
         return None
@@ -307,6 +329,313 @@ def _pin_action(
     )
 
 
+#: The action that supersedes ledger rows binding commits no live branch reaches.
+LEDGER_SUPERSEDE_ACTION: Final = "ledger.supersede-unreachable"
+
+#: The branch a ledger binding must descend from; the history gate's CI range starts here.
+LEDGER_BASE_REF: Final = "origin/main"
+
+#: Where the repair preserves a commit that no tag keeps alive.
+ARCHIVE_REF_PREFIX: Final = "refs/eawf/archive/"
+
+
+class LedgerSupersession(BaseModel):
+    """One superseding row planned for one effective ledger line.
+
+    Attributes:
+        path: The ledger file, repo-relative.
+        line: The 1-based line the row supersedes.
+        supersedes: The digest of that line.
+        rebinds: Each unreachable SHA mapped to the one commit on the base
+            branch that shares its tree or patch id.
+        unreachable: The SHAs with no such commit, declared with the ref
+            that preserves each.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str = Field(min_length=1)
+    line: int = Field(ge=1)
+    supersedes: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    rebinds: dict[str, str] = Field(default_factory=dict)
+    unreachable: tuple[UnreachableSha, ...] = ()
+
+
+def _git_text(repo: Path, *args: str, stdin: bytes | None = None) -> str:
+    """Run one read-only git command in *repo* and return its stdout.
+
+    Raises:
+        LedgerHistoryError: git exited non-zero.
+    """
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        input=stdin,
+        capture_output=True,
+        check=False,
+        **no_window_kwargs(),
+    )
+    if proc.returncode != 0:
+        message = proc.stderr.decode("utf-8", "replace").strip()
+        raise LedgerHistoryError(f"git {' '.join(args)} failed: {message}")
+    return proc.stdout.decode("utf-8", "replace")
+
+
+def _patch_ids(repo: Path, diff: str) -> dict[str, str]:
+    """Return the stable patch id of each commit in *diff*, keyed by commit."""
+    out = _git_text(repo, "patch-id", "--stable", stdin=diff.encode("utf-8"))
+    return {commit: patch for patch, commit in (row.split() for row in out.splitlines())}
+
+
+def _is_ancestor(repo: Path, commit: str, of: str) -> bool:
+    """Whether *commit* is an ancestor of *of*."""
+    proc = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", commit, of],
+        cwd=repo,
+        capture_output=True,
+        check=False,
+        **no_window_kwargs(),
+    )
+    return proc.returncode == 0
+
+
+def _rebind_target(
+    repo: Path, sha: str, base: str, trees: dict[str, list[str]]
+) -> tuple[str | None, str]:
+    """Find the one commit on *base* that landed *sha* under another SHA.
+
+    A squash or an amend keeps the tree, a cherry-pick keeps the patch; only
+    commits *base* gained after *sha* forked are candidates. Patch ids are
+    computed only for candidates touching exactly the files *sha* touches,
+    since hashing every diff of a long history costs tens of seconds.
+
+    Args:
+        repo: The repository's working directory.
+        sha: The unreachable commit.
+        base: The base branch's commit.
+        trees: Every commit on *base*, keyed by its tree.
+
+    Returns:
+        ``(target, reason)``: the matching commit, or ``None`` with why no
+        single commit matched.
+    """
+    tree = _git_text(repo, "rev-parse", f"{sha}^{{tree}}").strip()
+    same_tree = [c for c in trees.get(tree, []) if not _is_ancestor(repo, c, sha)]
+    if len(same_tree) == 1:
+        return same_tree[0], "same tree"
+    if same_tree:
+        return None, f"{len(same_tree)} commits on {LEDGER_BASE_REF} share its tree"
+    files = set(
+        _git_text(repo, "diff-tree", "--root", "-r", "--name-only", "--no-commit-id", sha).split()
+    )
+    patch = _patch_ids(repo, _git_text(repo, "diff-tree", "--root", "-p", sha)).get(sha)
+    if not files or patch is None:
+        return None, f"no commit on {LEDGER_BASE_REF} shares its tree and it carries no patch"
+    listing = _git_text(
+        repo, "log", "--no-merges", "--full-diff", "--name-only", "--format=%x00%H",
+        base, f"^{sha}", "--", *sorted(files),
+    )  # fmt: skip
+    candidates = []
+    for block in listing.split("\0")[1:]:
+        commit, *touched = block.split()
+        if set(touched) == files:
+            candidates.append(commit)
+    same_patch: list[str] = []
+    if candidates:
+        diff = _git_text(repo, "log", "--no-walk=unsorted", "-p", "--format=commit %H", *candidates)
+        same_patch = [commit for commit, pid in _patch_ids(repo, diff).items() if pid == patch]
+    if len(same_patch) == 1:
+        return same_patch[0], "same patch id"
+    if same_patch:
+        return None, f"{len(same_patch)} commits on {LEDGER_BASE_REF} share its patch id"
+    return None, f"no commit on {LEDGER_BASE_REF} shares its tree or patch id"
+
+
+def _archive_ref(repo: Path, sha: str) -> str:
+    """Return the ref preserving *sha*: a containing tag, an archive ref, or one to mint."""
+    refs = _git_text(
+        repo,
+        "for-each-ref",
+        "--contains",
+        sha,
+        "--format=%(refname)",
+        "refs/tags/",
+        ARCHIVE_REF_PREFIX,
+    ).split()
+    # A tag travels with a push; an archive ref is local to this clone.
+    refs.sort(key=lambda ref: (not ref.startswith("refs/tags/"), ref))
+    return refs[0] if refs else f"{ARCHIVE_REF_PREFIX}{sha}"
+
+
+def _grouped(
+    findings: Iterable[UnreachableFinding],
+) -> tuple[dict[tuple[str, int], list[str]], int]:
+    """Group repairable findings by ledger line; count those in non-record files."""
+    grouped: dict[tuple[str, int], list[str]] = {}
+    unrepairable = 0
+    for finding in findings:
+        # Only the ledger/ files hold LedgerRecord lines a row can supersede.
+        if Path(finding.path).parent.name != "ledger":
+            unrepairable += 1
+            continue
+        grouped.setdefault((finding.path, finding.line), []).append(finding.sha)
+    return grouped, unrepairable
+
+
+def plan_ledger_supersessions(repo: Path) -> tuple[tuple[LedgerSupersession, ...], int]:
+    """Plan one superseding row per effective ledger line binding an unreachable commit.
+
+    The working tree's ledgers are scanned against :data:`LEDGER_BASE_REF`
+    and ``HEAD``, the same reachability the ledger history gate applies.
+
+    Args:
+        repo: The repository's working directory.
+
+    Returns:
+        The planned rows in file order, and how many findings sit in files
+        whose lines are not ledger records and so cannot be superseded here.
+
+    Raises:
+        LedgerHistoryError: The base ref does not resolve or git failed.
+    """
+    report = scan_ledger_history(repo, LEDGER_BASE_REF)
+    grouped, unrepairable = _grouped(report.unreachable)
+    trees: dict[str, list[str]] = {}
+    if grouped:
+        for row in _git_text(repo, "log", "--format=%H %T", report.base).splitlines():
+            commit, tree = row.split()
+            trees.setdefault(tree, []).append(commit)
+    lines_of: dict[str, tuple[str, ...]] = {}
+    rows: list[LedgerSupersession] = []
+    for (path, line), shas in sorted(grouped.items()):
+        if path not in lines_of:
+            lines_of[path] = split_ledger_lines((repo / path).read_bytes())
+        rebinds: dict[str, str] = {}
+        unreachable: list[UnreachableSha] = []
+        for sha in shas:
+            target, reason = _rebind_target(repo, sha, report.base, trees)
+            if target is not None:
+                rebinds[sha] = target
+            else:
+                unreachable.append(
+                    UnreachableSha(sha=sha, archive_ref=_archive_ref(repo, sha), reason=reason)
+                )
+        rows.append(
+            LedgerSupersession(
+                path=path,
+                line=line,
+                supersedes=line_digest(lines_of[path][line - 1]),
+                rebinds=rebinds,
+                unreachable=tuple(unreachable),
+            )
+        )
+    return tuple(rows), unrepairable
+
+
+def ledger_supersession_digest(repo: Path, rows: Iterable[LedgerSupersession]) -> str:
+    """Return the preview digest of *rows* over the ledger bytes they were planned from."""
+    planned = list(rows)
+    ledgers = {
+        path: content_digest((repo / path).read_bytes())
+        for path in sorted({r.path for r in planned})
+    }
+    return _digest_json(
+        {"rows": [row.model_dump(mode="json") for row in planned], "ledgers": ledgers}
+    )
+
+
+def _rebound(value: Any, rebinds: dict[str, str], repo: Path) -> Any:
+    """Return *value* with every rebound SHA replaced, recursively.
+
+    A record whose ``commit`` moved also gets the identity digest of its new
+    commit, since that digest describes the commit the field names.
+    """
+    if isinstance(value, str):
+        for old, new in rebinds.items():
+            value = value.replace(old, new)
+        return value
+    if isinstance(value, list):
+        return [_rebound(item, rebinds, repo) for item in value]
+    if isinstance(value, dict):
+        out = {key: _rebound(item, rebinds, repo) for key, item in value.items()}
+        commit = out.get("commit")
+        if (
+            isinstance(commit, str)
+            and commit != value.get("commit")
+            and value.get("commit_identity_digest") is not None
+        ):
+            out["commit_identity_digest"] = commit_identity_digest(commit, repo_root=repo)
+        return out
+    return value
+
+
+def superseding_record(
+    repo: Path, row: LedgerSupersession, *, recorded_at: datetime
+) -> LedgerRecord:
+    """Build the record that supersedes *row*'s line.
+
+    Args:
+        repo: The repository's working directory.
+        row: The planned supersession.
+        recorded_at: The UTC instant the new row records.
+
+    Returns:
+        The superseded record with each rebound SHA replaced and each
+        unreachable SHA declared under ``unreachable_shas`` in its payload.
+
+    Raises:
+        ValidationError: The line is not a ledger record.
+    """
+    text = split_ledger_lines((repo / row.path).read_bytes())[row.line - 1]
+    record = LedgerRecord.model_validate_json(text)
+    payload = _rebound(record.payload, row.rebinds, repo)
+    if row.unreachable:
+        declared = payload.get(UNREACHABLE_KEY)
+        payload[UNREACHABLE_KEY] = [
+            *(declared if isinstance(declared, list) else []),
+            *(entry.model_dump(mode="json") for entry in row.unreachable),
+        ]
+    return LedgerRecord(
+        collection=record.collection,
+        record_key=record.record_key,
+        status=record.status,
+        recorded_at=recorded_at,
+        supersedes=row.supersedes,
+        payload=payload,
+    )
+
+
+def _ledger_action(root: Path) -> tuple[DoctorRepairAction | None, int]:
+    """Preview the ledger supersession, and count the findings it cannot repair."""
+    if not (root / ".ea" / "generations").is_dir():
+        return None, 0
+    try:
+        rows, unrepairable = plan_ledger_supersessions(root)
+    except LedgerHistoryError:
+        # No base branch to measure reachability against (a fresh or
+        # remote-less clone): the gate cannot judge, so nothing is planned.
+        return None, 0
+    if not rows:
+        return None, unrepairable
+    rebound = sum(bool(row.rebinds) for row in rows)
+    declared = sum(bool(row.unreachable) for row in rows)
+    return (
+        DoctorRepairAction(
+            action_id=LEDGER_SUPERSEDE_ACTION,
+            scope="repo",
+            preview_digest=ledger_supersession_digest(root, rows),
+            mutation_class="committed_store",
+            record_count=len(rows),
+            detail=(
+                f"append {len(rows)} superseding ledger row(s): {rebound} rebound to "
+                f"{LEDGER_BASE_REF}, {declared} declaring unreachable_shas"
+            ),
+            target=str(root),
+        ),
+        unrepairable,
+    )
+
+
 def _desired_sync_drift(workspace: Path) -> bool:
     """Return whether current config/profile composition would change rules."""
     from eawf.platform.profiles.compose import compose
@@ -442,7 +771,14 @@ def build_repair_plan(workspace: Path) -> DoctorRepairPlan:
     unresolved: list[str] = []
     if state_path.is_file():
         state = State.model_validate_json(state_path.read_bytes())
-        pin_issues = scan_commit_pins(state, repo_root=root)
+        # An epoch-2 tree froze state.json at the cutover, so its wave
+        # pins can no longer drift and re-pinning them would rewrite a
+        # frozen file.
+        pin_issues = (
+            []
+            if resolve_authority(state_path.parent).epoch == 2
+            else scan_commit_pins(state, repo_root=root)
+        )
         unresolved_pins = [issue for issue in pin_issues if not issue.repairable]
         if unresolved_pins:
             unresolved.append(f"commits.unresolved={len(unresolved_pins)}")
@@ -453,6 +789,11 @@ def build_repair_plan(workspace: Path) -> DoctorRepairPlan:
         ):
             if action is not None:
                 actions.append(action)
+    ledger_action, unrepairable = _ledger_action(root)
+    if ledger_action is not None:
+        actions.append(ledger_action)
+    if unrepairable:
+        unresolved.append(f"ledger.unreachable_unrepairable={unrepairable}")
     for action in (_sync_action(root), _service_action(), _stray_action()):
         if action is not None:
             actions.append(action)
@@ -498,12 +839,19 @@ def render_repair_plan(plan: DoctorRepairPlan) -> str:
 
 
 __all__ = [
+    "ARCHIVE_REF_PREFIX",
+    "LEDGER_BASE_REF",
+    "LEDGER_SUPERSEDE_ACTION",
     "DoctorRepairAction",
     "DoctorRepairMutationClass",
     "DoctorRepairPlan",
     "DoctorRepairStatus",
+    "LedgerSupersession",
     "build_repair_plan",
     "digest_repair_actions",
     "digest_strays",
+    "ledger_supersession_digest",
+    "plan_ledger_supersessions",
     "render_repair_plan",
+    "superseding_record",
 ]

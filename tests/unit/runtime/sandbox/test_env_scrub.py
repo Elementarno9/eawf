@@ -101,7 +101,7 @@ def test_build_child_env_user_identity_absent_when_base_lacks_it() -> None:
 def test_build_child_env_pins_path_not_parent() -> None:
     """PATH is pinned to the fixed floor, NOT the parent PATH."""
     env = build_child_env("claude-code", base_env=_FULL_BASE_ENV)
-    assert env["PATH"] == _PINNED_PATH
+    assert env["PATH"] == env_scrub.pinned_path(sys.platform, _FULL_BASE_ENV)
     assert env["PATH"] != _FULL_BASE_ENV["PATH"]
     assert "/opt/evil/bin" not in env["PATH"]
 
@@ -180,14 +180,17 @@ def test_build_child_env_opencode_lane_drops_both_vendor_auth() -> None:
 def test_build_child_env_extra_path_dir_prepended_to_pinned_floor() -> None:
     """extra_path_dir prepends to the pinned PATH; the parent PATH never leaks."""
     env = build_child_env("opencode", base_env=_FULL_BASE_ENV, extra_path_dir="/opt/homebrew/bin")
-    assert env["PATH"] == "/opt/homebrew/bin:" + _PINNED_PATH
+    floor = env_scrub.pinned_path(sys.platform, _FULL_BASE_ENV)
+    assert env["PATH"] == "/opt/homebrew/bin" + os.pathsep + floor
     assert "/opt/evil/bin" not in env["PATH"]
 
 
 def test_build_child_env_extra_path_dir_already_in_floor_not_duplicated() -> None:
     """A dir already in the pinned floor is not prepended again (no duplicate)."""
-    env = build_child_env("codex", base_env=_FULL_BASE_ENV, extra_path_dir="/usr/bin")
-    assert env["PATH"] == _PINNED_PATH
+    floor = env_scrub.pinned_path(sys.platform, _FULL_BASE_ENV)
+    first = floor.split(os.pathsep)[0]
+    env = build_child_env("codex", base_env=_FULL_BASE_ENV, extra_path_dir=first)
+    assert env["PATH"] == floor
 
 
 # ---------------------------------------------------------------------------
@@ -361,7 +364,7 @@ def test_build_child_env_drops_all_credential_families(runtime: str) -> None:
 def test_build_child_env_empty_base_seeds_floor() -> None:
     """An empty base env still yields a pinned PATH + defaulted LANG, no crash."""
     env = build_child_env("claude-code", base_env={})
-    assert env["PATH"] == _PINNED_PATH
+    assert env["PATH"] == env_scrub.pinned_path(sys.platform, {})
     assert env["LANG"] == "C.UTF-8"
     # No floor key the parent never had (HOME / TERM) is invented.
     assert "HOME" not in env
@@ -449,6 +452,6 @@ def test_spawn_session_passes_scrubbed_env(monkeypatch: pytest.MonkeyPatch) -> N
 
     env = captured["env"]
     assert isinstance(env, dict)
-    assert env["PATH"] == _PINNED_PATH
+    assert env["PATH"] == env_scrub.pinned_path(sys.platform, os.environ)
     for key in env:
         assert not key.startswith(("AWS_", "GH_", "GITHUB_", "SSH_", "KUBECONFIG"))

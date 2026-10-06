@@ -12,6 +12,9 @@ Covers:
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 
 from eawf.runtime.hooks.event import HookEventType
@@ -51,7 +54,48 @@ def test_render_hook_sh_bootstraps_path_and_resolves_uv() -> None:
     assert "export PATH" in output
     assert ".local/bin" in output
     # The exec uses the resolved interpreter, not a bare ``uv``.
-    assert 'exec "${_eawf_uv}" run eawf hook run session_end' in output
+    assert 'exec "${_eawf_uv}" "${_eawf_uv_run[@]}" eawf hook run session_end' in output
+
+
+_UV_RUN_CONDITIONAL: str = (
+    "if command -v eawf >/dev/null 2>&1; then\n"
+    "    _eawf_uv_run=(run --no-project)\n"
+    "else\n"
+    "    _eawf_uv_run=(run)\n"
+    "fi\n"
+)
+
+
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+@pytest.mark.parametrize("event_type", list(HookEventType))
+def test_render_hook_sh_skips_host_project_only_when_eawf_on_path(
+    event_type: HookEventType, runtime: str
+) -> None:
+    """Every ``uv run`` goes through the PATH-conditional argument array.
+
+    ``--no-project`` keeps uv from syncing the host repository's environment
+    before each hook, but hides an eawf installed only as that project's
+    dependency; the wrapper therefore passes it only when ``eawf`` is on PATH.
+    Exactly one ``uv`` invocation means the wrapper never retries.
+    """
+    output = render_hook_sh(event_type, runtime=runtime)
+    assert output.count(_UV_RUN_CONDITIONAL) == 1, output
+    runs = re.findall(r'"\$\{_eawf_uv\}" (\S+) eawf hook run (\S+)', output)
+    assert runs == [('"${_eawf_uv_run[@]}"', event_type.value)], output
+    assert "run --no-project eawf" not in output
+
+
+_GOLDEN_HOOKS: Path = (
+    Path(__file__).resolve().parents[1] / "golden" / "plugin_install" / "claude" / "hooks"
+)
+
+
+def test_claude_hook_goldens_carry_the_uv_run_conditional() -> None:
+    """All ten installed Claude hook goldens carry the PATH conditional."""
+    goldens = sorted(_GOLDEN_HOOKS.glob("*.sh"))
+    assert len(goldens) == 10
+    for golden in goldens:
+        assert _UV_RUN_CONDITIONAL in golden.read_text(encoding="utf-8"), golden.name
 
 
 def test_render_hook_sh_synthesises_json_payload_keys() -> None:

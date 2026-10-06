@@ -26,6 +26,7 @@ import asyncio
 import contextlib
 import ctypes
 import getpass
+import hashlib
 import json
 import logging
 import queue as _queue
@@ -33,7 +34,10 @@ import sys
 import threading
 import time
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Any, Protocol
+
+from eawf.runtime.daemon.runtime_dir import runtime_dir as resolve_runtime_dir
 
 if sys.platform != "win32":
     raise ImportError("eawf.runtime.daemon.windows_pipe is win32-only")
@@ -46,6 +50,12 @@ if sys.platform == "win32":  # pragma: no cover - win32-only branch
 
 logger = logging.getLogger(__name__)
 
+
+# Win32 errors that mean the client end of a pipe instance is already closed:
+# ``ERROR_NO_DATA`` (232, "the pipe is being closed") on a write and
+# ``ERROR_BROKEN_PIPE`` (109) on a read. A peer leaving early is routine, not a
+# transport fault, so it is logged below warning level.
+_PEER_GONE_ERRORS: frozenset[int] = frozenset({232, 109})
 
 # Per-read chunk size handed to ``win32file.ReadFile``. A message-mode pipe
 # whose message exceeds this chunk does NOT truncate: ``ReadFile`` returns
@@ -268,7 +278,7 @@ def pipe_ready(pipe_name: str, wait_ms: int = 0) -> bool:
     poll never saw the daemon come up.
 
     Args:
-        pipe_name: The ``\\.\pipe\eawfd-<user>`` path to probe.
+        pipe_name: The ``\\.\pipe\eawfd-<user>-<key>`` path to probe.
         wait_ms: Milliseconds to wait for a free instance (0 = poll once).
 
     Returns:
@@ -344,7 +354,7 @@ def pipe_client_call(
        cannot outlive the call timeout.
 
     Args:
-        pipe_name: The ``\\.\pipe\eawfd-<user>`` path the daemon bound.
+        pipe_name: The ``\\.\pipe\eawfd-<user>-<key>`` path the daemon bound.
         payload: One JSON-RPC request frame (newline-terminated by the
             caller, matching the POSIX UDS wire format).
         wait_ms: Milliseconds for the whole pipe round-trip. The budget is
@@ -401,7 +411,7 @@ def open_subscription_pipe(
     win32-only module lets the TUI binding stay free of guarded imports.
 
     Args:
-        pipe_name: The per-user pipe path the daemon bound.
+        pipe_name: The per-tree pipe path the daemon bound.
         request_frame: The newline-terminated ``state.subscribe`` frame.
         wait_ms: Milliseconds to wait for a free pipe instance.
 
@@ -580,19 +590,38 @@ def make_bus_subscribe_router(
     return _router
 
 
-def default_pipe_name(username: str | None = None) -> str:
-    r"""Return the canonical pipe path ``\\.\pipe\eawfd-<username>``.
+#: Win32 caps a pipe path (``\\.\pipe\`` prefix included) at 256 characters.
+_PIPE_NAME_MAX_CHARS: int = 256
+
+#: Hex digits of the runtime-dir key, matching the tree key of the runtime dir.
+_PIPE_KEY_CHARS: int = 16
+
+_PIPE_PREFIX: str = r"\\.\pipe\eawfd-"
+
+
+def default_pipe_name(runtime_dir: Path, username: str | None = None) -> str:
+    r"""Return the per-tree pipe path ``\\.\pipe\eawfd-<user>-<key>``.
+
+    A per-user name let a client in one tree reach the daemon of another tree
+    of the same account. Keying the name by the runtime directory, which is
+    itself one per tree, gives the pipe the isolation the POSIX socket gets
+    from living inside that directory.
 
     Args:
+        runtime_dir: The daemon runtime directory; ``<key>`` is the first 16
+            hex characters of the sha256 of its resolved path.
         username: Override the resolved user (tests). When ``None`` the
             current login is read via :func:`getpass.getuser`.
 
     Returns:
-        Per-user pipe path the daemon binds to.
+        The pipe path, truncating the user part so the whole path stays
+        within the 256-character Win32 limit.
     """
     if username is None:
         username = getpass.getuser()
-    return rf"\\.\pipe\eawfd-{username}"
+    key = hashlib.sha256(str(runtime_dir.resolve()).encode("utf-8")).hexdigest()[:_PIPE_KEY_CHARS]
+    user_budget = _PIPE_NAME_MAX_CHARS - len(_PIPE_PREFIX) - len(key) - 1
+    return f"{_PIPE_PREFIX}{username[:user_budget]}-{key}"
 
 
 class WindowsPipeServer:
@@ -630,8 +659,8 @@ class WindowsPipeServer:
             loop: asyncio loop running the daemon.
             handler: Frame handler — same dispatcher the POSIX
                 listener uses.
-            pipe_name: Override the resolved pipe path (tests). Falls
-                back to :func:`default_pipe_name` for the current user.
+            pipe_name: The pipe path to bind. Falls back to
+                :func:`default_pipe_name` of the resolved runtime directory.
             verify_sid: Pinned expected SID for the post-connect
                 check; when ``None`` the helper resolves the current
                 user at verification time.
@@ -645,7 +674,7 @@ class WindowsPipeServer:
         """
         self._loop = loop
         self._handler = handler
-        self._pipe_name = pipe_name or default_pipe_name()
+        self._pipe_name = pipe_name or default_pipe_name(resolve_runtime_dir())
         self._verify_sid = verify_sid
         self._verify_sid_enabled = verify_sid_enabled
         self._subscribe_router = subscribe_router
@@ -792,7 +821,10 @@ class WindowsPipeServer:
                     win32pipe.PIPE_ACCESS_DUPLEX,
                     win32pipe.PIPE_TYPE_MESSAGE
                     | win32pipe.PIPE_READMODE_MESSAGE
-                    | win32pipe.PIPE_WAIT,
+                    | win32pipe.PIPE_WAIT
+                    # Local clients only: the DACL admits the operator's SID,
+                    # which an SMB client on another host can also present.
+                    | getattr(win32pipe, "PIPE_REJECT_REMOTE_CLIENTS", 0x8),
                     win32pipe.PIPE_UNLIMITED_INSTANCES,
                     _PIPE_BUFFER_BYTES,
                     _PIPE_BUFFER_BYTES,
@@ -879,7 +911,12 @@ class WindowsPipeServer:
             response = self._await_handler(payload)
             win32file.WriteFile(pipe, response)
         except pywintypes.error as exc:
-            logger.warning(f"_serve_connected_pipe pywin32 err={exc!s}")
+            if exc.winerror in _PEER_GONE_ERRORS:
+                # The client hung up before the reply landed (a readiness
+                # probe that timed out, a cancelled CLI): nothing to deliver.
+                logger.info(f"_serve_connected_pipe peer_gone winerror={exc.winerror}")
+            else:
+                logger.warning(f"_serve_connected_pipe pywin32 err={exc!s}")
         except Exception:
             logger.exception("_serve_connected_pipe unhandled")
         finally:

@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from typing import Any
+from typing import TypedDict
 
 CREATE_NO_WINDOW: int = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 """The win32 ``CREATE_NO_WINDOW`` creation flag; ``0`` where it is absent.
@@ -55,7 +55,25 @@ behind a ``sys.platform == "win32"`` test.
 """
 
 
-def detached_subprocess_kwargs() -> dict[str, Any]:
+class NoWindowKwargs(TypedDict, total=False):
+    """The console-suppression knob :func:`no_window_kwargs` may carry.
+
+    Typed rather than ``dict[str, Any]`` so a splat keeps the overload
+    resolution a caller's ``CompletedProcess[str]`` return type depends on,
+    and declares only ``creationflags`` so a caller that sets
+    ``start_new_session`` itself does not type-check as a duplicate.
+    """
+
+    creationflags: int
+
+
+class DetachKwargs(NoWindowKwargs, total=False):
+    """The detach knobs :func:`detached_subprocess_kwargs` may carry."""
+
+    start_new_session: bool
+
+
+def detached_subprocess_kwargs() -> DetachKwargs:
     """Return the platform-appropriate detach kwargs for a TUI-spawned child.
 
     On POSIX this is ``{"start_new_session": True}`` -- the child becomes a
@@ -75,7 +93,7 @@ def detached_subprocess_kwargs() -> dict[str, Any]:
     return {"start_new_session": True}
 
 
-def no_window_kwargs() -> dict[str, Any]:
+def no_window_kwargs() -> NoWindowKwargs:
     """Return the console-suppression kwargs for a daemon-spawned child.
 
     On win32 this is ``{"creationflags": CREATE_NO_WINDOW}`` so a console-
@@ -102,4 +120,10 @@ def no_window_kwargs() -> dict[str, Any]:
     return {}
 
 
-__all__ = ["CREATE_NO_WINDOW", "detached_subprocess_kwargs", "no_window_kwargs"]
+__all__ = [
+    "CREATE_NO_WINDOW",
+    "DetachKwargs",
+    "NoWindowKwargs",
+    "detached_subprocess_kwargs",
+    "no_window_kwargs",
+]

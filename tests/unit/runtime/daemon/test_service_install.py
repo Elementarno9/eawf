@@ -75,6 +75,7 @@ class _RunRecorder:
         check: bool = False,
         capture_output: bool = False,
         text: bool = False,
+        **_spawn_kwargs: object,
     ) -> _StubProcess:
         self.calls.append(list(cmd))
         if not self._responses:

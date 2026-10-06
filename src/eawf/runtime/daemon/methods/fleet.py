@@ -47,6 +47,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sys
 import threading
 import time
 import uuid
@@ -85,6 +86,7 @@ from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
 from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.observability.telemetry.join import DEFAULT_EU_MINUTES
+from eawf.platform.process_liveness import pid_alive
 from eawf.runtime.daemon.dispatch_runner import (
     SpawnFailureClass,
     classify_spawn_failure,
@@ -3895,6 +3897,9 @@ def _default_liveness(pgid: int) -> bool:
     Returns:
         ``True`` when the group leader is still resolvable, else ``False``.
     """
+    if sys.platform == "win32":
+        # No process groups on win32: the recorded pgid is the child's pid.
+        return pid_alive(pgid)
     try:
         os.getpgid(pgid)
     except ProcessLookupError:

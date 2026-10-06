@@ -12,7 +12,8 @@ Resolution rules:
   answers only the clients of the tree it serves.
 - ``<base>`` is ``$XDG_RUNTIME_DIR/eawfd/`` on Linux when
   ``XDG_RUNTIME_DIR`` is set, and ``~/.eawfd/`` everywhere else. On Windows
-  the listener itself is a named pipe at ``\\\\.\\pipe\\eawfd-<user>``.
+  the listener itself is a named pipe at ``\\\\.\\pipe\\eawfd-<user>-<key>``,
+  where ``<key>`` digests this directory, so the pipe is one per tree too.
 """
 
 from __future__ import annotations

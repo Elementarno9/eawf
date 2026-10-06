@@ -49,6 +49,7 @@ import typer
 
 import eawf
 from eawf.platform.install.instrument_probe import resolve_cache_path
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.cli.errors import UserError, ValidationError, emit_error
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
@@ -145,6 +146,7 @@ def _run_uv_tool_list() -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         check=False,
+        **no_window_kwargs(),
     )
 
 

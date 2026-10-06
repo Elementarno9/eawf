@@ -66,6 +66,7 @@ from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import LedgerError, LedgerRecord, read_ledger_records
 from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, Epoch2Collection, StorageTier, tier_for
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.delegation import delegation_overrun
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import (
@@ -558,6 +559,7 @@ def _repository_head(repo_root: Path) -> str | None:
             capture_output=True,
             text=True,
             check=False,
+            **no_window_kwargs(),
         )
     except OSError:
         return None

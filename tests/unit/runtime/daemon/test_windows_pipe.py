@@ -763,3 +763,69 @@ def test_cancel_pending_read_unblocks_blocked_read() -> None:
 
     asyncio.run(runner())
     assert bus_state.get("unblocked") is True, "blocked read did not unblock after CancelIoEx"
+
+
+def test_client_hanging_up_before_reply_is_not_a_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A client that leaves before its reply is logged as peer_gone, not a fault.
+
+    The daemon's readiness probe and a cancelled CLI both close their handle
+    while the server still owes a reply; the write then fails with
+    ``ERROR_NO_DATA``. That is routine and must not surface as a WARNING.
+    """
+    import logging
+
+    import win32file  # type: ignore[import-not-found]
+    import win32pipe  # type: ignore[import-not-found]
+
+    from eawf.runtime.daemon.windows_pipe import WindowsPipeServer
+
+    pipe_name = _unique_pipe_name("hangup")
+    client_gone = threading.Event()
+
+    def _send_and_leave() -> None:
+        win32pipe.WaitNamedPipe(pipe_name, 5000)
+        handle = win32file.CreateFile(
+            pipe_name,
+            win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+            0,
+            None,
+            win32file.OPEN_EXISTING,
+            0,
+            None,
+        )
+        win32file.WriteFile(handle, b'{"jsonrpc":"2.0","id":"1","method":"daemon.ping"}')
+        win32file.CloseHandle(handle)
+        client_gone.set()
+
+    async def runner() -> None:
+        loop = asyncio.get_running_loop()
+
+        async def slow_handler(payload: bytes) -> bytes:
+            await asyncio.to_thread(client_gone.wait, 5)
+            return b'{"jsonrpc":"2.0","id":"1","result":{}}\n'
+
+        server = WindowsPipeServer(
+            loop, slow_handler, pipe_name=pipe_name, verify_sid_enabled=False
+        )
+        server.start()
+        try:
+            await asyncio.to_thread(_send_and_leave)
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline and not any(
+                "peer_gone" in r.getMessage() for r in caplog.records
+            ):
+                await asyncio.sleep(0.05)
+        finally:
+            server.stop()
+            await asyncio.sleep(0.05)
+
+    with caplog.at_level(logging.INFO, logger="eawf.runtime.daemon.windows_pipe"):
+        asyncio.run(runner())
+
+    messages = [(r.levelno, r.getMessage()) for r in caplog.records]
+    assert any("peer_gone" in m for _, m in messages), messages
+    assert not any(
+        level >= logging.WARNING and "_serve_connected_pipe" in m for level, m in messages
+    ), messages

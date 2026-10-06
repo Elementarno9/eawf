@@ -6,6 +6,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from eawf.platform.subprocess_detach import no_window_kwargs
+
 _GIT_TIMEOUT_SECONDS = 30.0
 
 
@@ -31,6 +33,7 @@ def _git(
         capture_output=True,
         check=False,
         timeout=_GIT_TIMEOUT_SECONDS,
+        **no_window_kwargs(),
     )
     if result.returncode not in allowed_returncodes:
         detail = result.stderr.decode("utf-8", errors="replace").strip()

@@ -32,6 +32,7 @@ import sys
 import time
 from pathlib import Path
 
+from eawf.platform.process_liveness import pid_alive
 from eawf.runtime.daemon.limits import READINESS_BUDGET_SECONDS
 from eawf.runtime.daemon.singleton import (
     DaemonSpawnLockTimeoutError,
@@ -117,13 +118,16 @@ def _pid_alive(pid: int) -> bool:
     but belongs to another user (treated as alive — the caller's UID
     check rejects mismatched ownership separately).
 
-    On Windows the same check is implemented via ``os.kill`` which
-    Microsoft now wires to ``OpenProcess`` + ``TerminateProcess`` when
-    sig == 0 — the import of ``signal.CTRL_BREAK_EVENT`` is NOT
-    triggered by a signal value of 0.
+    On Windows ``os.kill(pid, 0)`` is not a probe: ``signal.CTRL_C_EVENT``
+    is ``0``, so it sends a console Ctrl+C to every process sharing the
+    caller's console. The win32 branch asks ``OpenProcess`` instead via
+    :func:`eawf.platform.process_liveness.pid_alive`.
     """
     if pid <= 0:
         return False
+    if sys.platform == "win32":
+        # ``os.kill(pid, 0)`` is a console Ctrl+C on win32 (CTRL_C_EVENT == 0).
+        return pid_alive(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -201,9 +205,8 @@ def _wait_for_pipe(runtime_dir: Path, deadline: float) -> bool:
     fires on a POSIX dev host.
 
     Args:
-        runtime_dir: Daemon runtime directory; unused on Windows (the pipe
-            name is per-user, not per-runtime-dir) but kept for call-site
-            symmetry with the POSIX :func:`_wait_for_socket`.
+        runtime_dir: Daemon runtime directory, which keys the per-tree
+            pipe name.
         deadline: ``time.monotonic()`` value at which the poll loop gives
             up and returns False.
 
@@ -211,7 +214,6 @@ def _wait_for_pipe(runtime_dir: Path, deadline: float) -> bool:
         True when ``WaitNamedPipe`` reports a free instance; False on
         deadline expiry.
     """
-    del runtime_dir  # symmetric signature with _wait_for_socket; unused on win32
     # ``default_pipe_name`` + ``pipe_ready`` live in the import-guarded,
     # mypy-overridden windows_pipe module so every pywin32 reference stays
     # behind one win32-only boundary. This helper only runs on win32 (the
@@ -219,7 +221,7 @@ def _wait_for_pipe(runtime_dir: Path, deadline: float) -> bool:
     # on a POSIX dev host.
     from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_ready
 
-    pipe_path = default_pipe_name()
+    pipe_path = default_pipe_name(runtime_dir)
     while time.monotonic() < deadline:
         # 0 ms: do not block inside a single poll iteration -- the outer
         # loop owns the deadline + backoff. ``pipe_ready`` (WaitNamedPipe)
@@ -336,10 +338,9 @@ def _ping_daemon_once(runtime_dir: Path) -> int | None:
     if sys.platform == "win32":
         from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_client_call
 
-        del runtime_dir  # Windows readiness is the pipe RPC, not the pid file.
         try:
             response = pipe_client_call(
-                default_pipe_name(),
+                default_pipe_name(runtime_dir),
                 _daemon_ping_request(),
                 wait_ms=max(1, int(SPAWN_POLL_INTERVAL_SECONDS * 1000)),
             )
@@ -414,7 +415,7 @@ def request_daemon_shutdown(
 
         try:
             response = pipe_client_call(
-                default_pipe_name(),
+                default_pipe_name(runtime_dir),
                 request,
                 wait_ms=max(1, timeout_seconds * 1000),
             )

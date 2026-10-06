@@ -436,7 +436,9 @@ def terminate_with_grace(
             break
         sleep(poll_interval)
 
-    proc.send_signal(signal.SIGKILL)
+    # SIGKILL is POSIX-only; win32 handles read the POSIX number (9) as the
+    # hard rung (see eawf.runtime.runtimes.cancel).
+    proc.send_signal(int(getattr(signal, "SIGKILL", 9)))
     waited = monotonic() - start
     logger.info(f"terminate_with_grace sigkill=true waited={waited:.3f}")
     return TerminationResult(

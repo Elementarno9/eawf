@@ -7,10 +7,13 @@
    at another epoch refuses the hook with migration guidance),
    judged_tools (the `|`-joined tool names the data-loss guard judges). The
    host delivers hook input as a JSON document on stdin, so the wrapper
-   forwards that stdin verbatim to `uv run eawf hook run <event_type>
-   --runtime <runtime>`. When stdin is empty (or a TTY, for interactive
-   smoke runs) it falls back to synthesising a minimal payload from up to
-   four positional args. POSIX bash 3.2 compatible. -#}
+   forwards that stdin verbatim to `uv run [--no-project] eawf hook run
+   <event_type> --runtime <runtime>`; `--no-project` keeps uv off the host
+   repository's own environment, and is passed only when an `eawf`
+   executable is on PATH, so a repository that installs eawf solely as a
+   project dependency still resolves it. When stdin is empty (or a TTY, for
+   interactive smoke runs) it falls back to synthesising a minimal payload
+   from up to four positional args. POSIX bash 3.2 compatible. -#}
 #!/usr/bin/env bash
 # Eä-managed hook wrapper for {{ event_type }} ({{ runtime }} runtime).
 # Generator: eawf plugin install {{ runtime }} (managed file — re-render via
@@ -41,6 +44,18 @@ export PATH
 _eawf_uv="$(command -v uv 2>/dev/null || true)"
 if [ -z "${_eawf_uv}" ]; then
     _eawf_uv="uv"
+fi
+
+# `--no-project` keeps uv from syncing the host repository's environment on
+# every hook, but it also hides an eawf installed only as that project's
+# dependency. Skip the host project only when an eawf executable is already
+# on PATH; otherwise let uv resolve eawf from the project environment. The
+# choice is made once up front and never retried on exit status, because
+# exit 2 from the pre-tool hook is a deny, not a failure.
+if command -v eawf >/dev/null 2>&1; then
+    _eawf_uv_run=(run --no-project)
+else
+    _eawf_uv_run=(run)
 fi
 
 # Escape the minimum set of characters required for a JSON string body
@@ -86,7 +101,7 @@ fi
    with exit 2, which both hosts honour as a deny. -#}
 {% if event_type == "pre_tool_use" -%}
 set +e
-_eawf_out="$(printf '%s' "${_eawf_payload}" | "${_eawf_uv}" run eawf hook run pre_tool_use --runtime {{ runtime }} --target-epoch {{ target_epoch }})"
+_eawf_out="$(printf '%s' "${_eawf_payload}" | "${_eawf_uv}" "${_eawf_uv_run[@]}" eawf hook run pre_tool_use --runtime {{ runtime }} --target-epoch {{ target_epoch }})"
 _eawf_status=$?
 set -e
 if [ "${_eawf_status}" -ne 0 ] && printf '%s' "${_eawf_payload}" | grep -Eq '"tool_name"[[:space:]]*:[[:space:]]*"({{ judged_tools }})"'; then
@@ -95,7 +110,7 @@ if [ "${_eawf_status}" -ne 0 ] && printf '%s' "${_eawf_payload}" | grep -Eq '"to
 fi
 printf '%s' "${_eawf_out}"
 {% elif runtime == "codex" and event_type != "session_start" -%}
-printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run {{ event_type }} --runtime codex --target-epoch {{ target_epoch }} >/dev/null
+printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" "${_eawf_uv_run[@]}" eawf hook run {{ event_type }} --runtime codex --target-epoch {{ target_epoch }} >/dev/null
 {% else -%}
-printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run {{ event_type }} --runtime {{ runtime }} --target-epoch {{ target_epoch }}
+printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" "${_eawf_uv_run[@]}" eawf hook run {{ event_type }} --runtime {{ runtime }} --target-epoch {{ target_epoch }}
 {% endif -%}

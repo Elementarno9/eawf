@@ -29,6 +29,7 @@ from importlib.metadata import Distribution, PackageNotFoundError
 from pathlib import Path
 
 from eawf import __version__
+from eawf.platform.subprocess_detach import no_window_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,7 @@ def _git_output(args: list[str]) -> str | None:
             text=True,
             check=False,
             timeout=_GIT_TIMEOUT_S,
+            **no_window_kwargs(),
         )
     except (OSError, subprocess.SubprocessError) as exc:
         logger.debug(f"_git_output args={args!r} reason={exc!r}")

@@ -57,6 +57,7 @@ from eawf.kernel.projection.verification import (
 )
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.platform.registry import RegistryReadError
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.native_guard import EA_DIRNAME
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.tui.chassis.theme import (
@@ -1114,7 +1115,13 @@ class ConsoleApp(App[None]):
         self.copy_to_clipboard(text)
         command = shutil.which(PBCOPY) if sys.platform == "darwin" else None
         if command is not None and not self.is_headless:
-            subprocess.run([command], input=text.encode(), timeout=PBCOPY_TIMEOUT, check=False)
+            subprocess.run(
+                [command],
+                input=text.encode(),
+                timeout=PBCOPY_TIMEOUT,
+                check=False,
+                **no_window_kwargs(),
+            )
         return True
 
     def _arrival(self, event: Key) -> float:

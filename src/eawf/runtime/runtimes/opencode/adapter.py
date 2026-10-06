@@ -31,6 +31,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from eawf.kernel.state.models import SessionAttempt, Wave
+from eawf.platform.process_liveness import (
+    hold_process_handle,
+    process_group_id,
+    release_process_handle,
+)
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.runtimes.adapter import (
     ConcurrentSpawnCapError,
@@ -790,6 +795,7 @@ class OpenCodeAdapter:
         # is held only for the real subprocess lifetime; it is released in the
         # ``finally`` after the child is reaped / parsed.
         acquire_spawn_slot()
+        proc: asyncio.subprocess.Process | None = None
         try:
             started_at = datetime.now(UTC)
             proc = await asyncio.create_subprocess_exec(
@@ -805,6 +811,9 @@ class OpenCodeAdapter:
             logger.info(f"spawn_session runtime={self.id!r} pid={pid} model={model!r}")
             if on_spawn is not None:
                 on_spawn(pid)
+            # Pin the PID on win32 while asyncio's own handle still does, so the
+            # tree kill can never reach a process that reused it.
+            hold_process_handle(pid)
             if on_pgid is not None:
                 # The child is its own group leader (start_new_session=True),
                 # so its pgid equals its pid; resolve via getpgid so a future
@@ -812,7 +821,7 @@ class OpenCodeAdapter:
                 # exited makes getpgid raise -- the cancel path then falls back
                 # to the pid, so the lookup failure is non-fatal.
                 try:
-                    on_pgid(os.getpgid(pid))
+                    on_pgid(process_group_id(pid))
                 except ProcessLookupError:
                     logger.warning(f"spawn_session pgid-unresolved pid={pid}")
             try:
@@ -845,6 +854,9 @@ class OpenCodeAdapter:
                 ended_at=ended_at,
             )
         finally:
+            # An unreaped child keeps its handle so a later cancel still reaches it.
+            if proc is not None and proc.returncode is not None:
+                release_process_handle(proc.pid)
             release_spawn_slot()
 
     async def continue_session(

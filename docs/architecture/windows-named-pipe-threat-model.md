@@ -1,10 +1,14 @@
 # Windows named-pipe transport — threat model
 
-*Why the daemon's per-user named pipe is safe on Windows, and the one accepted residual: a single bounded pre-verify read.*
+*Why the daemon's per-tree named pipe is safe on Windows, and the one accepted residual: a single bounded pre-verify read.*
 
 ## Context
 
-On POSIX the daemon listens on a Unix domain socket guarded by a peer-credential (SO_PEERCRED / LOCAL_PEERCRED) check; on Windows there are no Unix domain sockets, so the daemon transport becomes a per-user named pipe `\\.\pipe\eawfd-<username>`. The transport must give the same guarantee the UDS gives: only the owning operator's processes can drive the daemon's mutators.
+On POSIX the daemon listens on a Unix domain socket guarded by a peer-credential (SO_PEERCRED / LOCAL_PEERCRED) check; on Windows there are no Unix domain sockets, so the daemon transport becomes a per-tree named pipe `\\.\pipe\eawfd-<user>-<key>`, where `<key>` is the first 16 hex characters of the sha256 of the resolved runtime directory (`default_pipe_name`).
+
+The runtime directory is already one per tree, so two trees of one Windows account get two pipes and a client never reaches another tree's daemon, as the POSIX socket inside that directory already guarantees.
+
+The transport must give the same guarantee the UDS gives: only the owning operator's processes can drive the daemon's mutators.
 
 Two gates enforce that on the pipe:
 

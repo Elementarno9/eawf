@@ -47,6 +47,7 @@ from eawf.kernel.release.gate_binding import (
 from eawf.kernel.release.signals import ReleaseSignalStatus
 from eawf.kernel.spec.release import Release
 from eawf.kernel.spec.release_config import ReleaseGateName
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.workflow.release.advance import CheckpointGateReceipt
 from eawf.workflow.verify.release_readiness import ReleaseReadiness
 
@@ -376,6 +377,7 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         text=True,
         check=False,
         timeout=_GIT_TIMEOUT_SECONDS,
+        **no_window_kwargs(),
     )
 
 
@@ -426,6 +428,7 @@ def _run_in_tree(
             text=True,
             check=False,
             timeout=command.timeout_seconds,
+            **no_window_kwargs(),
         )
     except subprocess.TimeoutExpired:
         detail = f"proof {command.command_id} timed out after {command.timeout_seconds}s"

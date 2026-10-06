@@ -31,6 +31,7 @@ from typing import Final
 
 from eawf.observability.reflect.report import NON_QUOTABLE_MARK, QUOTABLE_MARK
 from eawf.observability.reflect.titles import TitleSource
+from eawf.platform.subprocess_detach import no_window_kwargs
 
 RULE_CODE = "EAWF027"
 
@@ -127,6 +128,7 @@ def committed_scope(repo_root: Path) -> list[Path]:
         check=True,
         capture_output=True,
         text=True,
+        **no_window_kwargs(),
     ).stdout
     return [
         Path(name) for name in listed.split("\0") if name and Path(name).suffix in TEXT_SUFFIXES

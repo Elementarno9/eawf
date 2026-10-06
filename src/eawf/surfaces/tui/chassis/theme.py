@@ -70,6 +70,8 @@ from typing import IO, TYPE_CHECKING, Final
 
 from textual.theme import Theme
 
+from eawf.platform.subprocess_detach import no_window_kwargs
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -650,7 +652,9 @@ def _run_appearance_probe(cmd: list[str]) -> tuple[str, int] | None:
     import subprocess
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1.0)
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=1.0, **no_window_kwargs()
+        )
     except OSError, subprocess.SubprocessError:
         return None
     return proc.stdout, proc.returncode

@@ -61,6 +61,7 @@ from eawf.platform.install.managed_block import (
     unmanaged_bytes,
     unmanaged_survives,
 )
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.admission import load_economics
 from eawf.runtime.harness.fan_out import fan_out_values
 from eawf.runtime.harness.host_keys import require_recorded
@@ -333,6 +334,7 @@ def _marketplace_plugin_root(home: Path | None = None) -> Path | None:
             check=False,
             stdin=subprocess.DEVNULL,
             env=command_env,
+            **no_window_kwargs(),
         )
     except FileNotFoundError:
         return None

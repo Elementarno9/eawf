@@ -30,6 +30,18 @@ if [ -z "${_eawf_uv}" ]; then
     _eawf_uv="uv"
 fi
 
+# `--no-project` keeps uv from syncing the host repository's environment on
+# every hook, but it also hides an eawf installed only as that project's
+# dependency. Skip the host project only when an eawf executable is already
+# on PATH; otherwise let uv resolve eawf from the project environment. The
+# choice is made once up front and never retried on exit status, because
+# exit 2 from the pre-tool hook is a deny, not a failure.
+if command -v eawf >/dev/null 2>&1; then
+    _eawf_uv_run=(run --no-project)
+else
+    _eawf_uv_run=(run)
+fi
+
 # Escape the minimum set of characters required for a JSON string body
 # (backslash + double-quote) so the fallback payload is portable across
 # bash versions. Only used for the positional-arg fallback below.
@@ -66,4 +78,4 @@ else
         "${_eawf_arg4}")
 fi
 
-printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run user_prompt_submit --runtime claude --target-epoch 2
+printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" "${_eawf_uv_run[@]}" eawf hook run user_prompt_submit --runtime claude --target-epoch 2

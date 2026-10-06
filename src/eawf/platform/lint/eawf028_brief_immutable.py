@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Final
 
 from eawf.kernel.spec.common import ARTIFACT_KIND_SUBDIR
+from eawf.platform.subprocess_detach import no_window_kwargs
 
 RULE_CODE = "EAWF028"
 
@@ -124,7 +125,12 @@ def check_brief(path: str, before: str, after: str) -> BriefFinding | None:
 
 def _git(repo_root: Path, *args: str) -> str:
     return subprocess.run(
-        ["git", *args], cwd=repo_root, check=True, capture_output=True, text=True
+        ["git", *args],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+        **no_window_kwargs(),
     ).stdout
 
 
