@@ -3,9 +3,10 @@
 Two failure modes share one fix. First, an accepted-risk criterion's
 ``accepted_risk_decision_ref`` was only checked for presence, so an id
 naming no recorded Decision (``DEC-bogus``) reached ``APPROVED``. Second, a
-v1 ``state.json`` that exists but fails to load was treated the same as
-one that never existed, admitting every ``measured`` and ``accepted-risk``
-citation instead of refusing them.
+store that exists but fails to load was treated the same as one that never
+existed, admitting every ``measured`` and ``accepted-risk`` citation
+instead of refusing them. Both stores are the selected generation's
+ledgers: the decision ledger and the evidence ledger.
 
 Both are proved here through the real ``PLAN-SUBMIT`` and ``PLAN-APPROVE``
 daemon verbs over a provisioned canary, the same route an operator drives:
@@ -17,13 +18,14 @@ closed rather than open when that store cannot be read.
 from __future__ import annotations
 
 import asyncio
-import json
 import tempfile
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
 
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.methods.planning import PLAN_APPROVE_METHOD, PLAN_SUBMIT_METHOD
@@ -31,12 +33,13 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     BATCH_URN,
     MILESTONE_URN,
     TASK_URN,
+    document_path,
     method_context,
     provision,
     seed,
     seed_row,
-    tree_root,
 )
+from tests.integration.workflow.planning.test_plan_revision_apply import seed_generation_store
 
 pytestmark = pytest.mark.integration
 
@@ -48,9 +51,6 @@ ACTOR: Final = "OP-0001"
 REVISION_KEY: Final = "PRV-0060"
 OPERATOR: Final[dict[str, str]] = {"principal_kind": "operator", "principal_id": ACTOR}
 
-V1_STATE_FIXTURE: Final = (
-    Path(__file__).resolve().parents[3] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
-)
 V1_STATE_SCOPE: Final = "QR"
 
 
@@ -87,19 +87,16 @@ def _decision_row(decision_id: str) -> dict[str, Any]:
     }
 
 
-def _write_v1_state(
-    canary: CanaryProvision, *, decisions: dict[str, dict[str, Any]] | None = None
-) -> None:
-    """Write a v1 ``state.json`` beside *canary*'s epoch-2 tree, optionally recording Decisions."""
-    payload = json.loads(V1_STATE_FIXTURE.read_text(encoding="utf-8"))
-    if decisions is not None:
-        payload["decisions"] = decisions
-    (tree_root(canary) / "state.json").write_text(json.dumps(payload), encoding="utf-8")
+def _record_decisions(canary: CanaryProvision, decisions: dict[str, dict[str, Any]]) -> None:
+    """Record *decisions* in *canary*'s generation decision ledger, keyed by id."""
+    seed_generation_store(canary, decisions=decisions)
 
 
-def _write_corrupt_v1_state(canary: CanaryProvision) -> None:
-    """Write a ``state.json`` that exists but does not parse as JSON."""
-    (tree_root(canary) / "state.json").write_text("{not valid json", encoding="utf-8")
+def _write_corrupt_ledger(canary: CanaryProvision, collection: Epoch2Collection) -> None:
+    """Leave *collection*'s ledger holding a line that does not parse as a record."""
+    path = ledger_path(document_path(canary), collection)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{not valid json}\n", encoding="utf-8")
 
 
 def _criterion(
@@ -200,15 +197,15 @@ def _approve(canary: CanaryProvision, tmp_path: Path) -> dict[str, Any]:
     )
 
 
-# ---- CR-01 / H1: accepted-risk Decision refs resolve against v1 state ------
+# ---- CR-01 / H1: accepted-risk Decision refs resolve against the ledger ----
 
 
-def test_approval_resolves_an_accepted_risk_decision_ref_recorded_in_v1_state(
+def test_approval_resolves_an_accepted_risk_decision_ref_recorded_in_the_ledger(
     tmp_path: Path,
 ) -> None:
-    """A Decision id actually recorded in ``state.json`` clears approval."""
+    """A Decision id actually recorded in the decision ledger clears approval."""
     canary = _planned_canary(tmp_path, code="DECRSLV")
-    _write_v1_state(canary, decisions={"D67": _decision_row("D67")})
+    _record_decisions(canary, {"D67": _decision_row("D67")})
     body = _body(_criterion(grounding="accepted-risk", accepted_risk_decision_ref="D67"))
     assert _submit(canary, tmp_path, body=body)["status"] == "ok"
 
@@ -227,7 +224,7 @@ def test_approval_refuses_an_accepted_risk_criterion_whose_decision_ref_is_unrec
     binding is the Decision citation.
     """
     canary = _planned_canary(tmp_path, code="DECBOGUS")
-    _write_v1_state(canary, decisions={"D67": _decision_row("D67")})
+    _record_decisions(canary, {"D67": _decision_row("D67")})
     body = _body(_criterion(grounding="accepted-risk", accepted_risk_decision_ref="DEC-BOGUS"))
     assert _submit(canary, tmp_path, body=body)["status"] == "ok"
 
@@ -251,12 +248,12 @@ def test_approval_refuses_an_accepted_risk_criterion_whose_decision_no_longer_st
 ) -> None:
     """Gate-fire proof: a recorded but superseded or obsolete Decision refuses.
 
-    The Decision key is present in ``state.decisions``, so a resolver
+    The Decision key is present in the decision ledger, so a resolver
     checking presence alone would approve; reverting the status check
     reds this test.
     """
     canary = _planned_canary(tmp_path, code=f"DEC{status.upper()[:6]}")
-    _write_v1_state(canary, decisions={"D67": {**_decision_row("D67"), "status": status, **extra}})
+    _record_decisions(canary, {"D67": {**_decision_row("D67"), "status": status, **extra}})
     body = _body(_criterion(grounding="accepted-risk", accepted_risk_decision_ref="D67"))
     assert _submit(canary, tmp_path, body=body)["status"] == "ok"
 
@@ -270,7 +267,7 @@ def test_approval_refuses_an_accepted_risk_criterion_whose_decision_no_longer_st
 def test_approval_refuses_an_active_decision_that_names_a_successor(tmp_path: Path) -> None:
     """Boundary: an ACTIVE row that already names ``superseded_by`` no longer stands."""
     canary = _planned_canary(tmp_path, code="DECSUCC")
-    _write_v1_state(canary, decisions={"D67": {**_decision_row("D67"), "superseded_by": "D68"}})
+    _record_decisions(canary, {"D67": {**_decision_row("D67"), "superseded_by": "D68"}})
     body = _body(_criterion(grounding="accepted-risk", accepted_risk_decision_ref="D67"))
     assert _submit(canary, tmp_path, body=body)["status"] == "ok"
 
@@ -280,38 +277,38 @@ def test_approval_refuses_an_active_decision_that_names_a_successor(tmp_path: Pa
     assert answer["errors"][0]["guard"] == "criteria_grounded_at_approval"
 
 
-def test_approval_admits_an_accepted_risk_criterion_when_v1_state_is_absent(
+def test_approval_refuses_an_accepted_risk_criterion_when_no_decision_is_recorded(
     tmp_path: Path,
 ) -> None:
-    """A tree with no v1 state.json has nothing to resolve against, so it admits.
+    """Boundary: an empty decision ledger resolves nothing, so the citation refuses.
 
-    Matches the existing ``measured``/``contract_refs`` skip semantics:
-    a tree that predates the store (or never provisioned one) cannot
-    honestly refuse a citation it has no way to look up.
+    The generation is always the store, so a tree that has recorded no
+    Decision yet cannot ground a citation on one.
     """
-    canary = _planned_canary(tmp_path, code="NOV1STATE")
+    canary = _planned_canary(tmp_path, code="NODECISION")
     body = _body(_criterion(grounding="accepted-risk", accepted_risk_decision_ref="DEC-ANY"))
     assert _submit(canary, tmp_path, body=body)["status"] == "ok"
 
     answer = _approve(canary, tmp_path)
 
-    assert answer["status"] == "ok"
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["guard"] == "criteria_grounded_at_approval"
 
 
 # ---- CR-01 / M4: an unreadable store fails closed, not open ----------------
 
 
-def test_approval_refuses_a_measured_criterion_when_v1_state_is_unreadable(
+def test_approval_refuses_a_measured_criterion_when_the_evidence_ledger_is_unreadable(
     tmp_path: Path,
 ) -> None:
-    """Gate-fire proof: a state.json that exists but fails to parse fails closed.
+    """Gate-fire proof: a ledger that exists but fails to parse fails closed.
 
     Reverting the fail-closed resolver reds this test: a broken store
     would otherwise be treated the same as a missing one and skip the
     check, admitting a contract citation nobody promoted.
     """
     canary = _planned_canary(tmp_path, code="CORRUPT1")
-    _write_corrupt_v1_state(canary)
+    _write_corrupt_ledger(canary, Epoch2Collection.EVIDENCE)
     body = _body(_criterion(grounding="measured", contract_refs=["MCT-NEVER-PROMOTED"]))
     assert _submit(canary, tmp_path, body=body)["status"] == "ok"
 
@@ -322,12 +319,12 @@ def test_approval_refuses_a_measured_criterion_when_v1_state_is_unreadable(
     assert answer["errors"][0]["guard"] == "criteria_grounded_at_approval"
 
 
-def test_approval_refuses_an_accepted_risk_criterion_when_v1_state_is_unreadable(
+def test_approval_refuses_an_accepted_risk_criterion_when_the_decision_ledger_is_unreadable(
     tmp_path: Path,
 ) -> None:
     """The same fail-closed rule applies to a Decision citation, not only a contract one."""
     canary = _planned_canary(tmp_path, code="CORRUPT2")
-    _write_corrupt_v1_state(canary)
+    _write_corrupt_ledger(canary, Epoch2Collection.DECISION)
     body = _body(_criterion(grounding="accepted-risk", accepted_risk_decision_ref="D67"))
     assert _submit(canary, tmp_path, body=body)["status"] == "ok"
 

@@ -5,10 +5,10 @@ The unit-tier suite
 ``_checkpoint_config`` and ``committed_membership_refs`` as pure
 functions. This module proves the same thing through the actual CLI
 entry point, against a real git checkout holding nothing but a copy of
-this repository's committed canary export -- the shape CI's own
-preflight job meets, since it runs from a fresh clone with no
-``--membership-ref`` (or any other membership option) to pass and no
-release record open yet to read refs from either
+the dev3 canary export -- the shape CI's own preflight job meets, since
+it runs from a fresh clone with no ``--membership-ref`` (or any other
+membership option) to pass and no release record open yet to read refs
+from either
 (``.github/workflows/release.yaml``, the ``release-preflight`` job).
 
 The checkout is minimal on purpose: nothing here claims the sweep goes
@@ -31,6 +31,10 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.surfaces.cli.app import app
+from eawf.workflow.evidence.provider_certification import (
+    CANARY_EVIDENCE_DIRS,
+    CANARY_EVIDENCE_FILENAME,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -38,10 +42,14 @@ DEV3_VERSION = "0.7.0.dev3"
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
-#: Where the committed canary export lives, relative to a checkout root.
-_EVIDENCE_RELATIVE = Path(
-    ".ea/artifacts/evidence/2026-09-18-dev3-conformance/native-canary-evidence.json"
-)
+#: Where the release machinery looks for the dev3 canary export in a checkout.
+_EVIDENCE_RELATIVE = Path(*CANARY_EVIDENCE_DIRS["REL-0.7.0.dev3"], CANARY_EVIDENCE_FILENAME)
+
+#: The dev3 export the checkout is seeded with, kept as a fixture because the
+#: evidence directory it was filed in is machine-local.
+_EVIDENCE_FIXTURE = (
+    _REPO_ROOT / "tests" / "fixtures" / "artifacts" / "2026-09-18-dev3-conformance"
+) / CANARY_EVIDENCE_FILENAME
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -56,8 +64,8 @@ def _bare_checkout(tmp_path: Path, *, with_evidence: bool) -> Path:
 
     Args:
         tmp_path: Directory the checkout is created under.
-        with_evidence: Whether to copy this repository's committed
-            canary export into the checkout before the commit.
+        with_evidence: Whether to copy the dev3 canary export into the
+            checkout before the commit.
 
     Returns:
         The checkout root, with ``origin/main`` pointed at its HEAD.
@@ -69,7 +77,7 @@ def _bare_checkout(tmp_path: Path, *, with_evidence: bool) -> Path:
     _git(repo, "config", "user.email", "test@example.invalid")
     _git(repo, "config", "commit.gpgSign", "false")
     if with_evidence:
-        source = _REPO_ROOT / _EVIDENCE_RELATIVE
+        source = _EVIDENCE_FIXTURE
         destination = repo / _EVIDENCE_RELATIVE
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)

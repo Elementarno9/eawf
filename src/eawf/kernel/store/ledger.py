@@ -12,6 +12,15 @@ The guard is structural rather than advisory.
 of what the file already holds, which catches a rewrite, a reorder and a
 removal with one check, and :func:`guarded_ledger_write` is the only
 sanctioned way to replace a ledger's bytes wholesale.
+
+A ledger may be sealed once (:func:`seal_ledger_prefix`): a leading run of
+its lines moves, byte for byte, into ``snapshots/<stem>.<sha256>.jsonl``
+beside it, and the live file keeps only what follows. The ledger a reader
+sees is the snapshot's bytes followed by the live file's, so sealing
+changes no record, no order and no digest; it only stops every later
+commit of the live file from re-storing the sealed bytes. The snapshot is
+named by its own sha256, and a snapshot whose bytes no longer hash to
+that name is refused rather than read.
 """
 
 from __future__ import annotations
@@ -45,6 +54,14 @@ class LedgerAppendOnlyError(LedgerError):
 
 class LedgerTornTailError(LedgerError):
     """The ledger ends mid-line, so it cannot be read until it is repaired."""
+
+
+class LedgerSnapshotError(LedgerError):
+    """A ledger's sealed snapshot cannot be trusted or cannot be written."""
+
+
+#: The directory beside a ledger that holds its sealed snapshot.
+SNAPSHOT_DIRNAME: Final = "snapshots"
 
 
 class LedgerRecord(BaseModel):
@@ -109,8 +126,108 @@ def split_ledger_lines(content: bytes) -> tuple[str, ...]:
     return tuple(content.decode("utf-8").split("\n")[:-1])
 
 
+def snapshot_name(stem: str, content: bytes) -> str:
+    """Return the file name a snapshot of *content* for the ledger *stem* takes.
+
+    Args:
+        stem: The ledger's file stem, such as ``task``.
+        content: The sealed bytes.
+
+    Returns:
+        ``<stem>.<sha256 hex>.jsonl``.
+    """
+    return f"{stem}.{hashlib.sha256(content).hexdigest()}.jsonl"
+
+
+def snapshot_digest_mismatch(name: str, content: bytes) -> str | None:
+    """Explain why *content* is not the snapshot *name* promises, if it is not.
+
+    Args:
+        name: The snapshot's file name, ``<stem>.<sha256 hex>.jsonl``.
+        content: The bytes the file holds.
+
+    Returns:
+        ``None`` when the bytes hash to the digest in the name, otherwise
+        a one-line reason.
+    """
+    stem, _, rest = name.partition(".")
+    named = rest.removesuffix(".jsonl")
+    actual = hashlib.sha256(content).hexdigest()
+    if not stem or len(named) != 64 or name != f"{stem}.{named}.jsonl":
+        return f"snapshot {name!r} is not named <stem>.<sha256>.jsonl"
+    if actual != named:
+        return f"snapshot {name!r} hashes to sha256:{actual}, not the digest its name carries"
+    return None
+
+
+def ledger_snapshot(path: Path) -> Path | None:
+    """Return the sealed snapshot of the ledger at *path*, ``None`` when it has none.
+
+    Args:
+        path: The live ledger file.
+
+    Returns:
+        The one ``snapshots/<stem>.<sha256>.jsonl`` beside the ledger.
+
+    Raises:
+        LedgerSnapshotError: More than one snapshot claims the ledger, so
+            the order its sealed lines read in is undefined.
+    """
+    found = sorted((path.parent / SNAPSHOT_DIRNAME).glob(f"{path.stem}.*.jsonl"))
+    if len(found) > 1:
+        names = ", ".join(item.name for item in found)
+        raise LedgerSnapshotError(f"ledger {path.name} has {len(found)} snapshots: {names}")
+    return found[0] if found else None
+
+
+def compose_ledger_content(snapshot: bytes, live: bytes) -> bytes:
+    """Return the ledger a sealed *snapshot* and its *live* file make together.
+
+    A seal writes the snapshot before it shortens the live file, so a
+    crash between the two leaves a live file that still starts with the
+    snapshot's bytes. That file is the whole ledger as it stood before the
+    seal, and it is read alone rather than with the snapshot in front.
+
+    Args:
+        snapshot: The verified snapshot bytes; empty when there is none.
+        live: The live file's bytes.
+
+    Returns:
+        The ledger's bytes in append order.
+    """
+    if not snapshot or live.startswith(snapshot):
+        return live
+    return snapshot + live
+
+
+def read_ledger_content(path: Path) -> bytes:
+    """Return every byte of the ledger at *path*: its snapshot, then its live file.
+
+    Args:
+        path: The live ledger file. A missing file reads as empty.
+
+    Returns:
+        The ledger's bytes in append order.
+
+    Raises:
+        LedgerSnapshotError: The snapshot's bytes do not hash to the digest
+            its name carries, or the ledger has more than one snapshot.
+    """
+    live = path.read_bytes() if path.exists() else b""
+    snapshot = ledger_snapshot(path)
+    if snapshot is None:
+        return live
+    sealed = snapshot.read_bytes()
+    reason = snapshot_digest_mismatch(snapshot.name, sealed)
+    if reason is not None:
+        raise LedgerSnapshotError(f"{reason}; refusing to read ledger {path.name}")
+    return compose_ledger_content(sealed, live)
+
+
 def read_ledger_records(path: Path) -> tuple[LedgerRecord, ...]:
-    """Read every record of the ledger at *path*, in file order.
+    """Read every record of the ledger at *path*, in append order.
+
+    A sealed snapshot's lines come first, then the live file's.
 
     Args:
         path: The ledger file. A missing file reads as empty.
@@ -120,11 +237,10 @@ def read_ledger_records(path: Path) -> tuple[LedgerRecord, ...]:
 
     Raises:
         LedgerTornTailError: The file ends mid-line.
+        LedgerSnapshotError: The snapshot does not match its digest.
         ValidationError: A line does not satisfy :class:`LedgerRecord`.
     """
-    if not path.exists():
-        return ()
-    lines = split_ledger_lines(path.read_bytes())
+    lines = split_ledger_lines(read_ledger_content(path))
     return tuple(LedgerRecord.model_validate_json(line) for line in lines)
 
 
@@ -226,10 +342,11 @@ def effective_records(records: tuple[LedgerRecord, ...]) -> tuple[LedgerRecord, 
     )
 
 
-#: Each ledger's latest rows, beside the size and modification time they were read at.
-#: A ledger only grows, so an unchanged size and stamp mean unchanged bytes, and a read
-#: of a several-megabyte ledger is paid once per append rather than once per request.
-_LATEST_ROWS: dict[Path, tuple[tuple[int, int], Mapping[str, dict[str, Any]]]] = {}
+#: Each ledger's latest rows, beside the size and modification time of the live file
+#: and the name, size and modification time of its snapshot when they were read. A
+#: ledger only grows, so unchanged stamps mean unchanged bytes, and a read of a
+#: several-megabyte ledger is paid once per append rather than once per request.
+_LATEST_ROWS: dict[Path, tuple[tuple[int | str, ...], Mapping[str, dict[str, Any]]]] = {}
 
 
 def latest_rows(path: Path) -> Mapping[str, dict[str, Any]]:
@@ -248,13 +365,21 @@ def latest_rows(path: Path) -> Mapping[str, dict[str, Any]]:
 
     Raises:
         LedgerTornTailError: The file ends mid-line.
+        LedgerSnapshotError: The snapshot does not match its digest.
         ValidationError: A line does not satisfy :class:`LedgerRecord`.
     """
+    snapshot = ledger_snapshot(path)
     try:
         stat = path.stat()
     except FileNotFoundError:
-        return MappingProxyType({})
-    stamp = (stat.st_size, stat.st_mtime_ns)
+        if snapshot is None:
+            return MappingProxyType({})
+        stamp: tuple[int | str, ...] = (-1, -1)
+    else:
+        stamp = (stat.st_size, stat.st_mtime_ns)
+    if snapshot is not None:
+        sealed = snapshot.stat()
+        stamp = (*stamp, snapshot.name, sealed.st_size, sealed.st_mtime_ns)
     cached = _LATEST_ROWS.get(path)
     if cached is not None and cached[0] == stamp:
         return cached[1]
@@ -306,6 +431,83 @@ def guarded_ledger_write(path: Path, content: bytes) -> None:
     verify_append_only(current, content)
     path.parent.mkdir(parents=True, exist_ok=True)
     _atomic_write(path, content)
+
+
+def seal_ledger_prefix(path: Path, cut: int, *, timeout: float = 5.0) -> Path:
+    """Move the ledger's first *cut* bytes into a snapshot named by their sha256.
+
+    The snapshot is written first and the live file shortened second, both
+    atomically and under the ledger's append lock, so a crash between the
+    two leaves a live file that still starts with the snapshot and reads
+    as the unsealed ledger (:func:`compose_ledger_content`);
+    :func:`finish_interrupted_seal` completes it.
+
+    Args:
+        path: The live ledger file.
+        cut: The byte offset to seal through; it must end a line.
+        timeout: Seconds to wait for the sibling append lock.
+
+    Returns:
+        The snapshot written.
+
+    Raises:
+        LedgerSnapshotError: The ledger already has a snapshot, or *cut*
+            is not a line boundary inside the file.
+        LedgerTornTailError: The file ends mid-line.
+        StateConflict: The sibling lock could not be acquired.
+    """
+    from eawf.runtime.lock import portalock
+    from eawf.surfaces.cli.errors import StateConflict
+
+    try:
+        with portalock.acquire(path, timeout=timeout):
+            if ledger_snapshot(path) is not None:
+                raise LedgerSnapshotError(f"ledger {path.name} is already sealed")
+            live = path.read_bytes() if path.exists() else b""
+            if not 0 < cut <= len(live) or live[cut - 1 : cut] != b"\n":
+                raise LedgerSnapshotError(
+                    f"cut {cut} is not a line boundary inside {path.name} ({len(live)} bytes)"
+                )
+            split_ledger_lines(live)
+            sealed = live[:cut]
+            snapshot = path.parent / SNAPSHOT_DIRNAME / snapshot_name(path.stem, sealed)
+            snapshot.parent.mkdir(parents=True, exist_ok=True)
+            _atomic_write(snapshot, sealed)
+            _atomic_write(path, live[cut:])
+    except portalock.LockTimeout as exc:
+        raise StateConflict(
+            f"could not acquire append lock for {path}: {exc}", kind="LockConflict"
+        ) from exc
+    logger.info(f"seal_ledger_prefix path={path} sealed_bytes={cut} snapshot={snapshot.name}")
+    return snapshot
+
+
+def finish_interrupted_seal(path: Path) -> bool:
+    """Shorten a live ledger a seal snapshotted but did not get to shorten.
+
+    Args:
+        path: The live ledger file.
+
+    Returns:
+        ``True`` when the live file still started with its snapshot and
+        was shortened, ``False`` when there was nothing to finish.
+
+    Raises:
+        LedgerSnapshotError: The snapshot does not match its digest.
+    """
+    snapshot = ledger_snapshot(path)
+    if snapshot is None or not path.exists():
+        return False
+    sealed = snapshot.read_bytes()
+    reason = snapshot_digest_mismatch(snapshot.name, sealed)
+    if reason is not None:
+        raise LedgerSnapshotError(reason)
+    live = path.read_bytes()
+    if not live.startswith(sealed):
+        return False
+    _atomic_write(path, live[len(sealed) :])
+    logger.warning(f"finish_interrupted_seal path={path} dropped_bytes={len(sealed)}")
+    return True
 
 
 def truncate_torn_tail(path: Path) -> int:
@@ -361,20 +563,29 @@ def _atomic_write(path: Path, content: bytes) -> None:
 
 __all__ = [
     "LEDGER_SCHEMA_VERSION",
+    "SNAPSHOT_DIRNAME",
     "LedgerAppendOnlyError",
     "LedgerError",
     "LedgerRecord",
+    "LedgerSnapshotError",
     "LedgerTornTailError",
     "append_correction",
     "append_ledger_record",
     "append_ledger_record_once",
+    "compose_ledger_content",
     "content_digest",
     "effective_records",
+    "finish_interrupted_seal",
     "guarded_ledger_write",
     "latest_rows",
+    "ledger_snapshot",
     "line_digest",
+    "read_ledger_content",
     "read_ledger_records",
     "render_ledger_line",
+    "seal_ledger_prefix",
+    "snapshot_digest_mismatch",
+    "snapshot_name",
     "split_ledger_lines",
     "split_torn_tail",
     "truncate_torn_tail",

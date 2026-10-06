@@ -27,6 +27,7 @@ from eawf.kernel.release.gate_binding import (
     PRODUCT_CANARY_PRE_MERGE_GATES,
 )
 from eawf.kernel.spec.release_config import ReleaseGateName
+from eawf.kernel.store.commit_policy import PROMOTED_ARTIFACTS
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.release.canary_receipts import (
     CanaryReadinessVerdict,
@@ -39,6 +40,13 @@ from eawf.workflow.release.canary_receipts import (
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
+
+#: Where a cited artifact git does not carry is mirrored for a clone.
+FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "artifacts"
+
+#: The artifact tree, whose files a clone carries only when promoted.
+ARTIFACT_ROOT = ".ea/artifacts/"
+PROMOTED = frozenset(row.pattern for row in PROMOTED_ARTIFACTS)
 DEV5_VERSION = "0.7.0.dev5"
 DEV5_KEY = f"REL-{DEV5_VERSION}"
 
@@ -104,11 +112,42 @@ def test_the_record_is_ready_pending_post_merge_observation() -> None:
     assert_pre_merge_receipts_bound(DEV5_KEY, committed())
 
 
+def committed_copy(ref: str) -> Path:
+    """Return the file a clone carries for the repository evidence *ref*.
+
+    A local artifact stays out of git, so a receipt citing one is backed by
+    its fixture copy: the same file under ``tests/fixtures/artifacts/``,
+    keyed by its evidence directory. Every other ref is carried as named.
+    """
+    if not ref.startswith(ARTIFACT_ROOT) or ref in PROMOTED:
+        return REPO_ROOT / ref
+    _kind, _, below = ref.removeprefix(ARTIFACT_ROOT).partition("/")
+    return FIXTURE_ROOT / below
+
+
 def test_every_repository_evidence_ref_names_a_committed_file() -> None:
     for receipt in committed().receipts:
         for ref in (*receipt.evidence_refs, *receipt.live_refs):
             if "://" not in ref:
-                assert (REPO_ROOT / ref).is_file(), f"{receipt.gate.value}: {ref}"
+                assert committed_copy(ref).is_file(), f"{receipt.gate.value}: {ref}"
+
+
+def test_a_cited_local_artifact_matches_its_fixture_copy() -> None:
+    """Where the local artifact is present, the copy a clone carries is that file."""
+    for receipt in committed().receipts:
+        for ref in receipt.evidence_refs:
+            local, copy = REPO_ROOT / ref, committed_copy(ref)
+            if copy != local and local.is_file():
+                assert copy.read_bytes() == local.read_bytes(), ref
+
+
+def test_committed_copy_maps_a_local_artifact_to_its_fixture() -> None:
+    assert committed_copy(LIVE_CUTOVER_RECORD) == (
+        FIXTURE_ROOT / "2026-09-dev5-live-cutover" / "live-cutover.json"
+    )
+    promoted = next(iter(sorted(PROMOTED)))
+    assert committed_copy(promoted) == REPO_ROOT / promoted
+    assert committed_copy(INTEGRATE_SEAL_PROOF) == REPO_ROOT / INTEGRATE_SEAL_PROOF
 
 
 def test_the_live_cutover_receipt_binds_the_committed_cutover_record() -> None:

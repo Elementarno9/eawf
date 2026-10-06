@@ -5,12 +5,13 @@ grandfathered as ``kind == legacy`` at migration. W25 drains that corpus
 through the W24 converter (``eawf spec convert-legacy``): every row in the
 range is now typed with a falsifying gate, or stays legacy carrying a named
 non-convertible reason on ``waiver_reason`` — no silent legacy rows. With
-the corpus honest, the repo opts into ODR blocking at iter close.
+the corpus honest, the repo opts into ODR blocking at iter close. The
+drained corpus lives in the frozen epoch-1 document, which git no longer
+carries, so what stays pinned here is the opt-in and its threading.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -19,51 +20,8 @@ import yaml
 pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_STATE_PATH = _REPO_ROOT / ".ea" / "state.json"
+_STATE_PATH = _REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot" / "state.json"
 _CONFIG_PATH = _REPO_ROOT / ".ea" / "config.yaml"
-
-#: P30-I21-W22 is the pending v0.6.0 phase re-close wave — retyped by the
-#: W36 runbook, deliberately outside this drain corpus.
-_EXCLUDED = frozenset({"P30-I21-W22"})
-
-
-def _corpus_waves(state: dict) -> dict[str, dict]:
-    return {
-        wave_id: wave
-        for wave_id, wave in (state.get("waves") or {}).items()
-        if (wave_id.startswith("P30-I20-") or wave_id.startswith("P30-I21-"))
-        and wave_id not in _EXCLUDED
-    }
-
-
-def test_no_silent_legacy_rows_survive_in_the_corpus() -> None:
-    """CR-01: every corpus row is typed, or reason-tagged legacy."""
-    state = json.loads(_STATE_PATH.read_text(encoding="utf-8"))
-    corpus = _corpus_waves(state)
-    assert corpus, "the I20/I21 corpus is empty — the drain premise is gone"
-    silent: list[str] = []
-    rows = 0
-    for wave_id, wave in corpus.items():
-        for criterion in wave.get("success_criteria") or []:
-            rows += 1
-            if criterion.get("kind") == "legacy" and not criterion.get("waiver_reason"):
-                silent.append(f"{wave_id}/{criterion.get('id')}")
-    assert rows >= 100, f"corpus unexpectedly thin ({rows} rows)"
-    assert not silent, f"silent legacy rows survive: {silent[:10]}"
-
-
-def test_converted_rows_carry_a_falsifying_gate() -> None:
-    """CR-01: a retyped row is gated — conversion is not a kind rename."""
-    state = json.loads(_STATE_PATH.read_text(encoding="utf-8"))
-    for wave_id, wave in _corpus_waves(state).items():
-        gate_ids = {gate.get("id") for gate in wave.get("gates") or []}
-        for criterion in wave.get("success_criteria") or []:
-            if criterion.get("kind") == "legacy":
-                continue
-            refs = criterion.get("gate_ids") or []
-            assert refs, f"{wave_id}/{criterion.get('id')} converted but gateless"
-            missing = [ref for ref in refs if ref not in gate_ids]
-            assert not missing, f"{wave_id}/{criterion.get('id')} dangling gates {missing}"
 
 
 def test_repo_opts_into_odr_blocking_and_config_validates() -> None:

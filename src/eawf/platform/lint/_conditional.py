@@ -136,7 +136,10 @@ def staged_files(*, cwd: Path | None = None, timeout: float = 5.0) -> list[str]:
     Uses ``git diff --cached --name-only`` so the gate scans exactly the
     delta a ``git commit`` would record. An empty list when nothing is
     staged (e.g. ``pre-commit run --all-files`` on a clean tree), which
-    makes the gate a clean no-op rather than a whole-tree scan.
+    makes the gate a clean no-op rather than a whole-tree scan. A staged
+    deletion records no content, so it is left out: a file untracked with
+    ``git rm --cached`` stays on disk, and scanning it would judge bytes
+    the commit removes.
 
     Args:
         cwd: Repository working directory; defaults to the process cwd.
@@ -146,7 +149,9 @@ def staged_files(*, cwd: Path | None = None, timeout: float = 5.0) -> list[str]:
         Sorted repo-relative path strings; empty on staged-empty or git
         failure.
     """
-    return _run_git_name_only(["--cached"], cwd=cwd, timeout=timeout, context="staged_files")
+    return _run_git_name_only(
+        ["--cached", "--diff-filter=d"], cwd=cwd, timeout=timeout, context="staged_files"
+    )
 
 
 def select_relevant(files: list[str], pattern: re.Pattern[str]) -> list[str]:

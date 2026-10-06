@@ -35,8 +35,8 @@ pytestmark = pytest.mark.integration
 #: Four levels up from this file lands on the repository root.
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
-#: Where the isolation record is committed.
-RECORD = _REPO_ROOT / ".ea/artifacts/evidence/2026-09-18-canary-rehearsal/isolation-record.json"
+#: The isolation record, kept as a fixture because its evidence directory is local.
+RECORD = _REPO_ROOT / "tests/fixtures/artifacts/2026-09-18-canary-rehearsal/isolation-record.json"
 
 #: A sha256 digest as every record in this repository spells one.
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")

@@ -20,12 +20,13 @@ from __future__ import annotations
 
 import ast
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 from pydantic import BaseModel, ValidationError
 
 from eawf.kernel.spec.common import ARTIFACT_KIND_SUBDIR, ArtifactPathStr
+from eawf.kernel.store.commit_policy import PROMOTED_ARTIFACTS
 from eawf.platform.lint.eawf023_artifact_placement import check_artifact_path
 
 SRC_ROOT = Path(__file__).resolve().parents[4] / "src" / "eawf"
@@ -94,11 +95,14 @@ def test_lint_004_the_lint_names_the_map_values_when_it_refuses() -> None:
 
 
 def test_lint_004_every_committed_subdirectory_is_a_map_value() -> None:
-    """The sub-directories actually committed are all declared, so none is filed by habit."""
+    """The sub-directories actually committed are all declared, so none is filed by habit.
+
+    Only the promoted artifacts are committed, so their first path segment is the
+    committed set; the local tree a clone does not carry is never read.
+    """
     committed = {
-        path.name
-        for path in (SRC_ROOT.parent.parent / ".ea" / "artifacts").iterdir()
-        if path.is_dir() and path.name != "rendered"
+        PurePosixPath(row.pattern).relative_to(".ea/artifacts").parts[0]
+        for row in PROMOTED_ARTIFACTS
     }
     assert committed
     assert committed <= set(ARTIFACT_KIND_SUBDIR.values())

@@ -1,14 +1,13 @@
-"""The locked write chokepoint and a production spike-report filer.
+"""The promotion write path and a production spike-report filer.
 
-``_submit_evidence`` used to persist ``state.json`` with a plain
-``write_text`` -- no lock, no atomic write, no leak check -- and appended
-its event and evidence rows before that write landed. These tests drive
-the registered daemon verbs (never a private test-only filer) to prove
-two things: the write now goes through the locked, leak-refusing
-chokepoint with events appended only after it lands, and a spike report
-filed by its own production verb (``runtime.evidence.spike_report.file``)
-is resolved by ``submit_evidence`` end to end, with no test-only filer in
-the loop.
+``_submit_evidence`` promotes into the tree's selected generation: one
+line of its evidence ledger, appended through the leak-refusing native
+ledger commit, and never a write of the v1 ``state.json``, which a marked
+tree refuses to every writer. These tests drive the registered daemon
+verbs (never a private test-only filer) to prove that, and that a spike
+report filed by its own production verb
+(``runtime.evidence.spike_report.file``) is resolved by
+``submit_evidence`` end to end, with no test-only filer in the loop.
 
 Driven through the same registered-verb dispatch
 :mod:`tests.integration.runtime.daemon.test_semantic_tool_handlers` uses,
@@ -17,19 +16,24 @@ so what runs is the shipped gateway and the shipped handlers.
 
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
+from typing import Final
 
 import pytest
 
-from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.io import StateValidationError
+from eawf.kernel.state.io import LegacyOperationRemovedError, write_state_unlocked
+from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
+from eawf.runtime.daemon.epoch2_transaction import TransactionRefusalCode, TransactionRefusedError
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.semantic_handlers import EVIDENCE_SPIKE_REPORT_FILE_METHOD
-from eawf.workflow.evidence._io import store_paths
+from eawf.workflow.evidence._io import atomic_write_state, load_state
+from tests.integration.runtime.daemon._epoch2_transaction_fixtures import root_context
 from tests.integration.runtime.daemon.test_semantic_tool_handlers import (
+    PROJECT_SCOPE,
     RUN_URN,
-    V1_STATE_SCOPE,
     bind,
     call_verb,
     evidence_payload,
@@ -38,7 +42,7 @@ from tests.integration.runtime.daemon.test_semantic_tool_handlers import (
     make_canary,
     method_context,
     seal_call,
-    seed_v1_state,
+    seed_project,
     spike_report_payload,
     task_scope,
 )
@@ -46,6 +50,9 @@ from tests.integration.runtime.daemon.test_semantic_tool_handlers import (
 pytestmark = pytest.mark.integration
 
 ACTOR: str = "OP-0001"
+V1_STATE_FIXTURE: Final = (
+    Path(__file__).resolve().parents[3] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
+)
 
 
 @pytest.fixture
@@ -87,7 +94,7 @@ def test_a_report_filed_by_its_production_verb_resolves_through_submit_evidence(
     """CR-02: the production filer, not a test-only one, is what submit_evidence reads."""
     capsule = executor_capsule(tool_grants=("budget_status", "submit_evidence"))
     bind(ctx, task_canary, capsule)
-    seed_v1_state(task_canary)
+    seed_project(task_canary)
     ref = "artifact://spike/run-w17-01"
     filed = file_via_daemon(
         ctx,
@@ -113,7 +120,7 @@ def test_a_report_filed_by_its_production_verb_resolves_through_submit_evidence(
     output = answer["result"]["bounded_output"]
     assert answer["result"]["status"] == "succeeded"
     assert output["accepted"] is True
-    assert output["contract_refs"] == [f"urn:eawf:v1:artifact:{V1_STATE_SCOPE}/MCT-99990101"]
+    assert output["contract_refs"] == [f"urn:eawf:v1:artifact:{PROJECT_SCOPE}/MCT-99990101"]
 
 
 def test_refiling_the_same_ref_with_the_same_content_replays(
@@ -139,15 +146,15 @@ def test_refiling_the_same_ref_with_different_content_is_refused(
         )
 
 
-def test_submit_evidence_writes_state_before_appending_any_event(
+def test_submit_evidence_files_its_promotion_through_one_ledger_append(
     task_canary: CanaryProvision, ctx: MethodContext, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """CR-01: the atomic state write lands before either event row is appended."""
+    """The promotion is one generation ledger line and touches no v1 file."""
     import eawf.runtime.daemon.semantic_handlers as handlers_mod
 
     capsule = executor_capsule(tool_grants=("budget_status", "submit_evidence"))
     bind(ctx, task_canary, capsule)
-    seed_v1_state(task_canary)
+    seed_project(task_canary)
     ref = "artifact://spike/run-w17-04"
     filed = file_via_daemon(
         ctx,
@@ -156,20 +163,14 @@ def test_submit_evidence_writes_state_before_appending_any_event(
         report=spike_report_payload(report_id="RPT-W17-04", contract_id="MCT-99990104"),
     )
 
-    order: list[str] = []
-    real_write = handlers_mod.atomic_write_state
-    real_append = handlers_mod.append_jsonl
+    appended: list[LedgerRecord] = []
+    real_append = handlers_mod.commit_ledger_append
 
-    def spy_write(path: Path, state: object, **kwargs: object) -> None:
-        order.append("write")
-        real_write(path, state, **kwargs)
+    def spy_append(session: object, record: LedgerRecord, **kwargs: object) -> object:
+        appended.append(record)
+        return real_append(session, record, **kwargs)  # type: ignore[arg-type]
 
-    def spy_append(path: Path, envelope: object) -> None:
-        order.append("append")
-        real_append(path, envelope)
-
-    monkeypatch.setattr(handlers_mod, "atomic_write_state", spy_write)
-    monkeypatch.setattr(handlers_mod, "append_jsonl", spy_append)
+    monkeypatch.setattr(handlers_mod, "commit_ledger_append", spy_append)
 
     answer = invoke(
         ctx,
@@ -184,33 +185,78 @@ def test_submit_evidence_writes_state_before_appending_any_event(
         capsule,
     )
 
-    output = answer["result"]["bounded_output"]
-    assert output["accepted"] is True
-    assert order == ["write", "append", "append"]
+    assert answer["result"]["bounded_output"]["accepted"] is True
+    assert [(item.collection, item.record_key) for item in appended] == [
+        (Epoch2Collection.EVIDENCE, "RPT-W17-04")
+    ]
+    ea = Path(task_canary.root) / ".ea"
+    assert not (ea / "state.json").exists()
+    assert not (ea / "store" / "evidence.jsonl").exists()
+
+
+def test_a_marked_tree_refuses_every_v1_document_writer(
+    task_canary: CanaryProvision, tmp_path: Path
+) -> None:
+    """CR-1: neither v1 writer has a carve-out left, so a marked tree refuses both."""
+    plain = tmp_path / "plain" / "state.json"
+    plain.parent.mkdir()
+    plain.write_text(V1_STATE_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+    state = load_state(plain)
+    target = Path(task_canary.root) / ".ea" / "state.json"
+
+    with pytest.raises(LegacyOperationRemovedError):
+        atomic_write_state(target, state)
+    with pytest.raises(LegacyOperationRemovedError):
+        write_state_unlocked(target, state.model_dump(mode="json"))
+
+    assert not target.exists()
+    assert "native_authority" not in inspect.signature(write_state_unlocked).parameters
+    assert "native_authority" not in inspect.signature(atomic_write_state).parameters
+
+
+def test_an_unmarked_tree_still_takes_a_v1_document_write(tmp_path: Path) -> None:
+    """Boundary: the fence is the marker, so an epoch-1 tree keeps its writer."""
+    plain = tmp_path / "plain" / "state.json"
+    plain.parent.mkdir()
+    plain.write_text(V1_STATE_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+    state = load_state(plain)
+
+    atomic_write_state(plain, state)
+
+    assert load_state(plain).project == state.project
 
 
 @pytest.mark.parametrize(
     ("failure", "code"),
     [
-        (StateValidationError("seeded failure: simulated leak refusal"), "state_leak_refused"),
+        (
+            TransactionRefusedError(
+                code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
+                detail="seeded failure: simulated leak refusal",
+                entity_ref=RUN_URN,
+                remediation="Remove the leak and retry.",
+            ),
+            "state_leak_refused",
+        ),
         (OSError(28, "No space left on device"), "state_write_failed"),
         (PermissionError(13, "Permission denied"), "state_write_failed"),
     ],
     ids=["leak_refusal", "os_error", "os_error_subclass"],
 )
-def test_a_failed_state_write_is_a_typed_refusal_with_state_unchanged(
+def test_a_failed_ledger_append_is_a_typed_refusal_with_nothing_promoted(
     task_canary: CanaryProvision,
     ctx: MethodContext,
+    runtime_root: Path,
     monkeypatch: pytest.MonkeyPatch,
     failure: Exception,
     code: str,
 ) -> None:
-    """CR-02: a refused or failed write answers a finding and leaves no orphan row."""
+    """A refused or failed append answers a finding and leaves the ledger as it was."""
     import eawf.runtime.daemon.semantic_handlers as handlers_mod
 
     capsule = executor_capsule(tool_grants=("budget_status", "submit_evidence"))
     bind(ctx, task_canary, capsule)
-    seed_v1_state(task_canary)
+    seed_project(task_canary)
     ref = "artifact://spike/run-w17-05"
     filed = file_via_daemon(
         ctx,
@@ -219,17 +265,10 @@ def test_a_failed_state_write_is_a_typed_refusal_with_state_unchanged(
         report=spike_report_payload(report_id="RPT-W17-05", contract_id="MCT-99990105"),
     )
 
-    def seeded_failure(path: Path, state: object, **kwargs: object) -> None:
+    def seeded_failure(session: object, record: object, **kwargs: object) -> None:
         raise failure
 
-    monkeypatch.setattr(handlers_mod, "atomic_write_state", seeded_failure)
-
-    state_path = Path(task_canary.root) / ".ea" / "state.json"
-    before = state_path.read_bytes()
-    event_path = store_paths(state_path)[StoreKind.EVENT]
-    evidence_path = store_paths(state_path)[StoreKind.EVIDENCE]
-    events_before = event_path.read_bytes() if event_path.exists() else b""
-    evidence_before = evidence_path.read_bytes() if evidence_path.exists() else b""
+    monkeypatch.setattr(handlers_mod, "commit_ledger_append", seeded_failure)
 
     answer = invoke(
         ctx,
@@ -251,10 +290,7 @@ def test_a_failed_state_write_is_a_typed_refusal_with_state_unchanged(
     assert [finding["code"] for finding in output["findings"]] == [code]
     # The leak text can quote the leaking value, so it must not reach the receipt.
     assert "seeded failure" not in output["findings"][0]["message"]
-    assert state_path.read_bytes() == before
-    # The gateway still logs its own receipt rows; what must be absent is any
-    # event naming the contract the refused write would have promoted.
-    events_after = event_path.read_bytes() if event_path.exists() else b""
-    assert events_after.startswith(events_before)
-    assert b"MCT-99990105" not in events_after[len(events_before) :]
-    assert (evidence_path.read_bytes() if evidence_path.exists() else b"") == evidence_before
+    context = root_context(task_canary, runtime_root)
+    with context.session([RUN_URN]) as session:
+        assert read_ledger_records(session.ledger_path(Epoch2Collection.EVIDENCE)) == ()
+    assert not (Path(task_canary.root) / ".ea" / "state.json").exists()

@@ -18,7 +18,7 @@ import pytest
 pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_STATE_PATH = _REPO_ROOT / ".ea" / "state.json"
+_STATE_PATH = _REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot" / "state.json"
 
 
 def _actuals() -> dict[str, dict]:

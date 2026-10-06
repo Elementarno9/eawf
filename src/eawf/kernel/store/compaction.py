@@ -71,12 +71,18 @@ from eawf.kernel.state.types import Sha256DigestStr, UtcDatetime
 from eawf.kernel.store.index import regenerate_indexes, write_ledger_index
 from eawf.kernel.store.ledger import (
     LedgerRecord,
+    LedgerSnapshotError,
     append_ledger_record,
+    content_digest,
     effective_records,
+    finish_interrupted_seal,
     guarded_ledger_write,
+    ledger_snapshot,
     line_digest,
     read_ledger_records,
     render_ledger_line,
+    seal_ledger_prefix,
+    split_ledger_lines,
     truncate_torn_tail,
 )
 from eawf.kernel.store.paths import (
@@ -775,7 +781,7 @@ def recover_store_tree(state_path: Path) -> RecoveryReport:
         ledger = ledger_path(state_path, collection)
         if not ledger.exists():
             continue
-        if truncate_torn_tail(ledger):
+        if truncate_torn_tail(ledger) | finish_interrupted_seal(ledger):
             repaired.append(collection)
         dropped.extend(_drop_committed_rows(document, collection, ledger))
 
@@ -824,13 +830,111 @@ def _drop_committed_rows(
     return [f"{collection.value}/{key}" for key in doomed]
 
 
+#: The ``origin.kind`` an imported epoch-1 record carries in its payload.
+LEGACY_ORIGIN_KIND: Final = "legacy"
+
+
+class LegacySealPlan(BaseModel):
+    """Where a ledger's legacy import ends, and the bytes that was measured over.
+
+    Attributes:
+        sealed_digest: The digest of the bytes the seal moves, which is
+            the digest the snapshot's file name will carry.
+        cut: The byte offset just past the last legacy-origin line; the
+            seal moves every byte before it into the snapshot.
+        sealed_lines: How many lines the snapshot will hold.
+        live_lines: How many lines stay in the live file.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    sealed_digest: Sha256DigestStr
+    cut: Annotated[int, Field(gt=0)]
+    sealed_lines: Annotated[int, Field(gt=0)]
+    live_lines: Annotated[int, Field(ge=0)]
+
+
+def plan_legacy_seal(ledger: Path) -> LegacySealPlan | None:
+    """Measure the seal that would take the ledger's legacy import out of its live file.
+
+    The seal moves a prefix, so it runs through the last line whose
+    payload ``origin.kind`` is ``legacy``: a superseding line appended
+    later that copies a legacy record's payload is sealed with it, and any
+    native line before it is sealed too. Moving only the legacy lines out
+    of order would reorder the ledger and could change which row stands
+    last for a key.
+
+    Args:
+        ledger: The live ledger file.
+
+    Returns:
+        The plan, or ``None`` when the ledger is already sealed, missing,
+        or carries no legacy-origin line.
+
+    Raises:
+        LedgerTornTailError: The file ends mid-line.
+        LedgerSnapshotError: More than one snapshot claims the ledger.
+    """
+    if ledger_snapshot(ledger) is not None or not ledger.is_file():
+        return None
+    content = ledger.read_bytes()
+    lines = split_ledger_lines(content)
+    offset, cut, sealed = 0, 0, 0
+    for number, line in enumerate(lines, start=1):
+        offset += len(line.encode("utf-8")) + 1
+        origin = json.loads(line).get("payload", {}).get("origin")
+        if isinstance(origin, dict) and origin.get("kind") == LEGACY_ORIGIN_KIND:
+            cut, sealed = offset, number
+    if not cut:
+        return None
+    return LegacySealPlan(
+        sealed_digest=content_digest(content[:cut]),
+        cut=cut,
+        sealed_lines=sealed,
+        live_lines=len(lines) - sealed,
+    )
+
+
+def seal_legacy_import(
+    state_path: Path, *, collection: Epoch2Collection, plan: LegacySealPlan
+) -> Path:
+    """Seal the legacy import of one ledger into its snapshot, as *plan* measured it.
+
+    Args:
+        state_path: Path to the tree's ``state.json``.
+        collection: The ledger collection to seal.
+        plan: The plan the caller previewed; it is measured again here
+            and must be unchanged.
+
+    Returns:
+        The snapshot written.
+
+    Raises:
+        LedgerSnapshotError: The ledger changed since *plan* was taken,
+            or is already sealed.
+        LedgerTornTailError: The ledger ends mid-line.
+    """
+    ledger = ledger_path(state_path, collection)
+    if plan_legacy_seal(ledger) != plan:
+        raise LedgerSnapshotError(f"ledger {ledger.name} changed since the seal was planned")
+    snapshot = seal_ledger_prefix(ledger, plan.cut)
+    write_ledger_index(state_path, collection)
+    logger.info(
+        f"seal_legacy_import collection={collection.value} sealed_lines={plan.sealed_lines} "
+        f"live_lines={plan.live_lines}"
+    )
+    return snapshot
+
+
 __all__ = [
     "CANONICAL_SEQUENCE_KEY",
     "IN_FLIGHT_TASK_FIELDS",
     "IN_FLIGHT_TASK_STATUSES",
+    "LEGACY_ORIGIN_KIND",
     "CompactionCrashError",
     "CompactionCrashPoint",
     "CompactionResult",
+    "LegacySealPlan",
     "PreviousProjection",
     "RecordInTwoPlacesError",
     "RecordLocation",
@@ -841,8 +945,10 @@ __all__ = [
     "document_rows",
     "locate_record",
     "migrate_status_projection",
+    "plan_legacy_seal",
     "read_document",
     "recover_store_tree",
+    "seal_legacy_import",
     "settle_status_ledgers",
     "write_document",
 ]

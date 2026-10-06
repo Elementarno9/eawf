@@ -13,15 +13,19 @@ its realization assertion, so the row passes when the others hold too.
 from __future__ import annotations
 
 import copy
-import json
+import tempfile
 import textwrap
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 from eawf.kernel.spec.release_config import ReleaseConfig, load_release_config
+from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.workflow.release.train import DEV1_RELEASE_CONFIG_YAML, V07_TRAIN
 from eawf.workflow.verify.release_probes import TagPreflightInputs, build_tag_probes
 from eawf.workflow.verify.release_readiness import (
@@ -29,6 +33,10 @@ from eawf.workflow.verify.release_readiness import (
     ReleaseSignalName,
     ReleaseSignalStatus,
     compute_readiness,
+)
+from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
+    document_path,
+    provision,
 )
 
 _NOW = datetime(2027, 2, 1, 12, 0, tzinfo=UTC)
@@ -174,19 +182,35 @@ def _renewed(decision: str, *, expires: str = "2026-01-31") -> str:
     )
 
 
+@pytest.fixture(autouse=True)
+def canary_runtime_under_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Allocate every canary runtime directory under this test's tmp dir."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+
+
 def _with_decisions(repo_root: Path, *ids: str) -> Path:
-    ea = repo_root / ".ea"
-    ea.mkdir(exist_ok=True)
-    (ea / "state.json").write_text(
-        json.dumps({"decisions": {name: {"id": name} for name in ids}}), encoding="utf-8"
-    )
+    """Provision an epoch-2 tree at *repo_root* whose decision ledger records *ids*."""
+    canary = provision(repo_root, code="RLS")
+    for name in ids:
+        append_ledger_record(
+            ledger_path(document_path(canary), Epoch2Collection.DECISION),
+            LedgerRecord(
+                collection=Epoch2Collection.DECISION,
+                record_key=name,
+                status="imported",
+                recorded_at=_NOW,
+                payload={"payload": {"id": name, "status": "active"}},
+            ),
+        )
     return repo_root
 
 
 def test_exclusion_expiry_renewal_against_an_unknown_decision_reds_the_row(
     tmp_path: Path,
 ) -> None:
-    repo = _with_decisions(_repo(tmp_path, _renewed("D-GHOST")), "D-REAL")
+    repo = _repo(_with_decisions(tmp_path / "repo", "D-REAL"), _renewed("D-GHOST"))
     row = _sweep(repo, today=date(2027, 2, 1)).row(ReleaseSignalName.PERFECT_REALIZATION)
     assert row.status is ReleaseSignalStatus.FAIL
     assert "D-GHOST" in row.remediation
@@ -194,19 +218,23 @@ def test_exclusion_expiry_renewal_against_an_unknown_decision_reds_the_row(
 
 
 def test_exclusion_expiry_renewal_reds_before_the_grant_even_lapses(tmp_path: Path) -> None:
-    repo = _with_decisions(_repo(tmp_path, _renewed("D-GHOST", expires="2030-01-01")), "D-REAL")
+    repo = _repo(
+        _with_decisions(tmp_path / "repo", "D-REAL"), _renewed("D-GHOST", expires="2030-01-01")
+    )
     row = _sweep(repo, today=date(2027, 2, 1)).row(ReleaseSignalName.PERFECT_REALIZATION)
     assert row.status is ReleaseSignalStatus.FAIL
-    assert "absent from state.json" in row.remediation
+    assert "absent from the decision ledger" in row.remediation
 
 
 def test_exclusion_expiry_renewal_against_a_recorded_decision_is_accepted(tmp_path: Path) -> None:
-    repo = _with_decisions(_repo(tmp_path, _renewed("D-REAL", expires="2030-01-01")), "D-REAL")
+    repo = _repo(
+        _with_decisions(tmp_path / "repo", "D-REAL"), _renewed("D-REAL", expires="2030-01-01")
+    )
     row = _sweep(repo, today=date(2027, 2, 1)).row(ReleaseSignalName.PERFECT_REALIZATION)
     assert row.status is ReleaseSignalStatus.PASS
 
 
-def test_exclusion_expiry_renewal_needs_state_json_to_be_present(tmp_path: Path) -> None:
+def test_exclusion_expiry_renewal_needs_a_decision_ledger_to_be_present(tmp_path: Path) -> None:
     row = _sweep(_repo(tmp_path, _renewed("D-REAL")), today=date(2027, 2, 1)).row(
         ReleaseSignalName.PERFECT_REALIZATION
     )

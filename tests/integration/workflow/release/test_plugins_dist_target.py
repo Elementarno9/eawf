@@ -22,7 +22,7 @@ other half is the published past held still: the ``dev2`` document byte
 for byte, the three identities the ``dev2`` manifest froze, and that
 manifest's digest -- the one ``REL-0.7.0.dev2`` pins and
 :func:`assert_manifest_binds` checks -- recomputing unchanged from the
-committed evidence.
+frozen manifest fixture.
 """
 
 from __future__ import annotations
@@ -77,12 +77,12 @@ DEV2_APPROVED_MANIFEST_DIGEST = "sha256:" + (
     "3ea0e1250281a90d1840583cbd92c2751fc1c99b9d9f1824e69f740ea9c9e148"  # pragma: allowlist secret
 )
 
-#: The manifest the ``dev2`` publication froze, as committed.
+#: The manifest the ``dev2`` publication froze, kept as a fixture because
+#: the evidence directory it was filed in is machine-local.
 DEV2_MANIFEST_PATH = (
-    Path(__file__).resolve().parents[4]
-    / ".ea"
+    Path(__file__).resolve().parents[3]
+    / "fixtures"
     / "artifacts"
-    / "evidence"
     / "2026-09-16-dev2-publication"
     / "frozen-manifest.json"
 )
@@ -101,7 +101,7 @@ PUBLISHED_PROFILES = (ReleaseGateProfile.DEV1, ReleaseGateProfile.DEV2)
 
 
 def dev2_manifest() -> FrozenManifest:
-    """Return the manifest the ``dev2`` approval bound, as committed."""
+    """Return the manifest the ``dev2`` approval bound, as frozen."""
     return FrozenManifest.model_validate(json.loads(DEV2_MANIFEST_PATH.read_text(encoding="utf-8")))
 
 

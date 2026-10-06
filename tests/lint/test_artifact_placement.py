@@ -17,10 +17,12 @@ import pytest
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from eawf.kernel.spec.common import ArtifactPathStr, artifact_path_str
+from eawf.kernel.store.commit_policy import PROMOTED_ARTIFACTS
 from eawf.platform.lint.eawf023_artifact_placement import (
     GRANDFATHERED_ARTIFACTS,
     check_artifact_path,
     check_artifact_paths,
+    committed_artifact_paths,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -85,12 +87,35 @@ def test_check_artifact_path_non_markdown_skipped() -> None:
 
 
 def test_check_artifact_path_grandfathered_passes() -> None:
-    # A legacy date-stem-less file on the baseline is exempt.
+    # A path on an explicit baseline is exempt; without one it is flagged.
     legacy = ".ea/artifacts/audits/A09-P08-ship-gate.md"
-    assert legacy in GRANDFATHERED_ARTIFACTS
-    assert check_artifact_path(legacy) is None
-    # ... but with an empty grandfather set it IS flagged.
-    assert check_artifact_path(legacy, grandfather=frozenset()) is not None
+    assert check_artifact_path(legacy, grandfather=frozenset({legacy})) is None
+    assert check_artifact_path(legacy) is not None
+
+
+def test_grandfather_names_only_promoted_paths() -> None:
+    """Only a committed artifact is in surface, and only a promoted one is committed."""
+    promoted = {row.pattern for row in PROMOTED_ARTIFACTS}
+    assert promoted >= GRANDFATHERED_ARTIFACTS
+
+
+# --- the committed surface -------------------------------------------------
+
+
+def test_committed_artifact_paths_empty() -> None:
+    assert committed_artifact_paths([]) == []
+
+
+def test_committed_artifact_paths_keeps_only_promoted_in_order() -> None:
+    promoted = [row.pattern for row in PROMOTED_ARTIFACTS]
+    local = ".ea/artifacts/audits/A09-P08-ship-gate.md"
+    paths = [promoted[-1], local, "src/eawf/x.py", promoted[0]]
+    assert committed_artifact_paths(paths) == [promoted[-1], promoted[0]]
+
+
+def test_committed_artifact_paths_drops_a_local_artifact() -> None:
+    assert committed_artifact_paths([".ea/artifacts/research/2026-06-11-x.md"]) == []
+    assert committed_artifact_paths([".ea/artifacts/rendered/memory/x.md"]) == []
 
 
 # --- placement lint: list aggregation + clean tree -------------------------
@@ -123,8 +148,9 @@ def test_check_artifact_paths_clean_over_real_tree() -> None:
         timeout=10,
     )
     tracked = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
-    assert tracked, "expected a non-empty tracked artifact tree"
-    violations = check_artifact_paths(tracked)
+    committed = committed_artifact_paths(tracked)
+    assert committed, "expected a promoted markdown artifact in the tracked tree"
+    violations = check_artifact_paths(committed)
     assert violations == [], f"clean tree should pass; got {[v.path for v in violations]}"
 
 

@@ -6,8 +6,8 @@ establishing one as a side effect. The ruling is only useful while it stays
 queryable and keeps naming both of its halves: the target tree shape, and
 the boundary saying where an epoch-1 row that epoch-2 cannot model natively
 is allowed to live. This suite pins the stored decision row, the rationale
-carrying the boundary, and the brief that argues for them. The row is read
-from the committed state directly: the flag day retired ``decision list``.
+carrying the boundary, and the rival it rejected. The row is read from the
+committed state directly: the flag day retired ``decision list``.
 """
 
 from __future__ import annotations
@@ -21,8 +21,7 @@ import pytest
 pytestmark = pytest.mark.integration
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
-_STATE_PATH = _REPO_ROOT / ".ea" / "state.json"
-_BRIEF_DIR = _REPO_ROOT / ".ea" / "artifacts" / "research"
+_STATE_PATH = _REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot" / "state.json"
 
 #: The target shape, as the decision summary must still say it. Matched on
 #: content rather than on the id ``D42`` so a renumbering does not silently
@@ -104,26 +103,3 @@ def test_state_tree_rows_rejects_a_half_named_shape() -> None:
         {"id": "D01", "summary": "Keep a separate legacy store somewhere", "status": "active"},
     ]
     assert _state_tree_rows(half_named) == []
-
-
-def test_promoted_brief_argues_for_the_decided_shape(
-    listed_decisions: list[dict[str, Any]],
-) -> None:
-    """CR-01: a research brief on the decided shape backs the ruling.
-
-    Binds the state row to committed prose, so a decision cannot survive as
-    a bare title once the reasoning behind it is gone.
-    """
-    assert _state_tree_rows(listed_decisions), "no ACTIVE state-tree decision to back"
-    titled = [
-        path
-        for path in sorted(_BRIEF_DIR.glob("*.md"))
-        if all(
-            term in path.read_text(encoding="utf-8").splitlines()[0].lower()
-            for term in _SHAPE_TERMS
-        )
-    ]
-    assert len(titled) == 1, f"expected one state-tree brief, got {[p.name for p in titled]}"
-    text = titled[0].read_text(encoding="utf-8").lower()
-    missing = [term for term in _BOUNDARY_TERMS if term not in text]
-    assert not missing, f"{titled[0].name} no longer names the boundary: {missing}"

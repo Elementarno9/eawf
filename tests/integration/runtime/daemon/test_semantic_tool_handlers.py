@@ -57,6 +57,7 @@ from eawf.runtime.candidate.seal import submission_record
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods.planning import PLAN_APPROVE_METHOD, PLAN_SUBMIT_METHOD
 from eawf.runtime.daemon.methods.run import RUN_BIND_METHOD
 from eawf.runtime.daemon.methods.semantic import SEMANTIC_CALL_METHOD
 from eawf.runtime.daemon.semantic_gateway import AGENT_LAUNCH_COMMANDS, PreHandlerCheck
@@ -91,12 +92,21 @@ RUN_KEY: Final = "RUN-00000010"
 SLOT: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
 RUN_URN: Final = f"{SLOT}/run/{RUN_KEY}"
 REPOSITORY_URN: Final = f"{SLOT}/repository/REP-EAWF"
-#: The fixture project code the seeded v1 state carries; promoted URNs
-#: resolve under it.
-V1_STATE_SCOPE: Final = "QR"
-V1_STATE_FIXTURE = (
-    Path(__file__).resolve().parents[3] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
-)
+#: The project code the seeded generation project row carries; promoted
+#: URNs resolve under it.
+PROJECT_SCOPE: Final = "QR"
+#: The project record a migrated tree's generation holds, as the cutover
+#: imported it from the v1 document.
+PROJECT_RECORD: Final[dict[str, Any]] = {
+    "code": PROJECT_SCOPE,
+    "slug": "quant-research",
+    "title": "Quant Research",
+    "description": "",
+    "domains": ["quant"],
+    "default_branch": "main",
+    "status": "active",
+    "repo_urn": f"urn:eawf:v1:repo:{PROJECT_SCOPE}",
+}
 TRACK_URN: Final = f"{SLOT}/track/TRK-RUNTIME"
 FINDING_URN: Final = f"{SLOT}/campaign-finding/CFN-0001"
 PLAN_TASK_URN: Final = f"{SLOT}/task/EAWF-0042"
@@ -472,15 +482,13 @@ def file_spike_report(
     return content_digest
 
 
-def seed_v1_state(canary: CanaryProvision) -> None:
-    """Write a v1 ``state.json`` beside *canary*'s epoch-2 tree.
+def seed_project(canary: CanaryProvision) -> None:
+    """Record the project row a promotion is scoped under in *canary*'s generation.
 
-    This is the store ``submit_evidence``'s handler promotes a contract
-    into, at ``<repo_root>/.ea/state.json`` -- the same path
-    ``native_root()`` resolves this call's ``repo_root`` to.
+    The row takes the import-envelope shape the cutover writes, so the
+    handler reads it the way it reads a migrated tree's.
     """
-    state_path = Path(canary.root) / ".ea" / "state.json"
-    state_path.write_text(V1_STATE_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+    seed(canary, {"project": {PROJECT_SCOPE: {"payload": {"payload": dict(PROJECT_RECORD)}}}})
 
 
 def evidence_payload(*, spike_report_ref: str, spike_report_digest: str) -> dict[str, Any]:
@@ -1220,7 +1228,7 @@ def test_submit_evidence_promotes_a_contract_through_the_real_handler(
     """The registered submit_evidence handler writes an artifact revision."""
     capsule = executor_capsule(tool_grants=("budget_status", "submit_evidence"))
     bind(ctx, task_canary, capsule)
-    seed_v1_state(task_canary)
+    seed_project(task_canary)
     ref = "artifact://spike/run-10"
     digest = file_spike_report(task_canary, runtime_root, report=spike_report_payload(), ref=ref)
 
@@ -1239,7 +1247,7 @@ def test_submit_evidence_promotes_a_contract_through_the_real_handler(
     assert answer["result"]["status"] == "succeeded"
     assert output["tool_id"] == "submit_evidence"
     assert output["accepted"] is True
-    assert output["contract_refs"] == [f"urn:eawf:v1:artifact:{V1_STATE_SCOPE}/MCT-99990001"]
+    assert output["contract_refs"] == [f"urn:eawf:v1:artifact:{PROJECT_SCOPE}/MCT-99990001"]
 
 
 def test_submit_evidence_refuses_an_unverified_report_through_the_real_handler(
@@ -1248,7 +1256,7 @@ def test_submit_evidence_refuses_an_unverified_report_through_the_real_handler(
     """An unverified report is reported as a finding, and nothing is promoted."""
     capsule = executor_capsule(tool_grants=("budget_status", "submit_evidence"))
     bind(ctx, task_canary, capsule)
-    seed_v1_state(task_canary)
+    seed_project(task_canary)
     ref = "artifact://spike/run-11"
     digest = file_spike_report(
         task_canary,
@@ -1280,7 +1288,7 @@ def test_submit_evidence_refuses_a_digest_the_filed_report_does_not_have(
 ) -> None:
     capsule = executor_capsule(tool_grants=("budget_status", "submit_evidence"))
     bind(ctx, task_canary, capsule)
-    seed_v1_state(task_canary)
+    seed_project(task_canary)
     ref = "artifact://spike/run-12"
     file_spike_report(task_canary, runtime_root, report=spike_report_payload(), ref=ref)
 
@@ -1306,7 +1314,7 @@ def test_submit_evidence_refuses_a_report_nobody_filed(
 ) -> None:
     capsule = executor_capsule(tool_grants=("budget_status", "submit_evidence"))
     bind(ctx, task_canary, capsule)
-    seed_v1_state(task_canary)
+    seed_project(task_canary)
 
     answer = invoke(
         ctx,
@@ -1325,3 +1333,165 @@ def test_submit_evidence_refuses_a_report_nobody_filed(
     output = answer["result"]["bounded_output"]
     assert output["accepted"] is False
     assert output["findings"][0]["code"] == "identity_not_found"
+
+
+# ---------------------------------------------------------------------------
+# submit_evidence promotes into the generation, never into a v1 document
+# ---------------------------------------------------------------------------
+
+
+def promote(
+    ctx: MethodContext,
+    canary: CanaryProvision,
+    runtime_root: Path,
+    *,
+    report_id: str,
+    key: str,
+    ordinal: int = 1,
+) -> dict[str, Any]:
+    """File one verified report carrying ``MCT-99990001`` and promote it as call *ordinal*."""
+    capsule = executor_capsule(tool_grants=("budget_status", "submit_evidence"))
+    ref = f"artifact://spike/{report_id.lower()}"
+    filed = file_spike_report(
+        canary, runtime_root, report=spike_report_payload(report_id=report_id), ref=ref
+    )
+    answer = invoke(
+        ctx,
+        canary,
+        seal_call(
+            capsule=capsule,
+            tool_id="submit_evidence",
+            payload=evidence_payload(spike_report_ref=ref, spike_report_digest=filed),
+            key=key,
+            ordinal=ordinal,
+        ),
+        capsule,
+    )
+    return dict(answer["result"]["bounded_output"])
+
+
+def evidence_lines(canary: CanaryProvision, runtime_root: Path) -> list[Any]:
+    """Return every line of the canary generation's evidence ledger."""
+    context = root_context(canary, runtime_root)
+    with context.session([RUN_URN]) as session:
+        return list(read_ledger_records(session.ledger_path(Epoch2Collection.EVIDENCE)))
+
+
+def test_submit_evidence_appends_the_promotion_to_the_generation_evidence_ledger(
+    task_canary: CanaryProvision, ctx: MethodContext, runtime_root: Path
+) -> None:
+    """One line under the report id carries the contract; no v1 file is written."""
+    bind(ctx, task_canary, executor_capsule(tool_grants=("budget_status", "submit_evidence")))
+    seed_project(task_canary)
+
+    output = promote(ctx, task_canary, runtime_root, report_id="RPT-0101", key="ledger")
+
+    assert output["accepted"] is True
+    [line] = evidence_lines(task_canary, runtime_root)
+    assert (line.record_key, line.status) == ("RPT-0101", "measured_contract")
+    [contract] = line.payload["contracts"]
+    assert contract["id"] == "MCT-99990001"
+    assert contract["urn"] == f"urn:eawf:v1:artifact:{PROJECT_SCOPE}/MCT-99990001"
+    ea = Path(task_canary.root) / ".ea"
+    assert not (ea / "state.json").exists()
+    assert not (ea / "store" / "evidence.jsonl").exists()
+
+
+def test_submit_evidence_refuses_a_contract_the_evidence_ledger_already_holds(
+    task_canary: CanaryProvision, ctx: MethodContext, runtime_root: Path
+) -> None:
+    """Off-by-one: a second promotion of the same contract id is refused, not appended."""
+    bind(ctx, task_canary, executor_capsule(tool_grants=("budget_status", "submit_evidence")))
+    seed_project(task_canary)
+    assert promote(ctx, task_canary, runtime_root, report_id="RPT-0102", key="first")["accepted"]
+
+    again = promote(ctx, task_canary, runtime_root, report_id="RPT-0103", key="again", ordinal=2)
+
+    assert again["accepted"] is False
+    assert again["findings"][0]["code"] == "contract_already_promoted"
+    assert [line.record_key for line in evidence_lines(task_canary, runtime_root)] == ["RPT-0102"]
+
+
+def test_submit_evidence_refuses_a_generation_holding_no_project(
+    task_canary: CanaryProvision, ctx: MethodContext, runtime_root: Path
+) -> None:
+    """Error path: with no project row there is nothing to scope a promotion under."""
+    bind(ctx, task_canary, executor_capsule(tool_grants=("budget_status", "submit_evidence")))
+
+    output = promote(ctx, task_canary, runtime_root, report_id="RPT-0104", key="no-project")
+
+    assert output["accepted"] is False
+    assert output["findings"][0]["code"] == "no_promoted_contract_store"
+    assert evidence_lines(task_canary, runtime_root) == []
+
+
+def measured_plan(contract_ref: str) -> dict[str, Any]:
+    """Return :data:`PLAN_BODY` with its criterion graded measured against *contract_ref*."""
+    body = json.loads(json.dumps(PLAN_BODY))
+    body["tasks"][0]["criteria"][0].update(grounding="measured", contract_refs=[contract_ref])
+    return body
+
+
+def submit_and_approve(
+    ctx: MethodContext, canary: CanaryProvision, *, key: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Submit *body* under *key* through PLAN-SUBMIT and approve it through PLAN-APPROVE."""
+    operator = {"principal_kind": "operator", "principal_id": "OP-0001"}
+    common = {"repo_root": str(canary.root), "actor": "OP-0001"}
+    submitted = asyncio.run(
+        methods.dispatch(
+            PLAN_SUBMIT_METHOD,
+            ctx,
+            {
+                **common,
+                "proposal": {"key": key, "author": operator, "body": body},
+                "idempotency_key": f"submit-{key}",
+            },
+        )
+    )
+    assert submitted["status"] == "ok"
+    return asyncio.run(
+        methods.dispatch(
+            PLAN_APPROVE_METHOD,
+            ctx,
+            {
+                **common,
+                "key": key,
+                "expected_revision": 2,
+                "action_ref": f"{SLOT}/pending-action/ACT-0060",
+                "approved_by": operator,
+                "idempotency_key": f"approve-{key}",
+            },
+        )
+    )
+
+
+def test_a_plan_citing_a_promoted_contract_approves_with_no_v1_state_evidence(
+    tmp_path: Path, ctx: MethodContext, runtime_root: Path
+) -> None:
+    """The contract submit_evidence promoted is what approval resolves; no state.json exists."""
+    canary = make_canary(tmp_path / "planned", scope=task_scope(), planned=True)
+    bind(ctx, canary, executor_capsule(tool_grants=("budget_status", "submit_evidence")))
+    seed_project(canary)
+    assert promote(ctx, canary, runtime_root, report_id="RPT-0105", key="cite")["accepted"]
+    contract_urn = f"urn:eawf:v1:artifact:{PROJECT_SCOPE}/MCT-99990001"
+
+    answer = submit_and_approve(ctx, canary, key="PRV-0105", body=measured_plan(contract_urn))
+
+    assert not (Path(canary.root) / ".ea" / "state.json").exists()
+    assert answer["status"] == "ok"
+
+
+def test_a_plan_citing_an_unpromoted_contract_is_refused_with_no_v1_state_evidence(
+    tmp_path: Path, ctx: MethodContext, runtime_root: Path
+) -> None:
+    """Gate-fire proof: the generation resolves the citation, so a stray id refuses."""
+    canary = make_canary(tmp_path / "planned", scope=task_scope(), planned=True)
+    bind(ctx, canary, executor_capsule(tool_grants=("budget_status", "submit_evidence")))
+    seed_project(canary)
+    assert promote(ctx, canary, runtime_root, report_id="RPT-0106", key="stray")["accepted"]
+
+    answer = submit_and_approve(ctx, canary, key="PRV-0106", body=measured_plan("MCT-99999999"))
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["guard"] == "criteria_grounded_at_approval"

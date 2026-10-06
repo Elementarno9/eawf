@@ -5,6 +5,8 @@ part of the implementation contract for ``evidence/<area>.py`` only — the CLI
 layer never imports them directly. They centralise:
 
 * Loading + parsing ``state.json`` into a :class:`State`.
+* Reading the promoted measured contracts out of an epoch-2 tree's
+  selected generation.
 * Computing a stable args-hash for the event envelope.
 * Building event envelopes with consistent shape.
 
@@ -30,30 +32,37 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any, Final
 
 import orjson
 
 from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.models import State
+from eawf.kernel.state.models import Artifact, Project, State
 from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.store.append import append_envelope as append_jsonl
+from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import store_paths
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.kernel.validate.strict import validate_state as validate_payload
 from eawf.surfaces.cli.errors import UserError, ValidationError
 
-if TYPE_CHECKING:
-    from eawf.kernel.state.epoch2.authority import RootAuthority
-
 logger = logging.getLogger(__name__)
 
+#: The status of the evidence-ledger line that files one spike report's
+#: promoted contracts, under ``record_key`` the report id.
+MEASURED_CONTRACT_STATUS: Final = "measured_contract"
+
 __all__ = [
+    "MEASURED_CONTRACT_STATUS",
     "append_jsonl",
     "artifact_urn",
     "event_envelope",
+    "generation_contract_view",
     "kind_envelope",
     "load_state",
     "store_paths",
@@ -78,9 +87,7 @@ def load_state(state_path: Path) -> State:
     return report.state
 
 
-def atomic_write_state(
-    state_path: Path, state: State, *, native_authority: RootAuthority | None = None
-) -> None:
+def atomic_write_state(state_path: Path, state: State) -> None:
     """Persist *state* via the LOCKED, leak-refusing atomic writer.
 
     Caller MUST already hold ``portalock(state_path)``. Use this only inside
@@ -90,20 +97,86 @@ def atomic_write_state(
     Args:
         state_path: The ``state.json`` to persist.
         state: The state to write.
-        native_authority: The epoch-2 answer a native handler writes the
-            v1 document beside its generation under; ``None`` for every
-            epoch-1 caller, which a marked tree refuses.
 
     Raises:
         StateValidationError: When a string *state* adds or changes relative
             to the on-disk payload at *state_path* carries a leak shape, or
-            (``legacy_operation_removed``) the tree carries the epoch
-            marker and no matching epoch-2 answer was presented.
+            (``legacy_operation_removed``) the tree carries the epoch marker.
     """
     from eawf.kernel.state.io import write_state_unlocked
 
     payload = json.loads(state.model_dump_json())
-    write_state_unlocked(state_path, payload, native_authority=native_authority)
+    write_state_unlocked(state_path, payload)
+
+
+def _promoted_contracts(*, artifact_ledger: Path, evidence_ledger: Path) -> dict[str, Artifact]:
+    """Return every measured contract a generation holds, keyed by contract id.
+
+    Two sources hold one: the artifact ledger carries the contract rows the
+    cutover imported from the v1 document, and the evidence ledger carries
+    every promotion filed since, one line per spike report.
+
+    Raises:
+        LedgerTornTailError: A ledger ends mid-line.
+        pydantic.ValidationError: A line, or a contract row it carries, does
+            not satisfy its model.
+        KeyError: A promotion line carries no ``contracts``.
+    """
+    from eawf.workflow.evidence.measured_contract import CONTRACT_BODY_URI
+
+    contracts: dict[str, Artifact] = {}
+    for record in effective_records(read_ledger_records(artifact_ledger)):
+        imported = record.payload.get("payload")
+        if isinstance(imported, Mapping) and imported.get("uri") == CONTRACT_BODY_URI:
+            contract = Artifact.model_validate(imported)
+            contracts[contract.id] = contract
+    for record in effective_records(read_ledger_records(evidence_ledger)):
+        if record.status != MEASURED_CONTRACT_STATUS:
+            continue
+        for row in record.payload["contracts"]:
+            contract = Artifact.model_validate(row)
+            contracts[contract.id] = contract
+    return contracts
+
+
+def generation_contract_view(
+    document: Mapping[str, Any], *, artifact_ledger: Path, evidence_ledger: Path
+) -> State:
+    """Return a generation's promoted contracts shaped as the v1 document.
+
+    :mod:`eawf.workflow.evidence.measured_contract` promotes into and
+    resolves against a :class:`State`, but reads only the project's code
+    and the ``artifacts``; the generation holds no other v1 collection, so
+    the rest is left unset rather than invented. The code is the key of
+    the document's one project row, which a migrated and a native tree
+    spell alike.
+
+    Args:
+        document: The selected generation's document.
+        artifact_ledger: The generation's ``ledger/artifact.jsonl``.
+        evidence_ledger: The generation's ``ledger/evidence.jsonl``.
+
+    Returns:
+        An unvalidated, in-memory view that is never written anywhere. Its
+        ``project`` is ``None`` when the document holds no project row; a
+        later promotion of a contract id wins over an earlier one.
+
+    Raises:
+        ValueError: The document holds something other than an object under
+            the project collection.
+        LedgerTornTailError: A ledger ends mid-line.
+        pydantic.ValidationError: A ledger line, or a contract row it
+            carries, does not satisfy its model.
+        KeyError: A promotion line carries no ``contracts``.
+    """
+    code = min(document_rows(dict(document), Epoch2Collection.PROJECT), default=None)
+    return State.model_construct(
+        project=None if code is None else Project.model_construct(code=code),
+        artifacts=_promoted_contracts(
+            artifact_ledger=artifact_ledger, evidence_ledger=evidence_ledger
+        ),
+        updated_at=datetime.now(UTC),
+    )
 
 
 def args_hash(args: dict[str, Any]) -> str:

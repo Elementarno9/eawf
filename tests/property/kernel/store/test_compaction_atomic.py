@@ -11,6 +11,7 @@ make it agree with the ledger rather than the other way round.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import shutil
 from datetime import UTC, datetime
@@ -32,12 +33,23 @@ from eawf.kernel.store.compaction import (
     compact_terminal_record,
     compact_terminal_task,
     locate_record,
+    plan_legacy_seal,
     read_document,
     recover_store_tree,
+    seal_legacy_import,
     write_document,
 )
 from eawf.kernel.store.index import regenerate_indexes
-from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record, read_ledger_records
+from eawf.kernel.store.ledger import (
+    SNAPSHOT_DIRNAME,
+    LedgerRecord,
+    append_ledger_record,
+    latest_rows,
+    line_digest,
+    read_ledger_records,
+    render_ledger_line,
+    snapshot_name,
+)
 from eawf.kernel.store.paths import index_dir, ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 
@@ -400,3 +412,108 @@ def test_compaction_refuses_a_collection_holding_a_json_array(tmp_path: Path) ->
 
     with pytest.raises(ValueError, match="not an object"):
         compact_terminal_record(state_path, record=record)
+
+
+# --- sealing a ledger's legacy import into a hashed snapshot ----------------------
+
+
+def _canonical_digest(value: object) -> str:
+    text = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _ledger_digests(ledger: Path) -> tuple[str, str]:
+    """The canonical-JSON digests of every record and of the latest row per key."""
+    records = [record.model_dump(mode="json") for record in read_ledger_records(ledger)]
+    return _canonical_digest(records), _canonical_digest(dict(latest_rows(ledger)))
+
+
+#: One generated line: its key, whether its origin is legacy, whether it carries
+#: its own key in the payload, and which earlier line it supersedes, if any.
+_lines = st.lists(
+    st.tuples(
+        st.integers(min_value=1, max_value=6),
+        st.booleans(),
+        st.booleans(),
+        st.one_of(st.none(), st.integers(min_value=0, max_value=40)),
+    ),
+    min_size=1,
+    max_size=25,
+)
+
+
+def _build_ledger(ledger: Path, lines: list[tuple[int, bool, bool, int | None]]) -> None:
+    """Append the generated *lines*, each superseding the earlier line it names, if any."""
+    written: list[str] = []
+    for number, (ordinal, legacy, keyed, target) in enumerate(lines):
+        key = f"EAWF-{ordinal:04d}"
+        payload: dict[str, object] = {
+            "origin": {"kind": "legacy" if legacy else "native"},
+            "n": number,
+        }
+        if keyed:
+            payload["key"] = key
+        supersedes = (
+            line_digest(written[target % len(written)]) if target is not None and written else None
+        )
+        record = LedgerRecord(
+            collection=Epoch2Collection.TASK,
+            record_key=key,
+            status="COMPLETED",
+            recorded_at=_RECORDED_AT,
+            supersedes=supersedes,
+            payload=payload,
+        )
+        append_ledger_record(ledger, record)
+        written.append(render_ledger_line(record))
+
+
+@settings(
+    max_examples=60,
+    deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
+@given(lines=_lines, crash=st.booleans())
+def test_sealed_ledger_reads_the_same_records_and_latest_rows(
+    tmp_path_factory: pytest.TempPathFactory,
+    lines: list[tuple[int, bool, bool, int | None]],
+    crash: bool,
+) -> None:
+    """A seal, finished or interrupted between its two writes, changes no read."""
+    state_path = _seed_tree(tmp_path_factory.mktemp("seal"), ())
+    ledger = ledger_path(state_path, Epoch2Collection.TASK)
+    _build_ledger(ledger, lines)
+    before = _ledger_digests(ledger)
+    content = ledger.read_bytes()
+    plan = plan_legacy_seal(ledger)
+    if plan is None:
+        assert not any(legacy for _, legacy, _, _ in lines)
+        return
+
+    if crash:
+        snapshot = ledger.parent / SNAPSHOT_DIRNAME / snapshot_name("task", content[: plan.cut])
+        snapshot.parent.mkdir()
+        snapshot.write_bytes(content[: plan.cut])
+        assert _ledger_digests(ledger) == before
+        recover_store_tree(state_path)
+    else:
+        snapshot = seal_legacy_import(state_path, collection=Epoch2Collection.TASK, plan=plan)
+
+    assert _ledger_digests(ledger) == before
+    assert snapshot.read_bytes() == content[: plan.cut]
+    assert ledger.read_bytes() == content[plan.cut :]
+    assert b'"kind":"legacy"' not in ledger.read_bytes()
+
+    sealed = snapshot.read_bytes()
+    append_ledger_record(
+        ledger,
+        LedgerRecord(
+            collection=Epoch2Collection.TASK,
+            record_key="EAWF-9999",
+            status="COMPLETED",
+            recorded_at=_RECORDED_AT,
+            payload={"key": "EAWF-9999"},
+        ),
+    )
+    assert snapshot.read_bytes() == sealed
+    assert latest_rows(ledger)["EAWF-9999"] == {"key": "EAWF-9999"}

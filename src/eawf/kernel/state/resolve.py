@@ -18,6 +18,8 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
+from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
+
 logger = logging.getLogger(__name__)
 
 REASON_ENV: str = "env"
@@ -88,9 +90,11 @@ def resolve_with_reason(
         - ``"workspace_flag"`` — ``EA_STATE`` unset, ``workspace`` provided;
           *path* = ``workspace / .ea / state.json``.
         - ``"pwd_upward"`` — neither override was given; the resolver walked
-          upward from :func:`pathlib.Path.cwd`. If no candidate exists on
-          disk the resolver still returns ``cwd / .ea / state.json`` so the
-          caller can distinguish "no state file" from "lookup error".
+          upward from :func:`pathlib.Path.cwd` to the first ``.ea`` holding
+          ``state.json`` or the epoch-2 marker, and *path* names that tree's
+          ``state.json`` whether or not it exists. If no tree is found the
+          resolver still returns ``cwd / .ea / state.json`` so the caller
+          can distinguish "no state file" from "lookup error".
 
         Under a gate harness a path that lands on the fenced live ledger is
         replaced by its sandbox snapshot (:func:`fence_live_ledger`); the
@@ -108,7 +112,9 @@ def resolve_with_reason(
     cur = Path.cwd().resolve()
     for directory in [cur, *cur.parents]:
         target = directory / ".ea" / "state.json"
-        if target.exists():
+        # An epoch-2 tree need not hold the v1 document at all, so its
+        # epoch marker anchors the tree just as the document does.
+        if target.exists() or (directory / ".ea" / GENERATIONS_DIRNAME / MARKER_FILENAME).exists():
             logger.debug(f"resolve_with_reason source=pwd-upward path={target}")
             return fence_live_ledger(target, environ), REASON_PWD_UPWARD
     fallback = cur / ".ea" / "state.json"

@@ -12,7 +12,11 @@ Two checks hold those lines, over every committed ledger file (the LEDGER tier o
 - **append-only** -- for each ledger file the range changes, the bytes at the range's
   base must be a byte prefix of the bytes at its tip (the rule
   :func:`~eawf.kernel.store.ledger.verify_append_only` enforces on a live write).
-  A finding names the file and the byte offset the two diverge at.
+  A ledger's bytes are its sealed snapshot's followed by its live file's, so a
+  seal that moved leading lines into ``ledger/snapshots/`` passes when the
+  snapshot holds exactly the removed bytes and hashes to the digest its name
+  carries; the report lists each such removal as sealed. A finding names the
+  file and the byte offset the two diverge at.
 - **reachability** -- every 40-hex string in an effective row (one no later row
   supersedes) that names a commit must be an ancestor of the range's base or tip.
   A row may declare a SHA it knowingly keeps in ``unreachable_shas``, each entry
@@ -32,7 +36,7 @@ import os
 import re
 import subprocess
 from collections.abc import Iterable, Iterator
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Annotated, Any, Final
 
 import orjson
@@ -44,7 +48,14 @@ from eawf.kernel.store.commit_policy import (
     UndeclaredPathError,
     classify_path,
 )
-from eawf.kernel.store.ledger import line_digest, split_ledger_lines
+from eawf.kernel.store.ledger import (
+    SNAPSHOT_DIRNAME,
+    compose_ledger_content,
+    line_digest,
+    snapshot_digest_mismatch,
+    split_ledger_lines,
+)
+from eawf.kernel.store.paths import LEDGER_DIRNAME
 from eawf.kernel.store.tiers import StorageTier
 from eawf.platform.subprocess_detach import no_window_kwargs
 
@@ -130,6 +141,16 @@ class MalformedDeclaration(BaseModel):
         return f"  {self.path}:{self.line}: malformed {UNREACHABLE_KEY}: {self.detail}"
 
 
+class SealedRemoval(BaseModel):
+    """Leading bytes a live ledger lost that its snapshot now holds, digest-checked."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str
+    snapshot: str
+    sealed_bytes: int
+
+
 class LedgerHistoryReport(BaseModel):
     """Everything one run of the gate found over one range."""
 
@@ -142,6 +163,7 @@ class LedgerHistoryReport(BaseModel):
     append_only: tuple[AppendOnlyFinding, ...]
     unreachable: tuple[UnreachableFinding, ...]
     malformed: tuple[MalformedDeclaration, ...]
+    sealed: tuple[SealedRemoval, ...] = ()
 
     @property
     def clean(self) -> bool:
@@ -191,6 +213,60 @@ def append_only_finding(path: str, before: bytes, after: bytes) -> AppendOnlyFin
     return AppendOnlyFinding(path=path, offset=offset, detail=detail)
 
 
+def snapshot_owner(path: str) -> str | None:
+    """Return the live ledger a sealed snapshot path belongs to.
+
+    Args:
+        path: A repo-relative path.
+
+    Returns:
+        ``<dir>/ledger/<stem>.jsonl`` for ``<dir>/ledger/snapshots/<stem>.<sha256>.jsonl``,
+        ``None`` for any path that is not a snapshot.
+    """
+    pure = PurePosixPath(path)
+    if pure.parent.name != SNAPSHOT_DIRNAME or pure.parent.parent.name != LEDGER_DIRNAME:
+        return None
+    stem = pure.name.partition(".")[0]
+    return (pure.parent.parent / f"{stem}.jsonl").as_posix()
+
+
+def snapshot_findings(path: str, snapshots: dict[str, bytes]) -> tuple[AppendOnlyFinding, ...]:
+    """Check the snapshots one live ledger carries at the range's tip.
+
+    Args:
+        path: The live ledger, for the report.
+        snapshots: Each snapshot path the ledger has, with its bytes.
+
+    Returns:
+        A finding for a ledger claimed by more than one snapshot, and one
+        for each snapshot whose bytes do not hash to its name's digest.
+    """
+    findings: list[AppendOnlyFinding] = []
+    if len(snapshots) > 1:
+        findings.append(
+            AppendOnlyFinding(
+                path=path,
+                offset=0,
+                detail=f"{len(snapshots)} snapshots claim this ledger; a ledger seals once",
+            )
+        )
+    for snapshot, content in sorted(snapshots.items()):
+        reason = snapshot_digest_mismatch(PurePosixPath(snapshot).name, content)
+        if reason is not None:
+            findings.append(AppendOnlyFinding(path=snapshot, offset=0, detail=reason))
+    return tuple(findings)
+
+
+def _superseded(content: bytes) -> frozenset[str]:
+    """Return every digest a line of *content* names in ``supersedes``."""
+    rows = (orjson.loads(line) for line in split_ledger_lines(content))
+    return frozenset(
+        row["supersedes"]
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("supersedes"), str)
+    )
+
+
 def _declared(value: Any) -> Iterator[Any]:
     """Yield every ``unreachable_shas`` value nested anywhere in *value*."""
     if isinstance(value, dict):
@@ -216,17 +292,20 @@ def _record_key(row: Any) -> str | None:
 
 
 def sha_mentions(
-    path: str, content: bytes
+    path: str, content: bytes, *, superseded_later: frozenset[str] = frozenset()
 ) -> tuple[tuple[ShaMention, ...], tuple[MalformedDeclaration, ...]]:
     """Collect the 40-hex strings the effective rows of one ledger file carry.
 
-    A row is effective when no line of the same file names its digest in
-    ``supersedes``. A SHA the row itself declares in ``unreachable_shas`` is
-    left out; a declaration that does not hold its shape exempts nothing.
+    A row is effective when no line of the same file, and no digest in
+    *superseded_later*, names its digest in ``supersedes``. A SHA the row
+    itself declares in ``unreachable_shas`` is left out; a declaration that
+    does not hold its shape exempts nothing.
 
     Args:
         path: The ledger file, for the report.
         content: The whole file.
+        superseded_later: The digests the lines read after this file name in
+            ``supersedes``: a sealed snapshot's live file can supersede it.
 
     Returns:
         The non-exempt mentions, one per distinct SHA per row, and the rows
@@ -239,6 +318,7 @@ def sha_mentions(
     lines = split_ledger_lines(content)
     rows = [orjson.loads(line) for line in lines]
     superseded = {row.get("supersedes") for row in rows if isinstance(row, dict)}
+    superseded |= superseded_later
     mentions: list[ShaMention] = []
     malformed: list[MalformedDeclaration] = []
     for number, (line, row) in enumerate(zip(lines, rows, strict=True), start=1):
@@ -357,6 +437,53 @@ def _changed_ledger_paths(repo: Path, old: str, tip: str | None) -> list[str]:
     return sorted(p for p in raw.decode("utf-8").split("\0") if p and is_ledger_path(p))
 
 
+def _snapshots_at(repo: Path, rev: str | None, live: str) -> dict[str, bytes]:
+    """Return the snapshots of the ledger *live* at *rev* (the working tree when ``None``)."""
+    directory = (PurePosixPath(live).parent / SNAPSHOT_DIRNAME).as_posix()
+    if rev is None:
+        names = [
+            f"{directory}/{item.name}"
+            for item in (repo / directory).glob(f"{PurePosixPath(live).stem}.*.jsonl")
+        ]
+    else:
+        raw = _git(repo, "ls-tree", "-z", "--name-only", rev, "--", f"{directory}/")
+        names = [p for p in raw.decode("utf-8").split("\0") if p]
+    owned = sorted(p for p in names if is_ledger_path(p) and snapshot_owner(p) == live)
+    return {path: _blob(repo, rev, path) for path in owned}
+
+
+def _ledger_bytes(snapshots: dict[str, bytes], live: bytes) -> bytes:
+    """Return a ledger's bytes in append order: its one snapshot's, then its live file's."""
+    if len(snapshots) != 1:
+        # More than one snapshot is a finding of its own; the live file alone
+        # is then the only order that can be compared.
+        return live
+    return compose_ledger_content(next(iter(snapshots.values())), live)
+
+
+def _append_only_over(
+    repo: Path, old: str, tip: str | None, live: str
+) -> tuple[list[AppendOnlyFinding], SealedRemoval | None]:
+    """Check one ledger, snapshot included, between *old* and *tip*.
+
+    Returns:
+        The findings, and the removal the tip's snapshot explains when the
+        live file lost leading bytes and the ledger as a whole still extends.
+    """
+    live_before, live_after = _blob(repo, old, live), _blob(repo, tip, live)
+    after_snapshots = _snapshots_at(repo, tip, live)
+    findings = list(snapshot_findings(live, after_snapshots))
+    before = _ledger_bytes(_snapshots_at(repo, old, live), live_before)
+    finding = append_only_finding(live, before, _ledger_bytes(after_snapshots, live_after))
+    if finding is not None:
+        findings.append(finding)
+    sealed = None
+    if not findings and not live_after.startswith(live_before):
+        snapshot, content = next(iter(after_snapshots.items()))
+        sealed = SealedRemoval(path=live, snapshot=snapshot, sealed_bytes=len(content))
+    return findings, sealed
+
+
 def _resolve_commits(repo: Path, shas: Iterable[str]) -> frozenset[str]:
     """Return the subset of *shas* that name a commit in *repo*."""
     ordered = sorted(set(shas))
@@ -398,17 +525,22 @@ def scan_ledger_history(repo: Path, spec: str) -> LedgerHistoryReport:
     old = _git(repo, "merge-base", base_sha, tip_sha).decode().strip()
     tip_ref = tip_sha if tip is not None else None
 
-    checked = (
-        append_only_finding(path, _blob(repo, old, path), _blob(repo, tip_ref, path))
-        for path in _changed_ledger_paths(repo, old, tip_ref)
-    )
-    append_only = tuple(finding for finding in checked if finding is not None)
+    append_only: list[AppendOnlyFinding] = []
+    sealed: list[SealedRemoval] = []
+    changed = _changed_ledger_paths(repo, old, tip_ref)
+    for live in sorted({snapshot_owner(path) or path for path in changed}):
+        findings, removal = _append_only_over(repo, old, tip_ref, live)
+        append_only.extend(findings)
+        if removal is not None:
+            sealed.append(removal)
 
     mentions: list[ShaMention] = []
     malformed: list[MalformedDeclaration] = []
     ledgers = _ledger_paths_at(repo, tip_ref)
     for path in ledgers:
-        found, bad = sha_mentions(path, _blob(repo, tip_ref, path))
+        owner = snapshot_owner(path)
+        later = _superseded(_blob(repo, tip_ref, owner)) if owner is not None else frozenset()
+        found, bad = sha_mentions(path, _blob(repo, tip_ref, path), superseded_later=later)
         mentions.extend(found)
         malformed.extend(bad)
     commits = _resolve_commits(repo, (m.sha for m in mentions))
@@ -418,9 +550,10 @@ def scan_ledger_history(repo: Path, spec: str) -> LedgerHistoryReport:
         base=base_sha,
         tip=tip_sha if tip is not None else "WORKTREE",
         ledgers_scanned=len(ledgers),
-        append_only=append_only,
+        append_only=tuple(append_only),
         unreachable=unreachable_findings(mentions, commits=commits, reachable=reachable),
         malformed=tuple(malformed),
+        sealed=tuple(sealed),
     )
 
 
@@ -431,6 +564,7 @@ __all__ = [
     "LedgerHistoryError",
     "LedgerHistoryReport",
     "MalformedDeclaration",
+    "SealedRemoval",
     "ShaMention",
     "UnreachableFinding",
     "UnreachableSha",
@@ -439,5 +573,7 @@ __all__ = [
     "parse_range",
     "scan_ledger_history",
     "sha_mentions",
+    "snapshot_findings",
+    "snapshot_owner",
     "unreachable_findings",
 ]

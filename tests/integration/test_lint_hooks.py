@@ -112,6 +112,14 @@ def test_staged_files_lists_index(tmp_path: Path) -> None:
     assert _conditional.staged_files(cwd=repo) == ["src/eawf/y.py"]
 
 
+def test_staged_files_skips_a_staged_deletion(tmp_path: Path) -> None:
+    """An untracked-but-kept file is removed by the commit, so no gate scans it."""
+    repo = _init_repo_with_staged(tmp_path, rel="src/eawf/y.py", body="y = 1\n")
+    _git(["rm", "-q", "--cached", "seed.txt"], repo)
+    assert (repo / "seed.txt").is_file()
+    assert _conditional.staged_files(cwd=repo) == ["src/eawf/y.py"]
+
+
 def test_staged_files_empty_when_nothing_staged(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

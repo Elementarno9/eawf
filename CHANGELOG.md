@@ -10,6 +10,10 @@ The format is based on Keep a Changelog [1], and this project adheres to Semanti
 
 - **Hook wrappers fall back to the project environment when eawf is off PATH.** They run `uv run --no-project eawf` only when `eawf` is on PATH and plain `uv run eawf` otherwise, so an eawf installed only as a project dependency no longer fails every hook closed. Re-render installed hooks with `eawf plugin update claude` and `eawf plugin update codex`; Codex can mark re-rendered hooks untrusted until you re-approve them, and `eawf plugin doctor codex` reports their trust state.
 
+### Migration
+
+- **The v1 state document and the frozen epoch-1 stores leave git.** On an epoch-2 tree `.ea/state.json` and every `.ea/store/*.jsonl` except the release and conformance stores (`release`, `release_record`, `release_checkpoint_receipt`, `release_train_advance`, `conformance_stage`) are no longer committed, and the managed `.gitignore` block ignores them, but git keeps tracking a file it already tracked. Untrack them once, keeping the local copies, with `git rm --cached .ea/state.json` and `git ls-files '.ea/store/*.jsonl' | grep -Ev '/(event|release|release_record|release_checkpoint_receipt|release_train_advance|conformance_stage)\.jsonl$' | xargs git rm --cached --`, then commit. Git history keeps every earlier version.
+
 ## [0.7.0rc1]
 
 This is the first release candidate of v0.7.0. It is the first build meant for real projects on epoch-2 authority: the epoch-1 command surface is retired on a flag day, the native console replaces the epoch-1 TUI, and a v0.6.8 tree upgrades in place by the procedure in `docs/help/upgrade-from-0.6.md` (`eawf help upgrade-from-0.6`). Read the Migration section before upgrading.

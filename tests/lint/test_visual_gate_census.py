@@ -20,7 +20,8 @@ import pytest
 pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_STATE_PATH = _REPO_ROOT / ".ea" / "state.json"
+_SNAPSHOT = _REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot"
+_STATE_PATH = _SNAPSHOT / "state.json"
 _FIXTURES = _REPO_ROOT / "tests" / "fixtures" / "mockup_image_diff"
 
 _LIVE_SENTINEL = "<live>"
@@ -96,7 +97,7 @@ def test_inc_p30_08_closed_with_store_row() -> None:
     assert incident["status"] == "resolved"
     assert "P30-I23-W30" in incident["corrective_action_ids"]
     assert "P30-I23-W31" in incident["corrective_action_ids"]
-    store = (_REPO_ROOT / ".ea" / "store" / "incident.jsonl").read_text(encoding="utf-8")
+    store = (_SNAPSHOT / "store" / "incident.jsonl").read_text(encoding="utf-8")
     assert any(
         json.loads(line).get("id") == "INC-P30-08-CLOSE" for line in store.splitlines() if line
     ), "no INC-P30-08-CLOSE row in the incident store"

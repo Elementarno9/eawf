@@ -27,7 +27,6 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
-from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.io import (
     LEGACY_OPERATION_REMOVED,
     LegacyOperationRemovedError,
@@ -256,25 +255,13 @@ def test_native_writer_commits_on_a_marked_root(tmp_path: Path, repo: Path) -> N
     assert _epoch1_digests(repo)[0] == before[0]
 
 
-def test_write_state_unlocked_admits_the_trees_own_native_authority(
-    tmp_path: Path, repo: Path
-) -> None:
-    """Only the epoch-2 answer for this very tree lets the v1 document be written."""
+def test_write_state_unlocked_refuses_every_write_of_the_v1_document(repo: Path) -> None:
+    """No writer, native or not, may write the v1 document of a marked tree."""
     _canary(repo)
-    other = tmp_path / "other"
-    other.mkdir()
-    provision(other, code="OTH")
     state_path = _ea(repo) / "state.json"
-    payload = orjson.loads(state_path.read_bytes())
+    before = state_path.read_bytes()
 
     with pytest.raises(LegacyOperationRemovedError):
-        write_state_unlocked(state_path, payload)
-    with pytest.raises(LegacyOperationRemovedError):
-        write_state_unlocked(state_path, payload, native_authority=resolve_authority(_ea(other)))
-    with pytest.raises(LegacyOperationRemovedError):
-        write_state_unlocked(
-            state_path, payload, native_authority=resolve_authority(tmp_path / "plain")
-        )
+        write_state_unlocked(state_path, orjson.loads(before))
 
-    write_state_unlocked(state_path, payload, native_authority=resolve_authority(_ea(repo)))
-    assert orjson.loads(state_path.read_bytes()) == payload
+    assert state_path.read_bytes() == before

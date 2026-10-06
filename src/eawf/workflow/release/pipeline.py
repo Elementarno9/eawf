@@ -9,8 +9,10 @@ module runs the whole post-merge walk as one verb instead:
 pin the source, fetch the build receipts, tag and push (only with the
 operator's publish flag), wait for the publish runs, open the record,
 pin the candidate, prove the gates, sweep readiness, approve, publish,
-reconcile, observe to BAKED, advance the train, check the phase's wave
-pins by trailer, and land the evidence.
+reconcile, observe to BAKED, advance the train, check by trailer that
+main carries what was released -- a phase's wave pins, or each Batch of
+a Milestone as exactly one commit -- and land the evidence locally,
+recording each file's sha256 in the evidence step's journal row.
 
 Every step is journaled once it completes, one row per step, under the
 checkout's ignored ``.ea/local`` tree. A rerun skips the journaled steps
@@ -29,6 +31,7 @@ real step logic against fakes and the CLI wires the real adapters.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -43,6 +46,7 @@ from typing import Any, Final, Literal, Protocol
 
 from pydantic import ConfigDict, Field, ValidationError
 
+from eawf.kernel.identity import EntityKind, validate_entity_key
 from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.spec.release import (
     ReleaseChannel,
@@ -58,7 +62,7 @@ from eawf.runtime.lock import portalock
 from eawf.workflow.lifecycle.wave_sha import load_drift_acks
 from eawf.workflow.lifecycle.wave_trailer_repin import TrailerRepinError, resolve_trailer_repins
 from eawf.workflow.release.advance import TrainAdvanceRecord
-from eawf.workflow.release.pipeline_files import baseline_evidence, flatten_artifacts
+from eawf.workflow.release.pipeline_files import flatten_artifacts
 from eawf.workflow.release.pipeline_receipts import RECEIPT_FILENAMES, read_build_receipt
 from eawf.workflow.release.publication_receipt import (
     read_receipts,
@@ -116,7 +120,11 @@ class PipelineRefusalCode(StrEnum):
     TRAILER_REPIN_UNDECIDED = "trailer_repin_undecided"
     TRAILER_REPIN_PENDING = "trailer_repin_pending"
     PHASE_PINS_MISSING = "phase_pins_missing"
-    EVIDENCE_BASELINE_FAILED = "evidence_baseline_failed"
+    MILESTONE_UNREADABLE = "milestone_unreadable"
+    MILESTONE_BATCHES_MISSING = "milestone_batches_missing"
+    BATCH_TRAILER_MISSING = "batch_trailer_missing"
+    BATCH_TRAILER_DUPLICATED = "batch_trailer_duplicated"
+    BATCH_HEAD_MISMATCH = "batch_head_mismatch"
 
 
 class PipelineRpcError(RuntimeError):
@@ -214,11 +222,16 @@ _PHASE_ID_RE: Final[re.Pattern[str]] = re.compile(r"^P\d{2,}$")
 class PipelineOptions:
     """What the operator asked the pipeline to do.
 
+    Exactly one of ``phase_id`` and ``milestone_key`` names what was
+    released, and so what the repin step checks on ``main``.
+
     Attributes:
-        version: The checkpoint version the merged phase released.
-        phase_id: The merged phase whose wave pins the repin step checks.
+        version: The checkpoint version the merge released.
         publish: Whether the operator decided to publish; without it the
             tag step refuses before pushing anything.
+        phase_id: The merged phase whose wave pins the repin step checks.
+        milestone_key: The Milestone whose COMPLETED Batches the repin
+            step checks, each by its ``Batch:`` trailer.
         membership_refs: Acceptance bundles the record is opened with.
         remote: The remote ``main`` and the tag live on.
         observe_attempts: Read-backs per target before an inconclusive
@@ -227,21 +240,31 @@ class PipelineOptions:
     """
 
     version: str
-    phase_id: str
     publish: bool
+    phase_id: str | None = None
+    milestone_key: str | None = None
     membership_refs: tuple[str, ...] = ()
     remote: str = "origin"
     observe_attempts: int = 10
     observe_backoff_seconds: float = 60.0
 
     def __post_init__(self) -> None:
-        """Refuse a ``phase_id`` that is not a real phase id.
+        """Require exactly one of a real phase id and a real Milestone key.
 
         Raises:
-            ValueError: When ``phase_id`` does not match ``P<NN>``.
+            ValueError: When both or neither are named, ``phase_id`` does
+                not match ``P<NN>``, or ``milestone_key`` is not a
+                ``MLS-NNNN`` key.
         """
-        if not _PHASE_ID_RE.fullmatch(self.phase_id):
+        if (self.phase_id is None) == (self.milestone_key is None):
+            raise ValueError(
+                "name exactly one of the phase (--phase) and the milestone (--milestone) "
+                "the release checks"
+            )
+        if self.phase_id is not None and not _PHASE_ID_RE.fullmatch(self.phase_id):
             raise ValueError(f"phase_id {self.phase_id!r} is not a phase id (want P<NN>, e.g. P35)")
+        if self.milestone_key is not None:
+            validate_entity_key(EntityKind.MILESTONE, self.milestone_key)
 
 
 #: One ``release.*`` JSON-RPC call: method, params -> result. Raises
@@ -305,6 +328,18 @@ class PipelineHost(Protocol):
         """Return wave id -> pinned commit for the closed waves of *phase_id*."""
         ...
 
+    def milestone_batch_heads(self, milestone_key: str) -> dict[str, str | None]:
+        """Return Batch key -> bound head for the COMPLETED Batches of *milestone_key*.
+
+        The head is the commit the Batch's selected integration generation
+        binds, or ``None`` when no generation binds one.
+        """
+        ...
+
+    def batch_trailer_commits(self, ref: str) -> dict[str, tuple[str, ...]]:
+        """Return Batch key -> the commits reachable from *ref* carrying its ``Batch:`` trailer."""
+        ...
+
     def sleep(self, seconds: float) -> None:
         """Wait *seconds*."""
         ...
@@ -314,8 +349,13 @@ class PipelineHost(Protocol):
 #: Ignored by git, so neither dirties the tree the readiness sweep checks.
 PIPELINE_DIRNAME: Final[str] = ".ea/local/release-pipeline"
 
-#: Where the evidence lands for commit, under the repo root.
-EVIDENCE_DIRNAME: Final[str] = ".ea/artifacts/evidence"
+#: Where the evidence lands, under the repo root. Evidence is local: the
+#: evidence step's journal row carries each file's sha256, which is how a
+#: ledger row cites it.
+EVIDENCE_DIRNAME: Final[str] = ".ea/local/evidence"
+
+#: The fact-key prefix the evidence step records one file's digest under.
+EVIDENCE_DIGEST_FACT_PREFIX: Final[str] = "sha256:"
 
 #: The publish workflows the tag push starts; together they write one
 #: publication receipt per target.
@@ -710,9 +750,14 @@ class _PipelineRun:
                 remedy="install them; the gate proofs run uv and uvx",
             )
         run_date = self.now().date().isoformat()
+        released = (
+            {"phase": self.options.phase_id}
+            if self.options.phase_id is not None
+            else {"milestone": str(self.options.milestone_key)}
+        )
         return {
             "source_sha": head,
-            "phase": self.options.phase_id,
+            **released,
             "evidence_dir": f"{EVIDENCE_DIRNAME}/{run_date}-{self.label}-publication",
         }
 
@@ -1113,14 +1158,80 @@ class _PipelineRun:
         }
 
     def _repin(self, step: PipelineStep) -> dict[str, str]:
-        pins = self.host.phase_wave_pins(self.options.phase_id)
+        if self.options.milestone_key is not None:
+            return self._repin_milestone(step, self.options.milestone_key)
+        assert self.options.phase_id is not None  # PipelineOptions names exactly one
+        return self._repin_phase(step, self.options.phase_id)
+
+    def _repin_milestone(self, step: PipelineStep, milestone_key: str) -> dict[str, str]:
+        # Tasks are traced through their Batch in state, not by trailer, so
+        # a Batch that landed as exactly the commit publish bound is the
+        # whole check; epoch-1 wave pins and drift acks play no part.
+        remote = self.options.remote
+        target_ref = f"refs/remotes/{remote}/main"
+        try:
+            heads = self.host.milestone_batch_heads(milestone_key)
+            carriers = self.host.batch_trailer_commits(target_ref) if heads else {}
+        except PipelineHostError as exc:
+            raise PipelineRefusal(
+                step,
+                PipelineRefusalCode.MILESTONE_UNREADABLE,
+                detail=str(exc),
+                remedy=f"repair what it names (a native state tree, a fetched {remote}/main), "
+                "then rerun",
+            ) from exc
+        # A mistyped key reads no Batches, and checking none would pass
+        # without checking the released Milestone at all.
+        if not heads:
+            raise PipelineRefusal(
+                step,
+                PipelineRefusalCode.MILESTONE_BATCHES_MISSING,
+                detail=f"milestone {milestone_key} has no COMPLETED Batch",
+                remedy="rerun with the released Milestone's key in --milestone",
+            )
+        missing = sorted(key for key in heads if not carriers.get(key))
+        if missing:
+            raise PipelineRefusal(
+                step,
+                PipelineRefusalCode.BATCH_TRAILER_MISSING,
+                detail=f"no commit on {target_ref} carries the Batch trailer of "
+                f"{', '.join(missing)}",
+                remedy=f"publish and land those Batches with `eawf publish`, fetch {remote} "
+                "and rerun",
+            )
+        doubled = [f"{key}={len(carriers[key])}" for key in sorted(heads) if len(carriers[key]) > 1]
+        if doubled:
+            raise PipelineRefusal(
+                step,
+                PipelineRefusalCode.BATCH_TRAILER_DUPLICATED,
+                detail=f"{target_ref} carries more than one commit for {', '.join(doubled)}",
+                remedy="a Batch lands as exactly one commit; inspect them with "
+                f"`git log --grep '^Batch: ' {target_ref}` and settle the release by hand",
+            )
+        moved = [
+            f"{key} bound {head[:12] if head else 'nothing'}, landed {carriers[key][0][:12]}"
+            for key, head in sorted(heads.items())
+            if head != carriers[key][0]
+        ]
+        if moved:
+            raise PipelineRefusal(
+                step,
+                PipelineRefusalCode.BATCH_HEAD_MISMATCH,
+                detail=f"main landed other commits than publish bound: {'; '.join(moved)}",
+                remedy="land the published branch on main by fast-forward, or publish again "
+                "so the Batch binds the landed commit, then rerun",
+            )
+        return {"milestone": milestone_key, "batches": str(len(heads))}
+
+    def _repin_phase(self, step: PipelineStep, phase_id: str) -> dict[str, str]:
+        pins = self.host.phase_wave_pins(phase_id)
         # A well-formed but mistyped phase id reads no pins, and verifying
         # zero pins would pass without checking the merged phase at all.
         if not pins:
             raise PipelineRefusal(
                 step,
                 PipelineRefusalCode.PHASE_PINS_MISSING,
-                detail=f"phase {self.options.phase_id} has no closed waves with a pinned commit",
+                detail=f"phase {phase_id} has no closed waves with a pinned commit",
                 remedy="rerun with the merged phase's id in --phase",
             )
         target_ref = f"refs/remotes/{self.options.remote}/main"
@@ -1170,20 +1281,12 @@ class _PipelineRun:
         evidence_dir = self.facts["evidence_dir"]
         dest = self.layout.repo_root / evidence_dir
         dest.mkdir(parents=True, exist_ok=True)
+        digests: dict[str, str] = {}
         for path in staged:
             shutil.copy2(path, dest / path.name)
-        rel_paths = [f"{evidence_dir}/{path.name}" for path in staged]
-        try:
-            findings = baseline_evidence(self.layout.repo_root, rel_paths)
-        except (ImportError, OSError, ValueError) as exc:
-            raise PipelineRefusal(
-                step,
-                PipelineRefusalCode.EVIDENCE_BASELINE_FAILED,
-                detail=str(exc),
-                remedy="baseline only the new evidence files by hand, bump the Baseline-hash "
-                "comment, then rerun",
-            ) from exc
-        return {"evidence_dir": evidence_dir, "files": str(len(staged)), "baselined": str(findings)}
+            digest = hashlib.sha256((dest / path.name).read_bytes()).hexdigest()
+            digests[f"{EVIDENCE_DIGEST_FACT_PREFIX}{path.name}"] = f"sha256:{digest}"
+        return {"evidence_dir": evidence_dir, "files": str(len(staged)), **digests}
 
 
 def run_post_merge_pipeline(
@@ -1194,7 +1297,7 @@ def run_post_merge_pipeline(
     redo: PipelineStep | None = None,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> PipelineResult:
-    """Walk a merged phase's checkpoint from tag to BAKED and the train advance.
+    """Walk a merged checkpoint from tag to BAKED and the train advance.
 
     Resumes at the first step the journal does not hold; *redo* first
     drops that step's row and every later one.
@@ -1230,6 +1333,7 @@ def run_post_merge_pipeline(
 
 
 __all__ = [
+    "EVIDENCE_DIGEST_FACT_PREFIX",
     "EVIDENCE_DIRNAME",
     "PIPELINE_DIRNAME",
     "PIPELINE_STEPS",

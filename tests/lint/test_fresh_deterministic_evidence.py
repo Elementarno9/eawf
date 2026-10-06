@@ -16,8 +16,9 @@ import pytest
 pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_STATE_PATH = _REPO_ROOT / ".ea" / "state.json"
-_EVIDENCE = _REPO_ROOT / ".ea" / "store" / "evidence.jsonl"
+_SNAPSHOT = _REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot"
+_STATE_PATH = _SNAPSHOT / "state.json"
+_EVIDENCE = _SNAPSHOT / "store" / "evidence.jsonl"
 
 
 def test_fresh_deterministic_pass_evidence_exists() -> None:

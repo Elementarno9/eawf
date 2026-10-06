@@ -4,25 +4,27 @@ Covers parsing (the bare-path refusal that rejects the configuration
 rather than the commit, the required keys, unknown keys, both date
 spellings, duplicate grants), the expiry boundary at exactly the expiry
 date and one day past it, the renewal contract (a bare renewal raises; a
-renewal validates against a decision id present in state json), and the
-state reader that supplies those ids.
+renewal validates against a decision id the decision ledger records), and
+the ledger reader that supplies those ids.
 """
 
 from __future__ import annotations
 
-import json
 import textwrap
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
+from eawf.kernel.store.ledger import LedgerRecord, LedgerTornTailError
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.lint import DEFAULT_MAX_LOC, load_lint_config
 from eawf.platform.lint.exclusion_expiry import (
     ExclusionConfigError,
     ExclusionRenewal,
     ModuleExclusion,
-    decision_ids_from_state,
+    decision_ids_from_ledger,
     expired_exclusions,
     parse_exclusion,
     parse_exclusions,
@@ -284,13 +286,13 @@ def test_exclusion_renewal_validates_against_a_known_decision() -> None:
 
 def test_exclusion_renewal_unknown_decision_raises() -> None:
     grants = parse_exclusions([_entry(renewal={"decision": "D-GHOST", "owner": "team"})])
-    with pytest.raises(ExclusionConfigError, match=r"absent from state\.json"):
+    with pytest.raises(ExclusionConfigError, match=r"absent from the decision ledger"):
         validate_renewals(grants, decision_ids=frozenset({"D-SUP-01"}))
 
 
 def test_exclusion_renewal_empty_decision_set_raises() -> None:
     grants = parse_exclusions([_entry(renewal={"decision": "D-SUP-01", "owner": "team"})])
-    with pytest.raises(ExclusionConfigError, match=r"absent from state\.json"):
+    with pytest.raises(ExclusionConfigError, match=r"absent from the decision ledger"):
         validate_renewals(grants, decision_ids=frozenset())
 
 
@@ -298,30 +300,47 @@ def test_exclusion_renewal_unrenewed_grant_needs_no_decision() -> None:
     validate_renewals(parse_exclusions([_entry()]), decision_ids=frozenset())
 
 
-def test_exclusion_renewal_decision_ids_read_from_a_state_mapping(tmp_path: Path) -> None:
-    state = tmp_path / "state.json"
-    state.write_text(json.dumps({"decisions": {"D-ONE": {}, "D-TWO": {}}}), encoding="utf-8")
-    assert decision_ids_from_state(state) == frozenset({"D-ONE", "D-TWO"})
+def _ledger_line(key: str) -> str:
+    return LedgerRecord(
+        collection=Epoch2Collection.DECISION,
+        record_key=key,
+        status="imported",
+        recorded_at=datetime(2026, 9, 1, tzinfo=UTC),
+        payload={"payload": {"id": key}},
+    ).model_dump_json()
 
 
-def test_exclusion_renewal_decision_ids_read_from_a_state_list(tmp_path: Path) -> None:
-    state = tmp_path / "state.json"
-    state.write_text(json.dumps({"decisions": [{"id": "D-ONE"}]}), encoding="utf-8")
-    assert decision_ids_from_state(state) == frozenset({"D-ONE"})
+def test_exclusion_renewal_decision_ids_read_from_the_decision_ledger(tmp_path: Path) -> None:
+    ledger = tmp_path / "decision.jsonl"
+    ledger.write_text(f"{_ledger_line('D-ONE')}\n{_ledger_line('D-TWO')}\n", encoding="utf-8")
+    assert decision_ids_from_ledger(ledger) == frozenset({"D-ONE", "D-TWO"})
 
 
-def test_exclusion_renewal_decision_ids_empty_when_state_absent(tmp_path: Path) -> None:
-    assert decision_ids_from_state(tmp_path / "absent.json") == frozenset()
+def test_exclusion_renewal_decision_ids_read_a_single_line(tmp_path: Path) -> None:
+    ledger = tmp_path / "decision.jsonl"
+    ledger.write_text(f"{_ledger_line('D-ONE')}\n", encoding="utf-8")
+    assert decision_ids_from_ledger(ledger) == frozenset({"D-ONE"})
 
 
-def test_exclusion_renewal_decision_ids_empty_when_state_records_none(tmp_path: Path) -> None:
-    state = tmp_path / "state.json"
-    state.write_text(json.dumps({"waves": {}}), encoding="utf-8")
-    assert decision_ids_from_state(state) == frozenset()
+def test_exclusion_renewal_decision_ids_empty_when_ledger_absent(tmp_path: Path) -> None:
+    assert decision_ids_from_ledger(tmp_path / "absent.jsonl") == frozenset()
 
 
-def test_exclusion_renewal_decision_ids_raise_on_malformed_state(tmp_path: Path) -> None:
-    state = tmp_path / "state.json"
-    state.write_text("{not json", encoding="utf-8")
-    with pytest.raises(json.JSONDecodeError):
-        decision_ids_from_state(state)
+def test_exclusion_renewal_decision_ids_empty_when_ledger_is_empty(tmp_path: Path) -> None:
+    ledger = tmp_path / "decision.jsonl"
+    ledger.write_text("", encoding="utf-8")
+    assert decision_ids_from_ledger(ledger) == frozenset()
+
+
+def test_exclusion_renewal_decision_ids_raise_on_a_torn_ledger(tmp_path: Path) -> None:
+    ledger = tmp_path / "decision.jsonl"
+    ledger.write_text(_ledger_line("D-ONE"), encoding="utf-8")
+    with pytest.raises(LedgerTornTailError):
+        decision_ids_from_ledger(ledger)
+
+
+def test_exclusion_renewal_decision_ids_raise_on_a_malformed_line(tmp_path: Path) -> None:
+    ledger = tmp_path / "decision.jsonl"
+    ledger.write_text("{not json}\n", encoding="utf-8")
+    with pytest.raises(ValidationError):
+        decision_ids_from_ledger(ledger)

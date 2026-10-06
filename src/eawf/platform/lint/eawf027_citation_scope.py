@@ -35,7 +35,8 @@ from eawf.platform.subprocess_detach import no_window_kwargs
 
 RULE_CODE = "EAWF027"
 
-#: The committed paths in scope: artifacts, rendered documents and rule projections.
+#: The committed paths in scope: promoted artifacts, rendered documents and rule
+#: projections. Listing is by git, so a local artifact under ``.ea/artifacts`` is out of scope.
 COMMITTED_SCOPE: Final[tuple[str, ...]] = (
     ".ea/artifacts",
     "docs",

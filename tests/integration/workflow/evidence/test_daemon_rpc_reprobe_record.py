@@ -55,8 +55,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 #: Where the daemon-RPC observation is committed.
 RECORD_PATH = _REPO_ROOT / DAEMON_RPC_REPROBE_PATH
 
-#: The append-only evidence store the citation rows land in.
-EVIDENCE_STORE = _REPO_ROOT / ".ea/store/evidence.jsonl"
+#: The citation rows the frozen epoch-1 evidence store holds, kept in the
+#: stripped snapshot since that store left git.
+EVIDENCE_STORE = _REPO_ROOT / "tests/fixtures/epoch1-snapshot/store/evidence.jsonl"
 
 #: The scope every re-probe evidence row is filed under.
 SCOPE_ID = "P33-I01-W85"

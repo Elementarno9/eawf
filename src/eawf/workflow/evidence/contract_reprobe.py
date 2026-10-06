@@ -55,6 +55,8 @@ from eawf.workflow.evidence.measured_contract import PREFLIGHT_CONTRACTS
 logger = logging.getLogger(__name__)
 
 #: Repo-relative directory the re-probe observation files are written to.
+#: Artifacts are local by default; the two records below are promoted in
+#: the commit policy because this module reads them, so git carries them.
 REPROBE_DIR: Final[str] = ".ea/artifacts/evidence/2026-09-18-dev3-reprobe"
 
 #: Repo-relative path of the cross-provider conformance re-probe.

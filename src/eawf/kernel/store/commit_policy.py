@@ -169,13 +169,50 @@ def _row(
 _YES: Final = CommitPolicy.COMMITTED
 _NO: Final = CommitPolicy.NOT_COMMITTED
 
+#: The only artifacts git carries. An artifact is local by default -- a
+#: ledger row cites it by sha256 digest -- so a path joins this list only
+#: when a source module reads it, and its note names that module. None is
+#: required: a product repository shares this declaration without the files.
+PROMOTED_ARTIFACTS: Final[tuple[PathClass, ...]] = tuple(
+    _row(path, _YES, f"promoted: read by {reader}")
+    for path, reader in (
+        (
+            ".ea/artifacts/research/2026-09-04-dev1-config-defaults-benchmark.md",
+            "src/eawf/platform/artifacts/config_defaults_benchmark.py",
+        ),
+        (
+            ".ea/artifacts/evidence/2026-09-18-dev3-reprobe/cross-provider-reprobe.json",
+            "src/eawf/workflow/evidence/contract_reprobe.py",
+        ),
+        (
+            ".ea/artifacts/evidence/2026-09-18-dev3-reprobe/daemon-rpc-reprobe.json",
+            "src/eawf/workflow/evidence/contract_reprobe.py",
+        ),
+        *(
+            (
+                f".ea/artifacts/evidence/{directory}/native-canary-evidence.json",
+                "src/eawf/workflow/evidence/provider_certification.py",
+            )
+            for directory in (
+                "2026-09-18-dev3-conformance",
+                "2026-09-26-dev4-conformance",
+                "2026-09-27-dev5-product-canary",
+                "2026-10-02-rc1-flag-day",
+            )
+        ),
+        (
+            ".ea/artifacts/evidence/2026-09-27-dev5-product-canary/product-canary-receipts.json",
+            "src/eawf/workflow/release/canary_receipts.py",
+        ),
+    )
+)
+
 EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
     _row(
         ".ea/state.json",
-        _YES,
-        "the compare-and-swap document of work in flight",
+        _NO,
+        "the frozen epoch-1 document; an epoch-2 tree reads its selected generation",
         tier=StorageTier.DOCUMENT,
-        must_exist=True,
     ),
     _row(
         ".ea/config.yaml",
@@ -205,9 +242,24 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
     ),
     _row(
         ".ea/store/*.jsonl",
-        _YES,
-        "the typed epoch-1 stores that carry the evidence chain",
+        _NO,
+        "the frozen epoch-1 stores; the generation ledgers carry the evidence chain",
         tier=StorageTier.LEDGER,
+    ),
+    *(
+        _row(
+            f".ea/store/{stem}.jsonl",
+            _YES,
+            "a release or conformance store the epoch-2 release train still appends to",
+            tier=StorageTier.LEDGER,
+        )
+        for stem in (
+            "release",
+            "release_record",
+            "release_checkpoint_receipt",
+            "release_train_advance",
+            "conformance_stage",
+        )
     ),
     _row(
         ".ea/ledger/*.jsonl",
@@ -241,6 +293,13 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
         ".ea/generations/gen-*/ledger/*.jsonl",
         _YES,
         "one generation's append-only history; a line is never rewritten",
+        tier=StorageTier.LEDGER,
+    ),
+    _row(
+        ".ea/generations/gen-*/ledger/snapshots/*.jsonl",
+        _YES,
+        "a ledger's sealed leading lines, named by their sha256 and read before the live "
+        "file; written once and never changed",
         tier=StorageTier.LEDGER,
     ),
     _row(
@@ -302,7 +361,13 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
         "render cache for memory and research views; regenerable",
         tier=StorageTier.DERIVED,
     ),
-    _row(".ea/artifacts/**", _YES, "durable audits, research, decisions and evidence"),
+    _row(
+        ".ea/artifacts/**",
+        _NO,
+        "audits, research, decisions and evidence stay local; a ledger row cites one by "
+        "sha256 digest, and only a promoted path below is committed",
+    ),
+    *PROMOTED_ARTIFACTS,
     _row(
         ".ea/specs/**",
         _NO,
@@ -352,7 +417,9 @@ class CensusFinding(BaseModel):
 
     kind: CensusFindingKind
     path: Annotated[str, Field(min_length=1, max_length=240)]
-    reason: Annotated[str, Field(min_length=1, max_length=240)]
+    # Room for the longest pattern, note and path, since an untrack
+    # finding quotes all three.
+    reason: Annotated[str, Field(min_length=1, max_length=640)]
 
     def render(self) -> str:
         """Return a ``kind path: reason`` one-liner for the console."""
@@ -439,7 +506,8 @@ def _tracked_findings(
                 CensusFinding(
                     kind=CensusFindingKind.TRACKED_BUT_NOT_COMMITTED,
                     path=path,
-                    reason=f"declared not committed by {row.pattern!r} ({row.note})",
+                    reason=f"declared not committed by {row.pattern!r} ({row.note}); "
+                    f"untrack it, keeping the local copy, with: git rm --cached -- {path}",
                 )
             )
     return findings
@@ -701,6 +769,7 @@ __all__ = [
     "EA_PATH_CLASSES",
     "PERMANENT_COMMIT_ORDER",
     "PROBE_SEGMENT",
+    "PROMOTED_ARTIFACTS",
     "PROVENANCE_TRAILER_KEY",
     "PUBLICATION_SUBJECT",
     "REVIEW_CHECKPOINT_TRAILER_KEY",

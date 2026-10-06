@@ -404,7 +404,8 @@ def test_tool_recounts_against_the_real_state_json() -> None:
     plausible, in-range figures — the figures a build-report would declare.
     """
     mod = _load_tool_module()
-    state = json.loads((_REPO_ROOT / ".ea" / "state.json").read_text(encoding="utf-8"))
+    snapshot = _REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot" / "state.json"
+    state = json.loads(snapshot.read_text(encoding="utf-8"))
     closed = mod.recount_closed_wave_count(state)
     eu = mod.recount_eu_delivered(state)
     coverage = mod.recount_evidence_coverage(state)

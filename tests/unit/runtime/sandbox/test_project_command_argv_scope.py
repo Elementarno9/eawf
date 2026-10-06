@@ -34,7 +34,7 @@ from eawf.workflow.audit_dsl.models import CheckSpec
 from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY
 
 _REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[4]
-_STATE_PATH: Final[Path] = _REPO_ROOT / ".ea" / "state.json"
+_STATE_PATH: Final[Path] = _REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot" / "state.json"
 _DRY_RUN_ARGV: Final[list[str]] = [
     "uv",
     "run",

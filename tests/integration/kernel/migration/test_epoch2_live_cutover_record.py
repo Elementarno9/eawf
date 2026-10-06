@@ -22,7 +22,12 @@ from eawf.kernel.state.epoch2.authority import resolve_authority
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 RECORD_PATH = (
-    REPO_ROOT / ".ea" / "artifacts" / "evidence" / "2026-09-dev5-live-cutover" / "live-cutover.json"
+    REPO_ROOT
+    / "tests"
+    / "fixtures"
+    / "artifacts"
+    / "2026-09-dev5-live-cutover"
+    / "live-cutover.json"
 )
 
 Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]

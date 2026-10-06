@@ -18,9 +18,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from eawf.kernel.config.layered import get_dotted, global_config_path
 from eawf.kernel.config.migration import migrate_config_payload
 from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS, LEAF_KEY_REGISTRY
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.state.enums import AuditKind, IterStatus, StoreKind
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.models import State
+from eawf.kernel.store.compaction import LegacySealPlan, plan_legacy_seal
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.gate_receipt import GateReceipt, LegacyGateReceipt
 from eawf.kernel.store.ledger import (
@@ -29,7 +31,8 @@ from eawf.kernel.store.ledger import (
     line_digest,
     split_ledger_lines,
 )
-from eawf.kernel.store.paths import store_path
+from eawf.kernel.store.paths import ledger_path, store_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.doctor.artifact_digests import (
     ARTIFACT_DIGEST_ACTION,
     artifact_digest_preview,
@@ -693,6 +696,39 @@ def _receipt_rekey_action(root: Path) -> DoctorRepairAction | None:
     )
 
 
+#: The action that seals the Task ledger's legacy import into a hashed snapshot.
+LEGACY_SEAL_ACTION: Final = "ledger.compact-legacy-import"
+
+
+def legacy_seal_preview(plan: LegacySealPlan) -> str:
+    """Return the preview digest of a legacy seal; it covers the sealed bytes' digest."""
+    return _digest_json(plan.model_dump(mode="json"))
+
+
+def _legacy_seal_action(root: Path) -> DoctorRepairAction | None:
+    """Preview sealing the selected generation's Task ledger import, if it has one."""
+    authority = resolve_authority(root / ".ea")
+    if authority.epoch != 2 or authority.target is None or authority.generation_id is None:
+        return None
+    document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    plan = plan_legacy_seal(ledger_path(document, Epoch2Collection.TASK))
+    if plan is None:
+        return None
+    return DoctorRepairAction(
+        action_id=LEGACY_SEAL_ACTION,
+        scope="repo",
+        preview_digest=legacy_seal_preview(plan),
+        mutation_class="committed_store",
+        record_count=plan.sealed_lines,
+        detail=(
+            f"seal the Task ledger's first {plan.sealed_lines} line(s), through its last "
+            f"legacy-origin line, into ledger/snapshots/ named by sha256; "
+            f"{plan.live_lines} line(s) stay in the live file"
+        ),
+        target=str(root),
+    )
+
+
 def _ledger_actions(root: Path) -> tuple[list[DoctorRepairAction], list[str]]:
     """Return the ledger repair actions and the findings they leave unresolved."""
     actions: list[DoctorRepairAction] = []
@@ -708,6 +744,11 @@ def _ledger_actions(root: Path) -> tuple[list[DoctorRepairAction], list[str]]:
     rekey = _receipt_rekey_action(root)
     if rekey is not None:
         actions.append(rekey)
+    # Last, so a row the actions above append is planned before the seal measures
+    # its cut; a seal applied first would move the lines they were planned from.
+    seal = _legacy_seal_action(root)
+    if seal is not None:
+        actions.append(seal)
     return actions, unresolved
 
 
@@ -915,6 +956,7 @@ __all__ = [
     "ARCHIVE_REF_PREFIX",
     "LEDGER_BASE_REF",
     "LEDGER_SUPERSEDE_ACTION",
+    "LEGACY_SEAL_ACTION",
     "DoctorRepairAction",
     "DoctorRepairMutationClass",
     "DoctorRepairPlan",
@@ -924,6 +966,7 @@ __all__ = [
     "digest_repair_actions",
     "digest_strays",
     "ledger_supersession_digest",
+    "legacy_seal_preview",
     "plan_ledger_supersessions",
     "render_repair_plan",
     "superseding_record",

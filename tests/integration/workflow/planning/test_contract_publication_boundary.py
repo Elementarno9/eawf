@@ -11,7 +11,6 @@ reported measured, so the criterion is refused as ungrounded.
 from __future__ import annotations
 
 import asyncio
-import json
 import tempfile
 from pathlib import Path
 from typing import Any, Final
@@ -36,6 +35,7 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     seed_row,
     tree_root,
 )
+from tests.integration.workflow.planning.test_plan_revision_apply import file_contract_rows
 
 pytestmark = pytest.mark.integration
 
@@ -48,10 +48,6 @@ REVISION_KEY: Final = "PRV-0040"
 OPERATOR: Final[dict[str, str]] = {"principal_kind": "operator", "principal_id": ACTOR}
 CONTRACT_ID: Final = "MCT-26091801"
 PROBE: Final = "uv run python probes/replay_order.py"
-
-V1_STATE_FIXTURE: Final = (
-    Path(__file__).resolve().parents[3] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
-)
 
 
 @pytest.fixture(autouse=True)
@@ -81,30 +77,31 @@ def _canary(tmp_path: Path, *, code: str, preference: list[str]) -> CanaryProvis
 
 
 def _promote_contract(canary: CanaryProvision, *, provider_tuple: list[str]) -> None:
-    """Write a v1 state holding one contract measured through *provider_tuple*."""
-    payload = json.loads(V1_STATE_FIXTURE.read_text(encoding="utf-8"))
-    payload["artifacts"] = {
-        CONTRACT_ID: {
-            "id": CONTRACT_ID,
-            "kind": "plan_spec",
-            "uri": CONTRACT_BODY_URI,
-            "urn": f"urn:eawf:v1:artifact:{payload['project']['code']}/{CONTRACT_ID}",
-            "created_at": "2026-09-18T00:00:00Z",
-            "metadata": {
-                "probe_command": PROBE,
-                "environment": {
-                    "scale_band": "dev",
-                    "population": "every recorded replay log",
-                    "population_size": 1200,
-                    "host_platform": "linux",
-                    "toolchain": "python 3.14.3",
-                    "repository": None,
-                    "provider_tuple": provider_tuple,
+    """File one contract measured through *provider_tuple* into the generation."""
+    file_contract_rows(
+        canary,
+        [
+            {
+                "id": CONTRACT_ID,
+                "kind": "plan_spec",
+                "uri": CONTRACT_BODY_URI,
+                "urn": f"urn:eawf:v1:artifact:QR/{CONTRACT_ID}",
+                "created_at": "2026-09-18T00:00:00Z",
+                "metadata": {
+                    "probe_command": PROBE,
+                    "environment": {
+                        "scale_band": "dev",
+                        "population": "every recorded replay log",
+                        "population_size": 1200,
+                        "host_platform": "linux",
+                        "toolchain": "python 3.14.3",
+                        "repository": None,
+                        "provider_tuple": provider_tuple,
+                    },
                 },
-            },
-        }
-    }
-    (tree_root(canary) / "state.json").write_text(json.dumps(payload), encoding="utf-8")
+            }
+        ],
+    )
 
 
 def _body() -> dict[str, Any]:

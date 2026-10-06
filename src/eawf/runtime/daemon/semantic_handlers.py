@@ -111,13 +111,11 @@ from eawf.kernel.runtime.semantic import (
     ValidationFinding,
 )
 from eawf.kernel.spec.measured_contract import SpikeReport
-from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey
 from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.state.epoch2.urns import RunUrn
-from eawf.kernel.state.io import StateValidationError
-from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
+from eawf.kernel.store.ledger import LedgerRecord, LedgerTornTailError, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.candidate.seal import (
     accepted_report_of,
@@ -127,14 +125,12 @@ from eawf.runtime.candidate.seal import (
     submission_record,
 )
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession, canonical_entity_urn
-from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
+from eawf.runtime.daemon.epoch2_transaction import TransactionRefusedError, commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 from eawf.runtime.integration.git_workspace import CandidatePinError, pin_submission_commit
-from eawf.runtime.lock import portalock
 from eawf.surfaces.cli.errors import UserError
-from eawf.surfaces.cli.errors import ValidationError as CliValidationError
-from eawf.workflow.evidence._io import append_jsonl, atomic_write_state, load_state, store_paths
+from eawf.workflow.evidence._io import MEASURED_CONTRACT_STATUS, generation_contract_view
 from eawf.workflow.evidence.measured_contract import submit_evidence as promote_spike_evidence
 from eawf.workflow.planning.apply import PlanRevisionProposal, validate_plan_proposal
 from eawf.workflow.planning.revision import PlanRefusal, PlanRefusalCode
@@ -547,38 +543,41 @@ def _refused_evidence(*, code: str, message: str) -> SemanticToolOutput:
     )
 
 
-def _state_write_refusal(error: StateValidationError | OSError) -> SemanticToolOutput:
-    """Return the refusal a failed ``state.json`` write answers with.
+def _promotion_write_refusal(error: TransactionRefusedError | OSError) -> SemanticToolOutput:
+    """Return the refusal a failed evidence-ledger append answers with.
 
     A leak refusal's text can quote the leaking value itself, so neither
     the receipt nor the daemon log carries it; only its kind is reported.
 
     Args:
-        error: What the locked state writer raised.
+        error: What the ledger append raised.
 
     Returns:
         A refused evidence output naming one finding.
     """
-    if isinstance(error, StateValidationError):
-        logger.warning("_submit_evidence write_refused=leak")
+    if isinstance(error, TransactionRefusedError):
+        logger.warning(f"_submit_evidence write_refused=transaction code={error.code}")
         return _refused_evidence(
             code="state_leak_refused",
-            message="the promotion would write a leak-shaped value into state.json",
+            message="the promotion would write a leak-shaped value into the evidence ledger",
         )
     logger.warning(f"_submit_evidence write_refused=os_error errno={error.errno}")
     return _refused_evidence(
         code="state_write_failed",
-        message=f"state.json could not be written: {error.strerror or type(error).__name__}",
+        message=(
+            f"the evidence ledger could not be written: {error.strerror or type(error).__name__}"
+        ),
     )
 
 
 def _submit_evidence(inputs: HandlerInputs) -> SemanticToolOutput:
-    """Promote a verified SpikeReport's contracts through the v1 evidence path.
+    """Promote a verified SpikeReport's contracts into the tree's selected generation.
 
     Reads the filed report the same way ``_submit_plan`` reads a filed
-    proposal, then hands each of its contracts to
-    :func:`eawf.workflow.evidence.measured_contract.submit_evidence`
-    against the v1 ``state.json`` beside this tree -- the same store
+    proposal, hands each of its contracts to
+    :func:`eawf.workflow.evidence.measured_contract.submit_evidence`, and
+    files the promoted rows as one line of the generation's evidence
+    ledger -- the store
     :func:`eawf.workflow.planning.apply.approve_plan_revision` resolves a
     plan's ``contract_refs`` against, so a contract promoted here is
     immediately citable from a plan's approval.
@@ -603,45 +602,48 @@ def _submit_evidence(inputs: HandlerInputs) -> SemanticToolOutput:
             code="schema_validation_failed",
             message="the filed report is not a spike report this daemon can read",
         )
-    state_path = inputs.session.context.identity.tree_root / "state.json"
+    session = inputs.session
     try:
-        with portalock.acquire(state_path, timeout=5.0):
-            try:
-                state = load_state(state_path)
-            except UserError, CliValidationError:
-                return _refused_evidence(
-                    code="no_promoted_contract_store",
-                    message=(
-                        f"{state_path} carries no readable v1 state to promote a contract into"
-                    ),
-                )
-            if state.project is None:
-                return _refused_evidence(
-                    code="no_promoted_contract_store",
-                    message=f"{state_path} carries no project to scope a promotion under",
-                )
-            try:
-                promotions = promote_spike_evidence(
-                    state, report=report, scope_id=state.project.code
-                )
-            except UserError as error:
-                code = _evidence_finding_code(error.kind or "measured_contract_rejected")
-                return _refused_evidence(code=code, message=str(error))
-            # The locked, leak-refusing writer is the chokepoint every other
-            # state.json mutator funnels through (see
-            # eawf.kernel.state.io.write_state_unlocked); events append only
-            # after it returns, so a refused leak or a failed write leaves no
-            # orphan event behind it.
-            try:
-                atomic_write_state(state_path, state, native_authority=inputs.session.authority)
-            except (StateValidationError, OSError) as error:
-                return _state_write_refusal(error)
-            paths = store_paths(state_path)
-            for promotion in promotions:
-                append_jsonl(paths[StoreKind.EVENT], promotion.artifact_event)
-                append_jsonl(paths[StoreKind.EVIDENCE], promotion.evidence_envelope)
-    except portalock.LockTimeout as error:
-        return _refused_evidence(code="state_write_conflict", message=str(error))
+        state = generation_contract_view(
+            session.read_document(),
+            artifact_ledger=session.ledger_path(Epoch2Collection.ARTIFACT),
+            evidence_ledger=session.ledger_path(Epoch2Collection.EVIDENCE),
+        )
+    except LedgerTornTailError, ValueError, KeyError:
+        return _refused_evidence(
+            code="no_promoted_contract_store",
+            message="the tree's generation holds no readable promoted-contract store",
+        )
+    if state.project is None:
+        return _refused_evidence(
+            code="no_promoted_contract_store",
+            message="the tree's generation holds no project to scope a promotion under",
+        )
+    try:
+        promotions = promote_spike_evidence(state, report=report, scope_id=state.project.code)
+    except UserError as error:
+        code = _evidence_finding_code(error.kind or "measured_contract_rejected")
+        return _refused_evidence(code=code, message=str(error))
+    if promotions:
+        # One line carries the whole report, so a refused or failed append
+        # leaves none of its contracts promoted rather than some of them.
+        record = LedgerRecord(
+            collection=Epoch2Collection.EVIDENCE,
+            record_key=report.report_id,
+            status=MEASURED_CONTRACT_STATUS,
+            recorded_at=inputs.now,
+            payload={
+                "spike_report_ref": payload.spike_report_ref,
+                "contracts": [
+                    state.artifacts[promotion.artifact_id].model_dump(mode="json")
+                    for promotion in promotions
+                ],
+            },
+        )
+        try:
+            commit_ledger_append(session, record)
+        except (TransactionRefusedError, OSError) as error:
+            return _promotion_write_refusal(error)
     logger.info(f"_submit_evidence report_id={report.report_id!r} contracts={len(promotions)}")
     return SubmitEvidenceOutput(
         tool_id="submit_evidence",

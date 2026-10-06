@@ -1,7 +1,8 @@
 """EAWF028 — the brief-immutability guard: a committed research brief keeps its wording.
 
 A research brief under ``.ea/artifacts/research/`` is evidence: decisions and audits cite
-it, so once committed its words stay as they were read. A later finding goes into a new,
+it, so once committed its words stay as they were read. Briefs are local unless promoted,
+so only a promoted brief is in git for this guard to compare. A later finding goes into a new,
 dated brief that supersedes the old one. Format repairs are still welcome, because they
 change how the brief renders and not what it says.
 

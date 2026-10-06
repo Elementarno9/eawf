@@ -189,9 +189,12 @@ def test_release_ledger_is_tracked_and_committed() -> None:
     assert row.tier is StorageTier.LEDGER
 
 
-def test_release_ledger_sits_beside_the_other_typed_stores() -> None:
-    """The ledger is one of the store family, not a special case."""
-    assert classify_path(RELEASE_LEDGER) == classify_path(".ea/store/release_record.jsonl")
+def test_release_ledger_is_kept_like_the_other_release_stores() -> None:
+    """The ledger is kept by the same kind of row as the release record store."""
+    ledger = classify_path(RELEASE_LEDGER)
+    record = classify_path(".ea/store/release_record.jsonl")
+    assert (ledger.policy, ledger.tier) == (record.policy, record.tier)
+    assert classify_path(".ea/store/audit.jsonl").policy is CommitPolicy.NOT_COMMITTED
 
 
 # --- the secrets exclusion names its files ----------------------------------

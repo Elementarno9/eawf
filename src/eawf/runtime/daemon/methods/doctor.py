@@ -17,7 +17,13 @@ from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import State
-from eawf.kernel.store.compaction import document_rows, read_document
+from eawf.kernel.store.compaction import (
+    document_rows,
+    plan_legacy_seal,
+    read_document,
+    seal_legacy_import,
+)
+from eawf.kernel.store.ledger import ledger_snapshot
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.kernel.validate.strict import validate_state
 from eawf.observability.doctor.artifact_digests import (
@@ -35,10 +41,12 @@ from eawf.observability.doctor.receipt_rekey import (
 from eawf.observability.doctor.repair import (
     ARCHIVE_REF_PREFIX,
     LEDGER_SUPERSEDE_ACTION,
+    LEGACY_SEAL_ACTION,
     DoctorRepairAction,
     build_repair_plan,
     digest_repair_actions,
     ledger_supersession_digest,
+    legacy_seal_preview,
     plan_ledger_supersessions,
     superseding_record,
 )
@@ -240,9 +248,13 @@ def _apply_ledger_supersede(
         records = [superseding_record(workspace, row, recorded_at=recorded_at) for row in rows]
         for row, record in zip(rows, records, strict=True):
             # The append path writes the selected generation's ledger of the
-            # record's collection; a row read from any other file would land
-            # somewhere other than the line it supersedes.
-            if (workspace / row.path).resolve() != session.ledger_path(record.collection).resolve():
+            # record's collection; a row read from any other file than that
+            # ledger or its sealed snapshot would land somewhere other than
+            # the line it supersedes.
+            ledger = session.ledger_path(record.collection)
+            snapshot = ledger_snapshot(ledger)
+            source = (workspace / row.path).resolve()
+            if source != ledger.resolve() and (snapshot is None or source != snapshot.resolve()):
                 raise DaemonValidationError(
                     f"ledger repair cannot supersede {row.path!r}: it is not the selected "
                     f"generation's {record.collection.value} ledger"
@@ -323,12 +335,41 @@ def _apply_receipt_rekey(
     return ("applied" if records else "noop"), len(records)
 
 
+def _apply_legacy_seal(
+    ctx: MethodContext, workspace: Path, action: DoctorRepairAction
+) -> tuple[str, int]:
+    """Seal the Task ledger's legacy import under the tree's session lock.
+
+    The seal is measured again under the lock and must match the preview,
+    whose digest covers the bytes it moves, so no line moves that the
+    operator did not see. The seal adds no line and changes none: the
+    ledger reads the same records, in the same order, before and after.
+
+    Raises:
+        DaemonValidationError: The tree is not epoch 2 or the preview changed.
+    """
+    authority = resolve_authority(workspace / ".ea")
+    if authority.epoch != 2:
+        raise DaemonValidationError("legacy ledger seal needs an epoch-2 tree")
+    context = ctx.native_root_context(authority.root)
+    with context.session([_project_lock_urn(context)]) as session:
+        plan = plan_legacy_seal(session.ledger_path(Epoch2Collection.TASK))
+        if plan is None or legacy_seal_preview(plan) != action.preview_digest:
+            raise DaemonValidationError(
+                f"doctor repair preview changed: {action.action_id!r}; rerun `eawf doctor --fix`"
+            )
+        seal_legacy_import(session.document_path, collection=Epoch2Collection.TASK, plan=plan)
+    return "applied", plan.sealed_lines
+
+
 def _apply_action(
     ctx: MethodContext,
     workspace: Path,
     state_path: Path,
     action: DoctorRepairAction,
 ) -> tuple[str, int]:
+    if action.action_id == LEGACY_SEAL_ACTION:
+        return _apply_legacy_seal(ctx, workspace, action)
     if action.action_id == LEDGER_SUPERSEDE_ACTION:
         return _apply_ledger_supersede(ctx, workspace, action)
     if action.action_id == ARTIFACT_DIGEST_ACTION:

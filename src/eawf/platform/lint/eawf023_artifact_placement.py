@@ -12,11 +12,11 @@ sortable URI. Two conventions keep that URI honest:
    prefix so the artifact sorts chronologically within its kind and the
    slug never collides with a same-named sibling from another date.
 
-This rule walks the git-tracked ``.ea/artifacts/**/*.md`` set and flags
-any file that violates either convention. A grandfather baseline carries
-the pre-convention legacy artifacts (named before the date-stem rule
-landed) so the clean tree passes while every new artifact is held to the
-convention. The kind sub-directories are read from
+Artifacts are local unless promoted, so this rule walks the committed
+``.ea/artifacts/**/*.md`` set -- the git-tracked paths the commit policy
+classifies as committed -- and flags any file that violates either
+convention. A grandfather baseline may exempt a promoted path from the
+convention; it names none today. The kind sub-directories are read from
 :data:`eawf.kernel.spec.common.ARTIFACT_KIND_SUBDIR`, the one declaration
 the draft promoter and :data:`eawf.kernel.spec.common.ArtifactPathStr`
 read as well.
@@ -25,9 +25,11 @@ read as well.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from eawf.kernel.spec.common import ARTIFACT_KIND_SUBDIR
+from eawf.kernel.store.commit_policy import CommitPolicy, classify_path
 
 RULE_CODE = "EAWF023"
 
@@ -37,46 +39,32 @@ ARTIFACTS_ROOT = ".ea/artifacts/"
 #: A conforming artifact filename stem leads with a ``YYYY-MM-DD-`` date.
 DATE_STEM_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-")
 
-#: Pre-convention legacy artifacts named before the date-stem + canonical
-#: sub-directory rule landed. These are grandfathered so the clean tree
-#: passes; every NEW artifact is still held to the convention. A legacy
-#: file drops off this baseline when a wave renames it to the canonical
-#: form (rename-on-touch).
-GRANDFATHERED_ARTIFACTS: frozenset[str] = frozenset(
-    {
-        ".ea/artifacts/audits/A09-P08-ship-gate.md",
-        ".ea/artifacts/audits/A10-P09-ship-gate.md",
-        ".ea/artifacts/audits/A11-P10-ship-gate.md",
-        ".ea/artifacts/audits/A12-P11-ship-gate.md",
-        ".ea/artifacts/audits/A13-P12-ship-gate.md",
-        ".ea/artifacts/audits/A14-P13-ship-gate.md",
-        ".ea/artifacts/audits/A15-P14-ship-gate.md",
-        ".ea/artifacts/audits/A16-P14-ship-gate.md",
-        ".ea/artifacts/audits/A17-P14-ship-gate.md",
-        ".ea/artifacts/audits/A18-P14-ship-gate.md",
-        ".ea/artifacts/audits/A19-P14-ship-gate.md",
-        ".ea/artifacts/audits/A20-P15-p15-skills-audit.md",
-        ".ea/artifacts/audits/A21-P16-ship-gate.md",
-        ".ea/artifacts/audits/A22-P17-ship-gate.md",
-        ".ea/artifacts/audits/A23-P18-ship-gate.md",
-        ".ea/artifacts/audits/A24-P19-ship-gate.md",
-        ".ea/artifacts/audits/A25-P19-I02-W16-backlog-bulk-close.md",
-        ".ea/artifacts/audits/A26-P19-I02-ship-gate.md",
-        ".ea/artifacts/audits/A27-P20-ship-gate.md",
-        ".ea/artifacts/audits/A28-P22-ship-gate.md",
-        ".ea/artifacts/audits/A29-P23-ship-gate.md",
-        ".ea/artifacts/audits/A30-P24-ship-gate.md",
-        ".ea/artifacts/audits/A31-P25-ship-gate.md",
-        ".ea/artifacts/audits/audit-2026-05-28-p28-i03-deep-audit.md",
-        ".ea/artifacts/audits/v0.1-closeout.md",
-        ".ea/artifacts/research/long-term/c04a-workflow.md",
-        ".ea/artifacts/research/long-term/c04b-skills.md",
-        ".ea/artifacts/research/long-term/c04c-agent.md",
-        ".ea/artifacts/research/long-term/c04d-runtime.md",
-        ".ea/artifacts/research/research-2026-05-24-python-package-structure.md",
-        ".ea/artifacts/research/research-2026-05-30-tui-chassis.md",
-    }
-)
+#: Artifacts exempt from the convention. Only a committed artifact is in
+#: the rule's surface, and every committed artifact is a promoted one, so an
+#: exemption may name only a promoted path; none needs one today.
+GRANDFATHERED_ARTIFACTS: frozenset[str] = frozenset()
+
+
+def committed_artifact_paths(paths: Iterable[str]) -> list[str]:
+    """Return the paths the commit policy keeps in git, in input order.
+
+    Artifacts are local unless promoted, so a tracked artifact the policy
+    does not commit is awaiting removal from the index -- the census
+    reports it -- and its placement is no longer this rule's concern.
+
+    Args:
+        paths: Repo-relative candidate paths, typically the git-tracked
+            ``.ea/artifacts/**/*.md`` set.
+
+    Returns:
+        The paths under :data:`ARTIFACTS_ROOT` that classify as committed.
+    """
+    return [
+        path
+        for path in paths
+        if _normalize(path).startswith(ARTIFACTS_ROOT)
+        and classify_path(path).policy is CommitPolicy.COMMITTED
+    ]
 
 
 @dataclass(frozen=True)

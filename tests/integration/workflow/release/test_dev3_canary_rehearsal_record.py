@@ -94,8 +94,11 @@ pytestmark = pytest.mark.integration
 #: Four levels up from this file lands on the repository root.
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
-#: Where the rehearsal record is committed.
-MANIFEST = _REPO_ROOT / ".ea/artifacts/evidence/2026-09-18-canary-rehearsal/rehearsal-manifest.json"
+#: Where an input whose evidence directory is local is kept for a clone.
+_FIXTURE_ROOT = _REPO_ROOT / "tests" / "fixtures" / "artifacts"
+
+#: The rehearsal record, kept as a fixture because its evidence directory is local.
+MANIFEST = _FIXTURE_ROOT / "2026-09-18-canary-rehearsal" / "rehearsal-manifest.json"
 
 #: The five steps of the native path, in the order a Milestone takes them.
 STEP_ORDER: tuple[str, ...] = ("plan_apply", "dispatch", "integrate", "verify", "accept")
@@ -943,8 +946,13 @@ def evidence_path(release: str) -> Path:
 
 
 def walk_path(release: str) -> Path:
-    """Return the committed walk record of *release*."""
-    return _REPO_ROOT.joinpath(*CANARY_EVIDENCE_DIRS[release], WALK_FILENAME)
+    """Return the committed walk record of *release*.
+
+    The export is promoted into git because the release probes read it; the
+    walk record is read only here, so its copy lives with the fixtures,
+    keyed by the export's evidence directory.
+    """
+    return _FIXTURE_ROOT / CANARY_EVIDENCE_DIRS[release][-1] / WALK_FILENAME
 
 
 #: The three skills the criterion names, each of which must have taken a step.

@@ -106,6 +106,36 @@ def test_pwd_upward_walks_up_parents(
     assert resolved == state.resolve()
 
 
+def test_pwd_upward_anchors_on_the_epoch2_marker_without_a_document(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An epoch-2 tree with no v1 document still anchors the walk."""
+    repo = tmp_path / "repo"
+    (repo / ".ea" / "generations").mkdir(parents=True)
+    (repo / ".ea" / "generations" / "EPOCH2_ACTIVE.json").write_text("{}", encoding="utf-8")
+    deep = repo / "src" / "pkg"
+    deep.mkdir(parents=True)
+    monkeypatch.chdir(deep)
+    resolved = resolve_state_path(workspace=None)
+    assert resolved == (repo / ".ea" / "state.json").resolve()
+    assert not resolved.exists()
+
+
+def test_pwd_upward_skips_a_generations_dir_without_the_marker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bare generations directory is no epoch-2 tree, so the walk goes on."""
+    outer = tmp_path / "outer"
+    (outer / ".ea").mkdir(parents=True)
+    (outer / ".ea" / "state.json").write_text("{}", encoding="utf-8")
+    inner = outer / "inner"
+    (inner / ".ea" / "generations").mkdir(parents=True)
+    monkeypatch.chdir(inner)
+    assert resolve_state_path(workspace=None) == (outer / ".ea" / "state.json").resolve()
+
+
 def test_missing_state_raises_filenotfounderror(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

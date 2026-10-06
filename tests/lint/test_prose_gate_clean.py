@@ -69,7 +69,7 @@ def _changed_markdown() -> list[str] | None:
     for base in _DIFF_BASES:
         if _git("rev-parse", "--verify", "--quiet", f"{base}^{{commit}}").returncode != 0:
             continue
-        proc = _git("diff", "--name-only", f"{base}...HEAD", "--", "*.md")
+        proc = _git("diff", "--name-only", "--diff-filter=d", f"{base}...HEAD", "--", "*.md")
         if proc.returncode != 0:
             continue
         return [

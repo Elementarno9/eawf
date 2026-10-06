@@ -57,8 +57,12 @@ from typing import ClassVar, Final, Literal
 from pydantic import NonNegativeInt, PositiveInt, ValidationError
 
 from eawf.kernel.fsync import fsync_parent_dir
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.spec.release import Sha256DigestStr
+from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.models import Project
+from eawf.kernel.store.compaction import document_rows, read_document
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.telemetry.models import RuntimeName
 from eawf.platform.install.gitignore_writer import plan_gitignore_block
 from eawf.platform.rules.carriers import carrier_stamp_matches_body, render_role_carriers
@@ -452,7 +456,7 @@ def load_project_brief(repo_root: Path) -> ProjectBrief:
         The brief; fields with no committed source stay empty.
 
     Raises:
-        RuleProjectionError: When ``.ea/state.json`` or ``pyproject.toml``
+        RuleProjectionError: When the generation document or ``pyproject.toml``
             exists but is unreadable, or the project record fails its schema.
     """
     project = _read_project_record(repo_root)
@@ -1310,27 +1314,31 @@ def _atomic_write_bytes(path: Path, payload: bytes) -> None:
 
 
 def _read_project_record(repo_root: Path) -> Project | None:
-    """Read the committed project record from ``.ea/state.json``.
+    """Read the committed project record from the selected generation's document.
 
     Args:
         repo_root: The repository root.
 
     Returns:
-        The project record, or ``None`` when there is no state or no project.
+        The project record, or ``None`` when the tree selects no generation
+        or its document holds no project.
 
     Raises:
-        RuleProjectionError: When the state file is unreadable or the project
+        RuleProjectionError: When the document is unreadable or the project
             record fails its schema.
     """
-    path = repo_root / ".ea" / "state.json"
-    if not path.is_file():
+    authority = resolve_authority(repo_root / ".ea")
+    if authority.target is None or authority.generation_id is None:
         return None
+    path = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
     try:
-        payload = json.loads(path.read_bytes())
-        project = payload.get("project") if isinstance(payload, dict) else None
-        return None if project is None else Project.model_validate(project)
-    except (json.JSONDecodeError, ValidationError) as exc:
-        raise RuleProjectionError(f".ea/state.json project record is unreadable: {exc}") from exc
+        rows = document_rows(read_document(path), Epoch2Collection.PROJECT)
+        row = rows[min(rows)] if rows else None
+        # A migrated tree keeps the record inside the cutover's import envelope.
+        record = (row or {}).get("payload", {}).get("payload", row)
+        return None if record is None else Project.model_validate(record)
+    except (OSError, ValueError) as exc:
+        raise RuleProjectionError(f"the generation's project record is unreadable: {exc}") from exc
 
 
 def _read_package_table(repo_root: Path) -> dict[str, object]:

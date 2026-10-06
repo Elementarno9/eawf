@@ -443,13 +443,11 @@ def test_edit_wave_plan_resolves_gate_refs_against_the_supplied_gates() -> None:
 def test_tightened_floor_resolves_for_every_synced_p31_wave() -> None:
     """Every synced P31 wave clears the tightened floor with no waiver.
 
-    Reads the committed ``.ea/state.json`` rather than a fixture so the
-    tightening is scored against the real corpus it has to admit.
+    Reads the stripped epoch-1 snapshot rather than a hand-built state so
+    the tightening is scored against real waves it has to admit.
     """
-    state_path = Path(__file__).resolve().parents[4] / ".ea" / "state.json"
-    if not state_path.exists():
-        pytest.skip("no .ea/state.json in this checkout")
-    state = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
+    snapshot = Path(__file__).resolve().parents[4] / "tests" / "fixtures" / "epoch1-snapshot"
+    state = State.model_validate(json.loads((snapshot / "state.json").read_text(encoding="utf-8")))
     synced = [
         wave
         for wave_id, wave in sorted(state.waves.items())

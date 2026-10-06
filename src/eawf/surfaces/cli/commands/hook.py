@@ -1762,8 +1762,9 @@ def sigil_totality(ctx: typer.Context) -> None:
 def _git_tracked_artifacts(*, cwd: Path) -> list[str]:
     """Return git-tracked ``.ea/artifacts/**/*.md`` paths under ``cwd``.
 
-    The EAWF023 placement gate scans the whole tracked artifact tree (not
-    a staged delta) so a misplaced or date-stem-less artifact reds CI
+    The EAWF023 placement gate narrows these to the committed artifacts and
+    scans that whole set (not a staged delta) so a misplaced or
+    date-stem-less artifact reds CI
     irrespective of which files the commit touched. A failed git
     invocation yields an empty list (fail-open) — the authoritative
     backstop is the same gate on the next clean run.
@@ -1789,21 +1790,24 @@ def eawf023_artifact_placement(
 ) -> None:
     """Reject misplaced or date-stem-less artifacts under ``.ea/artifacts/``.
 
-    Walks the git-tracked ``.ea/artifacts/**/*.md`` set (or an explicit
-    file list, for tests) and runs the EAWF023 placement rule: each
-    artifact must live under its canonical kind sub-directory
+    Walks the committed ``.ea/artifacts/**/*.md`` set -- the git-tracked
+    paths the commit policy keeps, which are the promoted artifacts --
+    (or an explicit file list, for tests) and runs the EAWF023 placement
+    rule: each artifact must live under its canonical kind sub-directory
     (``audits/``, ``research/``, ``incidents/``, ...) and its filename
-    stem must lead with a ``YYYY-MM-DD-`` date prefix. A pre-convention
-    legacy baseline is grandfathered so the clean tree passes. The scan
-    covers the whole tracked tree (not a staged delta) so a misplaced
-    artifact reds CI regardless of which files the commit touched. Exits
-    1 on a violation, 0 when clean.
+    stem must lead with a ``YYYY-MM-DD-`` date prefix. The scan covers
+    the whole committed set (not a staged delta) so a misplaced artifact
+    reds CI regardless of which files the commit touched. Exits 1 on a
+    violation, 0 when clean.
     """
-    from eawf.platform.lint.eawf023_artifact_placement import check_artifact_paths
+    from eawf.platform.lint.eawf023_artifact_placement import (
+        check_artifact_paths,
+        committed_artifact_paths,
+    )
 
     flags: GlobalFlags = ctx.obj
     cwd = (flags.workspace or Path.cwd()).resolve()
-    paths = files if files else _git_tracked_artifacts(cwd=cwd)
+    paths = files if files else committed_artifact_paths(_git_tracked_artifacts(cwd=cwd))
     violations = check_artifact_paths(paths)
     rows = [f"  {v.path}: {v.render()}" for v in violations]
     _emit_static_lint_result(

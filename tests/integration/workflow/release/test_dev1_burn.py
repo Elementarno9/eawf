@@ -12,7 +12,7 @@ state it lands in offers no way out. The walk is driven by the operator
 verb wherever one exists, so what is proven is the path an operator can
 actually take, not a sequence of library calls only a test assembles.
 
-**evidence.** The burn basis committed under ``.ea/artifacts/evidence``
+**evidence.** The burn basis, kept under ``tests/fixtures/artifacts``,
 validates against the artifact chassis and names all three observed
 target states -- the same three the burned record projects, asserted
 against each other so the document and the record cannot drift.
@@ -181,9 +181,9 @@ _EMPTY_STATE = _REPO_ROOT / "tests" / "fixtures" / "states" / "valid" / "01-empt
 #: The burn basis this wave commits, read back by the evidence tests.
 BURN_BASIS = (
     _REPO_ROOT
-    / ".ea"
+    / "tests"
+    / "fixtures"
     / "artifacts"
-    / "evidence"
     / "2026-09-11-dev1-burn"
     / "2026-09-11-burn-basis.md"
 )

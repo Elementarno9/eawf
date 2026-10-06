@@ -12,6 +12,7 @@ shape and proves the seed alone does NOT flip any authority floor.
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -28,8 +29,9 @@ from eawf.runtime.daemon.methods.state import _resolve_jury_block_authority
 pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_STATE_PATH = _REPO_ROOT / ".ea" / "state.json"
-_GOLD_STORE = _REPO_ROOT / ".ea" / "store" / "gold_label.jsonl"
+_SNAPSHOT = _REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot"
+_STATE_PATH = _SNAPSHOT / "state.json"
+_GOLD_STORE = _SNAPSHOT / "store" / "gold_label.jsonl"
 
 
 def _load_rows() -> list[GoldLabel]:
@@ -101,7 +103,7 @@ def test_cohort_reads_non_empty_and_authority_stays_advisory() -> None:
     assert authority is BlockAuthority.ADVISORY
 
 
-def test_metrics_cli_survives_ballotless_labelled_cohort() -> None:
+def test_metrics_cli_survives_ballotless_labelled_cohort(tmp_path: Path) -> None:
     """CR-02: ``eawf metrics jury-validation`` reports the seeded cohort
     honestly (no crash on labelled waves that predate the ballot store)
     with block authority still advisory."""
@@ -109,7 +111,8 @@ def test_metrics_cli_survives_ballotless_labelled_cohort() -> None:
 
     from eawf.surfaces.cli.app import app
 
-    result = CliRunner().invoke(app, ["--workspace", str(_REPO_ROOT), "metrics", "jury-validation"])
+    shutil.copytree(_SNAPSHOT, tmp_path / ".ea")
+    result = CliRunner().invoke(app, ["--workspace", str(tmp_path), "metrics", "jury-validation"])
     assert result.exit_code == 0, result.output
     assert "advisory" in result.output.lower()
     assert "labelled cohort rows" in result.output

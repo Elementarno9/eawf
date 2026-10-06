@@ -252,7 +252,8 @@ def test_auth_056_a_track_in_a_dropped_state_fails_validation(status: str) -> No
 
 def test_auth_056_the_committed_state_holds_zero_rows_in_a_dropped_state() -> None:
     """The census the drop rests on: no live Track sits in either state."""
-    document = json.loads((REPO_ROOT / ".ea" / "state.json").read_text(encoding="utf-8"))
+    snapshot = REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot" / "state.json"
+    document = json.loads(snapshot.read_text(encoding="utf-8"))
     tracks: dict[str, Any] = document.get("tracks") or {}
 
     assert [key for key, row in tracks.items() if row["status"] in DROPPED_TRACK_STATUSES] == []

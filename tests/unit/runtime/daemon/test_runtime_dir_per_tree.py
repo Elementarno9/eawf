@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
+from eawf.kernel.state.resolve import REASON_PWD_UPWARD, resolve_with_reason
 from eawf.runtime.daemon import runtime_dir as runtime_dir_mod
 from eawf.runtime.daemon.runtime_dir import (
     TREES_DIRNAME,
@@ -116,3 +118,50 @@ def test_ensure_hardens_the_base_and_trees_dirs(
 
     for path in (rt_dir, rt_dir.parent, rt_dir.parent.parent):
         assert path.stat().st_mode & 0o777 == 0o700
+
+
+def _marked_tree(root: Path) -> Path:
+    """Return *root* holding only the epoch-2 marker, with no v1 ``state.json``."""
+    marker = root / ".ea" / GENERATIONS_DIRNAME / MARKER_FILENAME
+    marker.parent.mkdir(parents=True)
+    marker.write_text("{}", encoding="utf-8")
+    return root
+
+
+def test_a_marked_tree_without_state_json_anchors_the_upward_walk(
+    default_resolution: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _marked_tree(tmp_path / "a")
+    (root / "src" / "pkg").mkdir(parents=True)
+    monkeypatch.chdir(root / "src" / "pkg")
+
+    path, reason = resolve_with_reason(workspace=None)
+
+    assert (path, reason) == ((root / ".ea" / "state.json").resolve(), REASON_PWD_UPWARD)
+    assert not path.exists()
+    assert runtime_dir().name == tree_key(root / ".ea" / "state.json")
+
+
+def test_a_generations_dir_without_the_marker_does_not_anchor_the_walk(
+    default_resolution: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outer = _tree(tmp_path / "outer")
+    inner = outer / "inner"
+    (inner / ".ea" / GENERATIONS_DIRNAME).mkdir(parents=True)
+    monkeypatch.chdir(inner)
+
+    path, reason = resolve_with_reason(workspace=None)
+
+    assert (path, reason) == ((outer / ".ea" / "state.json").resolve(), REASON_PWD_UPWARD)
+
+
+def test_the_nearest_marked_tree_wins_over_an_outer_v1_tree(
+    default_resolution: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outer = _tree(tmp_path / "outer")
+    inner = _marked_tree(outer / "inner")
+    monkeypatch.chdir(inner)
+
+    path, _reason = resolve_with_reason(workspace=None)
+
+    assert path == (inner / ".ea" / "state.json").resolve()

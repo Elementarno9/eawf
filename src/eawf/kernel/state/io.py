@@ -46,7 +46,6 @@ from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILE
 from eawf.kernel.state.enums import StoreKind
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.epoch2.authority import RootAuthority
     from eawf.kernel.state.models import State
     from eawf.kernel.store.envelope import Envelope
 
@@ -123,40 +122,30 @@ def epoch_marker_present(ea_dir: Path) -> bool:
     return (ea_dir / GENERATIONS_DIRNAME / MARKER_FILENAME).exists()
 
 
-def refuse_legacy_write(state_path: Path, *, native_authority: RootAuthority | None = None) -> None:
+def refuse_legacy_write(state_path: Path) -> None:
     """Refuse an epoch-1 write to ``state_path`` on a tree that carries the marker.
+
+    No writer is let through on a marked tree, a native handler included:
+    the selected generation is the only authority there, so a second copy
+    of any record in the v1 document would be a second writer.
 
     Args:
         state_path: The file about to be written. A file not named
             ``state.json`` is never refused, so the generic JSON writer can
             call this for every target.
-        native_authority: The epoch-2 answer a native handler holds for
-            this very tree. A native handler that keeps the v1 document
-            beside its generation writes under that proof rather than as
-            an epoch-1 writer, so it is let through; an answer for any
-            other tree, or an epoch-1 answer, changes nothing.
 
     Raises:
         LegacyOperationRemovedError: ``state_path`` is a ``state.json``
-            whose directory carries the epoch marker and no matching
-            epoch-2 answer was presented.
+            whose directory carries the epoch marker.
     """
     path = Path(state_path)
     if path.name != STATE_FILENAME or not epoch_marker_present(path.parent):
-        return
-    if (
-        native_authority is not None
-        and native_authority.epoch == 2
-        and native_authority.root.resolve() == path.parent.resolve()
-    ):
         return
     logger.info(f"refuse_legacy_write refused tree={path.parent.name}")
     raise LegacyOperationRemovedError(ea_dir=path.parent)
 
 
-def write_state_unlocked(
-    path: Path, data: dict[str, Any], *, native_authority: RootAuthority | None = None
-) -> None:
+def write_state_unlocked(path: Path, data: dict[str, Any]) -> None:
     """Refuse a leaking payload, else write *data* to *path* atomically.
 
     This is the one place every ``state.json`` write -- the daemon-down
@@ -176,8 +165,6 @@ def write_state_unlocked(
     Args:
         path: Destination ``state.json`` path (parent dirs are created).
         data: JSON-serialisable payload to persist.
-        native_authority: The epoch-2 answer a native handler writes
-            under; see :func:`refuse_legacy_write`.
 
     Raises:
         StateValidationError: When a string *data* adds or changes relative
@@ -188,7 +175,7 @@ def write_state_unlocked(
     """
     from eawf.observability.logging.state_leak import state_leak_refusal
 
-    refuse_legacy_write(path, native_authority=native_authority)
+    refuse_legacy_write(path)
     old = orjson.loads(path.read_bytes()) if path.exists() else {}
     if (leak_refusal := state_leak_refusal(old, data)) is not None:
         raise StateValidationError(leak_refusal)

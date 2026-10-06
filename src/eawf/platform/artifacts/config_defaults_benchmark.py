@@ -31,6 +31,8 @@ from eawf.platform.artifacts.validation import validate_markdown_artifact
 logger = logging.getLogger(__name__)
 
 #: Repo-relative location of the benchmark artifact this module parses.
+#: Artifacts are local by default; this one is promoted in the commit
+#: policy because this module reads it, so git carries it.
 DEV1_CONFIG_DEFAULTS_BENCHMARK_PATH: Final[Path] = Path(
     ".ea/artifacts/research/2026-09-04-dev1-config-defaults-benchmark.md"
 )

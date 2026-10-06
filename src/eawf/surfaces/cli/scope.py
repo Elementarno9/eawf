@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
 from eawf.kernel.state.resolve import fence_live_ledger
 from eawf.platform.registry import (
     Registry,
@@ -128,7 +129,9 @@ def resolve_state_path(workspace: Path | None) -> Path:
     cur = Path.cwd().resolve()
     for directory in [cur, *cur.parents]:
         target = directory / ".ea" / "state.json"
-        if target.exists():
+        # An epoch-2 tree need not hold the v1 document, so its epoch marker
+        # anchors the tree just as the document does.
+        if target.exists() or (directory / ".ea" / GENERATIONS_DIRNAME / MARKER_FILENAME).exists():
             logger.debug(f"resolve_state_path pwd-upward-hit path={target}")
             return fence_live_ledger(target, os.environ)
     raise FileNotFoundError(

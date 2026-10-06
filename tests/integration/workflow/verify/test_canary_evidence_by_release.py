@@ -48,8 +48,14 @@ DEV4_KEY: Final = f"REL-{DEV4_VERSION}"
 UNMAPPED_KEY: Final = "REL-0.7.0.dev2"
 
 #: The dev4 walk record, whose Milestone reference is the dev4 membership ref.
-DEV4_WALK: Final = REPO_ROOT.joinpath(
-    *CANARY_EVIDENCE_DIRS[DEV4_KEY], "canary-acceptance-walk.json"
+#: Its evidence directory is local, so a clone reads the fixture copy.
+DEV4_WALK: Final = (
+    REPO_ROOT
+    / "tests"
+    / "fixtures"
+    / "artifacts"
+    / CANARY_EVIDENCE_DIRS[DEV4_KEY][-1]
+    / "canary-acceptance-walk.json"
 )
 
 

@@ -44,6 +44,10 @@ from functools import partial
 from pathlib import Path
 from typing import Final
 
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.reflect.retyped import (
     RETYPED_TRIAGE_PATH,
     RetypedTriage,
@@ -55,7 +59,7 @@ from eawf.platform.lint import load_lint_config
 from eawf.platform.lint.dispositions import disposition_findings
 from eawf.platform.lint.exclusion_expiry import (
     ExclusionConfigError,
-    decision_ids_from_state,
+    decision_ids_from_ledger,
     expired_exclusions,
     validate_renewals,
 )
@@ -526,8 +530,8 @@ def _probe_module_length_exclusion(
 
     The renewal escape hatch is checked here too, because the release is
     where an unratified extension would otherwise take effect: a grant
-    renewed against a decision id that no ``Decision`` row in state.json
-    carries is an extension nobody signed, and reds the row the same way
+    renewed against a decision id the selected generation's decision
+    ledger does not record is an extension nobody signed, and reds the row the same way
     a lapsed grant does.
 
     Args:
@@ -544,11 +548,13 @@ def _probe_module_length_exclusion(
             malformed, which the sweep converts into a blocked row.
     """
     config = load_lint_config(inputs.repo_root / "pyproject.toml")
+    authority = resolve_authority(inputs.repo_root / ".ea")
+    decision_ids: frozenset[str] = frozenset()
+    if authority.target is not None and authority.generation_id is not None:
+        document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+        decision_ids = decision_ids_from_ledger(ledger_path(document, Epoch2Collection.DECISION))
     try:
-        validate_renewals(
-            config.eawf010.exclusions,
-            decision_ids=decision_ids_from_state(inputs.repo_root / ".ea" / "state.json"),
-        )
+        validate_renewals(config.eawf010.exclusions, decision_ids=decision_ids)
     except ExclusionConfigError as exc:
         logger.warning(
             f"_probe_module_length_exclusion signal={context.signal.value!r} "

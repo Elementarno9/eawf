@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from eawf.kernel.store.commit_policy import PROMOTED_ARTIFACTS
 from eawf.platform.install import gitignore_writer
 from eawf.platform.install.gitignore_writer import (
     GITIGNORE_PATTERNS,
@@ -28,6 +29,15 @@ from eawf.platform.rules.render import (
     render_rule_projections,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_PROMOTED = tuple(row.pattern for row in PROMOTED_ARTIFACTS)
+_LOCAL_ARTIFACTS = (
+    ".ea/artifacts/audits/x.md",
+    ".ea/artifacts/x.md",
+    ".ea/artifacts/research/long-term/2026-05-16-c01-foundations.md",
+    ".ea/artifacts/evidence/2026-09-18-dev3-reprobe/2026-09-18-dev3-reprobe.md",
+    ".ea/artifacts/rendered/memory/scope.md",
+)
 _BEGIN = "# BEGIN EAWF:gitignore"
 _END = "# END EAWF:gitignore"
 _OPERATOR = "# operator header\nnode_modules/\n\n"
@@ -165,3 +175,76 @@ def test_surf_174_unenumerated_paths_follows_gitignore_matching(
 
 def test_surf_174_unenumerated_paths_keeps_input_order() -> None:
     assert unenumerated_paths(["a.md"], ["z.md", "a.md", "b.md"]) == ("z.md", "b.md")
+
+
+# ---- artifacts are local, promoted paths re-included -------------------------
+
+
+def test_block_ignores_artifacts_then_re_includes_each_promoted_path() -> None:
+    patterns = list(GITIGNORE_PATTERNS)
+    ignore = patterns.index(".ea/artifacts/**")
+    directories = patterns.index("!.ea/artifacts/**/")
+    assert ignore < directories
+    for path in _PROMOTED:
+        assert patterns.index(f"!{path}") > directories, path
+    assert ".ea/artifacts/" not in patterns
+
+
+def test_block_negates_nothing_but_artifact_directories_and_promoted_paths() -> None:
+    negations = {line for line in GITIGNORE_PATTERNS if line.startswith("!")}
+    kept_stores = {
+        f"!.ea/store/{stem}.jsonl"
+        for stem in (
+            "release",
+            "release_record",
+            "release_checkpoint_receipt",
+            "release_train_advance",
+            "conformance_stage",
+        )
+    }
+    assert negations == {"!.ea/artifacts/**/", *(f"!{path}" for path in _PROMOTED), *kept_stores}
+
+
+@pytest.mark.parametrize(
+    ("relative", "ignored"),
+    [
+        (".ea/state.json", True),
+        (".ea/store/audit.jsonl", True),
+        (".ea/store/event.jsonl", True),
+        (".ea/store/release.jsonl", False),
+        (".ea/store/conformance_stage.jsonl", False),
+    ],
+)
+def test_fresh_block_ignores_the_v1_files_but_keeps_the_release_stores(
+    repo: Path, relative: str, ignored: bool
+) -> None:
+    render_rule_projections(repo)
+    assert _ignored_by_git(repo, relative) is ignored
+
+
+@pytest.mark.parametrize("relative", _LOCAL_ARTIFACTS)
+def test_fresh_block_ignores_a_local_artifact(repo: Path, relative: str) -> None:
+    render_rule_projections(repo)
+    assert _ignored_by_git(repo, relative)
+
+
+@pytest.mark.parametrize("relative", _PROMOTED)
+def test_fresh_block_keeps_a_promoted_artifact(repo: Path, relative: str) -> None:
+    render_rule_projections(repo)
+    assert not _ignored_by_git(repo, relative)
+    directory, _, name = relative.rpartition("/")
+    assert _ignored_by_git(repo, f"{directory}/x-{name}")
+
+
+@pytest.mark.parametrize("relative", _LOCAL_ARTIFACTS)
+def test_repo_gitignore_ignores_a_local_artifact(relative: str) -> None:
+    assert _ignored_by_git(_REPO_ROOT, relative)
+
+
+@pytest.mark.parametrize("relative", _PROMOTED)
+def test_repo_gitignore_keeps_a_promoted_artifact(relative: str) -> None:
+    assert not _ignored_by_git(_REPO_ROOT, relative)
+
+
+def test_repo_gitignore_block_is_current() -> None:
+    assert not plan_gitignore_block(_REPO_ROOT).stale

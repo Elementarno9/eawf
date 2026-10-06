@@ -28,8 +28,9 @@ from tests.integration.runtime.daemon.test_close_lock_split import _state_payloa
 pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
-_STATE_PATH = _REPO_ROOT / ".ea" / "state.json"
-_INCIDENT_STORE = _REPO_ROOT / ".ea" / "store" / "incident.jsonl"
+_SNAPSHOT = _REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot"
+_STATE_PATH = _SNAPSHOT / "state.json"
+_INCIDENT_STORE = _SNAPSHOT / "store" / "incident.jsonl"
 
 
 def _store_status_by_base_id() -> dict[str, str]:

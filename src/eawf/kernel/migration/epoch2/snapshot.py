@@ -34,7 +34,12 @@ from eawf.kernel.migration.epoch2.errors import (
 )
 from eawf.kernel.migration.epoch2.rows import with_epoch1_defaults
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel, rule_digest
-from eawf.kernel.store.commit_policy import CommitPolicy, classify_path
+from eawf.kernel.store.commit_policy import (
+    CommitPolicy,
+    PathClass,
+    UndeclaredPathError,
+    classify_path,
+)
 from eawf.platform.subprocess_detach import no_window_kwargs
 
 logger = logging.getLogger(__name__)
@@ -440,20 +445,48 @@ class StagedCorpus(StrictMigrationModel):
     sources: tuple[StagedSource, ...]
 
 
+#: What an epoch-1 tree committed. The cutover stages an epoch-1 revision,
+#: whose v1 document and typed stores were committed even though the live
+#: policy no longer carries them, so these rows win over the live table.
+EPOCH1_CORPUS_CLASSES: Final[tuple[PathClass, ...]] = (
+    PathClass(
+        pattern=LIVE_STATE_LOCATOR,
+        policy=CommitPolicy.COMMITTED,
+        note="the epoch-1 document a cutover imports",
+    ),
+    PathClass(
+        pattern=f"{LIVE_STORE_LOCATOR}/*{LEDGER_SUFFIX}",
+        policy=CommitPolicy.COMMITTED,
+        note="the typed epoch-1 stores a cutover imports",
+    ),
+    PathClass(
+        pattern=f"{LIVE_STORE_LOCATOR}/event{LEDGER_SUFFIX}",
+        policy=CommitPolicy.NOT_COMMITTED,
+        note="the epoch-1 firehose, which no clone carried",
+    ),
+)
+
+
 def is_committed(locator: str) -> bool:
-    """Report whether version control carries one path under ``.ea/``.
+    """Report whether an epoch-1 revision's version control carries one path under ``.ea/``.
 
     Args:
         locator: A repo-relative, forward-slash path.
 
     Returns:
-        ``True`` when the commit policy declares the path committed.
+        ``True`` when :data:`EPOCH1_CORPUS_CLASSES` declares the path
+        committed, or, for a path those rows do not cover, when the live
+        commit policy does.
 
     Raises:
         UndeclaredPathError: When no policy row matches, which means the
             tree grew a file family nobody declared.
     """
-    return classify_path(locator).policy is CommitPolicy.COMMITTED
+    try:
+        row = classify_path(locator, classes=EPOCH1_CORPUS_CLASSES)
+    except UndeclaredPathError:
+        row = classify_path(locator)
+    return row.policy is CommitPolicy.COMMITTED
 
 
 def require_committed(locator: str) -> str:

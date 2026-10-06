@@ -49,6 +49,7 @@ from eawf.workflow.release import pipeline as pipeline_module
 from eawf.workflow.release import pipeline_host as host_module
 from eawf.workflow.release.advance import TrainAdvanceRecord
 from eawf.workflow.release.pipeline import (
+    EVIDENCE_DIGEST_FACT_PREFIX,
     PIPELINE_STEPS,
     PipelineHostError,
     PipelineJournalRow,
@@ -67,7 +68,6 @@ from eawf.workflow.release.pipeline_files import (
     PRE_COMMIT_CONFIG,
     SECRETS_BASELINE,
     baseline_evidence,
-    baseline_hash,
     flatten_artifacts,
 )
 from eawf.workflow.release.pipeline_host import isolated_proof_path
@@ -497,11 +497,12 @@ def test_run_post_merge_pipeline_bakes_advances_and_repins(world: World) -> None
     assert world.journal_steps() == list(PIPELINE_STEPS)
 
 
-def test_run_post_merge_pipeline_lands_evidence_and_baselines_only_it(world: World) -> None:
-    (world.root / "unrelated.json").write_text(json.dumps({"sha": OTHER}), encoding="utf-8")
-    world.run()
+def test_run_post_merge_pipeline_lands_evidence_locally_with_digests(world: World) -> None:
+    baseline_before = (world.root / SECRETS_BASELINE).read_text(encoding="utf-8")
+    config_before = (world.root / PRE_COMMIT_CONFIG).read_text(encoding="utf-8")
+    result = world.run()
 
-    evidence = world.root / ".ea/artifacts/evidence/2026-09-25-dev4-publication"
+    evidence = world.root / ".ea/local/evidence/2026-09-25-dev4-publication"
     names = sorted(path.name for path in evidence.iterdir())
     assert names == sorted(
         [
@@ -514,17 +515,42 @@ def test_run_post_merge_pipeline_lands_evidence_and_baselines_only_it(world: Wor
             "receipts.json",
         ]
     )
-    baseline_text = (world.root / SECRETS_BASELINE).read_text(encoding="utf-8")
-    results = json.loads(baseline_text)["results"]
-    assert "unrelated.json" not in results
-    assert "kept/older.json" in results
-    assert any(name.startswith(".ea/artifacts/evidence/") for name in results)
-    # Rows carry the repo-relative path, never the scanner's absolute one.
-    assert all(row["filename"] == name for name, rows in results.items() for row in rows)
-    config = (world.root / PRE_COMMIT_CONFIG).read_text(encoding="utf-8")
-    assert f"# Baseline-hash: {baseline_hash(baseline_text)} (" in config
+    assert not (world.root / ".ea/artifacts").exists()
+    # The journal row of the evidence step carries one sha256 per file landed.
+    (row,) = [
+        row
+        for row in read_journal(PipelineLayout(world.root, VERSION).journal)
+        if row.step is PipelineStep.EVIDENCE
+    ]
+    digests = {
+        key.removeprefix(EVIDENCE_DIGEST_FACT_PREFIX): value
+        for key, value in row.facts.items()
+        if key.startswith(EVIDENCE_DIGEST_FACT_PREFIX)
+    }
+    assert sorted(digests) == names
+    for name, value in digests.items():
+        expected = hashlib.sha256((evidence / name).read_bytes()).hexdigest()
+        assert value == f"sha256:{expected}"
+    (outcome,) = [o for o in result.outcomes if o.step is PipelineStep.EVIDENCE]
+    assert dict(outcome.facts) == row.facts
+    assert row.facts["files"] == str(len(names))
+    # Local evidence is never committed, so the scanner baseline is left alone.
+    assert (world.root / SECRETS_BASELINE).read_text(encoding="utf-8") == baseline_before
+    assert (world.root / PRE_COMMIT_CONFIG).read_text(encoding="utf-8") == config_before
     approval = world.daemon.params["release.approve"]["approval_ref"]
-    assert approval == "repo:.ea/artifacts/evidence/2026-09-25-dev4-publication/receipts.json"
+    assert approval == "repo:.ea/local/evidence/2026-09-25-dev4-publication/receipts.json"
+
+
+def test_run_post_merge_pipeline_refuses_an_empty_evidence_stage(world: World) -> None:
+    world.run()
+    for path in PipelineLayout(world.root, VERSION).staged.glob("*.json"):
+        path.unlink()
+    with pytest.raises(PipelineRefusal) as refused:
+        world.run(redo=PipelineStep.EVIDENCE)
+    assert (refused.value.step, refused.value.code) == (
+        PipelineStep.EVIDENCE,
+        PipelineRefusalCode.EVIDENCE_MISSING,
+    )
 
 
 def _load_commit_prefix_lint() -> ModuleType:
@@ -540,19 +566,13 @@ def _load_commit_prefix_lint() -> ModuleType:
     return module
 
 
-def test_commit_lint_accepts_the_evidence_step_as_one_state_commit(
+def test_commit_lint_accepts_the_release_stores_as_one_state_commit(
     world: World, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
-    # The CLI tells the operator to land the evidence step's output in one
-    # bare state commit; the commit lint must accept exactly that path set.
+    # The CLI tells the operator to land the release stores in one bare state
+    # commit; the evidence stays local, so the commit carries the stores alone.
     world.run()
-    evidence = world.root / ".ea/artifacts/evidence/2026-09-25-dev4-publication"
-    staged = [
-        ".ea/store/release_record.jsonl",
-        *(path.relative_to(world.root).as_posix() for path in sorted(evidence.iterdir())),
-        SECRETS_BASELINE,
-        PRE_COMMIT_CONFIG,
-    ]
+    staged = [".ea/store/release_record.jsonl"]
     message = tmp_path_factory.mktemp("commit") / "COMMIT_EDITMSG"
     message.write_text(
         "[P35] state: land dev4 publication evidence\n\n"

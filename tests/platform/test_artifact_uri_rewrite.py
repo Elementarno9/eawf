@@ -1,4 +1,4 @@
-"""Canonical-subdir placement for every committed artifact + rewritten refs.
+"""Canonical-subdir placement for every committed artifact.
 
 Wave P30-I14-W07 relocated the legacy loose-root artifacts (those that sat
 directly under ``.ea/artifacts/`` rather than inside a kind subdir) under their
@@ -7,9 +7,9 @@ canonical kind subdir from the ``ARTIFACT_KIND_SUBDIR`` map (e.g. ``A29-P23-ship
 rewrote the doc/code references that named the old paths.
 
 These tests pin the post-relocation invariant: no tracked artifact markdown
-sits loose at the root of ``.ea/artifacts/``, every one lives under a canonical
-kind subdir (or the ``research/long-term/`` brief convention), and a sampled
-rewritten reference resolves to a real file at its new path.
+sits loose at the root of ``.ea/artifacts/``, and every one lives under a
+canonical kind subdir (or the ``research/long-term/`` brief convention). They
+read the tracked path list, never the local files a clone does not carry.
 """
 
 from __future__ import annotations
@@ -17,12 +17,9 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import pytest
-
 from eawf.kernel.spec.common import ARTIFACT_KIND_SUBDIR
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_ARTIFACTS_DIR = _REPO_ROOT / ".ea" / "artifacts"
 
 # Canonical first-path-segment subdirs under ``.ea/artifacts/``, read from the one
 # kind map rather than restated here.
@@ -68,28 +65,3 @@ def test_no_loose_root_artifact_remains() -> None:
             uncanonical.append(rel)
     assert not loose, f"loose-root artifacts remain: {loose}"
     assert not uncanonical, f"artifacts outside a canonical kind subdir: {uncanonical}"
-
-
-def test_relocated_research_brief_resolves_under_canonical_subdir() -> None:
-    """The relocated TUI-chassis research brief resolves at its new ``research/`` path."""
-    new_path = _ARTIFACTS_DIR / "research" / "research-2026-05-30-tui-chassis.md"
-    old_path = _ARTIFACTS_DIR / "research-2026-05-30-tui-chassis.md"
-    assert new_path.is_file(), f"relocated research brief missing: {new_path}"
-    assert not old_path.exists(), f"loose-root copy lingers: {old_path}"
-
-
-@pytest.mark.parametrize(
-    ("citing_file", "new_ref"),
-    [
-        # The A48 flow audit cites the relocated TUI-chassis brief by its new path.
-        (
-            ".ea/artifacts/audits/2026-06-03-A48-P29-i05-flow-audit.md",
-            ".ea/artifacts/research/research-2026-05-30-tui-chassis.md",
-        ),
-    ],
-)
-def test_rewritten_reference_resolves(citing_file: str, new_ref: str) -> None:
-    """A rewritten reference names the new path AND that path exists on disk."""
-    citing_text = (_REPO_ROOT / citing_file).read_text(encoding="utf-8")
-    assert new_ref in citing_text, f"{citing_file} does not cite rewritten path {new_ref!r}"
-    assert (_REPO_ROOT / new_ref).is_file(), f"rewritten reference target missing: {new_ref}"

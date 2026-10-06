@@ -175,11 +175,13 @@ def test_default_allowed_emails_includes_noreply_casefolded() -> None:
     assert all(email == email.casefold() for email in allowed)
 
 
-def test_pre_commit_config_keeps_state_json_detect_secrets_exclusion() -> None:
+def test_pre_commit_config_excludes_only_the_snapshot_document_from_detect_secrets() -> None:
     config = yaml.safe_load((_REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
     hooks = [hook for repo in config["repos"] for hook in repo["hooks"]]
 
     detect_secrets = next(hook for hook in hooks if hook["id"] == "detect-secrets")
 
-    assert re.search(detect_secrets["exclude"], ".ea/state.json")
+    snapshot = "tests/fixtures/epoch1-snapshot"
+    assert re.search(detect_secrets["exclude"], f"{snapshot}/state.json")
+    assert not re.search(detect_secrets["exclude"], f"{snapshot}/store/evidence.jsonl")
     assert not re.search(detect_secrets["exclude"], ".ea/store/audit.jsonl")

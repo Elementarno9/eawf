@@ -25,6 +25,7 @@ from pydantic import ValidationError
 from eawf.kernel.store.commit_census import run_census
 from eawf.kernel.store.commit_policy import (
     EA_PATH_CLASSES,
+    PROMOTED_ARTIFACTS,
     CensusFindingKind,
     CommitPolicy,
     CommitPolicyError,
@@ -35,10 +36,25 @@ from eawf.kernel.store.commit_policy import (
     probe_paths,
 )
 from eawf.kernel.store.tiers import StorageTier
+from eawf.platform.artifacts.config_defaults_benchmark import DEV1_CONFIG_DEFAULTS_BENCHMARK_PATH
+from eawf.workflow.evidence.contract_reprobe import (
+    CROSS_PROVIDER_REPROBE_PATH,
+    DAEMON_RPC_REPROBE_PATH,
+)
+from eawf.workflow.evidence.provider_certification import (
+    CANARY_EVIDENCE_DIRS,
+    CANARY_EVIDENCE_FILENAME,
+)
+from eawf.workflow.release.canary_receipts import CANARY_RECEIPTS_FILENAME
 from tools.ea_commit_census import GIT_UNAVAILABLE_EXIT
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CENSUS_TOOL = _REPO_ROOT / "tools" / "ea_commit_census.py"
+
+#: The most artifacts the commit policy may promote into git: the three
+#: single-file readers, one canary export per mapped release, and the one
+#: receipt file a release reads beside its export.
+_PROMOTED_CEILING = 3 + len(CANARY_EVIDENCE_DIRS) + 1
 
 
 def _isolated_git_env() -> dict[str, str]:
@@ -72,9 +88,8 @@ def _seed_repo(tmp_path: Path) -> Path:
         (_REPO_ROOT / ".gitignore").read_text(encoding="utf-8"), encoding="utf-8"
     )
     (repo / "AGENTS.md").write_text("# contract\n", encoding="utf-8")
-    (repo / ".ea" / "state.json").write_text("{}\n", encoding="utf-8")
     (repo / ".ea" / "config.yaml").write_text("version: 1\n", encoding="utf-8")
-    _git(repo, "add", ".gitignore", "AGENTS.md", ".ea/state.json", ".ea/config.yaml")
+    _git(repo, "add", ".gitignore", "AGENTS.md", ".ea/config.yaml")
     return repo
 
 
@@ -93,17 +108,66 @@ def _run_tool(repo: Path) -> subprocess.CompletedProcess[str]:
 # --- classification: pass paths --------------------------------------------
 
 
-def test_classify_path_document_is_committed() -> None:
+#: The epoch-1 stores the epoch-2 release train still appends to.
+_KEPT_STORES = (
+    "release",
+    "release_record",
+    "release_checkpoint_receipt",
+    "release_train_advance",
+    "conformance_stage",
+)
+
+
+def test_classify_path_v1_document_is_not_committed() -> None:
     row = classify_path(".ea/state.json")
-    assert row.policy is CommitPolicy.COMMITTED
+    assert row.policy is CommitPolicy.NOT_COMMITTED
     assert row.tier is StorageTier.DOCUMENT
-    assert row.must_exist
+    assert not row.must_exist
 
 
 def test_classify_path_firehose_beats_the_store_family() -> None:
     """The literal event row wins over ``.ea/store/*.jsonl`` on specificity."""
-    assert classify_path(".ea/store/event.jsonl").policy is CommitPolicy.NOT_COMMITTED
-    assert classify_path(".ea/store/audit.jsonl").policy is CommitPolicy.COMMITTED
+    row = classify_path(".ea/store/event.jsonl")
+    assert row.policy is CommitPolicy.NOT_COMMITTED
+    assert row.tier is StorageTier.FIREHOSE
+
+
+@pytest.mark.parametrize("stem", ["audit", "decision", "evidence", "gold_label", "x"])
+def test_classify_path_frozen_epoch1_store_is_not_committed(stem: str) -> None:
+    row = classify_path(f".ea/store/{stem}.jsonl")
+    assert row.pattern == ".ea/store/*.jsonl"
+    assert row.policy is CommitPolicy.NOT_COMMITTED
+    assert not row.must_exist
+
+
+@pytest.mark.parametrize("stem", _KEPT_STORES)
+def test_classify_path_release_store_is_committed_by_its_own_row(stem: str) -> None:
+    row = classify_path(f".ea/store/{stem}.jsonl")
+    assert row.pattern == f".ea/store/{stem}.jsonl"
+    assert row.policy is CommitPolicy.COMMITTED
+    assert row.tier is StorageTier.LEDGER
+    # A product repository may never have released, so none is required.
+    assert not row.must_exist
+
+
+def test_kept_store_rows_are_exactly_the_release_and_conformance_stores() -> None:
+    kept = {
+        row.pattern
+        for row in EA_PATH_CLASSES
+        if row.pattern.startswith(".ea/store/") and row.policy is CommitPolicy.COMMITTED
+    }
+    assert kept == {f".ea/store/{stem}.jsonl" for stem in _KEPT_STORES}
+
+
+def test_classify_path_kept_store_neighbour_stays_local() -> None:
+    """A near-miss of a kept store name falls to the frozen family."""
+    assert classify_path(".ea/store/xrelease.jsonl").policy is CommitPolicy.NOT_COMMITTED
+
+
+@pytest.mark.parametrize("path", [".ea/store/release.jsonl.bak", ".ea/store/release.json"])
+def test_classify_path_kept_store_variant_is_undeclared(path: str) -> None:
+    with pytest.raises(UndeclaredPathError):
+        classify_path(path)
 
 
 def test_classify_path_epoch2_ledger_is_committed() -> None:
@@ -118,11 +182,69 @@ def test_classify_path_derived_index_is_not_committed() -> None:
     assert row.tier is StorageTier.DERIVED
 
 
-def test_classify_path_render_cache_beats_the_artifact_family() -> None:
-    authored = classify_path(".ea/artifacts/audits/2026-09-10-a.md")
+def test_classify_path_artifact_is_local_by_default() -> None:
+    assert classify_path(".ea/artifacts/audits/x.md").policy is CommitPolicy.NOT_COMMITTED
+    assert classify_path(".ea/artifacts/x.md").policy is CommitPolicy.NOT_COMMITTED
+    nested = ".ea/artifacts/research/long-term/2026-05-16-c01-foundations.md"
+    assert classify_path(nested).policy is CommitPolicy.NOT_COMMITTED
+
+
+def test_classify_path_render_cache_stays_not_committed() -> None:
     cached = classify_path(".ea/artifacts/rendered/memory/scope.md")
-    assert authored.policy is CommitPolicy.COMMITTED
     assert cached.policy is CommitPolicy.NOT_COMMITTED
+    assert cached.tier is StorageTier.DERIVED
+
+
+@pytest.mark.parametrize("row", PROMOTED_ARTIFACTS, ids=lambda row: row.pattern)
+def test_classify_path_promoted_artifact_is_committed(row: PathClass) -> None:
+    assert classify_path(row.pattern) == row
+    assert row.policy is CommitPolicy.COMMITTED
+    # Product repositories share the declaration, so no promoted file is required.
+    assert not row.must_exist
+
+
+@pytest.mark.parametrize("row", PROMOTED_ARTIFACTS, ids=lambda row: row.pattern)
+def test_classify_path_promoted_artifact_sibling_stays_local(row: PathClass) -> None:
+    """Promotion is per file: a neighbour in the same directory is not carried."""
+    directory, _, name = row.pattern.rpartition("/")
+    for sibling in (f"{directory}/x-{name}", f"{row.pattern}.bak", f"{directory}/sub/{name}"):
+        assert classify_path(sibling).policy is CommitPolicy.NOT_COMMITTED, sibling
+
+
+def test_promoted_artifacts_stay_within_the_ceiling() -> None:
+    assert 0 < len(PROMOTED_ARTIFACTS) <= _PROMOTED_CEILING
+    assert len({row.pattern for row in PROMOTED_ARTIFACTS}) == len(PROMOTED_ARTIFACTS)
+
+
+@pytest.mark.parametrize("row", PROMOTED_ARTIFACTS, ids=lambda row: row.pattern)
+def test_promoted_artifact_note_names_a_src_reader_of_it(row: PathClass) -> None:
+    """Each promotion is justified by a source module that names the path."""
+    readers = [word for word in row.note.split() if word.startswith("src/")]
+    assert readers == [_READERS[row.pattern]], row.note
+    assert (_REPO_ROOT / readers[0]).is_file(), readers[0]
+
+
+#: Each promoted path, keyed to the source module whose constant names it.
+_READERS = {
+    DEV1_CONFIG_DEFAULTS_BENCHMARK_PATH.as_posix(): (
+        "src/eawf/platform/artifacts/config_defaults_benchmark.py"
+    ),
+    CROSS_PROVIDER_REPROBE_PATH: "src/eawf/workflow/evidence/contract_reprobe.py",
+    DAEMON_RPC_REPROBE_PATH: "src/eawf/workflow/evidence/contract_reprobe.py",
+    **{
+        "/".join((*directory, CANARY_EVIDENCE_FILENAME)): (
+            "src/eawf/workflow/evidence/provider_certification.py"
+        )
+        for directory in CANARY_EVIDENCE_DIRS.values()
+    },
+    "/".join((*CANARY_EVIDENCE_DIRS["REL-0.7.0.dev5"], CANARY_RECEIPTS_FILENAME)): (
+        "src/eawf/workflow/release/canary_receipts.py"
+    ),
+}
+
+
+def test_promoted_artifacts_are_exactly_the_reader_constants() -> None:
+    assert {row.pattern for row in PROMOTED_ARTIFACTS} == set(_READERS)
 
 
 def test_classify_path_spec_render_is_not_committed() -> None:
@@ -132,8 +254,10 @@ def test_classify_path_spec_render_is_not_committed() -> None:
 
 
 def test_classify_path_folds_back_slashes() -> None:
-    row = classify_path(".ea\\artifacts\\audits\\2026-09-10-a.md")
+    row = classify_path(".ea\\store\\release.jsonl")
     assert row.policy is CommitPolicy.COMMITTED
+    promoted = PROMOTED_ARTIFACTS[0].pattern.replace("/", "\\")
+    assert classify_path(promoted) == PROMOTED_ARTIFACTS[0]
 
 
 def test_classify_path_single_star_does_not_cross_a_separator() -> None:
@@ -357,12 +481,12 @@ def test_census_reds_when_a_declared_committed_path_is_gitignored(tmp_path: Path
 
 def test_census_reds_when_a_required_path_is_absent(tmp_path: Path) -> None:
     repo = _seed_repo(tmp_path)
-    _git(repo, "rm", "--quiet", "--cached", ".ea/state.json")
+    _git(repo, "rm", "--quiet", "--cached", ".ea/config.yaml")
 
     result = _run_tool(repo)
     assert result.returncode == 1
     assert CensusFindingKind.DECLARED_BUT_ABSENT.value in result.stderr
-    assert ".ea/state.json" in result.stderr
+    assert ".ea/config.yaml" in result.stderr
 
 
 def test_census_reds_when_the_firehose_is_force_added(tmp_path: Path) -> None:
@@ -374,6 +498,89 @@ def test_census_reds_when_the_firehose_is_force_added(tmp_path: Path) -> None:
     result = _run_tool(repo)
     assert result.returncode == 1
     assert CensusFindingKind.TRACKED_BUT_NOT_COMMITTED.value in result.stderr
+
+
+@pytest.mark.parametrize("path", [".ea/state.json", ".ea/store/audit.jsonl"])
+def test_tracked_but_not_committed_v1_file_names_the_untrack_command(
+    tmp_path: Path, path: str
+) -> None:
+    """An adopter's still-tracked v1 file reds with the command that untracks it."""
+    repo = _seed_repo(tmp_path)
+    (repo / path).parent.mkdir(parents=True, exist_ok=True)
+    (repo / path).write_text("{}\n", encoding="utf-8")
+    _git(repo, "add", "--force", path)
+
+    result = _run_tool(repo)
+    assert result.returncode == 1
+    assert f"{CensusFindingKind.TRACKED_BUT_NOT_COMMITTED.value} {path}" in result.stderr
+    assert f"git rm --cached -- {path}" in result.stderr
+
+
+def test_tracked_but_not_committed_kept_store_stays_clean(tmp_path: Path) -> None:
+    """The release and conformance stores are added without force and pass."""
+    repo = _seed_repo(tmp_path)
+    (repo / ".ea" / "store").mkdir()
+    for stem in _KEPT_STORES:
+        (repo / ".ea" / "store" / f"{stem}.jsonl").write_text("{}\n", encoding="utf-8")
+    (repo / ".ea" / "store" / "audit.jsonl").write_text("{}\n", encoding="utf-8")
+    (repo / ".ea" / "state.json").write_text("{}\n", encoding="utf-8")
+    _git(repo, "add", "--all")
+
+    result = _run_tool(repo)
+    assert result.returncode == 0, result.stderr
+
+
+def test_tracked_but_not_committed_finding_fits_the_longest_row() -> None:
+    """The untrack reason quotes pattern, note and path without overflowing."""
+    longest = max(EA_PATH_CLASSES, key=lambda row: len(row.pattern) + len(row.note))
+    path = f".ea/{'x' * 230}"
+    row = PathClass(pattern=".ea/*", policy=CommitPolicy.NOT_COMMITTED, note=longest.note)
+    (finding,) = census_findings(tracked=(path,), ignored_probes=(row.probe,), classes=(row,))
+    assert finding.kind is CensusFindingKind.TRACKED_BUT_NOT_COMMITTED
+    assert finding.reason.endswith(f"git rm --cached -- {path}")
+
+
+def test_census_ignores_a_local_artifact(tmp_path: Path) -> None:
+    repo = _seed_repo(tmp_path)
+    (repo / ".ea" / "artifacts" / "audits").mkdir(parents=True)
+    (repo / ".ea" / "artifacts" / "audits" / "x.md").write_text("# a\n", encoding="utf-8")
+    _git(repo, "add", "--all")
+
+    result = _run_tool(repo)
+    assert result.returncode == 0, result.stderr
+
+
+def test_census_reds_when_a_local_artifact_is_force_added(tmp_path: Path) -> None:
+    repo = _seed_repo(tmp_path)
+    (repo / ".ea" / "artifacts" / "audits").mkdir(parents=True)
+    (repo / ".ea" / "artifacts" / "audits" / "x.md").write_text("# a\n", encoding="utf-8")
+    _git(repo, "add", "--force", ".ea/artifacts/audits/x.md")
+
+    result = _run_tool(repo)
+    assert result.returncode == 1
+    assert CensusFindingKind.TRACKED_BUT_NOT_COMMITTED.value in result.stderr
+    assert ".ea/artifacts/audits/x.md" in result.stderr
+
+
+def test_census_passes_a_promoted_artifact_added_without_force(tmp_path: Path) -> None:
+    repo = _seed_repo(tmp_path)
+    for row in PROMOTED_ARTIFACTS:
+        promoted = repo / row.pattern
+        promoted.parent.mkdir(parents=True, exist_ok=True)
+        promoted.write_text("{}\n", encoding="utf-8")
+    _git(repo, "add", "--all")
+    listed = subprocess.run(
+        ["git", "ls-files", ".ea/artifacts"],
+        cwd=repo,
+        env=_isolated_git_env(),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert sorted(listed) == sorted(row.pattern for row in PROMOTED_ARTIFACTS)
+
+    result = _run_tool(repo)
+    assert result.returncode == 0, result.stderr
 
 
 def test_census_tool_exits_two_outside_a_repository(tmp_path: Path) -> None:

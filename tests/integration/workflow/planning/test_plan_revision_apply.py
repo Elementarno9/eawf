@@ -31,8 +31,11 @@ from typing import Any, Final
 import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.state.models import Decision
+from eawf.kernel.state.models import State
 from eawf.kernel.store.compaction import read_document, write_document
+from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.epoch2_root import RootSession
@@ -42,7 +45,7 @@ from eawf.runtime.daemon.methods.planning import (
     PLAN_SUBMIT_METHOD,
 )
 from eawf.runtime.daemon.wal import list_records
-from eawf.workflow.evidence._io import load_state
+from eawf.workflow.evidence._io import MEASURED_CONTRACT_STATUS
 from eawf.workflow.evidence.measured_contract import PREFLIGHT_CONTRACTS, promote_measured_contract
 from eawf.workflow.planning.apply import apply_plan_revision
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
@@ -63,10 +66,7 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
 pytestmark = pytest.mark.integration
 
 DRIFT_CASES = Path(__file__).resolve().parents[3] / "fixtures" / "planning" / "drift_cases"
-V1_STATE_FIXTURE = (
-    Path(__file__).resolve().parents[3] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
-)
-#: The fixture project code, and the scope a contract is promoted into below.
+#: The scope a contract is promoted into below.
 V1_STATE_SCOPE = "QR"
 
 SLOT = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
@@ -134,7 +134,7 @@ CRITERION: dict[str, Any] = {
 
 #: The measured contract every canary here has promoted (see
 #: ``planned_canary``), matching ``CRITERION["contract_refs"]`` above so
-#: the default plan resolves against the real v1 store rather than an
+#: the default plan resolves against the generation's real store rather than an
 #: unresolvable placeholder.
 DEFAULT_PROMOTED_CONTRACT: Final = "MCT-26081303"
 
@@ -183,8 +183,8 @@ def canary_runtime_under_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 def planned_canary(tmp_path: Path, *, code: str) -> CanaryProvision:
     """Provision a canary holding the Track and repository the plan binds.
 
-    Also seeds a v1 ``state.json`` with :data:`DEFAULT_PROMOTED_CONTRACT`
-    already promoted, so ``CRITERION``'s ``measured`` grade resolves
+    Also files :data:`DEFAULT_PROMOTED_CONTRACT` as already promoted into
+    the generation, so ``CRITERION``'s ``measured`` grade resolves
     against the real store every approval here checks -- PLAN-025's
     evidence path, not an unresolvable placeholder id.
     """
@@ -196,7 +196,7 @@ def planned_canary(tmp_path: Path, *, code: str) -> CanaryProvision:
             "repository": {"REP-EAWF": {"key": "REP-EAWF", "head_sha": HEAD}},
         },
     )
-    seed_v1_state(canary, promote=DEFAULT_PROMOTED_CONTRACT)
+    seed_generation_store(canary, promote=DEFAULT_PROMOTED_CONTRACT)
     return canary
 
 
@@ -212,45 +212,61 @@ def decision_row(decision_id: str) -> dict[str, Any]:
     }
 
 
-def seed_v1_state(
+def seed_generation_store(
     canary: CanaryProvision,
     *,
     promote: str | None = None,
     decisions: dict[str, dict[str, Any]] | None = None,
 ) -> None:
-    """Write a v1 ``state.json`` beside *canary*'s epoch-2 tree.
+    """File promoted contracts and Decisions into *canary*'s selected generation.
 
     This is the store ``approve_plan_revision`` resolves ``contract_refs``
-    and ``accepted_risk_decision_ref`` citations against (PLAN-025, H1); a
-    canary that never calls this has no such file, which the resolvers
-    read as "nothing to check against" rather than "nothing resolves".
+    and ``accepted_risk_decision_ref`` citations against (PLAN-025, H1):
+    a promotion is one line of the evidence ledger, as ``submit_evidence``
+    files it, and a Decision is one line of the decision ledger in the
+    shape the cutover imports a v1 row in.
 
     Args:
-        canary: The canary to seed. Its own ``.ea`` directory already
-            exists, provisioned as an epoch-2 tree.
-        promote: A :data:`PREFLIGHT_CONTRACTS` id to promote into the
-            written state, or ``None`` to leave the state with nothing
-            promoted.
-        decisions: Decision rows to record, keyed by id, or ``None`` to
-            leave ``decisions`` empty.
+        canary: The canary to seed.
+        promote: A :data:`PREFLIGHT_CONTRACTS` id to promote, or ``None``.
+        decisions: Decision rows to record, keyed by id, or ``None``.
     """
-    state_path = tree_root(canary) / "state.json"
-    state_path.write_text(V1_STATE_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
-    if promote is None and decisions is None:
-        return
-    state = load_state(state_path)
+    document = document_path(canary)
     if promote is not None:
         contract = PREFLIGHT_CONTRACTS[promote]
+        view = State.model_construct(project=None, artifacts={}, updated_at=AT)
         promote_measured_contract(
-            state,
+            view,
             contract=contract,
             scope_id=V1_STATE_SCOPE,
             required_band=contract.environment.scale_band,
         )
-    if decisions is not None:
-        for decision_id, row in decisions.items():
-            state.decisions[decision_id] = Decision.model_validate(row)
-    state_path.write_text(json.dumps(state.model_dump(mode="json"), indent=2), encoding="utf-8")
+        file_contract_rows(canary, [view.artifacts[promote].model_dump(mode="json")])
+    for decision_id, row in (decisions or {}).items():
+        append_ledger_record(
+            ledger_path(document, Epoch2Collection.DECISION),
+            LedgerRecord(
+                collection=Epoch2Collection.DECISION,
+                record_key=decision_id,
+                status="imported",
+                recorded_at=AT,
+                payload={"payload": row},
+            ),
+        )
+
+
+def file_contract_rows(canary: CanaryProvision, rows: list[dict[str, Any]]) -> None:
+    """File *rows* as one promotion line of *canary*'s generation evidence ledger."""
+    append_ledger_record(
+        ledger_path(document_path(canary), Epoch2Collection.EVIDENCE),
+        LedgerRecord(
+            collection=Epoch2Collection.EVIDENCE,
+            record_key=f"RPT-{rows[0]['id']}",
+            status=MEASURED_CONTRACT_STATUS,
+            recorded_at=AT,
+            payload={"spike_report_ref": "artifact://spike/seeded", "contracts": rows},
+        ),
+    )
 
 
 def dispatch(
@@ -731,7 +747,7 @@ def test_approval_refuses_an_acceptance_criterion_still_graded_assumed(tmp_path:
 def test_approval_admits_the_same_plan_regraded_accepted_risk(tmp_path: Path) -> None:
     """Regrading the criterion accepted-risk, citing a recorded Decision, clears approval."""
     canary = planned_canary(tmp_path, code="ACCRISK")
-    seed_v1_state(canary, decisions={"DEC-0001": decision_row("DEC-0001")})
+    seed_generation_store(canary, decisions={"DEC-0001": decision_row("DEC-0001")})
     body = with_criterion_grounding(
         grounding="accepted-risk", accepted_risk_decision_ref="DEC-0001"
     )
@@ -746,14 +762,14 @@ def test_approval_admits_the_same_plan_regraded_accepted_risk(tmp_path: Path) ->
 def test_approval_refuses_an_accepted_risk_criterion_whose_decision_ref_does_not_resolve(
     tmp_path: Path,
 ) -> None:
-    """H1 gate-fire proof: the v1 state ``planned_canary`` seeds records no such Decision.
+    """H1 gate-fire proof: the generation ``planned_canary`` seeds records no such Decision.
 
     Reverting :func:`~eawf.workflow.planning.apply._build_citation_resolvers`
     to skip Decision resolution reds this test: an unrecorded id such as
     ``DEC-bogus`` would otherwise reach APPROVED unconditionally.
     """
     canary = planned_canary(tmp_path, code="DECBOGUS")
-    seed_v1_state(canary, decisions={"DEC-0001": decision_row("DEC-0001")})
+    seed_generation_store(canary, decisions={"DEC-0001": decision_row("DEC-0001")})
     body = with_criterion_grounding(
         grounding="accepted-risk", accepted_risk_decision_ref="DEC-BOGUS"
     )
@@ -773,7 +789,7 @@ def test_approval_refuses_an_accepted_risk_criterion_whose_decision_ref_does_not
 def test_approval_refuses_a_measured_criterion_whose_contract_ref_does_not_resolve(
     tmp_path: Path,
 ) -> None:
-    """The v1 state ``planned_canary`` seeds refuses a citation it never promoted."""
+    """The generation ``planned_canary`` seeds refuses a citation it never promoted."""
     canary = planned_canary(tmp_path, code="UNRESOLVD")
     body = with_criterion_grounding(grounding="measured", contract_refs=["MCT-99999999"])
     assert submit_body(canary, tmp_path, body=body)["status"] == "ok"
@@ -799,12 +815,11 @@ def test_approval_admits_a_measured_criterion_whose_contract_ref_resolves(
     assert collection(canary, "plan_revision")[REVISION_KEY]["status"] == "APPROVED"
 
 
-def test_approval_of_an_assumed_criterion_is_unaffected_by_an_empty_v1_state(
+def test_approval_of_an_assumed_criterion_is_unaffected_by_the_contract_store(
     tmp_path: Path,
 ) -> None:
-    """A resolver that exists but resolves nothing still flags assumed the same way."""
+    """A resolver that exists still flags assumed the same way."""
     canary = planned_canary(tmp_path, code="ASSUMEDV1")
-    seed_v1_state(canary)
     assert submit_body(canary, tmp_path, body=with_criterion_grounding())["status"] == "ok"
 
     answer = approve(canary, tmp_path)

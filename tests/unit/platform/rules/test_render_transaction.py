@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -10,8 +12,12 @@ import pytest
 import yaml
 
 from eawf.kernel.config.providers import ProviderRegistry, load_provider_configuration
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.runtime.compiled import canonical_digest
 from eawf.kernel.runtime.host_facts import DELIVERY_FACT_NAMES, HOST_RUNTIMES
+from eawf.kernel.state.epoch2.authority import require_native_authority
+from eawf.kernel.store.compaction import read_document, write_document
+from eawf.platform.install.canary import canary_ref, provision_canary
 from eawf.platform.rules import (
     CONDUCT_MODULE_REF,
     RuleModuleEntry,
@@ -476,28 +482,95 @@ def test_load_project_brief_without_sources_uses_the_directory_name(tmp_path: Pa
     assert brief.package is None
 
 
-def test_load_project_brief_reads_the_project_record(repo: Path) -> None:
-    state = {
-        "project": {
-            "code": "DEMO",
-            "slug": "demo",
-            "title": "Demo Project",
-            "description": "Demo purpose",
-            "domains": ["tooling"],
-            "default_branch": "main",
-            "status": "active",
-            "repo_urn": "urn:eawf:v1:repo:DEMO",
-        }
-    }
-    (repo / ".ea" / "state.json").write_text(json.dumps(state), encoding="utf-8")
+_PROJECT_RECORD: dict[str, Any] = {
+    "code": "DEMO",
+    "slug": "demo",
+    "title": "Demo Project",
+    "description": "Demo purpose",
+    "domains": ["tooling"],
+    "default_branch": "main",
+    "status": "active",
+    "repo_urn": "urn:eawf:v1:repo:DEMO",
+}
+
+
+def _generation_repo(
+    root: Path, monkeypatch: pytest.MonkeyPatch, *, project_row: dict[str, Any] | None
+) -> Path:
+    """Provision an epoch-2 tree at *root*, place *project_row*, then the rule sources."""
+    scratch = root.parent / f"{root.name}-scratch"
+    scratch.mkdir(parents=True)
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    provision_canary(repo_root=root, ref=canary_ref("DEMO"), provisioned_at=datetime.now(UTC))
+    if project_row is not None:
+        authority = require_native_authority(root / ".ea")
+        assert authority.target is not None and authority.generation_id is not None
+        path = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+        document = read_document(path)
+        document["project"] = {"DEMO": project_row}
+        write_document(path, document)
+    _write_source(root)
+    (root / "pyproject.toml").write_text(
+        '[project]\nname = "demo"\ndescription = "A demo project"\nrequires-python = ">=3.14"\n',
+        encoding="utf-8",
+    )
+    return root
+
+
+def test_load_project_brief_reads_the_generation_project_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imported = {"payload": {"payload": dict(_PROJECT_RECORD)}, "status": "imported"}
+    repo = _generation_repo(tmp_path / "gen", monkeypatch, project_row=imported)
+    assert not (repo / ".ea" / "state.json").exists()
     brief = load_project_brief(repo)
     assert (brief.title, brief.purpose, brief.code) == ("Demo Project", "Demo purpose", "DEMO")
     assert brief.domains == ("tooling",)
     assert brief.default_branch == "main"
 
 
-def test_load_project_brief_refuses_an_invalid_project_record(repo: Path) -> None:
-    (repo / ".ea" / "state.json").write_text('{"project": {"code": "x"}}', encoding="utf-8")
+def test_load_project_brief_reads_a_native_project_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _generation_repo(tmp_path / "gen", monkeypatch, project_row=dict(_PROJECT_RECORD))
+    assert load_project_brief(repo).code == "DEMO"
+
+
+def test_load_project_brief_of_a_generation_without_a_project_uses_the_package(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _generation_repo(tmp_path / "gen", monkeypatch, project_row=None)
+    brief = load_project_brief(repo)
+    assert (brief.title, brief.code) == ("demo", None)
+
+
+def test_sync_renders_the_same_brief_whether_or_not_state_json_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imported = {"payload": {"payload": dict(_PROJECT_RECORD)}, "status": "imported"}
+    repo = _generation_repo(tmp_path / "gen", monkeypatch, project_row=imported)
+    without = plan_rule_projections(repo)
+    stale = {"project": {**_PROJECT_RECORD, "title": "Stale v1 title", "code": "OLD"}}
+    (repo / ".ea" / "state.json").write_text(json.dumps(stale), encoding="utf-8")
+    with_v1 = plan_rule_projections(repo)
+    assert with_v1 == without
+    render_rule_projections(repo)
+    assert "Demo Project" in (repo / CARD_TARGET).read_text(encoding="utf-8")
+    assert "Stale v1 title" not in (repo / CARD_TARGET).read_text(encoding="utf-8")
+
+
+def test_load_project_brief_ignores_a_v1_document_on_an_unmarked_tree(repo: Path) -> None:
+    stale = {"project": {**_PROJECT_RECORD, "title": "Stale v1 title"}}
+    (repo / ".ea" / "state.json").write_text(json.dumps(stale), encoding="utf-8")
+    brief = load_project_brief(repo)
+    assert (brief.title, brief.code) == ("demo", None)
+
+
+def test_load_project_brief_refuses_an_invalid_project_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    broken = {"payload": {"payload": {"code": "x"}}, "status": "imported"}
+    repo = _generation_repo(tmp_path / "gen", monkeypatch, project_row=broken)
     with pytest.raises(RuleProjectionError, match="project record"):
         load_project_brief(repo)
 

@@ -46,9 +46,9 @@ from eawf.observability.telemetry.turn_cost import (
 
 _REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 _ARTIFACT_PATH: Final[Path] = (
-    _REPO_ROOT / ".ea" / "artifacts" / "research" / "2026-09-04-dev1-turn-cost-baseline.md"
+    _REPO_ROOT / "tests" / "fixtures" / "artifacts" / "2026-09-04-dev1-turn-cost-baseline.md"
 )
-_STATE_PATH: Final[Path] = _REPO_ROOT / ".ea" / "state.json"
+_STATE_PATH: Final[Path] = _REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot" / "state.json"
 
 _JSON_BLOCK: Final[re.Pattern[str]] = re.compile(r"```json\n(.*?)\n```", re.DOTALL)
 

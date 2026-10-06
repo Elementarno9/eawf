@@ -14,9 +14,11 @@ through :func:`~eawf.kernel.store.commit_policy.classify_path` rather
 than through a hand-written exclusion list is what keeps the fixture and
 the policy from disagreeing -- a file whose policy changes moves the
 fixture with it, in the same commit, without anyone remembering to.
-The bytes come from git objects at HEAD rather than from the working
-tree, so the staging depends on the revision alone and never races the
-daemon writing the live document.
+The bytes come from git objects rather than from the working tree, so
+the staging depends on the revision alone and never races the daemon
+writing the live document. The revision is the last one that tracked the
+v1 document: the repository untracked it once epoch 2 owned the tree, so
+HEAD no longer carries the corpus and a clone pinned there stages it.
 
 The firehose is the case that makes this load-bearing.
 ``.ea/store/event.jsonl`` is raw agent stdout: gitignored, unbounded, and
@@ -44,10 +46,14 @@ code that reads it.
 
 from __future__ import annotations
 
+import atexit
+import functools
 import json
 import logging
 import os
+import shutil
 import subprocess
+import tempfile
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -221,12 +227,66 @@ def stage_live_corpus(*, repo_root: Path, destination: Path) -> Path:
         MigrationStagingRefusedError: When ``destination`` is not empty.
     """
     stage_committed_corpus(
-        repo_root=repo_root,
+        repo_root=frozen_corpus_root(repo_root),
         destination=destination,
         workspace_key=WORKSPACE_KEY,
         project_key=PROJECT_KEY,
     )
     return destination
+
+
+def frozen_corpus_revision(repo_root: Path) -> str:
+    """Return the newest revision that still tracks the v1 document.
+
+    Args:
+        repo_root: Any directory inside the repository.
+
+    Returns:
+        HEAD while it tracks ``.ea/state.json``, otherwise the parent of the
+        newest commit that deleted it.
+
+    Raises:
+        subprocess.CalledProcessError: git cannot read the history.
+        MigrationSourceUnreadableError: ``repo_root`` is not in a git
+            repository with a commit.
+    """
+    top, head = repository_revision(repo_root)
+    tracked = subprocess.run(
+        ["git", "-C", str(top), "cat-file", "-e", f"{head}:{LIVE_STATE_LOCATOR}"],
+        check=False,
+        capture_output=True,
+    )
+    if tracked.returncode == 0:
+        return head
+    log = ["log", "-1", "--format=%H", "--diff-filter=D", "--", LIVE_STATE_LOCATOR]
+    deleted = _git_out(top, *log)
+    return _git_out(top, "rev-parse", f"{deleted}^")
+
+
+def _git_out(top: Path, *args: str) -> str:
+    """Return one read-only git command's stripped stdout."""
+    return subprocess.run(
+        ["git", "-C", str(top), *args], check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+
+@functools.cache
+def frozen_corpus_root(repo_root: Path) -> Path:
+    """Return a clone pinned at :func:`frozen_corpus_revision`, made once per process.
+
+    Args:
+        repo_root: Any directory inside the repository.
+
+    Returns:
+        The clone's root; it is removed when the process exits.
+    """
+    scratch = Path(tempfile.mkdtemp(prefix="eawf-frozen-corpus-"))
+    atexit.register(shutil.rmtree, scratch, ignore_errors=True)
+    clone = scratch / "repo"
+    clone_at_revision(
+        repo_root=repo_root, destination=clone, revision=frozen_corpus_revision(repo_root)
+    )
+    return clone
 
 
 def corpus_bytes(root: Path) -> int:
@@ -297,9 +357,9 @@ def pre_cutover_revision(repo_root: Path) -> str:
         repo_root: The repository's root directory.
 
     Returns:
-        The 40-character revision named in the committed cutover record.
+        The 40-character revision named in the cutover record fixture.
     """
-    record = repo_root / ".ea" / "artifacts" / "evidence" / "2026-09-dev5-live-cutover"
+    record = repo_root / "tests" / "fixtures" / "artifacts" / "2026-09-dev5-live-cutover"
     return str(json.loads((record / "live-cutover.json").read_text(encoding="utf-8"))["revision"])
 
 
@@ -438,6 +498,8 @@ __all__ = [
     "commit_live_state",
     "committed_sources",
     "corpus_bytes",
+    "frozen_corpus_revision",
+    "frozen_corpus_root",
     "is_committed",
     "magnitude_for",
     "quiesce_clone",

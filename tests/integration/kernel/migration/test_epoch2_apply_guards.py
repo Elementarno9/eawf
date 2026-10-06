@@ -848,7 +848,8 @@ def _staged_findings(repo: Path, destination: Path) -> tuple[Any, ...]:
 
 def _synthetic_document() -> dict[str, Any]:
     """Return the live document with hand-built worktree and session rows."""
-    document = json.loads((REPO_ROOT / ".ea" / "state.json").read_text(encoding="utf-8"))
+    snapshot = REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot" / "state.json"
+    document = json.loads(snapshot.read_text(encoding="utf-8"))
     template_wt = next(iter(document["worktrees"].values()))
     template_ses = next(
         row for row in document["agent_sessions"].values() if row["status"] != "active"

@@ -67,8 +67,16 @@ def release_pipeline(
         str, typer.Argument(help="Checkpoint version the merged phase released, e.g. 0.7.0.dev4.")
     ],
     phase: Annotated[
-        str, typer.Option("--phase", help="The merged phase whose wave pins are checked, e.g. P35.")
-    ],
+        str | None,
+        typer.Option("--phase", help="The merged phase whose wave pins are checked, e.g. P35."),
+    ] = None,
+    milestone: Annotated[
+        str | None,
+        typer.Option(
+            "--milestone",
+            help="The Milestone whose completed Batches are checked on main, e.g. MLS-0102.",
+        ),
+    ] = None,
     publish: Annotated[
         bool,
         typer.Option("--publish", help="Push the tag, which publishes to every registry."),
@@ -87,15 +95,19 @@ def release_pipeline(
         typer.Option("--redo", help="Run this step and every later one again, e.g. receipts."),
     ] = None,
 ) -> None:
-    """Take a merged phase's checkpoint from tag to BAKED and the train advance.
+    """Take a merged checkpoint from tag to BAKED and the train advance.
 
-    Run it from a clean checkout of the merge on ``main``. It pins that
-    commit, fetches the dry run's build receipts, sweeps readiness, tags
-    and pushes, waits for the publish runs and downloads their receipts,
-    then opens, pins, proves, approves, publishes, reconciles and
-    observes the record until it bakes, advances the train, checks the
-    phase's wave pins by their trailers, and lands the evidence for one
-    ``[P<NN>] state:`` commit.
+    Run it from a clean checkout of the merge on ``main``, naming what
+    was released with exactly one of ``--phase`` and ``--milestone``. It
+    pins that commit, fetches the dry run's build receipts, sweeps
+    readiness, tags and pushes, waits for the publish runs and downloads
+    their receipts, then opens, pins, proves, approves, publishes,
+    reconciles and observes the record until it bakes, advances the
+    train, checks by trailer that ``main`` carries what was released, and
+    lands the evidence locally with each file's sha256 journaled, leaving
+    the release stores for one ``state:`` commit. With ``--milestone``
+    each completed Batch must land as exactly one commit carrying its
+    ``Batch:`` trailer, the very commit ``eawf publish`` bound.
 
     The tag push publishes, so it runs only with ``--publish``; without
     it every earlier step still runs and the verb refuses before the
@@ -133,6 +145,7 @@ def release_pipeline(
         options = PipelineOptions(
             version=version,
             phase_id=phase,
+            milestone_key=milestone,
             publish=publish,
             membership_refs=tuple(membership_ref or ()),
             remote=remote,
@@ -174,8 +187,8 @@ def release_pipeline(
         [
             f"release pipeline {result.version}: baked, train advanced",
             *_outcome_lines(result.outcomes),
-            f"next: commit .ea/store/release*.jsonl, {evidence}, .secrets.baseline and "
-            ".pre-commit-config.yaml in one quiet-window `[P<NN>] state:` commit",
+            "next: commit .ea/store/release*.jsonl in one quiet-window `state:` commit; "
+            f"the evidence stays local under {evidence}, cited by the digests above",
         ]
     )
     emit_json_or_text(payload, text, flags=flags)

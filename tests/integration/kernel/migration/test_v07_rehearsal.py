@@ -77,8 +77,12 @@ from eawf.kernel.migration.epoch2.plan_mode import (
 )
 from eawf.kernel.migration.epoch2.restore import read_restore_manifest
 from eawf.kernel.migration.epoch2.scrub import scan_text
-from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot, repository_revision
-from eawf.kernel.store.commit_policy import EA_PATH_CLASSES, CommitPolicy
+from eawf.kernel.migration.epoch2.snapshot import (
+    SourceSnapshot,
+    repository_revision,
+    stage_committed_corpus,
+)
+from eawf.kernel.store.commit_policy import EA_PATH_CLASSES, CommitPolicy, UndeclaredPathError
 from eawf.kernel.store.compaction import read_document
 from eawf.surfaces.cli.app import app
 from tests.integration.kernel.migration._corpus_builders import CorpusPlan
@@ -109,6 +113,7 @@ from tests.integration.kernel.migration._live_corpus import (
     clone_at_revision,
     commit_live_state,
     committed_sources,
+    frozen_corpus_root,
     is_committed,
     magnitude_for,
     pre_cutover_revision,
@@ -985,7 +990,7 @@ def test_the_live_corpus_stages_only_paths_the_commit_policy_carries() -> None:
     from an exclusion list kept alongside it is what stops the fixture
     and the policy from disagreeing about which files those are.
     """
-    top, revision = repository_revision(REPO_ROOT)
+    top, revision = repository_revision(frozen_corpus_root(REPO_ROOT))
     sources = committed_sources(top, revision=revision)
     uncommitted = [source.locator for source in sources if not is_committed(source.locator)]
     tracked = _git(top, "ls-tree", "--name-only", revision, f"{LIVE_STORE_LOCATOR}/").split()
@@ -1036,11 +1041,36 @@ def _built_repo(root: Path) -> Path:
     return repo
 
 
+@pytest.mark.parametrize(
+    ("locator", "committed"),
+    [
+        (".ea/state.json", True),
+        (".ea/store/audit.jsonl", True),
+        (".ea/store/release.jsonl", True),
+        (".ea/store/event.jsonl", False),
+        (".ea/config.yaml", True),
+        (".ea/telemetry.db", False),
+    ],
+)
+def test_is_committed_reads_the_epoch1_corpus_before_the_live_policy(
+    locator: str, committed: bool
+) -> None:
+    """A cutover stages what an epoch-1 tree committed, not what this one does."""
+    assert is_committed(locator) is committed
+
+
+def test_is_committed_refuses_an_undeclared_family() -> None:
+    with pytest.raises(UndeclaredPathError):
+        is_committed(".ea/mystery/x.bin")
+
+
 def _seed_uncommitted_families(repo_root: Path, *, leak: str) -> tuple[str, ...]:
     """Write one representative file per uncommitted ``.ea/`` family.
 
     The families come from the commit policy's own probe paths, so a row
-    added to the table is seeded here without anyone editing this test.
+    added to the table is seeded here without anyone editing this test. A
+    family an epoch-1 tree committed (the v1 document and its stores) is
+    skipped: the staging reads it as corpus, not as an excluded family.
 
     Args:
         repo_root: The directory holding the synthetic ``.ea`` tree.
@@ -1053,6 +1083,8 @@ def _seed_uncommitted_families(repo_root: Path, *, leak: str) -> tuple[str, ...]
     written: list[str] = []
     for row in EA_PATH_CLASSES:
         if row.policy is not CommitPolicy.NOT_COMMITTED or not row.probe.startswith(".ea/"):
+            continue
+        if is_committed(row.probe):
             continue
         path = repo_root / row.probe
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -1139,15 +1171,16 @@ def _stage_to(repo: Path, destination: Path) -> Result:
 def test_stage_to_matches_stage_live_corpus_byte_for_byte(tmp_path: Path) -> None:
     """The operator verb and the rehearsal stage one snapshot, byte for byte.
 
-    Driven over this repository's own committed corpus, which is the tree
-    the operator stages at the flag day.
+    Driven over this repository's last committed epoch-1 corpus, which is
+    the tree the operator staged at the flag day.
     """
+    frozen = frozen_corpus_root(REPO_ROOT)
     helper = stage_live_corpus(repo_root=REPO_ROOT, destination=tmp_path / "helper")
-    result = _stage_to(REPO_ROOT, tmp_path / "verb")
+    result = _stage_to(frozen, tmp_path / "verb")
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)["result"]
-    assert envelope["revision"] == repository_revision(REPO_ROOT)[1]
+    assert envelope["revision"] == repository_revision(frozen)[1]
     assert envelope["sources"][:2] == [".ea/state.json", ".ea/config.yaml"]
     verb = _tree_bytes(tmp_path / "verb")
     assert verb == _tree_bytes(helper)
@@ -1298,7 +1331,12 @@ def test_stage_committed_corpus_refuses_a_revision_without_a_document(tmp_path: 
     )
 
     with pytest.raises(MigrationSourceUnreadableError, match="not tracked"):
-        stage_live_corpus(repo_root=repo, destination=tmp_path / "staged")
+        stage_committed_corpus(
+            repo_root=repo,
+            destination=tmp_path / "staged",
+            workspace_key=WORKSPACE_KEY,
+            project_key=PROJECT_KEY,
+        )
 
 
 # ---------------------------------------------------------------------------

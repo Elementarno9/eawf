@@ -1,9 +1,8 @@
 """The v0.6.0 re-close staging invariants.
 
 W36 hands the phase off to P30-I21-W22 (the re-close wave): its criteria
-are retyped with real gates, the runbook artifact drafts the exact
-phase-close subject, and the repo carries fresh deterministic evidence —
-the three preconditions the ship gate reads before the operator confirms
+are retyped with real gates and the repo carries fresh deterministic
+evidence -- preconditions the ship gate reads before the operator confirms
 the merge.
 """
 
@@ -18,17 +17,11 @@ import pytest
 pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_STATE_PATH = _REPO_ROOT / ".ea" / "state.json"
-_RUNBOOK = _REPO_ROOT / ".ea" / "artifacts" / "plans" / "2026-07-03-v0.6.0-reclose-runbook.md"
-
-#: The extraction regex from .github/workflows/phase-release.yaml — the
-#: annotation must be its own paren group for the tag job to fire.
-_EXTRACTION_RE = re.compile(r"\(release=(v\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)")
+_SNAPSHOT = _REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot"
+_STATE_PATH = _SNAPSHOT / "state.json"
 
 #: The minor of the ``schema_version`` 0.6.0 shipped on.
 _V060_SCHEMA_MINOR = 19
-
-_DRAFTED_SUBJECT = "[P30] state: close iter + phase (audit=A-P30-I22-ship) (release=v0.6.0)"
 
 
 def _state() -> dict:
@@ -52,19 +45,6 @@ def test_reclose_wave_is_retyped_with_gates() -> None:
     assert any("test_reclose_staging" in argv for argv in gate_argvs), (
         "the CHANGELOG structural gate is missing"
     )
-
-
-def test_runbook_drafts_the_exact_subject_and_descope() -> None:
-    """CR-02: the runbook carries the subject (own paren group) + de-scope."""
-    body = _RUNBOOK.read_text(encoding="utf-8")
-    assert _DRAFTED_SUBJECT in body
-    match = _EXTRACTION_RE.search(_DRAFTED_SUBJECT)
-    assert match and match.group(1) == "v0.6.0"
-    # The fused shape must NOT match the extraction regex — the runbook
-    # exists to prevent exactly that silent miss.
-    assert not _EXTRACTION_RE.search("(audit=A-P30-I22-ship, release=v0.6.0)")
-    assert "D-WINDOWS-DESCOPE" in body
-    assert "de-scoped" in body or "de-scope" in body
 
 
 #: The phase-close vehicle after the I26 reconcile. The original re-close wave
@@ -282,7 +262,7 @@ def test_fresh_deterministic_evidence_precondition() -> None:
     """CR-03: >= 1 deterministic pass row dated within/after the I22 open."""
     state = _state()
     i22_open = state["iters"]["P30-I22"]["opened_at"]
-    evidence = (_REPO_ROOT / ".ea" / "store" / "evidence.jsonl").read_text(encoding="utf-8")
+    evidence = (_SNAPSHOT / "store" / "evidence.jsonl").read_text(encoding="utf-8")
     fresh = 0
     for line in evidence.splitlines():
         if not line.strip():

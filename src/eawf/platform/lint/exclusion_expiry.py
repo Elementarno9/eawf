@@ -30,12 +30,13 @@ entry is expired on 2027-03-02.
 
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+
+from eawf.kernel.store.ledger import read_ledger_records
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class ExclusionRenewal:
     """The explicit extension of one exclusion past its first expiry.
 
     Attributes:
-        decision: Id of the typed ``Decision`` in ``state.json`` that
+        decision: Id of the typed ``Decision`` in the decision ledger that
             ratified the extension.
         owner: Handle accountable for retiring the exclusion. A role or
             team handle, never a personal identifier.
@@ -293,29 +294,25 @@ def expired_exclusions(
     return tuple(entry for entry in exclusions if entry.is_expired(today=today))
 
 
-def decision_ids_from_state(state_path: Path) -> frozenset[str]:
-    """Return the ids of every decision recorded in a state file.
+def decision_ids_from_ledger(decision_ledger: Path) -> frozenset[str]:
+    """Return the key of every decision a generation's decision ledger records.
 
     Args:
-        state_path: Path to ``.ea/state.json``.
+        decision_ledger: Path to the selected generation's
+            ``ledger/decision.jsonl``.
 
     Returns:
-        The decision ids, empty when the file is absent or records no
-        decisions. Absence is not an error here: a renewal validated
-        against an empty set simply fails with a message naming the id,
-        which is the same refusal the operator needs either way.
+        The decision keys, imported and native alike, whatever their status;
+        empty when the ledger is absent. Absence is not an error here: a
+        renewal validated against an empty set simply fails with a message
+        naming the id, which is the same refusal the operator needs either
+        way.
 
     Raises:
-        json.JSONDecodeError: When the file exists but is not JSON.
+        LedgerTornTailError: When the ledger ends mid-line.
+        pydantic.ValidationError: When a line is not a ledger record.
     """
-    if not state_path.is_file():
-        logger.warning(f"decision_ids_from_state missing state_path={state_path.name!r}")
-        return frozenset()
-    data = json.loads(state_path.read_text(encoding="utf-8"))
-    decisions = data.get("decisions", {}) if isinstance(data, dict) else {}
-    if isinstance(decisions, Mapping):
-        return frozenset(str(key) for key in decisions)
-    return frozenset(str(row.get("id", "")) for row in decisions if isinstance(row, Mapping))
+    return frozenset(record.record_key for record in read_ledger_records(decision_ledger))
 
 
 def validate_renewals(
@@ -329,8 +326,8 @@ def validate_renewals(
 
     Args:
         exclusions: Parsed grants to check.
-        decision_ids: Ids present in ``state.json``, e.g. from
-            :func:`decision_ids_from_state`.
+        decision_ids: Ids the decision ledger records, e.g. from
+            :func:`decision_ids_from_ledger`.
 
     Raises:
         ExclusionConfigError: When a renewal cites an unknown decision.
@@ -341,7 +338,7 @@ def validate_renewals(
         if entry.renewal.decision not in decision_ids:
             raise ExclusionConfigError(
                 f"EAWF010 exclusion {entry.path!r} is renewed against decision "
-                f"{entry.renewal.decision!r}, which is absent from state.json; record the "
+                f"{entry.renewal.decision!r}, which is absent from the decision ledger; record the "
                 f"decision before extending the grant"
             )
 
@@ -353,7 +350,7 @@ __all__ = [
     "ExclusionConfigError",
     "ExclusionRenewal",
     "ModuleExclusion",
-    "decision_ids_from_state",
+    "decision_ids_from_ledger",
     "expired_exclusions",
     "parse_exclusion",
     "parse_exclusions",

@@ -158,10 +158,27 @@ AGENTS.override.md
 *.db
 .ea/state.json.bak.*
 .ea/store/event.jsonl
+.ea/state.json
+.ea/store/*.jsonl
+!.ea/store/release.jsonl
+!.ea/store/release_record.jsonl
+!.ea/store/release_checkpoint_receipt.jsonl
+!.ea/store/release_train_advance.jsonl
+!.ea/store/conformance_stage.jsonl
 .ea/generations/.staging-*/
 .ea/generations/restore/
 .ea/generations/journal.jsonl
 .ea/epoch2-disposable-canary.json
 .ea/artifacts/rendered/
+.ea/artifacts/**
+!.ea/artifacts/**/
+!.ea/artifacts/research/2026-09-04-dev1-config-defaults-benchmark.md
+!.ea/artifacts/evidence/2026-09-18-dev3-reprobe/cross-provider-reprobe.json
+!.ea/artifacts/evidence/2026-09-18-dev3-reprobe/daemon-rpc-reprobe.json
+!.ea/artifacts/evidence/2026-09-18-dev3-conformance/native-canary-evidence.json
+!.ea/artifacts/evidence/2026-09-26-dev4-conformance/native-canary-evidence.json
+!.ea/artifacts/evidence/2026-09-27-dev5-product-canary/native-canary-evidence.json
+!.ea/artifacts/evidence/2026-10-02-rc1-flag-day/native-canary-evidence.json
+!.ea/artifacts/evidence/2026-09-27-dev5-product-canary/product-canary-receipts.json
 .ea/**/.DS_Store
 # END EAWF:gitignore

@@ -68,6 +68,7 @@ from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.append import append_json_line
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.ledger import LedgerTornTailError, effective_records, read_ledger_records
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.logging.state_leak import state_leak_refusal
@@ -84,8 +85,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
 )
 from eawf.runtime.daemon.wal import WalRecord, mark_applied, mark_fsynced, write_pending
 from eawf.surfaces.cli.errors import UserError
-from eawf.surfaces.cli.errors import ValidationError as CliValidationError
-from eawf.workflow.evidence._io import load_state
+from eawf.workflow.evidence._io import generation_contract_view
 from eawf.workflow.evidence.measured_contract import resolve_contract_citation
 from eawf.workflow.lifecycle.epoch2 import TransitionDenied, apply_transition
 from eawf.workflow.planning.lenses import blocking_findings, run_plan_lenses
@@ -707,7 +707,7 @@ def submit_plan_revision(
 
 @dataclass(frozen=True, slots=True)
 class _CitationResolvers:
-    """The two grounding-citation resolvers one v1 state read builds.
+    """The two grounding-citation resolvers one read of the generation builds.
 
     Attributes:
         contract_is_resolvable: Forwarded to
@@ -717,58 +717,79 @@ class _CitationResolvers:
             ``decision_is_resolvable``.
     """
 
-    contract_is_resolvable: Callable[[str], bool] | None
-    decision_is_resolvable: Callable[[str], bool] | None
+    contract_is_resolvable: Callable[[str], bool]
+    decision_is_resolvable: Callable[[str], bool]
 
 
 def _refuse_every_citation(_ref: str) -> bool:
     """Fail-closed resolver: refuse every citation.
 
-    Used when the tree's ``state.json`` exists but could not be read --
-    broken JSON, a schema-invalid payload, or a race with a concurrent
-    writer. Such a store might resolve the reference or might not, and
-    admitting a citation on a store this call could not read would let
-    corruption forge grounding, so every citation refuses instead.
+    Used when a ledger the citations resolve against could not be read --
+    a torn tail or a line that fails its model. Such a store might resolve
+    the reference or might not, and admitting a citation on a store this
+    call could not read would let corruption forge grounding, so every
+    citation refuses instead.
     """
     return False
 
 
+def _standing_decision_keys(decision_ledger: Path) -> frozenset[str]:
+    """Return the keys of every Decision that still stands in *decision_ledger*.
+
+    The ledger holds both the decisions the cutover imported, whose record
+    is the v1 row, and the decisions taken natively since; both carry
+    their record under ``payload`` with a ``status`` and a
+    ``superseded_by``, and a key's last standing line is its current
+    record. A superseded, reversed, obsolete or merely proposed Decision
+    no longer stands behind the risk it once accepted.
+
+    Raises:
+        LedgerTornTailError: The ledger ends mid-line.
+        pydantic.ValidationError: A line does not satisfy its model.
+    """
+    latest = {
+        line.record_key: line.payload.get("payload")
+        for line in effective_records(read_ledger_records(decision_ledger))
+    }
+    return frozenset(
+        key
+        for key, decision in latest.items()
+        if isinstance(decision, dict)
+        and str(decision.get("status", "")).lower() == DecisionStatus.ACTIVE.value
+        and decision.get("superseded_by") is None
+    )
+
+
 def _build_citation_resolvers(
-    context: Epoch2RootContext, *, provider_tuple: tuple[str, ...]
+    session: RootSession, document: dict[str, Any], *, provider_tuple: tuple[str, ...]
 ) -> _CitationResolvers:
-    """Return the contract and Decision resolvers for *context*'s v1 state.
+    """Return the contract and Decision resolvers for the session's generation.
 
     A promoted :class:`~eawf.kernel.spec.measured_contract.MeasuredContract`
-    and a recorded :class:`~eawf.kernel.state.models.Decision` are both
-    registered in the v1 ``state.json`` this epoch-2 tree sits beside
-    (the evidence path), read once here rather than once per
-    citation.
-
-    A tree carrying no such file -- one that predates either store, or a
-    canary that never provisioned one -- has nothing to honestly refuse a
-    citation against, so both resolvers are ``None``, which skips the
-    check entirely. A tree whose ``state.json`` exists but fails to load
-    is a different case: the store was provisioned and something is
-    wrong with it, so both resolvers become :func:`_refuse_every_citation`
-    -- failing closed rather than treating an unreadable store the same
-    as an absent one.
+    and a recorded Decision are both held in the selected generation's
+    ledgers, read once here rather than once per citation. A generation
+    that holds none of either resolves no citation of that kind. A ledger
+    that cannot be read fails closed: both resolvers become
+    :func:`_refuse_every_citation`.
 
     Args:
-        context: The native context of the addressed root.
+        session: The locked pass over the addressed root.
+        document: The generation document the session read.
         provider_tuple: The providers the plan's Runs dispatch to, which a
             provider-scoped contract must have been measured through
             exactly.
 
     Returns:
-        The two resolvers, both ``None`` when *state_path* is absent, or
-        both :func:`_refuse_every_citation` when it exists but does not load.
+        The two resolvers.
     """
-    state_path = context.identity.tree_root / "state.json"
-    if not state_path.exists():
-        return _CitationResolvers(contract_is_resolvable=None, decision_is_resolvable=None)
     try:
-        state = load_state(state_path)
-    except UserError, CliValidationError, OSError, ValueError:
+        state = generation_contract_view(
+            document,
+            artifact_ledger=session.ledger_path(Epoch2Collection.ARTIFACT),
+            evidence_ledger=session.ledger_path(Epoch2Collection.EVIDENCE),
+        )
+        standing = _standing_decision_keys(session.ledger_path(Epoch2Collection.DECISION))
+    except LedgerTornTailError, ValueError, KeyError, OSError:
         return _CitationResolvers(
             contract_is_resolvable=_refuse_every_citation,
             decision_is_resolvable=_refuse_every_citation,
@@ -781,18 +802,8 @@ def _build_citation_resolvers(
             return False
         return True
 
-    def decision_resolves(ref: str) -> bool:
-        # A superseded, reversed or obsolete Decision no longer stands
-        # behind the risk it once accepted, so only a live one resolves.
-        decision = state.decisions.get(ref)
-        return (
-            decision is not None
-            and decision.status is DecisionStatus.ACTIVE
-            and decision.superseded_by is None
-        )
-
     return _CitationResolvers(
-        contract_is_resolvable=contract_resolves, decision_is_resolvable=decision_resolves
+        contract_is_resolvable=contract_resolves, decision_is_resolvable=standing.__contains__
     )
 
 
@@ -815,7 +826,7 @@ def approve_plan_revision(
     of consent to exactly what is filed and to nothing else.
 
     A criterion graded ``measured`` or ``accepted-risk`` is also checked
-    here against the v1 state beside this tree -- see
+    here against the tree's selected generation -- see
     :func:`_build_citation_resolvers` -- so a citation naming a contract
     nobody promoted, or a Decision nobody recorded or that no longer stands
     (superseded, reversed, obsolete), refuses the same as a
@@ -874,7 +885,9 @@ def approve_plan_revision(
             policy_revision=record.policy_revision,
             head_bindings=record.head_bindings,
         )
-        resolvers = _build_citation_resolvers(context, provider_tuple=record.provider_tuple)
+        resolvers = _build_citation_resolvers(
+            session, document, provider_tuple=record.provider_tuple
+        )
         outcome = advance_plan_revision(
             record,
             to=PlanRevisionStatus.APPROVED,

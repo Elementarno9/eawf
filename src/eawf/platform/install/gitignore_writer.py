@@ -64,22 +64,42 @@ _LISTED_PATTERNS: tuple[str, ...] = (
     ".ea/state.json.bak.*",
     # The event store is the firehose, not the ledger: it accumulates one row
     # per lifecycle mutation plus the raw stdout of every spawned agent, so it
-    # grows without bound and carries free text nobody typed. The evidence chain
-    # that decisions cite lives in the typed stores next to it (audit, decision,
-    # evidence, the agent reports), which stay committed. Tracking this one
-    # instead re-stores a multi-megabyte blob on every bookkeeping commit and
-    # points a raw-output channel at version control.
+    # grows without bound and carries free text nobody typed. Tracking it
+    # re-stores a multi-megabyte blob on every bookkeeping commit and points a
+    # raw-output channel at version control.
     ".ea/store/event.jsonl",
 )
 
 
-def _policy_line(pattern: str) -> str:
-    """Return the gitignore line for one commit-policy row's file pattern.
+def _policy_lines(pattern: str) -> tuple[str, ...]:
+    """Return the gitignore lines for one not-committed commit-policy row.
 
     A row names files (``dir/**``); gitignore ignores the directory itself
-    (``dir/``), which also keeps git from descending into it.
+    (``dir/``), which also keeps git from descending into it. git cannot
+    re-include a file below an ignored directory, so a family that holds
+    committed rows instead ignores its files, re-includes its directories
+    and then re-includes each committed path. A family of files in one
+    directory ignores only the files, so it re-includes each committed
+    path it would otherwise match.
     """
-    return pattern.removesuffix("**") if pattern.endswith("/**") else pattern
+    if not pattern.endswith("/**"):
+        matched = tuple(
+            row.pattern
+            for row in EA_PATH_CLASSES
+            if row.policy is CommitPolicy.COMMITTED
+            and "*" not in row.pattern
+            and PurePosixPath(row.pattern).full_match(pattern)
+        )
+        return (pattern, *(f"!{path}" for path in matched))
+    directory = pattern.removesuffix("**")
+    kept = tuple(
+        row.pattern
+        for row in EA_PATH_CLASSES
+        if row.policy is CommitPolicy.COMMITTED and row.pattern.startswith(directory)
+    )
+    if not kept:
+        return (directory,)
+    return (pattern, f"!{directory}**/", *(f"!{path}" for path in kept))
 
 
 #: Every path the commit policy keeps out of version control, appended so a
@@ -90,9 +110,10 @@ GITIGNORE_PATTERNS: tuple[str, ...] = tuple(
         (
             *_LISTED_PATTERNS,
             *(
-                _policy_line(row.pattern)
+                line
                 for row in EA_PATH_CLASSES
                 if row.policy is CommitPolicy.NOT_COMMITTED
+                for line in _policy_lines(row.pattern)
             ),
         )
     )
