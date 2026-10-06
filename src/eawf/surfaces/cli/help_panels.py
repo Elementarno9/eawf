@@ -158,6 +158,7 @@ COMMAND_PANELS: dict[str, str] = {
     "clone-repo": "vcs",
     "coauthor": "vcs",
     "init": "vcs",
+    "publish": "vcs",
     "repo": "vcs",
     "store": "vcs",
     "wal": "vcs",

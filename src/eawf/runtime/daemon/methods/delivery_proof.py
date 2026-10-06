@@ -55,7 +55,7 @@ from eawf.kernel.state.enums import GateReceiptResult
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.urns import TaskUrn
-from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
+from eawf.kernel.store.ledger import LedgerRecord, effective_records, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
@@ -243,7 +243,7 @@ def _next_receipt_ordinal(session: RootSession) -> int:
         ValidationError: A line claims to be a filed proof and does not
             validate as one, which means the ledger is corrupt.
     """
-    lines = read_ledger_records(session.ledger_path(Epoch2Collection.RECEIPT))
+    lines = effective_records(read_ledger_records(session.ledger_path(Epoch2Collection.RECEIPT)))
     taken = [
         int(FiledProof.model_validate(item.payload).receipt.id.split("-")[1])
         for item in lines

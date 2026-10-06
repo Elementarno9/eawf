@@ -27,6 +27,7 @@ The epoch-2 tiers are siblings of ``store/`` rather than members of it::
     <state_dir>/local/<collection>                local store
     <state_dir>/local/status.json                 status projection
     <state_dir>/local/ledger/<collection>.jsonl   status ledger
+    <state_dir>/local/staged/<binding>.json       staged commit bindings
     <state_dir>/store/event.jsonl                 firehose
 
 Run rows and in-flight Task status are the machine-local projection:
@@ -73,6 +74,11 @@ LOCAL_DIRNAME: Final = "local"
 
 #: The file holding the document rows of the status projection collections.
 STATUS_PROJECTION_FILENAME: Final = "status.json"
+
+#: The directory, inside the local tier, holding commit bindings staged on
+#: scratch work; a scratch commit is rewritten before publish, so a row
+#: naming it must never reach a committed ledger.
+STAGED_DIRNAME: Final = "staged"
 
 
 def store_dir(state_path: Path) -> Path:
@@ -156,6 +162,11 @@ def seed_ledger_path(state_path: Path, collection: Epoch2Collection) -> Path:
 def status_projection_path(state_path: Path) -> Path:
     """Return ``<state_dir>/local/status.json``, the status projection's rows."""
     return state_path.parent / LOCAL_DIRNAME / STATUS_PROJECTION_FILENAME
+
+
+def staged_dir(state_path: Path) -> Path:
+    """Return ``<state_dir>/local/staged/`` (does not create the directory)."""
+    return state_path.parent / LOCAL_DIRNAME / STAGED_DIRNAME
 
 
 def index_dir(state_path: Path) -> Path:

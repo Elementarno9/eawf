@@ -36,13 +36,16 @@ from eawf.kernel.identity import (
 
 
 def render_qualified_urn(value: QualifiedUrn) -> str:
-    """Render *value* as its canonical URN string.
+    """Render *value* as its URN string, in the form it was spelled in.
+
+    A re-keyed URN renders in its single-key form, so a record read from a
+    re-keyed document and written back keeps the address it was read with.
 
     Args:
         value: The parsed URN to render.
 
     Returns:
-        The canonical ``eawf://`` string.
+        The ``eawf://`` string.
 
     Raises:
         IdentityError: A slot, key, or rung rule is broken.
@@ -54,6 +57,7 @@ def render_qualified_urn(value: QualifiedUrn) -> str:
         kind=value.kind,
         entity_key=value.entity_key,
         rung=value.rung,
+        single_key=value.single_key,
     )
 
 

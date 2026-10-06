@@ -14,10 +14,14 @@ a trailer in ``base..old`` must still be named by a trailer in ``base..new``,
 and so must every native Task a ``Task`` trailer names, since that
 trailer is the only identity a native Task commit carries.
 
-``commit_prefix_lint.py`` dispatches here for its ``--check-rewrite OLD NEW``
-and ``--pre-push`` modes; the latter reads the tips from the
-``PRE_COMMIT_FROM_REF`` / ``PRE_COMMIT_TO_REF`` variables pre-commit exports
-to ``pre-push`` hooks.
+The same push also has each pushed commit linted under the Batch regime
+(:func:`check_pushed_commits`), so scratch commits stay free locally and are
+refused only when they would leave the machine.
+
+``commit_prefix_lint.py`` dispatches here for its ``--check-rewrite OLD NEW``,
+``--pre-push`` and ``--pre-push-lint`` modes; the last two read the tips from
+the ``PRE_COMMIT_FROM_REF`` / ``PRE_COMMIT_TO_REF`` variables pre-commit
+exports to ``pre-push`` hooks.
 
 Exit codes: ``0`` accepted, ``1`` refused or unreadable history.
 """
@@ -28,10 +32,18 @@ import subprocess
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from commit_prefix_lint import _TASK_TRAILER_RE, _WAVE_TRAILER_RE
+from commit_prefix_lint import (
+    _TASK_TRAILER_RE,
+    _WAVE_TRAILER_RE,
+    _canonical_state_path,
+    batch_commit_error,
+    load_native_records,
+)
+from epoch2_lifecycle_view import epoch2_generation
 
 _GIT_TIMEOUT_SECONDS = 20.0
 _REC_SEP = "\x00"
+_COMMIT_SEP = "\x1e"
 _ZERO_SHA_CHAR = "0"
 
 
@@ -135,3 +147,66 @@ def check_pre_push(env: Mapping[str, str], *, repo_root: Path | None = None) -> 
     if not old.strip(_ZERO_SHA_CHAR) or not new.strip(_ZERO_SHA_CHAR):
         return 0, ""
     return check_rewrite(old, new, repo_root=repo_root)
+
+
+def check_pushed_commits(
+    env: Mapping[str, str], *, repo_root: Path | None = None
+) -> tuple[int, str]:
+    """Lint every non-merge commit a push adds under the Batch regime.
+
+    The pushed range is ``PRE_COMMIT_FROM_REF..PRE_COMMIT_TO_REF``; for a new
+    branch pre-commit sets the first variable to the parent of the oldest
+    commit no remote holds, so the range is still exactly what the push adds.
+    A deletion, or a run without the variables, adds nothing and passes. The
+    Batch and Task records are read from the canonical main-worktree
+    generation, so a worktree cannot prove a commit against a stale copy.
+
+    Args:
+        env: The hook environment.
+        repo_root: Repository working directory; ``None`` uses the cwd.
+
+    Returns:
+        ``(exit_code, diagnostic)``; ``1`` naming each refused commit, or when
+        the range or the generation cannot be read; ``0`` otherwise.
+    """
+    old = env.get("PRE_COMMIT_FROM_REF", "")
+    new = env.get("PRE_COMMIT_TO_REF", "")
+    if not old.strip(_ZERO_SHA_CHAR) or not new.strip(_ZERO_SHA_CHAR):
+        return 0, ""
+    log = _git(
+        ["log", "--no-merges", "--format=%H%x00%B%x1e", f"{old}..{new}", "--"],
+        repo_root=repo_root,
+    )
+    if log.returncode != 0:
+        return 1, f"commit lint: cannot read the commits between {old} and {new}"
+    canonical = _canonical_state_path(repo_root or Path.cwd())
+    generation = None if canonical is None else epoch2_generation(canonical.parent)
+    try:
+        records = None if generation is None else load_native_records(generation)
+    except (OSError, ValueError) as exc:
+        return 1, f"commit lint: managed state decode failed: {exc}"
+    refused: list[str] = []
+    for record in log.stdout.split(_COMMIT_SEP):
+        sha, _, message = record.strip("\n").partition(_REC_SEP)
+        if not sha:
+            continue
+        changed = _git(
+            ["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", sha],
+            repo_root=repo_root,
+        )
+        if changed.returncode != 0:
+            return 1, f"commit lint: cannot read the paths of {sha[:12]}"
+        error = batch_commit_error(message, changed.stdout.splitlines(), records)
+        if error is not None:
+            refused.append(f"{sha[:12]} {error}")
+    if not refused:
+        return 0, ""
+    return 1, "\n".join(
+        [
+            "commit lint: this push carries commits outside the Batch regime:",
+            *refused,
+            "Squash scratch work into one '<type>: <summary>' commit per Batch with "
+            "exactly one 'Batch: BAT-<NNNN>' trailer (eawf publish), ending with one "
+            "'state: <summary>' commit, then push again.",
+        ]
+    )

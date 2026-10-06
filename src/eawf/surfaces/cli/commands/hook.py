@@ -2705,6 +2705,62 @@ def eawf011_cognitive_complexity(
     )
 
 
+_LedgerRangeOpt = Annotated[
+    str,
+    typer.Option(
+        "--range",
+        help="<base>..<tip> to check, or <base> alone to check the working tree.",
+    ),
+]
+
+
+@hook_app.command(name="ledger-history")
+def ledger_history(
+    ctx: typer.Context,
+    range_spec: _LedgerRangeOpt,
+) -> None:
+    """Check the committed ledgers stay append-only and bind only reachable commits.
+
+    Over the range, every changed ledger file must extend its bytes at the
+    merge base, and every commit SHA an effective ledger row names must be an
+    ancestor of the base or the tip unless the row declares it in
+    ``unreachable_shas``. Leading lines a seal moved into the ledger's
+    snapshot are listed under ``sealed`` and are not findings. Exits 1 on a
+    finding, 0 when clean; exits 2 on a malformed range or unknown rev.
+    """
+    from eawf.platform.lint.ledger_history import LedgerHistoryError, scan_ledger_history
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    try:
+        report = scan_ledger_history(cwd, range_spec)
+    except LedgerHistoryError as exc:
+        typer.echo(f"ledger-history: {exc}", err=True)
+        raise typer.Exit(exit_codes.VALIDATION_ERROR) from exc
+    payload: dict[str, object] = {
+        "hook": "ledger-history",
+        **report.model_dump(mode="json"),
+        "clean": report.clean,
+    }
+    if report.clean:
+        emit_json_or_text(
+            payload,
+            f"ledger-history: clean ({report.ledgers_scanned} ledger file(s) scanned)",
+            flags=flags,
+        )
+        return
+    lines = [
+        f"ledger-history: {len(report.append_only)} append-only, "
+        f"{len(report.unreachable)} unreachable, {len(report.malformed)} malformed "
+        f"over {report.range}",
+        *(finding.render() for finding in report.append_only),
+        *(finding.render() for finding in report.unreachable),
+        *(finding.render() for finding in report.malformed),
+    ]
+    emit_json_or_text(payload, "\n".join(lines), flags=flags)
+    raise typer.Exit(exit_codes.USER_ERROR)
+
+
 def _marketplace_mode() -> bool:
     """True when the eawf plugin is installed for the user via the marketplace.
 

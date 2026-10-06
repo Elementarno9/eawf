@@ -145,6 +145,8 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("workspace", "eawf.surfaces.cli.commands.workspace", "workspace_app"),
     GroupRow("repo", "eawf.surfaces.cli.commands.repo", "repo_app"),
     CommandRow("clone-repo", "eawf.surfaces.cli.commands.clone_repo", "clone_repo_cmd", None),
+    # Squash scratch commits into one commit per Batch before a push.
+    CommandRow("publish", "eawf.surfaces.cli.commands.publish", "publish_cmd", None),
     # Output envelope render bridge.
     CommandRow(
         "render-output",

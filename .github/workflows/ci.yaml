@@ -240,7 +240,7 @@ jobs:
     # may carry any epoch-1 bracket form it was written in.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -251,9 +251,18 @@ jobs:
         uses: astral-sh/setup-uv@v8.1.0
         with:
           python-version: "3.14"
+          enable-cache: true
 
       - name: Commit grammar
         run: uv run --no-project python tools/commit_prefix_lint.py --check-history "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      # Committed ledger lines stay append-only and the commits they bind
+      # must stay reachable once the branch lands; a finding fails the job.
+      - name: Ledger history
+        run: uv run eawf hook ledger-history --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
 
   requirement-trace:
     name: Requirement trace census (value-fresh)

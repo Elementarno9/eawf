@@ -20,6 +20,8 @@ Verbs:
 - ``eawf migrate --dry-run`` — show what would change; write nothing.
 - ``eawf migrate --no-backup`` — skip the backup write (testing only).
 - ``eawf migrate status`` — show current ``schema_version`` + chain.
+- ``eawf migrate urn-rekey --project-key <P> [--apply]`` — plan, or write,
+  the re-key of every three-slot URN onto the single project key.
 - ``eawf migrate epoch2 --opt-in --target-root .ea`` — back up a live
   epoch-1 tree and opt it into the cutover against that backup.
 - ``eawf migrate epoch2 --plan`` — read-only epoch-2 cutover plan.
@@ -257,6 +259,86 @@ def migrate_status(ctx: typer.Context) -> None:
     ]
     lines += [f"  {edge}" for edge in edges]
     emit_json_or_text(payload, "\n".join(lines), flags=flags)
+
+
+@migrate_app.command("urn-rekey")
+def migrate_urn_rekey(
+    ctx: typer.Context,
+    project_key: Annotated[
+        str,
+        typer.Option("--project-key", help="The single key every three-slot URN collapses onto."),
+    ],
+    apply_: Annotated[
+        bool,
+        typer.Option("--apply", help="Write the re-key; without it the plan is only reported."),
+    ] = False,
+) -> None:
+    """Re-key the tree's three-slot URNs onto one project key.
+
+    Without ``--apply`` the verb reports what the re-key would write:
+    ``pending`` counts the outstanding writes, ``rows`` the superseding
+    ledger rows. With ``--apply`` the daemon appends those rows, rewrites
+    the generation document and files the repository under the key in
+    one serialised transaction; a re-keyed tree reports zero rows.
+    """
+    flags: GlobalFlags = ctx.obj
+    state_path, _reason = resolve_with_reason(workspace=flags.workspace)
+    try:
+        key = _symbol_key(project_key, option="--project-key")
+        payload = _epoch2_payload(
+            method=_URN_REKEY_METHOD,
+            params={
+                "repo_root": str(state_path.parent.parent),
+                "project_key": key,
+                "apply": apply_,
+            },
+            local=lambda: _urn_rekey_locally(state_path, project_key=key, apply=apply_),
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    verb = "re-keyed" if payload["applied"] else "would re-key"
+    text = (
+        f"urn-rekey: {verb} onto {payload['project_key']}: {payload['rows']} ledger row(s), "
+        f"document {'rewritten' if payload['document'] else 'unchanged'}, "
+        f"pending {payload['pending']}"
+    )
+    emit_json_or_text(payload, text, flags=flags)
+
+
+#: The daemon method the re-key is served by, spelled here so the verb does
+#: not import the daemon package unless it falls back to running in process.
+_URN_REKEY_METHOD: Final = "migration.urn_rekey"
+
+
+def _urn_rekey_locally(state_path: Path, *, project_key: str, apply: bool) -> dict[str, Any]:
+    """Run the re-key in process, under the same locks the daemon takes.
+
+    Args:
+        state_path: The tree's ``state.json``.
+        project_key: The validated single key.
+        apply: Write the plan rather than only report it.
+
+    Returns:
+        The re-key answer.
+
+    Raises:
+        ValidationError: The tree is not an epoch-2 tree.
+    """
+    from eawf.kernel.state.epoch2.authority import NativeAuthorityRequiredError
+    from eawf.kernel.state.io import fallback_wal_dir
+    from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootIdentity
+    from eawf.runtime.daemon.methods.urn_rekey import UrnRekeyParams, run_urn_rekey
+
+    context = Epoch2RootContext(
+        identity=RootIdentity.of(state_path.parent),
+        daemon_wal_dir=fallback_wal_dir(state_path),
+    )
+    params = UrnRekeyParams(project_key=project_key, apply=apply)
+    try:
+        return run_urn_rekey(context, params, at=datetime.now(UTC))
+    except NativeAuthorityRequiredError as exc:
+        raise cli_errors.ValidationError(f"{exc.code}: {exc}") from exc
 
 
 epoch2_app = typer.Typer(

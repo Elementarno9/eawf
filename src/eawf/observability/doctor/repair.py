@@ -30,6 +30,12 @@ from eawf.kernel.store.ledger import (
     split_ledger_lines,
 )
 from eawf.kernel.store.paths import store_path
+from eawf.observability.doctor.artifact_digests import (
+    ARTIFACT_DIGEST_ACTION,
+    artifact_digest_preview,
+    plan_artifact_digests,
+    selected_artifact_ledger,
+)
 from eawf.observability.doctor.checks import (
     check_launchd_agent,
     check_manifest_in_sync,
@@ -38,6 +44,12 @@ from eawf.observability.doctor.daemon_strays import (
     StrayDaemon,
     describe_stray,
     find_stray_daemons,
+)
+from eawf.observability.doctor.receipt_rekey import (
+    RECEIPT_REKEY_ACTION,
+    plan_receipt_rekeys,
+    receipt_rekey_preview,
+    selected_receipt_ledger,
 )
 from eawf.platform.lint.ledger_history import (
     UNREACHABLE_KEY,
@@ -636,6 +648,69 @@ def _ledger_action(root: Path) -> tuple[DoctorRepairAction | None, int]:
     )
 
 
+def _artifact_digest_action(root: Path) -> tuple[DoctorRepairAction | None, int]:
+    """Preview the artifact digest rows, and count the cited files absent here."""
+    ledger = selected_artifact_ledger(root)
+    if ledger is None:
+        return None, 0
+    plan = plan_artifact_digests(root, ledger)
+    if not plan.rows:
+        return None, len(plan.missing)
+    return (
+        DoctorRepairAction(
+            action_id=ARTIFACT_DIGEST_ACTION,
+            scope="repo",
+            preview_digest=artifact_digest_preview(ledger, plan),
+            mutation_class="committed_store",
+            record_count=len(plan.rows),
+            detail=(
+                f"append {len(plan.rows)} superseding artifact row(s) carrying the sha256 of "
+                f"the cited local file; {len(plan.missing)} cited file(s) absent here"
+            ),
+            target=str(root),
+        ),
+        len(plan.missing),
+    )
+
+
+def _receipt_rekey_action(root: Path) -> DoctorRepairAction | None:
+    """Preview the re-keyed rows for filed proofs whose stored freshness key is stale."""
+    ledger = selected_receipt_ledger(root)
+    rows = () if ledger is None else plan_receipt_rekeys(ledger)
+    if ledger is None or not rows:
+        return None
+    return DoctorRepairAction(
+        action_id=RECEIPT_REKEY_ACTION,
+        scope="repo",
+        preview_digest=receipt_rekey_preview(ledger, rows),
+        mutation_class="committed_store",
+        record_count=len(rows),
+        detail=(
+            f"append {len(rows)} superseding receipt row(s) carrying the freshness key "
+            "their recorded inputs produce"
+        ),
+        target=str(root),
+    )
+
+
+def _ledger_actions(root: Path) -> tuple[list[DoctorRepairAction], list[str]]:
+    """Return the ledger repair actions and the findings they leave unresolved."""
+    actions: list[DoctorRepairAction] = []
+    unresolved: list[str] = []
+    for (action, count), finding in (
+        (_ledger_action(root), "ledger.unreachable_unrepairable"),
+        (_artifact_digest_action(root), "ledger.artifact_file_absent"),
+    ):
+        if action is not None:
+            actions.append(action)
+        if count:
+            unresolved.append(f"{finding}={count}")
+    rekey = _receipt_rekey_action(root)
+    if rekey is not None:
+        actions.append(rekey)
+    return actions, unresolved
+
+
 def _desired_sync_drift(workspace: Path) -> bool:
     """Return whether current config/profile composition would change rules."""
     from eawf.platform.profiles.compose import compose
@@ -789,11 +864,9 @@ def build_repair_plan(workspace: Path) -> DoctorRepairPlan:
         ):
             if action is not None:
                 actions.append(action)
-    ledger_action, unrepairable = _ledger_action(root)
-    if ledger_action is not None:
-        actions.append(ledger_action)
-    if unrepairable:
-        unresolved.append(f"ledger.unreachable_unrepairable={unrepairable}")
+    ledger_actions, ledger_findings = _ledger_actions(root)
+    actions.extend(ledger_actions)
+    unresolved.extend(ledger_findings)
     for action in (_sync_action(root), _service_action(), _stray_action()):
         if action is not None:
             actions.append(action)

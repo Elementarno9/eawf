@@ -11,6 +11,7 @@ Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and sub
 | `impact` | Render decision → wave → file-glob impact graph. |
 | `init` | Initialise a new Eä Workflow workspace. |
 | `metrics` | Show rolling workflow metrics — EU variance, audit pass rate, wave elapsed, and planned vs reactive split. |
+| `publish` | Squash the scratch commits past origin into one commit per Batch, then a state commit. |
 | `render-output` | Convert between JSON and markdown forms of the output envelope (reads JSON or markdown from stdin). At a TTY with no piped data the command exits 2 with a hint instead of hanging. |
 | `status` | Show active pointers, blockers, and git head. |
 | `sync` | Re-render managed assets and report drift. |
@@ -195,6 +196,7 @@ Dispatch hook events through the Eä hook runner.
 | `eawf027-citation-scope` | Reject committed text quoting a reflection row it may not. |
 | `eawf028-brief-immutable` | Reject a staged wording edit to a committed research brief. |
 | `email-leak-lint` | Reject email addresses outside the canonical author/no-reply allowlist. |
+| `ledger-history` | Check the committed ledgers stay append-only and bind only reachable commits. |
 | `log-format-lint` | Run the EAWF001 log-format rule over changed library modules. |
 | `path-leak-lint` | Reject home-directory path literals (macOS, Windows, and Linux home roots). |
 | `plugin-doctor-drift` | Fail when ``plugin doctor --strict`` reports drift in the plugin tree. |
@@ -252,6 +254,7 @@ Migrate state.json across schema versions (v1.0 -> v1.1 chain).
 | Verb | Summary |
 |---|---|
 | `status` | Show the current ``schema_version`` and available migration edges. |
+| `urn-rekey` | Re-key the tree's three-slot URNs onto one project key. |
 
 ### `eawf milestone`
 
@@ -359,7 +362,7 @@ Tag releases and drive the release train's checkpoint records.
 | `discharge-debt` | Discharge a verification debt once its deferred gate has passed. |
 | `notes` | Render a scrubbed release-notes draft. |
 | `observe` | Read one publication target back and settle it against the manifest. |
-| `pipeline` | Take a merged phase's checkpoint from tag to BAKED and the train advance. |
+| `pipeline` | Take a merged checkpoint from tag to BAKED and the train advance. |
 | `preflight` | Sweep every readiness signal for one checkpoint over this checkout. |
 | `publish` | Open the publication episode and return its reference at once. |
 | `readiness` | Ask the daemon for a checkpoint's readiness sweep. |

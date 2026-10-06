@@ -27,7 +27,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.delivery.adoption import ADOPTION_KEY_PREFIX, LandedAdoption
 from eawf.kernel.delivery.integration import IntegrationGeneration
-from eawf.kernel.delivery.receipts import ProofReceipt, RevisionBinding, canonical_digest
+from eawf.kernel.delivery.receipts import (
+    ProofReceipt,
+    RevisionBinding,
+    canonical_digest,
+)
 from eawf.kernel.runtime.candidate import CandidateBundle
 from eawf.kernel.spec.common import GateSpec
 from eawf.kernel.state.enums import AgentReportVerdict, GateReceiptResult
@@ -36,7 +40,7 @@ from eawf.kernel.state.epoch2.base import PrincipalKey
 from eawf.kernel.state.epoch2.task import Task
 from eawf.kernel.state.epoch2.urns import BatchUrn, TaskUrn
 from eawf.kernel.state.epoch2.values import ExactRevisionBinding
-from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
+from eawf.kernel.store.ledger import LedgerRecord, effective_records, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
@@ -108,14 +112,14 @@ class FiledProof(BaseModel):
 
 
 def filed_proofs(session: RootSession, task_ref: TaskUrn) -> tuple[FiledProof, ...]:
-    """Return every proof filed for *task_ref*, oldest first.
+    """Return every effective proof filed for *task_ref*, oldest first.
 
     Raises:
         ValidationError: A line claims to be a filed proof and does not
             validate as one, which means the ledger is corrupt.
     """
     wanted = str(task_ref)
-    lines = read_ledger_records(session.ledger_path(Epoch2Collection.RECEIPT))
+    lines = effective_records(read_ledger_records(session.ledger_path(Epoch2Collection.RECEIPT)))
     proofs = (
         FiledProof.model_validate(item.payload)
         for item in lines

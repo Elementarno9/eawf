@@ -29,6 +29,12 @@ rung card's copy verb yields; no epoch-1 ``urn:eawf:`` form and no minted
 event key ever addresses a rung. Both a fragment on a non-claim URN and a
 rung number outside the ladder are ``identity_kind_mismatch``: the
 fragment names a kind of thing the URN does not address.
+
+A re-keyed tree collapses the three container slots onto one project
+key and spells its URNs ``eawf://<project-key>/<entity-kind>/<entity-key>``.
+That form parses to the same address with every container slot holding
+the project key, and renders back in the form it was read in, so a
+record read from a re-keyed document is written back unchanged.
 """
 
 from __future__ import annotations
@@ -59,6 +65,10 @@ _URN_RE: Final = re.compile(
     r"^eawf://(?P<workspace>[^/#]+)/(?P<project>[^/#]+)/(?P<repository>[^/#]+)"
     r"/(?P<kind>[a-z][a-z-]*)/(?P<entity>[^/#]+)(?:#(?P<fragment>[^#]*))?$"
 )
+_SINGLE_KEY_URN_RE: Final = re.compile(
+    r"^eawf://(?P<project>[^/#]+)"
+    r"/(?P<kind>[a-z][a-z-]*)/(?P<entity>[^/#]+)(?:#(?P<fragment>[^#]*))?$"
+)
 _RUNG_RE: Final = re.compile(r"^rung-(?P<ordinal>\d+)$")
 
 _SLOT_SCOPES: Final = frozenset({EntityScope.WORKSPACE, EntityScope.PROJECT})
@@ -80,6 +90,8 @@ class QualifiedUrn:
         kind: The entity kind the URN addresses.
         entity_key: The addressed record's public key.
         rung: The evidence rung selected on a claim URN, or ``None``.
+        single_key: Whether the URN is spelled in the re-keyed form,
+            whose one key fills every container slot.
     """
 
     workspace_key: str
@@ -88,6 +100,7 @@ class QualifiedUrn:
     kind: EntityKind
     entity_key: str
     rung: int | None = None
+    single_key: bool = False
 
     def __post_init__(self) -> None:
         """Validate every slot, the entity key, and the rung fragment.
@@ -105,6 +118,14 @@ class QualifiedUrn:
             project_code=project_code_of(self.project_key),
         )
         _validate_rung(self.kind, self.rung)
+        if self.single_key and (
+            self.workspace_key != self.project_key
+            or self.repository_key not in (None, self.project_key)
+        ):
+            raise IdentityError(
+                IdentityRejection.URN_MALFORMED,
+                f"a single-key URN fills every container slot with {self.project_key!r}",
+            )
 
     @property
     def repository_slot(self) -> str:
@@ -114,11 +135,14 @@ class QualifiedUrn:
         return self.repository_key
 
     def __str__(self) -> str:
-        """Render the canonical URN string."""
-        base = (
-            f"{URN_SCHEME}{self.workspace_key}/{self.project_key}/"
-            f"{self.repository_slot}/{self.kind.value}/{self.entity_key}"
-        )
+        """Render the URN string in the form it was spelled in."""
+        if self.single_key:
+            base = f"{URN_SCHEME}{self.project_key}/{self.kind.value}/{self.entity_key}"
+        else:
+            base = (
+                f"{URN_SCHEME}{self.workspace_key}/{self.project_key}/"
+                f"{self.repository_slot}/{self.kind.value}/{self.entity_key}"
+            )
         if self.rung is None:
             return base
         return f"{base}#rung-{self.rung}"
@@ -210,7 +234,8 @@ def parse_qualified_urn(
     """Parse *raw* into a validated :class:`QualifiedUrn`.
 
     Args:
-        raw: The URN string to parse.
+        raw: The URN string to parse, in the three-slot or the
+            single-key form.
         expected_kind: The discriminator of the reference carrying the
             URN. When given, the URN's own kind must equal it.
 
@@ -224,7 +249,7 @@ def parse_qualified_urn(
             with *expected_kind* or the rung fragment is misplaced, and
             the slot or key rejections raised by construction.
     """
-    match = _URN_RE.fullmatch(raw)
+    match = _URN_RE.fullmatch(raw) or _SINGLE_KEY_URN_RE.fullmatch(raw)
     if match is None:
         raise IdentityError(
             IdentityRejection.URN_MALFORMED,
@@ -236,6 +261,17 @@ def parse_qualified_urn(
             IdentityRejection.IDENTITY_KIND_MISMATCH,
             f"URN addresses a {kind.value} but the reference discriminates "
             f"{expected_kind.value}: {raw!r}",
+        )
+    if match.re is _SINGLE_KEY_URN_RE:
+        key = match.group("project")
+        return QualifiedUrn(
+            workspace_key=key,
+            project_key=key,
+            repository_key=None if ENTITY_SCOPES[kind] in _SLOT_SCOPES else key,
+            kind=kind,
+            entity_key=match.group("entity"),
+            rung=_parse_fragment(match.group("fragment")),
+            single_key=True,
         )
     repository = match.group("repository")
     return QualifiedUrn(
@@ -256,6 +292,7 @@ def format_qualified_urn(
     kind: EntityKind,
     entity_key: str,
     rung: int | None = None,
+    single_key: bool = False,
 ) -> str:
     """Render a validated qualified URN string.
 
@@ -267,6 +304,8 @@ def format_qualified_urn(
         kind: The entity kind being addressed.
         entity_key: The addressed record's public key.
         rung: The evidence rung to select on a claim URN.
+        single_key: Render the re-keyed form, whose one key fills every
+            container slot.
 
     Returns:
         The canonical URN string.
@@ -282,5 +321,6 @@ def format_qualified_urn(
             kind=kind,
             entity_key=entity_key,
             rung=rung,
+            single_key=single_key,
         )
     )

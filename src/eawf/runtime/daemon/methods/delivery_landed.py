@@ -17,6 +17,12 @@ the ledgers. Only then does it file the adoption and the generation it
 selects. The Task still completes only on receipts its proof run takes at
 that head, so an adoption proves integration and nothing more.
 
+A head the remote's default branch does not yet carry is scratch work that
+publish will squash, so its SHA must not reach a committed ledger: the
+adoption is staged in the generation's local tier instead, to be bound by
+tree to the commit publish produces. A repository with no remote default
+branch has no publish boundary, so its adoptions bind at once.
+
 ``runtime.delivery.read_back_merge``: the host read-back, done locally.
 
 The reconciliation verb is handed an observation because nothing in the
@@ -56,6 +62,7 @@ from eawf.kernel.state.models import ShaStr
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.kinds.gate_receipt import GateIdentityStr
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
+from eawf.kernel.store.paths import staged_dir
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
@@ -76,6 +83,7 @@ from eawf.runtime.daemon.methods.delivery_acceptance import (
 from eawf.runtime.daemon.methods.delivery_anchor import require_anchor
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.integration.recovery import generation_record_key, integration_generation_id
+from eawf.workflow.integration.publish_binding import StagedBinding, stage_binding
 from eawf.workflow.integration.reconcile import HostMergeObservation
 
 logger = logging.getLogger(__name__)
@@ -155,8 +163,9 @@ class AdoptLandedAnswer(BaseModel):
     Attributes:
         batch_ref: The Batch the change was adopted onto.
         adoption_key: The Batch-ledger key the adoption is filed under.
-        generation_id: The generation it selected.
-        generation: That generation's ordinal.
+        generation_id: The generation it selected, or ``None`` when the
+            adoption was staged.
+        generation: That generation's ordinal, or ``None`` when staged.
         head_sha: The adopted head.
         tree_sha: Its tree.
         target_branch: The branch the head was found on.
@@ -164,14 +173,16 @@ class AdoptLandedAnswer(BaseModel):
         changed_paths: How many paths the change touched.
         replayed: Whether the adoption was already filed.
         reason: One sentence an operator reads.
+        staged_path: The tree-relative staged binding file when the head
+            is scratch work not yet published, else ``None``.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     batch_ref: str
     adoption_key: str
-    generation_id: str
-    generation: int
+    generation_id: str | None
+    generation: int | None
     head_sha: str
     tree_sha: str
     target_branch: str
@@ -179,6 +190,7 @@ class AdoptLandedAnswer(BaseModel):
     changed_paths: int
     replayed: bool
     reason: str
+    staged_path: str | None = None
 
 
 class ReadBackParams(BaseModel):
@@ -248,6 +260,11 @@ def _branch_head(repository: Path, branch: str) -> str | None:
         if head:
             return head
     return None
+
+
+def _published_head(repository: Path) -> str | None:
+    """Return the head of the remote's default branch, or ``None`` when there is none."""
+    return _git(repository, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/HEAD^{commit}")
 
 
 def _batch_row(session: RootSession, urn: BatchUrn) -> DeliveryBatch:
@@ -461,6 +478,18 @@ def adopt_landed(
     )
     if head is not None and head.integrated_revision.head_sha == args.head_sha:
         return _answer(adoption, head, target_head=target_head, replayed=True)
+    published = _published_head(repository)
+    if published is not None and not _ancestor(repository, args.head_sha, published):
+        answer = _stage(context, adoption, target_head=target_head)
+        file_keyed_answer(
+            context,
+            method=DELIVERY_ADOPT_LANDED_METHOD,
+            key=args.idempotency_key,
+            params=params,
+            answer=answer.model_dump(mode="json"),
+            at=now,
+        )
+        return answer
     ordinal = 2 if head is None else head.generation + 1
     manifest = adoption.digest()
     base = _binding(
@@ -553,6 +582,47 @@ def adopt_landed(
         at=now,
     )
     return answer
+
+
+def _stage(
+    context: Epoch2RootContext, adoption: LandedAdoption, *, target_head: str
+) -> AdoptLandedAnswer:
+    """Stage *adoption* in the generation's local tier and build its answer."""
+    staged = StagedBinding(
+        batch_ref=adoption.batch_ref,
+        task_refs=adoption.task_refs,
+        tree_sha=adoption.tree_sha,
+        head_sha=adoption.head_sha,
+        report_verdict=adoption.report_verdict,
+        evidence_refs=adoption.evidence_refs,
+        staged_by=adoption.adopted_by,
+        staged_at=adoption.adopted_at,
+    )
+    with context.session([str(adoption.batch_ref)]) as session:
+        directory = staged_dir(session.document_path)
+        context.declared_path(directory / staged.file_name())
+        path = stage_binding(directory, staged)
+    relative = path.relative_to(context.identity.tree_root).as_posix()
+    logger.info(
+        f"adopt_landed batch={adoption.batch_ref.entity_key} head={adoption.head_sha} staged=True"
+    )
+    return AdoptLandedAnswer(
+        batch_ref=str(adoption.batch_ref),
+        adoption_key=adoption.record_key(),
+        generation_id=None,
+        generation=None,
+        head_sha=adoption.head_sha,
+        tree_sha=adoption.tree_sha,
+        target_branch=adoption.target_branch,
+        target_head_sha=target_head,
+        changed_paths=len(adoption.changed_paths),
+        replayed=False,
+        reason=(
+            f"{adoption.head_sha} is scratch work the remote default branch does not carry, "
+            f"so its binding is staged until publish binds it by tree {adoption.tree_sha}"
+        ),
+        staged_path=relative,
+    )
 
 
 def _answer(

@@ -55,6 +55,7 @@ from eawf.kernel.delivery.acceptance import (
     EvidenceView,
     MilestoneAcceptanceBundle,
 )
+from eawf.kernel.migration.epoch2.urn_rekey import rekey_value
 from eawf.kernel.state.epoch2.milestone import MilestoneStatus
 from eawf.kernel.state.epoch2.pending_action import (
     PendingAction,
@@ -62,12 +63,19 @@ from eawf.kernel.state.epoch2.pending_action import (
     PendingActionStatus,
 )
 from eawf.kernel.store.compaction import read_document
-from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record, read_ledger_records
+from eawf.kernel.store.ledger import (
+    LedgerRecord,
+    append_ledger_record,
+    line_digest,
+    read_ledger_records,
+    render_ledger_line,
+)
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import DaemonValidationError
+from eawf.runtime.daemon.methods import projection as projection_methods
 from eawf.runtime.daemon.methods.delivery_acceptance import (
     BUNDLE_KEY_PREFIX,
     AcceptanceRepairParams,
@@ -82,6 +90,7 @@ from eawf.workflow.delivery.acceptance import (
     evidence_view,
     request_repair,
     require_sealed_acceptance,
+    sealed_approval,
 )
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     MILESTONE_URN,
@@ -216,6 +225,48 @@ def test_a_bundle_that_is_not_the_approved_one_is_refused() -> None:
             bundle=other,
             milestone_ref=other.milestone_ref,
             status=MilestoneStatus.ACCEPTANCE_REVIEW,
+        )
+
+    assert caught.value.code is AcceptanceRefusal.BUNDLE_SUPERSEDED
+
+
+def test_an_approval_of_the_bytes_before_a_respelling_binds_the_respelled_bundle() -> None:
+    """The bundle's bytes before a URN re-key are what the operator approved."""
+    original = bundle()
+    respelled = bundle(steps=[step(evidence=RECEIPT_URN)])
+
+    approval = sealed_approval(
+        action(digest=original.digest()),
+        bundle=respelled,
+        milestone_ref=respelled.milestone_ref,
+        respelled_digest=original.digest(),
+    )
+
+    assert approval.approved_digest == respelled.digest()
+
+
+def test_a_respelled_digest_the_approval_does_not_name_is_still_refused() -> None:
+    """Naming an earlier spelling widens nothing: the approval must have sealed it."""
+    respelled = bundle(steps=[step(evidence=RECEIPT_URN)])
+    with pytest.raises(AcceptanceRefusedError) as caught:
+        sealed_approval(
+            action(digest=bundle(sealed_at=LATER).digest()),
+            bundle=respelled,
+            milestone_ref=respelled.milestone_ref,
+            respelled_digest=bundle().digest(),
+        )
+
+    assert caught.value.code is AcceptanceRefusal.BUNDLE_SUPERSEDED
+
+
+def test_an_approval_of_the_earlier_spelling_is_refused_without_naming_it() -> None:
+    """Without the earlier digest, only the bundle's own bytes bind."""
+    respelled = bundle(steps=[step(evidence=RECEIPT_URN)])
+    with pytest.raises(AcceptanceRefusedError) as caught:
+        sealed_approval(
+            action(digest=bundle().digest()),
+            bundle=respelled,
+            milestone_ref=respelled.milestone_ref,
         )
 
     assert caught.value.code is AcceptanceRefusal.BUNDLE_SUPERSEDED
@@ -1116,3 +1167,72 @@ def test_the_question_is_not_opened_on_unheld_evidence(tmp_path: Path) -> None:
             steps=[step(evidence=unheld)],
             accepted_binding=ACCEPTED_BINDING,
         )
+
+
+# ---------- an approval given before the URN re-key ----------
+
+REKEY_KEY: Final = "EAWF"
+BUNDLE_KEY: Final = "MAB-0001-MLS-0030"
+
+
+def _bundle_line(payload: dict[str, Any], *, supersedes: str | None = None) -> LedgerRecord:
+    return LedgerRecord(
+        collection=Epoch2Collection.MILESTONE,
+        record_key=BUNDLE_KEY,
+        status="sealed",
+        recorded_at=AT,
+        supersedes=supersedes,
+        payload=payload,
+    )
+
+
+def _respelled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *lines: LedgerRecord
+) -> MilestoneAcceptanceBundle:
+    """File *lines* in a scratch Milestone ledger; return the last line's bundle."""
+    state = tmp_path / "state.json"
+    monkeypatch.setattr(projection_methods, "document_path", lambda _authority: state)
+    ledger = state.parent / "ledger" / "milestone.jsonl"
+    for line in lines:
+        append_ledger_record(ledger, line)
+    return MilestoneAcceptanceBundle.model_validate(lines[-1].payload)
+
+
+def test_a_rekeyed_bundle_names_the_digest_it_carried_before(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = bundle().model_dump(mode="json")
+    first = _bundle_line(original)
+    rekeyed = _bundle_line(
+        rekey_value(original, REKEY_KEY), supersedes=line_digest(render_ledger_line(first))
+    )
+    held = _respelled(tmp_path, monkeypatch, first, rekeyed)
+
+    found = projection_methods._respelled_digest(None, held)  # type: ignore[arg-type]
+
+    assert held.digest() != bundle().digest()
+    assert found == bundle().digest()
+
+
+def test_a_superseding_row_that_changed_more_than_urns_names_no_earlier_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = bundle().model_dump(mode="json")
+    first = _bundle_line(original)
+    changed = rekey_value(bundle(sealed_at=LATER).model_dump(mode="json"), REKEY_KEY)
+    held = _respelled(
+        tmp_path,
+        monkeypatch,
+        first,
+        _bundle_line(changed, supersedes=line_digest(render_ledger_line(first))),
+    )
+
+    assert projection_methods._respelled_digest(None, held) is None  # type: ignore[arg-type]
+
+
+def test_a_bundle_filed_once_names_no_earlier_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    held = _respelled(tmp_path, monkeypatch, _bundle_line(bundle().model_dump(mode="json")))
+
+    assert projection_methods._respelled_digest(None, held) is None  # type: ignore[arg-type]

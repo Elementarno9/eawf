@@ -51,7 +51,7 @@ from eawf.kernel.state.epoch2.urns import BatchUrn
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.changes import MAX_PAGE, ChangePage, read_change_page
 from eawf.kernel.store.compaction import document_rows, read_document
-from eawf.kernel.store.ledger import read_ledger_records
+from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, Epoch2Collection
 from eawf.observability.doctor.models import CheckResult
@@ -256,7 +256,7 @@ def read_proof_receipts(path: Path, key: str) -> tuple[ProofReceipt, ...]:
     """Return every proof receipt the receipt ledger at *path* files under *key*."""
     proofs = (
         FiledProof.model_validate(item.payload)
-        for item in read_ledger_records(path)
+        for item in effective_records(read_ledger_records(path))
         if item.payload.get("payload_kind") == PROOF_PAYLOAD_KIND
     )
     return tuple(proof.receipt for proof in proofs if proof.receipt.id == key)

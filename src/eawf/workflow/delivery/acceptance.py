@@ -173,9 +173,16 @@ def _require_approving_answer(action: PendingAction) -> None:
 
 
 def _require_bundle_binding(
-    action: PendingAction, bundle: MilestoneAcceptanceBundle, *, milestone_ref: MilestoneUrn
+    action: PendingAction,
+    bundle: MilestoneAcceptanceBundle,
+    *,
+    milestone_ref: MilestoneUrn,
+    respelled_digest: str | None = None,
 ) -> str:
-    """Return the digest the sealed answer was given to, refusing any drift.
+    """Return the digest of the bundle the sealed answer covers, refusing any drift.
+
+    An answer given to *respelled_digest* covers the bundle too: those are the
+    same bytes before a URN re-key respelled them, so the approval still binds.
 
     Raises:
         AcceptanceRefusedError: The action approves another Milestone, the
@@ -197,14 +204,14 @@ def _require_bundle_binding(
     approved = action.bundle_digest
     assert approved is not None, "a protected approval always records the digest it approves"
     presented = bundle.digest()
-    if presented != approved:
+    if approved not in (presented, respelled_digest):
         raise AcceptanceRefusedError(
             AcceptanceRefusal.BUNDLE_SUPERSEDED,
             f"action {action.id} approved another set of bytes than revision "
             f"{bundle.revision} of {milestone_ref.entity_key} presents, so the approval does "
             "not cover it",
         )
-    return approved
+    return presented
 
 
 def _require_complete_journey(bundle: MilestoneAcceptanceBundle) -> None:
@@ -224,7 +231,11 @@ def _require_complete_journey(bundle: MilestoneAcceptanceBundle) -> None:
 
 
 def sealed_approval(
-    action: PendingAction, *, bundle: MilestoneAcceptanceBundle, milestone_ref: MilestoneUrn
+    action: PendingAction,
+    *,
+    bundle: MilestoneAcceptanceBundle,
+    milestone_ref: MilestoneUrn,
+    respelled_digest: str | None = None,
 ) -> AcceptanceApproval:
     """Return the approval ``action`` sealed over ``bundle``, or refuse it.
 
@@ -236,9 +247,13 @@ def sealed_approval(
         action: The PendingAction the tree holds, read rather than presented.
         bundle: The bundle the approval is claimed to cover.
         milestone_ref: The Milestone the approval is claimed for.
+        respelled_digest: The digest *bundle* carried before a URN re-key
+            respelled its URNs, when it was; an approval given to those
+            bytes covers the bundle. ``None`` accepts only the bundle's own.
 
     Returns:
-        The approval, carrying who gave it and the exact digest it covers.
+        The approval, carrying who gave it and the digest of the bundle it
+        covers as held now.
 
     Raises:
         AcceptanceRefusedError: The action is not a sealed protected
@@ -248,7 +263,9 @@ def sealed_approval(
     """
     _require_sealed_protected(action)
     _require_approving_answer(action)
-    approved = _require_bundle_binding(action, bundle, milestone_ref=milestone_ref)
+    approved = _require_bundle_binding(
+        action, bundle, milestone_ref=milestone_ref, respelled_digest=respelled_digest
+    )
     _require_complete_journey(bundle)
     resolver = action.resolution_actor
     receipt = action.receipt_ref

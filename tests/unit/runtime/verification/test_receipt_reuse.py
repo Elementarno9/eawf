@@ -47,6 +47,8 @@ BATCH = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/batch/BAT-0007"
 BOUND_AT = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
 HEAD = "1" * 40
 OLDER_HEAD = "3" * 40
+TREE = "2" * 40
+OLDER_TREE = "5" * 40
 
 
 def _compiled(evidence_kinds: dict[str, CriterionEvidenceKind]) -> ExecutionContractSet:
@@ -80,14 +82,16 @@ def _compiled(evidence_kinds: dict[str, CriterionEvidenceKind]) -> ExecutionCont
     return compile_execution_contracts(authoring)
 
 
-def _binding(head_sha: str = HEAD) -> RevisionBinding:
+def _binding(
+    head_sha: str = HEAD, tree_sha: str = TREE, parent_sha: str | None = None
+) -> RevisionBinding:
     return RevisionBinding.model_validate(
         {
             "repository_ref": REPOSITORY,
             "ref_kind": RevisionRefKind.INTEGRATION,
             "head_sha": head_sha,
-            "tree_sha": "2" * 40,
-            "parent_sha": None,
+            "tree_sha": tree_sha,
+            "parent_sha": parent_sha,
             "batch_ref": BATCH,
             "integration_generation": 1,
             "manifest_digest": canonical_digest("manifest"),
@@ -110,10 +114,16 @@ def _legs(
     ]
 
 
-def _key_for(contract: ExecutionContract, *, head_sha: str = HEAD) -> ProofFreshnessKey:
+def _key_for(
+    contract: ExecutionContract,
+    *,
+    head_sha: str = HEAD,
+    tree_sha: str = TREE,
+    parent_sha: str | None = None,
+) -> ProofFreshnessKey:
     return compute_proof_freshness_key(
         contract,
-        revision_binding=_binding(head_sha),
+        revision_binding=_binding(head_sha, tree_sha, parent_sha),
         selector_digest=canonical_digest("selector"),
         policy_digest=canonical_digest("policy"),
         runner_digest=canonical_digest("runner"),
@@ -181,7 +191,7 @@ def test_decide_receipt_reuse_names_each_rerun_with_reason() -> None:
     fresh, missing, stale, failed = legs
     receipts = [
         _receipt(fresh, "RCP-0001"),
-        _receipt(stale, "RCP-0003", key=_key_for(stale.contract, head_sha=OLDER_HEAD)),
+        _receipt(stale, "RCP-0003", key=_key_for(stale.contract, tree_sha=OLDER_TREE)),
         _receipt(failed, "RCP-0004", result=GateReceiptResult.FAIL),
     ]
     plan = decide_receipt_reuse(legs, receipts)
@@ -236,7 +246,7 @@ def test_decide_leg_reuse_prefers_exact_key_over_newer_stale_receipt() -> None:
     newer_stale = _receipt(
         leg,
         "RCP-0002",
-        key=_key_for(leg.contract, head_sha=OLDER_HEAD),
+        key=_key_for(leg.contract, tree_sha=OLDER_TREE),
         ended_at=BOUND_AT + timedelta(hours=1),
     )
     decision = decide_leg_reuse(leg, [newer_stale, exact])
@@ -297,11 +307,29 @@ def test_decide_leg_reuse_applies_age_limit(age: timedelta, reason: ReuseReason)
 
 def test_decide_leg_reuse_reports_stale_before_expired() -> None:
     leg = _single_leg()
-    receipt = _receipt(leg, "RCP-0001", key=_key_for(leg.contract, head_sha=OLDER_HEAD))
+    receipt = _receipt(leg, "RCP-0001", key=_key_for(leg.contract, tree_sha=OLDER_TREE))
     decision = decide_leg_reuse(
         leg, [receipt], now=BOUND_AT + timedelta(days=30), max_age=timedelta(hours=1)
     )
     assert decision.reason is ReuseReason.STALE
+
+
+def test_decide_leg_reuse_reuses_receipt_across_squash_of_same_tree() -> None:
+    leg = _single_leg()
+    squashed = _key_for(leg.contract, head_sha=OLDER_HEAD, parent_sha="4" * 40)
+    assert squashed.digest() == leg.expected.digest()
+    decision = decide_leg_reuse(leg, [_receipt(leg, "RCP-0001", key=squashed)])
+    assert (decision.reason, decision.receipt_id) == (ReuseReason.FRESH, "RCP-0001")
+    assert decision.changed_components == ()
+
+
+def test_decide_leg_reuse_names_code_when_tree_differs() -> None:
+    leg = _single_leg()
+    moved = _key_for(leg.contract, tree_sha=OLDER_TREE)
+    assert moved.digest() != leg.expected.digest()
+    decision = decide_leg_reuse(leg, [_receipt(leg, "RCP-0001", key=moved)])
+    assert decision.reason is ReuseReason.STALE
+    assert decision.changed_components == (FreshnessComponent.CODE,)
 
 
 def test_decide_leg_reuse_marks_judgment_leg_unavailable() -> None:

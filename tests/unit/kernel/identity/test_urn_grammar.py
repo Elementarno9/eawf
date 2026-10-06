@@ -203,3 +203,78 @@ def test_qualified_urn_validates_on_direct_construction() -> None:
             entity_key="MLS-0030",
         )
     assert excinfo.value.code is IdentityRejection.REPOSITORY_SLOT_INVALID
+
+
+SINGLE_KEY = [
+    pytest.param("eawf://EAWF/task/EAWF-0042", "EAWF", id="task"),
+    pytest.param("eawf://EAWF/repository/EAWF", "EAWF", id="repository"),
+    pytest.param("eawf://EAWF/workspace/EAWF", None, id="workspace"),
+    pytest.param("eawf://EAWF/claim/CLM-0001#rung-2", None, id="claim-rung"),
+    pytest.param("eawf://E1/batch/BAT-0001", "E1", id="shortest-key"),
+]
+
+
+@pytest.mark.parametrize(("raw", "repository"), SINGLE_KEY)
+def test_parse_qualified_urn_reads_the_single_key_form_and_renders_it_back(
+    raw: str, repository: str | None
+) -> None:
+    parsed = parse_qualified_urn(raw)
+    assert parsed.single_key is True
+    key = raw.removeprefix("eawf://").split("/", 1)[0]
+    assert (parsed.workspace_key, parsed.project_key, parsed.repository_key) == (
+        key,
+        key,
+        repository,
+    )
+    assert str(parsed) == raw
+
+
+def test_parse_qualified_urn_keeps_reading_the_three_slot_form() -> None:
+    parsed = parse_qualified_urn("eawf://EAWF/EAWF/EAWF/task/EAWF-0042")
+    assert parsed.single_key is False
+    assert str(parsed) == "eawf://EAWF/EAWF/EAWF/task/EAWF-0042"
+
+
+@pytest.mark.parametrize(
+    ("raw", "code"),
+    [
+        pytest.param("eawf://EAWF/task", IdentityRejection.URN_MALFORMED, id="two-segments"),
+        pytest.param("eawf://EAWF/Task/EAWF-0042", IdentityRejection.URN_MALFORMED, id="kind-case"),
+        pytest.param("eawf://EAWF/widget/W-1", IdentityRejection.URN_UNKNOWN_KIND, id="kind"),
+        pytest.param("eawf://EAWF/task/DEMO-0042", None, id="task-of-another-project"),
+        pytest.param("eawf://EAWF/workspace/OTHER", None, id="container-elsewhere"),
+        pytest.param("eawf://EAWF/task/EAWF-0042#rung-1", None, id="rung-off-claim"),
+    ],
+)
+def test_parse_qualified_urn_refuses_a_broken_single_key_urn(
+    raw: str, code: IdentityRejection | None
+) -> None:
+    with pytest.raises(IdentityError) as excinfo:
+        parse_qualified_urn(raw)
+    if code is not None:
+        assert excinfo.value.code is code
+
+
+def test_a_single_key_urn_refuses_slots_that_disagree() -> None:
+    with pytest.raises(IdentityError) as excinfo:
+        QualifiedUrn(
+            workspace_key=WORKSPACE,
+            project_key=PROJECT,
+            repository_key=REPOSITORY,
+            kind=EntityKind.MILESTONE,
+            entity_key="MLS-0030",
+            single_key=True,
+        )
+    assert excinfo.value.code is IdentityRejection.URN_MALFORMED
+
+
+def test_format_qualified_urn_renders_the_single_key_form() -> None:
+    rendered = format_qualified_urn(
+        workspace_key="EAWF",
+        project_key="EAWF",
+        repository_key="EAWF",
+        kind=EntityKind.TASK,
+        entity_key="EAWF-0042",
+        single_key=True,
+    )
+    assert rendered == "eawf://EAWF/task/EAWF-0042"

@@ -64,6 +64,7 @@ from eawf.kernel.delivery.acceptance import (
 )
 from eawf.kernel.delivery.batch_proof import BLOCKING_VERDICTS
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.migration.epoch2.urn_rekey import rekey_value
 from eawf.kernel.projection.compute import (
     CANONICAL_SEQUENCE_FIELD,
     CEILING_BREACH_KIND,
@@ -105,7 +106,13 @@ from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.kernel.state.epoch2.values import ExactRevisionBinding
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.ledger import effective_records, latest_rows, read_ledger_records
+from eawf.kernel.store.ledger import (
+    effective_records,
+    latest_rows,
+    line_digest,
+    read_ledger_records,
+    render_ledger_line,
+)
 from eawf.kernel.store.paths import ledger_path, store_path
 from eawf.kernel.store.tiers import Epoch2Collection, StorageTier, tier_for
 from eawf.runtime.daemon.epoch2_root import RootIdentity
@@ -505,7 +512,7 @@ def _proof_rows(authority: RootAuthority, key: str) -> tuple[dict[str, Any], ...
     task = key.rsplit("/", 1)[-1]
     rows: list[dict[str, Any]] = []
     path = ledger_path(document_path(authority), Epoch2Collection.RECEIPT)
-    for record in read_ledger_records(path):
+    for record in effective_records(read_ledger_records(path)):
         if record.payload.get("payload_kind") != PROOF_PAYLOAD_KIND:
             continue
         proof = FiledProof.model_validate(record.payload)
@@ -721,19 +728,52 @@ def _sealed_bundle(
     return ledger.at(revision) if isinstance(revision, int) else ledger.head
 
 
+def _respelled_digest(authority: RootAuthority, bundle: MilestoneAcceptanceBundle) -> str | None:
+    """Return the digest *bundle* carried before a URN re-key respelled it, else ``None``.
+
+    The re-key files a bundle again as a row superseding its original line, with every
+    old URN in single-key form; an approval sealed before it names the original bytes.
+    Only a row that is exactly its predecessor re-keyed counts, so a row that changed
+    anything else carries no earlier digest an approval could bind through.
+    """
+    records = read_ledger_records(ledger_path(document_path(authority), Epoch2Collection.MILESTONE))
+    by_line = {line_digest(render_ledger_line(record)): record for record in records}
+    digest = bundle.digest()
+    project_key = bundle.milestone_ref.project_key
+    for record in records:
+        predecessor = None if record.supersedes is None else by_line.get(record.supersedes)
+        if (
+            predecessor is None
+            or not record.record_key.startswith(BUNDLE_KEY_PREFIX)
+            or MilestoneAcceptanceBundle.model_validate(record.payload).digest() != digest
+            or rekey_value(predecessor.payload, project_key) != record.payload
+        ):
+            continue
+        return MilestoneAcceptanceBundle.model_validate(predecessor.payload).digest()
+    return None
+
+
 def _bound_approval(
-    document: dict[str, Any], bundle: MilestoneAcceptanceBundle
+    document: dict[str, Any], bundle: MilestoneAcceptanceBundle, *, respelled_digest: str | None
 ) -> AcceptanceApproval | None:
     """Return the latest sealed approval given to *bundle*'s own bytes, else ``None``.
 
     An action that does not read back, or that the acceptance rules refuse -- another
     Milestone's, another digest's, unsealed or declined -- is no approval of this bundle.
+    An approval given to *respelled_digest*, the same bytes before a URN re-key, is.
     """
     found: list[AcceptanceApproval] = []
     for key, row in document_rows(document, Epoch2Collection.PENDING_ACTION).items():
         try:
             action = PendingAction.model_validate(row)
-            found.append(sealed_approval(action, bundle=bundle, milestone_ref=bundle.milestone_ref))
+            found.append(
+                sealed_approval(
+                    action,
+                    bundle=bundle,
+                    milestone_ref=bundle.milestone_ref,
+                    respelled_digest=respelled_digest,
+                )
+            )
         except (ValidationError, AcceptanceRefusedError) as error:
             logger.debug(f"_bound_approval passed over action={key!r} cause={error!s}")
     return max(found, key=lambda item: item.approved_at) if found else None
@@ -754,7 +794,13 @@ def _milestone_acceptance(*, authority: RootAuthority, key: str) -> MilestoneAcc
     bundle = _sealed_bundle(
         authority=authority, urn=urn, revision=fields.get("acceptance_bundle_revision")
     )
-    approval = None if bundle is None else _bound_approval(document, bundle)
+    approval = (
+        None
+        if bundle is None
+        else _bound_approval(
+            document, bundle, respelled_digest=_respelled_digest(authority, bundle)
+        )
+    )
     binding = fields.get("accepted_binding")
     try:
         journey = _JOURNEY.validate_python(fields.get("acceptance_journey", ()))

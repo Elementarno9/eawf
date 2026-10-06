@@ -28,10 +28,17 @@ import pytest
 
 from eawf import __version__
 from eawf.kernel.state.enums import StoreKind
+from eawf.platform.registry import Registry, RegistryRepoEntry
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.registry import read, update
+from eawf.runtime.daemon.methods.registry import (
+    apply_rename,
+    load_registry,
+    read,
+    update,
+    write_registry,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -478,3 +485,42 @@ def test_update_keeps_registered_workspaces(
     payload = orjson.loads(registry_path.read_bytes())
     assert payload["workspaces"]["GHI"]["home_project_code"] == "ABC"
     assert sorted(payload["workspaces"]["GHI"]["member_project_codes"]) == ["ABC", "DEF"]
+
+
+def test_a_missing_registry_loads_empty(tmp_path: Path) -> None:
+    assert load_registry(tmp_path / "registry.json").repos == {}
+
+
+def test_an_unreadable_registry_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    path.write_text("{not json", encoding="utf-8")
+    with pytest.raises(ValueError, match="registry unreadable"):
+        load_registry(path)
+
+
+def test_a_written_registry_reads_back_with_its_rename(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    entry = RegistryRepoEntry(code="OLD", path=str(tmp_path / "repo"))
+    registry = Registry(repos={"OLD": entry}, active_code="OLD")
+
+    write_registry(path, apply_rename(registry, repo_id="OLD", fields={"new_code": "NEW"}))
+
+    stored = load_registry(path)
+    assert set(stored.repos) == {"NEW"}
+    assert stored.active_code == "NEW"
+
+
+@pytest.mark.parametrize(
+    ("repo_id", "fields", "match"),
+    [
+        ("OLD", {}, "'new_code' field required"),
+        ("GONE", {"new_code": "NEW"}, "not registered"),
+        ("OLD", {"new_code": "OLD"}, "already registered"),
+    ],
+)
+def test_a_rename_that_cannot_apply_is_refused(
+    tmp_path: Path, repo_id: str, fields: dict[str, Any], match: str
+) -> None:
+    entry = RegistryRepoEntry(code="OLD", path=str(tmp_path / "repo"))
+    with pytest.raises(ValueError, match=match):
+        apply_rename(Registry(repos={"OLD": entry}), repo_id=repo_id, fields=fields)

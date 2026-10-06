@@ -161,7 +161,7 @@ def _evict_expired(cache: dict[str, Any], *, now: float) -> None:
 # ---- Operation appliers ----------------------------------------------------
 
 
-def _resolve_registry_path(override: str | None = None) -> Path:
+def resolve_registry_path(override: str | None = None) -> Path:
     """Resolve the registry path.
 
     Precedence (highest first):
@@ -171,6 +171,12 @@ def _resolve_registry_path(override: str | None = None) -> Path:
     2. ``EAWF_REGISTRY_PATH`` environment variable (test seam for
        in-process unit tests of the daemon methods).
     3. :func:`default_registry_path` — ``~/.eawf/registry.json``.
+
+    Args:
+        override: The caller's path, or ``None`` to fall through.
+
+    Returns:
+        The registry path the precedence selects.
     """
     if override:
         return Path(override)
@@ -180,12 +186,21 @@ def _resolve_registry_path(override: str | None = None) -> Path:
     return default_registry_path()
 
 
-def _load_registry(registry_path: Path) -> Registry:
+def load_registry(registry_path: Path) -> Registry:
     """Load *registry_path* into a typed :class:`Registry` for mutation.
 
     Returns a fresh empty :class:`Registry` when the file is missing
     (bootstrap path for the first ``add``). Other read errors raise
     :class:`ValueError` so the daemon maps them onto ``-32602``.
+
+    Args:
+        registry_path: The registry file, read under the caller's lock.
+
+    Returns:
+        The parsed registry, empty when the file does not exist.
+
+    Raises:
+        ValueError: The file exists but cannot be read or parsed.
     """
     try:
         return read_registry(path=registry_path)
@@ -252,8 +267,21 @@ def _apply_remove(registry: Registry, *, repo_id: str) -> Registry:
     )
 
 
-def _apply_rename(registry: Registry, *, repo_id: str, fields: dict[str, Any]) -> Registry:
-    """Apply a ``rename`` operation — re-keys the entry under ``new_code``."""
+def apply_rename(registry: Registry, *, repo_id: str, fields: dict[str, Any]) -> Registry:
+    """Apply a ``rename`` operation — re-keys the entry under ``new_code``.
+
+    Args:
+        registry: The registry as read under its lock.
+        repo_id: The code the entry is filed under now.
+        fields: The operation fields; ``new_code`` names the new key.
+
+    Returns:
+        A copy of *registry* with the entry filed under ``new_code``.
+
+    Raises:
+        ValueError: ``new_code`` is missing, *repo_id* is not registered,
+            or ``new_code`` is already taken.
+    """
     new_code = fields.get("new_code")
     if not isinstance(new_code, str) or not new_code:
         raise ValueError("validation_failed: 'new_code' field required for rename")
@@ -278,6 +306,23 @@ def _apply_rename(registry: Registry, *, repo_id: str, fields: dict[str, Any]) -
             "repos": new_repos,
         }
     )
+
+
+def write_registry(registry_path: Path, registry: Registry) -> None:
+    """Persist *registry* to *registry_path*; the caller holds its lock.
+
+    The candidate is round-tripped through the model first, so an applier
+    that produced an invalid row fails here instead of on the next read.
+
+    Args:
+        registry_path: The registry file.
+        registry: The registry to leave behind.
+
+    Raises:
+        ValidationError: The registry does not survive the round-trip.
+    """
+    payload = Registry.model_validate(registry.model_dump(mode="json")).model_dump(mode="json")
+    atomic_write_json_locked(registry_path, payload)
 
 
 _OPERATIONS = {"add", "remove", "rename"}
@@ -332,8 +377,8 @@ async def read(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         JSON-mode dict + the on-disk path.
     """
     args = ReadParams.model_validate(params)
-    registry_path = _resolve_registry_path(args.registry_path)
-    registry = _load_registry(registry_path)
+    registry_path = resolve_registry_path(args.registry_path)
+    registry = load_registry(registry_path)
     return ReadResult(
         registry=registry.model_dump(mode="json"),
         registry_path=str(registry_path),
@@ -380,7 +425,7 @@ async def update(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             )
             return result
 
-    registry_path = _resolve_registry_path(args.registry_path)
+    registry_path = resolve_registry_path(args.registry_path)
     registry_path.parent.mkdir(parents=True, exist_ok=True)
 
     from eawf.runtime.lock import portalock
@@ -388,20 +433,15 @@ async def update(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     ctx.in_flight_mutations += 1
     try:
         with portalock.acquire(registry_path, timeout=5.0):
-            registry = _load_registry(registry_path)
+            registry = load_registry(registry_path)
             if args.operation == "add":
                 updated = _apply_add(registry, repo_id=args.repo_id, fields=args.fields)
             elif args.operation == "remove":
                 updated = _apply_remove(registry, repo_id=args.repo_id)
             else:  # rename
-                updated = _apply_rename(registry, repo_id=args.repo_id, fields=args.fields)
+                updated = apply_rename(registry, repo_id=args.repo_id, fields=args.fields)
 
-            # Re-validate via round-trip — defends against future
-            # schema drift in the appliers.
-            payload = Registry.model_validate(updated.model_dump(mode="json")).model_dump(
-                mode="json"
-            )
-            atomic_write_json_locked(registry_path, payload)
+            write_registry(registry_path, updated)
 
             envelope = _build_envelope(
                 operation=args.operation,
@@ -438,6 +478,10 @@ async def update(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
 __all__ = [
     "IDEMPOTENCY_TTL_SECONDS",
+    "apply_rename",
+    "load_registry",
     "read",
+    "resolve_registry_path",
     "update",
+    "write_registry",
 ]

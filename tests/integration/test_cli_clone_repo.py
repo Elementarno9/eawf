@@ -11,6 +11,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -104,7 +105,13 @@ def test_cli_clone_repo_propagates_branch_flag(tmp_path: Path) -> None:
         stdout = ""
         stderr = ""
 
-    def _fake_run(args: list[str], **_kwargs: object) -> _FakeResult:
+    real_run = subprocess.run
+
+    def _fake_run(args: list[str], **kwargs: Any) -> object:
+        # The patch replaces ``subprocess.run`` process-wide, so the git
+        # calls init makes after the clone must still reach real git.
+        if list(args[:2]) != ["git", "clone"]:
+            return real_run(args, **kwargs)
         captured["args"] = list(args)
         target_dir = Path(args[-1])
         target_dir.mkdir(parents=True, exist_ok=True)

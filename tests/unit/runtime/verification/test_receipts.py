@@ -46,6 +46,7 @@ ARGV = ["uv", "run", "pytest", "tests/unit/sample/test_loader.py", "-q"]
 BOUND_AT = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
 HEAD = "1" * 40
 OLDER_HEAD = "3" * 40
+OLDER_TREE = "5" * 40
 
 
 def _digest(label: str) -> str:
@@ -143,7 +144,7 @@ def _changed(recorded: ProofFreshnessKey, expected: ProofFreshnessKey) -> set[Fr
 
 # One variant per freshness input; each changes exactly that input.
 _INPUT_CHANGES: dict[FreshnessComponent, Callable[[], ProofFreshnessKey]] = {
-    FreshnessComponent.CODE: lambda: _key(binding=_binding(head_sha=OLDER_HEAD)),
+    FreshnessComponent.CODE: lambda: _key(binding=_binding(tree_sha=OLDER_TREE)),
     FreshnessComponent.CRITERION: lambda: _key(
         _contract(text="the loader returns the merged configuration")
     ),
@@ -198,7 +199,7 @@ def _binding_variants() -> list[tuple[str, Any]]:
         ("repository_ref", "eawf://WSP-MAIN/PRJ-EAWF/REP-OTHER/repository/REP-OTHER"),
         ("ref_kind", RevisionRefKind.CANDIDATE),
         ("head_sha", OLDER_HEAD),
-        ("tree_sha", "5" * 40),
+        ("tree_sha", OLDER_TREE),
         ("parent_sha", None),
         ("batch_ref", OTHER_BATCH),
         ("integration_generation", 4),
@@ -281,8 +282,22 @@ def test_require_fresh_receipt_accepts_reobserved_head() -> None:
     assert require_fresh_receipt(receipt, reobserved) is receipt
 
 
-def test_require_fresh_receipt_rejects_receipt_bound_to_older_head() -> None:
-    receipt = _receipt(_key(binding=_binding(head_sha=OLDER_HEAD)))
+def test_require_fresh_receipt_accepts_squashed_commit_over_same_tree() -> None:
+    receipt = _receipt(_key())
+    squashed = _key(binding=_binding(head_sha=OLDER_HEAD, parent_sha="6" * 40))
+    assert squashed.digest() == receipt.freshness.digest()
+    assert require_fresh_receipt(receipt, squashed) is receipt
+
+
+def test_require_fresh_receipt_accepts_root_commit_over_same_tree() -> None:
+    receipt = _receipt(_key())
+    rooted = _key(binding=_binding(head_sha=OLDER_HEAD, parent_sha=None))
+    assert require_fresh_receipt(receipt, rooted) is receipt
+
+
+def test_require_fresh_receipt_rejects_receipt_bound_to_older_tree() -> None:
+    receipt = _receipt(_key(binding=_binding(tree_sha=OLDER_TREE)))
+    assert receipt.freshness.digest() != _key().digest()
     with pytest.raises(StaleReceiptError, match=r"RCP-0001.*stale: changed code") as caught:
         require_fresh_receipt(receipt, _key())
     assert caught.value.receipt_id == "RCP-0001"
@@ -290,7 +305,7 @@ def test_require_fresh_receipt_rejects_receipt_bound_to_older_head() -> None:
 
 
 def test_require_fresh_receipt_names_every_changed_input() -> None:
-    receipt = _receipt(_key(binding=_binding(head_sha=OLDER_HEAD), runner_digest=_digest("old")))
+    receipt = _receipt(_key(binding=_binding(tree_sha=OLDER_TREE), runner_digest=_digest("old")))
     with pytest.raises(StaleReceiptError) as caught:
         require_fresh_receipt(receipt, _key())
     assert caught.value.changed == (FreshnessComponent.CODE, FreshnessComponent.RUNNER)
@@ -302,7 +317,7 @@ def test_stale_receipt_error_is_a_value_error() -> None:
 
 def test_proof_receipt_rejects_mismatched_freshness_key() -> None:
     with pytest.raises(ValidationError, match="does not match its inputs"):
-        _receipt(_key(), freshness_key=_key(binding=_binding(head_sha=OLDER_HEAD)).digest())
+        _receipt(_key(), freshness_key=_key(binding=_binding(tree_sha=OLDER_TREE)).digest())
 
 
 @pytest.mark.parametrize(

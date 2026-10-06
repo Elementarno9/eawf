@@ -145,6 +145,7 @@ ROOT_ENTRY_EXCEPTIONS: Final[tuple[RootEntryException, ...]] = (
     _entry("store", "tooling", "compacts the epoch-1 JSONL stores"),
     _entry("init", "tooling", "creates a tree, before any entity exists"),
     _entry("clone-repo", "tooling", "clones a repository and initialises it"),
+    _entry("publish", "tooling", "rewrites the branch's scratch commits across every Batch"),
     _entry("repo", "tooling", "registers repositories in the machine registry"),
     _entry("status", "tooling", "summarises the tree for the operator"),
     _entry("validate", "tooling", "validates a state or envelope document"),
@@ -326,6 +327,11 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
     _exempt("hook agent-output", "host_event", "records one host agent output chunk"),
     _exempt("init", "local_setup", "creates a tree, before any record exists"),
     _exempt("clone-repo", "local_setup", "clones and initialises a repository"),
+    _exempt(
+        "publish",
+        "wire_pending",
+        "the bind route takes no anchor yet; a rerun only unstages rows already bound",
+    ),
     _exempt("repo init", "local_setup", "creates a repository tree, before any record exists"),
     _exempt(
         "workspace select", "local_setup", "picks the session's workspace and writes no record"
@@ -364,6 +370,11 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
     _exempt("doctor", "local_setup", "--fix repairs the local install, below the record layer"),
     _exempt("migrate", "epoch1_state", "rewrites an epoch-1 state.json across schema versions"),
     _exempt("migrate epoch2", "epoch1_state", "cuts an epoch-1 tree over before any record exists"),
+    _exempt(
+        "migrate urn-rekey",
+        "wire_pending",
+        "re-plans under the document lock, so a repeated apply writes nothing; takes no anchor",
+    ),
     _exempt("cc statusline install", "local_setup", "writes the host statusline configuration"),
     _exempt("schema dump", "local_setup", "rewrites the committed generated schema files"),
     _exempt("sync", "local_setup", "re-renders the managed instruction files"),

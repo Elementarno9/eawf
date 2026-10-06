@@ -437,6 +437,7 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "permission",
     "planning",
     "projection",
+    "publish",
     "question",
     "question_decision",
     "regime",
@@ -458,6 +459,7 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "state",
     "state_subscribe",
     "state_upkeep",
+    "urn_rekey",
     "wal_admin",
     "workspace_lease",
 )

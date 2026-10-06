@@ -309,7 +309,7 @@ def _held_receipt(path: Path, key: str | None) -> HeldReceipt | None:
         return None
     proofs = (
         FiledProof.model_validate(item.payload)
-        for item in read_ledger_records(path)
+        for item in effective_records(read_ledger_records(path))
         if item.payload.get("payload_kind") == PROOF_PAYLOAD_KIND
     )
     receipt = next(

@@ -18,9 +18,20 @@ from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import State
 from eawf.kernel.store.compaction import document_rows, read_document
-from eawf.kernel.store.ledger import guarded_ledger_write, render_ledger_line
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.kernel.validate.strict import validate_state
+from eawf.observability.doctor.artifact_digests import (
+    ARTIFACT_DIGEST_ACTION,
+    artifact_digest_preview,
+    digested_record,
+    plan_artifact_digests,
+)
+from eawf.observability.doctor.receipt_rekey import (
+    RECEIPT_REKEY_ACTION,
+    plan_receipt_rekeys,
+    receipt_rekey_preview,
+    rekeyed_record,
+)
 from eawf.observability.doctor.repair import (
     ARCHIVE_REF_PREFIX,
     LEDGER_SUPERSEDE_ACTION,
@@ -33,6 +44,7 @@ from eawf.observability.doctor.repair import (
 )
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
+from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.gate_receipt_hygiene import scrub_gate_receipt_store
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 from eawf.runtime.lock import portalock
@@ -203,23 +215,38 @@ def _apply_ledger_supersede(
     """Append the previewed superseding rows under the tree's session locks.
 
     The plan is taken again under the locks and must match the preview, so
-    no row lands that the operator did not see. Ledgers are only extended,
-    through the guarded writer; a commit the rows declare unreachable is
-    pinned under its archive ref first, so the declaration never names a
-    ref that does not exist.
+    no row lands that the operator did not see. Each row is committed
+    through the ledger-append path, so it is journalled and sequenced like
+    any native line; a commit the rows declare unreachable is pinned under
+    its archive ref first, so the declaration never names a ref that does
+    not exist.
+
+    Raises:
+        DaemonValidationError: The tree is not epoch 2, the preview
+            changed, or a planned row's ledger is not the selected
+            generation's ledger of its collection.
     """
     authority = resolve_authority(workspace / ".ea")
     if authority.epoch != 2:
         raise DaemonValidationError("ledger repair needs an epoch-2 tree")
     context = ctx.native_root_context(authority.root)
-    with context.session([_project_lock_urn(context)]):
+    with context.session([_project_lock_urn(context)]) as session:
         rows, _unrepairable = plan_ledger_supersessions(workspace)
         if ledger_supersession_digest(workspace, rows) != action.preview_digest:
             raise DaemonValidationError(
                 f"doctor repair preview changed: {action.action_id!r}; rerun `eawf doctor --fix`"
             )
         recorded_at = datetime.now(UTC)
-        appends: dict[str, bytes] = {}
+        records = [superseding_record(workspace, row, recorded_at=recorded_at) for row in rows]
+        for row, record in zip(rows, records, strict=True):
+            # The append path writes the selected generation's ledger of the
+            # record's collection; a row read from any other file would land
+            # somewhere other than the line it supersedes.
+            if (workspace / row.path).resolve() != session.ledger_path(record.collection).resolve():
+                raise DaemonValidationError(
+                    f"ledger repair cannot supersede {row.path!r}: it is not the selected "
+                    f"generation's {record.collection.value} ledger"
+                )
         for row in rows:
             for entry in row.unreachable:
                 if entry.archive_ref.startswith(ARCHIVE_REF_PREFIX):
@@ -230,12 +257,70 @@ def _apply_ledger_supersede(
                         check=True,
                         **no_window_kwargs(),
                     )
-            line = render_ledger_line(superseding_record(workspace, row, recorded_at=recorded_at))
-            appends[row.path] = appends.get(row.path, b"") + f"{line}\n".encode()
-        for path, appended in appends.items():
-            ledger = workspace / path
-            guarded_ledger_write(ledger, ledger.read_bytes() + appended)
+        for record in records:
+            commit_ledger_append(session, record)
     return ("applied" if rows else "noop"), len(rows)
+
+
+def _apply_artifact_digests(
+    ctx: MethodContext, workspace: Path, action: DoctorRepairAction
+) -> tuple[str, int]:
+    """Append the previewed digest-carrying artifact rows through the ledger transaction.
+
+    The plan is taken again under the session's lock and must match the
+    preview, so no row lands that the operator did not see -- a cited file
+    whose content moved since the preview changes the digest too. Each row
+    is one committed ledger append, which only extends the ledger.
+
+    Raises:
+        DaemonValidationError: The tree is not epoch 2 or the preview changed.
+    """
+    authority = resolve_authority(workspace / ".ea")
+    if authority.epoch != 2:
+        raise DaemonValidationError("artifact digest repair needs an epoch-2 tree")
+    context = ctx.native_root_context(authority.root)
+    with context.session([_project_lock_urn(context)]) as session:
+        ledger = session.ledger_path(Epoch2Collection.ARTIFACT)
+        plan = plan_artifact_digests(workspace, ledger)
+        if artifact_digest_preview(ledger, plan) != action.preview_digest:
+            raise DaemonValidationError(
+                f"doctor repair preview changed: {action.action_id!r}; rerun `eawf doctor --fix`"
+            )
+        recorded_at = datetime.now(UTC)
+        records = [digested_record(ledger, row, recorded_at=recorded_at) for row in plan.rows]
+        for record in records:
+            commit_ledger_append(session, record)
+    return ("applied" if records else "noop"), len(records)
+
+
+def _apply_receipt_rekey(
+    ctx: MethodContext, workspace: Path, action: DoctorRepairAction
+) -> tuple[str, int]:
+    """Append the previewed re-keyed receipt rows through the ledger transaction.
+
+    The plan is taken again under the session's lock and must match the
+    preview, so no row lands that the operator did not see. Each row is one
+    committed ledger append, which only extends the ledger.
+
+    Raises:
+        DaemonValidationError: The tree is not epoch 2 or the preview changed.
+    """
+    authority = resolve_authority(workspace / ".ea")
+    if authority.epoch != 2:
+        raise DaemonValidationError("receipt re-key repair needs an epoch-2 tree")
+    context = ctx.native_root_context(authority.root)
+    with context.session([_project_lock_urn(context)]) as session:
+        ledger = session.ledger_path(Epoch2Collection.RECEIPT)
+        rows = plan_receipt_rekeys(ledger)
+        if receipt_rekey_preview(ledger, rows) != action.preview_digest:
+            raise DaemonValidationError(
+                f"doctor repair preview changed: {action.action_id!r}; rerun `eawf doctor --fix`"
+            )
+        recorded_at = datetime.now(UTC)
+        records = [rekeyed_record(ledger, row, recorded_at=recorded_at) for row in rows]
+        for record in records:
+            commit_ledger_append(session, record)
+    return ("applied" if records else "noop"), len(records)
 
 
 def _apply_action(
@@ -246,6 +331,10 @@ def _apply_action(
 ) -> tuple[str, int]:
     if action.action_id == LEDGER_SUPERSEDE_ACTION:
         return _apply_ledger_supersede(ctx, workspace, action)
+    if action.action_id == ARTIFACT_DIGEST_ACTION:
+        return _apply_artifact_digests(ctx, workspace, action)
+    if action.action_id == RECEIPT_REKEY_ACTION:
+        return _apply_receipt_rekey(ctx, workspace, action)
     if action.action_id.startswith("config.normalize."):
         return _apply_config(workspace, action)
     if action.action_id == "receipts.scrub":

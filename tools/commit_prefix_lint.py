@@ -149,9 +149,16 @@ Enforces:
    and trailer grammar of every commit in a revision range without
    reading state; see ``commit_grammar_history.py``.
 
-Checks 1-7 run as a ``commit-msg``-stage pre-commit hook. The first
-argument is the commit-message file path (pre-commit passes it). The
-linter consults ``git diff --cached --name-only`` for staged paths.
+10. Pushed commits carry the Batch regime. ``--pre-push-lint``, the
+   ``pre-push``-stage hook, lints every commit in the pushed range with
+   :func:`batch_commit_error`: one ``Batch:`` trailer per non-``state``
+   commit, optional ``Task:`` trailers of that Batch, and a ``state:``
+   commit confined to committed state paths. Commits stay free locally,
+   so scratch history is refused only when it is pushed.
+
+Checks 1-7 run when the first argument is a commit-message file path,
+consulting ``git diff --cached --name-only`` for staged paths; no hook
+stage calls that mode any longer.
 
 Exit codes:
 - ``0`` — accepted (an advisory deprecation warning may still print to
@@ -179,6 +186,7 @@ from coauthor_policy import (
 )
 from epoch2_lifecycle_view import (
     NATIVE_TASK_KEY_RE,
+    _collection_rows,
     epoch2_generation,
     generation_lifecycle_view,
     native_task_status,
@@ -228,6 +236,11 @@ _WAVE_TRAILER_RE = re.compile(
 # package, so tests/unit/test_commit_prefix_lint_epoch2.py pins the copy.
 _TASK_TRAILER_NAME = "Task"
 _TASK_TRAILER_RE = re.compile(rf"^{_TASK_TRAILER_NAME}:\s+(?P<key>\S+)\s*$", re.MULTILINE)
+# A pushed commit names the one Batch it delivers; its Task trailers, when
+# present, only narrow which Tasks of that Batch it carries.
+_BATCH_TRAILER_NAME = "Batch"
+_BATCH_TRAILER_RE = re.compile(rf"^{_BATCH_TRAILER_NAME}:\s+(?P<key>\S+)\s*$", re.MULTILINE)
+_BATCH_KEY_RE = re.compile(r"^BAT-\d{4}$")
 # The prefix form names the Task in the subject instead of a trailer. Both
 # grammars are read while the project moves to the trailer form; the prefix
 # form warns whenever the trailer form is the configured one.
@@ -486,8 +499,12 @@ def task_trailer_position_error(text: str) -> str | None:
     Returns:
         A diagnostic when the message names more than one Task trailer, or
         when anything but co-author trailers follows it; ``None`` when the
-        message carries no Task trailer or carries one in place.
+        message carries no Task trailer, carries one in place, or carries a
+        ``Batch`` trailer, whose commit may name several Tasks of its Batch
+        (see :func:`batch_commit_error`).
     """
+    if _BATCH_TRAILER_RE.search(text) is not None:
+        return None
     lines = _message_lines(text)
     positions = [index for index, line in enumerate(lines) if _TASK_TRAILER_RE.match(line)]
     if not positions:
@@ -509,6 +526,101 @@ def task_trailer_position_error(text: str) -> str | None:
             f"{_TASK_TRAILER_NAME} trailer out of place: {lines[positions[0]]!r} follows a "
             "co-author trailer; it comes before them"
         )
+    return None
+
+
+@dataclass(frozen=True)
+class NativeRecords:
+    """The canonical generation's native Batches and the Batch of each Task.
+
+    Attributes:
+        batch_keys: Every native Batch key the generation holds, whatever
+            its status.
+        task_batches: Each Task key mapped to the key of the Batch its
+            ``batch_ref`` names, or ``None`` when it names none.
+    """
+
+    batch_keys: frozenset[str]
+    task_batches: Mapping[str, str | None]
+
+
+def _ref_key(ref: object) -> str | None:
+    # A ref is a URN whose last segment is the record key; reading only that
+    # segment keeps the check indifferent to how many slots the URN carries.
+    return ref.rsplit("/", 1)[-1] if isinstance(ref, str) and ref else None
+
+
+def load_native_records(generation: Path) -> NativeRecords:
+    """Read the native Batches and Task memberships of *generation*.
+
+    Args:
+        generation: The selected generation directory.
+
+    Returns:
+        The Batch keys and each Task's Batch key.
+
+    Raises:
+        OSError: The generation document cannot be read.
+        ValueError: The document or a ledger is not the expected JSON shape.
+    """
+    batches = _collection_rows(generation, "batch")
+    tasks = _collection_rows(generation, "task")
+    return NativeRecords(
+        batch_keys=frozenset(key for key in batches if _BATCH_KEY_RE.match(key)),
+        task_batches={key: _ref_key(row.get("batch_ref")) for key, row in tasks.items()},
+    )
+
+
+def batch_commit_error(
+    message: str, paths: Iterable[str], records: NativeRecords | None
+) -> str | None:
+    """Return why one pushed commit breaks the Batch regime, or ``None``.
+
+    A ``state:`` commit carries only committed state paths. Any other commit
+    is ``<type>: <summary>`` with exactly one ``Batch: BAT-<NNNN>`` trailer
+    naming a Batch of the canonical generation, in any status: the Batch
+    moves only when it integrates, which is after its commits are pushed.
+    ``Task`` trailers are optional; each one present must name a Task of
+    that Batch. No per-Task or per-wave commit cap applies.
+
+    Args:
+        message: The full commit message.
+        paths: The paths the commit changes.
+        records: The canonical generation's records, or ``None`` when the
+            canonical root is not marked epoch 2.
+
+    Returns:
+        The first diagnostic, or ``None`` when the commit is accepted.
+    """
+    subject = _extract_subject(message)
+    conventional = _SUBJECT_BARE_CONVENTIONAL_RE.match(subject)
+    if conventional is None:
+        return f"subject is not '<type>: <summary>': {subject!r}"
+    if conventional.group("type") == "state":
+        strays = _state_strays(list(paths), epoch2=records is not None)
+        return None if not strays else f"state commit touches non-state paths: {strays}"
+    batch_keys = [match.group("key") for match in _BATCH_TRAILER_RE.finditer(message)]
+    if len(batch_keys) != 1:
+        found = "no" if not batch_keys else f"{len(batch_keys)} ({', '.join(batch_keys)})"
+        return f"carries {found} {_BATCH_TRAILER_NAME} trailers; a commit names exactly one Batch"
+    batch = batch_keys[0]
+    if not _BATCH_KEY_RE.match(batch):
+        return f"{_BATCH_TRAILER_NAME} trailer {batch!r} is not a Batch key (BAT-<NNNN>)"
+    if records is None:
+        return f"{_BATCH_TRAILER_NAME} trailer {batch!r}: the canonical root is not marked epoch 2"
+    if batch not in records.batch_keys:
+        return f"{_BATCH_TRAILER_NAME} trailer {batch!r} names no Batch of the canonical generation"
+    for match in _TASK_TRAILER_RE.finditer(message):
+        task = match.group("key")
+        if task not in records.task_batches:
+            return (
+                f"{_TASK_TRAILER_NAME} trailer {task!r} names no Task of the canonical generation"
+            )
+        owner = records.task_batches[task]
+        if owner != batch:
+            return (
+                f"{_TASK_TRAILER_NAME} trailer {task!r} belongs to Batch {owner!r}, not {batch!r}"
+            )
     return None
 
 
@@ -1681,11 +1793,13 @@ def _check_history_main(argv: list[str]) -> int:
 def main(argv: list[str]) -> int:
     if argv[1:2] == ["--check-history"]:
         return _check_history_main(argv)
-    if argv[1:2] in (["--check-rewrite"], ["--pre-push"]):
-        from wave_trailer_guard import check_pre_push, check_rewrite
+    if argv[1:2] in (["--check-rewrite"], ["--pre-push"], ["--pre-push-lint"]):
+        from wave_trailer_guard import check_pre_push, check_pushed_commits, check_rewrite
 
         if argv[1] == "--pre-push":
             exit_code, diag = check_pre_push(os.environ)
+        elif argv[1] == "--pre-push-lint":
+            exit_code, diag = check_pushed_commits(os.environ)
         elif len(argv) == 4:
             exit_code, diag = check_rewrite(argv[2], argv[3])
         else:

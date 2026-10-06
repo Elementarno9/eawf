@@ -78,7 +78,11 @@ repos:
         # carries the same commit SHAs and URNs; the generation markers pin a
         # manifest digest, the rehearsal goldens' class. The generation's
         # ledgers stay scanned, like the epoch-1 typed stores.
-        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/cutover-faults/pending-wal/locks/wal/wal-canary-0001\.pending\.json$|^tests/fixtures/migration/epoch1-full/backlog_corpus\.json$|^tests/fixtures/migration/epoch2/complete-manifest\.json$|^tests/fixtures/migration/live-cutover/corpus-pin\.json$|^tests/fixtures/migration/p30-i26-history/provenance\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/document\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/store/audit\.jsonl$|^tests/golden/kernel/migration/rehearsal/[a-z0-9-]+\.json$|^tests/fixtures/release/observations/[a-z_]+-dev2\.json$|^\.ea/requirements\.json$|^\.ea/generations/gen-[0-9a-f]{16}/state\.json$|^\.ea/generations/(EPOCH2_ACTIVE|selected)\.json$'
+        #
+        # The ledger-history fixtures are slices of committed ledgers taken at
+        # pinned revisions, so they carry the same commit SHAs; they are listed
+        # one by one like the migration fixtures.
+        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/cutover-faults/pending-wal/locks/wal/wal-canary-0001\.pending\.json$|^tests/fixtures/migration/epoch1-full/backlog_corpus\.json$|^tests/fixtures/migration/epoch2/complete-manifest\.json$|^tests/fixtures/migration/live-cutover/corpus-pin\.json$|^tests/fixtures/migration/p30-i26-history/provenance\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/document\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/store/audit\.jsonl$|^tests/golden/kernel/migration/rehearsal/[a-z0-9-]+\.json$|^tests/fixtures/release/observations/[a-z_]+-dev2\.json$|^\.ea/requirements\.json$|^\.ea/generations/gen-[0-9a-f]{16}/state\.json$|^\.ea/generations/(EPOCH2_ACTIVE|selected)\.json$|^tests/fixtures/ledger_history/(batch_before|batch_remapped|task_stray)\.jsonl$'
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.0.0
@@ -103,12 +107,21 @@ repos:
         stages: [commit-msg]
       - id: commit-prefix-lint
         name: commit-prefix-lint
-        entry: python3 tools/commit_prefix_lint.py
+        entry: python3 tools/commit_prefix_lint.py --pre-push-lint
+        stages: [pre-push]
         language: system
-        stages: [commit-msg]
+        pass_filenames: false
+        always_run: true
       - id: wave-trailer-guard
         name: wave-trailer-guard
         entry: python3 tools/commit_prefix_lint.py --pre-push
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      - id: ledger-history
+        name: ledger-history
+        entry: uv run eawf hook ledger-history --range origin/main..HEAD
         language: system
         pass_filenames: false
         always_run: true

@@ -193,12 +193,15 @@ class ExternalInputDigest(_FrozenModel):
 #: Which freshness component each :class:`RevisionBinding` field feeds.
 #: ``bound_at`` maps to ``None``: it is when the binding was observed, not
 #: what was bound, so re-observing the same head must not stale a proof.
+#: ``head_sha`` and ``parent_sha`` also map to ``None``: they are commit
+#: identity, not content, so squashing or rebasing onto an unchanged tree
+#: must not stale a proof. ``tree_sha`` stays keyed as the content identity.
 REVISION_BINDING_COMPONENTS: Final[Mapping[str, FreshnessComponent | None]] = {
     "repository_ref": FreshnessComponent.CODE,
     "ref_kind": FreshnessComponent.CODE,
-    "head_sha": FreshnessComponent.CODE,
+    "head_sha": None,
     "tree_sha": FreshnessComponent.CODE,
-    "parent_sha": FreshnessComponent.CODE,
+    "parent_sha": None,
     "batch_ref": FreshnessComponent.CODE,
     "integration_generation": FreshnessComponent.CODE,
     "manifest_digest": FreshnessComponent.CODE,

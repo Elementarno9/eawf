@@ -783,6 +783,8 @@ ALLOWED_DOCUMENT_WRITERS: Final = frozenset(
         "runtime/daemon/epoch2_transaction.py",
         # The plan-revision commit, which journals its own WAL intent.
         "workflow/planning/apply.py",
+        # The whole-document rewrite commit, which journals its own WAL intent.
+        "runtime/daemon/epoch2_rewrite.py",
         # A canary's empty born generation, written before it has authority.
         "platform/install/canary.py",
         # The cutover's projection of the epoch-1 corpus into a new generation.

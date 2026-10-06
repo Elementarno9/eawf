@@ -349,6 +349,8 @@ _NON_STATE_WRITERS = frozenset(
         "surfaces/cli/commands/repo.py",
         "surfaces/cli/commands/workspace.py",
         "kernel/spec/writer.py",
+        # A machine-local staged binding row, written under the root's session.
+        "workflow/integration/publish_binding.py",
     }
 )
 
