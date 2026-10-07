@@ -1,63 +1,58 @@
 """When a budget notice may open: the one policy that owns every notice number.
 
-A notice reports an event that has happened -- an estimate was passed, a
-ceiling was reached -- never a prediction that one is coming. The policy
-therefore carries no fraction below one on any basis: the estimate's
-notify fraction is at least one, and nothing else is declared. A former
-progress or warning fraction, under that name or any other, is an unknown
-key and fails to load, so a later revision cannot reintroduce an interrupt
-at eighty percent by renaming it. The observed fraction stays readable in
-the usage gauge; only the interrupt is gone.
+A notice reports a hard ceiling a running Run has reached, never an
+estimate it passed nor a prediction that a ceiling is coming: passing an
+estimate proved elapsed-time arithmetic, and every notice it opened was
+the same wall-clock reading that discriminated nothing. So one rule
+remains. On the token axis the ceiling's kill ladder has already acted,
+and the notice opens at once. On the wall-clock axis a long healthy Run
+and a stuck one reach the ceiling alike, so the notice opens only once
+the Run has also shown no event for the grace period.
 
-Passing an estimate proves elapsed-time arithmetic, not that anything is
-wrong: an optimistic estimate and a healthy long Run cross it alike. So an
-estimate notice opens only once no progress has been observed for the
-grace period as well, and until then the crossing is an activity fact and
-nothing more.
+A former estimate or warning fraction, under any name, is an unknown key
+and fails to load, so a later revision cannot reintroduce an interrupt
+below the ceiling by renaming it. The observed fraction stays readable in
+the usage gauge; only the interrupt is gone.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from decimal import Decimal
-from typing import Annotated, Final
+from typing import Annotated, Any, Final, Literal
 
-from pydantic import Field, StrictInt
+from pydantic import Field, StrictInt, model_validator
 
 from eawf.kernel.economics.prompt_budget import BudgetPolicyId
 from eawf.kernel.runtime.provider import RuntimeRecord
 
+#: The key the estimate threshold was configured under before it was removed.
+_REMOVED_NOTIFY_FRACTION: Final = "notify_fraction"
+
 
 class EstimatedTimeNotice(RuntimeRecord):
-    """When an elapsed-time estimate crossing becomes a notice.
+    """When a Run that reached a hard ceiling opens a budget notice.
 
     Attributes:
-        notify_fraction: The elapsed fraction of the estimate at which the
-            crossing is a durable fact. At least one: below it the estimate
-            has not been passed, and a notice there would be a prediction.
-        require_no_progress_for: Seconds with no observed progress before
-            the crossing opens a notice.
+        require_no_progress_for: Seconds a Run must show no event before
+            its wall-clock ceiling crossing opens a notice.
     """
 
-    notify_fraction: Annotated[Decimal, Field(ge=1)] = Decimal("1.00")
     require_no_progress_for: Annotated[StrictInt, Field(ge=1)] = 600
 
-    def passed(self, *, elapsed_seconds: float, estimate_seconds: float) -> bool:
-        """Return whether *elapsed_seconds* reached the notify fraction of the estimate.
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_keys(cls, data: Any) -> Any:
+        """Name the removed estimate threshold rather than report a bare unknown key.
 
-        Args:
-            elapsed_seconds: Wall seconds since the work started.
-            estimate_seconds: The estimate those seconds are measured against.
-
-        Returns:
-            ``True`` once the elapsed fraction is at or past the notify
-            fraction; never for a non-positive estimate, which states no
-            budget to pass.
+        Raises:
+            ValueError: The table still declares ``notify_fraction``.
         """
-        if estimate_seconds <= 0:
-            return False
-        fraction = Decimal(str(elapsed_seconds)) / Decimal(str(estimate_seconds))
-        return fraction >= self.notify_fraction
+        if isinstance(data, dict) and _REMOVED_NOTIFY_FRACTION in data:
+            raise ValueError(
+                f"{_REMOVED_NOTIFY_FRACTION} was removed: a budget notice opens only at "
+                "a Run's hard ceiling, so delete the key"
+            )
+        return data
 
     def grace_met(self, *, last_progress_at: datetime, now: datetime) -> bool:
         """Return whether no progress has been seen for the grace period.
@@ -72,6 +67,34 @@ class EstimatedTimeNotice(RuntimeRecord):
         """
         return now - last_progress_at >= timedelta(seconds=self.require_no_progress_for)
 
+    def opens(
+        self,
+        *,
+        running: bool,
+        axis: Literal["tokens", "wall_seconds"],
+        ceiling_reached: bool,
+        silent_for: timedelta,
+    ) -> bool:
+        """Return whether a ceiling reading opens a budget notice: the one notice rule.
+
+        Args:
+            running: Whether the scope is a Run in ``RUNNING``. Anything
+                else -- a stopped Run, a wave -- never opens a notice.
+            axis: The metered resource the ceiling is set on.
+            ceiling_reached: Whether the reading reached the Run's hard
+                ceiling on *axis*.
+            silent_for: How long the Run has shown no event, counted from
+                its start when it has shown none. The token axis ignores it.
+
+        Returns:
+            ``True`` for a running Run at its hard ceiling: always on the
+            token axis, and on the wall-clock axis only once the Run has
+            been silent for :attr:`require_no_progress_for` seconds.
+        """
+        if not (running and ceiling_reached):
+            return False
+        return axis == "tokens" or silent_for >= timedelta(seconds=self.require_no_progress_for)
+
 
 class BudgetNoticePolicy(RuntimeRecord):
     """The validated ``economics.notice_policy`` table.
@@ -79,7 +102,7 @@ class BudgetNoticePolicy(RuntimeRecord):
     Attributes:
         policy_id: The policy's stable identity.
         revision: Bumped on every change.
-        estimated_time: When an estimate crossing becomes a notice.
+        estimated_time: When a ceiling crossing becomes a notice.
     """
 
     policy_id: BudgetPolicyId = "NTC-DEFAULT"

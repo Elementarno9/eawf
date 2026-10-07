@@ -8,6 +8,8 @@ actions an agent raises when it reaches a choice it may not take.
 from __future__ import annotations
 
 import logging
+import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Final
 
 import typer
@@ -91,6 +93,44 @@ def _campaign_call(
     return None
 
 
+def _questions_file(path: Path) -> list[dict[str, Any]]:
+    """Return the questions a ``--questions-file`` lists, each validated.
+
+    The file is a YAML list whose items each hold ``question``, an optional
+    ``context`` and an optional ``brief`` path relative to the repository root.
+
+    Raises:
+        UserError: The file cannot be read, is not YAML, is not a list, or an
+            item does not hold the question shape, an unknown key included.
+    """
+    import yaml
+    from pydantic import TypeAdapter
+    from pydantic import ValidationError as PydanticValidationError
+
+    from eawf.kernel.state.epoch2.campaign import CampaignQuestionSpec
+
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise errors.UserError(
+            f"--questions-file {path} cannot be read as YAML: {exc}", kind="InvalidInput"
+        ) from exc
+    if not isinstance(raw, list) or not raw:
+        raise errors.UserError(
+            f"--questions-file {path} must hold a non-empty YAML list of questions",
+            kind="InvalidInput",
+        )
+    try:
+        items = TypeAdapter(list[CampaignQuestionSpec]).validate_python(raw)
+    except PydanticValidationError as exc:
+        fields = sorted({".".join(str(part) for part in row["loc"]) for row in exc.errors()})
+        raise errors.UserError(
+            f"--questions-file {path} is not a valid questions list; check {', '.join(fields)}",
+            kind="InvalidInput",
+        ) from exc
+    return [item.model_dump(mode="json") for item in items]
+
+
 @campaign_app.command("new")
 def campaign_new(
     ctx: typer.Context,
@@ -98,9 +138,24 @@ def campaign_new(
     actor: _Actor,
     track: Annotated[str, typer.Option("--track", help="URN of the Track that owns it.")],
     question: Annotated[
-        list[str],
+        list[str] | None,
         typer.Option("--question", help="A question to work; repeat it, the Campaign's own first."),
-    ],
+    ] = None,
+    questions_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--questions-file",
+            help="YAML list of {question, context, brief} items, after any --question.",
+        ),
+    ] = None,
+    idempotency_key: Annotated[
+        str | None,
+        typer.Option(
+            "--idempotency-key",
+            help="Caller's name for this request; a retry returns the first Campaign. "
+            "Minted when omitted.",
+        ),
+    ] = None,
     depth: Annotated[
         str | None,
         typer.Option(
@@ -128,7 +183,19 @@ def campaign_new(
     the depth names plus a closing synthesis, and approves the plan under the
     Track. With ``--run`` it also starts driving it; ``campaign run`` does so
     later. A budget left unset bounds the Campaign by one round per step.
+    A question from ``--questions-file`` may carry context and a brief file,
+    which the daemon reads once, now, and every round of the question sees.
     """
+    asked: list[str | dict[str, Any]] = list(question or [])
+    try:
+        if questions_file is not None:
+            asked += _questions_file(questions_file)
+        if not asked:
+            raise errors.UserError(
+                "state at least one --question or a --questions-file", kind="InvalidInput"
+            )
+    except errors.CliError as exc:
+        errors.emit_error(exc, flags=ctx.obj)
     axes = [
         {"axis_kind": kind, "limit": limit, "unit": kind}
         for kind, limit in (("rounds", budget_rounds), ("tokens", budget_tokens))
@@ -138,9 +205,10 @@ def campaign_new(
         "actor": actor,
         "track_ref": track,
         "title": title,
-        "questions": question,
+        "questions": asked,
         "runtime": runtime,
         "drive": run,
+        "idempotency_key": idempotency_key or f"campaign-new-{uuid.uuid4().hex}",
     }
     params |= {
         key: value
@@ -166,6 +234,12 @@ def campaign_run(
     ctx: typer.Context,
     campaign_key: _CampaignKey,
     actor: _Actor,
+    expected_revision: Annotated[
+        int,
+        typer.Option(
+            "--expected-revision", min=1, help="The Campaign revision the drive was decided at."
+        ),
+    ],
     agents: _Agents = None,
     runtime: _Runtime = "claude-code",
 ) -> None:
@@ -174,9 +248,15 @@ def campaign_run(
     Each ready step runs on a Run of its own; each round checkpoints its
     report as an artifact revision, charges the budget and finishes its step.
     The drive runs behind the answer: follow it in the console's Campaign
-    screen. A hard budget axis at its limit stops it and says why.
+    screen. A hard budget axis at its limit stops it and says why. A
+    Campaign that moved past the expected revision is refused, not driven.
     """
-    params: dict[str, Any] = {"actor": actor, "campaign_key": campaign_key, "runtime": runtime}
+    params: dict[str, Any] = {
+        "actor": actor,
+        "campaign_key": campaign_key,
+        "runtime": runtime,
+        "expected_revision": expected_revision,
+    }
     if agents is not None:
         params["agents"] = agents
     answer = _campaign_call(ctx, CAMPAIGN_RUN, params, "campaign run")

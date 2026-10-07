@@ -68,6 +68,8 @@ def test_campaign_new_sends_the_brief_with_its_budget(
         "Does replay preserve event order?",
         "--budget-tokens",
         "5000",
+        "--idempotency-key",
+        "new-1",
     )
     assert result.exit_code == exit_codes.OK, result.output
     assert sent == [
@@ -80,6 +82,7 @@ def test_campaign_new_sends_the_brief_with_its_budget(
                 "questions": ["Does replay preserve event order?"],
                 "runtime": "claude-code",
                 "drive": False,
+                "idempotency_key": "new-1",
                 "budget": {"axes": [{"axis_kind": "tokens", "limit": 5000, "unit": "tokens"}]},
             },
         )
@@ -90,12 +93,21 @@ def test_campaign_new_sends_the_brief_with_its_budget(
 def test_campaign_run_names_the_campaign_and_its_width(
     tmp_path: Path, sent: list[tuple[str, dict[str, Any]]]
 ) -> None:
-    result = _invoke(tmp_path, "run", "CAM-0001", "--actor", "OP-0001", "--agents", "2")
+    result = _invoke(
+        tmp_path, "run", "CAM-0001", "--actor", "OP-0001", "--agents", "2",
+        "--expected-revision", "3",
+    )  # fmt: skip
     assert result.exit_code == exit_codes.OK, result.output
     assert sent == [
         (
             "runtime.campaign.run",
-            {"actor": "OP-0001", "campaign_key": "CAM-0001", "runtime": "claude-code", "agents": 2},
+            {
+                "actor": "OP-0001",
+                "campaign_key": "CAM-0001",
+                "runtime": "claude-code",
+                "expected_revision": 3,
+                "agents": 2,
+            },
         )
     ]
 

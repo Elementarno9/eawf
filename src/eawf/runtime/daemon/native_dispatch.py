@@ -817,7 +817,7 @@ def append_attempt(session: RootSession, attempt: DispatchAttempt) -> None:
     )
 
 
-def _bind_contract(
+def bind_contract(
     session: RootSession, *, binding: RunBinding, records: tuple[LedgerRecord, ...]
 ) -> None:
     """Record the contract this Run was dispatched under, once."""
@@ -935,7 +935,7 @@ def open_attempt(
                 "recorded_at": now,
             }
         )
-        _bind_contract(
+        bind_contract(
             session,
             binding=RunBinding(
                 run_ref=args.urn,
@@ -1358,6 +1358,7 @@ __all__ = [
     "accept_announcement",
     "active_lease_of",
     "append_attempt",
+    "bind_contract",
     "compile_for_dispatch",
     "compile_launchers",
     "control_facts_of",

@@ -29,10 +29,19 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Literal, Self
+from pathlib import PurePosixPath, PureWindowsPath
+from typing import Annotated, Final, Literal, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
+from eawf.kernel.delivery.integration import IdempotencyKey
 from eawf.kernel.spec.release import Sha256DigestStr
 from eawf.kernel.state.enums import CampaignStatus
 from eawf.kernel.state.epoch2.base import (
@@ -79,6 +88,86 @@ StepTitle = Annotated[
         strict=True, strip_whitespace=True, min_length=1, max_length=72, pattern=r"^.*[^.]$"
     ),
 ]
+
+
+#: The most characters of a question's brief a Campaign keeps; a longer brief is
+#: refused rather than cut, since a round must not be worked from part of one.
+BRIEF_MAX_CHARS: Final = 16_384
+
+#: A question as an operator asks it.
+QuestionText = Annotated[
+    str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=500)
+]
+
+#: What a round should know before it works its question.
+QuestionContextText = Annotated[str, StringConstraints(strict=True, max_length=2000)]
+
+
+def _repo_relative(path: str) -> str:
+    """Refuse a brief path that is absolute or climbs out of the repository.
+
+    Raises:
+        ValueError: The path is absolute, names a drive, or has a ``..`` part.
+    """
+    parts = PurePosixPath(path.replace("\\", "/"))
+    if parts.is_absolute() or PureWindowsPath(path).drive or ".." in parts.parts:
+        raise ValueError(f"a brief is named relative to the repository root, not {path!r}")
+    return path
+
+
+#: A brief's location: relative to the repository root, never climbing out of it.
+BriefPath = Annotated[
+    str,
+    StringConstraints(strict=True, min_length=1, max_length=400),
+    AfterValidator(_repo_relative),
+]
+
+BriefText = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=BRIEF_MAX_CHARS)]
+
+
+class CampaignQuestionSpec(BaseModel):
+    """One question of a questions file, as the operator writes it.
+
+    Attributes:
+        question: The question in full.
+        context: What a round should know before it works the question.
+        brief: A file the rounds read with the question, relative to the
+            repository root; read once, when the Campaign is planned.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    question: QuestionText
+    context: QuestionContextText = ""
+    brief: BriefPath | None = None
+
+
+class QuestionBrief(Epoch2Model):
+    """A question's brief as it was read when the Campaign was planned.
+
+    Attributes:
+        path: Where it was read from, relative to the repository root.
+        sha256: The digest of the file's bytes.
+        text: The brief in full.
+    """
+
+    path: BriefPath
+    sha256: Sha256DigestStr
+    text: BriefText
+
+
+class CampaignQuestionContext(Epoch2Model):
+    """What the rounds working one question are told beside it.
+
+    Attributes:
+        question_ref: The question it frames.
+        context: What a round should know before it works the question.
+        brief: The brief the rounds read with it.
+    """
+
+    question_ref: QuestionUrn
+    context: QuestionContextText = ""
+    brief: QuestionBrief | None = None
 
 
 def revision_ref(artifact_ref: str, revision: int) -> str:
@@ -461,10 +550,15 @@ class Campaign(Epoch2Record):
         approved_plan_digest: The digest of the approved steps.
         plan_steps: The approved plan, in order.
         artifact_revision_refs: Every artifact revision it keeps, append-only.
+        question_context: The context and brief of each question its plan
+            frames, at most one row per question.
+        idempotency_key: The caller's name for the request that started it; a
+            retry under the same name is answered with this Campaign.
 
     Raises:
         pydantic.ValidationError: The plan's ordinals, dependencies, methods
-            or bounds do not hold, or the status and the stop disagree.
+            or bounds do not hold, the status and the stop disagree, or a
+            question's context names a question no step works or repeats one.
     """
 
     urn: CampaignUrn
@@ -478,6 +572,8 @@ class Campaign(Epoch2Record):
     approved_plan_digest: Sha256DigestStr
     plan_steps: Annotated[tuple[CampaignPlanStep, ...], Field(min_length=1)]
     artifact_revision_refs: tuple[ArtifactRevisionRef, ...] = ()
+    question_context: tuple[CampaignQuestionContext, ...] = ()
+    idempotency_key: IdempotencyKey | None = None
 
     @model_validator(mode="after")
     def _plan_holds(self) -> Self:
@@ -486,6 +582,13 @@ class Campaign(Epoch2Record):
         refused = self.method_policy.violations(self.plan_steps)
         if refused:
             raise ValueError(f"the plan breaks the method policy: {'; '.join(refused)}")
+        framed = [str(row.question_ref) for row in self.question_context]
+        if len(framed) != len(set(framed)):
+            raise ValueError("a question's context is stated twice")
+        worked = {str(step.question_ref) for step in self.plan_steps}
+        stray = sorted(set(framed) - worked)
+        if stray:
+            raise ValueError(f"context frames questions no step works: {stray}")
         return self
 
     @model_validator(mode="after")
@@ -507,16 +610,25 @@ class Campaign(Epoch2Record):
         """Return step *ordinal*, or ``None`` when the plan has none."""
         return next((step for step in self.plan_steps if step.ordinal == ordinal), None)
 
+    def context_of(self, question_ref: object) -> CampaignQuestionContext | None:
+        """Return the context of the question *question_ref* names, or ``None``."""
+        ref = str(question_ref)
+        return next((row for row in self.question_context if str(row.question_ref) == ref), None)
+
 
 __all__ = [
+    "BRIEF_MAX_CHARS",
     "ArtifactRevisionRef",
     "BudgetAxis",
     "Campaign",
     "CampaignMethod",
     "CampaignMethodPolicy",
     "CampaignPlanStep",
+    "CampaignQuestionContext",
+    "CampaignQuestionSpec",
     "CampaignStop",
     "NamedProgress",
+    "QuestionBrief",
     "ResearchBudget",
     "SettableAxisKind",
     "StepState",

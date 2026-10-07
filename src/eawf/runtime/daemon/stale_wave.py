@@ -2,17 +2,14 @@
 
 Each active wave is measured against its own estimate: an explicit
 estimate row, else its effort bucket's default, else a generous absolute
-window for a wave that has neither. Short of the notice policy's notify
-fraction nothing happens at all -- no event, no notice, no prompt -- and
-the elapsed fraction stays readable in the effort gauge.
+window for a wave that has neither. Short of it nothing happens at all
+-- no event, no notice, no prompt -- and the elapsed fraction stays
+readable in the effort gauge.
 
-At the notify fraction the estimate has been passed. That is recorded
-once per claim as an activity event and nothing more, because passing an
-estimate proves elapsed-time arithmetic, not that anything is wrong. Only
-once no progress has been observed for the policy's grace period does the
-crossing open a budget notice, and a notice never pauses, asks or opens
-anything: it is one non-blocking row in the notice ledger, upserted so a
-restart or a second sweep leaves the same one row.
+Once the estimate has been passed, that is recorded once per claim as an
+activity event and nothing more, because passing an estimate proves
+elapsed-time arithmetic, not that anything is wrong. A wave is not a Run,
+so it never opens a budget notice.
 
 Progress is any event the wave's own work wrote -- a claim, an agent's
 output -- rather than the daemon's own bookkeeping about it. The elapsed
@@ -44,14 +41,7 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.budget.legacy_notices import import_legacy_notices
-from eawf.runtime.budget.notices import (
-    LOCAL_OPERATOR,
-    BudgetCrossing,
-    UpsertOutcome,
-    budget_window_digest,
-    notices_path,
-    upsert_notice,
-)
+from eawf.runtime.budget.notices import notices_path
 from eawf.runtime.daemon.admission import load_economics
 from eawf.workflow.estimation.thresholds import wave_budget_minutes
 from eawf.workflow.evidence._io import load_state
@@ -183,11 +173,11 @@ def plan_estimate_crossings(
     Args:
         state: Validated state document.
         events: The event store's payloads, read for progress.
-        policy: When an estimate is passed and when its grace is met.
+        policy: When a crossing's grace is met.
         now: Reference time; defaults to wall-clock UTC.
 
     Returns:
-        One crossing per wave at or past the notify fraction, in state
+        One crossing per wave at or past its estimate, in state
         iteration order; nothing for a wave short of it.
     """
     reference = now or _now()
@@ -199,7 +189,7 @@ def plan_estimate_crossings(
         anchor = wave.claimed_at
         elapsed = max((reference - anchor).total_seconds(), 0.0)
         estimate = wave_budget_minutes(state, wave.id) * 60
-        if not policy.passed(elapsed_seconds=elapsed, estimate_seconds=estimate):
+        if estimate <= 0 or elapsed < estimate:
             continue
         last_progress = max(anchor, progress.get(wave.id, anchor))
         crossings.append(
@@ -257,15 +247,6 @@ def _passed_message(crossing: EstimateCrossing) -> str:
     return f"Wave {crossing.wave_id} exceeded its {minutes:g}-minute estimate; execution continues"
 
 
-def _opened_message(crossing: EstimateCrossing, grace_seconds: int) -> str:
-    """Say what the crossing and the missing progress establish together."""
-    minutes = round(crossing.estimate_seconds / 60, 1)
-    return (
-        f"Wave {crossing.wave_id} exceeded its {minutes:g}-minute estimate and no progress was "
-        f"observed for {grace_seconds // 60} minutes; execution continues"
-    )
-
-
 async def sweep_once(
     *,
     state_path: Path,
@@ -274,11 +255,11 @@ async def sweep_once(
     publish: Callable[[Envelope], None] | None = None,
     now: datetime | None = None,
 ) -> list[EstimateCrossing]:
-    """Run one sweep: record new crossings, and open a notice past the grace.
+    """Run one sweep: record each new crossing as an activity event.
 
     Args:
         state_path: The ``state.json`` the waves are read from.
-        policy: When an estimate is passed and when its grace is met.
+        policy: When a crossing's grace is met.
         event_path: The event store; defaults to the one beside the state.
         publish: Called with every event appended, after the append.
         now: Reference time; defaults to wall-clock UTC.
@@ -310,30 +291,6 @@ async def sweep_once(
                     now=reference,
                 )
             )
-        if crossing.grace_met:
-            upsert = upsert_notice(
-                notices_path(state_path),
-                BudgetCrossing(
-                    scope_id=crossing.wave_id,
-                    axis="wall_seconds",
-                    basis="estimate",
-                    band="limit_reached",
-                    observed_value=int(crossing.elapsed_seconds),
-                    budget_value=int(crossing.estimate_seconds),
-                    observed_at=reference,
-                    contract_digest=budget_window_digest(crossing.claim_ref),
-                    audience=(LOCAL_OPERATOR,),
-                ),
-            )
-            if upsert.outcome is UpsertOutcome.CREATED:
-                appended.append(
-                    _activity_envelope(
-                        crossing,
-                        event_type=NOTICE_OPENED_EVENT_TYPE,
-                        message=_opened_message(crossing, policy.require_no_progress_for),
-                        now=reference,
-                    )
-                )
         for envelope in appended:
             append_envelope(events_path, envelope)
             if publish is not None:

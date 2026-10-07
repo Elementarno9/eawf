@@ -38,6 +38,7 @@ from pydantic import (
 )
 
 from eawf.kernel.runtime.compiled import BoundedText, JsonPointer, canonical_digest
+from eawf.kernel.runtime.content import CONTENT_CHAR_LIMIT, CONTENT_LINE_CHARS, CONTENT_LINE_LIMIT
 from eawf.kernel.runtime.lease import LeaseId, WorkspaceHandle
 from eawf.kernel.runtime.provider import (
     ArtifactUrn,
@@ -325,11 +326,16 @@ class RepoReadInput(SemanticToolInputBase):
 
 
 class RepoSearchInput(SemanticToolInputBase):
-    """Search the read set for a bounded number of matches."""
+    """Search the read set for a bounded number of matches.
+
+    ``query`` is matched literally unless ``regex`` is set, in which case it
+    is a Python regular expression matched against each line.
+    """
 
     tool_id: Literal["repo_search"]
     resource_handle: WorkspaceHandle
     query: BoundedText
+    regex: StrictBool = False
     path_prefix: RepoRelativePath | None = None
     result_cap: Annotated[StrictInt, Field(ge=1, le=1000)] = 100
 
@@ -560,24 +566,57 @@ class StateQueryOutput(SemanticToolOutputBase):
     next_cursor: BoundedText | None = None
 
 
+#: The longest text a read carries inline: the content store's character
+#: bound plus one line break per kept line.
+REPO_READ_TEXT_CHARS: Final = CONTENT_CHAR_LIMIT + CONTENT_LINE_LIMIT
+
+
 class RepoReadOutput(SemanticToolOutputBase):
-    """The bytes a repository read returned, by reference and digest."""
+    """The text a repository read returned, inline and by reference and digest.
+
+    The text is the bounded, scrubbed form the content store keeps, so a
+    worker with no file tool of its own can read it from the answer.
+    ``byte_count`` is how many bytes of the file from ``start_byte`` the
+    text covers, so the next window starts at ``start_byte + byte_count``;
+    ``truncated`` says the file continues past it or a line was cut.
+    """
 
     tool_id: Literal["repo_read"]
     content_ref: ArtifactUrn
     content_digest: Digest
     byte_count: Annotated[StrictInt, Field(ge=0)]
     truncated: StrictBool = False
+    text: Annotated[str, StringConstraints(strict=True, max_length=REPO_READ_TEXT_CHARS)]
+
+
+class RepoSearchMatch(RuntimeRecord):
+    """One matching line: where it is and its bounded, scrubbed text."""
+
+    path: RepoRelativePath
+    line: Annotated[StrictInt, Field(ge=1)]
+    text: Annotated[str, StringConstraints(strict=True, max_length=CONTENT_LINE_CHARS)]
 
 
 class RepoSearchOutput(SemanticToolOutputBase):
-    """The matches a repository search returned, by reference and digest."""
+    """The matches a repository search returned, inline and by reference and digest."""
 
     tool_id: Literal["repo_search"]
     match_ref: ArtifactUrn
     match_digest: Digest
     match_count: Annotated[StrictInt, Field(ge=0)]
     truncated: StrictBool = False
+    matches: Annotated[tuple[RepoSearchMatch, ...], Field(max_length=CONTENT_LINE_LIMIT)]
+
+    @model_validator(mode="after")
+    def _count_covers_the_matches(self) -> Self:
+        """Refuse a count that disagrees with the matches carried.
+
+        Raises:
+            ValueError: ``match_count`` is not the number of matches.
+        """
+        if self.match_count != len(self.matches):
+            raise ValueError("match_count is not the number of matches carried")
+        return self
 
 
 class DiffReadOutput(SemanticToolOutputBase):

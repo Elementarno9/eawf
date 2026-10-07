@@ -17,27 +17,22 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
 
-from eawf.kernel.state.enums import EffortBucket
 from eawf.kernel.state.epoch2.measurement import VendorSessionRef
 from eawf.kernel.state.epoch2.run import Run, RunRuntimeTuple
-from eawf.kernel.state.types import UtcDatetime
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.campaign_scheduler import StepAssignment, StepReport
 from eawf.runtime.daemon.methods import DaemonValidationError, campaign_run
-from eawf.runtime.daemon.methods.campaign_run import CAMPAIGN_START_METHOD, HostResearchAgent
+from eawf.runtime.daemon.methods.campaign_run import CAMPAIGN_START_METHOD
 from eawf.runtime.daemon.methods.host_subagent import HOST_SUBAGENT_START_METHOD
 from eawf.runtime.daemon.methods.run import RUN_CONTROL_REQUEST_METHOD
-from eawf.runtime.runtimes.adapter import SpawnResult
 from eawf.runtime.session.host_session import claude_code_provider, with_host_session
-from eawf.runtime.session.vendor_id import hash_vendor_session_id
 from eawf.workflow.evidence.provider_certification import canary_evidence_path
 from tests.conftest import REPO_ROOT
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
@@ -237,81 +232,6 @@ def test_a_campaign_round_records_the_runtime_and_session_it_ran_on(
         )
         assert step.runner_runtime == run.runtime_tuple
         assert step.runner_session == run.vendor_session
-
-
-class _Adapter:
-    """A runtime adapter answering one spawn with a fixed result."""
-
-    def __init__(self, result: SpawnResult) -> None:
-        self.result = result
-
-    async def spawn_session(self, _prompt: str, *, model: str, cwd: str) -> SpawnResult:
-        assert model and cwd
-        return self.result
-
-
-def _spawned(runtime: str, *, resolved: str | None) -> SpawnResult:
-    at: UtcDatetime = datetime(2026, 10, 2, tzinfo=UTC)
-    return SpawnResult(
-        session_id="round-session",
-        runtime=runtime,
-        model="sonnet",
-        resolved_model=resolved,
-        subprocess_pid=4242,
-        exit_status=0,
-        text='```json\n{"report": "# R", "outcome": "held"}\n```',
-        started_at=at,
-        ended_at=at,
-    )
-
-
-@pytest.mark.parametrize(
-    ("runtime", "resolved", "expected"),
-    [
-        (
-            "claude-code",
-            "claude-sonnet-4-5",
-            RunRuntimeTuple(harness="claude-code", provider="anthropic", model="claude-sonnet-4-5"),
-        ),
-        (
-            "claude-code",
-            None,
-            RunRuntimeTuple(harness="claude-code", provider="anthropic", model="sonnet"),
-        ),
-        ("codex", "bad model id", RunRuntimeTuple(harness="codex")),
-    ],
-)
-def test_the_host_research_agent_reports_what_its_spawn_ran_on(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    runtime: str,
-    resolved: str | None,
-    expected: RunRuntimeTuple,
-) -> None:
-    for name in ("ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX"):
-        monkeypatch.delenv(name, raising=False)
-    adapter = _Adapter(_spawned(runtime, resolved=resolved))
-    monkeypatch.setattr(campaign_run, "select_adapter", lambda _runtime: adapter)
-    agent = HostResearchAgent(runtime, tmp_path, EffortBucket.S)
-    assignment = StepAssignment.model_validate(
-        {
-            "campaign_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/campaign/CAM-0001",
-            "campaign_title": "t",
-            "ordinal": 1,
-            "title": "s",
-            "method": "survey",
-            "question": "q",
-            "run_ref": RUN_URN,
-            "round_number": 1,
-        }
-    )
-
-    report = asyncio.run(agent.work(assignment))
-
-    assert report.runtime == expected
-    assert report.session == VendorSessionRef(
-        harness=runtime, session_digest=hash_vendor_session_id("round-session")
-    )
 
 
 # ---------- the gate on runtime.run.control.request ----------

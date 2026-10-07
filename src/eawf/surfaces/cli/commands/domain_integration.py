@@ -185,6 +185,7 @@ def _send(
     key: str | None,
     read: bool = False,
     wait: bool | None = None,
+    gated: bool = False,
 ) -> dict[str, Any] | None:
     """Send one native RPC and return its answer, or print why there is none.
 
@@ -200,6 +201,8 @@ def _send(
         wait: ``None`` to call *method* directly; otherwise submit it as an
             operation under *key*, blocking until it is terminal when true,
             with the wire held as long as a gated mutation may run.
+        gated: Whether a direct call holds the wire as long as a gated
+            mutation may run, for a verb that works for minutes in the request.
 
     Returns:
         The answer, or ``None`` after a submission, a refusal envelope or an
@@ -211,7 +214,9 @@ def _send(
         if key is not None:
             _check_idempotency_key(key)
         if wait is None:
-            return _native_answer(method, params, flags=flags, verb_text=verb_text, read=read)
+            return _native_answer(
+                method, params, flags=flags, verb_text=verb_text, read=read, gated=gated
+            )
         submitted = _native_answer(
             OPERATION_SUBMIT,
             {"method": method, "params": params, "idempotency_key": key, "wait": wait},

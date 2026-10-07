@@ -1,50 +1,34 @@
 """Codex CLI adapter — implements :class:`RuntimeAdapter`.
 
-Codex CLI = ``codex exec``. There is no caller-side ``cache_control``
-marker (OpenAI prompt caching is automatic at the ≥1024-token
-threshold); :attr:`supports_cache_control` is therefore ``False``.
+There is no caller-side ``cache_control`` marker (OpenAI prompt caching
+is automatic at the ≥1024-token threshold); :attr:`supports_cache_control`
+is therefore ``False``.
 
 Codex session logs live under ``$CODEX_HOME`` (date-sharded JSONL); the
 adapter caches ``(session_id → path)`` at dispatch time so subsequent
 retries skip the tree walk. v0.3 ships the typed surface only; the live
 walk lands in a later wave.
 
-The live :meth:`CodexAdapter.spawn_session` forks ``codex exec --json``
-(headless newline-delimited JSON events on stdout) and
-:func:`_parse_codex_result` parses that event stream into a typed
-:class:`~eawf.runtime.runtimes.adapter.SpawnResult` -- the codex juror
-lane for the later cross-vendor jury. The spawn reuses the same
-filesystem-jail + env-scrub floor as the claude lane; the jail helpers
-are duplicated locally rather than imported from the shared adapter so
-this wave touches only the codex module.
+A native Run is driven by :class:`CodexNativeLauncher`, which drives
+``codex app-server`` through the official Codex Python SDK (see
+:mod:`~eawf.runtime.runtimes.codex.app_server`) and borrows only the jail
+and the error taxonomy from here.
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 import os
 import re
 import shutil
 import sys
 import uuid
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import ValidationError
-
-from eawf.kernel.state.enums import MeasurementQuality, MeasurementStatus
 from eawf.kernel.state.models import SessionAttempt, Wave
-from eawf.platform.process_liveness import (
-    hold_process_handle,
-    process_group_id,
-    release_process_handle,
-)
-from eawf.platform.subprocess_detach import no_window_kwargs
-from eawf.runtime.mcp.native_launch import native_run_server_config
 from eawf.runtime.runtimes.adapter import (
     ConcurrentSpawnCapError,
     ErrorClass,
@@ -52,15 +36,8 @@ from eawf.runtime.runtimes.adapter import (
     NativeLaunchRequest,
     NativeRunLauncher,
     RuntimeAdapter,
-    RuntimeSpawnError,
-    SpawnResult,
-    acquire_spawn_slot,
-    ambient_denied_tools,
-    compose_worker_hello,
-    release_spawn_slot,
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
-from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.runtimes.selector import runtime_supports
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.runtime.sandbox.egress_proxy import (
@@ -68,9 +45,7 @@ from eawf.runtime.sandbox.egress_proxy import (
     emit_enforcement,
     make_enforcement_event,
 )
-from eawf.runtime.sandbox.env_scrub import build_child_env, resolve_binary_dir
 from eawf.runtime.sandbox.jail import jail_command, jail_supported
-from eawf.runtime.sandbox.policy import invert_deny_to_allow
 
 if TYPE_CHECKING:
     from eawf.workflow.agents.specs.models import RoleContract
@@ -91,22 +66,22 @@ _JAIL_WRAPPER_BINARY: dict[str, str] = {
 #: macOS refuses to apply a seatbelt profile inside a process that already
 #: runs under one (``sandbox_apply: Operation not permitted``), so a jailed
 #: codex on darwin dies before it reaches the model. The eawf jail is the
-#: enforced boundary on that path, which is the externally-sandboxed case
-#: this mode exists for.
-_OUTER_SEATBELT_SANDBOX_ARGS: tuple[str, ...] = ("--sandbox", "danger-full-access")
+#: enforced boundary on that path. ``codex app-server`` refuses
+#: ``--sandbox`` after its subcommand, so the mode is a root ``-c`` override.
+OUTER_SEATBELT_OVERRIDE: str = 'sandbox_mode="danger-full-access"'
 
 
 def _defer_to_outer_seatbelt(argv: list[str]) -> list[str]:
-    """Return a ``codex exec`` *argv* that leaves sandboxing to the eawf jail.
+    """Return a codex *argv* that leaves sandboxing to the eawf jail.
 
     Args:
-        argv: The child's own argv, ``[<binary>, "exec", ...]``.
+        argv: The child's own argv, ``[<binary>, <subcommand>, ...]``.
 
     Returns:
-        A new argv with :data:`_OUTER_SEATBELT_SANDBOX_ARGS` spliced in right
-        after the ``exec`` subcommand, so the prompt stays the last token.
+        A new argv with :data:`OUTER_SEATBELT_OVERRIDE` as a root ``-c``
+        ahead of the subcommand.
     """
-    return [*argv[:2], *_OUTER_SEATBELT_SANDBOX_ARGS, *argv[2:]]
+    return [argv[0], "-c", OUTER_SEATBELT_OVERRIDE, *argv[1:]]
 
 
 def _record_env_scrub(
@@ -184,6 +159,8 @@ def _maybe_jail_argv(
     cwd: str | None,
     session: str = "",
     sink: EnforcementSink | None = None,
+    private_home: Path | None = None,
+    storage_dirs: tuple[Path, ...] = (),
 ) -> list[str]:
     """Prefix *argv* with the OS jail when the host supports it.
 
@@ -199,7 +176,7 @@ def _maybe_jail_argv(
     kill ladder reaps the whole tree unchanged.
 
     Args:
-        argv: The child's own argv (``["codex", "exec", ...]``).
+        argv: The child's own argv (``["codex", "app-server", ...]``).
         runtime: The runtime adapter id selecting the own-cred carve-out.
         cwd: The spawn cwd. ``None`` defaults the jail confinement to the
             repo root containing the process cwd; when the process cwd is
@@ -209,6 +186,10 @@ def _maybe_jail_argv(
             enforcement event when the cwd-outside-repo fallback fires.
         sink: The enforcement sink a ``cwd-guard`` event is persisted
             through; ``None`` only logs.
+        private_home: The Run's own ``CODEX_HOME``, made writable in place
+            of the operator's (see :func:`~eawf.runtime.sandbox.jail.jail_command`).
+        storage_dirs: The daemon's storage directories a native Run may
+            not read.
 
     Returns:
         Either ``jail_command(argv, ...)`` (jailed) or *argv* unchanged
@@ -254,7 +235,14 @@ def _maybe_jail_argv(
 
     if wrapper == _JAIL_WRAPPER_BINARY["darwin"]:
         argv = _defer_to_outer_seatbelt(argv)
-    jailed = jail_command(argv, runtime=runtime, cwd=cwd_path, root=root)
+    jailed = jail_command(
+        argv,
+        runtime=runtime,
+        cwd=cwd_path,
+        root=root,
+        private_home=private_home,
+        storage_dirs=storage_dirs,
+    )
     logger.info(f"spawn_session jail=on wrapper={wrapper!r} runtime={runtime!r} cwd={cwd_path!s}")
     return jailed
 
@@ -275,557 +263,46 @@ _SERVER_RE = re.compile(rb"\b5\d\d\b")
 _TIMEOUT_RE = re.compile(rb"\b(?:timeout|deadline_exceeded)\b", re.IGNORECASE)
 _API_RE = re.compile(rb"\b4\d\d\b")
 
-#: Dotted codex config key for the model reasoning-effort level, confirmed
-#: live against ``codex exec -c model_reasoning_effort=<level> ...`` (codex
-#: 0.134.0). Passed via ``-c`` so the value lands as a TOML override on the
-#: per-call config rather than mutating the user's ``config.toml``.
-_REASONING_EFFORT_CONFIG_KEY = "model_reasoning_effort"
-
-#: Dotted codex config namespace for the per-tool grant table, confirmed live
-#: against ``codex exec`` help (codex 0.138.0 exposes ``tools.<name>`` toggles,
-#: e.g. ``tools.web_search``). ``codex exec`` has NO single tool-allowlist or
-#: tool-deny flag; the per-tool boolean config is the only per-call grant
-#: surface, so a deny-list is mapped to ``-c tools.<name>=<bool>`` overrides:
-#: the inverted allowlist (universe minus denied) is granted ``true`` and the
-#: denied names are pinned ``false`` so a denied tool can never reach the
-#: child's effective grant even under a default-allow codex.
-_TOOLS_CONFIG_NAMESPACE = "tools"
-
-
-def codex_tool_config_key(tool: str) -> str:
-    """Return the dotted codex config key for a tool's grant boolean.
-
-    Maps an eawf tool name (e.g. ``"WebSearch"``) to the codex ``tools.<name>``
-    dotted config path, lowercasing the camel/Pascal name to codex's
-    snake-ish convention (``tools.websearch``). Codex's ``-c`` override parses
-    the value as TOML, so the boolean is emitted bare (``true`` / ``false``).
-
-    Args:
-        tool: The eawf tool name to map.
-
-    Returns:
-        The dotted config key (e.g. ``"tools.websearch"``).
-    """
-    return f"{_TOOLS_CONFIG_NAMESPACE}.{tool.lower()}"
+#: The codex 0.159.2 settings that withhold each ambient tool codex lets a
+#: configuration withhold, checked against that release's config schema.
+#: Codex reads files through its shell, so denying ``Bash`` also takes the
+#: ``Read``/``Grep``/``Glob`` route; ``Read`` alone can only drop the image
+#: reader. Skills are read from ``$HOME/.agents`` and the repository as
+#: well as ``CODEX_HOME``, so ``Skill`` also skips that host discovery.
+#: ``Write`` and ``Edit`` have no setting: ``apply_patch`` follows
+#: the model's catalog entry, so only the jail bounds what it writes. The
+#: ``Task*`` names need none, since ``update_plan`` is off unless enabled.
+_CODEX_TOOL_DENIALS: dict[str, tuple[str, ...]] = {
+    "Agent": ("features.multi_agent=false",),
+    "Bash": ("features.shell_tool=false",),
+    "Read": ("features.view_image=false",),
+    "Skill": (
+        "features.skip_host_skill_discovery=true",
+        "skills.bundled.enabled=false",
+        "skills.include_instructions=false",
+    ),
+    "WebFetch": ('web_search="disabled"',),
+    "WebSearch": ('web_search="disabled"',),
+}
 
 
-def _codex_tool_grant_overrides(denied_tools: Sequence[str]) -> list[str]:
-    """Build the ``-c tools.<name>=<bool>`` overrides for a deny-list.
-
-    Codex grants tools by config, not by a deny flag, so the deny-list is
-    expressed as its inverted allowlist:
-    :func:`~eawf.runtime.sandbox.policy.invert_deny_to_allow` yields the
-    universe-minus-denied allow set, each granted ``true``; the denied names
-    are additionally pinned ``false``. The denied set is therefore absent from
-    the ``true`` grant AND explicitly disabled, so a deny cannot silently pass
-    through to the child's effective tool grant.
-
-    The overrides are interleaved as ``["-c", "<key>=<bool>", ...]`` in a
-    deterministic order (the allow set is sorted by the inversion helper; the
-    denied set is sorted here) so the argv is reproducible.
+def codex_tool_denials(tools: Sequence[str]) -> list[str]:
+    """Return the ``-c`` overrides that withhold *tools* from a codex app-server.
 
     Args:
-        denied_tools: The per-wave deny-list (already known non-empty by the
-            caller; an empty list yields no overrides).
+        tools: Ambient tool names to withhold. A name codex has no setting
+            for adds nothing, because codex cannot be told to drop it.
 
     Returns:
-        The flat ``-c`` override token list to splice into the codex argv.
+        Interleaved ``-c`` and ``key=value`` tokens, each setting once, in
+        sorted order so the configuration is reproducible.
     """
-    overrides: list[str] = []
-    for allowed in invert_deny_to_allow(list(denied_tools)):
-        overrides.extend(("-c", f"{codex_tool_config_key(allowed)}=true"))
-    for denied in sorted(set(denied_tools)):
-        overrides.extend(("-c", f"{codex_tool_config_key(denied)}=false"))
-    return overrides
-
-
-def _usage_int(
-    usage: dict[str, object],
-    key: str,
-    *,
-    missing: int | None = None,
-) -> int | None:
-    """Read a non-negative token count from a codex ``usage`` block.
-
-    The ``usage`` block is decoded from JSON so each value is typed
-    ``object``; this coerces *key* to ``int`` (defaulting a missing /
-    falsey value to ``0``) so the caller stays type-clean. A value that is
-    not int-coercible falls back to ``0`` rather than raising -- a malformed
-    usage figure must not sink an otherwise-complete spawn result.
-
-    Args:
-        usage: The decoded ``turn.completed`` usage mapping.
-        key: The token-count key to read (e.g. ``"input_tokens"``).
-
-    Returns:
-        The coerced integer, or ``0`` when absent / falsey / non-coercible.
-    """
-    if key not in usage:
-        return missing
-    value = usage[key]
-    if value == 0:
-        return 0
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value if value >= 0 else None
-    if isinstance(value, (str, float)):
-        try:
-            parsed = int(value)
-        except TypeError, ValueError:
-            return None
-        return parsed if parsed >= 0 else None
-    return None
-
-
-#: Chunk size for the incremental stdout / stderr drain. Reads in fixed-size
-#: byte chunks (rather than line-bounded ``readline``) so an arbitrarily long
-#: JSONL frame -- a large ``agent_message`` body -- can never overrun the
-#: StreamReader line-length limit; the line framing for ``on_chunk`` is done
-#: in-helper over the accumulated buffer.
-_STREAM_CHUNK_BYTES: int = 65536
-
-
-async def _drain_stream(stream: asyncio.StreamReader | None) -> bytes:
-    """Drain a subprocess stream to its full bytes (no per-line callback).
-
-    Reads *stream* in :data:`_STREAM_CHUNK_BYTES` chunks until EOF and returns
-    the concatenated bytes -- byte-equivalent to what ``communicate`` would
-    have collected. Used for stderr (and for stdout when no ``on_chunk`` is
-    wired) so the two streams drain concurrently without deadlock.
-
-    Args:
-        stream: The subprocess stream reader, or ``None`` (no PIPE) yielding
-            empty bytes.
-
-    Returns:
-        The full accumulated stream bytes.
-    """
-    if stream is None:
-        return b""
-    chunks: list[bytes] = []
-    while True:
-        chunk = await stream.read(_STREAM_CHUNK_BYTES)
-        if not chunk:
-            break
-        chunks.append(chunk)
-    return b"".join(chunks)
-
-
-async def _drain_stream_chunked(
-    stream: asyncio.StreamReader | None,
-    on_chunk: Callable[[str], Awaitable[None]],
-) -> bytes:
-    """Drain *stream* to full bytes while firing *on_chunk* per stdout line.
-
-    Reads *stream* in :data:`_STREAM_CHUNK_BYTES` chunks, accumulating the raw
-    bytes for the result parser AND framing complete newline-terminated lines
-    out of a running buffer to fire ``on_chunk`` as each line arrives. The
-    decoded line string keeps its trailing newline (matching what a
-    ``readline`` loop would yield); a final partial line with no trailing
-    newline is emitted at EOF. Decoding uses ``errors="replace"`` so a partial
-    multi-byte sequence at a chunk boundary -- or a non-JSON stray line -- can
-    never crash the live fan-out. The returned bytes are byte-equivalent to a
-    full buffered read, so the existing parser sees the same input.
-
-    Args:
-        stream: The subprocess stdout reader, or ``None`` (no PIPE) yielding
-            empty bytes and firing no callback.
-        on_chunk: The async callback invoked once per decoded line as it
-            arrives.
-
-    Returns:
-        The full accumulated stdout bytes.
-    """
-    if stream is None:
-        return b""
-    chunks: list[bytes] = []
-    line_buf = b""
-    while True:
-        chunk = await stream.read(_STREAM_CHUNK_BYTES)
-        if not chunk:
-            break
-        chunks.append(chunk)
-        line_buf += chunk
-        while b"\n" in line_buf:
-            line, line_buf = line_buf.split(b"\n", 1)
-            await on_chunk((line + b"\n").decode(errors="replace"))
-    if line_buf:
-        await on_chunk(line_buf.decode(errors="replace"))
-    return b"".join(chunks)
-
-
-async def _collect_spawn_output(
-    proc: asyncio.subprocess.Process,
-    *,
-    on_chunk: Callable[[str], Awaitable[None]] | None,
-) -> tuple[bytes, bytes]:
-    """Collect a spawned child's ``(stdout, stderr)`` incrementally.
-
-    Replaces ``proc.communicate`` so stdout can be fanned to *on_chunk* line
-    by line as it arrives rather than buffered to process exit. stdout and
-    stderr are drained CONCURRENTLY (a single-stream drain would deadlock when
-    the child fills the other pipe's OS buffer), then the child is reaped via
-    :meth:`asyncio.subprocess.Process.wait` so ``returncode`` is populated --
-    exactly the post-conditions ``communicate`` guaranteed. When *on_chunk* is
-    ``None`` the stdout drain takes the plain (callback-free) path, so the
-    accumulated bytes are byte-equivalent to the buffered result.
-
-    Args:
-        proc: The spawned subprocess.
-        on_chunk: The per-line async callback, or ``None`` for the buffered
-            (byte-equivalent) path.
-
-    Returns:
-        The ``(stdout, stderr)`` bytes the result parser consumes.
-    """
-    if on_chunk is None:
-        stdout, stderr = await asyncio.gather(
-            _drain_stream(proc.stdout),
-            _drain_stream(proc.stderr),
-        )
-    else:
-        stdout, stderr = await asyncio.gather(
-            _drain_stream_chunked(proc.stdout, on_chunk),
-            _drain_stream(proc.stderr),
-        )
-    await proc.wait()
-    return stdout, stderr
-
-
-def _decode_codex_events(stdout: bytes) -> list[dict[str, object]]:
-    """Decode a ``codex exec --json`` byte stream into event objects.
-
-    Codex emits one JSON object per line on stdout. Blank lines are
-    skipped; a stray non-JSON line is skipped rather than failing the whole
-    parse (the absence of any usable event is the caller's concern). Only
-    JSON objects are kept.
-
-    Args:
-        stdout: Raw subprocess stdout bytes (already known non-empty).
-
-    Returns:
-        The decoded event objects in stream order.
-    """
-    events: list[dict[str, object]] = []
-    for line in stdout.decode(errors="replace").splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        try:
-            event = json.loads(stripped)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(event, dict):
-            events.append(event)
-    return events
-
-
-def _scan_codex_events(
-    events: list[dict[str, object]],
-) -> tuple[str, str, dict[str, object] | None]:
-    """Scan decoded codex events into ``(session_id, text, usage)``.
-
-    Walks the event stream once, pulling the session id from
-    ``thread.started``, the answer text from the LAST ``item.completed``
-    ``agent_message`` (so a multi-message turn resolves to the final
-    assistant text), and the token usage from ``turn.completed``.
-
-    Args:
-        events: Decoded codex event objects in stream order.
-
-    Returns:
-        A tuple of the session id (``""`` when the stream carried no
-        ``thread.started``), the answer text, and the usage mapping
-        (``None`` when no ``turn.completed`` usage was seen).
-
-    Raises:
-        RuntimeSpawnError: an ``error`` / ``turn.failed`` event was seen
-            (the unwrapped event detail rides on ``stderr`` so the failure
-            classifies by its own message), or the stream carried no
-            ``agent_message`` item.
-    """
-    session_id = ""
-    text: str | None = None
-    usage: dict[str, object] | None = None
-    for event in events:
-        event_type = event.get("type")
-        if event_type == "error":
-            detail = _unwrap_codex_error_message(event.get("message"))
-            # Codex can report an auth or rate-limit failure as a stream event
-            # while still exiting zero, and parse_error keys on stderr -- carry
-            # the event detail there so the failure classifies by its own
-            # message instead of falling through to the generic API default.
-            raise RuntimeSpawnError(
-                f"codex reported an error event: {detail!r}",
-                stderr=detail.encode(),
-            )
-        if event_type == "turn.failed":
-            err = event.get("error")
-            raw = err.get("message") if isinstance(err, dict) else None
-            detail = _unwrap_codex_error_message(raw)
-            raise RuntimeSpawnError(
-                f"codex turn failed: {detail!r}",
-                stderr=detail.encode(),
-            )
-        if event_type == "thread.started":
-            session_id = str(event.get("thread_id") or "")
-        elif event_type == "item.completed":
-            item = event.get("item")
-            if isinstance(item, dict) and item.get("type") == "agent_message":
-                text_field = item.get("text")
-                text = "" if text_field is None else str(text_field)
-        elif event_type == "turn.completed":
-            turn_usage = event.get("usage")
-            if isinstance(turn_usage, dict):
-                usage = turn_usage
-    if text is None:
-        raise RuntimeSpawnError("codex output carried no agent_message item")
-    return session_id, text, usage
-
-
-def _unwrap_codex_error_message(raw: object) -> str:
-    """Return the human-readable message from a codex error payload.
-
-    Codex wraps the upstream API failure as a JSON STRING inside the event's
-    ``message`` field (e.g.
-    ``{"type":"error","status":400,"error":{"message":"The 'gpt-5-mini' model
-    is not supported ..."}}``). This unwraps that envelope to the innermost
-    ``error.message`` (or top-level ``message``) so the surfaced detail is the
-    400 reason a human reads, not the JSON envelope. A plain (non-JSON) string
-    is returned verbatim; a non-string returns ``""``.
-
-    Args:
-        raw: The event's ``message`` (or nested ``error.message``) value.
-
-    Returns:
-        The innermost human message, or ``""`` when *raw* is not a string.
-    """
-    if not isinstance(raw, str):
-        return ""
-    text = raw.strip()
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError:
-        return text
-    if isinstance(parsed, dict):
-        err = parsed.get("error")
-        if isinstance(err, dict) and isinstance(err.get("message"), str):
-            return str(err["message"])
-        if isinstance(parsed.get("message"), str):
-            return str(parsed["message"])
-    return text
-
-
-def _codex_stream_error_detail(stdout: bytes) -> str:
-    """Extract the failure message from a codex event stream, or ``""``.
-
-    Codex ``--json`` reports a failed turn as an ``error`` / ``turn.failed``
-    event on STDOUT (not stderr), then exits non-zero. The nonzero-exit guard
-    in :func:`_parse_codex_result` runs before the stream is scanned, so
-    without this the real reason (e.g. a 400 model-rejection) is lost and only
-    the empty stderr surfaces. This walks the decoded events and returns the
-    LAST error / turn.failed message (unwrapped via
-    :func:`_unwrap_codex_error_message`) so the caller can put the actual
-    reason in the raised error + feed it to the classifier.
-
-    Args:
-        stdout: Raw subprocess stdout bytes (the newline-delimited events).
-
-    Returns:
-        The unwrapped failure message, or ``""`` when the stream carried no
-        error / turn.failed event (e.g. a crash with no structured output).
-    """
-    detail = ""
-    for event in _decode_codex_events(stdout):
-        event_type = event.get("type")
-        if event_type == "error":
-            detail = _unwrap_codex_error_message(event.get("message"))
-        elif event_type == "turn.failed":
-            err = event.get("error")
-            if isinstance(err, dict):
-                detail = _unwrap_codex_error_message(err.get("message"))
-    return detail
-
-
-def _parse_codex_result(
-    *,
-    runtime: str,
-    model: str,
-    stdout: bytes,
-    stderr: bytes,
-    exit_status: int,
-    subprocess_pid: int,
-    started_at: datetime,
-    ended_at: datetime,
-) -> SpawnResult:
-    """Parse a ``codex exec --json`` event stream into a result.
-
-    Codex ``--json`` emits newline-delimited JSON events on stdout, not a
-    single envelope like claude. The events this parser consumes are:
-
-    * ``thread.started`` -- carries ``thread_id`` (the session id).
-    * ``item.completed`` with ``item.type == "agent_message"`` -- carries
-      the answer ``text``. The LAST such event wins so a multi-message turn
-      resolves to the final assistant message.
-    * ``turn.completed`` -- carries ``usage`` with ``input_tokens`` (the
-      GROSS input total INCLUDING cached), ``cached_input_tokens`` (the
-      prompt-cache read count), ``output_tokens``, and
-      ``reasoning_output_tokens``.
-    * ``error`` / ``turn.failed`` -- a failure event; either raises.
-
-    Codex reports no cache-CREATION tokens and no self-reported cost, so
-    :attr:`SpawnResult.cache_creation_input_tokens` and
-    :attr:`SpawnResult.cost_usd_reported` stay ``0`` / ``None`` -- the
-    metering layer prices that honestly rather than inventing a figure.
-    Because codex's ``input_tokens`` is gross, the non-cached count stamped
-    onto the result is ``input_tokens - cached_input_tokens`` (clamped at
-    ``0``) and the cached portion lands on ``cache_read_input_tokens`` so
-    the two never double-count.
-
-    Kept standalone (no adapter ``self``) so the parse is unit-testable
-    against a fixed event stream without spawning a subprocess. The
-    function is fail-fast: every malformed-output condition raises
-    :class:`~eawf.runtime.runtimes.adapter.RuntimeSpawnError` rather than
-    returning a partially-populated result, so a caller never silently
-    meters a garbage spawn.
-
-    Args:
-        runtime: Adapter id stamped onto the result (e.g. ``"codex"``).
-        model: Model alias/id the spawn was requested with.
-        stdout: Raw subprocess stdout bytes (the newline-delimited events).
-        stderr: Raw subprocess stderr bytes (surfaced in the error on a
-            non-zero exit).
-        exit_status: Subprocess exit code.
-        subprocess_pid: PID of the spawned subprocess.
-        started_at: When the subprocess started.
-        ended_at: When the subprocess exited.
-
-    Returns:
-        The validated :class:`SpawnResult` for the completed call.
-
-    Raises:
-        RuntimeSpawnError: non-zero exit, empty stdout, no parseable JSON
-            event line, an ``error`` / ``turn.failed`` event, or no
-            ``agent_message`` item in the stream.
-    """
-
-    if exit_status != 0:
-        # Codex reports the real failure (e.g. a 400 model-rejection) as an
-        # error / turn.failed event on STDOUT, not stderr -- surface that so a
-        # nonzero exit carries the actual reason rather than an empty stderr.
-        stream_detail = _codex_stream_error_detail(stdout)
-        stderr_snippet = stderr.decode(errors="replace").strip()
-        diagnostic = " ".join(part for part in (stream_detail, stderr_snippet) if part)
-        raise RuntimeSpawnError(
-            f"codex spawn exited nonzero: status={exit_status} detail={diagnostic[:300]!r}",
-            exit_status=exit_status,
-            # Feed the combined stdout-event + stderr text to the classifier
-            # (parse_error keys on this) so a model-rejection / auth failure is
-            # classified from its real message, not blank stderr. Fall back to
-            # the raw stderr bytes when the stream carried no detail.
-            stderr=diagnostic.encode() if diagnostic else stderr,
-            stdout=stdout,
-        )
-    if not stdout.decode(errors="replace").strip():
-        raise RuntimeSpawnError("codex spawn produced empty stdout")
-
-    events = _decode_codex_events(stdout)
-    if not events:
-        raise RuntimeSpawnError("codex output carried no parseable json event line")
-    session_id, text, usage = _scan_codex_events(events)
-
-    input_total = _usage_int(usage, "input_tokens") if usage is not None else None
-    output_tokens = _usage_int(usage, "output_tokens") if usage is not None else None
-    cache_read = _usage_int(usage, "cached_input_tokens", missing=0) if usage is not None else None
-    reasoning = _usage_int(usage, "reasoning_output_tokens") if usage is not None else None
-    usage_observed = (
-        input_total is not None and output_tokens is not None and cache_read is not None
-    )
-    # Codex's input_tokens is GROSS (includes cached); split out the
-    # non-cached portion so input + cache-read never double-count. Clamp at
-    # 0 to respect the ge=0 SpawnResult field if a malformed envelope ever
-    # reports more cached than total.
-    input_non_cached = (
-        max(input_total - cache_read, 0)
-        if usage_observed and input_total is not None and cache_read is not None
-        else None
-    )
-
-    return SpawnResult(
-        session_id=session_id or f"{runtime}-{subprocess_pid}",
-        runtime=runtime,
-        model=model,
-        resolved_model=None,
-        subprocess_pid=subprocess_pid,
-        exit_status=exit_status,
-        text=text,
-        input_tokens=input_non_cached,
-        output_tokens=output_tokens if usage_observed else None,
-        cache_creation_input_tokens=0 if usage_observed else None,
-        cache_creation_5m_input_tokens=0 if usage_observed else None,
-        cache_creation_1h_input_tokens=0 if usage_observed else None,
-        cache_read_input_tokens=cache_read,
-        reasoning_output_tokens=reasoning if usage_observed else None,
-        cost_usd_reported=None,
-        measurement_quality=(
-            MeasurementQuality.EXACT if usage_observed else MeasurementQuality.UNAVAILABLE
-        ),
-        measurement_status=(
-            MeasurementStatus.USAGE_OBSERVED
-            if usage_observed
-            else MeasurementStatus.NO_TOKEN_EVIDENCE
-        ),
-        measurement_reason=None if usage_observed else "codex_turn_usage_missing_or_invalid",
-        started_at=started_at,
-        ended_at=ended_at,
-    )
-
-
-def _usage_sample_from_stream_line(line: str) -> UsageSample | None:
-    """Return the usage reading one codex ``--json`` event line discloses, or None.
-
-    Only a ``type: "turn.completed"`` event carries ``usage`` -- the same
-    event :func:`_scan_codex_events` reads for the terminal spawn result, so
-    a multi-turn tool loop that emits several such events mid-stream yields
-    one cumulative reading per turn. A line that is not JSON, not an object,
-    not a ``turn.completed`` event, or carries no well-formed usage block is
-    skipped rather than raised: a malformed mid-turn line must not abort an
-    otherwise-live spawn.
-
-    Args:
-        line: One decoded stdout line, trailing newline included or not.
-
-    Returns:
-        The cumulative :class:`~eawf.runtime.runtimes.metering.UsageSample`
-        the line reports, or ``None`` when the line carries none.
-    """
-    try:
-        data = json.loads(line)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(data, dict) or data.get("type") != "turn.completed":
-        return None
-    usage = data.get("usage")
-    if not isinstance(usage, dict):
-        return None
-    input_total = _usage_int(usage, "input_tokens")
-    output_tokens = _usage_int(usage, "output_tokens")
-    cache_read = _usage_int(usage, "cached_input_tokens", missing=0)
-    if input_total is None or output_tokens is None or cache_read is None:
-        return None
-    try:
-        return UsageSample(
-            input_tokens=max(input_total - cache_read, 0),
-            output_tokens=output_tokens,
-            cache_read_input_tokens=cache_read,
-        )
-    except ValidationError:
-        return None
+    settings = sorted({s for tool in tools for s in _CODEX_TOOL_DENIALS.get(tool, ())})
+    return [token for setting in settings for token in ("-c", setting)]
 
 
 class CodexAdapter:
-    """Codex CLI runtime adapter (``codex exec`` subprocess primary)."""
+    """Codex CLI runtime adapter."""
 
     id: str = "codex"
     cli_binary: str = "codex"
@@ -897,252 +374,6 @@ class CodexAdapter:
             started_at=datetime.now(UTC),
         )
 
-    async def spawn_session(
-        self,
-        prompt: str,
-        *,
-        model: str,
-        cwd: str | None = None,
-        extra_args: Sequence[str] = (),
-        denied_tools: Sequence[str] = (),
-        timeout: float | None = None,
-        on_spawn: Callable[[int], None] | None = None,
-        on_pgid: Callable[[int], None] | None = None,
-        on_chunk: Callable[[str], Awaitable[None]] | None = None,
-        session: str = "",
-        enforcement_sink: EnforcementSink | None = None,
-    ) -> SpawnResult:
-        """Spawn a live ``codex exec`` subprocess and collect its result.
-
-        Runs ``codex exec --json --skip-git-repo-check -m <model> <prompt>``
-        via :func:`asyncio.create_subprocess_exec`, captures stdout (the
-        newline-delimited JSON event stream) + stderr, and parses the
-        outcome into a typed
-        :class:`~eawf.runtime.runtimes.adapter.SpawnResult` via
-        :func:`_parse_codex_result` (raw text + the token classes + pid +
-        exit). Codex has no ``--output-format json`` single-envelope flag
-        like claude; ``--json`` is the headless structured surface and
-        ``--skip-git-repo-check`` lets the spawn run when the jailed cwd is
-        not itself a git working tree. The child is started in its own
-        session / process group (``start_new_session=True``) so a later
-        cancel can signal the whole group by pgid. The child environment is
-        SCRUBBED via :func:`~eawf.runtime.sandbox.env_scrub.build_child_env`
-        -- it receives an allowlist floor plus the codex lane's own auth,
-        never the full parent env. The argv is additionally prefixed with
-        the OS filesystem jail (bubblewrap / seatbelt via
-        :func:`~eawf.runtime.sandbox.jail.jail_command`) when the host
-        supports it; a host without the wrapper binary runs unjailed with a
-        warning rather than failing.
-
-        The sandbox-enforcement seam is at parity with the claude lane: the
-        env-scrub drop, the per-wave argv deny, and the cwd-guard fallback
-        are each recorded to *enforcement_sink* (when wired) so a
-        denial-timeline surface reads what the floor refused for *session*.
-        The floor also caps the number of live spawns in flight at once
-        (:data:`CONCURRENT_SPAWN_CAP`): a spawn past the cap fails fast with
-        :class:`ConcurrentSpawnCapError` before any subprocess is forked.
-
-        The model reasoning-effort level is NOT a parameter on the
-        vendor-neutral seam; a caller that needs it passes
-        ``-c model_reasoning_effort=<level>`` through *extra_args* (the
-        routing escape hatch) -- the confirmed dotted config key is exported
-        as :data:`_REASONING_EFFORT_CONFIG_KEY`. *extra_args* are appended
-        verbatim at the argv tail so that escape hatch stays last.
-
-        **denied_tools maps to an INVERTED allowlist on codex.** ``codex
-        exec`` (0.138.0) has no single tool-allowlist flag and no per-call
-        tool-DENY flag -- its only per-call tool-grant surface is the
-        ``-c tools.<name>=<bool>`` config override (e.g. ``tools.web_search``).
-        Codex grants by allowlist, so a deny-list is expressed as its
-        complement: when *denied_tools* is non-empty the argv gains
-        ``-c tools.<allowed>=true`` for every tool in the universe minus the
-        denied set (the inverted allowlist via
-        :func:`~eawf.runtime.sandbox.policy.invert_deny_to_allow`) PLUS
-        ``-c tools.<denied>=false`` for each denied name. The denied tool is
-        therefore absent from the ``true`` grant AND explicitly disabled, so a
-        deny can never reach the child's effective grant -- even under a
-        default-allow codex. The overrides are spliced ahead of *extra_args*
-        so the verbatim escape hatch stays at the argv tail, and the FS jail
-        still confines the child on top. An empty deny-list adds no override
-        (byte-equivalent to a deny-free spawn). A non-empty deny is recorded
-        as an ``argv-deny`` enforcement event (``block`` severity) so the
-        denial is auditable on the timeline -- the same shape the claude lane
-        records for its ``--disallowedTools`` deny.
-
-        The optional *on_spawn* callback fires with the child PID the moment
-        the subprocess exists -- before output is awaited -- so a cancel
-        path can register the pid and halt a still-running call mid-flight.
-        The optional *on_pgid* callback fires with the child's process-GROUP
-        id (resolved via :func:`os.getpgid` right after spawn) so the
-        budget-HALT interlock can ``os.killpg`` the whole group when the wave
-        runs over its hard token cap -- at parity with the claude lane.
-
-        The optional *on_chunk* async callback fires once per stdout line AS
-        IT ARRIVES: the spawn drains stdout incrementally (via
-        :func:`_collect_spawn_output`) rather than buffering the whole event
-        stream to process exit, so a downstream wave can surface each codex
-        JSONL frame live. The full stdout is still accumulated and fed to
-        :func:`_parse_codex_result` unchanged, so with ``on_chunk=None`` the
-        returned :class:`SpawnResult` is byte-equivalent to the buffered path.
-
-        Args:
-            prompt: Rendered prompt passed to ``codex exec``.
-            model: Model alias/id for ``-m``. No hardcoded floor -- the
-                caller resolves it (the routing decision feeds this).
-            cwd: Working directory for the subprocess; ``None`` inherits the
-                parent's.
-            extra_args: Extra CLI args appended verbatim (the routing /
-                reasoning-effort / structured-output escape hatch).
-            denied_tools: Per-wave sandbox deny-list (tool names). Codex has
-                no per-call deny flag, so a non-empty set is mapped to its
-                inverted allowlist as ``-c tools.<name>=<bool>`` overrides
-                (allowed granted ``true``, denied pinned ``false``); the FS
-                jail still confines the child on top. Empty (the default) adds
-                no override.
-            timeout: Wall-clock ceiling in seconds; ``None`` waits
-                indefinitely. On expiry the child is killed and a typed
-                error is raised.
-            on_spawn: Optional callback invoked with the child PID right
-                after spawn (before output is awaited).
-            on_pgid: Optional callback invoked with the child's process-GROUP
-                id right after spawn so the budget-HALT interlock can reap
-                the whole group. Resolution failures (the child raced to
-                exit) are swallowed -- the cancel path falls back to the pid.
-            on_chunk: Optional async callback invoked once per stdout line as
-                it arrives (live streaming); ``None`` (the default) leaves the
-                spawn byte-equivalent to the buffered path.
-            session: The spawning session id stamped on every enforcement
-                event this spawn records.
-            enforcement_sink: The sink each enforcement decision is persisted
-                through; ``None`` only logs.
-
-        Returns:
-            The validated :class:`SpawnResult` for the completed call.
-
-        Raises:
-            ConcurrentSpawnCapError: When the concurrent-spawn cap is already
-                saturated (raised before any subprocess is forked).
-            RuntimeSpawnError: the spawn timed out, exited non-zero, or
-                returned an unparseable / error event stream.
-        """
-
-        # Codex grants tools by allowlist config, not a deny flag, so a
-        # deny-list is mapped to its inverted allowlist: every tool in the
-        # universe minus the denied set is granted ``-c tools.<name>=true`` and
-        # each denied name is pinned ``-c tools.<name>=false``, so a denied
-        # tool is absent from the grant by construction. The overrides precede
-        # the verbatim *extra_args* escape hatch. An empty deny-list emits no
-        # override (byte-equivalent to a deny-free spawn).
-        tool_overrides: list[str] = []
-        if denied_tools:
-            tool_overrides = _codex_tool_grant_overrides(denied_tools)
-            logger.info(
-                f"spawn_session runtime={self.id!r} denied_tools={len(denied_tools)} "
-                f"mapped=inverted-allowlist allowed={len(invert_deny_to_allow(list(denied_tools)))}"
-            )
-            # Record the deny on the denial timeline at parity with the claude
-            # lane: the target names the sorted denied tools so the timeline
-            # surface reads which tools were refused for the session.
-            emit_enforcement(
-                enforcement_sink,
-                make_enforcement_event(
-                    session=session,
-                    kind="argv-deny",
-                    target=" ".join(sorted(denied_tools)),
-                    severity="block",
-                ),
-            )
-        argv = [
-            self.cli_binary,
-            "exec",
-            "--json",
-            "--skip-git-repo-check",
-            "-m",
-            model,
-            *tool_overrides,
-            *extra_args,
-            prompt,
-        ]
-        # Prefix the OS filesystem jail (bubblewrap / seatbelt) when the
-        # host supports it. ``start_new_session=True`` lands on the jail
-        # wrapper (the group leader) so a pgid-reap still tears down the
-        # whole tree; an absent wrapper runs unjailed with a warning. The
-        # cwd-guard fallback records a degraded-but-continued decision.
-        argv = _maybe_jail_argv(
-            argv, runtime=self.id, cwd=cwd, session=session, sink=enforcement_sink
-        )
-        # Build the scrubbed child env + record the env-scrub decision (which
-        # credential-bearing families were dropped) onto the denial timeline.
-        child_env = build_child_env(self.id, extra_path_dir=resolve_binary_dir(self.cli_binary))
-        _record_env_scrub(child_env, session=session, sink=enforcement_sink)
-
-        # The concurrent-spawn cap is the LAST gate before the fork so the slot
-        # is held only for the real subprocess lifetime; it is released in the
-        # ``finally`` after the child is reaped / parsed.
-        acquire_spawn_slot()
-        proc: asyncio.subprocess.Process | None = None
-        try:
-            started_at = datetime.now(UTC)
-            proc = await asyncio.create_subprocess_exec(
-                *argv,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                start_new_session=True,
-                cwd=cwd,
-                env=child_env,
-                **no_window_kwargs(),
-            )
-            pid = proc.pid
-            logger.info(f"spawn_session runtime={self.id!r} pid={pid} model={model!r}")
-            if on_spawn is not None:
-                on_spawn(pid)
-            # Pin the PID on win32 while asyncio's own handle still does, so the
-            # tree kill can never reach a process that reused it.
-            hold_process_handle(pid)
-            if on_pgid is not None:
-                # The child is its own group leader (start_new_session=True),
-                # so its pgid equals its pid; resolve via getpgid so a future
-                # double-fork still yields the leader. A child that already
-                # exited makes getpgid raise -- the cancel path then falls back
-                # to the pid, so the lookup failure is non-fatal.
-                try:
-                    on_pgid(process_group_id(pid))
-                except ProcessLookupError:
-                    logger.warning(f"spawn_session pgid-unresolved pid={pid}")
-            try:
-                # Drain stdout / stderr incrementally so each codex JSONL frame
-                # is fanned to on_chunk as it arrives; the full stdout is still
-                # accumulated for the existing parser. wait_for preserves the
-                # wall-clock ceiling + the kill-on-timeout contract.
-                stdout, stderr = await asyncio.wait_for(
-                    _collect_spawn_output(proc, on_chunk=on_chunk), timeout=timeout
-                )
-            except TimeoutError:
-                proc.kill()
-                await proc.wait()
-                # 124 is the conventional timeout exit code parse_error maps to
-                # RUNTIME_TIMEOUT, so a classifier routes the V5 switch ladder.
-                raise RuntimeSpawnError(
-                    f"codex spawn timed out: timeout={timeout}s pid={pid}",
-                    exit_status=124,
-                ) from None
-            ended_at = datetime.now(UTC)
-            return _parse_codex_result(
-                runtime=self.id,
-                model=model,
-                stdout=stdout or b"",
-                stderr=stderr or b"",
-                exit_status=proc.returncode if proc.returncode is not None else -1,
-                subprocess_pid=pid,
-                started_at=started_at,
-                ended_at=ended_at,
-            )
-        finally:
-            # An unreaped child keeps its handle so a later cancel still reaches it.
-            if proc is not None and proc.returncode is not None:
-                release_process_handle(proc.pid)
-            release_spawn_slot()
-
     async def continue_session(
         self,
         session_id: str,
@@ -1207,7 +438,11 @@ class CodexNativeLauncher:
     The launcher reads policy from the spec and from nothing else, and it
     answers with the worker's announcement rather than with free text, so
     the daemon judges the launch against the Run's recorded binding
-    instead of against whatever the child printed.
+    instead of against whatever the child printed. The Run is driven over
+    ``codex app-server`` through the official Codex Python SDK (see
+    :mod:`~eawf.runtime.runtimes.codex.app_server`):
+    the launch returns once the thread is open and its turn started, and the
+    turn runs on in the task the outcome carries.
 
     Attributes:
         provider_kind: The compiled ``provider_options`` discriminator
@@ -1241,64 +476,29 @@ class CodexNativeLauncher:
                 workspace and the announcement sequence expected back.
 
         Returns:
-            The provider session, the child's pid and the announcement.
+            The provider session, the child's pid, the announcement and the
+            turn still running.
 
         Raises:
-            RuntimeSpawnError: The spawn timed out, exited non-zero,
-                returned an envelope that does not parse, or the per-Run
-                MCP configuration could not be built or does not register
-                the Run's server.
+            ConcurrentSpawnCapError: Every spawn slot is already held.
+            RuntimeSpawnError: The binary was not found, the app-server
+                refused or failed a request before the turn started, or the
+                per-Run MCP configuration could not be built or does not
+                register the Run's server.
         """
-        spec = request.spec
-        server_config = native_run_server_config(request, runtime_id=self._adapter.id)
-        pgid_box: list[int | None] = [None]
-        relayed_terminated = False
+        # The app-server driver imports this module for its jail and taxonomy.
+        from eawf.runtime.runtimes.codex.app_server import launch_codex_run
 
-        def _capture_pgid(pgid: int) -> None:
-            pgid_box[0] = pgid
-
-        async def _relay_usage(line: str) -> None:
-            """Parse *line* for a usage reading and hand it to the sink.
-
-            Stops relaying once the sink reports the Run terminated at its
-            cap -- the kill ladder reaps the child from there, and a
-            terminated meter answers every further reading identically, so
-            relaying past that point buys nothing.
-            """
-            nonlocal relayed_terminated
-            if request.usage_sink is None or relayed_terminated:
-                return
-            sample = _usage_sample_from_stream_line(line)
-            if sample is None:
-                return
-            relayed_terminated = await request.usage_sink(sample, pgid_box[0])
-
-        result = await self._adapter.spawn_session(
-            request.prompt,
-            model=spec.model_id,
-            cwd=str(request.workspace),
-            extra_args=server_config.argv_flags,
-            denied_tools=ambient_denied_tools(spec),
-            timeout=float(spec.limits.wall_seconds),
-            on_pgid=_capture_pgid if request.usage_sink is not None else None,
-            on_chunk=_relay_usage if request.usage_sink is not None else None,
-        )
-        return NativeLaunchOutcome(
-            provider_session_ref=result.session_id,
-            subprocess_pid=result.subprocess_pid,
-            hello=compose_worker_hello(
-                spec=spec,
-                capsule=request.capsule,
-                provider_session_ref=result.session_id,
-                sdk_version=self.driver_version,
-                worker_protocol_version=self.worker_protocol_version,
-                event_codec_version=self.event_codec_version,
-                hello_sequence=request.hello_sequence,
-            ),
+        return await launch_codex_run(
+            request,
+            adapter=self._adapter,
+            driver_version=self.driver_version,
+            worker_protocol_version=self.worker_protocol_version,
+            event_codec_version=self.event_codec_version,
         )
 
 
 _ADAPTER_CHECK: RuntimeAdapter = CodexAdapter()
 _LAUNCHER_CHECK: NativeRunLauncher = CodexNativeLauncher()
 
-__all__ = ["CodexAdapter", "CodexNativeLauncher", "ConcurrentSpawnCapError"]
+__all__ = ["CodexAdapter", "CodexNativeLauncher", "ConcurrentSpawnCapError", "codex_tool_denials"]

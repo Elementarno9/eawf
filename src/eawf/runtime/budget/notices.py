@@ -4,19 +4,24 @@ A budget crossing is recorded as one notice per logical condition -- a
 scope, a resource axis and the basis the budget was set on -- and never
 as a question, a pause, a pending action or a hold: the lifecycle records
 refuse a budget event outright (see
-:mod:`eawf.kernel.state.budget_signal`). The threshold band is kept out of
-the identity on purpose, so the approaching band and the limit band move
-one row through two revisions instead of stacking two cards.
+:mod:`eawf.kernel.state.budget_signal`).
+
+A producer records one condition only: a running Run reached its hard
+ceiling. Rows recorded before that rule may still carry the estimate basis
+and the approaching band; they load for display, and only the legacy
+import (:mod:`eawf.runtime.budget.legacy_notices`) folds new ones, so the
+band is kept out of the identity and its escalation moves one row through
+two revisions instead of stacking two cards.
 
 The upsert runs as one locked read-modify-write over the notice ledger, so
 a restart, a retried dispatch or two concurrent producers crossing the
-same band still leave one row at one revision. A repeated crossing and a
-late lower band write nothing: the first is already on file, the second
+same ceiling still leave one row at one revision. A repeated crossing and
+a late lower band write nothing: the first is already on file, the second
 must never regress the band a reader has already seen.
 
-No threshold is defined here. The band a crossing reached is computed by
-:mod:`eawf.runtime.budget.policy`; a notice only records the value it
-observed and the budget it was measured against.
+No threshold is defined here. When a reading opens a notice is decided by
+:mod:`eawf.kernel.economics.notice_policy`; a notice only records the value
+it observed and the ceiling it was measured against.
 """
 
 from __future__ import annotations
@@ -44,13 +49,22 @@ from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 
-#: The ordered threshold bands. ``approaching`` precedes ``limit_reached``;
-#: a notice only ever moves forward through them.
-NoticeBand = Literal["approaching", "limit_reached"]
+#: The one band a producer records: the ceiling was reached.
+NoticeBand = Literal["limit_reached"]
 
-#: What the budget was set on. An ``estimate`` is a prediction the run may
-#: legitimately outgrow; a ``hard_limit`` is an enforced cap.
-NoticeBasis = Literal["estimate", "hard_limit"]
+#: What the budget was set on: an enforced cap, the only basis a producer records.
+NoticeBasis = Literal["hard_limit"]
+
+#: The band a legacy row may hold below the limit. It precedes ``limit_reached``,
+#: and a notice only ever moves forward from it.
+LegacyNoticeBand = Literal["approaching"]
+
+#: The basis a legacy row may hold: an estimate the work could outgrow.
+LegacyNoticeBasis = Literal["estimate"]
+
+#: Every band and basis a stored row may hold, legacy rows included.
+RecordedBand = NoticeBand | LegacyNoticeBand
+RecordedBasis = NoticeBasis | LegacyNoticeBasis
 
 NoticeSeverity = Literal["info", "warning", "critical"]
 
@@ -84,7 +98,7 @@ _LOCK_TIMEOUT_SECONDS: Final[float] = 5.0
 
 
 def notice_key_for(
-    *, scope_id: str, axis: BudgetAxis, basis: NoticeBasis, contract_digest: str | None = None
+    *, scope_id: str, axis: BudgetAxis, basis: RecordedBasis, contract_digest: str | None = None
 ) -> str:
     """Return the logical identity of the notice for one budget condition.
 
@@ -127,7 +141,7 @@ def budget_window_digest(claim_ref: str) -> str:
     return f"sha256:{hashlib.sha256(f'claim\x1f{claim_ref}'.encode()).hexdigest()}"
 
 
-def severity_for(basis: NoticeBasis, band: NoticeBand) -> NoticeSeverity:
+def severity_for(basis: RecordedBasis, band: RecordedBand) -> NoticeSeverity:
     """Return the severity a notice of *basis* carries at *band*.
 
     Args:
@@ -183,8 +197,12 @@ class NoticeHistoryEntry(BaseModel):
     reason: NonEmptyStr | None = None
 
 
-class BudgetCrossing(BaseModel):
+class RecordedCrossing(BaseModel):
     """One observation that a scope's consumption reached a threshold band.
+
+    This is the shape a stored row can be folded from, legacy bands
+    included; a producer records a :class:`BudgetCrossing`, which admits
+    only the hard ceiling.
 
     Attributes:
         scope_id: The scope whose budget was crossed.
@@ -205,8 +223,8 @@ class BudgetCrossing(BaseModel):
 
     scope_id: NonEmptyStr
     axis: BudgetAxis = "tokens"
-    basis: NoticeBasis
-    band: NoticeBand
+    basis: RecordedBasis
+    band: RecordedBand
     observed_value: StrictNonNegativeInt
     budget_value: StrictNonNegativeInt | None
     observed_at: UtcDatetime
@@ -223,6 +241,18 @@ class BudgetCrossing(BaseModel):
             basis=self.basis,
             contract_digest=self.contract_digest,
         )
+
+
+class BudgetCrossing(RecordedCrossing):
+    """A running Run's reading that reached its hard ceiling.
+
+    Attributes:
+        basis: Always ``hard_limit``: no producer records an estimate.
+        band: Always ``limit_reached``: no producer records an approach.
+    """
+
+    basis: NoticeBasis
+    band: NoticeBand
 
 
 class BudgetThresholdNotice(BaseModel):
@@ -257,10 +287,10 @@ class BudgetThresholdNotice(BaseModel):
     notice_key: str = Field(pattern=_NOTICE_KEY_PATTERN)
     scope_id: NonEmptyStr
     axis: BudgetAxis
-    basis: NoticeBasis
+    basis: RecordedBasis
     contract_digest: Digest | None = None
     blocking: Literal[False] = False
-    highest_band: NoticeBand
+    highest_band: RecordedBand
     severity: NoticeSeverity
     observed_value: StrictNonNegativeInt
     budget_value: StrictNonNegativeInt | None
@@ -359,7 +389,7 @@ class NoticeUpsert:
 
 
 def apply_crossing(
-    ledger: BudgetNoticeLedger, crossing: BudgetCrossing
+    ledger: BudgetNoticeLedger, crossing: RecordedCrossing
 ) -> tuple[BudgetNoticeLedger, NoticeUpsert]:
     """Fold one *crossing* into *ledger* without touching storage.
 
@@ -534,6 +564,8 @@ __all__ = [
     "BudgetCrossing",
     "BudgetNoticeLedger",
     "BudgetThresholdNotice",
+    "LegacyNoticeBand",
+    "LegacyNoticeBasis",
     "NoticeAction",
     "NoticeBand",
     "NoticeBasis",
@@ -542,6 +574,9 @@ __all__ = [
     "NoticeStatus",
     "NoticeUpsert",
     "RecipientState",
+    "RecordedBand",
+    "RecordedBasis",
+    "RecordedCrossing",
     "UpsertOutcome",
     "apply_crossing",
     "budget_window_digest",

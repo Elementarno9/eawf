@@ -15,7 +15,8 @@ rounds run side by side, and each one ends in its checkpoint:
 3. the step finishes with the outcome the agent stated, the findings it
    names are promoted, and the Run finishes.
 
-A round whose agent fails returns its step to pending and cancels its Run, and
+A round whose agent fails returns its step to pending, charges the tokens its
+turn was metered for, states why on its Run's stream and cancels the Run, and
 the drive pauses there rather than retrying blind; a step an earlier drive
 left running is returned to pending when the next drive starts. The drive
 ends when the
@@ -39,7 +40,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Annotated, Any, Final, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, ConfigDict, StringConstraints, ValidationError
 
 from eawf.kernel.config.schema import DEFAULT_STALL_INTERVAL_SECONDS
 from eawf.kernel.identity import EntityKind, QualifiedUrn, parse_qualified_urn
@@ -48,11 +49,13 @@ from eawf.kernel.runtime.events import MessageSummaryPayload, RunEventKind
 from eawf.kernel.spec.research import ResearchDepth
 from eawf.kernel.state.enums import CampaignStatus
 from eawf.kernel.state.epoch2.artifact_revision import MediaKind
-from eawf.kernel.state.epoch2.base import PrincipalKey, StrictNonNegativeInt
+from eawf.kernel.state.epoch2.base import NonEmptyStr, PrincipalKey, StrictNonNegativeInt
 from eawf.kernel.state.epoch2.campaign import (
     Campaign,
     CampaignMethod,
     CampaignPlanStep,
+    QuestionBrief,
+    QuestionContextText,
     ResearchBudget,
     StepOutcome,
     StepState,
@@ -120,7 +123,39 @@ _ROUND_UNIT: Final = "rounds"
 #: and a beat at a quarter of that keeps a slow round from reading as lost.
 _HEARTBEAT_SECONDS: float = DEFAULT_STALL_INTERVAL_SECONDS / 4
 
+#: The most characters of a failure's cause a log line or a drive's detail carries.
+_FAILURE_DETAIL_CHARS: Final = 500
+
 Report = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=MAX_TEXT_BYTES)]
+
+
+class UnreportedRoundError(ValueError):
+    """A round whose turn ran, and so spent tokens, but handed back no usable report.
+
+    Attributes:
+        tokens: The tokens the turn was metered for; ``None`` when no reading
+            metered them.
+    """
+
+    def __init__(self, message: str, *, tokens: int | None) -> None:
+        super().__init__(message)
+        self.tokens = tokens
+
+
+def failure_detail(error: BaseException) -> str:
+    """Return *error*'s cause on one line, without the input that caused it.
+
+    A validation error names each field path and what is wrong with it, never
+    the value, because the value is the worker's own text.
+    """
+    if isinstance(error, ValidationError):
+        cause = "; ".join(
+            f"{'.'.join(str(part) for part in item['loc']) or 'report'}: {item['msg']}"
+            for item in error.errors(include_input=False, include_url=False)
+        )
+    else:
+        cause = " ".join(str(error).split())
+    return f"{type(error).__name__}: {cause}"[:_FAILURE_DETAIL_CHARS]
 
 
 class StepAssignment(BaseModel):
@@ -133,6 +168,8 @@ class StepAssignment(BaseModel):
         title: The step in words.
         method: How the step works its question.
         question: The question in full.
+        context: What the round should know before it works the question.
+        brief: The question's brief, as read when the Campaign was planned.
         prior_outcomes: What each step it depends on showed, in plan order.
         run_ref: The Run the round is worked under.
         round_number: Which round of the step this is, from one.
@@ -146,6 +183,8 @@ class StepAssignment(BaseModel):
     title: str
     method: CampaignMethod
     question: str
+    context: str = ""
+    brief: QuestionBrief | None = None
     prior_outcomes: tuple[str, ...] = ()
     run_ref: RunUrn
     round_number: int
@@ -216,6 +255,22 @@ class CampaignDrive(BaseModel):
 # ---------- planning ----------
 
 
+class PlannedQuestion(BaseModel):
+    """One question of a research brief, with what its rounds are told beside it.
+
+    Attributes:
+        question: The question in full.
+        context: What a round should know before it works the question.
+        brief: The question's brief, already read.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    question: NonEmptyStr
+    context: QuestionContextText = ""
+    brief: QuestionBrief | None = None
+
+
 def _slot(anchor: QualifiedUrn, kind: EntityKind, key: str, *, repository: bool) -> str:
     """Return the address of *key* of *kind* beside *anchor*."""
     return str(
@@ -240,9 +295,10 @@ def plan_campaign(
     actor: str,
     track_ref: TrackUrn,
     title: str,
-    questions: Sequence[str],
+    questions: Sequence[str | PlannedQuestion],
     depth: ResearchDepth,
     budget: ResearchBudget | None = None,
+    idempotency_key: str | None = None,
 ) -> PlanApproveParams:
     """Return the plan approval a research brief asks for.
 
@@ -255,13 +311,17 @@ def plan_campaign(
         actor: Who approves the plan.
         track_ref: The Track that owns the Campaign.
         title: What the Campaign researches.
-        questions: The brief's questions, the Campaign's own first.
+        questions: The brief's questions, the Campaign's own first; a bare
+            string is a question with no context and no brief.
         depth: How deep each question is worked.
         budget: The Campaign's axes; ``None`` bounds it by one round per step.
+        idempotency_key: The caller's name for the request; ``None`` when it
+            names none.
 
     Returns:
         The plan approval request, every step bounded by one round and by
-        the Campaign's own limit on every other axis.
+        the Campaign's own limit on every other axis, with the context of
+        each question that states any.
 
     Raises:
         ValueError: The brief states no question.
@@ -269,7 +329,13 @@ def plan_campaign(
     if not questions:
         raise ValueError("a research brief states at least one question")
     first = _next_ordinal("QST", taken_keys)
-    seeds = [{"key": f"QST-{first + i:04d}", "question": text} for i, text in enumerate(questions)]
+    asked = [
+        q if isinstance(q, PlannedQuestion) else PlannedQuestion(question=q) for q in questions
+    ]
+    seeds: list[dict[str, Any]] = [
+        {"key": f"QST-{first + i:04d}", "question": q.question, "framing": q}
+        for i, q in enumerate(asked)
+    ]
     for seed in seeds:
         seed["urn"] = _slot(track_ref, EntityKind.QUESTION, seed["key"], repository=False)
     methods = _DEPTH_METHODS[depth]
@@ -320,6 +386,16 @@ def plan_campaign(
             "seed_questions": [
                 {"urn": seed["urn"], "question": seed["question"]} for seed in seeds
             ],
+            "question_context": [
+                {
+                    "question_ref": seed["urn"],
+                    "context": seed["framing"].context,
+                    "brief": seed["framing"].brief,
+                }
+                for seed in seeds
+                if seed["framing"].context or seed["framing"].brief is not None
+            ],
+            "idempotency_key": idempotency_key,
         }
     )
 
@@ -532,6 +608,7 @@ class _Driver:
             for dep in campaign.plan_steps
             if dep.ordinal in step.depends_on and dep.outcome is not None
         )
+        framing = campaign.context_of(step.question_ref)
         return StepAssignment.model_validate(
             {
                 "campaign_ref": str(campaign.urn),
@@ -540,6 +617,8 @@ class _Driver:
                 "title": step.title,
                 "method": step.method,
                 "question": self._question(self._document(), step.question_ref),
+                "context": framing.context if framing is not None else "",
+                "brief": framing.brief if framing is not None else None,
                 "prior_outcomes": prior,
                 "run_ref": run,
                 "round_number": len(step.run_refs) + 1,
@@ -616,12 +695,31 @@ class _Driver:
         self._rounds += 1
 
     def abandon(self, assignment: StepAssignment, error: BaseException) -> None:
-        """Return a failed round's step to pending and cancel its Run."""
+        """Return a failed round's step to pending, charge what it spent and cancel its Run.
+
+        A turn that ran before its report was refused still spent the tokens it
+        was metered for, so the step's tokens axis is charged with them.
+        """
+        detail = failure_detail(error)
         logger.warning(
-            f"campaign round failed campaign={self._key} step={assignment.ordinal} "
-            f"error={type(error).__name__}"
+            f"campaign round failed campaign={self._key} step={assignment.ordinal} error={detail}"
         )
-        self._step(assignment.ordinal, to_state=StepState.PENDING.value)
+        ran = isinstance(error, UnreportedRoundError)
+        tokens = error.tokens if isinstance(error, UnreportedRoundError) else None
+        step = self.campaign().step(assignment.ordinal)
+        assert step is not None
+        spent = {
+            axis.axis_kind: axis.spent + tokens
+            for axis in step.bound.axes
+            if axis.axis_kind == "tokens" and tokens is not None
+        }
+        self._step(
+            assignment.ordinal,
+            to_state=StepState.PENDING.value,
+            spent=spent,
+            unmetered=("tokens",) if ran and tokens is None else (),
+        )
+        self._say(str(assignment.run_ref), f"round failed: {detail}")
         self._end_run(str(assignment.run_ref), report=None)
 
     async def work(self, assignment: StepAssignment) -> tuple[StepReport | None, float, str]:
@@ -648,7 +746,7 @@ class _Driver:
             done.set()
             await beating
             self.abandon(assignment, error)
-            return None, time.monotonic() - began, f"{type(error).__name__}: {error}"
+            return None, time.monotonic() - began, failure_detail(error)
         done.set()
         await beating
         return report, time.monotonic() - began, ""
@@ -818,9 +916,12 @@ async def drive_campaign(
 
 __all__ = [
     "CampaignDrive",
+    "PlannedQuestion",
     "ResearchAgent",
     "StepAssignment",
     "StepReport",
+    "UnreportedRoundError",
     "drive_campaign",
+    "failure_detail",
     "plan_campaign",
 ]

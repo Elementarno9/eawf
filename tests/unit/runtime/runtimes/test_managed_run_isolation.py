@@ -1,9 +1,7 @@
 """A managed claude Run sees only its granted MCP tools and no operator config.
 
 The launch cases drive the REAL :class:`~eawf.runtime.runtimes.claude.adapter.ClaudeNativeLauncher`
-and the headless ``ClaudeAdapter.spawn_session`` path the daemon's jury,
-research, fleet-repair and agent dispatches use, against a fake ``claude``
-that records its argv and environment, inside a
+against a fake ``claude`` that records its argv and environment, inside a
 fake operator home seeded with the configuration a managed Run must not
 inherit: a user settings file with a hook, a user-scoped MCP server, an
 operator ``CLAUDE_CONFIG_DIR``, and a workspace carrying project settings
@@ -38,15 +36,13 @@ from eawf.runtime.runtimes.claude import adapter as claude_adapter
 from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter, ClaudeNativeLauncher
 from eawf.runtime.runtimes.claude.managed_run import (
     CONFIG_DIR_ENV,
-    EPHEMERAL_RUN_PREFIX,
     MANAGED_CONFIG_DIRNAME,
     SECURE_STORAGE_ENV,
-    STRICT_MCP_FLAG,
-    ephemeral_managed_isolation,
     prepare_managed_isolation,
 )
 from eawf.workflow.runtime.compile import compile_run_spec
 from tests import _provider_helpers as fx
+from tests.fixtures.runtime.fake_claude_cli import install_fake_claude
 from tests.integration.runtime.daemon.test_native_dispatch import capsule_request
 
 #: The MCP server the operator installed for themselves.
@@ -65,7 +61,14 @@ _RESULT_LINE: Final = json.dumps(
 
 
 def _bypass_jail(
-    argv: list[str], *, runtime: str, cwd: str | None, session: str = "", sink: object = None
+    argv: list[str],
+    *,
+    runtime: str,
+    cwd: str | None,
+    session: str = "",
+    sink: object = None,
+    private_home: object = None,
+    storage_dirs: object = (),
 ) -> list[str]:
     return argv
 
@@ -149,15 +152,25 @@ def _request(
         capsule=capsule,
         workspace_handle=f"wsh-{'a' * 32}",
         workspace=workspace,
+        repo_root=workspace.parent,
         prompt="implement the fixture task",
         hello_sequence=1,
     )
 
 
 def _launch(request: NativeLaunchRequest) -> None:
+    """Launch against the SDK-speaking fake and await the turn."""
+    bin_dir = request.workspace / "sdk-bin"
+    bin_dir.mkdir(exist_ok=True)
     adapter = ClaudeAdapter()
-    adapter.cli_binary = str(request.workspace / "claude")
-    asyncio.run(ClaudeNativeLauncher(adapter=adapter).launch(request))
+    adapter.cli_binary = str(install_fake_claude(bin_dir))
+
+    async def launch_and_turn() -> None:
+        outcome = await ClaudeNativeLauncher(adapter=adapter).launch(request)
+        assert outcome.turn is not None
+        await outcome.turn
+
+    asyncio.run(launch_and_turn())
 
 
 def _sealed(spec: CompiledRunSpec, grants: list[str]) -> AuthorityCapsule:
@@ -194,12 +207,14 @@ def test_launch_isolates_the_child_config_dir_and_renders_only_the_intersection(
     assert env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] == "1"
     assert env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] == "1"
     assert sorted(config_dir.iterdir()) == []
-    assert argv[argv.index("--setting-sources") + 1] == ""
+    assert "--setting-sources=" in argv
     assert "--strict-mcp-config" in argv
-    document = json.loads(Path(argv[argv.index("--mcp-config") + 1]).read_text("utf-8"))
+    document = json.loads(argv[argv.index("--mcp-config") + 1])
     assert list(document["mcpServers"]) == ["eawf-semantic"]
     assert OPERATOR_SERVER not in json.dumps(document)
-    assert argv[argv.index("--allowedTools") + 1].split() == ["mcp__eawf-semantic__budget_status"]
+    assert argv[argv.index("--allowedTools") + 1].split(",") == [
+        "mcp__eawf-semantic__budget_status"
+    ]
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the fake child is a shebang script")
@@ -241,131 +256,6 @@ def _hand_sealed(spec: CompiledRunSpec, *, grants: tuple[str, ...]) -> Authority
     fields = sealed.model_dump(mode="json", exclude={"contract_digest"})
     fields["tool_grants"] = list(grants)
     return AuthorityCapsule.seal(fields)
-
-
-# ---------------------------------------------------------------------------
-# The headless spawn: every other managed child
-# ---------------------------------------------------------------------------
-
-
-def _headless_spawn(workspace: Path, **kwargs: Any) -> None:
-    adapter = ClaudeAdapter()
-    adapter.cli_binary = str(workspace / "claude")
-    asyncio.run(
-        adapter.spawn_session("review", model="placeholder-model", cwd=str(workspace), **kwargs)
-    )
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="the fake child is a shebang script")
-def test_spawn_session_isolates_a_headless_child_from_the_operator_config(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setattr(claude_adapter, "_maybe_jail_argv", _bypass_jail)
-    operator_config = _operator_home(tmp_path, monkeypatch)
-    workspace = _workspace(tmp_path)
-
-    _headless_spawn(workspace, timeout=30.0)
-
-    env = json.loads((workspace / "env.json").read_text(encoding="utf-8"))
-    argv = json.loads((workspace / "argv.json").read_text(encoding="utf-8"))
-    config_dir = Path(env[CONFIG_DIR_ENV])
-    assert config_dir.name == MANAGED_CONFIG_DIRNAME
-    assert config_dir.parent.name.startswith(EPHEMERAL_RUN_PREFIX)
-    assert config_dir.parent.parent == workspace / MCP_ARTIFACT_DIRNAME
-    assert config_dir.resolve() != operator_config.resolve()
-    assert env[SECURE_STORAGE_ENV] == str(operator_config)
-    assert env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] == "1"
-    assert env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] == "1"
-    assert json.loads((workspace / "home.json").read_text(encoding="utf-8")) == []
-    assert argv[argv.index("--setting-sources") + 1] == ""
-    assert STRICT_MCP_FLAG in argv
-    assert "--mcp-config" not in argv
-    assert not config_dir.parent.exists(), "the per-spawn home outlives its turn"
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="the fake child is a shebang script")
-def test_spawn_session_removes_the_per_spawn_home_when_the_child_fails(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setattr(claude_adapter, "_maybe_jail_argv", _bypass_jail)
-    _operator_home(tmp_path, monkeypatch)
-    workspace = _workspace(tmp_path)
-    (workspace / "fail-turn").write_text("", encoding="utf-8")
-
-    with pytest.raises(RuntimeSpawnError):
-        _headless_spawn(workspace, timeout=30.0)
-
-    assert json.loads((workspace / "home.json").read_text(encoding="utf-8")) == []
-    assert list((workspace / MCP_ARTIFACT_DIRNAME).iterdir()) == []
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="the fake child is a shebang script")
-def test_spawn_session_keeps_an_explicit_run_isolation(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setattr(claude_adapter, "_maybe_jail_argv", _bypass_jail)
-    _operator_home(tmp_path, monkeypatch)
-    workspace = _workspace(tmp_path)
-    isolation = prepare_managed_isolation(workspace / "run", operator_env={})
-
-    _headless_spawn(workspace, isolation=isolation)
-
-    env = json.loads((workspace / "env.json").read_text(encoding="utf-8"))
-    argv = json.loads((workspace / "argv.json").read_text(encoding="utf-8"))
-    assert env[CONFIG_DIR_ENV] == str(isolation.config_dir)
-    assert STRICT_MCP_FLAG not in argv
-    assert isolation.config_dir.is_dir(), "a Run-owned home is the Run's to remove"
-
-
-def test_ephemeral_managed_isolation_gives_concurrent_spawns_distinct_homes(
-    tmp_path: Path,
-) -> None:
-    with (
-        ephemeral_managed_isolation(tmp_path, operator_env={}) as first,
-        ephemeral_managed_isolation(tmp_path, operator_env={}) as second,
-    ):
-        assert first.config_dir != second.config_dir
-        assert first.config_dir.is_dir()
-        assert second.config_dir.is_dir()
-        assert first.argv_flags == ("--setting-sources", "", STRICT_MCP_FLAG)
-
-    assert not first.config_dir.exists()
-    assert not second.config_dir.exists()
-
-
-def test_ephemeral_managed_isolation_removes_the_home_when_the_body_raises(
-    tmp_path: Path,
-) -> None:
-    with (
-        pytest.raises(RuntimeError, match="spawn failed"),
-        ephemeral_managed_isolation(tmp_path, operator_env={}) as isolation,
-    ):
-        raise RuntimeError("spawn failed")
-
-    assert not isolation.config_dir.parent.exists()
-
-
-def test_ephemeral_managed_isolation_refuses_a_missing_cwd(tmp_path: Path) -> None:
-    missing = tmp_path / "gone"
-
-    with (
-        pytest.raises(FileNotFoundError, match="not a directory"),
-        ephemeral_managed_isolation(missing, operator_env={}),
-    ):
-        pass
-
-    assert not missing.exists()
-
-
-def test_ephemeral_managed_isolation_refuses_a_file_cwd(tmp_path: Path) -> None:
-    blocker = tmp_path / "file"
-    blocker.write_text("", encoding="utf-8")
-
-    with (
-        pytest.raises(FileNotFoundError, match="not a directory"),
-        ephemeral_managed_isolation(blocker, operator_env={}),
-    ):
-        pass
 
 
 # ---------------------------------------------------------------------------

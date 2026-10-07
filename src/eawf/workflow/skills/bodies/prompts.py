@@ -613,6 +613,10 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " frozen artifacts.",
             "Declare RELEASED only after every required target is independently observed with"
             " matching digests. Return operation references immediately.",
+            "Once observe reports `released`, run `eawf reflect run` without naming an output"
+            " path, so the report lands in the local reflect collection under"
+            " `.ea/local/reflect`; it writes nothing canonical. Cite the report path it prints"
+            " in your report.",
         ),
         constraints=(
             "Stop on stale source, dirty or non-ancestor tree, version/channel mismatch, missing"
@@ -621,8 +625,8 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
         ),
         output=(
             "Output one ReleaseSkillReport with frozen manifest digest, readiness matrix,"
-            " approvals, per-target attempts/effects/observations, recovery state, and terminal"
-            " release truth."
+            " approvals, per-target attempts/effects/observations, recovery state, terminal"
+            " release truth, and, once released, the path of the reflect report."
         ),
         activities=("release",),
     ),

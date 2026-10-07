@@ -5,12 +5,13 @@ installed now, the same conformance probe it runs on its own when a Run first
 reports a version nothing certifies, and answers with the row it recorded. A
 certified version prints its expiry and exits 0; a quarantined one prints what
 the probe did not find and exits non-zero. The probe runs no model, so it costs
-no tokens.
+no tokens. ``--task`` with ``--actor`` walks the containment canary as a Run
+under that Task and the certify stage after it, which does cost tokens.
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Final
+from typing import Annotated, Any, Final
 
 import typer
 
@@ -33,16 +34,32 @@ def runtime_certify_cmd(
     runtime: Annotated[
         str, typer.Argument(help="The runtime to probe: claude-code, codex or opencode.")
     ],
+    task: Annotated[
+        str | None,
+        typer.Option("--task", help="Walk the containment canary as a Run under this Task."),
+    ] = None,
+    actor: Annotated[
+        str | None,
+        typer.Option("--actor", help="Principal key the canary Run is recorded against."),
+    ] = None,
 ) -> None:
     """Probe the installed runtime and record its certification or quarantine."""
     subject = f"runtime://{runtime}"
+    params: dict[str, Any] = {"runtime": runtime}
+    if task is not None:
+        params["task"] = task
+    if actor is not None:
+        params["actor"] = actor
     answer = _send(
         ctx,
         RUNTIME_CERTIFY,
-        {"runtime": runtime},
+        params,
         urn=subject,
         verb_text="runtime certify",
         key=None,
+        # A canary walk awaits a real Run's turn inside the request, which takes
+        # minutes; the probe alone answers within the default wire timeout.
+        gated=task is not None,
     )
     if answer is not None:
         failed = "findings" if answer["outcome"] == "quarantined" else None

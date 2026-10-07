@@ -49,9 +49,7 @@ DENIAL_REASONS: dict[ContainmentAttempt, DenialReason] = {
     ContainmentAttempt.DAEMON_STORAGE: DenialReason.SCOPE_ESCAPE,
     ContainmentAttempt.WRITE_AHEAD_LOG: DenialReason.SCOPE_ESCAPE,
     ContainmentAttempt.OUTSIDE_WRITABLE_ROOTS: DenialReason.SCOPE_ESCAPE,
-    ContainmentAttempt.UNREGISTERED_EXECUTABLE: DenialReason.NOT_IN_COMPONENT_REGISTRY,
     ContainmentAttempt.HOST_PROCESS_METADATA: DenialReason.SCOPE_ESCAPE,
-    ContainmentAttempt.DIRECT_EGRESS: DenialReason.EGRESS_OUTSIDE_POLICY,
     ContainmentAttempt.CREDENTIAL_VALUE: DenialReason.CREDENTIAL_REFERENCE_ONLY,
 }
 
@@ -175,16 +173,16 @@ def test_run_containment_probes_reports_an_allowed_call_as_an_escape() -> None:
 def test_run_containment_probes_reports_returned_bytes_as_observable() -> None:
     """A denial that still handed bytes back is not a passed probe."""
     outcomes = contained()
-    outcomes[ContainmentAttempt.DIRECT_EGRESS] = denied(
-        ContainmentAttempt.DIRECT_EGRESS, returned_bytes=1
+    outcomes[ContainmentAttempt.HOST_PROCESS_METADATA] = denied(
+        ContainmentAttempt.HOST_PROCESS_METADATA, returned_bytes=1
     )
 
     result = graded(outcomes)
 
     assert not result.passed
     assert result.failure_code is CertificationFailureCode.SECRET_MATERIAL_OBSERVABLE
-    assert result.observed == (ContainmentAttempt.DIRECT_EGRESS,)
-    assert ContainmentAttempt.DIRECT_EGRESS not in {row.attempt for row in result.receipts}
+    assert result.observed == (ContainmentAttempt.HOST_PROCESS_METADATA,)
+    assert ContainmentAttempt.HOST_PROCESS_METADATA not in {row.attempt for row in result.receipts}
 
 
 def test_run_containment_probes_reports_a_skipped_axis_as_uncovered() -> None:
@@ -207,8 +205,8 @@ def test_run_containment_probes_grades_an_escape_above_an_observation() -> None:
     outcomes[ContainmentAttempt.CANONICAL_GIT] = ContainmentCallOutcome(
         attempt=ContainmentAttempt.CANONICAL_GIT, denied=False
     )
-    outcomes[ContainmentAttempt.DIRECT_EGRESS] = denied(
-        ContainmentAttempt.DIRECT_EGRESS, returned_bytes=4096
+    outcomes[ContainmentAttempt.HOST_PROCESS_METADATA] = denied(
+        ContainmentAttempt.HOST_PROCESS_METADATA, returned_bytes=4096
     )
     del outcomes[ContainmentAttempt.AMBIENT_ENVIRONMENT]
 
@@ -232,7 +230,7 @@ def test_run_containment_probes_reports_an_empty_run_as_wholly_uncovered() -> No
 
 
 def test_run_containment_probes_reports_a_single_attempt_run() -> None:
-    """One denied attempt is one receipt and nine uncovered obligations."""
+    """One denied attempt is one receipt and seven uncovered obligations."""
     only = ContainmentAttempt.WRITE_AHEAD_LOG
     result = graded({only: denied(only)})
 
@@ -242,7 +240,7 @@ def test_run_containment_probes_reports_a_single_attempt_run() -> None:
 
 
 def test_run_containment_probes_reports_one_missing_attempt() -> None:
-    """Nine of ten attempts is uncovered evidence, not a rounding error."""
+    """Seven of eight attempts is uncovered evidence, not a rounding error."""
     outcomes = contained()
     del outcomes[ContainmentAttempt.HOST_PROCESS_METADATA]
 
@@ -269,7 +267,7 @@ def test_run_containment_probes_accepts_the_maximum_disclosure() -> None:
 def test_run_containment_probes_refuses_an_outcome_filed_under_another_attempt() -> None:
     """Grading one call under another's obligation is refused."""
     outcomes = contained()
-    outcomes[ContainmentAttempt.DIRECT_EGRESS] = denied(ContainmentAttempt.CANONICAL_GIT)
+    outcomes[ContainmentAttempt.HOST_PROCESS_METADATA] = denied(ContainmentAttempt.CANONICAL_GIT)
 
     with pytest.raises(ValueError, match="is filed under"):
         graded(outcomes)
@@ -284,16 +282,16 @@ def test_axis_of_raises_key_error_for_a_name_that_is_not_an_attempt() -> None:
 def test_containment_call_outcome_requires_a_reason_when_denied() -> None:
     """A denial with no reason could not be written into a receipt."""
     with pytest.raises(ValidationError, match="denial_reason"):
-        ContainmentCallOutcome(attempt=ContainmentAttempt.DIRECT_EGRESS, denied=True)
+        ContainmentCallOutcome(attempt=ContainmentAttempt.HOST_PROCESS_METADATA, denied=True)
 
 
 def test_containment_call_outcome_refuses_a_reason_when_allowed() -> None:
     """An allowed call was not denied, so it has no denial reason."""
     with pytest.raises(ValidationError, match="no denial_reason"):
         ContainmentCallOutcome(
-            attempt=ContainmentAttempt.DIRECT_EGRESS,
+            attempt=ContainmentAttempt.HOST_PROCESS_METADATA,
             denied=False,
-            denial_reason=DenialReason.EGRESS_OUTSIDE_POLICY,
+            denial_reason=DenialReason.SCOPE_ESCAPE,
         )
 
 
@@ -315,7 +313,7 @@ def test_containment_call_outcome_refuses_a_repeated_disclosure() -> None:
 def test_containment_call_outcome_refuses_negative_returned_bytes() -> None:
     """A byte count below zero describes no call."""
     with pytest.raises(ValidationError):
-        denied(ContainmentAttempt.DIRECT_EGRESS, returned_bytes=-1)
+        denied(ContainmentAttempt.HOST_PROCESS_METADATA, returned_bytes=-1)
 
 
 def test_containment_call_outcome_refuses_an_unknown_field() -> None:
@@ -323,9 +321,9 @@ def test_containment_call_outcome_refuses_an_unknown_field() -> None:
     with pytest.raises(ValidationError):
         ContainmentCallOutcome.model_validate(
             {
-                "attempt": ContainmentAttempt.DIRECT_EGRESS,
+                "attempt": ContainmentAttempt.HOST_PROCESS_METADATA,
                 "denied": True,
-                "denial_reason": DenialReason.EGRESS_OUTSIDE_POLICY,
+                "denial_reason": DenialReason.SCOPE_ESCAPE,
                 "observed_value": "token-abc",  # pragma: allowlist secret
             }
         )
@@ -368,3 +366,18 @@ def test_axis_attempts_partitions_every_attempt_exactly_once() -> None:
 def test_axis_of_maps_every_attempt_to_its_axis() -> None:
     """Every attempt resolves, so no receipt can be unfiled."""
     assert all(axis_of(attempt) in CONTAINMENT_AXES for attempt in CONTAINMENT_ATTEMPTS)
+
+
+def test_the_probe_set_owes_eight_attempts_over_four_axes() -> None:
+    """Every axis still obliges at least one attempt after the contract narrowed."""
+    assert len(CONTAINMENT_ATTEMPTS) == 8
+    assert all(AXIS_ATTEMPTS[axis] for axis in ContainmentAxis)
+
+
+@pytest.mark.parametrize("dropped", ["direct_egress", "unregistered_executable"])
+def test_containment_call_outcome_refuses_an_attempt_the_contract_dropped(dropped: str) -> None:
+    """A worker reporting an attempt no longer asked for names no member."""
+    with pytest.raises(ValidationError):
+        ContainmentCallOutcome.model_validate(
+            {"attempt": dropped, "denied": True, "denial_reason": "scope_escape"}
+        )

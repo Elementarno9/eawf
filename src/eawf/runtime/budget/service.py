@@ -28,12 +28,13 @@ Contract (state mutation):
   waves raise :class:`KeyError`.
 * :func:`check_budget` — read-only classify the wave against
   :mod:`eawf.runtime.budget.policy`.
-* :func:`emit_budget_notice` — upsert the scope's non-blocking notice once
-  a consumption reached its ceiling. Nothing opens below the ceiling: the
-  observed fraction stays readable in the statusline, and a notice reports
-  an event that happened rather than a prediction. A storage failure is
-  logged and swallowed: a notice is observability, so losing one must
-  never stop the work it describes.
+* :func:`emit_budget_notice` — upsert a running Run's non-blocking notice
+  once its consumption reached its hard ceiling. Nothing opens below the
+  ceiling or under a soft one: the observed fraction stays readable in the
+  statusline, and a notice reports an enforced limit that was reached
+  rather than an estimate or a prediction. A storage failure is logged and
+  swallowed: a notice is observability, so losing one must never stop the
+  work it describes.
 * :func:`load_budget_config` — read and validate the repo's ``flow.budget``
   table, the one source every ceiling is derived from.
 * :func:`consume_against_ceiling` — accumulate a consumption and decide it
@@ -50,19 +51,19 @@ import signal
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
 from pydantic import ValidationError
 
 from eawf.kernel.config.layered import merge_config
+from eawf.kernel.economics.notice_policy import DEFAULT_NOTICE_POLICY
 from eawf.kernel.runtime.budget_notice import BudgetNotice
 from eawf.kernel.state.models import State, Wave
 from eawf.runtime.budget.notices import (
     LOCAL_OPERATOR,
     BudgetCrossing,
-    NoticeBasis,
     NoticeUpsert,
     upsert_notice,
 )
@@ -183,47 +184,50 @@ def emit_budget_notice(
     notices_file: Path,
     *,
     scope_id: str,
+    running: bool,
     consumed: int,
     ceiling: PromptBudgetCeiling | None,
     observed_at: datetime,
     contract_digest: str | None = None,
     audience: tuple[str, ...] = (LOCAL_OPERATOR,),
 ) -> NoticeUpsert | None:
-    """Upsert *scope_id*'s budget notice once *consumed* reached *ceiling*.
+    """Upsert *scope_id*'s token notice once a running Run reached its hard ceiling.
 
-    Below the ceiling, or with no ceiling, nothing is recorded: a notice
-    reports that the limit was reached, never that it is being approached.
-    The notice never pauses, asks or holds anything -- it is recorded and
-    left for a reader. Its basis follows the ceiling's enforce mode: a
-    ``hard`` ceiling is an enforced limit, a ``soft`` one an estimate the
-    work may legitimately outgrow.
+    Whether anything is recorded is the notice policy's one rule: a Run
+    that is not running, a soft ceiling, no ceiling, or a consumption
+    short of it records nothing. The notice never pauses, asks or holds
+    anything -- it is recorded and left for a reader.
 
     Args:
         notices_file: The notice ledger file.
-        scope_id: The scope whose consumption was metered.
+        scope_id: The Run whose consumption was metered.
+        running: Whether the Run is in ``RUNNING``.
         consumed: Cumulative consumption after the latest increment.
-        ceiling: The scope's one ceiling, or ``None`` when none is set.
+        ceiling: The Run's one ceiling, or ``None`` when none is set.
         observed_at: When the consumption was read.
-        contract_digest: The compiled contract a Run's ceiling came from,
-            part of the notice's identity; ``None`` for a wave.
-        audience: The principals the notice is for; an epoch-1 wave's is
-            its root's one operator.
+        contract_digest: The compiled contract the Run's ceiling came
+            from, part of the notice's identity.
+        audience: The principals the notice is for.
 
     Returns:
-        The upsert result, or ``None`` when the ceiling was not reached or
-        the ledger could not be written.
+        The upsert result, or ``None`` when the rule opened nothing or the
+        ledger could not be written.
 
     Raises:
         ValueError: ``consumed`` is negative.
     """
     if consumed < 0:
         raise ValueError(f"consumed must be non-negative; got {consumed}")
-    if ceiling is None or not ceiling.reached(consumed):
+    reached = ceiling is not None and ceiling.enforce == "hard" and ceiling.reached(consumed)
+    # the token rule waits on no silence: the ceiling's kill ladder has already acted
+    opens = DEFAULT_NOTICE_POLICY.estimated_time.opens(
+        running=running, axis="tokens", ceiling_reached=reached, silent_for=timedelta(0)
+    )
+    if ceiling is None or not opens:
         return None
-    basis: NoticeBasis = "hard_limit" if ceiling.enforce == "hard" else "estimate"
     crossing = BudgetCrossing(
         scope_id=scope_id,
-        basis=basis,
+        basis="hard_limit",
         band="limit_reached",
         observed_value=consumed,
         budget_value=ceiling.tokens,
@@ -316,6 +320,8 @@ def emit_termination_notice(
     return emit_budget_notice(
         notices_file,
         scope_id=receipt.run_ref.entity_key,
+        # the receipt is written as the ladder stops the Run, so it was running at the reading
+        running=True,
         consumed=receipt.observed_tokens,
         ceiling=PromptBudgetCeiling(tokens=receipt.cap_tokens, enforce="hard"),
         observed_at=receipt.noticed_at,

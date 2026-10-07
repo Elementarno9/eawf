@@ -11,6 +11,14 @@ the SDK appends to its command line reaches ``claude`` after the jail
 prefix, so the jail confines the child exactly as it confined the headless
 spawn.
 
+The Run's tools are an allow-list, not a deny-list. Claude Code ships
+built-in tools faster than any deny-list can name them, and one it does
+not name (``Monitor`` runs shell commands) is an unjailed shell beside the
+brokered catalog. So the child is started with no built-in tool at all,
+the per-Run MCP server is its only tool source, and the tools the child
+reports in its session announcement are checked against that grant: a
+child that reports any other tool is reaped and the launch refused.
+
 The launch is split from the turn. :func:`launch_claude_run` returns as
 soon as the provider reports its session, and the rest of the turn runs in
 a task the daemon awaits; that task meters usage as it arrives, reaps the
@@ -51,7 +59,13 @@ from pydantic import ValidationError
 
 from eawf.kernel.state.epoch2.run import RunRuntimeTuple
 from eawf.platform.process_liveness import hold_process_handle, release_process_handle
-from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME, native_run_server_config
+from eawf.runtime.daemon.runtime_dir import runtime_dir
+from eawf.runtime.mcp.native_launch import (
+    MCP_ARTIFACT_DIRNAME,
+    RUN_TMP_ENV_KEYS,
+    native_run_server_config,
+    prepare_run_tmpdir,
+)
 from eawf.runtime.runtimes import cancel
 from eawf.runtime.runtimes.adapter import (
     ErrorClass,
@@ -82,6 +96,9 @@ WRAPPER_CONFIG_FILENAME: Final = "claude-wrapper.json"
 
 #: Where the wrapper records the process group it started.
 PGID_FILENAME: Final = "worker.pgid"
+
+#: The variable naming the directory Claude Code keeps its own scratch in.
+CLAUDE_TMPDIR_ENV: Final = "CLAUDE_CODE_TMPDIR"
 
 #: The provider's announcement of its session.
 _INIT_SUBTYPE: Final = "init"
@@ -319,6 +336,7 @@ class _Turn:
         fold: The running usage total the sink is handed.
         transcript: The reading of the turn's messages as transcript items.
         slot_held: Whether the turn holds one of the process-wide spawn slots.
+        granted_tools: The only tools the announced session may report.
     """
 
     client: ClaudeSDKClient
@@ -334,6 +352,7 @@ class _Turn:
     fold: _UsageFold = field(default_factory=_UsageFold)
     transcript: ClaudeTranscriptItems = field(default_factory=ClaudeTranscriptItems)
     slot_held: bool = False
+    granted_tools: frozenset[str] = frozenset()
 
     def stderr(self) -> bytes:
         """Return the child's stderr so far."""
@@ -350,7 +369,8 @@ class _Turn:
 
         Raises:
             RuntimeSpawnError: The stream ended, failed or reported a
-                result before any session was announced.
+                result before any session was announced, or the session
+                holds a tool outside the Run's grant.
         """
         async for message in self.stream:
             if isinstance(message, SystemMessage) and message.subtype == _INIT_SUBTYPE:
@@ -358,6 +378,7 @@ class _Turn:
                 if not isinstance(session, str) or not session:
                     raise RuntimeSpawnError("claude announced a session with no session_id")
                 self.pgid = int(pgid_path.read_text(encoding="utf-8"))
+                self._check_tools(message.data.get("tools"))
                 self.runtime = observed_runtime_tuple(
                     self.adapter.id,
                     harness_version=message.data.get("claude_code_version"),
@@ -377,6 +398,29 @@ class _Turn:
             exit_status=None,
             stderr=self.stderr(),
         )
+
+    def _check_tools(self, reported: object) -> None:
+        """Refuse a session whose tools are not a subset of the grant.
+
+        The tool restriction is enforced by the child, so the child's own
+        report is the only evidence it took effect; a report that is absent
+        or malformed is treated as an unrestricted session.
+
+        Raises:
+            RuntimeSpawnError: The report is not a list of names, or names a
+                tool the Run was not granted.
+        """
+        if not isinstance(reported, list) or not all(isinstance(name, str) for name in reported):
+            raise RuntimeSpawnError(
+                f"tool_allowlist_unverified: claude reported no tool list; "
+                f"run={self.request.spec.run_ref}"
+            )
+        stray = sorted(set(reported) - self.granted_tools)
+        if stray:
+            raise RuntimeSpawnError(
+                f"tool_allowlist_unenforced: claude holds ungranted tools {stray}; "
+                f"run={self.request.spec.run_ref}"
+            )
 
     async def run(self) -> TurnOutcome:
         """Drive the turn to its end and say how it ended, on the runtime it ran."""
@@ -550,11 +594,18 @@ def _sdk_options(
         model=spec.model_id,
         system_prompt=preset,
         # Headless turns have no one to answer a permission prompt; the
-        # boundary is the jail plus the deny lists, as on the headless spawn.
+        # boundary is the jail plus the tool allow-list below.
         permission_mode="bypassPermissions",
         mcp_servers=lane.mcp_servers,
         strict_mcp_config=lane.strict_mcp_config,
+        # ``tools`` is the CLI's ``--tools``: the built-ins the child holds
+        # at all, so a built-in no deny-list names is absent too. A compiled
+        # spec pins ``ambient_provider_tools`` false, so the set is empty and
+        # the Run's own MCP server is its only tool source. ``allowed_tools``
+        # only pre-approves, which bypass mode makes moot.
+        tools=[],
         allowed_tools=lane.allowed_tools,
+        # The denials stay as a second layer behind the allow-list.
         disallowed_tools=ambient_denied_tools(spec),
         # The lane's own ambient denial rides as a second deny flag, exactly
         # as the headless spawn passed it beside the spec's denials.
@@ -605,11 +656,21 @@ async def launch_claude_run(
     lane = _lane_options((*server_config.argv_flags, *isolation.argv_flags), server_config.files)
     claude = _resolve_executable(adapter.cli_binary)
     jailed = claude_adapter._maybe_jail_argv(
-        [claude], runtime=adapter.id, cwd=str(request.workspace)
+        [claude],
+        runtime=adapter.id,
+        cwd=str(request.workspace),
+        private_home=isolation.config_dir,
+        # The log, not the runtime dir: the Run's server dials the socket beside it.
+        storage_dirs=(request.repo_root / ".ea", runtime_dir() / "wal"),
     )
     child_env = build_child_env(adapter.id, extra_path_dir=resolve_binary_dir(adapter.cli_binary))
     adapter._record_env_scrub(child_env, session="", sink=None)
     child_env.update(isolation.env)
+    # The jail opens no shared temp area to a native Run, so its temp
+    # files go to its own directory. Claude Code keeps its own scratch
+    # under /tmp/claude-<uid> whatever TMPDIR says, unless told otherwise.
+    run_tmp = str(prepare_run_tmpdir(run_dir))
+    child_env.update(dict.fromkeys((*RUN_TMP_ENV_KEYS, CLAUDE_TMPDIR_ENV), run_tmp))
     wrapper = _write_wrapper(
         run_dir,
         argv=[_resolve_executable(jailed[0]), *jailed[1:]],
@@ -635,6 +696,7 @@ async def launch_claude_run(
         request=request,
         deadline=deadline,
         stderr_lines=stderr_lines,
+        granted_tools=frozenset(lane.allowed_tools),
     )
     # The slot is the last gate before the fork and is held for the whole
     # turn, as it was for the headless spawn.
@@ -646,6 +708,9 @@ async def launch_claude_run(
             await client.query(request.prompt)
             session, pgid = await turn.announced_session(pgid_path)
     except Exception as error:
+        if turn.pgid is not None:
+            # The child announced itself, so it is running with the prompt.
+            await turn._reap()
         await turn.close()
         raise await _spawn_error(error, turn) from error
     # The wrapper replaced itself with the child after setsid, so the
@@ -671,6 +736,7 @@ async def launch_claude_run(
 
 
 __all__ = [
+    "CLAUDE_TMPDIR_ENV",
     "PGID_FILENAME",
     "WRAPPER_CONFIG_FILENAME",
     "WRAPPER_FILENAME",

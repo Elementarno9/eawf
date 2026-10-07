@@ -12,8 +12,10 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import sys
 import time
+import tomllib
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, Final
@@ -26,7 +28,8 @@ from eawf.kernel.runtime.events import MessageSummaryPayload, TranscriptItem
 from eawf.kernel.state.epoch2.run import RunRuntimeTuple
 from eawf.runtime.budget.service import DEFAULT_GRACE_SECONDS
 from eawf.runtime.daemon.native_dispatch import CapsuleRequest, seal_capsule
-from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME
+from eawf.runtime.daemon.runtime_dir import runtime_dir
+from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME, RUN_TMP_DIRNAME, RUN_TMP_ENV_KEYS
 from eawf.runtime.runtimes import adapter as runtimes_adapter
 from eawf.runtime.runtimes.adapter import (
     ConcurrentSpawnCapError,
@@ -40,17 +43,22 @@ from eawf.runtime.runtimes.codex import adapter as codex_adapter
 from eawf.runtime.runtimes.codex.adapter import CodexAdapter, CodexNativeLauncher
 from eawf.runtime.runtimes.codex.app_server import (
     APP_SERVER_ARGS,
+    CODEX_AUTH_FILENAME,
+    CODEX_CONFIG_FILENAME,
+    CODEX_HOME_DIRNAME,
     PGID_FILENAME,
     WRAPPER_CONFIG_FILENAME,
     WRAPPER_FILENAME,
     _message_payload,
+    _toml_document,
     _user_agent_version,
-    thread_config,
+    codex_home_config,
 )
 from eawf.runtime.runtimes.codex.mcp_config import SERVER_CONFIG_KEY
 from eawf.runtime.runtimes.host_transcript import SUMMARY_LIMIT, WITHHELD_TEXT, SpokenMessage
 from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.sandbox.env_scrub import build_child_env, resolve_binary_dir
+from eawf.runtime.sandbox.policy import TOOL_UNIVERSE
 from eawf.workflow.runtime.compile import compile_run_spec
 from tests import _provider_helpers as fx
 from tests.fixtures.runtime.fake_codex_server import (
@@ -88,8 +96,22 @@ _SERVER: Final = SERVER_CONFIG_KEY.split(".", 1)[1]
 UsageSink = Callable[[UsageSample, int | None], Awaitable[bool]]
 
 
+#: The jail as production builds it, kept before the fixture bypasses it.
+_REAL_JAIL: Final = codex_adapter._maybe_jail_argv
+
+#: The default turn, for a script that only adds a key to it.
+_DEFAULT_LINES: Final = {"lines": [agent_message("done"), token_usage(3, 1), turn_completed()]}
+
+
 def _bypass_jail(
-    argv: list[str], *, runtime: str, cwd: str | None, session: str = "", sink: object = None
+    argv: list[str],
+    *,
+    runtime: str,
+    cwd: str | None,
+    session: str = "",
+    sink: object = None,
+    private_home: object = None,
+    storage_dirs: object = (),
 ) -> list[str]:
     """Leave the child unjailed so the fake runs on any host."""
     return argv
@@ -141,6 +163,7 @@ def _request(
         capsule=capsule,
         workspace_handle=f"wsh-{'a' * 32}",
         workspace=workspace,
+        repo_root=workspace.parent,
         prompt="implement the fixture task",
         hello_sequence=1,
         usage_sink=usage_sink,
@@ -152,6 +175,7 @@ def _request(
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Return an empty workspace, with HOME pointed away from the operator's."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
     monkeypatch.setattr(codex_adapter, "_maybe_jail_argv", _bypass_jail)
     root = tmp_path / "ws"
     root.mkdir()
@@ -191,6 +215,32 @@ def _thread_start(workspace: Path) -> dict[str, Any]:
     return loaded
 
 
+def _home(workspace: Path) -> Path:
+    """Return the Run's private ``CODEX_HOME``."""
+    return workspace / MCP_ARTIFACT_DIRNAME / CODEX_HOME_DIRNAME
+
+
+def _home_config(workspace: Path) -> dict[str, Any]:
+    """Return the configuration the private home hands codex, parsed."""
+    return tomllib.loads((_home(workspace) / CODEX_CONFIG_FILENAME).read_text("utf-8"))
+
+
+def _operator_codex(home: Path) -> Path:
+    """Write an operator ``~/.codex`` carrying plugins, a marketplace and an MCP server."""
+    codex = home / ".codex"
+    codex.mkdir(parents=True)
+    (codex / CODEX_AUTH_FILENAME).write_text('{"auth_mode": "chatgpt"}', encoding="utf-8")
+    (codex / CODEX_CONFIG_FILENAME).write_text(
+        '[plugins."github@openai-curated"]\nenabled = true\n\n'
+        '[marketplaces.operator]\nsource = "git"\n\n'
+        '[mcp_servers.operator_server]\ncommand = "operator-mcp"\n',
+        encoding="utf-8",
+    )
+    (codex / "history.jsonl").write_text("{}\n", encoding="utf-8")
+    (codex / "AGENTS.md").write_text("operator instructions\n", encoding="utf-8")
+    return codex
+
+
 def _observed(spec: CompiledRunSpec) -> RunRuntimeTuple:
     """Return the runtime the fake reports for a thread opened on *spec*."""
     return RunRuntimeTuple(
@@ -228,18 +278,21 @@ def test_launch_opens_one_thread_and_the_turn_resolves_completed(workspace: Path
     assert params["cwd"] == str(workspace)
     assert params["model"] == spec.model_id
     assert params["approvalPolicy"] == "never"
-    assert list(params["config"]["mcp_servers"]) == [_SERVER]
+    assert params.get("config") is None
+    assert list(_home_config(workspace)["mcp_servers"]) == [_SERVER]
     assert "turn" not in outcome.model_dump()
 
 
 def test_the_run_server_is_the_only_mcp_server(workspace: Path) -> None:
+    _operator_codex(workspace.parent / "home")
+
     _run(workspace)
 
-    servers = _thread_start(workspace)["config"]["mcp_servers"]
+    servers = _home_config(workspace)["mcp_servers"]
     assert list(servers) == [_SERVER]
     assert servers[_SERVER]["enabled"] is True
-    assert servers[_SERVER]["command"] == "eawf"
-    assert servers[_SERVER]["args"][:3] == ["mcp", "serve", "--binding"]
+    assert servers[_SERVER]["command"] == sys.executable
+    assert servers[_SERVER]["args"][:6] == ["-I", "-m", "eawf", "mcp", "serve", "--binding"]
 
 
 def test_the_prompt_starts_the_turn_on_the_opened_thread(workspace: Path) -> None:
@@ -313,13 +366,21 @@ def test_the_child_env_is_the_scrub_allowlist(
         monkeypatch.setenv(key, value)
     launcher = _launcher(workspace)
     cli = launcher._adapter.cli_binary
-    allowlist = set(build_child_env("codex", extra_path_dir=resolve_binary_dir(cli)))
+    # The private home and the Run's own temp directory are what the launcher
+    # adds to what the scrub admits.
+    allowlist = {
+        "CODEX_HOME",
+        *RUN_TMP_ENV_KEYS,
+        *build_child_env("codex", extra_path_dir=resolve_binary_dir(cli)),
+    }
 
     asyncio.run(_launch_and_turn(launcher, _request(workspace)))
 
     env = json.loads((workspace / "env.json").read_text(encoding="utf-8"))
     assert set(env) - _PLATFORM_INJECTED <= allowlist
     assert not set(_LEAKS) & set(env)
+    run_tmp = workspace / MCP_ARTIFACT_DIRNAME / RUN_TMP_DIRNAME
+    assert {env[key] for key in RUN_TMP_ENV_KEYS} == {str(run_tmp)}
 
 
 def test_the_wrapper_config_names_keys_and_never_values(
@@ -374,6 +435,7 @@ def test_the_thread_sandbox_follows_the_compiled_spec(
 
     assert spec.sandbox.mode == mode
     assert _thread_start(workspace)["sandbox"] == sandbox
+    assert _home_config(workspace)["sandbox_mode"] == sandbox
 
 
 def test_the_jail_wraps_the_app_server_argv(
@@ -392,9 +454,24 @@ def test_the_jail_wraps_the_app_server_argv(
     calls: list[dict[str, Any]] = []
 
     def fake_jail(
-        argv: list[str], *, runtime: str, cwd: str | None, session: str = "", sink: object = None
+        argv: list[str],
+        *,
+        runtime: str,
+        cwd: str | None,
+        session: str = "",
+        sink: object = None,
+        private_home: Path | None = None,
+        storage_dirs: tuple[Path, ...] = (),
     ) -> list[str]:
-        calls.append({"argv": list(argv), "runtime": runtime, "cwd": cwd})
+        calls.append(
+            {
+                "argv": list(argv),
+                "runtime": runtime,
+                "cwd": cwd,
+                "private_home": private_home,
+                "storage_dirs": storage_dirs,
+            }
+        )
         return [str(jail), *argv]
 
     monkeypatch.setattr(codex_adapter, "_maybe_jail_argv", fake_jail)
@@ -404,7 +481,16 @@ def test_the_jail_wraps_the_app_server_argv(
 
     cli = launcher._adapter.cli_binary
     assert turn.exit_kind == "completed"
-    assert calls == [{"argv": [cli, *APP_SERVER_ARGS], "runtime": "codex", "cwd": str(workspace)}]
+    assert calls == [
+        {
+            "argv": [cli, *APP_SERVER_ARGS],
+            "runtime": "codex",
+            "cwd": str(workspace),
+            "private_home": _home(workspace),
+            # The daemon's state and write-ahead log are closed to the Run.
+            "storage_dirs": (workspace.parent / ".ea", runtime_dir() / "wal"),
+        }
+    ]
     assert json.loads((workspace / "jail.json").read_text(encoding="utf-8"))[1:] == [
         cli,
         *APP_SERVER_ARGS,
@@ -415,7 +501,14 @@ def test_under_the_outer_seatbelt_codex_sandboxing_is_deferred(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def seatbelt(
-        argv: list[str], *, runtime: str, cwd: str | None, session: str = "", sink: object = None
+        argv: list[str],
+        *,
+        runtime: str,
+        cwd: str | None,
+        session: str = "",
+        sink: object = None,
+        private_home: object = None,
+        storage_dirs: object = (),
     ) -> list[str]:
         return codex_adapter._defer_to_outer_seatbelt(argv)
 
@@ -426,19 +519,28 @@ def test_under_the_outer_seatbelt_codex_sandboxing_is_deferred(
     argv = json.loads((workspace / "argv.json").read_text(encoding="utf-8"))
     assert argv[1:4] == ["-c", codex_adapter.OUTER_SEATBELT_OVERRIDE, "app-server"]
     assert _thread_start(workspace)["sandbox"] == "danger-full-access"
+    assert _home_config(workspace)["sandbox_mode"] == "danger-full-access"
 
 
-def test_seatbelt_deferral_keeps_the_exec_form_for_exec() -> None:
-    argv = ["codex", "exec", "--json", "prompt"]
+@pytest.mark.skipif(
+    sys.platform != "darwin" or shutil.which("sandbox-exec") is None,
+    reason="the managed-preference sync is a macOS seatbelt behaviour",
+)
+def test_the_seatbelt_jailed_server_can_sync_codex_managed_preferences(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The real jail confines the child to its repository root; the workspace stands in.
+    monkeypatch.setattr(codex_adapter, "_repo_root_for", lambda path: workspace)
+    monkeypatch.setattr(codex_adapter, "_maybe_jail_argv", _REAL_JAIL)
 
-    assert codex_adapter._defer_to_outer_seatbelt(argv) == [
-        "codex",
-        "exec",
-        "--sandbox",
-        "danger-full-access",
-        "--json",
-        "prompt",
-    ]
+    _, turn = _run(workspace, {**_DEFAULT_LINES, "sync_managed_preferences": True})
+
+    run_dir = workspace / MCP_ARTIFACT_DIRNAME
+    argv = json.loads((run_dir / WRAPPER_CONFIG_FILENAME).read_text(encoding="utf-8"))["argv"]
+    # Proves the server really ran under the seatbelt, not an unjailed fallback.
+    assert Path(argv[0]).name == "sandbox-exec"
+    assert turn.exit_kind == "completed"
+    assert _thread_start(workspace)["sandbox"] == "danger-full-access"
 
 
 def test_the_turn_holds_a_spawn_slot_until_it_ends(workspace: Path) -> None:
@@ -682,19 +784,107 @@ def test_a_retried_error_does_not_fail_the_turn(workspace: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# The lane flags translate to a thread config, at their boundaries
+# Each Run reads a private CODEX_HOME, never the operator's
 # ---------------------------------------------------------------------------
 
 
-def test_thread_config_of_no_flags_is_empty() -> None:
-    assert thread_config(()) == {}
+def test_the_wrapper_starts_codex_on_the_private_home(workspace: Path) -> None:
+    _run(workspace)
+
+    env = json.loads((workspace / "env.json").read_text(encoding="utf-8"))
+    config = json.loads(
+        (workspace / MCP_ARTIFACT_DIRNAME / WRAPPER_CONFIG_FILENAME).read_text("utf-8")
+    )
+    assert env["CODEX_HOME"] == str(_home(workspace))
+    assert "CODEX_HOME" in config["env_keys"]
 
 
-def test_thread_config_of_one_override_is_one_key() -> None:
-    assert thread_config(("-c", "tools.websearch=false")) == {"tools.websearch": False}
+def test_an_operator_codex_home_in_the_environment_is_replaced(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    operator = _operator_codex(workspace.parent / "elsewhere")
+    monkeypatch.setenv("CODEX_HOME", str(operator))
+
+    _run(workspace)
+
+    env = json.loads((workspace / "env.json").read_text(encoding="utf-8"))
+    assert env["CODEX_HOME"] == str(_home(workspace))
+    link = _home(workspace) / CODEX_AUTH_FILENAME
+    assert link.resolve() == (operator / CODEX_AUTH_FILENAME).resolve()
 
 
-def test_thread_config_folds_the_server_keys_into_one_table() -> None:
+def test_the_generated_config_holds_one_server_and_no_plugin_or_marketplace(
+    workspace: Path,
+) -> None:
+    _operator_codex(workspace.parent / "home")
+    spec = _review_spec()
+
+    _run(workspace, spec=spec)
+
+    config = _home_config(workspace)
+    assert list(config["mcp_servers"]) == [_SERVER]
+    assert "plugins" not in config
+    assert "marketplaces" not in config
+    assert "projects" not in config
+    assert config["model"] == spec.model_id
+    assert config["approval_policy"] == "never"
+    assert config["web_search"] == "disabled"
+    assert config["features"]["shell_tool"] is False
+    assert config["features"]["plugins"] is False
+    assert config["features"]["apps"] is False
+    assert config["skills"]["bundled"]["enabled"] is False
+
+
+def test_the_auth_file_is_the_only_operator_file_in_the_private_home(workspace: Path) -> None:
+    operator = _operator_codex(workspace.parent / "home")
+    before = {path.name: path.read_bytes() for path in operator.iterdir()}
+
+    _run(workspace)
+
+    home = _home(workspace)
+    link = home / CODEX_AUTH_FILENAME
+    assert sorted(path.name for path in home.iterdir()) == [
+        CODEX_AUTH_FILENAME,
+        CODEX_CONFIG_FILENAME,
+    ]
+    assert link.is_symlink()
+    assert link.resolve() == (operator / CODEX_AUTH_FILENAME).resolve()
+    assert not (home / CODEX_CONFIG_FILENAME).is_symlink()
+    assert {path.name: path.read_bytes() for path in operator.iterdir()} == before
+
+
+def test_an_operator_without_an_auth_file_gets_no_link(workspace: Path) -> None:
+    _run(workspace)
+
+    assert [path.name for path in _home(workspace).iterdir()] == [CODEX_CONFIG_FILENAME]
+
+
+def test_a_relaunch_replaces_the_previous_link(workspace: Path) -> None:
+    operator = _operator_codex(workspace.parent / "home")
+    _run(workspace)
+    (operator / CODEX_AUTH_FILENAME).unlink()
+
+    _run(workspace)
+
+    assert not (_home(workspace) / CODEX_AUTH_FILENAME).is_symlink()
+
+
+# ---------------------------------------------------------------------------
+# The lane flags translate to the home's config table, at their boundaries
+# ---------------------------------------------------------------------------
+
+
+def test_codex_home_config_of_no_flags_is_empty() -> None:
+    assert codex_home_config(()) == {}
+
+
+def test_codex_home_config_of_one_override_nests_its_key() -> None:
+    assert codex_home_config(("-c", "features.shell_tool=false")) == {
+        "features": {"shell_tool": False}
+    }
+
+
+def test_codex_home_config_folds_the_server_keys_into_one_table() -> None:
     flags = (
         "-c",
         f'{SERVER_CONFIG_KEY}.command="eawf"',
@@ -703,13 +893,17 @@ def test_thread_config_folds_the_server_keys_into_one_table() -> None:
         "-c",
         f"{SERVER_CONFIG_KEY}.enabled=true",
         "-c",
-        "tools.websearch=false",
+        'web_search="disabled"',
     )
 
-    assert thread_config(flags) == {
+    assert codex_home_config(flags) == {
         "mcp_servers": {_SERVER: {"command": "eawf", "args": ["mcp", "serve"], "enabled": True}},
-        "tools.websearch": False,
+        "web_search": "disabled",
     }
+
+
+def test_codex_home_config_lets_a_later_flag_win() -> None:
+    assert codex_home_config(("-c", 'model="a"', "-c", 'model="b"')) == {"model": "b"}
 
 
 @pytest.mark.parametrize(
@@ -719,11 +913,30 @@ def test_thread_config_folds_the_server_keys_into_one_table() -> None:
         (("--model", "x=1"), "is not a -c override"),
         (("-c", "novalue"), "is not a -c override"),
         (("-c", "key=not toml ["), "is not TOML"),
+        (("-c", 'model="a"', "-c", 'model.name="b"'), "nests under a value"),
     ],
 )
-def test_thread_config_refuses_what_it_cannot_express(flags: tuple[str, ...], message: str) -> None:
+def test_codex_home_config_refuses_what_it_cannot_express(
+    flags: tuple[str, ...], message: str
+) -> None:
     with pytest.raises(RuntimeSpawnError, match=message):
-        thread_config(flags)
+        codex_home_config(flags)
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        {},
+        {"model": "gpt"},
+        {"features": {}},
+        {"a": {"b": {"c": 1}}, "z": 2.5},
+        {"mcp_servers": {"eawf_semantic": {"args": [], "command": 'say "hi" \\ ok'}}},
+        {"projects": {"/tmp/a b": {"trust_level": "trusted"}}, "name": "café\n"},
+    ],
+    ids=["empty", "single", "empty-table", "deep", "escapes", "quoted-key"],
+)
+def test_the_toml_document_reads_back_as_the_table(table: dict[str, Any]) -> None:
+    assert tomllib.loads(_toml_document(table)) == table
 
 
 # ---------------------------------------------------------------------------
@@ -825,3 +1038,40 @@ def test_user_agent_version_reads_the_token_after_the_first_slash(
     user_agent: str | None, expected: str | None
 ) -> None:
     assert _user_agent_version(user_agent) == expected
+
+
+# ---------------------------------------------------------------------------
+# Ambient tool denials map onto real codex settings only
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("tools", "expected"),
+    [
+        ((), []),
+        (("Bash",), ["-c", "features.shell_tool=false"]),
+        (("Write",), []),
+        (("NotATool",), []),
+        (("WebFetch", "WebSearch"), ["-c", 'web_search="disabled"']),
+        (("Bash", "Bash"), ["-c", "features.shell_tool=false"]),
+    ],
+    ids=["empty", "single", "no-setting", "unknown", "shared-setting", "repeated"],
+)
+def test_codex_tool_denials_boundaries(tools: tuple[str, ...], expected: list[str]) -> None:
+    assert codex_adapter.codex_tool_denials(tools) == expected
+
+
+def test_every_codex_tool_denial_is_a_key_the_home_config_accepts() -> None:
+    config = codex_home_config(codex_adapter.codex_tool_denials(sorted(TOOL_UNIVERSE)))
+
+    assert "tools" not in config
+    assert config == {
+        "features": {
+            "multi_agent": False,
+            "shell_tool": False,
+            "skip_host_skill_discovery": True,
+            "view_image": False,
+        },
+        "skills": {"bundled": {"enabled": False}, "include_instructions": False},
+        "web_search": "disabled",
+    }

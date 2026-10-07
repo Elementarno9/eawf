@@ -31,6 +31,7 @@ _SRC = _REPO_ROOT / "src" / "eawf"
 _SANDBOX = _SRC / "runtime" / "sandbox"
 _JAIL = _SANDBOX / "jail.py"
 _ENV_SCRUB = _SANDBOX / "env_scrub.py"
+_PREFIX_READER = _SRC / "runtime" / "runtimes" / "containment_observation.py"
 
 #: What the cutover has to remove alongside the backend, named in every
 #: failure message so the red test reads as a checklist rather than a
@@ -38,7 +39,8 @@ _ENV_SCRUB = _SANDBOX / "env_scrub.py"
 _SUNSET_TODO = (
     "The self-built jail is gone: delete the per-platform TMPDIR pin "
     "(pinned_tmpdir in env_scrub.py), the conditional cred-dir masks "
-    "(_build_linux_argv in jail.py), the linux-jail CI job in "
+    "(_build_linux_argv in jail.py), the bwrap prefix reader "
+    "(_BWRAP_ARITY in containment_observation.py), the linux-jail CI job in "
     ".github/workflows/ci.yaml with its lint gate in "
     "tests/lint/test_phase_ci_gates.py, and this expiry module."
 )
@@ -68,9 +70,17 @@ def test_linux_jail_backend_still_exists() -> None:
 
 
 def test_tmpfs_masks_are_reachable_only_through_the_linux_jail() -> None:
-    """Exactly one production module emits a tmpfs mask: the jail backend."""
+    """Only the jail backend emits a tmpfs mask, and only the canary reads one back.
+
+    The canary's containment observation parses the jail prefix a launcher
+    recorded, so it names the flag without emitting it; it expires with
+    the jail all the same.
+    """
     emitters = _production_modules_containing("--tmpfs")
-    assert emitters == {_JAIL.relative_to(_REPO_ROOT)}, (
+    assert emitters == {
+        _JAIL.relative_to(_REPO_ROOT),
+        _PREFIX_READER.relative_to(_REPO_ROOT),
+    }, (
         f"the tmpfs-mask fix leaked out of the jail backend into {emitters}; "
         f"it must expire with the jail. {_SUNSET_TODO}"
     )

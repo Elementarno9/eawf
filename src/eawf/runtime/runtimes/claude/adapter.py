@@ -9,31 +9,17 @@ subprocess outcomes.
 
 from __future__ import annotations
 
-import asyncio
-import functools
-import json
 import logging
 import os
 import re
 import shutil
 import sys
 import uuid
-from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
-from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-from pydantic import ValidationError
+from typing import TYPE_CHECKING
 
 from eawf.kernel.state.models import SessionAttempt, Wave
-from eawf.platform.process_liveness import (
-    hold_process_handle,
-    process_group_id,
-    release_process_handle,
-)
-from eawf.platform.subprocess_detach import no_window_kwargs
-from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME, native_run_server_config
 from eawf.runtime.runtimes.adapter import (
     ConcurrentSpawnCapError,
     ErrorClass,
@@ -41,29 +27,15 @@ from eawf.runtime.runtimes.adapter import (
     NativeLaunchRequest,
     NativeRunLauncher,
     RuntimeAdapter,
-    RuntimeSpawnError,
-    SpawnResult,
-    acquire_spawn_slot,
-    ambient_denied_tools,
-    compose_worker_hello,
-    release_spawn_slot,
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
-from eawf.runtime.runtimes.claude.managed_run import (
-    ManagedClaudeIsolation,
-    ephemeral_managed_isolation,
-    prepare_managed_isolation,
-)
-from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.runtimes.selector import runtime_supports
-from eawf.runtime.runtimes.stream_json import stream_message_payloads, terminal_result_envelope
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.runtime.sandbox.egress_proxy import (
     EnforcementSink,
     emit_enforcement,
     make_enforcement_event,
 )
-from eawf.runtime.sandbox.env_scrub import build_child_env, resolve_binary_dir
 from eawf.runtime.sandbox.jail import jail_command, jail_supported
 
 if TYPE_CHECKING:
@@ -101,6 +73,8 @@ def _maybe_jail_argv(
     cwd: str | None,
     session: str = "",
     sink: EnforcementSink | None = None,
+    private_home: Path | None = None,
+    storage_dirs: tuple[Path, ...] = (),
 ) -> list[str]:
     """Prefix *argv* with the OS jail when the host supports it.
 
@@ -118,7 +92,7 @@ def _maybe_jail_argv(
     kill ladder reaps the whole tree unchanged.
 
     Args:
-        argv: The child's own argv (``["claude", "-p", ...]``).
+        argv: The child's own argv (``["claude"]`` for a native Run).
         runtime: The runtime adapter id selecting the own-cred carve-out.
         cwd: The spawn cwd. ``None`` defaults the jail confinement to the
             repo root containing the process cwd; when the process cwd is
@@ -128,6 +102,11 @@ def _maybe_jail_argv(
             enforcement event when the cwd-outside-repo fallback fires.
         sink: The enforcement sink a ``cwd-guard`` event is persisted
             through; ``None`` only logs.
+        private_home: A native Run's configuration home, made writable in
+            place of the operator's ``~/.claude`` (see
+            :func:`~eawf.runtime.sandbox.jail.jail_command`).
+        storage_dirs: The daemon's storage directories a native Run may
+            not read.
 
     Returns:
         Either ``jail_command(argv, ...)`` (jailed) or *argv* unchanged
@@ -168,7 +147,14 @@ def _maybe_jail_argv(
         )
         return argv
 
-    jailed = jail_command(argv, runtime=runtime, cwd=cwd_path, root=root)
+    jailed = jail_command(
+        argv,
+        runtime=runtime,
+        cwd=cwd_path,
+        root=root,
+        private_home=private_home,
+        storage_dirs=storage_dirs,
+    )
     logger.info(f"spawn_session jail=on wrapper={wrapper!r} runtime={runtime!r} cwd={cwd_path!s}")
     return jailed
 
@@ -200,377 +186,8 @@ _TIMEOUT_RE = re.compile(rb"\b(?:timeout|deadline_exceeded)\b", re.IGNORECASE)
 _API_RE = re.compile(rb"\b4\d\d\b")
 
 
-#: Chunk size for the incremental stdout / stderr drain. Reads in fixed-size
-#: byte chunks (rather than line-bounded ``readline``) so an arbitrarily long
-#: output -- a large ``result`` body -- can never overrun the StreamReader
-#: line-length limit; the line framing for ``on_chunk`` is done in-helper over
-#: the accumulated buffer.
-_STREAM_CHUNK_BYTES: int = 65536
-
-
-async def _drain_stream(stream: asyncio.StreamReader | None) -> bytes:
-    """Drain a subprocess stream to its full bytes (no per-line callback).
-
-    Reads *stream* in :data:`_STREAM_CHUNK_BYTES` chunks until EOF and returns
-    the concatenated bytes -- byte-equivalent to what ``communicate`` would
-    have collected. Used for stderr (and for stdout when no ``on_chunk`` is
-    wired) so the two streams drain concurrently without deadlock.
-
-    Args:
-        stream: The subprocess stream reader, or ``None`` (no PIPE) yielding
-            empty bytes.
-
-    Returns:
-        The full accumulated stream bytes.
-    """
-    if stream is None:
-        return b""
-    chunks: list[bytes] = []
-    while True:
-        chunk = await stream.read(_STREAM_CHUNK_BYTES)
-        if not chunk:
-            break
-        chunks.append(chunk)
-    return b"".join(chunks)
-
-
-async def _drain_stream_chunked(
-    stream: asyncio.StreamReader | None,
-    on_chunk: Callable[[str], Awaitable[None]],
-) -> bytes:
-    """Drain *stream* to full bytes while firing *on_chunk* per stdout line.
-
-    Reads *stream* in :data:`_STREAM_CHUNK_BYTES` chunks, accumulating the raw
-    bytes for the result parser AND framing complete newline-terminated lines
-    out of a running buffer to fire ``on_chunk`` as each line arrives. The
-    decoded line string keeps its trailing newline (matching what a
-    ``readline`` loop would yield); a final partial line with no trailing
-    newline is emitted at EOF. With the ``--output-format stream-json`` default
-    claude emits one envelope per event, so the framing fans a chunk per line as
-    the run proceeds -- the same shape as the codex JSONL lane, which is what
-    lets one seam serve both. Decoding uses ``errors="replace"`` so a partial multi-byte
-    sequence at a chunk boundary can never crash the live fan-out. The
-    returned bytes are byte-equivalent to a full buffered read, so the
-    existing parser sees the same input.
-
-    Args:
-        stream: The subprocess stdout reader, or ``None`` (no PIPE) yielding
-            empty bytes and firing no callback.
-        on_chunk: The async callback invoked once per decoded line as it
-            arrives.
-
-    Returns:
-        The full accumulated stdout bytes.
-    """
-    if stream is None:
-        return b""
-    chunks: list[bytes] = []
-    line_buf = b""
-    while True:
-        chunk = await stream.read(_STREAM_CHUNK_BYTES)
-        if not chunk:
-            break
-        chunks.append(chunk)
-        line_buf += chunk
-        while b"\n" in line_buf:
-            line, line_buf = line_buf.split(b"\n", 1)
-            await on_chunk((line + b"\n").decode(errors="replace"))
-    if line_buf:
-        await on_chunk(line_buf.decode(errors="replace"))
-    return b"".join(chunks)
-
-
-async def _collect_spawn_output(
-    proc: asyncio.subprocess.Process,
-    *,
-    on_chunk: Callable[[str], Awaitable[None]] | None,
-) -> tuple[bytes, bytes]:
-    """Collect a spawned child's ``(stdout, stderr)`` incrementally.
-
-    Replaces ``proc.communicate`` so stdout can be fanned to *on_chunk* line
-    by line as it arrives rather than buffered to process exit. stdout and
-    stderr are drained CONCURRENTLY (a single-stream drain would deadlock when
-    the child fills the other pipe's OS buffer), then the child is reaped via
-    :meth:`asyncio.subprocess.Process.wait` so ``returncode`` is populated --
-    exactly the post-conditions ``communicate`` guaranteed. When *on_chunk* is
-    ``None`` the stdout drain takes the plain (callback-free) path, so the
-    accumulated bytes are byte-equivalent to the buffered result.
-
-    Args:
-        proc: The spawned subprocess.
-        on_chunk: The per-line async callback, or ``None`` for the buffered
-            (byte-equivalent) path.
-
-    Returns:
-        The ``(stdout, stderr)`` bytes the result parser consumes.
-    """
-    if on_chunk is None:
-        stdout, stderr = await asyncio.gather(
-            _drain_stream(proc.stdout),
-            _drain_stream(proc.stderr),
-        )
-    else:
-        stdout, stderr = await asyncio.gather(
-            _drain_stream_chunked(proc.stdout, on_chunk),
-            _drain_stream(proc.stderr),
-        )
-    await proc.wait()
-    return stdout, stderr
-
-
-def _parse_claude_result(
-    *,
-    runtime: str,
-    model: str,
-    stdout: bytes,
-    stderr: bytes,
-    exit_status: int,
-    subprocess_pid: int,
-    started_at: datetime,
-    ended_at: datetime,
-) -> SpawnResult:
-    """Parse a ``claude -p`` result envelope into a result.
-
-    Handles both output formats: the ``--output-format stream-json`` transcript
-    (one JSON event per line, terminated by a ``type=="result"`` envelope) and
-    the legacy single-object json envelope. The terminal result envelope carries
-    ``result`` (the answer text), ``session_id``, ``usage`` (the token classes),
-    an optional ``modelUsage`` map naming the billed model, and an optional
-    ``total_cost_usd``. Kept standalone (no adapter ``self``) so the parse is
-    unit-testable against a fixed envelope without spawning a subprocess.
-
-    The function is fail-fast: every malformed-output condition raises
-    :class:`~eawf.runtime.runtimes.adapter.RuntimeSpawnError` rather than
-    returning a partially-populated result, so a caller never silently
-    meters a garbage spawn.
-
-    Args:
-        runtime: Adapter id stamped onto the result (e.g. ``"claude-code"``).
-        model: Model alias/id the spawn was requested with.
-        stdout: Raw subprocess stdout bytes (the JSON envelope).
-        stderr: Raw subprocess stderr bytes (surfaced in the error on a
-            non-zero exit).
-        exit_status: Subprocess exit code.
-        subprocess_pid: PID of the spawned subprocess.
-        started_at: When the subprocess started.
-        ended_at: When the subprocess exited.
-
-    Returns:
-        The validated :class:`SpawnResult` for the completed call.
-
-    Raises:
-        RuntimeSpawnError: non-zero exit, empty stdout, unparseable JSON,
-            a non-object envelope, a non-object usage block, or an
-            ``is_error`` result.
-    """
-
-    if exit_status != 0:
-        snippet = stderr.decode(errors="replace").strip()[:200]
-        raise RuntimeSpawnError(
-            f"claude spawn exited nonzero: status={exit_status} stderr={snippet!r}",
-            exit_status=exit_status,
-            stderr=stderr,
-            stdout=stdout,
-        )
-    raw = stdout.decode(errors="replace").strip()
-    if not raw:
-        raise RuntimeSpawnError("claude spawn produced empty stdout")
-    # Under --output-format stream-json the CLI emits one JSON event per line
-    # terminated by a type=="result" envelope; under the legacy single-object
-    # json format the whole stdout IS that envelope. Isolate the terminal result
-    # envelope so the usage / cost / session parse survives either format (a
-    # bare {"result": ...} with no type field has no result event and falls
-    # back to parsing the whole stdout).
-    envelope_text = terminal_result_envelope(raw) or raw
-    try:
-        data = json.loads(envelope_text)
-    except json.JSONDecodeError as exc:
-        raise RuntimeSpawnError(f"claude output is not valid json: {exc}") from exc
-    if not isinstance(data, dict):
-        raise RuntimeSpawnError(f"claude output is not a json object: {type(data).__name__}")
-    if data.get("is_error"):
-        detail = data.get("subtype") or data.get("result")
-        # The vendor's error envelope IS the stdout payload here (stderr is
-        # empty on a stream-json failure), so carry it for classification.
-        raise RuntimeSpawnError(
-            f"claude reported an error result: {detail!r}",
-            exit_status=exit_status,
-            stderr=stderr,
-            stdout=stdout,
-        )
-    usage = data.get("usage") or {}
-    if not isinstance(usage, dict):
-        raise RuntimeSpawnError("claude usage block is not a json object")
-
-    text_field = data.get("result")
-    text = "" if text_field is None else str(text_field)
-
-    cache_write_total = int(usage.get("cache_creation_input_tokens", 0) or 0)
-    ttl_split = usage.get("cache_creation")
-    if isinstance(ttl_split, dict):
-        cache_write_5m = int(ttl_split.get("ephemeral_5m_input_tokens", 0) or 0)
-        cache_write_1h = int(ttl_split.get("ephemeral_1h_input_tokens", 0) or 0)
-    else:
-        cache_write_5m = 0
-        cache_write_1h = 0
-    if cache_write_5m == 0 and cache_write_1h == 0 and cache_write_total > 0:
-        # Envelope disclosed no TTL split: attribute the whole write to the
-        # 5-minute tier (the conservative prior) rather than dropping it.
-        cache_write_5m = cache_write_total
-
-    model_usage = data.get("modelUsage")
-    resolved_model = next(iter(model_usage), None) if isinstance(model_usage, dict) else None
-
-    cost_reported = data.get("total_cost_usd")
-    session_field = str(data.get("session_id") or "")
-
-    return SpawnResult(
-        session_id=session_field or f"{runtime}-{subprocess_pid}",
-        runtime=runtime,
-        model=model,
-        resolved_model=resolved_model,
-        subprocess_pid=subprocess_pid,
-        exit_status=exit_status,
-        text=text,
-        input_tokens=int(usage.get("input_tokens", 0) or 0),
-        output_tokens=int(usage.get("output_tokens", 0) or 0),
-        cache_creation_input_tokens=cache_write_total or (cache_write_5m + cache_write_1h),
-        cache_creation_5m_input_tokens=cache_write_5m,
-        cache_creation_1h_input_tokens=cache_write_1h,
-        cache_read_input_tokens=int(usage.get("cache_read_input_tokens", 0) or 0),
-        # The claude envelope reports no reasoning counter: unknown, not zero.
-        reasoning_output_tokens=None,
-        cost_usd_reported=(Decimal(str(cost_reported)) if cost_reported is not None else None),
-        started_at=started_at,
-        ended_at=ended_at,
-    )
-
-
-def _assistant_usage_from_stream_line(line: str) -> tuple[str | None, UsageSample] | None:
-    """Return the per-call usage reading one claude stream-json line discloses.
-
-    Only a ``type: "assistant"`` event carries ``message.usage`` -- the same
-    block the finished-transcript aggregator
-    (:func:`~eawf.runtime.runtimes.claude.transcript_counters.aggregate_transcript_counters`)
-    reads off the persisted session log, because the live stream and the
-    persisted transcript are the same wire shape. That shape is PER API
-    CALL, not a running session total: unlike a provider whose stream
-    discloses a cumulative reading each time, Claude reports what one call
-    billed and nothing more. A line that is not JSON, not an object, not an
-    assistant event, or carries no well-formed usage block is skipped
-    rather than raised: a malformed mid-turn line must not abort an
-    otherwise-live spawn.
-
-    Args:
-        line: One decoded stdout line, trailing newline included or not.
-
-    Returns:
-        A ``(dedupe_key, sample)`` pair, or ``None`` when the line carries
-        no usage. ``sample`` is the token classes THIS call billed --
-        :class:`_ClaudeUsageAccumulator` folds it into the running total the
-        in-flight meter expects. ``dedupe_key`` identifies the billed call
-        (see :func:`_usage_dedupe_key`) so the accumulator can drop the
-        duplicate content-block copies Claude Code writes for one message;
-        it is ``None`` when the event names no such id, and the reading is
-        then folded unconditionally.
-    """
-    try:
-        data = json.loads(line)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(data, dict) or data.get("type") != "assistant":
-        return None
-    message = data.get("message")
-    if not isinstance(message, dict):
-        return None
-    usage = message.get("usage")
-    if not isinstance(usage, dict):
-        return None
-    try:
-        sample = UsageSample(
-            input_tokens=usage.get("input_tokens") or 0,
-            output_tokens=usage.get("output_tokens") or 0,
-            cache_read_input_tokens=usage.get("cache_read_input_tokens") or 0,
-        )
-    except ValidationError, TypeError:
-        return None
-    return _usage_dedupe_key(data, message), sample
-
-
-def _usage_dedupe_key(data: dict[str, Any], message: dict[str, Any]) -> str | None:
-    """Return the id naming the billed call *data* / *message* belong to.
-
-    Mirrors :func:`~eawf.runtime.runtimes.claude.transcript_counters._usage_key`:
-    Claude Code appends an assistant message once per content block, each
-    copy repeating the same ``message.usage``, so the message id -- falling
-    back to the event's own request or row id -- names the call rather than
-    the line.
-    """
-    for candidate in (message.get("id"), data.get("requestId"), data.get("uuid")):
-        if isinstance(candidate, str) and candidate:
-            return candidate
-    return None
-
-
-class _ClaudeUsageAccumulator:
-    """Fold a claude stream's per-call usage readings into running totals.
-
-    Claude's ``message.usage`` on a stream-json ``assistant`` event is what
-    ONE API call billed, not a session-cumulative figure. The in-flight
-    meter (:class:`~eawf.runtime.runtimes.metering.InFlightMeter`) ratchets
-    each reading against the largest one seen so far, which is a safe fold
-    only when every reading IS the running total -- fed a bare per-call
-    figure instead, it discards every earlier call and meters a Run at its
-    single largest message, so a Run whose calls together cross the token
-    cap runs past it. This accumulator restores the running-total contract
-    at the source: it dedupes Claude Code's duplicate content-block copies
-    of one message (see :func:`_usage_dedupe_key`) and emits the running
-    sum, so every reading handed to the meter already is cumulative -- the
-    same contract codex's own stream already satisfies natively.
-    """
-
-    def __init__(self) -> None:
-        """Start the fold at zero, with no call yet seen."""
-        self._seen: set[str] = set()
-        self._input_tokens = 0
-        self._output_tokens = 0
-        self._cache_read_input_tokens = 0
-
-    def observe(self, line: str) -> UsageSample | None:
-        """Fold *line*'s reading in and return the new running total.
-
-        Args:
-            line: One decoded stdout line, trailing newline included or
-                not.
-
-        Returns:
-            The running-total :class:`UsageSample` after folding *line* in,
-            or ``None`` when *line* discloses no NEW usage -- it is not an
-            assistant-usage event, or it repeats a call already folded.
-        """
-        usage = _assistant_usage_from_stream_line(line)
-        if usage is None:
-            return None
-        dedupe_key, sample = usage
-        if dedupe_key is not None:
-            if dedupe_key in self._seen:
-                return None
-            self._seen.add(dedupe_key)
-        self._input_tokens += sample.input_tokens
-        self._output_tokens += sample.output_tokens
-        self._cache_read_input_tokens += sample.cache_read_input_tokens
-        try:
-            return UsageSample(
-                input_tokens=self._input_tokens,
-                output_tokens=self._output_tokens,
-                cache_read_input_tokens=self._cache_read_input_tokens,
-            )
-        except ValidationError:
-            return None
-
-
 class ClaudeAdapter:
-    """Claude Code runtime adapter (``claude -p`` subprocess primary).
+    """Claude Code runtime adapter.
 
     Implements :class:`~eawf.runtime.runtimes.adapter.RuntimeAdapter`. ``id``
     + ``cli_binary`` follow the canonical naming per
@@ -652,294 +269,6 @@ class ClaudeAdapter:
             session_log_handle=self.session_log_handle(session_id),
             started_at=datetime.now(UTC),
         )
-
-    async def spawn_session(
-        self,
-        prompt: str,
-        *,
-        model: str,
-        cwd: str | None = None,
-        extra_args: Sequence[str] = (),
-        denied_tools: Sequence[str] = (),
-        timeout: float | None = None,
-        on_spawn: Callable[[int], None] | None = None,
-        on_pgid: Callable[[int], None] | None = None,
-        on_chunk: Callable[[str], Awaitable[None]] | None = None,
-        session: str = "",
-        enforcement_sink: EnforcementSink | None = None,
-        isolation: ManagedClaudeIsolation | None = None,
-    ) -> SpawnResult:
-        """Spawn a live ``claude -p`` subprocess and collect its result.
-
-        Runs ``claude -p <prompt> --output-format stream-json --model <model>``
-        via :func:`asyncio.create_subprocess_exec`, captures stdout (the
-        streamed JSON envelopes) + stderr, and parses the outcome into a typed
-        :class:`~eawf.runtime.runtimes.adapter.SpawnResult` (raw text +
-        the token classes + pid + exit + the optional self-reported cost).
-        The child is started in its own session / process group
-        (``start_new_session=True``) so a later cancel can signal the whole
-        group by pgid without this wave building the cancel path. The child
-        environment is SCRUBBED via
-        :func:`~eawf.runtime.sandbox.env_scrub.build_child_env` -- it
-        receives an allowlist floor (pinned ``PATH`` + ``HOME`` / locale /
-        ``TERM``) plus the claude lane's own auth, never the full parent
-        env (which would carry ``AWS_*`` / ``GH_*`` / ``SSH_*`` creds into
-        the child). The argv is additionally prefixed with the OS
-        filesystem jail (bubblewrap / seatbelt via
-        :func:`~eawf.runtime.sandbox.jail.jail_command`) when the host
-        supports it; the jail wrapper inherits the daemon-set session so
-        the pgid-reap is preserved, and a host without the wrapper binary
-        runs unjailed with a warning rather than failing.
-
-        This wave builds the spawn mechanism + the parse only. Metering,
-        cancellation, and the schema-forced re-ask loop are separate waves
-        and are deliberately NOT wired here.
-
-        When *denied_tools* is non-empty the argv gains
-        ``--disallowedTools <space-joined-sorted>`` so the spawned child is
-        launched with those tools disabled per the wave's sandbox policy.
-        The deny flag is built BEFORE the jail wrapper is applied, so the
-        jail confines the full child argv including the deny flag; the tool
-        names are sorted for a deterministic argv. The deny flag is inserted
-        ahead of *extra_args* so the verbatim escape hatch stays at the argv
-        tail; an empty deny-list adds no flag (byte-equivalent to a deny-free
-        spawn).
-
-        The optional *on_spawn* callback fires with the child PID the
-        moment the subprocess exists — before output is awaited — so a
-        later cancel path can register the pid and halt a still-running
-        call mid-flight. The optional *on_pgid* callback fires with the
-        child's process-GROUP id (resolved via :func:`os.getpgid` right
-        after spawn) so the budget-HALT interlock can ``os.killpg`` the
-        whole group when the wave runs over its hard token cap.
-
-        The optional *on_chunk* async callback fires once per stdout line AS
-        IT ARRIVES: the spawn drains stdout incrementally (via
-        :func:`_collect_spawn_output`) rather than buffering the whole output
-        to process exit, so a downstream wave can surface model output live.
-        With the ``--output-format stream-json`` default claude emits one
-        envelope per event, so the output streams during the run rather than
-        arriving as a single envelope at exit. The full stdout is still
-        accumulated and fed to :func:`_parse_claude_result` unchanged, so with
-        ``on_chunk=None`` the returned :class:`SpawnResult` is byte-equivalent
-        to the buffered path.
-
-        The floor caps the number of live spawns in flight at once
-        (:data:`CONCURRENT_SPAWN_CAP`): a spawn past the cap fails fast
-        with :class:`ConcurrentSpawnCapError` before any subprocess is
-        forked. Each enforcement decision the spawn makes -- the env-scrub
-        drop, the per-wave argv deny, the cwd-guard fallback -- is recorded
-        to *enforcement_sink* (when wired) so a denial-timeline surface can
-        read what the floor refused for *session*.
-
-        Args:
-            prompt: Rendered prompt passed to ``claude -p``.
-            model: Model alias/id for ``--model``. No hardcoded floor —
-                the caller resolves it (the routing decision feeds this).
-            cwd: Working directory for the subprocess; ``None`` inherits
-                the parent's.
-            extra_args: Extra CLI args appended verbatim (the routing /
-                structured-output escape hatch).
-            denied_tools: Per-wave sandbox deny-list (tool names). When
-                non-empty the argv gains ``--disallowedTools`` with the
-                sorted names space-joined into one token; empty (the
-                default) adds no flag.
-            timeout: Wall-clock ceiling in seconds; ``None`` waits
-                indefinitely. On expiry the child is killed and a typed
-                error is raised.
-            on_spawn: Optional callback invoked with the child PID right
-                after spawn (before output is awaited).
-            on_pgid: Optional callback invoked with the child's process-GROUP
-                id right after spawn so the budget-HALT interlock can reap
-                the whole group. Resolution failures (the child raced to
-                exit) are swallowed -- the cancel path falls back to the pid.
-            on_chunk: Optional async callback invoked once per stdout line as
-                it arrives (live streaming); ``None`` (the default) leaves the
-                spawn byte-equivalent to the buffered path.
-            session: The spawning session id stamped on every enforcement
-                event this spawn records.
-            enforcement_sink: The sink each enforcement decision is
-                persisted through; ``None`` only logs.
-            isolation: The clean configuration home, instruction
-                suppression and settings-source flags of a managed Run.
-                Its flags precede *extra_args* and its variables are laid
-                over the scrubbed environment, so the child never reads
-                the operator's configuration home. ``None`` isolates the
-                spawn in a per-spawn home under *cwd* with MCP closed,
-                removed when the turn ends: every child eawf starts is a
-                managed one, so no spawn inherits the operator's home.
-
-        Returns:
-            The validated :class:`SpawnResult` for the completed call.
-
-        Raises:
-            ConcurrentSpawnCapError: When the concurrent-spawn cap is
-                already saturated (raised before any subprocess is forked).
-            RuntimeSpawnError: the spawn timed out, exited non-zero, or
-                returned an unparseable / error result envelope.
-            OSError: The per-spawn configuration home could not be created.
-        """
-        spawn = functools.partial(
-            self._spawn_isolated,
-            prompt,
-            model=model,
-            cwd=cwd,
-            extra_args=extra_args,
-            denied_tools=denied_tools,
-            timeout=timeout,
-            on_spawn=on_spawn,
-            on_pgid=on_pgid,
-            on_chunk=on_chunk,
-            session=session,
-            enforcement_sink=enforcement_sink,
-        )
-        if isolation is not None:
-            return await spawn(isolation=isolation)
-        spawn_dir = Path(cwd) if cwd is not None else Path.cwd()
-        with ephemeral_managed_isolation(spawn_dir, operator_env=os.environ) as own:
-            return await spawn(isolation=own)
-
-    async def _spawn_isolated(
-        self,
-        prompt: str,
-        *,
-        model: str,
-        cwd: str | None,
-        extra_args: Sequence[str],
-        denied_tools: Sequence[str],
-        timeout: float | None,
-        on_spawn: Callable[[int], None] | None,
-        on_pgid: Callable[[int], None] | None,
-        on_chunk: Callable[[str], Awaitable[None]] | None,
-        session: str,
-        enforcement_sink: EnforcementSink | None,
-        isolation: ManagedClaudeIsolation,
-    ) -> SpawnResult:
-        """Run the spawn :meth:`spawn_session` describes against *isolation*."""
-        deny_flag: list[str] = []
-        if denied_tools:
-            # Map the per-wave deny-list to the claude deny flag. Sorted +
-            # space-joined into one token so the argv is deterministic and
-            # the vendor flag spelling stays inside the adapter.
-            deny_flag = ["--disallowedTools", " ".join(sorted(denied_tools))]
-            emit_enforcement(
-                enforcement_sink,
-                make_enforcement_event(
-                    session=session,
-                    kind="argv-deny",
-                    target=" ".join(sorted(denied_tools)),
-                    severity="block",
-                ),
-            )
-        argv = [
-            self.cli_binary,
-            "-p",
-            prompt,
-            # stream-json streams one JSON event per line during the run instead
-            # of withholding a single envelope until the spawn ends -- the fix
-            # for the multi-minute output blackout. Print mode (-p) requires
-            # --verbose for stream-json; the terminal type=="result" line still
-            # carries the usage / cost the metering parse reads.
-            "--output-format",
-            "stream-json",
-            "--verbose",
-            # Headless print mode has no TTY to answer a permission prompt, so a
-            # default-mode spawn denies Edit / Write / Bash and the agent reports
-            # "blocked on write permissions". bypassPermissions auto-approves the
-            # tool calls without a prompt; the enforced boundary stays the OS
-            # filesystem jail (below) + the per-wave --disallowedTools deny-list
-            # (which Claude still honors), so this is scoped by the sandbox, not a
-            # blanket grant. acceptEdits is insufficient -- it auto-accepts edits
-            # but still blocks arbitrary Bash (e.g. `uv run`).
-            "--permission-mode",
-            "bypassPermissions",
-            "--model",
-            model,
-            *deny_flag,
-            *isolation.argv_flags,
-            *extra_args,
-        ]
-        # Prefix the OS filesystem jail (bubblewrap / seatbelt) when the
-        # host supports it. The daemon stays the sole session-setter:
-        # ``start_new_session=True`` lands on the jail wrapper, which is the
-        # group leader, so ``cancel_process_group(os.getpgid(pid))`` reaps
-        # the whole tree unchanged. When the wrapper binary is absent the
-        # child runs unjailed with a warning (CI / hosts without the tool).
-        argv = _maybe_jail_argv(
-            argv, runtime=self.id, cwd=cwd, session=session, sink=enforcement_sink
-        )
-        # Build the scrubbed child env + record the env-scrub decision (which
-        # credential-bearing families were dropped) onto the denial timeline.
-        child_env = build_child_env(self.id, extra_path_dir=resolve_binary_dir(self.cli_binary))
-        self._record_env_scrub(child_env, session=session, sink=enforcement_sink)
-        child_env.update(isolation.env)
-
-        # The concurrent-spawn cap is the LAST gate before the fork so the
-        # slot is held only for the real subprocess lifetime; it is released
-        # in the ``finally`` after the child is reaped / parsed.
-        acquire_spawn_slot()
-        proc: asyncio.subprocess.Process | None = None
-        try:
-            started_at = datetime.now(UTC)
-            proc = await asyncio.create_subprocess_exec(
-                *argv,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                start_new_session=True,
-                cwd=cwd,
-                env=child_env,
-                **no_window_kwargs(),
-            )
-            pid = proc.pid
-            logger.info(f"spawn_session runtime={self.id!r} pid={pid} model={model!r}")
-            if on_spawn is not None:
-                on_spawn(pid)
-            # Pin the PID on win32 while asyncio's own handle still does, so the
-            # tree kill can never reach a process that reused it.
-            hold_process_handle(pid)
-            if on_pgid is not None:
-                # The child is its own group leader (start_new_session=True),
-                # so its pgid equals its pid; resolve via getpgid so a future
-                # double-fork still yields the leader. A child that already
-                # exited makes getpgid raise -- the cancel path then falls
-                # back to the pid, so the lookup failure is non-fatal.
-                try:
-                    on_pgid(process_group_id(pid))
-                except ProcessLookupError:
-                    logger.warning(f"spawn_session pgid-unresolved pid={pid}")
-            try:
-                # Drain stdout / stderr incrementally so each stdout line is
-                # fanned to on_chunk as it arrives; the full stdout is still
-                # accumulated for the existing parser. wait_for preserves the
-                # wall-clock ceiling + the kill-on-timeout contract.
-                stdout, stderr = await asyncio.wait_for(
-                    _collect_spawn_output(proc, on_chunk=on_chunk), timeout=timeout
-                )
-            except TimeoutError:
-                proc.kill()
-                await proc.wait()
-                # 124 is the conventional timeout exit code parse_error maps
-                # to RUNTIME_TIMEOUT, so a classifier routes the V5 switch.
-                raise RuntimeSpawnError(
-                    f"claude spawn timed out: timeout={timeout}s pid={pid}",
-                    exit_status=124,
-                ) from None
-            ended_at = datetime.now(UTC)
-            return _parse_claude_result(
-                runtime=self.id,
-                model=model,
-                stdout=stdout or b"",
-                stderr=stderr or b"",
-                exit_status=proc.returncode if proc.returncode is not None else -1,
-                subprocess_pid=pid,
-                started_at=started_at,
-                ended_at=ended_at,
-            )
-        finally:
-            # An unreaped child keeps its handle so a later cancel still reaches it.
-            if proc is not None and proc.returncode is not None:
-                release_process_handle(proc.pid)
-            release_spawn_slot()
 
     @staticmethod
     def _record_env_scrub(
@@ -1053,12 +382,10 @@ class ClaudeNativeLauncher:
     with instruction discovery and settings files switched off (see
     :mod:`~eawf.runtime.runtimes.claude.managed_run`).
 
-    There is no vendor SDK behind the CLI, so a launch is one headless
-    turn: the child is started, the turn is awaited, and the worker's
-    announcement is composed from the session the child reported. A
-    long-lived worker announcing itself over the daemon socket mid-turn
-    is the shape the streaming path takes; this is the one-shot form of
-    the same handshake.
+    The child is driven through the Claude Agent SDK (see
+    :mod:`~eawf.runtime.runtimes.claude.sdk_launcher`): the launch returns
+    once the session is announced, and the turn runs on in the task the
+    outcome carries.
 
     Attributes:
         provider_kind: The compiled ``provider_options`` discriminator
@@ -1092,80 +419,24 @@ class ClaudeNativeLauncher:
                 workspace and the announcement sequence expected back.
 
         Returns:
-            The provider session, the child's pid and the announcement.
+            The provider session, the child's pid, the announcement and
+            the turn still running.
 
         Raises:
-            RuntimeSpawnError: The spawn timed out, exited non-zero,
-                returned an envelope that does not parse, or the per-Run
-                MCP configuration could not be built or does not register
-                the Run's server.
+            RuntimeSpawnError: The CLI was not found, the child failed or
+                reported an error before announcing its session, or the
+                per-Run MCP configuration could not be built or does not
+                register the Run's server.
         """
-        spec = request.spec
-        server_config = native_run_server_config(request, runtime_id=self._adapter.id)
-        isolation = prepare_managed_isolation(
-            request.workspace / MCP_ARTIFACT_DIRNAME, operator_env=os.environ
-        )
-        pgid_box: list[int | None] = [None]
-        relayed_terminated = False
-        usage_accumulator = _ClaudeUsageAccumulator()
+        # The SDK driver imports this module for its jail and taxonomy.
+        from eawf.runtime.runtimes.claude.sdk_launcher import launch_claude_run
 
-        def _capture_pgid(pgid: int) -> None:
-            pgid_box[0] = pgid
-
-        async def _relay_usage(line: str) -> None:
-            """Parse *line* for a usage reading and hand it to the sink.
-
-            *line* discloses what one API call billed, not a running
-            total, so ``usage_accumulator`` folds it into the running sum
-            the sink expects before relaying (see
-            :class:`_ClaudeUsageAccumulator`).
-
-            Stops relaying once the sink reports the Run terminated at its
-            cap -- the kill ladder reaps the child from there, and a
-            terminated meter answers every further reading identically, so
-            relaying past that point buys nothing.
-            """
-            nonlocal relayed_terminated
-            if request.usage_sink is None or relayed_terminated:
-                return
-            sample = usage_accumulator.observe(line)
-            if sample is None:
-                return
-            relayed_terminated = await request.usage_sink(sample, pgid_box[0])
-
-        async def _relay_line(line: str) -> None:
-            """Relay *line*'s usage reading, then each message it carries."""
-            await _relay_usage(line)
-            if request.message_sink is None:
-                return
-            for message in stream_message_payloads(line):
-                await request.message_sink(message)
-
-        relaying = request.usage_sink is not None or request.message_sink is not None
-
-        result = await self._adapter.spawn_session(
-            request.prompt,
-            model=spec.model_id,
-            cwd=str(request.workspace),
-            extra_args=server_config.argv_flags,
-            denied_tools=ambient_denied_tools(spec),
-            timeout=float(spec.limits.wall_seconds),
-            on_pgid=_capture_pgid if request.usage_sink is not None else None,
-            on_chunk=_relay_line if relaying else None,
-            isolation=isolation,
-        )
-        return NativeLaunchOutcome(
-            provider_session_ref=result.session_id,
-            subprocess_pid=result.subprocess_pid,
-            hello=compose_worker_hello(
-                spec=spec,
-                capsule=request.capsule,
-                provider_session_ref=result.session_id,
-                sdk_version=self.driver_version,
-                worker_protocol_version=self.worker_protocol_version,
-                event_codec_version=self.event_codec_version,
-                hello_sequence=request.hello_sequence,
-            ),
+        return await launch_claude_run(
+            request,
+            adapter=self._adapter,
+            driver_version=self.driver_version,
+            worker_protocol_version=self.worker_protocol_version,
+            event_codec_version=self.event_codec_version,
         )
 
 

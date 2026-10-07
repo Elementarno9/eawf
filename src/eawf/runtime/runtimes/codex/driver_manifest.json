@@ -1,0 +1,47 @@
+{
+  "schema_version": "launcher-manifest/v1",
+  "runtime_id": "codex",
+  "driver_ref": "driver://codex-python-sdk/v1",
+  "auth_profile_ref": "auth://local-session/codex",
+  "listed_models": ["gpt-5.5", "gpt-5.3-codex-spark"],
+  "manifest_id": "codex-python-sdk",
+  "provider_id": "codex",
+  "driver_kind": "native_sdk",
+  "distribution": {
+    "kind": "python",
+    "package": "openai-codex",
+    "entrypoint_ref": "component://codex/app-server-launcher"
+  },
+  "worker_protocol_versions": ["1.0.0"],
+  "semantic_protocol_versions": ["1.0.0"],
+  "event_codec": {
+    "codec_id": "codex-app-server-notifications",
+    "schema_version": "1.0.0",
+    "schema_ref": "schema://codex/app-server-notifications/v1",
+    "supports_replay": false,
+    "provider_sequence_kind": "none"
+  },
+  "auth_kinds": ["local_session"],
+  "control_schema_ref": "schema://codex/control/v1",
+  "provider_options_schema_ref": "schema://codex/options/v1",
+  "capabilities": [
+    {
+      "capability_id": "streaming",
+      "level_kind": "boolean",
+      "allowed_levels": [true, false],
+      "default_level": true
+    },
+    {
+      "capability_id": "tool_use",
+      "level_kind": "boolean",
+      "allowed_levels": [true, false],
+      "default_level": true
+    },
+    {
+      "capability_id": "semantic_tools",
+      "level_kind": "boolean",
+      "allowed_levels": [true, false],
+      "default_level": true
+    }
+  ]
+}

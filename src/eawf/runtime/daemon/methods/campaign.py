@@ -49,6 +49,7 @@ from typing import Annotated, Any, Final, Literal, NoReturn
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from eawf.kernel.delivery.integration import IdempotencyKey
 from eawf.kernel.delivery.receipts import canonical_digest
 from eawf.kernel.identity import EntityKind, QualifiedUrn
 from eawf.kernel.projection.campaign import (
@@ -74,6 +75,7 @@ from eawf.kernel.state.epoch2.campaign import (
     Campaign,
     CampaignMethodPolicy,
     CampaignPlanStep,
+    CampaignQuestionContext,
     CampaignStop,
     NamedProgress,
     ResearchBudget,
@@ -171,6 +173,8 @@ class PlanApproveParams(_Params):
         method_policy: The order the plan may work methods in.
         seed_questions: Questions to file with the plan; every step's question
             is one of these or an open question the tree already holds.
+        question_context: The context and brief of each question that states any.
+        idempotency_key: The caller's name for the request, which a retry replays on.
     """
 
     actor: PrincipalKey
@@ -180,6 +184,8 @@ class PlanApproveParams(_Params):
     plan_steps: Annotated[tuple[CampaignPlanStep, ...], Field(min_length=1)]
     method_policy: CampaignMethodPolicy = CampaignMethodPolicy()
     seed_questions: tuple[SeedQuestion, ...] = ()
+    question_context: tuple[CampaignQuestionContext, ...] = ()
+    idempotency_key: IdempotencyKey | None = None
 
 
 class PlanReviseParams(_Params):
@@ -493,12 +499,13 @@ def approve_plan(
         now: When the plan was approved.
 
     Returns:
-        The Campaign, and the row to publish. A Campaign already admitted under
-        the Track with the same title and plan is returned with nothing written.
+        The Campaign, and the row to publish. A Campaign already admitted under the same
+        idempotency key, or the Track, title and plan, is returned with nothing written.
 
     Raises:
         TransactionRefusedError: The Track is not a live row, a step arrives
-            already started, or the plan does not hold against the budget.
+            already started, the plan does not hold against the budget, or the
+            idempotency key already started a Campaign of another Track or title.
     """
     started = [step.ordinal for step in args.plan_steps if step != _fresh(step)]
     if started:
@@ -520,13 +527,19 @@ def approve_plan(
                 fix="Create the Track before approving a Campaign under it.",
             )
         rows = document_rows(document, Epoch2Collection.CAMPAIGN)
-        for row in rows.values():
-            standing = Campaign.model_validate(row)
-            if (standing.track_ref, standing.title, standing.approved_plan_digest) == (
-                args.track_ref,
-                args.title,
-                digest,
-            ):
+        held = [Campaign.model_validate(row) for row in rows.values()]
+        retry = args.idempotency_key
+        keyed = [c for c in held if retry is not None and c.idempotency_key == retry]
+        if keyed and (keyed[0].track_ref, keyed[0].title) != (args.track_ref, args.title):
+            _refused(
+                TransactionRefusalCode.IDEMPOTENCY_CONFLICT,
+                f"idempotency key {retry!r} already started {keyed[0].key} under another title",
+                urn=args.track_ref,
+                fix="Send a new idempotency key for a new Campaign.",
+            )
+        plan = (args.track_ref, args.title, digest)
+        for standing in keyed or held:
+            if keyed or (standing.track_ref, standing.title, standing.approved_plan_digest) == plan:
                 logger.info(f"approve_plan standing campaign={standing.key}")
                 return CampaignCommit(record=standing.model_dump(mode="json"), committed=False), ()
         key = _next_key("CAM", rows)
@@ -556,6 +569,8 @@ def approve_plan(
                     "method_policy": args.method_policy.model_dump(mode="json"),
                     "approved_plan_digest": digest,
                     "plan_steps": [step.model_dump(mode="json") for step in args.plan_steps],
+                    "question_context": [r.model_dump(mode="json") for r in args.question_context],
+                    "idempotency_key": args.idempotency_key,
                 }
             )
         except ValidationError as error:

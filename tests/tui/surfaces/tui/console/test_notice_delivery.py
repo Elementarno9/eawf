@@ -40,8 +40,8 @@ from eawf.kernel.projection.registers import ATTENTION_ROUTE, build_register_vie
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.budget.notices import (
-    BudgetCrossing,
     BudgetNoticeLedger,
+    RecordedCrossing,
     UpsertOutcome,
     apply_crossing,
 )
@@ -287,9 +287,9 @@ def test_ui_018_another_routes_register_is_refused() -> None:
 # ---------- UI-019: the bands collapse, and nothing storms at startup ----------
 
 
-def _crossing(band: str, observed: int) -> BudgetCrossing:
-    """Return one crossing of the probe scope's estimate budget."""
-    return BudgetCrossing.model_validate(
+def _crossing(band: str, observed: int) -> RecordedCrossing:
+    """Return one legacy crossing of the probe scope's estimate budget."""
+    return RecordedCrossing.model_validate(
         {
             "scope_id": "P01-I01-W01",
             "basis": "estimate",

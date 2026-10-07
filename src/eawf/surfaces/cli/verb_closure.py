@@ -388,8 +388,16 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
         "release receipts", "wire_pending", "release.produce_receipts takes neither anchor yet"
     ),
     _exempt("release advance", "wire_pending", "release.advance_train takes neither anchor yet"),
-    _exempt("campaign new", "wire_pending", "runtime.campaign.start takes neither anchor yet"),
-    _exempt("campaign run", "wire_pending", "runtime.campaign.run takes neither anchor yet"),
+    _exempt(
+        "campaign new",
+        "optional_key",
+        "mints a Campaign, which has no revision yet; the retry key is minted when not given",
+    ),
+    _exempt(
+        "campaign run",
+        "revision_only",
+        "starting a drive keeps no replay ledger; a drive already running is not started twice",
+    ),
 )
 
 

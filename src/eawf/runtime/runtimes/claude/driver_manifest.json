@@ -1,0 +1,47 @@
+{
+  "schema_version": "launcher-manifest/v1",
+  "runtime_id": "claude-code",
+  "driver_ref": "driver://claude-agent-sdk/v1",
+  "auth_profile_ref": "auth://local-session/claude",
+  "listed_models": ["claude-sonnet-4-6", "claude-opus-4-8", "claude-haiku-4-5"],
+  "manifest_id": "claude-agent-sdk",
+  "provider_id": "claude",
+  "driver_kind": "native_sdk",
+  "distribution": {
+    "kind": "python",
+    "package": "claude-agent-sdk",
+    "entrypoint_ref": "component://claude/sdk-launcher"
+  },
+  "worker_protocol_versions": ["1.0.0"],
+  "semantic_protocol_versions": ["1.0.0"],
+  "event_codec": {
+    "codec_id": "claude-agent-sdk-messages",
+    "schema_version": "1.0.0",
+    "schema_ref": "schema://claude/sdk-messages/v1",
+    "supports_replay": false,
+    "provider_sequence_kind": "none"
+  },
+  "auth_kinds": ["local_session"],
+  "control_schema_ref": "schema://claude/control/v1",
+  "provider_options_schema_ref": "schema://claude/options/v1",
+  "capabilities": [
+    {
+      "capability_id": "streaming",
+      "level_kind": "boolean",
+      "allowed_levels": [true, false],
+      "default_level": true
+    },
+    {
+      "capability_id": "tool_use",
+      "level_kind": "boolean",
+      "allowed_levels": [true, false],
+      "default_level": true
+    },
+    {
+      "capability_id": "semantic_tools",
+      "level_kind": "boolean",
+      "allowed_levels": [true, false],
+      "default_level": true
+    }
+  ]
+}

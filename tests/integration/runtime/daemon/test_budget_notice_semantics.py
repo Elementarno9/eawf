@@ -1,7 +1,8 @@
 """Budget notices, driven through the producer, the ledger and the daemon verbs.
 
 Each case runs the code an operator's session runs: the daemon's estimate
-sweep over a real state file and event store, the notice ledger on disk,
+sweep over a real state file and event store, a Run's budget termination,
+the notice ledger on disk,
 the recipient verbs the daemon registers, the pause projection the
 operator surface reads, and the legacy import that reinterprets the old
 over-budget pauses. A restart is a fresh call over the same files, which
@@ -357,12 +358,8 @@ def test_prx_033_the_repository_loader_refuses_a_sub_unity_band(tmp_path: Path) 
         load_economics(tmp_path)
 
 
-def test_prx_033_the_notify_fraction_boundary_is_exactly_one() -> None:
+def test_prx_033_an_empty_table_loads_the_shipped_policy() -> None:
     assert economics_policy_from({}).notice_policy == DEFAULT_NOTICE_POLICY
-    assert not POLICY.passed(elapsed_seconds=599.0, estimate_seconds=600.0)
-    assert POLICY.passed(elapsed_seconds=600.0, estimate_seconds=600.0)
-    assert POLICY.passed(elapsed_seconds=601.0, estimate_seconds=600.0)
-    assert not POLICY.passed(elapsed_seconds=1.0, estimate_seconds=0.0)
 
 
 def test_prx_033_a_crossing_with_recent_progress_is_recorded_but_opens_nothing(
@@ -383,34 +380,22 @@ def test_prx_033_a_crossing_with_recent_progress_is_recorded_but_opens_nothing(
     assert open_legacy_pauses(state_path) == []
 
 
-# ---- PRX-034: one notice past the grace, stable across restarts -------------
+# ---- PRX-034: a wave opens no notice; a Run's notice survives restarts ------
 
 
-def test_prx_034_no_progress_past_the_grace_opens_exactly_one_notice(tmp_path: Path) -> None:
+def test_prx_034_a_wave_past_its_estimate_and_the_grace_opens_no_notice(tmp_path: Path) -> None:
     state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
     _progress(state_path, at=CLAIMED + timedelta(minutes=1))
     now = max(_at_fraction(state_path, 1.0), CLAIMED + timedelta(minutes=1) + GRACE)
 
     _crossings, published = _sweep(state_path, now=now)
 
-    assert [e.payload["event_type"] for e in published] == [
-        ESTIMATE_PASSED_EVENT_TYPE,
-        NOTICE_OPENED_EVENT_TYPE,
-    ]
-    (notice,) = load_notice_ledger(notices_path(state_path)).notices.values()
-    assert (notice.basis, notice.axis, notice.status, notice.revision) == (
-        "estimate",
-        "wall_seconds",
-        "OPEN",
-        1,
-    )
-    assert notice.blocking is False
-    assert notice.audience == (LOCAL_OPERATOR,)
+    assert [e.payload["event_type"] for e in published] == [ESTIMATE_PASSED_EVENT_TYPE]
+    assert not notices_path(state_path).exists()
 
 
 def test_prx_034_three_restarts_keep_one_row_one_delivery_and_no_modal(tmp_path: Path) -> None:
-    state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
-    now = _at_fraction(state_path, 1.0) + GRACE
+    state_path, _key, now = _opened(tmp_path)
     _sweep(state_path, now=now)
     ledger_file = notices_path(state_path)
     first = deliver_pending(ledger_file, principal=LOCAL_OPERATOR, now=now)
@@ -418,15 +403,14 @@ def test_prx_034_three_restarts_keep_one_row_one_delivery_and_no_modal(tmp_path:
 
     for restart in range(1, 4):
         later = now + timedelta(minutes=restart)
-        _crossings, published = _sweep(state_path, now=later)  # daemon restart
+        _sweep(state_path, now=later)  # daemon restart
         again = deliver_pending(ledger_file, principal=LOCAL_OPERATOR, now=later)  # client restart
-        assert published == []
         assert again == ()
 
     assert len(first) == 1
     assert ledger_file.read_bytes() == settled
     assert len(load_notice_ledger(ledger_file).notices) == 1
-    assert _event_types(state_path).count(NOTICE_OPENED_EVENT_TYPE) == 1
+    assert NOTICE_OPENED_EVENT_TYPE not in _event_types(state_path)
     assert PAUSE_EVENT_TYPE not in _event_types(state_path)
     assert open_legacy_pauses(state_path) == []
 
@@ -474,27 +458,40 @@ def test_prx_035_a_reimport_is_byte_identical(tmp_path: Path) -> None:
     assert notices_path(state_path).read_bytes() == once
 
 
-def test_prx_035_a_live_run_reaches_the_limit_without_ever_approaching(tmp_path: Path) -> None:
+def test_prx_035_a_live_wave_never_opens_a_notice_at_any_fraction(tmp_path: Path) -> None:
     state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
-    ledger_file = notices_path(state_path)
 
     for fraction in (0.5, 0.8, 0.95, 1.0, 1.5, 3.0):
         _sweep(state_path, now=_at_fraction(state_path, fraction) + GRACE)
-        for notice in load_notice_ledger(ledger_file).notices.values():
-            assert notice.highest_band == "limit_reached"
-            assert notice.revision == 1
 
-    assert len(load_notice_ledger(ledger_file).notices) == 1
+    assert not notices_path(state_path).exists()
 
 
 # ---- PRX-036: dispositions survive restart ---------------------------------
 
 
+def _terminated(state_path: Path, *, now: datetime, audience: tuple[str, ...]) -> str:
+    """Fold one Run's budget-termination receipt into the tree's notice ledger."""
+    receipt = BudgetNotice.model_validate(
+        {
+            "run_ref": str(RUN_URN),
+            "control_request_ref": "CTL-00000001",
+            "observed_tokens": 1200,
+            "cap_tokens": 1000,
+            "noticed_at": now.isoformat(),
+        }
+    )
+    result = emit_termination_notice(
+        notices_path(state_path), receipt, contract_digest=None, audience=audience
+    )
+    assert result is not None
+    return result.notice.notice_key
+
+
 def _opened(tmp_path: Path) -> tuple[Path, str, datetime]:
     state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
     now = _at_fraction(state_path, 1.0) + GRACE
-    _sweep(state_path, now=now)
-    (key,) = load_notice_ledger(notices_path(state_path)).notices
+    key = _terminated(state_path, now=now, audience=(LOCAL_OPERATOR,))
     return state_path, key, now
 
 
@@ -656,20 +653,7 @@ def test_the_daemon_verbs_without_a_repo_root_read_the_bound_tree(tmp_path: Path
 def _alice_notice(tmp_path: Path) -> tuple[Path, str, datetime]:
     state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
     now = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
-    receipt = BudgetNotice.model_validate(
-        {
-            "run_ref": str(RUN_URN),
-            "control_request_ref": "CTL-00000001",
-            "observed_tokens": 1200,
-            "cap_tokens": 1000,
-            "noticed_at": now.isoformat(),
-        }
-    )
-    result = emit_termination_notice(
-        notices_path(state_path), receipt, contract_digest=None, audience=(ALICE,)
-    )
-    assert result is not None
-    return state_path, result.notice.notice_key, now
+    return state_path, _terminated(state_path, now=now, audience=(ALICE,)), now
 
 
 def test_prx_037_a_notice_for_one_principal_is_invisible_to_another(tmp_path: Path) -> None:
@@ -702,7 +686,7 @@ def test_prx_037_alice_snoozing_leaves_bob_undelivered_and_active(tmp_path: Path
         ledger_file,
         BudgetCrossing(
             scope_id=WAVE,
-            basis="estimate",
+            basis="hard_limit",
             band="limit_reached",
             observed_value=10,
             budget_value=5,
@@ -796,43 +780,37 @@ def test_prx_038_exact_exhaustion_stops_only_the_subject_run(tmp_path: Path) -> 
     assert answer["stage"] == DispatchStage.ANNOUNCED.value
 
 
-# ---- PRX-039: concurrent producers and a delayed lower band -------------------
+# ---- PRX-039: concurrent producers ---------------------------------------------
 
 
-def test_prx_039_concurrent_producers_and_a_late_lower_band_yield_one_notice(
-    tmp_path: Path,
-) -> None:
+def test_prx_039_concurrent_producers_yield_one_notice(tmp_path: Path) -> None:
     ledger_file = notices_path(_write_state(tmp_path, {WAVE: _wave(WAVE)}))
     now = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
-
-    def crossing(band: str, at: datetime) -> BudgetCrossing:
-        return BudgetCrossing(
-            scope_id=WAVE,
-            axis="wall_seconds",
-            basis="estimate",
-            band=band,  # type: ignore[arg-type]
-            observed_value=7200,
-            budget_value=3600,
-            observed_at=at,
-            audience=(ALICE, BOB),
-        )
+    crossing = BudgetCrossing(
+        scope_id=WAVE,
+        axis="wall_seconds",
+        basis="hard_limit",
+        band="limit_reached",
+        observed_value=7200,
+        budget_value=3600,
+        observed_at=now,
+        audience=(ALICE, BOB),
+    )
 
     outcomes: list[UpsertOutcome] = []
     start = threading.Barrier(2)
 
     def produce() -> None:
         start.wait()
-        outcomes.append(upsert_notice(ledger_file, crossing("limit_reached", now)).outcome)
+        outcomes.append(upsert_notice(ledger_file, crossing).outcome)
 
     producers = [threading.Thread(target=produce) for _ in range(2)]
     for thread in producers:
         thread.start()
     for thread in producers:
         thread.join()
-    late = upsert_notice(ledger_file, crossing("approaching", now - timedelta(minutes=5)))
 
     assert sorted(outcomes) == sorted([UpsertOutcome.CREATED, UpsertOutcome.UNCHANGED])
-    assert late.outcome is UpsertOutcome.RETAINED
     (notice,) = load_notice_ledger(ledger_file).notices.values()
     assert (notice.highest_band, notice.revision) == ("limit_reached", 1)
 
@@ -853,26 +831,6 @@ def test_prx_039_concurrent_producers_and_a_late_lower_band_yield_one_notice(
         thread.join()
 
     assert delivered == {ALICE: 1, BOB: 1}
-
-
-def test_prx_039_an_escalation_is_delivered_once_more_per_recipient(tmp_path: Path) -> None:
-    ledger_file = notices_path(_write_state(tmp_path, {WAVE: _wave(WAVE)}))
-    now = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
-    base = {
-        "scope_id": WAVE,
-        "axis": "wall_seconds",
-        "basis": "estimate",
-        "observed_value": 60,
-        "budget_value": 60,
-        "observed_at": now,
-        "audience": (ALICE,),
-    }
-    upsert_notice(ledger_file, BudgetCrossing.model_validate({**base, "band": "approaching"}))
-    assert len(deliver_pending(ledger_file, principal=ALICE, now=now)) == 1
-    upsert_notice(ledger_file, BudgetCrossing.model_validate({**base, "band": "limit_reached"}))
-
-    assert [n.revision for n in deliver_pending(ledger_file, principal=ALICE, now=now)] == [2]
-    assert deliver_pending(ledger_file, principal=ALICE, now=now) == ()
 
 
 # ---- PRX-040: legacy bands collapse deterministically -------------------------

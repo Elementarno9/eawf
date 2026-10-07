@@ -9,7 +9,14 @@ from the handler table rather than declared beside it -- a tool is
 brokered exactly when a function answers it, so the set cannot grow past
 what is implemented.
 
-Five tools are answered here today.
+Eight tools are answered here today.
+
+``repo_read`` and ``repo_search`` read the Run's leased workspace, or the
+repository root for a Run that holds no lease, such as a campaign round.
+Every path is resolved inside that root and nothing under ``.ea`` or
+``.git`` is read, for the same reason the jail denies daemon storage
+reads. The text comes back inline, bounded and scrubbed the way the
+content store keeps it, and is filed there too so the reference resolves.
 
 ``budget_status`` reports only what the daemon measured itself. Wall time
 is the difference between two stamps it wrote and the call count is the
@@ -43,12 +50,19 @@ raises :class:`HandlerRefusalError`, which the gateway lets propagate
 rather than files as a receipt, because there is no output that could
 report it without inventing one.
 
-``submit_report`` does not read the report body either. The body travels
-by reference, so the one thing this handler alone can check is that the
-call names the exact schema and contract this Run was actually sealed
-under -- the two facts the capsule already pins and the payload cannot
-spoof. Acceptance does record the report's schema, digest and verdict
-against the Run, once, so the separate, operator-driven act that binds
+``workspace_apply_patch`` writes whole files into the Run's leased
+workspace and nowhere else. The scope check has bounded the paths by the
+Run's write set before this module is reached; the handler adds the one
+check only the tree can answer -- a link that would carry a write out of
+the workspace -- and runs it over every path before writing any.
+
+``submit_report`` takes the report's content -- verdict, summary,
+criteria outcomes and body -- and nothing the daemon already knows: the
+schema and the contract digest come from the Run's capsule, and the body
+is filed in the Run's content store under a digest the daemon computes.
+A worker that names the schema or the contract anyway is refused when
+either differs. Acceptance records the report's schema, digest and
+verdict against the Run, once, so the separate, operator-driven act that binds
 an accepted report to a candidate's seal decision
 (:data:`eawf.runtime.daemon.methods.candidate.CANDIDATE_REPORT_BIND_METHOD`)
 can read them back rather than take them typed by hand. Recording them
@@ -80,9 +94,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+import subprocess
+import textwrap
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Final, Literal, Self
 
@@ -91,12 +109,23 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError, model_
 from eawf.kernel.runtime.candidate import AcceptedReport, CandidateSubmission, candidate_identity
 from eawf.kernel.runtime.capsule import AuthorityCapsule
 from eawf.kernel.runtime.compiled import JsonPointer, canonical_digest
+from eawf.kernel.runtime.content import (
+    CONTENT_CHAR_LIMIT,
+    CONTENT_LINE_CHARS,
+    CONTENT_LINE_LIMIT,
+    bound_content,
+)
 from eawf.kernel.runtime.lease import WorkLease
 from eawf.kernel.runtime.provider import ArtifactUrn, Digest, RuntimeRecord
 from eawf.kernel.runtime.semantic import (
     BudgetStatusOutput,
     BudgetUsage,
     FindingCode,
+    RepoReadInput,
+    RepoReadOutput,
+    RepoSearchInput,
+    RepoSearchMatch,
+    RepoSearchOutput,
     SemanticCall,
     SemanticToolId,
     SemanticToolOutput,
@@ -109,6 +138,8 @@ from eawf.kernel.runtime.semantic import (
     SubmitReportInput,
     SubmitReportOutput,
     ValidationFinding,
+    WorkspaceApplyPatchInput,
+    WorkspaceApplyPatchOutput,
 )
 from eawf.kernel.spec.measured_contract import SpikeReport
 from eawf.kernel.state.epoch2.authority import RootAuthority
@@ -124,11 +155,16 @@ from eawf.runtime.candidate.seal import (
     submission_of,
     submission_record,
 )
+from eawf.runtime.daemon.content_store import file_content
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession, canonical_entity_urn
 from eawf.runtime.daemon.epoch2_transaction import TransactionRefusedError, commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 from eawf.runtime.integration.git_workspace import CandidatePinError, pin_submission_commit
+from eawf.runtime.sandbox.cwd_guard import is_path_inside
+from eawf.runtime.workspace.lease import workspace_path
+from eawf.runtime.worktree.tree_change import snapshot_tree
+from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence._io import MEASURED_CONTRACT_STATUS, generation_contract_view
 from eawf.workflow.evidence.measured_contract import submit_evidence as promote_spike_evidence
@@ -178,6 +214,10 @@ _REPORT_CONTRACT_MISMATCH: Final = "report_contract_mismatch"
 #: The finding code a report is refused with when its Run already holds an
 #: accepted report naming another body or verdict.
 _REPORT_ALREADY_ACCEPTED: Final = "report_already_accepted"
+
+#: The finding code a report is refused with when its rendered content is
+#: larger than the content store keeps whole.
+_REPORT_BODY_TOO_LARGE: Final = "report_body_too_large"
 
 
 class HandlerTableError(RuntimeError):
@@ -435,62 +475,351 @@ def _submit_candidate(inputs: HandlerInputs) -> SemanticToolOutput:
     )
 
 
+def _workspace_apply_patch(inputs: HandlerInputs) -> SemanticToolOutput:
+    """Write the patch's files into the Run's leased workspace and name the tree that results.
+
+    The scope check has already compared every path against the Run's
+    write set on its spelling alone. What it cannot see is the tree: a
+    directory on the way that is a link out of the workspace. Every path
+    is therefore resolved against the workspace before any is written,
+    so a refused patch writes nothing rather than its first few files.
+    What the writes changed reaches the Run's stream through the edit
+    record taken when the turn ends, the same as any other worker edit.
+
+    Raises:
+        HandlerRefusalError: A path resolves outside the leased workspace,
+            or the filesystem refuses a write.
+    """
+    payload = inputs.call.payload
+    assert isinstance(payload, WorkspaceApplyPatchInput), (
+        "the envelope binds the payload to its tool"
+    )
+    lease = inputs.lease
+    assert lease is not None, "the lease check admits only a run holding an active lease"
+    workspace = workspace_path(inputs.session.context, handle=lease.workspace_handle)
+    targets = [(item, workspace / item.path) for item in payload.files]
+    for item, target in targets:
+        if not is_path_inside(target, root=workspace):
+            raise HandlerRefusalError(
+                code="patch_path_escapes_workspace",
+                detail=f"{item.path!r} resolves outside this run's leased workspace",
+            )
+    try:
+        for item, target in targets:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(item.content, encoding="utf-8")
+        tree = snapshot_tree(workspace)
+    except (OSError, cli_errors.CliError) as error:
+        raise HandlerRefusalError(
+            code="patch_write_failed",
+            detail=f"the leased workspace refused the write: {type(error).__name__}",
+        ) from error
+    logger.info(
+        f"_workspace_apply_patch run={inputs.run.key!r} paths={len(payload.files)} "
+        f"generation={lease.workspace_generation}"
+    )
+    return WorkspaceApplyPatchOutput(
+        tool_id="workspace_apply_patch",
+        changed_paths=tuple(item.path for item in payload.files),
+        resulting_tree_digest=tree.digest,
+        workspace_generation=lease.workspace_generation,
+    )
+
+
+#: The trees no read reaches: eawf's own storage and git's.
+_REFUSED_TREES: Final = frozenset({".ea", ".git"})
+
+#: How many leading bytes decide that a file is binary.
+_BINARY_PROBE_BYTES: Final = 8192
+
+#: The most bytes of one file a search scans.
+_SEARCH_FILE_BYTES: Final = 1_048_576
+
+#: The most bytes one search scans across every file.
+_SEARCH_TOTAL_BYTES: Final = 64 * 1_048_576
+
+#: How long listing the tree may take before the search is refused.
+_LIST_TIMEOUT_SECONDS: Final = 30
+
+
+def _read_root(inputs: HandlerInputs, handle: str) -> Path:
+    """Return the directory this Run reads: its leased workspace, else the repository root.
+
+    Raises:
+        HandlerRefusalError: The Run holds a lease and the call names
+            another workspace.
+    """
+    lease = inputs.lease
+    context = inputs.session.context
+    if lease is None:
+        # The native tree is the repository's ``.ea`` directory.
+        return context.identity.tree_root.parent
+    if lease.workspace_handle != handle:
+        raise HandlerRefusalError(
+            code="read_handle_mismatch",
+            detail=f"run {inputs.run.key!r} holds another workspace than the one this call names",
+        )
+    return workspace_path(context, handle=lease.workspace_handle)
+
+
+def _refused_tree(relative: Path) -> bool:
+    """Return whether *relative* names a path under a tree no read reaches."""
+    return any(part in _REFUSED_TREES for part in relative.parts)
+
+
+def _inside(root: Path, path: str) -> Path:
+    """Return *path* joined to *root*, refusing an escape or a refused tree.
+
+    Both the spelling and the resolved target are checked, so a link
+    pointing into ``.ea`` is refused as surely as the path ``.ea`` itself.
+
+    Raises:
+        HandlerRefusalError: The path resolves outside *root*, or it or
+            its target lies under ``.ea`` or ``.git``.
+    """
+    target = root / path
+    if not is_path_inside(target, root=root):
+        raise HandlerRefusalError(
+            code="repo_path_escapes_root",
+            detail=f"{path!r} resolves outside the tree this run reads",
+        )
+    resolved = target.resolve().relative_to(root.resolve())
+    if _refused_tree(Path(path)) or _refused_tree(resolved):
+        raise HandlerRefusalError(
+            code="repo_path_refused",
+            detail=f"{path!r} lies under .ea or .git, which no run reads",
+        )
+    return target
+
+
+def _repo_read(inputs: HandlerInputs) -> SemanticToolOutput:
+    """Return a bounded window of one file of the tree this Run reads.
+
+    The window is cut at whole lines and at the content store's bounds,
+    so ``byte_count`` names exactly the bytes the text covers and the
+    next window resumes where this one stopped.
+
+    Raises:
+        HandlerRefusalError: The path escapes the tree, lies under a
+            refused tree, names no file, or names a binary file.
+    """
+    payload = inputs.call.payload
+    assert isinstance(payload, RepoReadInput), "the envelope binds the payload to its tool"
+    target = _inside(_read_root(inputs, payload.resource_handle), payload.path)
+    if not target.is_file():
+        raise HandlerRefusalError(
+            code="repo_path_not_found", detail=f"{payload.path!r} names no file of the tree"
+        )
+    with target.open("rb") as handle:
+        handle.seek(payload.start_byte)
+        window = handle.read(payload.byte_cap)
+        more = bool(handle.read(1))
+    if b"\0" in window[:_BINARY_PROBE_BYTES]:
+        raise HandlerRefusalError(
+            code="repo_path_binary", detail=f"{payload.path!r} is a binary file"
+        )
+    lines = window.splitlines(keepends=True)
+    if more and len(lines) > 1 and not lines[-1].endswith(b"\n"):
+        # A window cut mid-line would split a line, or a character, across two reads.
+        lines.pop()
+    kept: list[str] = []
+    spent = consumed = 0
+    for raw in lines[:CONTENT_LINE_LIMIT]:
+        line = raw.decode("utf-8", errors="replace")
+        if kept and spent + len(line) > CONTENT_CHAR_LIMIT:
+            break
+        kept.append(line)
+        spent += len(line)
+        consumed += len(raw)
+    source = "".join(kept)
+    bounded = bound_content(source)
+    cut = len(bounded.lines) < bounded.total_lines or any(
+        len(line.rstrip()) > CONTENT_LINE_CHARS for line in kept
+    )
+    ref = file_content(inputs.session, run_ref=inputs.call.run_ref, text=source, now=inputs.now)
+    logger.info(f"_repo_read run={inputs.run.key!r} bytes={consumed} lines={len(bounded.lines)}")
+    return RepoReadOutput(
+        tool_id="repo_read",
+        content_ref=ref,
+        content_digest=f"sha256:{bounded.digest}",
+        byte_count=consumed,
+        truncated=cut or more or consumed < len(window),
+        text="\n".join(bounded.lines),
+    )
+
+
+def _listed_files(root: Path, prefix: str | None) -> list[str]:
+    """Return the tree's tracked and unignored files under *prefix*, sorted.
+
+    The tree's own listing is used so an ignored directory such as a
+    virtual environment is never scanned.
+
+    Raises:
+        HandlerRefusalError: The tree cannot be listed.
+    """
+    argv = ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"]
+    if prefix is not None:
+        argv += ["--", prefix]
+    try:
+        listed = subprocess.run(
+            argv, cwd=root, capture_output=True, check=True, timeout=_LIST_TIMEOUT_SECONDS
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise HandlerRefusalError(
+            code="repo_search_failed",
+            detail=f"the tree could not be listed: {type(error).__name__}",
+        ) from error
+    names = {name for name in listed.stdout.decode("utf-8", errors="replace").split("\0") if name}
+    return sorted(name for name in names if not _refused_tree(Path(name)))
+
+
+def _repo_search(inputs: HandlerInputs) -> SemanticToolOutput:
+    """Return the first matching lines of the tree this Run reads.
+
+    Binary files, files the tree ignores, links and anything under
+    ``.ea`` or ``.git`` are skipped. The scan stops at the result cap, the
+    content store's bounds or the byte budget, and ``truncated`` says
+    that more matches may exist past what is returned.
+
+    Raises:
+        HandlerRefusalError: The prefix escapes the tree or lies under a
+            refused tree, the pattern is not a valid expression, or the
+            tree cannot be listed.
+    """
+    payload = inputs.call.payload
+    assert isinstance(payload, RepoSearchInput), "the envelope binds the payload to its tool"
+    root = _read_root(inputs, payload.resource_handle)
+    if payload.path_prefix is not None:
+        _inside(root, payload.path_prefix)
+    try:
+        pattern = re.compile(payload.query if payload.regex else re.escape(payload.query))
+    except re.error as error:
+        raise HandlerRefusalError(
+            code="search_pattern_invalid", detail=f"the pattern does not compile: {error}"
+        ) from error
+    cap = min(payload.result_cap, CONTENT_LINE_LIMIT)
+    matches: list[RepoSearchMatch] = []
+    spent = scanned = 0
+    truncated = False
+    for name in _listed_files(root, payload.path_prefix):
+        target = root / name
+        if target.is_symlink() or not target.is_file():
+            continue
+        with target.open("rb") as handle:
+            data = handle.read(_SEARCH_FILE_BYTES)
+        if b"\0" in data[:_BINARY_PROBE_BYTES]:
+            continue
+        scanned += len(data)
+        for number, line in enumerate(data.decode("utf-8", errors="replace").splitlines(), 1):
+            if pattern.search(line) is None:
+                continue
+            text = next(iter(bound_content(line).lines), "")
+            if len(matches) == cap or spent + len(name) + len(text) > CONTENT_CHAR_LIMIT:
+                truncated = True
+                break
+            matches.append(RepoSearchMatch(path=name, line=number, text=text))
+            spent += len(name) + len(text)
+        if truncated or scanned >= _SEARCH_TOTAL_BYTES:
+            truncated = True
+            break
+    rendered = "\n".join(f"{item.path}:{item.line}: {item.text}" for item in matches)
+    ref = file_content(inputs.session, run_ref=inputs.call.run_ref, text=rendered, now=inputs.now)
+    logger.info(
+        f"_repo_search run={inputs.run.key!r} matches={len(matches)} scanned={scanned} "
+        f"truncated={truncated}"
+    )
+    return RepoSearchOutput(
+        tool_id="repo_search",
+        match_ref=ref,
+        match_digest=f"sha256:{bound_content(rendered).digest}",
+        match_count=len(matches),
+        truncated=truncated,
+        matches=tuple(matches),
+    )
+
+
 def _submit_report(inputs: HandlerInputs) -> SemanticToolOutput:
-    """Accept the Run's terminal report exactly when it names its own contract.
+    """Accept the Run's terminal report content, binding it to the Run's own contract.
 
-    The body travels by reference and is not read here, so acceptance
-    checks only what the capsule already pins for this Run: the schema it
-    must report against and the contract it was sealed under. Either
-    mismatching is refused with a finding rather than accepted on a claim
-    this handler cannot verify. Acceptance names the Run itself, which is
-    the one entity a terminal report is ever about; no fresh identity is
-    minted for the report body.
+    The worker sends content only. The schema and the contract digest are
+    taken from the capsule the Run was sealed under; a worker that names
+    either anyway is refused when it differs, because a report filed
+    against another contract is not this Run's report. The body is
+    rendered with the verdict, summary and criteria, filed in the Run's
+    content store, and the digest the acceptance records is the one the
+    store names that content by, so the stored body and the recorded
+    digest cannot disagree. A report too large to store whole is refused
+    rather than stored cut short.
 
-    Acceptance also records the report's schema, digest and verdict
-    against the Run, once, so a request that later binds a candidate's
+    Acceptance names the Run itself, which is the one entity a terminal
+    report is ever about, and records the report's schema, digest and
+    verdict against it once, so a request that later binds a candidate's
     seal to this Run's report -- typically ``/integrate seal``, presented
-    only the Run -- can read them back instead of repeating what this
-    handler already checked.
+    only the Run -- reads them back instead of repeating them.
 
-    A retry naming the standing report's digest and verdict is accepted
-    again without a second row. A resubmission naming another body or
-    verdict is refused rather than accepted and dropped, matching how a
-    Run's candidate binding refuses a second, different report.
+    A retry carrying the same content is accepted again without a second
+    row. A resubmission with another body or verdict is refused rather
+    than accepted and dropped, matching how a Run's candidate binding
+    refuses a second, different report.
     """
     payload = inputs.call.payload
     assert isinstance(payload, SubmitReportInput), "the envelope binds the payload to its tool"
-    if payload.report_schema_ref != inputs.capsule.report_schema_ref:
+    capsule = inputs.capsule
+    if payload.report_schema_ref is not None and (
+        payload.report_schema_ref != capsule.report_schema_ref
+    ):
         return _refused_report(
             _REPORT_SCHEMA_MISMATCH,
             message=(
-                f"this run is sealed to report against {inputs.capsule.report_schema_ref!r}, "
-                f"not {payload.report_schema_ref!r}"
+                f"this run is sealed to report against {capsule.report_schema_ref!r}, "
+                f"not {payload.report_schema_ref!r}; omit the field and eawf fills it"
             ),
             field_path="/report_schema_ref",
         )
-    if payload.contract_digest != inputs.capsule.contract_digest:
+    if payload.contract_digest is not None and payload.contract_digest != capsule.contract_digest:
         return _refused_report(
             _REPORT_CONTRACT_MISMATCH,
-            message="the call names a contract digest this run was not sealed under",
+            message=(
+                "the call names a contract digest this run was not sealed under; "
+                "omit the field and eawf fills it"
+            ),
             field_path="/contract_digest",
         )
+    text = _report_text(payload)
+    bounded = bound_content(text)
+    if len(bounded.lines) < bounded.total_lines:
+        return _refused_report(
+            _REPORT_BODY_TOO_LARGE,
+            message=(
+                f"the report renders to {bounded.total_lines} lines and only "
+                f"{len(bounded.lines)} fit the store; shorten the body"
+            ),
+            field_path="/body",
+        )
+    report_digest = f"sha256:{bounded.digest}"
     run_ref = str(inputs.call.run_ref)
     records = read_ledger_records(inputs.session.ledger_path(Epoch2Collection.RUN))
     standing = accepted_report_of(records, run_ref)
     if standing is None:
+        file_content(inputs.session, run_ref=inputs.call.run_ref, text=text, now=inputs.now)
         commit_ledger_append(
             inputs.session,
             accepted_report_record(
                 AcceptedReport(
                     run_ref=inputs.call.run_ref,
-                    report_schema_ref=payload.report_schema_ref,
-                    report_digest=payload.body_digest,
+                    report_schema_ref=capsule.report_schema_ref,
+                    report_digest=report_digest,
                     verdict=payload.verdict,
                     accepted_at=inputs.now,
+                    contract_digest=capsule.contract_digest,
                 )
             ),
         )
-    elif standing.report_digest != payload.body_digest or standing.verdict != payload.verdict:
+        logger.info(
+            f"_submit_report accepted run={inputs.run.key!r} verdict={payload.verdict.value} "
+            f"lines={len(bounded.lines)} withheld={bounded.withheld_lines}"
+        )
+    elif standing.report_digest != report_digest or standing.verdict != payload.verdict:
         # A seal reads the one standing report back, so accepting a different
         # body here without recording it would bind a report the worker has
         # already replaced.
@@ -500,13 +829,40 @@ def _submit_report(inputs: HandlerInputs) -> SemanticToolOutput:
                 f"run {inputs.call.run_ref.entity_key!r} already holds an accepted report "
                 f"with verdict {standing.verdict.value!r}; a Run files one terminal report"
             ),
-            field_path=(
-                "/body_digest" if standing.report_digest != payload.body_digest else "/verdict"
-            ),
+            field_path="/verdict" if standing.verdict != payload.verdict else "/body",
         )
     return SubmitReportOutput(
         tool_id="submit_report", accepted=True, report_ref=inputs.call.run_ref
     )
+
+
+def _report_text(payload: SubmitReportInput) -> str:
+    """Return the text one terminal report is stored as.
+
+    Every line is wrapped to the store's line bound first, so a long
+    paragraph is kept whole across lines rather than cut at the bound.
+
+    Args:
+        payload: The report content the worker sent.
+
+    Returns:
+        The verdict, summary, each criterion's outcome and the body, one
+        fact per line.
+    """
+    lines = [f"verdict: {payload.verdict.value}", f"summary: {payload.summary}"]
+    if payload.criteria:
+        lines.append("criteria:")
+        for result in payload.criteria:
+            note = "" if result.note is None else f" -- {result.note}"
+            lines.append(f"- {result.criterion_id}: {result.outcome.value}{note}")
+    if payload.body is not None:
+        lines.extend(("", *payload.body.splitlines()))
+    wrapped = (
+        piece
+        for line in lines
+        for piece in (textwrap.wrap(line, width=CONTENT_LINE_CHARS, drop_whitespace=False) or [""])
+    )
+    return "\n".join(wrapped)
 
 
 def _refused_report(code: str, *, message: str, field_path: str) -> SemanticToolOutput:
@@ -659,10 +1015,13 @@ SEMANTIC_HANDLERS: Final[Mapping[SemanticToolId, Callable[[HandlerInputs], Seman
     MappingProxyType(
         {
             SemanticToolId.BUDGET_STATUS: _budget_status,
+            SemanticToolId.REPO_READ: _repo_read,
+            SemanticToolId.REPO_SEARCH: _repo_search,
             SemanticToolId.SUBMIT_CANDIDATE: _submit_candidate,
             SemanticToolId.SUBMIT_EVIDENCE: _submit_evidence,
             SemanticToolId.SUBMIT_PLAN: _submit_plan,
             SemanticToolId.SUBMIT_REPORT: _submit_report,
+            SemanticToolId.WORKSPACE_APPLY_PATCH: _workspace_apply_patch,
         }
     )
 )

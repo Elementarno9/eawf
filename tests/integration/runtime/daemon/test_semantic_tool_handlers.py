@@ -570,6 +570,8 @@ def test_every_brokered_tool_has_a_handler_and_no_other_tool_does() -> None:
     assert frozenset(SEMANTIC_HANDLERS) == BROKERED_TOOLS
     assert {
         SemanticToolId.BUDGET_STATUS,
+        SemanticToolId.REPO_READ,
+        SemanticToolId.REPO_SEARCH,
         SemanticToolId.SUBMIT_CANDIDATE,
         SemanticToolId.SUBMIT_EVIDENCE,
         SemanticToolId.SUBMIT_PLAN,

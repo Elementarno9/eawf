@@ -9,8 +9,10 @@ import click
 import pytest
 from typer.testing import CliRunner
 
+from eawf.runtime.daemon import limits
+from eawf.runtime.daemon.limits import cli_mutation_timeout_for
 from eawf.surfaces.cli import exit_codes
-from eawf.surfaces.cli._daemon_client import DaemonRpcError
+from eawf.surfaces.cli._daemon_client import DEFAULT_CALL_TIMEOUT_SECONDS, DaemonRpcError
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands.runtime import RUNTIME_CERTIFY
 from tests.contract.surfaces.cli.conftest import FakeDaemon
@@ -72,3 +74,35 @@ def test_certify_without_a_runtime_sends_nothing(daemon: FakeDaemon, tmp_path: P
     result = runner.invoke(app, ["--workspace", str(tmp_path), "runtime", "certify"])
     assert result.exit_code == click.UsageError("x").exit_code
     assert daemon.calls == []
+
+
+@pytest.mark.parametrize(
+    ("argv", "walks"),
+    [
+        pytest.param([], False, id="probe"),
+        pytest.param(["--task", "EAWF-0042", "--actor", "OP-0001"], True, id="canary-walk"),
+    ],
+)
+def test_a_canary_walk_holds_the_wire_as_long_as_a_gated_mutation(
+    daemon: FakeDaemon,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    argv: list[str],
+    walks: bool,
+) -> None:
+    """A walk awaits a real Run inside the request; the probe answers at once."""
+    timeouts: list[float] = []
+
+    def client(*_args: object, call_timeout_seconds: float, **_kwargs: object) -> FakeDaemon:
+        timeouts.append(call_timeout_seconds)
+        return daemon
+
+    monkeypatch.setattr("eawf.surfaces.cli.commands.domain.DaemonClient", client)
+    monkeypatch.setattr(limits, "configured_juror_wall_clock", lambda _root: None)
+    daemon.result = _CERTIFIED
+    result = runner.invoke(
+        app, ["--workspace", str(tmp_path), "--json", "runtime", "certify", "claude-code", *argv]
+    )
+    assert result.exit_code == exit_codes.OK, result.output
+    expected = cli_mutation_timeout_for(None) if walks else DEFAULT_CALL_TIMEOUT_SECONDS
+    assert timeouts == [pytest.approx(expected)]

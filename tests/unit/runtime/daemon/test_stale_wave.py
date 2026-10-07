@@ -3,8 +3,8 @@
 Each active wave is measured against its own estimate (an explicit
 estimate row, else its effort bucket's default, else the absolute
 backstop). Short of the estimate nothing is written; at it the crossing is
-recorded once per claim as activity; and only after the no-progress grace
-does it open one budget notice. Nothing it writes is a pause.
+recorded once per claim as activity. A wave is not a Run, so it never
+opens a budget notice, and nothing it writes is a pause.
 """
 
 from __future__ import annotations
@@ -341,21 +341,16 @@ def test_sweep_records_a_new_claim_as_a_new_crossing(tmp_path: Path) -> None:
     assert _event_types(state_path).count(ESTIMATE_PASSED_EVENT_TYPE) == 2
 
 
-def test_sweep_opens_one_notice_once_the_grace_is_met(tmp_path: Path) -> None:
+def test_sweep_opens_no_notice_for_a_wave_past_the_grace(tmp_path: Path) -> None:
     state_path = tmp_path / ".ea" / "state.json"
     _write_state(state_path, _state_payload(claimed_at=_claimed_at(2.0)))
 
     first = _sweep(state_path, now=_now())
     again = _sweep(state_path, now=_now() + timedelta(minutes=5))
 
-    assert [e.payload["event_type"] for e in first] == [
-        ESTIMATE_PASSED_EVENT_TYPE,
-        NOTICE_OPENED_EVENT_TYPE,
-    ]
-    assert "no progress was observed" in first[1].payload["message"]
+    assert [e.payload["event_type"] for e in first] == [ESTIMATE_PASSED_EVENT_TYPE]
     assert again == []
-    (notice,) = load_notice_ledger(notices_path(state_path)).notices.values()
-    assert (notice.scope_id, notice.axis, notice.basis) == (_WAVE_ID, "wall_seconds", "estimate")
+    assert not notices_path(state_path).exists()
 
 
 def test_sweep_over_a_missing_state_returns_nothing(tmp_path: Path) -> None:

@@ -42,7 +42,7 @@ from eawf.runtime.budget.service import emit_budget_notice
 from eawf.surfaces.render.statusline import SegmentSource, budget_segment
 
 AT = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
-CEILING = PromptBudgetCeiling(tokens=1000, enforce="soft")
+CEILING = PromptBudgetCeiling(tokens=1000, enforce="hard")
 SCOPE = "P01-I01-W01"
 
 
@@ -60,7 +60,7 @@ def test_ui_029_a_fraction_short_of_the_ceiling_writes_no_notice(
     consumed = int(CEILING.tokens * fraction)
     assert (
         emit_budget_notice(
-            ledger, scope_id=SCOPE, consumed=consumed, ceiling=CEILING, observed_at=AT
+            ledger, scope_id=SCOPE, running=True, consumed=consumed, ceiling=CEILING, observed_at=AT
         )
         is None
     )
@@ -81,10 +81,10 @@ def test_ui_029_the_ceiling_writes_one_non_blocking_notice(tmp_path: Path) -> No
     ledger = _ledger(tmp_path)
     consumed = int(CEILING.tokens * BLOCK_FRACTION)
     first = emit_budget_notice(
-        ledger, scope_id=SCOPE, consumed=consumed, ceiling=CEILING, observed_at=AT
+        ledger, scope_id=SCOPE, running=True, consumed=consumed, ceiling=CEILING, observed_at=AT
     )
     again = emit_budget_notice(
-        ledger, scope_id=SCOPE, consumed=consumed + 5, ceiling=CEILING, observed_at=AT
+        ledger, scope_id=SCOPE, running=True, consumed=consumed + 5, ceiling=CEILING, observed_at=AT
     )
     assert first is not None and again is not None
     assert len(load_notice_ledger(ledger).notices) == 1
@@ -102,7 +102,9 @@ def test_ui_029_no_ceiling_means_no_notice(tmp_path: Path) -> None:
     """A scope with no ceiling is never noticed, however much it consumed."""
     ledger = _ledger(tmp_path)
     assert (
-        emit_budget_notice(ledger, scope_id=SCOPE, consumed=10**9, ceiling=None, observed_at=AT)
+        emit_budget_notice(
+            ledger, scope_id=SCOPE, running=True, consumed=10**9, ceiling=None, observed_at=AT
+        )
         is None
     )
     assert not ledger.exists()
@@ -112,7 +114,12 @@ def test_ui_029_negative_consumption_is_refused(tmp_path: Path) -> None:
     """The error path: a reading below zero is not a reading."""
     with pytest.raises(ValueError, match="non-negative"):
         emit_budget_notice(
-            _ledger(tmp_path), scope_id=SCOPE, consumed=-1, ceiling=CEILING, observed_at=AT
+            _ledger(tmp_path),
+            scope_id=SCOPE,
+            running=True,
+            consumed=-1,
+            ceiling=CEILING,
+            observed_at=AT,
         )
 
 

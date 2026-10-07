@@ -8,11 +8,13 @@ that describes one claim of one wave collapses into one estimate-basis
 notice at the highest band it observed, carrying every pause it came from
 as provenance.
 
-Only the bands a legacy row recorded are used, which is why the
-approaching band still exists: a ``warn`` row is the one thing that can
-reach it, and a later ``err`` row for the same claim escalates that same
-notice. A legacy advisory never implies a hard exhaustion, and nothing the
-old surface kept only in a session -- a dismissed modal -- becomes a
+Only the bands a legacy row recorded are used. No producer records the
+estimate basis or the approaching band any more; this import is the one
+path that still folds them, so such rows stay on file for display. A
+``warn`` row is the one thing that reaches the approaching band, and a
+later ``err`` row for the same claim escalates that same notice. A legacy
+advisory never implies a hard exhaustion, and nothing the old surface
+kept only in a session -- a dismissed modal -- becomes a
 durable acknowledgement, because no durable record of it exists.
 
 The import reads nothing but its input and its result depends on nothing
@@ -30,12 +32,12 @@ from typing import Final
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.runtime.budget.notices import (
     LOCAL_OPERATOR,
-    BudgetCrossing,
     BudgetNoticeLedger,
     BudgetThresholdNotice,
-    NoticeBand,
     NoticeHistoryEntry,
     RecipientState,
+    RecordedBand,
+    RecordedCrossing,
     apply_crossing,
     budget_window_digest,
     rewrite_ledger,
@@ -57,7 +59,7 @@ LEGACY_ADVISORY_KIND: Final = "stale_wave_detected"
 
 #: The notice band each legacy advisory band collapses onto. A row from
 #: before the bands were recorded was the one flat over-budget alarm.
-_LEGACY_BANDS: Final[Mapping[str | None, NoticeBand]] = {
+_LEGACY_BANDS: Final[Mapping[str | None, RecordedBand]] = {
     "warn": "approaching",
     "err": "limit_reached",
     "backstop": "limit_reached",
@@ -72,7 +74,7 @@ def _seconds(minutes: object) -> int | None:
     return round(minutes * 60)
 
 
-def _crossing(payload: EventPayload) -> BudgetCrossing | None:
+def _crossing(payload: EventPayload) -> RecordedCrossing | None:
     """Return the crossing one legacy pause row records, or ``None`` for another row.
 
     A row that recorded no elapsed time is left a pause: a notice needs an
@@ -88,7 +90,7 @@ def _crossing(payload: EventPayload) -> BudgetCrossing | None:
         return None
     band = payload.extras.get("advisory_band")
     session = payload.extras.get("session")
-    return BudgetCrossing(
+    return RecordedCrossing(
         scope_id=wave_id,
         axis="wall_seconds",
         basis="estimate",
@@ -176,7 +178,7 @@ def import_legacy_advisories(
         pydantic.ValidationError: A legacy row carries a value a notice
             cannot hold.
     """
-    crossings: list[BudgetCrossing] = []
+    crossings: list[RecordedCrossing] = []
     resumes: dict[str, EventPayload] = {}
     for payload in payloads:
         if payload.event_type == RESUME_EVENT_TYPE:

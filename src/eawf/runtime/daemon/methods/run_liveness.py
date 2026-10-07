@@ -15,19 +15,18 @@ the Run citing it, which ends when the Run answers again or stops running.
 Run still running that has produced nothing since -- so a surface can say which Runs are
 lost without reading each Run's stream.
 
-The same sweep measures each running Run against the effort constant of the mapping in
-force, the newest revision the estimate ledger stores. A Run whose elapsed time since it
-started reaches the notice policy's notify fraction of that estimate, and that has
-produced nothing for the policy's grace period, opens one non-blocking budget notice.
-The notice is upserted under the Run's key, so a later sweep or a restarted daemon finds
-it on file and writes nothing.
+The same sweep measures each running Run against the wall-clock ceiling its binding
+sealed. A Run whose elapsed time since it started reached that ceiling, and that has
+shown no event for the notice policy's grace period, opens one non-blocking budget
+notice. The notice is upserted under the Run's key and contract, so a later sweep or a
+restarted daemon finds it on file and writes nothing.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Final
 
@@ -64,7 +63,7 @@ from eawf.runtime.daemon.methods.pause import (
     stall_of,
 )
 from eawf.runtime.daemon.methods.run import RUN_CONTROL_REQUEST_METHOD, run_stall_interval
-from eawf.runtime.daemon.native_dispatch import control_facts_of, stored_run
+from eawf.runtime.daemon.native_dispatch import control_facts_of, run_binding_of, stored_run
 from eawf.runtime.daemon.native_guard import native_params, require_native_call
 from eawf.runtime.daemon.run_events import (
     hello_facts_of,
@@ -73,7 +72,6 @@ from eawf.runtime.daemon.run_events import (
     run_events_of,
     stall_facts_of,
 )
-from eawf.workflow.estimation.mapping_revisions import mapping_in_force
 
 logger = logging.getLogger(__name__)
 
@@ -284,8 +282,8 @@ def _settle_run(context: Epoch2RootContext, urn: QualifiedUrn, *, now: datetime)
     return ended
 
 
-def _estimate_audience(document: dict[str, Any], scope: RunScope) -> tuple[str, ...]:
-    """Return who a Run's estimate notice is for: its Task's claim holder, else the operator."""
+def _notice_audience(document: dict[str, Any], scope: RunScope) -> tuple[str, ...]:
+    """Return who a Run's wall-clock notice is for: its Task's claim holder, else the operator."""
     if isinstance(scope, TaskScope):
         row = document_rows(document, Epoch2Collection.TASK).get(scope.task_ref.entity_key)
         if row is not None:
@@ -295,15 +293,14 @@ def _estimate_audience(document: dict[str, Any], scope: RunScope) -> tuple[str, 
     return (LOCAL_OPERATOR,)
 
 
-def detect_estimate_crossings(context: Epoch2RootContext, *, now: datetime) -> tuple[str, ...]:
-    """Open one budget notice for every running Run past its estimate with no progress.
+def detect_wall_ceiling_crossings(context: Epoch2RootContext, *, now: datetime) -> tuple[str, ...]:
+    """Open one budget notice for every running Run past its wall ceiling and silent.
 
-    A Run is measured from ``started_at`` against the effort constant of the mapping in
-    force. Short of the notify fraction, or with progress inside the grace period,
-    nothing is written. A
-    crossing upserts the notice keyed by the Run, so a Run already noticed -- by this
-    daemon or an earlier one -- writes nothing again, and a notice the operator resolved
-    is never reopened.
+    A Run is measured from ``started_at`` against the wall-clock ceiling its binding
+    sealed; a Run bound without one is not measured. Whether the reading opens a notice
+    is the notice policy's one rule. A crossing upserts the notice keyed by the Run and
+    its contract, so a Run already noticed -- by this daemon or an earlier one -- writes
+    nothing again, and a notice the operator resolved is never reopened.
 
     Args:
         context: The tree swept.
@@ -324,37 +321,41 @@ def detect_estimate_crossings(context: Epoch2RootContext, *, now: datetime) -> t
     if not running:
         return ()
     records = read_ledger_records(ledger_path(path, Epoch2Collection.RUN))
-    estimates = read_ledger_records(ledger_path(path, Epoch2Collection.ESTIMATE))
-    estimate_seconds = mapping_in_force(estimates).effort_minutes * 60
     opened: list[str] = []
     for run in running:
-        if not _still_running(records, run.status, run.urn):
+        binding = run_binding_of(records, run.urn)
+        if binding is None or binding.capsule is None:
             continue
+        ceiling = binding.capsule.budget.wall_seconds
         assert run.started_at is not None, "a running Run always carries its start stamp"
         elapsed = max((now - run.started_at).total_seconds(), 0.0)
-        if not policy.passed(elapsed_seconds=elapsed, estimate_seconds=estimate_seconds):
-            continue
         activity = reduce_run_events(run_events_of(records, run.urn)).last_activity_at
-        last_progress = run.started_at if activity is None else max(run.started_at, activity)
-        if not policy.grace_met(last_progress_at=last_progress, now=now):
+        last_event = run.started_at if activity is None else max(run.started_at, activity)
+        if not policy.opens(
+            running=_still_running(records, run.status, run.urn),
+            axis="wall_seconds",
+            ceiling_reached=elapsed >= ceiling,
+            silent_for=max(now - last_event, timedelta(0)),
+        ):
             continue
         upsert = upsert_notice(
             notices_path(tree_root / _STATE_FILENAME),
             BudgetCrossing(
                 scope_id=run.key,
                 axis="wall_seconds",
-                basis="estimate",
+                basis="hard_limit",
                 band="limit_reached",
                 observed_value=int(elapsed),
-                budget_value=int(estimate_seconds),
+                budget_value=ceiling,
                 observed_at=now,
-                audience=_estimate_audience(document, run.scope),
+                contract_digest=binding.compiled_spec_digest,
+                audience=_notice_audience(document, run.scope),
             ),
         )
         if upsert.outcome is UpsertOutcome.CREATED:
             logger.info(
-                f"detect_estimate_crossings opened run={run.key} "
-                f"elapsed_seconds={elapsed:.0f} estimate_seconds={estimate_seconds:.0f}"
+                f"detect_wall_ceiling_crossings opened run={run.key} "
+                f"elapsed_seconds={elapsed:.0f} ceiling_seconds={ceiling}"
             )
             opened.append(run.key)
     return tuple(opened)
@@ -403,8 +404,8 @@ __all__ = [
     "RUN_STALLS_READ_METHOD",
     "RunStallsAnswer",
     "RunStallsRead",
-    "detect_estimate_crossings",
     "detect_stalls",
+    "detect_wall_ceiling_crossings",
     "settle_stall_pauses",
     "stall_key",
     "standing_stall_facts",

@@ -72,21 +72,9 @@ def test_run_025_an_identical_repeat_returns_the_standing_notice_without_writing
     assert result.notice == first.notice
 
 
-def test_run_025_a_late_lower_band_never_regresses_the_notice() -> None:
-    ledger, _ = apply_crossing(BudgetNoticeLedger(), crossing())
-    kept, result = apply_crossing(ledger, crossing(band="approaching", observed_value=900))
-    assert result.outcome is UpsertOutcome.RETAINED
-    assert kept.notices[crossing().notice_key].highest_band == "limit_reached"
-
-
-def test_run_025_a_higher_band_increments_the_same_notice() -> None:
-    ledger, _ = apply_crossing(
-        BudgetNoticeLedger(), crossing(band="approaching", observed_value=900)
-    )
-    escalated, result = apply_crossing(ledger, crossing())
-    assert result.outcome is UpsertOutcome.ESCALATED
-    assert result.notice.revision == 2
-    assert len(escalated.notices) == 1
+def test_run_025_a_run_crossing_never_carries_the_approaching_band() -> None:
+    with pytest.raises(ValidationError, match="band"):
+        crossing(band="approaching", observed_value=900)
 
 
 def test_run_025_concurrent_producers_leave_one_row(tmp_path: Path) -> None:

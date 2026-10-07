@@ -11,6 +11,12 @@ records its process group in :data:`PGID_FILENAME`, sends its stderr to
 replaces itself with the jail-wrapped ``codex app-server``. The binary it
 starts is the operator's certified ``codex``, never the copy the SDK bundles.
 
+Codex loads its whole setup -- plugins, marketplaces, MCP servers, hooks,
+project trust -- from ``CODEX_HOME``, and writes back into it. Each Run
+therefore gets a private home beside the wrapper, holding only a
+``config.toml`` eawf generates and a link to the operator's credential
+file; the jail makes that home writable and the operator's home not.
+
 The launch is split from the turn. :func:`launch_codex_run` returns as soon
 as the thread is open and its turn has started, and the rest of the turn
 runs in a task the daemon awaits; that task relays usage, agent messages,
@@ -57,7 +63,13 @@ from pydantic import ValidationError
 from eawf.kernel.runtime.events import MessageSummaryPayload
 from eawf.kernel.runtime.provider import SandboxMode as CompiledSandboxMode
 from eawf.kernel.state.epoch2.run import RunRuntimeTuple
-from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME, native_run_server_config
+from eawf.runtime.daemon.runtime_dir import runtime_dir
+from eawf.runtime.mcp.native_launch import (
+    MCP_ARTIFACT_DIRNAME,
+    RUN_TMP_ENV_KEYS,
+    native_run_server_config,
+    prepare_run_tmpdir,
+)
 from eawf.runtime.runtimes import cancel
 from eawf.runtime.runtimes.adapter import (
     NativeLaunchOutcome,
@@ -99,6 +111,35 @@ STDERR_FILENAME: Final = "worker.stderr"
 #: The app-server subcommand and its transport, after the binary.
 APP_SERVER_ARGS: Final = ("app-server", "--listen", "stdio://")
 
+#: The Run's private ``CODEX_HOME``, under its MCP artifact directory.
+CODEX_HOME_DIRNAME: Final = "codex-home"
+
+#: The configuration codex reads from a home.
+CODEX_CONFIG_FILENAME: Final = "config.toml"
+
+#: The credential file a home holds; the only operator file a private home links.
+CODEX_AUTH_FILENAME: Final = "auth.json"
+
+#: Features that reach past the Run -- installed plugins and apps, the
+#: browser and computer-use tools, hooks, tool suggestions -- each a stable
+#: codex 0.159.2 feature key, all off whatever the Run was granted.
+_ISOLATION_OVERRIDES: Final = tuple(
+    token
+    for feature in (
+        "apps",
+        "browser_use",
+        "computer_use",
+        "hooks",
+        "image_generation",
+        "in_app_browser",
+        "plugins",
+        "remote_plugin",
+        "skill_mcp_dependency_install",
+        "tool_suggest",
+    )
+    for token in ("-c", f"features.{feature}=false")
+)
+
 #: The thread sandbox each compiled sandbox mode asks codex for.
 SANDBOX_MODES: Final[dict[CompiledSandboxMode, SandboxMode]] = {
     "read_only": SandboxMode.read_only,
@@ -115,9 +156,6 @@ _APPROVAL_POLICY: Final = AskForApproval(root=AskForApprovalValue.never)
 #: What eawf answers any request the server sends. The SDK answers only
 #: with a result, never an error, and its default accepts approvals.
 _SERVER_REQUEST_ANSWER: Final[JsonObject] = {"decision": "decline"}
-
-#: The config table one MCP server is registered under.
-_MCP_SERVERS_KEY: Final = "mcp_servers"
 
 #: How long an interrupt may take before the kill ladder runs regardless.
 _INTERRUPT_SECONDS: Final = 5.0
@@ -150,24 +188,21 @@ except OSError as error:
 """
 
 
-def thread_config(flags: Sequence[str]) -> dict[str, Any]:
-    """Translate the lane's ``-c key=value`` flags into a ``thread/start`` config map.
-
-    The Run's MCP server keys are folded into one whole ``mcp_servers``
-    table, so the override replaces the table rather than adding a server
-    beside any the operator configured.
+def codex_home_config(flags: Sequence[str]) -> dict[str, Any]:
+    """Translate ``-c key=value`` flags into the table a home's ``config.toml`` holds.
 
     Args:
-        flags: Interleaved ``-c`` and ``key=<toml value>`` tokens.
+        flags: Interleaved ``-c`` and ``key=<toml value>`` tokens; a later
+            flag for the same key wins.
 
     Returns:
-        The override map, one dotted key per flag.
+        The nested table, one level per dotted key segment.
 
     Raises:
-        RuntimeSpawnError: A token is not a ``-c`` pair, or a value is not TOML.
+        RuntimeSpawnError: A token is not a ``-c`` pair, a value is not
+            TOML, or a key sets both a value and a table beneath it.
     """
     config: dict[str, Any] = {}
-    servers: dict[str, dict[str, Any]] = {}
     if len(flags) % 2:
         raise RuntimeSpawnError(f"lane flags {list(flags)!r} are not -c pairs")
     for flag, assignment in zip(flags[::2], flags[1::2], strict=True):
@@ -178,15 +213,77 @@ def thread_config(flags: Sequence[str]) -> dict[str, Any]:
             value = tomllib.loads(f"value = {raw}")["value"]
         except tomllib.TOMLDecodeError as error:
             raise RuntimeSpawnError(f"lane override {key!r} is not TOML: {error}") from error
-        table, _, rest = key.partition(".")
-        if table == _MCP_SERVERS_KEY:
-            name, _, setting = rest.partition(".")
-            servers.setdefault(name, {})[setting] = value
-        else:
-            config[key] = value
-    if servers:
-        config[_MCP_SERVERS_KEY] = servers
+        *tables, leaf = key.split(".")
+        table = config
+        for name in tables:
+            table = table.setdefault(name, {})
+            if not isinstance(table, dict):
+                raise RuntimeSpawnError(f"lane override {key!r} nests under a value")
+        table[leaf] = value
     return config
+
+
+def _toml_value(value: Any) -> str:
+    """Return *value* as a TOML inline value; a JSON string is a TOML basic string."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, list):
+        return "[" + ", ".join(_toml_value(item) for item in value) + "]"
+    if isinstance(value, int | float):
+        return repr(value)
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _toml_key(name: str) -> str:
+    """Return *name* bare when TOML allows it, else quoted."""
+    bare = name and all(c.isascii() and (c.isalnum() or c in "_-") for c in name)
+    return name if bare else json.dumps(name, ensure_ascii=False)
+
+
+def _toml_document(table: dict[str, Any], path: tuple[str, ...] = ()) -> str:
+    """Render *table* as a TOML document, values before their sub-tables."""
+    nested = {name: value for name, value in table.items() if isinstance(value, dict)}
+    # A table holding only sub-tables needs no header of its own.
+    titled = path and (len(nested) < len(table) or not table)
+    lines = [f"[{'.'.join(_toml_key(name) for name in path)}]"] if titled else []
+    lines += [
+        f"{_toml_key(name)} = {_toml_value(value)}"
+        for name, value in table.items()
+        if name not in nested
+    ]
+    text = "".join(f"{line}\n" for line in lines)
+    for name, value in nested.items():
+        text += ("\n" if text else "") + _toml_document(value, (*path, name))
+    return text
+
+
+def _operator_auth_file() -> Path:
+    """Return the credential file the operator's own codex reads."""
+    configured = os.environ.get("CODEX_HOME")
+    home = Path(configured) if configured else Path.home() / ".codex"
+    return home / CODEX_AUTH_FILENAME
+
+
+def _prepare_codex_home(home: Path) -> None:
+    """Create the Run's private ``CODEX_HOME`` holding only the operator's credential link.
+
+    The credential is linked rather than copied, so a refresh codex writes
+    through the link keeps the operator's stored token current. An operator
+    without the file gets no link, and codex then authenticates from the
+    environment or refuses on its own.
+
+    Args:
+        home: The private home, under the Run's MCP artifact directory.
+
+    Raises:
+        OSError: The home or the link could not be written.
+    """
+    home.mkdir(mode=0o700, exist_ok=True)
+    link = home / CODEX_AUTH_FILENAME
+    link.unlink(missing_ok=True)
+    operator_auth = _operator_auth_file()
+    if operator_auth.is_file():
+        link.symlink_to(operator_auth.resolve())
 
 
 def _message_payload(item: AgentMessageThreadItem) -> MessageSummaryPayload | None:
@@ -496,7 +593,7 @@ def _spawn_error(error: BaseException, turn: _Turn) -> RuntimeSpawnError:
     return RuntimeSpawnError(f"{error} stderr={snippet!r}", exit_status=1, stderr=stderr)
 
 
-async def _open_turn(turn: _Turn, *, sandbox: SandboxMode, config: dict[str, Any]) -> None:
+async def _open_turn(turn: _Turn, *, sandbox: SandboxMode) -> None:
     """Initialize the server, open the Run's thread and start its one turn.
 
     Raises:
@@ -519,7 +616,6 @@ async def _open_turn(turn: _Turn, *, sandbox: SandboxMode, config: dict[str, Any
         model=request.spec.model_id,
         sandbox=sandbox,
         approval_policy=_APPROVAL_POLICY,
-        config=config,
     )
     opened = await _call("thread/start", lambda: client.thread_start(params))
     turn.thread_id = opened.thread.id
@@ -571,18 +667,43 @@ async def launch_codex_run(
     spec = request.spec
     deadline = asyncio.get_running_loop().time() + float(spec.limits.wall_seconds)
     server_config = native_run_server_config(request, runtime_id=adapter.id)
-    denied = ambient_denied_tools(spec)
-    grants = codex_adapter._codex_tool_grant_overrides(denied) if denied else []
-    config = thread_config((*server_config.argv_flags, *grants))
+    denials = codex_adapter.codex_tool_denials(ambient_denied_tools(spec))
     codex = _resolve_executable(adapter.cli_binary)
+    run_dir = request.workspace / MCP_ARTIFACT_DIRNAME
+    # The home and its link exist before the jail is built, which grants
+    # write to the home and to the credential the link resolves to only.
+    home = run_dir / CODEX_HOME_DIRNAME
+    _prepare_codex_home(home)
     jailed = codex_adapter._maybe_jail_argv(
-        [codex, *APP_SERVER_ARGS], runtime=adapter.id, cwd=str(request.workspace)
+        [codex, *APP_SERVER_ARGS],
+        runtime=adapter.id,
+        cwd=str(request.workspace),
+        private_home=home,
+        # The log, not the runtime dir: the Run's server dials the socket beside it.
+        storage_dirs=(request.repo_root / ".ea", runtime_dir() / "wal"),
     )
     deferred = codex_adapter.OUTER_SEATBELT_OVERRIDE in jailed
     sandbox = _OUTER_SEATBELT_SANDBOX if deferred else SANDBOX_MODES[spec.sandbox.mode]
+    config = codex_home_config(
+        (
+            "-c",
+            f"model={json.dumps(spec.model_id)}",
+            "-c",
+            f"sandbox_mode={json.dumps(sandbox.value)}",
+            "-c",
+            f"approval_policy={json.dumps(AskForApprovalValue.never.value)}",
+            *_ISOLATION_OVERRIDES,
+            *server_config.argv_flags,
+            *denials,
+        )
+    )
+    (home / CODEX_CONFIG_FILENAME).write_text(_toml_document(config), encoding="utf-8")
     child_env = build_child_env(adapter.id, extra_path_dir=resolve_binary_dir(adapter.cli_binary))
+    child_env["CODEX_HOME"] = str(home)
+    # The jail opens no shared temp area to a native Run, so its temp
+    # files go to its own directory.
+    child_env.update(dict.fromkeys(RUN_TMP_ENV_KEYS, str(prepare_run_tmpdir(run_dir))))
     codex_adapter._record_env_scrub(child_env, session="", sink=None)
-    run_dir = request.workspace / MCP_ARTIFACT_DIRNAME
     wrapper = _write_wrapper(
         run_dir,
         argv=[_resolve_executable(jailed[0]), *jailed[1:]],
@@ -610,7 +731,7 @@ async def launch_codex_run(
     turn.slot_held = True
     try:
         async with asyncio.timeout_at(deadline):
-            await _open_turn(turn, sandbox=sandbox, config=config)
+            await _open_turn(turn, sandbox=sandbox)
     except Exception as error:
         await turn.close()
         raise _spawn_error(error, turn) from error
@@ -638,11 +759,14 @@ async def launch_codex_run(
 
 __all__ = [
     "APP_SERVER_ARGS",
+    "CODEX_AUTH_FILENAME",
+    "CODEX_CONFIG_FILENAME",
+    "CODEX_HOME_DIRNAME",
     "PGID_FILENAME",
     "SANDBOX_MODES",
     "STDERR_FILENAME",
     "WRAPPER_CONFIG_FILENAME",
     "WRAPPER_FILENAME",
+    "codex_home_config",
     "launch_codex_run",
-    "thread_config",
 ]

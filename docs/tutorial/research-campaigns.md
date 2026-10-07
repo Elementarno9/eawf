@@ -24,8 +24,10 @@ A Campaign is bounded by its budget. Without one, it gets one round per step; `-
 ## 2. Drive it
 
 ```bash
-eawf campaign run CAM-0001 --actor OP-0001
+eawf campaign run CAM-0001 --actor OP-0001 --expected-revision 1
 ```
+
+The revision is the one you read the Campaign at; a Campaign that moved since is refused rather than driven.
 
 The daemon drives the plan round by round. Each round starts every ready step on a Run of its own, up to the fan-out width: `--agents`, or the `research.agent_count` setting. A step is ready once every step it depends on is done and no open contradiction blocks it. For each round, the research agent investigates the step's question read-only, and then the daemon:
 

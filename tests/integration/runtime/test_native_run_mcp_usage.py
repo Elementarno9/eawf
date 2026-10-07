@@ -5,33 +5,44 @@ per-Run semantic MCP server was never attached to the launched child, and
 the in-flight token meter had nothing to read while the turn ran. These
 cases drive the REAL :class:`~eawf.runtime.runtimes.claude.adapter.ClaudeNativeLauncher`
 and :class:`~eawf.runtime.runtimes.codex.adapter.CodexNativeLauncher` -- not
-a stand-in -- against a fake provider CLI that records its own argv and
-prints a scripted, synthesized stream-json / JSONL transcript. No model is
-ever reached: the fake is a Python script the launcher's own ``spawn_session``
-forks exactly the way it would fork the real ``claude`` / ``codex`` binary.
+a stand-in -- against a fake provider that records what it was started
+with and plays a scripted, synthesized stream-json transcript or app-server
+JSON-RPC turn. No model is
+ever reached: the fake is a Python script started exactly the way the real
+``claude`` / ``codex`` binary would be.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-import stat
 import sys
+import tomllib
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import pytest
 
 from eawf.kernel.runtime.compiled import CompiledRunSpec
 from eawf.runtime.daemon.native_dispatch import CapsuleRequest, seal_capsule
-from eawf.runtime.runtimes.adapter import NativeLaunchRequest
+from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME
+from eawf.runtime.runtimes.adapter import NativeLaunchOutcome, NativeLaunchRequest
 from eawf.runtime.runtimes.claude import adapter as claude_adapter
 from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter, ClaudeNativeLauncher
 from eawf.runtime.runtimes.codex import adapter as codex_adapter
 from eawf.runtime.runtimes.codex.adapter import CodexAdapter, CodexNativeLauncher
+from eawf.runtime.runtimes.codex.app_server import CODEX_CONFIG_FILENAME, CODEX_HOME_DIRNAME
 from eawf.runtime.runtimes.metering import UsageSample
 from eawf.workflow.runtime.compile import compile_run_spec
 from tests import _provider_helpers as fx
+from tests.fixtures.runtime.fake_claude_cli import install_fake_claude
+from tests.fixtures.runtime.fake_codex_server import (
+    THREAD_ID,
+    agent_message,
+    install_fake_codex,
+    token_usage,
+    turn_completed,
+)
 from tests.integration.runtime.daemon.test_native_dispatch import capsule_request
 
 pytestmark = pytest.mark.integration
@@ -41,103 +52,68 @@ pytestmark = pytest.mark.integration
 #: ``tests/unit/runtime/runtimes/test_claude_child_env.py`` uses: the OS jail
 #: has its own coverage, so these cases observe the MCP + usage seam alone.
 def _bypass_jail(
-    argv: list[str], *, runtime: str, cwd: str | None, session: str = "", sink: object = None
+    argv: list[str],
+    *,
+    runtime: str,
+    cwd: str | None,
+    session: str = "",
+    sink: object = None,
+    private_home: object = None,
+    storage_dirs: object = (),
 ) -> list[str]:
     return argv
 
 
-_CLAUDE_LINES: Final[tuple[str, ...]] = (
-    json.dumps(
-        {
-            "type": "assistant",
-            "message": {
-                "id": "m1",
-                "model": "fixture-model",
-                "usage": {"input_tokens": 100, "output_tokens": 10},
-            },
-        }
-    ),
+async def _launch_claude_turn(
+    launcher: ClaudeNativeLauncher, request: NativeLaunchRequest
+) -> NativeLaunchOutcome:
+    """Launch, then await the turn the usage arrives on."""
+    outcome = await launcher.launch(request)
+    assert outcome.turn is not None
+    await outcome.turn
+    return outcome
+
+
+_CLAUDE_LINES: Final[tuple[dict[str, Any] | str, ...]] = (
+    {
+        "type": "assistant",
+        "message": {"id": "m1", "usage": {"input_tokens": 100, "output_tokens": 10}},
+    },
     "not-json-at-all",
-    json.dumps(
-        {
-            "type": "assistant",
-            "message": {
-                "id": "m2",
-                "model": "fixture-model",
-                "usage": {"input_tokens": 100, "output_tokens": 40},
-            },
-        }
-    ),
-    json.dumps({"type": "assistant", "message": {"id": "m3"}}),
-    json.dumps(
-        {
-            "type": "assistant",
-            "message": {
-                "id": "m4",
-                "model": "fixture-model",
-                "usage": {"input_tokens": 100, "output_tokens": 90},
-            },
-        }
-    ),
-    json.dumps(
-        {
-            "type": "result",
-            "subtype": "success",
-            "is_error": False,
-            "session_id": "sess-fake-claude",
-            "result": "ok",
-            "total_cost_usd": 0.0,
-            "usage": {"input_tokens": 100, "output_tokens": 90},
-        }
-    ),
+    {
+        "type": "assistant",
+        "message": {"id": "m2", "usage": {"input_tokens": 100, "output_tokens": 40}},
+    },
+    {"type": "assistant", "message": {"id": "m3"}},
+    {
+        "type": "assistant",
+        "message": {"id": "m4", "usage": {"input_tokens": 100, "output_tokens": 90}},
+    },
+    {
+        "type": "result",
+        "result": "ok",
+        "total_cost_usd": 0.0,
+        "usage": {"input_tokens": 100, "output_tokens": 90},
+    },
 )
 
-_CODEX_LINES: Final[tuple[str, ...]] = (
-    json.dumps({"type": "thread.started", "thread_id": "th-fake"}),
-    json.dumps(
-        {
-            "type": "turn.completed",
-            "usage": {"input_tokens": 100, "cached_input_tokens": 0, "output_tokens": 50},
-        }
-    ),
-    "not-json-at-all",
-    json.dumps(
-        {
-            "type": "turn.completed",
-            "usage": {"input_tokens": 200, "cached_input_tokens": 0, "output_tokens": 150},
-        }
-    ),
-    json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": "done"}}),
-    json.dumps(
-        {
-            "type": "turn.completed",
-            "usage": {"input_tokens": 300, "cached_input_tokens": 50, "output_tokens": 250},
-        }
-    ),
+_CODEX_LINES: Final[tuple[dict[str, Any], ...]] = (
+    token_usage(100, 50),
+    token_usage(200, 150),
+    agent_message("done"),
+    token_usage(300, 250, cached=50),
+    turn_completed(),
 )
 
 
-def _write_fake_cli(directory: Path, name: str, lines: tuple[str, ...]) -> Path:
-    """Write a fake provider CLI that records its argv and prints *lines*.
-
-    A Python script rather than a shell one, at parity with the existing
-    fake-``claude`` fixture, because a shell exports variables of its own.
-    The lines are synthesized, neutral stream content -- no real prompt or
-    session id -- so nothing here resembles a live transcript.
-    """
-    script = directory / name
-    script.write_text(
-        f"#!{sys.executable}\n"
-        "import json, sys\n"
-        "with open('argv.json', 'w', encoding='utf-8') as handle:\n"
-        "    json.dump(sys.argv, handle)\n"
-        f"for line in {list(lines)!r}:\n"
-        "    print(line)\n"
-        "    sys.stdout.flush()\n",
-        encoding="utf-8",
-    )
-    script.chmod(script.stat().st_mode | stat.S_IXUSR)
-    return script
+async def _launch_codex_turn(
+    launcher: CodexNativeLauncher, request: NativeLaunchRequest
+) -> NativeLaunchOutcome:
+    """Launch, then await the turn the usage arrives on."""
+    outcome = await launcher.launch(request)
+    assert outcome.turn is not None
+    await outcome.turn
+    return outcome
 
 
 class _Recorder:
@@ -200,6 +176,7 @@ def _request(*, spec: CompiledRunSpec, workspace: Path, usage_sink: object) -> N
         capsule=capsule,
         workspace_handle=f"wsh-{'a' * 32}",
         workspace=workspace,
+        repo_root=workspace.parent,
         prompt="implement the fixture task",
         hello_sequence=1,
         usage_sink=usage_sink,
@@ -214,13 +191,12 @@ def test_claude_native_launch_wires_mcp_config_and_relays_usage_in_order(
     monkeypatch.setattr(claude_adapter, "_maybe_jail_argv", _bypass_jail)
     workspace = tmp_path / "ws"
     workspace.mkdir()
-    _write_fake_cli(workspace, "claude", _CLAUDE_LINES)
     recorder = _Recorder()
     request = _request(spec=_claude_spec(), workspace=workspace, usage_sink=recorder.sink)
     adapter = ClaudeAdapter()
-    adapter.cli_binary = str(workspace / "claude")
+    adapter.cli_binary = str(install_fake_claude(workspace, {"lines": list(_CLAUDE_LINES)}))
 
-    outcome = asyncio.run(ClaudeNativeLauncher(adapter=adapter).launch(request))
+    outcome = asyncio.run(_launch_claude_turn(ClaudeNativeLauncher(adapter=adapter), request))
 
     assert outcome.provider_session_ref == "sess-fake-claude"
     # Claude's message.usage bills PER CALL, not a running total (unlike
@@ -236,11 +212,10 @@ def test_claude_native_launch_wires_mcp_config_and_relays_usage_in_order(
 
     argv = json.loads((workspace / "argv.json").read_text(encoding="utf-8"))
     assert "--mcp-config" in argv
-    config_path = Path(argv[argv.index("--mcp-config") + 1])
-    document = json.loads(config_path.read_text(encoding="utf-8"))
+    document = json.loads(argv[argv.index("--mcp-config") + 1])
     assert "eawf-semantic" in document["mcpServers"]
     allow_index = argv.index("--allowedTools")
-    assert argv[allow_index + 1].split() == [
+    assert argv[allow_index + 1].split(",") == [
         "mcp__eawf-semantic__budget_status",
         "mcp__eawf-semantic__submit_candidate",
     ]
@@ -254,13 +229,12 @@ def test_claude_native_launch_stops_relaying_once_the_sink_terminates(
     monkeypatch.setattr(claude_adapter, "_maybe_jail_argv", _bypass_jail)
     workspace = tmp_path / "ws"
     workspace.mkdir()
-    _write_fake_cli(workspace, "claude", _CLAUDE_LINES)
     recorder = _Recorder(terminate_after=2)
     request = _request(spec=_claude_spec(), workspace=workspace, usage_sink=recorder.sink)
     adapter = ClaudeAdapter()
-    adapter.cli_binary = str(workspace / "claude")
+    adapter.cli_binary = str(install_fake_claude(workspace, {"lines": list(_CLAUDE_LINES)}))
 
-    asyncio.run(ClaudeNativeLauncher(adapter=adapter).launch(request))
+    asyncio.run(_launch_claude_turn(ClaudeNativeLauncher(adapter=adapter), request))
 
     assert [(s.input_tokens, s.output_tokens) for s, _pgid in recorder.calls] == [
         (100, 10),
@@ -274,17 +248,19 @@ def test_codex_native_launch_wires_mcp_config_and_relays_usage_in_order(
 ) -> None:
     """The launched child sees the MCP entry, and readings arrive in order."""
     monkeypatch.setattr(codex_adapter, "_maybe_jail_argv", _bypass_jail)
+    # The private home links the operator's credential; keep the real one out.
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
     workspace = tmp_path / "ws"
     workspace.mkdir()
-    _write_fake_cli(workspace, "codex", _CODEX_LINES)
     recorder = _Recorder()
     request = _request(spec=_codex_spec(), workspace=workspace, usage_sink=recorder.sink)
     adapter = CodexAdapter()
-    adapter.cli_binary = str(workspace / "codex")
+    adapter.cli_binary = str(install_fake_codex(workspace, {"lines": list(_CODEX_LINES)}))
 
-    outcome = asyncio.run(CodexNativeLauncher(adapter=adapter).launch(request))
+    outcome = asyncio.run(_launch_codex_turn(CodexNativeLauncher(adapter=adapter), request))
 
-    assert outcome.provider_session_ref == "th-fake"
+    assert outcome.provider_session_ref == THREAD_ID
     assert [
         (s.input_tokens, s.output_tokens, s.cache_read_input_tokens) for s, _pgid in recorder.calls
     ] == [
@@ -294,7 +270,8 @@ def test_codex_native_launch_wires_mcp_config_and_relays_usage_in_order(
     ]
     assert all(pgid is not None for _sample, pgid in recorder.calls)
 
-    argv = json.loads((workspace / "argv.json").read_text(encoding="utf-8"))
-    joined = " ".join(argv)
-    assert "mcp_servers.eawf_semantic.enabled=true" in joined
-    assert "mcp_servers.eawf_semantic.command=" in joined
+    home = workspace / MCP_ARTIFACT_DIRNAME / CODEX_HOME_DIRNAME
+    config = tomllib.loads((home / CODEX_CONFIG_FILENAME).read_text(encoding="utf-8"))
+    server = config["mcp_servers"]["eawf_semantic"]
+    assert server["enabled"] is True
+    assert server["command"] == sys.executable

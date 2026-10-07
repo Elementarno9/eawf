@@ -23,30 +23,84 @@ is queued again only after the back-off or after a probe that recorded
 nothing; while it runs, a control on that version other than a stop is refused
 as in progress. ``runtime.auto_certify: false`` turns the background probe
 off; ``eawf runtime certify`` still runs one on request.
+
+The background probe stays token-free and dispatches nothing. An operator who
+names a canary Task to ``eawf runtime certify`` asks for the whole walk
+instead: after a passed probe, :func:`walk_certification` dispatches the
+containment canary as a real Run under that Task, compiled from the same
+request the tuple serves, and walks the certify stage. The containment probe
+set grades what eawf itself observed: once the canary's worker is launched,
+the daemon makes every attempt through the wrapper, jail and admitted
+environment the launcher recorded for that Run, and the worker's own answer
+can only worsen the grade. A canary that misses an axis quarantines the
+version; one that passes records a certification carrying what only a
+dispatched Run can observe, such as whether the worker filed its report
+through its semantic tools and which model it ran.
 """
 
 from __future__ import annotations
 
+import asyncio
+import dataclasses
 import logging
+import os
 import platform
 import re
+import secrets
+import shutil
 import threading
+from collections.abc import Iterator, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timedelta
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from eawf.kernel.config.layered import resolve_auto_certify
+from eawf.kernel.config.providers import ProviderConfigError
+from eawf.kernel.identity import EntityKind, QualifiedUrn, format_entity_key
 from eawf.kernel.runtime.certification import CapabilityCertification
-from eawf.kernel.runtime.compiled import canonical_digest
+from eawf.kernel.runtime.compiled import (
+    CapabilityObservation,
+    CompiledRunSpec,
+    RuntimeBinding,
+    canonical_digest,
+)
+from eawf.kernel.runtime.handshake import WorkerHello
 from eawf.kernel.runtime.provider import AuthKind, ControlKind
 from eawf.kernel.state.epoch2.run import RunRuntimeTuple
 from eawf.kernel.store.kinds.runtime_certification import MachineCertification
+from eawf.kernel.store.ledger import read_ledger_records
+from eawf.observability.telemetry.models import RuntimeName
 from eawf.runtime.daemon.methods.conformance import StoreStageJournal, runner_for
+from eawf.runtime.daemon.runtime_dir import runtime_dir
+from eawf.runtime.mcp.grant import SEMANTIC_TOOLS_CAPABILITY
+from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME
+from eawf.runtime.runtimes.adapter import (
+    NativeLaunchOutcome,
+    NativeLaunchRequest,
+    NativeRunLauncher,
+)
 from eawf.runtime.runtimes.capabilities import RUNTIME_IDS, ProbeResult, detect_drift
-from eawf.runtime.runtimes.conformance import ProbeRequest, RuntimeTuple
+from eawf.runtime.runtimes.conformance import (
+    CanaryRequest,
+    CanaryStageResult,
+    CertificationRequest,
+    ProbeRequest,
+    ProtocolFacts,
+    RuntimeTuple,
+    canary_outcomes,
+    render_canary_prompt,
+)
+from eawf.runtime.runtimes.containment import ContainmentCallOutcome
+from eawf.runtime.runtimes.containment_observation import (
+    ContainmentTargets,
+    observe_containment,
+)
 from eawf.runtime.runtimes.probes.sdk_baseline import probe_runtime
 from eawf.runtime.runtimes.quarantine import is_quarantined
+from eawf.runtime.sandbox.jail import _CRED_DENY_DIRS
 from eawf.workflow.evidence.machine_certification import (
     CERTIFICATION_LIFETIME,
     append_machine_certification,
@@ -58,6 +112,10 @@ from eawf.workflow.evidence.run_certification import (
     decide_run_control,
     runtime_certifications,
 )
+
+if TYPE_CHECKING:
+    from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
+    from eawf.runtime.daemon.native_dispatch import DispatchParams, Publish
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +140,14 @@ _PROBED_ON: Final = frozenset({ControlGateCode.UNCERTIFIED, ControlGateCode.EXPI
 
 #: How long a quarantined or already-queued version waits before it is probed again.
 REPROBE_BACKOFF: Final = timedelta(hours=24)
+
+#: The token ceiling a canary Run is sealed under: the probe set is eight attempts
+#: and one report, and the in-flight governor admits no uncapped Run.
+CANARY_TOKEN_BUDGET: Final = 200_000
+
+#: The provider a canary of each runtime is dispatched to, which is also the
+#: runtime its host facts are filed under.
+_CANARY_PROVIDERS: Final[Mapping[str, RuntimeName]] = {"claude-code": "claude", "codex": "codex"}
 
 
 class RuntimeNotProbedError(ValueError):
@@ -149,25 +215,19 @@ def _runtime_tuple(runtime_id: str, version: str, flags: tuple[str, ...]) -> Run
     )
 
 
-def certify_installed(state_path: Path, runtime_id: str) -> MachineCertification:
-    """Probe the installed *runtime_id* and record what the probe concluded.
+def _probe_installed(
+    state_path: Path, runtime_id: str
+) -> tuple[MachineCertification, RuntimeTuple]:
+    """Walk the probe stage and return its row, unrecorded, beside the tuple it covers.
 
     Each capability the matrix has a probe rule for and declares supported is
     required; one it declares unsupported is recorded unsupported, as the
     committed exports record it.
 
-    Args:
-        state_path: Path to the tree's ``state.json``.
-        runtime_id: The runtime to probe.
-
-    Returns:
-        The recorded row: a certification, or a quarantine with findings.
-
     Raises:
         RuntimeNotProbedError: The binary is absent or reports no version,
             its ``--help`` timed out or could not be run, the platform cannot
-            be named, or no capability of the runtime has a probe rule;
-            nothing was recorded.
+            be named, or no capability of the runtime has a probe rule.
     """
     observed = probe_runtime(runtime_id)
     version = installed_version(observed.version) if observed.installed else None
@@ -260,8 +320,7 @@ def certify_installed(state_path: Path, runtime_id: str) -> MachineCertification
                 ),
             }
         )
-    append_machine_certification(state_path, row)
-    return row
+    return row, runtime_tuple
 
 
 def gate_run_control(
@@ -342,8 +401,24 @@ class RuntimeCertifier:
         Raises:
             RuntimeNotProbedError: The runtime could not be probed.
         """
+        return self.probe(runtime_id)[0]
+
+    def probe(self, runtime_id: str) -> tuple[MachineCertification, RuntimeTuple]:
+        """Probe and record as :meth:`certify` does, also answering the tuple probed.
+
+        Args:
+            runtime_id: The runtime to probe.
+
+        Returns:
+            The recorded row and the runtime tuple its stage is journaled under.
+
+        Raises:
+            RuntimeNotProbedError: The runtime could not be probed.
+        """
         with self._serial:
-            return certify_installed(self._state_path, runtime_id)
+            row, runtime_tuple = _probe_installed(self._state_path, runtime_id)
+            append_machine_certification(self._state_path, row)
+            return row, runtime_tuple
 
     def ensure(
         self, runtime_id: str, version: str, *, now: datetime
@@ -466,14 +541,520 @@ def start_auto_certification(
     return certifier_for(tree_root).ensure(runtime.harness, version, now=now)
 
 
+#: What a planted decoy credential holds: a fixed marker in no credential format,
+#: so nothing that finds it mistakes it for a secret.
+DECOY_CREDENTIAL_MARKER: Final = "eawf canary decoy: not a credential\n"
+
+#: The prefix of the scratch directory a decoy credential store is planted in.
+DECOY_SCRATCH_PREFIX: Final = "canary-credential-"
+
+
+@contextmanager
+def _credential_targets(tree_root: Path) -> Iterator[tuple[Path, ...]]:
+    """Yield the credential stores the canary's credential attempt reads.
+
+    The other tools' stores present in the operator's home are the targets;
+    their bytes are never read here, and the attempt in the jail reports
+    only whether its read was refused. A host holding none, such as a clean
+    CI host, gets a decoy store instead, so the attempt still has something
+    to be refused: it is planted inside the tree's ``.ea``, which every
+    native Run's jail denies by the same rule that denies a store
+    (``deny file-read*`` under seatbelt, a mask under bubblewrap) while
+    re-opening only the Run's own workspace, and it is removed once the
+    attempts are made, however they end.
+
+    Args:
+        tree_root: The tree's ``.ea`` directory.
+
+    Yields:
+        The present stores, or the one planted decoy store.
+
+    Raises:
+        OSError: The decoy could not be planted.
+    """
+    home = Path.home()
+    present = tuple(path for relative in _CRED_DENY_DIRS if (path := home / relative).exists())
+    if present:
+        yield present
+        return
+    scratch = tree_root / "local" / f"{DECOY_SCRATCH_PREFIX}{secrets.token_hex(8)}"
+    store = scratch / _CRED_DENY_DIRS[0]
+    try:
+        store.mkdir(parents=True)
+        (store / "credentials").write_text(DECOY_CREDENTIAL_MARKER, encoding="utf-8")
+        yield (store,)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _containment_targets(
+    tree_root: Path, workspace: Path, *, credential_paths: tuple[Path, ...]
+) -> ContainmentTargets:
+    """Return what the attempts made in the jail of a canary leased *workspace* reach for."""
+    return ContainmentTargets(
+        canonical_git=tree_root.parent / ".git",
+        daemon_storage=tree_root,
+        write_ahead_log=runtime_dir() / "wal",
+        outside_writable_roots=workspace.parent,
+        credential_paths=credential_paths,
+        host_process=os.getpid(),
+    )
+
+
+class _ObservedLauncher:
+    """A launcher that keeps what it launched and observes the jail it launched in.
+
+    The supervisor awaits the turn and keeps only how it ended, so this
+    keeps hold of the launch. Right after the worker is announced, while
+    the Run's workspace and the wrapper the launcher wrote for it are
+    certainly in place, the daemon makes every containment attempt in that
+    same wrapper and jail itself.
+
+    Attributes:
+        provider_kind: The provider the wrapped launcher starts.
+        launched: What the wrapped launcher answered, once it did.
+        observed: What eawf observed per containment attempt it made.
+    """
+
+    def __init__(self, real: NativeRunLauncher, *, tree_root: Path) -> None:
+        """Wrap *real*, launching under the tree at *tree_root*."""
+        self.provider_kind = real.provider_kind
+        self.launched: NativeLaunchOutcome | None = None
+        self.observed: tuple[ContainmentCallOutcome, ...] = ()
+        self._real = real
+        self._tree_root = tree_root
+
+    async def launch(self, request: NativeLaunchRequest) -> NativeLaunchOutcome:
+        """Launch through the wrapped launcher, observe its jail and keep its answer."""
+        self.launched = await self._real.launch(request)
+        self.observed = await asyncio.to_thread(self._observe, request.workspace)
+        return self.launched
+
+    def _observe(self, workspace: Path) -> tuple[ContainmentCallOutcome, ...]:
+        """Make every containment attempt in the jail of the Run leased *workspace*."""
+        with _credential_targets(self._tree_root) as credential_paths:
+            return observe_containment(
+                workspace / MCP_ARTIFACT_DIRNAME,
+                workspace=workspace,
+                targets=_containment_targets(
+                    self._tree_root, workspace, credential_paths=credential_paths
+                ),
+            )
+
+
+@dataclass(frozen=True)
+class _CanaryRun:
+    """What one dispatched canary showed, for the canary and certify stages.
+
+    Attributes:
+        served: The spec the tuple serves.
+        canary: The spec the canary Run was dispatched under.
+        observed: What eawf observed per attempt it made in the canary's jail.
+        answered: What its worker's answer reported per attempted call.
+        hello: The worker's announcement.
+        observed_model: The model its runtime reported running, if it did.
+        reported: Whether the worker filed its report through a semantic tool.
+        semantic_protocol_version: The semantic protocol its driver speaks.
+    """
+
+    served: CompiledRunSpec
+    canary: CompiledRunSpec
+    observed: tuple[ContainmentCallOutcome, ...]
+    answered: tuple[ContainmentCallOutcome, ...]
+    hello: WorkerHello
+    observed_model: str | None
+    reported: bool
+    semantic_protocol_version: str
+
+
+def _under_test(
+    binding: RuntimeBinding, *, evidence_ref: str, probed: MachineCertification
+) -> RuntimeBinding:
+    """Return *binding* carrying the semantic tools as the capability its canary tests.
+
+    The canary is how the semantic tools are observed, and its worker can only
+    reach them if its own compile grants them; the row the walk records
+    attests them only once that worker has actually filed through them.
+    """
+    assert probed.expires_at is not None, "only a certified probe is walked to its canary"
+    held = tuple(
+        item for item in binding.capabilities if item.capability_id != SEMANTIC_TOOLS_CAPABILITY
+    )
+    tested = CapabilityObservation(
+        capability_id=SEMANTIC_TOOLS_CAPABILITY,
+        effective_level=True,
+        status="verified",
+        basis="native",
+        basis_refs=(binding.certification_ref,),
+        certification_evidence_ref=evidence_ref,
+        verified_at=probed.verified_at,
+        expires_at=probed.expires_at,
+    )
+    return RuntimeBinding.model_validate({**binding.model_dump(), "capabilities": (*held, tested)})
+
+
+def _canary_requests(
+    context: Epoch2RootContext,
+    probed: MachineCertification,
+    *,
+    task: QualifiedUrn,
+    actor: str,
+    provider: str,
+    evidence_ref: str,
+    now: datetime,
+) -> tuple[DispatchParams, CompiledRunSpec, CompiledRunSpec]:
+    """Return the canary's dispatch request, the spec the tuple serves and the canary's.
+
+    Both specs compile from one Task request on one set of bindings, so the
+    canary runs under exactly the authority the tuple will serve; only the
+    Run and the prompt differ.
+
+    Raises:
+        DaemonValidationError: The provider layers do not load, or the base,
+            the bindings or the compiler refused the request.
+    """
+    # Dispatch reaches the Run-start path, which starts this module's probe.
+    from eawf.runtime.daemon.methods.delivery import stored_tasks
+    from eawf.runtime.daemon.methods.task_dispatch import head_commit, next_run_urn
+    from eawf.runtime.daemon.native_dispatch import (
+        DEFAULT_TOOL_GRANTS,
+        DispatchRefusal,
+        compile_for_dispatch,
+        refused,
+    )
+    from eawf.runtime.daemon.provider_facts import installed_provider_facts
+    from eawf.workflow.runtime.task_request import compile_task_request
+
+    tree_root = context.identity.tree_root
+    with context.session([task]) as session:
+        task_row = next(row for row in stored_tasks(session) if row.urn == task)
+    try:
+        facts = installed_provider_facts(tree_root, now=now)
+    except ProviderConfigError as error:
+        raise refused(DispatchRefusal.PROVIDER_CONFIG_INVALID, str(error)) from error
+    bindings = tuple(
+        _under_test(binding, evidence_ref=evidence_ref, probed=probed)
+        if binding.manifest.provider_id == provider
+        else binding
+        for binding in facts.bindings
+    )
+    canary_urn = next_run_urn(context, task_row)
+    # The served Run is never created: it only names the Run the canary stands
+    # for, which must be another Run than the canary itself.
+    served_urn = dataclasses.replace(
+        canary_urn,
+        entity_key=format_entity_key(
+            EntityKind.RUN, int(canary_urn.entity_key.removeprefix("RUN-")) + 1
+        ),
+    )
+    base = head_commit(tree_root.parent)
+
+    def compiled(run_urn: QualifiedUrn) -> DispatchParams:
+        return compile_task_request(
+            task_row,
+            run_urn,
+            provider=provider,
+            config=facts.config,
+            registry=facts.registry,
+            bindings=bindings,
+            budget=CANARY_TOKEN_BUDGET,
+            base=base,
+            actor=actor,
+            now=now,
+        )
+
+    request = compiled(canary_urn)
+    request = request.model_copy(
+        update={
+            "prompt": render_canary_prompt(
+                report_tool=DEFAULT_TOOL_GRANTS[0],
+                report_schema_ref=request.capsule.report_schema_ref,
+            )
+        }
+    )
+    served = compile_for_dispatch(compiled(served_urn), now=now)
+    return request, served, compile_for_dispatch(request, now=now)
+
+
+async def _dispatch_canary(
+    context: Epoch2RootContext,
+    probed: MachineCertification,
+    *,
+    task: QualifiedUrn,
+    actor: str,
+    provider: str,
+    evidence_ref: str,
+    launchers: Mapping[str, NativeRunLauncher],
+    publish: Publish | None,
+) -> _CanaryRun:
+    """Create the canary Run under *task*, dispatch it, and await its turn.
+
+    Raises:
+        DaemonValidationError: The request does not compile, the Run is not
+            created, or the dispatch refused.
+    """
+    # Dispatch reaches the Run-start path, which starts this module's probe.
+    from eawf.runtime.candidate.seal import accepted_report_of
+    from eawf.runtime.daemon.epoch2_create import CreateRequest, run_create
+    from eawf.runtime.daemon.methods.task_dispatch import dispatch_cursor
+    from eawf.runtime.daemon.native_dispatch import dispatch_run, run_ledger
+    from eawf.runtime.daemon.run_supervisor import supervisor_of
+
+    now = datetime.now(UTC)
+    request, served, canary = await asyncio.to_thread(
+        _canary_requests,
+        context,
+        probed,
+        task=task,
+        actor=actor,
+        provider=provider,
+        evidence_ref=evidence_ref,
+        now=now,
+    )
+    run_key = request.urn.entity_key
+    create = CreateRequest(
+        urn=request.urn,
+        expected_revision=await asyncio.to_thread(dispatch_cursor, context, task),
+        idempotency_key=f"certify-canary-{run_key}-create",
+        actor=actor,
+        spec={"key": run_key, "scope": request.compile_request.run_scope.model_dump(mode="json")},
+    )
+    committed = await asyncio.to_thread(run_create, context=context, request=create, now=now)
+    if publish is not None and committed.envelope is not None:
+        publish(committed.envelope)
+    tree_root = context.identity.tree_root
+    observed = {
+        kind: _ObservedLauncher(launcher, tree_root=tree_root)
+        for kind, launcher in launchers.items()
+    }
+    await dispatch_run(context, request, now=now, launchers=observed, publish=publish)
+    supervised = supervisor_of(context).task_of(str(request.urn))
+    if supervised is not None:
+        await supervised
+    observer = observed[canary.provider_options.provider_kind]
+    launched = observer.launched
+    assert launched is not None, "an announced dispatch launched its worker"
+    turn, answer = launched.turn, None
+    if turn is not None and turn.done() and not turn.cancelled() and turn.exception() is None:
+        answer = turn.result().answer_text
+    with context.session([request.urn]) as session:
+        records = read_ledger_records(run_ledger(session))
+    binding = next(
+        item for item in request.bindings if item.driver_ref == canary.driver_manifest_ref
+    )
+    logger.info(
+        f"_dispatch_canary run={run_key} provider={provider} answered={answer is not None} "
+        f"observed={len(observer.observed)}"
+    )
+    return _CanaryRun(
+        served=served,
+        canary=canary,
+        observed=observer.observed,
+        answered=canary_outcomes(answer),
+        hello=launched.hello,
+        observed_model=None if launched.runtime_tuple is None else launched.runtime_tuple.model,
+        reported=accepted_report_of(records, str(request.urn)) is not None,
+        semantic_protocol_version=binding.manifest.semantic_protocol_versions[0],
+    )
+
+
+def _canary_findings(result: CanaryStageResult) -> tuple[str, ...]:
+    """Return one line per parity axis or attempt that failed the canary."""
+    if result.containment is None:
+        return tuple(
+            f"{axis.value}: the canary spec differs from the served spec"
+            for axis in result.parity_mismatches
+        )
+    graded = (
+        ("escaped containment", result.containment.escaped),
+        ("returned bytes through its denial", result.containment.observed),
+        ("was not attempted", result.containment.skipped),
+    )
+    return tuple(
+        f"{attempt.value}: {verdict}" for verdict, attempts in graded for attempt in attempts
+    )
+
+
+def _conclude_walk(
+    state_path: Path,
+    probed: MachineCertification,
+    runtime_tuple: RuntimeTuple,
+    run: _CanaryRun,
+    *,
+    evidence_ref: str,
+) -> MachineCertification:
+    """Grade the canary, walk the certify stage after a pass, and record the row.
+
+    The certify stage's own outcome is kept on the row rather than deciding
+    it: a certify refused because the shipped host facts measure nothing of
+    the runtime refuses the driver certification, whose facts those are, not
+    the capabilities this machine's canary observed.
+
+    Returns:
+        The recorded row: a quarantine naming every failed attempt, or a
+        certification carrying what the canary observed.
+    """
+    runner = runner_for(state_path)
+    result = runner.run_canary(
+        CanaryRequest(
+            runtime_tuple=runtime_tuple,
+            served_spec=run.served,
+            canary_spec=run.canary,
+            outcomes=run.observed,
+            reported=run.answered,
+            evidence_ref=evidence_ref,
+        )
+    )
+    named = f"{probed.runtime_id} {probed.harness_version}"
+    common = probed.model_dump(
+        include={"certification_urn", "runtime_id", "harness_version", "tuple_digest", "probe"}
+    ) | {"observed_model": run.observed_model}
+    if not result.passed:
+        findings = _canary_findings(result)
+        row = MachineCertification.model_validate(
+            {
+                **common,
+                "outcome": "quarantined",
+                "reason_code": result.record.reason_code,
+                "findings": findings,
+                "stages": (result.record,),
+                "verified_at": result.record.completed_at,
+                "reason": (
+                    f"{named} failed the containment canary ({result.record.reason_code}): "
+                    f"{', '.join(line.split(':')[0] for line in findings)}"
+                ),
+            }
+        )
+        append_machine_certification(state_path, row)
+        return row
+    assert probed.expires_at is not None, "only a certified probe is walked to its canary"
+    capabilities = probed.capabilities
+    if run.reported:
+        capabilities += (
+            CapabilityCertification(
+                capability_id=SEMANTIC_TOOLS_CAPABILITY,
+                level=True,
+                status="verified",
+                basis="native",
+                evidence_ref=evidence_ref,
+                verified_at=result.record.completed_at,
+                expires_at=probed.expires_at,
+            ),
+        )
+    certify = runner.certify(
+        CertificationRequest(
+            runtime_tuple=runtime_tuple,
+            protocol=ProtocolFacts(
+                worker_protocol_version=run.hello.worker_protocol_version,
+                semantic_protocol_version=run.semantic_protocol_version,
+                event_codec_version=run.hello.event_codec_version,
+            ),
+            certification_id=re.sub(r"[^a-z0-9_-]", "-", named.lower())[:64],
+            capabilities=capabilities,
+            runtime=_CANARY_PROVIDERS[probed.runtime_id],
+            install_trust="observed",
+            evidence_bundle_ref=evidence_ref,
+            expires_at=probed.expires_at,
+        )
+    ).record
+    refusal = "" if certify.reason_code is None else f" ({certify.reason_code})"
+    row = MachineCertification.model_validate(
+        {
+            **common,
+            "outcome": "certified",
+            "capabilities": capabilities,
+            "stages": (result.record, certify),
+            "verified_at": certify.completed_at,
+            "expires_at": probed.expires_at,
+            "reason": (
+                f"{named} passed the containment canary and the certify stage "
+                f"{certify.outcome}{refusal}; certified until {probed.expires_at:%Y-%m-%d}"
+            ),
+        }
+    )
+    append_machine_certification(state_path, row)
+    return row
+
+
+async def walk_certification(
+    context: Epoch2RootContext,
+    runtime_id: str,
+    *,
+    task: QualifiedUrn,
+    actor: str,
+    launchers: Mapping[str, NativeRunLauncher] | None = None,
+    publish: Publish | None = None,
+) -> MachineCertification:
+    """Walk the probe, canary and certify stages of the installed *runtime_id*.
+
+    The canary is a real Run placed under *task*, which lends it the scope a
+    Task Run is compiled with; the canary never claims or starts the Task.
+
+    Args:
+        context: The native context of the tree.
+        runtime_id: The runtime to certify.
+        task: The Task the canary Run is placed under.
+        actor: The principal the canary Run is recorded against.
+        launchers: The launcher table, defaulting to the shipped one.
+        publish: Where each committed transition is handed for the fan-out.
+
+    Returns:
+        The last recorded row: the probe's quarantine, the canary's
+        quarantine, or the certification the walk earned.
+
+    Raises:
+        RuntimeNotProbedError: The runtime could not be probed, or no shipped
+            launcher dispatches it; nothing was recorded.
+        DaemonValidationError: The canary did not compile, was not created
+            or was not dispatched; only the probe's row was recorded.
+    """
+    # Dispatch reaches the Run-start path, which starts this module's probe.
+    from eawf.runtime.daemon.native_dispatch import NATIVE_LAUNCHERS
+
+    provider = _CANARY_PROVIDERS.get(runtime_id)
+    if provider is None:
+        raise RuntimeNotProbedError(
+            f"runtime_canary_unavailable: no shipped launcher dispatches a {runtime_id} canary"
+        )
+    tree_root = context.identity.tree_root
+    probed, runtime_tuple = await asyncio.to_thread(certifier_for(tree_root).probe, runtime_id)
+    if probed.outcome != "certified":
+        return probed
+    evidence_ref = f"artifact://runtime-certification/{runtime_id}/{probed.harness_version}/canary"
+    run = await _dispatch_canary(
+        context,
+        probed,
+        task=task,
+        actor=actor,
+        provider=provider,
+        evidence_ref=evidence_ref,
+        launchers=NATIVE_LAUNCHERS if launchers is None else launchers,
+        publish=publish,
+    )
+    row = await asyncio.to_thread(
+        _conclude_walk,
+        tree_root / "state.json",
+        probed,
+        runtime_tuple,
+        run,
+        evidence_ref=evidence_ref,
+    )
+    logger.info(
+        f"walk_certification runtime={runtime_id!r} version={row.harness_version!r} "
+        f"outcome={row.outcome} stages={[stage.stage for stage in row.stages]}"
+    )
+    return row
+
+
 __all__ = [
+    "CANARY_TOKEN_BUDGET",
     "CONFORMANCE_SUITE_VERSION",
     "REPROBE_BACKOFF",
     "RuntimeCertifier",
     "RuntimeNotProbedError",
     "certifier_for",
-    "certify_installed",
     "gate_run_control",
     "installed_version",
     "start_auto_certification",
+    "walk_certification",
 ]

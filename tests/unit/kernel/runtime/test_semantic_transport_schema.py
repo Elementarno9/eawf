@@ -22,8 +22,13 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import ValidationError
 
+from eawf.kernel.runtime.content import CONTENT_LINE_CHARS, CONTENT_LINE_LIMIT
 from eawf.kernel.runtime.semantic import (
+    REPO_READ_TEXT_CHARS,
     SEMANTIC_TOOL_CATALOG,
+    RepoReadOutput,
+    RepoSearchInput,
+    RepoSearchOutput,
     SemanticCall,
     SemanticResult,
     SemanticToolErrorCode,
@@ -172,6 +177,7 @@ def result_fields(**overrides: Any) -> dict[str, Any]:
             "content_digest": DIGEST,
             "byte_count": 4096,
             "truncated": True,
+            "text": "from __future__ import annotations",
         },
         "completed_at": REQUESTED_AT,
     }
@@ -333,3 +339,96 @@ def test_decode_result_refuses_a_failure_that_still_returns_output() -> None:
 def test_a_result_accepts_an_artifact_reference_as_its_output() -> None:
     document = result_fields(bounded_output=None, output_ref="artifact://content/run-10-1")
     assert SemanticResult.model_validate(document).bounded_output is None
+
+
+# ---- repository read and search outputs -----------------------------------------
+
+
+def read_output(**overrides: Any) -> dict[str, Any]:
+    """Return a repo_read output document."""
+    fields: dict[str, Any] = {
+        "tool_id": "repo_read",
+        "content_ref": "artifact://content/run-10-1",
+        "content_digest": DIGEST,
+        "byte_count": 0,
+        "text": "",
+    }
+    fields.update(overrides)
+    return fields
+
+
+def search_output(matches: list[dict[str, Any]], **overrides: Any) -> dict[str, Any]:
+    """Return a repo_search output document carrying *matches*."""
+    fields: dict[str, Any] = {
+        "tool_id": "repo_search",
+        "match_ref": "artifact://content/run-10-1",
+        "match_digest": DIGEST,
+        "match_count": len(matches),
+        "matches": matches,
+    }
+    fields.update(overrides)
+    return fields
+
+
+MATCH = {"path": "src/a.py", "line": 1, "text": "hit"}
+
+
+@pytest.mark.parametrize("size", [0, 1, REPO_READ_TEXT_CHARS])
+def test_a_read_output_carries_text_up_to_its_bound(size: int) -> None:
+    assert len(RepoReadOutput.model_validate(read_output(text="t" * size)).text) == size
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"text": "t" * (REPO_READ_TEXT_CHARS + 1)},
+        {"text": None},
+        {"text": 1},
+        {"byte_count": -1},
+        {"extra": True},
+    ],
+    ids=["over-bound", "none", "wrong-type", "negative-count", "extra-key"],
+)
+def test_a_read_output_refuses_text_past_its_bound_or_of_the_wrong_shape(
+    overrides: dict[str, Any],
+) -> None:
+    with pytest.raises(ValidationError):
+        RepoReadOutput.model_validate(read_output(**overrides))
+
+
+def test_a_read_output_requires_its_text() -> None:
+    document = read_output()
+    del document["text"]
+    with pytest.raises(ValidationError, match="text"):
+        RepoReadOutput.model_validate(document)
+
+
+@pytest.mark.parametrize("count", [0, 1, CONTENT_LINE_LIMIT])
+def test_a_search_output_carries_up_to_the_store_line_limit(count: int) -> None:
+    output = RepoSearchOutput.model_validate(search_output([MATCH] * count))
+    assert output.match_count == len(output.matches) == count
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        search_output([MATCH] * (CONTENT_LINE_LIMIT + 1)),
+        search_output([MATCH], match_count=2),
+        search_output([{**MATCH, "line": 0}]),
+        search_output([{**MATCH, "text": "t" * (CONTENT_LINE_CHARS + 1)}]),
+        search_output([{**MATCH, "path": "../escape.py"}]),
+        search_output([{**MATCH, "column": 1}]),
+    ],
+    ids=["over-limit", "count-mismatch", "line-zero", "long-text", "escape", "extra-key"],
+)
+def test_a_search_output_refuses_a_malformed_match_set(document: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        RepoSearchOutput.model_validate(document)
+
+
+def test_a_search_input_reads_its_query_literally_unless_told_otherwise() -> None:
+    document = {"tool_id": "repo_search", "resource_handle": HANDLE, "query": "a.*"}
+    assert RepoSearchInput.model_validate(document).regex is False
+    assert RepoSearchInput.model_validate({**document, "regex": True}).regex is True
+    with pytest.raises(ValidationError):
+        RepoSearchInput.model_validate({**document, "regex": "yes"})

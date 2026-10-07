@@ -958,7 +958,10 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             recover=("--target", "--dry-run"),
         ),
         effects=EffectsBoundary(
-            summary="Release reads plus the create, pin, readiness, approval and publish verbs.",
+            summary=(
+                "Release reads plus the create, pin, readiness, approval and publish verbs, and a"
+                " reflect run once the release is observed."
+            ),
             rpcs=(
                 "projection.release.read",
                 "release.show",
@@ -971,7 +974,9 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
                 "release.retry_target",
                 "release.reconcile",
             ),
+            verbs=("reflect run",),
             canonical_mutates=True,
+            local_write_scope=".ea/local/reflect",
         ),
         output=_out(
             "ReleaseSkillReport",

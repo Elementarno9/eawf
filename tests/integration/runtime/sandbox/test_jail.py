@@ -35,17 +35,16 @@ non-macOS and when ``sandbox-exec`` is absent so CI on Linux stays green.
 
 from __future__ import annotations
 
-import asyncio
 import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
 from eawf.runtime.runtimes.claude import adapter as claude_adapter
-from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter
 from eawf.runtime.sandbox.cwd_guard import CwdGuardError
 from eawf.runtime.sandbox.env_scrub import pinned_tmpdir
 from eawf.runtime.sandbox.jail import (
@@ -730,6 +729,63 @@ def test_build_seatbelt_profile_egress_tls_floor_w37(
     assert '(allow file-write* (subpath "/private/var/folders"))' not in profile
 
 
+#: The clauses codex needs to synchronize its managed-preference domain.
+_PREFERENCE_IPC: tuple[str, ...] = (
+    '(allow mach-lookup (global-name "com.apple.cfprefsd.daemon") '
+    '(global-name "com.apple.cfprefsd.agent"))',
+    '(allow ipc-posix-shm-read-data (ipc-posix-name-prefix "apple.cfprefs."))',
+)
+
+
+def test_build_seatbelt_profile_codex_reaches_the_preferences_daemon(tmp_path: Path) -> None:
+    """codex refuses every thread unless its managed-preference domain synchronizes."""
+    _root, cwd = _repo_with_cwd(tmp_path)
+    lines = build_seatbelt_profile(cwd=cwd, runtime=_CODEX, home=tmp_path).splitlines()
+    for clause in _PREFERENCE_IPC:
+        assert lines.count(clause) == 1
+    assert not any("user-preference-write" in line for line in lines)
+
+
+@pytest.mark.parametrize("runtime", [_CLAUDE, _OPENCODE])
+def test_build_seatbelt_profile_other_lanes_get_no_preference_ipc(
+    runtime: str, tmp_path: Path
+) -> None:
+    """Only the codex lane is opened to the preferences daemon."""
+    _root, cwd = _repo_with_cwd(tmp_path)
+    profile = build_seatbelt_profile(cwd=cwd, runtime=runtime, home=tmp_path)
+    assert "cfprefs" not in profile
+
+
+@_REQUIRE_SEATBELT
+def test_seatbelt_codex_jail_still_refuses_a_preference_write(tmp_path: Path) -> None:
+    """The preferences daemon writes on the child's behalf only if the profile allows it.
+
+    Reaching the daemon must not become a way around the write confinement,
+    so a jailed ``defaults write`` to a throwaway domain is refused and the
+    host never sees the value.
+    """
+    root, cwd = _repo_with_cwd(tmp_path)
+    prefix = build_jail_argv(_CODEX, cwd=cwd, root=root, platform="darwin")
+    domain = f"eawf.jail-probe.{tmp_path.name}"
+    try:
+        written = subprocess.run(
+            [*prefix, "/usr/bin/defaults", "write", domain, "key", "jailed"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        read_back = subprocess.run(
+            ["/usr/bin/defaults", "read", domain, "key"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        subprocess.run(["/usr/bin/defaults", "delete", domain], capture_output=True, check=False)
+    assert written.returncode != 0
+    assert read_back.returncode != 0
+
+
 def test_build_seatbelt_profile_unknown_runtime_raises(tmp_path: Path) -> None:
     """An unknown runtime lane raises ValueError naming the value."""
     _root, cwd = _repo_with_cwd(tmp_path)
@@ -847,125 +903,601 @@ def test_jail_command_opencode_lane_jails(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Wiring: the live spawn jails (or falls back) without losing env / session
+# The Claude launcher's jail prefix: jailed, or unjailed with a warning
 # ---------------------------------------------------------------------------
 
 
-class _FakeProcess:
-    """Minimal stand-in for :class:`asyncio.subprocess.Process`.
-
-    The claude adapter drains ``.stdout`` / ``.stderr`` incrementally;
-    :meth:`open_streams` (called from the in-loop factory) populates the
-    StreamReaders with the canned envelope.
-    """
-
-    def __init__(self, *, stdout: bytes, returncode: int, pid: int = 4321) -> None:
-        self._stdout = stdout
-        self.returncode: int | None = returncode
-        self.pid = pid
-        self.stdout: asyncio.StreamReader | None = None
-        self.stderr: asyncio.StreamReader | None = None
-
-    def open_streams(self) -> None:
-        self.stdout = asyncio.StreamReader()
-        self.stdout.feed_data(self._stdout)
-        self.stdout.feed_eof()
-        self.stderr = asyncio.StreamReader()
-        self.stderr.feed_eof()
-
-    def kill(self) -> None:  # pragma: no cover - not exercised on the happy path
-        pass
-
-    async def wait(self) -> int:  # pragma: no cover - not exercised on happy path
-        return self.returncode if self.returncode is not None else -1
-
-
-_ENVELOPE: bytes = b'{"result":"ok","session_id":"s","usage":{"input_tokens":1,"output_tokens":1}}'
-
-
-def _patch_spawn(monkeypatch: pytest.MonkeyPatch, captured: dict[str, object]) -> None:
-    """Patch ``create_subprocess_exec`` to capture argv + kwargs, no real spawn."""
-    proc = _FakeProcess(stdout=_ENVELOPE, returncode=0)
-
-    async def _fake_exec(*argv: str, **kwargs: object) -> _FakeProcess:
-        captured["argv"] = list(argv)
-        captured.update(kwargs)
-        proc.open_streams()
-        return proc
-
-    monkeypatch.setattr(claude_adapter.asyncio, "create_subprocess_exec", _fake_exec)
-
-
-def test_spawn_session_jails_when_wrapper_present(
+def test_maybe_jail_argv_jails_when_wrapper_present(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """When the wrapper is on PATH + supported, argv[0] is the wrapper and
-    ``start_new_session`` + the scrubbed env are still passed."""
+    """With the wrapper on PATH the child argv is prefixed by the jail."""
     root, cwd = _repo_with_cwd(tmp_path)
     monkeypatch.setattr(claude_adapter.sys, "platform", "linux")
     monkeypatch.setattr(claude_adapter.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(claude_adapter, "_repo_root_for", lambda _path: root)
 
-    captured: dict[str, object] = {}
-    _patch_spawn(monkeypatch, captured)
+    argv = claude_adapter._maybe_jail_argv(["claude"], runtime=_CLAUDE, cwd=str(cwd))
 
-    adapter = ClaudeAdapter()
-    result = asyncio.run(adapter.spawn_session("p", model="m", cwd=str(cwd)))
-    assert result.text == "ok"
-
-    argv = captured["argv"]
-    assert isinstance(argv, list)
     assert argv[0] == "bwrap"
-    assert "claude" in argv  # the inner child argv survives the prefix
-    # The daemon stays the sole session-setter + env stays scrubbed.
-    assert captured["start_new_session"] is True
-    env = captured["env"]
-    assert isinstance(env, dict)
-    assert env["PATH"] == "/usr/bin:/bin:/usr/sbin:/sbin"
+    assert argv[-1] == "claude"
 
 
-def test_spawn_session_falls_back_unjailed_when_wrapper_absent(
+def test_maybe_jail_argv_falls_back_unjailed_when_wrapper_absent(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """When the wrapper binary is absent, argv[0] is ``claude`` (unjailed) and
-    a warning is logged; the spawn still passes env + session."""
+    """Without the wrapper binary the child argv is returned unchanged."""
     root, cwd = _repo_with_cwd(tmp_path)
     monkeypatch.setattr(claude_adapter.sys, "platform", "linux")
     monkeypatch.setattr(claude_adapter.shutil, "which", lambda _name: None)
     monkeypatch.setattr(claude_adapter, "_repo_root_for", lambda _path: root)
 
-    captured: dict[str, object] = {}
-    _patch_spawn(monkeypatch, captured)
-
-    adapter = ClaudeAdapter()
-    result = asyncio.run(adapter.spawn_session("p", model="m", cwd=str(cwd)))
-    assert result.text == "ok"
-
-    argv = captured["argv"]
-    assert isinstance(argv, list)
-    assert argv[0] == "claude"
-    assert "bwrap" not in argv
-    assert captured["start_new_session"] is True
-    env = captured["env"]
-    assert isinstance(env, dict)
-    assert env["PATH"] == "/usr/bin:/bin:/usr/sbin:/sbin"
+    assert claude_adapter._maybe_jail_argv(["claude"], runtime=_CLAUDE, cwd=str(cwd)) == ["claude"]
 
 
-def test_spawn_session_unjailed_on_windows(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """On Windows (no jail parity) the spawn runs unjailed, never raising."""
+def test_maybe_jail_argv_unjailed_on_windows(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """On Windows (no jail parity) the argv is returned unchanged, never raising."""
     _root, cwd = _repo_with_cwd(tmp_path)
     monkeypatch.setattr(claude_adapter.sys, "platform", "win32")
-    # The faked win32 platform makes the real ``shutil.which`` (in
-    # resolve_binary_dir) take shutil's Windows branch, which needs ``_winapi``
-    # (absent off-Windows). Binary resolution isn't under test here, so stub it.
-    monkeypatch.setattr(claude_adapter, "resolve_binary_dir", lambda _binary: None)
 
-    captured: dict[str, object] = {}
-    _patch_spawn(monkeypatch, captured)
+    assert claude_adapter._maybe_jail_argv(["claude"], runtime=_CLAUDE, cwd=str(cwd)) == ["claude"]
 
-    adapter = ClaudeAdapter()
-    result = asyncio.run(adapter.spawn_session("p", model="m", cwd=str(cwd)))
-    assert result.text == "ok"
-    argv = captured["argv"]
-    assert isinstance(argv, list)
-    assert argv[0] == "claude"
+
+# ---------------------------------------------------------------------------
+# A private home replaces the operator's codex home as the writable state dir
+# ---------------------------------------------------------------------------
+
+
+def _private_home(cwd: Path, operator: Path | None) -> Path:
+    """Return a private home under *cwd*, linking *operator*'s auth file when given."""
+    private = cwd / ".eawf-mcp" / "codex-home"
+    private.mkdir(parents=True)
+    if operator is not None:
+        (private / "auth.json").symlink_to(operator / "auth.json")
+    return private
+
+
+def _operator_codex_home(home: Path) -> Path:
+    """Return an operator ``~/.codex`` holding an auth file and a config."""
+    operator = home / ".codex"
+    operator.mkdir(parents=True)
+    (operator / "auth.json").write_text("{}\n", encoding="utf-8")
+    (operator / "config.toml").write_text("model = 'x'\n", encoding="utf-8")
+    return operator
+
+
+def test_build_seatbelt_profile_private_home_grants_no_operator_home_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    _root, cwd = _repo_with_cwd(tmp_path)
+    operator = _operator_codex_home(tmp_path)
+    private = _private_home(cwd, operator)
+
+    profile = build_seatbelt_profile(cwd=cwd, runtime=_CODEX, home=tmp_path, private_home=private)
+
+    operator_dir = str(operator.resolve())
+    assert f'(allow file-write* (subpath "{operator_dir}"))' not in profile
+    assert f'(allow file-write* (subpath "{private.resolve()}"))' in profile
+    assert f'(allow file-write* (literal "{operator_dir}/auth.json"))' in profile
+    writes = [line for line in profile.splitlines() if "file-write" in line]
+    assert [line for line in writes if operator_dir in line] == [
+        f'(allow file-write* (literal "{operator_dir}/auth.json"))'
+    ]
+
+
+def test_build_seatbelt_profile_private_home_without_link_writes_no_credential(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    _root, cwd = _repo_with_cwd(tmp_path)
+    private = _private_home(cwd, None)
+
+    profile = build_seatbelt_profile(cwd=cwd, runtime=_CODEX, home=tmp_path, private_home=private)
+
+    operator_dir = str((tmp_path / ".codex").resolve())
+    writes = [line for line in profile.splitlines() if "file-write" in line]
+    assert not [line for line in writes if "(literal " in line and '"/dev/' not in line]
+    assert not [line for line in writes if operator_dir in line]
+
+
+def test_jail_private_home_rw_bound_linux_and_operator_home_not(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    root, cwd = _repo_with_cwd(tmp_path)
+    operator = _operator_codex_home(tmp_path)
+    private = _private_home(cwd, operator)
+
+    argv = build_jail_argv(
+        _CODEX, cwd=cwd, root=root, platform="linux", home=tmp_path, private_home=private
+    )
+
+    binds = [argv[i + 1] for i, tok in enumerate(argv) if tok == "--bind"]
+    assert str(private) in binds
+    assert str((operator / "auth.json").resolve()) in binds
+    assert str(operator.resolve()) not in binds
+
+
+@_REQUIRE_SEATBELT
+def test_seatbelt_private_home_blocks_operator_home_writes_on_macos(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A REAL jailed spawn can write its private home and the linked auth file only.
+
+    The operator home sits in the per-user Darwin temp, which the profile
+    never opens, so a write there proves the private-home grant is the only
+    state-dir grant rather than riding on a temp carve-out.
+    """
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    root, cwd = _repo_with_cwd(tmp_path)
+    user_temp = subprocess.run(
+        ["/usr/bin/getconf", "DARWIN_USER_TEMP_DIR"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    home = Path(tempfile.mkdtemp(dir=user_temp)).resolve()
+    try:
+        operator = _operator_codex_home(home)
+        private = _private_home(cwd, operator)
+        prefix = build_jail_argv(
+            _CODEX, cwd=cwd, root=root, platform="darwin", home=home, private_home=private
+        )
+
+        def run(script: str) -> int:
+            return subprocess.run(
+                [*prefix, "/bin/sh", "-c", script], capture_output=True, check=False
+            ).returncode
+
+        config_before = (operator / "config.toml").read_bytes()
+        assert run(f"echo x >> {operator / 'config.toml'}") != 0
+        assert run(f"echo x > {operator / 'new-file'}") != 0
+        assert run(f"echo ok > {private / 'state'}") == 0
+        assert run(f"echo refreshed > {private / 'auth.json'}") == 0
+        assert (operator / "config.toml").read_bytes() == config_before
+        assert not (operator / "new-file").exists()
+        assert (operator / "auth.json").read_text().strip() == "refreshed"
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# A native Run writes only its workspace, its isolation directory, the
+# canonical repository's admin entry of its worktree and a few device nodes
+# ---------------------------------------------------------------------------
+
+#: The device nodes a native Run's seatbelt profile opens for writing.
+_NATIVE_DEVICE_WRITES: frozenset[str] = frozenset(
+    {
+        '(allow file-write* (literal "/dev/null"))',
+        '(allow file-write* (literal "/dev/zero"))',
+        '(allow file-write* (literal "/dev/tty"))',
+        '(allow file-write* (literal "/dev/dtracehelper"))',
+        '(allow file-write* (literal "/dev/stdout"))',
+        '(allow file-write* (literal "/dev/stderr"))',
+        '(allow file-write* (subpath "/dev/fd"))',
+    }
+)
+
+#: The private home each lane's launcher hands the jail.
+_PRIVATE_HOME_NAMES: dict[str, str] = {_CLAUDE: "claude-config", _CODEX: "codex-home"}
+
+
+def _native_home(cwd: Path, runtime: str) -> Path:
+    """Return *runtime*'s private home inside the isolation directory under *cwd*."""
+    private = cwd / ".eawf-mcp" / _PRIVATE_HOME_NAMES[runtime]
+    private.mkdir(parents=True)
+    return private
+
+
+def _write_grants(profile: str) -> set[str]:
+    """Return the profile's write-allow clauses."""
+    return {line for line in profile.splitlines() if line.startswith("(allow file-write*")}
+
+
+def _linked_worktree(base: Path) -> tuple[Path, Path, Path]:
+    """Return ``(canonical repo, its admin entry, workspace)`` linked as git links them."""
+    canon = base / "canon"
+    admin = canon / ".git" / "worktrees" / "ws"
+    admin.mkdir(parents=True)
+    (canon / ".git" / "objects").mkdir()
+    (canon / ".git" / "config").write_text("[core]\n", encoding="utf-8")
+    workspace = base / "ws"
+    workspace.mkdir()
+    (workspace / ".git").write_text(f"gitdir: {admin}\n", encoding="utf-8")
+    (admin / "gitdir").write_text(f"{workspace / '.git'}\n", encoding="utf-8")
+    return canon, admin, workspace
+
+
+@pytest.mark.parametrize("runtime", [_CLAUDE, _CODEX])
+def test_native_profile_writes_only_workspace_private_home_and_device_nodes(
+    runtime: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    _root, cwd = _repo_with_cwd(tmp_path)
+    private = _native_home(cwd, runtime)
+
+    profile = build_seatbelt_profile(cwd=cwd, runtime=runtime, home=tmp_path, private_home=private)
+
+    assert _write_grants(profile) == {
+        f'(allow file-write* (subpath "{cwd.resolve()}"))',
+        f'(allow file-write* (subpath "{private.resolve()}"))',
+        *_NATIVE_DEVICE_WRITES,
+    }
+    # The agent CLI calls its model API directly, so network stays open.
+    assert "(allow network*)" in profile
+
+
+def test_headless_profile_keeps_temp_dev_and_state_dir_writes(tmp_path: Path) -> None:
+    """Without a private home the headless spawns keep their temp and state grants."""
+    _root, cwd = _repo_with_cwd(tmp_path)
+
+    profile = build_seatbelt_profile(cwd=cwd, runtime=_CLAUDE, home=tmp_path)
+
+    grants = _write_grants(profile)
+    assert f'(allow file-write* (subpath "{pinned_tmpdir("darwin")}"))' in grants
+    assert '(allow file-write* (subpath "/private/var/tmp"))' in grants
+    assert '(allow file-write* (subpath "/dev"))' in grants
+
+
+def test_native_profile_grants_only_the_worktree_entry_of_the_canonical_repo(
+    tmp_path: Path,
+) -> None:
+    canon, admin, workspace = _linked_worktree(tmp_path)
+    private = _native_home(workspace, _CLAUDE)
+
+    profile = build_seatbelt_profile(
+        cwd=workspace, runtime=_CLAUDE, home=tmp_path, private_home=private
+    )
+
+    canon_grants = [line for line in _write_grants(profile) if str(canon.resolve()) in line]
+    assert canon_grants == [f'(allow file-write* (subpath "{admin.resolve()}"))']
+
+
+def _point_elsewhere(admin: Path, workspace: Path) -> None:
+    (admin / "gitdir").write_text(f"{admin.parent / 'other' / '.git'}\n", encoding="utf-8")
+
+
+def _not_a_pointer(admin: Path, workspace: Path) -> None:
+    (workspace / ".git").write_text(f"{admin}\n", encoding="utf-8")
+
+
+def _undecodable(admin: Path, workspace: Path) -> None:
+    (workspace / ".git").write_bytes(b"gitdir: \xff\xfe\n")
+
+
+def _outside_worktrees(admin: Path, workspace: Path) -> None:
+    hooks = admin.parent.parent / "hooks"
+    hooks.mkdir()
+    (hooks / "gitdir").write_text(f"{workspace / '.git'}\n", encoding="utf-8")
+    (workspace / ".git").write_text(f"gitdir: {hooks}\n", encoding="utf-8")
+
+
+def _no_backlink(admin: Path, workspace: Path) -> None:
+    (admin / "gitdir").unlink()
+
+
+def _plain_repository(admin: Path, workspace: Path) -> None:
+    (workspace / ".git").unlink()
+    (workspace / ".git").mkdir()
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        _point_elsewhere,
+        _not_a_pointer,
+        _undecodable,
+        _outside_worktrees,
+        _no_backlink,
+        _plain_repository,
+    ],
+)
+def test_native_profile_grants_nothing_in_the_canonical_repo_without_a_backlinked_entry(
+    tamper: Callable[[Path, Path], None], tmp_path: Path
+) -> None:
+    """A ``.git`` pointer a Run could have rewritten opens nothing on its own."""
+    canon, admin, workspace = _linked_worktree(tmp_path)
+    tamper(admin, workspace)
+    private = _native_home(workspace, _CODEX)
+
+    profile = build_seatbelt_profile(
+        cwd=workspace, runtime=_CODEX, home=tmp_path, private_home=private
+    )
+
+    assert not [line for line in _write_grants(profile) if str(canon.resolve()) in line]
+
+
+def test_native_linux_argv_has_no_host_temp_and_binds_the_worktree_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    canon, admin, workspace = _linked_worktree(tmp_path)
+    private = _native_home(workspace, _CODEX)
+
+    argv = build_jail_argv(
+        _CODEX, cwd=workspace, root=workspace, platform="linux", home=tmp_path, private_home=private
+    )
+
+    tmpfs_targets = [argv[i + 1] for i, tok in enumerate(argv) if tok == "--tmpfs"]
+    binds = [argv[i + 1] for i, tok in enumerate(argv) if tok == "--bind"]
+    assert pinned_tmpdir("linux") not in tmpfs_targets
+    assert binds == [str(workspace.resolve()), str(private), str(admin.resolve())]
+    assert str(canon.resolve()) not in binds
+    assert "--unshare-pid" in argv
+    assert "--die-with-parent" in argv
+
+
+def test_headless_linux_argv_keeps_the_temp_mount(tmp_path: Path) -> None:
+    root, cwd = _repo_with_cwd(tmp_path)
+
+    argv = build_jail_argv(_CODEX, cwd=cwd, root=root, platform="linux", home=tmp_path)
+
+    tmpfs_targets = [argv[i + 1] for i, tok in enumerate(argv) if tok == "--tmpfs"]
+    assert pinned_tmpdir("linux") in tmpfs_targets
+
+
+@pytest.mark.parametrize(
+    ("secure_storage", "config_dir", "login_dir"),
+    [
+        (None, None, ".claude"),
+        ("", "configured", "configured"),
+        ("pinned", "configured", "pinned"),
+    ],
+)
+def test_native_linux_claude_binds_only_the_stored_login_file(
+    secure_storage: str | None,
+    config_dir: str | None,
+    login_dir: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Off macOS the login file itself is bound, never the directory holding it."""
+    for name, value in (
+        ("CLAUDE_SECURESTORAGE_CONFIG_DIR", secure_storage),
+        ("CLAUDE_CONFIG_DIR", config_dir),
+    ):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, str(tmp_path / value) if value else "")
+    login = tmp_path / login_dir / ".credentials.json"
+    login.parent.mkdir()
+    login.write_text("{}\n", encoding="utf-8")
+    root, cwd = _repo_with_cwd(tmp_path)
+    private = _native_home(cwd, _CLAUDE)
+
+    argv = build_jail_argv(
+        _CLAUDE, cwd=cwd, root=root, platform="linux", home=tmp_path, private_home=private
+    )
+
+    binds = [argv[i + 1] for i, tok in enumerate(argv) if tok == "--bind"]
+    assert binds == [str(cwd.resolve()), str(private), str(login.resolve())]
+
+
+def test_native_linux_claude_without_a_login_file_binds_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CLAUDE_SECURESTORAGE_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    (tmp_path / ".claude").mkdir()
+    root, cwd = _repo_with_cwd(tmp_path)
+    private = _native_home(cwd, _CLAUDE)
+
+    argv = build_jail_argv(
+        _CLAUDE, cwd=cwd, root=root, platform="linux", home=tmp_path, private_home=private
+    )
+
+    binds = [argv[i + 1] for i, tok in enumerate(argv) if tok == "--bind"]
+    assert binds == [str(cwd.resolve()), str(private)]
+
+
+def _user_temp_dir() -> Path:
+    """Return a fresh directory in the per-user Darwin temp no profile opens."""
+    user_temp = subprocess.run(
+        ["/usr/bin/getconf", "DARWIN_USER_TEMP_DIR"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    return Path(tempfile.mkdtemp(dir=user_temp)).resolve()
+
+
+@_REQUIRE_SEATBELT
+@pytest.mark.parametrize("runtime", [_CLAUDE, _CODEX])
+def test_seatbelt_native_run_refuses_writes_outside_workspace_and_isolation_dir(
+    runtime: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A REAL jailed spawn: shared temp, canonical .git, operator home and /dev are closed."""
+    for name in ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    base = _user_temp_dir()
+    other = Path(tempfile.mkdtemp(dir="/private/tmp")).resolve()
+    var_tmp = Path("/private/var/tmp") / f"{other.name}-refused"
+    try:
+        home = base / "home"
+        (home / ".claude").mkdir(parents=True)
+        (home / ".codex").mkdir()
+        canon, admin, workspace = _linked_worktree(base)
+        private = _native_home(workspace, runtime)
+        run_tmp = workspace / ".eawf-mcp" / "tmp"
+        run_tmp.mkdir()
+        prefix = build_jail_argv(
+            runtime,
+            cwd=workspace,
+            root=workspace,
+            platform="darwin",
+            home=home,
+            private_home=private,
+        )
+
+        def write(target: Path) -> int:
+            return subprocess.run(
+                [*prefix, "/bin/sh", "-c", f"echo x >> {target}"], capture_output=True, check=False
+            ).returncode
+
+        refused = [
+            other / "other-run.txt",
+            var_tmp,
+            canon / ".git" / "config",
+            canon / ".git" / "objects" / "planted",
+            canon / ".git" / "HEAD",
+            home / ".claude" / "settings.json",
+            home / ".codex" / "config.toml",
+            Path("/dev/urandom"),
+        ]
+        allowed = [
+            workspace / "edit.txt",
+            workspace / ".eawf-mcp" / "binding.json",
+            private / "state.json",
+            run_tmp / "scratch",
+            admin / "index.lock",
+            Path("/dev/null"),
+        ]
+        assert [str(target) for target in refused if write(target) == 0] == []
+        assert [str(target) for target in allowed if write(target) != 0] == []
+        assert not list(other.iterdir())
+        assert not var_tmp.exists()
+        assert (canon / ".git" / "config").read_text(encoding="utf-8") == "[core]\n"
+        assert not (canon / ".git" / "HEAD").exists()
+        assert not list((home / ".claude").iterdir())
+        assert not list((home / ".codex").iterdir())
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+        shutil.rmtree(other, ignore_errors=True)
+
+
+@_REQUIRE_SEATBELT
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git on PATH")
+def test_seatbelt_native_run_in_a_real_worktree_cannot_write_the_object_store() -> None:
+    """Git's own worktree layout opens its admin entry and nothing else of the repository."""
+    base = _user_temp_dir()
+    try:
+        canon = base / "canon"
+        workspace = base / "ws"
+        identity = {
+            "GIT_AUTHOR_NAME": "jail",
+            "GIT_AUTHOR_EMAIL": "jail@example.invalid",
+            "GIT_COMMITTER_NAME": "jail",
+            "GIT_COMMITTER_EMAIL": "jail@example.invalid",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "PATH": "/usr/bin:/bin",
+            "HOME": str(base),
+        }
+
+        def git(*args: str, cwd: Path = base) -> str:
+            return subprocess.run(
+                ["git", "-c", "core.hooksPath=/dev/null", *args],
+                cwd=cwd,
+                env=identity,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+        git("init", "-q", str(canon))
+        tree = git("hash-object", "-t", "tree", "-w", "/dev/null", cwd=canon)
+        commit = git("commit-tree", tree, "-m", "init", cwd=canon)
+        git("update-ref", "refs/heads/main", commit, cwd=canon)
+        git("worktree", "add", "-q", str(workspace), "-b", "run", "main", cwd=canon)
+        (workspace / "edit.txt").write_text("edit\n", encoding="utf-8")
+        private = _native_home(workspace, _CODEX)
+        run_tmp = workspace / ".eawf-mcp" / "tmp"
+        run_tmp.mkdir()
+        prefix = build_jail_argv(
+            _CODEX,
+            cwd=workspace,
+            root=workspace,
+            platform="darwin",
+            home=base,
+            private_home=private,
+        )
+        objects = canon / ".git" / "objects"
+        objects_before = sorted(path.name for path in objects.rglob("*"))
+
+        def jailed_git(*args: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [*prefix, "git", "-c", "core.hooksPath=/dev/null", "-C", str(workspace), *args],
+                env={**identity, "TMPDIR": str(run_tmp)},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        status = jailed_git("status", "--porcelain")
+        added = jailed_git("add", "edit.txt")
+
+        assert status.returncode == 0, status.stderr
+        assert "edit.txt" in status.stdout
+        assert added.returncode != 0
+        assert sorted(path.name for path in objects.rglob("*")) == objects_before
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+#: Reads one path inside the jail and prints ``ok`` or the refusing errno.
+_READ_PROGRAM = """\
+import os, sys
+try:
+    path = sys.argv[1]
+    os.listdir(path) if os.path.isdir(path) else open(path, "rb").read()
+    print("ok")
+except OSError as error:
+    print(f"refused {error.errno}")
+"""
+
+
+@_REQUIRE_SEATBELT
+@pytest.mark.parametrize("runtime", [_CLAUDE, _CODEX])
+def test_seatbelt_native_run_cannot_read_daemon_storage_but_reads_its_lease(
+    runtime: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A REAL jailed read of the tree's .ea is refused; the lease leased under it is not."""
+    for name in ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    base = _user_temp_dir()
+    try:
+        storage = base / "repo" / ".ea"
+        storage.mkdir(parents=True)
+        (storage / "state.json").write_text("{}", encoding="utf-8")
+        workspace = storage / "worktrees" / "ws"
+        workspace.mkdir(parents=True)
+        (workspace / "edit.txt").write_text("edit\n", encoding="utf-8")
+        sibling = storage / "worktrees" / "other"
+        sibling.mkdir()
+        (sibling / "edit.txt").write_text("other\n", encoding="utf-8")
+        wal = base / "runtime" / "wal"
+        wal.mkdir(parents=True)
+        (wal / "segment").write_text("w", encoding="utf-8")
+        private = _native_home(workspace, runtime)
+        (private / "state.json").write_text("{}", encoding="utf-8")
+        home = base / "home"
+        home.mkdir()
+        prefix = build_jail_argv(
+            runtime,
+            cwd=workspace,
+            root=workspace,
+            platform="darwin",
+            home=home,
+            private_home=private,
+            storage_dirs=(storage, wal),
+        )
+
+        def read(target: Path) -> str:
+            ran = subprocess.run(
+                [*prefix, sys.executable, "-I", "-c", _READ_PROGRAM, str(target)],
+                cwd=workspace,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert ran.returncode == 0, ran.stderr
+            return ran.stdout.strip()
+
+        refused = [storage, storage / "state.json", sibling / "edit.txt", wal / "segment"]
+        readable = [workspace, workspace / "edit.txt", private / "state.json", wal.parent]
+        assert {str(path): read(path) for path in refused} == {
+            str(path): "refused 1" for path in refused
+        }
+        assert {str(path): read(path) for path in readable} == {
+            str(path): "ok" for path in readable
+        }
+    finally:
+        shutil.rmtree(base, ignore_errors=True)

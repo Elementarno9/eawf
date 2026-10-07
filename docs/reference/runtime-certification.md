@@ -30,6 +30,8 @@ eawf runtime certify codex
 
 A certified version prints its expiry and exits 0. A quarantined version prints what the probe found missing and exits non-zero. A runtime with no binary on the daemon's `PATH` is refused with `runtime_not_installed`, and nothing is recorded.
 
+`eawf runtime certify claude-code --task <KEY> --actor <PRINCIPAL>` walks the whole certification: after a passed probe it dispatches the containment canary as a real Run under that Task (the Task is never claimed or started), grades the ten containment attempts its worker reports, and then walks the certify stage. A canary that lets any attempt through, returns bytes through a denial or skips one quarantines the version. A passed canary records a certification that also attests the semantic tools when the worker filed its report through them, and the model it ran. The canary spends tokens, up to a 200,000-token ceiling, so only this request walks it; the background probe never does.
+
 ## Automatic certification
 
 When a Run starts, or a host session is adopted as one, on a version that has no current certification, or whose quarantine is at least 24 hours old, the daemon queues a background probe of the installed binary. It queues a version again only after the same 24 hours, or at once when the last probe recorded nothing, and runs one probe at a time per tree. While the probe runs, a control other than a stop is refused with `runtime_certification_in_progress`. A failure of the probe or its trigger is logged and never stops the Run from starting. The probe reads the binary installed now, so a Run that reported an older version leaves that version uncertified.

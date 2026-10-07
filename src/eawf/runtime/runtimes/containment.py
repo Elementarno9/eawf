@@ -58,9 +58,7 @@ class ContainmentAttempt(StrEnum):
     DAEMON_STORAGE = "daemon_storage"
     WRITE_AHEAD_LOG = "write_ahead_log"
     OUTSIDE_WRITABLE_ROOTS = "outside_writable_roots"
-    UNREGISTERED_EXECUTABLE = "unregistered_executable"
     HOST_PROCESS_METADATA = "host_process_metadata"
-    DIRECT_EGRESS = "direct_egress"
     CREDENTIAL_VALUE = "credential_value"
 
 
@@ -70,8 +68,6 @@ class DenialReason(StrEnum):
     OUTSIDE_ALLOWLIST = "outside_allowlist"
     AMBIENT_INHERITANCE_REFUSED = "ambient_inheritance_refused"
     SCOPE_ESCAPE = "scope_escape"
-    NOT_IN_COMPONENT_REGISTRY = "not_in_component_registry"
-    EGRESS_OUTSIDE_POLICY = "egress_outside_policy"
     CREDENTIAL_REFERENCE_ONLY = "credential_reference_only"
 
 
@@ -100,14 +96,8 @@ AXIS_ATTEMPTS: Final[Mapping[ContainmentAxis, tuple[ContainmentAttempt, ...]]] =
         ContainmentAttempt.WRITE_AHEAD_LOG,
         ContainmentAttempt.OUTSIDE_WRITABLE_ROOTS,
     ),
-    ContainmentAxis.PROCESS: (
-        ContainmentAttempt.UNREGISTERED_EXECUTABLE,
-        ContainmentAttempt.HOST_PROCESS_METADATA,
-    ),
-    ContainmentAxis.NETWORK: (
-        ContainmentAttempt.DIRECT_EGRESS,
-        ContainmentAttempt.CREDENTIAL_VALUE,
-    ),
+    ContainmentAxis.PROCESS: (ContainmentAttempt.HOST_PROCESS_METADATA,),
+    ContainmentAxis.NETWORK: (ContainmentAttempt.CREDENTIAL_VALUE,),
 }
 
 #: Every attempt the probe set owes, in axis order.
