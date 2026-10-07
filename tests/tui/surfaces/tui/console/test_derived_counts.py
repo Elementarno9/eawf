@@ -236,7 +236,7 @@ def test_a_count_with_no_register_is_absent_rather_than_zero() -> None:
 def test_an_empty_register_counts_zero() -> None:
     """A register the route binds and that holds nothing counts zero, honestly."""
     spine = _view("scope.home", document={"track": {}})
-    assert spine.counts == {"track": 0, "milestone": 0, "batch": 0}
+    assert spine.counts == {"track": 0, "milestone": 0, "batch": 0, "task": 0}
     assert spine.rows == ()
 
 

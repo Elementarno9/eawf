@@ -83,7 +83,7 @@ def test_a_milestone_reaches_tasks_only_through_its_batches() -> None:
     """Descendants are found down the chain, through a closed Batch, in the route's collections."""
     picked = subject_ledger_rows(route="milestone", subject="MLS-0001", document={}, filed=_FILED)
 
-    assert _keys(picked) == {"batch": ["BAT-0001"]}
+    assert _keys(picked) == {"batch": ["BAT-0001"], "task": ["EAWF-0001", "EAWF-0002"]}
 
 
 def test_a_document_row_is_never_returned_from_the_ledger() -> None:

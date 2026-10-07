@@ -23,6 +23,7 @@ from eawf.surfaces.tui.console.frame import (
     g_frame,
     g_row,
     thin,
+    wide_title,
     window_rows,
 )
 from eawf.surfaces.tui.console.keybar import keybar, route_pairs
@@ -109,7 +110,7 @@ def _native_rows(
 # The rows the unfocused group lists before it counts the rest.
 _PEEK = 2
 # The cells the native grid's key, status and due columns take; the title takes the rest
-# up to its cap, and a wider frame leaves the remainder empty rather than stretching it.
+# up to its cap, a cap that grows with every column past 120.
 _KEY_W, _STATUS_W, _DUE_W, _TITLE_MAX = 11, 24, 12, 48
 
 
@@ -138,7 +139,7 @@ def _native_grid(w: int, keys: Sequence[str]) -> Grid:
     sits in the gutter against it, as in every other list.
     """
     key_w = max([_KEY_W, *(cell_len(key) + 1 for key in keys)])
-    title = min(_TITLE_MAX, max(16, w - 3 - key_w - _STATUS_W - _DUE_W))
+    title = min(wide_title(w, _TITLE_MAX), max(16, w - 3 - key_w - _STATUS_W - _DUE_W))
     return Grid([key_w, title, _STATUS_W, 0], 2)
 
 

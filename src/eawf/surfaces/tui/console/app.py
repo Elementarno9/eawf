@@ -1,5 +1,8 @@
 """The console app: one screen of three row widgets, one key dispatcher, one clock.
 
+# noqa: EAWF010 the one render loop owns every per-paint read; split seam: the read-model
+# family builders and the worker wiring could move to a sibling module.
+
 :func:`compose_frame` is the frame renderer. An armed go prefix or an open drawer keeps the
 route frame and replaces its tail; a full-frame overlay replaces the frame; otherwise the
 route's own frame is shown. The app never caches the frame size: it reads its own size at
@@ -19,7 +22,8 @@ import logging
 import shutil
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Awaitable, Mapping
+from dataclasses import replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
@@ -75,19 +79,17 @@ from eawf.surfaces.tui.console.chrome import ConsoleChrome, load_chrome
 from eawf.surfaces.tui.console.clock import (
     Clock,
     FakeClock,
-    QuitStep,
     expire_prefix,
     notify,
-    prompt_quit,
-    quit_step,
     sweep_toasts,
 )
-from eawf.surfaces.tui.console.dispatch import activate_crumb, dispatch
+from eawf.surfaces.tui.console.dispatch import activate_crumb, dispatch, quit_press
 from eawf.surfaces.tui.console.drawers import DRAWERS
 from eawf.surfaces.tui.console.drill import ROW_DRILLS, destination, say_why
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, paint_rack, thin, unheld
 from eawf.surfaces.tui.console.header import CrumbRun, crumb_at
+from eawf.surfaces.tui.console.inspector import beside, entered, inspects
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS, ENTRY_ROUTE
 from eawf.surfaces.tui.console.navigation import Ctx, open_overlay
@@ -102,7 +104,13 @@ from eawf.surfaces.tui.console.paint import Part
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import loading_frame, render_route
 from eawf.surfaces.tui.console.rows import RowsWidget, row_classes
-from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup, conn_label
+from eawf.surfaces.tui.console.session import (
+    SIZES,
+    Session,
+    SessionSetup,
+    conn_label,
+    unlinked_label,
+)
 from eawf.surfaces.tui.console.token_map import SURFACES, TOKEN_MAP, render_css
 from eawf.surfaces.tui.console.tokens import CARET, Severity
 from eawf.surfaces.tui.console.width import cell_len, pad
@@ -135,6 +143,8 @@ TAIL_WORKERS = "tail"
 WRITE_WORKERS = "writes"
 # The worker group the read ahead of the caret's drill target runs in; the latest wins.
 PREFETCH_WORKERS = "prefetch"
+# The worker group the inspector pane's route read runs in, one read at a time.
+INSPECT_WORKERS = "inspect"
 # How long the caret rests on a row before the route its Enter opens is read ahead; the
 # sweep checks it, so the read starts on the first tick past it.
 PREFETCH_REST_SECONDS = 0.1
@@ -283,7 +293,7 @@ def compose_frame(view: View) -> list[str]:
     elif overlay is not None and is_overlay(overlay):
         rows = render_overlay(overlay, view)
     else:
-        rows = render_route(view)
+        rows = beside(view) if view.inspector is not None else render_route(view)
         s.route_windowed = s.windowed
         s.route_bar_keys = s.bar_keys
     for i, row in enumerate(rows):
@@ -647,7 +657,8 @@ class ConsoleApp(App[None]):
             self.deliver_attention()
         if not self.is_running:
             return
-        if self.route_key in routes or ATTENTION_ROUTE in routes:
+        inspecting = self.seam.inspecting if self.seam is not None else None
+        if self.route_key in routes or ATTENTION_ROUTE in routes or inspecting in routes:
             self.arrive()
         # a patch may have dropped a per-subject read the frame draws; read it again
         self._follow_route()
@@ -772,15 +783,8 @@ class ConsoleApp(App[None]):
             at: When the press arrived, on the console clock; ``None`` reads the clock.
         """
         self.session.keys += 1
-        check = quit_step(self.session, self.console_clock, at=at)
-        if check.step is QuitStep.QUIT:
-            self.session.log_key("Ctrl+C", f"quit - guarded, {check.gap_ms}ms apart")
+        if quit_press(self.session, self.console_clock, "Ctrl+C", at=at):
             self.quit()
-        elif check.step is QuitStep.BURST:
-            self.session.log_key("Ctrl+C", "too fast to be two presses - still armed")
-        else:
-            self.session.log_key("Ctrl+C", "press again within 1.5s to quit")
-            prompt_quit(self.session, self.console_clock)
         self.render_frame()
 
     @property
@@ -830,7 +834,10 @@ class ConsoleApp(App[None]):
 
     def route_view(self) -> SpineView | RouteReadModel | None:
         """Return the read model the session's route draws from, if one is held."""
-        projection = self._held_projection()
+        return self._read_model(self._held_projection())
+
+    def _read_model(self, projection: RouteProjection | None) -> SpineView | RouteReadModel | None:
+        """Return the read model ``projection``'s route family draws, if it is one."""
         if projection is None:
             return None
         route = projection.route
@@ -886,7 +893,11 @@ class ConsoleApp(App[None]):
 
     def register_view(self) -> RegisterView | None:
         """Return the register read model the session's route draws from, if one is held."""
-        projection = self._held_projection()
+        return self._register_of(self._held_projection())
+
+    @staticmethod
+    def _register_of(projection: RouteProjection | None) -> RegisterView | None:
+        """Return ``projection`` as a register read model, if its route is a register."""
         if projection is None or projection.route not in REGISTER_ROUTES:
             return None
         return build_register_view(projection)
@@ -908,11 +919,14 @@ class ConsoleApp(App[None]):
         A console holding the prototype registers has no seam and keeps whatever value
         its setup gave it -- that is the tracked golden contract. A console holding a
         seam draws its connection value from it on every render, so the header can
-        never be left showing a value nothing produced.
+        never be left showing a value nothing produced; one holding neither never
+        claims a live link it does not have.
         """
         seam = self.seam
         if seam is not None:
             self.session.conn = conn_label(seam.connection)
+        elif not self.fixture.prototype:
+            self.session.conn = unlinked_label(self.session.conn)
 
     def view(self) -> View:
         """Return the render view at the current frame size."""
@@ -1016,13 +1030,13 @@ class ConsoleApp(App[None]):
         """
         sweep_toasts(self.session, self.console_clock)
         subject = self.subject
-        view = self.view()
+        view = self._inspecting(self.view())
         rows = compose_frame(view)
         if self.subject != subject:
             # a route on no subject is about the row its caret lands on, which only the
             # compose places; the frame is drawn again for that row, and its reads owed
             self._follow_route()
-            view = self.view()
+            view = self._inspecting(self.view())
             rows = compose_frame(view)
         s = self.session
         if self._awaiting == self.route_key and s.overlay is None and s.prefix != "g":
@@ -1040,6 +1054,46 @@ class ConsoleApp(App[None]):
         self.query_one("#body", Body).set_rows(rows[1 : view.h - 1])
         self.query_one("#keybar", KeybarRow).set_rows(rows[view.h - 1 :])
         self._rest_caret()
+
+    def _inspecting(self, view: View) -> View:
+        """Return ``view`` holding what Enter would open, where its list sets an inspector.
+
+        A card Enter opens over the list draws from what the list itself holds; a route it
+        opens draws from the seam's held read of that route, which the feed keeps current
+        and which is read here when it is owed.
+        """
+        seam = self.seam
+        opened = entered(self._ctx()) if inspects(view) else None
+        target: tuple[str | None, str | None] = (None, None)
+        if opened is not None and opened.route != view.session.route:
+            spec = REGISTRY.by_id.get(opened.route)
+            target = (spec.key if spec is not None else opened.route, opened.subj_id)
+        if seam is not None:
+            seam.inspect(*target)
+            read = seam.read_inspected() if self.is_running else None
+            if read is not None:
+                self.run_worker(self._read_inspected(read), group=INSPECT_WORKERS)
+        if opened is None:
+            return view
+        if target[0] is None:
+            return replace(view, inspector=replace(view, session=opened))
+        held = seam.inspected() if seam is not None else None
+        pane = replace(
+            view,
+            session=opened,
+            projection=self._read_model(held),
+            register=self._register_of(held),
+            settings=None,
+            live={},
+            liveness=None,
+            timeline=None,
+        )
+        return replace(view, inspector=pane)
+
+    async def _read_inspected(self, read: Awaitable[bool]) -> None:
+        """Await the inspector pane's route read, and repaint once it arrives."""
+        if await read and self.is_running:
+            self.arrive()
 
     def _rest_caret(self) -> None:
         """Note the route Enter would open from the row under the caret, and since when."""

@@ -257,7 +257,7 @@ def test_notifications_draws_the_boxed_card_from_a_held_register(w: int) -> None
     assert any(row.startswith("┌─ NOTIFICATIONS · what may interrupt") for row in frame)
     assert "needs permission" in text and "needs_permission" not in text
     assert "RUN-00000001" not in text
-    assert frame[-1].split() == ["↑↓", "class", "Esc", "close"]
+    assert frame[-1].split() == ["↑↓", "class", "Esc", "close", "q", "quit", "?", "help"]
 
 
 def test_the_notifications_cursor_walks_the_classes() -> None:

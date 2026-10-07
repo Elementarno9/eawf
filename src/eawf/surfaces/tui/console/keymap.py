@@ -19,6 +19,7 @@ from types import MappingProxyType
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.keybar import (
     KEY,
+    PACK_KEYS,
     RECORD_FRAME_KEYS,
     ROUTE_KEYS,
     KeyEntry,
@@ -190,11 +191,15 @@ def entry_keys(session: Session, fixture: Fixture) -> tuple[KeyEntry, ...]:
 def route_keys(
     session: Session, fixture: Fixture, route: str | None = None
 ) -> tuple[KeyEntry, ...]:
-    """Return the key table of ``route``, the session's route by default."""
+    """Return the key table of ``route``, the session's route by default.
+
+    The chrome keys every table ends with are the console's rather than the route's, so
+    they are no row of it: the bar advertises them and the gate admits them on its own.
+    """
     target = route or session.route
     if target == ENTRY_ROUTE:
         return entry_keys(session, fixture)
-    return ROUTE_KEYS.get(target, ())
+    return PACK_KEYS.get(target, ())
 
 
 #: The keys a route's native frame serves beyond its table: scope home's inspect opens the
@@ -282,5 +287,8 @@ def allowlist(session: Session, fixture: Fixture) -> frozenset[str]:
     keys.update(key for global_key in GLOBAL_KEYS for key in global_key.keys)
     keys.update(MOTION | MODIFIERS)
     keys.add(HELP_KEY)
+    if not fixture.prototype:
+        # the design pack bound no quit letter, so only a console over the chrome has one
+        keys.update(KEY["quit"].keys)
     keys.update(alias for alias, key in ALIASES.items() if key in keys)
     return frozenset(keys)

@@ -243,7 +243,20 @@ def test_ui_020_trust_is_bound_to_its_read_model_and_draws_the_three_groups() ->
     assert re.match(r"^\s+JURY\s+VERDICT\s+ANSWERED BY\s+FRESHNESS", frame[3])
     for group in (" CALIBRATION", " TRACK RECORD"):
         assert any(row.startswith(group) for row in frame)
-    assert frame[-1].split() == ["Enter", "evidence", ".", "actions", "i", "inspect", "Esc", "back"]
+    assert frame[-1].split() == [
+        "Enter",
+        "evidence",
+        ".",
+        "actions",
+        "i",
+        "inspect",
+        "Esc",
+        "back",
+        "q",
+        "quit",
+        "?",
+        "help",
+    ]
 
 
 def test_ui_063_an_unobserved_subject_is_unknown_never_a_negative() -> None:
@@ -391,6 +404,10 @@ def test_ui_064_wider_frames_add_columns_and_the_graph(
         "copy",
         "Esc",
         "back",
+        "q",
+        "quit",
+        "?",
+        "help",
     ]
 
 
@@ -472,7 +489,7 @@ def test_ui_065_the_repair_is_named_at_the_foot_and_never_run() -> None:
     passing = _starts(_frame("health", verdicts=VERDICTS, sel=0), " REPAIR")
     assert NOTHING_TO_REPAIR in passing
     # the focused check's detail is the docked readout itself, so Enter offers nothing more
-    assert _frame("health")[-1].split() == ["Esc", "back"]
+    assert _frame("health")[-1].split() == ["Esc", "back", "q", "quit", "?", "help"]
 
 
 @pytest.mark.parametrize(("w", "runner"), [(80, False), (120, True)])
@@ -548,7 +565,18 @@ def test_ui_066_the_readout_names_the_run_the_rule_its_value_and_the_revision() 
     readout = _starts(frame, " DECISION")
     assert "denied · RUN-00000001" in readout
     assert "rule scope · write set src · sandbox policy · rev 1" in frame[frame.index(readout) + 1]
-    assert frame[-1].split() == ["Enter", "run", "p", "policy", "Esc", "back"]
+    assert frame[-1].split() == [
+        "Enter",
+        "run",
+        "p",
+        "policy",
+        "Esc",
+        "back",
+        "q",
+        "quit",
+        "?",
+        "help",
+    ]
 
 
 def test_ui_066_an_unreadable_revision_renders_unavailable_never_allowed() -> None:
@@ -587,7 +615,7 @@ def test_ui_066_a_policy_is_cited_in_the_packet_form() -> None:
     assert "sandbox policy · rev 3" in _text(frame)
     assert "pol-" not in _text(frame) and "fs.write.scope" not in _text(frame)
     assert frame.index(_starts(frame, " DECISION")) == len(frame) - 3
-    assert frame[-1].split() == ["p", "policy", "Esc", "back"]
+    assert frame[-1].split() == ["p", "policy", "Esc", "back", "q", "quit", "?", "help"]
 
 
 # ---------- UI-023 / UI-067: the unattended route ----------
@@ -629,6 +657,10 @@ def test_ui_023_the_route_observes_and_names_the_daemon_as_authority() -> None:
         "actions",
         "Esc",
         "back",
+        "q",
+        "quit",
+        "?",
+        "help",
     ]
 
 
@@ -649,7 +681,18 @@ def test_ui_045_repository_facts_render_unavailable_never_clean() -> None:
     checks = _starts(frame, " CHECKS")
     assert "not read yet" in checks and "pass" not in checks
     assert "happen in your git tool" in _starts(frame, " ACTION")
-    assert frame[-1].split() == ["m", "conflict", "y", "copy", "Esc", "back"]
+    assert frame[-1].split() == [
+        "m",
+        "conflict",
+        "y",
+        "copy",
+        "Esc",
+        "back",
+        "q",
+        "quit",
+        "?",
+        "help",
+    ]
 
 
 # ---------- UI-046: the cost.ceiling route ----------
@@ -663,7 +706,7 @@ def test_ui_046_the_ceiling_observes_and_no_zero_stands_for_unpriced() -> None:
     assert "∅ unmetered" in _text(frame)
     assert "80%" not in _text(frame) and "eighty" not in _text(frame)
     assert "ceiling moves in settings" in _starts(frame, " AUTHORITY")
-    assert frame[-1].split() == ["Esc", "back"]
+    assert frame[-1].split() == ["Esc", "back", "q", "quit", "?", "help"]
 
 
 # ---------- UI-047: the crash.recovery route ----------
@@ -679,7 +722,20 @@ def test_ui_047_three_doors_each_state_where_they_leave_the_console() -> None:
     assert "41,209" in _text(frame)
     assert "2 runs were active then" in _text(frame)
     assert "No door discards work" in _starts(frame, " NO LOSS")
-    assert frame[-1].split() == ["↑↓", "door", "Enter", "choose", "i", "inspect", "Esc", "later"]
+    assert frame[-1].split() == [
+        "↑↓",
+        "door",
+        "Enter",
+        "choose",
+        "i",
+        "inspect",
+        "Esc",
+        "later",
+        "q",
+        "quit",
+        "?",
+        "help",
+    ]
 
 
 def test_ui_047_each_door_states_its_cost_in_reads_from_the_held_cursor() -> None:
@@ -759,7 +815,7 @@ def test_ui_048_hits_counts_by_kind_and_the_window_line() -> None:
     window = _starts(frame, " WINDOW")
     assert "1 of 1 · sorted by kind, then id · every count exact" in window
     assert "event text is not searched" in _starts(frame, " SCOPE")
-    assert frame[-1].split() == ["Enter", "drill", "Esc", "back"]
+    assert frame[-1].split() == ["Enter", "drill", "Esc", "back", "q", "quit", "?", "help"]
 
 
 def test_ui_048_a_query_nothing_carries_is_zero_hits_stated() -> None:
@@ -944,7 +1000,7 @@ def test_home_nests_each_milestone_under_its_track_with_title_and_progress() -> 
     assert leaf.startswith("   ▸ MLS-0100 Close out the canary")
     assert "ACTIVE" in leaf and "batches done" not in leaf
     assert NO_TRACK in _text(frame)
-    assert frame[1].rstrip() == " 1 track · 3 milestones · 2 batches"
+    assert frame[1].rstrip() == " 1 track · 3 milestones · 2 batches · 0 tasks"
 
 
 def test_home_attention_region_states_why_it_has_no_count() -> None:
@@ -980,7 +1036,9 @@ def test_activity_draws_the_rail_where_the_registry_declares_it(w: int) -> None:
     rail = REGISTRY.rail_at("activity", w) is not None
     assert any("│ BUCKETS" in row for row in frame) is rail
     assert any(row.startswith(" BUCKETS") for row in frame) is not rail
-    head = next(row for row in frame if re.match(r"^\s+RUN\s+TASK\s+STATE\s+REASON\s+AS OF", row))
+    # the widest frame always draws the provider, between the Task and the state
+    cols = r"TASK\s+PROVIDER\s+STATE" if w >= 160 else r"TASK\s+STATE"
+    head = next(row for row in frame if re.match(rf"^\s+RUN\s+{cols}\s+REASON\s+AS OF", row))
     assert head
     run = next(row for row in frame if "RUN-00000001" in row)
     assert "TSK-0001" in run and "RUNNING" in run and UNKNOWN_WORD in run

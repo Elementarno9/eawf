@@ -48,6 +48,7 @@ from eawf.surfaces.tui.console.frame import (
     build,
     needs_count,
     scope_label,
+    with_chrome,
 )
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import keybar, pick, route_pairs
@@ -98,6 +99,24 @@ GLYPH_WINS = "="
 GLYPH_SHADOWED = "≠"
 GLYPH_INHERITS = "·"
 GLYPH_DEFAULT = "–"  # noqa: RUF001
+#: What each gutter glyph says, in the order the legend names them.
+GLYPH_MEANINGS: tuple[tuple[str, str], ...] = (
+    (GLYPH_WINS, "set at this layer"),
+    (GLYPH_SHADOWED, "set here, another layer wins"),
+    (GLYPH_INHERITS, "inherited"),
+    (GLYPH_DEFAULT, "built-in default"),
+)
+
+
+def glyph_legend(rows: Sequence[str]) -> str:
+    """Return the one line naming each gutter glyph the key ``rows`` show, or ``""``.
+
+    A key row reads ``<caret> <glyph> <key>``, so its glyph is its third cell; a row
+    holding no glyph, such as the window count, names none.
+    """
+    used = {row[2:3] for row in rows}
+    return "   ".join(f"{mark} {meaning}" for mark, meaning in GLYPH_MEANINGS if mark in used)
+
 
 #: The FROM cell of a key no code reads, listed only while a file still states it: the
 #: four glyphs keep their meaning for it, and the word says what sets it apart.
@@ -493,9 +512,12 @@ def _body(
     body.append(pad(pad("    KEY", key_w + 4) + pad("VALUE", col - key_w - 14) + "FROM", col))
     # the key list keeps three rows however tall the notes grow
     readout = _readout(leaf, session, section, col, max(2, avail - len(body) - 1 - 3))
-    room = max(1, avail - len(body) - 1 - len(readout))
-    body += _key_rows(keys, session, section, col, room)
-    body += ["" for _ in range(avail - len(body) - 1 - len(readout))]
+    # one row under the keys is the glyph legend's
+    room = max(1, avail - len(body) - 2 - len(readout))
+    rows = _key_rows(keys, session, section, col, room)
+    body += rows
+    body += ["" for _ in range(avail - len(body) - 2 - len(readout))]
+    body.append(pad(f"  {glyph_legend(rows)}", col))
     body.append("─" * col)
     body += readout
     return body
@@ -597,7 +619,7 @@ def settings_frame(view: View, settings: EffectiveSettingsView) -> list[str]:
     if session.edit is None and len(section_keys(settings, session, section)) < 2:
         # a section showing one key has no other field for the arrows to step to
         keys = tuple(pair for pair in keys if pair[1] != "field")
-    return build(view, rows, keybar(keys, w))
+    return build(view, rows, keybar(with_chrome(view, keys), w))
 
 
 # ---------- the stack card ----------

@@ -1,5 +1,8 @@
 """The console's one link to the daemon projection, and the way back after a break.
 
+# noqa: EAWF010 one cache over one binding; split seam: the inspected held read could
+# move to a collaborator the way the writes moved to seam_writes.
+
 Everything the console draws arrives through this seam, and the seam owns no transport of
 its own: it holds a :class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding` and uses
 its socket push, its always-on poll backstop and its resume cursor. That is the point of
@@ -41,6 +44,10 @@ costs no read. Attention is pinned in the cache, because the header prints its c
 every route. The cache is bounded because a large tree makes each projection large; the
 least recently shown unpinned route is evicted first, and is read again if the operator
 returns to it.
+
+Beside a wide list the seam holds one more route: the one the inspector pane draws, which
+Enter would open from the row under the cursor. A read ahead is dropped when the feed moves
+across it, so the pane is not built on one; it is a held read the feed patches in place.
 """
 
 from __future__ import annotations
@@ -138,6 +145,9 @@ _ACCEPTANCE_COLLECTIONS: frozenset[Epoch2Collection] = frozenset(
 
 #: The Evidence route and its rung card, which draw one claim's ladder; the route first.
 EVIDENCE_ROUTES: tuple[str, ...] = ("evidence", "evidence.digest")
+
+#: The owed-read name of the route the inspector pane draws beside a list.
+INSPECTOR_READ: Final = "inspector"
 
 #: Called with the routes one pushed patch changed, so the app can repaint when the
 #: route on screen is among them.
@@ -277,6 +287,12 @@ class ProjectionSeam:
         # bumped by every patch and every break in the link, so a read ahead that began
         # before one is known to be older than the feed it would be held beside
         self._feed_epoch = 0
+        # the route the inspector pane opens and the record it opens onto, and that route
+        # as last read for a target; unlike a read ahead it is kept current by the feed,
+        # and marked stale when the feed moved while its read was in flight
+        self._inspect: tuple[str, str | None] | None = None
+        self._inspected: tuple[tuple[str, str | None], RouteProjection] | None = None
+        self._inspect_stale = False
         self._listeners: list[PatchListener] = []
         self._append_listeners: list[AppendListener] = []
         self._reading: set[str] = set()
@@ -421,6 +437,8 @@ class ProjectionSeam:
         claim = self._claim_subject()
         if claim is not None and claim not in self._ladders:
             owed.append(EVIDENCE_LADDER_METHOD)
+        if self._inspect_owed():
+            owed.append(INSPECTOR_READ)
         return tuple(
             route
             for route in owed
@@ -459,6 +477,9 @@ class ProjectionSeam:
             return LIVE_READS[name].address(self)
         if name == EVIDENCE_LADDER_METHOD:
             return self._claim_subject()
+        if name == INSPECTOR_READ and self._inspect is not None:
+            route, about = self._inspect
+            return f"{route} {about or ''}".rstrip()
         return None
 
     def route_owed(self) -> bool:
@@ -502,6 +523,9 @@ class ProjectionSeam:
             return
         about = self._about(self._route)
         ahead = self._prefetched.pop((self._route, about), None)
+        if ahead is None:
+            # the route the inspector pane drew is the one Enter opens, already current
+            ahead = self.inspected() if self._inspect == (self._route, about) else None
         if ahead is not None:
             self._hold(self._route, ahead)
             self._held_about[self._route] = about
@@ -638,6 +662,8 @@ class ProjectionSeam:
                 await self.load_decisions()
             elif route == EVIDENCE_LADDER_METHOD:
                 await self.load_ladder()
+            elif route == INSPECTOR_READ:
+                await self.load_inspected()
             else:
                 await self.load(route)
         except Exception as exc:
@@ -667,6 +693,7 @@ class ProjectionSeam:
         if route == MILESTONE_ROUTE and about and about not in self._acceptance:
             reads.append(self.load_acceptance(about))
         held = route in self._held and self._held_about.get(route) == about
+        held = held or (self._inspect == (route, about) and self.inspected() is not None)
         if route in ROUTE_COLLECTIONS and not held and (route, about) not in self._prefetched:
             reads.append(self._read_ahead(route, about))
         await asyncio.gather(*reads)
@@ -687,6 +714,103 @@ class ProjectionSeam:
         while len(self._prefetched) > PREFETCH_CAPACITY:
             self._prefetched.popitem(last=False)
         logger.debug(f"prefetch route={route} about={about}")
+
+    def inspect(self, route: str | None, subject: str | None) -> None:
+        """Hold *route* opened onto *subject* for the inspector pane beside the list.
+
+        Unlike a read ahead, the inspected route is a held read: the feed keeps it current,
+        so a patch to the record it draws moves the pane without reading it again or
+        leaving it empty. A route already read for that record, ahead or as a held route,
+        is taken at once; any other is owed a read. ``None`` stops inspecting.
+
+        Args:
+            route: The route Enter would open from the row under the cursor.
+            subject: The record it would open onto.
+        """
+        target = None if route is None else (route, self._read_for(route, subject))
+        if target == self._inspect:
+            return
+        self._inspect = target
+        self._inspect_stale = False
+        if target is None:
+            self._inspected = None
+            return
+        ahead = self._prefetched.pop(target, None)
+        if ahead is None and self._held_about.get(target[0], "") == target[1]:
+            ahead = self._held.get(target[0])
+        if ahead is not None:
+            self._inspected = (target, ahead)
+        logger.debug(f"inspect route={target[0]} about={target[1]} held={ahead is not None}")
+
+    def inspected(self) -> RouteProjection | None:
+        """Return the inspected route as held for the record it is inspected for now.
+
+        ``None`` before its first read for that record, so a pane never draws another
+        record's frame under the cursor's row.
+        """
+        held = self._inspected
+        return held[1] if held is not None and held[0] == self._inspect else None
+
+    @property
+    def inspecting(self) -> str | None:
+        """Return the route the inspector pane draws; ``None`` while nothing is inspected."""
+        return self._inspect[0] if self._inspect is not None else None
+
+    def _inspect_owed(self) -> bool:
+        """Return whether the inspected route waits on a read: unread, or read across a move."""
+        if self._inspect is None or self._inspect[0] not in ROUTE_COLLECTIONS:
+            return False
+        return self._inspect_stale or self.inspected() is None
+
+    def inspect_due(self) -> bool:
+        """Return whether a read of the inspected route should start now.
+
+        It is due while it is owed, not in flight, and not already failed for this record.
+        """
+        failed = (INSPECTOR_READ, self._read_now(INSPECTOR_READ)) in self._failed
+        return self._inspect_owed() and INSPECTOR_READ not in self._reading and not failed
+
+    def read_inspected(self) -> Awaitable[bool] | None:
+        """Start the inspected route's read when it is due, under every owed read's rules.
+
+        The read counts as in flight from this call, so a repaint before it runs does not
+        start a second one; one that failed for this record is not retried until a patch
+        or a reconnect.
+
+        Returns:
+            The read, answering whether it arrived; ``None`` when no read is due.
+        """
+        if not self.inspect_due():
+            return None
+        self._reading.add(INSPECTOR_READ)
+        return self._read_one(INSPECTOR_READ)
+
+    async def load_inspected(self) -> RouteProjection:
+        """Read the inspected route for the record it is inspected for, and hold it.
+
+        The answer is held even when the feed moved while it was read, since it is newer
+        than nothing; it is then owed again, so a patch it may predate is not lost. An
+        answer for a record the cursor has since left is dropped.
+
+        Returns:
+            The projection as read.
+
+        Raises:
+            ValueError: Nothing is inspected.
+        """
+        target = self._inspect
+        if target is None:
+            raise ValueError("an inspector read names the route it is about")
+        route, about = target
+        params = self._params() if about is None else {**self._params(), "key": about}
+        epoch = self._feed_epoch
+        answer = await self._binding.call(read_method(route), params)
+        projection = RouteProjection.model_validate(answer)
+        if self._inspect == target:
+            self._inspected = (target, projection)
+            self._inspect_stale = self._feed_epoch != epoch
+        logger.debug(f"load_inspected route={route} about={about} stale={self._inspect_stale}")
+        return projection
 
     @property
     def settings(self) -> EffectiveSettingsView | None:
@@ -1167,7 +1291,7 @@ class ProjectionSeam:
             listener(patched)
 
     def _fan_out(self, patch: KeyedPatch) -> tuple[str, ...]:
-        """Apply *patch* to each held route it reaches; return those routes.
+        """Apply *patch* to each held route it reaches, the inspected one too; return them.
 
         A route read at or past the patch's ordinal already states it, so the patch
         is not applied again; that happens when a read and the push race.
@@ -1179,7 +1303,22 @@ class ProjectionSeam:
         )
         for route in patched:
             self._patch_route(route, [patch], cursor=patch.canonical_sequence)
-        return patched
+        inspected = self._inspected
+        if inspected is None:
+            return patched
+        (route, about), held = inspected
+        if route not in patch.routes or int(held.header.source_cursor) >= patch.canonical_sequence:
+            return patched
+        # the pane's route is moved in place, so it never stands empty while it is read again
+        moved = apply_patches(
+            held,
+            [patch],
+            cursor=patch.canonical_sequence,
+            scope_id=self._scope_id,
+            generated_at=self._clock(),
+        )
+        self._inspected = ((route, about), moved)
+        return patched if route in patched else (*patched, route)
 
     def _patch_route(self, route: str, patches: list[KeyedPatch], *, cursor: int) -> None:
         """Advance the held *route* by *patches* to *cursor*; no patches is a no-op."""
@@ -1247,6 +1386,8 @@ class ProjectionSeam:
         self._acceptance.clear()
         self._live.clear()
         self._prefetched.clear()
+        # the pane's route stands before the gap too; it is read again for the same record
+        self._inspected = None
         self._feed_epoch += 1
 
     def _evict(self) -> None:
@@ -1351,6 +1492,7 @@ class ProjectionSeam:
 
 __all__ = [
     "DEFAULT_ROUTE_CAPACITY",
+    "INSPECTOR_READ",
     "KNOWN_COUNT_LABEL",
     "PINNED_ROUTES",
     "PREFETCH_CAPACITY",

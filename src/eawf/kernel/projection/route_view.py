@@ -108,6 +108,7 @@ class RouteRecord:
         fields: Every field the route declares, by name, each a truth field.
         title: The record's own title, when it states one.
         parent_key: The key of the record it is filed under, when it names one.
+        facts: The further facts the projection read about the record, by name.
     """
 
     key: str
@@ -117,6 +118,7 @@ class RouteRecord:
     fields: Mapping[str, TruthField[str]]
     title: str | None = None
     parent_key: str | None = None
+    facts: Mapping[str, str] = MappingProxyType({})
 
     def field(self, name: str) -> TruthField[str]:
         """Return the named field.
@@ -333,6 +335,7 @@ def build_route_read_model(
             revision=row.revision,
             title=row.title,
             parent_key=row.parent_key,
+            facts=MappingProxyType(dict(row.facts)),
             fields=MappingProxyType({spec.name: _cell(row, spec) for spec in specs}),
         )
         for row in projection.rows

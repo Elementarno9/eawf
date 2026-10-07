@@ -49,6 +49,7 @@ from eawf.surfaces.tui.console.renderers.spine import (
     held,
     native_frame,
 )
+from eawf.surfaces.tui.console.renderers.task_progress import Progress
 from eawf.surfaces.tui.console.width import clip
 
 OWN = "BAT-0001"
@@ -192,9 +193,10 @@ def batch_frame(view: View, spine: SpineView) -> list[str]:
     tasks = children(spine.rows, subject.key, Epoch2Collection.TASK)
     done = sum(1 for task in tasks if status(task) == TaskStatus.COMPLETED.value)
     facts = dict(subject.facts)
+    progress = f" · {Progress.of(spine.rows).batch_cell(subject)}" if tasks else ""
     below = [
         lrow("MILESTONE", subject.parent_key or "∅ cut under no Milestone"),
-        lrow("COUNT", f"{dv.plural(len(tasks), 'task')} · {done} completed"),
+        lrow("COUNT", f"{dv.plural(len(tasks), 'task')} · {done} completed{progress}"),
         lrow("BASE", facts.get("target_branch", "∅ no target branch is chosen yet")),
         lrow("HEAD", _head_text(facts)),
         lrow("RUNS", _runs_text(spine, tasks)),

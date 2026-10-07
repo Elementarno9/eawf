@@ -58,7 +58,7 @@ from eawf.surfaces.tui.console.drawers import action_rows
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.header import header_row
-from eawf.surfaces.tui.console.keybar import ROUTE_KEYS, KeyKind, keybar
+from eawf.surfaces.tui.console.keybar import CHROME_KEYS, ROUTE_KEYS, KeyKind, keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_KEYS, DRAWER_PAIRS, OVERLAY_KEYS
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
@@ -591,7 +591,7 @@ def test_con_143_the_action_menu_opens_under_no_read_only_surface(name: str) -> 
 def test_con_143_a_read_only_route_lists_no_action_menu_verb(route: str) -> None:
     fixture = prototype()
     assert fixture.menus.verbs(route) == ()
-    for entry in ROUTE_KEYS[route]:
+    for entry in (e for e in ROUTE_KEYS[route] if e not in CHROME_KEYS):
         assert entry.kind in (KeyKind.NAV, KeyKind.GLOBAL), entry
         assert set(entry.keys) <= _READ_ONLY_KEYS, entry
 

@@ -34,6 +34,7 @@ from eawf.kernel.projection.registers import RegisterView, build_register_view
 from eawf.kernel.projection.truth import Precision, TruthState
 from eawf.kernel.state.enums import MeasurementQuality
 from eawf.kernel.state.epoch2.run import RunStatus, SuspensionReason
+from eawf.surfaces.tui.console.cells import NO_VALUE
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View
@@ -251,3 +252,82 @@ def test_ui_031_the_strip_folds_the_sub_buckets_into_their_parent() -> None:
     strip = next(row for row in frame if row.startswith(" BUCKETS"))
     assert "↳" not in strip
     assert "needs operator 3" in strip
+
+
+# ---------- the widest frame: the PROVIDER column and the SELECTED strip ----------
+
+#: The widest frame's head row: the provider stands between the Task and the state.
+XWIDE_HEAD = re.compile(r"^\s+RUN\s+TASK\s+PROVIDER\s+STATE\s+REASON\s+AS OF")
+#: Every narrower frame's head row while no shown Run recorded its runtime.
+NARROW_HEAD = re.compile(r"^\s+RUN\s+TASK\s+STATE\s+REASON\s+AS OF")
+
+
+def _tupled() -> dict[str, Any]:
+    """Return two Runs: one under a Task that recorded its provider, one with no tuple."""
+    told = _run("RUN-00000001", "RUNNING")
+    told["scope"] = {"task_ref": f"{SCOPE}/task/TSK-0001"}
+    told["runtime_tuple"] = {"harness": "claude-code", "provider": "anthropic"}
+    return {"RUN-00000001": told, "RUN-00000002": _run("RUN-00000002", "QUEUED")}
+
+
+def _sized(runs: dict[str, Any], *, w: int = 160, sel_id: str | None = None) -> list[str]:
+    """Render the Activity native frame ``w`` columns wide with the cursor on ``sel_id``."""
+    session = Session()
+    session.route = "activity"
+    session.sel_id = sel_id
+    view = View(
+        session=session,
+        fixture=Fixture.from_chrome(load_chrome()),
+        w=w,
+        h=40,
+        register=_register(runs),
+        linked=True,
+    )
+    return render_route(view)
+
+
+def _selected(frame: list[str]) -> list[list[str]]:
+    """Return the words of every SELECTED strip in ``frame``."""
+    return [row.split() for row in frame if row.startswith(" SELECTED")]
+
+
+@pytest.mark.parametrize("w", [160, 161, 200])
+def test_cr_0393_1_the_widest_frame_heads_with_provider_and_names_the_selected_run(
+    w: int,
+) -> None:
+    """From 160 columns the provider follows the Task and SELECTED names the cursor Run."""
+    frame = _sized(_tupled(), w=w)
+    assert any(XWIDE_HEAD.match(row) for row in frame)
+    assert _selected(frame) == [["SELECTED", "RUN-00000001", "·", "TSK-0001"]]
+
+
+def test_cr_0393_1_the_selected_strip_follows_the_cursor_to_a_run_naming_no_task() -> None:
+    """The strip names the Run under the cursor alone when that Run names no Task."""
+    frame = _sized(_tupled(), sel_id="RUN-00000002")
+    assert _selected(frame) == [["SELECTED", "RUN-00000002"]]
+
+
+def test_cr_0393_1_an_empty_widest_frame_names_no_selected_run() -> None:
+    """With no Run shown nothing is under the cursor, so no strip is drawn."""
+    frame = _sized({})
+    assert any(XWIDE_HEAD.match(row) for row in frame)
+    assert _selected(frame) == []
+
+
+@pytest.mark.parametrize("w", [80, 120, 159])
+def test_cr_0393_1_below_160_columns_the_frame_keeps_its_layout(w: int) -> None:
+    """Narrower, no strip is drawn and no provider column for Runs that recorded none."""
+    frame = _sized(RUNS, w=w)
+    assert any(NARROW_HEAD.match(row) for row in frame)
+    assert not any("PROVIDER" in row for row in frame)
+    assert _selected(frame) == []
+
+
+def test_cr_0393_2_a_run_with_no_runtime_tuple_wears_the_no_value_mark_in_provider() -> None:
+    """At 160 a Run that recorded no tuple reads the no-value mark, never a blank cell."""
+    frame = _sized(_tupled())
+    at = next(row for row in frame if XWIDE_HEAD.match(row)).index("PROVIDER")
+    told = next(row for row in frame if "RUN-00000001" in row and "│" in row)
+    bare = next(row for row in frame if "RUN-00000002" in row and "│" in row)
+    assert told[at:].startswith("anthropic")
+    assert bare[at:].startswith(NO_VALUE)

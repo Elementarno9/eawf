@@ -38,8 +38,10 @@ from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.header import ProcessValue, header_row
 from eawf.surfaces.tui.console.keybar import (
+    CHROME_KEYS,
     KEY,
     KEY_NAMES,
+    PACK_KEYS,
     RECORD_FRAME_KEYS,
     ROUTE_KEYS,
     KeyEntry,
@@ -47,6 +49,7 @@ from eawf.surfaces.tui.console.keybar import (
     keybar,
 )
 from eawf.surfaces.tui.console.keymap import unserved
+from eawf.surfaces.tui.console.navigation import busy
 from eawf.surfaces.tui.console.session import Session, Toast
 from eawf.surfaces.tui.console.tokens import BRAND, CRUMB_SEP, RULE_HEAVY, RULE_THIN, Severity
 from eawf.surfaces.tui.console.width import cell_len, clip_words, pad
@@ -60,6 +63,10 @@ _GUTTER = 13
 #: its wide layout and from :data:`XWIDE_FROM` its widest, as the pack's 80/120/160 do.
 WIDE_FROM = 120
 XWIDE_FROM = 160
+#: The terminal width from which a list route sets an inspector pane beside its list. The
+#: pane needs the smallest frame width a route is laid out for, so it opens only where the
+#: list keeps the rest; below it every frame is drawn as it always was.
+INSPECT_FROM = 180
 
 
 class Breadth(IntEnum):
@@ -82,6 +89,19 @@ def breadth_of(columns: int) -> Breadth:
     if columns >= XWIDE_FROM:
         return Breadth.XWIDE
     return Breadth.WIDE if columns >= WIDE_FROM else Breadth.NARROW
+
+
+def wide_title(w: int, cap: int) -> int:
+    """Return a title column ``cap`` cells wide at 120 columns, grown by each cell past them.
+
+    The columns beside a title keep the room they had at 120 columns, so a wider frame
+    spends its extra width on the title rather than on an empty remainder.
+
+    Args:
+        w: The frame's width in cells.
+        cap: The title column's width at 120 columns.
+    """
+    return cap + max(0, w - WIDE_FROM)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -136,6 +156,10 @@ class View:
             120-column terminal takes the wide layout although its frame is 118 wide.
         live: The answers of the route's live reads, by read name, for what the route
             is about now; empty before they arrive or with no link.
+        inspector: What Enter would open from the row under the cursor, as a render of
+            its own: the session Enter leaves and the read model that route draws from.
+            The frame draws it in a pane beside the list at :data:`INSPECT_FROM` columns
+            and wider; ``None`` draws the frame alone.
     """
 
     session: Session
@@ -162,6 +186,7 @@ class View:
     scope_name: str = ""
     gutter: int = 0
     live: Mapping[str, object] = MappingProxyType({})
+    inspector: View | None = None
 
     @property
     def columns(self) -> int:
@@ -407,11 +432,17 @@ class Table:
         return out
 
     def row(self, cells: Sequence[str], cur: bool = False) -> str:
-        """Return one row, the cursor in the gutter when ``cur``."""
+        """Return one row, the cursor in the gutter when ``cur``.
+
+        A padded cell is clipped one cell short of its column, so a value that fills its
+        column still ends a space before the next one begins.
+        """
         lead = (CARET + " " * (self.mark - 1) if cur else " " * self.mark) if self.mark else ""
         out = " " + lead
         for i, cell in enumerate(cells):
-            out += pad(cell, self.cols[i]) if i < len(self.cols) - 1 else cell
+            width = self.cols[i]
+            last = i >= len(self.cols) - 1
+            out += cell if last else pad(cell, width - 1) + " " if width else ""
         return out
 
 
@@ -449,16 +480,37 @@ def acting_pairs(view: View, pairs: Sequence[Pair]) -> list[Pair]:
     cursor on the frame to move, so it is refused rather than moving an undrawn one.
     """
     if not from_read_model(view):
-        return list(pairs)
+        return with_chrome(view, pairs)
     session = view.session
     idle = unserved(session.route, session.subj_id)
     acting = [
         (token, label)
-        for token, label in pairs
+        for token, label in with_chrome(view, pairs)
         if not idle.intersection(_keys_of(token)) and _acts(token, session)
     ]
     session.bar_keys = frozenset(key for token, _label in acting for key in _keys_of(token))
     return acting
+
+
+_CHROME_PAIRS: tuple[Pair, ...] = tuple(entry.pair() for entry in CHROME_KEYS)
+
+
+def with_chrome(view: View, pairs: Sequence[Pair]) -> list[Pair]:
+    """Return a route bar's ``pairs`` ending in the chrome pairs the frame's mode draws.
+
+    A console over the packaged chrome ends every route bar with ``q quit`` and
+    ``? help``, unless a field, the go prefix or a surface above the route holds the keys,
+    where neither key would do what it says. The prototype registers replay the design
+    pack's tables, which bind no ``q``, so they keep a chrome pair only where the pack's
+    table for the route carried it.
+    """
+    session = view.session
+    if view.fixture.prototype:
+        own = {entry.pair() for entry in PACK_KEYS.get(session.route, ())}
+        return [pair for pair in pairs if pair not in _CHROME_PAIRS or pair in own]
+    if busy(session) or session.set_typing:
+        return list(pairs)
+    return [*(pair for pair in pairs if pair not in _CHROME_PAIRS), *_CHROME_PAIRS]
 
 
 _KEY_OF_NAME: Mapping[str, str] = MappingProxyType({name: key for key, name in KEY_NAMES.items()})
@@ -794,7 +846,7 @@ def g_frame(
     w = view.w
     rows: list[str] = [header(view, " " + crumb), g_row(" " + ctx, w), bar(w)]
     rows.extend(row if isinstance(row, Fixed) else g_row(row, w) for row in body)
-    return build(view, rows, keybar(keys, w))
+    return build(view, rows, keybar(with_chrome(view, keys), w))
 
 
 def prose(name: str, sentences: Sequence[str], room: int) -> list[str]:

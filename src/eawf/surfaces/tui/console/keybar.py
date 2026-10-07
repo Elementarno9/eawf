@@ -193,6 +193,7 @@ KEY: Mapping[str, KeyEntry] = MappingProxyType(
         "refine": _k("refine", "\\"),
         "actions": _k("actions", ".", kind=_G),
         "help": _k("help", "?", kind=_G),
+        "quit": _k("quit", "q", kind=_G),
         "inspect": _k("inspect", "i", kind=_G),
         "stack": _k("stack", "i", kind=_G),
         "raw": _k("raw", "r", kind=KeyKind.SAFE),
@@ -211,11 +212,14 @@ _K = KEY
 # The keys a record frame offers after its row keys, in place of its route's own table.
 RECORD_FRAME_KEYS: tuple[KeyEntry, ...] = (KEY["actions"], KEY["inspect"], KEY["esc"])
 
-# Every route's ordered key table, route verbs first and globals last; the pre-session
-# ``entry`` layer builds its own from the state it is in, so it has no row here. A frame
-# that shows a state-dependent part of its table picks the entries by label with
-# :func:`pick`, so it can leave keys out but never spell one the table lacks.
-ROUTE_KEYS: Mapping[str, tuple[KeyEntry, ...]] = MappingProxyType(
+#: The console's own keys, which every route's table ends with: the guarded quit, then
+#: help, the one key that explains every other.
+CHROME_KEYS: tuple[KeyEntry, ...] = (KEY["quit"], KEY["help"])
+
+# Every route's own ordered table, route verbs first and globals last, as the design pack
+# recorded it; the pre-session ``entry`` layer builds its own from the state it is in, so
+# it has no row here. The prototype replay draws these tables verbatim.
+PACK_KEYS: Mapping[str, tuple[KeyEntry, ...]] = MappingProxyType(
     {
         "scope.home": (
             _k("tree", *_UP_DOWN),
@@ -399,6 +403,16 @@ ROUTE_KEYS: Mapping[str, tuple[KeyEntry, ...]] = MappingProxyType(
     }
 )
 
+# Every route's whole table: its own keys, then :data:`CHROME_KEYS`. A frame that shows a
+# state-dependent part of its table picks the entries by label with :func:`pick`, so it
+# can leave keys out but never spell one the table lacks.
+ROUTE_KEYS: Mapping[str, tuple[KeyEntry, ...]] = MappingProxyType(
+    {
+        route: (*(entry for entry in table if entry not in CHROME_KEYS), *CHROME_KEYS)
+        for route, table in PACK_KEYS.items()
+    }
+)
+
 
 def unregistered_routes(
     tables: Mapping[str, Sequence[KeyEntry]], *, registry: RouteRegistry = REGISTRY
@@ -413,7 +427,7 @@ if _UNKEYED:
 
 # The global grammar's keys: a route table binds each only through the shared vocabulary,
 # and a route wanting a verb of its own takes an unclaimed letter instead.
-RESERVED: frozenset[str] = frozenset("g/\\.?!iryY-u[]")
+RESERVED: frozenset[str] = frozenset("g/\\.?!iryY-u[]q")
 _SHARED: frozenset[KeyEntry] = frozenset(KEY.values())
 
 
@@ -446,12 +460,15 @@ if _COLLISIONS:
 
 
 def route_pairs(route: str) -> tuple[Pair, ...]:
-    """Return ``route``'s whole table as keybar pairs, in advertising order.
+    """Return ``route``'s own table as keybar pairs, in advertising order.
+
+    The chrome pairs the table ends with are left to the frame that composes the bar,
+    which adds them on a linked console; see :data:`CHROME_KEYS`.
 
     Raises:
         KeyError: ``route`` has no key table.
     """
-    return tuple(entry.pair() for entry in ROUTE_KEYS[route])
+    return tuple(entry.pair() for entry in PACK_KEYS[route])
 
 
 def pick(route: str, *labels: str) -> list[Pair]:
@@ -490,11 +507,13 @@ def _compose(pairs: Sequence[Pair]) -> str:
 
 
 # The global pairs in the order they leave a bar too wide for its budget; the copy,
-# dismiss and inspect pairs go after these, from the tail.
+# dismiss and inspect pairs go after these, from the tail, and the quit pair last.
 GLOBAL_DROP_ORDER: tuple[str, ...] = ("?", "/", ".", "Esc", "g")
-#: The help pair's token, which a frame drawn from a read model pins last.
-HELP_TOKEN = GLOBAL_DROP_ORDER[0]
-GLOBAL_TOKENS: frozenset[str] = frozenset({*GLOBAL_DROP_ORDER, "-", "y", "Y", "i"})
+#: The quit pair's token, the last global a bar gives up.
+QUIT_TOKEN = KEY["quit"].token
+#: The chrome pairs' tokens, which a frame drawn from a read model pins last in this order.
+CHROME_TOKENS: tuple[str, ...] = tuple(entry.token for entry in CHROME_KEYS)
+GLOBAL_TOKENS: frozenset[str] = frozenset({*GLOBAL_DROP_ORDER, QUIT_TOKEN, "-", "y", "Y", "i"})
 
 # The paging pairs only repeat what the arrows do a screen at a time, so a bar that would
 # otherwise lose the way back or a copy gives up the ends pair, then the pages pair, first.
@@ -508,15 +527,19 @@ def _drop_at(pairs: Sequence[Pair]) -> int:
     """Return the index of the pair that leaves a bar too wide next.
 
     The global pairs leave in :data:`GLOBAL_DROP_ORDER`, then the other globals from the
-    tail. A bar holding no global has only route verbs left, which the key-table contract
-    keeps inside every budget, so its last pair goes only for a table that breaks it. The
-    first pair is never chosen.
+    tail, then the quit pair. A bar holding no global has only route verbs left, which the
+    key-table contract keeps inside every budget, so its last pair goes only for a table
+    that breaks it. The first pair is never chosen.
     """
     last = len(GLOBAL_DROP_ORDER)
+
+    def rank(token: str) -> int:
+        if token in GLOBAL_DROP_ORDER:
+            return GLOBAL_DROP_ORDER.index(token)
+        return last + 1 if token == QUIT_TOKEN else last
+
     ranked = [
-        (GLOBAL_DROP_ORDER.index(token) if token in GLOBAL_DROP_ORDER else last, -i)
-        for i, (token, _label) in enumerate(pairs)
-        if i and token in GLOBAL_TOKENS
+        (rank(token), -i) for i, (token, _label) in enumerate(pairs) if i and token in GLOBAL_TOKENS
     ]
     return -min(ranked)[1] if ranked else len(pairs) - 1
 
@@ -532,8 +555,9 @@ def keybar(pairs: Sequence[Pair], w: int, *, keep_actions: bool = False) -> str:
         keep_actions: Whether the action menu's pair is worth the paging pairs. A frame
             drawn from a read model keeps it, because its menu is where the verbs of the
             record on screen are refused or offered; the prototype replay drops it first,
-            as its tracked bars do. Such a frame also pins its help pair last, so the one
-            key that explains every other is never the one a narrow terminal loses.
+            as its tracked bars do. Such a frame also pins its quit and help pairs last,
+            so neither the way out nor the one key that explains every other is what a
+            narrow terminal loses.
 
     Raises:
         ValueError: a token fails :func:`assert_full_key_names`, or ``w`` fails :func:`budget`.
@@ -542,7 +566,7 @@ def keybar(pairs: Sequence[Pair], w: int, *, keep_actions: bool = False) -> str:
         assert_full_key_names(token)
     room = budget(w)
     cheap = _CHEAP_GLOBALS - {KEY["actions"].token} if keep_actions else _CHEAP_GLOBALS
-    pinned = [p for p in pairs if p[0] == HELP_TOKEN] if keep_actions else []
+    pinned = [p for p in pairs if p[0] in CHROME_TOKENS] if keep_actions else []
     kept = [p for p in pairs if p not in pinned]
     if pinned and kept:
         room -= cell_len(GAP + _compose(pinned).lstrip())

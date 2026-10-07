@@ -21,12 +21,15 @@ from eawf.surfaces.tui.console.fixture import load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.keybar import (
     ABBREVIATED,
+    CHROME_KEYS,
+    CHROME_TOKENS,
     GAP,
     GLOBAL_DROP_ORDER,
     GLOBAL_TOKENS,
     KEY,
     KEY_NAMES,
     MARGIN,
+    PACK_KEYS,
     ROUTE_KEYS,
     KeyEntry,
     assert_full_key_names,
@@ -34,6 +37,7 @@ from eawf.surfaces.tui.console.keybar import (
     key_token,
     keybar,
     route_bar,
+    route_pairs,
     unregistered_routes,
 )
 from eawf.surfaces.tui.console.keymap import GLOBAL_KEYS, acts_here
@@ -109,7 +113,10 @@ def test_con032_route_bar_fits_budget_and_never_drops_a_route_verb(route: str, w
 
 
 def _help_tokens(route: str) -> set[str]:
-    return {key.token.split(" ")[0] for key in GLOBAL_KEYS if acts_here(key, route)}
+    # the chrome pairs are the console's own: ``?`` opens help itself, and a frame drawn
+    # from a read model pins both, so neither needs a row of help to stay reachable
+    listed = {key.token.split(" ")[0] for key in GLOBAL_KEYS if acts_here(key, route)}
+    return listed | set(CHROME_TOKENS)
 
 
 @pytest.mark.parametrize("w", WIDTHS)
@@ -187,11 +194,64 @@ def test_route_bar_pinned_attention_and_activity_at_80() -> None:
     activity = route_bar("activity", 80)
     assert _used(attention) == 77
     assert attention.rstrip().endswith("v resolve")
-    assert _used(activity) == 69
+    assert _used(activity) == 78
     assert activity.rstrip() == (
-        " ↑↓ row   PageUp PageDown page   Enter drill   Tab buckets   \\ filter"
+        " ↑↓ row   PageUp PageDown page   Enter drill   Tab buckets   \\ filter   q quit"
     )
     assert ". actions" in route_bar("activity", 120)
+
+
+# ---------- every route table ends with the console's own keys ----------
+
+
+@pytest.mark.parametrize("route", ROUTES)
+def test_every_route_table_ends_with_quit_then_help(route: str) -> None:
+    assert ROUTE_KEYS[route][-2:] == CHROME_KEYS
+    assert ROUTE_KEYS[route][-1] == KEY["help"]
+
+
+def test_every_route_table_is_checked() -> None:
+    assert len(ROUTES) == len(PACK_KEYS) == len(set(REGISTRY.ids) - {"entry"})
+
+
+@pytest.mark.parametrize("route", ROUTES)
+def test_a_route_table_holds_each_chrome_key_once(route: str) -> None:
+    table = ROUTE_KEYS[route]
+    assert [entry for entry in table if entry in CHROME_KEYS] == list(CHROME_KEYS)
+
+
+@pytest.mark.parametrize("route", ROUTES)
+def test_the_pack_table_keeps_its_own_order_ahead_of_the_chrome(route: str) -> None:
+    own = [entry for entry in PACK_KEYS[route] if entry not in CHROME_KEYS]
+    assert list(ROUTE_KEYS[route][: len(own)]) == own
+
+
+def test_route_pairs_reads_the_pack_table_without_the_chrome() -> None:
+    assert route_pairs("receipt") == (("y", "copy"), ("Esc", "back"))
+    assert ("?", "help") in route_pairs("scope.home")
+    assert ("q", "quit") not in route_pairs("scope.home")
+
+
+def test_route_pairs_unknown_route_raises_key_error() -> None:
+    with pytest.raises(KeyError):
+        route_pairs("nowhere")
+
+
+def test_quit_is_the_last_global_a_bar_gives_up() -> None:
+    pairs = [("Enter", "x" * 20), ("q", "quit"), ("/", "palette"), ("y", "copy")]
+    full = cell_len(" " + GAP.join(f"{t} {lab}" for t, lab in pairs)) + 1
+    assert _shown(keybar(pairs, full)) == [f"{t} {lab}" for t, lab in pairs]
+    assert _shown(keybar(pairs, full - 1)) == [f"Enter {'x' * 20}", "q quit", "y copy"]
+    narrow = cell_len(f" Enter {'x' * 20}{GAP}q quit") + 1
+    assert _shown(keybar(pairs, narrow)) == [f"Enter {'x' * 20}", "q quit"]
+    assert _shown(keybar(pairs, narrow - 1)) == [f"Enter {'x' * 20}"]
+
+
+def test_a_read_model_bar_pins_quit_and_help_last() -> None:
+    pairs = [("Enter", "x" * 40), ("/", "palette"), ("q", "quit"), ("?", "help")]
+    bar = keybar(pairs, 70, keep_actions=True)
+    assert _shown(bar) == [f"Enter {'x' * 40}", "q quit", "? help"]
+    assert cell_len(bar) == 70
 
 
 def test_route_bar_unknown_route_raises_key_error() -> None:

@@ -186,8 +186,8 @@ ROUTE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingPr
         "history.diff": DIAGNOSTICS_CORPUS,
         "merge.conflict": (Epoch2Collection.BATCH,),
         # the Milestone frame draws the Milestone and the Batches cut under it, which
-        # is the membership an acceptance bundle is sealed over
-        "milestone": (Epoch2Collection.MILESTONE, Epoch2Collection.BATCH),
+        # is the membership an acceptance bundle is sealed over, and counts their Tasks
+        "milestone": (Epoch2Collection.MILESTONE, Epoch2Collection.BATCH, Epoch2Collection.TASK),
         "notifications": (Epoch2Collection.RUN,),
         "receipt": (Epoch2Collection.RECEIPT,),
         # a candidate's membership is the Milestones it carries, so the Release frame
@@ -204,8 +204,14 @@ ROUTE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingPr
         # the decisions are notices on the receipt ledger, listed beside the policies
         "sandbox.log": (Epoch2Collection.SANDBOX_POLICY,),
         # home nests each Milestone under its Track and counts the Batches cut under
-        # each Milestone, so its progress is read off rows it holds rather than guessed
-        "scope.home": (Epoch2Collection.TRACK, Epoch2Collection.MILESTONE, Epoch2Collection.BATCH),
+        # each Milestone and their Tasks, so its progress is read off rows it holds
+        # rather than guessed
+        "scope.home": (
+            Epoch2Collection.TRACK,
+            Epoch2Collection.MILESTONE,
+            Epoch2Collection.BATCH,
+            Epoch2Collection.TASK,
+        ),
         "search": DIAGNOSTICS_CORPUS,
         # a Task frame lists the Runs of it, and a Track frame the Milestones filed under
         # it with the Batches cut under each, all found by their parent key
@@ -232,6 +238,13 @@ ROUTE_NOTICE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = Ma
         "task.detail": (Epoch2Collection.RECEIPT,),
         "trust": (Epoch2Collection.BATCH,),
     }
+)
+
+#: The stored statuses a route leaves out of one collection it binds. Home counts the
+#: Tasks of delivery; a draft, deferred or dropped Task never entered it, so home holds
+#: no row for one and its Task count is the work its Milestones carry.
+_HIDDEN: Final[Mapping[tuple[str, Epoch2Collection], frozenset[str]]] = MappingProxyType(
+    {("scope.home", Epoch2Collection.TASK): frozenset({"DRAFT", "DEFERRED", "DROPPED"})}
 )
 
 
@@ -467,6 +480,7 @@ def build_route_projection(
                 document=document, collection=collection, ledger_rows=ledger_rows
             ).items()
         )
+        if stored_fields(collection, key, row)[1] not in _HIDDEN.get((route, collection), ())
     ) + tuple(
         _with_facts(_projection_row(key=key, row=row, collection=collection), row, links)
         for collection in ROUTE_NOTICE_COLLECTIONS.get(route, ())

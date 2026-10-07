@@ -39,7 +39,7 @@ from eawf.surfaces.tui.console.header import (
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.plain import ascii_twin, legend_line, plain_rows, render_plain
 from eawf.surfaces.tui.console.registry import REGISTRY
-from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup
+from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup, unlinked_label
 from eawf.surfaces.tui.console.tokens import BRAND, CONNECTION, CRUMB_SEP
 from eawf.surfaces.tui.console.width import cell_len, pad
 from tests.tui.surfaces.tui.console.test_chrome_sweeps import GOLDEN_ROOT, RENDERED
@@ -590,3 +590,64 @@ def test_con_168_make_room_frees_blank_rows_then_rules_bottom_up(
     body: list[str], n: int, kept: list[str] | None
 ) -> None:
     assert make_room(body, n) == kept
+
+
+# ---------- a console with no daemon link never claims a live one ----------
+
+
+def _unlinked_header(setup: SessionSetup) -> tuple[str, str]:
+    async def body() -> tuple[str, str]:
+        app = ConsoleApp(clock=FakeClock())
+        async with app.run_test(size=(120, 30)) as pilot:
+            app.reset(setup)
+            app.render_frame()
+            await pilot.pause()
+            return app.session.conn, app.frame_rows[0]
+
+    return asyncio.run(body())
+
+
+@pytest.mark.parametrize("route", ["scope.home", "activity", "settings", "history"])
+def test_an_unlinked_console_reads_disconnected_on_every_route(route: str) -> None:
+    conn, header = _unlinked_header(SessionSetup(route=route))
+    assert conn == "DISCONNECTED"
+    assert "LIVE" not in header and "DISCONNECTED" in header
+
+
+@pytest.mark.parametrize("claimed", ["LIVE", "LIVE / PARTIAL"])
+def test_an_unlinked_console_drops_a_live_value_its_setup_claimed(claimed: str) -> None:
+    conn, header = _unlinked_header(SessionSetup(conn=claimed))
+    assert conn == "DISCONNECTED" and "LIVE" not in header
+
+
+def test_an_unlinked_console_keeps_the_offline_snapshot_it_opened_onto() -> None:
+    conn, _header = _unlinked_header(SessionSetup(conn="OFFLINE SNAPSHOT"))
+    assert conn == "OFFLINE SNAPSHOT"
+
+
+def test_the_prototype_replay_keeps_its_recorded_live_value() -> None:
+    async def body() -> str:
+        app = ConsoleApp(load_fixture(GOLDEN_ROOT / "fixture"), FakeClock())
+        async with app.run_test(size=(120, 30)) as pilot:
+            app.reset(SessionSetup())
+            await pilot.pause()
+            return app.session.conn
+
+    assert asyncio.run(body()) == "LIVE"
+
+
+@pytest.mark.parametrize(
+    ("label", "shown"),
+    [
+        ("LIVE", "DISCONNECTED"),
+        ("LIVE / PARTIAL", "DISCONNECTED"),
+        ("DISCONNECTED", "DISCONNECTED"),
+        ("OFFLINE SNAPSHOT", "OFFLINE SNAPSHOT"),
+        ("GAP DETECTED", "GAP DETECTED"),
+        ("", ""),
+        ("live", "live"),
+        ("LIVE ", "LIVE "),
+    ],
+)
+def test_unlinked_label_turns_only_a_live_value_into_disconnected(label: str, shown: str) -> None:
+    assert unlinked_label(label) == shown

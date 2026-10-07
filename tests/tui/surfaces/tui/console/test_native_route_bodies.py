@@ -406,7 +406,7 @@ def test_con_085_home_names_the_principal_under_more_than_one() -> None:
     # a Track is a container, so its row never carries the caret
     track = _starts(frame, "   TRK-CORE")
     # the Run count, then this principal's one open action, then both principals' two
-    assert re.search(r"Core framework\s+2\s+!1\s+!2\s+0 of 1 milestone", track)
+    assert re.search(r"Core framework\s+2\s+!1\s+!2\s+0 of 1 task ready", track)
 
 
 def test_con_085_home_under_one_principal_keeps_its_one_attention_column() -> None:

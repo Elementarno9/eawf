@@ -21,7 +21,9 @@ the frame shows next is the daemon's re-read rather than what the console asked 
 from __future__ import annotations
 
 import asyncio
+import copy
 import os
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, get_args, get_type_hints
@@ -49,10 +51,11 @@ from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.config import set_layer_value, unset_layer_value
 from eawf.runtime.daemon.methods.projection import SETTINGS_READ_METHOD
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
+from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
-from eawf.surfaces.tui.console.frame import LeadReceded, Receded, View
+from eawf.surfaces.tui.console.frame import LeadReceded, Receded, View, wide_title
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
     SETTING_SET_METHOD,
@@ -67,14 +70,18 @@ from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.provenance import (
     GLYPH_DEFAULT,
     GLYPH_INHERITS,
+    GLYPH_MEANINGS,
     GLYPH_SHADOWED,
     GLYPH_WINS,
     coerce,
     glyph,
+    glyph_legend,
     rail_width,
 )
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import Session
+from eawf.surfaces.tui.console.width import cell_len
+from tests.tui.surfaces.tui.console import test_spine_frames as sp
 
 AT = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 SCOPE = "EAWF"
@@ -836,3 +843,100 @@ def test_an_open_editor_recedes_the_rail_and_keys_and_keeps_the_readout_lit(
     assert all(isinstance(row, LeadReceded) for row in rows[readout:])
     lit = [s for s in paint(rows[-1], Part.BODY) if s.text.strip() and s.surface != "recede"]
     assert lit, "the readout beside the rail is drawn as usual"
+
+
+# ---------- the glyph legend, and titles that use the width they are given ----------
+
+_KEY_ROW = re.compile(r"│ [▸ ] (\S) \S")
+
+
+def _legend_row(rows: list[str]) -> str:
+    return next(row for row in rows if any(f"{g} {m}" in row for g, m in GLYPH_MEANINGS))
+
+
+@pytest.mark.parametrize(("w", "h"), SIZES)
+def test_the_legend_names_each_glyph_the_key_rows_show(
+    tree: Path, fixture: Fixture, w: int, h: int
+) -> None:
+    _write(tree / ".ea" / "config.yaml", "telemetry:\n  enabled: false\n")
+    view = _view(tree)
+    rows = _frame(fixture, view, _on(_session(), view, BOOL_KEY), w=w, h=h)
+    shown = {match.group(1) for match in map(_KEY_ROW.search, rows) if match}
+    legend = _legend_row(rows)
+    assert shown, "the section draws key rows"
+    for mark, meaning in GLYPH_MEANINGS:
+        assert (f"{mark} {meaning}" in legend) is (mark in shown), (mark, legend)
+    assert len(rows) == h
+
+
+def test_the_legend_sits_under_the_keys_above_the_readout(tree: Path, fixture: Fixture) -> None:
+    view = _view(tree)
+    rows = _frame(fixture, view, _on(_session(), view, BOOL_KEY), w=120, h=30)
+    at = rows.index(_legend_row(rows))
+    assert "├─" in rows[at + 1], "the readout's rule follows the legend"
+
+
+_ALL_FOUR = (
+    "= set at this layer   ≠ set here, another layer wins   · inherited   – built-in default"  # noqa: RUF001
+)
+
+
+@pytest.mark.parametrize(
+    ("rows", "legend"),
+    [
+        ([], ""),
+        (["  1-5 of 9"], ""),
+        (["▸ = a.key   true"], "= set at this layer"),
+        (["  – a.key", "  – b.key"], "– built-in default"),  # noqa: RUF001
+        (["  · a", "▸ = b", "  ≠ c", "  – d"], _ALL_FOUR),  # noqa: RUF001
+        (["▸", ""], ""),
+    ],
+)
+def test_glyph_legend_names_only_the_glyphs_in_the_rows(rows: list[str], legend: str) -> None:
+    assert glyph_legend(rows) == legend
+
+
+def test_the_prototype_replay_draws_no_legend(fixture: Fixture) -> None:
+    rows = render_route(View(session=_session(), fixture=fixture, w=120, h=30))
+    assert not any(f"{g} {m}" in row for row in rows for g, m in GLYPH_MEANINGS)
+
+
+#: A title exactly 60 cells long, which a 200-column frame has room for.
+TITLE_60 = "Draw every console title at the full width the terminal give"
+_TITLED = [("scope.home", None), ("track", "TRK-CORE"), ("backlog", None)]
+
+
+def _wide(route: str, subject: str | None, w: int) -> list[str]:
+    document = copy.deepcopy(sp.DOCUMENT)
+    document["milestone"]["MLS-0100"]["title"] = TITLE_60
+    document["task"]["TSK-0003"].update(status="DRAFT", intent=TITLE_60)
+    view = View(
+        session=sp._session(route, subject),
+        fixture=Fixture.from_chrome(load_chrome()),
+        w=w,
+        h=50,
+        projection=sp._model(route, document),
+    )
+    return render_route(view)
+
+
+@pytest.mark.parametrize(("route", "subject"), _TITLED)
+def test_a_200_column_frame_shows_a_60_cell_title_unclipped(
+    route: str, subject: str | None
+) -> None:
+    assert cell_len(TITLE_60) == 60
+    assert any(TITLE_60 in row for row in _wide(route, subject, 200))
+
+
+@pytest.mark.parametrize(("route", "subject"), _TITLED)
+def test_a_120_column_frame_still_clips_the_title(route: str, subject: str | None) -> None:
+    rows = [row for row in _wide(route, subject, 120) if TITLE_60[:30] in row]
+    assert rows and all(TITLE_60 not in row and "…" in row for row in rows)
+
+
+@pytest.mark.parametrize(
+    ("w", "cap", "width"),
+    [(80, 48, 48), (119, 48, 48), (120, 48, 48), (121, 48, 49), (200, 48, 128), (0, 0, 0)],
+)
+def test_wide_title_grows_only_past_120_columns(w: int, cap: int, width: int) -> None:
+    assert wide_title(w, cap) == width

@@ -230,7 +230,7 @@ def test_con031_help_prints_the_route_table_and_each_global_that_acts_there(rout
     session.route = route
     session.overlay = "help"
     text = "\n".join(compose_frame(View(session=session, fixture=FIXTURE, w=160, h=60)))
-    for entry in ROUTE_KEYS[route]:
+    for entry in route_keys(session, FIXTURE):
         assert entry.token in text and entry.label in text, (route, entry)
     for key in GLOBAL_KEYS:
         row = f"   {key.token}"

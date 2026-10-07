@@ -789,7 +789,7 @@ def test_con_138_a_file_that_fits_promises_copy_and_close(size: int) -> None:
     assert "the file is the record · the console renders it, it does not rewrite it" in ds.text(
         rows
     )
-    assert ds.keys(rows) == [" y copy", "Esc close"]
+    assert ds.keys(rows) == [" y copy", "Esc close", "q quit", "? help"]
 
 
 @pytest.mark.parametrize("size", range(3))
@@ -798,7 +798,7 @@ def test_con_138_the_top_and_the_scrolled_window_count_what_they_hide(size: int)
     top = ds.frame(session, decisions=ARTIFACTS, size=size)
     hidden = re.search(r"… (\d+) lines below", ds.text(top))
     assert hidden and "lines above" not in ds.text(top)
-    assert ds.keys(top) == [" ↑↓ scroll", "y copy", "Esc close"]
+    assert ds.keys(top) == [" ↑↓ scroll", "y copy", "Esc close", "q quit", "? help"]
     assert "█" in ds.text(top)
     ds.press(session, "ArrowDown", "ArrowDown", "ArrowDown", decisions=ARTIFACTS, size=size)
     scrolled = ds.text(ds.frame(session, decisions=ARTIFACTS, size=size))
@@ -864,7 +864,7 @@ def test_con_139_a_passed_failed_unknown_not_run_and_attested_rung(
     assert not _STAGE_WORDS.search(rows[3])
     assert "conformance runner" not in body
     assert "▸" not in "\n".join(rows[3:-1])
-    assert ds.keys(rows) == [" y copy", "Esc close"]
+    assert ds.keys(rows) == [" y copy", "Esc close", "q quit", "? help"]
 
 
 def test_con_139_an_unknown_and_a_not_run_rung_state_their_time_in_words() -> None:
@@ -895,10 +895,13 @@ def test_con_139_the_card_and_the_ladder_row_read_one_record() -> None:
 STEP_ROWS: dict[int, tuple[str, list[str]]] = {
     1: (
         "1 baseline digests · ✓ done · 11:18 → 12:24",
-        [" Tab region", "↑↓ line", "y copy", "Esc back"],
+        [" Tab region", "↑↓ line", "y copy", "Esc back", "q quit", "? help"],
     ),
-    5: ("5 cross-provider · ⋯ running · started 13:44", [" ↑↓ line", "y copy", "Esc back"]),
-    6: ("6 write-up · ○ blocked · never started", [" y copy", "Esc back"]),
+    5: (
+        "5 cross-provider · ⋯ running · started 13:44",
+        [" ↑↓ line", "y copy", "Esc back", "q quit", "? help"],
+    ),
+    6: ("6 write-up · ○ blocked · never started", [" y copy", "Esc back", "q quit", "? help"]),
 }
 
 
@@ -989,7 +992,9 @@ def test_con_142_a_card_for_an_absent_record_states_the_absence(
     rows = ds.frame(ds.opened(route, overlay, subject, **fields), decisions=_HELD)
     assert named in rows[0]
     assert f"nothing is recorded for {named}" in ds.text(rows)
-    assert ds.keys(rows) == [" Esc back"]
+    # a route's card ends with the console's own keys; an overlay's keeps to its own
+    chrome = ["q quit", "? help"] if overlay is None else []
+    assert ds.keys(rows) == [" Esc back", *chrome]
 
 
 @pytest.mark.parametrize(("route", "overlay", "subject", "named", "fields"), ABSENT)
@@ -1015,7 +1020,7 @@ def test_con_142_a_card_without_rows_promises_only_copy_and_escape(
     route: str, subject: str, fields: dict[str, int]
 ) -> None:
     rows = ds.frame(ds.opened(route, None, subject, **fields), decisions=_HELD)
-    assert {pair.split()[0] for pair in ds.keys(rows)} == {"y", "Esc"}
+    assert {pair.split()[0] for pair in ds.keys(rows)} == {"y", "Esc", "q", "?"}
 
 
 def test_con_142_a_sub_surface_card_pushes_the_back_stack_once_for_a_double_enter() -> None:
@@ -1081,6 +1086,6 @@ def test_con_065_an_approval_a_later_seal_voided_renders_invalidated() -> None:
     assert signal.state.state is TruthState.INVALIDATED
     assert first.digest() in (signal.state.missing_reason or "")
     row = next(line for line in _frame(model) if line.lstrip().startswith("approval "))
-    assert "! invalida" in row and "? unknown" not in row
+    assert "! invalid" in row and "? unknown" not in row
     held = _view("release", bundle=first, approval=_approval(digest=first.digest()))
     assert next(i for i in held.signals if i.name == "approval").state.state is TruthState.KNOWN

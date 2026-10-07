@@ -96,7 +96,7 @@ def test_the_source_pane_names_the_change_under_the_caret() -> None:
     # the event is named in words, and the ledger sequence is not prose
     assert "task planned · by OP-0001" in source and "sequence" not in source
     assert "2 fields changed" in frame[frame.index(source) + 1]
-    assert frame[-1].split()[-2:] == ["Esc", "back"]
+    assert frame[-1].split()[-6:] == ["Esc", "back", "q", "quit", "?", "help"]
     assert "Enter" in frame[-1].split()
 
 
@@ -109,7 +109,7 @@ def test_a_change_naming_nobody_is_never_given_an_actor() -> None:
 def test_an_empty_feed_says_since_when_nothing_was_recorded() -> None:
     frame = _frame({HISTORY_READ: _page()})
     assert any("no changes recorded since 2026-10-02" in row for row in frame)
-    assert frame[-1].split() == ["Esc", "back"]
+    assert frame[-1].split() == ["Esc", "back", "q", "quit", "?", "help"]
 
 
 def test_enter_opens_the_diff_of_the_change_under_the_caret() -> None:

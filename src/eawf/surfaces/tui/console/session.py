@@ -60,6 +60,22 @@ def conn_label(value: ConnectionValue | None) -> str:
     return _CONNECTION_LABELS[value]
 
 
+_LIVE_LABELS = frozenset(
+    _CONNECTION_LABELS[value]
+    for value in (ConnectionValue.LIVE_COMPLETE, ConnectionValue.LIVE_PARTIAL)
+)
+
+
+def unlinked_label(label: str) -> str:
+    """Return the header label a console holding no daemon link shows for ``label``.
+
+    Only a link that reached the daemon may claim a live value, so either live label reads
+    ``DISCONNECTED``; a value the console reached on its own, such as the offline snapshot
+    the entry layer opens onto, is kept.
+    """
+    return conn_label(None) if label in _LIVE_LABELS else label
+
+
 class BackEntry(BaseModel):
     """One step the back stack restores: the place, and every cursor it was left with.
 

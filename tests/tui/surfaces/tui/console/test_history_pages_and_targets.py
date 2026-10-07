@@ -12,15 +12,18 @@ import asyncio
 from collections.abc import Mapping
 from typing import Any
 
+import pytest
+
 from eawf.kernel.store.changes import ChangePage
 from eawf.surfaces.tui.console.app import compose_frame
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture
-from eawf.surfaces.tui.console.frame import View
+from eawf.surfaces.tui.console.frame import Table, View
 from eawf.surfaces.tui.console.live_reads import HISTORY_DIFF_READ, HISTORY_READ, LIVE_READS
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.renderers import render_route
+from eawf.surfaces.tui.console.renderers.history import NATIVE_LEDGER
 from eawf.surfaces.tui.console.session import SIZES, Session
 from tests.tui.surfaces.tui.console.overlay_support import Host
 from tests.tui.surfaces.tui.console.test_history_change_feed import _page, _record
@@ -178,3 +181,51 @@ def test_e_opens_the_record_the_diff_is_about() -> None:
     session = _session("history.diff", "TSK-0003")
     _press(session, _diff_live(), "e")
     assert (session.route, session.subj_id) == ("task.detail", "TSK-0003")
+
+
+# ---------- adjacent cells never touch ----------
+
+
+def test_a_cell_filling_its_column_still_ends_a_space_before_the_next() -> None:
+    row = Table([5, 0], 0).row(["abcde", "X"])
+    assert row.index("X") == 1 + 5
+    assert row[row.index("X") - 1] == " "
+    assert "abcde" not in row and "…" in row
+
+
+def test_a_cell_one_short_of_its_column_is_kept_whole() -> None:
+    assert Table([5, 0], 0).row(["abcd", "X"]) == " abcd X"
+
+
+def test_a_short_cell_is_padded_to_its_column() -> None:
+    assert Table([5, 0], 0).row(["ab", "X"]) == " ab   X"
+
+
+def test_a_row_of_no_cells_is_its_gutter_alone() -> None:
+    assert Table([5, 0], 2).row([]) == "   "
+    assert Table([5, 0], 2).row([], cur=True) == " ▸ "
+
+
+def test_the_remainder_column_is_never_padded_or_clipped() -> None:
+    assert Table([0], 0).row(["a long remainder value"]) == " a long remainder value"
+
+
+def test_a_zero_width_column_draws_nothing() -> None:
+    assert Table([0, 3, 0], 0).row(["gone", "ab", "X"]) == " ab X"
+
+
+def test_a_negative_column_width_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="non-negative"):
+        Table([-1, 0], 0).row(["a", "b"])
+
+
+def test_history_columns_stay_apart_when_the_source_fills_its_column() -> None:
+    actor = "A" * NATIVE_LEDGER.cols[2]
+    feed = _page(_record("TSK-0003", 12, actor, status=("DRAFT", "PLANNED")))
+    row = next(
+        line
+        for line in _draw(_session("history", None), {HISTORY_READ: feed})
+        if "TSK-0003" in line
+    )
+    assert actor not in row
+    assert "A… Oct 2 12:34" in row, row

@@ -85,6 +85,7 @@ from eawf.kernel.projection.connection import (
 )
 from eawf.kernel.projection.liveness import STALLED
 from eawf.kernel.projection.registers import ATTENTION_ROUTE
+from eawf.kernel.projection.row_facts import parent_key_of, stored_fields
 from eawf.kernel.projection.settings import (
     SETTINGS_ROUTE,
     EffectiveSettingsView,
@@ -574,6 +575,59 @@ def _notice_rows_for(
     return rows
 
 
+#: The landing route, whose Track progress counts the Tasks under every Milestone it holds.
+HOME_ROUTE: Final = "scope.home"
+
+
+def _home_tree_rows(
+    *,
+    authority: RootAuthority,
+    document: dict[str, Any],
+    rows: Mapping[Epoch2Collection, tuple[Mapping[str, Any], ...]],
+) -> dict[Epoch2Collection, tuple[Mapping[str, Any], ...]]:
+    """Return the closed Batches and Tasks filed under the Milestones home holds.
+
+    A Task leaves the document on the commit that completes it, so a home read of the
+    document alone would count a shipped Milestone's work back toward zero. The ledgers
+    are read as their latest row per key -- a read cached on the file's stamp -- and only
+    rows filed under a Milestone or Batch home already holds are kept, so the read is
+    bounded by the work those Milestones carry rather than by the ledger's history.
+
+    Args:
+        authority: The fence-cleared tree.
+        document: The document home was read from.
+        rows: The ledger rows already merged, whose Milestones and Batches count as held.
+
+    Returns:
+        The ledger-held Batches and Tasks to merge, by collection.
+    """
+    held = set(document_rows(document, Epoch2Collection.MILESTONE)) | {
+        key
+        for row in rows.get(Epoch2Collection.MILESTONE, ())
+        if isinstance(key := row.get("key"), str)
+    }
+    picked: dict[Epoch2Collection, tuple[Mapping[str, Any], ...]] = {}
+    for collection in (Epoch2Collection.BATCH, Epoch2Collection.TASK):
+        live = document_rows(document, collection)
+        filed = latest_rows(ledger_path(document_path(authority), collection))
+        found = tuple(
+            row
+            for key, row in filed.items()
+            if key not in live
+            and parent_key_of(collection, stored_fields(collection, key, row)[0]) in held
+        )
+        picked[collection] = found
+        merged = rows.get(collection, ())
+        held = set(live) | {
+            key for row in (*merged, *found) if isinstance(key := row.get("key"), str)
+        }
+    logger.debug(
+        f"home_tree_rows batches={len(picked[Epoch2Collection.BATCH])} "
+        f"tasks={len(picked[Epoch2Collection.TASK])}"
+    )
+    return picked
+
+
 def _ledger_rows_for(
     *, route: str, authority: RootAuthority, document: dict[str, Any], key: str | None
 ) -> dict[Epoch2Collection, tuple[Mapping[str, Any], ...]]:
@@ -599,6 +653,11 @@ def _ledger_rows_for(
     if key is not None:
         for collection, found in _subject_rows(
             route=route, authority=authority, document=document, key=key
+        ).items():
+            rows[collection] = (*rows.get(collection, ()), *found)
+    if route == HOME_ROUTE:
+        for collection, found in _home_tree_rows(
+            authority=authority, document=document, rows=rows
         ).items():
             rows[collection] = (*rows.get(collection, ()), *found)
     if route in LADDER_ROUTES:

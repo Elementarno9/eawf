@@ -207,11 +207,13 @@ def test_home_keeps_the_packet_columns_at_80() -> None:
     assert (head.index("RUNS"), head.index("ATTENTION"), head.index("PROGRESS")) == (33, 40, 52)
 
 
-@pytest.mark.parametrize("w", [120, 160])
-def test_home_caps_the_name_column_near_48_and_keeps_the_counts_beside_it(w: int) -> None:
+@pytest.mark.parametrize(("w", "runs_at"), [(120, 51), (160, 91)])
+def test_home_caps_the_name_column_near_48_and_keeps_the_counts_beside_it(
+    w: int, runs_at: int
+) -> None:
     frame = _frame("scope.home", w=w)
     head = next(row for row in frame if row.lstrip().startswith("MILESTONES"))
-    assert head.index("RUNS") == 51, "the name column stops at 48 cells, whatever the width"
+    assert head.index("RUNS") == runs_at, "the name column is 48 cells at 120, plus each past it"
     leaf = next(row for row in frame if "MLS-0100" in row)
     # a title longer than its column is clipped with an ellipsis, never run into the status
     assert "…" in leaf and re.search(r"…\s{2,}ACTIVE", leaf)
@@ -533,7 +535,7 @@ def test_history_docks_the_source_pane_at_the_foot() -> None:
     frame = _frame("history", w=80)
     assert frame[-2].startswith(" SOURCE")
     assert frame[-3].startswith("─")
-    assert frame[-1].split() == ["Esc", "back"]
+    assert frame[-1].split() == ["Esc", "back", "q", "quit", "?", "help"]
 
 
 def test_enter_on_the_held_ledger_opens_no_prototype_card() -> None:

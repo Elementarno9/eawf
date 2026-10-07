@@ -175,7 +175,7 @@ def test_a_milestone_state_sits_under_runs(columns: int) -> None:
         assert row[head.index("RUNS") :].split()[0] in ("ACTIVE", "PLANNED"), row
 
 
-@pytest.mark.parametrize("columns", [82, 162])
+@pytest.mark.parametrize("columns", [82, 122])
 def test_clipped_names_end_at_one_cell(columns: int) -> None:
     frame = _home(columns, _long_home())
     ends = {row.index("…") for row in frame if re.search(r"MLS-010[01] ", row)}

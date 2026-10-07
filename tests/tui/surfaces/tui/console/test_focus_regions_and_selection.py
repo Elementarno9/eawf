@@ -45,6 +45,7 @@ from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch, siblings_of
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
+from eawf.surfaces.tui.console.inspector import entered, pane_width
 from eawf.surfaces.tui.console.keybar import KEY_NAMES
 from eawf.surfaces.tui.console.keymap import allowlist, route_keys
 from eawf.surfaces.tui.console.navigation import (
@@ -664,6 +665,25 @@ def test_con_018_the_drilled_detail_is_its_own_route_at_every_width(size: int) -
     session = _session("activity")
     session.size = size
     _press(session, "Enter")
+    assert (session.route, session.subj_id) == ("run.detail", "RUN-538453eb")
+
+
+def test_con_018_at_180_columns_the_pane_beside_the_list_is_the_route_enter_opens() -> None:
+    """CON-018: the inspector draws the drilled route at its width; Enter still opens it."""
+    w, h = 180, 40
+    session = _session("activity")
+    view = View(session=session, fixture=_fixture(), w=w, h=h)
+    compose_frame(view)
+    opened = entered(Ctx(session=session, fixture=view.fixture, host=_Host(), w=w, h=h))
+    assert opened is not None
+    inspected = dataclasses.replace(view, inspector=dataclasses.replace(view, session=opened))
+    pane = [row[w - pane_width(w) :] for row in compose_frame(inspected)[1:-1]]
+    pressed = session.model_copy(deep=True)
+    dispatch(Ctx(session=pressed, fixture=view.fixture, host=_Host(), w=w, h=h), "Enter")
+    drawn = View(session=pressed, fixture=_fixture(), w=pane_width(w), h=h - 1)
+    assert pane == render_route(drawn)[:-1]
+    dispatch(Ctx(session=session, fixture=view.fixture, host=_Host(), w=w, h=h), "Enter")
+    assert (session.route, session.subj_id) == (opened.route, opened.subj_id)
     assert (session.route, session.subj_id) == ("run.detail", "RUN-538453eb")
 
 

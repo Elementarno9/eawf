@@ -29,6 +29,7 @@ from eawf.surfaces.tui.console.frame import (
     recede,
     route_keys_bar,
     thin,
+    wide_title,
     window_rows,
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
@@ -118,9 +119,9 @@ UNFILED: Mapping[str, str] = MappingProxyType(
 )
 
 
-def _name_w(wide: bool) -> int:
+def _name_w(view: View) -> int:
     """Return the Milestone name column: the packet's width, widened in the wide layout."""
-    return 48 if wide else 34
+    return wide_title(view.w, 48) if view.wide else 34
 
 
 def _milestone_cells(spine: SpineView, milestone: SpineRow, width: int) -> list[str]:
@@ -159,14 +160,14 @@ def track_frame(view: View, spine: SpineView) -> list[str]:
     on_milestones = focused.id == GROUPS[0].id
     keys = [m.key for m in milestones] if on_milestones else []
     cursor = child_cursor(session, keys, subject=subject.key)
-    table = Table([_name_w(view.wide), 12, 9, 0], 2)
+    table = Table([_name_w(view), 12, 9, 0], 2)
     head = table.head(["MILESTONES", "STATE", "BATCHES", "DUE"])
     rows += [thin(w), head if on_milestones else recede(head, w)]
     chrome = len(rows) + 2 * len(UNFILED) + 2
     win = window_rows(view, total=len(milestones), cursor=cursor, chrome=chrome)
     for index in range(win.start, win.stop):
         on = on_milestones and index == cursor
-        line = table.row(_milestone_cells(spine, milestones[index], _name_w(view.wide)), on)
+        line = table.row(_milestone_cells(spine, milestones[index], _name_w(view)), on)
         rows.append(line if on else Fixed(pad(line, w)) if on_milestones else recede(line, w))
     if not milestones:
         rows.append("   ∅ no Milestone is filed under this Track")

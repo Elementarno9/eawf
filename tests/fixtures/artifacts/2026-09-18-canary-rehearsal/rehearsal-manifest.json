@@ -191,6 +191,8 @@
         "projection.batch.detail.read",
         "projection.history.diff.read",
         "projection.history.read",
+        "projection.milestone.read",
+        "projection.scope.home.read",
         "projection.search.read",
         "projection.task.detail.read"
       ],

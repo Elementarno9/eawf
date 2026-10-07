@@ -22,11 +22,14 @@ from eawf.surfaces.tui.console import keymap as km
 from eawf.surfaces.tui.console.action_menu import COPY_PREFIX, MenuVerb, light_opening
 from eawf.surfaces.tui.console.attach import ONBOARDING, skip_step
 from eawf.surfaces.tui.console.clock import (
+    Clock,
+    QuitStep,
     arm_prefix,
     disarm,
     expire_prefix,
     guarded_quit,
     prompt_quit,
+    quit_step,
 )
 from eawf.surfaces.tui.console.enter_keys import DRAFT_FIELDS, enter, refused, send_verb
 from eawf.surfaces.tui.console.fixture import Fixture
@@ -232,7 +235,7 @@ def _console_keys(ctx: Ctx, k: str, shift: bool) -> None:
             drill.no_cycle(ctx, back=True)
         return
     s.keys += 1
-    if k != "Escape" or not _quit_press(s):
+    if k != QUIT_KEY and (k != "Escape" or not _quit_press(s)):
         # an Escape that closes or goes back is not a quit press: the prompt promised the
         # next press at a quiet scope home would quit, and a back-step is not that press
         disarm(s, k)
@@ -1060,6 +1063,43 @@ def _attention_verb(ctx: Ctx, k: str, pane: bool) -> None:
     ctx.log(k, f"{name} → {card} preview first")
 
 
+#: The letter that quits through the same guard as Ctrl+C.
+QUIT_KEY = KEY["quit"].keys[0]
+
+
+def quit_press(session: Session, clock: Clock, token: str, *, at: float | None = None) -> bool:
+    """Apply one press of a quit key to the guard Esc Esc shares, logging the step taken.
+
+    ``q`` and Ctrl+C quit from any route the same way: the first press arms the guard and
+    raises the prompt, and a second press inside the window quits, so a stray key from a
+    terminal burst never ends the session on its own.
+
+    Args:
+        session: The session whose guard and key log are used.
+        clock: The console clock the gap is judged on.
+        token: The key as the log names it.
+        at: When the press arrived, on the console clock; ``None`` reads the clock.
+
+    Returns:
+        Whether the console should quit now.
+    """
+    check = quit_step(session, clock, at=at)
+    if check.step is QuitStep.QUIT:
+        session.log_key(token, f"quit - guarded, {check.gap_ms}ms apart")
+        return True
+    if check.step is QuitStep.BURST:
+        session.log_key(token, "too fast to be two presses - still armed")
+    else:
+        session.log_key(token, "press again within 1.5s to quit")
+        prompt_quit(session, clock)
+    return False
+
+
+def _quit(ctx: Ctx, k: str, pane: bool) -> None:
+    if quit_press(ctx.s, ctx.clock, k, at=ctx.pressed_at):
+        ctx.host.quit()
+
+
 def _modifier(ctx: Ctx, k: str, pane: bool) -> None:
     ctx.s.keys -= 1
 
@@ -1097,6 +1137,7 @@ _KEYS: Mapping[str, Callable[[Ctx, str, bool], None]] = MappingProxyType(
         "Y": _copy_urn,
         "-": _dismiss,
         "?": _help,
+        QUIT_KEY: _quit,
         km.ATTENTION_JUMP_KEY: _top_attention,
         "/": _palette,
         "\\": _filter,

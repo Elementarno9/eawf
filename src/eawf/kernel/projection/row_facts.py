@@ -584,23 +584,41 @@ def _action_facts(fields: Mapping[str, Any], links: Links) -> dict[str, str]:
     return {name: value for name, value in facts.items() if value}
 
 
-def _batch_facts(fields: Mapping[str, Any]) -> dict[str, str]:
+def _batch_facts(key: str, fields: Mapping[str, Any], links: Links) -> dict[str, str]:
     """Return what a Batch states about where it merges and the exact head it was bound at.
 
     A merging Batch is drawn as the facts it holds beside the questions it cannot answer,
     so its branch, its bound head and the instant it last moved are read here verbatim.
+    Its repository, its Track and that Track's active-Batch ceiling travel with it too, so
+    a frame can tell a Batch that waits on the ceiling from one that waits on its Tasks.
     """
     binding = fields.get("current_head_binding")
     failure = fields.get("failure")
     tasks = fields.get("task_refs")
+    track = links.chain(Epoch2Collection.BATCH, key).get(Epoch2Collection.TRACK.value)
     facts = {
         "target_branch": _text(fields.get("target_branch")),
         "head": _text(binding.get("head_sha")) if isinstance(binding, dict) else None,
         "updated_at": _text(fields.get("updated_at")),
         "failure": _text(failure.get("message")) if isinstance(failure, dict) else None,
         "tasks": str(len(tasks)) if isinstance(tasks, list | tuple) else None,
+        "repository": _key_of(fields.get("repository_ref")),
+        "track": track,
+        BATCH_CEILING_FACT: None if track is None else _batch_ceiling(links, track),
     }
     return {name: value for name, value in facts.items() if value}
+
+
+#: The Batch fact naming how many Batches its Track lets be active in one repository.
+BATCH_CEILING_FACT: Final = "active_batches_per_repo"
+
+
+def _batch_ceiling(links: Links, track: str) -> str | None:
+    """Return the Track's active-Batch ceiling per repository, or ``None`` when unstated."""
+    policy = links.fields(Epoch2Collection.TRACK, track)[0].get("policy")
+    wip = policy.get("wip") if isinstance(policy, dict) else None
+    ceiling = wip.get("active_batches_per_repo") if isinstance(wip, dict) else None
+    return str(ceiling) if isinstance(ceiling, int) and not isinstance(ceiling, bool) else None
 
 
 def _task_facts(fields: Mapping[str, Any]) -> dict[str, str]:
@@ -693,7 +711,7 @@ def row_facts(collection: Epoch2Collection, key: str, stored: Any, links: Links)
     elif collection is Epoch2Collection.TASK:
         facts.update(_task_facts(fields))
     elif collection is Epoch2Collection.BATCH:
-        facts.update(_batch_facts(fields))
+        facts.update(_batch_facts(key, fields, links))
     elif collection in (Epoch2Collection.TRACK, Epoch2Collection.MILESTONE):
         facts.update(_placement_facts(key, fields, stored, links))
     return facts
@@ -702,6 +720,7 @@ def row_facts(collection: Epoch2Collection, key: str, stored: Any, links: Links)
 __all__ = [
     "ACTED_FACT",
     "ANSWERED_FACT",
+    "BATCH_CEILING_FACT",
     "CALIBRATION_KEY",
     "CEILING_BREACH_KIND",
     "CRITERION_FACT",

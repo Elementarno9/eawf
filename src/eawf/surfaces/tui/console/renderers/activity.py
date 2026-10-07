@@ -30,12 +30,14 @@ from eawf.kernel.projection.activity import (
 from eawf.kernel.projection.compute import ProjectionRow
 from eawf.kernel.projection.liveness import HeldLiveness
 from eawf.kernel.projection.registers import RegisterView
+from eawf.kernel.projection.row_facts import RUNTIME_FACTS
 from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
 from eawf.surfaces.tui.console.fixture import FleetRow
 from eawf.surfaces.tui.console.format import clock_minute, group, instant
 from eawf.surfaces.tui.console.frame import (
+    Breadth,
     Fixed,
     Table,
     View,
@@ -67,6 +69,8 @@ RAIL_W = 29
 #: The rail's count column, the count set against its right edge.
 _COUNT_W = 4
 _AS_OF_W = 6
+#: The provider column's width, drawn only while a shown Run recorded its runtime.
+_PROVIDER_W = 12
 _FOOTER = 2
 _COL_HEAD = 1
 #: What the filter row says its keys do: Esc and Enter answer only while it is typed into;
@@ -315,6 +319,34 @@ def task_cell(row: ProjectionRow, room: int | None = None) -> str:
     return f"{row.parent_key} {clip_words(title, left)}" if left > 1 else row.parent_key
 
 
+def provider_cell(row: ProjectionRow) -> str:
+    """Return who served a Run's model, as its recorded runtime tuple states, or no value.
+
+    A tuple that never observed its provider leaves the mark, never a borrowed default.
+    """
+    return row.facts.get(RUNTIME_FACTS["provider"]) or NO_VALUE
+
+
+def records_runtime(rows: Sequence[ProjectionRow]) -> bool:
+    """Report whether any of ``rows`` recorded the runtime it ran on.
+
+    The provider column is drawn only then, so a window of Runs that recorded none reads
+    as it did before any Run could record one.
+    """
+    stated = frozenset(RUNTIME_FACTS.values())
+    return any(stated.intersection(row.facts) for row in rows)
+
+
+def selected_strip(row: ProjectionRow) -> str:
+    """Return the SELECTED strip: the Run under the cursor, then the Task it runs.
+
+    The widest frame names what contains the cursor Run, so a drill confirms what the
+    operator already reads rather than discovering it; a Run naming no Task stands alone.
+    """
+    task = "" if row.parent_key is None else f" · {row.parent_key}"
+    return label("SELECTED", f"{row.key}{task}")
+
+
 def _bucket_of(row: ProjectionRow, stalled: frozenset[str]) -> str | None:
     """Return the exception bucket a Run lands in, by the grouping's own tables."""
     try:
@@ -453,20 +485,32 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
         top.append(label("UNBUCKETED", f"{unstated} in no bucket · the row states no status"))
     # the column holds the longest Task key whole, since a key never gives way
     longest = max((cell_len(row.parent_key or "") for row in shown), default=0)
+    # the widest layout always has room for the provider, so it stands beside the Task and
+    # names a Run that recorded none with the no-value mark; narrower, only when one did
+    xwide = view.breadth is Breadth.XWIDE
+    prov_w = _PROVIDER_W if xwide or records_runtime(shown) else 0
     task_w = max(14, longest + 1, (col - 16 - 12 - _AS_OF_W) // 2)
-    cols = [16, task_w, 12, max(12, col - 16 - task_w - 12 - _AS_OF_W - 1)]
-    table = Table([cols[0] - 3, cols[1], cols[2], cols[3], 0], 2)
-    body: list[str] = [table.head(["RUN", "TASK", "STATE", "REASON", "AS OF"])]
-    win = window_rows(view, total=len(shown), cursor=cursor, chrome=len(top) + 1 + _FOOTER)
+    # the provider's room comes out of the reason, which gives way at a word; the Task never
+    reason_w = max(12, col - 16 - task_w - 12 - prov_w - _AS_OF_W - 1)
+    if xwide:
+        heads, widths = ["RUN", "TASK", "PROVIDER", "STATE"], [16 - 3, task_w, prov_w, 12]
+    else:
+        provider = ["PROVIDER"] if prov_w else []
+        heads = ["RUN", "TASK", "STATE", *provider]
+        widths = [16 - 3, task_w, 12, *([prov_w] if prov_w else [])]
+    table = Table([*widths, reason_w, 0], 2)
+    body: list[str] = [table.head([*heads, "REASON", "AS OF"])]
+    selected = 1 if xwide and shown else 0
+    win = window_rows(
+        view, total=len(shown), cursor=cursor, chrome=len(top) + 1 + _FOOTER + selected
+    )
     for index in range(win.start, win.stop):
         row = shown[index]
-        cells = [
-            row.key,
-            pad(task_cell(row, cols[1] - 1), cols[1] - 1),
-            value_cell(row.status).slot,
-            pad(run_reason(row, liveness), cols[3] - 1),
-            as_of(row),
-        ]
+        task = pad(task_cell(row, task_w - 1), task_w - 1)
+        state = value_cell(row.status).slot
+        prov = [pad(provider_cell(row), prov_w - 1)] if prov_w else []
+        lead = [row.key, task, *prov, state] if xwide else [row.key, task, state, *prov]
+        cells = [*lead, pad(run_reason(row, liveness), reason_w - 1), as_of(row)]
         body.append(table.row(cells, index == cursor))
     if not shown:
         body.extend(empty_lines(view, register))
@@ -476,6 +520,8 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     matching = " matching" if (s.bucket or dv.filter_of(s)) else ""
     # a WINDOW row owes the operator only the rows it hides
     foot = [thin(w), win.line(complete=register.complete) + matching] if win.hides else []
+    if selected:
+        foot = [*(foot or [thin(w)]), selected_strip(shown[cursor])]
     rows = [*top, *body, *foot]
     if s.typing:
         return build(view, rows, keybar(list(FILTER_KEYS), w))

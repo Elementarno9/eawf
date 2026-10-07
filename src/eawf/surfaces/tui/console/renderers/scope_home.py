@@ -7,7 +7,8 @@ recedes.
 The native frame draws the same two regions from the read model: every Track, the one
 the cursor is in expanded to the Milestones filed under it, each with its title and
 status, and the attention list under a thin rule. A Track's progress is counted off rows
-the frame holds -- its completed Milestones -- so it is exact rather than estimated. A
+the frame holds -- the Tasks under its Milestones that are ready or integrated, beside its
+Batches done -- so it is exact rather than estimated. A
 Milestone filed under no Track this scope holds is grouped under a ``no track`` heading
 rather than dropped, and a column no producer states wears the unknown token. The name
 column keeps the packet's width at 80 columns and widens to a cap beyond it, so the
@@ -45,6 +46,7 @@ from eawf.surfaces.tui.console.frame import (
     route_keys_bar,
     snap_caret,
     thin,
+    wide_title,
     window_rows,
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
@@ -61,6 +63,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     route_crumb,
 )
 from eawf.surfaces.tui.console.renderers.spine import held
+from eawf.surfaces.tui.console.renderers.task_progress import Progress, batches_done
 from eawf.surfaces.tui.console.width import cell_len, clip, pad
 
 ATTENTION_REGION = "attention"
@@ -125,7 +128,8 @@ _ATTENTION_ROWS = 4
 # The cells the RUNS and ATTENTION columns take beside a tree row's name, and the MINE
 # column the attention count splits off under more than one principal.
 _RUNS_W, _ATTN_W, _MINE_W, _ALL_W = 7, 12, 7, 16
-# The name column: the packet's width below 120 columns, and the cap it widens to above.
+# The name column: the packet's width below 120 columns, and its width at 120, which
+# grows with every column past them.
 _NAME_W, _NAME_CAP = 30, 48
 
 
@@ -208,11 +212,23 @@ def _done(rows: list[SpineRow], status: str) -> int:
     return sum(1 for row in rows if row.field("status").value == status)
 
 
-def progress(spine: SpineView, row: SpineRow) -> str:
-    """Return a Track's progress, counted off the Milestones filed under it."""
+def progress(spine: SpineView, row: SpineRow, filed: Progress) -> str:
+    """Return a Track's progress, counted off the Tasks and Batches under its Milestones.
+
+    A Track whose Milestones hold no Task yet is counted by its Milestones instead, so a
+    Track with nothing cut under it still says how far it has come.
+
+    Args:
+        spine: The home read model.
+        row: The Track.
+        filed: The read model's Tasks and Batches, filed once per frame.
+    """
     under = [m for m in _of(spine, Epoch2Collection.MILESTONE) if m.parent_key == row.key]
     if not under:
         return "no milestone filed"
+    tally, batches = filed.milestones(m.key for m in under)
+    if tally.total:
+        return f"{tally.landed} of {dv.plural(tally.total, 'task')} ready · {batches_done(batches)}"
     done = _done(under, str(MilestoneStatus.COMPLETED))
     return f"{done} of {dv.plural(len(under), 'milestone')} done"
 
@@ -301,7 +317,7 @@ def _tree_lines(
     w = view.w
     attention = _home_attention(view)
     shared = len(attention.holders()) > 1
-    first = _NAME_CAP if view.wide else _NAME_W
+    first = wide_title(w, _NAME_CAP) if view.wide else _NAME_W
     widths = [first, _RUNS_W, *([_MINE_W, _ALL_W] if shared else [_ATTN_W]), 0]
     tracks = Table(widths, 2)
     # one grid for the whole tree: a Milestone's name sits two cells further in and ends
@@ -309,6 +325,7 @@ def _tree_lines(
     leaves = Table([first - 2, 0], 4)
     heads = ["RUNS", *(["MINE", "ALL PRINCIPALS"] if shared else ["ATTENTION"])]
     lines = [tracks.head(["MILESTONES", *heads, "PROGRESS"])]
+    under = Progress.of(spine.rows)
     win = window_rows(view, total=len(tree), cursor=cursor or 0, chrome=chrome + 2)
     for index in range(win.start, win.stop):
         item, on = tree[index], index == cursor
@@ -320,7 +337,7 @@ def _tree_lines(
             counts_ = [attention.cell(row.key, own=True)] if shared else []
             counts_.append(attention.cell(row.key, own=False))
             name = clip(_name(row), first - 2)
-            line = tracks.row([name, _runs(row), *counts_, progress(spine, row)], on)
+            line = tracks.row([name, _runs(row), *counts_, progress(spine, row, under)], on)
         else:
             row = item.row
             name = clip(_name(item.row), first - 4)

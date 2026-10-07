@@ -183,8 +183,8 @@ def test_a_complete_read_names_no_cursor(route: str, document: dict[str, Any]) -
 def test_only_an_incomplete_read_says_how_far_it_got() -> None:
     whole = build_spine_view(_projection("scope.home", HOME))
     part = dataclasses.replace(whole, complete=False)
-    assert counts(whole) == "1 track · 1 milestone · 0 batches"
-    assert counts(part) == "1 track · 1 milestone · 0 batches · known · cursor 41,208"
+    assert counts(whole) == "1 track · 1 milestone · 0 batches · 0 tasks"
+    assert counts(part) == "1 track · 1 milestone · 0 batches · 0 tasks · known · cursor 41,208"
 
 
 def test_a_detail_frame_names_its_subject() -> None:

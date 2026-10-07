@@ -24,7 +24,7 @@ from eawf.kernel.projection.compute import ProjectionRow
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.chrome import EntryState
 from eawf.surfaces.tui.console.fixture import Fixture
-from eawf.surfaces.tui.console.frame import View, bar, build, header, thin, unheld
+from eawf.surfaces.tui.console.frame import View, bar, build, header, thin, unheld, with_chrome
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import ENTRY_ROUTE
 from eawf.surfaces.tui.console.navigation import Ctx
@@ -171,7 +171,7 @@ def unknown_frame(view: View) -> list[str]:
         *wrapped("NEEDS", spec.needs, w),
         thin(w),
     ]
-    return build(view, rows, keybar([("Esc", "back")], w))
+    return build(view, rows, keybar(with_chrome(view, [("Esc", "back")]), w))
 
 
 def loading_frame(view: View) -> list[str]:
@@ -183,7 +183,7 @@ def loading_frame(view: View) -> list[str]:
     named = s.subj_id or s.route
     crumb = f" Eä ▸ {view.fixture.scope} ▸ {s.route}" + (f" ▸ {s.subj_id}" if s.subj_id else "")
     rows = [header(view, crumb), f" Loading {named}…", bar(view.w)]
-    return build(view, rows, keybar([("Esc", "back")], view.w))
+    return build(view, rows, keybar(with_chrome(view, [("Esc", "back")]), view.w))
 
 
 def render_route(view: View) -> list[str]:

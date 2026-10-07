@@ -58,6 +58,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     unstated_rows,
 )
 from eawf.surfaces.tui.console.renderers.spine import finished_rows, finished_subject
+from eawf.surfaces.tui.console.renderers.task_progress import Progress, batches_done
 from eawf.surfaces.tui.console.width import cell_len, pad
 from eawf.workflow.projection.acceptance import AcceptanceBundleView, JourneyStepRow
 
@@ -409,6 +410,8 @@ def milestone_frame(view: View, model: AcceptanceBundleView, subject: RouteRecor
     sec = SECTIONS[session.section % len(SECTIONS)]
     batches = children(model.rows, subject.key, Epoch2Collection.BATCH)
     done = sum(1 for batch in batches if status(batch) == BatchStatus.COMPLETED.value)
+    filed = Progress.of(model.rows)
+    tally, live = filed.milestones((subject.key,))
     track = subject.parent_key
     done_with = finished_subject(session, model)
     final = " · final" if done_with is not None else ""
@@ -426,6 +429,7 @@ def milestone_frame(view: View, model: AcceptanceBundleView, subject: RouteRecor
         lrow("BUNDLE", _bundle_text(model)),
         lrow("APPROVAL", _approval_text(model)),
         lrow("BUILT", f"{dv.plural(len(batches), 'batch', 'es')} · {done} completed"),
+        lrow("PROGRESS", f"{tally.line()} · {batches_done(live)}"),
         lrow("", _tabs(sec)),
         thin(w),
         *_section_rows(sec, model, subject),
@@ -434,7 +438,7 @@ def milestone_frame(view: View, model: AcceptanceBundleView, subject: RouteRecor
     listed = child_rows(
         view,
         "BATCHES",
-        [reference(batch) for batch in batches],
+        [f"{reference(batch)} · {filed.batch_cell(batch)}" for batch in batches],
         cursor,
         chrome=len(top) + len(below),
         empty="∅ no Batch is cut under this Milestone",
