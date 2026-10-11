@@ -1,9 +1,9 @@
 """Child-environment scrub: build a spawned runtime's env from an allowlist.
 
-The one live agent spawn (``claude -p`` via
-:meth:`~eawf.runtime.runtimes.claude.adapter.ClaudeAdapter.spawn_session`)
-today inherits the FULL parent environment, carrying any ``AWS_*`` /
-``GH_TOKEN`` / ``SSH_AUTH_SOCK`` credential straight into the child. This
+A live agent spawn (the native Run launcher in
+:mod:`~eawf.runtime.runtimes.claude.sdk_launcher`) would otherwise
+inherit the FULL parent environment, carrying any ``AWS_*`` / ``GH_TOKEN``
+/ ``SSH_AUTH_SOCK`` credential straight into the child. This
 module closes that cred-exfil-via-env gap by constructing the child env
 from an ALLOWLIST rather than scrubbing a denylist: a denylist fails open
 on the next unknown credential variable, so we start from empty (the

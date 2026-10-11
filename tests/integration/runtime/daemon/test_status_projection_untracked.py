@@ -117,12 +117,6 @@ def test_only_a_terminal_or_delivery_fact_changes_a_tracked_file(tmp_path: Path)
         commit_all(walker, "chore: record the completed Task")
         walker.transition(
             planned.run,
-            "RUNNING",
-            "the worker took the Run up",
-            updates={"started_at": datetime.now(UTC).isoformat()},
-        )
-        walker.transition(
-            planned.run,
             "COMPLETED",
             "the Run's report is bound and its work integrated",
             updates={"ended_at": datetime.now(UTC).isoformat()},

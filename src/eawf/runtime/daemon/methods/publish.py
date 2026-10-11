@@ -3,12 +3,13 @@
 ``runtime.publish.bind_staged``: the daemon half of ``eawf publish``.
 
 An adoption of scratch work is staged in the generation's local tier
-because its scratch SHA will not survive the squash. Once the publish has
-built one commit per Batch, the caller names, per Batch, the commits that
-now carry it; the daemon binds each staged row to the one whose tree equals
-the staged tree, reads the change back from the repository, files the
-adoption and the generation it selects at the published commit, exactly as
-an adoption of already-published work would, and removes the staged row.
+until the commit carrying it is published. At publish the caller names, per
+Batch, the commits carrying its work; the daemon binds each staged row to
+the one whose tree equals the staged tree, reads the change back from the
+repository, files the adoption and the generation it selects at the
+published commit, exactly as an adoption of already-published work would,
+and removes the staged row. A row whose Batch has since closed needs no
+binding and is passed over.
 
 Every row is checked before anything is written, so a row that cannot bind
 leaves every row staged and every ledger untouched. A row whose Batch
@@ -332,13 +333,20 @@ def bind_published(
     with context.session(list(offered)) as session:
         directory = staged_dir(session.document_path)
         files = sorted(directory.glob("*.json"))
-        rows = [(path, StagedBinding.model_validate_json(path.read_bytes())) for path in files]
+        batches = document_rows(session.read_document(), Epoch2Collection.BATCH)
+        # A Batch that closed needs no binding, so its staged rows are left where they are.
+        rows = [
+            (path, row)
+            for path, row in (
+                (path, StagedBinding.model_validate_json(path.read_bytes())) for path in files
+            )
+            if row.batch_ref.entity_key in batches
+        ]
         stray = sorted({str(row.batch_ref) for _, row in rows} - set(offered))
         if stray:
             raise _refused(
                 "publish_batch_unoffered", f"staged rows name batches with no commits: {stray}"
             )
-        batches = document_rows(session.read_document(), Epoch2Collection.BATCH)
         tasks = document_rows(session.read_document(), Epoch2Collection.TASK)
         ledger = session.ledger_path(Epoch2Collection.BATCH)
         planned: list[_Planned] = []

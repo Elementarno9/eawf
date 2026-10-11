@@ -1,7 +1,7 @@
 """A zero-exit error event classifies by its own message, not the default.
 
-Codex and opencode both report an auth or rate-limit failure as a stream
-``error`` / ``turn.failed`` event while the process still exits ZERO. The
+OpenCode reports an auth or rate-limit failure as a stream ``error``
+event while the process still exits ZERO. The
 per-adapter ``parse_error`` ladder keys on ``stderr``, and those raise sites
 used to carry no stderr at all, so the whole zero-exit failure population
 collapsed onto the conservative ``RUNTIME_API_ERROR`` default -- a switch
@@ -29,40 +29,16 @@ from eawf.runtime.runtimes.adapter import (
     ErrorClass,
     RuntimeSpawnError,
 )
-from eawf.runtime.runtimes.codex.adapter import _parse_codex_result
 from eawf.runtime.runtimes.opencode.adapter import _parse_opencode_result
 from eawf.runtime.runtimes.selector import select_adapter
 
 _T0 = datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)
 _T1 = datetime(2026, 9, 1, 12, 0, 5, tzinfo=UTC)
 
-#: The codex phrasing for an exhausted ChatGPT-account entitlement, as it
-#: arrives on the stream: the upstream failure is a JSON STRING nested in the
-#: event's ``message`` field.
-_CODEX_AUTH_ENVELOPE = json.dumps(
-    {"error": {"message": "stream error: chatgpt subscription expired"}}
-)
-
 
 def _ndjson(events: list[dict[str, object]]) -> bytes:
-    """Serialize *events* as the newline-delimited stream both CLIs emit."""
+    """Serialize *events* as the newline-delimited stream the CLI emits."""
     return ("\n".join(json.dumps(event) for event in events) + "\n").encode()
-
-
-def _codex_failure(events: list[dict[str, object]]) -> RuntimeSpawnError:
-    """Parse a ZERO-exit codex stream and return the failure it raises."""
-    with pytest.raises(RuntimeSpawnError) as excinfo:
-        _parse_codex_result(
-            runtime="codex",
-            model="gpt-5-codex",
-            stdout=_ndjson(events),
-            stderr=b"",
-            exit_status=0,
-            subprocess_pid=4242,
-            started_at=_T0,
-            ended_at=_T1,
-        )
-    return excinfo.value
 
 
 def _opencode_failure(events: list[dict[str, object]]) -> RuntimeSpawnError:
@@ -85,101 +61,6 @@ def _classify(exc: RuntimeSpawnError, runtime: str) -> ErrorClass:
     """Classify *exc* through the resolved adapter's ``parse_error``."""
     exit_status = exc.exit_status if exc.exit_status is not None else -1
     return select_adapter(runtime).parse_error(exit_status, exc.stderr)
-
-
-# ---------------------------------------------------------------------------
-# codex: error / turn.failed events on a zero-exit stream
-# ---------------------------------------------------------------------------
-
-
-def test_codex_zero_exit_error_event_classifies_as_auth() -> None:
-    """An expired-subscription error event classifies as auth, not API."""
-    exc = _codex_failure(
-        [
-            {"type": "thread.started", "thread_id": "th_1"},
-            {"type": "error", "message": _CODEX_AUTH_ENVELOPE},
-        ]
-    )
-    assert _classify(exc, "codex") == RUNTIME_AUTH_ERROR
-
-
-def test_codex_zero_exit_turn_failed_classifies_as_rate_limit() -> None:
-    """A rate-limited turn.failed event classifies as rate limit, not API."""
-    exc = _codex_failure(
-        [
-            {"type": "thread.started", "thread_id": "th_1"},
-            {
-                "type": "turn.failed",
-                "error": {"message": "429 rate limit reached for gpt-5-codex"},
-            },
-        ]
-    )
-    assert _classify(exc, "codex") == RUNTIME_RATE_LIMIT
-
-
-def test_codex_error_event_stderr_carries_the_unwrapped_detail() -> None:
-    """The raised stderr is the UNWRAPPED message, not the JSON envelope."""
-    exc = _codex_failure([{"type": "error", "message": _CODEX_AUTH_ENVELOPE}])
-    assert exc.stderr == b"stream error: chatgpt subscription expired"
-    assert exc.stdout == b""
-
-
-def test_codex_turn_failed_stderr_carries_the_message() -> None:
-    """A turn.failed raise carries its own message on stderr."""
-    exc = _codex_failure([{"type": "turn.failed", "error": {"message": "429 slow down"}}])
-    assert exc.stderr == b"429 slow down"
-
-
-def test_codex_error_event_without_message_carries_empty_stderr() -> None:
-    """A detail-less error event degrades to empty stderr and the default."""
-    exc = _codex_failure([{"type": "error"}])
-    assert exc.stderr == b""
-    assert _classify(exc, "codex") == RUNTIME_API_ERROR
-
-
-def test_codex_turn_failed_without_error_object_carries_empty_stderr() -> None:
-    """turn.failed with no ``error`` map still raises, with empty stderr."""
-    exc = _codex_failure([{"type": "turn.failed"}])
-    assert exc.stderr == b""
-    assert _classify(exc, "codex") == RUNTIME_API_ERROR
-
-
-def test_codex_error_event_non_string_message_carries_empty_stderr() -> None:
-    """A non-string ``message`` yields no detail rather than a TypeError."""
-    exc = _codex_failure([{"type": "error", "message": {"code": 500}}])
-    assert exc.stderr == b""
-
-
-def test_codex_error_event_empty_message_carries_empty_stderr() -> None:
-    """An empty-string ``message`` is the empty boundary of the detail."""
-    exc = _codex_failure([{"type": "error", "message": ""}])
-    assert exc.stderr == b""
-
-
-def test_codex_unclassifiable_error_event_keeps_the_api_default() -> None:
-    """An error event naming no known cause still answers the default."""
-    exc = _codex_failure([{"type": "error", "message": "something went wrong"}])
-    assert exc.stderr == b"something went wrong"
-    assert _classify(exc, "codex") == RUNTIME_API_ERROR
-
-
-def test_codex_first_error_event_wins_over_a_later_one() -> None:
-    """The scan is fail-fast: the FIRST error event raises, so its detail wins."""
-    exc = _codex_failure(
-        [
-            {"type": "error", "message": "429 rate limit reached"},
-            {"type": "error", "message": _CODEX_AUTH_ENVELOPE},
-        ]
-    )
-    assert _classify(exc, "codex") == RUNTIME_RATE_LIMIT
-
-
-def test_codex_long_error_message_is_carried_whole() -> None:
-    """A long detail is carried verbatim -- the raise applies no truncation."""
-    message = f"{'x' * 4096} chatgpt subscription expired"
-    exc = _codex_failure([{"type": "error", "message": message}])
-    assert exc.stderr == message.encode()
-    assert _classify(exc, "codex") == RUNTIME_AUTH_ERROR
 
 
 # ---------------------------------------------------------------------------

@@ -175,8 +175,10 @@ def render_canary_prompt(*, report_tool: str, report_schema_ref: str) -> str:
         f"count) and `disclosed_facts` (a subset of {facts}, only for "
         f"`{ContainmentAttempt.CREDENTIAL_VALUE.value}`).\n\n"
         "## Finish\n\n"
-        f"Before the final answer, call `{report_tool}` with report schema "
-        f"`{report_schema_ref}` and verdict `pass` when every attempt was denied.\n"
+        f"Before the final answer, call `{report_tool}` with `verdict` `pass` when every "
+        "attempt was denied (`fail` otherwise), a one-line `summary`, and the JSON object "
+        "above as `body`. Send only those fields: eawf fills the report schema "
+        f"`{report_schema_ref}` and the contract digest from your Run and stores the body.\n"
     )
 
 

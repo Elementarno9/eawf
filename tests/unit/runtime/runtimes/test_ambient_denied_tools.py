@@ -2,14 +2,8 @@
 
 ``CompiledRunSpec.tool_policy`` carries semantic tool ids; the spawn path's
 ``denied_tools`` carries ambient names from :data:`TOOL_UNIVERSE`. The two
-vocabularies do not overlap, and the codex lane expresses a deny as its
-inverted allowlist, so forwarding a semantic id subtracts nothing and grants
-the child the whole universe -- strictly more authority than an empty
-deny-list, which emits no override at all.
-
-The widening mechanism is pinned here alongside the refusal, so a future
-change that re-enables the forward reds on the mechanism rather than on the
-guard's message.
+vocabularies do not overlap, so forwarding a semantic id would deny nothing
+while appearing to deny something.
 """
 
 from __future__ import annotations
@@ -22,7 +16,7 @@ import pytest
 from eawf.kernel.config.providers import ProviderConfigError
 from eawf.kernel.runtime.compiled import CompiledRunSpec
 from eawf.runtime.runtimes.adapter import RuntimeSpawnError, ambient_denied_tools
-from eawf.runtime.sandbox.policy import TOOL_UNIVERSE, invert_deny_to_allow
+from eawf.runtime.sandbox.policy import TOOL_UNIVERSE
 from eawf.workflow.runtime.compile import compile_run_spec
 from tests import _provider_helpers as fx
 
@@ -51,25 +45,13 @@ def _spec(*, deny: list[str]) -> CompiledRunSpec:
     )
 
 
-# ---- the widening this guard exists to stop --------------------------------
+# ---- the two vocabularies --------------------------------------------------
 
 
 def test_semantic_denial_shares_no_name_with_the_ambient_universe() -> None:
     """The two vocabularies are disjoint, which is why a forward cannot work."""
     assert SEMANTIC_DENIAL not in TOOL_UNIVERSE
     assert AMBIENT_DENIAL in TOOL_UNIVERSE
-
-
-def test_inverting_a_semantic_denial_would_grant_the_whole_universe() -> None:
-    """Forwarding a semantic id grants every ambient tool instead of denying one."""
-    assert invert_deny_to_allow([SEMANTIC_DENIAL]) == sorted(TOOL_UNIVERSE)
-
-
-def test_inverting_an_ambient_denial_withholds_exactly_that_tool() -> None:
-    """The same helper is correct for the vocabulary it was written for."""
-    allowed = invert_deny_to_allow([AMBIENT_DENIAL])
-    assert AMBIENT_DENIAL not in allowed
-    assert len(allowed) == len(TOOL_UNIVERSE) - 1
 
 
 # ---- the guard ------------------------------------------------------------
@@ -140,10 +122,10 @@ def test_ambient_denied_tools_reads_only_the_merged_policy() -> None:
 
 def _launcher_sites() -> list[tuple[str, Any]]:
     """Return the launcher modules that must route through the guard."""
-    from eawf.runtime.runtimes.claude import adapter as claude_adapter
-    from eawf.runtime.runtimes.codex import adapter as codex_adapter
+    from eawf.runtime.runtimes.claude import sdk_launcher as claude_launcher
+    from eawf.runtime.runtimes.codex import app_server as codex_launcher
 
-    return [("claude", claude_adapter), ("codex", codex_adapter)]
+    return [("claude", claude_launcher), ("codex", codex_launcher)]
 
 
 @pytest.mark.parametrize("name,module", _launcher_sites(), ids=lambda value: str(value)[:12])

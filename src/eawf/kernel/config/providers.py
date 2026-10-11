@@ -504,8 +504,15 @@ def parse_provider_configuration(
     )
 
 
-def _runtime_section(layer: ProviderLayer, path: Path) -> Mapping[str, Any]:
+def read_runtime_section(layer: ProviderLayer, path: Path) -> Mapping[str, Any]:
     """Return the ``runtime`` mapping of the config file at *path*.
+
+    Args:
+        layer: The provider layer the file is read as, named in a refusal.
+        path: The layer's config file; a missing file reads as empty.
+
+    Returns:
+        The file's ``runtime`` mapping, empty when it declares none.
 
     Raises:
         ProviderConfigError: The file is unreadable, or ``runtime`` is not
@@ -560,5 +567,5 @@ def load_provider_configuration(
                 "repository=None when the workspace is the repository",
             )
         paths["repository"] = repository_path
-    documents = {layer: _runtime_section(layer, path) for layer, path in paths.items()}
+    documents = {layer: read_runtime_section(layer, path) for layer, path in paths.items()}
     return parse_provider_configuration(documents, registry=registry)

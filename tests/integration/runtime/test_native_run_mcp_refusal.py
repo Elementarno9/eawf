@@ -49,6 +49,7 @@ def _request(spec: CompiledRunSpec, workspace: Path) -> NativeLaunchRequest:
         capsule=capsule,
         workspace_handle=f"wsh-{'a' * 32}",
         workspace=workspace,
+        repo_root=workspace.parent,
         prompt="implement the fixture task",
         hello_sequence=1,
         usage_sink=None,

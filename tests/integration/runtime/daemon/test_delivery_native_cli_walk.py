@@ -62,7 +62,7 @@ def test_native_work_walks_from_a_lease_to_a_completed_task_through_the_cli(
                      "--submission-ref", submission_ref,
                      *[arg for path in claim["changed_paths"] for arg in ("--changed-path", path)],
                      "--resulting-tree-digest", claim["resulting_tree_digest"],
-                     "--expected-run-revision", "1",
+                     "--expected-run-revision", "2",
                      "--idempotency-key", "submit-1", "--actor", ACTOR)["result"]  # fmt: skip
     assert submitted["candidate_ref"] == candidate_identity(
         task_ref=world.TASK, resulting_tree_digest=claim["resulting_tree_digest"]
@@ -71,7 +71,7 @@ def test_native_work_walks_from_a_lease_to_a_completed_task_through_the_cli(
                   "--resulting-tree-digest", report["resulting_tree_digest"],
                   "--verdict", report["verdict"], "--report-digest", report["report_digest"],
                   "--report-schema-ref", report["report_schema_ref"],
-                  "--expected-run-revision", "1",
+                  "--expected-run-revision", "2",
                   "--idempotency-key", "seal-1", "--actor", ACTOR)["result"]  # fmt: skip
     assert sealed["sealed"] is True
     recorded = eawf(root, "record", "evidence", world.BATCH, "--kind", "artifact",

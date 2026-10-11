@@ -46,6 +46,7 @@ from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.native_dispatch import (
     RUN_DISPATCH_METHOD,
+    DispatchAnswer,
     DispatchAttempt,
     DispatchParams,
     DispatchRefusal,
@@ -55,6 +56,7 @@ from eawf.runtime.daemon.native_dispatch import (
     run_ledger,
     standing_attempt,
 )
+from eawf.runtime.daemon.run_supervisor import supervisor_of
 from eawf.runtime.runtimes.adapter import (
     NativeLaunchOutcome,
     NativeLaunchRequest,
@@ -337,23 +339,31 @@ def dispatch(
     *,
     params: dict[str, Any] | None = None,
     now: datetime = AT,
+    settle: bool = False,
 ) -> dict[str, Any]:
     """Drive one dispatch through the driver with *launcher* installed.
 
     A caller that goes on to reach a verb stamping from the real clock passes that
     clock here, so the lease this dispatch issues is measured against the same one.
+    With *settle* the call also awaits the supervisor until the worker's turn is over
+    and the Run ended, which stamps from the real clock too.
     """
     supplied = params if params is not None else dispatch_params(canary)
     args = DispatchParams.model_validate(
         {key: value for key, value in supplied.items() if key != "repo_root"}
     )
     context = ctx.native_root_context(canary.root / ".ea")
-    answer = asyncio.run(
-        native_dispatch.dispatch_run(
+
+    async def drive() -> DispatchAnswer:
+        answer = await native_dispatch.dispatch_run(
             context, args, now=now, launchers=dict(compile_launchers((launcher,)))
         )
-    )
-    return answer.model_dump(mode="json")
+        supervised = supervisor_of(context).task_of(str(args.urn))
+        if settle and supervised is not None:
+            await supervised
+        return answer
+
+    return asyncio.run(drive()).model_dump(mode="json")
 
 
 # ---- the registered verb ----------------------------------------------------

@@ -18,17 +18,21 @@ plan would be refused rather than run.
 
 The same honesty governs the dispatch arm. Opening a Run needs a compiled
 run specification -- provider documents, a certified binding set, an
-authority capsule and a rendered prompt -- and no surface this grammar
-reaches produces one. Without it the pass stops for an operator rather
-than sending a request it would have had to fabricate. An operator who
-has compiled one presents it with ``--run-request`` beside the one Task
-(``--task``) and the Run it runs under (``--run``); the pass then reads
-the Run back and asks the daemon to dispatch exactly that request, and
-the dispatched Task leaves the frontier it reports. A ``--budget`` named
-on this invocation overrides the presented request's own compiled Run
-token ceiling; omitting it leaves that compiled default untouched. The
-retry arm is complete: resuming a Run needs the Run reference and
-nothing else, so ``--resume`` reaches the daemon.
+authority capsule and a rendered prompt -- and the daemon compiles it from
+the Task itself: each Task standing ready on the first stage of the plan is
+sent to the Task dispatch verb by key, with the ``--provider`` and
+``--budget`` this invocation names, and the daemon claims it, creates its
+Run and answers once the worker is announced. A refusal for one Task is
+reported against that Task and the rest are still sent. An operator who
+has compiled a request by hand presents it with ``--run-request`` beside
+the one Task (``--task``) and the Run it runs under (``--run``); the pass
+then reads the Run back and asks the daemon to dispatch exactly that
+request instead. A ``--budget`` named on this invocation overrides the
+presented request's own compiled Run token ceiling; omitting it leaves
+that compiled default untouched. The retry arm is complete: resuming a Run
+needs the Run reference and nothing else, so ``--resume`` reaches the
+daemon. ``--dry-run`` sends nothing and stops on the frontier it would
+have dispatched.
 """
 
 from __future__ import annotations
@@ -79,7 +83,10 @@ TASK_READ_METHOD: Final = "projection.task.detail.read"
 #: The Run read model a resumed Run is re-derived from.
 RUN_READ_METHOD: Final = "projection.run.detail.read"
 
-#: The verb that opens one Run for one Task.
+#: The verb that runs one Task as a new Run, compiled by the daemon.
+TASK_DISPATCH_METHOD: Final = "runtime.task.dispatch"
+
+#: The verb that opens one Run for one Task from a presented request.
 RUN_DISPATCH_METHOD: Final = "runtime.run.dispatch"
 
 #: The verb that resumes or relinks one Run.
@@ -118,8 +125,11 @@ _PLANNED_STATUS: Final = "PLANNED"
 #: them out and an edge to one of them orders nothing.
 _SETTLED_STATUSES: Final = frozenset({"COMPLETED", "CANCELLED", "FAILED", "DROPPED"})
 
-#: Why the pass cannot open a Run from this grammar.
-_DISPATCH_STOP: Final = "run_request_uncompilable"
+#: Why a presented request opened no Run: it named no single Task and Run.
+_REQUEST_STOP: Final = "run_request_unaddressed"
+
+#: Why a dry run stopped with a frontier it did not dispatch.
+_DRY_RUN_STOP: Final = "dry_run"
 
 #: Who a dispatch or retry the pass sends is attributed to. The skill's own
 #: slash-prefixed name is not a valid principal key (the daemon's
@@ -149,6 +159,19 @@ def _budgeted_request(run_request: Mapping[str, Any], budget: int | None) -> dic
     capsule = dict(run_request.get("capsule") or {})
     capsule["token_budget"] = budget
     return {**run_request, "capsule": capsule}
+
+
+def _candidates(args: DispatchArgs, tasks: dict[str, Any], *, sent: set[str]) -> list[str]:
+    """Return the Tasks ready on the first stage of the derived plan, in plan order.
+
+    A ready Task stands at ``PLANNED``, was not sent by this pass and, when
+    ``--task`` narrowed the pass, is one of the Tasks it names.
+    """
+    planned = set(row_keys(tasks, status=_PLANNED_STATUS)) - sent
+    if args.task:
+        planned &= set(args.task)
+    derived = derive_concurrency_plan(_graph_tasks(tasks))
+    return [key for key in derived.fan_out if key in planned]
 
 
 def _graph_tasks(tasks: dict[str, Any]) -> tuple[GraphTask, ...]:
@@ -187,15 +210,16 @@ class DispatchArgs(BaseModel):
         batch_ref: The Batch to coordinate.
         task: Tasks to restrict the pass to; empty means the whole Batch.
         until: How far the pass runs before it reports.
-        provider: The provider id a dispatched Run would bind.
+        provider: The runtime each dispatched Task runs on; the daemon takes
+            the first entry of ``runtime.preference`` when omitted.
         resume: A Run reference to resume instead of opening new work.
         run: The Run the one named Task is dispatched under.
         run_request: The compiled dispatch request an operator presents
             for that Run: the compile request, provider documents and
             registry, bindings, capsule, base, lease and prompt.
-        budget: The Run token ceiling to seal into the presented request's
-            capsule, overriding whatever it already carries. ``None``
-            leaves the capsule's own compiled value untouched.
+        budget: The Run token ceiling each dispatched Task's Run is sealed
+            with, or that overrides whatever a presented request's capsule
+            already carries. ``None`` leaves the compiled value untouched.
         dry_run: Render the plan and record no effect.
         idempotency_key: This request's name; minted when omitted.
         repo_root: The tree to address, when not the daemon's own.
@@ -207,7 +231,7 @@ class DispatchArgs(BaseModel):
     batch_ref: str = Field(min_length=1)
     task: tuple[str, ...] = ()
     until: Literal["frontier-empty", "candidate-ready", "attention"] = "frontier-empty"
-    provider: str | None = None
+    provider: Literal["claude-code", "codex"] | None = None
     resume: str | None = None
     run: str | None = None
     run_request: dict[str, Any] | None = None
@@ -260,6 +284,8 @@ class DispatchSkill(Skill):
             ]
         except RpcRefusedError as refused:
             return self._refused(args, refused)
+        if args.run_request is None and args.resume is None and not args.dry_run:
+            dispatched += self._dispatch_frontier(caller, args, params, tasks)
         return self._report(args, batch=batch, tasks=tasks, dispatched=dispatched)
 
     def _resume(
@@ -343,6 +369,62 @@ class DispatchSkill(Skill):
             )
         ]
 
+    def _dispatch_frontier(
+        self,
+        caller: RpcCaller,
+        args: DispatchArgs,
+        params: dict[str, Any],
+        tasks: dict[str, Any],
+    ) -> list[DispatchedRun]:
+        """Send each Task ready on the first stage to the daemon's Task dispatch verb.
+
+        Each Task is dispatched on its own, so one refusal is reported
+        against its Task and leaves the rest of the stage to go out.
+
+        Args:
+            caller: The transport seam.
+            args: The validated invocation.
+            params: The tree-addressing params every call carries.
+            tasks: The Task read model the frontier is derived from.
+
+        Returns:
+            One row per Task sent, dispatched or refused, in plan order.
+        """
+        extra: dict[str, Any] = {}
+        if args.provider is not None:
+            extra["provider"] = args.provider
+        if args.budget is not None:
+            extra["budget"] = args.budget
+        rows: list[DispatchedRun] = []
+        for key in _candidates(args, tasks, sent=set()):
+            try:
+                answer = RPC_SCOPE.call(
+                    caller,
+                    TASK_DISPATCH_METHOD,
+                    {**params, **extra, "task": key, "actor": _ACTOR_PRINCIPAL},
+                )
+            except RpcRefusedError as refused:
+                logger.info(f"dispatch task refused task={key} code={refused.code}")
+                rows.append(
+                    DispatchedRun(
+                        task_ref=key,
+                        run_ref="",
+                        method=TASK_DISPATCH_METHOD,
+                        outcome="refused",
+                        refusal_code=refused.code,
+                    )
+                )
+                continue
+            rows.append(
+                DispatchedRun(
+                    task_ref=key,
+                    run_ref=str(answer.get("run_ref", "")),
+                    method=TASK_DISPATCH_METHOD,
+                    outcome="dispatched",
+                )
+            )
+        return rows
+
     def _report(
         self,
         args: DispatchArgs,
@@ -352,12 +434,16 @@ class DispatchSkill(Skill):
         dispatched: list[DispatchedRun],
     ) -> SkillResult:
         """Fold the read models into the coordination report."""
-        sent = {row.task_ref for row in dispatched if row.method == RUN_DISPATCH_METHOD}
+        sent = {
+            row.task_ref
+            for row in dispatched
+            if row.method in {RUN_DISPATCH_METHOD, TASK_DISPATCH_METHOD}
+        }
         derived = derive_concurrency_plan(_graph_tasks(tasks))
         planned = set(row_keys(tasks, status=_PLANNED_STATUS)) - sent
         if args.task:
             planned &= set(args.task)
-        candidates = [key for key in derived.fan_out if key in planned]
+        candidates = _candidates(args, tasks, sent=sent)
         cursor = batch.get("header", {}).get("source_cursor")
         plan = ConcurrencyPlan(
             parallel=list(derived.fan_out),
@@ -365,8 +451,24 @@ class DispatchSkill(Skill):
             stages=[list(stage) for stage in derived.stages],
             reasons={ref: list(why) for ref, why in derived.reasons.items()},
         )
+        refusals = [row for row in dispatched if row.outcome == "refused"]
+        if refusals:
+            return self._ok(
+                args,
+                outcome="blocked",
+                cursor=cursor,
+                plan=plan,
+                dispatched=dispatched,
+                frontier=[row.task_ref for row in refusals],
+                stopped_on=sorted({str(row.refusal_code) for row in refusals}),
+                reason=(
+                    f"the daemon refused {len(refusals)} Task(s) sent from batch "
+                    f"{args.batch_ref}; each refused row names its Task and code"
+                ),
+            )
         if not candidates:
             waiting = len(planned)
+            started = sum(row.method == TASK_DISPATCH_METHOD for row in dispatched)
             return self._ok(
                 args,
                 outcome="frontier_empty",
@@ -378,6 +480,7 @@ class DispatchSkill(Skill):
                 reason=(
                     f"batch {args.batch_ref} has no undispatched Task standing at "
                     f"{_PLANNED_STATUS} on the first stage of its derived plan"
+                    + (f"; {started} dispatched by this pass" if started else "")
                     + (f"; {waiting} wait on earlier stages" if waiting else "")
                 ),
             )
@@ -387,10 +490,15 @@ class DispatchSkill(Skill):
             plan=plan,
             dispatched=dispatched,
             frontier=candidates,
+            stop=_DRY_RUN_STOP if args.dry_run else _REQUEST_STOP,
             reason=(
                 f"{len(candidates)} Task(s) stand ready on the first stage of batch "
-                f"{args.batch_ref}'s derived plan; no compiled run specification reaches this "
-                "pass, so it stops rather than inventing a request"
+                f"{args.batch_ref}'s derived plan and this pass sent none of them: "
+                + (
+                    "it is a dry run"
+                    if args.dry_run
+                    else "a presented --run-request opens a Run only beside one --task and --run"
+                )
             ),
         )
 
@@ -420,7 +528,11 @@ class DispatchSkill(Skill):
         return SkillResult(
             status=status_for(outcome),
             body=body.model_dump(mode="json"),
-            next_valid_actions=[f"/verify {args.batch_ref} --mode all"],
+            next_valid_actions=[
+                f"/dispatch {args.batch_ref}"
+                if outcome == "blocked"
+                else f"/verify {args.batch_ref} --mode all"
+            ],
         )
 
     def _needs_operator(
@@ -431,6 +543,7 @@ class DispatchSkill(Skill):
         plan: ConcurrencyPlan,
         dispatched: list[DispatchedRun],
         frontier: list[str],
+        stop: str,
         reason: str,
     ) -> SkillResult:
         """Build the stop-for-an-operator result, which is a valid outcome."""
@@ -440,16 +553,17 @@ class DispatchSkill(Skill):
             plan=plan,
             dispatched=dispatched,
             frontier=frontier,
-            stopped_on=[_DISPATCH_STOP],
+            stopped_on=[stop],
             outcome="needs_operator",
             reason=reason,
             user_question=UserQuestion(
                 question=f"How should the ready Tasks of batch {args.batch_ref} be dispatched?",
                 options=[
                     UserQuestionOption(
-                        label="present compiled requests",
+                        label="dispatch them",
                         description=(
-                            "Re-invoke with --task, --run and --run-request for each ready Task."
+                            "Re-invoke with neither --dry-run nor --run-request; the daemon "
+                            "compiles and dispatches each ready Task."
                         ),
                     ),
                     UserQuestionOption(
@@ -462,7 +576,7 @@ class DispatchSkill(Skill):
         return SkillResult(
             status=status_for("needs_operator"),
             body=body.model_dump(mode="json"),
-            next_valid_actions=[f"/dispatch {args.batch_ref} --task <ref> --dry-run"],
+            next_valid_actions=[f"/dispatch {args.batch_ref}"],
         )
 
     def _refused(self, args: DispatchArgs, refused: RpcRefusedError) -> SkillResult:
@@ -505,6 +619,7 @@ __all__ = [
     "RUN_DISPATCH_METHOD",
     "RUN_READ_METHOD",
     "RUN_RETRY_METHOD",
+    "TASK_DISPATCH_METHOD",
     "TASK_READ_METHOD",
     "TERMINAL_OUTCOMES",
     "DispatchArgs",

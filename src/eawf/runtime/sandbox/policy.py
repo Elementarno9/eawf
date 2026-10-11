@@ -50,15 +50,13 @@ class SandboxPolicy(BaseModel):
 
 _POLICY_ID_PREFIX: str = "POL-"
 
-#: The canonical tool universe a deny-list is inverted against when a runtime
-#: exposes only an allowlist grant (no native per-call deny flag). Modeled
+#: The canonical tool universe an ambient deny-list draws its names from. Modeled
 #: from the eawf agent-role tool set (the union of every ``AgentSpec.tools`` in
 #: :data:`eawf.surfaces.render.agents.AGENT_REGISTRY`) rather than imported
 #: from the render layer -- the sandbox policy module is a leaf the render
 #: layer may depend on, so a back-import here would invert that edge. The
 #: universe is the closed set of tools an eawf-dispatched agent can hold; a
-#: deny-list names a subset to drop, and the inverted allowlist is the
-#: complement the allowlist-only runtime is granted.
+#: deny-list names a subset to drop.
 TOOL_UNIVERSE: frozenset[str] = frozenset(
     {
         "Read",
@@ -77,27 +75,6 @@ TOOL_UNIVERSE: frozenset[str] = frozenset(
         "TaskGet",
     }
 )
-
-
-def invert_deny_to_allow(denied: set[str] | frozenset[str] | list[str]) -> list[str]:
-    """Invert a deny-list into the allowlist a deny-less runtime is granted.
-
-    Runtimes that grant tools by allowlist only (no native per-call deny
-    flag, e.g. ``codex exec``) cannot deny a tool directly. The deny is
-    expressed as its complement: the child is granted every tool in
-    :data:`TOOL_UNIVERSE` EXCEPT the denied names, so a denied tool is absent
-    from the grant by construction. Names in *denied* that are not in the
-    universe are simply not present in the complement (they were never
-    grantable), so a stray name cannot widen the allow set.
-
-    Args:
-        denied: The per-wave deny-list of tool names to drop from the grant.
-
-    Returns:
-        The sorted allowlist (``TOOL_UNIVERSE`` minus *denied*) the runtime is
-        granted. Sorted so the resulting argv is deterministic.
-    """
-    return sorted(TOOL_UNIVERSE - set(denied))
 
 
 def resolve_denied_tools(
@@ -140,6 +117,5 @@ __all__ = [
     "TOOL_UNIVERSE",
     "SandboxPolicy",
     "SandboxPolicyScopeKind",
-    "invert_deny_to_allow",
     "resolve_denied_tools",
 ]

@@ -18,9 +18,9 @@ selects. The Task still completes only on receipts its proof run takes at
 that head, so an adoption proves integration and nothing more.
 
 A head the remote's default branch does not yet carry is scratch work that
-publish will squash, so its SHA must not reach a committed ledger: the
+may yet be rewritten, so its SHA must not reach a committed ledger: the
 adoption is staged in the generation's local tier instead, to be bound by
-tree to the commit publish produces. A repository with no remote default
+tree to the published commit at publish. A repository with no remote default
 branch has no publish boundary, so its adoptions bind at once.
 
 ``runtime.delivery.read_back_merge``: the host read-back, done locally.

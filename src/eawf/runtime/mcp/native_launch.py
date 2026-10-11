@@ -8,7 +8,7 @@ path, so a native Run's provider started with no MCP server entry and no
 route to its granted semantic tools.
 
 This module is the seam that calls them: it builds the binding a native
-launch can supply on its own (the sealed capsule and the Run's workspace,
+launch can supply on its own (the sealed capsule and the repository root,
 both already on the :class:`~eawf.runtime.runtimes.adapter.NativeLaunchRequest`),
 renders the lane's configuration, and refuses the launch outright when the
 rendered configuration does not actually register the Run's server --
@@ -26,7 +26,11 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
+import sys
+from pathlib import Path
 
+from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.runtime.mcp.grant import assert_capsule_within_intersection
 from eawf.runtime.mcp.semantic_stdio import (
     RunServerBinding,
@@ -36,13 +40,16 @@ from eawf.runtime.mcp.semantic_stdio import (
     run_server_config_for,
 )
 from eawf.runtime.runtimes.adapter import NativeLaunchRequest, RuntimeSpawnError
+from eawf.runtime.workspace.lease import MCP_ARTIFACT_DIRNAME
 
 logger = logging.getLogger(__name__)
 
-#: The subdirectory of a Run's leased workspace the per-Run MCP artifacts
-#: (the sealed capsule, the server binding, and the lane's own config
-#: files) are written under.
-MCP_ARTIFACT_DIRNAME = ".eawf-mcp"
+#: The subdirectory of the per-Run artifact directory a native Run's
+#: temporary files go to, in place of the host temp areas its jail closes.
+RUN_TMP_DIRNAME = "tmp"
+
+#: The variables naming the temporary directory, set to the Run's own.
+RUN_TMP_ENV_KEYS: tuple[str, ...] = ("TMPDIR", "TMP", "TEMP")
 
 #: The exact per-Run server-name spellings a rendered configuration must
 #: carry for the entry to be considered registered: claude's mcp.json keys
@@ -54,8 +61,21 @@ MCP_ARTIFACT_DIRNAME = ".eawf-mcp"
 _ENTRY_MARKERS: tuple[str, ...] = ("eawf-semantic", "eawf_semantic")
 
 #: The server command every lane's per-Run config points its provider at.
-#: The path to the written binding is appended by the caller.
-_SERVE_COMMAND_PREFIX: tuple[str, ...] = ("eawf", "mcp", "serve", "--binding")
+#: The path to the written binding is appended by the caller. The server
+#: runs on the daemon's own interpreter, named absolutely, because the
+#: provider resolves a bare ``eawf`` on its scrubbed ``PATH``, where it
+#: finds another install (or none) rather than the release serving the Run.
+#: ``-I`` keeps the Run's workspace, which is the server's working
+#: directory, off ``sys.path``, so a checkout cannot shadow the package.
+_SERVE_COMMAND_PREFIX: tuple[str, ...] = (
+    sys.executable,
+    "-I",
+    "-m",
+    "eawf",
+    "mcp",
+    "serve",
+    "--binding",
+)
 
 
 def native_run_server_config(request: NativeLaunchRequest, *, runtime_id: str) -> RunServerConfig:
@@ -63,7 +83,10 @@ def native_run_server_config(request: NativeLaunchRequest, *, runtime_id: str) -
 
     Writes the sealed capsule and a binding naming it under the Run's own
     workspace, renders *runtime_id*'s configuration from that binding, and
-    materializes any files the lane needs written to disk.
+    materializes any files the lane needs written to disk. The binding
+    routes calls to the repository root, not the workspace: the daemon
+    admits a semantic call only for a tree holding a generation, and a
+    leased worktree holds none.
 
     Args:
         request: The native launch request the config is built for.
@@ -95,8 +118,11 @@ def native_run_server_config(request: NativeLaunchRequest, *, runtime_id: str) -
     binding_path = artifact_dir / "binding.json"
     binding = RunServerBinding(
         run_ref=spec.run_ref,
-        repo_root=str(request.workspace),
+        repo_root=str(request.repo_root),
         capsule_path=str(capsule_path),
+        # The provider's environment carries no runtime pin, and resolving
+        # the default from the workspace names another tree's daemon.
+        runtime_dir=str(runtime_dir()),
     )
     binding_path.write_text(binding.model_dump_json(), encoding="utf-8")
     try:
@@ -143,4 +169,32 @@ def _assert_entry_registered(config: RunServerConfig, *, run_ref: str) -> None:
     )
 
 
-__all__ = ["MCP_ARTIFACT_DIRNAME", "native_run_server_config"]
+def prepare_run_tmpdir(run_dir: Path) -> Path:
+    """Create a native Run's temporary directory, empty, under *run_dir*.
+
+    It is emptied on every launch so a retry of the same Run starts without
+    what an earlier attempt left there.
+
+    Args:
+        run_dir: The Run's per-Run artifact directory.
+
+    Returns:
+        The temporary directory.
+
+    Raises:
+        OSError: The directory could not be removed or created.
+    """
+    tmpdir = run_dir / RUN_TMP_DIRNAME
+    if tmpdir.exists():
+        shutil.rmtree(tmpdir)
+    tmpdir.mkdir(parents=True, mode=0o700)
+    return tmpdir
+
+
+__all__ = [
+    "MCP_ARTIFACT_DIRNAME",
+    "RUN_TMP_DIRNAME",
+    "RUN_TMP_ENV_KEYS",
+    "native_run_server_config",
+    "prepare_run_tmpdir",
+]

@@ -178,21 +178,14 @@ def test_jailed_child_egress_allows_listed_host_no_block_recorded(
 
 
 def test_concurrent_spawn_cap_fails_fast_at_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A spawn past the concurrent cap raises before any subprocess is forked."""
+    """A launch past the concurrent cap is refused before any subprocess is forked."""
     # Saturate the shared in-flight counter at the one ceiling so the next
     # acquire fails. The counter lives on the shared adapter module: the cap is
     # process-wide, not per-vendor.
     monkeypatch.setattr(shared_adapter, "_spawn_inflight", shared_adapter.CONCURRENT_SPAWN_CAP)
 
-    async def _spawn() -> Any:
-        return await ClaudeAdapter().spawn_session(
-            "hi",
-            model="x",
-            session=_SESSION_ID,
-        )
-
     with pytest.raises(ConcurrentSpawnCapError, match="concurrent spawn cap"):
-        asyncio.run(_spawn())
+        shared_adapter.acquire_spawn_slot()
 
 
 def test_env_scrub_recorder_names_dropped_count(monkeypatch: pytest.MonkeyPatch) -> None:

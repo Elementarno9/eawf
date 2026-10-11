@@ -1,7 +1,7 @@
 """Process-group cancel primitive for live runtime spawns.
 
 The spawn seam
-(:meth:`~eawf.runtime.runtimes.claude.adapter.ClaudeAdapter.spawn_session`)
+(:mod:`~eawf.runtime.runtimes.claude.sdk_launcher`)
 starts every child with ``start_new_session=True``, so the child is its
 own session **and** process-group leader: its pgid equals its pid. That
 makes the whole subtree (the runtime CLI plus any helpers it forks)

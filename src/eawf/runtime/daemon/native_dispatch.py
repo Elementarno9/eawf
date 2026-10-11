@@ -18,6 +18,11 @@ reads it, resumes from there, and mints nothing: one attempt identity
 survives the restart, which is the whole reason the stage is written down
 instead of inferred from whichever side effects happen to exist.
 
+Dispatch ends at the announcement, not at the end of the worker's turn.
+The Run moves to ``RUNNING`` at the spawned stage, and the turn is handed
+to :mod:`eawf.runtime.daemon.run_supervisor`, which ends the Run and
+withdraws its lease once the turn is over.
+
 The other half of that identity rule -- what a retry after provider
 acceptance may do to it -- lives in
 :mod:`eawf.runtime.daemon.native_retry`, which reads the attempt this
@@ -30,7 +35,7 @@ import asyncio
 import hashlib
 import logging
 import secrets
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -86,6 +91,7 @@ from eawf.kernel.state.epoch2.run import Run, RunScope
 from eawf.kernel.state.epoch2.urns import RunUrn, TaskUrn
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.compaction import document_rows
+from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     effective_records,
@@ -103,7 +109,7 @@ from eawf.runtime.daemon.admission import (
 from eawf.runtime.daemon.delegation import delegation_parent
 from eawf.runtime.daemon.dispatch_stream import message_sink, state_spawn_failure, usage_sink
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
-from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
+from eawf.runtime.daemon.epoch2_transaction import TransactionRefusedError, commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.methods.run_budget import BudgetIdentity, InFlightRunMeter
 from eawf.runtime.daemon.run_events import (
@@ -125,8 +131,6 @@ from eawf.runtime.workspace.lease import (
     root_leases,
     workspace_path,
 )
-from eawf.runtime.worktree.tree_change import TreeSnapshot, snapshot_tree
-from eawf.surfaces.cli import errors as cli_errors
 from eawf.workflow.runtime.compile import RunCompileError, compile_run_spec
 
 logger = logging.getLogger(__name__)
@@ -165,6 +169,9 @@ BINDING_STATUS: Final = "bound"
 
 #: How many random bytes a minted attempt identity carries.
 _ATTEMPT_ENTROPY_BYTES: Final = 16
+
+#: Where a committed transition's envelope is handed for the subscription fan-out.
+Publish = Callable[[Envelope], object]
 
 #: One dispatch attempt's own identity.
 AttemptId = Annotated[str, StringConstraints(strict=True, pattern=r"^ATT-[0-9a-f]{32}$")]
@@ -1018,18 +1025,29 @@ async def launch_worker(
     launchers: Mapping[str, NativeRunLauncher],
     notice_policy: BudgetNoticePolicy,
     now: datetime,
+    publish: Publish | None = None,
 ) -> tuple[DispatchAttempt, NativeLaunchOutcome | None]:
     """Start the provider process with the compiled spec, once.
 
     An attempt already at the spawned stage is not launched again: the
     provider accepted it, and starting a second process would give one
     attempt identity two workers. A crossing of the Run's token cap is
-    judged under *notice_policy*.
+    judged under *notice_policy*. The launch returns once the worker is
+    announced; the rest of its turn is handed to the root's supervisor,
+    which ends the Run and publishes through *publish* when the turn does.
 
     Raises:
         DaemonValidationError: No launcher serves the compiled provider,
             or the launch failed.
     """
+    # The supervisor reads the attempt records this module defines.
+    from eawf.runtime.daemon.run_supervisor import (
+        SupervisedTurn,
+        supervise_turn,
+        supervisor_of,
+        worker_tree,
+    )
+
     if stage_reached(attempt.stage, DispatchStage.SPAWNED):
         return attempt, None
     launcher = launchers.get(spec.provider_options.provider_kind)
@@ -1050,14 +1068,15 @@ async def launch_worker(
     )
     meter = run_meter(context, args, attempt=attempt, capsule=capsule, identity=identity)
     workspace = workspace_path(context, handle=lease.workspace_handle)
-    before = await _worker_tree(workspace)
+    before = await worker_tree(workspace)
     try:
-        outcome = await launcher.launch(
+        outcome: NativeLaunchOutcome | None = await launcher.launch(
             NativeLaunchRequest(
                 spec=spec,
                 capsule=capsule,
                 workspace_handle=lease.workspace_handle,
                 workspace=workspace,
+                repo_root=context.identity.tree_root.parent,
                 prompt=args.prompt,
                 hello_sequence=sequence,
                 usage_sink=usage_sink(
@@ -1085,18 +1104,31 @@ async def launch_worker(
                 cause=str(error),
             )
             raise refused(DispatchRefusal.SPAWN_FAILED, str(error)) from error
+        outcome = None
+    if outcome is not None:
+        # Supervised before anything else is written, so a step below that
+        # refuses still leaves the worker's turn awaited and its Run ended.
+        job = SupervisedTurn(
+            context=context,
+            urn=args.urn,
+            actor=args.actor,
+            attempt_ref=attempt.attempt_ref,
+            lease_id=lease.lease_id,
+            turn=outcome.turn,
+            workspace=workspace,
+            before=before,
+            publish=publish,
+        )
+        supervisor_of(context).supervise(str(args.urn), supervise_turn(job))
     # A reaped child either fails its launch or returns a hello for a Run
     # that is already cancelled; neither may be recorded as a live worker.
-    if meter is not None and meter.terminated:
-        observed = 0 if meter.outcome is None else meter.outcome.decision.consumed
+    if outcome is None or (meter is not None and meter.terminated):
+        observed = 0 if meter is None or meter.outcome is None else meter.outcome.decision.consumed
         raise refused(
             DispatchRefusal.BUDGET_EXHAUSTED,
             f"run {args.urn.entity_key!r} reached {observed} tokens against its cap of "
             f"{capsule.budget.tokens} and was terminated mid-turn",
         )
-    await _record_worker_edits(
-        context, args, attempt=attempt, workspace=workspace, before=before, now=now
-    )
     moved = attempt.model_copy(
         update={
             "stage": DispatchStage.SPAWNED,
@@ -1108,54 +1140,6 @@ async def launch_worker(
     with context.session([args.urn]) as session:
         append_attempt(session, moved)
     return moved, outcome
-
-
-async def _worker_tree(workspace: Path) -> TreeSnapshot | None:
-    """Return the tree of the worker's workspace, or ``None`` when git cannot read it.
-
-    An unreadable tree costs the Run its edit record and nothing else, so the
-    dispatch goes on without one.
-    """
-    try:
-        return await asyncio.to_thread(snapshot_tree, workspace)
-    except cli_errors.CliError as error:
-        logger.warning(f"worker_tree unreadable workspace={workspace.name} error={error}")
-        return None
-
-
-async def _record_worker_edits(
-    context: Epoch2RootContext,
-    args: DispatchParams,
-    *,
-    attempt: DispatchAttempt,
-    workspace: Path,
-    before: TreeSnapshot | None,
-    now: datetime,
-) -> None:
-    """Record what the worker's turn changed in its workspace on the Run's stream.
-
-    The event is named from the attempt, so a resumed dispatch that records the
-    same turn again repeats the line rather than adding one.
-    """
-    # The recorder appends through the run verbs, which import this module.
-    from eawf.runtime.daemon.file_changes import FileEdit, record_file_edit
-
-    after = None if before is None else await _worker_tree(workspace)
-    if before is None or after is None:
-        return
-    digest = hashlib.sha256(f"{attempt.attempt_ref}:edits".encode()).hexdigest()[:32]
-    try:
-        await asyncio.to_thread(
-            record_file_edit,
-            context,
-            FileEdit(workspace=workspace, before=before, after=after),
-            run_ref=args.urn,
-            event_ref=f"EVT-{digest}",
-            actor=args.actor,
-            now=now,
-        )
-    except (cli_errors.CliError, DaemonValidationError) as error:
-        logger.warning(f"record_worker_edits skipped attempt={attempt.attempt_ref} error={error}")
 
 
 def run_meter(
@@ -1256,23 +1240,40 @@ async def dispatch_run(
     *,
     now: datetime,
     launchers: Mapping[str, NativeRunLauncher] | None = None,
+    publish: Publish | None = None,
 ) -> DispatchAnswer:
     """Drive one Run from a Task to an announced worker, in the fixed order.
+
+    The answer comes once the worker is announced, not once its turn ends: at
+    the spawned stage the Run moves to ``RUNNING`` and the turn is handed to
+    the root's supervisor, which ends the Run when the turn does.
 
     Args:
         context: The native context of the canary the Run lives in.
         args: The validated dispatch request.
         now: The stamp every record of this dispatch shares.
         launchers: The launcher table, defaulting to the compiled one.
+        publish: Where each committed Run transition is handed for the
+            subscription fan-out, now and when the supervisor ends the Run.
 
     Returns:
         The answer, naming the stage reached and whether the attempt was
         resumed rather than minted.
 
     Raises:
-        DaemonValidationError: Any step refused. A refusal before the
-            lease leaves the tree exactly as it was.
+        DaemonValidationError: Any step refused, including a second dispatch
+            of a Run whose turn this daemon still supervises. A refusal
+            before the lease leaves the tree exactly as it was.
     """
+    # The supervisor reads the attempt records this module defines.
+    from eawf.runtime.daemon.run_supervisor import start_run, supervisor_of
+
+    if supervisor_of(context).task_of(str(args.urn)) is not None:
+        raise refused(
+            DispatchRefusal.ATTEMPT_IN_FLIGHT,
+            f"run {args.urn.entity_key!r} has a worker whose turn this daemon is still "
+            "awaiting, so a second dispatch would start a second worker under one Run",
+        )
     table = NATIVE_LAUNCHERS if launchers is None else launchers
     spec = compile_for_dispatch(args, now=now)
     with context.session([args.urn]) as session:
@@ -1298,6 +1299,7 @@ async def dispatch_run(
         launchers=table,
         notice_policy=economics.notice_policy,
         now=now,
+        publish=publish,
     )
     if outcome is None:
         return DispatchAnswer(
@@ -1313,6 +1315,23 @@ async def dispatch_run(
                 "so no second process was started"
             ),
         )
+    try:
+        started = start_run(
+            context,
+            args.urn,
+            actor=args.actor,
+            attempt=attempt,
+            runtime=outcome.runtime_tuple,
+            now=now,
+        )
+    except TransactionRefusedError as refusal:
+        logger.info(f"dispatch_run start refused code={refusal.code.value}")
+        raise DaemonValidationError(
+            f"validation_failed: {refusal.code.value}: {refusal.detail}"
+        ) from refusal
+    if publish is not None:
+        for envelope in started:
+            publish(envelope)
     attempt, fact = accept_announcement(
         context, args, attempt=attempt, hello=outcome.hello, now=now
     )
@@ -1357,6 +1376,7 @@ __all__ = [
     "DispatchParams",
     "DispatchRefusal",
     "DispatchStage",
+    "Publish",
     "accept_announcement",
     "active_lease_of",
     "append_attempt",

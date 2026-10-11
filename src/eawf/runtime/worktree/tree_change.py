@@ -7,7 +7,9 @@ still spares re-hashing every unchanged file. The tree object it writes stays in
 object store, which is what lets a later snapshot be diffed against it by id alone.
 
 The digest is the same ``{"git_tree": <id>}`` canonical digest a delivered revision
-carries, so a file change and a delivery name one tree the same way.
+carries, so a file change and a delivery name one tree the same way. When a Run's
+work is kept, :func:`commit_worktree` records the working tree as a commit on the
+branch its worktree has checked out.
 """
 
 from __future__ import annotations
@@ -15,9 +17,11 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
+from typing import Final
 
 import eawf.runtime.worktree.git as git
 from eawf.kernel.delivery.receipts import canonical_digest
@@ -143,4 +147,75 @@ def tree_diff(
     )
 
 
-__all__ = ["TreeSnapshot", "changed_paths", "snapshot_tree", "tree_diff"]
+#: Who a commit eawf makes on a worker's behalf is authored and committed by. Fixed
+#: rather than read from git configuration, so a Run's commit never carries the
+#: operator's identity for work the operator did not write.
+COMMIT_IDENTITY: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "GIT_AUTHOR_NAME": "eawf",
+        "GIT_AUTHOR_EMAIL": "eawf@example.invalid",
+        "GIT_COMMITTER_NAME": "eawf",
+        "GIT_COMMITTER_EMAIL": "eawf@example.invalid",
+    }
+)
+
+
+def commit_worktree(workspace: Path, *, message: str, exclude: Sequence[str] = ()) -> str | None:
+    """Commit every change in *workspace* on the branch it has checked out.
+
+    The commit is written with plumbing rather than ``git commit``: hooks are a
+    person's policy over their own commits, and this one is eawf's record of a
+    worker's. The index is the checkout's own, so the worktree reads as clean
+    afterwards except for whatever *exclude* kept out.
+
+    Args:
+        workspace: The root of a git worktree.
+        message: The commit message, trailers included.
+        exclude: Repository-relative paths left out of the commit.
+
+    Returns:
+        The new commit's SHA, or ``None`` when nothing changed and no commit was
+        made.
+
+    Raises:
+        StateConflict: Git could not stage, write or record the commit.
+    """
+    # An excluded path the checkout's .gitignore already ignores makes an
+    # exclude pathspec fail ``git add``, so stage everything and unstage it.
+    _git(workspace, "add", "--all", "--", ".")
+    if exclude:
+        _git(workspace, "rm", "-r", "--cached", "--quiet", "--ignore-unmatch", "--", *exclude)
+    head = _git(workspace, "rev-parse", "HEAD").strip()
+    tree = _git(workspace, "write-tree").strip()
+    if tree == _git(workspace, "rev-parse", "HEAD^{tree}").strip():
+        return None
+    made = git.invoke(
+        workspace,
+        "commit-tree",
+        tree,
+        "-p",
+        head,
+        "-F",
+        "-",
+        input_text=message,
+        env=os.environ | dict(COMMIT_IDENTITY),
+    )
+    if made.returncode != 0:
+        raise cli_errors.StateConflict(
+            f"git commit-tree failed in the worktree (rc={made.returncode}): "
+            f"{(made.stderr or made.stdout).strip() or 'unknown'}",
+            kind="IntegrityViolation",
+        )
+    commit = made.stdout.strip()
+    _git(workspace, "update-ref", "HEAD", commit, head)
+    return commit
+
+
+__all__ = [
+    "COMMIT_IDENTITY",
+    "TreeSnapshot",
+    "changed_paths",
+    "commit_worktree",
+    "snapshot_tree",
+    "tree_diff",
+]

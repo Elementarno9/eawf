@@ -20,7 +20,6 @@ from typing import Any, Final
 from unittest import mock
 
 import pytest
-from eawf.runtime.daemon.run_supervisor import supervisor_of
 
 from eawf.kernel.projection.connection import read_method
 from eawf.kernel.projection.row_facts import RUNTIME_FACTS
@@ -28,6 +27,7 @@ from eawf.kernel.state.epoch2.run import RunRuntimeTuple
 from eawf.runtime.daemon import methods, native_dispatch
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.native_dispatch import RUN_DISPATCH_METHOD, compile_launchers
+from eawf.runtime.daemon.run_supervisor import supervisor_of
 from eawf.runtime.runtimes.adapter import (
     NativeLaunchOutcome,
     NativeLaunchRequest,

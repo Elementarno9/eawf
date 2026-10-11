@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import secrets
 from collections.abc import Callable, Iterator, Mapping
 from datetime import UTC, datetime
@@ -82,6 +83,9 @@ _METHOD_NOT_FOUND: Final = -32601
 
 #: The JSON-RPC code for a frame that is not a request this server reads.
 _INVALID_REQUEST: Final = -32600
+
+#: One segment of the pointer grammar a closed error's field path admits.
+_POINTER_SEGMENT: Final = re.compile(r"[a-z0-9_]+")
 
 
 class ForwardFailure(StrEnum):
@@ -362,11 +366,12 @@ class SemanticStdioServer:
                 granted[name], arguments if isinstance(arguments, dict) else {}
             )
         except (ValidationError, KeyError, ValueError) as error:
-            logger.info(f"_call_tool refused tool={name!r} reason=payload")
+            field_path, reason = _payload_fault(name, error)
+            logger.info(f"_call_tool refused tool={name!r} reason=payload at={field_path}")
             return _tool_failure(
                 ForwardFailure.PAYLOAD_INVALID,
-                message=f"the arguments are not a valid {name} payload",
-                field_path="/arguments",
+                message=f"the arguments are not a valid {name} payload{reason}",
+                field_path=field_path,
                 cause=error,
             )
         try:
@@ -412,6 +417,35 @@ class SemanticStdioServer:
                 "requested_at": self._clock(),
             }
         )
+
+
+def _payload_fault(tool: str, error: Exception) -> tuple[str, str]:
+    """Return where a refused payload first failed and the reason, as text.
+
+    A provider retrying a refusal that names only ``/arguments`` has to
+    guess which member to change, so the first failing member is named
+    when the validator located it inside the payload. The location is
+    used only when every segment fits the pointer grammar, because a
+    member name is whatever the provider sent.
+
+    Args:
+        tool: The granted tool the call named.
+        error: What the sealer raised.
+
+    Returns:
+        The JSON pointer of the failing member, ``/arguments`` when no
+        member can be named, and a message suffix naming the validator's
+        error type, empty when there is none.
+    """
+    if not isinstance(error, ValidationError):
+        return "/arguments", ""
+    first = error.errors(include_url=False, include_input=False)[0]
+    location = first["loc"]
+    segments = [str(part) for part in location[1:]]
+    named = bool(location) and location[0] == tool and bool(segments)
+    if named and all(_POINTER_SEGMENT.fullmatch(segment) for segment in segments):
+        return f"/arguments/{'/'.join(segments)}", f": {first['type']}"
+    return "/arguments", f": {first['type']}"
 
 
 def _daemon_error(error: Exception) -> SemanticToolErrorCode | None:

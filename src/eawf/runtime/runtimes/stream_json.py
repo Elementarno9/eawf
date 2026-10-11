@@ -21,11 +21,7 @@ stream-json result line down to its ``result`` payload, and
 report body validates against. :func:`unwrap_agent_json` composes the two for
 the bind path.
 
-A Run Eawf starts itself reads the same stream for its transcript:
-:func:`stream_message_payloads` turns each stream-json line the child writes into the
-message payloads the Run's stream carries, as the line arrives.
-
-A fourth consumer reads the same transcript for a different reason: under
+A third consumer reads the same transcript for a different reason: under
 ``--output-format stream-json`` a *failing* call routes the vendor's error
 envelope to **stdout**, leaving stderr empty, so an error taxonomy that only
 matches stderr classifies every such failure as its default.
@@ -42,9 +38,6 @@ import json
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
-
-from eawf.kernel.runtime.events import MessageSummaryPayload
-from eawf.runtime.runtimes.host_transcript import claude_record_payloads
 
 #: The stream-json event type carrying the agent's final answer.
 _RESULT_EVENT_TYPE: str = "result"
@@ -121,65 +114,6 @@ def unwrap_result_envelope(raw: str) -> str:
         if envelope is not None:
             return envelope
     return raw
-
-
-def stream_message_payloads(line: str) -> tuple[MessageSummaryPayload, ...]:
-    """Return the messages one claude stream-json line carries, in order.
-
-    What the agent says is a message; its tool calls, their results and the result
-    envelope are not, and hidden reasoning is never read. A line that is not a JSON
-    object carries nothing.
-
-    Args:
-        line: One stdout line of a ``claude -p --output-format stream-json`` turn.
-
-    Returns:
-        The line's message payloads; empty for every other line.
-    """
-    try:
-        record = json.loads(line)
-    except ValueError:
-        return ()
-    if not isinstance(record, dict):
-        return ()
-    return tuple(
-        payload
-        for payload in claude_record_payloads(record)
-        if isinstance(payload, MessageSummaryPayload)
-    )
-
-
-def terminal_result_envelope(raw: str) -> str | None:
-    """Return the raw JSON text of a claude stream-json terminal result event.
-
-    ``--output-format stream-json`` emits one JSON event per line terminated by a
-    ``type=="result"`` envelope carrying ``usage`` / ``total_cost_usd`` /
-    ``session_id`` / ``modelUsage`` -- the fields the metering parse reads. This
-    returns that terminal envelope's raw JSON text (the whole object, not just
-    its inner ``result`` string) so a caller can ``json.loads`` it directly.
-    Accepts a single result envelope (the fast path) as well as a multi-line
-    transcript. Returns ``None`` when no ``type=="result"`` event is present
-    (e.g. the legacy single-object ``{"result": ...}`` json format, which the
-    caller parses whole instead).
-
-    Args:
-        raw: The runtime's stdout text (a stream-json transcript or a single
-            envelope).
-
-    Returns:
-        The terminal result event's raw JSON text, or ``None`` when none is
-        present.
-    """
-    stripped = raw.strip()
-    if not stripped:
-        return None
-    if _is_result_object(stripped):
-        return stripped
-    for line in reversed(stripped.splitlines()):
-        candidate = line.strip()
-        if candidate and _is_result_object(candidate):
-            return candidate
-    return None
 
 
 def vendor_error_signal(raw: str) -> VendorErrorSignal | None:
@@ -314,25 +248,6 @@ def _first_status_code(error_object: dict[str, Any]) -> int | None:
         if isinstance(value, str) and value.strip().isdigit():
             return int(value.strip())
     return None
-
-
-def _is_result_object(candidate: str) -> bool:
-    """Return whether *candidate* parses to a JSON object with ``type=="result"``.
-
-    Args:
-        candidate: A single (stripped) line or the whole payload.
-
-    Returns:
-        ``True`` when *candidate* is a JSON object whose ``type`` is
-        ``"result"``; ``False`` otherwise.
-    """
-    if not candidate.startswith("{"):
-        return False
-    try:
-        data = json.loads(candidate)
-    except json.JSONDecodeError:
-        return False
-    return isinstance(data, dict) and data.get("type") == _RESULT_EVENT_TYPE
 
 
 def _as_result_envelope(candidate: str) -> str | None:
@@ -497,8 +412,6 @@ def _first_opener(text: str) -> int | None:
 __all__ = [
     "VendorErrorSignal",
     "extract_embedded_json",
-    "stream_message_payloads",
-    "terminal_result_envelope",
     "unwrap_agent_json",
     "unwrap_result_envelope",
     "vendor_error_signal",

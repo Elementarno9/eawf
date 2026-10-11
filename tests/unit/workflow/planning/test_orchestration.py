@@ -291,7 +291,7 @@ def test_surf_095_dispatch_derives_its_plan_from_the_projected_graph() -> None:
     body = DispatchBody.model_validate(result.body)
     assert body.plan.stages == [["EAWF-0001"], ["EAWF-0002"]]
     assert body.plan.reasons["EAWF-0002"] == ["depends on EAWF-0001"]
-    assert body.frontier == ["EAWF-0001"]
+    assert [row.task_ref for row in body.dispatched] == ["EAWF-0001"]
     assert body.contract == ORCHESTRATION_CONTRACT
 
 

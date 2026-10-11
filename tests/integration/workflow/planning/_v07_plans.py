@@ -29,6 +29,7 @@ from eawf.runtime.daemon.methods.planning import (
     PLAN_SUBMIT_METHOD,
 )
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import method_context
+from tests.integration.workflow.planning._plan_approval import seal_plan_approval
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[4]
 ROADMAP: Final = REPO_ROOT / "docs" / "roadmap" / "v0.7"
@@ -110,13 +111,14 @@ def dispatch(method: str, repo_root: Path, runtime: Path, params: dict[str, Any]
     return asyncio.run(methods.dispatch(method, context, {"repo_root": str(repo_root), **params}))
 
 
-def approve_params(proposal: dict[str, Any], approved_by: dict[str, str]) -> dict[str, Any]:
+def approve_params(
+    proposal: dict[str, Any], approved_by: dict[str, str], *, action_ref: str
+) -> dict[str, Any]:
     """Return the approve request for a freshly submitted *proposal*."""
-    slot = proposal["body"]["milestone_urn"].rsplit("/milestone/", 1)[0]
     return {
         "key": proposal["key"],
         "expected_revision": 2,
-        "action_ref": f"{slot}/pending-action/ACT-{proposal['key'].split('-')[1]}",
+        "action_ref": action_ref,
         "approved_by": approved_by,
         "actor": ACTOR,
         "idempotency_key": f"approve-{proposal['key']}",
@@ -136,8 +138,17 @@ def submit(proposal: dict[str, Any], repo_root: Path, runtime: Path) -> dict[str
 def approve(
     proposal: dict[str, Any], repo_root: Path, runtime: Path, approved_by: dict[str, str]
 ) -> dict[str, Any]:
-    """Seal *approved_by*'s approval onto the submitted *proposal*."""
-    return dispatch(PLAN_APPROVE_METHOD, repo_root, runtime, approve_params(proposal, approved_by))
+    """Seal *approved_by*'s approval onto the submitted *proposal*.
+
+    The operator answers the plan's approval question first, through the
+    same verbs the ``/plan`` skill drives, so the approval cites a sealed
+    PendingAction the tree holds.
+    """
+    action_ref = seal_plan_approval(
+        repo_root, runtime, subject=proposal["body"]["milestone_urn"], tag=proposal["key"]
+    )
+    params = approve_params(proposal, approved_by, action_ref=action_ref)
+    return dispatch(PLAN_APPROVE_METHOD, repo_root, runtime, params)
 
 
 def apply(proposal: dict[str, Any], repo_root: Path, runtime: Path) -> dict[str, Any]:

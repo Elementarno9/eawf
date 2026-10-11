@@ -19,7 +19,7 @@ from eawf.kernel.runtime.sandbox_decision import SandboxDecision, sandbox_decisi
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.store.compaction import document_rows, read_document
-from eawf.kernel.store.ledger import effective_records, read_ledger_records
+from eawf.kernel.store.ledger import LedgerRecord, effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.measurement.fold import SubtreeFold, fold_subtree
@@ -53,8 +53,67 @@ class RunReading:
     sandbox_decisions: tuple[SandboxDecision, ...] = ()
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _TreeRuns:
+    """Every Run record of the selected generation, with what a reading is built from."""
+
+    live: tuple[Run, ...]
+    compacted: tuple[Run, ...]
+    records: tuple[LedgerRecord, ...]
+    canonical_sequence: int
+    decided: tuple[SandboxDecision, ...]
+
+    def reading(self, run: Run) -> RunReading:
+        """Return *run*'s reading, its subtree folded over both tiers."""
+        return RunReading(
+            run=run,
+            events=run_events_of(self.records, run.urn),
+            canonical_sequence=self.canonical_sequence,
+            fold=fold_subtree(run, (*self.live, *self.compacted)),
+            sandbox_decisions=tuple(
+                item for item in self.decided if item.run_ref.entity_key == run.key
+            ),
+        )
+
+
+def _tree_runs(tree_root: Path) -> _TreeRuns | None:
+    """Return the Runs the tree's selected generation holds, or ``None`` at epoch 1.
+
+    Raises:
+        pydantic.ValidationError: A Run row does not validate.
+        LedgerTornTailError: The run ledger ends mid-line.
+    """
+    authority = resolve_authority(tree_root)
+    if authority.target is None or authority.generation_id is None:
+        logger.debug(f"read_tree_runs root={tree_root.name} epoch={authority.epoch} runs=0")
+        return None
+    document_path = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    document = read_document(document_path)
+    rows = document_rows(document, Epoch2Collection.RUN)
+    records = read_ledger_records(ledger_path(document_path, Epoch2Collection.RUN))
+    # A terminal Run is compacted out of the document into the run ledger, and its
+    # effective line is the record; a delegated child usually finishes first, so a
+    # subtree read off the document alone would miss it.
+    compacted = tuple(
+        Run.model_validate(item.payload)
+        for item in effective_records(records)
+        if "payload_kind" not in item.payload
+        and item.payload.get("key") == item.record_key
+        and item.record_key not in rows
+    )
+    return _TreeRuns(
+        live=tuple(Run.model_validate(rows[key]) for key in sorted(rows)),
+        compacted=compacted,
+        records=records,
+        canonical_sequence=int(document.get(CANONICAL_SEQUENCE_KEY, 0)),
+        decided=sandbox_decisions(
+            read_ledger_records(ledger_path(document_path, Epoch2Collection.RECEIPT))
+        ),
+    )
+
+
 def read_tree_runs(tree_root: Path) -> tuple[RunReading, ...]:
-    """Return every Run the tree's selected generation holds, in key order.
+    """Return every Run the tree's selected generation holds in its document, in key order.
 
     Args:
         tree_root: The tree's ``.ea`` directory.
@@ -68,45 +127,20 @@ def read_tree_runs(tree_root: Path) -> tuple[RunReading, ...]:
             which means the store is corrupt rather than merely unfamiliar.
         LedgerTornTailError: The run ledger ends mid-line.
     """
-    authority = resolve_authority(tree_root)
-    if authority.target is None or authority.generation_id is None:
-        logger.debug(f"read_tree_runs root={tree_root.name} epoch={authority.epoch} runs=0")
+    tree = _tree_runs(tree_root)
+    if tree is None:
         return ()
-    document_path = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
-    document = read_document(document_path)
-    rows = document_rows(document, Epoch2Collection.RUN)
-    records = read_ledger_records(ledger_path(document_path, Epoch2Collection.RUN))
-    sequence = int(document.get(CANONICAL_SEQUENCE_KEY, 0))
-    live = [Run.model_validate(rows[key]) for key in sorted(rows)]
-    # A delegated child usually finishes first, so it is read from the ledger it
-    # was compacted into; a subtree read off the document alone would miss it.
-    compacted = [
-        Run.model_validate(item.payload)
-        for item in effective_records(records)
-        if "payload_kind" not in item.payload
-        and item.payload.get("key") == item.record_key
-        and item.record_key not in rows
-    ]
-    tree = (*live, *compacted)
-    decided = sandbox_decisions(
-        read_ledger_records(ledger_path(document_path, Epoch2Collection.RECEIPT))
-    )
-    readings = [
-        RunReading(
-            run=run,
-            events=run_events_of(records, run.urn),
-            canonical_sequence=sequence,
-            fold=fold_subtree(run, tree),
-            sandbox_decisions=tuple(item for item in decided if item.run_ref.entity_key == run.key),
-        )
-        for run in live
-    ]
+    readings = tuple(tree.reading(run) for run in tree.live)
     logger.debug(f"read_tree_runs root={tree_root.name} runs={len(readings)}")
-    return tuple(readings)
+    return readings
 
 
 def read_tree_run(tree_root: Path, ref: str) -> RunReading:
-    """Return the one Run a key or URN names.
+    """Return the one Run a key or URN names, from the document or the run ledger.
+
+    A finished Run is compacted out of the document, and it is the Run whose
+    report is most often asked for, so the ledger's effective record answers
+    for it.
 
     Args:
         tree_root: The tree's ``.ea`` directory.
@@ -116,12 +150,16 @@ def read_tree_run(tree_root: Path, ref: str) -> RunReading:
         The Run's reading.
 
     Raises:
-        LookupError: The tree holds no Run under that key.
+        LookupError: Neither tier holds a Run under that key.
     """
     key = ref.rsplit("/", 1)[-1]
-    for reading in read_tree_runs(tree_root):
-        if reading.run.key == key:
-            return reading
+    tree = _tree_runs(tree_root)
+    if tree is not None:
+        # The last standing ledger line of a key is its record, as the store's
+        # latest-row reader holds it.
+        for run in (*tree.live, *reversed(tree.compacted)):
+            if run.key == key:
+                return tree.reading(run)
     raise LookupError(f"the tree holds no Run keyed {key!r}")
 
 

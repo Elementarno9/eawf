@@ -160,6 +160,7 @@ def test_the_supported_kinds_are_the_ones_whose_payload_model_exists() -> None:
         "event_gap",
         "file_changed",
         "message_summarized",
+        "provider_lost",
         "question_raised",
         "reasoning_started",
         "reasoning_summarized",

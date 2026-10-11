@@ -176,10 +176,10 @@ class PlanApproval(Epoch2Model):
     nobody gave for the situation in front of it.
 
     Attributes:
-        action_ref: The PendingAction the approval was sealed as. It is
-            asserted, not dereferenced: the record it addresses lands with
-            the PendingAction producer, and the reference travels into the
-            committed event so the approval stays readable from the event.
+        action_ref: The PendingAction the approval was sealed as. The
+            approve verb dereferences it before this receipt is built; the
+            reference travels into the committed event so the approval
+            stays readable from the event.
         approved_by: Who approved. The kind must be a human principal.
         approved_at: When the approval was given.
         content_digest: The digest of the plan body that was approved.

@@ -2,7 +2,7 @@
 
 ``submit_report`` records one accepted report per Run, and ``/integrate
 seal`` reads that record back when the caller omits the report fields. A
-later submission naming another body or verdict must therefore be
+later submission carrying another body or verdict must therefore be
 refused -- answering it ``accepted`` while keeping the first row would
 let the seal bind a report the worker has already replaced. A retry of
 the same report stays an accepted, idempotent answer.
@@ -29,7 +29,6 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import root_c
 from tests.integration.runtime.daemon.test_semantic_tool_handlers import (
     RUN_URN,
     bind,
-    digest,
     executor_capsule,
     invoke,
     make_canary,
@@ -42,6 +41,10 @@ from tests.integration.runtime.daemon.test_semantic_tool_handlers import (
 )
 
 REPORT_GRANTS: tuple[str, ...] = ("budget_status", "submit_report")
+
+#: Two report bodies a worker might file, which eawf stores under two digests.
+FIRST: str = "The first report body."
+SECOND: str = "A second, different report body."
 
 
 @pytest.fixture
@@ -75,7 +78,7 @@ def submit(
     canary: CanaryProvision,
     capsule: AuthorityCapsule,
     *,
-    body_digest: str,
+    body: str,
     verdict: str,
     ordinal: int,
 ) -> dict[str, Any]:
@@ -90,11 +93,9 @@ def submit(
             ordinal=ordinal,
             payload={
                 "tool_id": "submit_report",
-                "report_schema_ref": capsule.report_schema_ref,
-                "contract_digest": capsule.contract_digest,
-                "body_ref": f"artifact://report/executor/ar-{ordinal:04d}",
-                "body_digest": body_digest,
                 "verdict": verdict,
+                "summary": "the run's terminal report",
+                "body": body,
             },
         ),
         capsule,
@@ -123,12 +124,12 @@ def test_submit_report_first_submission_records_exactly_one_row(
     runtime_root: Path,
 ) -> None:
     """Boundary: a single submission is accepted and filed once."""
-    output = submit(ctx, task_canary, capsule, body_digest=digest("7"), verdict="fail", ordinal=1)
+    output = submit(ctx, task_canary, capsule, body=FIRST, verdict="fail", ordinal=1)
 
     assert output["accepted"] is True
     rows = accepted_rows(task_canary, runtime_root)
     assert len(rows) == 1
-    assert rows[0]["report_digest"] == digest("7")
+    assert rows[0]["report_digest"].startswith("sha256:")
     assert rows[0]["verdict"] == "fail"
 
 
@@ -139,8 +140,8 @@ def test_submit_report_retry_of_the_same_report_is_idempotent(
     runtime_root: Path,
 ) -> None:
     """Boundary: resending the standing report is accepted without a second row."""
-    submit(ctx, task_canary, capsule, body_digest=digest("7"), verdict="pass", ordinal=1)
-    again = submit(ctx, task_canary, capsule, body_digest=digest("7"), verdict="pass", ordinal=2)
+    submit(ctx, task_canary, capsule, body=FIRST, verdict="pass", ordinal=1)
+    again = submit(ctx, task_canary, capsule, body=FIRST, verdict="pass", ordinal=2)
 
     assert again["accepted"] is True
     assert again["findings"] == []
@@ -148,33 +149,36 @@ def test_submit_report_retry_of_the_same_report_is_idempotent(
 
 
 @pytest.mark.parametrize(
-    ("body_digest", "verdict", "field_path"),
+    ("body", "verdict", "field_path"),
     [
-        (digest("8"), "fail", "/body_digest"),
-        (digest("7"), "pass", "/verdict"),
-        (digest("8"), "pass", "/body_digest"),
+        (SECOND, "fail", "/body"),
+        (FIRST, "pass", "/verdict"),
+        (SECOND, "pass", "/verdict"),
     ],
-    ids=["other_digest", "other_verdict", "both_differ"],
+    ids=["other_body", "other_verdict", "both_differ"],
 )
 def test_submit_report_resubmission_naming_another_report_is_refused(
     task_canary: CanaryProvision,
     ctx: MethodContext,
     capsule: AuthorityCapsule,
     runtime_root: Path,
-    body_digest: str,
+    body: str,
     verdict: str,
     field_path: str,
 ) -> None:
     """Error path: a different report is refused, never accepted and dropped."""
-    submit(ctx, task_canary, capsule, body_digest=digest("7"), verdict="fail", ordinal=1)
+    submit(ctx, task_canary, capsule, body=FIRST, verdict="fail", ordinal=1)
+    (standing,) = accepted_rows(task_canary, runtime_root)
 
-    output = submit(ctx, task_canary, capsule, body_digest=body_digest, verdict=verdict, ordinal=2)
+    output = submit(ctx, task_canary, capsule, body=body, verdict=verdict, ordinal=2)
 
     assert output["accepted"] is False
     assert [finding["code"] for finding in output["findings"]] == ["report_already_accepted"]
     assert output["findings"][0]["field_path"] == field_path
     rows = accepted_rows(task_canary, runtime_root)
-    assert [(row["report_digest"], row["verdict"]) for row in rows] == [(digest("7"), "fail")]
+    assert [(row["report_digest"], row["verdict"]) for row in rows] == [
+        (standing["report_digest"], "fail")
+    ]
 
 
 def test_submit_report_seal_binds_the_one_report_the_run_accepted(
@@ -185,8 +189,9 @@ def test_submit_report_seal_binds_the_one_report_the_run_accepted(
 ) -> None:
     """The seal binds exactly the report submit_report answered ``accepted`` for."""
     ref, tree_digest = seal_fixture(task_canary, runtime_root)
-    submit(ctx, task_canary, capsule, body_digest=digest("7"), verdict="fail", ordinal=1)
-    refused = submit(ctx, task_canary, capsule, body_digest=digest("8"), verdict="pass", ordinal=2)
+    submit(ctx, task_canary, capsule, body=FIRST, verdict="fail", ordinal=1)
+    (standing,) = accepted_rows(task_canary, runtime_root)
+    refused = submit(ctx, task_canary, capsule, body=SECOND, verdict="pass", ordinal=2)
     assert refused["accepted"] is False
 
     result = integrate_skill.IntegrateSkill(caller=skill_caller(ctx, task_canary)).action(
@@ -217,4 +222,6 @@ def test_submit_report_seal_binds_the_one_report_the_run_accepted(
         if item.payload.get("candidate_ref") == ref and "report_digest" in item.payload
     ]
     assert bindings
-    assert {(row["report_digest"], row["verdict"]) for row in bindings} == {(digest("7"), "fail")}
+    assert {(row["report_digest"], row["verdict"]) for row in bindings} == {
+        (standing["report_digest"], "fail")
+    }

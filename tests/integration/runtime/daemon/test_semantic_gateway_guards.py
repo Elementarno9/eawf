@@ -292,10 +292,8 @@ def patch_payload(*, generation: int) -> dict[str, Any]:
     """Return the payload of a workspace patch at an expected generation."""
     return {
         "tool_id": "workspace_apply_patch",
-        "lease_id": "LSE-0123456789abcdef0123456789abcdef",
+        "files": [{"path": "src/one.txt", "content": "one\n"}],
         "expected_workspace_generation": generation,
-        "patch_ref": "artifact://patch/one",
-        "patch_digest": digest("2"),
     }
 
 
@@ -1006,17 +1004,19 @@ def test_an_active_lease_admits_a_patch_at_its_own_generation(
         ttl=timedelta(hours=1),
     )
 
-    with pytest.raises(DaemonValidationError, match="handler_not_brokered"):
-        invoke(
-            ctx,
-            provisioned,
-            seal_call(
-                capsule=capsule,
-                tool_id="workspace_apply_patch",
-                payload=patch_payload(generation=1),
-            ),
-            capsule,
-        )
+    answer = invoke(
+        ctx,
+        provisioned,
+        seal_call(
+            capsule=capsule,
+            tool_id="workspace_apply_patch",
+            payload=patch_payload(generation=1),
+        ),
+        capsule,
+    )
+
+    assert answer["result"]["status"] == "succeeded", answer["result"]
+    assert answer["result"]["bounded_output"]["workspace_generation"] == 1
 
 
 def test_a_patch_aimed_at_a_stale_generation_is_refused(

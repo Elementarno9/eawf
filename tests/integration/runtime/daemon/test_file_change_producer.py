@@ -20,12 +20,13 @@ from eawf.kernel.runtime.content import CONTENT_LINE_LIMIT, WITHHELD_LINE
 from eawf.kernel.runtime.events import FileChangePayload, RunEventKind, RunEventRecord
 from eawf.kernel.store.ledger import read_ledger_records
 from eawf.platform.install.canary import CanaryProvision
-from eawf.runtime.daemon import native_dispatch
+from eawf.runtime.daemon import run_supervisor
 from eawf.runtime.daemon.content_store import CONTENT_REF_PREFIX, stored_contents
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.file_changes import FileEdit, record_file_edit
 from eawf.runtime.daemon.native_dispatch import run_ledger
 from eawf.runtime.daemon.run_events import run_events_of
+from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME
 from eawf.runtime.runtimes.adapter import NativeLaunchOutcome, NativeLaunchRequest
 from eawf.runtime.worktree.tree_change import changed_paths, snapshot_tree, tree_diff
 from eawf.surfaces.cli import errors as cli_errors
@@ -63,6 +64,30 @@ class EditingLauncher(LedgerReadingLauncher):
         return await super().launch(request)
 
 
+class IsolationWritingLauncher(LedgerReadingLauncher):
+    """A launcher that writes the Run's isolation directory, and one worker edit when asked.
+
+    The isolation files are the ones a real launcher writes into the workspace before
+    the provider starts: the MCP binding, the sealed capsule and a private home.
+    """
+
+    def __init__(self, canary: CanaryProvision, runtime: Path, *, edit: bool) -> None:
+        """Bind the launcher; *edit* adds one worker edit beside the isolation files."""
+        super().__init__(canary, runtime)
+        self._edit = edit
+
+    async def launch(self, request: NativeLaunchRequest) -> NativeLaunchOutcome:
+        """Write the isolation files, then answer as the ledger-reading launcher does."""
+        isolation = request.workspace / MCP_ARTIFACT_DIRNAME
+        (isolation / "codex-home").mkdir(parents=True)
+        (isolation / "binding.json").write_text("{}", encoding="utf-8")
+        (isolation / "capsule.json").write_text("{}", encoding="utf-8")
+        (isolation / "codex-home" / "config.toml").write_text("x = 1\n", encoding="utf-8")
+        if self._edit:
+            (request.workspace / "src" / "module.py").write_text("x = 2\n", encoding="utf-8")
+        return await super().launch(request)
+
+
 def _canary(tmp_path: Path) -> tuple[CanaryProvision, Path]:
     return make_canary(tmp_path / "repo", rows={RUN_KEY: run_row()}), tmp_path / "runtime"
 
@@ -91,7 +116,7 @@ def test_run_062_a_dispatched_worker_edit_lands_as_one_file_changed_line(
     _seed_repository(canary)
     launcher = EditingLauncher(canary, runtime)
 
-    answer = dispatch(method_ctx(runtime), canary, launcher)
+    answer = dispatch(method_ctx(runtime), canary, launcher, now=datetime.now(UTC), settle=True)
 
     assert answer["stage"] == "announced"
     context = root_ctx(canary, runtime)
@@ -120,6 +145,31 @@ def test_run_062_a_worker_that_edits_nothing_records_no_line(tmp_path: Path) -> 
     assert _file_lines(root_ctx(canary, runtime)) == []
 
 
+def test_the_isolation_directory_is_not_recorded_as_a_worker_edit(tmp_path: Path) -> None:
+    """Only the worker's own file is an edit; the isolation files eawf wrote are not."""
+    canary, runtime = _canary(tmp_path)
+    _seed_repository(canary)
+    launcher = IsolationWritingLauncher(canary, runtime, edit=True)
+
+    dispatch(method_ctx(runtime), canary, launcher, now=datetime.now(UTC), settle=True)
+
+    (line,) = _file_lines(root_ctx(canary, runtime))
+    assert isinstance(line.payload, FileChangePayload)
+    assert line.payload.changed_paths == ("src/module.py",)
+
+
+def test_a_turn_that_wrote_only_the_isolation_directory_records_no_line(
+    tmp_path: Path,
+) -> None:
+    canary, runtime = _canary(tmp_path)
+    _seed_repository(canary)
+    launcher = IsolationWritingLauncher(canary, runtime, edit=False)
+
+    dispatch(method_ctx(runtime), canary, launcher, now=datetime.now(UTC), settle=True)
+
+    assert _file_lines(root_ctx(canary, runtime)) == []
+
+
 def test_run_062_an_unreadable_workspace_never_fails_the_dispatch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -128,11 +178,17 @@ def test_run_062_an_unreadable_workspace_never_fails_the_dispatch(
     def refuse(_workspace: Path) -> None:
         raise cli_errors.StateConflict("not a git working tree", kind="IntegrityViolation")
 
-    monkeypatch.setattr(native_dispatch, "snapshot_tree", refuse)
+    monkeypatch.setattr(run_supervisor, "snapshot_tree", refuse)
     canary, runtime = _canary(tmp_path)
     _seed_repository(canary)
 
-    answer = dispatch(method_ctx(runtime), canary, EditingLauncher(canary, runtime))
+    answer = dispatch(
+        method_ctx(runtime),
+        canary,
+        EditingLauncher(canary, runtime),
+        now=datetime.now(UTC),
+        settle=True,
+    )
 
     assert answer["stage"] == "announced"
     assert _file_lines(root_ctx(canary, runtime)) == []

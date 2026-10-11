@@ -1117,7 +1117,9 @@ def test_the_journeys_draw_the_packet_layouts_live_over_a_served_tree(tmp_path: 
         assert re.match(rf"^   [▸ ] {milestone.key}", leaf)
         assert milestone.status.value in leaf
     activity = frames["activity"].splitlines()
-    assert any(re.match(r"^\s+RUN\s+TASK\s+STATE\s+REASON\s+AS OF", row) for row in activity)
+    # a dispatched Run records its runtime, so the provider column stands beside its state
+    head = r"^\s+RUN\s+TASK\s+STATE\s+PROVIDER\s+REASON\s+AS OF"
+    assert any(re.match(head, row) for row in activity)
     for run in held["activity"].rows:
         line = next(row for row in activity if run.key in row)
         assert run.parent_key is None or run.parent_key in line

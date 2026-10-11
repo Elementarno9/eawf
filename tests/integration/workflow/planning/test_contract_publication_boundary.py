@@ -35,13 +35,13 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     seed_row,
     tree_root,
 )
+from tests.integration.workflow.planning._plan_approval import seal_plan_approval
 from tests.integration.workflow.planning.test_plan_revision_apply import file_contract_rows
 
 pytestmark = pytest.mark.integration
 
 SLOT: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
 REPOSITORY_URN: Final = f"{SLOT}/repository/REP-EAWF"
-ACTION_URN: Final = f"{SLOT}/pending-action/ACT-0040"
 HEAD: Final = "a" * 40
 ACTOR: Final = "OP-0001"
 REVISION_KEY: Final = "PRV-0040"
@@ -177,7 +177,9 @@ def _submit_and_approve(canary: CanaryProvision, tmp_path: Path) -> dict[str, An
         params={
             "key": REVISION_KEY,
             "expected_revision": 2,
-            "action_ref": ACTION_URN,
+            "action_ref": seal_plan_approval(
+                canary.root, tmp_path / "runtime", subject=MILESTONE_URN, tag=REVISION_KEY
+            ),
             "approved_by": OPERATOR,
             "actor": ACTOR,
             "idempotency_key": "req-approve",

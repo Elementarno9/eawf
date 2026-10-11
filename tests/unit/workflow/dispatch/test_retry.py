@@ -36,7 +36,9 @@ from eawf.runtime.runtimes.adapter import (
     spawn_inflight,
 )
 from eawf.runtime.runtimes.claude import adapter as claude_adapter
+from eawf.runtime.runtimes.claude import sdk_launcher as claude_sdk_launcher
 from eawf.runtime.runtimes.codex import adapter as codex_adapter
+from eawf.runtime.runtimes.codex import app_server as codex_app_server
 from eawf.runtime.runtimes.fallback import FallbackAction
 from eawf.runtime.runtimes.opencode import adapter as opencode_adapter
 from eawf.workflow.dispatch.retry import (
@@ -656,9 +658,9 @@ def test_cap_saturation_recovers_when_a_slot_frees_mid_ladder() -> None:
 
 
 def test_cap_saturation_states_one_effective_ceiling_across_vendors() -> None:
-    """Every vendor adapter draws its slot from the single shared counter."""
-    assert claude_adapter.acquire_spawn_slot is acquire_spawn_slot
-    assert codex_adapter.acquire_spawn_slot is acquire_spawn_slot
+    """Every vendor launch path draws its slot from the single shared counter."""
+    assert claude_sdk_launcher.acquire_spawn_slot is acquire_spawn_slot
+    assert codex_app_server.acquire_spawn_slot is acquire_spawn_slot
     assert opencode_adapter.acquire_spawn_slot is acquire_spawn_slot
     assert claude_adapter.ConcurrentSpawnCapError is ConcurrentSpawnCapError
     assert codex_adapter.ConcurrentSpawnCapError is ConcurrentSpawnCapError

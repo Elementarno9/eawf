@@ -35,7 +35,6 @@ import eawf.runtime.daemon.methods.domain
 import eawf.runtime.daemon.methods.projection
 import eawf.runtime.daemon.methods.run
 import eawf.runtime.daemon.methods.semantic  # noqa: F401  (registers the verbs the walk reaches)
-from eawf.kernel.delivery.receipts import canonical_digest
 from eawf.kernel.runtime.candidate import candidate_identity
 from eawf.kernel.runtime.capsule import AuthorityCapsule
 from eawf.kernel.runtime.semantic import SemanticCall
@@ -106,14 +105,6 @@ def dispatch(walker: Walker, planned: Planned) -> None:
         "the Task runs under the dispatched Run",
         updates={"active_run_ref": planned.run},
     )
-    # The stand-in answered the handshake but no worker takes the Run up,
-    # and the gateway answers only a running Run.
-    walker.transition(
-        planned.run,
-        "RUNNING",
-        "the worker took the Run up",
-        updates={"started_at": datetime.now(UTC).isoformat()},
-    )
 
 
 def submit_report(walker: Walker, run_urn: str, capsule: AuthorityCapsule) -> dict[str, Any]:
@@ -128,11 +119,8 @@ def submit_report(walker: Walker, run_urn: str, capsule: AuthorityCapsule) -> di
             "tool_schema_version": "1.0.0",
             "payload": {
                 "tool_id": "submit_report",
-                "report_schema_ref": capsule.report_schema_ref,
-                "contract_digest": capsule.contract_digest,
-                "body_ref": "artifact://report/executor/ar-0001",
-                "body_digest": canonical_digest({"report": "canary"}),
                 "verdict": "pass",
+                "summary": "the worked module assigns the new value",
             },
             "requested_at": datetime.now(UTC),
         }

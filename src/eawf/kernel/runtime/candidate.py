@@ -249,6 +249,9 @@ class AcceptedReport(RuntimeRecord):
         report_digest: The digest of that body.
         verdict: The verdict the body carried.
         accepted_at: When the daemon recorded the acceptance.
+        contract_digest: The sealed capsule the report was accepted under,
+            taken from the Run rather than from the worker. ``None`` on a
+            report accepted before the contract was recorded with it.
     """
 
     payload_kind: Literal["accepted_report"] = "accepted_report"
@@ -258,6 +261,7 @@ class AcceptedReport(RuntimeRecord):
     report_digest: Digest
     verdict: AgentReportVerdict
     accepted_at: UtcDatetime
+    contract_digest: Digest | None = None
 
 
 class CandidateBundle(RuntimeRecord):

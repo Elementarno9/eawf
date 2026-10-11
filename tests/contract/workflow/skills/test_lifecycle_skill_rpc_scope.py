@@ -42,6 +42,7 @@ _DISPATCH_ROW: Final[tuple[str, ...]] = (
     "projection.batch.detail.read",
     "projection.task.detail.read",
     "projection.run.detail.read",
+    "runtime.task.dispatch",
     "runtime.run.dispatch",
     "runtime.run.retry",
 )

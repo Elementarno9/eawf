@@ -1,15 +1,14 @@
-"""``eawf publish``: squash the branch's scratch commits into one commit per Batch.
+"""``eawf publish``: check the branch's commits and bind the staged adoptions to them.
 
 The handler reads the generation's Task placements and staged bindings,
 hands them to the publish library, and gives the library a binder that
-sends the staged rows to the daemon once the Batch commits exist. It never
-pushes; a push stays an operator action.
+sends the staged rows to the daemon with the commits carrying each Batch.
+It rewrites no commit and never pushes; a push stays an operator action.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -30,12 +29,12 @@ PUBLISH_BIND_STAGED: Final = "runtime.publish.bind_staged"
 
 
 def publish_cmd(ctx: typer.Context) -> None:
-    """Squash the scratch commits past origin into one commit per Batch, then a state commit.
+    """Check the commits past origin name one Batch each, then bind the staged adoptions.
 
-    Each Batch commit is made with git reset --soft and git commit, so the
-    hooks run; the old tip is kept under refs/eawf/archive/publish/. The
-    staged adoptions are bound to the new commits through the daemon. Run
-    it again on a published branch and it changes nothing. It never pushes.
+    Per-Task commits are published as they are, interleaved or not. The staged
+    adoptions are bound to the commits carrying their trees through the daemon,
+    and the rows that writes are committed as one state commit. Run it again
+    and it changes nothing. It never pushes.
     """
     from eawf.kernel.state.epoch2.authority import NativeAuthorityRequiredError
     from eawf.surfaces.cli.commands.domain import _native_answer
@@ -63,9 +62,7 @@ def publish_cmd(ctx: typer.Context) -> None:
         return len(answer["bound"])
 
     try:
-        result = publish(
-            repo, membership=read_membership(repo / ".ea"), bind=bind, now=datetime.now(UTC)
-        )
+        result = publish(repo, membership=read_membership(repo / ".ea"), bind=bind)
     except NativeAuthorityRequiredError as exc:
         cli_errors.emit_error(cli_errors.MigrationRequired(str(exc)), flags=flags)
     except PublishRefusedError as exc:
@@ -85,8 +82,7 @@ def _text(result: PublishResult) -> str:
     lines.extend(f"  {batch}  {sha[:12]}" for batch, sha in result.batch_commits.items())
     if result.state_commit is not None:
         lines.append(f"  state  {result.state_commit[:12]} ({result.bound} bindings)")
-    if result.archive_ref is not None:
-        lines.append(f"Old tip kept at {result.archive_ref}. Nothing was pushed.")
+    lines.append("Nothing was pushed.")
     return "\n".join(lines)
 
 

@@ -1,12 +1,13 @@
 """Commit bindings staged on scratch work and bound to a published commit by tree.
 
-A scratch commit is squashed away before publish, so a ledger row naming
-its SHA would bind something no published branch carries. Adopting work on
-a scratch commit therefore writes a staged binding into the generation's
-machine-local tier instead of the committed ledger. Publish rewrites the
-commits but keeps their content, so the staged row is later bound to the
-one published commit whose tree equals the staged ``tree_sha``; the scratch
-``head_sha`` stays on the row for reference only and is never matched on.
+A scratch commit may be rewritten before publish, by a rebase or a
+cherry-pick, so a ledger row naming its SHA could bind something no
+published branch carries. Adopting work on a scratch commit therefore writes
+a staged binding into the generation's machine-local tier instead of the
+committed ledger. A rewrite keeps the content, so the staged row is later
+bound to the one published commit whose tree equals the staged
+``tree_sha``; the scratch ``head_sha`` stays on the row for reference only
+and is never matched on.
 """
 
 from __future__ import annotations

@@ -1,21 +1,12 @@
-"""Squash the scratch commits a branch carries past its remote into one commit per Batch.
+"""Check the commits a branch carries past its remote, and bind the staged adoptions to them.
 
-Scratch commits are free locally: any subject, any number per Task. Before a
-push they are rewritten into the published shape: one ``<type>: <summary>``
-commit per Batch carrying exactly one ``Batch:`` trailer, then one trailing
-``state:`` commit. Each Batch commit is built by checking out the scratch
-commit that ends the Batch's run, moving ``HEAD`` back with
-``git reset --soft`` and running ``git commit``, so the repository's hooks
-run on exactly the content being committed; a ``commit-tree`` squash would
-skip them.
-
-A Batch commit must carry the very tree its scratch run ended on, or the
-staged bindings, which name that tree, would bind content nobody reviewed;
-a hook that rewrites content therefore refuses the publish and puts the
-branch back. The old tip is kept under ``refs/eawf/archive/publish/`` before
-the branch moves. The staged bindings are bound by tree through a caller
-supplied binder, which writes the ledger rows the trailing ``state:`` commit
-carries. Nothing here pushes.
+Commits are published as they were made: one or more per Task, each naming its Task in
+a ``Task:`` trailer, in whatever order the Tasks' work was cherry-picked, with
+``state:`` commits between them. Nothing is rewritten. A publish checks that every
+non-state commit names exactly one Batch through its trailers, binds each staged
+adoption by tree to the commit of its Batch that carries that tree, and commits the
+ledger rows the binding writes as one trailing ``state:`` commit. The staged bindings
+are bound through a caller supplied binder. Nothing here pushes.
 """
 
 from __future__ import annotations
@@ -24,8 +15,7 @@ import logging
 import re
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
@@ -36,7 +26,8 @@ from eawf.kernel.state.epoch2.authority import require_native_authority
 from eawf.kernel.state.epoch2.task import Task
 from eawf.kernel.store.commit_policy import CommitPolicy, CommitPolicyError, classify_path
 from eawf.kernel.store.compaction import document_rows, read_document
-from eawf.kernel.store.paths import staged_dir
+from eawf.kernel.store.ledger import effective_records, read_ledger_records
+from eawf.kernel.store.paths import ledger_path, staged_dir
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.workflow.integration.publish_binding import (
@@ -47,9 +38,6 @@ from eawf.workflow.integration.publish_binding import (
 )
 
 logger = logging.getLogger(__name__)
-
-#: Where the tip a publish rewrote is kept, one ref per publish.
-ARCHIVE_REF_PREFIX: Final = "refs/eawf/archive/publish/"
 
 #: The remote ref whose commits are already published.
 PUBLISHED_REF: Final = "refs/remotes/origin/HEAD"
@@ -75,27 +63,15 @@ PUBLISH_TASK_UNPLACED: Final = "publish_task_unplaced"
 #: Refusal: one commit carries the work of two Batches.
 PUBLISH_COMMIT_MIXED: Final = "publish_commit_mixed_batches"
 
-#: Refusal: a Batch's commits are split by another Batch's.
-PUBLISH_BATCHES_INTERLEAVED: Final = "publish_batches_interleaved"
-
-#: Refusal: a squashed commit's tree differs from the scratch tree it replaces.
-PUBLISH_TREE_MISMATCH: Final = "publish_tree_mismatch"
-
 #: Refusal: a git command the publish needs failed.
 PUBLISH_GIT_FAILED: Final = "publish_git_failed"
 
 _STATE_SUBJECT_RE: Final = re.compile(r"^state:\s")
-_CONVENTIONAL_SUBJECT_RE: Final = re.compile(
-    r"^(?:feat|fix|chore|docs|refactor|test|build|perf|ci|revert):\s+\S"
-)
 _TASK_TRAILER_RE: Final = re.compile(r"^Task:\s+(?P<key>\S+)\s*$", re.MULTILINE)
 _BATCH_TRAILER_RE: Final = re.compile(r"^Batch:\s+(?P<key>\S+)\s*$", re.MULTILINE)
 
-#: Scratch subjects listed in a Batch commit body before the rest are counted.
-_BODY_SUBJECTS: Final = 8
-
 #: The binder: given the published branch and each staged Batch's URN mapped to
-#: the commits now carrying it, binds the staged rows and answers how many.
+#: the commits carrying its work, binds the staged rows and answers how many.
 Binder = Callable[[str, Mapping[str, tuple[PublishedCommit, ...]]], int]
 
 
@@ -131,13 +107,11 @@ class ScratchCommit:
     Attributes:
         sha: The commit.
         tree_sha: Its tree.
-        parent_sha: Its only parent.
         message: Its full message.
     """
 
     sha: str
     tree_sha: str
-    parent_sha: str
     message: str
 
     @property
@@ -161,47 +135,20 @@ class ScratchCommit:
         return tuple(match.group("key") for match in _BATCH_TRAILER_RE.finditer(self.message))
 
 
-@dataclass(slots=True)
-class BatchRun:
-    """The scratch commits of one Batch, squashed into one commit.
-
-    Attributes:
-        batch_key: The Batch.
-        commits: Its commits, oldest first, with the ``state:`` commits
-            that fell between them.
-        task_keys: The Tasks its commits name, in first-seen order.
-    """
-
-    batch_key: str
-    commits: list[ScratchCommit] = field(default_factory=list)
-    task_keys: list[str] = field(default_factory=list)
-
-    @property
-    def end(self) -> ScratchCommit:
-        """Return the commit whose tree the squashed commit carries."""
-        return self.commits[-1]
-
-    def published(self) -> bool:
-        """Return whether the run is already one commit in the published shape."""
-        only = self.commits[0]
-        return len(self.commits) == 1 and only.batch_keys == (self.batch_key,)
-
-
 @dataclass(frozen=True, slots=True)
 class PublishPlan:
-    """How the scratch range is squashed.
+    """Which Batch each commit of the range carries.
 
     Attributes:
         base: The published commit the range starts after.
-        tip: The scratch tip.
-        runs: One run per Batch, in commit order.
-        trailing_state: The ``state:`` commits after the last Batch commit.
+        tip: The branch tip.
+        batches: Each Batch key mapped to its commits, oldest first, in the order
+            the Batches first appear.
     """
 
     base: str
     tip: str
-    runs: tuple[BatchRun, ...]
-    trailing_state: tuple[ScratchCommit, ...]
+    batches: Mapping[str, tuple[ScratchCommit, ...]]
 
 
 class PublishResult(BaseModel):
@@ -210,13 +157,11 @@ class PublishResult(BaseModel):
     Attributes:
         branch: The branch published.
         old_tip: Its tip before the publish.
-        new_tip: Its tip after.
-        archive_ref: The ref keeping the old tip, or ``None`` when no
-            commit was rewritten.
-        batch_commits: Each Batch key with the commit that carries it.
+        new_tip: Its tip after: the old tip, or the trailing state commit.
+        batch_commits: Each Batch key with the newest commit carrying its work.
         state_commit: The trailing ``state:`` commit written, or ``None``.
         bound: How many staged bindings were bound.
-        noop: Whether the branch was already in the published shape.
+        noop: Whether nothing was staged, so the branch was left as it was.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -224,7 +169,6 @@ class PublishResult(BaseModel):
     branch: str
     old_tip: str
     new_tip: str
-    archive_ref: str | None
     batch_commits: dict[str, str]
     state_commit: str | None
     bound: int
@@ -268,11 +212,15 @@ def _maybe_git(repo: Path, *args: str) -> str | None:
 def read_membership(tree_root: Path) -> Membership:
     """Read the Task placements and the staged bindings of the tree's generation.
 
+    A Task that completed has left the document for its ledger, and its commits are
+    still in the range a publish checks, so its placement is read from the ledger.
+    A staged row whose Batch has closed needs no binding, so it is left out.
+
     Args:
         tree_root: The tree's ``.ea`` directory.
 
     Returns:
-        Every native Task placed in a Batch, and every staged binding.
+        Every native Task placed in a Batch, and every staged binding of a live Batch.
 
     Raises:
         NativeAuthorityRequiredError: The tree is not in epoch 2.
@@ -281,18 +229,28 @@ def read_membership(tree_root: Path) -> Membership:
     authority = require_native_authority(tree_root)
     assert authority.target is not None and authority.generation_id is not None
     document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    live = read_document(document)
+    filed = effective_records(read_ledger_records(ledger_path(document, Epoch2Collection.TASK)))
+    rows = [item.payload for item in filed]
+    rows.extend(document_rows(live, Epoch2Collection.TASK).values())
     placements: dict[str, str] = {}
-    for key, row in document_rows(read_document(document), Epoch2Collection.TASK).items():
+    for row in rows:
         try:
             task = Task.model_validate(row)
         except ValidationError:
-            # An imported epoch-1 row is not a native Task and sits in no Batch.
+            # An imported epoch-1 row is not a native Task and sits in no Batch, and a
+            # release line in the ledger is not a Task at all.
             continue
         if task.batch_ref is not None:
-            placements[key] = task.batch_ref.entity_key
+            placements[task.key] = task.batch_ref.entity_key
+    batches = document_rows(live, Epoch2Collection.BATCH)
     staged = tuple(
-        StagedBinding.model_validate_json(path.read_bytes())
-        for path in sorted(staged_dir(document).glob("*.json"))
+        row
+        for row in (
+            StagedBinding.model_validate_json(path.read_bytes())
+            for path in sorted(staged_dir(document).glob("*.json"))
+        )
+        if row.batch_ref.entity_key in batches
     )
     return Membership(task_batches=placements, staged=staged)
 
@@ -332,15 +290,14 @@ def _commit_batch(commit: ScratchCommit, task_batches: Mapping[str, str]) -> str
 def plan_publish(
     base: str, tip: str, commits: Sequence[ScratchCommit], task_batches: Mapping[str, str]
 ) -> PublishPlan:
-    """Group the scratch commits into one run per Batch.
+    """File each commit of the range under the one Batch it carries.
 
-    A ``state:`` commit joins the run of the next Batch commit, so its
-    content lands in the commit that follows it; the ``state:`` commits
-    after the last Batch commit are left for the trailing state commit.
+    The commits of several Batches may interleave, because each Task's work lands
+    when it is cherry-picked; a ``state:`` commit carries no Batch.
 
     Args:
         base: The published commit the range starts after.
-        tip: The scratch tip.
+        tip: The branch tip.
         commits: The range, oldest first.
         task_batches: Each Task key mapped to its Batch key.
 
@@ -348,55 +305,17 @@ def plan_publish(
         The plan.
 
     Raises:
-        PublishRefusedError: A commit cannot be placed in one Batch, or a
-            Batch's commits are split by another Batch's.
+        PublishRefusedError: A commit names no Task or Batch, a Task in no Batch, or
+            more than one Batch.
     """
-    runs: list[BatchRun] = []
-    pending: list[ScratchCommit] = []
+    batches: dict[str, list[ScratchCommit]] = {}
     for commit in commits:
         batch = _commit_batch(commit, task_batches)
-        if batch is None:
-            pending.append(commit)
-            continue
-        if not runs or runs[-1].batch_key != batch:
-            earlier = next((run for run in runs if run.batch_key == batch), None)
-            if earlier is not None:
-                raise PublishRefusedError(
-                    PUBLISH_BATCHES_INTERLEAVED,
-                    f"{commit.sha[:12]} returns to Batch {batch} after Batch "
-                    f"{runs[-1].batch_key}; reorder the scratch commits so each Batch's "
-                    "work is contiguous",
-                )
-            runs.append(BatchRun(batch_key=batch))
-        run = runs[-1]
-        run.commits.extend([*pending, commit])
-        pending.clear()
-        run.task_keys.extend(key for key in commit.task_keys if key not in run.task_keys)
-    return PublishPlan(base=base, tip=tip, runs=tuple(runs), trailing_state=tuple(pending))
-
-
-def batch_message(run: BatchRun) -> str:
-    """Return the message of the commit one Batch run is squashed into.
-
-    The subject is the run's first conventional non-state subject, so the
-    author's own wording survives; the other subjects are listed in the
-    body. The ``Batch:`` trailer comes first, then one ``Task:`` per Task.
-    """
-    work = [commit for commit in run.commits if not commit.is_state]
-    subject = next(
-        (c.subject for c in work if _CONVENTIONAL_SUBJECT_RE.match(c.subject)),
-        f"feat: deliver Batch {run.batch_key}",
+        if batch is not None:
+            batches.setdefault(batch, []).append(commit)
+    return PublishPlan(
+        base=base, tip=tip, batches={key: tuple(found) for key, found in batches.items()}
     )
-    others = [c.subject for c in work if c.subject != subject]
-    lines = [subject, ""]
-    if others:
-        lines.extend(f"- {item}" for item in others[:_BODY_SUBJECTS])
-        if len(others) > _BODY_SUBJECTS:
-            lines.append(f"- and {len(others) - _BODY_SUBJECTS} more scratch commits")
-        lines.append("")
-    lines.append(f"Batch: {run.batch_key}")
-    lines.extend(f"Task: {key}" for key in run.task_keys)
-    return "\n".join(lines) + "\n"
 
 
 def scratch_commits(repo: Path, base: str, tip: str) -> list[ScratchCommit]:
@@ -413,34 +332,33 @@ def scratch_commits(repo: Path, base: str, tip: str) -> list[ScratchCommit]:
         )
     commits: list[ScratchCommit] = []
     for sha in _git(repo, "rev-list", "--reverse", f"{base}..{tip}").splitlines():
-        tree, parent = _git(repo, "show", "-s", "--format=%T %P", sha).split()
+        tree = _git(repo, "rev-parse", f"{sha}^{{tree}}")
         message = _git(repo, "show", "-s", "--format=%B", sha)
-        commits.append(ScratchCommit(sha=sha, tree_sha=tree, parent_sha=parent, message=message))
+        commits.append(ScratchCommit(sha=sha, tree_sha=tree, message=message))
     return commits
 
 
-def _check_bindable(plan: PublishPlan, staged: Sequence[StagedBinding]) -> None:
-    """Refuse a staged binding the squashed runs would leave unbound.
+def _candidates(plan: PublishPlan, batch_key: str) -> tuple[PublishedCommit, ...]:
+    """Return the commits of the range carrying *batch_key*'s work."""
+    return tuple(
+        PublishedCommit(sha=commit.sha, tree_sha=commit.tree_sha)
+        for commit in plan.batches.get(batch_key, ())
+    )
 
-    Each squashed commit carries its run's end tree, so binding against the
-    run ends now proves the binding will hold once the commits exist.
+
+def _check_bindable(plan: PublishPlan, staged: Sequence[StagedBinding]) -> None:
+    """Refuse a staged binding no commit of its Batch would take.
 
     Raises:
-        PublishRefusedError: A staged tree is carried by no run end of its
-            Batch, or by several.
+        PublishRefusedError: A staged tree is carried by no commit of its Batch,
+            or by several.
     """
     for row in staged:
-        candidates = [
-            PublishedCommit(sha=run.end.sha, tree_sha=run.end.tree_sha)
-            for run in plan.runs
-            if run.batch_key == row.batch_ref.entity_key
-        ]
         try:
-            bind_staged(row, candidates)
+            bind_staged(row, _candidates(plan, row.batch_ref.entity_key))
         except StagedBindingRefusedError as error:
             raise PublishRefusedError(
-                error.code,
-                f"{error}; adopt the Batch again at the scratch commit that ends its work",
+                error.code, f"{error}; adopt the Batch again at the commit that ends its work"
             ) from error
 
 
@@ -459,37 +377,25 @@ def _state_paths(repo: Path) -> list[str]:
     return paths
 
 
-def _archive_ref(repo: Path, tip: str, now: datetime) -> str:
-    """Keep *tip* under a new archive ref named for *now* and return the ref."""
-    ref = f"{ARCHIVE_REF_PREFIX}{now.strftime('%Y%m%dT%H%M%S%fZ')}"
-    # The empty old value makes the update create-only, so an archive is never overwritten.
-    _git(repo, "update-ref", ref, tip, "")
-    return ref
-
-
-def publish(repo: Path, *, membership: Membership, bind: Binder, now: datetime) -> PublishResult:
-    """Squash the branch's scratch commits into one commit per Batch.
+def publish(repo: Path, *, membership: Membership, bind: Binder) -> PublishResult:
+    """Check the branch's commits past origin and bind the staged adoptions to them.
 
     Args:
         repo: The repository's working tree.
         membership: The generation's Task placements and staged bindings.
-        bind: Binds the staged rows to the commits that now carry each
-            staged Batch and answers how many it bound; called only when a
-            staged row is waiting, after the branch has moved, so a binder
-            failure leaves the published branch and the archive ref in
-            place with the rows still staged.
-        now: When the publish runs, naming the archive ref.
+        bind: Binds the staged rows to the commits carrying each staged Batch
+            and answers how many it bound; called only when a staged row is
+            waiting, so a binder failure leaves the branch as it was with the
+            rows still staged.
 
     Returns:
-        What the publish did; ``noop`` when the branch was already in the
-        published shape and nothing was staged.
+        What the publish did; ``noop`` when nothing was staged.
 
     Raises:
         PublishRefusedError: The tree is dirty, ``HEAD`` is detached, the
-            remote default branch is unknown, a commit cannot be placed, a
-            staged row would stay unbound, a git step failed, or a hook
-            changed a squashed tree. The branch, the archive refs and the
-            state are then as they were.
+            remote default branch is unknown, the range holds a merge, a
+            commit cannot be placed in one Batch, a staged row would stay
+            unbound, or a git step failed. The branch is then as it was.
     """
     branch = _maybe_git(repo, "symbolic-ref", "--quiet", "--short", "HEAD")
     if not branch:
@@ -512,118 +418,50 @@ def publish(repo: Path, *, membership: Membership, bind: Binder, now: datetime) 
     base = _git(repo, "merge-base", tip, published)
     plan = plan_publish(base, tip, scratch_commits(repo, base, tip), membership.task_batches)
     _check_bindable(plan, membership.staged)
-    try:
-        head, rewritten, carried = _squash(repo, plan, staged=bool(membership.staged))
-    except PublishRefusedError:
-        _git(repo, "checkout", "--quiet", "--force", branch)
-        raise
-    if not rewritten and not membership.staged:
-        logger.info(f"publish branch={branch} noop=True runs={len(plan.runs)}")
+    batch_commits = {key: commits[-1].sha for key, commits in plan.batches.items()}
+    if not membership.staged:
+        logger.info(f"publish branch={branch} noop=True batches={len(plan.batches)}")
         return PublishResult(
             branch=branch,
             old_tip=tip,
             new_tip=tip,
-            archive_ref=None,
-            batch_commits={run.batch_key: run.end.sha for run in plan.runs},
+            batch_commits=batch_commits,
             state_commit=None,
             bound=0,
             noop=True,
         )
-    archive = _archive_ref(repo, tip, now) if rewritten else None
-    # HEAD already sits on the new head with the trailing state staged, so
-    # the branch is moved and re-attached without touching index or tree.
-    _git(repo, "update-ref", f"refs/heads/{branch}", head, tip)
-    _git(repo, "symbolic-ref", "HEAD", f"refs/heads/{branch}")
-    targets = {str(row.batch_ref): carried[row.batch_ref.entity_key] for row in membership.staged}
-    bound = bind(branch, targets) if targets else 0
+    targets = {
+        str(row.batch_ref): _candidates(plan, row.batch_ref.entity_key) for row in membership.staged
+    }
+    bound = bind(branch, targets)
     paths = _state_paths(repo)
     if paths:
         _git(repo, "add", "--", *paths)
     state_commit = None
     if _maybe_git(repo, "diff", "--cached", "--quiet") is None:
-        subject = (
-            f"state: bind {bound} published Batch commits"
-            if bound
-            else "state: carry the scratch state into the publish"
+        _git(
+            repo,
+            "commit",
+            "--quiet",
+            "-F",
+            "-",
+            stdin=f"state: bind {bound} published Batch commits\n",
         )
-        _git(repo, "commit", "--quiet", "-F", "-", stdin=f"{subject}\n")
         state_commit = _git(repo, "rev-parse", "HEAD")
-    new_tip = state_commit or head
-    logger.info(
-        f"publish branch={branch} runs={len(plan.runs)} rewritten={rewritten} bound={bound}"
-    )
+    logger.info(f"publish branch={branch} batches={len(plan.batches)} bound={bound}")
     return PublishResult(
         branch=branch,
         old_tip=tip,
-        new_tip=new_tip,
-        archive_ref=archive,
-        batch_commits={batch: commits[0].sha for batch, commits in carried.items()},
+        new_tip=state_commit or tip,
+        batch_commits=batch_commits,
         state_commit=state_commit,
         bound=bound,
         noop=False,
     )
 
 
-def _squash(
-    repo: Path, plan: PublishPlan, *, staged: bool
-) -> tuple[str, bool, dict[str, tuple[PublishedCommit, ...]]]:
-    """Build the published commits on a detached ``HEAD``.
-
-    A run already in the published shape on an unchanged parent is kept as
-    it is, so a publish of a published branch rewrites nothing.
-
-    Args:
-        repo: The repository's working tree.
-        plan: The runs to squash.
-        staged: Whether staged rows will be bound, so the trailing state
-            is rebuilt to carry them.
-
-    Returns:
-        The new head, whether any commit was rewritten, and each Batch
-        mapped to the commit that carries it. When the trailing state is
-        rebuilt it is left staged on top of the new head.
-
-    Raises:
-        PublishRefusedError: A git step failed, or a hook changed the tree
-            a squashed commit carries.
-    """
-    parent = plan.base
-    rewritten = False
-    carried: dict[str, tuple[PublishedCommit, ...]] = {}
-    for run in plan.runs:
-        if not rewritten and run.published() and run.end.parent_sha == parent:
-            parent = run.end.sha
-            carried[run.batch_key] = (PublishedCommit(sha=parent, tree_sha=run.end.tree_sha),)
-            continue
-        rewritten = True
-        _git(repo, "checkout", "--quiet", "--detach", run.end.sha)
-        _git(repo, "reset", "--quiet", "--soft", parent)
-        _git(repo, "commit", "--quiet", "-F", "-", stdin=batch_message(run))
-        built = _git(repo, "rev-parse", "HEAD")
-        tree = _git(repo, "rev-parse", f"{built}^{{tree}}")
-        if tree != run.end.tree_sha:
-            raise PublishRefusedError(
-                PUBLISH_TREE_MISMATCH,
-                f"the commit for Batch {run.batch_key} carries tree {tree}, not the scratch "
-                f"tree {run.end.tree_sha}; a hook changed the content, so fix the scratch "
-                "commits and publish again",
-            )
-        parent = built
-        carried[run.batch_key] = (PublishedCommit(sha=built, tree_sha=tree),)
-    trailing = plan.trailing_state
-    if trailing and (rewritten or staged or len(trailing) > 1):
-        rewritten = True
-        _git(repo, "checkout", "--quiet", "--detach", plan.tip)
-        _git(repo, "reset", "--quiet", "--soft", parent)
-    elif trailing:
-        parent = trailing[0].sha
-    return parent, rewritten, carried
-
-
 __all__ = [
-    "ARCHIVE_REF_PREFIX",
     "PUBLISHED_REF",
-    "PUBLISH_BATCHES_INTERLEAVED",
     "PUBLISH_COMMIT_MIXED",
     "PUBLISH_COMMIT_UNASSIGNED",
     "PUBLISH_DETACHED_HEAD",
@@ -632,15 +470,12 @@ __all__ = [
     "PUBLISH_MERGE_COMMIT",
     "PUBLISH_NO_REMOTE_DEFAULT",
     "PUBLISH_TASK_UNPLACED",
-    "PUBLISH_TREE_MISMATCH",
-    "BatchRun",
     "Binder",
     "Membership",
     "PublishPlan",
     "PublishRefusedError",
     "PublishResult",
     "ScratchCommit",
-    "batch_message",
     "plan_publish",
     "publish",
     "read_membership",

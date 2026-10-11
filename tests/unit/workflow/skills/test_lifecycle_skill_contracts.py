@@ -203,8 +203,8 @@ def test_dispatch_reports_an_empty_frontier_as_a_drained_batch() -> None:
     assert result.status == "ok"
 
 
-def test_dispatch_stops_for_an_operator_when_no_run_request_is_presented() -> None:
-    """A ready PLANNED Task with no compiled run request stops the pass, with a question."""
+def test_dispatch_dry_run_stops_for_an_operator_on_a_ready_frontier() -> None:
+    """A dry run over a ready PLANNED Task sends nothing and stops, with a question."""
     caller = RecordingCaller(
         {
             dispatch_skill.TASK_READ_METHOD: {
@@ -216,14 +216,14 @@ def test_dispatch_stops_for_an_operator_when_no_run_request_is_presented() -> No
             }
         }
     )
-    result = _run(dispatch_skill, {"batch_ref": "batch-1"}, caller)
+    result = _run(dispatch_skill, {"batch_ref": "batch-1", "dry_run": True}, caller)
 
     body = _body(result, DispatchBody)
     assert isinstance(body, DispatchBody)
     assert body.outcome == "needs_operator"
     assert body.frontier == ["task-a"]
     assert body.plan.parallel == ["task-a", "task-b"]
-    assert body.stopped_on == ["run_request_uncompilable"]
+    assert body.stopped_on == ["dry_run"]
     assert body.user_question is not None
     assert result.status == "needs_user"
 

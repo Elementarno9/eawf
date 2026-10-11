@@ -20,6 +20,7 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.runtime.semantic import (
+    REPORT_BODY_LIMIT,
     RETRY_CLASS_BY_CODE,
     SEMANTIC_TOOL_CATALOG,
     AskOperatorInput,
@@ -33,6 +34,7 @@ from eawf.kernel.runtime.semantic import (
     SemanticToolInputBase,
     SemanticToolOutputBase,
     SubmitEvidenceOutput,
+    SubmitReportInput,
     SubmitReportOutput,
     error_for,
     tool_contract,
@@ -417,6 +419,73 @@ def test_submit_report_output_accepts_a_refusal_that_names_its_finding() -> None
         }
     )
     assert output.findings[0].code == "body_invalid"
+
+
+def _report(**changed: Any) -> dict[str, Any]:
+    """Return a content-only report payload with *changed* members replaced."""
+    fields: dict[str, Any] = {"tool_id": "submit_report", "verdict": "pass", "summary": "done"}
+    fields.update(changed)
+    return fields
+
+
+def test_submit_report_input_needs_only_the_content_eawf_cannot_derive() -> None:
+    report = SubmitReportInput.model_validate(_report())
+    assert report.contract_digest is None
+    assert report.report_schema_ref is None
+    assert report.criteria == ()
+    assert report.body is None
+
+
+@pytest.mark.parametrize("count", [0, 1, 64], ids=["empty", "single", "max"])
+def test_submit_report_input_admits_up_to_the_criteria_bound(count: int) -> None:
+    criteria = [{"criterion_id": f"CR-{index:02d}", "outcome": "met"} for index in range(count)]
+    assert len(SubmitReportInput.model_validate(_report(criteria=criteria)).criteria) == count
+
+
+def test_submit_report_input_refuses_one_criterion_past_the_bound() -> None:
+    criteria = [{"criterion_id": f"CR-{index:02d}", "outcome": "met"} for index in range(65)]
+    with pytest.raises(ValidationError, match=r"too_long|at most 64"):
+        SubmitReportInput.model_validate(_report(criteria=criteria))
+
+
+def test_submit_report_input_refuses_a_criterion_named_twice() -> None:
+    row = {"criterion_id": "CR-01", "outcome": "met"}
+    with pytest.raises(ValidationError):
+        SubmitReportInput.model_validate(_report(criteria=[row, {**row, "outcome": "unmet"}]))
+
+
+def test_submit_report_input_bounds_the_inline_body() -> None:
+    at_limit = SubmitReportInput.model_validate(_report(body="x" * REPORT_BODY_LIMIT))
+    assert at_limit.body is not None and len(at_limit.body) == REPORT_BODY_LIMIT
+    with pytest.raises(ValidationError):
+        SubmitReportInput.model_validate(_report(body="x" * (REPORT_BODY_LIMIT + 1)))
+    with pytest.raises(ValidationError):
+        SubmitReportInput.model_validate(_report(body=""))
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"summary": "   "},
+        {"summary": 7},
+        {"verdict": "done"},
+        {"criteria": [{"criterion_id": "CR-01", "outcome": "partly"}]},
+        {"contract_digest": f"sha256:{'0' * 63}"},
+        {"report_schema_ref": "executor-report"},
+        {"body_ref": "artifact://report/run-10"},
+    ],
+    ids=["blank-summary", "summary-type", "verdict", "outcome", "digest", "schema", "extra"],
+)
+def test_submit_report_input_refuses_a_malformed_member(changed: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        SubmitReportInput.model_validate(_report(**changed))
+
+
+def test_submit_report_input_refuses_a_payload_missing_its_summary() -> None:
+    fields = _report()
+    del fields["summary"]
+    with pytest.raises(ValidationError, match="summary"):
+        SubmitReportInput.model_validate(fields)
 
 
 def test_submit_evidence_output_accepts_an_empty_contract_refs_on_acceptance() -> None:

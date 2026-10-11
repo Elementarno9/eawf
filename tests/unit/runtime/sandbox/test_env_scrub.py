@@ -17,15 +17,12 @@ The wiring test ALWAYS mocks the subprocess -- it never spawns a real
 
 from __future__ import annotations
 
-import asyncio
 import os
 import sys
 from pathlib import Path
 
 import pytest
 
-from eawf.runtime.runtimes.claude import adapter as claude_adapter
-from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter
 from eawf.runtime.sandbox import env_scrub
 from eawf.runtime.sandbox.env_scrub import build_child_env, pinned_tmpdir, resolve_binary_dir
 from eawf.runtime.sandbox.jail import build_jail_argv, build_seatbelt_profile
@@ -386,72 +383,3 @@ def test_build_child_env_unknown_runtime_raises() -> None:
     """An unknown runtime lane raises ValueError naming the value."""
     with pytest.raises(ValueError, match="unknown runtime lane"):
         build_child_env("gemini-cli", base_env=_FULL_BASE_ENV)
-
-
-# ---------------------------------------------------------------------------
-# Wiring: the live ``claude -p`` spawn passes the scrubbed env (mocked)
-# ---------------------------------------------------------------------------
-
-
-class _FakeProcess:
-    """Minimal stand-in for :class:`asyncio.subprocess.Process`.
-
-    The claude adapter drains ``.stdout`` / ``.stderr`` incrementally;
-    :meth:`open_streams` (called from the in-loop factory) populates the
-    StreamReaders with the canned envelope.
-    """
-
-    def __init__(self, *, stdout: bytes, returncode: int, pid: int = 4321) -> None:
-        self._stdout = stdout
-        self.returncode: int | None = returncode
-        self.pid = pid
-        self.stdout: asyncio.StreamReader | None = None
-        self.stderr: asyncio.StreamReader | None = None
-
-    def open_streams(self) -> None:
-        self.stdout = asyncio.StreamReader()
-        self.stdout.feed_data(self._stdout)
-        self.stdout.feed_eof()
-        self.stderr = asyncio.StreamReader()
-        self.stderr.feed_eof()
-
-    def kill(self) -> None:  # pragma: no cover - not exercised on the happy path
-        pass
-
-    async def wait(self) -> int:  # pragma: no cover - not exercised on happy path
-        return self.returncode if self.returncode is not None else -1
-
-
-def test_spawn_session_passes_scrubbed_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The live spawn passes a scrubbed, non-None env with no cred families."""
-    # The parent env carries credentials the child must never see.
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "placeholder-aws")  # pragma: allowlist secret
-    monkeypatch.setenv("GH_TOKEN", "placeholder-gh")  # pragma: allowlist secret
-    monkeypatch.setenv("GITHUB_TOKEN", "placeholder-github")  # pragma: allowlist secret
-    monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/ssh.sock")
-    monkeypatch.setenv("KUBECONFIG", "/sandbox/agent/.kube/config")
-
-    envelope = b'{"result":"ok","session_id":"s","usage":{"input_tokens":1,"output_tokens":1}}'
-    proc = _FakeProcess(stdout=envelope, returncode=0)
-    captured: dict[str, object] = {}
-
-    async def _fake_exec(*_argv: str, **kwargs: object) -> _FakeProcess:
-        captured.update(kwargs)
-        proc.open_streams()
-        return proc
-
-    monkeypatch.setattr(claude_adapter.asyncio, "create_subprocess_exec", _fake_exec)
-    # Pin the binary resolution to "absent" so PATH is the pinned floor verbatim
-    # regardless of whether a `claude` CLI is installed on the test host (the
-    # extra_path_dir prepend is covered by the resolve_binary_dir tests above).
-    monkeypatch.setattr(claude_adapter, "resolve_binary_dir", lambda _binary: None)
-
-    adapter = ClaudeAdapter()
-    result = asyncio.run(adapter.spawn_session("p", model="m"))
-    assert result.text == "ok"
-
-    env = captured["env"]
-    assert isinstance(env, dict)
-    assert env["PATH"] == env_scrub.pinned_path(sys.platform, os.environ)
-    for key in env:
-        assert not key.startswith(("AWS_", "GH_", "GITHUB_", "SSH_", "KUBECONFIG"))

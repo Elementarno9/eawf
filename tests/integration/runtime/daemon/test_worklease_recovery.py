@@ -34,6 +34,7 @@ from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.workspace_lease import RECONCILE_METHOD
 from eawf.runtime.daemon.native_guard import NativeAuthorityRefusedError
 from eawf.runtime.workspace.lease import (
+    MCP_ARTIFACT_DIRNAME,
     QUARANTINE_LOCATOR,
     QuarantineRecord,
     issue_lease,
@@ -232,6 +233,71 @@ def test_reconcile_quarantines_an_uncommitted_worktree_and_keeps_its_bytes(
     assert lease.recovery_handle is not None
     assert "uncommitted" in lease.quarantine_reason
     assert unsaved.read_text(encoding="utf-8") == "x = 2  # the work nobody has seen\n"
+
+
+def isolation_dir_of(context: Epoch2RootContext, lease_id: str) -> Path:
+    """Write the per-Run isolation directory a native launch leaves in a workspace."""
+    handle = read_lease(context, lease_id=lease_id).workspace_handle
+    isolation = workspace_path(context, handle=handle) / MCP_ARTIFACT_DIRNAME
+    (isolation / "tmp").mkdir(parents=True)
+    (isolation / "binding.json").write_text("{}", encoding="utf-8")
+    return isolation
+
+
+def test_reconcile_releases_a_worktree_holding_only_the_isolation_dir(
+    canary: tuple[CanaryProvision, Epoch2RootContext],
+) -> None:
+    """eawf's own per-Run directory is not the worker's residue."""
+    _, context = canary
+    lease_id = lease_the_repo(context)
+    isolation = isolation_dir_of(context, lease_id)
+    target = isolation.parent
+
+    report = reconcile_root(context, now=JUDGED)
+
+    assert (report.released, report.quarantined) == (1, 0)
+    assert read_lease(context, lease_id=lease_id).status is LeaseStatus.RELEASED
+    assert not target.exists()
+    assert quarantine_records(context) == []
+
+
+def test_the_isolation_dir_does_not_hide_a_worker_edit_beside_it(
+    canary: tuple[CanaryProvision, Epoch2RootContext],
+) -> None:
+    """Only the isolation entry is discounted; the edit still quarantines."""
+    _, context = canary
+    lease_id = lease_the_repo(context)
+    isolation = isolation_dir_of(context, lease_id)
+    (isolation.parent / "hello.txt").write_text("canary\n", encoding="utf-8")
+
+    reconcile_root(context, now=JUDGED)
+
+    lease = read_lease(context, lease_id=lease_id)
+    assert lease.status is LeaseStatus.QUARANTINED
+    assert lease.quarantine_reason == "the leased workspace holds 1 uncommitted entries"
+    [record] = quarantine_records(context)
+    assert record.residue == ("?? hello.txt",)
+    assert (isolation / "binding.json").is_file()
+
+
+def test_a_staged_file_under_the_isolation_dir_is_still_residue(
+    canary: tuple[CanaryProvision, Epoch2RootContext],
+) -> None:
+    """Only untracked isolation entries are discounted, never staged ones."""
+    _, context = canary
+    lease_id = lease_the_repo(context)
+    isolation = isolation_dir_of(context, lease_id)
+    subprocess.run(
+        ["git", "add", "-f", f"{MCP_ARTIFACT_DIRNAME}/binding.json"],
+        cwd=isolation.parent,
+        check=True,
+    )
+
+    reconcile_root(context, now=JUDGED)
+
+    lease = read_lease(context, lease_id=lease_id)
+    assert lease.status is LeaseStatus.QUARANTINED
+    assert "uncommitted" in lease.quarantine_reason
 
 
 def test_quarantine_record_is_readable_under_the_recovery_handle(

@@ -1,23 +1,20 @@
-"""``eawf publish`` squashes scratch commits into one commit per Batch.
+"""``eawf publish`` keeps every per-Task commit and binds the staged adoptions to them.
 
 A fixture repository carries five scratch commits across two Batches past
 its remote default branch, with each Batch's adoption staged at the
-scratch commit that ends its work. Publish leaves one commit per Batch and
-one ``state:`` commit, built through ``git commit`` so the hooks run, binds
-the staged rows to the new commits through the daemon, keeps the old tip
-under an archive ref, and changes nothing when run again. It refuses,
-changing nothing, a dirty tree, a hook that alters a squashed tree, and a
-range it cannot place in Batches.
+commit that ends its work. Publish rewrites none of them: it binds the
+staged rows to the commits carrying their trees through the daemon, adds
+one ``state:`` commit holding the rows that writes, built through ``git
+commit`` so the hooks run, and changes nothing when run again. It refuses,
+changing nothing, a dirty tree and a range it cannot place in Batches.
 """
 
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import re
 import stat
 import subprocess
-import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,8 +34,6 @@ from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.methods.publish import PUBLISH_BIND_STAGED_METHOD
 from eawf.surfaces.cli.app import app
 from eawf.workflow.integration.publish import (
-    ARCHIVE_REF_PREFIX,
-    PUBLISH_BATCHES_INTERLEAVED,
     PUBLISH_COMMIT_MIXED,
     PUBLISH_COMMIT_UNASSIGNED,
     PUBLISH_DETACHED_HEAD,
@@ -46,11 +41,8 @@ from eawf.workflow.integration.publish import (
     PUBLISH_MERGE_COMMIT,
     PUBLISH_NO_REMOTE_DEFAULT,
     PUBLISH_TASK_UNPLACED,
-    PUBLISH_TREE_MISMATCH,
-    BatchRun,
     PublishRefusedError,
     ScratchCommit,
-    batch_message,
     plan_publish,
     publish,
     read_membership,
@@ -85,7 +77,6 @@ AUDIT_ID = "A-PUBLISH-01"
 BRANCH = "feature/eawf-v0.7"
 BATCH_B_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/batch/BAT-0008"
 TASK_B_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/task/EAWF-0043"
-TOOLS = Path(__file__).resolve().parents[4] / "tools"
 SHA_RE = re.compile(rb"\b[0-9a-f]{40}\b")
 
 
@@ -279,47 +270,24 @@ def _range(root: Path, base: str) -> list[str]:
     return git(root, "rev-list", "--reverse", f"{base}..HEAD").splitlines()
 
 
-def _load_tool(name: str) -> Any:
-    """Import one module from ``tools/``."""
-    if str(TOOLS) not in sys.path:
-        sys.path.insert(0, str(TOOLS))
-    spec = importlib.util.spec_from_file_location(name, TOOLS / f"{name}.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
 def _no_bind(_branch: str, _targets: object) -> int:
     raise AssertionError("nothing is staged, so nothing is bound")
 
 
-# ---- CR-1: one commit per Batch, then one state commit ----------------------
+# ---- CR-1: every commit kept, then one state commit ------------------------
 
 
-def test_publish_squashes_five_scratch_commits_into_two_batches_and_a_state_commit(
+def test_publish_keeps_the_five_commits_and_adds_one_state_commit(
     scratch: Scratch, cli: None
 ) -> None:
     _hook(scratch.hooks, "pre-commit", f'echo ran >> "{scratch.root.parent}/hook.log"')
-    old_tree = git(scratch.root, "rev-parse", f"{scratch.tip}^{{tree}}")
 
     code, answer = eawf_publish(scratch.root)
 
     assert code == 0, answer
     published = _range(scratch.root, scratch.base)
-    assert len(published) == 3
-    first, second, state = published
-    for sha, batch, task in ((first, "BAT-0007", "EAWF-0042"), (second, "BAT-0008", "EAWF-0043")):
-        message = git(scratch.root, "show", "-s", "--format=%B", sha)
-        assert re.findall(r"^Batch: (\S+)$", message, re.MULTILINE) == [batch]
-        assert re.findall(r"^Task: (\S+)$", message, re.MULTILINE) == [task]
-    assert git(scratch.root, "show", "-s", "--format=%s", first) == "feat: add the alpha module"
-    assert git(scratch.root, "show", "-s", "--format=%s", second) == "fix: correct the beta module"
-    assert git(scratch.root, "rev-parse", f"{first}^{{tree}}") == git(
-        scratch.root, "rev-parse", f"{scratch.commits[1]}^{{tree}}"
-    )
-    assert git(scratch.root, "rev-parse", f"{second}^{{tree}}") == old_tree
+    assert published[:-1] == list(scratch.commits)
+    state = published[-1]
     assert git(scratch.root, "show", "-s", "--format=%s", state).startswith("state: ")
     state_paths = git(scratch.root, "diff-tree", "--no-commit-id", "--name-only", "-r", state)
     assert state_paths
@@ -328,31 +296,16 @@ def test_publish_squashes_five_scratch_commits_into_two_batches_and_a_state_comm
     )
     # The state commit adds bookkeeping only, so outside .ea the tip is the scratch tip.
     assert git(scratch.root, "diff", "--name-only", scratch.tip, "HEAD", "--", ".", ":!.ea") == ""
-    archive = git(
-        scratch.root, "for-each-ref", "--format=%(refname) %(objectname)", ARCHIVE_REF_PREFIX
-    )
-    ref, target = archive.split()
-    assert re.fullmatch(rf"{ARCHIVE_REF_PREFIX}\d{{8}}T\d{{12}}Z", ref)
-    assert target == scratch.tip
-    assert answer["archive_ref"] == ref
+    assert answer["batch_commits"] == {
+        "BAT-0007": scratch.commits[1],
+        "BAT-0008": scratch.commits[4],
+    }
+    assert "archive_ref" not in answer
     assert answer["bound"] == 2
     assert git(scratch.root, "symbolic-ref", "--short", "HEAD") == BRANCH
     assert git(scratch.root, "status", "--porcelain") == ""
-    # Two Batch commits and the state commit all ran the hooks.
-    assert (scratch.root.parent / "hook.log").read_text(encoding="utf-8").count("ran") == 3
-
-
-def test_published_range_passes_the_pre_push_commit_lint(scratch: Scratch, cli: None) -> None:
-    guard = _load_tool("wave_trailer_guard")
-    env = {"PRE_COMMIT_FROM_REF": scratch.base, "PRE_COMMIT_TO_REF": scratch.tip}
-    refused, _ = guard.check_pushed_commits(env, repo_root=scratch.root)
-    assert refused == 1
-
-    code, _answer = eawf_publish(scratch.root)
-    assert code == 0
-
-    env["PRE_COMMIT_TO_REF"] = git(scratch.root, "rev-parse", "HEAD")
-    assert guard.check_pushed_commits(env, repo_root=scratch.root) == (0, "")
+    # Only the state commit was made, and it ran the hooks.
+    assert (scratch.root.parent / "hook.log").read_text(encoding="utf-8").count("ran") == 1
 
 
 # ---- CR-2: bound SHAs are published, and a rerun is a no-op ----------------
@@ -382,6 +335,7 @@ def test_bound_shas_are_ancestors_of_head_and_a_second_publish_is_a_noop(
     }
     batch_commits = set(answer["batch_commits"].values())
     assert batch_commits <= bound
+    assert batch_commits <= set(scratch.commits)
     for sha in bound:
         assert (
             subprocess.run(
@@ -391,7 +345,6 @@ def test_bound_shas_are_ancestors_of_head_and_a_second_publish_is_a_noop(
             ).returncode
             == 0
         ), sha
-    assert not set(scratch.commits) & bound
     assert list(staged_dir(document_path(scratch.canary)).glob("*.json")) == []
 
     snapshot = _snapshot(scratch.root)
@@ -399,7 +352,6 @@ def test_bound_shas_are_ancestors_of_head_and_a_second_publish_is_a_noop(
 
     assert code == 0, again
     assert again["noop"] is True
-    assert again["archive_ref"] is None
     assert again["batch_commits"] == answer["batch_commits"]
     assert _snapshot(scratch.root) == snapshot
 
@@ -407,27 +359,23 @@ def test_bound_shas_are_ancestors_of_head_and_a_second_publish_is_a_noop(
 def test_publish_without_staged_rows_writes_no_state_commit(tmp_path: Path) -> None:
     made = make_repo(tmp_path)
 
-    result = publish(
-        made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind, now=AT
-    )
+    result = publish(made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind)
 
-    assert result.state_commit is None and result.bound == 0
-    assert len(_range(made.root, made.base)) == 2
-    assert result.new_tip == git(made.root, "rev-parse", "HEAD")
+    assert result.noop and result.state_commit is None and result.bound == 0
+    assert _range(made.root, made.base) == list(made.commits)
+    assert result.new_tip == made.tip == git(made.root, "rev-parse", "HEAD")
 
 
 def test_publish_of_an_empty_range_is_a_noop(tmp_path: Path) -> None:
     made = make_repo(tmp_path, messages=[])
 
-    result = publish(
-        made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind, now=AT
-    )
+    result = publish(made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind)
 
     assert result.noop and result.batch_commits == {}
     assert result.new_tip == made.base
 
 
-def test_state_commits_fold_into_the_next_batch_and_the_trailing_state(tmp_path: Path) -> None:
+def test_state_commits_stay_where_they_were_made(tmp_path: Path) -> None:
     made = make_repo(
         tmp_path,
         messages=[
@@ -438,19 +386,11 @@ def test_state_commits_fold_into_the_next_batch_and_the_trailing_state(tmp_path:
         ],
     )
 
-    result = publish(
-        made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind, now=AT
-    )
+    result = publish(made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind)
 
-    published = _range(made.root, made.base)
-    assert len(published) == 2
-    assert git(made.root, "show", "-s", "--format=%s", published[0]) == "feat: add alpha"
-    assert "a.txt" in git(made.root, "show", "--name-only", "--format=", published[0])
-    assert git(made.root, "show", "-s", "--format=%s", published[1]).startswith("state: ")
-    assert git(made.root, "rev-parse", "HEAD^{tree}") == git(
-        made.root, "rev-parse", f"{made.tip}^{{tree}}"
-    )
-    assert result.archive_ref is not None
+    assert _range(made.root, made.base) == list(made.commits)
+    assert result.batch_commits == {"BAT-0007": made.commits[1]}
+    assert result.noop
 
 
 # ---- CR-3: refusals change nothing -------------------------------------------
@@ -467,24 +407,14 @@ def test_publish_refuses_a_dirty_tree_and_changes_nothing(scratch: Scratch, cli:
     assert _snapshot(scratch.root) == snapshot
 
 
-def test_publish_refuses_a_hook_that_changes_the_squashed_tree(scratch: Scratch, cli: None) -> None:
-    _hook(scratch.hooks, "pre-commit", "echo '# hooked' >> src/module.py && git add src/module.py")
-    snapshot = _snapshot(scratch.root)
-
-    code, answer = eawf_publish(scratch.root)
-
-    assert code != 0
-    assert PUBLISH_TREE_MISMATCH in orjson.dumps(answer).decode()
-    assert _snapshot(scratch.root) == snapshot
-
-
 def test_publish_refuses_a_staged_tree_no_batch_commit_carries(tmp_path: Path) -> None:
     made = make_repo(tmp_path)
-    _stage(made, batch=BATCH_URN, task=TASK_URN, at=made.commits[0])
+    # The tree of a BAT-0008 commit, which no commit of BAT-0007 carries.
+    _stage(made, batch=BATCH_URN, task=TASK_URN, at=made.commits[2])
     snapshot = _snapshot(made.root)
 
     with pytest.raises(PublishRefusedError) as caught:
-        publish(made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind, now=AT)
+        publish(made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind)
 
     assert caught.value.code == STAGED_TREE_UNPUBLISHED
     assert _snapshot(made.root) == snapshot
@@ -496,14 +426,6 @@ def test_publish_refuses_a_staged_tree_no_batch_commit_carries(tmp_path: Path) -
         ([("src/a.py", "no trailer at all")], PUBLISH_COMMIT_UNASSIGNED),
         ([("src/a.py", "feat: a\n\nTask: EAWF-9999")], PUBLISH_TASK_UNPLACED),
         ([("src/a.py", "feat: a\n\nTask: EAWF-0042\nTask: EAWF-0043")], PUBLISH_COMMIT_MIXED),
-        (
-            [
-                ("src/a.py", "feat: a\n\nTask: EAWF-0042"),
-                ("src/b.py", "feat: b\n\nTask: EAWF-0043"),
-                ("src/c.py", "feat: c\n\nTask: EAWF-0042"),
-            ],
-            PUBLISH_BATCHES_INTERLEAVED,
-        ),
     ],
 )
 def test_publish_refuses_a_range_it_cannot_place(
@@ -513,7 +435,7 @@ def test_publish_refuses_a_range_it_cannot_place(
     snapshot = _snapshot(made.root)
 
     with pytest.raises(PublishRefusedError) as caught:
-        publish(made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind, now=AT)
+        publish(made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind)
 
     assert caught.value.code == code
     assert _snapshot(made.root) == snapshot
@@ -524,7 +446,7 @@ def test_publish_refuses_a_detached_head(tmp_path: Path) -> None:
     git(made.root, "checkout", "-q", "--detach", made.tip)
 
     with pytest.raises(PublishRefusedError) as caught:
-        publish(made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind, now=AT)
+        publish(made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind)
 
     assert caught.value.code == PUBLISH_DETACHED_HEAD
 
@@ -534,7 +456,7 @@ def test_publish_refuses_without_a_remote_default_branch(tmp_path: Path) -> None
     git(made.root, "symbolic-ref", "--delete", "refs/remotes/origin/HEAD")
 
     with pytest.raises(PublishRefusedError) as caught:
-        publish(made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind, now=AT)
+        publish(made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind)
 
     assert caught.value.code == PUBLISH_NO_REMOTE_DEFAULT
 
@@ -547,7 +469,7 @@ def test_publish_refuses_a_merge_commit(tmp_path: Path) -> None:
     git(made.root, "merge", "-q", "--no-ff", "-m", "merge side", "side")
 
     with pytest.raises(PublishRefusedError) as caught:
-        publish(made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind, now=AT)
+        publish(made.root, membership=read_membership(made.root / ".ea"), bind=_no_bind)
 
     assert caught.value.code == PUBLISH_MERGE_COMMIT
 
@@ -560,36 +482,17 @@ def test_publish_refusal_is_a_value_error() -> None:
 
 
 def _commit_row(index: int, message: str) -> ScratchCommit:
-    return ScratchCommit(
-        sha=f"{index:040x}", tree_sha=f"{index + 100:040x}", parent_sha="0" * 40, message=message
-    )
+    return ScratchCommit(sha=f"{index:040x}", tree_sha=f"{index + 100:040x}", message=message)
 
 
-def test_plan_of_no_commits_has_no_runs() -> None:
+def test_plan_of_no_commits_has_no_batches() -> None:
     plan = plan_publish("a" * 40, "a" * 40, [], {})
-    assert plan.runs == () and plan.trailing_state == ()
+    assert plan.batches == {}
 
 
 def test_plan_reads_a_batch_trailer_without_a_task() -> None:
     plan = plan_publish("a" * 40, "b" * 40, [_commit_row(1, "feat: x\n\nBatch: BAT-0007")], {})
-    assert [run.batch_key for run in plan.runs] == ["BAT-0007"]
-    assert plan.runs[0].published()
-
-
-def test_batch_message_without_a_conventional_subject_names_the_batch() -> None:
-    run = BatchRun(batch_key="BAT-0007", commits=[_commit_row(1, "wip")], task_keys=["EAWF-0042"])
-    assert batch_message(run) == (
-        "feat: deliver Batch BAT-0007\n\n- wip\n\nBatch: BAT-0007\nTask: EAWF-0042\n"
-    )
-
-
-def test_batch_message_counts_the_subjects_past_the_body_limit() -> None:
-    commits = [_commit_row(index, f"step {index}") for index in range(10)]
-    run = BatchRun(batch_key="BAT-0007", commits=commits, task_keys=[])
-    message = batch_message(run)
-    assert message.count("\n- step ") == 8
-    assert "- and 2 more scratch commits" in message
-    assert message.endswith("Batch: BAT-0007\n")
+    assert list(plan.batches) == ["BAT-0007"]
 
 
 # ---- the daemon verb ----------------------------------------------------------

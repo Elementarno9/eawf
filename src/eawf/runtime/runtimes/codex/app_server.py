@@ -545,7 +545,7 @@ class _Turn:
         if self.pgid is not None:
             await asyncio.gather(
                 asyncio.to_thread(cancel.cancel_with_grace, self.pgid),
-                asyncio.to_thread(self.client.close),
+                self._close_client(),
             )
 
     def _failed(self, text: str, *, result_is_error: bool) -> TurnOutcome:
@@ -561,11 +561,19 @@ class _Turn:
         """End the child through the SDK and free the turn's slot."""
         if self.turn_id:
             self.client.unregister_turn_notifications(self.turn_id)
-        with suppress(Exception):
-            await asyncio.to_thread(self.client.close)
+        await self._close_client()
         if self.slot_held:
             release_spawn_slot()
             self.slot_held = False
+
+    async def _close_client(self) -> None:
+        """Close the SDK client, tolerating a child that already exited.
+
+        A request written after the child exited stays buffered on its
+        stdin, so the SDK's close raises ``BrokenPipeError`` flushing it.
+        """
+        with suppress(Exception):
+            await asyncio.to_thread(self.client.close)
 
 
 def _spawn_error(error: BaseException, turn: _Turn) -> RuntimeSpawnError:

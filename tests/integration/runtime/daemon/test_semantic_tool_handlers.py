@@ -25,6 +25,7 @@ revision stays an operator verb.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -32,9 +33,14 @@ from typing import Any, Final
 
 import pytest
 
-from eawf.kernel.runtime.candidate import CandidateSubmission, candidate_identity
+from eawf.kernel.runtime.candidate import (
+    AcceptedReport,
+    CandidateSubmission,
+    candidate_identity,
+)
 from eawf.kernel.runtime.capsule import AuthorityCapsule
 from eawf.kernel.runtime.compiled import canonical_digest
+from eawf.kernel.runtime.content import CONTENT_LINE_CHARS, CONTENT_LINE_LIMIT
 from eawf.kernel.runtime.lease import LeaseStatus, WorkLease
 from eawf.kernel.runtime.semantic import (
     SemanticCall,
@@ -53,8 +59,9 @@ from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.ledger import read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision, canary_ref, provision_canary
-from eawf.runtime.candidate.seal import submission_record
+from eawf.runtime.candidate.seal import accepted_report_of, submission_record
 from eawf.runtime.daemon import methods
+from eawf.runtime.daemon.content_store import stored_contents
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.planning import PLAN_APPROVE_METHOD, PLAN_SUBMIT_METHOD
@@ -84,6 +91,7 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     seed,
     seed_row,
 )
+from tests.integration.workflow.planning._plan_approval import seal_plan_approval
 
 pytestmark = pytest.mark.integration
 
@@ -576,6 +584,7 @@ def test_every_brokered_tool_has_a_handler_and_no_other_tool_does() -> None:
         SemanticToolId.SUBMIT_EVIDENCE,
         SemanticToolId.SUBMIT_PLAN,
         SemanticToolId.SUBMIT_REPORT,
+        SemanticToolId.WORKSPACE_APPLY_PATCH,
     } == BROKERED_TOOLS
     assert set(SemanticToolId) > BROKERED_TOOLS
 
@@ -996,95 +1005,148 @@ def test_a_receipt_survives_the_call_that_asked_for_it(
 # ---------------------------------------------------------------------------
 
 
-def test_a_report_naming_its_own_contract_is_accepted(
+#: The content a worker files its report with: nothing eawf already knows.
+REPORT_CONTENT: Final[dict[str, Any]] = {
+    "tool_id": "submit_report",
+    "verdict": "pass",
+    "summary": "every criterion is met",
+    "criteria": [
+        {"criterion_id": "CR-01", "outcome": "met"},
+        {"criterion_id": "CR-02", "outcome": "not_attempted", "note": "out of scope"},
+    ],
+    "body": "## Outcome\n\nThe change landed with its tests.",
+}
+
+
+def file_report(
+    ctx: MethodContext,
+    canary: CanaryProvision,
+    capsule: AuthorityCapsule,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Return the handler's output for one ``submit_report`` call carrying *payload*."""
+    answer = invoke(
+        ctx, canary, seal_call(capsule=capsule, tool_id="submit_report", payload=payload), capsule
+    )
+    assert answer["result"]["status"] == "succeeded", answer
+    output: dict[str, Any] = answer["result"]["bounded_output"]
+    return output
+
+
+def accepted_report(canary: CanaryProvision, ctx: MethodContext) -> AcceptedReport | None:
+    """Return the report the Run holds as accepted, if any."""
+    context = ctx.native_root_context(canary.root / ".ea")
+    with context.session([RUN_URN]) as session:
+        records = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
+    return accepted_report_of(records, RUN_URN)
+
+
+def test_a_report_carrying_only_content_is_bound_to_its_runs_contract(
     task_canary: CanaryProvision, ctx: MethodContext
 ) -> None:
     capsule = executor_capsule(tool_grants=("budget_status", "submit_report"))
     bind(ctx, task_canary, capsule)
 
-    answer = invoke(
-        ctx,
-        task_canary,
-        seal_call(
-            capsule=capsule,
-            tool_id="submit_report",
-            payload={
-                "tool_id": "submit_report",
-                "report_schema_ref": capsule.report_schema_ref,
-                "contract_digest": capsule.contract_digest,
-                "body_ref": "artifact://report/executor/ar-0001",
-                "body_digest": digest("7"),
-                "verdict": "pass",
-            },
-        ),
-        capsule,
-    )
+    output = file_report(ctx, task_canary, capsule, REPORT_CONTENT)
 
-    output = answer["result"]["bounded_output"]
-    assert answer["result"]["status"] == "succeeded"
     assert output["accepted"] is True
     assert output["report_ref"] == RUN_URN
     assert output["findings"] == []
+    accepted = accepted_report(task_canary, ctx)
+    assert accepted is not None
+    assert accepted.contract_digest == capsule.contract_digest
+    assert accepted.report_schema_ref == capsule.report_schema_ref
+    assert accepted.verdict.value == "pass"
 
 
-def test_a_report_naming_another_schema_than_its_run_is_refused(
+def test_the_stored_body_is_the_one_the_recorded_digest_names(
+    task_canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    """The digest is computed by eawf over the content the store keeps."""
+    capsule = executor_capsule(tool_grants=("budget_status", "submit_report"))
+    bind(ctx, task_canary, capsule)
+    file_report(ctx, task_canary, capsule, REPORT_CONTENT)
+    accepted = accepted_report(task_canary, ctx)
+    assert accepted is not None
+
+    context = ctx.native_root_context(task_canary.root / ".ea")
+    with context.session([RUN_URN]) as session:
+        stored = stored_contents(session, RUN_URN)
+    hex_digest = accepted.report_digest.removeprefix("sha256:")
+    (content,) = [item for item in stored.values() if item.artifact_ref.endswith(hex_digest)]
+    body = json.dumps([list(content.lines), content.total_lines], separators=(",", ":"))
+    assert accepted.report_digest == f"sha256:{hashlib.sha256(body.encode()).hexdigest()}"
+    assert content.lines[:2] == ("verdict: pass", "summary: every criterion is met")
+    assert "- CR-02: not_attempted -- out of scope" in content.lines
+    assert content.lines[-1] == "The change landed with its tests."
+
+
+def test_a_long_body_line_is_kept_whole_across_stored_lines(
     task_canary: CanaryProvision, ctx: MethodContext
 ) -> None:
     capsule = executor_capsule(tool_grants=("budget_status", "submit_report"))
     bind(ctx, task_canary, capsule)
+    paragraph = " ".join(f"word{index}" for index in range(300))
 
-    answer = invoke(
-        ctx,
-        task_canary,
-        seal_call(
-            capsule=capsule,
-            tool_id="submit_report",
-            payload={
-                "tool_id": "submit_report",
-                "report_schema_ref": "schema://other-report/v1",
-                "contract_digest": capsule.contract_digest,
-                "body_ref": "artifact://report/executor/ar-0002",
-                "body_digest": digest("7"),
-                "verdict": "pass",
-            },
-        ),
-        capsule,
-    )
+    file_report(ctx, task_canary, capsule, {**REPORT_CONTENT, "body": paragraph})
 
-    output = answer["result"]["bounded_output"]
-    assert output["accepted"] is False
-    assert output["findings"][0]["code"] == "report_schema_mismatch"
-    assert output["findings"][0]["field_path"] == "/report_schema_ref"
+    context = ctx.native_root_context(task_canary.root / ".ea")
+    with context.session([RUN_URN]) as session:
+        (content,) = stored_contents(session, RUN_URN).values()
+    assert all(len(line) <= CONTENT_LINE_CHARS for line in content.lines)
+    kept = "".join(content.lines[content.lines.index("") + 1 :])
+    assert kept.replace(" ", "") == paragraph.replace(" ", "")
 
 
-def test_a_report_naming_a_contract_its_run_was_not_sealed_under_is_refused(
+def test_a_report_naming_its_own_schema_and_contract_is_accepted(
     task_canary: CanaryProvision, ctx: MethodContext
 ) -> None:
     capsule = executor_capsule(tool_grants=("budget_status", "submit_report"))
     bind(ctx, task_canary, capsule)
+    named = {
+        **REPORT_CONTENT,
+        "report_schema_ref": capsule.report_schema_ref,
+        "contract_digest": capsule.contract_digest,
+    }
 
-    answer = invoke(
-        ctx,
-        task_canary,
-        seal_call(
-            capsule=capsule,
-            tool_id="submit_report",
-            payload={
-                "tool_id": "submit_report",
-                "report_schema_ref": capsule.report_schema_ref,
-                "contract_digest": digest("0"),
-                "body_ref": "artifact://report/executor/ar-0003",
-                "body_digest": digest("7"),
-                "verdict": "pass",
-            },
-        ),
-        capsule,
-    )
+    assert file_report(ctx, task_canary, capsule, named)["accepted"] is True
 
-    output = answer["result"]["bounded_output"]
+
+@pytest.mark.parametrize(
+    ("field", "value", "code"),
+    [
+        ("report_schema_ref", "schema://other-report/v1", "report_schema_mismatch"),
+        ("contract_digest", f"sha256:{'0' * 64}", "report_contract_mismatch"),
+    ],
+    ids=["schema", "contract"],
+)
+def test_a_report_naming_another_schema_or_contract_than_its_run_is_refused(
+    task_canary: CanaryProvision, ctx: MethodContext, field: str, value: str, code: str
+) -> None:
+    capsule = executor_capsule(tool_grants=("budget_status", "submit_report"))
+    bind(ctx, task_canary, capsule)
+
+    output = file_report(ctx, task_canary, capsule, {**REPORT_CONTENT, field: value})
+
     assert output["accepted"] is False
-    assert output["findings"][0]["code"] == "report_contract_mismatch"
-    assert output["findings"][0]["field_path"] == "/contract_digest"
+    assert output["findings"][0]["code"] == code
+    assert output["findings"][0]["field_path"] == f"/{field}"
+    assert accepted_report(task_canary, ctx) is None
+
+
+def test_a_report_too_large_to_store_whole_is_refused(
+    task_canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    capsule = executor_capsule(tool_grants=("budget_status", "submit_report"))
+    bind(ctx, task_canary, capsule)
+    body = "\n".join(f"line {index}" for index in range(CONTENT_LINE_LIMIT))
+
+    output = file_report(ctx, task_canary, capsule, {**REPORT_CONTENT, "body": body})
+
+    assert output["accepted"] is False
+    assert output["findings"][0]["code"] == "report_body_too_large"
+    assert output["findings"][0]["field_path"] == "/body"
+    assert accepted_report(task_canary, ctx) is None
 
 
 # ---------------------------------------------------------------------------
@@ -1161,14 +1223,7 @@ def test_integrate_seal_reads_the_report_off_the_run_when_omitted(
         seal_call(
             capsule=capsule,
             tool_id="submit_report",
-            payload={
-                "tool_id": "submit_report",
-                "report_schema_ref": capsule.report_schema_ref,
-                "contract_digest": capsule.contract_digest,
-                "body_ref": "artifact://report/executor/ar-0009",
-                "body_digest": digest("7"),
-                "verdict": "pass",
-            },
+            payload=REPORT_CONTENT,
         ),
         capsule,
     )
@@ -1460,7 +1515,9 @@ def submit_and_approve(
                 **common,
                 "key": key,
                 "expected_revision": 2,
-                "action_ref": f"{SLOT}/pending-action/ACT-0060",
+                "action_ref": seal_plan_approval(
+                    canary.root, ctx.wal_dir.parent, subject=body["milestone_urn"], tag=key
+                ),
                 "approved_by": operator,
                 "idempotency_key": f"approve-{key}",
             },

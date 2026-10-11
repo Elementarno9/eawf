@@ -41,21 +41,25 @@ in :class:`~eawf.kernel.state.models.SessionAttempt.runtime`,
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import sys
 import threading
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Final, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from eawf.kernel.runtime.capsule import AuthorityCapsule
 from eawf.kernel.runtime.compiled import CompiledRunSpec, canonical_digest
 from eawf.kernel.runtime.events import TranscriptItem
 from eawf.kernel.runtime.handshake import WorkerHello
 from eawf.kernel.runtime.lease import WorkspaceHandle
+from eawf.kernel.runtime.provider import SemVer
 from eawf.kernel.state.enums import MeasurementQuality, MeasurementStatus
+from eawf.kernel.state.epoch2.run import RunRuntimeTuple
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.kinds.event import Event, EventKind, EventPayload
@@ -65,6 +69,8 @@ from eawf.runtime.sandbox.policy import TOOL_UNIVERSE
 
 if TYPE_CHECKING:
     from eawf.workflow.agents.specs.models import RoleContract
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Closed error-class set (§5.5)
@@ -357,7 +363,7 @@ class SpawnResult(BaseModel):
 
     Transient — NOT state-resident. Carries the raw runtime ``text`` +
     the parsed per-call token usage from a single
-    :meth:`~eawf.runtime.runtimes.claude.adapter.ClaudeAdapter.spawn_session`
+    :meth:`~eawf.runtime.runtimes.opencode.adapter.OpenCodeAdapter.spawn_session`
     call. Distinct from
     :class:`~eawf.kernel.state.models.SessionAttempt` (the ``state.json``
     bookkeeping row) precisely because the raw ``text`` must never land
@@ -447,8 +453,7 @@ class RuntimeAdapter(Protocol):
 
     Every concrete adapter implementation declares the five
     class-level attributes + the session methods
-    (:meth:`open_session`, :meth:`spawn_session`,
-    :meth:`continue_session`, :meth:`session_log_handle`) +
+    (:meth:`open_session`, :meth:`continue_session`, :meth:`session_log_handle`) +
     :meth:`parse_error` + :meth:`supports_continue`. The Protocol is decorated
     ``@runtime_checkable`` so the daemon can validate third-party
     adapters with ``isinstance(adapter, RuntimeAdapter)`` at load
@@ -505,84 +510,6 @@ class RuntimeAdapter(Protocol):
         callers that have not yet plumbed the contract through; the
         live subprocess spawn that consumes the contract lands in
         P26-SURFACES.
-        """
-
-    async def spawn_session(
-        self,
-        prompt: str,
-        *,
-        model: str,
-        cwd: str | None = None,
-        extra_args: Sequence[str] = (),
-        denied_tools: Sequence[str] = (),
-        timeout: float | None = None,
-        on_spawn: Callable[[int], None] | None = None,
-        on_chunk: Callable[[str], Awaitable[None]] | None = None,
-    ) -> SpawnResult:
-        """Spawn a live runtime subprocess for ``prompt`` against ``model``.
-
-        The vendor-neutral live-spawn seam: every adapter forks its own
-        CLI binary headlessly (Claude ``claude -p``, Codex ``codex exec``,
-        OpenCode ``opencode run``), captures the runtime's result envelope,
-        and parses it into a transient
-        :class:`SpawnResult` (raw answer text + the per-call token classes +
-        the child pid + the exit status). The result is NOT state-resident:
-        a later wave validates + meters + persists a typed body from it
-        before stamping the lean
-        :class:`~eawf.kernel.state.models.SessionAttempt` (rule 16 keeps the
-        raw text out of ``state.json``).
-
-        The *denied_tools* keyword is the per-wave sandbox deny-list the
-        daemon resolves from ``state.sandbox_policies`` via
-        :func:`eawf.runtime.sandbox.policy.resolve_denied_tools`. Each adapter
-        maps it to its own runtime's deny flag so a spawned child CLI is
-        actually launched with those tools disabled per the wave policy
-        (Claude ``--disallowedTools``); an empty deny-list adds no flag,
-        keeping the spawn byte-equivalent to a deny-free dispatch. The
-        vendor flag spelling stays inside the adapter -- the daemon caller
-        passes only the tool names, never a CLI flag.
-
-        The optional *on_spawn* callback fires with the child PID the moment
-        the subprocess exists -- before output is awaited -- so a cancel path
-        can register the pid and halt a still-running call mid-flight.
-
-        The optional *on_chunk* async callback fires once per stdout line AS
-        IT ARRIVES (the adapter reads the child's stdout incrementally rather
-        than buffering the whole output to process exit), so a downstream
-        wave can surface model output live. Each call receives the decoded
-        line string (trailing newline preserved for an interior line; the
-        final partial line at EOF carries none). The full stdout is still
-        accumulated and fed to the existing result parser unchanged, so with
-        ``on_chunk=None`` the returned :class:`SpawnResult` is byte-equivalent
-        to the buffered path.
-
-        Args:
-            prompt: Rendered prompt passed to the runtime CLI.
-            model: Model alias/id the spawn is requested with. No hardcoded
-                floor -- the caller resolves it (the routing decision feeds
-                this).
-            cwd: Working directory for the subprocess; ``None`` inherits the
-                parent's.
-            extra_args: Extra CLI args appended verbatim (the routing /
-                structured-output escape hatch).
-            denied_tools: Per-wave sandbox deny-list (tool names). Each
-                adapter maps it to its runtime's deny flag; empty (the
-                default) adds no flag.
-            timeout: Wall-clock ceiling in seconds; ``None`` waits
-                indefinitely. On expiry the child is killed and a typed
-                error is raised.
-            on_spawn: Optional callback invoked with the child PID right
-                after spawn (before output is awaited).
-            on_chunk: Optional async callback invoked once per stdout line as
-                it arrives (live streaming); ``None`` (the default) leaves the
-                spawn byte-equivalent to the buffered path.
-
-        Returns:
-            The validated :class:`SpawnResult` for the completed call.
-
-        Raises:
-            RuntimeSpawnError: the spawn timed out, exited non-zero, or
-                returned an unparseable / error result envelope.
         """
 
     async def continue_session(
@@ -682,6 +609,11 @@ class NativeLaunchRequest(BaseModel):
         workspace: The directory the child is started in. The daemon
             resolved it from the handle, which is the only resolution
             that exists.
+        repo_root: The repository whose ``.ea`` holds the Run's
+            generation. The Run's semantic calls are routed here rather
+            than to *workspace*: a leased worktree carries no generation
+            of its own, so the daemon would refuse every call addressed
+            to it.
         prompt: The rendered prompt the child is started with.
         hello_sequence: Which announcement the returned hello must be.
         usage_sink: Where the launcher hands each cumulative usage reading
@@ -703,6 +635,7 @@ class NativeLaunchRequest(BaseModel):
     capsule: AuthorityCapsule
     workspace_handle: WorkspaceHandle
     workspace: Path
+    repo_root: Path
     prompt: Annotated[str, Field(min_length=1, max_length=200_000)]
     hello_sequence: Annotated[int, Field(strict=True, ge=1)]
     usage_sink: Callable[[UsageSample, int | None], Awaitable[bool]] | None = Field(
@@ -713,6 +646,40 @@ class NativeLaunchRequest(BaseModel):
     )
 
 
+#: How a provider turn ended: it ran to its result, it failed, something
+#: other than the budget interrupted it, or the budget kill ladder reaped it.
+TurnExitKind = Literal["completed", "failed", "interrupted", "budget_terminated"]
+
+
+class TurnOutcome(BaseModel):
+    """How the turn a launched worker was started on ended.
+
+    Attributes:
+        exit_kind: Which of the four endings the turn reached.
+        error_text: What the provider or the launcher said went wrong;
+            ``None`` for a completed turn.
+        result_is_error: Whether the provider's own result message was an
+            error result, as opposed to the process failing around it.
+        error_class: The canonical class of a failed turn, so the daemon
+            can route it the way it routes a failed spawn.
+        answer_text: The provider's final answer, whole and unscrubbed, so a
+            caller can parse a report from it; ``None`` unless the turn
+            completed with one. It stays in the daemon's process: what the
+            transcript records is the scrubbed, cut summary.
+        runtime_tuple: The runtime as the provider reported itself at
+            launch; ``None`` when the outcome was not produced by a launcher.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    exit_kind: TurnExitKind
+    error_text: str | None = None
+    result_is_error: bool = False
+    error_class: ErrorClass | None = None
+    answer_text: str | None = None
+    runtime_tuple: RunRuntimeTuple | None = None
+
+
 class NativeLaunchOutcome(BaseModel):
     """What one launcher reports back about the process it started.
 
@@ -721,13 +688,21 @@ class NativeLaunchOutcome(BaseModel):
             which is what a later continuity proof is compared against.
         subprocess_pid: The child's process id.
         hello: What the worker announces about the contract it holds.
+        turn: The task driving the turn the worker was started on, which
+            resolves to its :class:`TurnOutcome`. ``None`` for a launcher
+            that ran the whole turn before announcing the worker.
+        runtime_tuple: The runtime as the provider reported itself by the
+            announcement, which is what the Run's start records; ``None``
+            when the launcher observed nothing of it.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
     provider_session_ref: Annotated[str, Field(min_length=1, max_length=500)]
     subprocess_pid: Annotated[int, Field(ge=1)]
     hello: WorkerHello
+    turn: asyncio.Task[TurnOutcome] | None = Field(default=None, exclude=True)
+    runtime_tuple: RunRuntimeTuple | None = None
 
 
 @runtime_checkable
@@ -748,6 +723,10 @@ class NativeRunLauncher(Protocol):
 
     async def launch(self, request: NativeLaunchRequest) -> NativeLaunchOutcome:
         """Start the provider process for *request* and take its hello.
+
+        A launcher that splits the launch from the turn answers as soon as
+        the provider reports its session and hands the rest of the turn
+        back as :attr:`NativeLaunchOutcome.turn`.
 
         Raises:
             RuntimeSpawnError: The process could not be started, or it
@@ -790,6 +769,80 @@ def ambient_denied_tools(spec: CompiledRunSpec) -> list[str]:
             f"withholding these; run_ref={spec.run_ref}"
         )
     return denied
+
+
+def observed_runtime_tuple(
+    harness: str,
+    *,
+    harness_version: object = None,
+    provider: object = None,
+    model: object = None,
+) -> RunRuntimeTuple:
+    """Return the runtime tuple a provider reported, keeping only what parses.
+
+    A provider reports these as free values, so a member outside the
+    tuple's grammar is dropped rather than failing the launch: an
+    unobserved member is ``None``, never a guess.
+
+    Args:
+        harness: The runtime the launcher drives, such as ``codex``.
+        harness_version: The version the provider reported.
+        provider: Who the provider said serves the model.
+        model: The model id the provider said it runs.
+
+    Returns:
+        The tuple, with each unparseable member left ``None``.
+
+    Raises:
+        pydantic.ValidationError: *harness* is not a runtime slug.
+    """
+    members: dict[str, object] = {}
+    for name, value in (
+        ("harness_version", harness_version),
+        ("provider", provider),
+        ("model", model),
+    ):
+        if value is None:
+            continue
+        try:
+            RunRuntimeTuple.model_validate({"harness": harness, name: value})
+        except ValidationError:
+            logger.warning(
+                f"observed_runtime_tuple harness={harness} dropped={name} value={value!r}"
+            )
+            continue
+        members[name] = value
+    return RunRuntimeTuple.model_validate({"harness": harness, **members})
+
+
+_SEMVER: Final = TypeAdapter(SemVer)
+
+
+def hello_sdk_version(runtime: RunRuntimeTuple, *, driver_version: str) -> str:
+    """Return the version a worker hello announces for *runtime*.
+
+    The hello names the provider's own version. Its grammar is semver, so
+    a version the provider did not report, or reported outside semver,
+    falls back to the driver's, which the log records.
+
+    Args:
+        runtime: What the provider reported at launch.
+        driver_version: The driver's own version.
+
+    Returns:
+        The provider's version, or *driver_version* when it has none in semver.
+    """
+    version = runtime.harness_version
+    if version is not None:
+        try:
+            return _SEMVER.validate_python(version)
+        except ValidationError:
+            pass
+    logger.warning(
+        f"hello_sdk_version harness={runtime.harness} version={version!r} "
+        f"not_semver=true announced={driver_version}"
+    )
+    return driver_version
 
 
 def compose_worker_hello(
@@ -961,12 +1014,16 @@ __all__ = [
     "RuntimeSpawnError",
     "SessionResumeFailedError",
     "SpawnResult",
+    "TurnExitKind",
+    "TurnOutcome",
     "acquire_spawn_slot",
     "ambient_denied_tools",
     "classify_stream_error",
     "compose_worker_hello",
     "emit_runtime_event",
+    "hello_sdk_version",
     "host_os_class",
+    "observed_runtime_tuple",
     "release_spawn_slot",
     "spawn_inflight",
 ]

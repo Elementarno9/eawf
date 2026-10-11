@@ -720,6 +720,17 @@ _TASK_ROWS: Final[tuple[TransitionRow, ...]] = (
         verb=TransitionVerb.CANCELLED,
         guards=(TransitionGuard.REASON_RECORDED,),
     ),
+    # A Run that ended without a delivering report leaves its Task's work
+    # undone rather than failed, so the Task goes back to be dispatched
+    # again -- only once no Run works for it any more.
+    TransitionRow(
+        entity=LifecycleEntity.TASK,
+        frm=TaskStatus.RUNNING,
+        to=TaskStatus.PLANNED,
+        verb=TransitionVerb.REPLANNED,
+        guards=(TransitionGuard.REASON_RECORDED, TransitionGuard.NO_ACTIVE_RUN),
+        cleared_fields=("active_run_ref", "claimed_by"),
+    ),
     TransitionRow(
         entity=LifecycleEntity.TASK,
         frm=TaskStatus.READY_TO_INTEGRATE,

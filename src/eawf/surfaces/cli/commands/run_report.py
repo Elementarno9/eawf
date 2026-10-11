@@ -63,9 +63,12 @@ def run_report_cmd(
     path = write_run_report(plan)
     emit_json_or_text(
         {
+            "run_status": plan.run_status,
+            "failure_code": plan.failure_code,
             "path": str(path),
             "parts": {part.name.value: part.size for part in plan.parts},
             "redactions": plan.redactions,
+            "runtime_tuple": plan.runtime_tuple,
         },
         str(path),
         flags=flags,

@@ -39,13 +39,13 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     seed,
     seed_row,
 )
+from tests.integration.workflow.planning._plan_approval import seal_plan_approval
 from tests.integration.workflow.planning.test_plan_revision_apply import seed_generation_store
 
 pytestmark = pytest.mark.integration
 
 SLOT: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
 REPOSITORY_URN: Final = f"{SLOT}/repository/REP-EAWF"
-ACTION_URN: Final = f"{SLOT}/pending-action/ACT-0060"
 HEAD: Final = "a" * 40
 ACTOR: Final = "OP-0001"
 REVISION_KEY: Final = "PRV-0060"
@@ -180,8 +180,21 @@ def _submit(canary: CanaryProvision, tmp_path: Path, *, body: dict[str, Any]) ->
     )
 
 
-def _approve(canary: CanaryProvision, tmp_path: Path) -> dict[str, Any]:
-    """Seal the operator approval over the submitted revision and return the envelope."""
+def _seal(canary: CanaryProvision, tmp_path: Path) -> str:
+    """Have the operator answer the plan's approval question, and return its URN."""
+    return seal_plan_approval(
+        canary.root, tmp_path / "runtime", subject=MILESTONE_URN, tag=REVISION_KEY
+    )
+
+
+def _approve(
+    canary: CanaryProvision, tmp_path: Path, *, action_ref: str | None = None
+) -> dict[str, Any]:
+    """Approve the submitted revision and return the envelope.
+
+    The approval question is answered here unless *action_ref* names one
+    already answered.
+    """
     return _dispatch(
         PLAN_APPROVE_METHOD,
         canary,
@@ -189,7 +202,7 @@ def _approve(canary: CanaryProvision, tmp_path: Path) -> dict[str, Any]:
         params={
             "key": REVISION_KEY,
             "expected_revision": 2,
-            "action_ref": ACTION_URN,
+            "action_ref": action_ref or _seal(canary, tmp_path),
             "approved_by": OPERATOR,
             "actor": ACTOR,
             "idempotency_key": "req-approve",
@@ -308,11 +321,12 @@ def test_approval_refuses_a_measured_criterion_when_the_evidence_ledger_is_unrea
     check, admitting a contract citation nobody promoted.
     """
     canary = _planned_canary(tmp_path, code="CORRUPT1")
+    action_ref = _seal(canary, tmp_path)
     _write_corrupt_ledger(canary, Epoch2Collection.EVIDENCE)
     body = _body(_criterion(grounding="measured", contract_refs=["MCT-NEVER-PROMOTED"]))
     assert _submit(canary, tmp_path, body=body)["status"] == "ok"
 
-    answer = _approve(canary, tmp_path)
+    answer = _approve(canary, tmp_path, action_ref=action_ref)
 
     assert answer["status"] == "error"
     assert answer["errors"][0]["code"] == "transition_guard_failed"

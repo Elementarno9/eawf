@@ -292,6 +292,7 @@ class HostResearchAgent:
                     capsule=capsule,
                     workspace_handle=f"wsh-{secrets.token_hex(16)}",
                     workspace=workspace,
+                    repo_root=self._tree.parent,
                     prompt=round_prompt(assignment),
                     hello_sequence=1,
                     usage_sink=metered,

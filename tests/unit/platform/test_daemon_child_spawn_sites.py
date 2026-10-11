@@ -6,7 +6,7 @@ console window. :func:`eawf.platform.subprocess_detach.no_window_kwargs`
 suppresses that; this sweep is what keeps it wired.
 
 The check is static (AST over each module's source) rather than dynamic,
-because three of the seven sites are ``async`` vendor-adapter spawns whose
+because one of the five sites is an ``async`` vendor-adapter spawn whose
 runtime kwargs are only observable through a live fork. A static sweep also
 catches a NEW bare spawn added to one of these modules later, which a
 per-site runtime assertion never would.
@@ -28,15 +28,13 @@ _SRC_ROOT = Path(eawf.__file__).resolve().parent.parent
 """Absolute path of the ``src/`` tree holding the installed ``eawf`` package."""
 
 DAEMON_CHILD_SPAWN_SITES: tuple[str, ...] = (
-    "eawf/runtime/runtimes/claude/adapter.py",
-    "eawf/runtime/runtimes/codex/adapter.py",
     "eawf/runtime/runtimes/opencode/adapter.py",
     "eawf/runtime/runtimes/probes/sdk_baseline.py",
     "eawf/runtime/worktree/git.py",
     "eawf/runtime/runtimes/claude/statusline_modules/git.py",
     "eawf/kernel/config/layered.py",
 )
-"""The seven src-relative modules that fork a child on a daemon-reachable path.
+"""The five src-relative modules that fork a child on a daemon-reachable path.
 
 Order mirrors the audit: the three vendor adapters, the SDK baseline probe,
 worktree git, the statusline git module, and layered config's branch
@@ -125,16 +123,16 @@ def assert_no_bare_spawns(source: str, *, label: str) -> None:
 
 @pytest.mark.parametrize("relative_path", DAEMON_CHILD_SPAWN_SITES)
 def test_daemon_child_spawn_site_suppresses_console_window(relative_path: str) -> None:
-    """Every spawn in each of the seven audited modules splats the no-window kwargs."""
+    """Every spawn in each of the five audited modules splats the no-window kwargs."""
     source = (_SRC_ROOT / relative_path).read_text(encoding="utf-8")
 
     assert spawn_calls(source), f"{relative_path}: sweep list is stale -- no spawn call found"
     assert_no_bare_spawns(source, label=relative_path)
 
 
-def test_sweep_covers_exactly_the_seven_audited_modules() -> None:
-    """The sweep list holds seven distinct, existing modules."""
-    assert len(DAEMON_CHILD_SPAWN_SITES) == len(set(DAEMON_CHILD_SPAWN_SITES)) == 7
+def test_sweep_covers_exactly_the_five_audited_modules() -> None:
+    """The sweep list holds five distinct, existing modules."""
+    assert len(DAEMON_CHILD_SPAWN_SITES) == len(set(DAEMON_CHILD_SPAWN_SITES)) == 5
     missing = [path for path in DAEMON_CHILD_SPAWN_SITES if not (_SRC_ROOT / path).is_file()]
     assert missing == []
 

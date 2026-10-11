@@ -53,7 +53,7 @@ from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter
 from eawf.runtime.runtimes.claude.mcp_config import MCP_CONFIG_FILENAME
 from eawf.runtime.runtimes.claude.mcp_config import RUNTIME_ID as CLAUDE_LANE
 from eawf.runtime.runtimes.claude.mcp_config import render_run_server_config as render_claude
-from eawf.runtime.runtimes.codex.adapter import CodexAdapter, codex_tool_config_key
+from eawf.runtime.runtimes.codex.adapter import CodexAdapter, codex_tool_denials
 from eawf.runtime.runtimes.codex.mcp_config import RUNTIME_ID as CODEX_LANE
 from eawf.runtime.runtimes.codex.mcp_config import SERVER_CONFIG_KEY
 from eawf.runtime.runtimes.codex.mcp_config import render_run_server_config as render_codex
@@ -159,15 +159,19 @@ def denied_ambient(config: RunServerConfig, tmp_path: Path) -> set[str]:
     if config.runtime_id == CLAUDE_LANE:
         return set(flag_value(config, "--disallowedTools").split(" "))
     if config.runtime_id == CODEX_LANE:
-        return {key for key, value in codex_overrides(config).items() if value == "false"}
+        return {f"{key}={value}" for key, value in codex_overrides(config).items()}
     document = opencode_document(config, tmp_path)
     return {name for name, granted in document["tools"].items() if granted is False}
 
 
 def ambient_names(lane: str) -> set[str]:
-    """Return the ambient universe as *lane* spells it."""
+    """Return the ambient universe as *lane* spells it.
+
+    Codex spells it as the settings that withhold a tool, and has none for
+    the tools only the jail can bound, so its set is every such setting.
+    """
     if lane == CODEX_LANE:
-        return {codex_tool_config_key(tool) for tool in TOOL_UNIVERSE}
+        return set(codex_tool_denials(sorted(TOOL_UNIVERSE))[1::2])
     return set(TOOL_UNIVERSE)
 
 

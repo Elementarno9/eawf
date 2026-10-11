@@ -24,6 +24,7 @@ stateDiagram-v2
     RUNNING --> READY_TO_INTEGRATE: ready [run_report_bound+criteria_evidence_bound]
     RUNNING --> FAILED: failed [run_report_bound+reason_recorded]
     RUNNING --> CANCELLED: cancelled [reason_recorded]
+    RUNNING --> PLANNED: replanned [reason_recorded+no_active_run]
     READY_TO_INTEGRATE --> COMPLETED: completed [integrated_binding_pinned]
     READY_TO_INTEGRATE --> PLANNED: replanned [reason_recorded]
     READY_TO_INTEGRATE --> FAILED: failed [reason_recorded]

@@ -1,19 +1,16 @@
 """How Codex is told about one Run's semantic tool server.
 
-Codex takes its whole configuration as TOML, and ``codex exec`` accepts
-per-call overrides with ``-c <dotted.key>=<toml value>``. The per-Run
-server is therefore registered entirely on the command line: no file is
-written and the operator's own ``config.toml`` is left alone, which is
-the same discipline the spawn path already follows for the reasoning
-effort and the tool grants.
+Codex takes its whole configuration as TOML, spelled here as the
+``-c <dotted.key>=<toml value>`` overrides codex itself accepts. The
+launcher folds them into the config file of the Run's private Codex home,
+so the operator's own ``config.toml`` is neither read nor written.
 
 Codex has no per-tool allowlist for MCP tools, so the positive grant is
 carried by the server itself: it publishes exactly the Run's granted
 tools and the daemon refuses anything else whatever a provider asks for.
 What the lane configuration adds is the registration and the ambient
-denial -- every vendor tool pinned ``false`` through the same dotted key
-the spawn path maps a deny-list to, so the two cannot spell it
-differently.
+denial -- every codex setting that withholds a vendor tool, from
+:func:`~eawf.runtime.runtimes.codex.adapter.codex_tool_denials`.
 """
 
 from __future__ import annotations
@@ -29,7 +26,7 @@ from eawf.runtime.mcp.semantic_stdio import (
     ambient_tool_denial,
     mcp_tool_name,
 )
-from eawf.runtime.runtimes.codex.adapter import codex_tool_config_key
+from eawf.runtime.runtimes.codex.adapter import codex_tool_denials
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +51,8 @@ def render_run_server_config(
 
     Args:
         binding: The Run the server answers for.
-        config_dir: Unused by this lane, which writes no file. It is
-            accepted so every lane renderer has one signature.
+        config_dir: Unused by this lane, whose file the launcher writes.
+            It is accepted so every lane renderer has one signature.
         server_command: The argv that starts the per-Run stdio server.
         capsule: The Run's sealed capsule, read from *binding* when not
             supplied.
@@ -82,8 +79,7 @@ def render_run_server_config(
         "-c",
         f"{SERVER_CONFIG_KEY}.enabled=true",
     ]
-    for tool in ambient_tool_denial():
-        overrides.extend(("-c", f"{codex_tool_config_key(tool)}=false"))
+    overrides.extend(codex_tool_denials(ambient_tool_denial()))
     logger.info(f"render_run_server_config runtime={RUNTIME_ID} tools={len(exposed)}")
     return RunServerConfig(
         runtime_id=RUNTIME_ID,

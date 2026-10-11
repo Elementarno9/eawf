@@ -21,6 +21,15 @@ filesystem change" a property of the control flow rather than a promise:
 there is no path from a refusal to a handler, so a refused call cannot
 have written anything.
 
+One refusal is held back for a moment rather than answered at once. A
+dispatch records ``RUNNING`` only after the launcher returns, and by then
+the provider is live and may already have called. A call that finds its
+Run still ``QUEUED`` while that Run's dispatch attempt has leased and its
+lease is live is therefore early rather than unauthorised: the walk is
+repeated, outside the lock, until the Run leaves ``QUEUED`` or a short
+bound runs out, and only then is the run-state refusal filed. A ``QUEUED``
+Run with no dispatch in flight is refused on the first walk, as before.
+
 The capsule travels with the call because the daemon stores only its
 digest. That is not the same as letting the caller choose its own
 authority: :class:`~eawf.kernel.runtime.capsule.AuthorityCapsule`
@@ -41,6 +50,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -112,6 +122,15 @@ GATEWAY_ACTOR: Final = "DAEMON"
 #: those tables moves this number and a decision stays explicable by the policy it
 #: was read against.
 SANDBOX_POLICY_REVISION: Final = 1
+
+#: How long a call from a Run whose dispatch is in flight waits for the
+#: Run to leave ``QUEUED``. The window it covers is the launcher returning
+#: and one transaction committing, so a few seconds is generous even on a
+#: loaded daemon, and a dispatch lost mid-flight costs one call this much.
+DISPATCH_SETTLE_SECONDS: Final = 5.0
+
+#: How often that wait re-reads the Run.
+_SETTLE_POLL_SECONDS: Final = 0.05
 
 #: How many random bytes a minted receipt identity carries.
 _RECEIPT_ENTROPY_BYTES: Final = 8
@@ -269,7 +288,8 @@ class ScopeRule:
             attributes its output to, or ``None`` when the call produces
             nothing attributable.
         path_field: The payload field naming repository-relative paths
-            the call would touch, or ``None``.
+            the call would touch, spelled as paths or as entries carrying
+            one in ``path``, or ``None``.
         fan_out: Whether the payload can ask for work to run elsewhere.
     """
 
@@ -282,18 +302,18 @@ class ScopeRule:
 #: catalog. A tool added without a row would reach the scope check with
 #: nothing to compare, which is the same as not being checked.
 #:
-#: The rows that bound nothing are deliberate. A read costs the same
-#: whichever entity it names, and a patch travels by reference, so the
-#: paths it would touch are not in the envelope to compare: those land
-#: inside the lease's writable roots when the patch is applied, which is
-#: the check that can see them.
+#: The rows that bound nothing are deliberate: a read costs the same
+#: whichever entity it names. A patch names every path it writes, so its
+#: paths are compared against the write set here, before any is joined to
+#: the workspace; a path that resolves out of the workspace through a link
+#: is the handler's to refuse, because only the tree can show it.
 SCOPE_RULES: Final[Mapping[SemanticToolId, ScopeRule]] = MappingProxyType(
     {
         SemanticToolId.EAWF_STATE_QUERY: ScopeRule(),
         SemanticToolId.REPO_READ: ScopeRule(),
         SemanticToolId.REPO_SEARCH: ScopeRule(),
         SemanticToolId.DIFF_READ: ScopeRule(),
-        SemanticToolId.WORKSPACE_APPLY_PATCH: ScopeRule(),
+        SemanticToolId.WORKSPACE_APPLY_PATCH: ScopeRule(path_field="files"),
         SemanticToolId.RUN_SCOPED_COMMAND: ScopeRule(fan_out=True),
         SemanticToolId.REPORT_PROGRESS: ScopeRule(),
         SemanticToolId.ATTACH_EVIDENCE: ScopeRule(subject_field="subject_ref"),
@@ -520,7 +540,9 @@ def _scope(inputs: GuardInputs) -> SemanticToolError | None:
                 field_path=f"/{rule.subject_field}",
             )
     if rule.path_field is not None:
-        escaped = _escaped_path(getattr(payload, rule.path_field), inputs.run)
+        declared = getattr(payload, rule.path_field)
+        paths = tuple(item if isinstance(item, str) else item.path for item in declared)
+        escaped = _escaped_path(paths, inputs.run)
         if escaped is not None:
             return error_for(
                 SemanticToolErrorCode.SCOPE_DENIED,
@@ -909,6 +931,69 @@ def serve_semantic_call(
             written in either case.
         NativeAuthorityRequiredError: The tree is not in epoch 2.
     """
+    deadline = time.monotonic() + DISPATCH_SETTLE_SECONDS
+    while True:
+        receipt = _serve_once(
+            context, call=call, capsule=capsule, now=now, settling=time.monotonic() < deadline
+        )
+        if receipt is not None:
+            return receipt
+        # Sleeping outside the session is what lets the dispatch that is
+        # about to record RUNNING take the lock this call would otherwise hold.
+        time.sleep(_SETTLE_POLL_SECONDS)
+
+
+def _awaits_running(
+    inputs: GuardInputs, outcome: GuardOutcome, run_records: tuple[LedgerRecord, ...]
+) -> bool:
+    """Return whether a run-state refusal is only a dispatch not yet recorded.
+
+    It is when the Run is still ``QUEUED`` and its dispatch attempt has
+    leased under the very lease that is live now: the provider has been
+    or is being started, and ``RUNNING`` is the next thing dispatch writes.
+    """
+    if outcome.check is not PreHandlerCheck.RUN_STATE or inputs.run.status is not RunStatus.QUEUED:
+        return False
+    if inputs.lease is None:
+        return False
+    # Deferred: dispatch reaches this module through the MCP grant table,
+    # so a top-level import would close a cycle.
+    from eawf.runtime.daemon.native_dispatch import (
+        DispatchStage,
+        stage_reached,
+        standing_attempt,
+    )
+
+    attempt = standing_attempt(run_records, inputs.call.run_ref)
+    return (
+        attempt is not None
+        and stage_reached(attempt.stage, DispatchStage.LEASED)
+        and attempt.lease_id == inputs.lease.lease_id
+    )
+
+
+def _serve_once(
+    context: Epoch2RootContext,
+    *,
+    call: SemanticCall,
+    capsule: AuthorityCapsule,
+    now: datetime,
+    settling: bool,
+) -> SemanticCallReceipt | None:
+    """Walk the checks once under the lock, and answer unless told to wait.
+
+    Args:
+        context: The native context of the root the Run belongs to.
+        call: The envelope the provider process sent.
+        capsule: The authority it claims to run under.
+        now: The instant every deadline and ceiling is judged at.
+        settling: Whether the settle bound still has time left. While it
+            does, a call whose Run is only awaiting its RUNNING record
+            writes nothing and is answered with ``None``.
+
+    Returns:
+        The receipt, or ``None`` when the call should be walked again.
+    """
     with context.session([call.run_ref]) as session:
         run_records = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
         held = run_receipts(session, call.run_ref)
@@ -925,6 +1010,8 @@ def serve_semantic_call(
             now=now,
         )
         outcome = evaluate_pre_handler_checks(inputs)
+        if settling and _awaits_running(inputs, outcome, run_records):
+            return None
         if outcome.replay is not None:
             logger.info(f"serve_semantic_call replayed call={outcome.replay.call_id}")
             return outcome.replay
@@ -1238,6 +1325,7 @@ _compile_role_ceiling()
 __all__ = [
     "AGENT_LAUNCH_COMMANDS",
     "BROKERED_TOOLS",
+    "DISPATCH_SETTLE_SECONDS",
     "GATEWAY_ACTOR",
     "HANDLER_NOT_BROKERED",
     "IDENTITY_NOT_FOUND",

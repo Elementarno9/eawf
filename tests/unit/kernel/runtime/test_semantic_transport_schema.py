@@ -72,10 +72,8 @@ PAYLOADS: dict[SemanticToolId, dict[str, Any]] = {
     },
     SemanticToolId.DIFF_READ: {"resource_handle": HANDLE, "path": "src/eawf"},
     SemanticToolId.WORKSPACE_APPLY_PATCH: {
-        "lease_id": LEASE,
+        "files": [{"path": "src/eawf/hello.txt", "content": "canary\n"}],
         "expected_workspace_generation": 3,
-        "patch_ref": "artifact://patch/run-10-1",
-        "patch_digest": DIGEST,
     },
     SemanticToolId.RUN_SCOPED_COMMAND: {
         "command_family_id": "pytest",
@@ -128,11 +126,10 @@ PAYLOADS: dict[SemanticToolId, dict[str, Any]] = {
         "resulting_tree_digest": DIGEST,
     },
     SemanticToolId.SUBMIT_REPORT: {
-        "report_schema_ref": "schema://report/executor/v1",
-        "contract_digest": DIGEST,
-        "body_ref": "artifact://report/run-10",
-        "body_digest": DIGEST,
         "verdict": "pass",
+        "summary": "every criterion is met",
+        "criteria": [{"criterion_id": "CR-01", "outcome": "met"}],
+        "body": "## Outcome\n\nThe change landed.",
     },
     SemanticToolId.SUBMIT_EVIDENCE: {
         "spike_report_ref": "artifact://spike/run-10",

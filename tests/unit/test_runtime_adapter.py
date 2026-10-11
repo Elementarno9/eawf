@@ -106,19 +106,19 @@ def test_protocol_rejects_partial_class() -> None:
     assert not isinstance(Incomplete(), RuntimeAdapter)
 
 
-def test_protocol_declares_spawn_session() -> None:
-    """The vendor-neutral spawn seam is declared on the Protocol itself."""
-    assert hasattr(RuntimeAdapter, "spawn_session")
+def test_protocol_declares_no_headless_spawn_seam() -> None:
+    """A native Run is launched by a launcher, never by a headless adapter spawn."""
+    assert not hasattr(RuntimeAdapter, "spawn_session")
 
 
 @pytest.mark.parametrize(
     "adapter_cls",
-    [ClaudeAdapter, CodexAdapter, OpenCodeAdapter],
-    ids=["claude-code", "codex", "opencode"],
+    [ClaudeAdapter, CodexAdapter],
+    ids=["claude-code", "codex"],
 )
-def test_adapter_has_spawn_session(adapter_cls: type) -> None:
-    """All 3 concrete adapters expose the ``spawn_session`` seam."""
-    assert hasattr(adapter_cls(), "spawn_session")
+def test_native_launched_adapter_has_no_spawn_session(adapter_cls: type) -> None:
+    """Claude and Codex start children only through their native launchers."""
+    assert not hasattr(adapter_cls(), "spawn_session")
 
 
 # ---------------------------------------------------------------------------
@@ -272,23 +272,6 @@ def test_opencode_continue_session_always_raises_v03() -> None:
     a = OpenCodeAdapter()
     with pytest.raises(SessionResumeFailedError):
         asyncio.run(a.continue_session("some-session-id", "hello"))
-
-
-# ---------------------------------------------------------------------------
-# spawn_session — all three adapters carry a live body (codex wired in W05,
-# opencode in W06); the Protocol declares the vendor-neutral deny-list seam
-# ---------------------------------------------------------------------------
-
-
-def test_protocol_spawn_session_accepts_denied_tools() -> None:
-    """The vendor-neutral spawn seam declares the ``denied_tools`` keyword."""
-    import inspect
-
-    sig = inspect.signature(RuntimeAdapter.spawn_session)
-    assert "denied_tools" in sig.parameters
-    # Additive default keeps the seam back-compatible with deny-free callers.
-    assert sig.parameters["denied_tools"].default == ()
-    assert sig.parameters["denied_tools"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
 # ---------------------------------------------------------------------------

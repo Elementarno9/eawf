@@ -27,13 +27,20 @@ import pytest
 from eawf.kernel.projection.attention import attention_mine
 from eawf.kernel.projection.compute import FACTS_FIELD, build_route_projection, row_document
 from eawf.kernel.projection.registers import RegisterView, build_register_view
+from eawf.kernel.projection.row_facts import RUNTIME_FACTS
 from eawf.kernel.projection.spine import build_spine_view
 from eawf.surfaces.tui.console.attention import audience_refusal
+from eawf.surfaces.tui.console.cells import NO_VALUE
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, needs_count
 from eawf.surfaces.tui.console.renderers import render_route
-from eawf.surfaces.tui.console.renderers.activity import EMPTY_NEXT, run_reason
+from eawf.surfaces.tui.console.renderers.activity import (
+    EMPTY_NEXT,
+    provider_cell,
+    records_runtime,
+    run_reason,
+)
 from eawf.surfaces.tui.console.renderers.attention import (
     EMPTY_NEXT as ATTENTION_NEXT,
 )
@@ -382,6 +389,69 @@ def test_a_runs_reason_is_read_off_its_facts_or_is_unknown(
         }
     )
     assert run_reason(moved) == reason
+
+
+# ---------- Activity's provider column reads the recorded runtime tuple ----------
+
+
+def _with_tuples() -> dict[str, Any]:
+    """Return the probe tree with a full tuple, a partial one and none on its three Runs."""
+    document = copy.deepcopy(DOCUMENT)
+    runs = document["run"]
+    runs["RUN-00000001"]["runtime_tuple"] = {
+        "harness": "claude-code",
+        "harness_version": "2.1.3",
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-5",
+    }
+    runs["RUN-00000002"]["runtime_tuple"] = {"harness": "codex", "harness_version": "0.46.0"}
+    return document
+
+
+def test_a_run_row_states_the_members_of_its_recorded_tuple() -> None:
+    facts = {row.key: row.facts for row in _projection("activity", _with_tuples()).rows}
+    assert {name: facts["RUN-00000001"][name] for name in RUNTIME_FACTS.values()} == {
+        "runtime_harness": "claude-code",
+        "runtime_version": "2.1.3",
+        "runtime_provider": "anthropic",
+        "runtime_model": "claude-sonnet-4-5",
+    }
+    assert "runtime_provider" not in facts["RUN-00000002"]
+    assert not set(RUNTIME_FACTS.values()) & set(facts["RUN-00000003"])
+
+
+@pytest.mark.parametrize("w", [w for w, _h in SIZES])
+def test_activity_draws_the_provider_each_run_recorded(w: int) -> None:
+    frame = _frame("activity", document=_with_tuples(), w=w)
+    head = _starts(frame, "   RUN ")
+    assert "PROVIDER" in head
+    at = head.index("PROVIDER")
+    rows = {key: next(row for row in frame if key in row) for key in DOCUMENT["run"]}
+    assert rows["RUN-00000001"][at:].startswith("anthropic")
+    # a tuple that never observed its provider, and a Run with no tuple, wear the mark
+    assert rows["RUN-00000002"][at:].startswith(NO_VALUE)
+    assert rows["RUN-00000003"][at:].startswith(NO_VALUE)
+    assert "needs" in rows["RUN-00000002"]
+    assert "TSK-0001 Bound" in rows["RUN-00000002"]
+
+
+def test_activity_without_a_recorded_tuple_draws_no_provider_column() -> None:
+    frame = _frame("activity")
+    assert "PROVIDER" not in _text(frame)
+    assert "needs permission" in _starts(frame, "   RUN-00000002")
+
+
+def test_the_provider_cell_and_the_column_gate_at_their_boundaries() -> None:
+    rows = _projection("activity", _with_tuples()).rows
+    full, partial, bare = rows
+    assert records_runtime([]) is False
+    assert records_runtime([bare]) is False
+    assert records_runtime([partial]) is True
+    assert (provider_cell(full), provider_cell(partial), provider_cell(bare)) == (
+        "anthropic",
+        NO_VALUE,
+        NO_VALUE,
+    )
 
 
 # ---------- CON-085: every count is mine or all principals ----------

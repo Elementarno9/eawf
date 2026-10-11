@@ -643,11 +643,12 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             subject_field="batch_ref",
         ),
         effects=EffectsBoundary(
-            summary="Coordinator read models plus the Run dispatch and retry verbs.",
+            summary="Coordinator reads plus the Task dispatch, Run dispatch and Run retry verbs.",
             rpcs=(
                 "projection.batch.detail.read",
                 "projection.task.detail.read",
                 "projection.run.detail.read",
+                "runtime.task.dispatch",
                 "runtime.run.dispatch",
                 "runtime.run.retry",
             ),

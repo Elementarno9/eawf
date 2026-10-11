@@ -29,7 +29,6 @@ from typing import Any, Final
 from unittest import mock
 
 import pytest
-from eawf.runtime.daemon.run_supervisor import supervisor_of
 from pydantic import ValidationError
 
 import eawf.runtime.daemon.methods.domain
@@ -50,6 +49,7 @@ from eawf.runtime.daemon.methods.conformance import runner_for
 from eawf.runtime.daemon.methods.runtime_certification import RUNTIME_CERTIFY_METHOD
 from eawf.runtime.daemon.methods.task_dispatch import TASK_DISPATCH_METHOD
 from eawf.runtime.daemon.native_dispatch import compile_launchers
+from eawf.runtime.daemon.run_supervisor import supervisor_of
 from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME
 from eawf.runtime.runtimes.adapter import (

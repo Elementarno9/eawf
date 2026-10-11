@@ -472,8 +472,9 @@ def test_console_live_journeys_render_the_canarys_own_ids_at_every_tracked_width
             assert milestone_row.status.value == "COMPLETED"
             assert run_ids, "the canary tree dispatches one Run"
             # W42 gave PendingAction its own urn; the walk's /verify step opens and
-            # seals exactly this one question, so Attention holds exactly one row.
-            assert [r.key for r in attention.rows] == [ATTENTION_ACTION_KEY]
+            # seals exactly this one question; beside it Attention lists the dispatched
+            # Run, which runs on because no worker in the walk ends its turn.
+            assert [r.key for r in attention.rows] == [ATTENTION_ACTION_KEY, *run_ids]
             action_row = attention.rows[0]
             assert action_row.urn == f"{walk.container}/pending-action/{ATTENTION_ACTION_KEY}"
             assert action_row.status.value == "SEALED"

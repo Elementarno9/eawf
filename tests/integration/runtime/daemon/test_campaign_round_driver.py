@@ -47,7 +47,6 @@ from eawf.runtime.runtimes.adapter import (
     TurnOutcome,
     compose_worker_hello,
 )
-from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter
 from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.session.vendor_id import hash_vendor_session_id
 from eawf.workflow.dispatch.routing import model_for_runtime
@@ -113,7 +112,6 @@ def _isolated(
         raise AssertionError("a Campaign round reached the headless spawn path")
 
     monkeypatch.setattr(selector, "select_adapter", refused)
-    monkeypatch.setattr(ClaudeAdapter, "spawn_session", refused)
     yield
 
 

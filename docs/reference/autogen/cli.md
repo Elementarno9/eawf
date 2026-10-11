@@ -11,7 +11,7 @@ Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and sub
 | `impact` | Render decision → wave → file-glob impact graph. |
 | `init` | Initialise a new Eä Workflow workspace. |
 | `metrics` | Show rolling workflow metrics — EU variance, audit pass rate, wave elapsed, and planned vs reactive split. |
-| `publish` | Squash the scratch commits past origin into one commit per Batch, then a state commit. |
+| `publish` | Check the commits past origin name one Batch each, then bind the staged adoptions. |
 | `render-output` | Convert between JSON and markdown forms of the output envelope (reads JSON or markdown from stdin). At a TTY with no piped data the command exits 2 with a hint instead of hanging. |
 | `status` | Show active pointers, blockers, and git head. |
 | `sync` | Re-render managed assets and report drift. |
@@ -53,6 +53,7 @@ Delivery-batch lifecycle (activate, integrate, adopt-landed, ready, merge, recon
 |---|---|
 | `activate` | Move a PLANNED delivery Batch to ACTIVE. |
 | `adopt-landed` | Adopt work that already landed on the Batch's target branch. |
+| `close-landed` | Close each ready Batch whose Tasks' commits are on its phase branch. |
 | `complete` | Complete a merged Batch whose landed commit matches the head it pinned. |
 | `create` | Admit a new delivery Batch's create document into the addressed tree. |
 | `integrate` | Integrate a Batch's sealed candidates into its next generation. |
@@ -148,7 +149,7 @@ Manage the eawfd background daemon.
 | `service-status` | Report the supervisor-level service state plus daemon-health advisories. |
 | `start` | Ensure the current daemon release is running. |
 | `status` | Print operational counters from the running daemon, never starting one. |
-| `stop` | Request graceful daemon shutdown. |
+| `stop` | Request graceful daemon shutdown, never starting a daemon to stop it. |
 
 ### `eawf doc`
 
@@ -400,6 +401,7 @@ Run lifecycle (create, start, finish, fail).
 |---|---|
 | `cancel` | Ask a Run to end without finishing its work. |
 | `create` | Admit a QUEUED Run against the scope its create document names. |
+| `dispatch` | Run a planned Task as a new Run; answers once its worker is announced. |
 | `drain-dispatch` | Ask the scheduler to start nothing new and let what runs finish; cancels nothing. |
 | `fail` | Fail a RUNNING Run; the payload carries the reason, ended_at and failure. |
 | `finish` | Complete a RUNNING Run once its report is bound; updates carry ended_at. |

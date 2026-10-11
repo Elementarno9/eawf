@@ -104,7 +104,9 @@ def serve_cmd(
         cli_errors.emit_error(cli_errors.UserError(str(err)), flags=flags)
         return
     runtime_dir = Path(binding.runtime_dir) if binding.runtime_dir else None
-    with DaemonClient(runtime_dir=runtime_dir) as client:
+    # The daemon that launched the Run is the only one that can answer for
+    # it, and the jailed provider cannot write the spawn lock in any case.
+    with DaemonClient(runtime_dir=runtime_dir, spawn=False) as client:
         server = SemanticStdioServer(
             binding=binding, capsule=capsule, transport=_DaemonTransport(client)
         )

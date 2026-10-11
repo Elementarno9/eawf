@@ -62,6 +62,7 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     seed_row,
     tree_root,
 )
+from tests.integration.workflow.planning._plan_approval import seal_plan_approval
 
 pytestmark = pytest.mark.integration
 
@@ -317,6 +318,9 @@ def approve(
     canary: CanaryProvision, tmp_path: Path, *, expected_revision: int = 2
 ) -> dict[str, Any]:
     """Seal the operator approval and return the envelope."""
+    action_ref = seal_plan_approval(
+        canary.root, tmp_path / "runtime", subject=MILESTONE_URN, tag=REVISION_KEY
+    )
     return dispatch(
         PLAN_APPROVE_METHOD,
         canary,
@@ -324,7 +328,7 @@ def approve(
         params={
             "key": REVISION_KEY,
             "expected_revision": expected_revision,
-            "action_ref": ACTION_URN,
+            "action_ref": action_ref,
             "approved_by": OPERATOR,
             "actor": ACTOR,
             "idempotency_key": "req-approve",
@@ -362,11 +366,16 @@ def approved(tmp_path: Path, *, code: str) -> CanaryProvision:
 
 
 def firehose_rows(canary: CanaryProvision) -> list[dict[str, Any]]:
-    """Return every row the canary's firehose holds."""
+    """Return every plan-revision row the canary's firehose holds.
+
+    The approval question and its answer write rows of their own; only the
+    plan verbs' rows are what these tests count.
+    """
     path = firehose_path(canary)
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    return [row for row in rows if row["payload"]["name"].startswith("planning.plan_revision.")]
 
 
 def wal_records(canary: CanaryProvision, tmp_path: Path) -> list[Path]:
@@ -733,6 +742,7 @@ def test_approval_refuses_an_acceptance_criterion_still_graded_assumed(tmp_path:
     """The daemon's own approve verb refuses a plan resting on an assumed claim."""
     canary = planned_canary(tmp_path, code="ASSUMED")
     assert submit_body(canary, tmp_path, body=with_criterion_grounding())["status"] == "ok"
+    seal_plan_approval(canary.root, tmp_path / "runtime", subject=MILESTONE_URN, tag=REVISION_KEY)
     before = document_path(canary).read_bytes()
 
     answer = approve(canary, tmp_path)
@@ -826,3 +836,394 @@ def test_approval_of_an_assumed_criterion_is_unaffected_by_the_contract_store(
 
     assert answer["status"] == "error"
     assert answer["errors"][0]["guard"] == "criteria_grounded_at_approval"
+
+
+# ---- re-plan: a child of an APPLIED revision rewrites its PLANNED Milestone
+
+
+PARENT_KEY: Final = "PRV-0010"
+CHILD_KEY: Final = "PRV-0011"
+GRANDCHILD_KEY: Final = "PRV-0012"
+BATCH_A: Final = f"{SLOT}/batch/BAT-0001"
+BATCH_B: Final = f"{SLOT}/batch/BAT-0002"
+BATCH_C: Final = f"{SLOT}/batch/BAT-0003"
+TASK_1: Final = f"{SLOT}/task/EAWF-0001"
+TASK_2: Final = f"{SLOT}/task/EAWF-0002"
+TASK_3: Final = f"{SLOT}/task/EAWF-0003"
+TASK_4: Final = f"{SLOT}/task/EAWF-0004"
+OTHER_MILESTONE_URN: Final = f"{SLOT}/milestone/MLS-0031"
+DEFAULT_BRANCH: Final = "trunk"
+
+#: The project row a migrated tree carries: the import envelope nests the
+#: v1 payload, default branch included, two levels down.
+IMPORTED_PROJECT_ROW: Final[dict[str, Any]] = {
+    "payload": {"payload": {"code": "EAWF", "default_branch": DEFAULT_BRANCH}},
+    "status": "imported",
+}
+
+
+def plan_body(
+    *,
+    batches: dict[str, tuple[tuple[str, str], ...]],
+    title: str = "Publish an installable wheel",
+    target_date: str | None = None,
+    milestone_urn: str = MILESTONE_URN,
+    dropped: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Return a plan body placing Tasks under Batches.
+
+    Args:
+        batches: Each Batch URN mapped to its ``(task_urn, criterion_id)``
+            entries, in order.
+        title: The Milestone title.
+        target_date: The Milestone target date, ISO formatted.
+        milestone_urn: The Milestone the plan writes.
+        dropped: Parent Task URNs the plan drops with a typed reason.
+
+    Returns:
+        A body the submit verb accepts.
+    """
+    body: dict[str, Any] = json.loads(json.dumps(BODY))
+    body["milestone_urn"] = milestone_urn
+    body["milestone"].update(
+        key=milestone_urn.rsplit("/", 1)[1],
+        title=title,
+        target_date=target_date,
+        required_batch_refs=list(batches),
+    )
+    body["batches"] = [{"urn": urn, "repository_ref": REPOSITORY_URN} for urn in batches]
+    body["tasks"] = [
+        {
+            "urn": task_urn,
+            "batch_ref": batch_urn,
+            "priority": "P1",
+            "intent": f"deliver {task_urn.rsplit('/', 1)[1]}",
+            "criteria": [{**CRITERION, "id": criterion_id}],
+        }
+        for batch_urn, entries in batches.items()
+        for task_urn, criterion_id in entries
+    ]
+    body["dropped_tasks"] = [{"task_ref": ref, "reason": "re-planned away"} for ref in dropped]
+    return body
+
+
+PARENT_BODY: Final = plan_body(
+    batches={
+        BATCH_A: ((TASK_1, "CR-01"), (TASK_2, "CR-01")),
+        BATCH_B: ((TASK_3, "CR-01"),),
+    }
+)
+
+CHILD_BODY: Final = plan_body(
+    batches={BATCH_C: ((TASK_1, "CR-02"), (TASK_4, "CR-01"))},
+    title="Publish a signed wheel",
+    target_date="2026-12-01",
+    dropped=(TASK_2, TASK_3),
+)
+
+
+def drive(
+    canary: CanaryProvision,
+    tmp_path: Path,
+    *,
+    key: str,
+    body: dict[str, Any],
+    parent_key: str | None = None,
+    apply: bool = True,
+) -> dict[str, Any]:
+    """Submit and approve one revision, then apply it unless told not to.
+
+    Returns:
+        The envelope of the last verb driven.
+    """
+    proposal: dict[str, Any] = {"key": key, "author": OPERATOR, "body": body}
+    if parent_key is not None:
+        proposal["parent_key"] = parent_key
+    submitted = dispatch(
+        PLAN_SUBMIT_METHOD,
+        canary,
+        tmp_path,
+        params={"proposal": proposal, "actor": ACTOR, "idempotency_key": f"submit-{key}"},
+    )
+    assert submitted["status"] == "ok", submitted["errors"]
+    action_ref = seal_plan_approval(
+        canary.root, tmp_path / "runtime", subject=body["milestone_urn"], tag=key
+    )
+    approved_answer = dispatch(
+        PLAN_APPROVE_METHOD,
+        canary,
+        tmp_path,
+        params={
+            "key": key,
+            "expected_revision": 2,
+            "action_ref": action_ref,
+            "approved_by": OPERATOR,
+            "actor": ACTOR,
+            "idempotency_key": f"approve-{key}",
+        },
+    )
+    assert approved_answer["status"] == "ok", approved_answer["errors"]
+    if not apply:
+        return approved_answer
+    return dispatch(
+        PLAN_APPLY_METHOD,
+        canary,
+        tmp_path,
+        params={
+            "key": key,
+            "expected_revision": 3,
+            "actor": ACTOR,
+            "idempotency_key": f"apply-{key}",
+        },
+    )
+
+
+def applied_parent(
+    tmp_path: Path, *, code: str, project: dict[str, Any] | None = IMPORTED_PROJECT_ROW
+) -> CanaryProvision:
+    """Return a canary whose parent plan is APPLIED and whose project row is *project*."""
+    canary = planned_canary(tmp_path, code=code)
+    if project is not None:
+        seed(canary, {"project": {"EAWF": project}})
+    answer = drive(canary, tmp_path, key=PARENT_KEY, body=PARENT_BODY)
+    assert answer["status"] == "ok", answer["errors"]
+    return canary
+
+
+def edit_row(canary: CanaryProvision, collection_name: str, key: str, **fields: Any) -> None:
+    """Overwrite *fields* of one stored row in place, bypassing every lifecycle edge."""
+    path = document_path(canary)
+    document = read_document(path)
+    document[collection_name][key].update(fields)
+    write_document(path, document)
+
+
+def apply_child(canary: CanaryProvision, tmp_path: Path) -> dict[str, Any]:
+    """Approve the child plan, then apply it, returning the apply envelope."""
+    return drive(canary, tmp_path, key=CHILD_KEY, body=CHILD_BODY, parent_key=PARENT_KEY)
+
+
+@pytest.mark.parametrize(
+    ("project", "branch"),
+    [
+        pytest.param(IMPORTED_PROJECT_ROW, DEFAULT_BRANCH, id="imported-row"),
+        pytest.param({"key": "EAWF", "default_branch": "main"}, "main", id="native-row"),
+    ],
+)
+def test_a_replan_rewrites_the_planned_milestone_in_one_apply(
+    tmp_path: Path, project: dict[str, Any], branch: str
+) -> None:
+    """The child rewrites what it keeps, cancels what it drops and adds the rest."""
+    canary = applied_parent(tmp_path, code="REPLAN", project=project)
+    milestone_before = collection(canary, "milestone")["MLS-0030"]
+    task_before = collection(canary, "task")["EAWF-0001"]
+
+    answer = apply_child(canary, tmp_path)
+
+    assert answer["status"] == "ok", answer["errors"]
+    milestone = collection(canary, "milestone")["MLS-0030"]
+    assert milestone["status"] == "PLANNED"
+    assert milestone["revision"] == 2
+    assert (milestone["uid"], milestone["created_at"], milestone["origin"]) == (
+        milestone_before["uid"],
+        milestone_before["created_at"],
+        milestone_before["origin"],
+    )
+    assert milestone["title"] == "Publish a signed wheel"
+    assert milestone["target_date"] == "2026-12-01"
+    assert milestone["required_batch_refs"] == [BATCH_C]
+
+    batches = collection(canary, "batch")
+    for dropped in ("BAT-0001", "BAT-0002"):
+        assert batches[dropped]["status"] == "CANCELLED"
+        assert batches[dropped]["target_branch"] == branch
+        assert batches[dropped]["revision"] == 2
+    assert batches["BAT-0003"]["status"] == "PLANNED"
+    assert batches["BAT-0003"]["revision"] == 1
+    assert batches["BAT-0003"]["task_refs"] == [TASK_1, TASK_4]
+
+    tasks = collection(canary, "task")
+    assert tasks["EAWF-0002"]["status"] == "CANCELLED"
+    assert tasks["EAWF-0003"]["status"] == "CANCELLED"
+    kept = tasks["EAWF-0001"]
+    assert kept["status"] == "PLANNED"
+    assert (kept["revision"], kept["contract_revision"]) == (2, 2)
+    assert (kept["uid"], kept["created_at"]) == (task_before["uid"], task_before["created_at"])
+    assert kept["batch_ref"] == BATCH_C
+    assert kept["due_scope"] == MILESTONE_URN
+    assert [item["id"] for item in kept["criteria"]] == ["CR-02"]
+    assert (tasks["EAWF-0004"]["status"], tasks["EAWF-0004"]["revision"]) == ("PLANNED", 1)
+
+    revisions = collection(canary, "plan_revision")
+    assert revisions[CHILD_KEY]["status"] == "APPLIED"
+    assert revisions[PARENT_KEY]["status"] == "APPLIED"
+
+
+def test_a_replan_keeping_every_batch_rewrites_them_and_needs_no_branch(
+    tmp_path: Path,
+) -> None:
+    """With nothing to cancel, a tree without a project row re-plans in place."""
+    canary = applied_parent(tmp_path, code="KEEPALL", project=None)
+    body = plan_body(
+        batches={BATCH_A: ((TASK_1, "CR-02"), (TASK_2, "CR-01")), BATCH_B: ((TASK_3, "CR-01"),)},
+        title="Publish a signed wheel",
+    )
+
+    answer = drive(canary, tmp_path, key=CHILD_KEY, body=body, parent_key=PARENT_KEY)
+
+    assert answer["status"] == "ok", answer["errors"]
+    batches = collection(canary, "batch")
+    assert {key: (row["status"], row["revision"]) for key, row in batches.items()} == {
+        "BAT-0001": ("PLANNED", 2),
+        "BAT-0002": ("PLANNED", 2),
+    }
+    assert batches["BAT-0001"]["target_branch"] is None
+    tasks = collection(canary, "task")
+    assert {key: row["contract_revision"] for key, row in tasks.items()} == {
+        "EAWF-0001": 2,
+        "EAWF-0002": 2,
+        "EAWF-0003": 2,
+    }
+    assert collection(canary, "milestone")["MLS-0030"]["revision"] == 2
+
+
+def test_a_dropped_parent_task_already_settled_is_left_untouched(tmp_path: Path) -> None:
+    """Only a still-PLANNED leftover is cancelled; a settled one keeps its row."""
+    canary = applied_parent(tmp_path, code="SETTLED")
+    edit_row(canary, "task", "EAWF-0003", status="CANCELLED", revision=2)
+    settled = collection(canary, "task")["EAWF-0003"]
+
+    answer = apply_child(canary, tmp_path)
+
+    assert answer["status"] == "ok", answer["errors"]
+    assert collection(canary, "task")["EAWF-0003"] == settled
+    assert collection(canary, "task")["EAWF-0002"]["status"] == "CANCELLED"
+
+
+def test_a_replan_of_a_milestone_no_longer_planned_is_refused(tmp_path: Path) -> None:
+    """An activated Milestone changes through its own lifecycle, not a re-plan."""
+    canary = applied_parent(tmp_path, code="ACTIVEMS")
+    edit_row(canary, "milestone", "MLS-0030", status="ACTIVE")
+    child_ready = drive(
+        canary, tmp_path, key=CHILD_KEY, body=CHILD_BODY, parent_key=PARENT_KEY, apply=False
+    )
+    assert child_ready["status"] == "ok"
+    before = document_path(canary).read_bytes()
+
+    answer = apply_plan_key(canary, tmp_path, key=CHILD_KEY)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["code"] == "transition_guard_failed"
+    assert answer["errors"][0]["guard"] == "replanned_milestone_planned"
+    assert answer["errors"][0]["remediation"]
+    assert document_path(canary).read_bytes() == before
+
+
+def apply_plan_key(canary: CanaryProvision, tmp_path: Path, *, key: str) -> dict[str, Any]:
+    """Apply the approved revision *key* and return the envelope."""
+    return dispatch(
+        PLAN_APPLY_METHOD,
+        canary,
+        tmp_path,
+        params={
+            "key": key,
+            "expected_revision": 3,
+            "actor": ACTOR,
+            "idempotency_key": f"apply-{key}",
+        },
+    )
+
+
+@pytest.mark.parametrize("status", ["CLAIMED", "RUNNING"])
+def test_a_replan_carrying_a_parent_task_past_planned_is_refused(
+    tmp_path: Path, status: str
+) -> None:
+    """A started Task stays claimed, so the re-plan cannot re-place it."""
+    canary = applied_parent(tmp_path, code=f"CARRY{status}")
+    edit_row(canary, "task", "EAWF-0001", status=status)
+    drive(canary, tmp_path, key=CHILD_KEY, body=CHILD_BODY, parent_key=PARENT_KEY, apply=False)
+    before = document_path(canary).read_bytes()
+
+    answer = apply_plan_key(canary, tmp_path, key=CHILD_KEY)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["guard"] == "plan_keys_unclaimed"
+    assert "task/EAWF-0001" in answer["errors"][0]["message"]
+    assert "milestone/MLS-0030" not in answer["errors"][0]["message"]
+    assert document_path(canary).read_bytes() == before
+
+
+def test_a_replan_dropping_a_batch_without_a_default_branch_is_refused(
+    tmp_path: Path,
+) -> None:
+    """A cancelled Batch records its branch, which cannot be invented."""
+    canary = applied_parent(tmp_path, code="NOBRANCH", project=None)
+    drive(canary, tmp_path, key=CHILD_KEY, body=CHILD_BODY, parent_key=PARENT_KEY, apply=False)
+    before = document_path(canary).read_bytes()
+
+    answer = apply_plan_key(canary, tmp_path, key=CHILD_KEY)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["code"] == "identity_not_found"
+    assert answer["errors"][0]["guard"] == "project_default_branch_resolved"
+    assert answer["errors"][0]["remediation"]
+    assert document_path(canary).read_bytes() == before
+
+
+def test_a_replan_under_a_parent_that_is_not_applied_is_refused(tmp_path: Path) -> None:
+    """A parent that placed nothing gives its child nothing to re-plan."""
+    canary = applied_parent(tmp_path, code="UNAPPLIED")
+    drive(canary, tmp_path, key=CHILD_KEY, body=CHILD_BODY, parent_key=PARENT_KEY, apply=False)
+    drive(
+        canary,
+        tmp_path,
+        key=GRANDCHILD_KEY,
+        body=CHILD_BODY,
+        parent_key=CHILD_KEY,
+        apply=False,
+    )
+    before = document_path(canary).read_bytes()
+
+    answer = apply_plan_key(canary, tmp_path, key=GRANDCHILD_KEY)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["code"] == "transition_guard_failed"
+    assert answer["errors"][0]["guard"] == "parent_plan_revision_applied"
+    assert document_path(canary).read_bytes() == before
+    assert collection(canary, "plan_revision")[CHILD_KEY]["status"] == "APPROVED"
+
+
+def test_a_child_of_an_unapplied_parent_creates_a_milestone_nobody_placed(
+    tmp_path: Path,
+) -> None:
+    """With no Milestone to rewrite, a repair of an unapplied parent plans as before."""
+    canary = planned_canary(tmp_path, code="REPAIR")
+    drive(canary, tmp_path, key=PARENT_KEY, body=PARENT_BODY, apply=False)
+
+    answer = apply_child(canary, tmp_path)
+
+    assert answer["status"] == "ok", answer["errors"]
+    assert collection(canary, "milestone")["MLS-0030"]["revision"] == 1
+    assert sorted(collection(canary, "batch")) == ["BAT-0003"]
+    assert collection(canary, "plan_revision")[PARENT_KEY]["status"] == "APPROVED"
+
+
+def test_a_child_of_a_parent_on_another_milestone_still_refuses_a_reused_key(
+    tmp_path: Path,
+) -> None:
+    """A parent on another Milestone only informs the lenses, as before."""
+    canary = applied_parent(tmp_path, code="OTHERMS")
+    body = plan_body(
+        batches={BATCH_C: ((TASK_1, "CR-02"), (TASK_4, "CR-01"))},
+        milestone_urn=OTHER_MILESTONE_URN,
+        dropped=(TASK_2, TASK_3),
+    )
+    drive(canary, tmp_path, key=CHILD_KEY, body=body, parent_key=PARENT_KEY, apply=False)
+    before = document_path(canary).read_bytes()
+
+    answer = apply_plan_key(canary, tmp_path, key=CHILD_KEY)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["guard"] == "plan_keys_unclaimed"
+    assert "task/EAWF-0001" in answer["errors"][0]["message"]
+    assert document_path(canary).read_bytes() == before

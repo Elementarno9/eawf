@@ -349,14 +349,41 @@ class DiffReadInput(SemanticToolInputBase):
     byte_cap: Annotated[StrictInt, Field(ge=1, le=1_048_576)] = 262_144
 
 
+class FileWrite(RuntimeRecord):
+    """One file's whole new content, at a repository-relative path."""
+
+    path: RepoRelativePath
+    content: Annotated[str, StringConstraints(strict=True, max_length=1_048_576)]
+
+
+def _reject_repeated_paths(files: tuple[FileWrite, ...]) -> tuple[FileWrite, ...]:
+    """Refuse a patch naming one path twice, which would leave its result ambiguous.
+
+    Raises:
+        ValueError: Two writes name the same path.
+    """
+    reject_repeats(tuple(item.path for item in files))
+    return files
+
+
 class WorkspaceApplyPatchInput(SemanticToolInputBase):
-    """Apply one patch to the lease workspace at an expected generation."""
+    """Write each named file's whole new content into the Run's leased workspace.
+
+    The edits travel inline rather than as a reference to a filed patch:
+    a worker has no other tool that files an artifact, so a reference it
+    must mint first is one it could never produce. Whole-file content is
+    used instead of a diff because a diff is written against a tree the
+    worker can only guess at, and a hunk that fails to apply is a refusal
+    the worker cannot repair from the error alone.
+    """
 
     tool_id: Literal["workspace_apply_patch"]
-    lease_id: LeaseId
-    expected_workspace_generation: Annotated[StrictInt, Field(gt=0)]
-    patch_ref: ArtifactUrn
-    patch_digest: Digest
+    files: Annotated[
+        tuple[FileWrite, ...],
+        Field(min_length=1, max_length=64),
+        AfterValidator(_reject_repeated_paths),
+    ]
+    expected_workspace_generation: Annotated[StrictInt, Field(gt=0)] | None = None
 
 
 class RunScopedCommandInput(SemanticToolInputBase):
@@ -469,15 +496,78 @@ class SubmitCandidateInput(SemanticToolInputBase):
     resulting_tree_digest: Digest
 
 
+class ReportCriterionOutcome(StrEnum):
+    """How one declared criterion ended, as the terminal report states it."""
+
+    MET = "met"
+    UNMET = "unmet"
+    NOT_ATTEMPTED = "not_attempted"
+
+
+class ReportCriterionResult(RuntimeRecord):
+    """One declared criterion's outcome, with an optional one-line note."""
+
+    criterion_id: CriterionId
+    outcome: ReportCriterionOutcome
+    note: BoundedText | None = None
+
+
+#: The longest report body a call may carry inline. Below the content
+#: store's own character bound, so a body at the limit still leaves room
+#: for the verdict, summary and criteria lines stored beside it.
+REPORT_BODY_LIMIT: Final = 12_000
+
+ReportBodyText = Annotated[
+    str, StringConstraints(strict=True, min_length=1, max_length=REPORT_BODY_LIMIT)
+]
+
+
 class SubmitReportInput(SemanticToolInputBase):
-    """Submit the terminal report body the role's schema pins."""
+    """File the Run's terminal report content; eawf binds the contract and stores the body.
+
+    The worker supplies only what it alone knows: the verdict, a summary,
+    each criterion's outcome and the body text. The schema and contract
+    the Run was sealed under are already in its capsule, so the daemon
+    fills them, and it stores the body and computes its digest itself. A
+    worker that does name the schema or the contract digest is refused
+    when either differs from the capsule's, never silently corrected.
+    """
 
     tool_id: Literal["submit_report"]
-    report_schema_ref: SchemaUrn
-    contract_digest: Digest
-    body_ref: ArtifactUrn
-    body_digest: Digest
     verdict: AgentReportVerdict
+    summary: Annotated[BoundedText, Field(description="One-line outcome of the Run.")]
+    criteria: Annotated[
+        tuple[ReportCriterionResult, ...],
+        Field(
+            max_length=64,
+            description=(
+                "One entry per declared criterion: criterion_id, outcome "
+                "(met, unmet or not_attempted) and an optional one-line note."
+            ),
+        ),
+    ] = ()
+    body: Annotated[
+        ReportBodyText | None,
+        Field(description="The report body as plain text or markdown; eawf stores it."),
+    ] = None
+    report_schema_ref: Annotated[
+        SchemaUrn | None,
+        Field(description="Omit: eawf fills it from the Run; if given it must match."),
+    ] = None
+    contract_digest: Annotated[
+        Digest | None,
+        Field(description="Omit: eawf fills it from the Run; if given it must match."),
+    ] = None
+
+    @model_validator(mode="after")
+    def _criteria_are_distinct(self) -> Self:
+        """Refuse a report naming one criterion twice.
+
+        Raises:
+            ValueError: Two entries share a criterion id.
+        """
+        reject_repeats(tuple(result.criterion_id for result in self.criteria))
+        return self
 
 
 class SubmitEvidenceInput(SemanticToolInputBase):
@@ -927,13 +1017,97 @@ def tool_input_schema(tool_id: SemanticToolId | str) -> dict[str, Any]:
     Args:
         tool_id: A catalog tool id.
 
+    The schema is published flat, with every local ``$ref`` inlined, and
+    every property whose grammar rests on a keyword a provider may strip
+    states that grammar in its ``description`` too. Codex reduces a tool's
+    input schema to types, enums, required members and descriptions
+    before its model sees it, so a pattern or a length bound published
+    only as a keyword never reaches the model that has to satisfy it.
+
+    Args:
+        tool_id: A catalog tool id.
+
     Returns:
-        The JSON Schema of the tool's input model.
+        The JSON Schema of the tool's input model, admitting exactly what
+        the model admits.
 
     Raises:
         KeyError: *tool_id* names no catalog tool.
     """
-    return tool_contract(tool_id).input_model.model_json_schema()
+    schema = tool_contract(tool_id).input_model.model_json_schema()
+    definitions = schema.pop("$defs", {})
+    published: dict[str, Any] = _describe_grammar(_inline_refs(schema, definitions))
+    return published
+
+
+#: The keywords whose bound a property's description restates, each with
+#: the prose it is restated in.
+_GRAMMAR_PROSE: Final[tuple[tuple[str, str], ...]] = (
+    ("pattern", "matches the regular expression {}"),
+    ("minLength", "at least {} characters"),
+    ("maxLength", "at most {} characters"),
+    ("minimum", "at least {}"),
+    ("exclusiveMinimum", "greater than {}"),
+    ("maximum", "at most {}"),
+    ("minItems", "at least {} items"),
+    ("maxItems", "at most {} items"),
+)
+
+
+def _inline_refs(node: Any, definitions: Mapping[str, Any]) -> Any:
+    """Return *node* with every ``#/$defs/`` reference replaced by its target."""
+    if isinstance(node, list):
+        return [_inline_refs(item, definitions) for item in node]
+    if not isinstance(node, dict):
+        return node
+    inlined = {
+        key: _inline_refs(value, definitions) for key, value in node.items() if key != "$ref"
+    }
+    ref = node.get("$ref")
+    if isinstance(ref, str):
+        target = _inline_refs(definitions[ref.removeprefix("#/$defs/")], definitions)
+        return {**target, **inlined}
+    return inlined
+
+
+def _grammar_prose(node: Mapping[str, Any]) -> str:
+    """Return the bounds one property schema states only as keywords."""
+    branches = node.get("anyOf")
+    if isinstance(branches, list):
+        spelled = [_grammar_prose(branch) for branch in branches]
+        if not any(spelled):
+            return ""
+        return " or ".join(part or "null" for part in spelled)
+    parts = [prose.format(node[keyword]) for keyword, prose in _GRAMMAR_PROSE if keyword in node]
+    item_prose = _grammar_prose(node["items"]) if isinstance(node.get("items"), dict) else ""
+    if item_prose:
+        parts.append(f"each item {item_prose}")
+    return ", ".join(parts)
+
+
+def _describe_grammar(node: Any) -> Any:
+    """Return *node* with each constrained property's grammar stated in its description."""
+    if isinstance(node, list):
+        return [_describe_grammar(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    described = {key: _describe_grammar(value) for key, value in node.items()}
+    properties = described.get("properties")
+    if isinstance(properties, dict):
+        for name, member in properties.items():
+            prose = _grammar_prose(member)
+            if not prose:
+                continue
+            # An authored description says what the member is for; the
+            # grammar is appended to it, because Codex keeps descriptions
+            # and drops the keywords the grammar is otherwise stated in.
+            authored = member.get("description")
+            constraint = f"Constraint: {prose}."
+            properties[name] = {
+                **member,
+                "description": constraint if authored is None else f"{authored} {constraint}",
+            }
+    return described
 
 
 # ---- envelopes ---------------------------------------------------------------

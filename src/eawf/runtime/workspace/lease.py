@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+import shutil
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -78,6 +79,17 @@ LEASE_LOCATOR: Final = "local/epoch2/leases"
 #: Where leased worktrees are materialized. Deliberately apart from the
 #: epoch-1 ``.ea/worktrees/`` ledger so the two never claim one path.
 WORKSPACE_LOCATOR: Final = "local/epoch2/workspaces"
+
+#: The directory inside a leased workspace that eawf itself writes a
+#: native Run's sealed capsule, MCP binding and temporary files to. It is
+#: never the worker's deliverable, so an untracked copy of it alone does
+#: not make the workspace hold residue.
+MCP_ARTIFACT_DIRNAME: Final = ".eawf-mcp"
+
+#: The porcelain prefix of an untracked entry under that directory. Only
+#: untracked entries are discounted: a tracked file there that the worker
+#: changed, or one it staged, still reads as residue.
+_ISOLATION_UNTRACKED_PREFIX: Final = f"?? {MCP_ARTIFACT_DIRNAME}/"
 
 #: Where the record of quarantined residue is filed. The residue itself
 #: stays where it lies; this is only how it is found again.
@@ -825,7 +837,8 @@ def _inspect_residue(context: Epoch2RootContext, *, lease: WorkLease) -> _Residu
     untracked entry, and HEAD still reads as the commit the worktree was
     materialized at. A worktree that committed its work has residue that
     is not in the integration base, which is exactly the content the
-    reconcile must not remove.
+    reconcile must not remove. The isolation directory eawf wrote for the
+    Run is not counted, because a lease whose worker did nothing holds it.
     """
     target = workspace_path(context, handle=lease.workspace_handle)
     if not target.is_dir():
@@ -835,7 +848,11 @@ def _inspect_residue(context: Epoch2RootContext, *, lease: WorkLease) -> _Residu
             present=False,
         )
     try:
-        porcelain = tuple(git.status_porcelain(target))
+        porcelain = tuple(
+            line
+            for line in git.status_porcelain(target)
+            if not line.startswith(_ISOLATION_UNTRACKED_PREFIX)
+        )
         head = git.commit_sha(target, "HEAD")
     except (cli_errors.CliError, OSError) as error:
         logger.warning(
@@ -890,7 +907,13 @@ def _remove_workspace(context: Epoch2RootContext, *, lease: WorkLease) -> None:
     """
     repo_root = context.identity.tree_root.parent
     target = workspace_path(context, handle=lease.workspace_handle)
+    isolation_dir = target / MCP_ARTIFACT_DIRNAME
     try:
+        # git refuses to remove a worktree holding untracked files, and the
+        # isolation directory is the one untracked entry the residue check
+        # discounted.
+        if isolation_dir.is_dir():
+            shutil.rmtree(isolation_dir)
         git.worktree_remove(repo_root, path=target)
         git.branch_delete(repo_root, name=lease.branch)
     except (cli_errors.CliError, OSError) as error:
@@ -1049,6 +1072,7 @@ def _require_stored(context: Epoch2RootContext, *, lease_id: str) -> WorkLease:
 __all__ = [
     "LEASE_BRANCH_PREFIX",
     "LEASE_LOCATOR",
+    "MCP_ARTIFACT_DIRNAME",
     "QUARANTINE_LOCATOR",
     "QUARANTINE_SCHEMA_VERSION",
     "RECONCILABLE_STATUSES",

@@ -532,16 +532,20 @@ def test_a_name_carrying_a_shell_shape_is_still_answered(
 
 
 @pytest.mark.parametrize(
-    "arguments",
+    ("arguments", "field_path"),
     [
-        {"include_children": "yes"},
-        {"include_children": False, "elevated": True},
-        {"tool_id": "submit_candidate", "include_children": False},
+        ({"include_children": "yes"}, "/arguments/include_children"),
+        ({"include_children": False, "elevated": True}, "/arguments/elevated"),
+        ({"tool_id": "submit_candidate", "include_children": False}, "/arguments"),
     ],
     ids=["mistyped", "extra-field", "mislabelled-tool"],
 )
 def test_arguments_the_catalog_refuses_never_reach_the_daemon(
-    tmp_path: Path, ctx: MethodContext, canary: CanaryProvision, arguments: dict[str, Any]
+    tmp_path: Path,
+    ctx: MethodContext,
+    canary: CanaryProvision,
+    arguments: dict[str, Any],
+    field_path: str,
 ) -> None:
     """Mistyped, extra and mislabelled payloads all stop at the server."""
     capsule = seal_capsule()
@@ -552,7 +556,7 @@ def test_arguments_the_catalog_refuses_never_reach_the_daemon(
         server.handle(request("tools/call", name="budget_status", arguments=arguments))
     )
 
-    assert_closed_error(answer, code=SemanticToolErrorCode.PAYLOAD_INVALID, field_path="/arguments")
+    assert_closed_error(answer, code=SemanticToolErrorCode.PAYLOAD_INVALID, field_path=field_path)
     assert transport.forwarded == []
 
 

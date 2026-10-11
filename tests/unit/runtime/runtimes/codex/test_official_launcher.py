@@ -672,6 +672,11 @@ def test_a_crossing_after_the_server_exited_does_not_wait_on_the_interrupt(
     workspace: Path,
 ) -> None:
     async def sink(sample: UsageSample, pgid: int | None) -> bool:
+        # Hold the crossing until the server has exited, without reaping it,
+        # so the interrupt is always written to a closed pipe.
+        assert pgid is not None
+        while os.waitid(os.P_PID, pgid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is None:
+            await asyncio.sleep(0.01)
         return True
 
     started = time.monotonic()

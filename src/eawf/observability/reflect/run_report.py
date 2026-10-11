@@ -1,8 +1,9 @@
 """The plain-text report of one Run, planned in full before a byte is written.
 
 A report is a local file under ``.ea/local/``, one line per fact. It never implies more
-than it holds: its head states who asked for it, the projection revision it was read at,
-the redaction policy and every purged range before the first fact line; a purged range is
+than it holds: its head states the Run's status, who asked for it, the projection revision
+it was read at, the redaction policy, every purged range and the runtime the Run recorded
+it ran on before the first fact line; a purged range is
 written as ``∅ purged`` in its own position rather than skipped; a part with no producer
 says so instead of printing nothing; and secrets are never carried, whatever was asked,
 and the report says that too.
@@ -26,6 +27,7 @@ from typing import Final
 from eawf.kernel.projection.transcript import TranscriptBlock, build_transcript_blocks
 from eawf.kernel.projection.truth import TruthState
 from eawf.kernel.runtime.sandbox_decision import SandboxDecision
+from eawf.kernel.runtime.usage import UsagePayload, aggregate_usage
 from eawf.kernel.state.epoch2.measurement import (
     CounterName,
     ExcludedRuntime,
@@ -33,6 +35,7 @@ from eawf.kernel.state.epoch2.measurement import (
     UncapturedRuntime,
     Unobserved,
 )
+from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.store.paths import LOCAL_DIRNAME
 from eawf.observability.measurement.fold import SubtreeFold
 from eawf.observability.reflect.runs import RunReading
@@ -76,8 +79,14 @@ PURGED_TOKEN: Final = "∅ purged"
 #: What the secrets part says, whether or not it was asked for.
 SECRETS_LINE: Final = "secrets never included: policy redacts secrets from every report"
 
+#: What the head says of a Run that recorded no runtime it ran on.
+NO_RUNTIME_TUPLE: Final = "runtime_tuple unrecorded: the Run holds no runtime tuple"
+
 #: What the sandbox part says of a Run the gateway decided nothing for.
 NO_SANDBOX_DECISIONS: Final = "sandbox_decisions: no call of this Run was decided by the gateway"
+
+#: The counters a Run's usage readings carry, in the order the report states them.
+_READING_COUNTERS: Final = ("input_tokens", "output_tokens", "cache_tokens", "cost_microusd")
 
 
 def parse_parts(text: str | None) -> tuple[ReportPartName, ...]:
@@ -138,6 +147,12 @@ class RunReportPlan:
         head: The lines stated before the first fact line.
         parts: The planned parts, in render order.
         redactions: The lines the scrub rewrote.
+        runtime_tuple: The runtime the Run recorded it ran on, member by member and
+            scrubbed; a member its launcher never observed is absent. ``None`` when the
+            Run recorded no tuple.
+        run_status: The Run's status at the read.
+        failure_code: The code the Run failed with, or ``None`` when it records no
+            failure.
     """
 
     urn: str
@@ -146,6 +161,9 @@ class RunReportPlan:
     head: tuple[str, ...]
     parts: tuple[PlannedPart, ...]
     redactions: int
+    runtime_tuple: dict[str, str] | None
+    run_status: str
+    failure_code: str | None
 
     def text(self) -> str:
         """Return the file's content, one fact per line."""
@@ -211,12 +229,18 @@ def _usage_lines(reading: RunReading) -> tuple[str, ...]:
 
 
 def _own_usage_lines(reading: RunReading) -> tuple[str, ...]:
-    """Return the usage and cost facts the Run's own captured runtime states."""
+    """Return the usage and cost facts the Run's own captured runtime states.
+
+    A native Run is metered by the usage readings its stream carries rather than by a
+    captured runtime, so when no runtime was captured those readings answer instead.
+    """
     captured = reading.run.captured_runtime
     if captured is None:
-        return ("usage_and_cost unavailable: the Run holds no captured runtime",)
+        missing = "usage_and_cost unavailable: the Run holds no captured runtime"
+        return _reading_lines(reading) or (missing,)
     if isinstance(captured, UncapturedRuntime):
-        return (f"usage_and_cost unavailable: uncaptured ({captured.reason.value})",)
+        missing = f"usage_and_cost unavailable: uncaptured ({captured.reason.value})"
+        return _reading_lines(reading) or (missing,)
     if isinstance(captured, ExcludedRuntime):
         return (f"usage_and_cost excluded: {captured.reason.value} ({captured.detail})",)
     lines = [
@@ -233,6 +257,60 @@ def _own_usage_lines(reading: RunReading) -> tuple[str, ...]:
             else f"usage_and_cost {name.value} unobserved: {reading_.reason}"
         )
     return tuple(lines)
+
+
+def _reading_lines(reading: RunReading) -> tuple[str, ...]:
+    """Return the usage the Run's own stream recorded, or nothing when it recorded none.
+
+    Running totals and deltas are folded by :func:`aggregate_usage`, so a stream of
+    cumulative readings reports its last total rather than their sum.
+    """
+    readings = [
+        event.payload
+        for event in reading.events
+        if event.quarantine is None and isinstance(event.payload, UsagePayload)
+    ]
+    if not readings:
+        return ()
+    totals = aggregate_usage(readings)
+    qualities = ", ".join(sorted({item.measurement_quality for item in readings}))
+    sources = ", ".join(sorted({item.usage_source for item in readings}))
+    count = len(readings)
+    lines = [
+        f"usage_and_cost quality {qualities} · source {sources}"
+        f" · {count} reading" + ("" if count == 1 else "s")
+    ]
+    for name in _READING_COUNTERS:
+        value = getattr(totals, name)
+        lines.append(
+            f"usage_and_cost {name} {value}"
+            if value is not None
+            else f"usage_and_cost {name} unobserved: no reading reported it"
+        )
+    return tuple(lines)
+
+
+def _status_line(run: Run) -> str:
+    """Return the head line stating the Run's status and, when it failed, why."""
+    if run.failure is None:
+        return f"status {run.status.value}"
+    return f"status {run.status.value} · failure {run.failure.code}"
+
+
+def _runtime_members(reading: RunReading) -> dict[str, str] | None:
+    """Return the scrubbed members of the Run's recorded runtime tuple, or ``None``."""
+    recorded = reading.run.runtime_tuple
+    if recorded is None:
+        return None
+    members = recorded.model_dump(mode="json", exclude_none=True)
+    return {name: redact_text(value) for name, value in members.items()}
+
+
+def _runtime_lines(members: dict[str, str] | None) -> tuple[str, ...]:
+    """Return one head line per recorded member, or the line saying none was recorded."""
+    if members is None:
+        return (NO_RUNTIME_TUPLE,)
+    return tuple(f"runtime_tuple {name} {value}" for name, value in members.items())
 
 
 def _part_lines(
@@ -283,12 +361,15 @@ def plan_run_report(
     blocks, purged = build_transcript_blocks(reading.events)
     ranges = ", ".join(f"{item.first}-{item.last}" for item in purged) or "none"
     asked = ", ".join(part.value for part in parts if part is not ReportPartName.SECRETS)
+    runtime = _runtime_members(reading)
     head = (
         f"run report {run.urn}",
+        _status_line(run),
         f"author {actor if actor is not None else 'unattributed: no --actor was named'}",
         f"projection revision {reading.canonical_sequence} · run revision {run.revision}",
         f"redaction policy: {REDACTION_POLICY}",
         f"purged ranges: {ranges}",
+        *_runtime_lines(runtime),
         QUOTABILITY,
         f"parts: {asked or 'none'} · secrets never",
     )
@@ -313,6 +394,9 @@ def plan_run_report(
         head=head,
         parts=tuple(planned),
         redactions=redactions,
+        runtime_tuple=runtime,
+        run_status=run.status.value,
+        failure_code=None if run.failure is None else run.failure.code,
     )
 
 
@@ -330,6 +414,7 @@ def write_run_report(plan: RunReportPlan) -> Path:
 
 __all__ = [
     "DEFAULT_PARTS",
+    "NO_RUNTIME_TUPLE",
     "NO_SANDBOX_DECISIONS",
     "PURGED_TOKEN",
     "QUOTABILITY",
