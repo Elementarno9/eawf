@@ -244,6 +244,32 @@ def test_build_envelope_uses_bucket_default_hint_when_no_kind() -> None:
     assert env.data == {}
 
 
+def test_a_validation_refusal_naming_its_remedy_is_hinted_with_that_command() -> None:
+    err = errors.cli_error_for_rpc(
+        errors.RPC_VALIDATION_FAILED,
+        "validation_failed: dispatch_semantic_tools_uncertified: runtime claude is certified "
+        "without semantic_tools; run `eawf runtime certify claude --task EAWF-0042` to walk "
+        "the canary that observes them",
+    )
+    env = errors.build_envelope(err)
+    assert env.suggested_next_step == "run `eawf runtime certify claude --task EAWF-0042`"
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["validation_failed: schema_validation_failed: check urn", "", "run `make` first"],
+    ids=["no-command", "empty", "not-eawf"],
+)
+def test_a_validation_refusal_naming_no_eawf_command_keeps_the_bucket_hint(message: str) -> None:
+    env = errors.build_envelope(errors.cli_error_for_rpc(errors.RPC_VALIDATION_FAILED, message))
+    assert env.suggested_next_step == errors._DEFAULT_HINTS["ValidationError"]
+
+
+def test_a_command_named_outside_a_validation_refusal_keeps_its_bucket_hint() -> None:
+    env = errors.build_envelope(errors.UserError("run `eawf validate` again"))
+    assert env.suggested_next_step == errors._DEFAULT_HINTS["UserError"]
+
+
 # --- Daemon RPC code mapping (C05 § 5.3) -----------------------------------
 
 

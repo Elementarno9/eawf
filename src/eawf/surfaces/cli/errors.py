@@ -38,6 +38,7 @@ Envelope shape (JSON branch) per :class:`ErrorEnvelope`:
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any, Final, Literal, NoReturn
 
@@ -342,20 +343,30 @@ def _concrete_kind(err: CliError) -> str | None:
     return cls_name
 
 
-def _resolve_hint(canonical: str, kind: str | None) -> str:
+#: The command a refusal names as its remedy, such as ``run `eawf runtime certify ...```.
+_NAMED_COMMAND: Final = re.compile(r"run `(eawf [^`]+)`")
+
+
+def _resolve_hint(canonical: str, kind: str | None, message: str) -> str:
     """Pick the most specific hint for *canonical* + *kind*.
+
+    A validation refusal that names the command repairing it is hinted with
+    that command: the bucket's generic hint would send the reader elsewhere.
 
     Args:
         canonical: One of the five bucket class names.
         kind: Fine-grained cause tag (concrete subclass name or
             operator-supplied ``kind=``) when present.
+        message: The error's message.
 
     Returns:
-        The kind-specific hint when one exists; otherwise the bucket
-        default hint.
+        The kind-specific hint when one exists; otherwise the command a
+        validation refusal names; otherwise the bucket default hint.
     """
     if kind is not None and kind in _KIND_HINTS:
         return _KIND_HINTS[kind]
+    if canonical == "ValidationError" and (named := _NAMED_COMMAND.search(message)):
+        return f"run `{named.group(1)}`"
     return _DEFAULT_HINTS.get(canonical, _DEFAULT_HINTS["InternalError"])
 
 
@@ -436,7 +447,7 @@ def build_envelope(
         message=message,
         exit_code=err.exit_code,
         exit_name=_EXIT_NAMES.get(canonical, exit_codes.name_for(err.exit_code)),
-        suggested_next_step=_resolve_hint(canonical, kind),
+        suggested_next_step=_resolve_hint(canonical, kind, message),
         error_code=error_code.value if error_code is not None else None,
         data=merged_data,
         correlation_id=correlation_id,

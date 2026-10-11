@@ -14,7 +14,7 @@ a trailer in ``base..old`` must still be named by a trailer in ``base..new``,
 and so must every native Task a ``Task`` trailer names, since that
 trailer is the only identity a native Task commit carries.
 
-The same push also has each pushed commit linted under the Batch regime
+The same push also has each pushed commit linted under the per-Batch regime
 (:func:`check_pushed_commits`), so scratch commits stay free locally and are
 refused only when they would leave the machine.
 
@@ -36,8 +36,8 @@ from commit_prefix_lint import (
     _TASK_TRAILER_RE,
     _WAVE_TRAILER_RE,
     _canonical_state_path,
-    batch_commit_error,
     load_native_records,
+    pushed_commit_error,
 )
 from epoch2_lifecycle_view import epoch2_generation
 
@@ -152,7 +152,7 @@ def check_pre_push(env: Mapping[str, str], *, repo_root: Path | None = None) -> 
 def check_pushed_commits(
     env: Mapping[str, str], *, repo_root: Path | None = None
 ) -> tuple[int, str]:
-    """Lint every non-merge commit a push adds under the Batch regime.
+    """Lint every non-merge commit a push adds under the per-Batch regime.
 
     The pushed range is ``PRE_COMMIT_FROM_REF..PRE_COMMIT_TO_REF``; for a new
     branch pre-commit sets the first variable to the parent of the oldest
@@ -196,17 +196,17 @@ def check_pushed_commits(
         )
         if changed.returncode != 0:
             return 1, f"commit lint: cannot read the paths of {sha[:12]}"
-        error = batch_commit_error(message, changed.stdout.splitlines(), records)
+        error = pushed_commit_error(message, changed.stdout.splitlines(), records)
         if error is not None:
             refused.append(f"{sha[:12]} {error}")
     if not refused:
         return 0, ""
     return 1, "\n".join(
         [
-            "commit lint: this push carries commits outside the Batch regime:",
+            "commit lint: this push carries commits outside the per-Batch regime:",
             *refused,
-            "Squash scratch work into one '<type>: <summary>' commit per Batch with "
-            "exactly one 'Batch: BAT-<NNNN>' trailer (eawf publish), ending with one "
-            "'state: <summary>' commit, then push again.",
+            "Squash each Batch's scratch work into one '<type>: <summary>' commit with "
+            "one 'Batch: BAT-<NNNN>' trailer and a 'Task: <KEY>' trailer per Task it "
+            "delivers, ending with one 'state: <summary>' commit, then push again.",
         ]
     )

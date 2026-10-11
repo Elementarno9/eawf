@@ -139,7 +139,7 @@ def _apply_sync(workspace: Path) -> tuple[str, int]:
     return ("applied" if changed else "noop"), changed
 
 
-def _project_lock_urn(context: Epoch2RootContext) -> str:
+def project_lock_urn(context: Epoch2RootContext) -> str:
     """Return the URN of the tree's one project, the lock a tree-wide append holds.
 
     Raises:
@@ -186,7 +186,7 @@ def _apply_ledger_supersede(
     if authority.epoch != 2:
         raise DaemonValidationError("ledger repair needs an epoch-2 tree")
     context = ctx.native_root_context(authority.root)
-    with context.session([_project_lock_urn(context)]) as session:
+    with context.session([project_lock_urn(context)]) as session:
         rows, _unrepairable = plan_ledger_supersessions(workspace)
         if ledger_supersession_digest(workspace, rows) != action.preview_digest:
             raise DaemonValidationError(
@@ -239,7 +239,7 @@ def _apply_artifact_digests(
     if authority.epoch != 2:
         raise DaemonValidationError("artifact digest repair needs an epoch-2 tree")
     context = ctx.native_root_context(authority.root)
-    with context.session([_project_lock_urn(context)]) as session:
+    with context.session([project_lock_urn(context)]) as session:
         ledger = session.ledger_path(Epoch2Collection.ARTIFACT)
         plan = plan_artifact_digests(workspace, ledger)
         if artifact_digest_preview(ledger, plan) != action.preview_digest:
@@ -269,7 +269,7 @@ def _apply_receipt_rekey(
     if authority.epoch != 2:
         raise DaemonValidationError("receipt re-key repair needs an epoch-2 tree")
     context = ctx.native_root_context(authority.root)
-    with context.session([_project_lock_urn(context)]) as session:
+    with context.session([project_lock_urn(context)]) as session:
         ledger = session.ledger_path(Epoch2Collection.RECEIPT)
         rows = plan_receipt_rekeys(ledger)
         if receipt_rekey_preview(ledger, rows) != action.preview_digest:
@@ -300,7 +300,7 @@ def _apply_legacy_seal(
     if authority.epoch != 2:
         raise DaemonValidationError("legacy ledger seal needs an epoch-2 tree")
     context = ctx.native_root_context(authority.root)
-    with context.session([_project_lock_urn(context)]) as session:
+    with context.session([project_lock_urn(context)]) as session:
         plan = plan_legacy_seal(session.ledger_path(Epoch2Collection.TASK))
         if plan is None or legacy_seal_preview(plan) != action.preview_digest:
             raise DaemonValidationError(
@@ -425,4 +425,4 @@ async def apply_repair(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
     return result
 
 
-__all__ = ["DoctorApplyParams", "apply_repair"]
+__all__ = ["DoctorApplyParams", "apply_repair", "project_lock_urn"]

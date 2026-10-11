@@ -90,7 +90,7 @@ class _SpawnRecorder:
 def spawn(monkeypatch: pytest.MonkeyPatch) -> _SpawnRecorder:
     """Replace the runner's spawn so no test ever executes a crafted argv."""
     recorder = _SpawnRecorder()
-    monkeypatch.setattr(registry.subprocess, "run", recorder)
+    monkeypatch.setattr(registry, "_run_in_group", recorder)
     return recorder
 
 

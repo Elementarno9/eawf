@@ -60,7 +60,9 @@ Delivery-batch lifecycle (activate, integrate, adopt-landed, ready, merge, recon
 | `merge` | Authorise the merge of a READY_TO_MERGE Batch at the head it pinned. |
 | `observe-merge` | Record that the host landed a MERGING Batch, on a filed landed read-back. |
 | `ready` | Declare an ACTIVE Batch ready to merge. |
+| `rebind` | Supersede every ledger row naming a commit the squash replaced. |
 | `reconcile` | File what a read-back of a MERGING Batch's target branch found. |
+| `squash` | Write the branch again as one commit per Batch and a trailing state commit. |
 
 ### `eawf bench`
 

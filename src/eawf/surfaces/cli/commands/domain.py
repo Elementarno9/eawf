@@ -1357,6 +1357,7 @@ def task_create_cmd(
 # load here, after every one is defined, rather than from ``lifecycle``: from
 # there they would run against a partial module whenever this module is the
 # first of the two a process imports.
+from eawf.surfaces.cli.commands import batch_squash as _batch_squash  # noqa: E402, F401
 from eawf.surfaces.cli.commands import domain_delivery as _domain_delivery  # noqa: E402, F401
 from eawf.surfaces.cli.commands import domain_target as _domain_target  # noqa: E402, F401
 from eawf.surfaces.cli.commands import record as _record  # noqa: E402, F401

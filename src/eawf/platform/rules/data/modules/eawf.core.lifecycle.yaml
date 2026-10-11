@@ -33,15 +33,15 @@ rules:
       method: review
   - rule_id: eawf.core.lifecycle.spike
     obligation_id: lifecycle.spike
-    revision: 2
-    title: Keep spikes read-only and local until they ratify a verdict
+    revision: 3
+    title: Keep spikes read-only and their briefs local
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      Run a spike as a time-boxed read-only investigation with its brief at .ea/local/<date>-<slug>.md; promote the brief to .ea/artifacts/ only in the commit landing the decision it ratifies.
+      Run a spike as a time-boxed read-only investigation with its brief at .ea/local/<date>-<slug>.md; keep the brief local and cite it by sha256 digest from the decision it informs, promoting it to .ea/artifacts/ only when the operator asks.
     rationale: >-
-      A spike exists to make the next wave's criteria writable; keeping briefs local until they back a decision keeps the committed record to evidence that was acted on.
+      A spike exists to make the next criteria writable; the pull request, state and docs are the durable record, so a brief stays local and a digest proves which version backed the decision.
     verification:
       method: review
     procedure_ref: docs/rules/spike-workflow.md
@@ -87,15 +87,15 @@ rules:
     procedure_ref: docs/rules/release-process.md
   - rule_id: eawf.core.lifecycle.ship-process
     obligation_id: lifecycle.ship-process
-    revision: 1
-    title: Ship a phase from its co-closing iter
+    revision: 4
+    title: Ship a Milestone from one pull request
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Ship in the phase's final iter: open one phase pull request, pass its CI gates, address review by appending waves to that iter, then close and land by fast-forward so every wave commit survives; never squash.
+      Ship each Milestone through one pull request: pass its CI gates, address review by appending Batches, then merge so each Batch commit survives; main and tags are never rewritten.
     rationale: >-
-      Squashing or re-creating commits on land discards the per-wave history and stales every wave pin.
+      A merge that re-creates or folds Batch commits discards the per-Batch history that review and bisect read and orphans the head each landed Batch bound, and rewriting main or a tag breaks every published binding.
     verification:
       method: review
     procedure_ref: docs/rules/ship-process.md

@@ -67,27 +67,27 @@ rules:
     procedure_ref: docs/rules/agent-driven-phase-equals-release.md
   - rule_id: repo.large-phase-pr
     obligation_id: delivery.phase-pr-size
-    revision: 2
-    title: Keep one pull request per phase regardless of size
+    revision: 5
+    title: Keep one pull request per Milestone regardless of size
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      Deliver each phase as one pull request however large it grows, keeping every wave commit buildable so bisect stays sharp; never split a phase to chase a line count.
+      Deliver each Milestone as one pull request however large it grows, keeping every Batch commit buildable so bisect stays sharp and merging so each survives; never split a Milestone to chase a line count; main and tags are never rewritten.
     rationale: >-
-      The review bottleneck here is coherent deliveries rather than line count, and per-wave commits already give per-change history inside the pull request.
+      The review bottleneck here is coherent deliveries rather than line count, and per-Batch commits already give per-change history inside the pull request.
     verification:
       method: review
     procedure_ref: docs/rules/agent-driven-large-phase-pr.md
   - rule_id: repo.cadence-decisions
     obligation_id: delivery.cadence-provenance
-    revision: 2
-    title: Cite the ratifying decisions when the cadence is questioned
+    revision: 5
+    title: Cite the ratifying decision when the cadence is questioned
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      When a review questions the release-per-phase or one-pull-request-per-phase cadence, cite decisions D10 and D07 in state.json; reverse it only by superseding D10 with a new decision.
+      When a review questions the one-pull-request-per-Milestone cadence or the commit-history regime, cite decision D87 in the decision ledger, which superseded D85; reverse it only by superseding D87 with a new one; main and tags are never rewritten.
     rationale: >-
       The cadence departs from small-change practice on purpose; without the decision trail it reads as an oversight and gets reverted.
     verification:
@@ -95,15 +95,15 @@ rules:
     procedure_ref: docs/rules/agent-driven-cadence-adr-pointer.md
   - rule_id: repo.research-evidence-chain
     obligation_id: research.evidence-chain
-    revision: 2
-    title: Back every research claim with an audit-recorded artifact
+    revision: 3
+    title: Back every research claim with a digest-cited artifact
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Back every behaviour, performance or correctness claim with an audit-recorded artifact such as a notebook, log or dataset; link each audit to its hypothesis, claim and artifact id, and have each decision cite its justifying audit.
+      Record the artifact behind every behaviour, performance or correctness claim under `.ea/local/` and cite it by sha256 digest in the state row; link each audit to its hypothesis, claim and artifact, and have each decision cite its justifying audit.
     rationale: >-
-      Hypotheses, audits and decisions are state-resident records, so the evidence chain behind a decision stays reconstructible from state.json alone.
+      Artifacts stay local unless promoted, so the digest in state is what proves which notebook, log or dataset backed a decision.
     verification:
       method: review
 

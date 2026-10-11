@@ -179,6 +179,7 @@ AGENTS.override.md
 !.ea/artifacts/evidence/2026-09-26-dev4-conformance/native-canary-evidence.json
 !.ea/artifacts/evidence/2026-09-27-dev5-product-canary/native-canary-evidence.json
 !.ea/artifacts/evidence/2026-10-02-rc1-flag-day/native-canary-evidence.json
+!.ea/artifacts/evidence/2026-10-08-rc2-cross-provider/native-canary-evidence.json
 !.ea/artifacts/evidence/2026-09-27-dev5-product-canary/product-canary-receipts.json
 .ea/**/.DS_Store
 # END EAWF:gitignore

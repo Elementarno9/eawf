@@ -408,7 +408,9 @@ def _bundle_ledger(session: RootSession, urn: MilestoneUrn) -> AcceptanceBundleL
     wanted = str(urn)
     payloads = [
         item.payload
-        for item in read_ledger_records(session.ledger_path(Epoch2Collection.MILESTONE))
+        for item in effective_records(
+            read_ledger_records(session.ledger_path(Epoch2Collection.MILESTONE))
+        )
         if item.record_key.startswith(BUNDLE_KEY_PREFIX)
         and item.payload.get("milestone_ref") == wanted
     ]

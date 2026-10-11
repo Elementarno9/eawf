@@ -104,6 +104,7 @@ def test_install_claude_interactive_prompt_decline_aborts(
             return False
 
     monkeypatch.setattr("questionary.confirm", lambda *a, **k: _StubPrompt())
+    monkeypatch.setattr("eawf.surfaces.cli.commands.plugin._stdin_is_tty", lambda: True)
     res = runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "claude", "--dry-run"])
     assert res.exit_code == 0
     assert "aborted" in res.output.lower()
@@ -121,9 +122,44 @@ def test_install_claude_interactive_prompt_accept_proceeds(
             return True
 
     monkeypatch.setattr("questionary.confirm", lambda *a, **k: _StubPrompt())
+    monkeypatch.setattr("eawf.surfaces.cli.commands.plugin._stdin_is_tty", lambda: True)
     res = runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "claude", "--dry-run"])
     assert res.exit_code == 0, res.output
     assert "plugin install" in res.output
+
+
+def test_install_claude_non_tty_stdin_refuses_like_no_input(
+    tmp_path: Path,
+    fake_conflict: CCPluginConflict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-terminal stdin refuses cleanly, naming --force, without prompting.
+
+    The real prompt raises ``OSError`` on a piped stdin; the stub reproduces
+    that so a regression surfaces as the traceback the operator once saw.
+    """
+
+    def _crash(*_a: object, **_k: object) -> object:
+        raise OSError(22, "Invalid argument")
+
+    monkeypatch.setattr("questionary.confirm", _crash)
+    monkeypatch.setattr("eawf.surfaces.cli.commands.plugin._stdin_is_tty", lambda: False)
+    res = runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "claude"])
+    assert res.exit_code == 1, res.output
+    assert isinstance(res.exception, SystemExit)
+    combined = res.output + (res.stderr or "")
+    assert "--force" in combined
+    assert "from a terminal" in combined
+    assert not (tmp_path / ".claude").exists()
+
+
+def test_install_claude_non_tty_without_conflict_proceeds(
+    tmp_path: Path, no_conflict: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A non-terminal stdin only matters when there is a conflict to confirm."""
+    monkeypatch.setattr("eawf.surfaces.cli.commands.plugin._stdin_is_tty", lambda: False)
+    res = runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "claude", "--dry-run"])
+    assert res.exit_code == 0, res.output
 
 
 def test_install_codex_skips_conflict_gate(tmp_path: Path, fake_conflict: CCPluginConflict) -> None:

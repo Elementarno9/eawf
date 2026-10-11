@@ -25,6 +25,7 @@ from typing import Final
 
 from eawf.kernel.release.checkpoint_template import (
     CheckpointConfigTemplate,
+    DeferredPlatformClaims,
     DeferredTargets,
     render_checkpoint_config,
 )
@@ -192,6 +193,13 @@ release:
 #: ``dev2`` are published against approved manifests frozen from the
 #: targets they declared, and a fourth row there would re-digest a
 #: manifest an approval already bound.
+#:
+#: The Windows claim is deferred to ``cross_provider`` for the same
+#: reason. The Windows CI job runs the win32 test set on a real Windows
+#: host, so its receipt is a real-host one, but no rung before the
+#: second release candidate required the ``platform`` gate that reads
+#: it, and adding the row to their configurations would re-digest
+#: documents already approved.
 V07_CONFIG_TEMPLATE: Final[CheckpointConfigTemplate] = CheckpointConfigTemplate(
     source_branch="main",
     require_signed_tag=True,
@@ -249,6 +257,16 @@ V07_CONFIG_TEMPLATE: Final[CheckpointConfigTemplate] = CheckpointConfigTemplate(
             "real_host": True,
         },
     ),
+    deferred_platform_claims=DeferredPlatformClaims(
+        from_profile=ReleaseGateProfile.CROSS_PROVIDER,
+        claims=(
+            {
+                "platform_id": "windows-x86_64",
+                "receipt_ref": "ci://eawf/.github/workflows/ci.yaml#windows",
+                "real_host": True,
+            },
+        ),
+    ),
 )
 
 #: The ``0.7.0.dev2`` checkpoint configuration, rendered from the train
@@ -300,6 +318,17 @@ RC1_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
     template=V07_CONFIG_TEMPLATE,
 )
 
+#: The ``0.7.0rc2`` checkpoint configuration: the first rung under
+#: ``cross_provider``, so the first whose required list carries the
+#: ``platform`` gate on top of the twenty-three ``flag_day`` gates, and
+#: the first to advertise Windows beside Linux. Its four targets are the
+#: ones ``rc1`` declared, because the profile adds a claim rather than a
+#: publication leg.
+RC2_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
+    rung=V07_TRAIN.checkpoint_for_version("0.7.0rc2"),
+    template=V07_CONFIG_TEMPLATE,
+)
+
 #: Checkpoint configurations by version. ``dev1`` is authored -- it was
 #: cut before the template existed and its file is the one the burned
 #: checkpoint was swept against -- and every later rung is rendered, so
@@ -311,6 +340,7 @@ CHECKPOINT_CONFIGS: Final[dict[str, str]] = {
     "0.7.0.dev4": DEV4_RELEASE_CONFIG_YAML,
     "0.7.0.dev5": DEV5_RELEASE_CONFIG_YAML,
     "0.7.0rc1": RC1_RELEASE_CONFIG_YAML,
+    "0.7.0rc2": RC2_RELEASE_CONFIG_YAML,
 }
 
 #: What each of the eight ``dev1`` gates reads.
@@ -543,8 +573,25 @@ FLAG_DAY_GATE_BINDINGS_YAML: Final[str] = (
 """
 )
 
+#: What the one gate ``cross_provider`` adds on top of ``flag_day``
+#: reads.
+#:
+#: ``platform`` reads the whole ``platform`` row, which passes only when
+#: every advertised claim carries a real-host receipt. It is a row
+#: rather than a proof command because the claim is part of the
+#: checkpoint configuration, not of the command tree: a claim whose
+#: receipt did not come from a real host reddens the row without a run.
+CROSS_PROVIDER_GATE_BINDINGS_YAML: Final[str] = (
+    FLAG_DAY_GATE_BINDINGS_YAML
+    + """\
+  - gate: platform
+    kind: signal
+    signal: platform
+"""
+)
+
 #: Authored gate binding tables by profile. ``dev1`` through
-#: ``flag_day`` are authored; the later profiles land with the waves
+#: ``cross_provider`` are authored; the later profiles land with the waves
 #: that build their producers.
 PROFILE_GATE_BINDINGS: Final[dict[ReleaseGateProfile, str]] = {
     ReleaseGateProfile.DEV1: DEV1_GATE_BINDINGS_YAML,
@@ -552,6 +599,7 @@ PROFILE_GATE_BINDINGS: Final[dict[ReleaseGateProfile, str]] = {
     ReleaseGateProfile.NATIVE_CANARY: NATIVE_CANARY_GATE_BINDINGS_YAML,
     ReleaseGateProfile.PRODUCT_CANARY: PRODUCT_CANARY_GATE_BINDINGS_YAML,
     ReleaseGateProfile.FLAG_DAY: FLAG_DAY_GATE_BINDINGS_YAML,
+    ReleaseGateProfile.CROSS_PROVIDER: CROSS_PROVIDER_GATE_BINDINGS_YAML,
 }
 
 
@@ -620,6 +668,7 @@ def checkpoint_config_yaml(version: str) -> str:
 
 __all__ = [
     "CHECKPOINT_CONFIGS",
+    "CROSS_PROVIDER_GATE_BINDINGS_YAML",
     "DEV1_GATE_BINDINGS_YAML",
     "DEV1_RELEASE_CONFIG_YAML",
     "DEV2_GATE_BINDINGS_YAML",
@@ -632,6 +681,7 @@ __all__ = [
     "PRODUCT_CANARY_GATE_BINDINGS_YAML",
     "PROFILE_GATE_BINDINGS",
     "RC1_RELEASE_CONFIG_YAML",
+    "RC2_RELEASE_CONFIG_YAML",
     "V07_CHECKPOINTS",
     "V07_CONFIG_TEMPLATE",
     "V07_TARGET_VERSION",

@@ -58,6 +58,7 @@ W08 compile-gate + W10 profile-floor packs can lean on the runner:
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -65,6 +66,7 @@ import platform
 import re
 import shlex
 import subprocess
+import sys
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -81,7 +83,8 @@ from eawf.platform.artifacts.references import (
 )
 from eawf.platform.artifacts.validation import REFERENCE_ROW_RE
 from eawf.platform.lint._conditional import changed_files
-from eawf.platform.subprocess_detach import no_window_kwargs
+from eawf.platform.subprocess_detach import detached_subprocess_kwargs
+from eawf.runtime.runtimes.cancel import cancel_process_group, cancel_with_grace
 from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, resolve_command_family
 from eawf.runtime.sandbox.env_scrub import (
     GATE_RUNTIME_LANE,
@@ -684,6 +687,57 @@ def resolve_timeout_seconds(args: CommandExitZeroArgs) -> int:
     return _TIMEOUT_CLASS_SECONDS[args.timeout_class]
 
 
+def _run_in_group(
+    argv: list[str], *, timeout: float, cwd: Path, env: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    """Run *argv* as its own process group and stop the whole group when it overruns.
+
+    A command that forks -- ``uv run`` starting ``pytest`` -- leaves its children
+    running past the timeout when only the direct child is killed, so the group is
+    signalled through the grace ladder and then killed outright.
+
+    Args:
+        argv: The command to run.
+        timeout: How many seconds it may run.
+        cwd: Where it runs.
+        env: Its whole environment.
+
+    Returns:
+        The finished command, its output decoded as UTF-8.
+
+    Raises:
+        subprocess.TimeoutExpired: The command overran *timeout*; the exception
+            carries what it wrote before its group was stopped.
+        FileNotFoundError: ``argv[0]`` is not executable.
+    """
+    with subprocess.Popen(
+        argv,
+        cwd=str(cwd),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        **detached_subprocess_kwargs(),
+    ) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            # a group left holding only its unreaped leader refuses a signal with
+            # EPERM on macOS, which means there is nothing left to stop
+            if sys.platform != "win32":
+                with contextlib.suppress(PermissionError):
+                    cancel_with_grace(process.pid)
+                    # the ladder reads a dead leader as a dead group; a member that
+                    # ignored the soft signal is killed here
+                    cancel_process_group(process.pid, hard=True)
+            process.kill()
+            stdout, stderr = process.communicate()
+            raise subprocess.TimeoutExpired(argv, timeout, output=stdout, stderr=stderr) from None
+    return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
+
+
 def _check_command_exit_zero(
     spec: CheckSpec,
     cwd: Path,
@@ -775,18 +829,7 @@ def _check_command_exit_zero(
     started_at = datetime.now(UTC)
     started_ns = time.perf_counter_ns()
     try:
-        completed = subprocess.run(
-            argv,
-            timeout=seconds,
-            check=False,
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            env=child_env,
-            **no_window_kwargs(),
-        )
+        completed = _run_in_group(argv, timeout=seconds, cwd=cwd, env=child_env)
     except subprocess.TimeoutExpired as exc:
         _write_full_log(
             cwd=cwd,

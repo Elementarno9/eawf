@@ -437,7 +437,13 @@ def stop_cmd(
         ),
     ] = False,
 ) -> None:
-    """Request graceful daemon shutdown."""
+    """Request graceful daemon shutdown, never starting a daemon to stop it.
+
+    With no daemon running there is nothing to stop, so this reports that
+    and exits 0 rather than cold-spawning one only to shut it down.
+    """
+    from eawf.surfaces.cli._daemon_client import DaemonNotRunningError
+
     flags: GlobalFlags = ctx.obj
     service_evicted = _handle_supervised_agent_on_stop(evict_service=evict_service)
     if service_evicted:
@@ -451,7 +457,14 @@ def stop_cmd(
         return
     params: dict[str, Any] = {"drain": not no_drain, "timeout_seconds": timeout}
     try:
-        response = _run_rpc("daemon.shutdown", params)
+        response = _run_rpc("daemon.shutdown", params, spawn=False)
+    except DaemonNotRunningError:
+        emit_json_or_text(
+            {"shutdown_at": None, "drained": None, "running": False},
+            "daemon not running; nothing to stop",
+            flags=flags,
+        )
+        return
     except ConnectionResetError as exc:
         # Only the win32 pipe client turns the daemon's exit-as-it-answers
         # race (pipe errors 109/232) into a reset; on a Unix socket a reset

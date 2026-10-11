@@ -116,11 +116,13 @@ from eawf.kernel.store.ledger import (
 )
 from eawf.kernel.store.paths import ledger_path, store_path
 from eawf.kernel.store.tiers import Epoch2Collection, StorageTier, tier_for
+from eawf.runtime.daemon.batch_proof import proof_notes
 from eawf.runtime.daemon.epoch2_root import RootIdentity
 from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY
 from eawf.runtime.daemon.methods import DaemonValidationError, Handler, MethodContext, register
 from eawf.runtime.daemon.methods.delivery_acceptance import BUNDLE_KEY_PREFIX
 from eawf.runtime.daemon.methods.delivery_completion import PROOF_PAYLOAD_KIND, FiledProof
+from eawf.runtime.daemon.methods.domain_guards import integrating_batch_refs
 from eawf.runtime.daemon.methods.host_question import open_question_rows
 from eawf.runtime.daemon.methods.permission import open_permission_rows
 from eawf.runtime.daemon.methods.run_liveness import stall_key, standing_stall_facts
@@ -135,6 +137,7 @@ from eawf.workflow.delivery.acceptance import (
     AcceptanceRefusedError,
     sealed_approval,
 )
+from eawf.workflow.integration.rebind import only_commits_rebound
 from eawf.workflow.projection.acceptance import (
     ACCEPTANCE_ROUTES,
     MILESTONE_ACCEPTANCE_METHOD,
@@ -689,6 +692,15 @@ def _project(*, route: str, authority: RootAuthority, key: str | None = None) ->
         FileNotFoundError: The selected generation carries no document.
     """
     document = read_document(document_path(authority))
+    integrating: frozenset[str] | None = frozenset()
+    if Epoch2Collection.BATCH in ROUTE_COLLECTIONS.get(route, ()):
+        integrating = integrating_batch_refs(document, document_path(authority))
+    # a Run row names its Task's title, and a completed Task is held by its ledger only
+    filed: dict[Epoch2Collection, Mapping[str, Any]] = {}
+    if Epoch2Collection.RUN in ROUTE_COLLECTIONS.get(route, ()):
+        filed[Epoch2Collection.TASK] = latest_rows(
+            ledger_path(document_path(authority), Epoch2Collection.TASK)
+        )
     try:
         return build_route_projection(
             route=route,
@@ -699,6 +711,9 @@ def _project(*, route: str, authority: RootAuthority, key: str | None = None) ->
             ledger_rows=_ledger_rows_for(
                 route=route, authority=authority, document=document, key=key
             ),
+            integrating=integrating or frozenset(),
+            filed=filed,
+            proofs=proof_notes(Path(authority.root)),
         )
     except ValueError as error:
         raise DaemonValidationError(
@@ -773,7 +788,7 @@ def _sealed_bundle(
     path = ledger_path(document_path(authority), Epoch2Collection.MILESTONE)
     payloads = [
         record.payload
-        for record in read_ledger_records(path)
+        for record in effective_records(read_ledger_records(path))
         if record.record_key.startswith(BUNDLE_KEY_PREFIX)
         and record.payload.get("milestone_ref") == urn
     ]
@@ -787,54 +802,73 @@ def _sealed_bundle(
     return ledger.at(revision) if isinstance(revision, int) else ledger.head
 
 
-def _respelled_digest(authority: RootAuthority, bundle: MilestoneAcceptanceBundle) -> str | None:
-    """Return the digest *bundle* carried before a URN re-key respelled it, else ``None``.
+def _respelled_digests(
+    authority: RootAuthority, bundle: MilestoneAcceptanceBundle
+) -> tuple[str, ...]:
+    """Return each digest *bundle* carried before a re-key or rebind respelled it, nearest first.
 
-    The re-key files a bundle again as a row superseding its original line, with every
-    old URN in single-key form; an approval sealed before it names the original bytes.
-    Only a row that is exactly its predecessor re-keyed counts, so a row that changed
-    anything else carries no earlier digest an approval could bind through.
+    A URN re-key files a bundle again with every old URN in single-key form, and a
+    rebind files it again naming the squashed branch's commits; each supersedes the
+    line before it, so an approval sealed earlier names an earlier line's bytes. Only
+    a row that is exactly its predecessor re-keyed or rebound counts, so a row that
+    changed anything else ends the walk.
     """
     records = read_ledger_records(ledger_path(document_path(authority), Epoch2Collection.MILESTONE))
     by_line = {line_digest(render_ledger_line(record)): record for record in records}
-    digest = bundle.digest()
+    by_digest = {
+        MilestoneAcceptanceBundle.model_validate(record.payload).digest(): record
+        for record in records
+        if record.record_key.startswith(BUNDLE_KEY_PREFIX)
+        and record.payload.get("milestone_ref") == str(bundle.milestone_ref)
+    }
     project_key = bundle.milestone_ref.project_key
-    for record in records:
-        predecessor = None if record.supersedes is None else by_line.get(record.supersedes)
-        if (
-            predecessor is None
-            or not record.record_key.startswith(BUNDLE_KEY_PREFIX)
-            or MilestoneAcceptanceBundle.model_validate(record.payload).digest() != digest
-            or rekey_value(predecessor.payload, project_key) != record.payload
+    found: list[str] = []
+    record = by_digest.get(bundle.digest())
+    while record is not None and record.supersedes is not None:
+        predecessor = by_line.get(record.supersedes)
+        if predecessor is None or not (
+            rekey_value(predecessor.payload, project_key) == record.payload
+            or only_commits_rebound(predecessor.payload, record.payload)
         ):
-            continue
-        return MilestoneAcceptanceBundle.model_validate(predecessor.payload).digest()
-    return None
+            break
+        found.append(MilestoneAcceptanceBundle.model_validate(predecessor.payload).digest())
+        record = predecessor
+    return tuple(found)
 
 
 def _bound_approval(
-    document: dict[str, Any], bundle: MilestoneAcceptanceBundle, *, respelled_digest: str | None
+    document: dict[str, Any],
+    bundle: MilestoneAcceptanceBundle,
+    *,
+    respelled_digests: tuple[str, ...],
 ) -> AcceptanceApproval | None:
     """Return the latest sealed approval given to *bundle*'s own bytes, else ``None``.
 
     An action that does not read back, or that the acceptance rules refuse -- another
     Milestone's, another digest's, unsealed or declined -- is no approval of this bundle.
-    An approval given to *respelled_digest*, the same bytes before a URN re-key, is.
+    An approval given to one of *respelled_digests*, the same bytes before a re-key or
+    rebind respelled them, is.
     """
     found: list[AcceptanceApproval] = []
     for key, row in document_rows(document, Epoch2Collection.PENDING_ACTION).items():
         try:
             action = PendingAction.model_validate(row)
-            found.append(
-                sealed_approval(
-                    action,
-                    bundle=bundle,
-                    milestone_ref=bundle.milestone_ref,
-                    respelled_digest=respelled_digest,
-                )
-            )
-        except (ValidationError, AcceptanceRefusedError) as error:
+        except ValidationError as error:
             logger.debug(f"_bound_approval passed over action={key!r} cause={error!s}")
+            continue
+        for respelled in respelled_digests or (None,):
+            try:
+                found.append(
+                    sealed_approval(
+                        action,
+                        bundle=bundle,
+                        milestone_ref=bundle.milestone_ref,
+                        respelled_digest=respelled,
+                    )
+                )
+                break
+            except AcceptanceRefusedError as error:
+                logger.debug(f"_bound_approval passed over action={key!r} cause={error!s}")
     return max(found, key=lambda item: item.approved_at) if found else None
 
 
@@ -857,7 +891,7 @@ def _milestone_acceptance(*, authority: RootAuthority, key: str) -> MilestoneAcc
         None
         if bundle is None
         else _bound_approval(
-            document, bundle, respelled_digest=_respelled_digest(authority, bundle)
+            document, bundle, respelled_digests=_respelled_digests(authority, bundle)
         )
     )
     binding = fields.get("accepted_binding")

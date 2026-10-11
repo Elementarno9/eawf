@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from eawf.runtime.daemon.limits import STOP_CONCLUDE_SECONDS
 from eawf.runtime.daemon.runtime_dir import runtime_dir as default_runtime_dir
 from eawf.runtime.daemon.service_install import (
     ServiceInstallError,
@@ -99,10 +100,60 @@ def wait_for_daemon_stopped(
     )
 
 
+def wait_for_predecessor(
+    runtime_dir: Path,
+    *,
+    timeout_seconds: float = DEFAULT_STOP_TIMEOUT_SECONDS + STOP_CONCLUDE_SECONDS,
+) -> int | None:
+    """Wait out a daemon that holds the runtime lock without answering readiness.
+
+    Such a daemon is either still starting or stopping: a stopping daemon
+    refuses readiness probes while it drains its Runs and keeps the lock
+    until it exits. Spawning beside it would only find the lock held.
+
+    Args:
+        runtime_dir: Daemon runtime directory.
+        timeout_seconds: Positive bounded wait.
+
+    Returns:
+        The PID of a daemon that became ready, or ``None`` once the lock is
+        free and a daemon may be spawned.
+
+    Raises:
+        DaemonLifecycleError: When the lock is still held, with no daemon
+            ready, at the deadline.
+    """
+    if timeout_seconds <= 0:
+        raise DaemonLifecycleError(f"timeout_seconds must be positive, got {timeout_seconds!r}")
+    deadline = time.monotonic() + timeout_seconds
+    while daemon_singleton_locked(runtime_dir):
+        ready_pid = daemon_pid_if_ready(runtime_dir)
+        if ready_pid is not None:
+            return ready_pid
+        if time.monotonic() >= deadline:
+            raise DaemonLifecycleError(
+                f"a previous daemon still holds the runtime lock after {timeout_seconds:.1f}s "
+                "without answering; run `eawf daemon status` and retry once it has exited"
+            )
+        time.sleep(STOP_POLL_INTERVAL_SECONDS)
+    return None
+
+
 def start_daemon(*, runtime_dir: Path | None = None) -> DaemonLifecycleResult:
-    """Ensure a daemon is ready, respecting an installed OS supervisor."""
+    """Ensure a daemon is ready, respecting an installed OS supervisor.
+
+    A predecessor still stopping is waited out first, so a start issued
+    right after a stop spawns once the old daemon has exited instead of
+    timing out against its held lock.
+
+    Raises:
+        DaemonLifecycleError: When the predecessor does not exit in time or
+            the new daemon does not become ready.
+    """
     resolved = runtime_dir if runtime_dir is not None else default_runtime_dir()
     previous_pid = daemon_pid_if_ready(resolved)
+    if previous_pid is None:
+        previous_pid = wait_for_predecessor(resolved)
     if previous_pid is not None:
         return DaemonLifecycleResult(
             action="already-running",

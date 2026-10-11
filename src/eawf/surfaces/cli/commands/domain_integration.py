@@ -22,6 +22,8 @@ such verb:
 - ``batch reconcile`` sends ``runtime.delivery.reconcile_merge`` with a
   presented observation, or ``runtime.delivery.read_back_merge`` to have
   the daemon read the branch back itself;
+- ``batch close-landed`` sends ``runtime.delivery.close_landed``, which
+  closes each ready Batch whose work is on its phase branch;
 - ``milestone open-approval`` and ``milestone seal-approval`` send the two
   acceptance-approval verbs; ``--bundle-out`` writes the bundle
   ``milestone accept --acceptance-bundle`` takes;
@@ -54,6 +56,7 @@ import typer
 
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
+from eawf.surfaces.cli.commands.batch_squash import DELIVERY_REBIND_SQUASHED
 from eawf.surfaces.cli.commands.domain import (
     CANDIDATE_SUBMIT,
     DELIVERY_SEAL_APPROVAL,
@@ -82,6 +85,8 @@ DELIVERY_PROVE: Final = "runtime.delivery.prove_task"
 DELIVERY_TASK_ASSESSMENT: Final = "runtime.delivery.task_assessment"
 DELIVERY_RECONCILE_MERGE: Final = "runtime.delivery.reconcile_merge"
 DELIVERY_READ_BACK_MERGE: Final = "runtime.delivery.read_back_merge"
+DELIVERY_CLOSE_LANDED: Final = "runtime.delivery.close_landed"
+DELIVERY_WAIVE_CRITERION: Final = "runtime.delivery.waive_criterion"
 DELIVERY_OPEN_APPROVAL: Final = "runtime.delivery.open_acceptance_approval"
 DELIVERY_RECORD_EVIDENCE: Final = "runtime.delivery.record_evidence"
 
@@ -95,8 +100,11 @@ INTEGRATION_CLI_METHODS: Final[tuple[str, ...]] = (
     DELIVERY_LABEL_AUDIT,
     DELIVERY_PROVE,
     DELIVERY_TASK_ASSESSMENT,
+    DELIVERY_WAIVE_CRITERION,
     DELIVERY_RECONCILE_MERGE,
     DELIVERY_READ_BACK_MERGE,
+    DELIVERY_CLOSE_LANDED,
+    DELIVERY_REBIND_SQUASHED,
     DELIVERY_OPEN_APPROVAL,
     DELIVERY_SEAL_APPROVAL,
     DELIVERY_RECORD_EVIDENCE,
@@ -130,6 +138,16 @@ _GATES_HELP: Final = (
     'JSON file {"gates": [GateSpec, ...]} naming the gates the criteria reference; '
     "omit to rerun the gates of the Task's earlier proof."
 )
+_WAIVE_CRITERION_HELP: Final = "Id of the Task's criterion to waive, such as CR-0320-2."
+_WAIVE_REASON_HELP: Final = "Why the criterion no longer needs proving."
+_RERUN_FAILED_HELP: Final = (
+    "Prove again each criterion whose proof at the branch head failed, instead of "
+    "answering the failure."
+)
+_WAIVE_DECISION_HELP: Final = (
+    "Key of the standing decision the waiver leans on (e.g. D86); required when "
+    "verify.waiver_mode is C."
+)
 _OUT_HELP: Final = "Write the assessment document here, for task complete --assessment."
 _REFS_HELP: Final = "JSON file carrying base, exit_refs and diagnostic_ref."
 _HEAD_HELP: Final = "Full sha of the landed commit to adopt."
@@ -147,6 +165,10 @@ _NOTE_HELP: Final = "Why the label is pinned (at least 20 characters)."
 _OBSERVATION_HELP: Final = (
     "JSON file carrying a host merge observation; omit to have the daemon read the "
     "target branch back from the repository."
+)
+_CLOSE_KEYS_HELP: Final = (
+    "Key of a Batch to close (repeatable); omit to close every open Batch of every "
+    "active Milestone."
 )
 _APPROVAL_SPEC_HELP: Final = "JSON file carrying requested_by, steps and accepted_binding."
 _BUNDLE_OUT_HELP: Final = "Write the acceptance bundle here, for milestone accept."
@@ -269,6 +291,7 @@ def _answer(
     urn: str,
     revision: int | None,
     failed_guard: str | None = None,
+    revision_after: int | None = None,
 ) -> None:
     """Print *answer* as its envelope and exit with the envelope's status.
 
@@ -279,13 +302,15 @@ def _answer(
         urn: The subject the request addressed.
         revision: The anchor the request was sent under, or ``None`` for a read.
         failed_guard: The answer field that did not hold, or ``None``.
+        revision_after: The subject's revision the answer reports, or ``None``
+            when it reports none.
     """
     envelope = answer_envelope(
         answer,
         operation=operation,
         urn=urn,
         revision_before=revision,
-        revision_after=None,
+        revision_after=revision_after,
         failed_guard=failed_guard,
     )
     emit_envelope(envelope, urn=urn, flags=ctx.obj)
@@ -455,6 +480,53 @@ def task_assess_cmd(
         revision=None,
         failed_guard=None if answer["answer"]["completable"] else "completable",
     )
+
+
+@task_app.command("waive-criterion")
+def task_waive_criterion_cmd(
+    ctx: typer.Context,
+    urn: Annotated[str, typer.Argument(help=_TASK_URN_HELP)],
+    criterion_id: Annotated[str, typer.Argument(help=_WAIVE_CRITERION_HELP)],
+    reason: Annotated[str, typer.Option("--reason", help=_WAIVE_REASON_HELP)],
+    expected_revision: _TaskRevision,
+    idempotency_key: _Key,
+    actor: _Actor,
+    decision: Annotated[str | None, typer.Option("--decision", help=_WAIVE_DECISION_HELP)] = None,
+) -> None:
+    """Waive one criterion of a promoted Task, so its Batch closes without proving it.
+
+    Allowed from PLANNED through READY_TO_INTEGRATE, and only to an operator: --actor
+    must be an OP- principal such as OP-0001, or the waiver is refused as
+    waiver_operator_required. A criterion graded accepted-risk is refused, and the
+    same waiver sent again changes nothing.
+    """
+    params: dict[str, Any] = {
+        "urn": urn,
+        "criterion_id": criterion_id,
+        "reason": reason,
+        "expected_revision": expected_revision,
+        "actor": actor,
+        "idempotency_key": idempotency_key,
+    }
+    if decision is not None:
+        params["decision_ref"] = decision
+    answer = _send(
+        ctx,
+        DELIVERY_WAIVE_CRITERION,
+        params,
+        urn=urn,
+        verb_text="task waive-criterion",
+        key=idempotency_key,
+    )
+    if answer is not None:
+        _answer(
+            ctx,
+            answer,
+            operation=DELIVERY_WAIVE_CRITERION,
+            urn=urn,
+            revision=expected_revision,
+            revision_after=answer["revision"],
+        )
 
 
 # ---- Batch ------------------------------------------------------------------
@@ -632,6 +704,33 @@ def batch_reconcile_cmd(
         _answer(ctx, answer, operation=method, urn=urn, revision=expected_revision)
 
 
+@batch_app.command("close-landed")
+def batch_close_landed_cmd(
+    ctx: typer.Context,
+    actor: _Actor,
+    batch_keys: Annotated[list[str] | None, typer.Argument(help=_CLOSE_KEYS_HELP)] = None,
+    rerun_failed: Annotated[bool, typer.Option("--rerun-failed", help=_RERUN_FAILED_HELP)] = False,
+) -> None:
+    """Close each ready Batch whose Tasks' commits are on its phase branch.
+
+    The daemon pins the branch head, walks the Batch to COMPLETED and completes its
+    ready Tasks; a Batch it leaves open is listed with why: a criterion still being
+    proved, or the criterion whose proof at the head failed.
+    """
+    keys = list(batch_keys or ())
+    subject = ", ".join(keys) or "open batches"
+    answer = _send(
+        ctx,
+        DELIVERY_CLOSE_LANDED,
+        {"actor": actor, "batch_keys": keys, "rerun_failed": rerun_failed},
+        urn=subject,
+        verb_text="batch close-landed",
+        key=None,
+    )
+    if answer is not None:
+        _answer(ctx, answer, operation=DELIVERY_CLOSE_LANDED, urn=subject, revision=None)
+
+
 # ---- Milestone --------------------------------------------------------------
 
 
@@ -761,6 +860,7 @@ def record_evidence_cmd(
 __all__ = [
     "INTEGRATION_CLI_METHODS",
     "batch_adopt_landed_cmd",
+    "batch_close_landed_cmd",
     "batch_integrate_cmd",
     "batch_label_cmd",
     "batch_reconcile_cmd",

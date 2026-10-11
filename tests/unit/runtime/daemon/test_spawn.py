@@ -427,7 +427,7 @@ def test_win32_request_daemon_shutdown_dials_the_runtime_dir_pipe(
     result = spawn_mod.request_daemon_shutdown(tmp_path / "tree-b", drain=False, timeout_seconds=0)
 
     assert result == {"accepted": True}
-    assert calls == [("pipe-for-tree-b", 1)]
+    assert calls == [("pipe-for-tree-b", int(spawn_mod.STOP_CONCLUDE_SECONDS * 1000))]
 
 
 def test_win32_request_daemon_shutdown_absent_pipe_returns_none(

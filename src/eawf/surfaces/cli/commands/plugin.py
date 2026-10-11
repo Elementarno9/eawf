@@ -40,6 +40,7 @@ produces a byte-identical tree. Hand-edits abort with exit 8 unless
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -168,12 +169,26 @@ def _claim_detectors() -> dict[RuntimeId, ClaimDetector]:
     return {"claude-code": _claude, "codex": _codex, "opencode": _opencode}
 
 
+def _stdin_is_tty() -> bool:
+    """Return whether stdin is a terminal a confirmation prompt can read.
+
+    A module-level seam so tests, whose runner never provides a terminal,
+    can drive the interactive branch.
+    """
+    return sys.stdin.isatty()
+
+
 def _confirm_runtime_conflict(conflict: RuntimeSetConflictError, *, flags: GlobalFlags) -> bool:
     """Return ``True`` when the operator acknowledges *conflict* at the prompt.
 
-    ``--no-input`` refuses with a :exc:`UserError` (``kind="InvalidInput"``)
-    so the operator can pick one install before retrying; otherwise a
+    ``--no-input``, or a stdin that is not a terminal, refuses with a
+    :exc:`UserError` (``kind="InvalidInput"``) naming ``--force``, so the
+    operator can pick one install before retrying; otherwise a
     :mod:`questionary` confirmation decides, and ``No`` aborts cleanly.
+
+    Raises:
+        typer.Exit: Through :func:`~eawf.surfaces.cli.errors.emit_error`
+            when no prompt can be shown.
     """
     claude_claimed = any(claim.runtime == "claude-code" for claim in conflict.claims)
     remedy = (
@@ -181,16 +196,18 @@ def _confirm_runtime_conflict(conflict: RuntimeSetConflictError, *, flags: Globa
         if claude_claimed
         else "remove the user-scope install first"
     )
-    if flags.no_input:
+    if flags.no_input or not _stdin_is_tty():
+        # The prompt toolkit behind questionary crashes with an OSError on a
+        # non-terminal stdin, so a piped or scripted run gets the --no-input
+        # refusal instead of a traceback.
+        retry = "without --no-input" if flags.no_input else "from a terminal"
         cli_errors.emit_error(
             cli_errors.UserError(
-                f"{conflict}. Rerun without --no-input to confirm, pass --force "
-                f"to acknowledge, or {remedy}.",
+                f"{conflict}. Rerun {retry} to confirm, pass --force to acknowledge, or {remedy}.",
                 kind="InvalidInput",
             ),
             flags=flags,
         )
-        return False
     import questionary
 
     proceed = questionary.confirm(

@@ -16,7 +16,11 @@ created and the Task started under it, each through the registered
 lifecycle verb so every guard, receipt and published event is the one an
 operator's own ``task claim``/``task start``/``run create`` would produce.
 The Run is then driven by :func:`dispatch_run`, which answers once the
-worker is announced and leaves the turn to the root's supervisor.
+worker is announced and leaves the turn to the root's supervisor. A Run
+whose dispatch is refused once it exists is failed with the refusal's
+code and its lease withdrawn, so the Task can be dispatched again; only a
+Run the governor queued or holds is left waiting. A dispatch that raised
+anything else, or was cancelled, fails its Run the same way.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ import asyncio
 import logging
 import re
 import subprocess
+import weakref
 from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -51,7 +56,7 @@ from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.admission import EconomicsPolicyError, load_economics
 from eawf.runtime.daemon.epoch2_recovery import publish_projection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
-from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY
+from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY, commit_row_write
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.delivery import stored_tasks
 from eawf.runtime.daemon.methods.domain_guards import task_run_open
@@ -67,7 +72,8 @@ from eawf.runtime.daemon.native_dispatch import (
 )
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 from eawf.runtime.daemon.provider_facts import installed_provider_facts
-from eawf.runtime.daemon.run_supervisor import sweep_after_boot
+from eawf.runtime.daemon.run_supervisor import fail_unlaunched_run, sweep_after_boot
+from eawf.runtime.mcp.grant import SEMANTIC_TOOLS_CAPABILITY, certifies_semantic_tools
 from eawf.workflow.runtime.task_request import compile_task_request
 
 logger = logging.getLogger(__name__)
@@ -79,6 +85,9 @@ TASK_DISPATCH_METHOD: Final = "runtime.task.dispatch"
 _TASK_CLAIM_METHOD: Final = "domain.task.claim"
 _TASK_START_METHOD: Final = "domain.task.start"
 _RUN_CREATE_METHOD: Final = "domain.run.create"
+
+#: The event a retry's rebind of a RUNNING Task onto its new Run carries.
+_TASK_RUN_REBOUND_EVENT: Final = "domain.task.run_rebound"
 
 #: The runtime adapters a Task can be dispatched to, beside the provider id
 #: their shipped launcher's driver manifest names.
@@ -97,6 +106,29 @@ _DISPATCHABLE_STATUSES: Final = frozenset(
 
 _RUN_KEY: Final = re.compile(r"^RUN-(\d{8})$")
 
+#: A refusal's wire form, ``validation_failed: <code>: <detail>``.
+_REFUSAL: Final = re.compile(r"^validation_failed: ([a-z0-9_]{1,64}): ")
+
+#: The refusals that leave a created Run waiting on the governor rather than
+#: refused: the queue admits it later, so it is not failed.
+_WAITING_REFUSALS: Final = frozenset(
+    {DispatchRefusal.ADMISSION_QUEUED.value, DispatchRefusal.DISPATCH_HELD.value}
+)
+
+#: The codes a created Run is failed with when its dispatch ended in something
+#: other than a refusal: a refusal that names no code, a cancelled request and an
+#: exception the driver did not map.
+_REFUSED_CODE: Final = "dispatch_refused"
+_CANCELLED_CODE: Final = "dispatch_cancelled"
+_FAILED_CODE: Final = "dispatch_failed"
+
+#: One lock per root, held from the guess of a new Run's key until that Run is
+#: created. The key is one past every key the tree holds, so two dispatches
+#: guessing at once would guess the same one.
+_RUN_ALLOCATION: Final[weakref.WeakKeyDictionary[Epoch2RootContext, asyncio.Lock]] = (
+    weakref.WeakKeyDictionary()
+)
+
 
 class TaskDispatchRefusal(StrEnum):
     """The stable codes a Task dispatch is refused with before any Run exists."""
@@ -107,6 +139,7 @@ class TaskDispatchRefusal(StrEnum):
     PROVIDER_UNSUPPORTED = "dispatch_provider_unsupported"
     BASE_UNRESOLVED = "dispatch_base_unresolved"
     BUDGET_REQUIRED = "dispatch_budget_required"
+    SEMANTIC_TOOLS_UNCERTIFIED = "dispatch_semantic_tools_uncertified"
 
 
 class TaskDispatchParams(BaseModel):
@@ -288,7 +321,16 @@ def next_run_urn(context: Epoch2RootContext, task: Task) -> QualifiedUrn:
         repository_key=task.urn.repository_key,
         kind=EntityKind.RUN,
         entity_key=format_entity_key(EntityKind.RUN, max(ordinals, default=0) + 1),
+        single_key=task.urn.single_key,
     )
+
+
+def run_allocation(context: Epoch2RootContext) -> asyncio.Lock:
+    """Return the lock a dispatch holds from guessing its Run's key until it creates it."""
+    lock = _RUN_ALLOCATION.get(context)
+    if lock is None:
+        lock = _RUN_ALLOCATION[context] = asyncio.Lock()
+    return lock
 
 
 def dispatch_cursor(context: Epoch2RootContext, urn: QualifiedUrn) -> int:
@@ -327,8 +369,9 @@ def _compile(
 
     Raises:
         DaemonValidationError: The economics policy would never admit the
-            Run, or the base, the provider layers, the bindings or the
-            compiler refused the request.
+            Run, the base, the provider layers, the bindings or the compiler
+            refused the request, or no binding of the provider is certified
+            to carry the semantic tools.
     """
     tree_root = context.identity.tree_root
     now = datetime.now(UTC)
@@ -347,6 +390,7 @@ def _compile(
             config=facts.config,
             registry=facts.registry,
             bindings=facts.bindings,
+            unbound=facts.unbound,
             budget=args.budget,
             base=base,
             actor=args.actor,
@@ -358,6 +402,16 @@ def _compile(
             f"validation_failed: schema_validation_failed: task {task.key} compiles to no "
             f"dispatch request; check {', '.join(fields)}"
         ) from error
+    # A Run whose certification withholds the semantic tools is granted none,
+    # so it could neither land its edit nor file its report: it would only fail.
+    if not any(certifies_semantic_tools(binding.capabilities) for binding in request.bindings):
+        raise _refused(
+            TaskDispatchRefusal.SEMANTIC_TOOLS_UNCERTIFIED,
+            f"runtime {adapter} is certified without {SEMANTIC_TOOLS_CAPABILITY}, so a Run of "
+            f"task {task.key} would be granted no tool to land its edit or file its report; "
+            f"run `eawf runtime certify {adapter} --task {task.key}` to walk the canary that "
+            "observes them",
+        )
     return request
 
 
@@ -384,6 +438,52 @@ def _task_now(context: Epoch2RootContext, task: Task) -> Task:
         return next(row for row in stored_tasks(session) if row.urn == task.urn)
 
 
+def _rebind_run(
+    context: Epoch2RootContext, task: Task, run_ref: str, *, actor: PrincipalKey, now: datetime
+) -> Envelope | None:
+    """Point a RUNNING Task at the Run a retry dispatched it under.
+
+    The daemon hands a Task back to PLANNED when its Run ends, but a Task
+    whose requeue was refused, or whose Run a host ended, stays RUNNING; a
+    retry adds a Run without starting the Task again, so no lifecycle edge
+    moves its ``active_run_ref``, and left alone it would keep naming the
+    ended Run while the new one does the work.
+
+    Returns:
+        The firehose row of the rebind, or ``None`` when the Task already
+        names *run_ref* or is no longer RUNNING.
+    """
+    with context.session([task.urn]) as session:
+        current = next(row for row in stored_tasks(session) if row.urn == task.urn)
+        if current.status is not TaskStatus.RUNNING or str(current.active_run_ref) == run_ref:
+            return None
+        rebound = Task.model_validate(
+            {
+                **current.model_dump(mode="json"),
+                "active_run_ref": run_ref,
+                "revision": current.revision + 1,
+                "updated_at": now,
+            }
+        )
+        return commit_row_write(
+            session,
+            collection=Epoch2Collection.TASK,
+            record_key=rebound.key,
+            row=rebound.model_dump(mode="json"),
+            event_name=_TASK_RUN_REBOUND_EVENT,
+            event_fields={
+                "entity_ref": str(rebound.urn),
+                "to_status": rebound.status.value,
+                "revision_after": rebound.revision,
+                "actor": actor,
+                "run_ref": run_ref,
+                "replaced_run_ref": str(current.active_run_ref),
+            },
+            compaction=None,
+            now=now,
+        )
+
+
 def _publisher(ctx: MethodContext) -> Callable[[Envelope], bool]:
     """Return where the dispatched Run's background transitions are published."""
 
@@ -393,63 +493,128 @@ def _publisher(ctx: MethodContext) -> Callable[[Envelope], bool]:
     return publish
 
 
+def _ending_code(error: BaseException) -> str:
+    """Return the code a Run whose dispatch ended in *error* is failed with."""
+    if isinstance(error, DaemonValidationError):
+        match = _REFUSAL.match(str(error))
+        return _REFUSED_CODE if match is None else match.group(1)
+    if isinstance(error, asyncio.CancelledError):
+        return _CANCELLED_CODE
+    return _FAILED_CODE
+
+
+async def _fail_refused_run(
+    context: Epoch2RootContext,
+    urn: QualifiedUrn,
+    error: BaseException,
+    *,
+    actor: PrincipalKey,
+    publish: Callable[[Envelope], bool],
+) -> None:
+    """Fail the Run a dispatch created and then lost, unless it waits on the queue.
+
+    The Run is this dispatch's own, so leaving it queued -- possibly with a
+    leased workspace -- would keep its Task from ever being dispatched again.
+    That holds whatever ended the dispatch: a refusal, an exception the driver
+    did not map, or the request being cancelled.
+    """
+    code = _ending_code(error)
+    if code in _WAITING_REFUSALS:
+        return
+    envelopes = await asyncio.to_thread(
+        fail_unlaunched_run,
+        context,
+        urn,
+        actor=actor,
+        code=code.replace("_", "-"),
+        detail=str(error) or type(error).__name__,
+        now=datetime.now(UTC),
+    )
+    for envelope in envelopes:
+        publish(envelope)
+
+
 @native_mutator(TASK_DISPATCH_METHOD)
 async def _dispatch_task(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
-    """Claim, create, start and dispatch, refusing a settled Task before any Run exists."""
+    """Claim, create, start and dispatch, refusing a settled Task before any Run exists.
+
+    The Task is judged, its Run's key guessed and that Run created under the
+    root's allocation lock, so a parallel dispatch neither guesses the same key
+    nor sees the Task without the Run this one just opened for it. Each
+    idempotency key names the Task it moves, so a key guessed again after a
+    refused create can never replay another Task's claim.
+    """
     args = _params(params)
     routing = {REPO_ROOT_PARAM: params[REPO_ROOT_PARAM]} if REPO_ROOT_PARAM in params else {}
     context = ctx.native_root_context(authority.root)
     publish = _publisher(ctx)
     await sweep_after_boot(context, actor=args.actor, publish=publish)
     urn = await asyncio.to_thread(task_urn, document_path(authority), args.task)
-    task = await asyncio.to_thread(_dispatchable_task, context, urn)
-    adapter = await asyncio.to_thread(_adapter, context.identity.tree_root.parent, args.provider)
-    request = await asyncio.to_thread(_compile, context, task, args, adapter)
-    run_ref, run_key = str(request.urn), request.urn.entity_key
-    if task.status is TaskStatus.PLANNED:
+    async with run_allocation(context):
+        task = await asyncio.to_thread(_dispatchable_task, context, urn)
+        adapter = await asyncio.to_thread(
+            _adapter, context.identity.tree_root.parent, args.provider
+        )
+        request = await asyncio.to_thread(_compile, context, task, args, adapter)
+        run_ref, run_key = str(request.urn), request.urn.entity_key
+        if task.status is TaskStatus.PLANNED:
+            await _lifecycle(
+                ctx,
+                routing,
+                _TASK_CLAIM_METHOD,
+                {
+                    "urn": str(task.urn),
+                    "expected_revision": task.revision,
+                    "idempotency_key": f"task-dispatch-{task.key}-r{task.revision}-claim",
+                    "actor": args.actor,
+                },
+            )
         await _lifecycle(
             ctx,
             routing,
-            _TASK_CLAIM_METHOD,
+            _RUN_CREATE_METHOD,
             {
-                "urn": str(task.urn),
-                "expected_revision": task.revision,
-                "idempotency_key": f"task-dispatch-{run_key}-claim",
+                "urn": run_ref,
+                "expected_revision": await asyncio.to_thread(dispatch_cursor, context, task.urn),
+                "idempotency_key": f"task-dispatch-{task.key}-{run_key}-create",
                 "actor": args.actor,
+                "spec": {
+                    "key": run_key,
+                    "scope": request.compile_request.run_scope.model_dump(mode="json"),
+                },
             },
         )
-    await _lifecycle(
-        ctx,
-        routing,
-        _RUN_CREATE_METHOD,
-        {
-            "urn": run_ref,
-            "expected_revision": await asyncio.to_thread(dispatch_cursor, context, task.urn),
-            "idempotency_key": f"task-dispatch-{run_key}-create",
-            "actor": args.actor,
-            "spec": {
-                "key": run_key,
-                "scope": request.compile_request.run_scope.model_dump(mode="json"),
-            },
-        },
-    )
-    current = await asyncio.to_thread(_task_now, context, task)
-    if current.status is TaskStatus.CLAIMED:
-        await _lifecycle(
-            ctx,
-            routing,
-            _TASK_START_METHOD,
-            {
-                "urn": str(task.urn),
-                "expected_revision": current.revision,
-                "idempotency_key": f"task-dispatch-{run_key}-start",
-                "actor": args.actor,
-                "updates": {"active_run_ref": run_ref},
-            },
+    try:
+        current = await asyncio.to_thread(_task_now, context, task)
+        if current.status is TaskStatus.CLAIMED:
+            await _lifecycle(
+                ctx,
+                routing,
+                _TASK_START_METHOD,
+                {
+                    "urn": str(task.urn),
+                    "expected_revision": current.revision,
+                    "idempotency_key": f"task-dispatch-{run_key}-start",
+                    "actor": args.actor,
+                    "updates": {"active_run_ref": run_ref},
+                },
+            )
+        else:
+            rebind = await asyncio.to_thread(
+                _rebind_run, context, current, run_ref, actor=args.actor, now=datetime.now(UTC)
+            )
+            if rebind is not None:
+                publish(rebind)
+        answer = await dispatch_run(context, request, now=datetime.now(UTC), publish=publish)
+    except BaseException as error:
+        # Shielded, so a second cancellation cannot stop the Run's ending half-way;
+        # the original error, cancellation included, is raised once it is written.
+        await asyncio.shield(
+            _fail_refused_run(context, request.urn, error, actor=args.actor, publish=publish)
         )
-    answer = await dispatch_run(context, request, now=datetime.now(UTC), publish=publish)
+        raise
     logger.info(
         f"task dispatched task={task.key} run={run_key} adapter={adapter} "
         f"stage={answer.stage.value}"

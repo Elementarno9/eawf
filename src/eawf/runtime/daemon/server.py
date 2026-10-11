@@ -332,6 +332,9 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     req_id = payload.get("id")
     method = payload["method"]
     params = payload.get("params", {}) or {}
+    if ctx.stopping and method in PROBE_METHODS:
+        # a stopping daemon is not ready: a starter waits for it to exit instead
+        return _error(req_id, DAEMON_SHUTTING_DOWN, "daemon shutting down")
     if method not in SUBSCRIBE_METHODS:
         ctx.touch_activity()
     try:

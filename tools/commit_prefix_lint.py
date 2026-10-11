@@ -149,11 +149,12 @@ Enforces:
    and trailer grammar of every commit in a revision range without
    reading state; see ``commit_grammar_history.py``.
 
-10. Pushed commits carry the Batch regime. ``--pre-push-lint``, the
+10. Pushed commits carry the per-Batch regime. ``--pre-push-lint``, the
    ``pre-push``-stage hook, lints every commit in the pushed range with
-   :func:`batch_commit_error`: one ``Batch:`` trailer per non-``state``
-   commit, optional ``Task:`` trailers of that Batch, and a ``state:``
-   commit confined to committed state paths. Commits stay free locally,
+   :func:`pushed_commit_error`: every non-``state`` commit names at least
+   one Task by ``Task:`` trailer and, when it names several, the one Batch
+   they all belong to by ``Batch:`` trailer; a ``state:`` commit is
+   confined to committed state paths. Commits stay free locally,
    so scratch history is refused only when it is pushed.
 
 Checks 1-7 run when the first argument is a commit-message file path,
@@ -236,8 +237,8 @@ _WAVE_TRAILER_RE = re.compile(
 # package, so tests/unit/test_commit_prefix_lint_epoch2.py pins the copy.
 _TASK_TRAILER_NAME = "Task"
 _TASK_TRAILER_RE = re.compile(rf"^{_TASK_TRAILER_NAME}:\s+(?P<key>\S+)\s*$", re.MULTILINE)
-# A pushed commit names the one Batch it delivers; its Task trailers, when
-# present, only narrow which Tasks of that Batch it carries.
+# A pushed commit names each Task it delivers; a Batch trailer names the Batch
+# they belong to, and is required once a commit names more than one.
 _BATCH_TRAILER_NAME = "Batch"
 _BATCH_TRAILER_RE = re.compile(rf"^{_BATCH_TRAILER_NAME}:\s+(?P<key>\S+)\s*$", re.MULTILINE)
 _BATCH_KEY_RE = re.compile(r"^BAT-\d{4}$")
@@ -500,7 +501,7 @@ def task_trailer_position_error(text: str) -> str | None:
         when anything but co-author trailers follows it; ``None`` when the
         message carries no Task trailer, carries one in place, or carries a
         ``Batch`` trailer, whose commit may name several Tasks of its Batch
-        (see :func:`batch_commit_error`).
+        (see :func:`pushed_commit_error`).
     """
     if _BATCH_TRAILER_RE.search(text) is not None:
         return None
@@ -549,6 +550,15 @@ def _ref_key(ref: object) -> str | None:
     return ref.rsplit("/", 1)[-1] if isinstance(ref, str) and ref else None
 
 
+def _batch_ref(row: dict[str, Any]) -> object:
+    # A Task compacted into the ledger keeps its fields inside the envelope's
+    # payload, while a document row holds them at the top level.
+    payload = row.get("payload")
+    if "batch_ref" not in row and isinstance(payload, dict):
+        return payload.get("batch_ref")
+    return row.get("batch_ref")
+
+
 def load_native_records(generation: Path) -> NativeRecords:
     """Read the native Batches and Task memberships of *generation*.
 
@@ -566,21 +576,21 @@ def load_native_records(generation: Path) -> NativeRecords:
     tasks = _collection_rows(generation, "task")
     return NativeRecords(
         batch_keys=frozenset(key for key in batches if _BATCH_KEY_RE.match(key)),
-        task_batches={key: _ref_key(row.get("batch_ref")) for key, row in tasks.items()},
+        task_batches={key: _ref_key(_batch_ref(row)) for key, row in tasks.items()},
     )
 
 
-def batch_commit_error(
+def pushed_commit_error(
     message: str, paths: Iterable[str], records: NativeRecords | None
 ) -> str | None:
-    """Return why one pushed commit breaks the Batch regime, or ``None``.
+    """Return why one pushed commit breaks the per-Batch regime, or ``None``.
 
     A ``state:`` commit carries only committed state paths. Any other commit
-    is ``<type>: <summary>`` with exactly one ``Batch: BAT-<NNNN>`` trailer
-    naming a Batch of the canonical generation, in any status: the Batch
-    moves only when it integrates, which is after its commits are pushed.
-    ``Task`` trailers are optional; each one present must name a Task of
-    that Batch. No per-Task or per-wave commit cap applies.
+    is ``<type>: <summary>`` naming at least one Task of the canonical
+    generation by ``Task: <KEY>`` trailer. A commit naming one Task may omit
+    the ``Batch: BAT-<NNNN>`` trailer; a commit naming several carries
+    exactly one, and every Task it names belongs to that Batch, which may be
+    in any status. No per-Task or per-wave commit cap applies.
 
     Args:
         message: The full commit message.
@@ -598,23 +608,50 @@ def batch_commit_error(
     if conventional.group("type") == "state":
         strays = _state_strays(list(paths), epoch2=records is not None)
         return None if not strays else f"state commit touches non-state paths: {strays}"
+    task_keys = [match.group("key") for match in _TASK_TRAILER_RE.finditer(message)]
     batch_keys = [match.group("key") for match in _BATCH_TRAILER_RE.finditer(message)]
-    if len(batch_keys) != 1:
-        found = "no" if not batch_keys else f"{len(batch_keys)} ({', '.join(batch_keys)})"
-        return f"carries {found} {_BATCH_TRAILER_NAME} trailers; a commit names exactly one Batch"
-    batch = batch_keys[0]
-    if not _BATCH_KEY_RE.match(batch):
-        return f"{_BATCH_TRAILER_NAME} trailer {batch!r} is not a Batch key (BAT-<NNNN>)"
+    if not task_keys:
+        return f"carries no {_TASK_TRAILER_NAME} trailers; a commit names at least one Task"
+    if len(task_keys) > 1 and not batch_keys:
+        return (
+            f"carries {len(task_keys)} ({', '.join(task_keys)}) {_TASK_TRAILER_NAME} trailers "
+            f"without a {_BATCH_TRAILER_NAME} trailer; a commit naming several Tasks names "
+            "their Batch"
+        )
+    repeated = sorted({key for key in task_keys if task_keys.count(key) > 1})
+    if repeated:
+        return f"names {_TASK_TRAILER_NAME} {repeated[0]!r} twice; name each Task once"
     if records is None:
-        return f"{_BATCH_TRAILER_NAME} trailer {batch!r}: the canonical root is not marked epoch 2"
-    if batch not in records.batch_keys:
-        return f"{_BATCH_TRAILER_NAME} trailer {batch!r} names no Batch of the canonical generation"
-    for match in _TASK_TRAILER_RE.finditer(message):
-        task = match.group("key")
+        return (
+            f"{_TASK_TRAILER_NAME} trailer {task_keys[0]!r}: the canonical root is not marked "
+            "epoch 2"
+        )
+    for task in task_keys:
         if task not in records.task_batches:
             return (
                 f"{_TASK_TRAILER_NAME} trailer {task!r} names no Task of the canonical generation"
             )
+    return _batch_trailer_error(batch_keys, task_keys, records)
+
+
+def _batch_trailer_error(
+    batch_keys: list[str], task_keys: list[str], records: NativeRecords
+) -> str | None:
+    # A single-Task commit may omit the Batch trailer; one that is present must
+    # name the Batch every Task of the commit belongs to.
+    if not batch_keys:
+        return None
+    if len(batch_keys) > 1:
+        return (
+            f"carries {len(batch_keys)} ({', '.join(batch_keys)}) {_BATCH_TRAILER_NAME} "
+            "trailers; a commit names at most one Batch"
+        )
+    batch = batch_keys[0]
+    if not _BATCH_KEY_RE.match(batch):
+        return f"{_BATCH_TRAILER_NAME} trailer {batch!r} is not a Batch key (BAT-<NNNN>)"
+    if batch not in records.batch_keys:
+        return f"{_BATCH_TRAILER_NAME} trailer {batch!r} names no Batch of the canonical generation"
+    for task in task_keys:
         owner = records.task_batches[task]
         if owner != batch:
             return (

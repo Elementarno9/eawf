@@ -353,7 +353,7 @@ def test_command_exit_zero_explicit_timeout_wins_over_class(
         stderr="",
     )
     with patch(
-        "eawf.workflow.audit_dsl.registry.subprocess.run",
+        "eawf.workflow.audit_dsl.registry._run_in_group",
         return_value=completed,
     ) as mocked:
         result = _run_command_check(
@@ -385,7 +385,7 @@ def test_command_exit_zero_marks_unavailable_fingerprints_as_none(
         patch("eawf.workflow.audit_dsl.registry._runner_fingerprint", return_value=None),
         patch("eawf.workflow.audit_dsl.registry._environment_fingerprint", return_value=None),
         patch(
-            "eawf.workflow.audit_dsl.registry.subprocess.run",
+            "eawf.workflow.audit_dsl.registry._run_in_group",
             return_value=completed,
         ),
     ):
@@ -436,7 +436,7 @@ def test_command_exit_zero_timeout_preserves_captured_output(
     )
     freshness = GateFreshnessInput(full_log_ref="artifact:gate/GATE-timeout")
     with patch(
-        "eawf.workflow.audit_dsl.registry.subprocess.run",
+        "eawf.workflow.audit_dsl.registry._run_in_group",
         side_effect=error,
     ):
         result = _run_command_check(
@@ -491,7 +491,7 @@ def test_command_exit_zero_w51_output_result_is_bounded_and_digest_complete(
         full_log_ref="artifact:gate/GATE-W51",
     )
     with patch(
-        "eawf.workflow.audit_dsl.registry.subprocess.run",
+        "eawf.workflow.audit_dsl.registry._run_in_group",
         return_value=completed,
     ):
         result = _run_command_check(
@@ -555,7 +555,7 @@ def test_command_exit_zero_digests_declared_collection_and_residual_manifests(
     )
 
     with patch(
-        "eawf.workflow.audit_dsl.registry.subprocess.run",
+        "eawf.workflow.audit_dsl.registry._run_in_group",
         return_value=completed,
     ):
         result = _run_command_check(
@@ -591,7 +591,7 @@ def test_command_exit_zero_fails_when_declared_manifest_is_missing(
     )
 
     with patch(
-        "eawf.workflow.audit_dsl.registry.subprocess.run",
+        "eawf.workflow.audit_dsl.registry._run_in_group",
         return_value=completed,
     ):
         result = _run_command_check(
@@ -649,7 +649,7 @@ def test_command_exit_zero_fails_manifest_digest_mismatch(
     )
 
     with patch(
-        "eawf.workflow.audit_dsl.registry.subprocess.run",
+        "eawf.workflow.audit_dsl.registry._run_in_group",
         return_value=completed,
     ):
         result = _run_command_check(

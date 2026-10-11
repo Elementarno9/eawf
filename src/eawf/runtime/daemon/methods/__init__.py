@@ -149,6 +149,9 @@ class MethodContext:
             :func:`eawf.runtime.daemon.server._process_frame` and consumed by
             :class:`eawf.runtime.daemon.idle.IdleTimeoutWatchdog` to gate the
             idle-timeout shutdown.
+        stopping: Whether ``daemon.shutdown`` began draining; a stopping
+            daemon refuses readiness probes, so a starter waits for it to
+            exit rather than attaching to it.
     """
 
     started_at: str
@@ -165,6 +168,7 @@ class MethodContext:
     wal_dir: Any = field(default=None)
     idempotency_cache: Any = field(default=None)
     last_activity: float = field(default_factory=time.monotonic)
+    stopping: bool = False
     #: Per-mutation in-flight telemetry: mutation_id ->
     #: :class:`MutationInFlight`. Populated at the in_flight increment,
     #: cleared at decrement; ``daemon.status`` projects it and the
@@ -390,6 +394,7 @@ def register(name: str) -> Callable[[Handler], Handler]:
 _METHOD_MODULES: Final[tuple[str, ...]] = (
     "bulk",
     "campaign",
+    "campaign_read",
     "campaign_run",
     "daemon",
     "budget_notice",
@@ -401,10 +406,13 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "delivery_acceptance",
     "delivery_approval",
     "delivery_assembly",
+    "delivery_close",
     "delivery_completion",
     "delivery_label",
     "delivery_landed",
     "delivery_proof",
+    "delivery_rebind",
+    "delivery_waiver",
     "dispatch_queue",
     "doctor",
     "domain",
@@ -453,6 +461,7 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "state",
     "state_subscribe",
     "state_upkeep",
+    "task_dispatch",
     "urn_rekey",
     "wal_admin",
     "workspace_lease",

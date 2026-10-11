@@ -466,7 +466,7 @@ _RETIRED_LEGACY: Final = (
 
 def test_surf_081_the_exemptions_hold_their_pinned_count() -> None:
     verbs = {row.verb for row in verb_closure.ANCHOR_EXEMPTIONS}
-    assert len(verb_closure.ANCHOR_EXEMPTIONS) == 93
+    assert len(verb_closure.ANCHOR_EXEMPTIONS) == 95
     assert "record append" in verbs
     assert not any(verb.endswith("-legacy") for verb in verbs)
 
@@ -578,5 +578,8 @@ def test_a_retired_legacy_verb_exits_two(
     leaves: dict[str, click.Command], argv: tuple[str, ...]
 ) -> None:
     assert " ".join(argv[:2]) not in leaves
-    result = CliRunner().invoke(app, [*argv, "--actor", "OPERATOR", "--reason", "done"])
+    result = CliRunner().invoke(app, ["--json", *argv, "--actor", "OPERATOR", "--reason", "done"])
     assert result.exit_code == 2, result.output
+    envelope = orjson.loads(result.stdout)
+    assert envelope["data"]["kind"] == "LegacyOperationRemoved"
+    assert "eawf help upgrade-from-0.6" in envelope["message"]

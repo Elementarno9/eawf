@@ -399,7 +399,7 @@ def batch_message(run: BatchRun) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _scratch_commits(repo: Path, base: str, tip: str) -> list[ScratchCommit]:
+def scratch_commits(repo: Path, base: str, tip: str) -> list[ScratchCommit]:
     """Return the commits of ``base..tip``, oldest first.
 
     Raises:
@@ -510,7 +510,7 @@ def publish(repo: Path, *, membership: Membership, bind: Binder, now: datetime) 
         )
     tip = _git(repo, "rev-parse", "HEAD")
     base = _git(repo, "merge-base", tip, published)
-    plan = plan_publish(base, tip, _scratch_commits(repo, base, tip), membership.task_batches)
+    plan = plan_publish(base, tip, scratch_commits(repo, base, tip), membership.task_batches)
     _check_bindable(plan, membership.staged)
     try:
         head, rewritten, carried = _squash(repo, plan, staged=bool(membership.staged))
@@ -644,4 +644,5 @@ __all__ = [
     "plan_publish",
     "publish",
     "read_membership",
+    "scratch_commits",
 ]

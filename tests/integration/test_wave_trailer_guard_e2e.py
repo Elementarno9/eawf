@@ -7,8 +7,8 @@ The pure comparison is covered in ``tests/unit/test_commit_prefix_lint_trailers.
 
 ``--pre-push-lint`` runs over the same kind of scratch repository: free-form
 scratch commits are refused, and the range a publish squashes them into is
-accepted. ``eawf publish`` itself is modelled by its two git steps, a soft
-reset to the base and one commit per Batch, then the trailing state commit.
+accepted. A push is modelled by its two git steps, a soft reset to the
+base and one commit per Task, then the trailing state commit.
 """
 
 from __future__ import annotations
@@ -181,7 +181,7 @@ def test_main_pre_push_uses_the_environment(
 
 
 # ---------------------------------------------------------------------------
-# --pre-push-lint: scratch commits are refused until published as Batch commits
+# --pre-push-lint: scratch commits are refused until squashed into Task commits
 # ---------------------------------------------------------------------------
 
 _GENERATION_ID = "gen-0123456789abcdef"
@@ -226,11 +226,11 @@ def epoch2_scratch(scratch: Path) -> tuple[Path, str]:
 
 
 def _publish(root: Path, base: str, *trailers: str) -> str:
-    """Squash ``base..HEAD`` into one Batch commit plus the trailing state commit."""
+    """Squash ``base..HEAD`` into one Task commit plus the trailing state commit."""
     _git(root, "reset", "-q", "--soft", base)
-    _git(root, "commit", "-q", "-m", "feat: land the batch\n\n" + "\n".join(trailers))
+    _git(root, "commit", "-q", "-m", "feat: land the task\n\n" + "\n".join(trailers))
     _git(root, "add", ".ea")
-    _git(root, "commit", "-q", "-m", "state: record the published batch")
+    _git(root, "commit", "-q", "-m", "state: record the landed task")
     return _git(root, "rev-parse", "HEAD")
 
 
@@ -246,9 +246,9 @@ def test_pre_push_lint_refuses_scratch_then_accepts_the_published_range(
 
     assert code == 1
     assert diag.count("subject is not '<type>: <summary>'") == 3
-    assert "eawf publish" in diag
+    assert "a 'Task: <KEY>' trailer per Task it delivers" in diag
 
-    published = _publish(root, base, "Batch: BAT-0306", "Task: EAWF-0331", "Task: EAWF-0332")
+    published = _publish(root, base, "Task: EAWF-0331")
 
     assert guard.check_pushed_commits(
         {"PRE_COMMIT_FROM_REF": base, "PRE_COMMIT_TO_REF": published}, repo_root=root
@@ -258,11 +258,16 @@ def test_pre_push_lint_refuses_scratch_then_accepts_the_published_range(
 @pytest.mark.parametrize(
     ("trailers", "expected"),
     [
-        (("Task: EAWF-0331",), "carries no Batch trailers"),
-        (("Batch: BAT-0305", "Batch: BAT-0306"), "carries 2 (BAT-0305, BAT-0306)"),
+        ((), "carries no Task trailers"),
+        (("Task: EAWF-0331", "Task: EAWF-0332"), "carries 2 (EAWF-0331, EAWF-0332)"),
+        (("Batch: BAT-0305", "Batch: BAT-0306", "Task: EAWF-0321"), "carries 2 (BAT-0305"),
         (("Batch: BAT-0306", "Task: EAWF-0321"), "belongs to Batch 'BAT-0305'"),
+        (
+            ("Batch: BAT-0306", "Task: EAWF-0331", "Task: EAWF-0321"),
+            "Task trailer 'EAWF-0321' belongs to Batch 'BAT-0305', not 'BAT-0306'",
+        ),
     ],
-    ids=["no-batch", "two-batches", "foreign-task"],
+    ids=["no-trailer", "two-tasks", "two-batches", "foreign-task", "foreign-second-task"],
 )
 def test_pre_push_lint_refuses_a_malformed_publish(
     epoch2_scratch: tuple[Path, str], guard: Any, trailers: tuple[str, ...], expected: str
@@ -278,6 +283,17 @@ def test_pre_push_lint_refuses_a_malformed_publish(
     assert expected in diag
     # The trailing state commit is not the one refused.
     assert diag.count("\n") == 2
+
+
+def test_pre_push_lint_accepts_one_batch_commit_naming_each_of_its_tasks(
+    epoch2_scratch: tuple[Path, str], guard: Any
+) -> None:
+    root, base = epoch2_scratch
+    published = _publish(root, base, "Batch: BAT-0306", "Task: EAWF-0331", "Task: EAWF-0332")
+
+    assert guard.check_pushed_commits(
+        {"PRE_COMMIT_FROM_REF": base, "PRE_COMMIT_TO_REF": published}, repo_root=root
+    ) == (0, "")
 
 
 def test_pre_push_lint_refuses_a_state_commit_carrying_source(
@@ -350,8 +366,8 @@ def test_main_pre_push_lint_uses_the_environment(
     monkeypatch.setenv("PRE_COMMIT_TO_REF", _git(root, "rev-parse", "HEAD"))
 
     assert lint.main(["lint", "--pre-push-lint"]) == 1
-    assert "outside the Batch regime" in capsys.readouterr().err
+    assert "outside the per-Batch regime" in capsys.readouterr().err
 
-    monkeypatch.setenv("PRE_COMMIT_TO_REF", _publish(root, base, "Batch: BAT-0306"))
+    monkeypatch.setenv("PRE_COMMIT_TO_REF", _publish(root, base, "Task: EAWF-0331"))
 
     assert lint.main(["lint", "--pre-push-lint"]) == 0

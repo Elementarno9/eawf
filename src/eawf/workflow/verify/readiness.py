@@ -930,7 +930,7 @@ def _overlay_repo_verify_leaves(
 
 def load_active_verify_block(
     scope_id: str,
-    state: State,
+    state: State | None,
     *,
     repo_root: Path,
     config_root: Path | None = None,

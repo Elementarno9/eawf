@@ -158,7 +158,7 @@ def test_stop_evict_service_does_not_respawn_for_shutdown_rpc(
             stderr="",
         )
 
-    def _rec_rpc(method: str, params: dict[str, object]) -> dict[str, object]:
+    def _rec_rpc(method: str, params: dict[str, object], **_kw: object) -> dict[str, object]:
         timeline.append(f"rpc:{method}")
         return {"result": {"shutdown_at": "2026-01-01T00:00:00Z", "drained": True}}
 
@@ -184,7 +184,7 @@ def test_stop_without_evict_warns_loudly(tmp_path: Path, monkeypatch: pytest.Mon
     monkeypatch.setattr(
         daemon_cmd,
         "_run_rpc",
-        lambda method, params: {"result": {"shutdown_at": "t", "drained": True}},
+        lambda method, params, **_kw: {"result": {"shutdown_at": "t", "drained": True}},
     )
 
     res = runner.invoke(app, ["daemon", "stop"])

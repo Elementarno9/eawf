@@ -198,6 +198,7 @@ PROMOTED_ARTIFACTS: Final[tuple[PathClass, ...]] = tuple(
                 "2026-09-26-dev4-conformance",
                 "2026-09-27-dev5-product-canary",
                 "2026-10-02-rc1-flag-day",
+                "2026-10-08-rc2-cross-provider",
             )
         ),
         (

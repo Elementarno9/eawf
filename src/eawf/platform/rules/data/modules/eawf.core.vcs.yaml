@@ -47,15 +47,15 @@ rules:
       method: review
   - rule_id: eawf.core.vcs.commit-scope-carrier
     obligation_id: vcs.commit-scope-carrier
-    revision: 1
-    title: Name the advanced wave in every commit
+    revision: 5
+    title: Name the Batch and its Tasks in every commit
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Write a wave commit subject as "<type>: <summary>" and name its wave in an "Eawf-Wave: P<NN>-I<NN>-W<NN>" trailer; keep the bracketed [P<NN>] subject prefix for state and phase-scoped docs bookkeeping only.
+      Write a Batch commit as "<type>: <summary>" with one `Batch: BAT-<NNNN>` trailer and a `Task: <KEY>` trailer per Task it delivers, each of that Batch; a single-Task commit may carry its `Task:` trailer alone; write the trailing state commit as "state: <summary>" touching only committed state paths.
     rationale: >-
-      The trailer ties every commit to the wave it advances, which is how wave pins, drift checks and the commit lint find it.
+      The trailers tie every commit to the Batch and Tasks it delivers, so the pre-push commit lint, the release check and the rebind after a squash find the work without reading prose.
     verification:
       method: review
     procedure_ref: docs/rules/commit-prefix.md
@@ -74,15 +74,15 @@ rules:
       method: review
   - rule_id: eawf.core.vcs.commit-granularity
     obligation_id: vcs.commit-granularity
-    revision: 2
-    title: Land one commit per wave and per deliverable
+    revision: 5
+    title: Land one commit per Batch and one state commit per push
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Land one commit per wave and per deliverable, code with its tests; amend follow-ups and wave-close bookkeeping into it, and put a golden refresh in a test commit named for its cause.
+      Before a push, squash the branch to one buildable commit per Batch, or a few for a large Batch, code with its tests; end each push with one `state:` commit; rebind every binding a squashed commit carried to its new commit with `eawf batch rebind`, never by editing a row.
     rationale: >-
-      A deliverable split across commits cannot be reviewed or reverted as a unit, and bisect lands on trees that never worked.
+      A deliverable split across commits cannot be reviewed or reverted as a unit and bisect lands on trees that never worked; a Batch binds the phase-branch head when it lands, so the squash leaves that binding naming a commit no branch reaches until a superseding row rebinds it.
     verification:
       method: review
     procedure_ref: docs/rules/commit-granularity.md

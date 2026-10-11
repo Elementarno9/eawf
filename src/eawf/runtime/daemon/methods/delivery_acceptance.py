@@ -485,7 +485,7 @@ def _read_bundle_ledger(path: Path, milestone_ref: MilestoneUrn) -> AcceptanceBu
     wanted = str(milestone_ref)
     payloads = [
         item.payload
-        for item in read_ledger_records(path)
+        for item in effective_records(read_ledger_records(path))
         if item.record_key.startswith(BUNDLE_KEY_PREFIX)
         and item.payload.get("milestone_ref") == wanted
     ]

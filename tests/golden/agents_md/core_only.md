@@ -9,7 +9,7 @@ This repo is managed by eawf, an agent-driven workflow. Work nests as **phase** 
 Reality lives in ``.ea/state.json``, not here: this file carries the rules, ``eawf status`` carries the current position.
 
 <!-- END EAWF:managed id=project-orientation -->
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.12 hash=32b578658b7cc22f -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.13 hash=26008cae3ff227f4 -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a non-trivial body has an expansion block immediately following.
@@ -47,7 +47,7 @@ The rules below apply to every eawf-managed project. Each rule with a non-trivia
 31. **Comment economy.** See ``comment-economy``.
 32. **Decisions are surfaced, not assumed.** See ``orchestrator-decision-surface``.
 33. **A new gate proves itself and sunsets.** See ``gate-fire-proof-sunset``.
-34. **One commit per wave and per deliverable.** See ``commit-granularity``.
+34. **One commit per Batch and one state commit per push.** See ``commit-granularity``.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=state-vs-specs version=1.2 hash=b31103e9ebf5191f -->
@@ -154,8 +154,8 @@ Before opening or resuming a phase, iter, or wave, verify the current branch is 
 If the working tree is dirty, preserve the dirty/untracked work before rebasing. If the branch intentionally remains behind or forked, record the reason in the plan or handoff before dispatching worktrees or starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.9 hash=b43803334553edb8 -->
-`commit-prefix` — Wave commits are written ``<type>: <summary>`` plus an ``Eawf-Wave: P<NN>-I<NN>-W<NN>`` trailer; the bracket prefix form still passes but warns, and ``[P<NN>] state:`` keeps its bracket. Full text: [docs/rules/commit-prefix.md](docs/rules/commit-prefix.md)
+<!-- BEGIN EAWF:managed id=commit-prefix version=2.3 hash=227fbceccefc9007 -->
+`commit-prefix` — A Batch commit is ``<type>: <summary>`` with one ``Batch:`` trailer and a ``Task:`` trailer per Task it delivers; each push ends with one ``state:`` commit. Full text: [docs/rules/commit-prefix.md](docs/rules/commit-prefix.md)
 <!-- END EAWF:managed id=commit-prefix -->
 <!-- BEGIN EAWF:managed id=branch-naming version=1.0 hash=8251a99a4f2ce095 -->
 ### Branch naming
@@ -175,8 +175,8 @@ Companion-doc references in rendered docs / commit messages / PR bodies / docstr
 Forward-fix only — once a leak lands in a published commit, history rewrite is the *last* resort because the blast radius (force-push, SHA churn, broken PR refs) is much larger than the prevention cost. Scrub locally before ``git add``; let ``pre-commit`` (``detect-secrets`` + custom path checks) catch the rest.
 
 <!-- END EAWF:managed id=secrets-hygiene -->
-<!-- BEGIN EAWF:managed id=artifact-chassis version=1.2 hash=a7f65861e1b30e94 -->
-`artifact-chassis` — Durable research, audit, decision, and incident markdown uses the renderer-owned Summary / References / Provenance / Scrub chassis, with dense citations backed by typed rows and no absolute paths. Full text: [docs/rules/artifact-chassis.md](docs/rules/artifact-chassis.md)
+<!-- BEGIN EAWF:managed id=artifact-chassis version=1.3 hash=31aec4fd9ed14687 -->
+`artifact-chassis` — Markdown promoted out of ``.ea/local/`` uses the renderer-owned Summary / References / Provenance / Scrub chassis, with typed citations and no absolute paths. Full text: [docs/rules/artifact-chassis.md](docs/rules/artifact-chassis.md)
 <!-- END EAWF:managed id=artifact-chassis -->
 <!-- BEGIN EAWF:managed id=planned-scope-revisability version=1.2 hash=d2ec84e7cc93e285 -->
 `planned-scope-revisability` — Scope mutability is status-tiered: PLANNED scope is freely editable, ACTIVE scope is append-only with PENDING-only wave edits, and CLOSED scope changes only via a reopen. Full text: [docs/rules/planned-scope-revisability.md](docs/rules/planned-scope-revisability.md)
@@ -204,8 +204,8 @@ The canonical flow for altering the roadmap (one phase at a time):
 Bulk propose (``--bulk --from-briefs RES-12,RES-13,...``) is deferred to a follow-up phase; P19 ships phase-at-a-time only. ``/roadmap reorder`` is also deferred — operator drops + re- proposes to swap order.
 
 <!-- END EAWF:managed id=roadmap-procedure -->
-<!-- BEGIN EAWF:managed id=spike-workflow version=1.3 hash=9fe63d701295e8dc -->
-`spike-workflow` — A spike is a time-boxed read-only investigation whose brief lands under ``.ea/local/`` and feeds the next roadmap proposal or wave claim; promote it only when it ratifies a verdict. Full text: [docs/rules/spike-workflow.md](docs/rules/spike-workflow.md)
+<!-- BEGIN EAWF:managed id=spike-workflow version=1.4 hash=d239af2e6b023c95 -->
+`spike-workflow` — A spike is a time-boxed read-only investigation whose brief lands under ``.ea/local/`` and feeds the next plan; the brief stays local, cited by sha256 digest, unless the operator asks to promote it. Full text: [docs/rules/spike-workflow.md](docs/rules/spike-workflow.md)
 <!-- END EAWF:managed id=spike-workflow -->
 <!-- BEGIN EAWF:managed id=engineering-principles version=1.1 hash=c6bb250bd2ed16c5 -->
 `engineering-principles` — Reach for the simplest design that solves the immediate need: no helper, parameter, or config knob without a present-day caller, and no handling for states that cannot happen. Full text: [docs/rules/engineering-principles.md](docs/rules/engineering-principles.md)
@@ -224,8 +224,8 @@ The ~72-column wrap convention is reserved for **commit messages** (subject + bo
 <!-- BEGIN EAWF:managed id=release-process version=1.4 hash=e9197d40232446a3 -->
 `release-process` — Releases are opt-in per repo via the release cadence setting; the per-phase cadence gates phase close on a changelog section, a version bump, a migration note, and the release annotation. Full text: [docs/rules/release-process.md](docs/rules/release-process.md)
 <!-- END EAWF:managed id=release-process -->
-<!-- BEGIN EAWF:managed id=ship-process version=1.5 hash=ee5fbe64154110e3 -->
-`ship-process` — Ship rides the phase-co-closing iter: open the one phase PR, pass CI, address review by appending waves to that same iter, then close and fast-forward main. Full text: [docs/rules/ship-process.md](docs/rules/ship-process.md)
+<!-- BEGIN EAWF:managed id=ship-process version=1.8 hash=37dd04d0ac8a855f -->
+`ship-process` — Ship a Milestone through one PR: pass CI, address review by appending Batches, then merge so each Batch commit survives; main and tags are never rewritten. Full text: [docs/rules/ship-process.md](docs/rules/ship-process.md)
 <!-- END EAWF:managed id=ship-process -->
 <!-- BEGIN EAWF:managed id=agent-report-contract version=1.0 hash=600b85c26e27f28b -->
 ### Agent report contract
@@ -269,8 +269,8 @@ Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``, ``pass-with-followup
 <!-- BEGIN EAWF:managed id=gate-fire-proof-sunset version=1.0 hash=4a0a7685adec45f5 -->
 `gate-fire-proof-sunset` — A new gate ships with a test proving it reds on a real defect, and sunsets at phase close if it never fired. Full text: [docs/rules/gate-fire-proof-sunset.md](docs/rules/gate-fire-proof-sunset.md)
 <!-- END EAWF:managed id=gate-fire-proof-sunset -->
-<!-- BEGIN EAWF:managed id=commit-granularity version=1.3 hash=df917983dc831b9e -->
-`commit-granularity` — One commit per wave and per deliverable; wave-close bookkeeping rides the wave commit, and a golden refresh rides its cause. Full text: [docs/rules/commit-granularity.md](docs/rules/commit-granularity.md)
+<!-- BEGIN EAWF:managed id=commit-granularity version=1.6 hash=0b34ce900665e070 -->
+`commit-granularity` — One commit per Batch, or a few for a large Batch, squashed before the push; each push ends with one ``state:`` commit, and the bindings a squash replaced are rebound by superseding rows. Full text: [docs/rules/commit-granularity.md](docs/rules/commit-granularity.md)
 <!-- END EAWF:managed id=commit-granularity -->
 <!-- BEGIN EAWF:managed id=anti-patterns version=1.2 hash=c174bad32821d1ea -->
 ## Anti-patterns

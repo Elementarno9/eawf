@@ -19,13 +19,14 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Final
 
 from pydantic import ValidationError
 
 from eawf.kernel.identity import EntityKind, IdentityError, parse_qualified_urn
-from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
+from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch, holds_head_proof
 from eawf.kernel.state.epoch2.lifecycle import LifecycleRecord
 from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
 from eawf.kernel.state.epoch2.policy import TrackPolicy
@@ -330,39 +331,94 @@ def _milestone_track(milestones: Mapping[str, Any], milestone_ref: Any) -> Any:
     return None if key is None else _row_field(milestones.get(key), "primary_track_ref")
 
 
-def batch_activation_admitted(document: dict[str, Any], batch: DeliveryBatch) -> bool:
+def integrating_batch_refs(document: dict[str, Any], document_path: Path) -> frozenset[str] | None:
+    """Return the Batches whose selected integration generation is still current.
+
+    A generation is what ``batch integrate`` files the moment a Batch's sealed candidates
+    are applied over its target, so a Batch holding one is building an exact-head proof.
+    The selected generation is a Batch's newest, and it stays current only while the
+    Batch is not edited after it: a Batch reopened or given another Task since has
+    abandoned that integration and builds no proof until it integrates again.
+
+    Args:
+        document: The document holding the Batches.
+        document_path: The selected generation's document, which the Batch ledger
+            resolves against.
+
+    Returns:
+        The Batch URNs, or ``None`` when the ledger cannot be read.
+    """
+    try:
+        lines = read_ledger_records(ledger_path(document_path, Epoch2Collection.BATCH))
+    except LedgerError, OSError, ValueError:
+        logger.warning("integrating_batch_refs unreadable batch ledger")
+        return None
+    # the ledger is append-ordered, so the last line filed for a Batch is its selected one
+    selected = {
+        str(item.payload.get("batch_ref")): item.recorded_at
+        for item in lines
+        if item.record_key.startswith("ING-")
+    }
+    edited = {
+        str(_row_field(row, "urn")): _row_field(row, "updated_at")
+        for row in document_rows(document, Epoch2Collection.BATCH).values()
+    }
+    return frozenset(
+        ref
+        for ref, filed_at in selected.items()
+        if isinstance(edited.get(ref), str) and filed_at >= datetime.fromisoformat(edited[ref])
+    )
+
+
+def batch_activation_admitted(
+    document: dict[str, Any], document_path: Path, batch: DeliveryBatch
+) -> bool:
     """Return whether *batch* may activate under its Track's hard WIP ceiling.
 
-    The ceiling counts the Track's Batches already ACTIVE in the same
-    repository, because integration is serialised per repository and a
-    second active Batch there keeps invalidating the first one's
-    exact-head proof. Batches of other Tracks, and of other repositories,
-    are not counted: the ceiling is per Track per repository, and there is
-    no workspace-wide one.
+    The ceiling counts the Track's other Batches in the same repository that hold or
+    are building an exact-head proof -- pinned at READY_TO_MERGE or later, or ACTIVE
+    and integrating -- because integration is serialised per repository and another
+    Batch moving the head there invalidates that proof. An ACTIVE Batch still
+    collecting Tasks holds none, so it is not counted. Batches of other Tracks, and
+    of other repositories, are not counted either: the ceiling is per Track per
+    repository, and there is no workspace-wide one.
 
     Args:
         document: The locked document.
+        document_path: The document's path, which the Batch ledger resolves against.
         batch: The Batch asking to activate.
 
     Returns:
         ``True`` when the ceiling admits one more; ``False`` when it does
-        not, or when the Batch's Milestone or Track cannot be read, since
-        an unreadable ceiling cannot be shown to admit anything.
+        not, or when the Batch's Milestone, Track or the Batch ledger cannot
+        be read, since an unreadable ceiling cannot be shown to admit anything.
     """
     milestones = document_rows(document, Epoch2Collection.MILESTONE)
     track_ref = _milestone_track(milestones, str(batch.milestone_ref))
     policy = _track_policy(document, track_ref)
     if policy is None:
         return False
-    active = sum(
-        1
+    peers = [
+        row
         for key, row in document_rows(document, Epoch2Collection.BATCH).items()
         if key != batch.key
-        and _row_field(row, "status") == BatchStatus.ACTIVE.value
         and _row_field(row, "repository_ref") == str(batch.repository_ref)
         and _milestone_track(milestones, _row_field(row, "milestone_ref")) == track_ref
+    ]
+    filed: frozenset[str] | None = frozenset()
+    if any(_row_field(row, "status") == BatchStatus.ACTIVE.value for row in peers):
+        filed = integrating_batch_refs(document, document_path)
+    if filed is None:
+        return False
+    integrating = filed
+    proving = sum(
+        1
+        for row in peers
+        if holds_head_proof(
+            _row_field(row, "status"), integrating=_row_field(row, "urn") in integrating
+        )
     )
-    return policy.admits_batch_activation(active_batches_in_repo=active)
+    return policy.admits_batch_activation(proving_batches_in_repo=proving)
 
 
 def milestone_watchlist(document: dict[str, Any], milestone: Milestone) -> tuple[str, ...]:
@@ -402,7 +458,7 @@ def _batch_wip_admits(inputs: GuardInputs) -> bool:
     """Return whether the Batch's Track admits one more active Batch in its repository."""
     if not isinstance(inputs.record, DeliveryBatch):
         return False
-    return batch_activation_admitted(inputs.document, inputs.record)
+    return batch_activation_admitted(inputs.document, inputs.document_path, inputs.record)
 
 
 def _never_claimed(inputs: GuardInputs) -> bool:
@@ -540,6 +596,7 @@ __all__ = [
     "GuardComputer",
     "GuardInputs",
     "batch_activation_admitted",
+    "integrating_batch_refs",
     "milestone_watchlist",
     "task_run_open",
 ]

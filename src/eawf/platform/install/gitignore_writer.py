@@ -319,6 +319,31 @@ def refresh_gitignore_block(target_dir: Path) -> GitignoreBlockPlan:
     return plan
 
 
+def ensure_gitignore_block(target_dir: Path) -> GitignoreBlockPlan:
+    """Write the managed block, appending it when the file has none.
+
+    Unlike :func:`refresh_gitignore_block`, a ``.gitignore`` without the
+    markers gains the block, so a tree from a release that predates the
+    markers stops listing machine-local files as committable. Every byte
+    outside the block is kept, and an up-to-date block is not rewritten.
+
+    Args:
+        target_dir: Repository root.
+
+    Returns:
+        The plan; ``added`` names the shipped patterns the file lacked.
+
+    Raises:
+        ManagedBlockError: When the existing file's markers are not exactly
+            one ordered pair; the file is left untouched.
+    """
+    plan = plan_gitignore_block(target_dir)
+    existing = plan.path.read_bytes() if plan.path.exists() else b""
+    if plan.payload != existing:
+        plan.path.write_bytes(plan.payload)
+    return plan
+
+
 def unenumerated_paths(patterns: Iterable[str], paths: Iterable[str]) -> tuple[str, ...]:
     """Return every path no pattern of a managed block ignores.
 
@@ -360,6 +385,7 @@ __all__ = [
     "GITIGNORE_PATTERNS",
     "GitignoreBlockPlan",
     "GitignoreWriteResult",
+    "ensure_gitignore_block",
     "plan_gitignore_block",
     "refresh_gitignore_block",
     "unenumerated_paths",

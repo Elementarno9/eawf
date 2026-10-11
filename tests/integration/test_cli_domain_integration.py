@@ -382,6 +382,57 @@ def test_batch_reconcile_without_an_observation_reads_the_branch_back(tmp_path: 
     assert "result.outcome: landed" in result.output
 
 
+_CLOSED = {
+    "closures": [
+        {
+            "batch_key": "BAT-0001",
+            "closed": True,
+            "reason": "closed on aaaaaaaaaaaa",
+            "head_sha": _SHA,
+            "completed_task_keys": ["CANARY-0001"],
+        }
+    ]
+}
+
+
+def test_batch_close_landed_forwards_the_named_batches(tmp_path: Path) -> None:
+    _FakeClient.answers[integration_cmd.DELIVERY_CLOSE_LANDED] = _CLOSED
+    result = _invoke(
+        tmp_path, "batch", "close-landed", "BAT-0001", "BAT-0002", "--actor", "OPERATOR"
+    )
+    assert result.exit_code == exit_codes.OK, result.output
+    method, params = _FakeClient.calls[0]
+    assert method == integration_cmd.DELIVERY_CLOSE_LANDED
+    assert params["batch_keys"] == ["BAT-0001", "BAT-0002"]
+    assert params["actor"] == "OPERATOR"
+
+
+def test_batch_close_landed_without_keys_asks_for_every_open_batch(tmp_path: Path) -> None:
+    _FakeClient.answers[integration_cmd.DELIVERY_CLOSE_LANDED] = {"closures": []}
+    result = _invoke(tmp_path, "batch", "close-landed", "--actor", "OPERATOR")
+    assert result.exit_code == exit_codes.OK, result.output
+    _method, params = _FakeClient.calls[0]
+    assert params["batch_keys"] == []
+    assert params["rerun_failed"] is False
+
+
+def test_batch_close_landed_asks_for_a_rerun_only_when_told(tmp_path: Path) -> None:
+    _FakeClient.answers[integration_cmd.DELIVERY_CLOSE_LANDED] = {"closures": []}
+    result = _invoke(tmp_path, "batch", "close-landed", "--rerun-failed", "--actor", "OPERATOR")
+    assert result.exit_code == exit_codes.OK, result.output
+    _method, params = _FakeClient.calls[0]
+    assert params["rerun_failed"] is True
+
+
+def test_batch_close_landed_refusal_renders_the_daemons_code(tmp_path: Path) -> None:
+    _FakeClient.answers[integration_cmd.DELIVERY_CLOSE_LANDED] = DaemonRpcError(
+        -32002, "validation_failed: schema_validation_failed: check batch_keys.0"
+    )
+    result = _invoke(tmp_path, "batch", "close-landed", "nope", "--actor", "OPERATOR")
+    assert result.exit_code != exit_codes.OK
+    assert "schema_validation_failed" in result.output
+
+
 @pytest.mark.parametrize("length", [0, 129])
 def test_batch_reconcile_key_bounds_are_refused_before_the_wire(
     tmp_path: Path, length: int
@@ -455,3 +506,64 @@ def test_unreachable_daemon_is_a_daemon_unreachable_error(tmp_path: Path) -> Non
     _FakeClient.answers[integration_cmd.DELIVERY_TASK_ASSESSMENT] = TimeoutError("no answer")
     result = _invoke(tmp_path, "task", "assess", _TASK, "--actor", "OPERATOR")
     assert result.exit_code == exit_codes.DAEMON_UNREACHABLE
+
+
+def test_task_waive_criterion_sends_the_one_criterion_and_its_reason(tmp_path: Path) -> None:
+    _FakeClient.answers[integration_cmd.DELIVERY_WAIVE_CRITERION] = {
+        "task_ref": _TASK,
+        "criterion_id": "CR-0320-2",
+        "waived": True,
+        "revision": 4,
+    }
+    result = _invoke(
+        tmp_path,
+        "task", "waive-criterion", _TASK, "CR-0320-2",
+        "--reason", "its test file was deleted with the drift check",
+        "--expected-revision", "3", "--idempotency-key", "waive-1", "--actor", "OPERATOR",
+    )  # fmt: skip
+    assert result.exit_code == exit_codes.OK, result.output
+    method, params = _FakeClient.calls[0]
+    assert method == integration_cmd.DELIVERY_WAIVE_CRITERION
+    assert params["criterion_id"] == "CR-0320-2"
+    assert params["reason"] == "its test file was deleted with the drift check"
+    assert params["expected_revision"] == 3
+    assert params["idempotency_key"] == "waive-1"
+    assert "revision 3 -> 4" in result.output
+
+
+def test_task_waive_criterion_help_names_the_operator_principal(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["task", "waive-criterion", "--help"], terminal_width=200)
+    assert result.exit_code == exit_codes.OK, result.output
+    assert "OP-" in result.output
+    assert "waiver_operator_required" in result.output
+
+
+def test_task_waive_criterion_sends_its_decision_only_when_named(tmp_path: Path) -> None:
+    _FakeClient.answers[integration_cmd.DELIVERY_WAIVE_CRITERION] = {
+        "task_ref": _TASK,
+        "criterion_id": "CR-0320-2",
+        "waived": True,
+        "revision": 4,
+    }
+    base = (
+        "task", "waive-criterion", _TASK, "CR-0320-2",
+        "--reason", "its test file was deleted with the drift check",
+        "--expected-revision", "3", "--actor", "OP-0001",
+    )  # fmt: skip
+    plain = _invoke(tmp_path, *base, "--idempotency-key", "waive-1")
+    named = _invoke(tmp_path, *base, "--idempotency-key", "waive-2", "--decision", "D86")
+    assert plain.exit_code == named.exit_code == exit_codes.OK, plain.output + named.output
+    assert "decision_ref" not in _FakeClient.calls[0][1]
+    assert _FakeClient.calls[1][1]["decision_ref"] == "D86"
+
+
+def test_task_waive_criterion_without_a_reason_is_refused_before_the_wire(
+    tmp_path: Path,
+) -> None:
+    result = _invoke(
+        tmp_path,
+        "task", "waive-criterion", _TASK, "CR-0320-2",
+        "--expected-revision", "3", "--idempotency-key", "waive-1", "--actor", "OPERATOR",
+    )  # fmt: skip
+    assert result.exit_code != exit_codes.OK
+    assert _FakeClient.calls == []

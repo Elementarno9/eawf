@@ -861,6 +861,25 @@ def _inspect_residue(context: Epoch2RootContext, *, lease: WorkLease) -> _Residu
     return _Residue(reason=None, residue=(), present=True)
 
 
+def lease_residue(context: Epoch2RootContext, *, lease: WorkLease) -> str | None:
+    """Return why a leased worktree may hold work, or ``None`` when it provably holds none.
+
+    A released lease was released only once its worktree was shown to hold nothing, so it
+    holds none even after the directory is gone; any other lease is judged on what its
+    worktree holds now.
+
+    Args:
+        context: The native context of the root the lease is filed under.
+        lease: The lease.
+
+    Returns:
+        The sentence naming the residue, or ``None``.
+    """
+    if lease.status is LeaseStatus.RELEASED:
+        return None
+    return _inspect_residue(context, lease=lease).reason
+
+
 def _remove_workspace(context: Epoch2RootContext, *, lease: WorkLease) -> None:
     """Remove a worktree already shown to hold nothing, and its branch.
 
@@ -1044,6 +1063,7 @@ __all__ = [
     "heartbeat_lease",
     "issue_lease",
     "lease_path",
+    "lease_residue",
     "open_workspace",
     "quarantine_path",
     "read_lease",

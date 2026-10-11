@@ -19,6 +19,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.runtime.daemon.limits import STOP_CONCLUDE_SECONDS
 from eawf.runtime.daemon.methods import MethodContext, register
 
 logger = logging.getLogger(__name__)
@@ -82,7 +83,11 @@ class ShutdownParams(BaseModel):
 
 
 class ShutdownResult(BaseModel):
-    """Result of :func:`shutdown`."""
+    """Result of :func:`shutdown`.
+
+    ``drained`` is true only when every dispatched Run the daemon was awaiting
+    has been ended, so none is left for the next daemon to reap as lost.
+    """
 
     model_config = ConfigDict(extra="forbid")
     shutdown_at: str
@@ -155,7 +160,14 @@ async def status(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
 @register("daemon.shutdown")
 async def shutdown(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Signal the server to stop accepting new connections + exit.
+    """Drain the dispatched Runs, then signal the server to exit.
+
+    New dispatches and readiness probes are refused at once. The Runs the
+    daemon awaits get the drain window to end on their own; past it, or at
+    once without ``drain``, each worker is stopped and its Run ended on the
+    report it holds. The answer comes only after that, and the server's
+    shutdown is signalled after the Runs are ended, so the in-flight workers
+    can still bind their reports during the window.
 
     Args:
         ctx: Server context — the ``shutdown_event`` asyncio.Event is
@@ -173,11 +185,18 @@ async def shutdown(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]
     args = ShutdownParams.model_validate(params)
     if not isinstance(ctx.shutdown_event, asyncio.Event):
         raise RuntimeError("shutdown event not wired on daemon context")
+    # the supervisor pulls in the Run and dispatch stack
+    from eawf.runtime.daemon.run_supervisor import drain_supervised_runs
+
     drain_window = args.timeout_seconds if args.drain else 0
     logger.info(f"shutdown drain={args.drain} timeout={drain_window}")
+    ctx.stopping = True
+    ended = await drain_supervised_runs(
+        grace_seconds=drain_window, conclude_seconds=STOP_CONCLUDE_SECONDS
+    )
     ctx.shutdown_event.set()
     result = ShutdownResult(
         shutdown_at=datetime.now(UTC).isoformat(),
-        drained=args.drain,
+        drained=args.drain and ended,
     )
     return result.model_dump(mode="json")

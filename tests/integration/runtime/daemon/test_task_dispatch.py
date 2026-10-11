@@ -24,7 +24,6 @@ from unittest import mock
 
 import pytest
 import yaml
-from eawf.runtime.daemon.run_supervisor import supervisor_of
 from typer.testing import CliRunner
 
 import eawf.runtime.daemon.methods.domain
@@ -34,6 +33,8 @@ from eawf.kernel.config import layered
 from eawf.kernel.identity import parse_qualified_urn
 from eawf.kernel.runtime.capsule import AuthorityCapsule
 from eawf.kernel.runtime.certification import CapabilityCertification, ConformanceStageRecord
+from eawf.kernel.runtime.lease import LeaseStatus
+from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.state.epoch2.task import Task
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.kinds.runtime_certification import MachineCertification
@@ -41,17 +42,20 @@ from eawf.kernel.store.ledger import read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods, native_dispatch
-from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, task_dispatch
 from eawf.runtime.daemon.methods.delivery import stored_tasks
 from eawf.runtime.daemon.methods.task_dispatch import TASK_DISPATCH_METHOD, TaskDispatchRefusal
-from eawf.runtime.daemon.native_dispatch import compile_launchers, run_ledger
+from eawf.runtime.daemon.native_dispatch import compile_launchers, run_ledger, stored_run
+from eawf.runtime.daemon.run_supervisor import fail_unlaunched_run, supervisor_of
 from eawf.runtime.runtimes.adapter import (
     NativeLaunchOutcome,
     NativeLaunchRequest,
+    RuntimeSpawnError,
     TurnOutcome,
     compose_worker_hello,
 )
 from eawf.runtime.runtimes.claude.plugin_install import install_plugin
+from eawf.runtime.workspace.lease import root_leases
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import domain as domain_commands
@@ -140,6 +144,16 @@ def certification(runtime_id: str, version: str) -> MachineCertification:
     )
 
 
+def walked_certification(runtime_id: str, version: str) -> MachineCertification:
+    """Return :func:`certification` as a canary walk leaves it, carrying the semantic tools."""
+    certified = certification(runtime_id, version)
+    (first, *_) = certified.capabilities
+    semantic = CapabilityCertification.model_validate(
+        {**first.model_dump(mode="json"), "capability_id": "semantic_tools"}
+    )
+    return certified.model_copy(update={"capabilities": (*certified.capabilities, semantic)})
+
+
 def task_row(status: str = "PLANNED", **overrides: Any) -> dict[str, Any]:
     """Return the seeded Task in *status*, claiming the canary's ``src`` tree."""
     row = seed_row("task", status)
@@ -161,7 +175,8 @@ def make_tree(
     versions = {"claude-code": CLAUDE_VERSION, "codex": CODEX_VERSION}
     for runtime_id in certified:
         append_machine_certification(
-            canary.root / ".ea" / "state.json", certification(runtime_id, versions[runtime_id])
+            canary.root / ".ea" / "state.json",
+            walked_certification(runtime_id, versions[runtime_id]),
         )
     return canary
 
@@ -206,6 +221,7 @@ class ParkedLauncher:
         release: Set by the test to let the turn end.
         capsule: The capsule the last launch carried.
         launches: How many workers were started.
+        working: The Task as it stood while the parked turns ran, before any ended.
     """
 
     def __init__(self, provider_kind: str) -> None:
@@ -214,6 +230,7 @@ class ParkedLauncher:
         self.release = asyncio.Event()
         self.capsule: AuthorityCapsule | None = None
         self.launches = 0
+        self.working: Task | None = None
 
     async def launch(self, request: NativeLaunchRequest) -> NativeLaunchOutcome:
         """Announce the worker and hand the parked turn back."""
@@ -260,6 +277,7 @@ def dispatch(
                 answers.append(await methods.dispatch(TASK_DISPATCH_METHOD, ctx, params))
             except DaemonValidationError as refusal:
                 answers.append(refusal)
+        launcher.working = task_now(ctx, canary)
         launcher.release.set()
         supervisor = supervisor_of(ctx.native_root_context(canary.root / ".ea"))
         for answer in answers:
@@ -298,7 +316,8 @@ def test_dispatch_claims_starts_and_announces_one_run(tmp_path: Path) -> None:
     assert answer["stage"] == "announced"
     assert answer["attempt_ref"] == answer["dispatch"]["attempt"]["attempt_ref"]
     assert runs(ctx, canary) == [FIRST_RUN]
-    task = task_now(ctx, canary)
+    task = launcher.working
+    assert task is not None
     assert task.status.value == "RUNNING"
     assert str(task.active_run_ref) == answer["run_ref"]
     assert task.claimed_by == ACTOR
@@ -334,10 +353,12 @@ def test_dispatch_starts_a_claimed_task_without_claiming_it_again(tmp_path: Path
     canary = make_tree(tmp_path, status="CLAIMED", claimed_by="OP-0002")
     ctx = method_ctx(tmp_path / "runtime")
 
-    (answer,) = dispatch(ctx, canary, ParkedLauncher("claude"), {"task": TASK_KEY})
+    launcher = ParkedLauncher("claude")
+    (answer,) = dispatch(ctx, canary, launcher, {"task": TASK_KEY})
 
     assert isinstance(answer, dict), answer
-    task = task_now(ctx, canary)
+    task = launcher.working
+    assert task is not None
     assert task.status.value == "RUNNING"
     assert task.claimed_by == "OP-0002"
     assert runs(ctx, canary) == [FIRST_RUN]
@@ -354,6 +375,193 @@ def test_dispatch_refuses_a_second_run_while_the_first_is_open(tmp_path: Path) -
     assert TaskDispatchRefusal.TASK_RUN_OPEN.value in refusal_of(second)
     assert runs(ctx, canary) == [FIRST_RUN]
     assert launcher.launches == 1
+
+
+# ---- a refusal after the Run exists fails it --------------------------------------
+
+
+class RefusingLauncher(ParkedLauncher):
+    """A launcher whose worker never starts, the way a missing binary fails."""
+
+    async def launch(self, request: NativeLaunchRequest) -> NativeLaunchOutcome:
+        """Fail the spawn."""
+        self.launches += 1
+        raise RuntimeSpawnError("the agent binary exited 127 before it said hello")
+
+
+def run_now(ctx: MethodContext, canary: CanaryProvision, key: str = FIRST_RUN) -> Run:
+    """Return the Run keyed *key* from whichever tier holds it."""
+    context = ctx.native_root_context(canary.root / ".ea")
+    urn = parse_qualified_urn(fx.RUN_URN.rsplit("/", 1)[0] + f"/{key}")
+    with context.session([urn]) as session:
+        return stored_run(session, read_ledger_records(run_ledger(session)), urn)
+
+
+def lease_states(ctx: MethodContext, canary: CanaryProvision) -> list[LeaseStatus]:
+    """Return the status of every workspace lease the tree holds."""
+    context = ctx.native_root_context(canary.root / ".ea")
+    return [lease.status for lease in root_leases(context)]
+
+
+def active_leases(ctx: MethodContext, canary: CanaryProvision) -> list[str]:
+    """Return the Run of every ACTIVE workspace lease the tree holds."""
+    context = ctx.native_root_context(canary.root / ".ea")
+    return [
+        str(lease.run_ref) for lease in root_leases(context) if lease.status is LeaseStatus.ACTIVE
+    ]
+
+
+def test_a_refused_spawn_fails_the_run_and_frees_the_task(tmp_path: Path) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+
+    (answer,) = dispatch(ctx, canary, RefusingLauncher("claude"), {"task": TASK_KEY})
+
+    assert native_dispatch.DispatchRefusal.SPAWN_FAILED.value in refusal_of(answer)
+    run = run_now(ctx, canary)
+    assert run.status.value == "FAILED"
+    assert run.failure is not None
+    assert run.failure.code == "dispatch-spawn-failed"
+    (withdrawn,) = lease_states(ctx, canary)
+    assert withdrawn in {LeaseStatus.RELEASED, LeaseStatus.QUARANTINED}
+    task = task_now(ctx, canary)
+    assert task.status.value == "PLANNED"
+    assert task.active_run_ref is None
+
+    launcher = ParkedLauncher("claude")
+    (again,) = dispatch(ctx, canary, launcher, {"task": TASK_KEY})
+
+    assert isinstance(again, dict), again
+    assert again["run_key"] == "RUN-00000002"
+    assert launcher.launches == 1
+
+
+class FailingTurnLauncher(ParkedLauncher):
+    """A launcher whose worker announces itself and then fails its turn."""
+
+    async def _turn(self) -> TurnOutcome:
+        await self.release.wait()
+        return TurnOutcome(exit_kind="failed", error_text="the provider was not logged in")
+
+
+def test_a_task_whose_run_failed_its_turn_is_dispatched_again(tmp_path: Path) -> None:
+    """A Run that ends FAILED after announcing hands its Task back to PLANNED.
+
+    No Run is open for the Task any more, so ``runtime.task.dispatch`` claims
+    it again and works it under a new Run the Task names.
+    """
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+
+    (first,) = dispatch(ctx, canary, FailingTurnLauncher("claude"), {"task": TASK_KEY})
+
+    assert isinstance(first, dict), first
+    failed = run_now(ctx, canary)
+    assert failed.status.value == "FAILED"
+    assert failed.failure is not None
+    assert failed.failure.code == "turn-failed"
+    requeued = task_now(ctx, canary)
+    assert requeued.status.value == "PLANNED"
+    assert requeued.active_run_ref is None
+
+    launcher = ParkedLauncher("claude")
+    (again,) = dispatch(ctx, canary, launcher, {"task": TASK_KEY})
+
+    assert isinstance(again, dict), again
+    assert again["run_key"] == "RUN-00000002"
+    assert again["stage"] == "announced"
+    assert launcher.launches == 1
+    assert sorted(runs(ctx, canary)) == [FIRST_RUN, "RUN-00000002"]
+    working = launcher.working
+    assert working is not None
+    assert working.status.value == "RUNNING"
+    assert str(working.active_run_ref) == again["run_ref"]
+
+
+def test_a_refusal_before_any_attempt_still_fails_the_created_run(tmp_path: Path) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+
+    with mock.patch.object(
+        task_dispatch,
+        "dispatch_run",
+        side_effect=native_dispatch.refused(
+            native_dispatch.DispatchRefusal.ADMISSION_DENIED, "over the ceiling"
+        ),
+    ):
+        (answer,) = dispatch(ctx, canary, ParkedLauncher("claude"), {"task": TASK_KEY})
+
+    assert native_dispatch.DispatchRefusal.ADMISSION_DENIED.value in refusal_of(answer)
+    run = run_now(ctx, canary)
+    assert run.status.value == "FAILED"
+    assert run.failure is not None
+    assert run.failure.code == "dispatch-admission-denied"
+    assert active_leases(ctx, canary) == []
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        native_dispatch.DispatchRefusal.ADMISSION_QUEUED,
+        native_dispatch.DispatchRefusal.DISPATCH_HELD,
+    ],
+)
+def test_a_run_the_governor_queues_is_left_waiting(
+    tmp_path: Path, code: native_dispatch.DispatchRefusal
+) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+
+    with mock.patch.object(
+        task_dispatch, "dispatch_run", side_effect=native_dispatch.refused(code, "waits")
+    ):
+        (answer,) = dispatch(ctx, canary, ParkedLauncher("claude"), {"task": TASK_KEY})
+
+    assert code.value in refusal_of(answer)
+    assert run_now(ctx, canary).status.value == "QUEUED"
+
+
+def test_a_refusal_with_no_wire_code_fails_the_run_under_a_generic_code(tmp_path: Path) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+
+    with mock.patch.object(
+        task_dispatch, "dispatch_run", side_effect=DaemonValidationError("something broke")
+    ):
+        (answer,) = dispatch(ctx, canary, ParkedLauncher("claude"), {"task": TASK_KEY})
+
+    assert "something broke" in refusal_of(answer)
+    run = run_now(ctx, canary)
+    assert run.failure is not None
+    assert run.failure.code == "dispatch-refused"
+
+
+def test_failing_an_unlaunched_run_leaves_a_stopped_run_as_it_ended(tmp_path: Path) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+    dispatch(ctx, canary, RefusingLauncher("claude"), {"task": TASK_KEY})
+    context = ctx.native_root_context(canary.root / ".ea")
+    run = run_now(ctx, canary)
+
+    envelopes = fail_unlaunched_run(
+        context, run.urn, actor=ACTOR, code="other-code", detail="again", now=datetime.now(UTC)
+    )
+
+    assert envelopes == ()
+    after = run_now(ctx, canary)
+    assert after.revision == run.revision
+    assert after.failure is not None
+    assert after.failure.code == "dispatch-spawn-failed"
+
+
+def test_failing_an_unknown_run_is_refused(tmp_path: Path) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+    context = ctx.native_root_context(canary.root / ".ea")
+    urn = parse_qualified_urn(fx.RUN_URN.rsplit("/", 1)[0] + "/RUN-00000099")
+
+    with pytest.raises(DaemonValidationError, match="identity_not_found"):
+        fail_unlaunched_run(context, urn, actor=ACTOR, code="x", detail="y", now=datetime.now(UTC))
 
 
 # ---- CR-2: refusals leave no Run ----------------------------------------------------

@@ -1208,10 +1208,10 @@ def test_a_rekeyed_bundle_names_the_digest_it_carried_before(
     )
     held = _respelled(tmp_path, monkeypatch, first, rekeyed)
 
-    found = projection_methods._respelled_digest(None, held)  # type: ignore[arg-type]
+    found = projection_methods._respelled_digests(None, held)  # type: ignore[arg-type]
 
     assert held.digest() != bundle().digest()
-    assert found == bundle().digest()
+    assert found == (bundle().digest(),)
 
 
 def test_a_superseding_row_that_changed_more_than_urns_names_no_earlier_digest(
@@ -1227,7 +1227,7 @@ def test_a_superseding_row_that_changed_more_than_urns_names_no_earlier_digest(
         _bundle_line(changed, supersedes=line_digest(render_ledger_line(first))),
     )
 
-    assert projection_methods._respelled_digest(None, held) is None  # type: ignore[arg-type]
+    assert projection_methods._respelled_digests(None, held) == ()  # type: ignore[arg-type]
 
 
 def test_a_bundle_filed_once_names_no_earlier_digest(
@@ -1235,4 +1235,4 @@ def test_a_bundle_filed_once_names_no_earlier_digest(
 ) -> None:
     held = _respelled(tmp_path, monkeypatch, _bundle_line(bundle().model_dump(mode="json")))
 
-    assert projection_methods._respelled_digest(None, held) is None  # type: ignore[arg-type]
+    assert projection_methods._respelled_digests(None, held) == ()  # type: ignore[arg-type]

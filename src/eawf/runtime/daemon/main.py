@@ -36,9 +36,11 @@ from eawf.kernel.store.paths import store_path
 from eawf.observability.logging.scrub import SensitiveScrubber
 from eawf.platform.registry.models import RegistryReadError, read_registry
 from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.batch_close_sweep import run_batch_close_loop
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.churn import ChurnOp, record_churn
 from eawf.runtime.daemon.epoch2_recovery import (
+    publish_projection,
     record_boot_recovery,
     recover_native_store_trees,
     repair_native_ledger_tails,
@@ -551,13 +553,41 @@ async def _attach_bound_tree(ctx: MethodContext) -> None:
     """Attach the epoch-2 tree the daemon was started for, moving its epoch-1 pauses.
 
     A daemon started over an epoch-1 tree, or over none, attaches nothing here.
+    Once attached, the proof checkouts a stopped daemon left in the repository are
+    removed and the tree's Runs that no worker is left to end are reaped.
     """
     if ctx.state_path is None or not epoch_marker_present(Path(ctx.state_path).parent):
         return
     try:
-        await asyncio.to_thread(ctx.native_root_context, Path(ctx.state_path).parent)
+        context = await asyncio.to_thread(ctx.native_root_context, Path(ctx.state_path).parent)
     except Exception as exc:
         logger.warning(f"_attach_bound_tree skipped error={exc!r}")
+        return
+    # imported here: the reap pulls in the Run and dispatch stack, which would
+    # otherwise delay a cold daemon's first answer
+    from eawf.runtime.daemon.batch_proof import prune_orphan_checkouts
+    from eawf.runtime.daemon.methods.permission import DAEMON_ACTOR
+    from eawf.runtime.daemon.run_reaper import reap_lost_runs
+    from eawf.runtime.daemon.run_supervisor import supervisor_of
+
+    try:
+        await asyncio.to_thread(prune_orphan_checkouts, context.identity.tree_root.parent)
+    except Exception as exc:
+        logger.warning(f"_attach_bound_tree proof prune skipped error={exc!r}")
+    try:
+        envelopes = await asyncio.to_thread(
+            reap_lost_runs,
+            context,
+            supervisor_of(context),
+            actor=DAEMON_ACTOR,
+            started_at=datetime.fromisoformat(ctx.started_at),
+            now=datetime.now(UTC),
+        )
+    except Exception as exc:
+        logger.warning(f"_attach_bound_tree reap skipped error={exc!r}")
+        return
+    for envelope in envelopes:
+        publish_projection(ctx.bus, envelope)
 
 
 def _schedule_permission_expiry_sweep(ctx: MethodContext) -> asyncio.Task[None]:
@@ -570,6 +600,12 @@ def _schedule_stall_sweep(ctx: MethodContext) -> asyncio.Task[None]:
     """Schedule the sweep that raises a stall fact for every Run that went quiet."""
     assert isinstance(ctx.shutdown_event, asyncio.Event)
     return asyncio.create_task(run_stall_loop(ctx, stop_event=ctx.shutdown_event))
+
+
+def _schedule_batch_close_sweep(ctx: MethodContext) -> asyncio.Task[None]:
+    """Schedule the sweep that closes every ready Batch whose work has landed."""
+    assert isinstance(ctx.shutdown_event, asyncio.Event)
+    return asyncio.create_task(run_batch_close_loop(ctx, stop_event=ctx.shutdown_event))
 
 
 def _schedule_wal_gc_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
@@ -845,6 +881,33 @@ def _configure_logging(foreground: bool) -> None:
     root.addHandler(err_handler)
 
 
+#: How long a stopping daemon lets its connections finish on their own -- a stop's
+#: answer still being written, a client hanging up -- before it closes them.
+CLIENT_FLUSH_SECONDS: Final[float] = 0.5
+
+#: How long closed connections may take to go before they are dropped outright.
+CLIENT_CLOSE_SECONDS: Final[float] = 1.0
+
+
+async def _close_server(server: asyncio.Server) -> None:
+    """Stop listening and end every connection, so no client keeps the daemon alive.
+
+    ``wait_closed`` waits for every connection to end, and an event subscription
+    or an idle client never ends on its own: a daemon that only waited would keep
+    its lock and socket until killed.
+    """
+    server.close()
+    with contextlib.suppress(TimeoutError):
+        await asyncio.wait_for(asyncio.shield(server.wait_closed()), CLIENT_FLUSH_SECONDS)
+        return
+    server.close_clients()
+    try:
+        await asyncio.wait_for(asyncio.shield(server.wait_closed()), CLIENT_CLOSE_SECONDS)
+    except TimeoutError:
+        logger.warning("_close_server aborting connections that did not close")
+        server.abort_clients()
+
+
 async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | None) -> None:
     """Start the JSON-RPC server and wait for shutdown (POSIX).
 
@@ -873,6 +936,7 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
     stale_wave_task = _schedule_stale_wave_sweep(ctx)
     permission_expiry_task = _schedule_permission_expiry_sweep(ctx)
     stall_task = _schedule_stall_sweep(ctx)
+    batch_close_task = _schedule_batch_close_sweep(ctx)
     await _attach_bound_tree(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
@@ -897,6 +961,9 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
         stall_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await stall_task
+        batch_close_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await batch_close_task
         if wal_gc_task is not None:
             wal_gc_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -909,8 +976,7 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
             loop_lag_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await loop_lag_task
-        server.close()
-        await server.wait_closed()
+        await _close_server(server)
 
 
 async def _run_windows_server(ctx: MethodContext, rt_dir: Path) -> None:
@@ -961,6 +1027,7 @@ async def _run_windows_server(ctx: MethodContext, rt_dir: Path) -> None:
     stale_wave_task = _schedule_stale_wave_sweep(ctx)
     permission_expiry_task = _schedule_permission_expiry_sweep(ctx)
     stall_task = _schedule_stall_sweep(ctx)
+    batch_close_task = _schedule_batch_close_sweep(ctx)
     await _attach_bound_tree(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
@@ -985,6 +1052,9 @@ async def _run_windows_server(ctx: MethodContext, rt_dir: Path) -> None:
         stall_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await stall_task
+        batch_close_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await batch_close_task
         if wal_gc_task is not None:
             wal_gc_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

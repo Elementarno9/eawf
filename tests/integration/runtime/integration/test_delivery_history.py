@@ -192,9 +192,18 @@ def test_del_019_replanning_one_offering_renders_the_same_commit(repo: Path) -> 
 
 
 def test_del_019_the_integration_workspace_is_the_only_history_author() -> None:
+    # A Run's lease branch keeps a snapshot commit of the worker's edits; it
+    # is integration input, re-projected by the integration workspace, so it
+    # never becomes delivered history. The per-Batch squash writes delivered
+    # history again but authors no content: every tree it commits is built
+    # from delivered commits and its tip is proved equal to the source tip.
     authors = sorted(
         str(path.relative_to(SOURCE_ROOT))
         for path in SOURCE_ROOT.rglob("*.py")
         if '"commit-tree"' in path.read_text(encoding="utf-8")
     )
-    assert authors == ["runtime/integration/git_workspace.py"]
+    assert authors == [
+        "runtime/integration/git_workspace.py",
+        "runtime/worktree/tree_change.py",
+        "workflow/integration/squash.py",
+    ]

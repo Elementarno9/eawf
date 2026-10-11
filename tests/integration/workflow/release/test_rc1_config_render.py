@@ -15,6 +15,7 @@ from typing import Any, Final
 
 import pytest
 import yaml
+from packaging.version import Version
 
 from eawf import __version__
 from eawf.kernel.release.checkpoint_template import render_checkpoint_config
@@ -147,5 +148,5 @@ def test_rc1_resolves_its_membership_off_the_committed_export() -> None:
     assert accepted.status.value == "COMPLETED"
 
 
-def test_the_package_version_is_rc1() -> None:
-    assert __version__ == RC1_VERSION
+def test_the_package_version_has_reached_rc1() -> None:
+    assert Version(__version__) >= Version(RC1_VERSION)

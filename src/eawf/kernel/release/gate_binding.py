@@ -204,8 +204,15 @@ PRODUCT_CANARY_POST_MERGE_GATES: Final[tuple[ReleaseGateName, ...]] = (
 #: and every epoch-1 verb the tree still answers has a disposition.
 FLAG_DAY_ADDED_GATES: Final[tuple[ReleaseGateName, ...]] = (ReleaseGateName.EPOCH1_REFUSAL,)
 
-#: The gate names each profile admits. ``dev1`` through ``flag_day``
-#: are authored: the later profiles add their gates
+#: The one gate ``cross_provider`` adds on top of the ``flag_day``
+#: twenty-three. Every earlier rung advertised a platform without a gate
+#: reading the claim, so a claim could go unproven and the checkpoint
+#: still bake; the second release candidate is the first to advertise a
+#: second platform, so it is where the row becomes required.
+CROSS_PROVIDER_ADDED_GATES: Final[tuple[ReleaseGateName, ...]] = (ReleaseGateName.PLATFORM,)
+
+#: The gate names each profile admits. ``dev1`` through
+#: ``cross_provider`` are authored: the later profiles add their gates
 #: with the waves that build their producers, and an unauthored profile
 #: is a loud :attr:`GateBindingRejection.UNDECLARED_PROFILE` rather than
 #: a silently empty gate set.
@@ -231,6 +238,15 @@ PROFILE_GATES: Final[Mapping[ReleaseGateProfile, tuple[ReleaseGateName, ...]]] =
         *PRODUCT_CANARY_PRE_MERGE_GATES,
         *PRODUCT_CANARY_POST_MERGE_GATES,
         *FLAG_DAY_ADDED_GATES,
+    ),
+    ReleaseGateProfile.CROSS_PROVIDER: (
+        *DEV1_GATES,
+        *DEV2_ADDED_GATES,
+        *NATIVE_CANARY_ADDED_GATES,
+        *PRODUCT_CANARY_PRE_MERGE_GATES,
+        *PRODUCT_CANARY_POST_MERGE_GATES,
+        *FLAG_DAY_ADDED_GATES,
+        *CROSS_PROVIDER_ADDED_GATES,
     ),
 }
 
@@ -683,6 +699,7 @@ def resolved_proof_commands(
 
 
 __all__ = [
+    "CROSS_PROVIDER_ADDED_GATES",
     "DEV1_GATES",
     "DEV2_ADDED_GATES",
     "FLAG_DAY_ADDED_GATES",

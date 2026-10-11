@@ -196,6 +196,7 @@ class DispatchRefusal(StrEnum):
     SUCCESSOR_REQUIRED = "retry_successor_required"
     SUCCESSOR_REFUSED = "retry_successor_refused"
     ATTEMPT_ABSENT = "retry_attempt_absent"
+    DAEMON_STOPPING = "dispatch_daemon_stopping"
 
 
 class DispatchStage(StrEnum):

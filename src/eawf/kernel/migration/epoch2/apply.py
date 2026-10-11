@@ -104,7 +104,7 @@ from eawf.kernel.migration.epoch2.snapshot import (
     digest_bytes,
     is_committed,
 )
-from eawf.platform.install.gitignore_writer import refresh_gitignore_block
+from eawf.platform.install.gitignore_writer import ensure_gitignore_block
 from eawf.platform.install.managed_block import ManagedBlockError
 from eawf.platform.registry.models import Registry, RegistryReadError, read_registry
 from eawf.platform.registry.workspace import WorkspaceMutationError, get_workspace
@@ -775,22 +775,24 @@ def apply_cutover(request: Epoch2ApplyRequest, *, applied_at: datetime) -> Cutov
 
 
 def _refresh_ignore_block(target: DisposableTarget) -> None:
-    """Bring the repository's managed ``.gitignore`` block up to this release.
+    """Write the repository's managed ``.gitignore`` block for this release.
 
-    A block an older release wrote does not know the generation tree, so
-    the first ``git status`` after the cutover would list its machine-local
-    files as committable. Marker damage is logged rather than raised: the
-    cutover has already landed, and doctor names the block for a hand repair.
+    A block an older release wrote, or no block at all, does not know the
+    generation tree, so the first ``git status`` after the cutover would
+    list its machine-local files as committable. A file without the markers
+    gains the block; lines outside it are kept. Marker damage is logged
+    rather than raised: the cutover has already landed, and doctor names the
+    block for a hand repair.
 
     Args:
         target: The fence-cleared tree; its parent is the repository root.
     """
     try:
-        plan = refresh_gitignore_block(target.root.parent)
+        plan = ensure_gitignore_block(target.root.parent)
     except ManagedBlockError as exc:
         logger.warning(f"apply_cutover gitignore_not_refreshed detail={exc}")
         return
-    if plan.stale:
+    if plan.added or plan.stale:
         logger.info(f"apply_cutover gitignore_refreshed added={list(plan.added)!r}")
 
 

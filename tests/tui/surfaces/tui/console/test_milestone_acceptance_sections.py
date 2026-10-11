@@ -336,7 +336,7 @@ def test_a_journey_that_does_not_read_back_is_refused(monkeypatch: pytest.Monkey
 def test_the_committed_milestones_draw_their_sections_from_their_records(
     tmp_path: Path,
 ) -> None:
-    """MLS-0100 (accepted) and MLS-0101 (active) draw their journeys and evidence live."""
+    """MLS-0100 and MLS-0102, both accepted, draw their journeys and evidence live."""
     require_epoch2_repository()
     root = committed_tree(tmp_path)
 
@@ -346,7 +346,7 @@ def test_the_committed_milestones_draw_their_sections_from_their_records(
             live_console(root, tmp_path / "runtime") as (app, seam),
             app.run_test(size=SIZES[2]) as pilot,
         ):
-            for key in ("MLS-0100", "MLS-0101"):
+            for key in ("MLS-0100", "MLS-0102"):
                 for section in ("glance", "try", "evidence", "risks"):
                     setup = SessionSetup(
                         route="milestone", subjId=key, size=2, section=SECTIONS.index(section)
@@ -366,14 +366,12 @@ def test_the_committed_milestones_draw_their_sections_from_their_records(
     assert "TRY          accepted at head 61c75ef · tree 8d8ea39" in frames["MLS-0100", "try"]
     assert "EVD-0002 · audit · Audit A-P36-I01-eval-r4" in frames["MLS-0100", "evidence"]
     assert "nothing open · every required step is proven" in frames["MLS-0100", "risks"]
-    active = frames["MLS-0101", "glance"]
+    rc2 = frames["MLS-0102", "glance"]
+    assert "JOURNEY      2 steps · 2 proven · 0 open · 0 not yet run" in rc2
     # the record's own action text, drawn as written
-    assert "AS-01 · operator · required · not yet run · open eawf tui" in active
-    assert "TRY          eawf milestone open-review " in frames["MLS-0101", "try"]
-    assert (
-        "no evidence is recorded: no sealed bundle covers this step"
-        in (frames["MLS-0101", "evidence"])
-    )
-    assert "AS-02 has not been run" in frames["MLS-0101", "risks"]
+    assert "AS-01 · operator · required · proven · review the exit-criteria logs" in rc2
+    assert "TRY          accepted at head bca031a · tree dda9c87" in frames["MLS-0102", "try"]
+    assert "EVD-0039 · decision · rc2 acceptance at a0112595e" in frames["MLS-0102", "evidence"]
+    assert "nothing open · every required step is proven" in frames["MLS-0102", "risks"]
     for text in frames.values():
         assert "no producer states this section" not in text

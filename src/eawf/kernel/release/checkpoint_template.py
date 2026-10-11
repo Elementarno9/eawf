@@ -92,6 +92,42 @@ class DeferredTargets(_StrictModel):
         return _PROFILE_RANK[profile] >= _PROFILE_RANK[self.from_profile]
 
 
+class DeferredPlatformClaims(_StrictModel):
+    """Platform claim rows that join the configuration from one rung onward.
+
+    A claim declared on the train-wide template would land on every
+    rung, and an earlier rung's configuration is the document its
+    approval and receipts were bound to, so a new claim there would
+    re-digest a configuration already approved. Deferring the claim to
+    the rung that first proves it keeps the published half of the
+    ladder fixed, the same way :class:`DeferredTargets` does for targets.
+
+    Attributes:
+        from_profile: Earliest gate profile whose rungs carry these
+            claims. Every rung at or after it in ladder order gets them;
+            every rung before it renders exactly as it did.
+        claims: Non-empty platform claim rows, verbatim, appended after
+            the always-present ones.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    from_profile: ReleaseGateProfile
+    claims: Annotated[tuple[dict[str, object], ...], Field(min_length=1)]
+
+    def applies_to(self, profile: ReleaseGateProfile) -> bool:
+        """Return whether a rung running *profile* carries these claims.
+
+        Args:
+            profile: Gate profile of the rung being rendered.
+
+        Returns:
+            ``True`` when *profile* is at or after
+            :attr:`from_profile` in ladder order.
+        """
+        return _PROFILE_RANK[profile] >= _PROFILE_RANK[self.from_profile]
+
+
 class CheckpointConfigTemplate(_StrictModel):
     """The train-wide half of a checkpoint configuration.
 
@@ -114,6 +150,8 @@ class CheckpointConfigTemplate(_StrictModel):
         deferred_targets: Target rows that join from one rung onward,
             or ``None`` when every rung publishes the same set.
         platform_claims: Advertised platform rows, verbatim.
+        deferred_platform_claims: Platform rows that join from one rung
+            onward, or ``None`` when every rung advertises the same set.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -125,6 +163,7 @@ class CheckpointConfigTemplate(_StrictModel):
     targets: Annotated[tuple[dict[str, object], ...], Field(min_length=1)]
     deferred_targets: DeferredTargets | None = None
     platform_claims: tuple[dict[str, object], ...] = ()
+    deferred_platform_claims: DeferredPlatformClaims | None = None
 
     def targets_for(self, profile: ReleaseGateProfile) -> list[dict[str, object]]:
         """Return the target rows a rung running *profile* publishes to.
@@ -140,6 +179,22 @@ class CheckpointConfigTemplate(_StrictModel):
         deferred = self.deferred_targets
         if deferred is not None and deferred.applies_to(profile):
             rows.extend(dict(target) for target in deferred.targets)
+        return rows
+
+    def platform_claims_for(self, profile: ReleaseGateProfile) -> list[dict[str, object]]:
+        """Return the platform claim rows a rung running *profile* advertises.
+
+        Args:
+            profile: Gate profile of the rung being rendered.
+
+        Returns:
+            The always-present claims, followed by the deferred ones
+            when the rung is at or after the profile they join at.
+        """
+        rows = [dict(claim) for claim in self.platform_claims]
+        deferred = self.deferred_platform_claims
+        if deferred is not None and deferred.applies_to(profile):
+            rows.extend(dict(claim) for claim in deferred.claims)
         return rows
 
 
@@ -167,6 +222,7 @@ def render_checkpoint_config(
     """
     gates = profile_gates(rung.gate_profile)
     targets = template.targets_for(rung.gate_profile)
+    claims = template.platform_claims_for(rung.gate_profile)
     body: dict[str, object] = {
         "version": rung.version,
         "channel": rung.channel.value,
@@ -176,13 +232,13 @@ def render_checkpoint_config(
         "require_clean_tree": template.require_clean_tree,
         "require_ancestor_of_remote": template.require_ancestor_of_remote,
         "targets": targets,
-        "platform_claims": [dict(claim) for claim in template.platform_claims],
+        "platform_claims": claims,
         "gates": {
             "profile": rung.gate_profile.value,
             "required": [gate.value for gate in gates],
         },
     }
-    if not template.platform_claims:
+    if not claims:
         del body["platform_claims"]
     logger.info(
         f"render_checkpoint_config release_key={rung.release_key!r} "
@@ -245,6 +301,7 @@ def with_membership_refs(
 __all__ = [
     "CONFIG_ROOT_KEY",
     "CheckpointConfigTemplate",
+    "DeferredPlatformClaims",
     "DeferredTargets",
     "render_checkpoint_config",
     "with_membership_refs",

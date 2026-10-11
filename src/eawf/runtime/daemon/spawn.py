@@ -32,8 +32,10 @@ import sys
 import time
 from pathlib import Path
 
+from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.platform.process_liveness import pid_alive
-from eawf.runtime.daemon.limits import READINESS_BUDGET_SECONDS
+from eawf.runtime.daemon.limits import READINESS_BUDGET_SECONDS, STOP_CONCLUDE_SECONDS
+from eawf.runtime.daemon.runtime_dir import pinned_workspace
 from eawf.runtime.daemon.singleton import (
     DaemonSpawnLockTimeoutError,
     acquire_spawn_lock,
@@ -396,7 +398,9 @@ def request_daemon_shutdown(
     Args:
         runtime_dir: Daemon runtime directory.
         drain: Whether to drain in-flight mutations before exit.
-        timeout_seconds: Drain window in seconds.
+        timeout_seconds: Drain window in seconds. The answer is awaited for
+            the window plus :data:`STOP_CONCLUDE_SECONDS`, since the daemon
+            answers only once the Runs it stopped are ended.
 
     Returns:
         Shutdown result object, or ``None`` when no daemon accepts the
@@ -410,6 +414,7 @@ def request_daemon_shutdown(
     if timeout_seconds < 0 or timeout_seconds > 600:
         raise ValueError(f"timeout_seconds must be between 0 and 600, got {timeout_seconds!r}")
     request = _daemon_shutdown_request(drain=drain, timeout_seconds=timeout_seconds)
+    answer_seconds = timeout_seconds + STOP_CONCLUDE_SECONDS
     if sys.platform == "win32":
         from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_client_call
 
@@ -417,7 +422,7 @@ def request_daemon_shutdown(
             response = pipe_client_call(
                 default_pipe_name(runtime_dir),
                 request,
-                wait_ms=max(1, timeout_seconds * 1000),
+                wait_ms=int(answer_seconds * 1000),
             )
         except OSError:
             return None
@@ -427,7 +432,7 @@ def request_daemon_shutdown(
             return None
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as control:
-                control.settimeout(max(1.0, float(timeout_seconds)))
+                control.settimeout(answer_seconds)
                 control.connect(str(sock_path))
                 control.sendall(request)
                 reader = control.makefile("rb")
@@ -479,6 +484,29 @@ def wait_for_daemon_ready(
     )
 
 
+def daemon_environ(runtime_dir: Path) -> dict[str, str]:
+    """Return the environment a daemon spawned for *runtime_dir* starts under.
+
+    Args:
+        runtime_dir: Runtime directory the daemon binds its socket and PID
+            file under, passed as ``EAWF_RUNTIME_DIR``.
+
+    Returns:
+        The caller's environment plus ``EAWF_RUNTIME_DIR`` and, when the
+        invocation pinned a workspace, ``EA_STATE`` naming that tree's
+        ``state.json``: the daemon resolves its tree from ``EA_STATE`` or
+        its working directory, and the working directory is the tree the
+        operator ran from, not the one ``--workspace`` named.
+    """
+    env = dict(os.environ)
+    env["EAWF_RUNTIME_DIR"] = str(runtime_dir)
+    workspace = pinned_workspace()
+    if workspace is not None:
+        state_path, _reason = resolve_with_reason(workspace)
+        env["EA_STATE"] = str(state_path.resolve())
+    return env
+
+
 def _spawn_posix(runtime_dir: Path) -> None:
     """Fork-fork-exec the daemon and detach via :func:`os.setsid`.
 
@@ -494,6 +522,7 @@ def _spawn_posix(runtime_dir: Path) -> None:
     intermediate child exits with status 0 so the parent's
     :func:`os.waitpid` does not zombify.
     """
+    env = daemon_environ(runtime_dir)
     # First fork — parent waits + returns; child continues.
     pid = os.fork()
     if pid != 0:
@@ -524,17 +553,9 @@ def _spawn_posix(runtime_dir: Path) -> None:
         os.close(devnull_in)
     if devnull_out > 2:
         os.close(devnull_out)
-    # Pin the spawned daemon to *runtime_dir* via the
-    # ``EAWF_RUNTIME_DIR`` env var so a test (or operator override)
-    # binds its socket + PID file under the caller-supplied directory
-    # rather than the user-global default.
-    os.environ["EAWF_RUNTIME_DIR"] = str(runtime_dir)
-    # Replace the current process image with the daemon entry point.
-    # Using ``execve`` propagates the override env into the daemon
-    # process explicitly rather than relying on ``execv``'s default
-    # of inheriting the parent environment (which it does, but the
-    # explicit form documents the intent).
-    os.execve(sys.executable, [sys.executable, "-m", "eawf.runtime.daemon.main"], os.environ)
+    # Replace the current process image with the daemon entry point under
+    # the environment that pins its runtime dir and tree.
+    os.execve(sys.executable, [sys.executable, "-m", "eawf.runtime.daemon.main"], env)
 
 
 def _pythonw_executable() -> str:
@@ -578,8 +599,7 @@ def _spawn_windows(runtime_dir: Path) -> None:
         | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
         | getattr(subprocess, "CREATE_NO_WINDOW", 0)
     )
-    env = dict(os.environ)
-    env["EAWF_RUNTIME_DIR"] = str(runtime_dir)
+    env = daemon_environ(runtime_dir)
     subprocess.Popen(
         [_pythonw_executable(), "-m", "eawf.runtime.daemon.main"],
         stdin=subprocess.DEVNULL,
@@ -662,6 +682,7 @@ __all__ = [
     "DaemonSpawnTimeout",
     "DaemonSpawnTimeoutError",
     "auto_spawn_daemon",
+    "daemon_environ",
     "daemon_pid_if_ready",
     "request_daemon_shutdown",
     "wait_for_daemon_ready",

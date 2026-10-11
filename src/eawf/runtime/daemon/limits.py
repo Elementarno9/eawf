@@ -62,6 +62,11 @@ CLI_WIRE_MARGIN_SECONDS: float = 30.0
 #: over the worst measured single-handler occupancy.
 READINESS_BUDGET_SECONDS: float = 1.0
 
+#: How long a stopping daemon allows the Runs it stopped past the drain window to
+#: be ended: each worker's grace-then-kill ladder plus the Run's closing writes.
+#: The stop's caller waits the drain window plus this before giving up on the answer.
+STOP_CONCLUDE_SECONDS: float = 60.0
+
 
 def mutation_hard_limit_for(juror_wall_clock_seconds: float | None) -> float:
     """Return the watchdog hard limit that accommodates *juror_wall_clock_seconds*.

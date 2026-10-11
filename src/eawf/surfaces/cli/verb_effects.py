@@ -67,6 +67,9 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "batch reconcile": _mutate(
         "runtime.delivery.read_back_merge", "runtime.delivery.reconcile_merge"
     ),
+    "batch close-landed": _mutate("runtime.delivery.close_landed"),
+    "batch squash": _read(),
+    "batch rebind": _mutate("runtime.delivery.rebind_squashed"),
     "task promote": _mutate("domain.task.promote"),
     "task demote": _mutate("domain.task.demote"),
     "task drop": _mutate("domain.task.drop"),
@@ -76,6 +79,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "task release": _mutate("domain.task.release"),
     "task ready": _mutate("domain.task.ready"),
     "task complete": _mutate("domain.task.complete"),
+    "task waive-criterion": _mutate("runtime.delivery.waive_criterion"),
     "task submit": _create("runtime.candidate.submit"),
     "task seal": _mutate("runtime.candidate.report.bind"),
     "task prove": _mutate("operation.submit", "runtime.delivery.prove_task"),
@@ -91,6 +95,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "run pause-dispatch": _create("runtime.dispatch.control.request"),
     "run drain-dispatch": _create("runtime.dispatch.control.request"),
     "run resume-dispatch": _create("runtime.dispatch.control.request"),
+    "run dispatch": _create("runtime.task.dispatch"),
     "release changelog": _read(),
     "release notes": _read(),
     "release observe": _mutate("release.observe_target"),

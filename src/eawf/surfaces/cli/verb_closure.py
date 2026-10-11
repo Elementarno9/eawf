@@ -55,6 +55,9 @@ RootEntryKind = Literal["cross_cutting", "tooling"]
 #:   processes, never a revisioned record.
 #: - ``wire_pending``: the route takes no anchor yet; adding it daemon-side
 #:   is open work, and the row leaves this list when it lands.
+#: - ``state_driven``: moves every record whose state calls for it, each
+#:   edge anchored on the revision it reads and keyed by it, so a retry finds
+#:   nothing left to move.
 AnchorExemptionKind = Literal[
     "revision_only",
     "derived_key",
@@ -66,6 +69,7 @@ AnchorExemptionKind = Literal[
     "host_event",
     "local_setup",
     "wire_pending",
+    "state_driven",
 ]
 
 #: The one anchor each partial exemption kind still takes, and whether the
@@ -210,6 +214,17 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
         "a question already standing on the same bundle is returned, not filed twice",
     ),
     _exempt("batch integrate", "derived_key", "assembling the same plan names the same replay key"),
+    _exempt(
+        "batch close-landed",
+        "state_driven",
+        "closes whichever Batches have landed, each edge keyed by the revision it moves",
+    ),
+    _exempt(
+        "batch rebind",
+        "create_keyed",
+        "appends superseding ledger rows, which keep no revision; the map's squashed tip "
+        "anchors the rewrite",
+    ),
     _exempt(
         "release adopt",
         "revision_only",
@@ -397,6 +412,11 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
         "campaign run",
         "revision_only",
         "starting a drive keeps no replay ledger; a drive already running is not started twice",
+    ),
+    _exempt(
+        "run dispatch",
+        "wire_pending",
+        "runtime.task.dispatch takes neither anchor yet; a Task with an open Run is refused",
     ),
 )
 
