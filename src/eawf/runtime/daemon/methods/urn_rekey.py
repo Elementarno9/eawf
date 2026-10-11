@@ -256,7 +256,7 @@ def _document_path(authority: RootAuthority) -> Path:
 
 
 @native_mutator(URN_REKEY_METHOD)
-async def urn_rekey(
+async def _urn_rekey(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
     """Serve one URN re-key plan, or its apply, for the fenced tree.
@@ -289,5 +289,4 @@ __all__ = [
     "UrnRekeyParams",
     "UrnRekeyRepositoryNotRegisteredError",
     "run_urn_rekey",
-    "urn_rekey",
 ]

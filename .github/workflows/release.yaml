@@ -1,9 +1,11 @@
 name: Release
 
-# Release pipeline. The build + wheel-size gate + ``twine check`` run on
-# tag push and manual dispatch (dry-run); the PyPI publish job is live,
-# gated behind an explicit tag-push condition so ``workflow_dispatch``
-# dry-runs never publish. Publishing uses the ``pypi-publish``
+# Release pipeline. The build + wheel-size gate + ``twine check``, the
+# receipts (inventory, pip-audit, reproducible build) and the plugin
+# package-and-validate gate run on tag push, on manual dispatch and
+# nightly (dry-runs); the PyPI publish job is live, gated behind an
+# explicit tag-push condition so a dispatched or nightly dry-run never
+# publishes. Publishing uses the ``pypi-publish``
 # trusted-publisher environment (OIDC, no API token) — the environment
 # and its PyPI trusted-publisher binding must exist in the repo settings
 # for the publish job to authenticate.
@@ -22,6 +24,12 @@ on:
         description: "alpha | beta | rc | stable"
         required: true
         default: alpha
+  # The nightly dry run fires the tag-time gates against main, so a red
+  # receipt, audit or plugin validate surfaces the morning after the
+  # commit that caused it instead of on the tag that would ship it.
+  # GitHub fires a schedule on the default branch only.
+  schedule:
+    - cron: "41 4 * * *"
 
 permissions:
   contents: read
@@ -371,6 +379,161 @@ jobs:
           name: reproducible-build-receipt
           path: dist/release-receipts/reproducible-build-receipt.json
 
+  plugin-package-validate:
+    name: Plugin package + validate (dry-run)
+    # The same render and blocking validate gate plugin-release.yaml runs
+    # before any plugin publish, run here so the nightly dry run proves the
+    # plugin trees still package and validate. The two steps are kept
+    # verbatim with plugin-release.yaml's package-validate job, which
+    # tests/lint/test_release_workflow_shape.py asserts. Nothing here
+    # publishes: no upload, no token beyond read.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Render published plugin trees (claude=npm, codex=git-subdir)
+        # The CLI ``eawf plugin package`` always emits the LOCAL source
+        # shape; the published-pointer shape is library-only. Call the
+        # packager directly with the published ``PublishSource`` so the
+        # rendered marketplace manifests carry the npm / git-subdir
+        # pointers the W05 self-hosted catalog references.
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          from pathlib import Path
+
+          from eawf.runtime.runtimes.claude.plugin_package import (
+              PublishSource as ClaudePublishSource,
+              package_plugin as package_claude,
+          )
+          from eawf.runtime.runtimes.codex.plugin_package import (
+              PublishSource as CodexPublishSource,
+              package_plugin as package_codex,
+          )
+
+          claude_target = Path("build/eawf-plugin")
+          codex_target = Path("build/eawf-codex-marketplace")
+
+          claude_result = package_claude(
+              claude_target,
+              force=True,
+              publish_source=ClaudePublishSource.NPM,
+          )
+          print(f"claude tree: {claude_result.target}")
+
+          codex_result = package_codex(
+              codex_target,
+              force=True,
+              publish_source=CodexPublishSource.GIT_SUBDIR,
+          )
+          print(f"codex tree: {codex_result.target}")
+          PY
+
+      - name: Validate gate (blocking) — claude + codex trees
+        # Blocking pre-publish gate. For Claude we prefer the official
+        # ``claude plugin validate`` when the binary is present in CI;
+        # otherwise we fall back to a JSON parse + required-key check so a
+        # malformed manifest still reds the job. For Codex (no validator
+        # binary) we parse the marketplace + plugin manifest and assert the
+        # git-subdir pointer + required keys are intact.
+        run: |
+          set -euo pipefail
+          claude_tree="build/eawf-plugin"
+          codex_market="build/eawf-codex-marketplace/.agents/plugins/marketplace.json"
+          codex_manifest="build/eawf-codex-marketplace/plugins/eawf/.codex-plugin/plugin.json"
+
+          if command -v claude >/dev/null 2>&1; then
+            echo "claude binary present — running official validator"
+            (cd "$claude_tree" && claude plugin validate .)
+          else
+            echo "claude binary absent — falling back to JSON-schema/parse check"
+          fi
+
+          # The catalog, prompt, argument, allowlist, output-schema and file
+          # digests of each rendered tree are checked as one publication unit.
+          uv run python -m eawf.workflow.skills.publication "$claude_tree"
+          uv run python -m eawf.workflow.skills.publication build/eawf-codex-marketplace/plugins/eawf
+
+          uv run python - "$claude_tree" "$codex_market" "$codex_manifest" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          claude_tree = Path(sys.argv[1])
+          codex_market = Path(sys.argv[2])
+          codex_manifest = Path(sys.argv[3])
+
+          failures: list[str] = []
+
+          def load(path: Path) -> dict | None:
+              if not path.is_file():
+                  failures.append(f"missing: {path}")
+                  return None
+              try:
+                  return json.loads(path.read_text(encoding="utf-8"))
+              except json.JSONDecodeError as exc:
+                  failures.append(f"invalid JSON {path}: {exc}")
+                  return None
+
+          # Claude plugin manifest + marketplace pointer (npm source).
+          claude_plugin = load(claude_tree / ".claude-plugin" / "plugin.json")
+          if claude_plugin is not None:
+              for key in ("name", "version"):
+                  if key not in claude_plugin:
+                      failures.append(f"claude plugin.json missing {key!r}")
+              if claude_plugin.get("name") != "eawf":
+                  failures.append(f"claude plugin name {claude_plugin.get('name')!r} != 'eawf'")
+
+          claude_market = load(claude_tree / ".claude-plugin" / "marketplace.json")
+          if claude_market is not None:
+              plugins = claude_market.get("plugins", [])
+              entry = next((p for p in plugins if p.get("name") == "eawf"), None)
+              if entry is None:
+                  failures.append("claude marketplace has no 'eawf' plugin entry")
+              else:
+                  source = entry.get("source")
+                  if not (isinstance(source, dict) and source.get("source") == "npm"):
+                      failures.append(f"claude marketplace source not npm pointer: {source!r}")
+
+          # Codex marketplace + manifest (git-subdir pointer).
+          market = load(codex_market)
+          if market is not None:
+              plugins = market.get("plugins", [])
+              entry = next((p for p in plugins if p.get("name") == "eawf"), None)
+              if entry is None:
+                  failures.append("codex marketplace has no 'eawf' plugin entry")
+              else:
+                  source = entry.get("source")
+                  if not (isinstance(source, dict) and source.get("source") == "git-subdir"):
+                      failures.append(f"codex marketplace source not git-subdir: {source!r}")
+                  elif source.get("ref") != "plugins-dist":
+                      failures.append(f"codex git-subdir ref {source.get('ref')!r} != 'plugins-dist'")
+
+          codex_plugin = load(codex_manifest)
+          if codex_plugin is not None and "name" not in codex_plugin:
+              failures.append("codex plugin.json missing 'name'")
+
+          if failures:
+              print("plugin validate gate FAILED:")
+              for entry in failures:
+                  print(f"  - {entry}")
+              sys.exit(1)
+          print("plugin validate gate passed (both runtimes)")
+          PY
+
   publish-pypi:
     name: Publish to PyPI
     needs:
@@ -382,7 +545,7 @@ jobs:
         inventory-and-reproducibility,
       ]
     # Live publish, gated behind an explicit condition: only a real
-    # ``v0.*`` tag push publishes. ``workflow_dispatch`` dry-runs build +
+    # ``v*`` tag push publishes. Dispatched and nightly dry-runs build +
     # validate but never reach this job. Requires the ``pypi-publish``
     # trusted-publisher environment to be configured in the repo settings.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -402,6 +565,9 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
+          # A re-run after a partial upload skips the files PyPI already
+          # holds instead of failing on them, so it can finish the set.
+          skip-existing: true
 
       - name: Write the PyPI publication receipt
         # The publisher is this pipeline, not the daemon: the runner is

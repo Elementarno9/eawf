@@ -1,18 +1,15 @@
 """REL-009: ``ended_at`` is stamped at process exit, not at later reconciliation.
 
-Before this seam the only writer of :attr:`AgentSession.ended_at` was
-:func:`~eawf.runtime.session.store.reconcile_orphaned_sessions`, which runs at
-the *next* daemon boot. A session that really ended at 14:02 was therefore
-recorded as ending whenever the daemon happened to restart, so every duration
-derived from it was wrong by minutes or days and the telemetry duration
-distribution was unusable.
+Before this seam :attr:`AgentSession.ended_at` was written only by a later
+reconcile at the *next* daemon boot. A session that really ended at 14:02 was
+therefore recorded as ending whenever the daemon happened to restart, so every
+duration derived from it was wrong by minutes or days and the telemetry
+duration distribution was unusable.
 
 These tests pin the fixed contract against the on-disk ``state.json``:
 
 - the ``session_end`` and ``agent_end`` hook paths both stamp ``ended_at`` at
   the event's own instant, and the row leaves ``active_session_ids``;
-- the boot-time reconcile then finds nothing left to flip, which is the
-  observable difference between "stamped at exit" and "stamped at reconcile";
 - ambiguous, absent, and already-terminal cases are non-blocking no-ops.
 """
 
@@ -30,7 +27,7 @@ from eawf.kernel.store.kinds.events.session_closed import SessionClosedPayload
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.hooks.event import HookEvent, HookEventType
 from eawf.runtime.hooks.lifecycle_capture import stamp_session_end_on_exit
-from eawf.runtime.session.store import reconcile_orphaned_sessions, stamp_session_end_at_exit
+from eawf.runtime.session.store import stamp_session_end_at_exit
 
 pytestmark = pytest.mark.unit
 
@@ -107,27 +104,6 @@ def test_hook_path_stamps_ended_at_at_process_exit(
     assert state.agent_sessions["SES-1"].ended_at == _EXITED
     assert state.agent_sessions["SES-1"].status is AgentSessionStatus.CLOSED
     assert state.current.active_session_ids == []
-
-
-def test_exit_stamped_ended_at_survives_the_boot_reconcile(tmp_path: Path) -> None:
-    """The reconcile finds nothing to flip once the exit path already stamped.
-
-    This is the whole REL-009 claim: the end instant belongs to the exit, so a
-    later daemon boot must not be the thing that decides it.
-    """
-    state_path = _write_state(
-        tmp_path, _session("SES-1", runtime_session_id="vendor-1", scope_id=_SCOPE)
-    )
-    events_path = store_path(state_path, StoreKind.EVENT)
-
-    stamped = stamp_session_end_at_exit(
-        state_path, events_path, runtime_session_id="vendor-1", now=_EXITED
-    )
-    flipped = reconcile_orphaned_sessions(state_path, events_path)
-
-    assert stamped == "SES-1"
-    assert flipped == 0
-    assert _reload(state_path).agent_sessions["SES-1"].ended_at == _EXITED
 
 
 def test_stamp_ended_at_appends_a_close_event(tmp_path: Path) -> None:

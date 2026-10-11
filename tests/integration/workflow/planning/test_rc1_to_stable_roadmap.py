@@ -26,6 +26,7 @@ import pytest
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.state.epoch2.authority import require_native_authority
 from eawf.kernel.store.compaction import read_document, write_document
+from eawf.kernel.store.ledger import ledger_snapshot, read_ledger_content
 from tests.integration.workflow.planning._v07_plans import (
     PARENTS,
     PLAN_NAMES,
@@ -125,16 +126,21 @@ def _copied_tree(tmp_path: Path) -> Path:
             document.get(collection, {}).pop(key, None)
     write_document(document_path, document)
     # A completed planned record compacts out of the document into its
-    # ledger, where it would still own its ids, so drop it there too.
+    # ledger, where it would still own its ids, so drop it there too. A sealed
+    # ledger keeps its leading lines in a hashed snapshot, so the filter reads
+    # snapshot and live file together and the copy keeps only a live file.
     for collection, keys in planned.items():
         ledger = document_path.parent / "ledger" / f"{collection}.jsonl"
-        if not ledger.is_file():
+        snapshot = ledger_snapshot(ledger)
+        if not ledger.is_file() and snapshot is None:
             continue
         kept = [
             line
-            for line in ledger.read_text(encoding="utf-8").splitlines(keepends=True)
+            for line in read_ledger_content(ledger).decode("utf-8").splitlines(keepends=True)
             if json.loads(line).get("record_key") not in keys
         ]
+        if snapshot is not None:
+            snapshot.unlink()
         ledger.write_text("".join(kept), encoding="utf-8")
     create_containers(root, tmp_path / "runtime")
     return root

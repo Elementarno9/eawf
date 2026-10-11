@@ -16,7 +16,6 @@ from __future__ import annotations
 import hashlib
 import shutil
 import sys
-import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -34,7 +33,6 @@ from eawf.runtime.daemon.churn import (
     CHURN_LEDGER_ROTATED_NAME,
     ChurnOp,
     ChurnRecord,
-    lineage_born_at,
 )
 from tests._session_helpers import seed_active_session
 
@@ -164,52 +162,3 @@ def test_boot_leaves_epoch1_sessions_and_state_bytes_unchanged(
     _boot(rt_dir, monkeypatch)
     assert _digest(_state_path(repo)) == before
     assert set(_statuses(repo).values()) == {AgentSessionStatus.ACTIVE}
-
-
-# ---- lineage_born_at --------------------------------------------------------
-
-
-def test_lineage_born_at_empty_dir_is_now(tmp_path: Path) -> None:
-    """No boot record at all: the lineage is born at the call."""
-    floor = time.time_ns()
-    born = lineage_born_at(tmp_path)
-    assert born is not None
-    assert born.timestamp() == pytest.approx(floor / 1_000_000_000, abs=5.0)
-
-
-def test_lineage_born_at_single_boot(tmp_path: Path) -> None:
-    """One boot record is the birth."""
-    _plant_boot(tmp_path, LINEAGE_BIRTH)
-    born = lineage_born_at(tmp_path)
-    assert born is not None
-    assert born.timestamp() == pytest.approx(LINEAGE_BIRTH.timestamp(), abs=1e-3)
-
-
-def test_lineage_born_at_takes_the_earliest_boot_and_ignores_exits(tmp_path: Path) -> None:
-    """Later boots and exit records never move the birth."""
-    _plant_boot(tmp_path, LINEAGE_BIRTH + timedelta(hours=1))
-    _plant_boot(tmp_path, LINEAGE_BIRTH)
-    exit_record = ChurnRecord(
-        pid=1, op=ChurnOp.EXIT, at_ns=0, suite_session=None, touched=("eawfd.pid",)
-    )
-    with (tmp_path / CHURN_LEDGER_NAME).open("a", encoding="utf-8") as fh:
-        fh.write(f"{exit_record.model_dump_json()}\n")
-    born = lineage_born_at(tmp_path)
-    assert born is not None
-    assert born.timestamp() == pytest.approx(LINEAGE_BIRTH.timestamp(), abs=1e-3)
-
-
-def test_lineage_born_at_rotated_ledger_is_unbounded(tmp_path: Path) -> None:
-    """A rotated ledger means the birth is past the retained records."""
-    _plant_boot(tmp_path, LINEAGE_BIRTH, ledger=CHURN_LEDGER_ROTATED_NAME)
-    assert lineage_born_at(tmp_path) is None
-
-
-def test_lineage_born_at_skips_a_torn_line(tmp_path: Path) -> None:
-    """A torn ledger tail does not hide the valid boot before it."""
-    _plant_boot(tmp_path, LINEAGE_BIRTH)
-    with (tmp_path / CHURN_LEDGER_NAME).open("a", encoding="utf-8") as fh:
-        fh.write('{"pid": 1, "op": "bo')
-    born = lineage_born_at(tmp_path)
-    assert born is not None
-    assert born.timestamp() == pytest.approx(LINEAGE_BIRTH.timestamp(), abs=1e-3)

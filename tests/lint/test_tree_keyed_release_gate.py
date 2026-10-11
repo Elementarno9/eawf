@@ -68,6 +68,7 @@ _TREE = "c" * 40
 _OTHER_TREE = "d" * 40
 _BASELINE_TREE = "f" * 40
 _API = "https://api.example.test"
+_RELEASE_REF = "refs/heads/release"
 
 
 def _load_tool() -> ModuleType:
@@ -221,7 +222,8 @@ def test_green_tree_gate_reds_on_a_partial_needs_list(tool: ModuleType) -> None:
     workflow = _load(_CI)
     workflow["jobs"][_GREEN_TREE_JOB]["needs"] = ["changes", "test", "twice-green"]
     assert green_tree_violations(workflow, heavy_jobs=tool.HEAVY_JOBS) == [
-        "the green-tree job does not need tool-install-smoke, snapshot-pairing, commit-grammar, "
+        "the green-tree job does not need lint, coverage, tool-install-smoke, snapshot-pairing, "
+        "commit-grammar, "
         "requirement-trace, "
         "skill-eval, linux-jail, prose-gate, windows, "
         "so a red run of one of them can still record the tree"
@@ -234,7 +236,9 @@ def test_green_tree_gate_reds_on_a_single_string_need(tool: ModuleType) -> None:
     workflow["jobs"][_GREEN_TREE_JOB]["needs"] = "changes"
     problems = green_tree_violations(workflow, heavy_jobs=tool.HEAVY_JOBS)
     assert len(problems) == 1
-    assert problems[0].startswith("the green-tree job does not need test, tool-install-smoke")
+    assert problems[0].startswith(
+        "the green-tree job does not need lint, test, coverage, tool-install-smoke"
+    )
 
 
 def test_green_tree_gate_reds_on_an_unsound_record_job(tool: ModuleType) -> None:
@@ -338,11 +342,11 @@ def _skipped_needs() -> dict[str, Any]:
 
 
 def test_green_tree_record_plan_accepts_passed_heavy_jobs(tool: ModuleType) -> None:
-    assert tool.plan_record(_needs("true"), event="push") == ""
+    assert tool.plan_record(_needs("true"), event="push", ref=_RELEASE_REF) == ""
 
 
 def test_green_tree_record_plan_inherits_a_skipped_push(tool: ModuleType) -> None:
-    assert tool.plan_record(_skipped_needs(), event="push") == _BASELINE
+    assert tool.plan_record(_skipped_needs(), event="push", ref=_RELEASE_REF) == _BASELINE
 
 
 def _without(needs: dict[str, Any], name: str) -> dict[str, Any]:
@@ -431,7 +435,7 @@ def test_green_tree_record_plan_refuses(
     tool: ModuleType, needs: object, event: str, message: str
 ) -> None:
     with pytest.raises(tool.RecordRefusedError, match=re.escape(message)):
-        tool.plan_record(needs, event=event)
+        tool.plan_record(needs, event=event, ref=_RELEASE_REF)
 
 
 # --- fakes for git, the API and the clock ------------------------------------------

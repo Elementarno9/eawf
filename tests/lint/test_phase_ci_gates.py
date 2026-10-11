@@ -19,8 +19,9 @@ The changes gate guards the cost cut that skips the heavy jobs on a
 state-only push: the skip must hinge on the classifier's verdict alone,
 and the jobs outside it must keep running on every push.
 
-The twice-green gate pins when the rerun happens as well as how: on main
-and release pushes plus nightly and manual runs, never on a pull request.
+The twice-green gate pins when the rerun happens as well as how: on
+release pushes plus nightly and manual runs, never on a pull request or a
+main push.
 """
 
 from __future__ import annotations
@@ -66,7 +67,12 @@ def test_coverage_gate_config_parses_and_classifies() -> None:
 
 
 def test_snapshot_pairing_gate_passes_over_the_phase_range() -> None:
-    """tools/snapshot_pairing_gate.py accepts the phase commit range."""
+    """tools/snapshot_pairing_gate.py accepts the phase commit range.
+
+    The range is local, so before ``eawf publish`` it holds scratch commits
+    whose ``Task:`` trailer names a native Task; after publish, Batch
+    commits. The gate accepts both against the committed generation.
+    """
     base = subprocess.run(
         ["git", "merge-base", "origin/main", "HEAD"],
         capture_output=True,
@@ -456,10 +462,13 @@ _CLASSIFIER_SAYS_RUN = "(needs.changes.result != 'success' || needs.changes.outp
 #: instead of auto-skipping when the changes job itself failed.
 _CHANGES_CONDITION = f"!cancelled() && {_CLASSIFIER_SAYS_RUN}"
 
-#: The one job-level condition twice-green carries: a push runs it under the
-#: changes gate, a scheduled or dispatched run always, a pull request never.
+#: The one job-level condition twice-green carries: a release push runs it
+#: under the changes gate, a scheduled or dispatched run always, a pull
+#: request or a main push never.
 _TWICE_GREEN_CONDITION = (
-    f"!cancelled() && ((github.event_name == 'push' && {_CLASSIFIER_SAYS_RUN})"
+    "!cancelled() && ((github.event_name == 'push'"
+    " && (github.ref == 'refs/heads/release' || startsWith(github.ref, 'refs/heads/release/'))"
+    f" && {_CLASSIFIER_SAYS_RUN})"
     " || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')"
 )
 
@@ -468,10 +477,10 @@ _PUSH_BRANCHES = ["main", "release", "release/**"]
 
 #: The sentence the job comment and the lint docstring both carry, so the
 #: cadence a reader sees is the cadence the lint enforces.
-_REL026_CADENCE = "the REL-026 proof runs on main and release pushes plus nightly and manual runs"
+_REL026_CADENCE = "the REL-026 proof runs on release pushes plus nightly and manual runs"
 
 _TWICE_GREEN_CONDITION_PROBLEM = (
-    "the twice-green job is not gated to main and release pushes plus nightly and manual "
+    "the twice-green job is not gated to release pushes plus nightly and manual "
     "runs, so it can run on a pull request or skip a run it owes"
 )
 _NIGHTLY_PROBLEM = "ci.yaml has no nightly schedule, so twice-green never re-proves main"
@@ -520,10 +529,10 @@ def twice_green_violations(workflow: dict[Any, Any]) -> list[str]:
     is where the shared-runtime-dir and stale-lock flakes lived. The
     ``test`` matrix runs the suite once and cannot see that class at all.
 
-    Cadence: the REL-026 proof runs on main and release pushes plus nightly
-    and manual runs. A pull request never runs it: there the rerun bounded
-    every push's wall-clock without catching a defect the first run missed.
-    A push skips it only when the changes job proved the code tree already
+    Cadence: the REL-026 proof runs on release pushes plus nightly and
+    manual runs. A pull request or a main push never runs it: there the
+    rerun bounded wall-clock without catching a defect the first run missed.
+    A release push skips it only when the changes job proved the code tree already
     went green, while a scheduled or dispatched run has no diff and always
     runs it. The cadence therefore needs the push branch filter, a nightly
     schedule, a dispatch trigger, and a concurrency group split by event,
@@ -698,7 +707,7 @@ def test_twice_green_gate_reds_on_a_missing_job() -> None:
 
 
 def test_twice_green_gate_accepts_the_cadence_condition() -> None:
-    """Main and release pushes under the changes gate plus nightly and manual runs."""
+    """Release pushes under the changes gate plus nightly and manual runs."""
     assert twice_green_violations(_twice_green_workflow()) == []
 
 
@@ -1650,8 +1659,9 @@ _TEST_PATH_CONFIGS: tuple[str, ...] = (
 #: word characters, dots and dashes, stopping at the first quote, whitespace
 #: or shell metacharacter. Backslashes are admitted because two of the four
 #: configs spell a path inside a regex (``settings\.json``); the caller
-#: strips them, along with a trailing glob slash.
-_TEST_PATH_RE = re.compile(r"tests/[\w./\\-]*[\w/]")
+#: strips them, along with a trailing glob slash. A ``*`` is admitted so a
+#: pytest ``--ignore-glob`` pattern is checked whole, not as its stem.
+_TEST_PATH_RE = re.compile(r"tests/[\w./\\*-]*[\w/]")
 
 
 def _configured_test_paths() -> dict[str, set[str]]:
@@ -1666,12 +1676,12 @@ def _configured_test_paths() -> dict[str, set[str]]:
 
 
 def _move_commit_ci_orphans(configured: dict[str, set[str]]) -> list[str]:
-    """Return one row per configured ``tests/`` path that is not on disk."""
+    """Return one row per configured ``tests/`` path or glob that matches nothing."""
     return sorted(
         f"{name} names {path}, which does not exist"
         for name, paths in configured.items()
         for path in paths
-        if not (_REPO_ROOT / path).exists()
+        if not any(_REPO_ROOT.glob(path))
     )
 
 
@@ -1690,6 +1700,14 @@ def test_move_commit_ci_gate_reds_on_an_orphaned_path() -> None:
     """The gate fires on the real defect: a path left behind by a move."""
     orphans = _move_commit_ci_orphans({"justfile": {"tests/runtimes/test_metering.py"}})
     assert orphans == ["justfile names tests/runtimes/test_metering.py, which does not exist"]
+
+
+def test_move_commit_ci_gate_reds_on_a_glob_that_matches_nothing() -> None:
+    """An ignore glob left behind by a move ignores nothing, which is the same defect."""
+    orphans = _move_commit_ci_orphans({"ci.yaml": {"tests/tui/console/test_console_live_*.py"}})
+    assert orphans == [
+        "ci.yaml names tests/tui/console/test_console_live_*.py, which does not exist"
+    ]
 
 
 def test_move_commit_ci_covers_every_config_that_hardcodes_a_test_path() -> None:

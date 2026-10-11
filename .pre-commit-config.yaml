@@ -16,8 +16,9 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=1024]
         # An epoch-2 generation's ledgers are the project state itself and
-        # grow with it, the way the epoch-1 state.json did.
-        exclude: ^\.ea/generations/gen-[0-9a-f]{16}/ledger/
+        # grow with it, the way the epoch-1 state.json did. The duration
+        # baseline keeps one row per test so the CI shards can balance.
+        exclude: ^(\.ea/generations/gen-[0-9a-f]{16}/ledger/|tests/duration-baseline\.json$)
       - id: check-merge-conflict
       - id: debug-statements
 
@@ -80,7 +81,10 @@ repos:
         # The ledger-history fixtures are slices of committed ledgers taken at
         # pinned revisions, so they carry the same commit SHAs; they are listed
         # one by one like the migration fixtures.
-        exclude: 'uv\.lock|\.gitignore|^tests/fixtures/epoch1-snapshot/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/cutover-faults/pending-wal/locks/wal/wal-canary-0001\.pending\.json$|^tests/fixtures/migration/epoch1-full/backlog_corpus\.json$|^tests/fixtures/migration/epoch2/complete-manifest\.json$|^tests/fixtures/migration/live-cutover/corpus-pin\.json$|^tests/fixtures/migration/p30-i26-history/provenance\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/document\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/store/audit\.jsonl$|^tests/golden/kernel/migration/rehearsal/[a-z0-9-]+\.json$|^tests/fixtures/release/observations/[a-z_]+-dev2\.json$|^\.ea/requirements\.json$|^\.ea/generations/gen-[0-9a-f]{16}/state\.json$|^\.ea/generations/(EPOCH2_ACTIVE|selected)\.json$|^tests/fixtures/ledger_history/(batch_before|batch_remapped|task_stray)\.jsonl$'
+        #
+        # The duration baseline is generated from a JUnit report and stamps
+        # the commit it measured, a hex revision like the lockfile's hashes.
+        exclude: 'uv\.lock|^tests/duration-baseline\.json$|\.gitignore|^tests/fixtures/epoch1-snapshot/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/cutover-faults/pending-wal/locks/wal/wal-canary-0001\.pending\.json$|^tests/fixtures/migration/epoch1-full/backlog_corpus\.json$|^tests/fixtures/migration/epoch2/complete-manifest\.json$|^tests/fixtures/migration/live-cutover/corpus-pin\.json$|^tests/fixtures/migration/p30-i26-history/provenance\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/document\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/store/audit\.jsonl$|^tests/golden/kernel/migration/rehearsal/[a-z0-9-]+\.json$|^tests/fixtures/release/observations/[a-z_]+-dev2\.json$|^\.ea/requirements\.json$|^\.ea/generations/gen-[0-9a-f]{16}/state\.json$|^\.ea/generations/(EPOCH2_ACTIVE|selected)\.json$|^tests/fixtures/ledger_history/(batch_before|batch_remapped|task_stray)\.jsonl$'
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.0.0
@@ -119,7 +123,7 @@ repos:
         stages: [pre-push]
       - id: ledger-history
         name: ledger-history
-        entry: uv run eawf hook ledger-history --range origin/main..HEAD --report-only
+        entry: uv run eawf hook ledger-history --range origin/main..HEAD
         language: system
         pass_filenames: false
         always_run: true

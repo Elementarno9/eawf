@@ -13,8 +13,9 @@ reports two things:
 - a **ceiling breach** -- a test of a fast-tier kind whose single run
   exceeds its tier's whole wall-time budget, which no baseline can excuse.
 
-The baseline keeps only the tests at or above the floor, because every
-test below it is judged against the floor anyway. Durations are read from
+The baseline keeps every test, sub-floor ones included: the gate judges
+those against the floor anyway, and the CI shard splitter weighs every
+test by its recorded duration. Durations are read from
 the JUnit report pytest writes, keyed ``<classname>::<name>`` so the key
 a baseline records and the key a later run measures are the same string.
 """
@@ -50,8 +51,7 @@ class DurationBaseline(BaseModel):
 
     Attributes:
         revision: The commit the recorded run measured.
-        durations: Seconds per test key, for every test at or above the
-            regression floor.
+        durations: Seconds per test key, for every test the run measured.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -106,7 +106,7 @@ def record_baseline(durations: Mapping[str, float], *, revision: str) -> Duratio
         revision: The commit that run measured.
 
     Returns:
-        A baseline keeping every test at or above the regression floor.
+        A baseline keeping every measured test, rounded to milliseconds.
 
     Raises:
         pydantic.ValidationError: *revision* is blank or a duration is
@@ -114,11 +114,7 @@ def record_baseline(durations: Mapping[str, float], *, revision: str) -> Duratio
     """
     return DurationBaseline(
         revision=revision,
-        durations={
-            key: round(seconds, 3)
-            for key, seconds in sorted(durations.items())
-            if seconds >= REGRESSION_FLOOR_SECONDS
-        },
+        durations={key: round(seconds, 3) for key, seconds in sorted(durations.items())},
     )
 
 

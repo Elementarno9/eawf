@@ -1,3 +1,16 @@
 {
-  "entries": []
+  "entries": [
+    {
+      "test_id": "tests/e2e/test_daemon_e2e.py::test_ping_cold_auto_spawns_and_reports_pid",
+      "backlog_ref": "EAWF-0392",
+      "fix_by": "2026-11-30",
+      "reason": "A cold daemon spawn on a loaded macOS runner can exceed the CLI's fixed 5 s readiness wait (SPAWN_POLL_TIMEOUT_SECONDS in the daemon spawn module), which no test-side setting can lengthen."
+    },
+    {
+      "test_id": "tests/e2e/test_daemon_e2e.py::test_ping_twice_reuses_same_daemon",
+      "backlog_ref": "EAWF-0392",
+      "fix_by": "2026-11-30",
+      "reason": "Its first ping is a cold daemon spawn that can exceed the CLI's fixed 5 s readiness wait on a loaded macOS runner, the same budget as the cold-ping case."
+    }
+  ]
 }

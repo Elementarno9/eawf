@@ -4,6 +4,10 @@ The instrument probe is stubbed at the module boundary so the suite never
 shells out to ``shutil.which`` / ``subprocess.run``. Each test pins
 ``EA_INSTRUMENT_PROBE`` (or passes ``-w/--workspace``) so the cache lives in
 a tmp dir and never touches the developer's workspace.
+
+``eawf.surfaces.doctor_repair`` is imported eagerly: a first import while
+``build_repair_plan`` is patched would bind the stub into that module for
+the rest of the process and break later real ``doctor --fix --yes`` runs.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from eawf.platform.install.instrument_probe import (
     ProbeReport,
     ProbeResult,
 )
+from eawf.surfaces import doctor_repair
 from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
@@ -175,7 +180,7 @@ def test_doctor_fix_previews_then_honors_single_rejection(
         applied = True
         return {"applied_count": 1}
 
-    monkeypatch.setattr("eawf.surfaces.doctor_repair.apply_repair_plan", apply)
+    monkeypatch.setattr(doctor_repair, "apply_repair_plan", apply)
 
     result = runner.invoke(
         app,
@@ -224,7 +229,8 @@ def test_doctor_fix_yes_applies_without_prompt(
         lambda _workspace: plan,
     )
     monkeypatch.setattr(
-        "eawf.surfaces.doctor_repair.apply_repair_plan",
+        doctor_repair,
+        "apply_repair_plan",
         lambda _plan: {"applied_count": 1, "actions": []},
     )
 

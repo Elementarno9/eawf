@@ -109,13 +109,24 @@ def test_lint_034_junit_durations_rejects_a_non_numeric_time() -> None:
         junit_durations(_junit({_UNIT: 0.1}).replace('time="0.1"', 'time="fast"'))
 
 
-def test_lint_034_record_keeps_only_tests_at_or_above_the_floor() -> None:
+def test_lint_034_record_keeps_sub_floor_tests_for_the_shard_splitter() -> None:
     baseline = record_baseline(
-        {_UNIT: REGRESSION_FLOOR_SECONDS, "a::b": REGRESSION_FLOOR_SECONDS - 0.001},
+        {_UNIT: REGRESSION_FLOOR_SECONDS, "a::b": 0.0004, "a::c": 0.0},
         revision="abc1234",
     )
 
-    assert baseline.durations == {_UNIT: REGRESSION_FLOOR_SECONDS}
+    assert baseline.durations == {"a::b": 0.0, "a::c": 0.0, _UNIT: REGRESSION_FLOOR_SECONDS}
+
+
+def test_lint_034_record_of_an_empty_run_is_an_empty_baseline() -> None:
+    assert record_baseline({}, revision="abc1234").durations == {}
+
+
+def test_lint_034_a_recorded_sub_floor_test_is_still_judged_against_the_floor() -> None:
+    baseline = record_baseline({_UNIT: 0.01}, revision="abc1234")
+
+    assert budget_findings({_UNIT: 2 * REGRESSION_FLOOR_SECONDS}, baseline) == []
+    assert len(budget_findings({_UNIT: 2 * REGRESSION_FLOOR_SECONDS + 0.01}, baseline)) == 1
 
 
 @pytest.mark.parametrize(

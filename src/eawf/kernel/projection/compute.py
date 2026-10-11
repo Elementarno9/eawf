@@ -34,7 +34,7 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Annotated, Any, Final, Literal
 
-from pydantic import ConfigDict, Field, ValidationError
+from pydantic import ConfigDict, Field, StringConstraints, ValidationError
 
 from eawf.kernel.identity import IdentityError, QualifiedUrn, parse_qualified_urn
 from eawf.kernel.migration.epoch2.continuation import entity_ref, read_legacy_row
@@ -121,6 +121,10 @@ _ASSIGNEE_FIELD: Final = "assignee_ref"
 
 #: The stored field a suspended Run names why it waits in.
 _SUSPENSION_FIELD: Final = "suspension_reason"
+
+#: One fact a row carries. Unbounded above, because a fact may join a list the record
+#: holds without limit -- a Task's write claims -- and a valid record must still render.
+_FactStr = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
 
 
 class _ProjectionViewModel(Epoch2Model):
@@ -326,7 +330,7 @@ class ProjectionRow(_ProjectionViewModel):
     parent_key: NonEmptyStr | None = None
     assignee_ref: NonEmptyStr | None = None
     suspension_reason: NonEmptyStr | None = None
-    facts: dict[str, NonEmptyStr] = Field(default_factory=dict)
+    facts: dict[str, _FactStr] = Field(default_factory=dict)
 
     def __eq__(self, other: object) -> bool:
         """Return whether two rows are one record at one revision, whatever facts ride on them.

@@ -1,11 +1,12 @@
 """Unit tests for the CI snapshot-pairing gate (``tools/snapshot_pairing_gate.py``).
 
 The gate enforces the C09 §5.6 contract: every commit in an ordinary PR range
-that *mutates* (status ``M`` / ``D`` / ``R``) a managed golden surface MUST carry
-a wave-form ``test:`` subject, so a golden change can never sneak in under an
-unrelated ``feat:`` / ``fix:`` commit. Phase PRs -- ranges whose commits declare
-a phase this repo actually opened -- defer to wholesale diff review and exit
-``0``, however many iters they span.
+that *mutates* (status ``M`` / ``D`` / ``R``) a managed golden surface MUST name
+its owner -- one corroborated ``Batch:`` trailer, a scratch commit's one
+corroborated ``Task:`` trailer, or a wave-form ``test:`` subject -- so a golden
+change can never sneak in under an unattributed ``feat:`` / ``fix:`` commit.
+Phase PRs -- ranges whose commits declare a phase this repo actually opened --
+defer to wholesale diff review and exit ``0``, however many iters they span.
 
 Coverage:
 
@@ -32,6 +33,10 @@ Coverage:
   commits for review and exit ``0`` even when a commit is unpaired;
 - the anti-spoof controls: a range that declares no phase, and a range whose
   scope tags name a phase the repo never opened, both keep the hard gate;
+- the Batch regime: ``names_native_scope`` over its accept and ambiguity
+  cases, ``native_scope`` over a seeded generation and its fail-closed paths,
+  and fixture-repo controls for Batch- and Task-trailered refreshes and for
+  fabricated or ambiguous keys;
 - the no-base/no-head push-build path no-ops at exit ``0``.
 
 ``tools/`` is excluded from the package, so the gate is loaded via
@@ -552,6 +557,204 @@ def test_unpaired_golden_under_an_unopened_phase_tag_still_fails(
     assert _GATE.main(["snapshot_pairing_gate.py", base, "HEAD"]) == 1
     err = capsys.readouterr().err
     assert offender_sha[:9] in err
+
+
+# --- Batch commit regime: native Batch / Task trailers ----------------------------
+
+_SCOPE = _GATE.NativeScope(
+    batch_keys=frozenset({"BAT-0101", "BAT-0102"}),
+    task_keys=frozenset({"EAWF-0389", "EAWF-0390"}),
+)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Why.\n\nBatch: BAT-0101\n",  # the published Batch commit
+        "Why.\n\nTask: EAWF-0389\nTask: EAWF-0390\nBatch: BAT-0102\n",  # Batch narrows Tasks
+        "Batch: BAT-0101 \t\n",  # trailing whitespace on the trailer line
+        "Why.\n\nTask: EAWF-0389\n",  # scratch commit before publish
+    ],
+)
+def test_names_native_scope_accepts_a_corroborated_batch_or_task(body: str) -> None:
+    assert _GATE.names_native_scope(body, _SCOPE) is True
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "",  # empty body names nothing
+        "Why, with no trailer.\n",
+        "Batch: BAT-0999\n",  # a Batch the generation does not hold
+        "Batch: BAT-0101\nBatch: BAT-0102\n",  # two Batches: a commit names exactly one
+        "Batch: BAT-0999\nTask: EAWF-0389\n",  # a bad Batch is not rescued by a Task
+        "Batch:\nBAT-0101\n",  # the key may not borrow the next line
+        "Task: EAWF-0999\n",  # a Task the generation does not hold
+        "Task: EAWF-0389\nTask: EAWF-0390\n",  # scratch form names exactly one Task
+        "Eawf-Wave: P32-I01-W37\n",  # a wave trailer alone is not a native carrier
+    ],
+)
+def test_names_native_scope_rejects_an_uncorroborated_or_ambiguous_body(body: str) -> None:
+    assert _GATE.names_native_scope(body, _SCOPE) is False
+
+
+def test_names_native_scope_knows_nothing_without_a_generation() -> None:
+    # Boundary: an empty scope (no epoch-2 generation) fails every native form closed.
+    empty = _GATE.NativeScope(frozenset(), frozenset())
+    assert _GATE.names_native_scope("Batch: BAT-0101\n", empty) is False
+    assert _GATE.names_native_scope("Task: EAWF-0389\n", empty) is False
+
+
+_GENERATION_ID = "gen-0123456789abcdef"
+
+
+def _seed_generation(
+    repo: Path,
+    *,
+    batches: tuple[str, ...] = (),
+    tasks: tuple[str, ...] = (),
+    ledger_batches: tuple[str, ...] = (),
+) -> Path:
+    """Mark *repo* as epoch 2 and seed its generation with native keys.
+
+    Only the fields the gate reads are written: the opt-in declaration and
+    marker that select the generation, in-flight rows in its document, and
+    compacted rows in the Batch ledger.
+
+    Returns:
+        The generation directory.
+    """
+    ea_dir = repo / ".ea"
+    generation = ea_dir / "generations" / _GENERATION_ID
+    (generation / "ledger").mkdir(parents=True, exist_ok=True)
+    (ea_dir / "epoch2-opt-in.json").write_text(json.dumps({"opt_in": True}), encoding="utf-8")
+    (ea_dir / "generations" / "EPOCH2_ACTIVE.json").write_text(
+        json.dumps({"epoch": 2, "generation_id": _GENERATION_ID}), encoding="utf-8"
+    )
+    document = {
+        "batch": {key: {"status": "ACTIVE"} for key in batches},
+        "task": {key: {"status": "RUNNING"} for key in tasks},
+    }
+    (generation / "state.json").write_text(json.dumps(document), encoding="utf-8")
+    (generation / "ledger" / "batch.jsonl").write_text(
+        "".join(json.dumps({"record_key": key}) + "\n" for key in ledger_batches),
+        encoding="utf-8",
+    )
+    return generation
+
+
+def test_native_scope_reads_ledger_and_document_keys(tmp_path: Path) -> None:
+    repo = tmp_path / "gen-ok"
+    _seed_generation(
+        repo,
+        batches=("BAT-0102", "BAT-12"),  # a malformed Batch key is dropped
+        tasks=("EAWF-0389",),
+        ledger_batches=("BAT-0101",),
+    )
+    nested = repo / "src" / "deep"
+    nested.mkdir(parents=True)
+    scope = _GATE.native_scope(nested)  # found by walking up from a subdirectory
+    assert scope.batch_keys == frozenset({"BAT-0101", "BAT-0102"})
+    assert scope.task_keys == frozenset({"EAWF-0389"})
+
+
+def test_native_scope_is_empty_without_an_epoch2_tree(tmp_path: Path) -> None:
+    # Boundary: no .ea at all, and an .ea that is not marked epoch 2.
+    bare = tmp_path / "unmanaged"
+    bare.mkdir()
+    assert _GATE.native_scope(bare) == _GATE.NativeScope(frozenset(), frozenset())
+    epoch1 = tmp_path / "epoch1"
+    _seed_state(epoch1, phases={"P32": "active"})
+    assert _GATE.native_scope(epoch1) == _GATE.NativeScope(frozenset(), frozenset())
+
+
+@pytest.mark.parametrize(
+    "ledger",
+    [
+        "not json\n",  # corrupt ledger line
+        '["BAT-0101"]\n',  # a line that is not an object with a record_key
+    ],
+)
+def test_native_scope_fails_closed_on_an_unreadable_generation(tmp_path: Path, ledger: str) -> None:
+    # Error path: a generation the gate cannot read corroborates no key.
+    repo = tmp_path / f"gen-bad-{abs(hash(ledger))}"
+    generation = _seed_generation(repo, batches=("BAT-0102",))
+    (generation / "ledger" / "batch.jsonl").write_text(ledger, encoding="utf-8")
+    assert _GATE.native_scope(repo) == _GATE.NativeScope(frozenset(), frozenset())
+
+
+def test_native_scope_fails_closed_on_a_missing_document(tmp_path: Path) -> None:
+    # Error path: the marker names a generation whose document is absent.
+    repo = tmp_path / "gen-missing"
+    generation = _seed_generation(repo, batches=("BAT-0102",))
+    (generation / "state.json").unlink()
+    assert _GATE.native_scope(repo) == _GATE.NativeScope(frozenset(), frozenset())
+
+
+def test_batch_trailed_golden_mutation_passes_the_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The published form: a `feat:` Batch commit carries its golden refresh.
+    repo = _init_repo(tmp_path / "batch-paired")
+    _seed_generation(repo, batches=("BAT-0101",))
+    base = _git(repo, "rev-list", "--max-parents=0", "HEAD")
+    _commit_golden_mutation(
+        repo, subject="feat: add a surface field", body="Why.\n\nBatch: BAT-0101\n"
+    )
+    monkeypatch.chdir(repo)
+
+    assert _GATE.find_unpaired(base, "HEAD") == []
+    assert _GATE.main(["snapshot_pairing_gate.py", base, "HEAD"]) == 0
+
+
+def test_task_trailed_scratch_golden_mutation_passes_the_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The scratch form a local pre-publish range holds.
+    repo = _init_repo(tmp_path / "task-paired")
+    _seed_generation(repo, tasks=("EAWF-0389",))
+    base = _git(repo, "rev-list", "--max-parents=0", "HEAD")
+    _commit_golden_mutation(repo, subject="fix: repair a renderer", body="Task: EAWF-0389\n")
+    monkeypatch.chdir(repo)
+
+    assert _GATE.find_unpaired(base, "HEAD") == []
+    assert _GATE.main(["snapshot_pairing_gate.py", base, "HEAD"]) == 0
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "",  # names no Batch, Task or wave
+        "Batch: BAT-0999\n",  # fabricated Batch key
+        "Task: EAWF-0999\n",  # fabricated Task key
+        "Batch: BAT-0101\nBatch: BAT-0102\n",  # ambiguous Batch
+    ],
+)
+def test_unattributed_golden_mutation_still_reds_under_the_batch_regime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], body: str
+) -> None:
+    repo = _init_repo(tmp_path / f"batch-unpaired-{abs(hash(body))}")
+    _seed_generation(repo, batches=("BAT-0101", "BAT-0102"), tasks=("EAWF-0389",))
+    base = _git(repo, "rev-list", "--max-parents=0", "HEAD")
+    offender_sha = _commit_golden_mutation(repo, subject="feat: sneak a golden rewrite", body=body)
+    monkeypatch.chdir(repo)
+
+    assert _GATE.main(["snapshot_pairing_gate.py", base, "HEAD"]) == 1
+    err = capsys.readouterr().err
+    assert offender_sha[:9] in err
+    assert "Batch: BAT-<NNNN>" in err
+
+
+def test_batch_trailer_without_a_generation_reds_the_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A Batch trailer in a tree that is not epoch 2 corroborates nothing.
+    repo = _init_repo(tmp_path / "batch-no-generation")
+    base = _git(repo, "rev-list", "--max-parents=0", "HEAD")
+    _commit_golden_mutation(repo, subject="feat: x", body="Batch: BAT-0101\n")
+    monkeypatch.chdir(repo)
+
+    assert _GATE.main(["snapshot_pairing_gate.py", base, "HEAD"]) == 1
 
 
 def test_no_base_or_head_is_a_push_build_noop() -> None:

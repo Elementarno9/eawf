@@ -328,7 +328,11 @@ jobs:
         # workflow run. Same head SHA, so the run is found by that SHA. A
         # dry run therefore needs a release.yaml dry run of the same
         # commit. The wait covers that run's receipt job and build job,
-        # which finish before its dist is uploaded.
+        # which finish before its dist is uploaded. A run that already
+        # completed will never upload one, so the wait stops at once and
+        # names its conclusion instead of sitting out the deadline. Its
+        # status is read before the download is tried, so a dist uploaded
+        # just before completion is still found.
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -337,14 +341,20 @@ jobs:
           set -euo pipefail
           deadline=$(( SECONDS + 2700 ))
           while :; do
-            run_id="$(
+            run="$(
               gh api "repos/${REPO}/actions/workflows/release.yaml/runs?head_sha=${SHA}&per_page=1" \
-                --jq '.workflow_runs[0].id // empty'
+                --jq '.workflow_runs[0] // empty | "\(.id) \(.status) \(.conclusion)"'
             )"
+            read -r run_id status conclusion <<< "${run}"
             if [ -n "${run_id}" ] && gh run download "${run_id}" --repo "${REPO}" \
                  --name dist --dir dist 2>/dev/null; then
               echo "downloaded dist from release.yaml run ${run_id}"
               break
+            fi
+            if [ "${status}" = "completed" ]; then
+              echo "refusing to render: release.yaml run ${run_id} for ${SHA} completed" \
+                "(${conclusion}) without a dist artifact" >&2
+              exit 1
             fi
             if [ "${SECONDS}" -ge "${deadline}" ]; then
               echo "refusing to render: no dist artifact for ${SHA} after 45 min" >&2

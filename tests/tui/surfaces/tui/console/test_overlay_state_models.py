@@ -26,6 +26,7 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.spec.release import ReleaseStatus
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console.clock import FakeClock, notify
 from eawf.surfaces.tui.console.decisions import (
     ClaimRecord,
@@ -446,7 +447,12 @@ def test_con_131_j2_01_live_a_sealed_pending_action_opens_no_card(tmp_path: Path
             await render_setup(app, pilot, SessionSetup(route="attention", size=1))
             held = seam.projection_for("attention")
             assert held is not None
-            assert [r.key for r in held.rows] == [ATTENTION_ACTION_KEY]
+            # The walk's dispatched Run runs on, since no worker in it ends its turn,
+            # so Attention may list it beside the action; only the action is pinned.
+            action, *others = held.rows
+            assert action.key == ATTENTION_ACTION_KEY
+            assert action.status.value == "SEALED"
+            assert all(r.collection is Epoch2Collection.RUN for r in others)
             app.press_key("Enter")
             header = app.frame_rows[0]
             return app.session.overlay, app.session.ov_subject, app.session.sel_id, header

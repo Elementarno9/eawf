@@ -44,7 +44,6 @@ from eawf.runtime.runtimes.adapter import (
 )
 from eawf.runtime.runtimes.claude import adapter as claude_adapter
 from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter, ClaudeNativeLauncher
-from eawf.runtime.runtimes.stream_json import stream_message_payloads
 from eawf.surfaces.tui.console.renderers.transcript import NATIVE_GLYPH, native_word
 from tests.fixtures.runtime.fake_claude_cli import install_fake_claude
 from tests.integration.runtime.daemon.test_native_dispatch import (
@@ -115,14 +114,15 @@ STREAM: Final[tuple[str, ...]] = (
 
 
 class StreamingLauncher(LedgerReadingLauncher):
-    """A launcher whose worker prints :data:`STREAM`, relayed as the Claude launcher does."""
+    """A launcher whose worker says each of :data:`SAID`, relayed as the Claude launcher does."""
 
     async def launch(self, request: NativeLaunchRequest) -> NativeLaunchOutcome:
         """Hand each message the stream carries to the dispatch's sink, then announce."""
         assert request.message_sink is not None, "a dispatch always records its messages"
-        for line in STREAM:
-            for message in stream_message_payloads(line):
-                await request.message_sink(message)
+        for summary in SAID:
+            await request.message_sink(
+                MessageSummaryPayload(message_role="assistant", summary=summary)
+            )
         return await super().launch(request)
 
 
@@ -137,15 +137,6 @@ class FailingLauncher(LedgerReadingLauncher):
 def _stream(canary: CanaryProvision, runtime: Path) -> tuple[RunEventRecord, ...]:
     """Return the dispatched Run's own stream lines, in ledger order."""
     return run_events_of(ledger_records(canary, runtime), run_urn())
-
-
-def test_stream_message_payloads_reads_what_the_worker_says_and_nothing_else() -> None:
-    """A tool call, its result, the envelope and a non-JSON line are not messages."""
-    said = [message.summary for line in STREAM for message in stream_message_payloads(line)]
-
-    assert said == list(SAID)
-    assert stream_message_payloads("") == ()
-    assert stream_message_payloads("[1, 2]") == ()
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the fake child is a shebang script")

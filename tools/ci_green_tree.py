@@ -13,7 +13,8 @@ of the checked-out tree, which the workflow uploads as the
 passed, or when the changes job skipped them because the tree differs
 only in bookkeeping from a green tree that is itself recorded. The record
 names that inherited tree, so every record traces back to a run whose
-heavy jobs actually ran.
+heavy jobs actually ran. Twice-green counts as heavy only on a push to the
+release train, the one push it runs on.
 
 ``gate`` runs in the ``require-green-ci`` job of both release workflows.
 It lists the successful push-event ``ci.yaml`` runs from this repository
@@ -31,7 +32,7 @@ Invocation (GitHub Actions)::
 
 Both read the standard Actions variables ``GITHUB_REPOSITORY``,
 ``GITHUB_SHA`` and ``GITHUB_API_URL``, plus ``GITHUB_TOKEN`` for the API.
-``record`` also reads ``GITHUB_EVENT_NAME``, ``GITHUB_RUN_ID``,
+``record`` also reads ``GITHUB_EVENT_NAME``, ``GITHUB_REF``, ``GITHUB_RUN_ID``,
 ``GITHUB_OUTPUT`` and ``NEEDS``, the ``toJSON(needs)`` of its job. The
 tool is stdlib-only because both jobs run it with the runner's system
 Python, before any dependency sync.
@@ -74,6 +75,13 @@ CHANGES_JOB = "changes"
 #: to have passed, or all of them to have been skipped against a recorded
 #: green tree.
 HEAVY_JOBS: tuple[str, ...] = ("test", "twice-green")
+
+#: The heavy job a push runs only on the release train. A push elsewhere
+#: skips it by its own condition, so the record there stands on the rest.
+TWICE_GREEN_JOB = "twice-green"
+
+#: The release-train branch; its ``release/`` children belong to it too.
+RELEASE_REF = "refs/heads/release"
 
 #: How long the gate waits for a push run on the tagged commit.
 GATE_DEADLINE_SECONDS = 1800
@@ -430,12 +438,14 @@ def await_green_run(
         sleep(POLL_SECONDS)
 
 
-def plan_record(needs: object, *, event: str) -> str:
+def plan_record(needs: object, *, event: str, ref: str) -> str:
     """Decide whether a ci.yaml run may record its tree.
 
     Args:
         needs: The decoded ``toJSON(needs)`` of the record job.
         event: The triggering event name.
+        ref: The pushed ref; off the release train the twice-green job
+            skips by design, so only the other heavy jobs must pass.
 
     Returns:
         An empty string when the heavy jobs passed on this run; otherwise
@@ -450,7 +460,9 @@ def plan_record(needs: object, *, event: str) -> str:
     if event != PUSH_EVENT:
         raise RecordRefusedError(f"a {event or 'unnamed'} run records no tree")
     _require_settled_needs(needs)
-    results = {name: _dig(needs, name, "result") for name in HEAVY_JOBS}
+    release = ref == RELEASE_REF or ref.startswith(f"{RELEASE_REF}/")
+    heavy = HEAVY_JOBS if release else tuple(n for n in HEAVY_JOBS if n != TWICE_GREEN_JOB)
+    results = {name: _dig(needs, name, "result") for name in heavy}
     shown = ", ".join(f"{name}={result}" for name, result in results.items())
     code = _dig(needs, CHANGES_JOB, "outputs", "code")
     if code == "true":
@@ -502,7 +514,9 @@ def build_record(
             tree carries no record.
         GreenTreeError: The environment, git or the API could not answer.
     """
-    inherit = plan_record(needs, event=env.get("GITHUB_EVENT_NAME", ""))
+    inherit = plan_record(
+        needs, event=env.get("GITHUB_EVENT_NAME", ""), ref=env.get("GITHUB_REF", "")
+    )
     sha = _require_sha(env, "GITHUB_SHA")
     run_id = _require(env, "GITHUB_RUN_ID")
     tree = tree_of(git, sha)

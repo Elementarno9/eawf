@@ -221,6 +221,66 @@ min_flows = 1
     assert any(entry.startswith("tui.flows") for entry in outcome.failures)
 
 
+def _report_under(tmp_path: Path, source: Path, filename: str) -> Path:
+    """Write a one-class report whose ``<source>`` is *source*."""
+    coverage_xml = tmp_path / "coverage.xml"
+    root = ET.Element("coverage")
+    sources = ET.SubElement(root, "sources")
+    ET.SubElement(sources, "source").text = str(source)
+    classes = ET.SubElement(ET.SubElement(ET.SubElement(root, "packages"), "package"), "classes")
+    classes.append(_class(filename, [(1, None)]))
+    ET.ElementTree(root).write(coverage_xml, encoding="utf-8", xml_declaration=True)
+    return coverage_xml
+
+
+def test_report_classes_spells_filenames_from_the_repo_root(tmp_path: Path) -> None:
+    """A report combined under ``source = src/eawf`` names files the gates can match."""
+    report = _report_under(tmp_path, tmp_path / "src" / "eawf", "kernel/x.py")
+    names = [c.get("filename") for c in _GATE.report_classes(report, tmp_path)]
+    assert names == ["src/eawf/kernel/x.py"]
+
+
+def test_report_classes_leaves_a_root_sourced_report_unchanged(tmp_path: Path) -> None:
+    report = _report_under(tmp_path, tmp_path, "src/eawf/kernel/x.py")
+    names = [c.get("filename") for c in _GATE.report_classes(report, tmp_path)]
+    assert names == ["src/eawf/kernel/x.py"]
+
+
+def test_report_classes_ignores_a_source_outside_the_repo(tmp_path: Path) -> None:
+    report = _report_under(tmp_path, tmp_path.parent / "elsewhere", "kernel/x.py")
+    names = [c.get("filename") for c in _GATE.report_classes(report, tmp_path / "repo")]
+    assert names == ["kernel/x.py"]
+
+
+def test_run_gate_leaves_out_an_excluded_package(tmp_path: Path) -> None:
+    """A package the run's tier does not exercise is not judged; the rest still are."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        """
+[tool.eawf.coverage.gates.pkg]
+path = "src/pkg/"
+line = 90
+branch = 0
+
+[tool.eawf.coverage.gates.other]
+path = "src/other/"
+line = 90
+branch = 0
+
+[tool.eawf.coverage.tui_behavioural]
+golden_glob = "none/*.json"
+min_goldens = 0
+flow_glob = "none/*.json"
+min_flows = 0
+""".lstrip(),
+        encoding="utf-8",
+    )
+    report = _report_under(tmp_path, tmp_path, "src/pkg/a.py")
+    failures = _GATE.run_gate(report, pyproject, tmp_path, frozenset({"pkg"})).failures
+    assert not any(entry.startswith("pkg:") for entry in failures)
+    assert "other: no source files matched" in failures
+
+
 _SEQUENCES = Path("tests/fixtures/console/golden/sequences")
 _BEHAVIOURAL_SPEC = {
     "golden_glob": str(_SEQUENCES / "frames-*.json"),

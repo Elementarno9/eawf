@@ -151,6 +151,7 @@ dev = [
     "detect-secrets>=1.5",
     "deptry>=0.20",
     "types-PyYAML>=6.0.12.20240917",
+    "pytest-split>=0.11.0",
 ]
 
 [tool.pytest.ini_options]

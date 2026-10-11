@@ -33,7 +33,6 @@ from eawf.observability.telemetry.store.base import AbstractMetricsStore
 from eawf.runtime.daemon.dispatch_runner import emit_session_closed
 from eawf.runtime.session.store import (
     close_session,
-    reconcile_orphaned_sessions,
     stamp_session_end_at_exit,
     start_session,
     terminalize_session,
@@ -281,28 +280,6 @@ def test_session_close_emits_event_on_process_exit_path(tmp_path: Path) -> None:
     assert payloads[0].end_marker == "clean_stop"
 
 
-def test_session_close_emits_event_on_reconcile_path(tmp_path: Path) -> None:
-    """The daemon-boot orphan reconcile emits an ``away`` close per session."""
-    state_path, event_path = _fixture_paths(tmp_path)
-    state = _make_state()
-    start_session(
-        state=state,
-        events_path=event_path,
-        role=AgentSessionRole.EXECUTOR,
-        scope_id="P32-I01-W36",
-        runtime=_RUNTIME,
-        now=_OPENED,
-    )
-    _write_state(state_path, state)
-
-    flipped = reconcile_orphaned_sessions(state_path, event_path)
-
-    payloads = _closed_payloads(event_path)
-    assert flipped == 1
-    assert len(payloads) == 1
-    assert payloads[0].end_marker == "away"
-
-
 def test_session_close_emits_event_for_zero_length_session(tmp_path: Path) -> None:
     """A session that opens and closes on the same instant still emits."""
     event_path, _ = _open_and_close(tmp_path, duration=timedelta(0))
@@ -441,7 +418,7 @@ def test_live_rebuild_reports_sessions(tmp_path: Path) -> None:
 
 
 def test_live_rebuild_reports_sessions_from_every_terminal_path(tmp_path: Path) -> None:
-    """Clean close, crash terminalize, exit stamp and boot reconcile all project."""
+    """Clean close, crash terminalize, exit stamp and a stale close all project."""
     state_path, event_path = _fixture_paths(tmp_path)
     state = _make_state()
     clean = start_session(
@@ -490,6 +467,13 @@ def test_live_rebuild_reports_sessions_from_every_terminal_path(tmp_path: Path) 
         runtime=_RUNTIME,
         now=_OPENED,
     )
+    close_session(
+        state=state,
+        events_path=event_path,
+        session_id=orphan.session.id,
+        status=AgentSessionStatus.STALE,
+        now=_OPENED + timedelta(minutes=4),
+    )
     _write_state(state_path, state)
     stamp_session_end_at_exit(
         state_path,
@@ -497,7 +481,6 @@ def test_live_rebuild_reports_sessions_from_every_terminal_path(tmp_path: Path) 
         scope_id="P32-I01-W03",
         now=_OPENED + timedelta(minutes=3),
     )
-    reconcile_orphaned_sessions(state_path, event_path)
 
     projected, rows = _rebuild_sessions(tmp_path)
 

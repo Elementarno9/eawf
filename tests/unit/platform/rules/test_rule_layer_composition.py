@@ -196,7 +196,12 @@ def test_compile_card_graph_matches_policy_when_workspace_is_empty(fx: _Fixture)
     assert compile_card_graph(fx.repo).digest == compile_rule_graph(fx.repo, home=fx.home).digest
 
 
-def test_compile_card_graph_never_reads_the_registry(fx: _Fixture) -> None:
+def test_compile_card_graph_never_reads_the_registry(
+    fx: _Fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The session-wide isolated registry may already exist on this worker, so
+    # point the lookup at a file that cannot exist to keep the refusal path.
+    monkeypatch.setenv("EAWF_REGISTRY_PATH", str(fx.home / "absent" / "registry.json"))
     fx.write_repo([_REPO_RULE], pin="sha256:" + "0" * 64)
     assert len(compile_card_graph(fx.repo).rules) == 1
     with pytest.raises(RuleWorkspaceUnresolvedError, match="registry is unreadable"):

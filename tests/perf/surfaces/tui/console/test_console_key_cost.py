@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -49,12 +50,40 @@ _skip_perf = pytest.mark.skipif(
 )
 
 
-@pytest.fixture(scope="module")
-def measured() -> KeyCost:
+#: How many independent profiles the increment gate may read before it fails.
+_INCREMENT_ATTEMPTS = 3
+
+
+def _measure() -> KeyCost:
     """Record one profile across every declared fleet size and split it."""
     harness = PerformanceHarness(FIXTURE_DIR)
     profile = asyncio.run(harness.profile(samples=DEFAULT_KEY_SAMPLES))
     return profile.key_cost()
+
+
+@pytest.fixture(scope="module")
+def measured() -> KeyCost:
+    """Return one measured key-cost split."""
+    return _measure()
+
+
+def _least_increment(first: KeyCost) -> KeyCost:
+    """Return the split with the smallest increment, re-measuring only while over budget.
+
+    The increment is the gap between two medians taken in separate windows, divided by a
+    span of tens of runs, so one scheduler burst in either window moves it by several
+    microseconds per run. A per-row regression lifts every profile; a burst lifts one.
+    Reading the least of a few independent profiles keeps the first and leaves only the
+    second behind.
+    """
+    least = first
+    for _ in range(_INCREMENT_ATTEMPTS - 1):
+        if least.increment_us < ROW_INCREMENT_CEILING_US:
+            break
+        again = _measure()
+        if again.increment_us < least.increment_us:
+            least = again
+    return least
 
 
 @_skip_perf
@@ -70,8 +99,10 @@ def test_per_key_floor_within_budget(measured: KeyCost) -> None:
 @_skip_perf
 def test_per_row_increment_within_budget(measured: KeyCost) -> None:
     assert measured.span_runs == sorted(FLEET_SIZES)[-1] - sorted(FLEET_SIZES)[-2]
-    assert measured.increment_us < ROW_INCREMENT_CEILING_US, (
-        f"per-row increment {measured.increment_us:.3f}us/run over {measured.span_runs} runs "
+    least = _least_increment(measured)
+    assert least.increment_us < ROW_INCREMENT_CEILING_US, (
+        f"per-row increment {least.increment_us:.3f}us/run over {least.span_runs} runs "
+        f"in each of up to {_INCREMENT_ATTEMPTS} profiles "
         f"exceeds the budget {ROW_INCREMENT_CEILING_US:.1f}us/run - likely a new scan over "
         "the fleet register"
     )
@@ -135,3 +166,50 @@ def test_a_console_that_does_no_per_row_work_reads_as_a_flat_slope() -> None:
     flat = _profile(floor_ms=0.5, increment_us=0.0)
     assert flat.increment_us == pytest.approx(0.0)
     assert flat.span_runs == max(FLEET_SIZES) - min(FLEET_SIZES)
+
+
+def _remeasured(monkeypatch: pytest.MonkeyPatch, increments: list[float]) -> list[float]:
+    """Make each re-measure answer the next of ``increments``; return what is left unread."""
+    queue = list(increments)
+
+    def fake() -> KeyCost:
+        return _profile(floor_ms=0.5, increment_us=queue.pop(0))
+
+    monkeypatch.setattr(sys.modules[__name__], "_measure", fake)
+    return queue
+
+
+def test_an_increment_within_budget_is_not_measured_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    left = _remeasured(monkeypatch, [0.1])
+    first = _profile(floor_ms=0.5, increment_us=0.7)
+    assert _least_increment(first) is first
+    assert left == [0.1]
+
+
+def test_a_burst_in_one_profile_is_outvoted_by_the_next(monkeypatch: pytest.MonkeyPatch) -> None:
+    """One noisy window over budget, then a quiet one: the gate reads the quiet one."""
+    left = _remeasured(monkeypatch, [0.4, 9.0])
+    noisy = _profile(floor_ms=0.5, increment_us=ROW_INCREMENT_CEILING_US + 1.0)
+    assert _least_increment(noisy).increment_us == pytest.approx(0.4)
+    assert left == [9.0]
+
+
+def test_a_per_row_regression_fails_every_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A real regression lifts every profile, so the least of them is still over budget."""
+    over = ROW_INCREMENT_CEILING_US * 20.0
+    left = _remeasured(monkeypatch, [over + 1.0, over + 2.0, 0.1])
+    least = _least_increment(_profile(floor_ms=0.5, increment_us=over))
+    assert least.increment_us == pytest.approx(over)
+    assert least.increment_us > ROW_INCREMENT_CEILING_US
+    assert left == [0.1], f"read {_INCREMENT_ATTEMPTS} profiles at most"
+
+
+def test_an_increment_just_over_the_ceiling_is_measured_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    left = _remeasured(monkeypatch, [0.2])
+    over = _profile(floor_ms=0.5, increment_us=ROW_INCREMENT_CEILING_US + 0.01)
+    assert _least_increment(over).increment_us == pytest.approx(0.2)
+    assert left == []

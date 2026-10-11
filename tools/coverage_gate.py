@@ -391,19 +391,57 @@ def stale_report_reason(
     return None
 
 
-def run_gate(coverage_xml: Path, pyproject_path: Path, repo_root: Path) -> GateOutcome:
+def report_classes(coverage_xml: Path, repo_root: Path) -> list[Element]:
+    """Return the report's ``<class>`` elements with filenames relative to *repo_root*.
+
+    ``coverage xml`` writes each filename relative to its ``<source>`` root, so a report
+    combined outside pytest-cov under ``source = ["src/eawf"]`` names ``kernel/x.py``
+    where the gates match ``src/eawf/kernel/x.py``. Each filename is rewritten through
+    the first source inside *repo_root*; a report whose source is the root is unchanged.
+
+    Args:
+        coverage_xml: Path to the Cobertura ``coverage.xml``.
+        repo_root: The repository root the gate paths are spelled against.
+
+    Returns:
+        The class elements, their ``filename`` attributes repo-relative.
+    """
+    root = ET.parse(coverage_xml).getroot()
+    prefix = ""
+    for source in root.iter("source"):
+        try:
+            inside = Path(source.text or "").resolve().relative_to(repo_root.resolve())
+        except ValueError:
+            continue
+        prefix = "" if inside == Path() else f"{inside.as_posix()}/"
+        break
+    classes = root.findall(".//class")
+    for element in classes:
+        name = element.get("filename", "")
+        if prefix and not name.startswith(prefix):
+            element.set("filename", f"{prefix}{name}")
+    return classes
+
+
+def run_gate(
+    coverage_xml: Path,
+    pyproject_path: Path,
+    repo_root: Path,
+    exclude: frozenset[str] = frozenset(),
+) -> GateOutcome:
     """Run the full gate: per-package ratchets + TUI behavioural floors.
 
     Args:
         coverage_xml: Path to the combined Cobertura ``coverage.xml``.
         pyproject_path: Path to the ``pyproject.toml`` carrying the gate config.
         repo_root: The repository root the behavioural globs resolve against.
+        exclude: Package gates left out, for a run whose tier does not exercise them.
 
     Returns:
         The :class:`GateOutcome` with every failure recorded (empty on pass).
     """
-    gates = load_gates(pyproject_path)
-    classes = ET.parse(coverage_xml).getroot().findall(".//class")
+    gates = {name: spec for name, spec in load_gates(pyproject_path).items() if name not in exclude}
+    classes = report_classes(coverage_xml, repo_root)
     pkg_report, pkg_failures = evaluate_package_gates(gates, classes)
     print("per-package coverage gates (C09 5.2)")
     print(f"{'package':16s} {'line%':>8s} {'gate':>6s}  {'branch%':>8s} {'gate':>6s}  status")
@@ -442,17 +480,23 @@ def main(argv: list[str] | None = None) -> int:
         default=repo_root_default,
         help="repository root the behavioural globs resolve against",
     )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        help="a package gate to leave out, for a run that does not exercise its tests (repeatable)",
+    )
     args = parser.parse_args(argv)
     pyproject_path = args.repo_root / "pyproject.toml"
     if not args.coverage_xml.is_file():
         print(f"coverage gate REFUSED: no report at {args.coverage_xml}", file=sys.stderr)
         return 1
-    classes = ET.parse(args.coverage_xml).getroot().findall(".//class")
+    classes = report_classes(args.coverage_xml, args.repo_root)
     reason = stale_report_reason(args.coverage_xml, classes=classes, repo_root=args.repo_root)
     if reason is not None:
         print(f"coverage gate REFUSED: {reason}; rerun the suite with --cov", file=sys.stderr)
         return 1
-    outcome = run_gate(args.coverage_xml, pyproject_path, args.repo_root)
+    outcome = run_gate(args.coverage_xml, pyproject_path, args.repo_root, frozenset(args.exclude))
     if outcome.passed:
         print("\nall coverage gates passed")
         return 0

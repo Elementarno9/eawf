@@ -64,12 +64,7 @@ from eawf.workflow.release.pipeline import (
     run_post_merge_pipeline,
     rung_label,
 )
-from eawf.workflow.release.pipeline_files import (
-    PRE_COMMIT_CONFIG,
-    SECRETS_BASELINE,
-    baseline_evidence,
-    flatten_artifacts,
-)
+from eawf.workflow.release.pipeline_files import flatten_artifacts
 from eawf.workflow.release.pipeline_host import isolated_proof_path
 from eawf.workflow.release.pipeline_receipts import RECEIPT_FILENAMES
 from eawf.workflow.release.publication_receipt import receipt_filename
@@ -81,6 +76,10 @@ VERSION = "0.7.0.dev4"
 KEY = f"REL-{VERSION}"
 NEXT_KEY = "REL-0.7.0rc1"
 TARGETS = ("npm", "pypi")
+#: The committed scan baseline and its pre-commit acknowledgement, which the
+#: evidence step must leave byte for byte now that evidence stays local.
+SECRETS_BASELINE = ".secrets.baseline"
+PRE_COMMIT_CONFIG = ".pre-commit-config.yaml"
 #: Commit ids are derived rather than spelled, so no literal here reads
 #: as a secret to the scanner the evidence step drives.
 SOURCE = hashlib.sha1(b"pipeline-source").hexdigest()
@@ -1092,28 +1091,6 @@ def test_flatten_artifacts_rejects_an_ambiguous_download(tmp_path: Path) -> None
         (tmp_path / "raw" / run / "a.json").write_text("{}", encoding="utf-8")
     with pytest.raises(ValueError, match="expected one"):
         flatten_artifacts(tmp_path / "raw", tmp_path / "flat", ["a.json"])
-
-
-def test_baseline_evidence_leaves_a_clean_file_alone(tmp_path: Path) -> None:
-    _seed_baseline(tmp_path)
-    (tmp_path / "clean.json").write_text('{"status": "baked"}\n', encoding="utf-8")
-    before = (tmp_path / PRE_COMMIT_CONFIG).read_text(encoding="utf-8")
-    assert baseline_evidence(tmp_path, ["clean.json"]) == 0
-    assert (tmp_path / PRE_COMMIT_CONFIG).read_text(encoding="utf-8") == before
-
-
-def test_baseline_evidence_requires_one_hash_comment(tmp_path: Path) -> None:
-    _seed_baseline(tmp_path)
-    (tmp_path / PRE_COMMIT_CONFIG).write_text("repos: []\n", encoding="utf-8")
-    (tmp_path / "pin.json").write_text(json.dumps({"sha": SOURCE}), encoding="utf-8")
-    with pytest.raises(ValueError, match="0 Baseline-hash"):
-        baseline_evidence(tmp_path, ["pin.json"])
-
-
-def test_baseline_evidence_rejects_a_baseline_without_results(tmp_path: Path) -> None:
-    (tmp_path / SECRETS_BASELINE).write_text("[]\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="no results map"):
-        baseline_evidence(tmp_path, [])
 
 
 def test_isolated_proof_path_hides_codex_and_keeps_the_toolchain(tmp_path: Path) -> None:

@@ -8,9 +8,8 @@ Per-(scope, runtime) uniqueness is enforced at ``start`` time: starting a new
 session whose ``(scope_id, runtime)`` pair already has an ``ACTIVE`` entry in
 ``state.agent_sessions`` raises :class:`SessionConflict`.
 
-Every terminal path here (:func:`close_session`, :func:`terminalize_session`,
-:func:`stamp_session_end_at_exit`, and :func:`reconcile_orphaned_sessions`
-through the first of those) also emits the typed ``session_closed`` event the
+Every terminal path here (:func:`close_session`, :func:`terminalize_session`
+and :func:`stamp_session_end_at_exit`) also emits the typed ``session_closed`` event the
 telemetry projection derives its session rows from. The flat ``session.close``
 row stays the human timeline; the typed row is the projectable record, and it
 is what makes a rebuild report the sessions that actually ran.
@@ -501,83 +500,6 @@ def terminalize_session(
     return staged
 
 
-def reconcile_orphaned_sessions(
-    state_path: Path,
-    event_path: Path,
-    *,
-    opened_since: datetime | None = None,
-) -> int:
-    """Flip the booting daemon's ``ACTIVE`` agent sessions to ``STALE``.
-
-    A daemon's spawned children (researcher / executor agents) die with the
-    daemon, but their :class:`~eawf.kernel.state.models.AgentSession` rows stay
-    ``ACTIVE`` in ``state.json``, so the Watch surface renders a zombie live
-    agent that never dies. A fresh daemon owns no live children by definition,
-    so every ``ACTIVE`` session its lineage opened is orphaned -- a flip by
-    open time, not a per-pid probe (``AgentSession`` carries no subprocess
-    pid). A session opened before the lineage first booted belongs to some
-    other daemon (a checkout's committed sessions under a gate-proof daemon
-    on a fresh runtime dir) and is left alone, so that boot writes nothing.
-
-    Each flip routes through :func:`close_session`, which stamps the terminal
-    status + ``ended_at``, drops the sid from ``state.current.active_session_ids``,
-    and appends a ``session.close`` event to *event_path*. The whole reconcile
-    runs under the canonical ``portalock(state.json)`` + one locked atomic
-    write, mirroring the daemon canonical-writer path. When no session is
-    ``ACTIVE`` the write is skipped (no-op) and no event is appended.
-
-    Boot-safe: an absent or unloadable ``state.json`` (a fresh project whose
-    state is not yet initialised, or a minimal stub) has no sessions to
-    reconcile, so it is a no-op that returns 0 rather than crashing the daemon
-    boot -- the reconcile runs before the listener starts, so a hard failure
-    here would abort startup.
-
-    Args:
-        state_path: Path to ``state.json``.
-        event_path: Path to ``event.jsonl`` (the ``session.close`` event sink).
-        opened_since: The booting lineage's birth; only sessions started at
-            or after it are flipped. ``None`` flips every ``ACTIVE`` session,
-            for a lineage older than its retained boot records.
-
-    Returns:
-        The count of sessions flipped from ``ACTIVE`` to ``STALE`` (0 when the
-        state is absent / unloadable / has no ACTIVE session of the lineage).
-    """
-    # Imported lazily: the ``eawf.workflow.evidence`` package __init__ pulls in
-    # the verdict path, which imports this module -- a module-level import here
-    # is a boot-time circular import.
-    from eawf.surfaces.cli.errors import UserError, ValidationError
-    from eawf.workflow.evidence._io import load_state
-
-    if not state_path.exists():
-        return 0
-    with portalock.acquire(state_path, timeout=5.0):
-        try:
-            state = load_state(state_path)
-        except (UserError, ValidationError) as exc:
-            logger.debug(f"reconcile_orphaned_sessions skip reason=state-unloadable cause={exc!r}")
-            return 0
-        orphan_ids = [
-            sid
-            for sid, session in state.agent_sessions.items()
-            if session.status is AgentSessionStatus.ACTIVE
-            and (opened_since is None or session.started_at >= opened_since)
-        ]
-        for sid in orphan_ids:
-            close_session(
-                state=state,
-                events_path=event_path,
-                session_id=sid,
-                status=AgentSessionStatus.STALE,
-                summary="orphaned by daemon restart",
-            )
-        if orphan_ids:
-            write_state_unlocked(state_path, state.model_dump(mode="json"))
-    count = len(orphan_ids)
-    logger.info(f"reconcile_orphaned_sessions flipped={count}")
-    return count
-
-
 def _exit_target(
     state: State,
     *,
@@ -591,7 +513,7 @@ def _exit_target(
     opened under it, and a bare exit with neither only resolves when exactly
     one session is live. Ambiguity returns ``None`` rather than guessing --
     stamping the wrong row's ``ended_at`` corrupts every duration derived from
-    it, and the daemon-boot reconcile still catches whatever this declines.
+    it, so a declined exit leaves the session for ``eawf session close``.
     The vendor id is compared through its hash, so a row whose binding is still
     a raw id resolves too.
     """
@@ -626,16 +548,15 @@ def stamp_session_end_at_exit(
 ) -> str | None:
     """Stamp the exiting process's session row terminal at the exit instant.
 
-    Without this, ``ended_at`` is only ever written by
-    :func:`reconcile_orphaned_sessions` at the *next* daemon boot, so every
-    session duration is really "time until someone restarted the daemon" --
-    minutes or days wide of the truth, which makes the duration distribution
-    unusable. The exit path owns the honest instant, so it writes it.
+    Without this, ``ended_at`` is written only when someone later closes the
+    session, so every session duration is really "time until someone
+    noticed" -- minutes or days wide of the truth, which makes the duration
+    distribution unusable. The exit path owns the honest instant, so it
+    writes it.
 
     Runs under the canonical ``portalock(state.json)`` + one locked atomic
     write, mirroring the daemon canonical-writer path (AGENTS rule 4's
-    direct-write fallback, as :func:`reconcile_orphaned_sessions` already
-    does). Idempotent: a session already terminal resolves to no target and
+    direct-write fallback). Idempotent: a session already terminal resolves to no target and
     the write is skipped, so a runtime that fires both ``session_end`` and
     ``agent_end`` stamps once.
 

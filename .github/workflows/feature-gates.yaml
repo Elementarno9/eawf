@@ -1,0 +1,87 @@
+name: Feature gates
+
+# The prose and skill-eval gates on every push to a feature branch, so a
+# finding surfaces while the work is still on the branch instead of on the
+# pull request that ships it. Only these two cheap gates run here: the
+# heavy test matrix stays on ci.yaml, whose push trigger does not name
+# feature branches. That is deliberate, not only a cost cut: the release
+# gates accept any green push run of ci.yaml on the tagged commit, so a
+# ci.yaml run on a feature push that skipped the matrix could vouch for a
+# tag nobody tested.
+
+on:
+  push:
+    branches: ["feature/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: feature-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prose-gate:
+    name: Layer-2 prose gate (strict)
+    # The push-time twin of ci.yaml's pull-request prose-gate. A push has
+    # no pull request base, so the diff base is the merge base with
+    # origin/main: the scan sees exactly the Markdown the branch adds or
+    # changes, not what main gained since the branch was cut.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history and every remote branch, so origin/main and the
+          # merge base are both present.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Install Vale + sync styles
+        # As in ci.yaml: the deterministic EAWF013/014/017 legs block even
+        # when the Vale leg fails open.
+        run: |
+          uv tool install vale || pipx install vale || true
+          vale sync || true
+
+      - name: Validate prose (strict)
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          base="$(git merge-base origin/main "${SHA}")"
+          echo "diff base: merge base with origin/main ${base:0:10}"
+          uv run eawf hook validate-prose --strict --base "${base}"
+
+      - name: Citation scope (EAWF027) over the tree
+        run: uv run eawf hook eawf027-citation-scope
+
+  skill-eval:
+    name: Skill envelope evals
+    # The same deterministic, model-free envelope evals ci.yaml runs.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Skill envelope evals
+        run: uv run pytest tests/eval/test_skill_eval.py -m eval -q

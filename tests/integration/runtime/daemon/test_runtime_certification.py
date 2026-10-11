@@ -36,9 +36,9 @@ from eawf.runtime.daemon.methods.conformance import runner_for
 from eawf.runtime.daemon.methods.runtime_certification import RUNTIME_CERTIFY_METHOD
 from eawf.runtime.daemon.runtime_certifier import (
     REPROBE_BACKOFF,
+    RuntimeCertifier,
     RuntimeNotProbedError,
     certifier_for,
-    certify_installed,
     installed_version,
 )
 from eawf.runtime.runtimes.probes import sdk_baseline
@@ -110,6 +110,11 @@ def _bin(tmp_path: Path, *, wait_for: Path | None = None) -> Path:
 
 def _state_path(canary: CanaryProvision) -> Path:
     return canary.root / ".ea" / "state.json"
+
+
+def certify_installed(state_path: Path, runtime_id: str) -> MachineCertification:
+    """Probe *runtime_id* now through a certifier of the tree holding *state_path*."""
+    return RuntimeCertifier(state_path.parent).certify(runtime_id)
 
 
 @pytest.fixture
