@@ -21,8 +21,8 @@ from eawf.kernel.state.epoch2.plan_revision import PlanBody, PlannedTask, plan_c
 from eawf.kernel.state.epoch2.run import BatchScope, RunPurpose
 from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.surfaces.render.skills.registry import SKILL_REGISTRY
-from eawf.workflow.planning.apply import _planned_task
 from eawf.workflow.planning.lenses import PlanFindingCode, PlanLens, run_plan_lenses
+from eawf.workflow.planning.materialise import _planned_task
 from eawf.workflow.planning.orchestration import (
     ORCHESTRATION_CONTRACT,
     ORCHESTRATION_STATEMENT,

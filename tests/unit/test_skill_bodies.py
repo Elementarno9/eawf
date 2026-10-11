@@ -20,11 +20,9 @@ from pydantic import BaseModel, ValidationError
 from eawf.workflow.skills.bodies import (
     AuditBody,
     FlowBody,
-    InitBody,
     MemoryBody,
     MockupBody,
     MockupVariant,
-    PolishBody,
     ResearchBody,
     ReviewBody,
     ShipBody,
@@ -190,52 +188,6 @@ def test_review_body_round_trip_and_recommendation_literal() -> None:
                 "recommendation": "merge",
             }
         )
-
-
-def test_polish_body_round_trip_and_item_kind_literal() -> None:
-    body = PolishBody.model_validate(
-        {
-            "groups": [
-                {
-                    "topic": "stale",
-                    "scope": "docs",
-                    "risk": "low",
-                    "items": [
-                        {
-                            "kind": "stale_doc",
-                            "location": "docs/old.md",
-                            "action": "delete",
-                            "applied": False,
-                        }
-                    ],
-                }
-            ],
-            "memory_pass": {"promotions": 1, "prunes": 2, "compactions": 0},
-            "report_only": False,
-        }
-    )
-    _round_trip(body)
-    # Unknown item kind rejected.
-    with pytest.raises(ValidationError, match="Input should be"):
-        PolishBody.model_validate(
-            {
-                "groups": [
-                    {
-                        "topic": "x",
-                        "scope": "y",
-                        "risk": "low",
-                        "items": [{"kind": "unknown_kind", "location": "x", "action": "y"}],
-                    }
-                ]
-            }
-        )
-
-
-def test_init_body_minimal_round_trip_and_extra_rejected() -> None:
-    body = InitBody()
-    _round_trip(body)
-    with pytest.raises(ValidationError, match="Extra inputs"):
-        InitBody.model_validate({"unexpected": 1})
 
 
 def test_flow_body_round_trip_with_step_dicts() -> None:

@@ -10,8 +10,8 @@ pin the source, fetch the build receipts, tag and push (only with the
 operator's publish flag), wait for the publish runs, open the record,
 pin the candidate, prove the gates, sweep readiness, approve, publish,
 reconcile, observe to BAKED, advance the train, check by trailer that
-main carries what was released -- a phase's wave pins, or each Batch of
-a Milestone as exactly one commit -- and land the evidence locally,
+main carries what was released -- a phase's wave pins, or the commits
+each Batch of a Milestone pinned -- and land the evidence locally,
 recording each file's sha256 in the evidence step's journal row.
 
 Every step is journaled once it completes, one row per step, under the
@@ -59,8 +59,8 @@ from eawf.kernel.spec.release import (
 )
 from eawf.kernel.state.types import UtcDatetime
 from eawf.runtime.lock import portalock
-from eawf.workflow.lifecycle.wave_sha import load_drift_acks
-from eawf.workflow.lifecycle.wave_trailer_repin import TrailerRepinError, resolve_trailer_repins
+from eawf.runtime.vcs.trailer_repin import TrailerRepinError, resolve_trailer_repins
+from eawf.runtime.vcs.wave_sha import load_drift_acks
 from eawf.workflow.release.advance import TrainAdvanceRecord
 from eawf.workflow.release.pipeline_files import flatten_artifacts
 from eawf.workflow.release.pipeline_receipts import RECEIPT_FILENAMES, read_build_receipt
@@ -123,7 +123,6 @@ class PipelineRefusalCode(StrEnum):
     MILESTONE_UNREADABLE = "milestone_unreadable"
     MILESTONE_BATCHES_MISSING = "milestone_batches_missing"
     BATCH_TRAILER_MISSING = "batch_trailer_missing"
-    BATCH_TRAILER_DUPLICATED = "batch_trailer_duplicated"
     BATCH_HEAD_MISMATCH = "batch_head_mismatch"
 
 
@@ -328,16 +327,16 @@ class PipelineHost(Protocol):
         """Return wave id -> pinned commit for the closed waves of *phase_id*."""
         ...
 
-    def milestone_batch_heads(self, milestone_key: str) -> dict[str, str | None]:
-        """Return Batch key -> bound head for the COMPLETED Batches of *milestone_key*.
-
-        The head is the commit the Batch's selected integration generation
-        binds, or ``None`` when no generation binds one.
-        """
+    def milestone_batch_heads(self, milestone_key: str) -> dict[str, str]:
+        """Return Batch key -> the head each COMPLETED Batch of *milestone_key* pinned."""
         ...
 
-    def batch_trailer_commits(self, ref: str) -> dict[str, tuple[str, ...]]:
-        """Return Batch key -> the commits reachable from *ref* carrying its ``Batch:`` trailer."""
+    def batch_carrier_commits(self, ref: str) -> dict[str, tuple[str, ...]]:
+        """Return Batch key -> the commits reachable from *ref* carrying its work.
+
+        A commit carries a Batch through a ``Task:`` trailer naming a Task placed in it
+        or a ``Batch:`` trailer naming it.
+        """
         ...
 
     def sleep(self, seconds: float) -> None:
@@ -1164,21 +1163,20 @@ class _PipelineRun:
         return self._repin_phase(step, self.options.phase_id)
 
     def _repin_milestone(self, step: PipelineStep, milestone_key: str) -> dict[str, str]:
-        # Tasks are traced through their Batch in state, not by trailer, so
-        # a Batch that landed as exactly the commit publish bound is the
-        # whole check; epoch-1 wave pins and drift acks play no part.
+        # A Batch landed as it closed when main carries exactly the commits of its work
+        # that the head it pinned carries; a Batch may land as several commits. Epoch-1
+        # wave pins and drift acks play no part.
         remote = self.options.remote
         target_ref = f"refs/remotes/{remote}/main"
+        unreadable = (
+            f"repair what it names (a native state tree, a fetched {remote}/main), then rerun"
+        )
         try:
             heads = self.host.milestone_batch_heads(milestone_key)
-            carriers = self.host.batch_trailer_commits(target_ref) if heads else {}
+            landed = self.host.batch_carrier_commits(target_ref) if heads else {}
         except PipelineHostError as exc:
             raise PipelineRefusal(
-                step,
-                PipelineRefusalCode.MILESTONE_UNREADABLE,
-                detail=str(exc),
-                remedy=f"repair what it names (a native state tree, a fetched {remote}/main), "
-                "then rerun",
+                step, PipelineRefusalCode.MILESTONE_UNREADABLE, detail=str(exc), remedy=unreadable
             ) from exc
         # A mistyped key reads no Batches, and checking none would pass
         # without checking the released Milestone at all.
@@ -1189,37 +1187,33 @@ class _PipelineRun:
                 detail=f"milestone {milestone_key} has no COMPLETED Batch",
                 remedy="rerun with the released Milestone's key in --milestone",
             )
-        missing = sorted(key for key in heads if not carriers.get(key))
+        missing = sorted(key for key in heads if not landed.get(key))
         if missing:
             raise PipelineRefusal(
                 step,
                 PipelineRefusalCode.BATCH_TRAILER_MISSING,
-                detail=f"no commit on {target_ref} carries the Batch trailer of "
+                detail=f"no commit on {target_ref} carries a Task or Batch trailer of "
                 f"{', '.join(missing)}",
-                remedy=f"publish and land those Batches with `eawf publish`, fetch {remote} "
-                "and rerun",
+                remedy=f"land those Batches' commits on main, fetch {remote} and rerun",
             )
-        doubled = [f"{key}={len(carriers[key])}" for key in sorted(heads) if len(carriers[key]) > 1]
-        if doubled:
+        try:
+            pinned = {head: self.host.batch_carrier_commits(head) for head in set(heads.values())}
+        except PipelineHostError as exc:
             raise PipelineRefusal(
-                step,
-                PipelineRefusalCode.BATCH_TRAILER_DUPLICATED,
-                detail=f"{target_ref} carries more than one commit for {', '.join(doubled)}",
-                remedy="a Batch lands as exactly one commit; inspect them with "
-                f"`git log --grep '^Batch: ' {target_ref}` and settle the release by hand",
-            )
-        moved = [
-            f"{key} bound {head[:12] if head else 'nothing'}, landed {carriers[key][0][:12]}"
-            for key, head in sorted(heads.items())
-            if head != carriers[key][0]
-        ]
+                step, PipelineRefusalCode.MILESTONE_UNREADABLE, detail=str(exc), remedy=unreadable
+            ) from exc
+        moved: list[str] = []
+        for key, head in sorted(heads.items()):
+            bound = set(pinned[head].get(key, ()))
+            stray = [sha for sha in landed[key] if sha not in bound]
+            if stray or bound != set(landed[key]):
+                moved.append(f"{key} bound {head[:12]}, landed {(stray or landed[key])[0][:12]}")
         if moved:
             raise PipelineRefusal(
                 step,
                 PipelineRefusalCode.BATCH_HEAD_MISMATCH,
-                detail=f"main landed other commits than publish bound: {'; '.join(moved)}",
-                remedy="land the published branch on main by fast-forward, or publish again "
-                "so the Batch binds the landed commit, then rerun",
+                detail=f"main landed other commits than the Batches pinned: {'; '.join(moved)}",
+                remedy="merge the phase branch into main so each commit survives, then rerun",
             )
         return {"milestone": milestone_key, "batches": str(len(heads))}
 
@@ -1265,7 +1259,10 @@ class _PipelineRun:
                 step,
                 PipelineRefusalCode.TRAILER_REPIN_PENDING,
                 detail=f"main rewrote the commits of {', '.join(moved)}",
-                remedy="apply the commits.repin repair with `eawf doctor --fix`, then rerun",
+                remedy=(
+                    "list those waves under acked_wave_ids in .eawf/drift-acks.json "
+                    "to keep their stale pins, then rerun"
+                ),
             )
         return {"pins": str(len(rows)), "acked": str(len(rows) - len(checked))}
 

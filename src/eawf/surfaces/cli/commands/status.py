@@ -37,10 +37,12 @@ wave.
 
 Exit codes:
 
-- ``0`` on success.
-- ``2`` (``NOT_FOUND``) when no ``state.json`` is found via the resolver.
-- ``3`` (``INVALID_INPUT``) when the resolved state file fails Pydantic
-  schema validation (callers should rerun ``eawf validate`` to inspect).
+- ``0`` on success, including an epoch-2 tree whose decision ledger is
+  unreadable: its decisions are left out and ``blockers`` names the cause.
+- ``1`` (``USER_ERROR``) when no ``state.json`` is found via the resolver
+  (``data.kind`` ``NotFound``), or when the resolved state file or the
+  generation document fails to load (``data.kind`` ``InvalidInput``;
+  callers should rerun ``eawf validate`` to inspect).
 
 The text branch prints a compact human summary; the JSON branch is the
 canonical machine surface and the only one the acceptance gate inspects.
@@ -513,14 +515,15 @@ def status(
             flags=effective_flags,
         )
         return
+    ledger_blockers: list[str] = []
     try:
         native_decisions = _native_decisions(state_path) if authority["epoch"] == 2 else ()
     except (LedgerError, ValueError) as exc:
-        errors.emit_error(
-            errors.UserError(f"decision ledger unreadable: {exc}", kind="InvalidInput"),
-            flags=effective_flags,
-        )
-        return
+        # The decisions are one line of the report; a torn ledger costs that
+        # line, not the pointers, tasks and git head the operator came for.
+        logger.warning(f"status decisions=unavailable cause={exc!s}")
+        native_decisions = ()
+        ledger_blockers.append(f"decision ledger unreadable: {exc}")
 
     payload: dict[str, Any] = {
         "project": _project_summary(state),
@@ -537,7 +540,7 @@ def status(
         "git": _git_info(cwd=_find_git_root(state_path.parent)),
         "authority": authority,
         "native": native,
-        "blockers": _blockers(state),
+        "blockers": [*_blockers(state), *ledger_blockers],
         "research_campaign": _research_campaign_summary(state, state_path),
     }
 

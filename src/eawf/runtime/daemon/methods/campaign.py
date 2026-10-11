@@ -30,9 +30,7 @@ nothing:
 - ``runtime.campaign.finding.promote`` promotes what a Campaign learned into a
   held ``CFN-####`` finding. Promoting the same statement again finds it.
 
-``projection.campaign.view`` and ``projection.campaign.artifact`` read the
-Campaign back as :class:`~eawf.kernel.projection.campaign.CampaignView` and one
-:class:`~eawf.kernel.projection.campaign.ArtifactCardView`.
+The Campaign read models live in :mod:`eawf.runtime.daemon.methods.campaign_read`.
 """
 
 from __future__ import annotations
@@ -41,23 +39,18 @@ import asyncio
 import hashlib
 import logging
 import uuid
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, NoReturn
 
-import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.delivery.integration import IdempotencyKey
 from eawf.kernel.delivery.receipts import canonical_digest
 from eawf.kernel.identity import EntityKind, QualifiedUrn
 from eawf.kernel.projection.campaign import (
-    ArtifactCardView,
-    CampaignView,
-    build_campaign_view,
     promoted_findings,
-    promoting_sequences,
     stored_revisions,
 )
 from eawf.kernel.state.enums import CampaignStatus, OpenQuestionStatus
@@ -90,7 +83,6 @@ from eawf.kernel.state.epoch2.campaign import (
 )
 from eawf.kernel.state.epoch2.finding import CampaignFinding, FindingStatement
 from eawf.kernel.state.epoch2.question import OpenQuestion
-from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.state.epoch2.urns import (
     CampaignUrn,
     ClaimUrn,
@@ -100,14 +92,13 @@ from eawf.kernel.state.epoch2.urns import (
     TrackUrn,
 )
 from eawf.kernel.state.epoch2.values import EntityOrigin
-from eawf.kernel.store.compaction import document_rows, read_document
+from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     effective_records,
     read_ledger_records,
 )
-from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import (
@@ -116,11 +107,11 @@ from eawf.runtime.daemon.epoch2_transaction import (
     commit_ledger_append,
     commit_row_write,
 )
-from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
+from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods.campaign_answers import answer_converged_questions
 from eawf.runtime.daemon.methods.delivery_approval import publish_commits
 from eawf.runtime.daemon.methods.host_question import held_questions
-from eawf.runtime.daemon.methods.projection import document_path, firehose_path
-from eawf.runtime.daemon.native_guard import native_mutator, native_params, require_native_call
+from eawf.runtime.daemon.native_guard import native_mutator, native_params
 
 logger = logging.getLogger(__name__)
 
@@ -131,8 +122,7 @@ CAMPAIGN_BUDGET_SET_METHOD: Final = "runtime.campaign.budget.set"
 CAMPAIGN_STEP_UPDATE_METHOD: Final = "runtime.campaign.step.update"
 CAMPAIGN_ARTIFACT_RECORD_METHOD: Final = "runtime.campaign.artifact.record"
 CAMPAIGN_FINDING_PROMOTE_METHOD: Final = "runtime.campaign.finding.promote"
-CAMPAIGN_VIEW_METHOD: Final = "projection.campaign.view"
-CAMPAIGN_ARTIFACT_METHOD: Final = "projection.campaign.artifact"
+
 
 #: The largest drawable artifact whose text is kept beside its revision. A report
 #: past it is refused rather than truncated, since a card may not draw part of one.
@@ -255,6 +245,7 @@ class StepUpdateParams(_Params):
         to_state: The state to move the step to; ``None`` leaves it.
         run_ref: The Run that starts the step; required to start it.
         outcome: What the step showed; required to finish it.
+        outcome_clipped: Whether the outcome was shortened to fit its line.
         evidence_refs: Evidence the step produced, appended to what it produced.
         cleared_contradiction_refs: Contradictions resolved since the step was planned.
         spent: The observed spend per axis, never lower than what is recorded.
@@ -270,6 +261,7 @@ class StepUpdateParams(_Params):
     to_state: StepState | None = None
     run_ref: RunUrn | None = None
     outcome: StepOutcome | None = None
+    outcome_clipped: bool = False
     evidence_refs: tuple[EvidenceUrn, ...] = ()
     cleared_contradiction_refs: tuple[ClaimUrn, ...] = ()
     spent: dict[BudgetAxisKind, Annotated[int, Field(ge=0, strict=True)]] = Field(
@@ -310,26 +302,13 @@ class FindingPromoteParams(_Params):
         actor: Who promotes it.
         urn: The Campaign that learned it.
         statement: What was learned, in one line.
+        clipped: Whether the statement was shortened to fit its line.
     """
 
     actor: PrincipalKey
     urn: CampaignUrn
     statement: FindingStatement
-
-
-class CampaignReadParams(_Params):
-    """Params of :data:`CAMPAIGN_VIEW_METHOD`."""
-
-    repo_root: str | None = None
-    campaign_key: Annotated[str, Field(pattern=r"^CAM-\d{4,}$")]
-
-
-class ArtifactReadParams(_Params):
-    """Params of :data:`CAMPAIGN_ARTIFACT_METHOD`."""
-
-    repo_root: str | None = None
-    campaign_key: Annotated[str, Field(pattern=r"^CAM-\d{4,}$")]
-    artifact_ref: NonEmptyStr
+    clipped: bool = False
 
 
 class CampaignCommit(Epoch2Model):
@@ -366,6 +345,7 @@ def _sibling(anchor: QualifiedUrn, kind: EntityKind, key: str) -> QualifiedUrn:
         repository_key=anchor.repository_key,
         kind=kind,
         entity_key=key,
+        single_key=anchor.single_key,
     )
 
 
@@ -760,6 +740,7 @@ def _fresh(step: CampaignPlanStep) -> CampaignPlanStep:
                 mode="json",
                 exclude={"state", "run_refs", "started_at", "ended_at", "outcome", "produced"},
             ),
+            "outcome_clipped": False,
             "progress": None,
             "revision": 1,
         }
@@ -815,6 +796,7 @@ def _moved_step(
             fields["started_at"] = fields["started_at"] or now.isoformat()
         if target is StepState.DONE:
             fields["outcome"] = args.outcome
+            fields["outcome_clipped"] = args.outcome_clipped
             fields["ended_at"] = now.isoformat()
         fields["state"] = target.value
     fields["produced"] = [*fields["produced"], *(str(ref) for ref in args.evidence_refs)]
@@ -1164,8 +1146,16 @@ def close_campaign(
         envelope = _write_campaign(
             session, updated, event_name="campaign.closed", actor=args.actor, now=now
         )
+        answered = (
+            answer_converged_questions(session, updated, actor=args.actor, now=now)
+            if stop.reason == "converged"
+            else ()
+        )
     logger.info(f"close_campaign campaign={campaign.key} to={args.to_status} stop={stop.reason}")
-    return CampaignCommit(record=updated.model_dump(mode="json"), committed=True), (envelope,)
+    return CampaignCommit(record=updated.model_dump(mode="json"), committed=True), (
+        envelope,
+        *answered,
+    )
 
 
 # ---------- promoted findings ----------
@@ -1212,6 +1202,7 @@ def promote_finding(
             updated_at=now,
             campaign_ref=campaign.urn,
             statement=args.statement,
+            clipped=args.clipped,
         )
         envelope = commit_ledger_append(
             session,
@@ -1230,113 +1221,6 @@ def promote_finding(
         )
     logger.info(f"promote_finding campaign={campaign.key} finding={key}")
     return CampaignCommit(record=finding.model_dump(mode="json"), committed=True), (envelope,)
-
-
-# ---------- reads ----------
-
-
-def campaign_view(authority: RootAuthority, key: str) -> CampaignView:
-    """Return one Campaign's read model, its artifacts and findings resolved.
-
-    Raises:
-        DaemonValidationError: The tree holds no such Campaign.
-        ValueError: The Campaign lists an artifact revision no record holds.
-    """
-    document_file = document_path(authority)
-    document = read_document(document_file)
-    row = document_rows(document, Epoch2Collection.CAMPAIGN).get(key)
-    if row is None:
-        raise DaemonValidationError(
-            f"validation_failed: identity_not_found: the tree holds no campaign keyed {key!r}"
-        )
-
-    def payloads(collection: Epoch2Collection) -> tuple[Mapping[str, Any], ...]:
-        path = ledger_path(document_file, collection)
-        return tuple(line.payload for line in effective_records(read_ledger_records(path)))
-
-    return build_campaign_view(
-        row,
-        revisions=stored_revisions(payloads(Epoch2Collection.ARTIFACT)),
-        findings=promoted_findings(payloads(Epoch2Collection.CAMPAIGN_FINDING)),
-        runners=_runner_runs(document, document_file, Campaign.model_validate(row)),
-        promoted_at=promoting_sequences(_firehose_payloads(firehose_path(authority))),
-    )
-
-
-def _runner_runs(
-    document: dict[str, Any], document_file: Path, campaign: Campaign
-) -> dict[str, Run]:
-    """Return the Runs the Campaign's steps name as runners, by key.
-
-    A finished round's Run is compacted out of the document into the run ledger,
-    so a runner the document no longer holds is read from there.
-    """
-    wanted = {step.run_refs[-1].entity_key for step in campaign.plan_steps if step.run_refs}
-    rows = document_rows(document, Epoch2Collection.RUN)
-    found = {key: Run.model_validate(rows[key]) for key in wanted if key in rows}
-    if wanted - found.keys():
-        path = ledger_path(document_file, Epoch2Collection.RUN)
-        for line in effective_records(read_ledger_records(path)):
-            if line.record_key in wanted - found.keys() and "payload_kind" not in line.payload:
-                found[line.record_key] = Run.model_validate(line.payload)
-    return found
-
-
-def _firehose_payloads(path: Path) -> Iterator[Mapping[str, Any]]:
-    """Yield the payload of each readable firehose row, in the order it was written.
-
-    A row that does not parse is skipped: it states no sequence a finding could be
-    drawn at, and the finding it would have dated reads as promoted before the cursor.
-    """
-    if not path.exists():
-        return
-    with path.open("rb") as handle:
-        for raw in handle:
-            try:
-                row = orjson.loads(raw)
-            except orjson.JSONDecodeError:
-                logger.warning(f"campaign_view skipped an unreadable firehose row path={path}")
-                continue
-            if isinstance(row, dict) and isinstance(row.get("payload"), dict):
-                yield row["payload"]
-
-
-def _read_params[T: BaseModel](model: type[T], params: dict[str, Any], method: str) -> T:
-    try:
-        return model.model_validate(params)
-    except ValidationError as error:
-        raise DaemonValidationError(
-            f"validation_failed: schema_validation_failed: {error.error_count()} bad "
-            f"parameter(s) for {method}"
-        ) from error
-
-
-@register(CAMPAIGN_VIEW_METHOD)
-async def read_campaign(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Return one Campaign's :class:`CampaignView`. Nothing is written."""
-    args = _read_params(CampaignReadParams, params, CAMPAIGN_VIEW_METHOD)
-    authority = require_native_call(ctx, params)
-    view = await asyncio.to_thread(campaign_view, authority, args.campaign_key)
-    return view.model_dump(mode="json")
-
-
-@register(CAMPAIGN_ARTIFACT_METHOD)
-async def read_artifact(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Return one artifact revision's :class:`ArtifactCardView`. Nothing is written.
-
-    Raises:
-        DaemonValidationError: The Campaign keeps no such revision.
-    """
-    args = _read_params(ArtifactReadParams, params, CAMPAIGN_ARTIFACT_METHOD)
-    authority = require_native_call(ctx, params)
-    view = await asyncio.to_thread(campaign_view, authority, args.campaign_key)
-    card: ArtifactCardView | None = view.artifact(args.artifact_ref)
-    if card is None:
-        raise DaemonValidationError(
-            f"validation_failed: identity_not_found: {args.campaign_key} keeps no revision "
-            f"{args.artifact_ref!r}"
-        )
-    return card.model_dump(mode="json")
 
 
 # ---------- writers on the wire ----------
@@ -1373,7 +1257,6 @@ _writer(CAMPAIGN_FINDING_PROMOTE_METHOD, FindingPromoteParams, promote_finding)
 
 
 __all__ = [
-    "CAMPAIGN_ARTIFACT_METHOD",
     "CAMPAIGN_ARTIFACT_RECORD_METHOD",
     "CAMPAIGN_BUDGET_SET_METHOD",
     "CAMPAIGN_CLOSE_METHOD",
@@ -1381,12 +1264,10 @@ __all__ = [
     "CAMPAIGN_PLAN_APPROVE_METHOD",
     "CAMPAIGN_PLAN_REVISE_METHOD",
     "CAMPAIGN_STEP_UPDATE_METHOD",
-    "CAMPAIGN_VIEW_METHOD",
     "CampaignCommit",
     "PlanApproveParams",
     "SeedQuestion",
     "approve_plan",
-    "campaign_view",
     "close_campaign",
     "promote_finding",
     "record_artifact",

@@ -35,7 +35,9 @@ environment the launcher recorded for that Run, and the worker's own answer
 can only worsen the grade. A canary that misses an axis quarantines the
 version; one that passes records a certification carrying what only a
 dispatched Run can observe, such as whether the worker filed its report
-through its semantic tools and which model it ran.
+through its semantic tools and which model it ran. A worker that answers
+without filing is one model's miss, so the walk dispatches another canary
+before it records a certification that grants later Runs no tool.
 """
 
 from __future__ import annotations
@@ -144,6 +146,12 @@ REPROBE_BACKOFF: Final = timedelta(hours=24)
 #: The token ceiling a canary Run is sealed under: the probe set is eight attempts
 #: and one report, and the in-flight governor admits no uncapped Run.
 CANARY_TOKEN_BUDGET: Final = 200_000
+
+#: How many canaries one walk dispatches before it records a certification that
+#: carries no semantic tools. A worker that answers without filing its report is
+#: one model's miss, not proof the runtime cannot reach the tools, and a row
+#: without them leaves every later Run of the version granted no tool at all.
+CANARY_ATTEMPTS: Final = 3
 
 #: The provider a canary of each runtime is dispatched to, which is also the
 #: runtime its host facts are filed under.
@@ -757,6 +765,7 @@ def _canary_requests(
             config=facts.config,
             registry=facts.registry,
             bindings=bindings,
+            unbound=facts.unbound,
             budget=CANARY_TOKEN_BUDGET,
             base=base,
             actor=actor,
@@ -796,30 +805,36 @@ async def _dispatch_canary(
     # Dispatch reaches the Run-start path, which starts this module's probe.
     from eawf.runtime.candidate.seal import accepted_report_of
     from eawf.runtime.daemon.epoch2_create import CreateRequest, run_create
-    from eawf.runtime.daemon.methods.task_dispatch import dispatch_cursor
+    from eawf.runtime.daemon.methods.task_dispatch import dispatch_cursor, run_allocation
     from eawf.runtime.daemon.native_dispatch import dispatch_run, run_ledger
     from eawf.runtime.daemon.run_supervisor import supervisor_of
 
     now = datetime.now(UTC)
-    request, served, canary = await asyncio.to_thread(
-        _canary_requests,
-        context,
-        probed,
-        task=task,
-        actor=actor,
-        provider=provider,
-        evidence_ref=evidence_ref,
-        now=now,
-    )
-    run_key = request.urn.entity_key
-    create = CreateRequest(
-        urn=request.urn,
-        expected_revision=await asyncio.to_thread(dispatch_cursor, context, task),
-        idempotency_key=f"certify-canary-{run_key}-create",
-        actor=actor,
-        spec={"key": run_key, "scope": request.compile_request.run_scope.model_dump(mode="json")},
-    )
-    committed = await asyncio.to_thread(run_create, context=context, request=create, now=now)
+    # The canary's Run key is guessed like a dispatch's, so it is guessed and
+    # created under the same lock.
+    async with run_allocation(context):
+        request, served, canary = await asyncio.to_thread(
+            _canary_requests,
+            context,
+            probed,
+            task=task,
+            actor=actor,
+            provider=provider,
+            evidence_ref=evidence_ref,
+            now=now,
+        )
+        run_key = request.urn.entity_key
+        create = CreateRequest(
+            urn=request.urn,
+            expected_revision=await asyncio.to_thread(dispatch_cursor, context, task),
+            idempotency_key=f"certify-canary-{run_key}-create",
+            actor=actor,
+            spec={
+                "key": run_key,
+                "scope": request.compile_request.run_scope.model_dump(mode="json"),
+            },
+        )
+        committed = await asyncio.to_thread(run_create, context=context, request=create, now=now)
     if publish is not None and committed.envelope is not None:
         publish(committed.envelope)
     tree_root = context.identity.tree_root
@@ -882,6 +897,7 @@ def _conclude_walk(
     run: _CanaryRun,
     *,
     evidence_ref: str,
+    last: bool,
 ) -> MachineCertification:
     """Grade the canary, walk the certify stage after a pass, and record the row.
 
@@ -889,6 +905,15 @@ def _conclude_walk(
     it: a certify refused because the shipped host facts measure nothing of
     the runtime refuses the driver certification, whose facts those are, not
     the capabilities this machine's canary observed.
+
+    Args:
+        state_path: The tree's ``state.json``.
+        probed: The probe's certification the canary was walked from.
+        runtime_tuple: The tuple the stages are journaled under.
+        run: What the dispatched canary showed.
+        evidence_ref: The canary's evidence reference.
+        last: Whether no further canary follows this one, so a row without
+            the semantic tools says how a later walk can earn them.
 
     Returns:
         The recorded row: a quarantine naming every failed attempt, or a
@@ -958,6 +983,13 @@ def _conclude_walk(
         )
     ).record
     refusal = "" if certify.reason_code is None else f" ({certify.reason_code})"
+    unreported = (
+        f"; its worker filed no report through {SEMANTIC_TOOLS_CAPABILITY} in "
+        f"{CANARY_ATTEMPTS} canaries, so a dispatched Run is granted no tool until "
+        f"`eawf runtime certify {probed.runtime_id} --task` observes one"
+        if last and not run.reported
+        else ""
+    )
     row = MachineCertification.model_validate(
         {
             **common,
@@ -969,6 +1001,7 @@ def _conclude_walk(
             "reason": (
                 f"{named} passed the containment canary and the certify stage "
                 f"{certify.outcome}{refusal}; certified until {probed.expires_at:%Y-%m-%d}"
+                f"{unreported}"
             ),
         }
     )
@@ -989,6 +1022,8 @@ async def walk_certification(
 
     The canary is a real Run placed under *task*, which lends it the scope a
     Task Run is compiled with; the canary never claims or starts the Task.
+    A passed canary whose worker filed no report is walked again from a fresh
+    probe, up to :data:`CANARY_ATTEMPTS` canaries, each recording its own rows.
 
     Args:
         context: The native context of the tree.
@@ -1017,36 +1052,46 @@ async def walk_certification(
             f"runtime_canary_unavailable: no shipped launcher dispatches a {runtime_id} canary"
         )
     tree_root = context.identity.tree_root
-    probed, runtime_tuple = await asyncio.to_thread(certifier_for(tree_root).probe, runtime_id)
-    if probed.outcome != "certified":
-        return probed
-    evidence_ref = f"artifact://runtime-certification/{runtime_id}/{probed.harness_version}/canary"
-    run = await _dispatch_canary(
-        context,
-        probed,
-        task=task,
-        actor=actor,
-        provider=provider,
-        evidence_ref=evidence_ref,
-        launchers=NATIVE_LAUNCHERS if launchers is None else launchers,
-        publish=publish,
-    )
-    row = await asyncio.to_thread(
-        _conclude_walk,
-        tree_root / "state.json",
-        probed,
-        runtime_tuple,
-        run,
-        evidence_ref=evidence_ref,
-    )
-    logger.info(
-        f"walk_certification runtime={runtime_id!r} version={row.harness_version!r} "
-        f"outcome={row.outcome} stages={[stage.stage for stage in row.stages]}"
-    )
+    for attempt in range(1, CANARY_ATTEMPTS + 1):
+        probed, runtime_tuple = await asyncio.to_thread(certifier_for(tree_root).probe, runtime_id)
+        if probed.outcome != "certified":
+            return probed
+        evidence_ref = (
+            f"artifact://runtime-certification/{runtime_id}/{probed.harness_version}/canary"
+        )
+        run = await _dispatch_canary(
+            context,
+            probed,
+            task=task,
+            actor=actor,
+            provider=provider,
+            evidence_ref=evidence_ref,
+            launchers=NATIVE_LAUNCHERS if launchers is None else launchers,
+            publish=publish,
+        )
+        row = await asyncio.to_thread(
+            _conclude_walk,
+            tree_root / "state.json",
+            probed,
+            runtime_tuple,
+            run,
+            evidence_ref=evidence_ref,
+            last=attempt == CANARY_ATTEMPTS,
+        )
+        logger.info(
+            f"walk_certification runtime={runtime_id!r} version={row.harness_version!r} "
+            f"outcome={row.outcome} stages={[stage.stage for stage in row.stages]} "
+            f"canary={attempt}/{CANARY_ATTEMPTS} reported={run.reported}"
+        )
+        # Only a passed canary whose worker never filed is walked again: a
+        # quarantine stands as graded, and a filed report is what was sought.
+        if row.outcome != "certified" or run.reported:
+            return row
     return row
 
 
 __all__ = [
+    "CANARY_ATTEMPTS",
     "CANARY_TOKEN_BUDGET",
     "CONFORMANCE_SUITE_VERSION",
     "REPROBE_BACKOFF",

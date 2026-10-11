@@ -369,11 +369,10 @@ def test_install_plugin_preserves_unrelated_skill_files(tmp_path: Path) -> None:
 
 
 def test_install_wires_session_end_into_cc_stop_hook(tmp_path: Path) -> None:
-    """The CC Stop hook is wired so session_end -> daemon runtime.capture fires.
+    """The CC Stop hook is wired so session_end -> session.end_stamp fires.
 
     Without a real ``hooks`` entry CC never invokes the rendered
-    ``.claude/hooks/session_end.sh`` wrapper, so the runtime.capture chain
-    never runs and EU capture stays dark (the W34 root cause).
+    ``.claude/hooks/session_end.sh`` wrapper, so the session is never stamped.
     """
     install_plugin(tmp_path)
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))

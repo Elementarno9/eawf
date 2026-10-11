@@ -366,7 +366,7 @@ def test_route_bar_never_spells_an_abbreviated_key(w: int) -> None:
     assert words.isdisjoint(ABBREVIATED)
 
 
-@pytest.mark.parametrize("glyph", sorted(set(KEY_NAMES.values()) - {"Esc"}))
+@pytest.mark.parametrize("glyph", sorted(set(KEY_NAMES.values()) - {"Esc", "Space"}))
 def test_key_names_arrow_glyph_has_a_known_single_cell_width(glyph: str) -> None:
     assert_known_width(glyph)
     assert cell_len(glyph) == 1

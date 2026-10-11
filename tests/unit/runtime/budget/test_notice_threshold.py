@@ -2,8 +2,8 @@
 
 The rule is pinned at its source, the notice policy, and at the two producers
 that call it: the token termination path and the daemon's wall-clock sweep. A
-token crossing opens at once; a wall-clock crossing opens only after the
-policy's silence; nothing opens for a scope that is not a running Run. Rows
+crossing of either hard ceiling opens at once, because the daemon stops the Run
+there; nothing opens for a scope that is not a running Run. Rows
 recorded under the retired estimate basis and approaching band still load for
 display, a config still naming the retired fraction fails to load, and
 replaying representative recorded rows through the rule opens nothing.
@@ -21,12 +21,8 @@ from pydantic import ValidationError
 
 from eawf.kernel.economics.governor import economics_policy_from
 from eawf.kernel.economics.notice_policy import DEFAULT_NOTICE_POLICY, EstimatedTimeNotice
-from eawf.kernel.identity import parse_qualified_urn
 from eawf.kernel.runtime.budget_notice import BudgetNotice
 from eawf.kernel.store.kinds.event import EventPayload
-from eawf.kernel.store.ledger import read_ledger_records
-from eawf.kernel.store.paths import ledger_path
-from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.budget.legacy_notices import PAUSE_EVENT_TYPE, import_legacy_advisories
 from eawf.runtime.budget.notice_inbox import inbox_for
 from eawf.runtime.budget.notices import (
@@ -41,10 +37,10 @@ from eawf.runtime.budget.notices import (
 from eawf.runtime.budget.service import emit_termination_notice
 from eawf.runtime.daemon.admission import EconomicsPolicyError, load_economics
 from eawf.runtime.daemon.methods.run_liveness import detect_wall_ceiling_crossings
-from eawf.runtime.daemon.run_events import reduce_run_events, run_events_of
-from tests.integration.runtime.daemon._epoch2_transaction_fixtures import document_path
 from tests.integration.runtime.daemon.test_run_stall_interval import RUN_KEY, RUN_URN
 from tests.integration.runtime.daemon.test_run_wall_ceiling_notice import (
+    STARTED,
+    WALL,
     act,
     attached,
     bound_canary,
@@ -61,43 +57,16 @@ WAVE: Final = "P24-I02-W20"
 # ---------- the rule ----------
 
 
-@pytest.mark.parametrize(("silent", "opens"), [(0, False), (599, False), (600, True), (601, True)])
-def test_wall_seconds_opens_only_after_600_seconds_of_silence(silent: int, opens: bool) -> None:
-    assert (
-        POLICY.opens(
-            running=True,
-            axis="wall_seconds",
-            ceiling_reached=True,
-            silent_for=timedelta(seconds=silent),
-        )
-        is opens
-    )
+def test_a_running_run_at_its_hard_ceiling_opens_at_once() -> None:
+    assert POLICY.opens(running=True, ceiling_reached=True)
 
 
-def test_tokens_crossing_opens_at_once() -> None:
-    assert POLICY.opens(running=True, axis="tokens", ceiling_reached=True, silent_for=timedelta(0))
+def test_a_non_running_scope_never_opens() -> None:
+    assert not POLICY.opens(running=False, ceiling_reached=True)
 
 
-@pytest.mark.parametrize("axis", ["tokens", "wall_seconds"])
-def test_a_non_running_scope_never_opens(axis: Any) -> None:
-    assert not POLICY.opens(
-        running=False, axis=axis, ceiling_reached=True, silent_for=timedelta(days=1)
-    )
-
-
-@pytest.mark.parametrize("axis", ["tokens", "wall_seconds"])
-def test_short_of_the_ceiling_never_opens(axis: Any) -> None:
-    assert not POLICY.opens(
-        running=True, axis=axis, ceiling_reached=False, silent_for=timedelta(days=1)
-    )
-
-
-def test_the_silence_follows_the_configured_grace() -> None:
-    policy = EstimatedTimeNotice(require_no_progress_for=1)
-    assert policy.opens(
-        running=True, axis="wall_seconds", ceiling_reached=True, silent_for=timedelta(seconds=1)
-    )
-    assert DEFAULT_NOTICE_POLICY.estimated_time.require_no_progress_for == 600
+def test_short_of_the_ceiling_never_opens() -> None:
+    assert not POLICY.opens(running=True, ceiling_reached=False)
 
 
 @pytest.mark.parametrize("value", [0, -1, "600", 600.0, None])
@@ -150,18 +119,16 @@ def test_a_tokens_crossing_through_the_termination_path_opens_one_notice(tmp_pat
     assert len(load_notice_ledger(ledger).notices) == 1
 
 
-def test_the_wall_sweep_opens_at_600_seconds_of_silence_not_599(tmp_path: Path) -> None:
+def test_the_wall_sweep_opens_at_the_ceiling_even_for_a_run_still_active(tmp_path: Path) -> None:
     canary = bound_canary(tmp_path / "repo")
     ctx = daemon_for(canary, tmp_path / "runtime")
     act(ctx, canary, 1)
-    records = read_ledger_records(ledger_path(document_path(canary), Epoch2Collection.RUN))
-    last = reduce_run_events(run_events_of(records, parse_qualified_urn(RUN_URN))).last_activity_at
-    assert last is not None
 
-    assert detect_wall_ceiling_crossings(attached(ctx), now=last + timedelta(seconds=599)) == ()
-    assert detect_wall_ceiling_crossings(attached(ctx), now=last + timedelta(seconds=600)) == (
-        RUN_KEY,
+    assert (
+        detect_wall_ceiling_crossings(attached(ctx), now=STARTED + WALL - timedelta(seconds=1))
+        == ()
     )
+    assert detect_wall_ceiling_crossings(attached(ctx), now=STARTED + WALL) == (RUN_KEY,)
 
 
 # ---------- legacy rows and the retired key ----------
@@ -258,17 +225,14 @@ def _recorded_ledger() -> BudgetNoticeLedger:
 def _replay(notice: BudgetThresholdNotice, *, running: bool) -> bool:
     """Return whether *notice*'s recorded reading opens a notice under the one rule.
 
-    An estimate was never a ceiling, so only a hard-limit row reached one. The
-    rows record no silence, so the longest is assumed: the result cannot hinge on it.
+    An estimate was never a ceiling, so only a hard-limit row reached one.
     """
     reached = (
         notice.basis == "hard_limit"
         and notice.budget_value is not None
         and notice.observed_value >= notice.budget_value
     )
-    return POLICY.opens(
-        running=running, axis=notice.axis, ceiling_reached=reached, silent_for=timedelta.max
-    )
+    return POLICY.opens(running=running, ceiling_reached=reached)
 
 
 def test_replaying_recorded_notices_opens_none_for_an_epoch1_wave_scope() -> None:

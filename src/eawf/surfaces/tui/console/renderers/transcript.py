@@ -27,7 +27,8 @@ from eawf.kernel.projection.transcript import (
     TranscriptBlock,
     TranscriptReadModel,
 )
-from eawf.kernel.projection.truth import TruthKind
+from eawf.kernel.projection.truth import TruthField, TruthKind
+from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.derive import plural
@@ -45,7 +46,8 @@ from eawf.surfaces.tui.console.frame import (
     strip_chips,
     thin,
 )
-from eawf.surfaces.tui.console.keybar import KeyEntry, keybar, route_pairs
+from eawf.surfaces.tui.console.keybar import CHROME_KEYS, KeyEntry, keybar, route_pairs
+from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.live_reads import held_usage
 from eawf.surfaces.tui.console.navigation import Ctx, busy, copied
 from eawf.surfaces.tui.console.renderers.budget_lines import cost_line
@@ -77,6 +79,10 @@ TR_GLYPH: Mapping[str, str] = MappingProxyType(
 # Cells the time, glyph and kind columns of a block head take before its text.
 _HEAD_W = len(" 00:00:00  ¶ " + " " * 9)
 _KEYS = route_pairs("transcript")
+# The native bar names Space beside f, since both hold and follow a live Run's tail.
+_NATIVE_KEYS = tuple(
+    entry.pair() for entry in native_keys("transcript", windowed=False) if entry not in CHROME_KEYS
+)
 _NEWEST = KeyEntry("newest", ("End",)).pair()
 Block = Mapping[str, Any]
 
@@ -321,6 +327,7 @@ NATIVE_GLYPH: Mapping[str, str] = MappingProxyType(
         "running": "⋯",
         "purged": "✗",
         "event": "·",
+        "usage": "#",
     }
 )
 
@@ -331,6 +338,13 @@ UNGLYPHED = "·"
 #: What the state row prints beside a thinking cell eawf inferred, so the frame never
 #: presents that inference as an observation.
 DERIVED_LABEL = "derived"
+
+#: What the state row says beside the Run's status when no reasoning turn is open.
+NOT_THINKING = "no reasoning turn open"
+
+#: What the line under the header says of a RUNNING Run with no block open: the Run
+#: itself is still in flight, between the things it does.
+RUN_IN_FLIGHT = "in flight"
 
 #: What the block section says for a Run that has produced nothing.
 NO_BLOCK = "∅ this Run has produced no event · nothing has been observed of it yet"
@@ -552,10 +566,13 @@ def native_context(view: View, model: TranscriptReadModel) -> str:
     if not state:
         # nothing holding the Run says nothing about the Run itself, so its register
         # status is stated beside it rather than a claim that nothing runs; with work in
-        # the background the count below says what is in flight
-        found = model.index_of(run)
-        stored = value_cell(model.rows[found].field("status")).slot if found is not None else None
+        # the background the count below says what is in flight, and a RUNNING Run is
+        # itself in flight between its blocks
+        status = _run_status(model, run)
+        stored = value_cell(status).slot if status is not None else None
         quiet = "nothing in flight" if model.blocks else "no event recorded yet"
+        if status is not None and status.value == RunStatus.RUNNING:
+            quiet = f"{RUN_IN_FLIGHT} · " + ("no block open" if model.blocks else quiet)
         state = " · ".join(part for part in (stored, "" if background else quiet) if part)
     parts = [f"Run {run}", state]
     if background:
@@ -579,18 +596,32 @@ def follow_word(session: Session, total: int) -> str:
     return f"held · {max(0, total - since)} new"
 
 
-def _state_rows(model: TranscriptReadModel, w: int) -> list[str]:
+def _run_status(model: TranscriptReadModel, run: str | None) -> TruthField[str] | None:
+    """Return the stored status of the Run the frame is about, or ``None`` when none is held."""
+    found = model.index_of(run)
+    return model.rows[found].field("status") if found is not None else None
+
+
+def _state_rows(view: View, model: TranscriptReadModel, w: int) -> list[str]:
     """Return the state row, and the thinking cell's reason under it when the cell is marked.
 
     The state row carries the thinking cell as its token and word, its label and what the
     run reaches; the reason goes on its own rows, wrapped at the frame width rather than
-    cut, and without the state word the row above already printed.
+    cut, and without the state word the row above already printed. With no reasoning turn
+    open the row leads with the Run's stored status instead, since a Run that is not
+    thinking is still in a state the register knows.
     """
+    run = view.session.subj_id or (model.rows[0].key if model.rows else None)
+    status = _run_status(model, run)
     thinking = value_cell(model.thinking)
-    state = f"{thinking.slot} {thinking.word}".rstrip()
-    # a turn a provider's own start marker opened is observed, and says nothing more
-    if model.thinking.truth_kind is TruthKind.DERIVED:
-        state += f" · {DERIVED_LABEL}"
+    if not model.is_thinking() and status is not None:
+        thinking = value_cell(status)
+        state = f"{thinking.full} · {NOT_THINKING}"
+    else:
+        state = f"{thinking.slot} {thinking.word}".rstrip()
+        # a turn a provider's own start marker opened is observed, and says nothing more
+        if model.thinking.truth_kind is TruthKind.DERIVED:
+            state += f" · {DERIVED_LABEL}"
     parts = [
         state,
         plural(len(model.blocks), "block"),
@@ -657,7 +688,7 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
         native_header(view, _crumb(view, model), model.scope_id),
         Fixed(pad(" " + native_context(view, model), w)),
         bar(w),
-        *_state_rows(model, w),
+        *_state_rows(view, model, w),
         thin(w),
     ]
     closing: list[str] = [thin(w), *_outcome_rows(view, model)]
@@ -693,10 +724,12 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
     # Enter folds the block under the caret, so a block with nothing folded offers nothing,
     # and y copies it, so a Run with no block offers no copy
     held = model.block_at(sel) is not None
-    pairs = [pair for pair in _KEYS if (folded or pair[0] != "Enter") and (held or pair[0] != "y")]
+    pairs = [
+        pair for pair in _NATIVE_KEYS if (folded or pair[0] != "Enter") and (held or pair[0] != "y")
+    ]
     # a live Run's blocks grow under a held view, so End, back to the newest block and
-    # following it, sits beside f; the prototype's golden bars stay the table's own
-    after_follow = next(i for i, pair in enumerate(pairs) if pair[0] == "f") + 1
+    # following it, sits beside follow; the prototype's golden bars stay the table's own
+    after_follow = next(i for i, pair in enumerate(pairs) if pair[1] == "follow") + 1
     pairs.insert(after_follow, _NEWEST)
     return build(view, rows, keybar(acting_pairs(view, pairs), w))
 

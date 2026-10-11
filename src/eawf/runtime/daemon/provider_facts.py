@@ -146,11 +146,14 @@ class InstalledProviderFacts:
             current, in launcher order.
         config: Each provider layer's config document, keyed by layer
             name, in the shape ``compile_task_request`` reads.
+        unbound: Why each shipped provider has no binding, keyed by
+            provider id, with the command that would bind it.
     """
 
     registry: ProviderRegistry
     bindings: tuple[RuntimeBinding, ...]
     config: Mapping[str, Mapping[str, Any]]
+    unbound: Mapping[str, str]
 
 
 class _UnboundError(Exception):
@@ -325,7 +328,7 @@ def installed_provider_facts(tree_root: Path, *, now: datetime) -> InstalledProv
     Returns:
         The facts a Run of this tree compiles against. A runtime with no
         current certification, or whose SDK is not installed, has no
-        binding, and the reason is logged.
+        binding; the reason is logged and kept in ``unbound``.
 
     Raises:
         ValueError: *now* is naive.
@@ -338,17 +341,28 @@ def installed_provider_facts(tree_root: Path, *, now: datetime) -> InstalledProv
     launchers = shipped_launcher_manifests()
     latest = _latest_rows(read_machine_certifications(tree_root / "state.json"))
     bindings: list[RuntimeBinding] = []
+    unbound: dict[str, str] = {}
     for launcher in launchers:
+        runtime_id = launcher.runtime_id
+        package = launcher.distribution.package
         try:
-            bindings.append(_binding(launcher, latest.get(launcher.runtime_id), now))
+            bindings.append(_binding(launcher, latest.get(runtime_id), now))
         except _UnboundError as reason:
-            logger.info(
-                f"installed_provider_facts unbound runtime={launcher.runtime_id} reason={reason}"
+            logger.info(f"installed_provider_facts unbound runtime={runtime_id} reason={reason}")
+            remedy = (
+                f"install the {package} package"
+                if str(reason).startswith("driver_not_installed")
+                else f"run `eawf runtime certify {runtime_id}`"
             )
+            unbound[launcher.provider_id] = f"runtime {runtime_id} is unbound ({reason}); {remedy}"
         except PydanticValidationError as error:
             logger.warning(
-                f"installed_provider_facts unbound runtime={launcher.runtime_id} "
+                f"installed_provider_facts unbound runtime={runtime_id} "
                 f"reason=installed_fact_invalid errors={error.error_count()}"
+            )
+            unbound[launcher.provider_id] = (
+                f"runtime {runtime_id} is unbound (installed_fact_invalid: "
+                f"{error.error_count()} errors); reinstall the {package} package"
             )
     registry = ProviderRegistry(
         driver_refs=frozenset(launcher.driver_ref for launcher in launchers),
@@ -360,7 +374,10 @@ def installed_provider_facts(tree_root: Path, *, now: datetime) -> InstalledProv
         f"launchers={len(launchers)}"
     )
     return InstalledProviderFacts(
-        registry=registry, bindings=tuple(bindings), config=_provider_config(tree_root.parent)
+        registry=registry,
+        bindings=tuple(bindings),
+        config=_provider_config(tree_root.parent),
+        unbound=unbound,
     )
 
 

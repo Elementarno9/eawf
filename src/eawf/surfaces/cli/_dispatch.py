@@ -29,19 +29,12 @@ The helpers here are intentionally side-effect-light:
   call: it applies the rejection rule, ensures a daemon is up
   (auto-spawn), and hands the resolved runtime dir back so the caller
   can open its :class:`~eawf.surfaces.cli._daemon_client.DaemonClient`.
-* :func:`_mutate_via_daemon` builds on :func:`escalate_mutation` to
-  provide the single generic daemon-proxy entry: it escalates, marshals
-  one typed :class:`~eawf.kernel.state.mutations.Mutation` across
-  ``state.mutate``, and falls back to a caller-supplied in-process
-  callable when the daemon predates the kind or the transport drops
-  (the V1 carve-out).
 """
 
 from __future__ import annotations
 
 import logging
 import os
-import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -51,7 +44,6 @@ from eawf.surfaces.cli.flags import GlobalFlags
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from eawf.kernel.state.mutations import MutationKind
 
 logger = logging.getLogger(__name__)
 
@@ -196,167 +188,6 @@ def escalate_mutation(
     return ensure_daemon(runtime_dir)
 
 
-def _mutate_via_daemon[FallbackT](
-    kind: MutationKind,
-    params: dict[str, Any],
-    flags: GlobalFlags | None,
-    *,
-    scope_id: str,
-    verb: str,
-    fallback: Callable[[], FallbackT],
-    idempotency_key: str | None = None,
-    runtime_dir: Path | None = None,
-) -> dict[str, Any] | FallbackT:
-    """Proxy one typed mutation through the daemon, or run *fallback*.
-
-    The single generic daemon-proxy entry every mutating-verb wrapper
-    routes through (replacing the per-verb bespoke proxies). Procedure:
-
-    1. :func:`escalate_mutation` applies the mutating-verb rule —
-       refuse ``--daemonless`` / ``EAWF_DAEMONLESS=1`` and auto-spawn a
-       daemon when none is up. A daemonless mutating call raises here
-       before any wire traffic.
-    2. Build a typed :class:`~eawf.kernel.state.mutations.Mutation` (fresh
-       ``mutation_id``) and dispatch it across the daemon's
-       ``state.mutate`` RPC.
-    3. On success, return the daemon's result dict verbatim.
-    4. When the daemon predates the kind (``-32601`` method-not-found,
-       or a ``NotImplementedError`` carried in the RPC message) OR the
-       transport drops in the CONNECT phase (``__enter__`` raises
-       ``OSError`` / ``NotImplementedError`` — the request was never
-       sent, so the mutation provably never applied), invoke *fallback*
-       and return its value — the V1 carve-out lets the in-process
-       writer carry the mutation against a pre-wire / unreachable daemon.
-       A POST-SEND transport drop (``state_mutate`` raises
-       ``RuntimeError`` / ``TimeoutError`` / recv-side ``OSError`` after
-       the request was already on the wire) is INDETERMINATE — the
-       daemon may have applied the mutation before dropping — so it
-       raises :class:`~eawf.surfaces.cli.errors.DaemonMutationIndeterminate`
-       rather than blindly re-running *fallback* (which would
-       double-apply a non-idempotent kind such as ``EVENT_APPEND``).
-    5. A ``-32002 validation_failed`` rejection maps to
-       :class:`~eawf.surfaces.cli.errors.ValidationError`; any other RPC error
-       (``-32001`` lock conflict, ``-32003`` not found, ``-32005``
-       runtime unavailable, ...) maps onto its specific typed
-       :class:`~eawf.surfaces.cli.errors.CliError` via
-       :func:`~eawf.surfaces.cli.errors.cli_error_for_rpc` so the verb handler's
-       ``except CliError`` surfaces a proper error envelope rather than
-       leaking an uncaught ``DaemonRpcError``.
-
-    Args:
-        kind: :class:`MutationKind` discriminator the daemon dispatches
-            on.
-        params: Kind-specific parameter dict carried in
-            :attr:`Mutation.params`.
-        flags: Resolved global flags (``--daemonless`` source). ``None``
-            falls back to env-only resolution.
-        scope_id: Canonical scope id the mutation targets (wave / phase
-            / iter id), carried into the event envelope.
-        verb: Operator-facing verb name for the ``--daemonless``
-            rejection envelope (e.g. ``"wave close"``).
-        fallback: Zero-arg callable run when the daemon cannot serve
-            the mutation (method-not-found or a CONNECT-phase transport
-            drop, where the mutation provably never reached the daemon).
-            Its return value is propagated to the caller unchanged. NOT
-            run on a POST-SEND drop (indeterminate — see step 4).
-        idempotency_key: Optional retry key forwarded to the daemon for
-            the cross-runtime idempotency window.
-        runtime_dir: Optional explicit runtime dir (tests anchor it at a
-            temp dir); ``None`` resolves the per-user default.
-
-    Returns:
-        The daemon's ``state.mutate`` result dict on the proxied path,
-        or the value returned by *fallback* on the carve-out path.
-
-    Raises:
-        UserError: When ``--daemonless`` was requested (mutating verbs
-            reject it; ``data.kind="InvalidInput"``).
-        DaemonUnreachable: When the auto-spawn failed to expose a
-            socket (mapped from the spawn timeout).
-        DaemonMutationIndeterminate: When the connection drops or the
-            read times out AFTER the request was sent (POST-SEND phase) —
-            the write may or may not have applied, so the fallback is not
-            re-run. Exit code 4 (subclass of ``DaemonUnreachable``).
-        ValidationError: When the daemon rejects the mutation with
-            ``-32002 validation_failed``.
-        CliError: When the daemon returns any other JSON-RPC error
-            envelope — the code is mapped onto its specific typed
-            subclass (``StateConflict`` / ``UserError`` / ...) via
-            :func:`~eawf.surfaces.cli.errors.cli_error_for_rpc` so the caller's
-            ``except CliError`` handler renders it.
-    """
-    from eawf.kernel.state.mutations import Mutation
-    from eawf.runtime.daemon.limits import cli_mutation_timeout_for, configured_juror_wall_clock
-    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
-
-    escalate_mutation(verb, flags=flags, runtime_dir=runtime_dir)
-
-    mutation = Mutation(
-        kind=kind,
-        scope_id=scope_id,
-        mutation_id=uuid.uuid4().hex,
-        idempotency_key=idempotency_key,
-        params=params,
-    )
-    repo_root = str(((flags.workspace if flags is not None else None) or Path.cwd()).resolve())
-
-    # Phase split so a transport drop is classified by WHEN it happened:
-    #
-    # * CONNECT phase (``__enter__``) — the request was never sent, so the
-    #   daemon provably never applied the mutation → the in-process
-    #   fallback is safe.
-    # * POST-SEND phase (``state_mutate`` → ``call``) — the request was
-    #   already on the wire when the connection dropped / read timed out,
-    #   so the daemon MAY have applied it before dying. Re-running the
-    #   fallback would double-apply a non-idempotent kind (EVENT_APPEND),
-    #   so this is surfaced as the indeterminate error, NOT a blind
-    #   fallback. A ``DaemonRpcError`` is a clean daemon RESPONSE (the
-    #   write outcome is determinate) and keeps its specific mapping.
-    # The wire timeout must outlive the daemon's own hard limit. A gated close
-    # spawns a fresh-context auditor INSIDE the mutation, bounded by the repo's
-    # configured juror ceiling -- so a fixed 30s client gave up while the daemon
-    # was still working and reported the close as INDETERMINATE, an answer the
-    # operator cannot act on, for a mutation that then applied successfully.
-    client = DaemonClient(
-        runtime_dir=runtime_dir,
-        call_timeout_seconds=cli_mutation_timeout_for(
-            configured_juror_wall_clock(Path(repo_root)),
-        ),
-    )
-    try:
-        client.__enter__()
-    except (OSError, NotImplementedError) as exc:
-        logger.debug(f"_mutate_via_daemon connect-fallback kind={kind.value} reason={exc!s}")
-        return fallback()
-    try:
-        return client.state_mutate(
-            mutation,
-            idempotency_key=idempotency_key,
-            repo_root=repo_root,
-        )
-    except DaemonRpcError as exc:
-        if exc.code == -32601 or "NotImplementedError" in (exc.message or ""):
-            logger.debug(
-                f"_mutate_via_daemon falling back kind={kind.value} "
-                f"code={exc.code} message={exc.message!r}"
-            )
-            return fallback()
-        if exc.code == cli_errors.RPC_VALIDATION_FAILED:
-            raise cli_errors.ValidationError(exc.message) from exc
-        raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
-    except (RuntimeError, OSError, TimeoutError) as exc:
-        logger.debug(
-            f"_mutate_via_daemon indeterminate kind={kind.value} reason={exc!s}; "
-            f"daemon connection lost after the request was sent — not falling back"
-        )
-        raise cli_errors.DaemonMutationIndeterminate(
-            f"daemon connection lost mid-mutation ({kind.value}); "
-            f"the state may or may not have applied — re-check before retrying"
-        ) from exc
-    finally:
-        client.__exit__(None, None, None)
-
-
 def call_upkeep(
     method: str,
     params: dict[str, Any],
@@ -410,7 +241,6 @@ def call_upkeep(
 
 
 __all__ = [
-    "_mutate_via_daemon",
     "call_upkeep",
     "daemonless_requested",
     "dev_mode_enabled",

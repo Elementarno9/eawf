@@ -33,8 +33,9 @@ EPOCH1_REPLACEMENTS: Final[Mapping[str, str | None]] = {
     "worktree reconcile": None,
 }
 
-#: Verbs the flag day removed from the command tree, mapped to the verb that
-#: replaces each, or ``None`` when none does.
+#: Verbs the flag day removed from the command tree, and the legacy
+#: continuation verbs 0.7.0rc2 removed, mapped to the verb that replaces each,
+#: or ``None`` when none does.
 RETIRED_VERBS: Final[Mapping[str, str | None]] = {
     "actual recover": None,
     "actual start": None,
@@ -65,6 +66,7 @@ RETIRED_VERBS: Final[Mapping[str, str | None]] = {
     "backlog correct": None,
     "backlog edit": None,
     "backlog set-priority": None,
+    "batch close-legacy": None,
     "calibrate apply": "metrics refit",
     "calibrate buckets": "metrics refit",
     "close cancel": None,
@@ -103,6 +105,8 @@ RETIRED_VERBS: Final[Mapping[str, str | None]] = {
     "iter close": "batch complete",
     "iter open": "batch create",
     "iter plan": "plan submit",
+    "milestone cancel-legacy": None,
+    "milestone close-legacy": None,
     "operator rollup": None,
     "outcome define": None,
     "outcome set": None,
@@ -153,6 +157,7 @@ RETIRED_VERBS: Final[Mapping[str, str | None]] = {
     "state resolve": None,
     "state rpc": None,
     "state show": "status",
+    "task advance-legacy": None,
     "track add": "track create",
     "track switch": None,
     "track sync": None,

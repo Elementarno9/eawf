@@ -46,7 +46,9 @@ SCOPE: Final = "EAWF"
 CURSOR: Final = 41208
 ROOT: Final = "eawf://EAWF/EAWF/EAWF"
 REPO: Final = f"{ROOT}/repository/REP-EAWF"
-WAITING: Final = "waiting: one active batch per repository"
+WAITING: Final = "waiting: one integrating batch per repository"
+#: The Batches the fixture's Batch ledger files an integration generation for.
+INTEGRATING: Final = frozenset({f"{ROOT}/batch/BAT-0100", f"{ROOT}/batch/BAT-0104"})
 
 
 def _row(kind: str, key: str, status: str, revision: int = 1, **extra: Any) -> dict[str, Any]:
@@ -74,9 +76,9 @@ def _task(key: str, status: str, batch: str) -> dict[str, Any]:
 
 
 def document(*, ceiling: int = 1, running: str = "RUNNING") -> dict[str, Any]:
-    """Return one Track, one Milestone, an active Batch and two planned ones with Tasks.
+    """Return one Track, one Milestone, an integrating Batch and two planned ones with Tasks.
 
-    BAT-0101 holds only ready Tasks behind the active BAT-0100; BAT-0102 still has a Task
+    BAT-0101 holds only ready Tasks behind the integrating BAT-0100; BAT-0102 still has a Task
     at *running*; BAT-0103 is cancelled and so is never counted.
     """
     tasks = {
@@ -111,9 +113,15 @@ def document(*, ceiling: int = 1, running: str = "RUNNING") -> dict[str, Any]:
     }
 
 
-def _model(route: str, doc: dict[str, Any]) -> Any:
+def _model(route: str, doc: dict[str, Any], *, proofs: dict[str, str] | None = None) -> Any:
     projection = build_route_projection(
-        route=route, document=doc, cursor=CURSOR, scope_id=SCOPE, generated_at=AT
+        route=route,
+        document=doc,
+        cursor=CURSOR,
+        scope_id=SCOPE,
+        generated_at=AT,
+        integrating=INTEGRATING,
+        proofs=proofs or {},
     )
     return (
         build_acceptance_view(projection) if route == "milestone" else build_spine_view(projection)
@@ -200,7 +208,7 @@ def _batch_row(spine: SpineView, key: str) -> SpineRow:
     return next(row for row in spine.rows if row.key == key)
 
 
-def test_a_planned_batch_all_ready_behind_the_active_one_waits() -> None:
+def test_a_planned_batch_all_ready_behind_the_integrating_one_waits() -> None:
     spine = _model("scope.home", document())
     filed = Progress.of(spine.rows)
     assert filed.batch_cell(_batch_row(spine, "BAT-0101")) == f"2/2 ready · {WAITING}"
@@ -212,13 +220,13 @@ def test_a_batch_with_a_task_still_running_does_not_wait_on_the_ceiling() -> Non
     assert filed.batch_cell(_batch_row(spine, "BAT-0102")) == "1/3 ready · 1 running"
 
 
-def test_the_active_batch_itself_never_waits() -> None:
+def test_the_integrating_batch_itself_never_waits() -> None:
     spine = _model("scope.home", document())
     filed = Progress.of(spine.rows)
     assert filed.batch_cell(_batch_row(spine, "BAT-0100")) == "2/2 ready"
 
 
-def test_a_ceiling_of_two_admits_the_ready_batch_beside_one_active() -> None:
+def test_a_ceiling_of_two_admits_the_ready_batch_beside_one_integrating() -> None:
     spine = _model("scope.home", document(ceiling=2))
     filed = Progress.of(spine.rows)
     assert filed.batch_cell(_batch_row(spine, "BAT-0101")) == "2/2 ready"
@@ -233,7 +241,7 @@ def test_the_ceiling_is_read_from_the_track_policy_and_named_by_its_value() -> N
     assert row.facts["repository"] == "REP-EAWF"
     assert row.facts["track"] == "TRK-CORE"
     note = Progress.of(spine.rows).batch_cell(row)
-    assert note == "2/2 ready · waiting: 2 active batches per repository"
+    assert note == "2/2 ready · waiting: 2 integrating batches per repository"
 
 
 def test_a_batch_whose_track_states_no_ceiling_is_never_said_to_wait() -> None:
@@ -260,13 +268,25 @@ def test_a_ceiling_that_is_not_a_count_is_never_read_as_one() -> None:
     assert filed.waiting(unstated, TaskTally.of(["READY_TO_INTEGRATE"])) is None
 
 
+@pytest.mark.parametrize(
+    "note",
+    ["proving 2 criteria at 0123456789ab", "CR-0042-1 unmet at 0123456789ab"],
+)
+def test_a_batch_held_by_its_proof_says_why_on_its_row(note: str) -> None:
+    proofs = {f"{ROOT}/batch/BAT-0100": note}
+    spine = _model("scope.home", document(), proofs=proofs)
+    filed = Progress.of(spine.rows)
+    assert filed.batch_cell(_batch_row(spine, "BAT-0100")) == f"2/2 ready · waiting: {note}"
+    assert filed.batch_cell(_batch_row(spine, "BAT-0102")) == "1/3 ready · 1 running"
+
+
 # ---- the frames -----------------------------------------------------------------
 
 
 def test_home_track_row_counts_tasks_ready_and_batches_done() -> None:
     text = frame("scope.home", document())
     track = _line(text, "TRK-CORE")
-    assert "5 of 7 tasks ready · 0 of 3 batches done" in track
+    assert "1 completed · 4 ready of 7 tasks · 0 of" in track
 
 
 def test_home_track_with_no_task_keeps_counting_its_milestones() -> None:
@@ -279,7 +299,7 @@ def test_home_track_with_no_task_keeps_counting_its_milestones() -> None:
 def test_home_track_progress_is_clipped_never_wrapped_at_eighty_columns() -> None:
     text = frame("scope.home", document(), w=80)
     track = _line(text, "TRK-CORE")
-    assert "5 of 7 tasks ready" in track
+    assert "1 completed · 4 ready of 7" in track
     assert len(text.splitlines()) == dict(SIZES)[80]
 
 
@@ -359,16 +379,17 @@ def test_a_task_patch_moves_the_home_counts_without_a_blank_frame() -> None:
             renders = app.render_count
             await seam.apply_patch(_task_patch("READY_TO_INTEGRATE", 8))
             painted.append("\n".join(body.rows))
-            await pilot.pause()
+            await settle(app, pilot)
             painted.append("\n".join(body.rows))
             return before, painted, app.render_count - renders
 
     before, painted, repaints = asyncio.run(drive())
-    assert "5 of 7 tasks ready" in before
+    assert "1 completed · 4 ready of 7 tasks" in before
     assert all("TRK-CORE" in shot for shot in painted), "a frame went blank during the patch"
-    assert "6 of 7 tasks ready" in painted[-1]
-    assert repaints == 1
-    assert daemon.reads == ["scope.home", ATTENTION_ROUTE]
+    assert "1 completed · 5 ready of 7 tasks" in painted[-1]
+    # the patch repaints at once, and the read it owes for what it could not state again
+    assert repaints == 2
+    assert daemon.reads == ["scope.home", ATTENTION_ROUTE, "scope.home"]
 
 
 # ---- cost: O(rows), within the console's frame budgets ----------------------------

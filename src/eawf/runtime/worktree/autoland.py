@@ -7,12 +7,9 @@ the worktree (recording a commit SHA as evidence) but their commits do
 not yet live on the parent feature branch. ``wave_autoland`` brings the
 commit set home.
 
-It differs from :func:`eawf.runtime.worktree.wave_land.wave_land_batch`
-in *which* waves it touches. ``wave_land_batch`` lands *and closes*
-CLAIMED / IN_PROGRESS waves (the close happens as part of the land).
-``wave_autoland`` lands waves that are *already* CLOSED -- the close
-already ran inside the worktree -- so it only replays commits and tears
-the worktree down; it never drives :func:`close_wave`.
+It lands only waves that are *already* CLOSED -- the close already ran
+inside the worktree -- so it only replays commits and tears the worktree
+down; it never closes a wave.
 
 The flow:
 
@@ -27,8 +24,7 @@ The flow:
    for the operator, and report the failing wave plus the waves that
    were not reached.
 5. After a clean land of a wave, tear the worktree down via
-   :func:`eawf.runtime.worktree.cleanup.cleanup_worktree` -- mirroring
-   the post-land cleanup that :func:`wave_land` performs -- unless
+   :func:`eawf.runtime.worktree.cleanup.cleanup_worktree` unless
    ``keep_worktree`` is set.
 
 The function mutates the supplied :class:`State` in place. Caller holds

@@ -56,53 +56,6 @@ class ReadResult(BaseModel):
     version: str
 
 
-class WaveLandParams(BaseModel):
-    """Params for :func:`wave_land_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    repo_root: str
-    wave_id: str
-    outcome: str | None = None
-    keep_worktree: bool = False
-
-
-class WaveLandRpcResult(BaseModel):
-    """Result of :func:`wave_land_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    wave: str
-    commits: list[str]
-    outcome: str
-    closed: bool
-    worktree_cleaned: bool
-    merged_commit: str
-    integration_id: str | None = None
-    close_attempt: dict[str, Any] | None = None
-    close_backgrounded: bool = False
-
-
-class WaveLandBatchParams(BaseModel):
-    """Params for :func:`wave_land_batch_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    repo_root: str
-    iter_id: str | None = None
-    ready_only: bool = False
-    keep_worktree: bool = False
-
-
-class WaveLandBatchRpcResult(BaseModel):
-    """Result of :func:`wave_land_batch_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    landed: list[WaveLandRpcResult]
-    failed_wave: str | None
-    error: str | None
-    skipped: list[str]
-    barrier_requirements: dict[str, list[str]]
-    close_mode: Literal["durable_async", "daemonless_synchronous"]
-
-
 class WaveAutolandParams(BaseModel):
     """Params for :func:`wave_autoland_rpc`."""
 

@@ -886,6 +886,11 @@ def bind_run_event_bus(context: Epoch2RootContext, bus: Any) -> None:
     _EVENT_BUSES[context] = bus
 
 
+def event_bus_of(context: Epoch2RootContext) -> Any:
+    """Return the subscription bus *context* announces on, or ``None`` when none is bound."""
+    return _EVENT_BUSES.get(context)
+
+
 def _announce_append(
     context: Epoch2RootContext, urn: QualifiedUrn, *, event_ref: str, tail: int
 ) -> None:
@@ -1381,5 +1386,6 @@ __all__ = [
     "append_run_event",
     "append_run_event_in_session",
     "bind_run_event_bus",
+    "event_bus_of",
     "run_stall_interval",
 ]

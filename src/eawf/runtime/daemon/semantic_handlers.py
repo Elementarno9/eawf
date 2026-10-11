@@ -148,6 +148,7 @@ from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.store.ledger import LedgerRecord, LedgerTornTailError, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.candidate.seal import (
     accepted_report_of,
     accepted_report_record,
@@ -662,7 +663,12 @@ def _listed_files(root: Path, prefix: str | None) -> list[str]:
         argv += ["--", prefix]
     try:
         listed = subprocess.run(
-            argv, cwd=root, capture_output=True, check=True, timeout=_LIST_TIMEOUT_SECONDS
+            argv,
+            cwd=root,
+            capture_output=True,
+            check=True,
+            timeout=_LIST_TIMEOUT_SECONDS,
+            **no_window_kwargs(),
         )
     except (OSError, subprocess.SubprocessError) as error:
         raise HandlerRefusalError(

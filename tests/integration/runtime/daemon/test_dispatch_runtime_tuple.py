@@ -243,9 +243,11 @@ def runtime_facts(row: dict[str, Any]) -> dict[str, str]:
 
 
 def test_a_claude_dispatch_records_the_version_and_model_of_the_init_message(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The Claude init message names the version and model; nothing names a provider."""
+    """The Claude init message names the version and model; the child's environment the
+    provider it is routed to."""
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     launcher = claude_launcher({"init_fields": {"model": COMPILED_MODEL}, "lines": [CLAUDE_DONE]})
 
     running, _row, ended = dispatch_parked(tmp_path, launcher, claude=True)
@@ -253,11 +255,11 @@ def test_a_claude_dispatch_records_the_version_and_model_of_the_init_message(
     expected = RunRuntimeTuple(
         harness="claude-code",
         harness_version=CLAUDE_VERSION.split()[0],
+        provider="anthropic",
         model=COMPILED_MODEL,
     )
     assert running["status"] == "RUNNING"
     assert tuple_of(running) == expected
-    assert running["runtime_tuple"]["provider"] is None
     assert launcher.outcome is not None
     assert launcher.outcome.runtime_tuple == expected
     assert tuple_of(ended) == expected
@@ -282,16 +284,22 @@ def test_a_codex_dispatch_records_the_initialize_version_and_the_thread_model(
     assert tuple_of(ended) == expected
 
 
-def test_a_claude_init_without_version_or_model_leaves_both_absent(tmp_path: Path) -> None:
+def test_a_claude_init_without_version_or_model_leaves_both_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A member the init message did not state stays absent, never the compiled one."""
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     launcher = claude_launcher(
         {"init_fields": {"claude_code_version": None, "model": None}, "lines": [CLAUDE_DONE]}
     )
 
     running, row, _ended = dispatch_parked(tmp_path, launcher, claude=True)
 
-    assert tuple_of(running) == RunRuntimeTuple(harness="claude-code")
-    assert runtime_facts(row) == {"runtime_harness": "claude-code"}
+    assert tuple_of(running) == RunRuntimeTuple(harness="claude-code", provider="anthropic")
+    assert runtime_facts(row) == {
+        "runtime_harness": "claude-code",
+        RUNTIME_FACTS["provider"]: "anthropic",
+    }
 
 
 def test_a_codex_user_agent_without_a_version_leaves_the_version_absent(

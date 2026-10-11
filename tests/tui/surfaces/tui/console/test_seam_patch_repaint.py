@@ -50,14 +50,15 @@ def check_patch_repaints_the_visible_route() -> None:
             before = _painted(app)
             renders = app.render_count
             await seam.apply_patch(patch("scope.home", key=PATCHED_KEY, sequence=CURSOR + 1))
-            await pilot.pause()
+            await settle(app, pilot)
             return before, _painted(app), app.render_count - renders
 
     before, after, repaints = asyncio.run(drive())
     assert PATCHED_KEY not in before
     assert PATCHED_KEY in after, "the visible frame is stale after the patch"
-    assert repaints == 1
-    assert daemon.reads == ["scope.home", ATTENTION_ROUTE]
+    # the patch repaints at once, and the read it owes for what it could not state again
+    assert repaints == 2
+    assert daemon.reads == ["scope.home", ATTENTION_ROUTE, "scope.home"]
 
 
 def test_patch_repaints_held_route() -> None:
@@ -72,7 +73,10 @@ def test_patch_repaint_reds_with_fan_out_disabled(monkeypatch: pytest.MonkeyPatc
 
 
 def test_patch_to_a_hidden_held_route_repaints_nothing_and_is_drawn_on_return() -> None:
-    """A background route is kept current without a repaint, and a return reads nothing."""
+    """A background route is kept current without a repaint, and a return reads it again.
+
+    The patch holds the row at once; the read on return states what the patch could not.
+    """
     daemon = FakeDaemon()
     seam = seam_over(daemon)
 
@@ -95,7 +99,7 @@ def test_patch_to_a_hidden_held_route_repaints_nothing_and_is_drawn_on_return() 
     quiet, home = asyncio.run(drive())
     assert quiet == 0
     assert PATCHED_KEY in home
-    assert daemon.reads == ["scope.home", ATTENTION_ROUTE, "activity"]
+    assert daemon.reads == ["scope.home", ATTENTION_ROUTE, "activity", "scope.home"]
 
 
 def test_an_attention_patch_repaints_every_route_for_the_header() -> None:

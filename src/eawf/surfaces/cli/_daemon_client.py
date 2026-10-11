@@ -33,7 +33,6 @@ from typing import Any
 import orjson
 
 from eawf import __version__
-from eawf.kernel.state.mutations import Mutation
 from eawf.runtime.daemon.runtime_dir import runtime_dir as default_runtime_dir
 from eawf.runtime.daemon.spawn import auto_spawn_daemon, daemon_pid_if_ready
 from eawf.surfaces.cli.errors import DaemonVersionMismatch
@@ -430,55 +429,6 @@ class DaemonClient:
             raise RuntimeError(f"daemon returned non-object result: {result!r}")
         return result
 
-    def state_mutate(
-        self,
-        mutation: Mutation,
-        *,
-        idempotency_key: str | None = None,
-        repo_root: str | None = None,
-    ) -> dict[str, Any]:
-        """Proxy a :class:`Mutation` through the daemon's ``state.mutate`` RPC.
-
-        Thin convenience wrapper around :meth:`call` — serialises the
-        mutation to a JSON-mode dict, forwards the optional idempotency
-        key + repo anchor alongside it, and unwraps the result dict.
-        Used by :mod:`eawf.surfaces.cli._mutation` for the W09 proxy callsite
-        rewire.
-
-        Args:
-            mutation: Typed mutation to dispatch.
-            idempotency_key: Optional caller-supplied retry key. Shadows
-                :attr:`Mutation.idempotency_key` when both are set.
-            repo_root: Optional absolute path of the repo whose
-                ``state.json`` the mutation targets. The daemon is one
-                per user — passing the caller's repo root keeps a
-                cross-repo invocation from being mis-routed against the
-                daemon's boot-time cwd anchor. Omitting falls back to
-                the daemon's boot-time ``state_path`` with a one-shot
-                ``daemon_anchor_fallback`` warning logged on the daemon
-                side.
-
-        Returns:
-            Dict matching
-            :class:`eawf.runtime.daemon.methods.state.MutateResult` — the event
-            envelope plus ``before_version`` / ``after_version`` digests
-            and the ``idempotent_replay`` flag.
-
-        Raises:
-            DaemonRpcError: When the daemon returns a JSON-RPC error
-                envelope (e.g. ``-32002 validation_failed``).
-            RuntimeError: When the client was never entered or the
-                socket is closed.
-        """
-        params: dict[str, Any] = {"mutation": mutation.model_dump(mode="json")}
-        if idempotency_key is not None:
-            params["idempotency_key"] = idempotency_key
-        elif mutation.idempotency_key is not None:
-            params["idempotency_key"] = mutation.idempotency_key
-        if repo_root is not None:
-            params["repo_root"] = repo_root
-        return self.call("state.mutate", params)
-
     def config_set_layer_value(
         self,
         *,
@@ -601,95 +551,6 @@ class DaemonClient:
         if registry_path is not None:
             params["registry_path"] = registry_path
         return self.call("registry.update", params)
-
-    def spec_init(
-        self,
-        *,
-        scope_id: str,
-        title: str,
-        repo_code: str,
-        repo_root: str | None = None,
-        idempotency_key: str | None = None,
-        cache_dir: str | None = None,
-    ) -> dict[str, Any]:
-        """Proxy a ``spec.init`` call through the daemon."""
-        params: dict[str, Any] = {
-            "scope_id": scope_id,
-            "title": title,
-            "repo_code": repo_code,
-        }
-        if repo_root is not None:
-            params["repo_root"] = repo_root
-        if cache_dir is not None:
-            params["cache_dir"] = cache_dir
-        if idempotency_key is not None:
-            params["idempotency_key"] = idempotency_key
-        return self.call("spec.init", params)
-
-    def spec_validate(
-        self,
-        *,
-        scope_id: str,
-        repo_code: str,
-        repo_root: str | None = None,
-        cache_dir: str | None = None,
-    ) -> dict[str, Any]:
-        """Proxy a ``spec.validate`` call through the daemon."""
-        params: dict[str, Any] = {
-            "scope_id": scope_id,
-            "repo_code": repo_code,
-        }
-        if repo_root is not None:
-            params["repo_root"] = repo_root
-        if cache_dir is not None:
-            params["cache_dir"] = cache_dir
-        return self.call("spec.validate", params)
-
-    def spec_promote(
-        self,
-        *,
-        scope_id: str,
-        repo_code: str,
-        target_status: str,
-        repo_root: str | None = None,
-        idempotency_key: str | None = None,
-        cache_dir: str | None = None,
-    ) -> dict[str, Any]:
-        """Proxy a ``spec.promote`` call through the daemon."""
-        params: dict[str, Any] = {
-            "scope_id": scope_id,
-            "repo_code": repo_code,
-            "target_status": target_status,
-        }
-        if repo_root is not None:
-            params["repo_root"] = repo_root
-        if cache_dir is not None:
-            params["cache_dir"] = cache_dir
-        if idempotency_key is not None:
-            params["idempotency_key"] = idempotency_key
-        return self.call("spec.promote", params)
-
-    def spec_archive(
-        self,
-        *,
-        scope_id: str,
-        repo_code: str,
-        repo_root: str | None = None,
-        idempotency_key: str | None = None,
-        cache_dir: str | None = None,
-    ) -> dict[str, Any]:
-        """Proxy a ``spec.archive`` call through the daemon."""
-        params: dict[str, Any] = {
-            "scope_id": scope_id,
-            "repo_code": repo_code,
-        }
-        if repo_root is not None:
-            params["repo_root"] = repo_root
-        if cache_dir is not None:
-            params["cache_dir"] = cache_dir
-        if idempotency_key is not None:
-            params["idempotency_key"] = idempotency_key
-        return self.call("spec.archive", params)
 
 
 __all__ = [

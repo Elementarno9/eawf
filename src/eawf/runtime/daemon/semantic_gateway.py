@@ -586,7 +586,9 @@ def _lease(inputs: GuardInputs) -> SemanticToolError | None:
             SemanticToolErrorCode.STALE_WORKSPACE_GENERATION,
             message=(
                 f"the call expects workspace generation {expected} and the lease is at "
-                f"{inputs.lease.workspace_generation}"
+                f"{inputs.lease.workspace_generation}; the generation counts "
+                "rematerializations of the workspace and writes do not advance it, so pass "
+                "the generation the last patch answered or omit the field"
             ),
             field_path="/expected_workspace_generation",
         )

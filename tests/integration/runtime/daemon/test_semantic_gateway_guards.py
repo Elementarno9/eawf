@@ -1051,6 +1051,10 @@ def test_a_patch_aimed_at_a_stale_generation_is_refused(
         check=PreHandlerCheck.LEASE,
         code=SemanticToolErrorCode.STALE_WORKSPACE_GENERATION,
     )
+    # A worker guessing that its writes advanced the generation is told they do not.
+    message = answer["result"]["error"]["message"]
+    assert "lease is at 1" in message
+    assert "writes do not advance it" in message
 
 
 # ---------------------------------------------------------------------------

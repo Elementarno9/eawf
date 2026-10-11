@@ -14,9 +14,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from eawf.runtime.runtimes.claude.transcript_counters import aggregate_transcript_counters
+from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
+from eawf.runtime.runtimes.claude.transcript_counters import read_transcript
 
 _MODEL = "claude-opus-4-1"
+
+
+def _counters(path: Path, *, as_of: datetime | None = None) -> RuntimeCounters | None:
+    """Return the counters :func:`read_transcript` yields for *path*, or ``None``."""
+    reading = read_transcript(path, as_of=as_of)
+    return None if reading is None else reading.counters
 
 
 def _assistant(stamp: str, *, output: int, cache_read: int, block: str = "text") -> dict[str, Any]:
@@ -56,7 +63,7 @@ def _streamed(tmp_path: Path) -> Path:
 
 
 def test_meas_002_streamed_message_usage_is_its_completing_row(tmp_path: Path) -> None:
-    counters = aggregate_transcript_counters(_streamed(tmp_path))
+    counters = _counters(_streamed(tmp_path))
 
     assert counters is not None
     assert counters.output_tokens == 310
@@ -64,7 +71,7 @@ def test_meas_002_streamed_message_usage_is_its_completing_row(tmp_path: Path) -
 
 
 def test_meas_002_streamed_usage_is_no_field_wise_maximum(tmp_path: Path) -> None:
-    counters = aggregate_transcript_counters(_streamed(tmp_path))
+    counters = _counters(_streamed(tmp_path))
 
     assert counters is not None
     # 950 is the largest cache read any row shows; the completing row says 500.
@@ -77,7 +84,7 @@ def test_meas_002_repeated_completed_record_counts_once(tmp_path: Path) -> None:
         _assistant("2026-09-08T01:00:03Z", output=310, cache_read=500),
     ]
 
-    counters = aggregate_transcript_counters(_write(tmp_path / "s.jsonl", rows))
+    counters = _counters(_write(tmp_path / "s.jsonl", rows))
 
     assert counters is not None
     assert counters.output_tokens == 310
@@ -86,7 +93,7 @@ def test_meas_002_repeated_completed_record_counts_once(tmp_path: Path) -> None:
 def test_meas_002_single_row_message_reads_that_row(tmp_path: Path) -> None:
     rows = [_assistant("2026-09-08T01:00:02Z", output=7, cache_read=3)]
 
-    counters = aggregate_transcript_counters(_write(tmp_path / "s.jsonl", rows))
+    counters = _counters(_write(tmp_path / "s.jsonl", rows))
 
     assert counters is not None
     assert (counters.output_tokens, counters.cache_read_input_tokens) == (7, 3)
@@ -97,7 +104,7 @@ def test_meas_002_message_cut_mid_stream_reads_its_last_row_before_the_cut(
 ) -> None:
     as_of = datetime(2026, 9, 8, 1, 0, 6, tzinfo=UTC)
 
-    counters = aggregate_transcript_counters(_streamed(tmp_path), as_of=as_of)
+    counters = _counters(_streamed(tmp_path), as_of=as_of)
 
     assert counters is not None
     assert counters.output_tokens == 40

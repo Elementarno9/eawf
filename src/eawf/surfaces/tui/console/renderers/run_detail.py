@@ -119,11 +119,16 @@ def timeline_rows(view: View, timeline: RunTimeline) -> list[str]:
     if earlier:
         rows.append(f"   … {earlier} earlier rows · Enter opens the transcript")
     for item in shown:
-        detail = (
+        where = (
             f"sequences {item.first_sequence}–{item.last_sequence}"  # noqa: RUF001
             if item.coalesced
             else f"sequence {item.first_sequence}"
         )
+        # a single event reads as its own words; a coalesced row leads with the range it
+        # folds, then what the latest of its events says
+        detail = where if item.detail is None else item.detail
+        if item.coalesced and item.detail is not None:
+            detail = f"{where} · {item.detail}"
         when = "" if item.coalesced else clock_time(item.first_at)
         cells = [when, event_cell(item), clip_words(detail, text_w), item.priority.value]
         rows.append(table.row(cells))

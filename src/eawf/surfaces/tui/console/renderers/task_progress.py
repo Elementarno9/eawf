@@ -17,9 +17,13 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Final, Protocol
 
-from eawf.kernel.projection.row_facts import BATCH_CEILING_FACT
+from eawf.kernel.projection.row_facts import (
+    BATCH_CEILING_FACT,
+    BATCH_INTEGRATING_FACT,
+    BATCH_PROOF_FACT,
+)
 from eawf.kernel.projection.truth import TruthField
-from eawf.kernel.state.epoch2.batch import BatchStatus
+from eawf.kernel.state.epoch2.batch import BatchStatus, holds_head_proof
 from eawf.kernel.state.epoch2.task_status import TaskStatus
 from eawf.kernel.store.tiers import Epoch2Collection
 
@@ -113,6 +117,20 @@ class TaskTally:
         cell = f"{self.landed}/{self.total} ready"
         return f"{cell} · {self.running} running" if self.running else cell
 
+    def headline(self) -> str:
+        """Return the tally as a Track row reads it, in the Milestone line's words.
+
+        A COMPLETED Task is counted as completed, never as ready, so home and the
+        Milestone state the same numbers: ``6 of 6 tasks completed``, ``5 of 7 tasks
+        ready``, or ``1 completed · 4 ready of 7 tasks`` when both hold.
+        """
+        tasks = "task" if self.total == 1 else "tasks"
+        if self.total and self.completed == self.total:
+            return f"{self.completed} of {self.total} {tasks} completed"
+        if self.completed:
+            return f"{self.completed} completed · {self.ready} ready of {self.total} {tasks}"
+        return f"{self.ready} of {self.total} {tasks} ready"
+
     def line(self) -> str:
         """Return the tally by status, as the Milestone's progress line reads it."""
         parts = [
@@ -126,7 +144,7 @@ class TaskTally:
 
 
 def _ceiling_words(ceiling: int) -> str:
-    return "one active batch" if ceiling == 1 else f"{ceiling} active batches"
+    return "one integrating batch" if ceiling == 1 else f"{ceiling} integrating batches"
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,19 +154,20 @@ class Progress:
     Attributes:
         tasks: Each Batch's Task statuses, by Batch key.
         batches: Each Milestone's Batches, cancelled ones left out, by Milestone key.
-        active: The ACTIVE Batches, by repository and Track.
+        proving: The Batches holding or building an exact-head proof, by repository and
+            Track: pinned at READY_TO_MERGE or later, or ACTIVE and integrating.
     """
 
     tasks: Mapping[str, list[str | None]] = field(default_factory=dict)
     batches: Mapping[str, list[Counted]] = field(default_factory=dict)
-    active: Mapping[tuple[str, str], list[str]] = field(default_factory=dict)
+    proving: Mapping[tuple[str, str], list[str]] = field(default_factory=dict)
 
     @classmethod
     def of(cls, rows: Sequence[Counted]) -> Progress:
         """Return the rows filed under their parents, in one pass."""
         tasks: dict[str, list[str | None]] = {}
         batches: dict[str, list[Counted]] = {}
-        active: dict[tuple[str, str], list[str]] = {}
+        proving: dict[tuple[str, str], list[str]] = {}
         for row in rows:
             if row.parent_key is None:
                 continue
@@ -159,9 +178,10 @@ class Progress:
                 if state != BatchStatus.CANCELLED.value:
                     batches.setdefault(row.parent_key, []).append(row)
                 place = (row.facts.get("repository"), row.facts.get("track"))
-                if state == BatchStatus.ACTIVE.value and place[0] and place[1]:
-                    active.setdefault((place[0], place[1]), []).append(row.key)
-        return cls(tasks=tasks, batches=batches, active=active)
+                integrating = BATCH_INTEGRATING_FACT in row.facts
+                if holds_head_proof(state, integrating=integrating) and place[0] and place[1]:
+                    proving.setdefault((place[0], place[1]), []).append(row.key)
+        return cls(tasks=tasks, batches=batches, proving=proving)
 
     def batch(self, key: str) -> TaskTally:
         """Return the tally of the Tasks filed under one Batch."""
@@ -174,15 +194,21 @@ class Progress:
         return TaskTally.of(statuses), cut
 
     def waiting(self, batch: Counted, tally: TaskTally) -> str | None:
-        """Return why a PLANNED Batch whose Tasks are all ready does not activate, if so.
+        """Return why a Batch whose Tasks are all ready does not close or activate, if so.
 
-        It waits when its Track's ceiling of active Batches in its repository is already
-        reached by other Batches; the ceiling is the Track policy's, read off the Batch.
+        A Batch whose criteria are still being proved, or have a criterion unmet, says so
+        whatever its status. A PLANNED one otherwise waits when its Track's ceiling in its
+        repository is already reached by other Batches holding or building an exact-head
+        proof; a Batch still collecting Tasks holds none. The ceiling is the Track
+        policy's, read off the Batch.
 
         Returns:
-            The note the Batch row carries, or ``None`` when it is not waiting on the
-            ceiling or the read model does not state the facts that would show it.
+            The note the Batch row carries, or ``None`` when it is not waiting on its proof
+            or the ceiling, or the read model does not state the facts that would show it.
         """
+        proof = batch.facts.get(BATCH_PROOF_FACT)
+        if proof is not None:
+            return f"waiting: {proof}"
         if _status(batch) != BatchStatus.PLANNED.value or not tally.total:
             return None
         if tally.landed != tally.total:
@@ -193,7 +219,7 @@ class Progress:
         if repository is None or track is None or stated is None or not stated.isdigit():
             return None
         ceiling = int(stated)
-        others = [key for key in self.active.get((repository, track), ()) if key != batch.key]
+        others = [key for key in self.proving.get((repository, track), ()) if key != batch.key]
         if len(others) < ceiling:
             return None
         return f"waiting: {_ceiling_words(ceiling)} per repository"

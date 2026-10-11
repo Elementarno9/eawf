@@ -228,7 +228,7 @@ def progress(spine: SpineView, row: SpineRow, filed: Progress) -> str:
         return "no milestone filed"
     tally, batches = filed.milestones(m.key for m in under)
     if tally.total:
-        return f"{tally.landed} of {dv.plural(tally.total, 'task')} ready · {batches_done(batches)}"
+        return f"{tally.headline()} · {batches_done(batches)}"
     done = _done(under, str(MilestoneStatus.COMPLETED))
     return f"{done} of {dv.plural(len(under), 'milestone')} done"
 

@@ -283,7 +283,7 @@ def _checkout(repository: Path, *, head_sha: str, where: Path) -> Iterator[Path]
         shutil.rmtree(where, ignore_errors=True)
 
 
-def _run_leg(leg: VerificationLeg, *, cwd: Path, gate_context: GateExecutionContext) -> CheckResult:
+def run_leg(leg: VerificationLeg, *, cwd: Path, gate_context: GateExecutionContext) -> CheckResult:
     """Run one leg's gate in *cwd* and return what the gate did.
 
     Raises:
@@ -468,10 +468,10 @@ def prove_task(
                 continue
             head = leg.expected.revision_binding.head_sha
             with _checkout(repository, head_sha=head, where=run_dir / head[:12]) as cwd:
-                ran.append((leg, _run_leg(leg, cwd=cwd, gate_context=gate_context)))
+                ran.append((leg, run_leg(leg, cwd=cwd, gate_context=gate_context)))
     finally:
         shutil.rmtree(run_dir, ignore_errors=True)
-    outcomes = _file_proofs(context, args.urn, ran, now=now)
+    outcomes = file_proofs(context, args.urn, ran, now=now)
     passed = bool(outcomes) and all(item.result in {"pass", "reused"} for item in outcomes)
     logger.info(
         f"prove_task task={args.urn.entity_key} legs={len(outcomes)} "
@@ -498,7 +498,7 @@ def prove_task(
     return answer
 
 
-def _file_proofs(
+def file_proofs(
     context: Epoch2RootContext,
     urn: TaskUrn,
     ran: Sequence[tuple[VerificationLeg, ProofReceipt | CheckResult]],
@@ -620,6 +620,8 @@ __all__ = [
     "TaskProveAnswer",
     "TaskProveParams",
     "daemon_proof_facts",
+    "file_proofs",
     "prove_task",
+    "run_leg",
     "task_assessment",
 ]

@@ -1038,7 +1038,7 @@ async def launch_worker(
 
     Raises:
         DaemonValidationError: No launcher serves the compiled provider,
-            or the launch failed.
+            or the launch failed with a spawn error or an ``OSError``.
     """
     # The supervisor reads the attempt records this module defines.
     from eawf.runtime.daemon.run_supervisor import (
@@ -1091,7 +1091,7 @@ async def launch_worker(
                 ),
             )
         )
-    except RuntimeSpawnError as error:
+    except (RuntimeSpawnError, OSError) as error:  # OSError: the worker could not be forked
         if meter is None or not meter.terminated:
             logger.info(f"launch_worker failed attempt={attempt.attempt_ref}")
             await asyncio.to_thread(
@@ -1115,6 +1115,7 @@ async def launch_worker(
             attempt_ref=attempt.attempt_ref,
             lease_id=lease.lease_id,
             turn=outcome.turn,
+            pgid=outcome.subprocess_pid,
             workspace=workspace,
             before=before,
             publish=publish,
@@ -1262,46 +1263,78 @@ async def dispatch_run(
 
     Raises:
         DaemonValidationError: Any step refused, including a second dispatch
-            of a Run whose turn this daemon still supervises. A refusal
+            of a Run this daemon still launches or supervises. A refusal
             before the lease leaves the tree exactly as it was.
     """
     # The supervisor reads the attempt records this module defines.
     from eawf.runtime.daemon.run_supervisor import start_run, supervisor_of
 
-    if supervisor_of(context).task_of(str(args.urn)) is not None:
-        raise refused(
-            DispatchRefusal.ATTEMPT_IN_FLIGHT,
-            f"run {args.urn.entity_key!r} has a worker whose turn this daemon is still "
-            "awaiting, so a second dispatch would start a second worker under one Run",
+    # Held before the first await, so a same-key retry during a slow launch is refused.
+    with supervisor_of(context).launching(str(args.urn)):
+        table = NATIVE_LAUNCHERS if launchers is None else launchers
+        spec = compile_for_dispatch(args, now=now)
+        with context.session([args.urn]) as session:
+            parent, ceiling = delegation_parent(
+                session.read_document(), read_ledger_records(run_ledger(session)), args.urn
+            )
+        capsule = seal_capsule(
+            spec=spec, request=args.capsule, parent_run_ref=parent, parent_ceiling=ceiling
         )
-    table = NATIVE_LAUNCHERS if launchers is None else launchers
-    spec = compile_for_dispatch(args, now=now)
-    with context.session([args.urn]) as session:
-        parent, ceiling = delegation_parent(
-            session.read_document(), read_ledger_records(run_ledger(session)), args.urn
+        try:
+            economics = load_economics(context.identity.tree_root.parent)
+        except EconomicsPolicyError as error:
+            raise refused(DispatchRefusal.ECONOMICS_INVALID, str(error)) from error
+        state = open_attempt(
+            context, args, spec=spec, capsule=capsule, economics=economics, now=now
         )
-    capsule = seal_capsule(
-        spec=spec, request=args.capsule, parent_run_ref=parent, parent_ceiling=ceiling
-    )
-    try:
-        economics = load_economics(context.identity.tree_root.parent)
-    except EconomicsPolicyError as error:
-        raise refused(DispatchRefusal.ECONOMICS_INVALID, str(error)) from error
-    state = open_attempt(context, args, spec=spec, capsule=capsule, economics=economics, now=now)
-    attempt, lease = lease_workspace(context, args, attempt=state.attempt, spec=spec, now=now)
-    attempt, outcome = await launch_worker(
-        context,
-        args,
-        attempt=attempt,
-        spec=spec,
-        capsule=capsule,
-        lease=lease,
-        launchers=table,
-        notice_policy=economics.notice_policy,
-        now=now,
-        publish=publish,
-    )
-    if outcome is None:
+        attempt, lease = lease_workspace(context, args, attempt=state.attempt, spec=spec, now=now)
+        attempt, outcome = await launch_worker(
+            context,
+            args,
+            attempt=attempt,
+            spec=spec,
+            capsule=capsule,
+            lease=lease,
+            launchers=table,
+            notice_policy=economics.notice_policy,
+            now=now,
+            publish=publish,
+        )
+        if outcome is None:
+            return DispatchAnswer(
+                attempt=attempt.model_dump(mode="json"),
+                stage=attempt.stage,
+                resumed=state.resumed,
+                lease=lease.model_dump(mode="json"),
+                compiled_spec_digest=spec.contract_digest,
+                authority_capsule_digest=capsule.contract_digest,
+                handshake_disposition=HandshakeDisposition.ACCEPTED,
+                reason=(
+                    f"attempt {attempt.attempt_ref} had already reached {attempt.stage.value}, "
+                    "so no second process was started"
+                ),
+            )
+        try:
+            started = start_run(
+                context,
+                args.urn,
+                actor=args.actor,
+                attempt=attempt,
+                runtime=outcome.runtime_tuple,
+                now=now,
+            )
+        except TransactionRefusedError as refusal:
+            logger.info(f"dispatch_run start refused code={refusal.code.value}")
+            raise DaemonValidationError(
+                f"validation_failed: {refusal.code.value}: {refusal.detail}"
+            ) from refusal
+        if publish is not None:
+            for envelope in started:
+                publish(envelope)
+        attempt, fact = accept_announcement(
+            context, args, attempt=attempt, hello=outcome.hello, now=now
+        )
+        accepted = fact.disposition is HandshakeDisposition.ACCEPTED
         return DispatchAnswer(
             attempt=attempt.model_dump(mode="json"),
             stage=attempt.stage,
@@ -1309,52 +1342,18 @@ async def dispatch_run(
             lease=lease.model_dump(mode="json"),
             compiled_spec_digest=spec.contract_digest,
             authority_capsule_digest=capsule.contract_digest,
-            handshake_disposition=HandshakeDisposition.ACCEPTED,
+            handshake_disposition=fact.disposition,
+            mismatched_fields=fact.mismatched_fields,
+            refusal_code=None if accepted else RUNTIME_HANDSHAKE_MISMATCH,
             reason=(
-                f"attempt {attempt.attempt_ref} had already reached {attempt.stage.value}, "
-                "so no second process was started"
+                f"attempt {attempt.attempt_ref} compiled, leased, spawned and was announced"
+                if accepted
+                else (
+                    "the worker announced a contract that differs from this Run's binding in "
+                    f"{', '.join(fact.mismatched_fields)}, so no tool grant opens"
+                )
             ),
         )
-    try:
-        started = start_run(
-            context,
-            args.urn,
-            actor=args.actor,
-            attempt=attempt,
-            runtime=outcome.runtime_tuple,
-            now=now,
-        )
-    except TransactionRefusedError as refusal:
-        logger.info(f"dispatch_run start refused code={refusal.code.value}")
-        raise DaemonValidationError(
-            f"validation_failed: {refusal.code.value}: {refusal.detail}"
-        ) from refusal
-    if publish is not None:
-        for envelope in started:
-            publish(envelope)
-    attempt, fact = accept_announcement(
-        context, args, attempt=attempt, hello=outcome.hello, now=now
-    )
-    accepted = fact.disposition is HandshakeDisposition.ACCEPTED
-    return DispatchAnswer(
-        attempt=attempt.model_dump(mode="json"),
-        stage=attempt.stage,
-        resumed=state.resumed,
-        lease=lease.model_dump(mode="json"),
-        compiled_spec_digest=spec.contract_digest,
-        authority_capsule_digest=capsule.contract_digest,
-        handshake_disposition=fact.disposition,
-        mismatched_fields=fact.mismatched_fields,
-        refusal_code=None if accepted else RUNTIME_HANDSHAKE_MISMATCH,
-        reason=(
-            f"attempt {attempt.attempt_ref} compiled, leased, spawned and was announced"
-            if accepted
-            else (
-                "the worker announced a contract that differs from this Run's binding in "
-                f"{', '.join(fact.mismatched_fields)}, so no tool grant opens"
-            )
-        ),
-    )
 
 
 __all__ = [

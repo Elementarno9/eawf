@@ -90,7 +90,9 @@ from eawf.kernel.runtime.events import (
     RunEventRecord,
     ToolPayload,
 )
+from eawf.kernel.runtime.usage import UsagePayload
 from eawf.kernel.state.enums import MeasurementQuality
+from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.runtime.daemon.run_events import reduce_run_events
 
 logger = logging.getLogger(__name__)
@@ -127,6 +129,17 @@ PURGED_REASON: Final = "sequences {first}-{last} never reached the daemon, so no
 
 #: What a reasoning block says before its summary exists.
 OPEN_TURN_TEXT: Final = "a reasoning turn opened and has not been summarized"
+
+#: What a reasoning block says once its turn closed with no summary: the provider went
+#: on to its next message, tool or end without stating what it thought.
+CLOSED_TURN_TEXT: Final = "the model reasoned, then moved on · the provider gave no summary"
+
+#: How a provider spells a tool of eawf's own semantic server once the launchers' tool
+#: grammar has lower-cased and underscored ``mcp__eawf-semantic__``.
+SEMANTIC_TOOL_PREFIX: Final = "mcp__eawf_semantic__"
+
+#: The stored statuses a Run never leaves, so nothing it opened is still going.
+ENDED_STATUSES: Final = frozenset({RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED})
 
 #: Why a block states no text. A supported kind whose payload carries no renderable
 #: sentence is a line the console holds and cannot read aloud.
@@ -368,7 +381,34 @@ def _gateway_text(payload: object) -> str | None:
         return payload.message
     if isinstance(payload, ContextBoundaryPayload):
         return _boundary_text(payload)
+    if isinstance(payload, UsagePayload):
+        return _usage_text(payload)
     return None
+
+
+def _usage_text(payload: UsagePayload) -> str:
+    """Return what a usage reading says: its counters, whether they run, its cost and quality.
+
+    A counter the source did not report is left out rather than drawn as zero, and an
+    unpriced reading says so rather than stating a cost of nothing.
+    """
+    counts = [
+        f"{value:,} {name}"
+        for value, name in (
+            (payload.input_tokens, "in"),
+            (payload.output_tokens, "out"),
+            (payload.cache_tokens, "cache"),
+        )
+        if value is not None
+    ]
+    tokens = f"{' · '.join(counts)} tokens" if counts else "no token counter reported"
+    running = "running total" if payload.is_cumulative else "since the last reading"
+    cost = (
+        "unpriced"
+        if payload.cost_microusd is None
+        else f"{payload.cost_microusd / 1_000_000:.4f} USD"
+    )
+    return f"{tokens} · {running} · {cost} · {payload.measurement_quality}"
 
 
 def _boundary_text(payload: ContextBoundaryPayload) -> str:
@@ -623,6 +663,7 @@ LANES: Final[Mapping[RunEventKind, str]] = MappingProxyType(
         RunEventKind.CHILD_RUN_STARTED: "subagent",
         RunEventKind.CHILD_RUN_TERMINAL: "subagent",
         RunEventKind.HEARTBEAT: "heartbeat",
+        RunEventKind.USAGE_OBSERVED: "usage",
         RunEventKind.EVENT_GAP: "purged",
     }
 )
@@ -785,6 +826,50 @@ def _delegation(
     )
 
 
+def _without_echoes(events: tuple[RunEventRecord, ...]) -> tuple[RunEventRecord, ...]:
+    """Return the stream less the provider's own lines for calls the gateway also recorded.
+
+    A call to eawf's semantic server is seen twice: the provider states the tool it ran
+    under its ``mcp__`` name, and the gateway that served it records the same call under
+    the tool's own id with its receipt. The gateway's lines are kept, being the ones that
+    carry the outcome; the provider's are dropped only for as many calls of a tool as
+    the gateway recorded, matched in order, so a call that never reached the gateway is
+    still drawn.
+    """
+    served: dict[str, list[str]] = {}
+    asked: dict[str, list[str]] = {}
+    for event in events:
+        payload = event.payload
+        if isinstance(payload, ToolPayload):
+            calls = served.setdefault(payload.tool_id, [])
+        elif isinstance(payload, ProviderToolPayload) and payload.tool_name.startswith(
+            SEMANTIC_TOOL_PREFIX
+        ):
+            calls = asked.setdefault(payload.tool_name.removeprefix(SEMANTIC_TOOL_PREFIX), [])
+        else:
+            continue
+        if payload.call_ref not in calls:
+            calls.append(payload.call_ref)
+    echoes = {call for tool, calls in asked.items() for call in calls[: len(served.get(tool, ()))]}
+    return tuple(
+        event
+        for event in events
+        if not (isinstance(event.payload, ProviderToolPayload) and event.payload.call_ref in echoes)
+    )
+
+
+def _reasoning_text(event: RunEventRecord, *, going: bool) -> TruthField[str]:
+    """Return what a reasoning block says: its summary, or whether its turn is still open.
+
+    A turn the provider never summarized reads as open only while it is; once the Run's
+    next message, tool or end closed it, the block says the model moved on.
+    """
+    payload = event.payload
+    if isinstance(payload, ReasoningSummaryPayload) and payload.summary is None and not going:
+        return _derived(CLOSED_TURN_TEXT, urn=event.event_ref)
+    return block_text(event)
+
+
 def _subject_deadline(payload: object, deadlines: Mapping[str, datetime]) -> datetime | None:
     """Return the deadline of the record a question or approval block waits on, if held."""
     if isinstance(payload, QuestionActionPayload):
@@ -798,16 +883,21 @@ def build_transcript_blocks(
     children: Mapping[str, Sequence[RunEventRecord]] = MappingProxyType({}),
     contents: Mapping[str, ResolvedContent] = MappingProxyType({}),
     deadlines: Mapping[str, datetime] = MappingProxyType({}),
+    ended: bool = False,
 ) -> tuple[tuple[TranscriptBlock, ...], tuple[PurgedRange, ...]]:
     """Return the Run's blocks in stream order and the ranges the console does not hold.
 
     Args:
-        events: The Run's event lines, in any order. Quarantined lines are dropped.
+        events: The Run's event lines, in any order. Quarantined lines are dropped, and
+            so is the provider's own line for a semantic-server call the gateway also
+            recorded.
         children: The event lines of the child Runs this Run delegated to, by child URN.
             A delegation whose child is absent here is drawn as unreadable.
         contents: The content the Run's references resolved to, by reference.
         deadlines: When each record a question or approval waits on stops waiting, by
             the record's URN, as the caller read it.
+        ended: Whether the Run's stored status is one it never leaves; then no block is
+            in flight, whatever line the stream ended on.
 
     Returns:
         One block per live line, a recorded gap becoming a purged block in its own
@@ -815,8 +905,10 @@ def build_transcript_blocks(
     """
     blocks: list[TranscriptBlock] = []
     purged: list[PurgedRange] = []
-    ordered = _ordered(events)
+    ordered = _without_echoes(_ordered(events))
     going, typical = _in_flight(ordered)
+    if ended:
+        going = set()
     reports_to = ordered[0].run_ref.entity_key if ordered else ""
     outcomes = {
         e.payload.delegation_request_ref: e.payload.terminal_status.value.lower()
@@ -844,7 +936,7 @@ def build_transcript_blocks(
                 sequence=event.run_sequence,
                 kind=event.event_kind,
                 at=event.recorded_at,
-                text=block_text(event),
+                text=_reasoning_text(event, going=event.event_ref in going),
                 lane=_block_lane(event),
                 in_flight=event.event_ref in going,
                 background=isinstance(payload, CommandPayload)
@@ -862,6 +954,16 @@ def build_transcript_blocks(
         )
     logger.debug(f"build_transcript_blocks blocks={len(blocks)} purged={len(purged)}")
     return tuple(blocks), tuple(purged)
+
+
+def _run_ended(model: RouteReadModel, events: Sequence[RunEventRecord]) -> bool:
+    """Return whether the Run the lines belong to is stored in a status it never leaves."""
+    if not events:
+        return False
+    found = model.index_of(events[0].run_ref.entity_key)
+    if found is None:
+        return False
+    return model.rows[found].field("status").value in ENDED_STATUSES
 
 
 def build_transcript_view(
@@ -895,8 +997,14 @@ def build_transcript_view(
     """
     model = build_route_read_model(projection, family=FAMILY, fields=TRANSCRIPT_FIELDS)
     state = reduce_run_events(events)
+    ended = _run_ended(model, events)
     blocks, purged = build_transcript_blocks(
-        events, children=children, contents=contents, deadlines=deadlines
+        events, children=children, contents=contents, deadlines=deadlines, ended=ended
+    )
+    thinking = (
+        unknown_field(urn=model.scope_id, revision=BLOCK_REVISION, reason=NO_OPEN_TURN_REASON)
+        if ended
+        else _thinking_field(events, scope_id=model.scope_id)
     )
     return TranscriptReadModel(
         route=model.route,
@@ -910,7 +1018,7 @@ def build_transcript_view(
         specs=model.specs,
         blocks=blocks,
         purged=purged,
-        thinking=_thinking_field(events, scope_id=model.scope_id),
+        thinking=thinking,
         last_contiguous_sequence=state.last_contiguous_sequence,
         derivation_stopped=state.derivation_stopped,
         quarantined=len(state.quarantined),
@@ -919,7 +1027,9 @@ def build_transcript_view(
 
 __all__ = [
     "BLOCK_REVISION",
+    "CLOSED_TURN_TEXT",
     "EMPTY_CONTENT",
+    "ENDED_STATUSES",
     "ENDS_REASONING",
     "EVENT_LANE",
     "FAMILY",
@@ -931,6 +1041,7 @@ __all__ = [
     "PURGED_REASON",
     "RETRY_WORDS",
     "RUN_NOT_ENDED",
+    "SEMANTIC_TOOL_PREFIX",
     "THINKING",
     "TRANSCRIPT_FIELDS",
     "TRANSCRIPT_ROUTE",

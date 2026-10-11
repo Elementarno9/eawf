@@ -112,6 +112,10 @@ class StagedBindingRefusedError(ValueError):
 def stage_binding(directory: Path, staged: StagedBinding) -> Path:
     """Write *staged* into the staged directory and return its path.
 
+    A row of the same Batch whose Tasks *staged* all carries is removed: its work was
+    adopted again on a newer tree, so no published commit will carry the old one and the
+    row could only refuse the publish.
+
     Args:
         directory: The generation's staged directory; created when absent.
         staged: The binding to hold back until publish.
@@ -121,6 +125,13 @@ def stage_binding(directory: Path, staged: StagedBinding) -> Path:
     """
     path = directory / staged.file_name()
     atomic_write_json(path, staged.model_dump(mode="json"))
+    carried = set(staged.task_refs)
+    for other in directory.glob(f"{staged.batch_ref.entity_key}-*.json"):
+        if (
+            other != path
+            and set(StagedBinding.model_validate_json(other.read_bytes()).task_refs) <= carried
+        ):
+            other.unlink()
     return path
 
 

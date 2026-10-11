@@ -209,6 +209,13 @@ NATIVE_SERVED: Mapping[str, tuple[KeyEntry, ...]] = MappingProxyType(
     {"scope.home": (KEY["inspect"],)}
 )
 
+#: Entries a route's native frame binds more keys to than the design pack's entry of the
+#: same label: a live transcript holds and follows on Space as on f, while the prototype
+#: replay has no growing tail and keeps the pack's f alone.
+NATIVE_WIDENED: Mapping[str, tuple[KeyEntry, ...]] = MappingProxyType(
+    {"transcript": (KeyEntry("follow", ("f", " "), KeyKind.SAFE),)}
+)
+
 
 def native_keys(route: str, *, windowed: bool) -> tuple[KeyEntry, ...]:
     """Return the key table a native frame of ``route`` advertises.
@@ -225,7 +232,10 @@ def native_keys(route: str, *, windowed: bool) -> tuple[KeyEntry, ...]:
         KeyError: ``route`` has no key table.
     """
     paging = (KEY["page"], KEY["ends"])
-    table = tuple(entry for entry in ROUTE_KEYS[route] if entry not in paging)
+    widened = {entry.label: entry for entry in NATIVE_WIDENED.get(route, ())}
+    table = tuple(
+        widened.get(entry.label, entry) for entry in ROUTE_KEYS[route] if entry not in paging
+    )
     served = NATIVE_SERVED.get(route, ())
     if served:
         # a served key sits beside the menu, where the route tables keep the inspect pair

@@ -459,6 +459,7 @@ def _address(subject: ClaimSubjectUrn, kind: EntityKind, key: str) -> str:
         repository_key=None if kind is EntityKind.CLAIM else subject.repository_key,
         kind=kind,
         entity_key=key,
+        single_key=subject.single_key,
     )
 
 

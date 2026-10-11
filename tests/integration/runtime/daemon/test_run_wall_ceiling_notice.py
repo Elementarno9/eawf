@@ -1,10 +1,10 @@
-"""A running Run past its sealed wall ceiling and silent opens exactly one notice.
+"""A running Run at its sealed wall ceiling opens exactly one notice.
 
 The daemon's own sweep measures each running Run from its start against the wall-clock
-ceiling its binding sealed. Short of the ceiling, or with an event inside the grace
-period, nothing is written; past both, one non-blocking hard-limit notice lands on the
-notice ledger. Restarting the daemon three times keeps that one row, delivers it once,
-and opens no pause for anyone to answer.
+ceiling its binding sealed. Short of the ceiling nothing is written; at it, one
+non-blocking hard-limit notice lands on the notice ledger, whether or not the Run is
+still active, because the daemon ends the Run there. Restarting the daemon three times
+keeps that one row, delivers it once, and opens no pause for anyone to answer.
 
 A restart is a fresh daemon context attached to the same tree, which is all a restart is
 to a sweep that keeps nothing in memory. Thresholds are crossed by handing the sweep a
@@ -53,8 +53,8 @@ pytestmark = pytest.mark.integration
 #: When the seeded running Run started.
 STARTED: Final = datetime(2026, 9, 8, 1, 0, tzinfo=UTC)
 
-#: The default notice policy's no-event grace period.
-GRACE: Final = timedelta(seconds=600)
+#: How far past the ceiling a later reading is taken.
+LATER: Final = timedelta(seconds=600)
 
 #: The wall-clock ceiling the Run's binding seals.
 WALL: Final = timedelta(seconds=2400)
@@ -195,24 +195,21 @@ def test_one_second_short_of_the_wall_ceiling_writes_nothing(
     assert not _ledger(canary).exists()
 
 
-def test_an_event_inside_the_grace_holds_the_notice_back(
+def test_an_event_just_before_the_ceiling_holds_nothing_back(
     canary: CanaryProvision, tmp_path: Path
 ) -> None:
     ctx = daemon_for(canary, tmp_path / "runtime")
     act(ctx, canary, 1)
-    acted = datetime.now(UTC)
 
-    sweep_once(ctx, now=acted + GRACE - timedelta(seconds=30))
-    assert not _ledger(canary).exists()
+    sweep_once(ctx, now=STARTED + WALL)
 
-    sweep_once(ctx, now=acted + GRACE + timedelta(seconds=30))
     assert len(load_notice_ledger(_ledger(canary)).notices) == 1
 
 
 def test_three_restarts_keep_one_row_one_delivery_and_no_modal(
     canary: CanaryProvision, tmp_path: Path
 ) -> None:
-    now = STARTED + WALL + GRACE
+    now = STARTED + WALL + LATER
     sweep_once(daemon_for(canary, tmp_path / "runtime-0"), now=now)
     first = deliver_pending(_ledger(canary), principal=LOCAL_OPERATOR, now=now)
     settled = _ledger(canary).read_bytes()
@@ -238,7 +235,7 @@ def test_a_run_that_is_not_running_is_passed_over(tmp_path: Path) -> None:
     seed(provisioned, {"run": {done["key"]: done}})
     ctx = daemon_for(provisioned, tmp_path / "runtime")
 
-    sweep_once(ctx, now=STARTED + WALL + GRACE)
+    sweep_once(ctx, now=STARTED + WALL + LATER)
 
     assert not _ledger(provisioned).exists()
 

@@ -153,6 +153,7 @@ def compile_for(provider: str, found: InstalledProviderFacts) -> Any:
         config=found.config,
         registry=found.registry,
         bindings=found.bindings,
+        unbound=found.unbound,
         budget=None,
         base="a" * 40,
         actor="OP-0001",
@@ -256,7 +257,12 @@ def test_bindings_skip_a_runtime_whose_sdk_is_not_installed(
 
     record(tree, row(), row("codex", CODEX_VERSION))
     monkeypatch.setattr(importlib.metadata, "distribution", absent)
-    assert facts(tree).bindings == ()
+    found = facts(tree)
+    assert found.bindings == ()
+    assert found.unbound["claude"].startswith(
+        "runtime claude-code is unbound (driver_not_installed"
+    )
+    assert found.unbound["claude"].endswith("; install the claude-agent-sdk package")
 
 
 def test_bindings_ignore_a_runtime_with_no_shipped_launcher(tree: Path) -> None:
@@ -268,22 +274,41 @@ def test_bindings_ignore_a_runtime_with_no_shipped_launcher(tree: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "rows",
+    ("rows", "reason"),
     [
-        pytest.param((), id="never-certified"),
-        pytest.param((row(outcome="quarantined"),), id="quarantined"),
-        pytest.param((row(), row(outcome="quarantined", verified_at=NOW)), id="later-quarantine"),
-        pytest.param((row(verified_at=NOW - timedelta(days=91)),), id="expired"),
+        pytest.param((), "never_certified", id="never-certified"),
+        pytest.param((row(outcome="quarantined"),), "quarantined", id="quarantined"),
+        pytest.param(
+            (row(), row(outcome="quarantined", verified_at=NOW)),
+            "quarantined",
+            id="later-quarantine",
+        ),
+        pytest.param((row(verified_at=NOW - timedelta(days=91)),), "expired", id="expired"),
     ],
 )
 def test_refuses_a_runtime_without_a_current_certification(
-    tree: Path, rows: tuple[MachineCertification, ...]
+    tree: Path, rows: tuple[MachineCertification, ...], reason: str
 ) -> None:
     record(tree, *rows, row("codex", CODEX_VERSION))
     found = facts(tree)
     assert [b.manifest.provider_id for b in found.bindings] == ["codex"]
-    with pytest.raises(DaemonValidationError, match=CompileRejection.NO_ELIGIBLE_PROFILE.value):
+    with pytest.raises(DaemonValidationError) as caught:
         compile_for("claude", found)
+    message = str(caught.value)
+    assert CompileRejection.NO_ELIGIBLE_PROFILE.value in message
+    assert f"runtime claude-code is unbound ({reason}:" in message
+    assert message.endswith("; run `eawf runtime certify claude-code`")
+
+
+def test_a_bound_provider_has_no_unbound_cause(tree: Path) -> None:
+    record(tree, row("codex", CODEX_VERSION))
+    found = facts(tree)
+    assert "codex" not in found.unbound
+    assert set(found.unbound) == {"claude"}
+
+
+def test_an_empty_store_names_every_shipped_provider_unbound(tree: Path) -> None:
+    assert set(facts(tree).unbound) == {"claude", "codex"}
 
 
 def test_refuses_at_the_compiler_when_no_profile_has_a_binding(tree: Path) -> None:

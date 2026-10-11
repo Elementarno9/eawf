@@ -749,7 +749,7 @@ def test_status_leaves_the_decisions_of_an_epoch1_tree_unchanged(
     assert [d["id"] for d in _status_decisions(state_path, monkeypatch)] == ["D02", "D01"]
 
 
-def test_status_refuses_a_torn_decision_ledger(
+def test_status_reports_around_a_torn_decision_ledger(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -760,11 +760,13 @@ def test_status_refuses_a_torn_decision_ledger(
     monkeypatch.setenv("EA_STATE", str(state_path))
     _stub_no_git(monkeypatch)
     result = runner.invoke(app, ["--json", "status"])
-    assert result.exit_code == 1, result.output
-    assert "decision ledger unreadable" in json.loads(result.stdout)["message"]
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["recent_decisions"] == []
+    assert [b for b in payload["blockers"] if b.startswith("decision ledger unreadable")]
 
 
-def test_status_refuses_a_native_decision_line_its_model_rejects(
+def test_status_reports_around_a_native_decision_line_its_model_rejects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -780,5 +782,7 @@ def test_status_refuses_a_native_decision_line_its_model_rejects(
     monkeypatch.setenv("EA_STATE", str(state_path))
     _stub_no_git(monkeypatch)
     result = runner.invoke(app, ["--json", "status"])
-    assert result.exit_code == 1, result.output
-    assert "decision ledger unreadable" in json.loads(result.stdout)["message"]
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["recent_decisions"] == []
+    assert [b for b in payload["blockers"] if b.startswith("decision ledger unreadable")]

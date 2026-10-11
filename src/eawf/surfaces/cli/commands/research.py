@@ -7,11 +7,12 @@ actions an agent raises when it reaches a choice it may not take.
 
 from __future__ import annotations
 
+import hashlib
 import logging
-import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Final
 
+import orjson
 import typer
 
 from eawf.surfaces.cli import errors
@@ -153,7 +154,7 @@ def campaign_new(
         typer.Option(
             "--idempotency-key",
             help="Caller's name for this request; a retry returns the first Campaign. "
-            "Minted when omitted.",
+            "Derived from the request when omitted, so the same request retried is one Campaign.",
         ),
     ] = None,
     depth: Annotated[
@@ -208,7 +209,6 @@ def campaign_new(
         "questions": asked,
         "runtime": runtime,
         "drive": run,
-        "idempotency_key": idempotency_key or f"campaign-new-{uuid.uuid4().hex}",
     }
     params |= {
         key: value
@@ -219,6 +219,8 @@ def campaign_new(
         )
         if value is not None
     }
+    request = hashlib.sha256(orjson.dumps(params, option=orjson.OPT_SORT_KEYS)).hexdigest()
+    params["idempotency_key"] = idempotency_key or f"campaign-new-{request[:32]}"
     answer = _campaign_call(ctx, CAMPAIGN_START, params, "campaign new")
     if answer is None:
         return

@@ -409,6 +409,7 @@ class PendingAction(_FrozenModel):
                 repository_key=container.repository_key,
                 kind=EntityKind.PENDING_ACTION,
                 entity_key=key,
+                single_key=container.single_key,
             )
         except IdentityError:
             return data

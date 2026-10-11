@@ -30,7 +30,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Final
@@ -38,6 +38,7 @@ from typing import Any, Final
 from pydantic import ValidationError
 
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.projection.row_facts import parent_key_of, stored_fields
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.epoch2.authority import (
     NativeAuthorityRequiredError,
@@ -46,7 +47,7 @@ from eawf.kernel.state.epoch2.authority import (
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
 from eawf.kernel.state.models import State
 from eawf.kernel.store.compaction import document_rows, read_document
-from eawf.kernel.store.ledger import LedgerError
+from eawf.kernel.store.ledger import LedgerError, latest_rows
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.subprocess_detach import no_window_kwargs
@@ -79,6 +80,9 @@ PROOF_TIMEOUT_SECONDS: Final[float] = 3.0 * 3600
 
 #: One ``Batch:`` trailer line, the form ``eawf publish`` writes.
 _BATCH_TRAILER_RE: Final[re.Pattern[str]] = re.compile(r"^Batch:\s+(\S+)\s*$", re.MULTILINE)
+
+#: One ``Task:`` trailer line, the form every delivery commit carries.
+_TASK_TRAILER_RE: Final[re.Pattern[str]] = re.compile(r"^Task:\s+(\S+)\s*$", re.MULTILINE)
 
 
 def isolated_proof_path(path: str, *, shim_dir: Path) -> str:
@@ -363,55 +367,80 @@ class GitHubReleaseHost:
             and wave.commit is not None
         }
 
-    def milestone_batch_heads(self, milestone_key: str) -> dict[str, str | None]:
-        """Return Batch key -> bound head for the COMPLETED Batches of *milestone_key*.
+    def _tree_rows(self, collection: Epoch2Collection) -> dict[str, Mapping[str, Any]]:
+        """Return every record of *collection* in the native tree beside ``state_path``.
 
-        Read from the native tree beside ``state_path``: the head is the
-        commit the Batch's selected integration generation binds, which
-        ``eawf publish`` files, or ``None`` when none binds one.
+        A terminal record leaves the document for the collection's ledger, so the ledger's
+        latest row per key is read too; a row the document still holds wins over it.
 
         Raises:
-            PipelineHostError: The tree is not native, or a Batch row or
-                its generation ledger cannot be read or does not validate.
+            NativeAuthorityRequiredError: The tree is not native.
+            LedgerError: The ledger is torn or its snapshot does not match.
+            ValueError: A ledger line does not validate.
+            OSError: The document or the ledger cannot be read.
         """
-        from eawf.runtime.daemon.methods.delivery import read_generation_ledger
+        authority = require_native_authority(self._state_path.parent)
+        assert authority.target is not None and authority.generation_id is not None
+        document = authority.target.generation_path(authority.generation_id) / (GENERATION_DOCUMENT)
+        rows = {
+            **latest_rows(ledger_path(document, collection)),
+            **document_rows(read_document(document), collection),
+        }
+        return {key: stored_fields(collection, key, row)[0] for key, row in rows.items()}
 
-        tree_root = self._state_path.parent
+    def milestone_batch_heads(self, milestone_key: str) -> dict[str, str]:
+        """Return Batch key -> pinned head for the COMPLETED Batches of *milestone_key*.
+
+        A Batch that closed has compacted out of the document into its ledger, so both are
+        read. The head is the commit the Batch pinned when it closed on landing.
+
+        Raises:
+            PipelineHostError: The tree is not native, or a Batch row cannot be read or
+                does not validate.
+        """
         try:
-            authority = require_native_authority(tree_root)
-            assert authority.target is not None and authority.generation_id is not None
-            document = authority.target.generation_path(authority.generation_id) / (
-                GENERATION_DOCUMENT
-            )
-            ledger = ledger_path(document, Epoch2Collection.BATCH)
-            batches = [
-                DeliveryBatch.model_validate(row)
-                for row in document_rows(read_document(document), Epoch2Collection.BATCH).values()
-            ]
-            heads: dict[str, str | None] = {}
-            for batch in batches:
+            heads: dict[str, str] = {}
+            for key, row in self._tree_rows(Epoch2Collection.BATCH).items():
                 if (
-                    batch.milestone_ref.entity_key != milestone_key
-                    or batch.status is not BatchStatus.COMPLETED
+                    parent_key_of(Epoch2Collection.BATCH, row) != milestone_key
+                    or row.get("status") != BatchStatus.COMPLETED.value
                 ):
                     continue
-                head = read_generation_ledger(ledger, batch.urn).head
-                heads[batch.key] = None if head is None else head.integrated_revision.head_sha
+                binding = DeliveryBatch.model_validate(row).current_head_binding
+                assert binding is not None, "a COMPLETED Batch always pins its head"
+                heads[key] = binding.head_sha
         except (NativeAuthorityRequiredError, LedgerError, ValueError, OSError) as exc:
             raise PipelineHostError(f"milestone {milestone_key} batches: {exc}") from exc
         return heads
 
-    def batch_trailer_commits(self, ref: str) -> dict[str, tuple[str, ...]]:
-        """Return Batch key -> the commits reachable from *ref* carrying its ``Batch:`` trailer.
+    def batch_carrier_commits(self, ref: str) -> dict[str, tuple[str, ...]]:
+        """Return Batch key -> the commits reachable from *ref* carrying its work.
 
-        The whole message is matched rather than git's trailer block, which
-        misses a trailer set apart by a blank line.
+        A commit carries a Batch when a ``Task:`` trailer names a Task placed in it, or a
+        ``Batch:`` trailer names it. The whole message is matched rather than git's
+        trailer block, which misses a trailer set apart by a blank line.
+
+        Raises:
+            PipelineHostError: The log cannot be read, or the tree's Tasks cannot.
         """
-        listing = self._run(["git", "log", "-E", "--grep=^Batch:", "--format=%H%x00%B%x1e", ref])
+        listing = self._run(
+            ["git", "log", "-E", "--grep=^Batch:", "--grep=^Task:", "--format=%H%x00%B%x1e", ref]
+        )
+        try:
+            placed = {
+                key: batch
+                for key, row in self._tree_rows(Epoch2Collection.TASK).items()
+                if (batch := parent_key_of(Epoch2Collection.TASK, row)) is not None
+            }
+        except (NativeAuthorityRequiredError, LedgerError, ValueError, OSError) as exc:
+            raise PipelineHostError(f"tasks behind {ref}: {exc}") from exc
         found: dict[str, list[str]] = {}
         for entry in listing.split("\x1e"):
             sha, _, message = entry.strip().partition("\x00")
-            for key in _BATCH_TRAILER_RE.findall(message):
+            keys = set(_BATCH_TRAILER_RE.findall(message)) | {
+                placed[task] for task in _TASK_TRAILER_RE.findall(message) if task in placed
+            }
+            for key in sorted(keys):
                 found.setdefault(key, []).append(sha)
         return {key: tuple(shas) for key, shas in found.items()}
 

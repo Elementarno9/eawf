@@ -485,6 +485,7 @@ Task lifecycle (promote, claim, start, submit, seal, prove, assess, ready, compl
 | `seal` | Bind a Run's accepted report to its candidate and attempt the seal. |
 | `start` | Start a CLAIMED Task under the Run the payload binds it to. |
 | `submit` | File one Run's claim that its leased workspace is ready to integrate. |
+| `waive-criterion` | Waive one criterion of a promoted Task, so its Batch closes without proving it. |
 
 ### `eawf telemetry`
 
@@ -536,7 +537,7 @@ Workspace-scoped state and repo linkage.
 
 ### `eawf worktree`
 
-Manage per-wave git worktrees (create / list / merge-back / cleanup / reconcile).
+Manage per-wave git worktrees (merge-back / cleanup / reconcile).
 
 | Verb | Summary |
 |---|---|

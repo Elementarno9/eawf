@@ -27,6 +27,7 @@ from eawf.kernel.migration.epoch2.continuation import (
 )
 from eawf.kernel.migration.epoch2.decision_record import decision_lines
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.migration.epoch2.urn_rekey import spells_single_key
 from eawf.kernel.state.epoch2.decision import DecisionError
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
@@ -112,6 +113,7 @@ def _project_urn(context: Epoch2RootContext) -> str:
         repository_key=None,
         kind=EntityKind.PROJECT,
         entity_key=code,
+        single_key=spells_single_key(document),
     )
 
 

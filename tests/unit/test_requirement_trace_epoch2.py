@@ -221,6 +221,29 @@ def test_a_superseded_decision_in_the_ledger_defers_nothing(repo: Path) -> None:
     assert _trace(load_state_view(repo), repo)["REQ-007"] == ("unowned", ())
 
 
+def test_a_native_active_decision_in_the_ledger_defers_its_ids(repo: Path) -> None:
+    ledger = _generation_document(repo).parent / "ledger" / "decision.jsonl"
+    native = {
+        "schema_version": "2.0",
+        "collection": "decision",
+        "record_key": "D02",
+        "status": "ACTIVE",
+        "recorded_at": "2026-10-06T00:00:00Z",
+        "supersedes": None,
+        "payload": {"payload": {"key": "D02", "status": "ACTIVE", "superseded_by": None}},
+    }
+    with ledger.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(native) + "\n")
+    deferral = Deferral(decision="D02", release="v0.8", ids=("REQ-008",))
+
+    catalog = build_trace(
+        titles=_TITLES, deferrals=(deferral,), state=load_state_view(repo), repo_root=repo
+    )
+
+    row = next(row for row in catalog.requirements if row.id == "REQ-008")
+    assert (row.status.value, row.deferral) == ("deferred", "D02")
+
+
 def test_check_is_fresh_on_a_marked_repository_and_reds_when_an_owner_is_dropped(
     repo: Path, epoch1: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

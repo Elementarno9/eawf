@@ -185,7 +185,7 @@ def _stored_draft_row(*, key: str, body: PlanBody) -> dict[str, Any]:
     """Return a stored DRAFT PlanRevision row a repair can name as its parent.
 
     DRAFT carries no approval, which keeps the fixture to exactly the
-    fields :func:`~eawf.workflow.planning.apply._stored_revision` needs
+    fields :func:`~eawf.workflow.planning.materialise._stored_revision` needs
     to read the row back as a :class:`~eawf.kernel.state.epoch2.plan_revision.PlanRevision`.
     """
     return {

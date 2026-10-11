@@ -48,6 +48,7 @@ def _payload_models() -> dict[StoreKind, type[BaseModel]]:
     from eawf.kernel.store.kinds.runtime_certification import MachineCertification
     from eawf.kernel.store.kinds.spec_updated import SpecUpdatedPayload
     from eawf.kernel.store.kinds.subscription_lag import SubscriptionLagPayload
+    from eawf.runtime.daemon.batch_proof_notice import BatchProofNotice
     from eawf.runtime.daemon.run_events import RunEventsAppendedPayload
     from eawf.workflow.release.advance import CheckpointGateReceipt, TrainAdvanceRecord
 
@@ -116,6 +117,8 @@ def _payload_models() -> dict[StoreKind, type[BaseModel]]:
         StoreKind.RUNTIME_CERTIFICATION: MachineCertification,
         # A feed notice that one Run's stream moved; published live, never stored.
         StoreKind.RUN_EVENTS_APPENDED: RunEventsAppendedPayload,
+        # A feed notice that a Batch's proof moved; published live, never stored.
+        StoreKind.BATCH_PROOF_NOTED: BatchProofNotice,
     }
 
 

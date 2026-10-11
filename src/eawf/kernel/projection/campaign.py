@@ -22,6 +22,7 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import ConfigDict, Field, model_validator
 
+from eawf.kernel.runtime.usage import UsageTotals
 from eawf.kernel.spec.release import Sha256DigestStr
 from eawf.kernel.state.enums import CampaignStatus
 from eawf.kernel.state.epoch2.artifact_revision import (
@@ -92,6 +93,8 @@ class CampaignStepView(_View):
             records none.
         runner_session: The vendor session that runner ran in; ``None`` when it
             records none.
+        tokens: The input and output tokens its runners' usage readings add up to,
+            every round counted; ``None`` when no runner reported a reading.
 
     Raises:
         pydantic.ValidationError: A blocked step naming no blocker, or a
@@ -105,6 +108,7 @@ class CampaignStepView(_View):
     runner_ref: RunUrn | None = None
     runner_runtime: RunRuntimeTuple | None = None
     runner_session: VendorSessionRef | None = None
+    tokens: StrictNonNegativeInt | None = None
 
     @model_validator(mode="after")
     def _blocked_names_its_blocker(self) -> Self:
@@ -196,11 +200,21 @@ class CampaignView(_View):
 
 
 def _step_view(
-    step: CampaignPlanStep, steps: tuple[CampaignPlanStep, ...], runners: Mapping[str, Run]
+    step: CampaignPlanStep,
+    steps: tuple[CampaignPlanStep, ...],
+    runners: Mapping[str, Run],
+    usage: Mapping[str, UsageTotals],
 ) -> CampaignStepView:
     blockers = step_blockers(step, steps)
     runner_ref = step.run_refs[-1] if step.run_refs else None
     runner = None if runner_ref is None else runners.get(runner_ref.entity_key)
+    counted = [
+        value
+        for ref in step.run_refs
+        if (totals := usage.get(ref.entity_key)) is not None
+        for value in (totals.input_tokens, totals.output_tokens)
+        if value is not None
+    ]
     return CampaignStepView(
         step=step,
         ordinal_of_total=OrdinalOfTotal(ordinal=step.ordinal, total=len(steps)),
@@ -209,6 +223,7 @@ def _step_view(
         runner_ref=runner_ref,
         runner_runtime=None if runner is None else runner.runtime_tuple,
         runner_session=None if runner is None else runner.vendor_session,
+        tokens=sum(counted) if counted else None,
     )
 
 
@@ -286,6 +301,7 @@ def build_campaign_view(
     revisions: Mapping[str, StoredArtifactRevision],
     findings: Iterable[CampaignFinding],
     runners: Mapping[str, Run],
+    usage: Mapping[str, UsageTotals],
     promoted_at: Mapping[str, int] | None = None,
 ) -> CampaignView:
     """Return one Campaign's read model.
@@ -296,6 +312,8 @@ def build_campaign_view(
         findings: Every promoted finding; those of other Campaigns are left out.
         runners: The Runs its steps name, by Run key; a step whose runner is not
             held states no runtime for it.
+        usage: What each Run's usage readings fold to, by Run key; a Run that
+            reported none is absent, so its step states no tokens rather than zero.
         promoted_at: The sequence each finding's promoting event took, by key.
 
     Returns:
@@ -314,7 +332,9 @@ def build_campaign_view(
     unresolved = sorted((set(listed) | produced) - set(revisions))
     if unresolved:
         raise ValueError(f"{campaign.key} lists artifact revisions no record holds: {unresolved}")
-    steps = tuple(_step_view(step, campaign.plan_steps, runners) for step in campaign.plan_steps)
+    steps = tuple(
+        _step_view(step, campaign.plan_steps, runners, usage) for step in campaign.plan_steps
+    )
     cards = tuple(
         artifact_card(revisions[ref], ordinal=index, total=len(listed))
         for index, ref in enumerate(listed, start=1)

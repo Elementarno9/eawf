@@ -36,6 +36,7 @@ import shutil
 import sys
 import tomllib
 from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -72,6 +73,7 @@ from eawf.runtime.mcp.native_launch import (
 )
 from eawf.runtime.runtimes import cancel
 from eawf.runtime.runtimes.adapter import (
+    CONCURRENT_SPAWN_CAP,
     NativeLaunchOutcome,
     NativeLaunchRequest,
     RuntimeSpawnError,
@@ -107,6 +109,17 @@ PGID_FILENAME: Final = "worker.pgid"
 
 #: Where the worker's stderr goes, so a failure can be classified from it.
 STDERR_FILENAME: Final = "worker.stderr"
+
+#: The name every turn's notification reader thread starts with.
+TURN_READER_PREFIX: Final = "codex-turn"
+
+#: The threads a turn's notification reads block on, one per spawn slot. A read
+#: blocks for as long as the worker is silent, so a turn holds its reader for most of
+#: its life; on the default executor, which the daemon's own ``to_thread`` work
+#: shares, a full set of turns would starve every other blocking call.
+_TURN_READERS: Final = ThreadPoolExecutor(
+    max_workers=CONCURRENT_SPAWN_CAP, thread_name_prefix=TURN_READER_PREFIX
+)
 
 #: The app-server subcommand and its transport, after the binary.
 APP_SERVER_ARGS: Final = ("app-server", "--listen", "stdio://")
@@ -463,8 +476,11 @@ class _Turn:
 
     async def _consume(self) -> TurnOutcome:
         """Relay every notification until the turn completes or the budget reaps it."""
+        loop = asyncio.get_running_loop()
         while True:
-            note = await asyncio.to_thread(self.client.next_turn_notification, self.turn_id)
+            note = await loop.run_in_executor(
+                _TURN_READERS, self.client.next_turn_notification, self.turn_id
+            )
             outcome = await self._handle(note)
             if outcome is not None:
                 return outcome
@@ -556,6 +572,19 @@ class _Turn:
             result_is_error=result_is_error,
             error_class=self.adapter.parse_error(1, b"\n".join((text.encode(), self.stderr()))),
         )
+
+    async def abandon(self) -> None:
+        """End a child whose turn never started: signal its group, then close it.
+
+        Closing the SDK client ends only the process it started; a launch that
+        failed after the wrapper recorded the group would otherwise leave the
+        rest of the group running.
+        """
+        if self.pgid is None:
+            with suppress(FileNotFoundError, ValueError):
+                self.pgid = int((self.run_dir / PGID_FILENAME).read_text(encoding="utf-8"))
+        await self._reap()
+        await self.close()
 
     async def close(self) -> None:
         """End the child through the SDK and free the turn's slot."""
@@ -741,8 +770,12 @@ async def launch_codex_run(
         async with asyncio.timeout_at(deadline):
             await _open_turn(turn, sandbox=sandbox)
     except Exception as error:
-        await turn.close()
+        await turn.abandon()
         raise _spawn_error(error, turn) from error
+    except BaseException:
+        # A cancelled launch still ends its child and frees its slot.
+        await asyncio.shield(turn.abandon())
+        raise
     assert turn.pgid is not None
     assert turn.runtime is not None
     logger.info(f"launch_codex_run turn started pgid={turn.pgid} model={spec.model_id!r}")
@@ -773,6 +806,7 @@ __all__ = [
     "PGID_FILENAME",
     "SANDBOX_MODES",
     "STDERR_FILENAME",
+    "TURN_READER_PREFIX",
     "WRAPPER_CONFIG_FILENAME",
     "WRAPPER_FILENAME",
     "codex_home_config",

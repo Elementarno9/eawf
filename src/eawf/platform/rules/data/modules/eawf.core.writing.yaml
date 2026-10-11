@@ -21,15 +21,15 @@ rules:
       method: review
   - rule_id: eawf.core.writing.artifact-chassis
     obligation_id: writing.artifact-chassis
-    revision: 1
-    title: Write durable artifacts on the renderer-owned chassis
+    revision: 2
+    title: Write promoted artifacts on the renderer-owned chassis
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Write durable research, audit, decision and incident markdown on the renderer-owned Summary, References, Provenance and Scrub sections, with dense [N] citations backed by typed rows and only repo-relative, URL or URN references.
+      Write research, audit, decision and incident markdown promoted out of .ea/local/ on the renderer-owned Summary, References, Provenance and Scrub sections, with dense [N] citations backed by typed rows and only repo-relative, URL or URN references.
     rationale: >-
-      A fixed chassis lets promotion validate citations and scrub machine-local paths before an artifact is committed.
+      A fixed chassis lets promotion validate citations and scrub machine-local paths before an artifact is committed; a local draft is never committed, so it carries no chassis duty.
     verification:
       method: review
     procedure_ref: docs/rules/artifact-chassis.md

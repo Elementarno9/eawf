@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from eawf.kernel.config.migration import migrate_config_file
 from eawf.kernel.identity import EntityKind, format_qualified_urn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.migration.epoch2.urn_rekey import spells_single_key
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.store.compaction import (
     document_rows,
@@ -161,7 +162,7 @@ def project_lock_urn(context: Epoch2RootContext) -> str:
         repository_key=None,
         kind=EntityKind.PROJECT,
         entity_key=projects[0],
-        single_key=True,
+        single_key=spells_single_key(document),
     )
 
 

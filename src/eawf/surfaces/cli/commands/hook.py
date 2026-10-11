@@ -468,6 +468,18 @@ _BINARY_SUFFIXES: frozenset[str] = frozenset(
 _LEAK_ALLOW_MARKER = "pragma: allowlist secret"
 
 
+# Files whose lines are JSON text, so every string in them is escaped.
+_JSON_SUFFIXES = (".json", ".jsonl")
+
+# A JSON string escape the leak scan must read as the text it stands for.
+_JSON_ESCAPE = re.compile(r"\\\\|\\[ntr]")
+
+
+def _unescape_json(match: re.Match[str]) -> str:
+    """Return a backslash for an escaped backslash and a space for an escaped break."""
+    return "\\" if match.group(0) == "\\\\" else " "
+
+
 def _line_is_allowlisted(line: str) -> bool:
     """Return ``True`` when ``line`` carries the inline leak-allow marker."""
     return _LEAK_ALLOW_MARKER in line
@@ -574,8 +586,9 @@ def _scan_leaks(
             if _line_is_allowlisted(line):
                 continue
             # JSON escapes a backslash as two, which would hide a Windows home
-            # path from its single-backslash anchor.
-            text = line.replace("\\\\", "\\") if is_state else line
+            # path from its single-backslash anchor, and spells a line break as
+            # backslash-n, which would glue the next word onto an "@" after it.
+            text = _JSON_ESCAPE.sub(_unescape_json, line) if rel.endswith(_JSON_SUFFIXES) else line
             findings.extend(
                 LeakFinding(path=rel, lineno=lineno, snippet=hit.snippet)
                 for hit in scan_state_leaks(text, allowed_emails=allowed)

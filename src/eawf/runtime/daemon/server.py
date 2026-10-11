@@ -197,6 +197,10 @@ def _event_frames(envelope: Envelope) -> tuple[bytes, ...]:
     return (_push_frame(envelope),)
 
 
+#: The notices that ride the projection feed as raw pushes: each moves no projection row.
+_NOTICE_KINDS: Final = frozenset({StoreKind.RUN_EVENTS_APPENDED, StoreKind.BATCH_PROOF_NOTED})
+
+
 def _projection_frames(envelope: Envelope) -> tuple[bytes, ...]:
     """Build the ``projection.patch`` frames one envelope produces.
 
@@ -204,11 +208,13 @@ def _projection_frames(envelope: Envelope) -> tuple[bytes, ...]:
     projection subscriber sees only patches on a bus that carries every kind.
     A transition that cannot be turned into a patch is logged and dropped
     rather than raised: one malformed payload must not end the feed of every
-    projection subscriber on the daemon. A Run's append notice moves no projection
-    row, so it rides the feed as its raw ``event.push`` for a console following
-    that Run's transcript.
+    projection subscriber on the daemon. A Run's append notice and a Batch's proof
+    notice move no projection row, so each rides the feed as its raw ``event.push``
+    for a console following that Run's transcript or holding that Batch. Each
+    patch names the envelope it came from, which is the cursor a reconnecting
+    subscriber resumes the firehose from.
     """
-    if envelope.kind is StoreKind.RUN_EVENTS_APPENDED:
+    if envelope.kind in _NOTICE_KINDS:
         return (_push_frame(envelope),)
     try:
         patches = patches_for_event(envelope)
@@ -220,7 +226,7 @@ def _projection_frames(envelope: Envelope) -> tuple[bytes, ...]:
             {
                 "jsonrpc": "2.0",
                 "method": PROJECTION_PUSH_METHOD,
-                "params": {"patch": patch.model_dump(mode="json")},
+                "params": {"patch": patch.model_dump(mode="json"), "event_id": envelope.id},
             }
         )
         for patch in patches

@@ -210,10 +210,30 @@ class Links:
     counts the Runs under it. Those facts sit on records of other collections, so they are
     read here once per build rather than by the console, which holds only the route's own
     rows. Lookups are by key and cached, so a build reads each record at most once.
+
+    A Task leaves the document on the commit that completes it, so the Task a finished Run
+    ran may be held only by its ledger: ``filed`` supplies those rows, and a record looked
+    up by key is read from there when the document no longer holds it.
+
+    Attributes:
+        integrating: The URNs of the Batches an integration generation is filed for, which
+            the Batch ledger rather than the document holds.
+        proofs: Why a Batch's proof holds it open, by Batch URN, which only the daemon's
+            close knows.
     """
 
-    def __init__(self, document: Mapping[str, Any]) -> None:
+    def __init__(
+        self,
+        document: Mapping[str, Any],
+        *,
+        integrating: frozenset[str] = frozenset(),
+        filed: Mapping[Epoch2Collection, Mapping[str, Any]] = MappingProxyType({}),
+        proofs: Mapping[str, str] = MappingProxyType({}),
+    ) -> None:
         self._document = document
+        self._filed = filed
+        self.integrating = integrating
+        self.proofs = proofs
         self._fields: dict[tuple[Epoch2Collection, str], tuple[Mapping[str, Any], str | None]] = {}
         self._attempts: dict[str, list[str]] | None = None
         self._runs_under: dict[str, int] | None = None
@@ -228,7 +248,10 @@ class Links:
         """Return a record's stored fields and its status; empty when it is not held."""
         found = self._fields.get((collection, key))
         if found is None:
-            found = stored_fields(collection, key, self._rows(collection).get(key))
+            row = self._rows(collection).get(key)
+            if row is None:
+                row = self._filed.get(collection, {}).get(key)
+            found = stored_fields(collection, key, row)
             self._fields[(collection, key)] = found
         return found
 
@@ -589,8 +612,9 @@ def _batch_facts(key: str, fields: Mapping[str, Any], links: Links) -> dict[str,
 
     A merging Batch is drawn as the facts it holds beside the questions it cannot answer,
     so its branch, its bound head and the instant it last moved are read here verbatim.
-    Its repository, its Track and that Track's active-Batch ceiling travel with it too, so
-    a frame can tell a Batch that waits on the ceiling from one that waits on its Tasks.
+    Its repository, its Track, that Track's active-Batch ceiling and whether it is
+    integrating travel with it too, so a frame can tell a Batch that waits on the ceiling
+    from one that waits on its Tasks.
     """
     binding = fields.get("current_head_binding")
     failure = fields.get("failure")
@@ -605,12 +629,20 @@ def _batch_facts(key: str, fields: Mapping[str, Any], links: Links) -> dict[str,
         "repository": _key_of(fields.get("repository_ref")),
         "track": track,
         BATCH_CEILING_FACT: None if track is None else _batch_ceiling(links, track),
+        BATCH_INTEGRATING_FACT: "yes" if fields.get("urn") in links.integrating else None,
+        BATCH_PROOF_FACT: links.proofs.get(str(fields.get("urn"))),
     }
     return {name: value for name, value in facts.items() if value}
 
 
 #: The Batch fact naming how many Batches its Track lets be active in one repository.
 BATCH_CEILING_FACT: Final = "active_batches_per_repo"
+
+#: The Batch fact present when an integration generation is filed for the Batch.
+BATCH_INTEGRATING_FACT: Final = "integrating"
+
+#: The Batch fact naming why its proof holds it open: still proving, or a criterion unmet.
+BATCH_PROOF_FACT: Final = "proof"
 
 
 def _batch_ceiling(links: Links, track: str) -> str | None:
@@ -653,15 +685,22 @@ def _task_facts(fields: Mapping[str, Any]) -> dict[str, str]:
 
 
 def _criterion_text(criterion: Any) -> str | None:
-    """Return one stored criterion as its fact: ``<id> · <kind> · <gates> · <text>``."""
+    """Return one stored criterion as its fact: ``<id> · <kind> · <gates> · <text>``.
+
+    A waived criterion runs no gate, so its gates are stated as ``waived``.
+    """
     if not isinstance(criterion, dict):
         return None
     gates = criterion.get("gate_ids")
     named = [gate for gate in gates if isinstance(gate, str)] if isinstance(gates, list) else []
+    if _text(criterion.get("waiver_reason")):
+        stated_gates = "waived"
+    else:
+        stated_gates = f"gates {','.join(named)}" if named else "no gate"
     parts = (
         _text(criterion.get("id")) or "?",
         _text(criterion.get("kind")) or "?",
-        f"gates {','.join(named)}" if named else "no gate",
+        stated_gates,
         _text(criterion.get("text")) or "?",
     )
     return " · ".join(parts)
@@ -721,6 +760,8 @@ __all__ = [
     "ACTED_FACT",
     "ANSWERED_FACT",
     "BATCH_CEILING_FACT",
+    "BATCH_INTEGRATING_FACT",
+    "BATCH_PROOF_FACT",
     "CALIBRATION_KEY",
     "CEILING_BREACH_KIND",
     "CRITERION_FACT",

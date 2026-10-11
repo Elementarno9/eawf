@@ -66,16 +66,12 @@ target) exit 3, and anything that is genuinely a missing scope/state exits 2.
 from __future__ import annotations
 
 import logging
-import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import orjson
 import typer
 
-from eawf.kernel.state.enums import (
-    CloseFailureKind,
-)
 from eawf.kernel.state.io import (
     append_event,
     build_event_envelope,
@@ -85,7 +81,6 @@ from eawf.kernel.state.io import (
 )
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
-from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
@@ -205,141 +200,6 @@ _commit_mutation = commit_mutation
 # ---- Wave git / commit-ref helpers ------------------------------------------
 
 _GIT_REV_PARSE_TIMEOUT_SECONDS: float = 5.0
-
-
-def _close_failure_kind(exc: BaseException) -> CloseFailureKind:
-    """Type one CLI-side close failure from the exception chain.
-
-    The close RPC helpers fold every transport fault onto one
-    :class:`~eawf.surfaces.cli.errors.DaemonUnreachable`, so the original
-    ``TimeoutError`` only survives on ``__cause__``. Walking the chain keeps
-    the operator-facing kind identical to the one the daemon would persist
-    for the same fault instead of flattening a timeout into generic
-    harness breakage.
-    """
-    seen: BaseException | None = exc
-    while seen is not None:
-        if isinstance(seen, TimeoutError):
-            return CloseFailureKind.TIMED_OUT
-        seen = seen.__cause__
-    return CloseFailureKind.HARNESS_FAULT
-
-
-def _wave_close_via_daemon(
-    *,
-    flags: GlobalFlags,
-    wave_id: str,
-    outcome: str,
-    resolved_sha: str | None,
-    tokens_consumed: int | None,
-    no_runtime_waiver: bool = False,
-    transport_fallback: list[bool] | None = None,
-) -> bool:
-    """Proxy a wave close through the daemon's ``state.mutate`` RPC.
-
-    Returns True on a successful daemon-mediated close (caller exits
-    early); False when the daemon refuses the kind or the close RPC hit
-    a transport error (RuntimeError / OSError), in which case the caller
-    falls through to the in-process path. A daemon-required failure or
-    validation rejection emits the error envelope before returning True
-    so the caller does not double-emit.
-
-    A close-RPC ``TimeoutError`` is TERMINAL, not a fallback: the daemon
-    may still be mid-close under the lock, so silently re-running the
-    close in-process could double-apply it. On a timeout the helper emits
-    a typed :class:`~eawf.surfaces.cli.errors.DaemonMutationIndeterminate`
-    envelope and exits non-zero rather than returning False.
-
-    Args:
-        transport_fallback: Optional one-element sink. When the close RPC
-            fails with a RuntimeError / OSError, ``[0]`` is set to ``True``
-            so the caller's in-process close can stamp the event's
-            ``close_mechanism`` as ``"daemon-fallback"`` (distinct from a
-            gate-passed ``"daemon"`` close).
-    """
-    from eawf.kernel.state.mutations import Mutation, MutationKind
-    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
-    from eawf.surfaces.cli._mutation import _daemon_reachable
-
-    if not _daemon_reachable():
-        cli_errors.emit_error(
-            cli_errors.StateConflict(
-                "daemon_required: daemon.proxy_enabled=true but the daemon is unreachable; "
-                "run `eawf daemon start` or unset daemon.proxy_enabled for the V1 carve-out",
-                kind="IntegrityViolation",
-            ),
-            flags=flags,
-        )
-        return True  # error already emitted; treat as handled
-
-    params: dict[str, Any] = {"wave_id": wave_id, "outcome": outcome, "commit": resolved_sha}
-    if tokens_consumed is not None:
-        params["tokens_consumed"] = tokens_consumed
-    if no_runtime_waiver:
-        params["no_runtime_waiver"] = True
-
-    mutation = Mutation(
-        kind=MutationKind.WAVE_CLOSE,
-        scope_id=wave_id,
-        mutation_id=uuid.uuid4().hex,
-        idempotency_key=None,
-        params=params,
-    )
-    repo_root = str((flags.workspace or Path.cwd()).resolve())
-    try:
-        with DaemonClient() as client:
-            result = client.state_mutate(mutation, repo_root=repo_root)
-    except DaemonRpcError as exc:
-        if exc.code == -32601 or "NotImplementedError" in (exc.message or ""):
-            logger.debug(
-                f"_wave_close_via_daemon falling back mutation_kind={mutation.kind.value} "
-                f"code={exc.code} message={exc.message!r}"
-            )
-            return False
-        if exc.code == cli_errors.RPC_VALIDATION_FAILED:
-            cli_errors.emit_error(cli_errors.ValidationError(exc.message), flags=flags)
-            return True
-        cli_errors.emit_error(
-            cli_errors.StateConflict(exc.message, kind="IntegrityViolation"), flags=flags
-        )
-        return True
-    except TimeoutError as exc:
-        # Terminal: the daemon may still be mid-close under the lock, so a
-        # silent in-process retry could double-apply the close. Emit a typed
-        # indeterminate error and exit non-zero rather than fall through.
-        logger.debug(f"_wave_close_via_daemon close_rpc_timeout={exc!s}")
-        cli_errors.emit_error(
-            cli_errors.DaemonMutationIndeterminate(
-                f"close RPC timed out: the close of wave {wave_id!r} may still be "
-                "running in the daemon; re-check with 'eawf status' before retrying"
-            ),
-            flags=flags,
-            data={
-                "wave": wave_id,
-                "failure_kind": _close_failure_kind(exc).value,
-            },
-        )
-        return True  # emit_error raised typer.Exit; kept for the return type
-    except (RuntimeError, OSError) as exc:
-        logger.debug(f"_wave_close_via_daemon transport_error={exc!s}")
-        if transport_fallback is not None:
-            transport_fallback[0] = True
-        return False
-
-    text = f"wave close {wave_id} outcome={outcome!r} (via daemon)"
-    payload = {
-        "wave": wave_id,
-        "outcome": outcome,
-        "commit": resolved_sha,
-        "tokens_consumed": tokens_consumed,
-        "no_runtime_waiver": no_runtime_waiver,
-        "proxied": True,
-        "event": result.get("event"),
-        "before_version": result.get("before_version"),
-        "after_version": result.get("after_version"),
-    }
-    emit_json_or_text(payload, text, flags=flags)
-    return True
 
 
 # ---- Read-only state loaders ------------------------------------------------

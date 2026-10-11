@@ -61,6 +61,37 @@ _HEAD_BOUND: Final = frozenset(
     }
 )
 
+#: The states, short of COMPLETED, in which a Batch stands on the exact head it pinned:
+#: another Batch landing in its repository would move that head out from under it.
+_PINNED_HEAD: Final = frozenset(
+    {
+        BatchStatus.READY_TO_MERGE.value,
+        BatchStatus.MERGING.value,
+        BatchStatus.MERGED_PENDING_RECONCILIATION.value,
+    }
+)
+
+
+def holds_head_proof(status: str | None, *, integrating: bool) -> bool:
+    """Whether a Batch at *status* holds or is building an exact-head proof.
+
+    Integration is serialised per repository, so only such a Batch is hurt by another
+    one moving the repository's head. A Batch that pinned its head holds a proof; an
+    ACTIVE one builds one only once it is integrating, and an ACTIVE Batch still
+    collecting Tasks has no head to protect yet.
+
+    Args:
+        status: The Batch's stored status.
+        integrating: Whether an integration generation is filed for the Batch.
+
+    Returns:
+        ``True`` when the Batch counts against its Track's active-Batch ceiling.
+    """
+    if status == BatchStatus.ACTIVE.value:
+        return integrating
+    return status in _PINNED_HEAD
+
+
 #: The one state in which a target branch has not been chosen yet.
 _UNTARGETED: Final = frozenset({BatchStatus.PLANNED})
 
@@ -139,4 +170,5 @@ __all__ = [
     "BatchCreateSpec",
     "BatchStatus",
     "DeliveryBatch",
+    "holds_head_proof",
 ]

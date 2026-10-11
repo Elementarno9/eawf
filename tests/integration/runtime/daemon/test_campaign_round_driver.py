@@ -214,6 +214,7 @@ def _assignment(ordinal: int = 1) -> StepAssignment:
             "question": "What does src hold?",
             "run_ref": RUN_URN,
             "round_number": 1,
+            "actor": "OP-0001",
         }
     )
 
@@ -512,7 +513,8 @@ def test_a_cancelled_round_stops_its_turn_and_removes_the_checkout(
     canary: CanaryProvision,
 ) -> None:
     park = asyncio.Event()
-    driver = FakeDriver("claude", park=park)
+    # no reading, so the cancel lands while the turn is parked, not while a reading is stated
+    driver = FakeDriver("claude", park=park, usage=())
 
     async def body() -> None:
         working = asyncio.create_task(_agent(canary, driver).work(_assignment()))

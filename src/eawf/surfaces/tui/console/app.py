@@ -680,9 +680,12 @@ class ConsoleApp(App[None]):
                 self._follow_tail()
 
     def _on_run_appended(self, run: str, _tail: int) -> None:
-        """Follow an append to the Run on screen; reading past the held cursor, not to
-        *_tail*, misses no append past a hole."""
-        if run == self._transcript_tail()[0]:
+        """Follow an append to the Run on screen or to a child Run its transcript holds;
+        reading past the held cursor, not to *_tail*, misses no append past a hole."""
+        from eawf.surfaces.tui.console.live_reads import HeldTranscript
+
+        followed, held = self._transcript_tail()
+        if run == followed or (isinstance(held, HeldTranscript) and run in held.children):
             self._follow_tail()
 
     def _follow_tail(self) -> None:
@@ -1179,6 +1182,9 @@ class ConsoleApp(App[None]):
                     moved = True
                     self.deliver_attention()
         for name in names:
+            # the operator may have left the route since the tick named it; nothing is owed
+            if name not in seam.live_on_screen():
+                continue
             before = seam.live(name)
             try:
                 moved |= await seam.load_live(name) != before

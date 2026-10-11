@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import sys
+import threading
 import time
 import tomllib
 from collections.abc import Awaitable, Callable
@@ -21,6 +22,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from openai_codex.client import CodexClient
 from openai_codex.generated.v2_all import AgentMessageThreadItem
 
 from eawf.kernel.runtime.compiled import CompiledRunSpec
@@ -31,6 +33,7 @@ from eawf.runtime.daemon.native_dispatch import CapsuleRequest, seal_capsule
 from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME, RUN_TMP_DIRNAME, RUN_TMP_ENV_KEYS
 from eawf.runtime.runtimes import adapter as runtimes_adapter
+from eawf.runtime.runtimes import cancel
 from eawf.runtime.runtimes.adapter import (
     ConcurrentSpawnCapError,
     NativeLaunchOutcome,
@@ -40,6 +43,7 @@ from eawf.runtime.runtimes.adapter import (
     spawn_inflight,
 )
 from eawf.runtime.runtimes.codex import adapter as codex_adapter
+from eawf.runtime.runtimes.codex import app_server
 from eawf.runtime.runtimes.codex.adapter import CodexAdapter, CodexNativeLauncher
 from eawf.runtime.runtimes.codex.app_server import (
     APP_SERVER_ARGS,
@@ -330,12 +334,17 @@ def test_launch_returns_before_the_turn_ends(workspace: Path) -> None:
         outcome = await _launcher(workspace, {"lines": []}).launch(_request(workspace))
         assert outcome.turn is not None
         running = not outcome.turn.done()
+        # Let the turn start: a task cancelled before its first step never runs
+        # the finally that frees its spawn slot, which would leak to later tests.
+        await asyncio.sleep(0)
         outcome.turn.cancel()
         with pytest.raises(asyncio.CancelledError):
             await outcome.turn
         return running
 
+    before = spawn_inflight()
     assert asyncio.run(scenario())
+    assert spawn_inflight() == before
 
 
 def test_an_interrupted_turn_resolves_interrupted(workspace: Path) -> None:
@@ -567,6 +576,29 @@ def test_a_saturated_spawn_cap_refuses_before_the_fork(
     assert not (workspace / "argv.json").exists()
 
 
+def test_turn_notifications_are_read_off_the_default_executor(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readers: list[str] = []
+    read = CodexClient.next_turn_notification
+
+    def recording(self: CodexClient, turn_id: str) -> Any:
+        readers.append(threading.current_thread().name)
+        return read(self, turn_id)
+
+    monkeypatch.setattr(CodexClient, "next_turn_notification", recording)
+
+    _, turn = _run(workspace)
+
+    assert turn.exit_kind == "completed"
+    assert readers
+    assert all(name.startswith(app_server.TURN_READER_PREFIX) for name in readers)
+
+
+def test_every_spawn_slot_has_a_notification_reader() -> None:
+    assert app_server._TURN_READERS._max_workers == runtimes_adapter.CONCURRENT_SPAWN_CAP
+
+
 # ---------------------------------------------------------------------------
 # CR-3: usage reaches usage_sink, agent messages reach message_sink
 # ---------------------------------------------------------------------------
@@ -732,6 +764,63 @@ def test_a_refused_request_before_the_hello_raises_a_classified_error(
         "RUNTIME_AUTH_ERROR"
     )
     assert spawn_inflight() == before
+
+
+def _signalled(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Record every process group the kill ladder is run on, and still run it."""
+    groups: list[int] = []
+    ladder = cancel.cancel_with_grace
+
+    def recording(pgid: int, *args: Any, **kwargs: Any) -> Any:
+        groups.append(pgid)
+        return ladder(pgid, *args, **kwargs)
+
+    monkeypatch.setattr(cancel, "cancel_with_grace", recording)
+    return groups
+
+
+@pytest.mark.parametrize("method", ["initialize", "thread/start", "turn/start"])
+def test_a_refused_launch_signals_the_worker_group(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, method: str
+) -> None:
+    groups = _signalled(monkeypatch)
+    launcher = _launcher(workspace, {"refuse": {"method": method, "message": "401 unauthorized"}})
+
+    with pytest.raises(RuntimeSpawnError):
+        asyncio.run(launcher.launch(_request(workspace)))
+
+    assert groups == [_fake_pgid(workspace)]
+
+
+def test_a_cancelled_launch_signals_the_group_and_frees_the_slot(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    groups = _signalled(monkeypatch)
+    opened, gate = threading.Event(), threading.Event()
+    start_thread = CodexClient.thread_start
+
+    def stalled(self: CodexClient, params: Any) -> Any:
+        opened.set()
+        gate.wait(10)
+        return start_thread(self, params)
+
+    monkeypatch.setattr(CodexClient, "thread_start", stalled)
+    before = spawn_inflight()
+
+    async def scenario() -> bool:
+        launch = asyncio.create_task(_launcher(workspace).launch(_request(workspace)))
+        await asyncio.to_thread(opened.wait, 10)
+        launch.cancel()
+        gate.set()
+        try:
+            await launch
+        except asyncio.CancelledError:
+            return True
+        return False
+
+    assert asyncio.run(scenario())
+    assert spawn_inflight() == before
+    assert groups == [_fake_pgid(workspace)]
 
 
 _AFTER_HELLO: Final[dict[str, tuple[dict[str, Any], str, bool]]] = {

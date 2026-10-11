@@ -31,42 +31,6 @@ eawf --json doctor        # inspect full structured rows when needed
 eawf doctor --reprobe     # after installing tools or changing runtime setup
 ```
 
-## Git/state drift reconciler
-
-The `git_state_drift` row reconciles lifecycle state with git history. It loads `.ea/state.json`, walks CLOSED waves, and compares each wave's pinned `Wave.commit` with the commit derived from the wave's bracketed commit prefix.
-The derived commit comes from git history, so cherry-picked commits remain discoverable when their subject prefix is intact.
-
-`status="ok"` means every CLOSED wave reconciles, or state is absent / unparseable and another doctor row owns that failure. `status="warn"` means the row includes one or more drift records.
-
-JSON shape:
-
-```json
-{
-  "name": "git_state_drift",
-  "status": "warn",
-  "detail": "1 drift(s): P28-I03-W24=closed_no_pin",
-  "drifts": [
-    {
-      "wave_id": "P28-I03-W24",
-      "kind": "closed_no_pin",
-      "state_commit": null,
-      "git_commit": null
-    }
-  ]
-}
-```
-
-Drift kinds:
-
-| Kind | Meaning |
-|---|---|
-| `pinned_but_missing` | State has `Wave.commit`, but git cannot find a matching commit. |
-| `pinned_mismatch` | State and git both find a commit, but the SHAs do not match. |
-| `closed_no_pin` | A CLOSED wave has no pinned commit and no derivable commit prefix in git history. |
-| `closed_unfindable` | Git is unavailable, so the check cannot decide whether history reconciles. |
-
-When the reconciler warns, `eawf doctor` also emits a bounded `git_state_drift_detected` event for downstream telemetry. Use `eawf --json doctor` to see every drift row; the text table summarizes only the first few rows.
-
 ## Plugin cross-scope duplicates
 
 The `plugin_cross_scope_dup` row inspects `.ea/indexes/generated.json` and groups generated entries by `region_id`. A warning means the same generated plugin region appears under more than one scope, commonly project and user.

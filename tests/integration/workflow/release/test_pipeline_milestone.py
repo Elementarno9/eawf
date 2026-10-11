@@ -1,12 +1,13 @@
 """``eawf release pipeline --milestone`` checks a Milestone's Batches on main by trailer.
 
 The options take exactly one of ``--phase`` and ``--milestone``. The repin
-step of a Milestone release runs against a real repository: two Batches are
-published by ``eawf publish``, which binds each to its squashed commit, the
-published branch lands on ``refs/remotes/origin/main``, and both Batches are
-marked COMPLETED. The step passes there, and refuses by name when main
-carries no commit for a Batch, carries two, or carries one other than the
-commit publish bound. It never reaches the epoch-1 wave-pin helpers.
+step of a Milestone release runs against a real repository: two Batches
+land as five commits each carrying only its Task's ``Task:`` trailer, the
+branch lands on ``refs/remotes/origin/main``, and both Batches close on
+their last commit and compact out of the document into the Batch ledger,
+as a Batch closed on landing does. The step passes there, and refuses by
+name when main carries no commit for a Batch or carries other commits than
+the head it pinned. It never reaches the epoch-1 wave-pin helpers.
 """
 
 from __future__ import annotations
@@ -20,9 +21,12 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.kernel.identity import IdentityError
+from eawf.kernel.store.compaction import compact_terminal_record, document_rows, read_document
+from eawf.kernel.store.ledger import LedgerRecord
+from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.vcs import trailer_repin, wave_sha
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import release_pipeline as cli_module
-from eawf.workflow.lifecycle import wave_sha, wave_trailer_repin
 from eawf.workflow.release import pipeline as pipeline_module
 from eawf.workflow.release import pipeline_host as host_module
 from eawf.workflow.release.pipeline import (
@@ -38,6 +42,7 @@ from eawf.workflow.release.pipeline import (
 )
 from eawf.workflow.release.pipeline_host import GitHubReleaseHost
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
+    document_path,
     rekeyed,
     seed,
     seed_row,
@@ -45,8 +50,6 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
 from tests.integration.workflow.integration.test_publish import (
     Scratch,
     canary_runtime_under_tmp,
-    cli,
-    eawf_publish,
     git,
     scratch,
 )
@@ -59,7 +62,7 @@ from tests.integration.workflow.release.test_post_merge_pipeline import (
 
 pytestmark = pytest.mark.integration
 
-__all__ = ["canary_runtime_under_tmp", "cli", "scratch", "world"]
+__all__ = ["canary_runtime_under_tmp", "scratch", "world"]
 
 #: The Milestone the seeded Batches belong to.
 MILESTONE = "MLS-0030"
@@ -72,32 +75,37 @@ def _refuse_rpc(method: str, params: Any) -> dict[str, Any]:
     raise AssertionError(f"the repin step calls no daemon method, got {method}")
 
 
+def _closed(repo: Scratch, key: str, *, head: str) -> dict[str, Any]:
+    """Return Batch *key* COMPLETED on the pinned *head*."""
+    row = rekeyed(seed_row("batch", "COMPLETED"), key=key)
+    row["current_head_binding"]["head_sha"] = head
+    row["current_head_binding"]["tree_sha"] = git(repo.root, "rev-parse", f"{head}^{{tree}}")
+    return row
+
+
 @pytest.fixture
-def landed(scratch: Scratch, cli: None) -> Scratch:
-    """Two Batches published, landed on origin/main by fast-forward and COMPLETED."""
-    code, answer = eawf_publish(scratch.root)
-    assert code == 0, answer
-    git(scratch.root, "update-ref", "refs/remotes/origin/main", "HEAD")
-    seed(
-        scratch.canary,
-        {
-            "batch": {
-                "BAT-0007": seed_row("batch", "COMPLETED"),
-                "BAT-0008": rekeyed(seed_row("batch", "COMPLETED"), key="BAT-0008"),
-            }
-        },
-    )
+def landed(scratch: Scratch) -> Scratch:
+    """Two Batches landed on origin/main as Task-trailered commits, closed and compacted.
+
+    BAT-0007 holds EAWF-0042's two commits and pins the second; BAT-0008 holds
+    EAWF-0043's three and pins the branch tip.
+    """
+    git(scratch.root, "update-ref", "refs/remotes/origin/main", scratch.tip)
+    path = document_path(scratch.canary)
+    for key, head in (("BAT-0007", scratch.commits[1]), ("BAT-0008", scratch.tip)):
+        row = _closed(scratch, key, head=head)
+        seed(scratch.canary, {"batch": {key: row}})
+        compact_terminal_record(
+            path,
+            record=LedgerRecord(
+                collection=Epoch2Collection.BATCH,
+                record_key=key,
+                status="COMPLETED",
+                recorded_at=NOW,
+                payload=row,
+            ),
+        )
     return scratch
-
-
-def _batch_commits(repo: Scratch) -> dict[str, str]:
-    """Return Batch key -> the commit publish built for it."""
-    commits: dict[str, str] = {}
-    for sha in git(repo.root, "rev-list", f"{repo.base}..HEAD").splitlines():
-        for line in git(repo.root, "show", "-s", "--format=%B", sha).splitlines():
-            if line.startswith("Batch: "):
-                commits[line.removeprefix("Batch: ").strip()] = sha
-    return commits
 
 
 def _rebuild(repo: Path, sha: str, *, parent: str) -> str:
@@ -210,14 +218,18 @@ def test_cli_options_take_a_milestone_and_pin_it(
 # ---- CR-2: the repin step on a Milestone ---------------------------------------------
 
 
-def test_repin_passes_when_each_batch_landed_as_its_bound_commit(landed: Scratch) -> None:
+def test_the_completed_batches_have_left_the_document(landed: Scratch) -> None:
+    held = document_rows(read_document(document_path(landed.canary)), Epoch2Collection.BATCH)
+    assert not {"BAT-0007", "BAT-0008"} & set(held)
+
+
+def test_repin_passes_when_each_batch_landed_as_its_pinned_commits(landed: Scratch) -> None:
     outcome = _repin(landed.root)
     assert outcome == {"milestone": MILESTONE, "batches": "2"}
 
 
 def test_repin_refuses_a_batch_with_no_trailer_commit_on_main(landed: Scratch) -> None:
-    commits = _batch_commits(landed)
-    git(landed.root, "update-ref", "refs/remotes/origin/main", commits["BAT-0007"])
+    git(landed.root, "update-ref", "refs/remotes/origin/main", landed.commits[1])
     refusal = _repin(landed.root)
     assert isinstance(refusal, PipelineRefusal)
     assert refusal.code is PipelineRefusalCode.BATCH_TRAILER_MISSING
@@ -225,26 +237,27 @@ def test_repin_refuses_a_batch_with_no_trailer_commit_on_main(landed: Scratch) -
     assert "BAT-0007" not in refusal.detail
 
 
-def test_repin_refuses_a_batch_with_two_trailer_commits_on_main(landed: Scratch) -> None:
-    commits = _batch_commits(landed)
-    head = git(landed.root, "rev-parse", "refs/remotes/origin/main")
-    again = _rebuild(landed.root, commits["BAT-0007"], parent=head)
+def test_repin_refuses_a_batch_whose_commit_landed_twice(landed: Scratch) -> None:
+    again = _rebuild(landed.root, landed.commits[1], parent=landed.tip)
     git(landed.root, "update-ref", "refs/remotes/origin/main", again)
     refusal = _repin(landed.root)
     assert isinstance(refusal, PipelineRefusal)
-    assert refusal.code is PipelineRefusalCode.BATCH_TRAILER_DUPLICATED
-    assert "BAT-0007=2" in refusal.detail
+    assert refusal.code is PipelineRefusalCode.BATCH_HEAD_MISMATCH
+    assert refusal.detail.endswith(f"BAT-0007 bound {landed.commits[1][:12]}, landed {again[:12]}")
 
 
-def test_repin_refuses_a_batch_whose_bound_head_differs(landed: Scratch) -> None:
-    commits = _batch_commits(landed)
-    first = _rebuild(landed.root, commits["BAT-0007"], parent=landed.base)
-    second = _rebuild(landed.root, commits["BAT-0008"], parent=first)
-    git(landed.root, "update-ref", "refs/remotes/origin/main", second)
+def test_repin_refuses_batches_whose_commits_were_rewritten(landed: Scratch) -> None:
+    parent = landed.base
+    rebuilt: list[str] = []
+    for sha in landed.commits:
+        parent = _rebuild(landed.root, sha, parent=parent)
+        rebuilt.append(parent)
+    git(landed.root, "update-ref", "refs/remotes/origin/main", parent)
     refusal = _repin(landed.root)
     assert isinstance(refusal, PipelineRefusal)
     assert refusal.code is PipelineRefusalCode.BATCH_HEAD_MISMATCH
-    assert f"BAT-0007 bound {commits['BAT-0007'][:12]}, landed {first[:12]}" in refusal.detail
+    assert f"BAT-0007 bound {landed.commits[1][:12]}, landed {rebuilt[1][:12]}" in refusal.detail
+    assert f"BAT-0008 bound {landed.tip[:12]}, landed {rebuilt[4][:12]}" in refusal.detail
 
 
 def test_repin_refuses_a_milestone_with_no_completed_batch(landed: Scratch) -> None:
@@ -254,11 +267,11 @@ def test_repin_refuses_a_milestone_with_no_completed_batch(landed: Scratch) -> N
 
 
 def test_repin_skips_a_batch_that_is_not_completed(landed: Scratch) -> None:
+    # The document's live row wins over the row the ledger compacted.
     seed(
         landed.canary, {"batch": {"BAT-0008": rekeyed(seed_row("batch", "ACTIVE"), key="BAT-0008")}}
     )
-    commits = _batch_commits(landed)
-    git(landed.root, "update-ref", "refs/remotes/origin/main", commits["BAT-0007"])
+    git(landed.root, "update-ref", "refs/remotes/origin/main", landed.commits[1])
     assert _repin(landed.root) == {"milestone": MILESTONE, "batches": "1"}
 
 
@@ -283,27 +296,24 @@ def test_repin_refuses_a_tree_that_is_not_native(tmp_path: Path) -> None:
     assert refusal.code is PipelineRefusalCode.MILESTONE_UNREADABLE
 
 
-def test_repin_reads_trailers_from_the_whole_message(tmp_path: Path) -> None:
-    root = tmp_path / "repo"
-    root.mkdir()
-    git(root, "init", "-q", "-b", "main")
-    identity = ["-c", "user.name=ci", "-c", "user.email=ci@example.com"]
-    git(root, *identity, "commit", "-q", "--allow-empty", "-m", "chore: no trailer")
-    git(root, *identity, "commit", "-q", "--allow-empty", "-m", "feat: a\n\nBatch: BAT-0001")
+def test_carriers_read_task_and_batch_trailers_from_the_whole_message(
+    scratch: Scratch,
+) -> None:
+    root = scratch.root
+    git(root, "commit", "-q", "--allow-empty", "-m", "feat: a\n\nBatch: BAT-0001")
     first = git(root, "rev-parse", "HEAD")
-    git(
-        root,
-        *identity,
-        "commit",
-        "-q",
-        "--allow-empty",
-        "-m",
-        "fix: b\n\nBatch: BAT-0002\n\nTask: EAWF-0001",
-    )
+    git(root, "commit", "-q", "--allow-empty", "-m", "fix: b\n\nBatch: BAT-0002\n\nTask: EAWF-0042")
     second = git(root, "rev-parse", "HEAD")
-    git(root, *identity, "commit", "-q", "--allow-empty", "-m", "fix: says Batch: BAT-0009 inline")
+    git(root, "commit", "-q", "--allow-empty", "-m", "fix: says Batch: BAT-0009 inline")
+    git(root, "commit", "-q", "--allow-empty", "-m", "chore: c\n\nTask: EAWF-9999")
     host = GitHubReleaseHost(root, state_path=root / ".ea" / "state.json")
-    assert host.batch_trailer_commits("HEAD") == {"BAT-0001": (first,), "BAT-0002": (second,)}
+    commits = scratch.commits
+    assert host.batch_carrier_commits("HEAD") == {
+        "BAT-0001": (first,),
+        "BAT-0002": (second,),
+        "BAT-0007": (second, commits[1], commits[0]),
+        "BAT-0008": (commits[4], commits[3], commits[2]),
+    }
 
 
 # ---- CR-3: the Milestone path never touches the epoch-1 helpers ----------------------
@@ -315,7 +325,7 @@ def test_milestone_repin_passes_with_the_epoch1_helpers_patched_to_raise(
     def boom(*_args: object, **_kwargs: object) -> Any:
         raise AssertionError("the milestone path must not reach the epoch-1 helpers")
 
-    for module in (pipeline_module, wave_sha, wave_trailer_repin):
+    for module in (pipeline_module, wave_sha, trailer_repin):
         for name in ("load_drift_acks", "resolve_trailer_repins"):
             monkeypatch.setattr(module, name, boom, raising=False)
     assert _repin(landed.root) == {"milestone": MILESTONE, "batches": "2"}

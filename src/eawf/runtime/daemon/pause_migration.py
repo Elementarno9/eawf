@@ -29,6 +29,7 @@ from pydantic import ValidationError
 
 from eawf.kernel.identity import EntityKind, QualifiedUrn, parse_qualified_urn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.migration.epoch2.urn_rekey import spells_single_key
 from eawf.kernel.state.enums import OpenQuestionStatus, StoreKind
 from eawf.kernel.state.epoch2.question import MAX_OPTIONS, MIN_OPTIONS, OpenQuestion, QuestionOption
 from eawf.kernel.state.epoch2.values import EntityOrigin
@@ -160,6 +161,7 @@ def _question(pause: LegacyPause, workspace: QualifiedUrn, key: str, now: dateti
         repository_key=None,
         kind=EntityKind.QUESTION,
         entity_key=key,
+        single_key=workspace.single_key,
     )
     labels = [option.label[:_LABEL_LIMIT] for option in pause.question.options]
     options = (
@@ -206,6 +208,7 @@ def _workspace(document: dict[str, Any]) -> QualifiedUrn | None:
         repository_key=None,
         kind=EntityKind.WORKSPACE,
         entity_key=code,
+        single_key=spells_single_key(document),
     )
 
 

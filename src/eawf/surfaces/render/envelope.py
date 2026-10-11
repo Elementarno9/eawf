@@ -62,8 +62,6 @@ CANONICAL_SKILL_NAMES: tuple[str, ...] = (
     "/audit",
     "/ship",
     "/review",
-    "/polish",
-    "/init",
     "/flow",
     "/memory",
     "/dispatch",

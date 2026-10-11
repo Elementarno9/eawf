@@ -6,12 +6,12 @@ plus a pointer to the decisions that ratified them:
 
 - **phase = release** — every closed phase ships as at least a minor release;
   the phase-close commit bumps the package version and the merge tags it.
-- **large phase-PR** — one PR per phase (≈ +10k lines is acceptable); do not
-  split a phase into many small PRs; per-wave bisectable commits give the
+- **large PR** — one PR per Milestone (≈ +10k lines is acceptable); do not
+  split a Milestone into many small PRs; per-Batch bisectable commits give the
   granularity inside the PR.
-- **ADR pointer** — names Decision D10 (one-PR-per-phase cadence) + D07
-  (rebase-merge) and the canonical ``docs/architecture/workflow.md`` reference
-  so the divergence is auditable and reversible.
+- **ADR pointer** — names Decision D-GIT-HISTORY (one-PR-per-Milestone cadence
+  and commit-history regime) and the canonical ``docs/architecture/workflow.md``
+  reference so the divergence is auditable and reversible.
 - **lean wave verification** — targeted tests per wave; strict close validates
   audit-link integrity only, while exact-HEAD provenance stays deferred.
 
@@ -115,7 +115,7 @@ def test_agent_driven_profile_renders_divergence_rules(tmp_path: Path) -> None:
 
     Asserts the divergence content survives the full compose -> render path:
     the rendered AGENTS.md carries the phase=release semantics, the
-    one-PR-per-phase / large-PR rule, and the ADR pointer (Decision ids +
+    one-PR-per-Milestone / large-PR rule, and the ADR pointer (Decision id +
     workflow doc).
     """
     body = load_profile(_PROFILE_ID)
@@ -131,12 +131,13 @@ def test_agent_driven_profile_renders_divergence_rules(tmp_path: Path) -> None:
     assert rendered.count("### Mechanism") == block_count
     # phase = release: version bump on phase close.
     assert "at least a minor release" in rendered
-    # large phase-PR: one PR per phase, do not split.
-    assert "one PR per phase" in rendered
+    # large PR: one PR per Milestone, do not split.
+    assert "one PR per Milestone" in rendered
     assert "+10k lines" in rendered
-    # ADR pointer: the ratifying decisions + canonical workflow reference.
-    assert "D10" in rendered
-    assert "D07" in rendered
+    # ADR pointer: the ratifying decision + canonical workflow reference.
+    assert "D-GIT-HISTORY (D76)" in rendered
+    assert "D10" not in rendered
+    assert "D07" not in rendered
     assert "docs/architecture/workflow.md" in rendered
     assert "src/eawf/_version.py" in rendered
     assert "declares the version dynamically" in rendered

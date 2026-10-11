@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
@@ -23,7 +24,11 @@ from eawf.runtime.daemon.methods.domain_guards import batch_activation_admitted,
 
 
 def locked_unmet(
-    document: dict[str, Any], *, record: LifecycleRecord, target: LifecycleStatus
+    document: dict[str, Any],
+    *,
+    document_path: Path,
+    record: LifecycleRecord,
+    target: LifecycleStatus,
 ) -> frozenset[TransitionGuard]:
     """Return the guards that fail when re-judged against the locked document.
 
@@ -36,6 +41,7 @@ def locked_unmet(
 
     Args:
         document: The locked document.
+        document_path: The document's path, which its ledgers resolve against.
         record: The record as the document holds it.
         target: The status the request moves to.
 
@@ -45,7 +51,7 @@ def locked_unmet(
     if (
         isinstance(record, DeliveryBatch)
         and target is BatchStatus.ACTIVE
-        and not batch_activation_admitted(document, record)
+        and not batch_activation_admitted(document, document_path, record)
     ):
         return frozenset({TransitionGuard.BATCH_WIP_ADMITS})
     if (

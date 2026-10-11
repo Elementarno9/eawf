@@ -2,8 +2,9 @@
 
 AUTH-019 splits the two work-in-progress limits by whether a mechanism
 enforces them. ``wip.active_batches_per_repo`` refuses a Batch activation
-past the ceiling -- counted per Track per repository, and judged again
-under the document lock -- while ``wip.active_milestones`` never refuses
+past the ceiling -- counted per Track per repository over the Batches
+holding or building an exact-head proof, and judged again under the
+document lock -- while ``wip.active_milestones`` never refuses
 and is surfaced as a watchlist line on the accepted answer.
 
 AUTH-021 makes the backlog the draft head of the Task lifecycle. Demotion
@@ -49,6 +50,7 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     seed,
     seed_row,
 )
+from tests.integration.runtime.daemon.test_batch_close_ceiling import file_generation
 
 pytestmark = pytest.mark.integration
 
@@ -57,6 +59,7 @@ BRANCH = "feature/eawf-v0.7"
 SLOT = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
 OTHER_REPOSITORY = f"{SLOT}/repository/REP-OTHER"
 OTHER_TRACK = f"{SLOT}/track/TRK-OTHER"
+SECOND_URN = f"{SLOT}/batch/BAT-0008"
 
 
 @pytest.fixture(autouse=True)
@@ -113,15 +116,16 @@ def _batch(status: str, *, key: str = "BAT-0007", **overrides: Any) -> dict[str,
 
 
 def _activation_world(**second: Any) -> dict[str, dict[str, Any]]:
-    """A PLANNED Batch beside a second, ACTIVE one shaped by *second*."""
+    """A PLANNED Batch beside a second one on its pinned head, shaped by *second*."""
     track_batches = second.pop("track_batches", 1)
     extra_rows = second.pop("extra", {})
+    status = second.pop("status", "READY_TO_MERGE")
     rows: dict[str, dict[str, Any]] = {
         "track": {"TRK-RUNTIME": _track(batches=track_batches)},
         "milestone": {"MLS-0030": _milestone("ACTIVE")},
         "batch": {
             "BAT-0007": _batch("PLANNED"),
-            "BAT-0008": _batch("ACTIVE", key="BAT-0008", **second),
+            "BAT-0008": _batch(status, key="BAT-0008", **second),
         },
     }
     for collection, members in extra_rows.items():
@@ -143,8 +147,12 @@ def _activate(canary: CanaryProvision, tmp_path: Path) -> dict[str, Any]:
 # ---- AUTH-019: the hard per-repository Batch ceiling -------------------------
 
 
-def test_auth_019_a_second_active_batch_in_one_repository_is_refused(tmp_path: Path) -> None:
-    canary = _canary(tmp_path, _activation_world())
+@pytest.mark.parametrize("status", ["READY_TO_MERGE", "ACTIVE"])
+def test_auth_019_a_second_proving_batch_in_one_repository_is_refused(
+    tmp_path: Path, status: str
+) -> None:
+    canary = _canary(tmp_path, _activation_world(status=status))
+    file_generation(canary, tmp_path / "gen", SECOND_URN)
     before = document_path(canary).read_bytes()
 
     answer = _activate(canary, tmp_path)
@@ -188,6 +196,12 @@ def test_auth_019_another_tracks_active_batch_is_not_counted(tmp_path: Path) -> 
     assert _activate(canary, tmp_path)["status"] == "ok"
 
 
+def test_auth_019_an_active_sibling_collecting_tasks_is_not_counted(tmp_path: Path) -> None:
+    canary = _canary(tmp_path, _activation_world(status="ACTIVE"))
+
+    assert _activate(canary, tmp_path)["status"] == "ok"
+
+
 def test_auth_019_a_planned_sibling_batch_is_not_counted(tmp_path: Path) -> None:
     rows = _activation_world()
     rows["batch"]["BAT-0008"] = _batch("PLANNED", key="BAT-0008")
@@ -206,7 +220,8 @@ def test_auth_019_a_batch_whose_track_cannot_be_read_is_refused(tmp_path: Path) 
 
 def test_auth_019_the_ceiling_is_judged_again_under_the_document_lock(tmp_path: Path) -> None:
     """A caller that skips the preflight still meets the ceiling at commit."""
-    canary = _canary(tmp_path, _activation_world())
+    canary = _canary(tmp_path, _activation_world(status="ACTIVE"))
+    file_generation(canary, tmp_path / "gen", SECOND_URN)
     request = TransitionRequest(
         urn=BATCH_URN,
         to_status="ACTIVE",

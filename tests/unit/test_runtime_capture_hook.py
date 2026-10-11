@@ -1,34 +1,29 @@
-"""Tests for the SESSION_END runtime capture hook."""
+"""Tests for the runtime capture hook registry and the daemon methods its hooks call."""
 
 from __future__ import annotations
 
+import ast
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
+
+import eawf.runtime.hooks
+from eawf.runtime.daemon.methods import registered_methods
 from eawf.runtime.hooks.event import HookEvent, HookEventType
 from eawf.runtime.hooks.runner import HookRunner, register_runtime_capture_hooks
 
-
-def _event(payload: dict[str, Any]) -> HookEvent:
-    return HookEvent(
-        event_type=HookEventType.SESSION_END,
-        scope_id="P30-I05-W03",
-        command="",
-        args={},
-        runtime="claude",
-        occurred_at=datetime(2026, 6, 10, 12, 0, 0, tzinfo=UTC),
-        payloads={"claude_code": payload},
-    )
+_HOOKS_PACKAGE = Path(eawf.runtime.hooks.__file__).parent
 
 
-def _codex_event(event_type: HookEventType, payload: dict[str, Any]) -> HookEvent:
+def _event(event_type: HookEventType, payload: dict[str, Any], *, runtime: str) -> HookEvent:
     return HookEvent(
         event_type=event_type,
         scope_id="",
         command="",
         args={},
-        runtime="codex",
+        runtime=runtime,  # type: ignore[arg-type]
         occurred_at=datetime(2026, 6, 10, 12, 0, 0, tzinfo=UTC),
         payloads={event_type.value: payload},
     )
@@ -60,243 +55,167 @@ class _FailingClient:
         raise RuntimeError(f"{method} unavailable")
 
 
-def _runtime_payload() -> dict[str, Any]:
+def _module_strings(tree: ast.Module) -> dict[str, list[str]]:
+    """Map each module-level name bound to a string or a dict of strings to those strings."""
+    bound: dict[str, list[str]] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target, value = node.targets[0], node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            target, value = node.target, node.value
+        else:
+            continue
+        if not isinstance(target, ast.Name):
+            continue
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            bound[target.id] = [value.value]
+        elif isinstance(value, ast.Dict):
+            strings = [
+                v.value
+                for v in value.values
+                if isinstance(v, ast.Constant) and isinstance(v.value, str)
+            ]
+            if len(strings) == len(value.values):
+                bound[target.id] = strings
+    return bound
+
+
+def _called_methods(source: str, *, origin: str) -> set[str]:
+    """Return every daemon method name a ``<client>.call(...)`` in *source* names.
+
+    Raises:
+        ValueError: When a call's method argument is neither a string literal nor a
+            module-level string or dict-of-strings binding, so a new call shape fails
+            the scan instead of slipping past it.
+    """
+    tree = ast.parse(source)
+    bound = _module_strings(tree)
+    methods: set[str] = set()
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "call"
+            and node.args
+        ):
+            continue
+        arg = node.args[0]
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            methods.add(arg.value)
+        elif isinstance(arg, ast.Name) and arg.id in bound:
+            methods.update(bound[arg.id])
+        elif (
+            isinstance(arg, ast.Subscript)
+            and isinstance(arg.value, ast.Name)
+            and arg.value.id in bound
+        ):
+            methods.update(bound[arg.value.id])
+        else:
+            raise ValueError(f"{origin}:{node.lineno}: unresolvable daemon method argument")
+    return methods
+
+
+def _hook_called_methods() -> dict[str, set[str]]:
     return {
-        "hook_event_name": "Stop",
-        "session_id": "session-1",
-        "cost": {
-            "api_duration_ms": 17000,
-            "total_duration_ms": 21000,
-            "cost_usd": 0.42,
-        },
-        "context_window": {
-            "current_usage": {
-                "input_tokens": 100,
-                "output_tokens": 50,
-                "cache_creation_input_tokens": 5,
-                "cache_read_input_tokens": 7,
-            }
-        },
+        path.name: _called_methods(path.read_text(encoding="utf-8"), origin=path.name)
+        for path in sorted(_HOOKS_PACKAGE.glob("*.py"))
     }
 
 
-def test_session_end_capture_hook_invokes_runtime_capture_rpc() -> None:
-    client = _RecordingClient()
-    runner = HookRunner()
-    register_runtime_capture_hooks(
-        runner,
-        daemon_client_factory=lambda: client,
-        repo_root=Path("workspace"),
+def test_every_daemon_method_a_hook_calls_has_a_registered_handler() -> None:
+    registered = set(registered_methods())
+    called = _hook_called_methods()
+
+    unregistered = {
+        module: sorted(methods - registered)
+        for module, methods in called.items()
+        if methods - registered
+    }
+
+    assert unregistered == {}
+    # The scan must see the hooks' calls, or an empty registry check passes vacuously.
+    assert "runtime.host.subagent.start" in set().union(*called.values())
+
+
+def test_scan_flags_a_call_to_a_retired_method() -> None:
+    source = 'def hook(client):\n    client.call("runtime.capture", {})\n'
+
+    assert _called_methods(source, origin="probe.py") == {"runtime.capture"}
+    assert "runtime.capture" not in registered_methods()
+
+
+def test_scan_resolves_constant_and_dict_bindings() -> None:
+    source = (
+        'ONE = "a.one"\n'
+        'MANY: dict[str, str] = {"x": "b.two", "y": "b.three"}\n'
+        "def hook(client, key):\n"
+        "    client.call(ONE, {})\n"
+        "    client.call(MANY[key], {})\n"
     )
 
-    results = runner.run_event(_event(_runtime_payload()))
-
-    # SESSION_END carries two registered hooks: the capture RPC and the
-    # sibling end-of-session stamp, which runs off the same exit event.
-    assert [result.name for result in results] == ["runtime.capture", "session.end_stamp"]
-    assert results[0].block is False
-    assert results[0].output == "runtime.capture ok"
-    assert results[1].block is False
-    assert client.calls == [
-        (
-            "runtime.capture",
-            {
-                "api_duration_ms": 17000,
-                "total_duration_ms": 21000,
-                "cost_usd": "0.42",
-                "input_tokens": 100,
-                "output_tokens": 50,
-                "cache_creation_input_tokens": 5,
-                "cache_read_input_tokens": 7,
-                # W19 stamps the parser harness attribution onto every capture;
-                # this payload carries no model block so ``model`` stays None.
-                "harness": "claude-code",
-                "model": None,
-                # The statusline declares its OWN measure: its cost
-                # block is a different quantity from the transcript's per-turn
-                # duration, so a flip between the two sources must read as a change
-                # of measure rather than as work.
-                "measure_version": 101,
-                "session_id": "session-1",
-                "captured_at": "2026-06-10T12:00:00+00:00",
-                "repo_root": "workspace",
-            },
-        )
-    ]
+    assert _called_methods(source, origin="probe.py") == {"a.one", "b.two", "b.three"}
 
 
-def test_session_end_capture_hook_without_counters_makes_no_rpc_call() -> None:
+def test_scan_of_a_module_without_calls_is_empty() -> None:
+    assert _called_methods("", origin="empty.py") == set()
+
+
+def test_scan_refuses_an_unresolvable_method_argument() -> None:
+    source = "def hook(client, name):\n    client.call(name, {})\n"
+
+    with pytest.raises(ValueError, match=r"probe\.py:2"):
+        _called_methods(source, origin="probe.py")
+
+
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+def test_session_end_only_stamps_and_calls_no_daemon_method(runtime: str, tmp_path: Path) -> None:
     client = _RecordingClient()
     runner = HookRunner()
-    register_runtime_capture_hooks(runner, daemon_client_factory=lambda: client)
-
-    results = runner.run_event(_event({"hook_event_name": "Stop", "session_id": "session-1"}))
-
-    assert client.calls == []
-    assert results[0].block is False
-    assert results[0].output == "runtime.capture skipped: no usable counters"
-
-
-def test_session_end_capture_hook_daemon_error_is_non_blocking(tmp_path: Path) -> None:
-    runner = HookRunner()
-    # An empty repo root keeps the sibling end-stamp hook off the real
-    # workspace state, so its result is a function of this event alone.
-    register_runtime_capture_hooks(
-        runner,
-        daemon_client_factory=_FailingClient,
-        repo_root=tmp_path,
-    )
-
-    results = runner.run_event(_event(_runtime_payload()))
-
-    assert len(results) == 2
-    assert results[0].block is False
-    assert "runtime.capture" in results[0].output
-    assert "unavailable" in results[0].output
-    # A dead daemon must not turn the sibling stamp into a blocking failure.
-    assert results[1].name == "session.end_stamp"
-    assert results[1].block is False
-    assert results[1].output == "session.end_stamp skipped: no live session resolved"
-
-
-def test_codex_session_start_binds_provider_session() -> None:
-    client = _RecordingClient()
-    runner = HookRunner()
-    register_runtime_capture_hooks(runner, daemon_client_factory=lambda: client)
+    register_runtime_capture_hooks(runner, daemon_client_factory=lambda: client, repo_root=tmp_path)
 
     results = runner.run_event(
-        _codex_event(
-            HookEventType.SESSION_START,
-            {
-                "hook_event_name": "SessionStart",
-                "session_id": "provider-session-1",
-            },
-        )
-    )
-
-    (lifecycle,) = (result for result in results if result.name == "runtime.codex_lifecycle")
-    assert lifecycle.output.startswith("runtime.codex_lifecycle")
-    assert client.calls[0][0] == "runtime.codex_lifecycle"
-    assert client.calls[0][1]["event_type"] == "session_start"
-    assert client.calls[0][1]["provider_session_id"] == "provider-session-1"
-
-
-def test_codex_subagent_stop_forwards_exact_nullable_usage(tmp_path: Path) -> None:
-    transcript = tmp_path / "agent-rollout.jsonl"
-    transcript.write_text(
-        "\n".join(
-            [
-                '{"type":"session_meta","payload":{"id":"agent-1"}}',
-                (
-                    '{"type":"event_msg","payload":{"type":"token_count","info":'
-                    '{"total_token_usage":{"input_tokens":100,'
-                    '"cached_input_tokens":20,"output_tokens":30,'
-                    '"reasoning_output_tokens":5}}}}'
-                ),
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    client = _RecordingClient()
-    runner = HookRunner()
-    register_runtime_capture_hooks(runner, daemon_client_factory=lambda: client)
-
-    runner.run_event(
-        _codex_event(
-            HookEventType.SUBAGENT_STOP,
-            {
-                "hook_event_name": "SubagentStop",
-                "session_id": "provider-session-1",
-                "agent_id": "agent-1",
-                "agent_transcript_path": str(transcript),
-            },
-        )
-    )
-
-    method, params = client.calls[0]
-    assert method == "runtime.codex_lifecycle"
-    assert params["event_type"] == "subagent_stop"
-    assert params["measurement_quality"] == "exact"
-    assert params["measurement_status"] == "usage_observed"
-    assert params["measurement_reason"] is None
-    assert params["counters"]["input_tokens"] == 80
-    assert params["counters"]["output_tokens"] == 30
-    assert params["counters"]["cache_read_input_tokens"] == 20
-    assert params["counters"]["cache_creation_input_tokens"] is None
-    assert params["counters"]["cost_usd"] is None
-
-
-def test_codex_subagent_stop_missing_transcript_is_explicitly_unavailable() -> None:
-    client = _RecordingClient()
-    runner = HookRunner()
-    register_runtime_capture_hooks(runner, daemon_client_factory=lambda: client)
-
-    runner.run_event(
-        _codex_event(
-            HookEventType.SUBAGENT_STOP,
-            {
-                "hook_event_name": "SubagentStop",
-                "session_id": "provider-session-1",
-                "agent_id": "agent-1",
-            },
-        )
-    )
-
-    params = client.calls[0][1]
-    assert "counters" not in params
-    assert params["measurement_quality"] == "unavailable"
-    assert params["measurement_status"] == "usage_unavailable"
-    assert params["measurement_reason"] == "missing_transcript_path"
-
-
-def test_codex_session_end_captures_only_correlated_wave(tmp_path: Path) -> None:
-    transcript = tmp_path / "rollout.jsonl"
-    transcript.write_text(
-        "\n".join(
-            [
-                '{"type":"session_meta","payload":{"id":"provider-session-1"}}',
-                (
-                    '{"type":"event_msg","payload":{"type":"token_count","info":'
-                    '{"total_token_usage":{"input_tokens":100,'
-                    '"cached_input_tokens":20,"output_tokens":30}}}}'
-                ),
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    class _CorrelatingClient(_RecordingClient):
-        def call(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
-            self.calls.append((method, params))
-            if method == "runtime.codex_lifecycle":
-                return {
-                    "correlated": True,
-                    "wave_id": "P30-I05-W03",
-                }
-            return {"ok": True}
-
-    client = _CorrelatingClient()
-    runner = HookRunner()
-    register_runtime_capture_hooks(runner, daemon_client_factory=lambda: client)
-    results = runner.run_event(
-        _codex_event(
+        _event(
             HookEventType.SESSION_END,
-            {
-                "hook_event_name": "SessionEnd",
-                "session_id": "provider-session-1",
-                "transcript_path": str(transcript),
-            },
+            {"hook_event_name": "Stop", "session_id": "session-1"},
+            runtime=runtime,
         )
     )
 
-    assert results[0].output.endswith("runtime.capture ok")
-    assert [method for method, _params in client.calls] == [
-        "runtime.codex_lifecycle",
-        "runtime.capture",
-    ]
-    capture_params = client.calls[1][1]
-    assert capture_params["wave_id"] == "P30-I05-W03"
-    assert capture_params["harness"] == "codex"
-    assert capture_params["input_tokens"] == 80
+    assert [result.name for result in results] == ["session.end_stamp"]
+    assert results[0].block is False
+    assert results[0].output == "session.end_stamp skipped: no live session resolved"
+    assert client.calls == []
+
+
+def test_codex_session_start_calls_only_registered_methods(tmp_path: Path) -> None:
+    client = _RecordingClient()
+    runner = HookRunner()
+    register_runtime_capture_hooks(runner, daemon_client_factory=lambda: client, repo_root=tmp_path)
+
+    results = runner.run_event(
+        _event(
+            HookEventType.SESSION_START,
+            {"hook_event_name": "SessionStart", "session_id": "provider-session-1"},
+            runtime="codex",
+        )
+    )
+
+    assert "runtime.codex_lifecycle" not in {result.name for result in results}
+    assert {method for method, _params in client.calls} <= set(registered_methods())
+
+
+def test_subagent_hook_daemon_error_is_non_blocking(tmp_path: Path) -> None:
+    runner = HookRunner()
+    register_runtime_capture_hooks(runner, daemon_client_factory=_FailingClient, repo_root=tmp_path)
+
+    results = runner.run_event(
+        _event(
+            HookEventType.SUBAGENT_START,
+            {"hook_event_name": "SubagentStart", "session_id": "s-1", "agent_id": "agent-1"},
+            runtime="claude",
+        )
+    )
+
+    (adopt,) = (result for result in results if result.name == "runtime.host_subagent")
+    assert adopt.block is False
+    assert "runtime.host.subagent.start unavailable" in adopt.output

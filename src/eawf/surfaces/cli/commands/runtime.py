@@ -15,6 +15,7 @@ from typing import Annotated, Any, Final
 
 import typer
 
+from eawf.surfaces.cli import errors
 from eawf.surfaces.cli.commands.domain_integration import _answer, _send
 
 #: The dotted JSON-RPC name the verb forwards to, spelled here so the Typer tree
@@ -44,6 +45,16 @@ def runtime_certify_cmd(
     ] = None,
 ) -> None:
     """Probe the installed runtime and record its certification or quarantine."""
+    if task is not None and actor is None:
+        # The canary Run is recorded against a principal; refusing here keeps
+        # the daemon from being reached for a walk it could not attribute.
+        errors.emit_error(
+            errors.UserError(
+                "--task needs --actor to name who the canary Run is recorded against",
+                kind="InvalidInput",
+            ),
+            flags=ctx.obj,
+        )
     subject = f"runtime://{runtime}"
     params: dict[str, Any] = {"runtime": runtime}
     if task is not None:

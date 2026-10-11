@@ -6,11 +6,10 @@ uses PascalCase provider event names while Eä's CLI uses lowercase
 lifecycle names from leaking into ``hooks/hooks.json``.
 
 Every event in :data:`CODEX_HOOK_EVENT_NAMES` genuinely has a runner
-callable under the Codex runtime: ``runtime.codex_lifecycle`` handles
-SESSION_START / SUBAGENT_START / SUBAGENT_STOP unconditionally on
-``register_runtime_capture_hooks`` (the two subagent events also adopt the
-subagent as a Run through ``runtime.host_subagent``), SESSION_END is handled by both
-``runtime.capture`` and ``session.end_stamp``, and PRE_TOOL_USE runs the data-loss
+callable under the Codex runtime, registered by ``register_runtime_capture_hooks``:
+SESSION_START restates a resumed Run's context through ``runtime.host_context``, the
+two subagent events adopt the subagent as a Run through ``runtime.host_subagent``,
+SESSION_END stamps the session through ``session.end_stamp``, and PRE_TOOL_USE runs the data-loss
 guard, which refuses a call before Codex runs it. A module-level boot guard
 verifies this against the real runner registrations rather than trusting
 this dict by inspection, so an event added here with no registered

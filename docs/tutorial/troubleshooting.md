@@ -32,21 +32,6 @@ eawf doctor
 
 The error envelope names the failing field or invariant. If an operator-facing command accepts the same id or flag, prefer that command so the daemon remains the canonical writer.
 
-## Git/state drift
-
-When `eawf doctor` reports `git_state_drift`, the [drift reconciler](../reference/doctor.md#gitstate-drift-reconciler) compared CLOSED waves in state with commits discoverable from git history and found a mismatch.
-
-Common rows:
-
-| Kind | Meaning | Next step |
-|---|---|---|
-| `pinned_but_missing` | `Wave.commit` is set, but no matching commit is reachable from git history. | Fetch missing refs, inspect history, then close or repair the wave commit pointer through the lifecycle command. |
-| `pinned_mismatch` | State and git both find a commit, but the SHAs differ. | Check whether a rebase or cherry-pick changed the wave commit; re-pin the wave if the new commit is the accepted one. |
-| `closed_no_pin` | A CLOSED wave has no pinned commit and no commit subject with the wave prefix. | Find the intended close commit, then pin it through `eawf task complete` when reopening / repairing the lifecycle state is appropriate. |
-| `closed_unfindable` | Git was unavailable, so the check could not decide. | Re-run with `git` available before changing state. |
-
-Use `eawf --json doctor` for the full `checks[].drifts[]` list. The table view caps detail to keep terminal output readable.
-
 ## Plugin drift or duplicate plugin scope
 
 `PLUGIN_DRIFT_DETECTED` means a rendered plugin tree no longer matches the manifest that records managed file hashes. Inspect and repair with:

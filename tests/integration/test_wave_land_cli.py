@@ -1,8 +1,8 @@
-"""CLI integration tests for ``eawf wave land`` and ``eawf wave land-batch``.
+"""``eawf wave land`` is retired: it exits 2 even on a seeded repository.
 
-The tests stand up a real ``git init``-ed tmp repo, seed an
-``.ea/state.json`` with one or more CLAIMED waves, create worktrees,
-make commits, and drive the wave-land verbs via :class:`CliRunner`.
+The test stands up a real ``git init``-ed tmp repo, seeds an
+``.ea/state.json`` with a CLOSED wave, and drives the retired verb via
+:class:`CliRunner`.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_wave_land_already_closed_wave_exit_4(tmp_path: Path) -> None:
-    """Landing a wave that's already CLOSED surfaces exit 4 (VALIDATION_FAILED)."""
+    """Landing a CLOSED wave exits 2: the retired verb refuses before reading state."""
     repo, state_path = _seed_repo_with_state(tmp_path / "repo")
     payload = orjson.loads(state_path.read_bytes())
     payload["waves"]["P05-I01-W01"]["status"] = "closed"

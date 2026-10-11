@@ -166,10 +166,11 @@ def test_staged_rows_are_never_committed(path: str) -> None:
 
 def test_stage_binding_writes_one_file_per_batch_and_tree(tmp_path: Path) -> None:
     directory = tmp_path / "staged"
+    other_task = f"{TASK_URN.rsplit('/', 1)[0]}/EAWF-0043"
 
     first = stage_binding(directory, _staged())
     amended = stage_binding(directory, _staged(head_sha=OTHER))
-    other_tree = stage_binding(directory, _staged(tree_sha=OTHER))
+    other_tree = stage_binding(directory, _staged(tree_sha=OTHER, task_refs=[other_task]))
 
     assert first == amended
     assert first.name == f"BAT-0007-{TREE}.json"
@@ -177,6 +178,49 @@ def test_stage_binding_writes_one_file_per_batch_and_tree(tmp_path: Path) -> Non
     assert other_tree != first
     assert sorted(path.name for path in directory.glob("*.json")) == sorted(
         [first.name, other_tree.name]
+    )
+
+
+def test_restaging_the_same_tasks_on_a_new_tree_replaces_the_stale_row(tmp_path: Path) -> None:
+    directory = tmp_path / "staged"
+    stage_binding(directory, _staged())
+
+    again = stage_binding(directory, _staged(tree_sha=OTHER, head_sha=PUBLISHED))
+
+    assert [path.name for path in directory.glob("*.json")] == [again.name]
+
+
+def test_restaging_a_superset_of_the_tasks_replaces_the_narrower_row(tmp_path: Path) -> None:
+    directory = tmp_path / "staged"
+    other_task = f"{TASK_URN.rsplit('/', 1)[0]}/EAWF-0043"
+    stage_binding(directory, _staged())
+
+    wider = stage_binding(directory, _staged(tree_sha=OTHER, task_refs=[TASK_URN, other_task]))
+
+    assert [path.name for path in directory.glob("*.json")] == [wider.name]
+
+
+def test_staging_keeps_a_row_carrying_a_task_the_new_row_does_not(tmp_path: Path) -> None:
+    directory = tmp_path / "staged"
+    other_task = f"{TASK_URN.rsplit('/', 1)[0]}/EAWF-0043"
+    wider = stage_binding(directory, _staged(task_refs=[TASK_URN, other_task]))
+
+    narrower = stage_binding(directory, _staged(tree_sha=OTHER))
+
+    assert sorted(path.name for path in directory.glob("*.json")) == sorted(
+        [wider.name, narrower.name]
+    )
+
+
+def test_staging_leaves_another_batchs_row_alone(tmp_path: Path) -> None:
+    directory = tmp_path / "staged"
+    other_batch = f"{BATCH_URN.rsplit('/', 1)[0]}/BAT-0008"
+    kept = stage_binding(directory, _staged(batch_ref=other_batch))
+
+    staged = stage_binding(directory, _staged(tree_sha=OTHER))
+
+    assert sorted(path.name for path in directory.glob("*.json")) == sorted(
+        [kept.name, staged.name]
     )
 
 

@@ -58,7 +58,11 @@ def test_render_hook_sh_bootstraps_path_and_resolves_uv() -> None:
 
 
 _UV_RUN_CONDITIONAL: str = (
-    "if command -v eawf >/dev/null 2>&1; then\n"
+    '_eawf_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"\n'
+    'if [ -x "${_eawf_root}/.venv/bin/eawf" ]'
+    ' || [ -x "${_eawf_root}/.venv/Scripts/eawf.exe" ]; then\n'
+    '    _eawf_uv_run=(run --project "${_eawf_root}" --no-sync)\n'
+    "elif command -v eawf >/dev/null 2>&1; then\n"
     "    _eawf_uv_run=(run --no-project)\n"
     "else\n"
     "    _eawf_uv_run=(run)\n"
@@ -71,12 +75,12 @@ _UV_RUN_CONDITIONAL: str = (
 def test_render_hook_sh_skips_host_project_only_when_eawf_on_path(
     event_type: HookEventType, runtime: str
 ) -> None:
-    """Every ``uv run`` goes through the PATH-conditional argument array.
+    """Every ``uv run`` goes through the environment-conditional argument array.
 
-    ``--no-project`` keeps uv from syncing the host repository's environment
-    before each hook, but hides an eawf installed only as that project's
-    dependency; the wrapper therefore passes it only when ``eawf`` is on PATH.
-    Exactly one ``uv`` invocation means the wrapper never retries.
+    The project's own ``.venv`` eawf wins, so a global eawf of another version
+    never answers the hook; ``--no-project`` applies only when the project has
+    none and ``eawf`` is on PATH. Exactly one ``uv`` invocation means the
+    wrapper never retries.
     """
     output = render_hook_sh(event_type, runtime=runtime)
     assert output.count(_UV_RUN_CONDITIONAL) == 1, output
@@ -91,7 +95,7 @@ _GOLDEN_HOOKS: Path = (
 
 
 def test_claude_hook_goldens_carry_the_uv_run_conditional() -> None:
-    """All ten installed Claude hook goldens carry the PATH conditional."""
+    """All ten installed Claude hook goldens carry the environment conditional."""
     goldens = sorted(_GOLDEN_HOOKS.glob("*.sh"))
     assert len(goldens) == 10
     for golden in goldens:

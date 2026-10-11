@@ -46,6 +46,10 @@ COMMITTED_FILES: Final = ("track", "repository", "rc1", "rc2", "stable")
 #: The three Milestones of the remaining release train, in apply order.
 PLAN_NAMES: Final = ("rc1", "rc2", "stable")
 
+#: The applied revision each re-planning proposal names as its parent, kept
+#: as it was filed so the canary can land it before the child rewrites it.
+PARENTS: Final = {"rc2": REPO_ROOT / "tests" / "fixtures" / "planning" / "v07" / "rc2-prv0201.json"}
+
 #: The human who approves; a plan approval admits no other principal kind.
 OPERATOR: Final = {"principal_kind": "operator", "principal_id": "OP-0001"}
 ACTOR: Final = "OP-0001"
@@ -166,9 +170,23 @@ def apply(proposal: dict[str, Any], repo_root: Path, runtime: Path) -> dict[str,
     )
 
 
+def load_parent(name: str) -> dict[str, Any]:
+    """Return the applied revision the committed proposal *name* re-plans."""
+    return json.loads(PARENTS[name].read_text(encoding="utf-8"))
+
+
 def land(name: str, repo_root: Path, runtime: Path) -> None:
-    """Submit, approve and apply one committed proposal, asserting each step lands."""
-    proposal = load_proposal(name)
+    """Submit, approve and apply one committed proposal, asserting each step lands.
+
+    A proposal that re-plans an earlier revision has that parent landed
+    first, so the canary holds the Milestone the child rewrites.
+    """
+    if name in PARENTS:
+        _land(load_parent(name), f"{name} parent", repo_root, runtime)
+    _land(load_proposal(name), name, repo_root, runtime)
+
+
+def _land(proposal: dict[str, Any], name: str, repo_root: Path, runtime: Path) -> None:
     for step in (
         lambda: submit(proposal, repo_root, runtime),
         lambda: approve(proposal, repo_root, runtime, OPERATOR),

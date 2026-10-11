@@ -83,6 +83,22 @@ def _readings(records: Sequence[LedgerRecord], urn: QualifiedUrn) -> tuple[Usage
     )
 
 
+def run_usage(
+    records: Sequence[LedgerRecord], urns: Iterable[QualifiedUrn]
+) -> dict[str, UsageTotals]:
+    """Return what each of *urns* spent by its own readings, by Run key.
+
+    Args:
+        records: Every line the run ledger holds.
+        urns: The Runs asked about.
+
+    Returns:
+        Each Run's folded readings; a Run that stated no reading is absent, never zero.
+    """
+    held = {urn.entity_key: _readings(records, urn) for urn in urns}
+    return {key: aggregate_usage(readings) for key, readings in held.items() if readings}
+
+
 def _sum(values: Sequence[int | None]) -> int | None:
     """Return the reported values summed, or ``None`` when none was reported."""
     reported = [value for value in values if value is not None]
@@ -262,5 +278,6 @@ def run_usage_view(
 __all__ = [
     "UNATTRIBUTED",
     "cost_ceiling_view",
+    "run_usage",
     "run_usage_view",
 ]

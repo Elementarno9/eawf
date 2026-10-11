@@ -85,6 +85,7 @@ from eawf.runtime.runtimes.claude.managed_run import prepare_managed_isolation
 from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.runtimes.transcript_items import ClaudeTranscriptItems
 from eawf.runtime.sandbox.env_scrub import build_child_env, resolve_binary_dir
+from eawf.runtime.session.host_session import claude_code_provider
 
 logger = logging.getLogger(__name__)
 
@@ -337,6 +338,8 @@ class _Turn:
         transcript: The reading of the turn's messages as transcript items.
         slot_held: Whether the turn holds one of the process-wide spawn slots.
         granted_tools: The only tools the announced session may report.
+        provider: Who serves the model, as the child's environment routes it; the
+            init message names no provider, so this is read before the launch.
     """
 
     client: ClaudeSDKClient
@@ -353,6 +356,7 @@ class _Turn:
     transcript: ClaudeTranscriptItems = field(default_factory=ClaudeTranscriptItems)
     slot_held: bool = False
     granted_tools: frozenset[str] = frozenset()
+    provider: str | None = None
 
     def stderr(self) -> bytes:
         """Return the child's stderr so far."""
@@ -382,6 +386,7 @@ class _Turn:
                 self.runtime = observed_runtime_tuple(
                     self.adapter.id,
                     harness_version=message.data.get("claude_code_version"),
+                    provider=self.provider,
                     model=message.data.get("model"),
                 )
                 return session, self.pgid
@@ -697,6 +702,7 @@ async def launch_claude_run(
         deadline=deadline,
         stderr_lines=stderr_lines,
         granted_tools=frozenset(lane.allowed_tools),
+        provider=claude_code_provider(child_env),
     )
     # The slot is the last gate before the fork and is held for the whole
     # turn, as it was for the headless spawn.

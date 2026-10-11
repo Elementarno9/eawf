@@ -1,8 +1,7 @@
 """Transactional wrapper + daemon-proxy resolution for mutating verbs.
 
-This module owns the in-process write path and the predicates the
-daemon-proxy entry (:func:`eawf.surfaces.cli._dispatch._mutate_via_daemon`)
-consults to decide proxy-vs-fallback:
+This module owns the in-process write path and the predicates a
+mutating verb consults to decide proxy-vs-fallback:
 
 * :func:`state_transaction` — the in-process context manager and the
   common chokepoint every state-mutating CLI verb routes through (and
@@ -18,8 +17,8 @@ consults to decide proxy-vs-fallback:
   ``read_only=True``, the transaction refuses before acquiring the lock.
 
 * :func:`_proxy_enabled` / :func:`_daemon_reachable` — the predicates a
-  proxy callsite consults before marshalling a mutation across the
-  daemon's ``state.mutate`` RPC; ``daemon.proxy_enabled=false`` (CI
+  proxy callsite consults before sending a mutation to the daemon;
+  ``daemon.proxy_enabled=false`` (CI
   carve-out) or an unreachable daemon routes back to the in-process
   fallback.
 
@@ -281,9 +280,9 @@ def _proxy_enabled(workspace: Path | None) -> bool:
 def _daemon_reachable(runtime_dir: Path | None = None) -> bool:
     """Return True when the daemon is up and answering ``daemon.ping``.
 
-    Used by the bespoke ``_wave_close_via_daemon`` proxy to decide
-    between the proxy path and the daemonless fallback (per V1 carve-
-    out: reads + recovery shell + CI). Probes via
+    Used by the proxying verbs to decide between the proxy path and the
+    daemonless fallback (per V1 carve-out: reads + recovery shell + CI).
+    Probes via
     :class:`~eawf.surfaces.cli._daemon_client.DaemonClient`
     so the helper exercises the same wire format as the production
     path; transport errors map to a False return without raising so

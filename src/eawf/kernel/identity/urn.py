@@ -134,6 +134,33 @@ class QualifiedUrn:
             return RESERVED_REPOSITORY_SLOT
         return self.repository_key
 
+    def same_entity(self, other: QualifiedUrn) -> bool:
+        """Return whether *other* addresses the record this URN addresses.
+
+        The comparison is over the address, not the spelling: a three-slot
+        URN and its re-keyed single-key form name one record, and a rung
+        fragment selects part of its claim rather than another record.
+
+        Args:
+            other: The URN to compare against.
+
+        Returns:
+            ``True`` when both URNs address the same record.
+        """
+        return (
+            self.workspace_key,
+            self.project_key,
+            self.repository_key,
+            self.kind,
+            self.entity_key,
+        ) == (
+            other.workspace_key,
+            other.project_key,
+            other.repository_key,
+            other.kind,
+            other.entity_key,
+        )
+
     def __str__(self) -> str:
         """Render the URN string in the form it was spelled in."""
         if self.single_key:

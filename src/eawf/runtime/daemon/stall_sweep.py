@@ -3,14 +3,14 @@
 A Run stops producing whether or not anybody is watching it, and a stall that is only
 computed when someone reads the Run's stream is a stall nobody hears about. So the daemon
 sweeps every native tree it serves on a fixed cadence and raises the typed stall fact for
-each running Run silent past its interval. The sweep only observes: it never moves a Run,
+each running Run silent past its interval. A stall only observes: it never moves a Run,
 so a stalled Run stays running until a principal's control ends it.
 
 The sweep reads the trees the daemon has attached, which is every tree a native request
 has reached since it started; a Run can only have been dispatched through such a request.
 
-The same pass opens the one budget notice a running Run earns by reaching its sealed
-wall-clock ceiling with no event past the notice policy's grace period.
+The same pass ends every running Run that reached its sealed wall-clock ceiling: it opens
+the Run's one budget notice, fails the Run and stops its worker.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ SWEEP_SECONDS: Final = 15.0
 
 
 def sweep_once(ctx: MethodContext, *, now: datetime) -> tuple[str, ...]:
-    """Raise every due stall, and open every due wall-ceiling notice, in every attached tree, once.
+    """Raise every due stall, and end every Run at its wall ceiling, in every attached tree, once.
 
     A tree that cannot be swept -- it left epoch 2, or its select is not whole -- is
     logged and passed over, so one broken tree never stops the others' stalls.
@@ -48,6 +48,7 @@ def sweep_once(ctx: MethodContext, *, now: datetime) -> tuple[str, ...]:
         return ()
     # imported on the first tree to sweep: the liveness reads pull in the Run and dispatch
     # stack, which would otherwise delay a cold daemon's first answer
+    from eawf.runtime.daemon.epoch2_recovery import publish_projection
     from eawf.runtime.daemon.methods import run_liveness
 
     raised: list[str] = []
@@ -58,7 +59,9 @@ def sweep_once(ctx: MethodContext, *, now: datetime) -> tuple[str, ...]:
             logger.warning(f"stall sweep skipped root={root_id} error={exc!r}")
         # a wall-ceiling notice is its own observation, so a failed stall pass never withholds it
         try:
-            run_liveness.detect_wall_ceiling_crossings(context, now=now)
+            run_liveness.detect_wall_ceiling_crossings(
+                context, now=now, publish=lambda envelope: publish_projection(ctx.bus, envelope)
+            )
         except Exception as exc:
             logger.warning(f"wall ceiling sweep skipped root={root_id} error={exc!r}")
     return tuple(raised)

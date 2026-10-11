@@ -200,7 +200,7 @@ def test_a_missing_questions_file_and_no_question_are_refused_before_any_daemon_
     assert sent == []
 
 
-def test_a_bare_question_still_works_and_each_start_mints_its_own_key(
+def test_a_bare_question_still_works_and_a_retried_start_keeps_its_key(
     tmp_path: Path, sent: list[tuple[str, dict[str, Any]]]
 ) -> None:
     assert _new(tmp_path, "--question", QUESTION).exit_code == exit_codes.OK
@@ -208,7 +208,7 @@ def test_a_bare_question_still_works_and_each_start_mints_its_own_key(
     assert _new(tmp_path, "--question", QUESTION, "--idempotency-key", "k-1").exit_code == 0
     assert [params["questions"] for _method, params in sent] == [[QUESTION]] * 3
     keys = [params["idempotency_key"] for _method, params in sent]
-    assert keys[0] != keys[1]
+    assert keys[0] == keys[1]
     assert keys[2] == "k-1"
 
 
@@ -268,6 +268,7 @@ def _assignment(**framing: Any) -> StepAssignment:
             "prior_outcomes": ("40 events, 0 inversions",),
             "run_ref": RUN_URN,
             "round_number": 1,
+            "actor": "OP-0001",
             **framing,
         }
     )

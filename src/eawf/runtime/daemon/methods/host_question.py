@@ -244,6 +244,7 @@ def _question_urn(run: QualifiedUrn, key: str) -> QualifiedUrn:
             repository_key=None,
             kind=EntityKind.QUESTION,
             entity_key=key,
+            single_key=run.single_key,
         )
     )
 

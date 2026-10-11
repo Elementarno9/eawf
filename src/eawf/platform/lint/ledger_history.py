@@ -478,7 +478,9 @@ def _append_only_over(
     if finding is not None:
         findings.append(finding)
     sealed = None
-    if not findings and not live_after.startswith(live_before):
+    # A snapshot folded back into its live file leaves none at the tip: the
+    # ledger still extends, but no bytes were sealed away.
+    if not findings and after_snapshots and not live_after.startswith(live_before):
         snapshot, content = next(iter(after_snapshots.items()))
         sealed = SealedRemoval(path=live, snapshot=snapshot, sealed_bytes=len(content))
     return findings, sealed

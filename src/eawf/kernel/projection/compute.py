@@ -439,6 +439,9 @@ def build_route_projection(
     scope_id: str,
     generated_at: datetime,
     ledger_rows: Mapping[Epoch2Collection, Sequence[Mapping[str, Any]]] = MappingProxyType({}),
+    integrating: frozenset[str] = frozenset(),
+    filed: Mapping[Epoch2Collection, Mapping[str, Any]] = MappingProxyType({}),
+    proofs: Mapping[str, str] = MappingProxyType({}),
 ) -> RouteProjection:
     """Return one route's read model, read through *cursor*.
 
@@ -454,6 +457,13 @@ def build_route_projection(
             the caller -- a terminal record the document no longer holds, such as
             an accepted Milestone. A key the document already holds is the record
             still in flight and is never shadowed by one of these.
+        integrating: The URNs of the Batches an integration generation is filed for,
+            read from the Batch ledger by the caller.
+        filed: Records the route does not render but its facts name, by collection and
+            key, read from their ledgers by the caller -- the Task a Run ran, after the
+            Task compacted out of the document. The document's row wins over one here.
+        proofs: Why a Batch's proof holds it open -- still proving, or a criterion unmet
+            -- by Batch URN, as the daemon's close last judged it.
 
     Returns:
         The route's rows under a header whose ``source_cursor`` is *cursor*.
@@ -471,7 +481,7 @@ def build_route_projection(
         )
     if cursor < 0:
         raise ValueError(f"a projection cursor is a committed canonical_sequence, never {cursor}")
-    links = Links(document)
+    links = Links(document, integrating=integrating, filed=filed, proofs=proofs)
     rows = tuple(
         _with_facts(_projection_row(key=key, row=row, collection=collection), row, links)
         for collection in collections

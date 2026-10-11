@@ -44,6 +44,7 @@ import eawf.runtime.worktree.git as git
 from eawf.kernel.config.layered import get_dotted, merge_config, resolve_runtime_tier_models
 from eawf.kernel.config.providers import parse_provider_configuration
 from eawf.kernel.delivery.integration import IdempotencyKey
+from eawf.kernel.identity import parse_qualified_urn
 from eawf.kernel.runtime.capsule import AuthorityCapsule, StopCondition
 from eawf.kernel.runtime.compiled import (
     CompiledRunSpec,
@@ -85,14 +86,16 @@ from eawf.runtime.daemon.campaign_scheduler import (
     drive_campaign,
     failure_detail,
     plan_campaign,
+    planned_depth,
 )
+from eawf.runtime.daemon.dispatch_stream import usage_sink
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.epoch2_transaction import (
     TransactionRefusalCode,
     TransactionRefusedError,
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
-from eawf.runtime.daemon.methods.campaign import approve_plan
+from eawf.runtime.daemon.methods.campaign import MAX_TEXT_BYTES, approve_plan
 from eawf.runtime.daemon.methods.delivery_approval import publish_commits
 from eawf.runtime.daemon.methods.host_question import question_keys
 from eawf.runtime.daemon.methods.projection import document_path
@@ -105,6 +108,7 @@ from eawf.runtime.daemon.native_dispatch import (
 )
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.daemon.provider_facts import installed_provider_facts
+from eawf.runtime.daemon.run_supervisor import supervisor_of
 from eawf.runtime.runtimes.adapter import (
     NativeLaunchOutcome,
     NativeLaunchRequest,
@@ -141,6 +145,9 @@ _DEPTH_EFFORT: Final = {
 #: The longest step outcome and finding line a report holds, as the prompt states them.
 _OUTCOME_MAX_CHARS: Final = 500
 _FINDING_MAX_CHARS: Final = 200
+
+#: What ends a finding shortened to fit its line.
+_CLIP_MARK: Final = "…"
 
 _JSON_BLOCK: Final = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 
@@ -243,6 +250,10 @@ class HostResearchAgent:
     handed before the worker starts, because the semantic gateway admits a call
     only under the capsule the Run is bound to.
 
+    Each usage reading the driver hands back is stated as ``usage_observed`` on the
+    round's Run, as a dispatched Run's are, so the Run's own stream carries what the
+    round spent; the last reading is also what the round's report is charged.
+
     Args:
         runtime: The runtime to drive.
         context: The native context of the tree the Campaign belongs to.
@@ -280,10 +291,17 @@ class HostResearchAgent:
             raise ValueError(f"no launcher serves provider {spec.provider_options.provider_kind!r}")
         await asyncio.to_thread(self._bind, spec, capsule)
         readings: list[UsageSample] = []
+        stated = usage_sink(
+            self._context,
+            parse_qualified_urn(str(assignment.run_ref)),
+            actor=assignment.actor,
+            attempt_ref=str(assignment.run_ref),
+            meter=None,
+        )
 
-        async def metered(sample: UsageSample, _pgid: int | None) -> bool:
+        async def metered(sample: UsageSample, pgid: int | None) -> bool:
             readings.append(sample)
-            return False
+            return await stated(sample, pgid)
 
         async with _round_checkout(self._tree.parent) as workspace:
             launched = await launcher.launch(
@@ -298,7 +316,8 @@ class HostResearchAgent:
                     usage_sink=metered,
                 )
             )
-            ended = await _turn_of(launched)
+            with supervisor_of(self._context).worker(str(spec.run_ref), launched.subprocess_pid):
+                ended = await _turn_of(launched)
         last = readings[-1] if readings else None
         tokens = None if last is None else last.input_tokens + last.output_tokens
         if ended.exit_kind != "completed" or ended.answer_text is None:
@@ -469,12 +488,13 @@ def round_prompt(assignment: StepAssignment) -> str:
         "Work the question read-only; change no file. Back every claim with a file:line, "
         "a store URN or a URL, and mark a claim you cannot back as unresolved.\n\n"
         "End with one fenced ```json block holding exactly these keys and no other: "
-        '"report" (a string: the round\'s report as markdown), "outcome" (a string: what '
+        '"report" (a string: the round\'s report as markdown, at most '
+        f'{MAX_TEXT_BYTES} characters), "outcome" (a string: what '
         f"the step showed, one line of at most {_OUTCOME_MAX_CHARS} characters), "
         '"sources" (a whole number: how many sources you consulted, not a list of them) and '
         '"findings" (a list of strings: what should outlive the Campaign, each one line of '
-        f"at most {_FINDING_MAX_CHARS} characters; an empty list unless this step settles "
-        "something)."
+        f"at most {_FINDING_MAX_CHARS} characters, a longer one being cut short; an empty "
+        "list unless this step settles something)."
     )
 
 
@@ -490,7 +510,11 @@ def parse_round_report(text: str, *, tokens: int | None) -> StepReport:
         The validated report.
 
     A ``sources`` given as the list of sources consulted is taken as its count,
-    since the count is all the report keeps of it; any other mismatch is refused.
+    since the count is all the report keeps of it. An outcome or a one-line
+    finding past its bound is clipped to fit and marked so, and the report
+    states it in full, because the round already paid for what it learned. A
+    report past its own bound is refused, since nothing else could keep it in
+    full, as is any other mismatch.
 
     Raises:
         ValueError: No JSON block, one that is not a JSON object, or one that
@@ -508,12 +532,53 @@ def parse_round_report(text: str, *, tokens: int | None) -> StepReport:
         raise ValueError("the round's report block is not an object")
     if isinstance(body.get("sources"), list):
         body["sources"] = len(body["sources"])
+    in_full: list[str] = []
+    outcome = body.get("outcome")
+    outcome_clipped = isinstance(outcome, str) and len(outcome.strip()) > _OUTCOME_MAX_CHARS
+    if isinstance(outcome, str) and outcome_clipped:
+        in_full.append(f"## Outcome in full\n\n{outcome.strip()}")
+        body["outcome"] = _clip(outcome.strip(), _OUTCOME_MAX_CHARS)
+    overlong: list[str] = []
+    if isinstance(body.get("findings"), list):
+        overlong = [f.strip() for f in body["findings"] if _clippable(f)]
+        body["findings"] = [
+            _clip(f.strip(), _FINDING_MAX_CHARS) if _clippable(f) else f for f in body["findings"]
+        ]
+    if overlong:
+        stated = "\n".join(f"- {finding}" for finding in overlong)
+        in_full.append(f"## Findings in full\n\n{stated}")
+    if in_full and isinstance(body.get("report"), str):
+        body["report"] += "".join(f"\n\n{section}" for section in in_full) + "\n"
     try:
-        return StepReport.model_validate({**body, "tokens": tokens})
+        return StepReport.model_validate(
+            {
+                **body,
+                "tokens": tokens,
+                "outcome_clipped": outcome_clipped,
+                "clipped_findings": tuple(_clip(f, _FINDING_MAX_CHARS) for f in overlong),
+            }
+        )
     except ValidationError as error:
         raise ValueError(
             f"the round's report does not hold the asked shape: {failure_detail(error)}"
         ) from error
+
+
+def _clippable(finding: object) -> bool:
+    """Return whether *finding* is one line that only its length keeps from fitting."""
+    if not isinstance(finding, str):
+        return False
+    line = finding.strip()
+    return len(line) > _FINDING_MAX_CHARS and "\n" not in line and "\r" not in line
+
+
+def _clip(text: str, bound: int) -> str:
+    """Return *text* cut at its last word boundary to end in the clip mark within *bound*."""
+    room = bound - len(_CLIP_MARK)
+    head = text[:room]
+    if not text[room].isspace() and len(head.split()) > 1:
+        head = head.rsplit(maxsplit=1)[0]
+    return f"{head.rstrip()}{_CLIP_MARK}"
 
 
 def read_brief(repo_root: Path, path: str) -> QuestionBrief:
@@ -729,7 +794,7 @@ async def run_campaign(
             remediation="Re-read the Campaign and decide again.",
         )
     merged = await asyncio.to_thread(_layers, repo_root)
-    depth = resolve_default_research_depth(merged)
+    depth = planned_depth(campaign, resolve_default_research_depth(merged))
     driving = _begin(
         ctx,
         context,

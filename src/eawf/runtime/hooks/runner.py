@@ -176,7 +176,7 @@ class HookRunner:
 
 
 def _default_daemon_client_factory() -> Any:
-    """Return a daemon client context manager for runtime.capture."""
+    """Return a daemon client context manager for the hooks' daemon calls."""
     from eawf.surfaces.cli._daemon_client import DaemonClient
 
     return DaemonClient()
@@ -209,37 +209,8 @@ def register_runtime_capture_hooks(
     from eawf.runtime.hooks.lifecycle_capture import (
         HOST_SUBAGENT_METHODS,
         adopt_host_subagent,
-        capture_codex_lifecycle,
-        capture_runtime_on_session_end,
         stamp_session_end_on_exit,
     )
-
-    def _hook(event: HookEvent) -> HookResult:
-        return capture_runtime_on_session_end(
-            event,
-            daemon_client_factory=daemon_client_factory,
-            repo_root=repo_root,
-        )
-
-    def _codex_hook(event: HookEvent) -> HookResult:
-        result, _response, _counters = capture_codex_lifecycle(
-            event,
-            daemon_client_factory=daemon_client_factory,
-            repo_root=repo_root,
-        )
-        return result
-
-    for event_type in (
-        HookEventType.SESSION_START,
-        HookEventType.SUBAGENT_START,
-        HookEventType.SUBAGENT_STOP,
-    ):
-        runner.register(
-            event_type,
-            _codex_hook,
-            name="runtime.codex_lifecycle",
-        )
-    runner.register(HookEventType.SESSION_END, _hook, name="runtime.capture")
 
     def _host_subagent_hook(event: HookEvent) -> HookResult:
         return adopt_host_subagent(

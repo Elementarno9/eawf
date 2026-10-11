@@ -16,6 +16,9 @@ message whose file is gone is told it was pruned rather than that it never exist
 from __future__ import annotations
 
 import logging
+import threading
+from collections import OrderedDict
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -56,6 +59,10 @@ DEFAULT_RETENTION_DAYS: Final = 30
 #: The fewest and the most days the leaf may name.
 RETENTION_DAYS_MIN: Final = 1
 RETENTION_DAYS_MAX: Final = 365
+
+#: How many Runs' kept references are remembered at once; a Run past that is read
+#: again from the top on its next message.
+_REMEMBERED_RUNS: Final = 64
 
 _StoredLine = Annotated[str, StringConstraints(strict=True)]
 
@@ -152,18 +159,79 @@ def redacted_lines(text: str) -> tuple[tuple[str, ...], int]:
     return tuple(kept), withheld
 
 
+def _parsed(lines: Iterable[bytes], path: Path) -> Iterator[TranscriptEntry]:
+    """Yield the entries *lines* hold, skipping a torn line or one that is not UTF-8."""
+    for line in lines:
+        try:
+            yield TranscriptEntry.model_validate_json(line)
+        except ValidationError:
+            logger.warning(f"transcript_store skipped an unreadable line file={path.name}")
+
+
 def _entries(path: Path) -> dict[str, TranscriptEntry]:
-    """Return the entries of one Run's file by reference, skipping a torn line."""
-    held: dict[str, TranscriptEntry] = {}
-    with path.open(encoding="utf-8") as handle:
-        for line in handle:
-            try:
-                entry = TranscriptEntry.model_validate_json(line)
-            except ValidationError:
-                logger.warning(f"transcript_store skipped an unreadable line file={path.name}")
-                continue
-            held[entry.ref] = entry
-    return held
+    """Return the entries of one Run's file by reference, skipping an unreadable line."""
+    with path.open("rb") as handle:
+        return {entry.ref: entry for entry in _parsed(handle, path)}
+
+
+@dataclass(slots=True)
+class _ReadSoFar:
+    """How much of one Run's file has been read, and the references it held.
+
+    Attributes:
+        inode: The file the offset is into, so a pruned and rewritten file is
+            read again rather than taken for the old one.
+        offset: The byte just past the last whole line read.
+        refs: Every reference read up to there.
+    """
+
+    inode: int
+    offset: int
+    refs: set[str]
+
+
+class _KeptRefs:
+    """The references each Run's file holds, each byte of the file read once.
+
+    A turn keeps its messages one at a time, and the replay check each one makes
+    would otherwise read the whole file again, so keeping a turn's messages cost
+    the square of their count. Only the bytes past what was last read are read.
+    """
+
+    def __init__(self) -> None:
+        """Remember nothing yet."""
+        self.lock = threading.Lock()
+        self._read: OrderedDict[Path, _ReadSoFar] = OrderedDict()
+
+    def caught_up(self, path: Path) -> _ReadSoFar:
+        """Return *path*'s references, reading only what was appended since the last read.
+
+        Call it holding :attr:`lock`.
+
+        Raises:
+            OSError: The file could not be read.
+        """
+        size, inode = 0, 0
+        if path.is_file():
+            stat = path.stat()
+            size, inode = stat.st_size, stat.st_ino
+        read = self._read.pop(path, None)
+        if read is None or read.inode != inode or read.offset > size:
+            read = _ReadSoFar(inode=inode, offset=0, refs=set())
+        if size > read.offset:
+            with path.open("rb") as handle:
+                handle.seek(read.offset)
+                tail = handle.read(size - read.offset)
+            whole = tail[: tail.rfind(b"\n") + 1]
+            read.refs.update(entry.ref for entry in _parsed(whole.splitlines(), path))
+            read.offset += len(whole)
+        self._read[path] = read
+        while len(self._read) > _REMEMBERED_RUNS:
+            self._read.popitem(last=False)
+        return read
+
+
+_KEPT: Final = _KeptRefs()
 
 
 def keep_message(
@@ -196,12 +264,23 @@ def keep_message(
     ref = transcript_ref(urn, event_ref)
     directory = transcript_dir(context)
     path = _run_file(directory, urn)
-    if path.is_file() and ref in _entries(path):
-        return ref
     entry = TranscriptEntry(ref=ref, lines=lines, withheld_lines=withheld, recorded_at=now)
-    directory.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(f"{entry.model_dump_json()}\n")
+    with _KEPT.lock:
+        read = _KEPT.caught_up(path)
+        if ref in read.refs:
+            return ref
+        directory.mkdir(parents=True, exist_ok=True)
+        with path.open("ab") as handle:
+            start = handle.tell()
+            handle.write(f"{entry.model_dump_json()}\n".encode())
+            end = handle.tell()
+        # Taken as read only when nothing else was appended in between; otherwise
+        # the next catch-up reads this line along with the other writer's.
+        inode = path.stat().st_ino
+        if start == read.offset and read.inode in {0, inode}:
+            read.inode = inode
+            read.offset = end
+            read.refs.add(ref)
     logger.info(f"keep_message run={urn.entity_key} lines={len(lines)} withheld={withheld}")
     return ref
 

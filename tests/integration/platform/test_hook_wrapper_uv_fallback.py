@@ -1,8 +1,9 @@
 """Run rendered hook wrappers under bash against a stub ``uv``.
 
-The wrapper passes ``--no-project`` to ``uv run`` only when an ``eawf``
-executable is on PATH; otherwise it runs plain ``uv run eawf`` so an eawf
-installed solely as the host project's dependency still resolves. The stub
+The wrapper runs the host project's own ``.venv`` eawf (``uv run --project
+<root> --no-sync``) whenever the project has one, so a global eawf of another
+version never answers; it passes ``--no-project`` only when the project has no
+eawf and one is on PATH, and otherwise runs plain ``uv run eawf``. The stub
 ``uv`` records one argv line per invocation and exits with a chosen status,
 which also pins that the wrapper never retries on a non-zero exit.
 """
@@ -57,6 +58,7 @@ def _run_wrapper(
     *,
     eawf_on_path: bool,
     payload: str,
+    project_venv: bool = False,
     uv_exit: int = 0,
     uv_stdout: str = "",
 ) -> tuple[subprocess.CompletedProcess[str], list[list[str]], str]:
@@ -68,6 +70,7 @@ def _run_wrapper(
         runtime: ``claude`` or ``codex``.
         eawf_on_path: Whether a stub ``eawf`` executable is put on PATH.
         payload: JSON document fed to the wrapper on stdin.
+        project_venv: Whether the working directory's ``.venv`` holds eawf.
         uv_exit: Exit status the stub ``uv`` returns.
         uv_stdout: Text the stub ``uv`` prints.
 
@@ -89,6 +92,10 @@ def _run_wrapper(
     path_dirs += ["/usr/bin", "/bin"]
     wrapper = tmp_path / f"{event_type.value}.sh"
     wrapper.write_text(render_hook_sh(event_type, runtime=runtime), encoding="utf-8")
+    project = tmp_path / "project"
+    project.mkdir(exist_ok=True)
+    if project_venv:
+        _write_exe(project / ".venv" / "bin" / "eawf", "#!/bin/sh\nexit 0\n")
     log = tmp_path / "uv-argv.log"
     stdin_file = tmp_path / "uv-stdin.txt"
     home = tmp_path / "home"
@@ -108,6 +115,7 @@ def _run_wrapper(
         capture_output=True,
         text=True,
         env=env,
+        cwd=project,
         check=False,
         timeout=30,
     )
@@ -219,3 +227,24 @@ def test_empty_stdin_falls_back_to_synthesised_payload(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert argvs[0][:2] == ["run", "--no-project"]
     assert '"claude_event_name":"session_start"' in received
+
+
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+@pytest.mark.parametrize("eawf_on_path", [True, False], ids=["eawf-on-path", "eawf-off-path"])
+def test_project_venv_eawf_beats_a_global_eawf(
+    tmp_path: Path, runtime: str, eawf_on_path: bool
+) -> None:
+    """A project ``.venv`` eawf runs even when another eawf is on PATH."""
+    result, argvs, _ = _run_wrapper(
+        tmp_path,
+        HookEventType.PRE_TOOL_USE,
+        runtime,
+        eawf_on_path=eawf_on_path,
+        project_venv=True,
+        payload='{"tool_name":"Read"}',
+    )
+    assert result.returncode == 0, result.stderr
+    project = (tmp_path / "project").resolve()
+    assert len(argvs) == 1
+    assert argvs[0][:4] == ["run", "--project", str(project), "--no-sync"]
+    assert argvs[0][4:7] == ["eawf", "hook", "run"]

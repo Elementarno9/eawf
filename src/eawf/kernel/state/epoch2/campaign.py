@@ -328,6 +328,8 @@ class CampaignPlanStep(Epoch2Model):
         started_at: When it first ran.
         ended_at: When it finished.
         outcome: What it showed; required once done.
+        outcome_clipped: Whether the outcome was shortened to fit its line; the
+            report of the round that finished it states it in full.
         produced: The evidence and artifact revisions it produced, append-only.
         progress: The runner's named progress.
         revision: The step's compare-and-swap token.
@@ -350,6 +352,7 @@ class CampaignPlanStep(Epoch2Model):
     started_at: UtcDatetime | None = None
     ended_at: UtcDatetime | None = None
     outcome: StepOutcome | None = None
+    outcome_clipped: bool = False
     produced: tuple[EvidenceUrn | ArtifactRevisionRef, ...] = ()
     progress: NamedProgress | None = None
     revision: StrictPositiveInt = 1

@@ -77,6 +77,7 @@ def compile_task_request(
     config: Mapping[str, Mapping[str, Any]],
     registry: ProviderRegistry,
     bindings: Sequence[RuntimeBinding],
+    unbound: Mapping[str, str],
     budget: int | None,
     base: str,
     actor: str,
@@ -94,6 +95,8 @@ def compile_task_request(
             its ``runtime`` mapping is read.
         registry: The installed driver, auth and certification facts.
         bindings: The installed drivers; only those of *provider* are bound.
+        unbound: Why each provider with no binding has none, keyed by
+            provider id; the refusal for an unbound *provider* names it.
         budget: The Run's token ceiling, or ``None`` for an uncapped Run.
         base: The resolved commit SHA the workspace is materialized at.
         actor: The principal key the dispatch is recorded against.
@@ -143,7 +146,7 @@ def compile_task_request(
         "compile_request": compile_request,
         "provider_documents": _runtime_documents(config),
         "provider_registry": registry,
-        "bindings": _provider_bindings(bindings, provider),
+        "bindings": _provider_bindings(bindings, provider, unbound),
         "capsule": CapsuleRequest(
             criteria_digest=canonical_digest(
                 [criterion.model_dump(mode="json") for criterion in task.criteria]
@@ -227,20 +230,22 @@ def _runtime_documents(config: Mapping[str, Mapping[str, Any]]) -> dict[str, dic
 
 
 def _provider_bindings(
-    bindings: Sequence[RuntimeBinding], provider: str
+    bindings: Sequence[RuntimeBinding], provider: str, unbound: Mapping[str, str]
 ) -> tuple[RuntimeBinding, ...]:
     """Return the bindings whose driver serves *provider*.
 
     Raises:
         DaemonValidationError: No binding serves *provider*, which the
             compiler would report as no eligible profile had it been
-            handed the empty set.
+            handed the empty set. The message carries why the provider is
+            unbound and how to bind it, when that is known.
     """
     chosen = tuple(b for b in bindings if b.manifest.provider_id == provider)
     if not chosen:
+        cause = f": {unbound[provider]}" if provider in unbound else ""
         raise DaemonValidationError(
             f"validation_failed: {CompileRejection.NO_ELIGIBLE_PROFILE.value}: "
-            f"no installed driver serves provider {provider!r}"
+            f"no installed driver serves provider {provider!r}{cause}"
         )
     return chosen
 

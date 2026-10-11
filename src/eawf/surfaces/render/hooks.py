@@ -19,16 +19,18 @@ The output is a small POSIX-bash wrapper that:
    ``{"hook_event_name": <claude-name>, "claude_event_name":
    <eawf-event>, "args": [<arg1>, <arg2>, <arg3>, <arg4>]}`` from up to
    four positional arguments (``$1..$4``).
-3. Pipes the payload to ``uv run [--no-project] eawf hook run <event_type>
+3. Pipes the payload to ``uv run <mode> eawf hook run <event_type>
    --runtime <runtime>`` (``<runtime>`` is ``claude`` by default, ``codex``
    for the Codex install/doctor/package surfaces). The CLI's exit code (0
    ok, 9 blocked) is the wrapper's exit code. ``--no-project`` keeps uv from
    discovering, creating or syncing the host repository's own environment:
    a sync there costs seconds per hook and fails outright on Windows while
    one of that environment's executables is running, which would make the
-   fail-closed pre-tool guard refuse every judged tool call. The flag is
-   passed only when an ``eawf`` executable is on PATH; otherwise plain
-   ``uv run eawf`` resolves eawf from the host project's environment.
+   fail-closed pre-tool guard refuse every judged tool call. An eawf in the
+   host project's own ``.venv`` wins over both and runs with ``--project
+   <root> --no-sync``, so a global eawf of another version never answers
+   for the project; ``--no-project`` applies only when the project has no
+   eawf and one is on PATH, and plain ``uv run eawf`` is the last resort.
 
 The read is fail-open: a hook that dies breaks the operator's session,
 so an unreadable / empty stdin degrades to the positional-arg fallback
@@ -78,7 +80,7 @@ class HookSpec:
             router dispatches correctly.
         has_handler: ``True`` when a runner-registered handler actually
             consumes this event: :data:`HookEventType.SESSION_END` has
-            ``runtime.capture``, wired by
+            ``session.end_stamp``, wired by
             :func:`eawf.runtime.hooks.runner.register_runtime_capture_hooks`,
             :data:`HookEventType.SESSION_START` has the rule-projection
             staleness check ``eawf hook run`` registers, and the two subagent

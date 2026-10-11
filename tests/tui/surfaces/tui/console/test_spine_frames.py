@@ -513,7 +513,7 @@ def test_the_transcript_states_the_runs_own_status_and_climbs_through_it() -> No
     session = _session("transcript", "RUN-00000001")
     frame = render_route(_view(session, model, 120))
     assert frame[0].startswith(" Eä ▸ EAWF ▸ RUN-00000001 ▸ Transcript")
-    assert "RUNNING · no event recorded yet" in frame[1]
+    assert "RUNNING · in flight · no event recorded yet" in frame[1]
     assert "nothing running" not in frame[1]
 
 

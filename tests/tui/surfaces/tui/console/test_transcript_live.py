@@ -38,7 +38,12 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from eawf.kernel.runtime.events import CommandPayload, RunEventKind, RunEventRecord
+from eawf.kernel.runtime.events import (
+    ChildRunPayload,
+    CommandPayload,
+    RunEventKind,
+    RunEventRecord,
+)
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -607,6 +612,77 @@ def test_a_failed_cursor_read_keeps_the_frame_and_the_next_notice_reads_again(
     _drive(daemon, scenario)
 
 
+#: A subagent the followed Run delegated to, whose own stream grows while it works.
+DELEGATE_URN: Final = f"{bodies.ROOT}/run/RUN-00000004"
+
+
+def _delegating_daemon() -> _CountingDaemon:
+    """Return a counting daemon whose followed Run has started one delegation."""
+    daemon = _CountingDaemon()
+    started = RunEventRecord.model_validate(
+        {
+            "event_ref": "EVT-00000004",
+            "run_ref": FOLLOWED_URN,
+            "run_sequence": 4,
+            "event_kind": RunEventKind.CHILD_RUN_STARTED,
+            "provenance": "provider_native",
+            "payload": ChildRunPayload.model_validate(
+                {
+                    "child_run_ref": DELEGATE_URN,
+                    "delegation_request_ref": "delegation://claude/0a1b",
+                    "phase": "started",
+                }
+            ),
+            "actor": bodies.ME,
+            "recorded_at": bodies.AT + timedelta(seconds=4),
+        }
+    )
+    daemon.run_events[FOLLOWED_URN] = (*daemon.run_events[FOLLOWED_URN], started)
+    daemon.run_events[DELEGATE_URN] = (_line(DELEGATE_URN, 1),)
+    return daemon
+
+
+def _delegate_sequences(app: ConsoleApp) -> list[int]:
+    """Return the sequences the transcript on screen holds for the delegated Run."""
+    assert app.seam is not None
+    held = app.seam.live(TRANSCRIPT_READ)
+    assert isinstance(held, HeldTranscript)
+    return [line.run_sequence for line in held.children[DELEGATE_URN]]
+
+
+def test_a_notice_for_a_delegated_run_grows_its_line_without_a_parent_append() -> None:
+    """A subagent's append reads its own stream past its cursor; the parent stays put."""
+    daemon = _delegating_daemon()
+
+    async def scenario(app: ConsoleApp, pilot: Any) -> None:
+        await _open_followed(app, pilot)
+        assert _delegate_sequences(app) == [1]
+        reads = len(daemon.reads)
+        await _announce(daemon, app, pilot, DELEGATE_URN)
+        assert (DELEGATE_URN, 1) in daemon.reads[reads:]
+        assert _delegate_sequences(app) == [1, 2]
+        assert _sequences(app) == [1, 2, 3, 4], "the parent's own lines are unchanged"
+        await _announce(daemon, app, pilot, DELEGATE_URN)
+        assert _delegate_sequences(app) == [1, 2, 3]
+
+    _drive(daemon, scenario)
+
+
+def test_a_parent_append_with_no_delegate_append_keeps_the_held_delegate() -> None:
+    """A parent notice grows the parent; an unchanged delegate is not re-read whole."""
+    daemon = _delegating_daemon()
+
+    async def scenario(app: ConsoleApp, pilot: Any) -> None:
+        await _open_followed(app, pilot)
+        reads = len(daemon.reads)
+        await _announce(daemon, app, pilot, FOLLOWED_URN)
+        assert (DELEGATE_URN, 0) not in daemon.reads[reads:]
+        assert _sequences(app) == [1, 2, 3, 4, 5]
+        assert _delegate_sequences(app) == [1]
+
+    _drive(daemon, scenario)
+
+
 def test_following_a_read_that_holds_nothing_is_refused() -> None:
     """The seam follows only an answer it holds for what the route on screen is about."""
     daemon = _CountingDaemon()
@@ -680,6 +756,20 @@ def test_space_end_and_the_arrows_hold_and_follow_while_blocks_arrive() -> None:
     _drive(daemon, scenario)
 
 
+def test_the_keybar_and_help_advertise_space_beside_f() -> None:
+    """Space holds and follows as f does, so the bar and the help card name both keys."""
+    daemon = _CountingDaemon()
+
+    async def scenario(app: ConsoleApp, pilot: Any) -> None:
+        await _open_followed(app, pilot)
+        assert "f Space follow" in app.frame_rows[-1]
+        await pilot.press("question_mark")
+        await settle(pilot)
+        assert any(re.search(r"f Space +follow", row) for row in app.frame_rows), app.frame_rows
+
+    _drive(daemon, scenario)
+
+
 @pytest.mark.parametrize(
     ("follow", "held_from", "total", "word"),
     [
@@ -727,6 +817,7 @@ def test_only_the_projection_feed_subscribes_to_append_notices() -> None:
     assert projection._subscribe_params()["kinds"] == [
         StoreKind.EVENT.value,
         StoreKind.RUN_EVENTS_APPENDED.value,
+        StoreKind.BATCH_PROOF_NOTED.value,
     ]
     assert epoch_one._subscribe_params()["kinds"] == [StoreKind.EVENT.value]
 

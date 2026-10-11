@@ -555,8 +555,9 @@ def test_console_live_journeys_serve_this_repository_read_only(tmp_path: Path) -
     """CR-01: this repository's own projection, served live, draws no prototype literal.
 
     The canary above proves the read path on a tree a test built; this mode
-    proves it on the tree an operator actually opens. A real daemon serves
-    :data:`REPO_ROOT`'s ``.ea`` tree over the same isolated socket, the same
+    proves it on the tree an operator actually opens. A real daemon serves a
+    :func:`committed_tree` copy of this repository's ``.ea`` -- a running
+    daemon rewrites the checkout's own -- over the same isolated socket, the same
     five journeys render at every :data:`SIZES` width, and every frame must be
     on its grid and free of the prototype's literals
     (``test_console_live_no_fixture.assert_no_fixture_literal``). The header of
@@ -577,8 +578,9 @@ def test_console_live_journeys_serve_this_repository_read_only(tmp_path: Path) -
     )
 
     require_epoch2_repository()
-    root_id = RootIdentity.of(REPO_ROOT / ".ea").root_id
-    before = authority_digests(REPO_ROOT)
+    root = committed_tree(tmp_path)
+    root_id = RootIdentity.of(root / ".ea").root_id
+    before = authority_digests(root)
 
     held: set[str] = set()
 
@@ -586,7 +588,7 @@ def test_console_live_journeys_serve_this_repository_read_only(tmp_path: Path) -
         frames: dict[str, str] = {}
         images: dict[str, str] = {}
         async with (
-            live_console(REPO_ROOT, tmp_path / "runtime") as (app, seam),
+            live_console(root, tmp_path / "runtime") as (app, seam),
             app.run_test(size=SIZES[0]) as pilot,
         ):
             for size_index, (w, h) in enumerate(SIZES):
@@ -616,7 +618,7 @@ def test_console_live_journeys_serve_this_repository_read_only(tmp_path: Path) -
     frames, images = asyncio.run(body())
 
     assert_no_fixture_literal(frames, held=frozenset(held))
-    assert authority_digests(REPO_ROOT) == before, "the live serve wrote to the authority tree"
+    assert authority_digests(root) == before, "the live serve wrote to the authority tree"
 
     if os.environ.get(RECORD_EVIDENCE_ENV) == "1":
         for kind, captures, suffix in (("frames", frames, "txt"), ("images", images, "svg")):

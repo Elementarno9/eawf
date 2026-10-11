@@ -3,9 +3,7 @@
 Each check reads the source it guards and ships a companion that feeds the
 checker a synthetic defect, so a regression reds instead of passing an
 empty scan: a CI job condition that runs on a cancelled workflow, and an
-admission module whose prose names a status its code never checks. The
-prune's expected-SHA guard and the phase-branch refusal are pinned in
-``tests/unit/workflow/lifecycle/test_wave_archive_prune.py``.
+admission module whose prose names a status its code never checks.
 """
 
 from __future__ import annotations

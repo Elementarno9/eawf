@@ -7,11 +7,13 @@ reads ``eawf://EAWF/EAWF/EAWF/...``. The slots collapse into one project
 key, ``eawf://<project-key>/<kind>/<key>``.
 
 A ledger line is never edited, so the re-key is planned as one appended
-row per effective line that holds an old URN: the row keeps the line's
-collection, key, status and every non-URN payload value, rewrites the
-URNs, and names the old line's digest in ``supersedes`` so the old line
-drops out of the effective view. The generation document is rewritten
-whole, because it is replaced atomically rather than appended to.
+row per key whose last effective line holds an old URN: the row keeps
+the line's collection, key, status and every non-URN payload value,
+rewrites the URNs, and names the old line's digest in ``supersedes`` so
+the old line drops out of the effective view. An earlier line of the key
+keeps its spelling, which every reader parses. The generation document
+is rewritten whole, because it is replaced atomically rather than
+appended to.
 
 Planning reads and never writes; applying the plan is the caller's
 transaction. A value is an old URN only when the whole string is one,
@@ -29,10 +31,11 @@ from typing import Any, Final
 
 from eawf.kernel.identity.keys import EntityKind, validate_symbol_key
 from eawf.kernel.identity.urn import URN_SCHEME, parse_qualified_urn
-from eawf.kernel.store.compaction import read_document
+from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     line_digest,
+    read_ledger_content,
     render_ledger_line,
     split_ledger_lines,
 )
@@ -137,18 +140,50 @@ def rekey_value(value: Any, project_key: str) -> Any:
     return value
 
 
+def spells_single_key(document: dict[str, Any]) -> bool:
+    """Return whether *document*'s tree addresses its records in the single-key form.
+
+    A URN minted without a record to mint it beside takes the tree's form,
+    so a re-keyed tree gains no three-slot URN. The repository row is the
+    witness: the tree holds one from initialisation on, and the re-key
+    rewrites it with the rest of the document.
+
+    Args:
+        document: The decoded generation document.
+
+    Returns:
+        ``True`` when a repository row's URN is spelled in the single-key
+        form, ``False`` when none is, including a tree with no repository
+        row.
+
+    Raises:
+        IdentityError: A repository row's URN does not parse.
+        KeyError: A repository row carries no URN.
+    """
+    rows = document_rows(document, Epoch2Collection.REPOSITORY)
+    return any(parse_qualified_urn(str(row["urn"])).single_key for row in rows.values())
+
+
 def _ledger_rows(path: Path, project_key: str, recorded_at: datetime) -> tuple[RekeyRow, ...]:
-    """Plan the superseding rows for one ledger file."""
-    if not path.is_file():
-        return ()
-    lines = split_ledger_lines(path.read_bytes())
+    """Plan the superseding rows for one ledger, its sealed snapshot included.
+
+    Only a key's last effective line is re-keyed. A superseding row lands at
+    the tail, so re-keying an earlier line of a key would make that copy the
+    key's last line and bury the line that really stands. Each key gains at
+    most one row, so an apply cut short between rows leaves no key out of
+    order and a re-plan names only the keys still outstanding.
+    """
+    lines = split_ledger_lines(read_ledger_content(path))
     records = [LedgerRecord.model_validate_json(line) for line in lines]
     superseded = {record.supersedes for record in records if record.supersedes is not None}
-    rows: list[RekeyRow] = []
+    last: dict[str, tuple[str, LedgerRecord]] = {}
     for line, record in zip(lines, records, strict=True):
         digest = line_digest(line)
-        if digest in superseded:
-            continue
+        if digest not in superseded:
+            last.pop(record.record_key, None)
+            last[record.record_key] = (digest, record)
+    rows: list[RekeyRow] = []
+    for digest, record in last.values():
         payload = rekey_value(record.payload, project_key)
         if payload == record.payload:
             continue
@@ -191,6 +226,8 @@ def plan_urn_rekey(
             stored value has the three-slot shape but does not parse.
         FileNotFoundError: The generation document does not exist.
         LedgerTornTailError: A ledger ends mid-line.
+        LedgerSnapshotError: A ledger's sealed snapshot does not match its
+            digest.
         ValidationError: A ledger line is not a ledger record, or
             *recorded_at* is not timezone-aware UTC.
     """
@@ -220,4 +257,5 @@ __all__ = [
     "plan_urn_rekey",
     "rekey_urn",
     "rekey_value",
+    "spells_single_key",
 ]

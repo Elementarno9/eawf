@@ -361,6 +361,7 @@ def _permission_urn(run: QualifiedUrn, key: str) -> QualifiedUrn:
             repository_key=None,
             kind=EntityKind.PERMISSION,
             entity_key=key,
+            single_key=run.single_key,
         )
     )
 

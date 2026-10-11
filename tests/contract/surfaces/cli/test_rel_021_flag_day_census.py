@@ -188,6 +188,10 @@ def test_rel_021_guidance_points_a_verb_with_no_replacement_at_the_migration_sta
         ("question add", None),
         ("research question add", None),
         ("research question list", None),
+        ("task advance-legacy", None),
+        ("batch close-legacy", None),
+        ("milestone close-legacy", None),
+        ("milestone cancel-legacy", None),
     ],
 )
 def test_rel_021_a_retired_verb_names_the_live_verb_doing_its_job(

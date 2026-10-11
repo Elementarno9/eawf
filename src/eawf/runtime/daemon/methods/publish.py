@@ -71,7 +71,7 @@ class BatchCandidates(BaseModel):
 
     Attributes:
         batch_ref: The Batch.
-        commits: The commits that carry it.
+        commits: The commits that carry it, oldest first.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -239,14 +239,21 @@ def _plan_row(
             f"{sha} does not contain",
         )
     base_tree, *base_parents = _git(repository, "show", "-s", "--format=%T %P", base).split()
-    paths = tuple(_git(repository, "diff", "--name-only", base, sha).splitlines())
+    # NUL-separated, so a path git would quote is read as the path itself.
+    paths = tuple(
+        path
+        for path in _git(repository, "diff", "-z", "--name-only", base, sha).split("\0")
+        if path
+    )
     diff = subprocess.run(
         ["git", "-C", str(repository), "diff", "--binary", base, sha],
         capture_output=True,
         check=False,
         **no_window_kwargs(),
-    ).stdout
-    diff_digest = f"sha256:{hashlib.sha256(diff).hexdigest()}"
+    )
+    if diff.returncode != 0:
+        raise _refused("publish_commit_unread", f"git diff --binary {base} {sha} failed")
+    diff_digest = f"sha256:{hashlib.sha256(diff.stdout).hexdigest()}"
     staged = bound.staged
     adoption = LandedAdoption(
         batch_ref=staged.batch_ref,
@@ -349,12 +356,27 @@ def bind_published(
             )
         tasks = document_rows(session.read_document(), Epoch2Collection.TASK)
         ledger = session.ledger_path(Epoch2Collection.BATCH)
-        planned: list[_Planned] = []
+        bound_rows: list[tuple[Path, StagedBinding, PublishedBinding]] = []
         for path, row in rows:
             try:
-                bound = bind_staged(row, offered[str(row.batch_ref)])
+                bound_rows.append((path, row, bind_staged(row, offered[str(row.batch_ref)])))
             except StagedBindingRefusedError as error:
                 raise _refused(error.code, str(error).split(": ", 1)[1]) from error
+        # A Batch's rows are filed oldest commit first, each on the generation the one
+        # before it selected, so two rows of one Batch never claim the same ordinal.
+        order = {
+            ref: {commit.sha: index for index, commit in enumerate(commits)}
+            for ref, commits in offered.items()
+        }
+        bound_rows.sort(
+            key=lambda item: (
+                str(item[1].batch_ref),
+                order[str(item[1].batch_ref)][item[2].head_sha],
+            )
+        )
+        heads: dict[str, IntegrationGeneration | None] = {}
+        planned: list[_Planned] = []
+        for path, row, bound in bound_rows:
             try:
                 batch = DeliveryBatch.model_validate(batches.get(row.batch_ref.entity_key))
                 carried = [Task.model_validate(tasks.get(ref.entity_key)) for ref in row.task_refs]
@@ -364,7 +386,10 @@ def bind_published(
                     f"the tree holds no readable live batch {row.batch_ref.entity_key} with "
                     "the staged tasks",
                 ) from error
-            head = read_generation_ledger(ledger, row.batch_ref).head
+            key = str(row.batch_ref)
+            head = (
+                heads[key] if key in heads else read_generation_ledger(ledger, row.batch_ref).head
+            )
             if head is not None and head.integrated_revision.head_sha == bound.head_sha:
                 planned.append(_Planned(path=path, adoption=None, generation=head))
                 continue
@@ -382,6 +407,7 @@ def bind_published(
                     now=now,
                 )
             )
+            heads[key] = planned[-1].generation
         for item in planned:
             if item.adoption is not None:
                 commit_ledger_append(

@@ -511,7 +511,12 @@ def run_transaction(
             to=target,
             at=now,
             ctx=GuardContext(
-                unmet=locked_unmet(document, record=record, target=target),
+                unmet=locked_unmet(
+                    document,
+                    document_path=session.document_path,
+                    record=record,
+                    target=target,
+                ),
                 observations=frozenset(request.observations),
             ),
             updates=edge_updates(

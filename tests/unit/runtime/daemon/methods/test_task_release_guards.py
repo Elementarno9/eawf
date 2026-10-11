@@ -100,14 +100,23 @@ def test_del_021_an_unreadable_run_row_holds_nothing() -> None:
     assert task_run_open({"run": {"RUN-00000010": {"scope": "garbled"}}}, _task()) is False
 
 
-def test_del_021_a_run_queued_after_the_preflight_is_judged_again_at_commit() -> None:
+def test_del_021_a_run_queued_after_the_preflight_is_judged_again_at_commit(
+    tmp_path: Path,
+) -> None:
     document = {"run": {"RUN-00000010": _run("QUEUED")}}
+    path = tmp_path / "state.json"
 
-    unmet = locked_unmet(document, record=_task(), target=TaskStatus.PLANNED)
+    unmet = locked_unmet(document, document_path=path, record=_task(), target=TaskStatus.PLANNED)
 
     assert unmet == frozenset({TransitionGuard.NO_ACTIVE_RUN})
-    assert locked_unmet({}, record=_task(), target=TaskStatus.PLANNED) == frozenset()
-    assert locked_unmet(document, record=_task(), target=TaskStatus.CANCELLED) == frozenset()
+    assert (
+        locked_unmet({}, document_path=path, record=_task(), target=TaskStatus.PLANNED)
+        == frozenset()
+    )
+    assert (
+        locked_unmet(document, document_path=path, record=_task(), target=TaskStatus.CANCELLED)
+        == frozenset()
+    )
 
 
 # ---- the facts the claim and release edges write --------------------------------

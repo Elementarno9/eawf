@@ -77,7 +77,13 @@ def canary_runtime_under_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 def canary(tmp_path: Path) -> CanaryProvision:
     """A provisioned canary holding one planned Milestone."""
     provisioned = provision(tmp_path / "repo")
-    seed(provisioned, {"milestone": {"MLS-0030": seed_row("milestone", "PLANNED")}})
+    seed(
+        provisioned,
+        {
+            "track": {"TRK-RUNTIME": seed_row("track", "ACTIVE")},
+            "milestone": {"MLS-0030": seed_row("milestone", "PLANNED")},
+        },
+    )
     return provisioned
 
 
@@ -324,7 +330,13 @@ def test_one_key_is_free_on_another_root(tmp_path: Path) -> None:
     left = provision(tmp_path / "leftrepo", code="LEFT")
     right = provision(tmp_path / "rightrepo", code="RIGHT")
     for provisioned in (left, right):
-        seed(provisioned, {"milestone": {"MLS-0030": seed_row("milestone", "PLANNED")}})
+        seed(
+            provisioned,
+            {
+                "track": {"TRK-RUNTIME": seed_row("track", "ACTIVE")},
+                "milestone": {"MLS-0030": seed_row("milestone", "PLANNED")},
+            },
+        )
 
     first = run_transaction(
         context=root_context(left, tmp_path / "runtime"), request=_request(), now=AT

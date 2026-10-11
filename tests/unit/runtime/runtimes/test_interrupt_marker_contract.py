@@ -21,11 +21,12 @@ from typing import Any
 
 import pytest
 
+from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
 from eawf.runtime.runtimes.claude.transcript_counters import (
     MEASURE_VERSION,
     _is_interrupt_signal,
     _is_turn_duration_row,
-    aggregate_transcript_counters,
+    read_transcript,
 )
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "claude_interrupt_transcript.jsonl"
@@ -35,6 +36,12 @@ _EXPECTED_INTERRUPTS = [False, True, True, True, False]
 
 #: The two completed turns' figures; every interrupted turn is excluded.
 _COMPLETED_MS = 30_000 + 20_000
+
+
+def _counters(path: Path) -> RuntimeCounters | None:
+    """Return the counters :func:`read_transcript` yields for *path*, or ``None``."""
+    reading = read_transcript(path)
+    return None if reading is None else reading.counters
 
 
 def _rows(text: str) -> list[dict[str, Any]]:
@@ -63,7 +70,7 @@ def test_interrupt_marker_recognised_on_recorded_fixture() -> None:
 
 
 def test_interrupt_marker_excludes_interrupted_turns_from_duration() -> None:
-    counters = aggregate_transcript_counters(_FIXTURE)
+    counters = _counters(_FIXTURE)
 
     assert counters is not None
     assert counters.api_duration_ms == _COMPLETED_MS
@@ -92,7 +99,7 @@ def test_interrupt_marker_altered_fixture_reds(
 
     rows = _rows(text.replace(original, altered))
     pattern = _interrupt_pattern(rows)
-    counters = aggregate_transcript_counters(_write(tmp_path, text.replace(original, altered)))
+    counters = _counters(_write(tmp_path, text.replace(original, altered)))
 
     assert pattern != _EXPECTED_INTERRUPTS
     assert pattern[turn_index] is False

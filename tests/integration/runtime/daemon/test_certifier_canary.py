@@ -86,6 +86,7 @@ from tests.integration.runtime.daemon.test_task_dispatch import (
     BUDGET,
     TASK_KEY,
     ParkedLauncher,
+    dispatch,
     runs,
     task_now,
     task_row,
@@ -492,15 +493,72 @@ def test_a_task_run_after_the_walk_is_granted_its_report_tool(tmp_path: Path) ->
     assert "submit_report" in worker.capsule.tool_grants
 
 
-def test_a_task_run_after_the_probe_alone_is_granted_no_tool(tmp_path: Path) -> None:
+def refused_dispatch(ctx: MethodContext, canary: CanaryProvision) -> DaemonValidationError:
+    """Dispatch the seeded Task to Claude Code and return the refusal it must raise."""
+    worker = ParkedLauncher("claude")
+    (answer,) = dispatch(ctx, canary, worker, {"task": TASK_KEY, "provider": "claude-code"})
+    assert isinstance(answer, DaemonValidationError), answer
+    assert worker.capsule is None
+    return answer
+
+
+def test_a_task_run_after_the_probe_alone_is_refused_before_any_run(tmp_path: Path) -> None:
     canary = make_tree(tmp_path)
     ctx = method_ctx(tmp_path / "runtime")
     certify(ctx, canary, CanaryLauncher(ctx, canary))
 
+    refusal = refused_dispatch(ctx, canary)
+
+    assert str(refusal).startswith(
+        "validation_failed: dispatch_semantic_tools_uncertified: runtime claude-code is "
+        "certified without semantic_tools"
+    )
+    assert f"`eawf runtime certify claude-code --task {TASK_KEY}`" in str(refusal)
+    assert runs(ctx, canary) == []
+    assert task_now(ctx, canary).status.value == "PLANNED"
+
+
+def test_a_task_refused_for_its_tools_dispatches_once_the_walk_earns_them(
+    tmp_path: Path,
+) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+    certify(ctx, canary, CanaryLauncher(ctx, canary))
+    refused_dispatch(ctx, canary)
+
+    walk(ctx, canary, CanaryLauncher(ctx, canary))
     worker = dispatch_task(ctx, canary)
 
     assert worker.capsule is not None
-    assert worker.capsule.tool_grants == ()
+    assert "submit_report" in worker.capsule.tool_grants
+
+
+def test_a_walk_whose_canary_never_files_leaves_the_task_refused(tmp_path: Path) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+    walk(ctx, canary, CanaryLauncher(ctx, canary, report=False))
+    canaries = runs(ctx, canary)
+
+    refusal = refused_dispatch(ctx, canary)
+
+    assert "dispatch_semantic_tools_uncertified" in str(refusal)
+    assert runs(ctx, canary) == canaries
+
+
+def test_a_quarantined_runtime_keeps_its_unbound_refusal(tmp_path: Path) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+    escaped = {"attempt": "host_process_metadata", "denied": False, "returned_bytes": 5}
+    answer = json.dumps({"outcomes": outcomes(host_process_metadata=escaped)})
+    assert walk(ctx, canary, CanaryLauncher(ctx, canary, answer=answer)).outcome == "quarantined"
+    canaries = runs(ctx, canary)
+
+    refusal = refused_dispatch(ctx, canary)
+
+    assert "no_eligible_profile" in str(refusal)
+    assert "quarantined" in str(refusal)
+    assert "dispatch_semantic_tools_uncertified" not in str(refusal)
+    assert runs(ctx, canary) == canaries
 
 
 # ---- CR-2: a missed containment axis quarantines ------------------------------------

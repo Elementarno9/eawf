@@ -20,9 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.runtime.runtimes.claude.transcript_counters import (
-    aggregate_transcript_counters,
-)
+from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
+from eawf.runtime.runtimes.claude.transcript_counters import read_transcript
 
 _TRANSCRIPT_FIXTURE = (
     Path(__file__).parents[1]
@@ -34,8 +33,14 @@ _TRANSCRIPT_FIXTURE = (
 )
 
 
+def _counters(path: Path) -> RuntimeCounters | None:
+    """Return the counters :func:`read_transcript` yields for *path*, or ``None``."""
+    reading = read_transcript(path)
+    return None if reading is None else reading.counters
+
+
 def test_aggregate_real_transcript_fixture() -> None:
-    counters = aggregate_transcript_counters(_TRANSCRIPT_FIXTURE)
+    counters = _counters(_TRANSCRIPT_FIXTURE)
 
     assert counters is not None
     # Claude's own measure of the turn (502_968 ms), not the 593_177 ms span across
@@ -66,7 +71,7 @@ def test_aggregate_dedupes_repeated_usage_rows(tmp_path: Path) -> None:
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(row) for _ in range(4)) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     assert counters.input_tokens == 10
@@ -112,7 +117,7 @@ def test_aggregate_sums_distinct_messages_and_durations(tmp_path: Path) -> None:
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     assert counters.input_tokens == 15
@@ -146,14 +151,14 @@ def test_duration_only_grows_as_turn_rows_land(tmp_path: Path) -> None:
         _assistant_row("msg_0001", at="2026-07-13T00:10:00.000Z"),
     ]
     path.write_text("\n".join(json.dumps(r) for r in early_rows) + "\n", encoding="utf-8")
-    early = aggregate_transcript_counters(path)
+    early = _counters(path)
 
     late_rows = [
         *early_rows,
         _turn_duration_row(at="2026-07-13T00:10:05.000Z", ms=120_000),
     ]
     path.write_text("\n".join(json.dumps(r) for r in late_rows) + "\n", encoding="utf-8")
-    late = aggregate_transcript_counters(path)
+    late = _counters(path)
 
     assert early is not None
     assert late is not None
@@ -185,7 +190,7 @@ def test_a_transcript_that_shows_no_lifetime_justifies_no_duration(tmp_path: Pat
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     assert counters.api_duration_ms == 0
@@ -225,7 +230,7 @@ def test_the_clamp_has_no_door_for_a_resumed_file_with_one_timestamp(tmp_path: P
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     assert counters.api_duration_ms == 0
@@ -251,7 +256,7 @@ def test_aggregate_prices_cache_write_ttl_split(tmp_path: Path) -> None:
         }
         path = tmp_path / f"{ttl_key}.jsonl"
         path.write_text(json.dumps(row) + "\n", encoding="utf-8")
-        counters = aggregate_transcript_counters(path)
+        counters = _counters(path)
         assert counters is not None
         assert counters.cost_usd is not None
         return counters.cost_usd
@@ -272,7 +277,7 @@ def test_aggregate_prices_unsplit_cache_creation(tmp_path: Path) -> None:
     path = tmp_path / "t.jsonl"
     path.write_text(json.dumps(row) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     assert counters.cache_creation_input_tokens == 1_000
@@ -292,7 +297,7 @@ def test_aggregate_unpriced_model_keeps_counters_with_null_cost(tmp_path: Path) 
     path = tmp_path / "t.jsonl"
     path.write_text(json.dumps(row) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     assert counters.cost_usd is None
@@ -313,19 +318,18 @@ def test_aggregate_fails_open_on_useless_transcript(tmp_path: Path, content: str
     path = tmp_path / "t.jsonl"
     path.write_text(content, encoding="utf-8")
 
-    assert aggregate_transcript_counters(path) is None
+    assert _counters(path) is None
 
 
 def test_aggregate_missing_transcript_returns_none(tmp_path: Path) -> None:
-    assert aggregate_transcript_counters(tmp_path / "absent.jsonl") is None
-    assert aggregate_transcript_counters(None) is None
+    assert _counters(tmp_path / "absent.jsonl") is None
 
 
 def test_aggregate_unreadable_transcript_returns_none(tmp_path: Path) -> None:
     # A directory at the transcript path raises OSError on open -- fail open.
     (tmp_path / "dir.jsonl").mkdir()
 
-    assert aggregate_transcript_counters(tmp_path / "dir.jsonl") is None
+    assert _counters(tmp_path / "dir.jsonl") is None
 
 
 # --- P30-I25-W43: Claude measures its own turns; stop re-deriving wall clock --
@@ -384,7 +388,7 @@ def test_a_twelve_hour_wait_for_tool_approval_is_not_agent_runtime(tmp_path: Pat
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     # Claude's figure: 115 minutes of work. NOT the 13-hour span of the turn.
@@ -421,7 +425,7 @@ def test_an_interrupted_turn_contributes_no_runtime(tmp_path: Path) -> None:
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     # The 4 hours are the operator's absence, and they sit comfortably inside the
@@ -451,7 +455,7 @@ def test_an_interrupt_without_background_agents_is_still_an_interrupt(tmp_path: 
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     assert counters.api_duration_ms == 0
@@ -475,7 +479,7 @@ def test_the_span_is_never_substituted_for_a_measurement(tmp_path: Path) -> None
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     assert counters.api_duration_ms == 0  # not the 90-second span, and not the 10 hours
@@ -499,7 +503,7 @@ def test_an_ordinary_session_is_not_clamped(tmp_path: Path) -> None:
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     assert counters.api_duration_ms == 1_200_000  # both turns, in full
@@ -529,7 +533,7 @@ def test_duration_is_read_only_off_the_turn_duration_rows(tmp_path: Path) -> Non
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     assert counters.api_duration_ms == 600_000  # the turn only, not the hook row
@@ -547,7 +551,7 @@ def test_summed_turn_durations_are_the_measure(tmp_path: Path) -> None:
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     # The two turns Claude measured -- and not the 30 minutes the operator spent
@@ -571,7 +575,7 @@ def test_an_unmeasured_turn_reports_zero_rather_than_a_guess(tmp_path: Path) -> 
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
 
     assert counters is not None
     assert counters.api_duration_ms == 0
@@ -596,7 +600,7 @@ def test_out_of_order_rows_cannot_make_turns_overlap(tmp_path: Path) -> None:
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    counters = aggregate_transcript_counters(path)
+    counters = _counters(path)
     wall_clock_ms = 25 * 60_000
 
     assert counters is not None

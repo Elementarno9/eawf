@@ -1,9 +1,10 @@
 """A research round's answer is parsed into its report, or refused with a cause that names fields.
 
 The answers here are the shapes a model writes for the round prompt when it reads the
-asked keys loosely: sources as a list, findings as objects or long lines, an outcome
-past its cap, extra keys, a report past its cap. The one lossless case is taken; every
-other is refused with each field path and why, never the worker's text.
+asked keys loosely: sources as a list, findings as objects or two lines, extra keys, a
+report past its cap. The lossless case is taken, as is an outcome or a finding past
+its line, which is clipped; every other is refused with each field path and why,
+never the worker's text.
 """
 
 from __future__ import annotations
@@ -67,9 +68,7 @@ def test_a_report_at_its_cap_is_kept() -> None:
     ("body", "field", "cause"),
     [
         ({"findings": [{"statement": WORKER_TEXT, "evidence": "a.py:1"}]}, "findings.0", "string"),
-        ({"findings": [WORKER_TEXT + "y" * 200]}, "findings.0", "at most 200 characters"),
         ({"findings": [f"{WORKER_TEXT}\nsecond line"]}, "findings.0", "pattern"),
-        ({"outcome": WORKER_TEXT + "o" * 500}, "outcome", "at most 500 characters"),
         ({"confidence": WORKER_TEXT}, "confidence", "Extra inputs are not permitted"),
         ({"report": WORKER_TEXT + "r" * MAX_TEXT_BYTES}, "report", f"at most {MAX_TEXT_BYTES}"),
         ({"sources": "3"}, "sources", "integer"),
@@ -78,9 +77,7 @@ def test_a_report_at_its_cap_is_kept() -> None:
     ],
     ids=[
         "finding-object",
-        "finding-past-cap",
         "finding-two-lines",
-        "outcome-past-cap",
         "extra-key",
         "report-past-cap",
         "sources-string",
@@ -135,6 +132,7 @@ def test_the_prompt_states_each_cap_and_type_the_parser_holds() -> None:
             "question": "What does src hold?",
             "run_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000001",
             "round_number": 1,
+            "actor": "OP-0001",
         }
     )
 

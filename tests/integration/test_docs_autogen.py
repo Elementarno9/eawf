@@ -171,11 +171,11 @@ def test_schema_dump_schema_only_writes_just_json(tmp_path: Path) -> None:
 
 
 def test_schema_dump_rejects_non_directory_workspace(tmp_path: Path) -> None:
-    """A workspace path that is not a directory exits USER_ERROR (1)."""
+    """A workspace path that is not a directory is refused at parse time (2)."""
     not_a_dir = tmp_path / "file.txt"
     not_a_dir.write_text("x", encoding="utf-8")
     result = runner.invoke(app, ["-w", str(not_a_dir), "schema", "dump"])
-    assert result.exit_code == exit_codes_mod.USER_ERROR, result.output
+    assert result.exit_code == exit_codes_mod.VALIDATION_ERROR, result.output
 
 
 # --- Drift gate --------------------------------------------------------------

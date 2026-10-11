@@ -97,6 +97,7 @@ def build(
     *,
     config: dict[str, dict[str, Any]] | None = None,
     bindings: list[RuntimeBinding] | None = None,
+    unbound: dict[str, str] | None = None,
     provider: str = "codex",
     budget: int | None = 200_000,
     now: datetime = fx.COMPILED_AT,
@@ -109,6 +110,7 @@ def build(
         config=config if config is not None else layered_config(),
         registry=fx.registry(),
         bindings=bindings if bindings is not None else [fx.binding()],
+        unbound=unbound if unbound is not None else {},
         budget=budget,
         base=BASE,
         actor=ACTOR,
@@ -183,6 +185,19 @@ def test_a_provider_no_binding_serves_is_refused() -> None:
 def test_a_provider_with_an_empty_binding_set_is_refused() -> None:
     with pytest.raises(DaemonValidationError, match="no_eligible_profile"):
         build(bindings=[])
+
+
+def test_an_unbound_provider_refusal_names_the_cause_and_remedy() -> None:
+    cause = "runtime claude-code is unbound (never_certified: no row); run `eawf runtime certify`"
+    with pytest.raises(DaemonValidationError) as caught:
+        build(provider="claude", unbound={"claude": cause})
+    assert str(caught.value).endswith(f"no installed driver serves provider 'claude': {cause}")
+
+
+def test_another_providers_unbound_cause_is_not_named() -> None:
+    with pytest.raises(DaemonValidationError) as caught:
+        build(provider="claude", unbound={"codex": "runtime codex is unbound (expired: x)"})
+    assert str(caught.value).endswith("no installed driver serves provider 'claude'")
 
 
 # ---- the capsule -------------------------------------------------------------

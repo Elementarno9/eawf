@@ -51,7 +51,7 @@ STRATEGY_REBASE_THEN_FF: str = "rebase_then_ff"
 
 worktree_app = typer.Typer(
     name="worktree",
-    help="Manage per-wave git worktrees (create / list / merge-back / cleanup / reconcile).",
+    help="Manage per-wave git worktrees (merge-back / cleanup / reconcile).",
     no_args_is_help=True,
     add_completion=False,
 )

@@ -184,6 +184,40 @@ def test_email_leak_lint_skips_preexisting_email_in_state_json(tmp_path: Path) -
     assert payload["scanned"] == 1
 
 
+def test_email_leak_lint_reads_an_escaped_newline_as_a_break(tmp_path: Path) -> None:
+    repo = _repo_with_committed_state(tmp_path, {"title": "seed"})
+    decorator = "@" + "pytest.mark.parametrize"
+    _stage_state(repo, {"read": f"ok ---\n\n\n{decorator}(", "title": "seed"})
+
+    exit_code, payload = _lint(repo, "email-leak-lint")
+
+    assert exit_code == 0, payload
+    assert payload["findings"] == []
+
+
+def test_email_leak_lint_flags_an_email_after_an_escaped_newline(tmp_path: Path) -> None:
+    repo = _repo_with_committed_state(tmp_path, {"title": "seed"})
+    _stage_state(repo, {"read": f"owner:\n{LEAKED_EMAIL}", "title": "seed"})
+
+    exit_code, payload = _lint(repo, "email-leak-lint")
+
+    assert exit_code == 1, payload
+    assert [finding["snippet"] for finding in payload["findings"]] == [LEAKED_EMAIL]
+
+
+def test_email_leak_lint_reads_escapes_in_a_ledger_line(tmp_path: Path) -> None:
+    repo = _repo_with_committed_state(tmp_path, {"title": "seed"})
+    ledger = repo / ".ea/generations/gen-0000000000000000/ledger/receipt.jsonl"
+    ledger.parent.mkdir(parents=True)
+    decorator = "@" + "pytest.mark.parametrize"
+    ledger.write_text(json.dumps({"result": f"---\n{decorator}("}) + "\n", encoding="utf-8")
+    _git(["add", str(ledger.relative_to(repo))], repo)
+
+    exit_code, payload = _lint(repo, "email-leak-lint")
+
+    assert exit_code == 0, payload
+
+
 def test_path_leak_lint_honours_allowlist_marker_in_state_json(tmp_path: Path) -> None:
     repo = _repo_with_committed_state(tmp_path, {"title": "seed"})
     marker = "pragma: allowlist " + "secret"

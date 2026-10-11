@@ -37,20 +37,9 @@ site/
 .vscode/
 *.swp
 
-# Eä-managed surface:
-#  - AGENTS.md is committed (managed by `eawf sync`; user-region preserved
-#    on re-render).
-#  - CLAUDE.md + .claude/ stay gitignored permanently — these are
-#    machine-specific renders of the CC plugin tree (run
-#    `eawf plugin install claude` locally to regenerate). Only AGENTS.md
-#    is the committed agent contract.
-CLAUDE.md
-.claude/
-# The policy projection `eawf sync` renders from .ea/rules.yaml; AGENTS.md
-# is the committed card rendered beside it.
-AGENTS.override.md
-.codex/
-.opencode/
+# Eä-managed surface: AGENTS.md is committed (rendered by `eawf sync`); the
+# machine-specific runtime renders (CLAUDE.md, .claude/, AGENTS.override.md,
+# .codex/, .opencode/) are ignored by the managed block at the end of this file.
 
 # Vale prose-linter: the eawf style package + .vale.ini ARE committed; the
 # Google base package is fetched by `vale sync` into StylesPath at CI time
@@ -69,58 +58,16 @@ AGENTS.override.md
 !.agents/plugins/
 !.agents/plugins/marketplace.json
 
-# .ea/ — state.json + config.yaml + the TYPED stores are committed; locks +
-# local scratch + manifest cache + instrument-probe cache + worktrees +
-# state migration backups are not.
+# .ea/ — the managed block at the end of this file owns the scratch, lock,
+# cache, worktree and backup paths; only what it does not cover is listed here.
 #
-# The event store is deliberately NOT committed. It is the firehose, not the
-# ledger: one row per lifecycle mutation plus the raw stdout of every spawned
-# agent, so it grows without bound (6.4 MB and 1865 blob revisions in P30
-# alone — 42% of the branch's git weight) and carries free text nobody typed,
-# which is how a machine path or another project's name reaches a public repo.
-# Nothing reads the committed copy: state.json is canonical, and the evidence
-# chain decisions cite lives in the typed stores beside it (audit, decision,
-# evidence, the agent reports), which stay committed and stay clean.
-.ea/store/event.jsonl
-.ea/locks/
-.ea/local/
-.ea/indexes/
-# Per-runtime renders of the authored rule corpus (.ea/rules.yaml is the
-# source and stays committed). A view regenerates from the corpus, so
-# committing one only creates a second thing to keep in sync.
-.ea/rules/views/
-# Per-wave spec renders. The typed criteria and gates in state.json are the
-# durable record, so a committed spec would be a second copy to keep in sync.
-.ea/specs/
-.ea/instrument-probe.json
 # instrument-probe cache embeds absolute host paths; the bare glob covers
 # nested copies a doctor / skill run may write under a resolved state dir
 # (e.g. tests/fixtures/**/.ea/), not just the repo-root .ea/ default.
 **/instrument-probe.json
 
-# Render cache (memory-view) + machine-specific MCP / opencode runtime
-# configs written by `eawf plugin install`; regenerable, never committed.
-.ea/artifacts/rendered/
-.mcp.json
-opencode.json
-
-# Telemetry / SQLite databases — telemetry.db embeds absolute cwd +
-# session_log_path, so it must never be committed. The bare glob covers
-# any *.db written anywhere in the tree (telemetry, scratch probes).
-*.db
-.ea/telemetry.db
-
-# Per Q13 (operator decision 2026-05-18): worktrees live under .ea/worktrees/
-.ea/worktrees/
-
-# Per-Run MCP capsule and binding a native launcher writes into the leased
-# workspace; they must never ride a worker's candidate commit.
-.eawf-mcp/
-
-# State migration backups (kept locally during migration; not committed).
-# Forward-fix is the canonical recovery path. The bare glob covers backups
-# written adjacent to any resolved state.json, not just the .ea/ default.
-.ea/state.json.bak.*
+# State migration backups written adjacent to any resolved state.json, not
+# just the .ea/ default. Forward-fix is the canonical recovery path.
 state.json.bak.*
 
 # Secrets
@@ -132,7 +79,6 @@ secrets/
 # Daemon state lock (contains pid/hostname heartbeat) -- never commit
 .ea/state.json.lock
 .ea/*.lock
-.ea/**/*.lock
 
 # BEGIN EAWF:gitignore
 CLAUDE.md

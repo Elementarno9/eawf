@@ -90,9 +90,10 @@ _LEAKS: Final = {
     "EAWF_FIXTURE_LEAK": "leak",
 }
 
-#: The runtime the fake's init message reports.
+#: The runtime the fake's init message reports, and the provider the child's
+#: environment routes it to.
 _OBSERVED: Final = RunRuntimeTuple(
-    harness="claude-code", harness_version=VERSION.split()[0], model=MODEL
+    harness="claude-code", harness_version=VERSION.split()[0], provider="anthropic", model=MODEL
 )
 
 UsageSink = Callable[[UsageSample, int | None], Awaitable[bool]]
@@ -167,6 +168,7 @@ def _request(
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Return an empty workspace, with HOME pointed away from the operator's."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     monkeypatch.setattr(claude_adapter, "_maybe_jail_argv", _bypass_jail)
     root = tmp_path / "ws"
     root.mkdir()
@@ -230,12 +232,17 @@ def test_launch_returns_before_the_turn_ends(workspace: Path) -> None:
         outcome = await _launcher(workspace, script).launch(_request(workspace))
         assert outcome.turn is not None
         running = not outcome.turn.done()
+        # Let the turn start: a task cancelled before its first step never runs
+        # the finally that frees its spawn slot, which would leak to later tests.
+        await asyncio.sleep(0)
         outcome.turn.cancel()
         with pytest.raises(asyncio.CancelledError):
             await outcome.turn
         return running
 
+    before = spawn_inflight()
     assert asyncio.run(scenario())
+    assert spawn_inflight() == before
 
 
 def test_an_aborted_result_resolves_the_turn_interrupted(workspace: Path) -> None:
@@ -807,7 +814,7 @@ def test_runtime_tuple_drops_what_the_init_message_omits_or_misspells(workspace:
 
     outcome, turn = asyncio.run(_launch_and_turn(launcher, _request(workspace)))
 
-    assert turn.runtime_tuple == RunRuntimeTuple(harness="claude-code")
+    assert turn.runtime_tuple == RunRuntimeTuple(harness="claude-code", provider="anthropic")
     assert outcome.hello.sdk_version == launcher.driver_version
 
 

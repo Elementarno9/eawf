@@ -87,7 +87,7 @@ _DEFAULT_TIMESTAMP: str = "1970-01-01T00:00:00+00:00"
 # wrapper that exits 0 with an empty result list, so installing it would
 # subscribe the operator's session to a no-op script (and paint a false-green
 # "hooks:<n>" in the statusline). SESSION_START (the rule-projection
-# staleness check), SESSION_END (runtime.capture), the two subagent events
+# staleness check), SESSION_END (session.end_stamp), the two subagent events
 # (runtime.host_subagent), PERMISSION_REQUEST (runtime.host_permission) and the
 # three tool-use events (runtime.host_tool, runtime.host_file_edit) are the
 # handler-backed events
@@ -273,8 +273,7 @@ def _eawf_settings_hooks() -> dict[str, list[dict[str, Any]]]:
     Claude Code reads its hook subscriptions from the project
     ``settings.json`` ``hooks`` block (event -> matcher -> command). Without
     a real entry here CC never invokes the rendered ``.claude/hooks/*.sh``
-    wrappers -- which is why the ``Stop`` -> ``session_end`` -> daemon
-    ``runtime.capture`` chain never fired and EU capture stayed dark. This
+    wrappers, so no hook chain would ever fire. This
     mirrors :func:`~eawf.runtime.runtimes.claude.hook_map.build_plugin_hooks_json`
     but emits CONCRETE project-relative command paths (``$CLAUDE_PROJECT_DIR``
     is the CC-provided project root) rather than the plugin-manifest
@@ -349,7 +348,7 @@ def _patch_settings_json(
       subscriptions there), preserving every user / other-plugin hook entry
       and replacing only Eä's own (idempotent). This is the wire that makes
       CC actually invoke the rendered ``.claude/hooks/*.sh`` wrappers -- e.g.
-      ``Stop`` -> ``session_end`` -> daemon ``runtime.capture`` (EU capture).
+      ``Stop`` -> ``session_end`` -> ``session.end_stamp``.
     - Wire ``statusLine`` to ``eawf cc statusline`` so the project renders
       the Eä statusline, unless the operator already set a statusline of
       their own, which is kept.

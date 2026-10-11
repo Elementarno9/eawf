@@ -106,8 +106,8 @@ def release_pipeline(
     train, checks by trailer that ``main`` carries what was released, and
     lands the evidence locally with each file's sha256 journaled, leaving
     the release stores for one ``state:`` commit. With ``--milestone``
-    each completed Batch must land as exactly one commit carrying its
-    ``Batch:`` trailer, the very commit ``eawf publish`` bound.
+    main must carry exactly the commits of each completed Batch's work,
+    found by their ``Task:`` trailers, that the head it pinned carries.
 
     The tag push publishes, so it runs only with ``--publish``; without
     it every earlier step still runs and the verb refuses before the

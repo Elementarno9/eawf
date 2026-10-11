@@ -52,6 +52,8 @@ class CampaignFinding(Epoch2Record):
         urn: The finding's own address; any other kind is refused.
         campaign_ref: The Campaign that learned it.
         statement: What was learned, in one line.
+        clipped: Whether the statement was shortened to fit its line; the
+            report of the round that learned it states it in full.
         disposition: ``held`` until a Milestone consumes it, then ``consumed``.
         consumed_by_milestone_ref: The Milestone that consumed it.
         consumed_at: When that Milestone consumed it.
@@ -64,6 +66,7 @@ class CampaignFinding(Epoch2Record):
     urn: CampaignFindingUrn
     campaign_ref: CampaignUrn
     statement: FindingStatement
+    clipped: bool = False
     disposition: FindingDisposition = FindingDisposition.HELD
     consumed_by_milestone_ref: MilestoneUrn | None = None
     consumed_at: UtcDatetime | None = None

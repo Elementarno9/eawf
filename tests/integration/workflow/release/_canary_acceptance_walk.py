@@ -695,6 +695,7 @@ def _dispatch_and_seal(walker: Walker, planned: Planned) -> None:
         "READY_TO_INTEGRATE",
         "the Run's report is bound, so the Task's work is ready to integrate",
         observations=["run_report_bound"],
+        binding_refs=[run],
     )
 
 

@@ -673,50 +673,10 @@ def read_transcript(
     return TranscriptReading(rows=tuple(rows), scan=scan, counters=counters)
 
 
-def aggregate_transcript_counters(
-    transcript_path: Path | str | None, *, as_of: datetime | None = None
-) -> RuntimeCounters | None:
-    """Aggregate a Claude session transcript into cumulative runtime counters.
-
-    Args:
-        transcript_path: Path to the session JSONL, typically read off the Stop
-            hook payload's ``transcript_path``. ``None`` short-circuits.
-        as_of: Read the counters as they stood at this instant rather than at
-            the end of the file: token rows stamped after it are left out, and
-            a turn straddling it counts only its pre-instant share. ``None``
-            reads the whole file.
-
-    Returns:
-        :class:`RuntimeCounters` stamped ``harness="claude-code"`` carrying the
-        session's cumulative agent working time (Claude's own ``turn_duration``
-        per completed turn, clamped to the transcript's own wall-clock span -- see
-        :data:`MEASURE_VERSION`), per-class token tallies, billed model id, and the
-        token-derived ``cost_usd``. The transcript splits no
-        model-API duration out of the total, so both ``api_duration_ms`` and
-        ``total_duration_ms`` carry that one duration -- the same convention the
-        headless spawn snapshot uses, which keeps the default API-duration EU
-        basis working on the interactive path. ``None`` when the transcript is
-        absent, unreadable, or carries no usable counter (neither a duration nor
-        a token tally), so the caller degrades rather than capturing an empty
-        snapshot.
-
-    Raises:
-        ValueError: When *as_of* carries no timezone, since the transcript's
-            stamps are UTC and a naive instant names no point on that clock.
-    """
-    if as_of is not None and as_of.tzinfo is None:
-        raise ValueError(f"as_of must be timezone-aware: {as_of!r}")
-    if transcript_path is None:
-        return None
-    reading = read_transcript(Path(transcript_path), as_of=as_of)
-    return None if reading is None else reading.counters
-
-
 __all__ = [
     "MEASURE_VERSION",
     "TranscriptReading",
     "TranscriptScan",
-    "aggregate_transcript_counters",
     "projects_root",
     "read_transcript",
 ]

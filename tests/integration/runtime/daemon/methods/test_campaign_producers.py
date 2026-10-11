@@ -32,7 +32,6 @@ from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.epoch2_transaction import TransactionRefusedError
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.methods.campaign import (
-    CAMPAIGN_ARTIFACT_METHOD,
     CAMPAIGN_ARTIFACT_RECORD_METHOD,
     CAMPAIGN_BUDGET_SET_METHOD,
     CAMPAIGN_CLOSE_METHOD,
@@ -40,8 +39,8 @@ from eawf.runtime.daemon.methods.campaign import (
     CAMPAIGN_PLAN_APPROVE_METHOD,
     CAMPAIGN_PLAN_REVISE_METHOD,
     CAMPAIGN_STEP_UPDATE_METHOD,
-    CAMPAIGN_VIEW_METHOD,
 )
+from eawf.runtime.daemon.methods.campaign_read import CAMPAIGN_ARTIFACT_METHOD, CAMPAIGN_VIEW_METHOD
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     document_path,
     method_context,

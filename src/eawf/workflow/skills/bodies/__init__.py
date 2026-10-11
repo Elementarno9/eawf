@@ -11,8 +11,6 @@ Bodies still bound by the engine:
 - :class:`~eawf.workflow.skills.bodies.audit.AuditBody`
 - :class:`~eawf.workflow.skills.bodies.ship.ShipBody`
 - :class:`~eawf.workflow.skills.bodies.review.ReviewBody`
-- :class:`~eawf.workflow.skills.bodies.polish.PolishBody`
-- :class:`~eawf.workflow.skills.bodies.init.InitBody`
 - :class:`~eawf.workflow.skills.bodies.flow.FlowBody`
 - :class:`~eawf.workflow.skills.bodies.memory.MemoryBody`
 
@@ -37,14 +35,12 @@ from pydantic import BaseModel
 from eawf.workflow.skills.bodies.audit import AuditBody
 from eawf.workflow.skills.bodies.dispatch import DispatchBody
 from eawf.workflow.skills.bodies.flow import FlowBody
-from eawf.workflow.skills.bodies.init import InitBody
 from eawf.workflow.skills.bodies.integrate import IntegrateBody
 from eawf.workflow.skills.bodies.memory import MemoryBody
 from eawf.workflow.skills.bodies.mockup import (
     MockupBody,
     MockupVariant,
 )
-from eawf.workflow.skills.bodies.polish import PolishBody
 from eawf.workflow.skills.bodies.research import ResearchBody
 from eawf.workflow.skills.bodies.review import ReviewBody
 from eawf.workflow.skills.bodies.ship import ShipBody
@@ -62,8 +58,6 @@ SKILL_BODY_MODELS: dict[str, type[BaseModel]] = {
     "/audit": AuditBody,
     "/ship": ShipBody,
     "/review": ReviewBody,
-    "/polish": PolishBody,
-    "/init": InitBody,
     "/flow": FlowBody,
     "/memory": MemoryBody,
     "/dispatch": DispatchBody,
@@ -97,12 +91,10 @@ __all__ = [
     "AuditBody",
     "DispatchBody",
     "FlowBody",
-    "InitBody",
     "IntegrateBody",
     "MemoryBody",
     "MockupBody",
     "MockupVariant",
-    "PolishBody",
     "ResearchBody",
     "ReviewBody",
     "ShipBody",

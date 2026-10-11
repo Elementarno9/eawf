@@ -44,6 +44,7 @@ from pydantic import BaseModel, ConfigDict, StringConstraints, ValidationError
 
 from eawf.kernel.config.schema import DEFAULT_STALL_INTERVAL_SECONDS
 from eawf.kernel.identity import EntityKind, QualifiedUrn, parse_qualified_urn
+from eawf.kernel.runtime.control import TERMINAL_RUN_STATUSES
 from eawf.kernel.runtime.dispatch_queue import admission_hold
 from eawf.kernel.runtime.events import MessageSummaryPayload, RunEventKind
 from eawf.kernel.spec.research import ResearchDepth
@@ -63,7 +64,7 @@ from eawf.kernel.state.epoch2.campaign import (
 )
 from eawf.kernel.state.epoch2.finding import FindingStatement
 from eawf.kernel.state.epoch2.measurement import VendorSessionRef
-from eawf.kernel.state.epoch2.run import RunRuntimeTuple, RunStatus
+from eawf.kernel.state.epoch2.run import Run, RunRuntimeTuple, RunStatus
 from eawf.kernel.state.epoch2.urns import CampaignUrn, RunUrn, TrackUrn
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
@@ -173,6 +174,7 @@ class StepAssignment(BaseModel):
         prior_outcomes: What each step it depends on showed, in plan order.
         run_ref: The Run the round is worked under.
         round_number: Which round of the step this is, from one.
+        actor: Who the drive writes as, and so who the round's usage lines are stated by.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -188,6 +190,7 @@ class StepAssignment(BaseModel):
     prior_outcomes: tuple[str, ...] = ()
     run_ref: RunUrn
     round_number: int
+    actor: PrincipalKey
 
 
 class StepReport(BaseModel):
@@ -196,9 +199,13 @@ class StepReport(BaseModel):
     Attributes:
         report: The round's checkpoint report, as markdown.
         outcome: What the step showed, in one line.
+        outcome_clipped: Whether the outcome was shortened to fit its line; the
+            report states it in full.
         tokens: The tokens the round consumed; ``None`` when no reading metered them.
         sources: The sources the round consulted.
         findings: What the round learned that should outlive it, one line each.
+        clipped_findings: The findings shortened to fit their line; the report
+            states each of them in full.
         runtime: The runtime the round ran on, as the agent that spawned it knows
             it; ``None`` when the agent states none.
         session: The vendor session the round ran in; ``None`` when the agent
@@ -209,9 +216,11 @@ class StepReport(BaseModel):
 
     report: Report
     outcome: StepOutcome
+    outcome_clipped: bool = False
     tokens: StrictNonNegativeInt | None = 0
     sources: StrictNonNegativeInt = 0
     findings: tuple[FindingStatement, ...] = ()
+    clipped_findings: tuple[FindingStatement, ...] = ()
     runtime: RunRuntimeTuple | None = None
     session: VendorSessionRef | None = None
 
@@ -280,6 +289,7 @@ def _slot(anchor: QualifiedUrn, kind: EntityKind, key: str, *, repository: bool)
             repository_key=anchor.repository_key if repository else None,
             kind=kind,
             entity_key=key,
+            single_key=anchor.single_key,
         )
     )
 
@@ -287,6 +297,28 @@ def _slot(anchor: QualifiedUrn, kind: EntityKind, key: str, *, repository: bool)
 def _next_ordinal(prefix: str, keys: Iterable[str]) -> int:
     taken = [int(key.split("-", 1)[1]) for key in keys if key.startswith(f"{prefix}-")]
     return max(taken, default=0) + 1
+
+
+def planned_depth(campaign: Campaign, fallback: ResearchDepth) -> ResearchDepth:
+    """Return the depth *campaign*'s plan was drawn at, read back from its methods.
+
+    A Campaign records the steps its depth drew rather than the depth, and a shallow
+    and a medium plan draw the same survey steps, so a survey-only plan takes
+    *fallback* when that is one of the two, and medium otherwise.
+
+    Args:
+        campaign: The Campaign whose rounds are to be routed.
+        fallback: The repository's default depth.
+
+    Returns:
+        The deepest depth whose methods the plan works.
+    """
+    worked = {step.method for step in campaign.plan_steps}
+    for depth in (ResearchDepth.EXHAUSTIVE, ResearchDepth.DEEP):
+        if set(_DEPTH_METHODS[depth]) <= worked:
+            return depth
+    surveyed = (ResearchDepth.SHALLOW, ResearchDepth.MEDIUM)
+    return fallback if fallback in surveyed else ResearchDepth.MEDIUM
 
 
 def plan_campaign(
@@ -622,6 +654,7 @@ class _Driver:
                 "prior_outcomes": prior,
                 "run_ref": run,
                 "round_number": len(step.run_refs) + 1,
+                "actor": self._actor,
             }
         )
 
@@ -682,25 +715,49 @@ class _Driver:
                 now=datetime.now(UTC),
             )
         )
-        self._step(step.ordinal, to_state=StepState.DONE.value, outcome=report.outcome)
+        self._step(
+            step.ordinal,
+            to_state=StepState.DONE.value,
+            outcome=report.outcome,
+            outcome_clipped=report.outcome_clipped,
+        )
         for statement in report.findings:
             self._commit(
                 promote_finding(
                     self._context,
-                    FindingPromoteParams(actor=self._actor, urn=campaign.urn, statement=statement),
+                    FindingPromoteParams(
+                        actor=self._actor,
+                        urn=campaign.urn,
+                        statement=statement,
+                        clipped=statement in report.clipped_findings,
+                    ),
                     now=datetime.now(UTC),
                 )
             )
         self._end_run(str(assignment.run_ref), report=report)
         self._rounds += 1
 
-    def abandon(self, assignment: StepAssignment, error: BaseException) -> None:
+    def _stopped(self, urn: str) -> Run | None:
+        """Return the round's Run when something else already ended it, else ``None``."""
+        with self._context.session([urn]) as session:
+            records = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
+            run = stored_run(session, records, parse_qualified_urn(urn))
+        return run if run.status in TERMINAL_RUN_STATUSES else None
+
+    def abandon(self, assignment: StepAssignment, error: BaseException) -> str:
         """Return a failed round's step to pending, charge what it spent and cancel its Run.
 
         A turn that ran before its report was refused still spent the tokens it
-        was metered for, so the step's tokens axis is charged with them.
+        was metered for, so the step's tokens axis is charged with them. A Run the
+        daemon already ended -- at its wall-clock ceiling -- keeps that ending, and
+        its failure is what the round is said to have failed of.
+
+        Returns:
+            Why the round failed, in one line.
         """
-        detail = failure_detail(error)
+        stopped = self._stopped(str(assignment.run_ref))
+        failure = None if stopped is None else stopped.failure
+        detail = failure_detail(error) if failure is None else f"{failure.code}: {failure.message}"
         logger.warning(
             f"campaign round failed campaign={self._key} step={assignment.ordinal} error={detail}"
         )
@@ -719,8 +776,10 @@ class _Driver:
             spent=spent,
             unmetered=("tokens",) if ran and tokens is None else (),
         )
-        self._say(str(assignment.run_ref), f"round failed: {detail}")
-        self._end_run(str(assignment.run_ref), report=None)
+        if stopped is None:
+            self._say(str(assignment.run_ref), f"round failed: {detail}")
+            self._end_run(str(assignment.run_ref), report=None)
+        return detail
 
     async def work(self, assignment: StepAssignment) -> tuple[StepReport | None, float, str]:
         """Have the agent work *assignment*; the report, its seconds and any failure."""
@@ -745,8 +804,8 @@ class _Driver:
         except Exception as error:  # an agent failure of any kind ends only its round
             done.set()
             await beating
-            self.abandon(assignment, error)
-            return None, time.monotonic() - began, failure_detail(error)
+            detail = self.abandon(assignment, error)
+            return None, time.monotonic() - began, detail
         done.set()
         await beating
         return report, time.monotonic() - began, ""
@@ -924,4 +983,5 @@ __all__ = [
     "drive_campaign",
     "failure_detail",
     "plan_campaign",
+    "planned_depth",
 ]

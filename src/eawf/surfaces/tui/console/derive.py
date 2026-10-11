@@ -661,6 +661,7 @@ def scope_urn(rows: Sequence[ProjectionRow]) -> str | None:
             repository_key=None,
             kind=EntityKind.PROJECT,
             entity_key=held.project_key,
+            single_key=held.single_key,
         )
     return None
 

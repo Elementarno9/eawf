@@ -51,7 +51,7 @@ import signal
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
@@ -219,10 +219,7 @@ def emit_budget_notice(
     if consumed < 0:
         raise ValueError(f"consumed must be non-negative; got {consumed}")
     reached = ceiling is not None and ceiling.enforce == "hard" and ceiling.reached(consumed)
-    # the token rule waits on no silence: the ceiling's kill ladder has already acted
-    opens = DEFAULT_NOTICE_POLICY.estimated_time.opens(
-        running=running, axis="tokens", ceiling_reached=reached, silent_for=timedelta(0)
-    )
+    opens = DEFAULT_NOTICE_POLICY.estimated_time.opens(running=running, ceiling_reached=reached)
     if ceiling is None or not opens:
         return None
     crossing = BudgetCrossing(

@@ -35,7 +35,6 @@ from eawf.kernel.runtime.events import (
 from eawf.kernel.runtime.usage import UsagePayload
 from eawf.runtime.daemon.content_store import file_content
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
-from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.methods.run_budget import InFlightRunMeter
 from eawf.runtime.daemon.run_events import RunEventAppend
 from eawf.runtime.daemon.transcript_store import keep_message
@@ -56,8 +55,9 @@ def _append(
 ) -> None:
     """State one line the worker's turn produced on the Run's own stream.
 
-    A line the stream refuses is logged and dropped: the transcript is an observation
-    of the turn, and losing one line of it must never stop the worker.
+    A line the stream refuses, or that fails to be written for any other reason -- a
+    lock held too long, a disk that is full -- is logged and dropped: the transcript is
+    an observation of the turn, and losing one line of it must never stop the worker.
     """
     # the run verbs import the dispatch driver, which imports this module
     from eawf.runtime.daemon.methods.run import append_run_event
@@ -77,8 +77,8 @@ def _append(
             now=datetime.now(UTC),
             at_tail=True,
         )
-    except DaemonValidationError as error:
-        logger.warning(f"dispatch_stream refused run={urn.entity_key!r} cause={error}")
+    except Exception as error:
+        logger.warning(f"dispatch_stream dropped run={urn.entity_key!r} cause={error!r}")
 
 
 def _event_ref(attempt_ref: str, label: str) -> str:
@@ -114,14 +114,15 @@ def _kept(
     """Keep the whole of *message* in the local store and return its stream line's payload.
 
     The stream line keeps the summary it was given and names the kept text. A store
-    that cannot be written costs only the link: the summary is still stated.
+    that cannot be written, or cannot be found, costs only the link: the summary is
+    still stated.
     """
     summary = MessageSummaryPayload.model_validate(message.model_dump())
     try:
         ref = keep_message(
             context, urn, event_ref=event_ref, text=message.text, now=datetime.now(UTC)
         )
-    except OSError as error:
+    except Exception as error:
         logger.warning(f"dispatch_stream unkept run={urn.entity_key!r} cause={error!r}")
         return summary
     if ref is None:

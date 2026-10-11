@@ -16,6 +16,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.harness import settle
 from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
@@ -36,10 +38,24 @@ from tests.tui.surfaces.tui.console.test_console_live_smoke import (
 SIZE = 1
 #: The detail routes, each also walked on the first record its read model holds.
 DETAIL_ROUTES = ("track", "milestone", "batch.detail", "task.detail", "run.detail")
-#: The prototype records a live tree must never reach.
+#: The prototype records a live tree must never reach unless it holds a record of that key.
 PROTOTYPE_IDS = frozenset(
     {"MLS-0001", "MLS-0004", "MLS-0007", "CAM-0001", "CLM-0004", "REL-0001", "RUN-538453eb"}
 )
+
+
+def _unheld_prototypes(root: Path) -> frozenset[str]:
+    """Return the prototype ids no file under ``root``'s ``.ea`` tree names.
+
+    A real tree can mint a key a prototype also used (a first Campaign is ``CAM-0001``),
+    so a prototype id only marks a leak when the served tree holds no such record.
+    """
+    names = [path.read_bytes() for path in (root / ".ea").rglob("*") if path.is_file()]
+    return frozenset(
+        found for found in PROTOTYPE_IDS if not any(found.encode() in name for name in names)
+    )
+
+
 #: Of a pair of keys, the one that moves off a fresh frame is tried first.
 _FIRST = {"ArrowDown": 0, "PageDown": 0, "End": 0, "ArrowRight": 0}
 
@@ -65,52 +81,81 @@ async def _acts(app: ConsoleApp, pilot: Any, setup: SessionSetup, base: str, key
     return text != base
 
 
-async def _setups(app: ConsoleApp, pilot: Any, seam: Any) -> list[SessionSetup]:
-    """Return every route's setup, and each detail route's on its first held record."""
-    setups: list[SessionSetup] = []
-    for route in REGISTRY.ids:
-        if route == "entry":
-            continue
-        setups.append(SessionSetup(route=route, size=SIZE))
-        if route in DETAIL_ROUTES:
-            await render_setup(app, pilot, setups[-1])
-            model = seam.projection_for(REGISTRY.by_id[route].key)
-            keys = [row.key for row in getattr(model, "rows", ())]
-            if keys:
-                setups.append(SessionSetup(route=route, size=SIZE, subjId=keys[0]))
-    return setups
+#: Every route an operator can land on; ``entry`` only hands off to one of them.
+_ROUTES = tuple(route for route in REGISTRY.ids if route != "entry")
+
+#: One walk per route on its bare frame, and one more per detail route on its first held
+#: record; one case each keeps every case bounded and names the walk that went silent.
+_KEY_WALKS = tuple(
+    pytest.param(route, held, id=f"{route}-held" if held else route)
+    for route in _ROUTES
+    for held in ((False, True) if route in DETAIL_ROUTES else (False,))
+)
 
 
-def test_live_every_advertised_key_acts_on_every_route(tmp_path: Path) -> None:
-    """Each pair on each route's keybar moves the frame when one of its keys is pressed."""
+async def _setup(
+    app: ConsoleApp, pilot: Any, seam: Any, route: str, *, held: bool
+) -> SessionSetup | None:
+    """Return the walk's setup: ``route`` bare, or on its first held record.
+
+    Returns:
+        ``None`` when ``held`` asks for a record the route's read model does not hold.
+    """
+    bare = SessionSetup(route=route, size=SIZE)
+    if not held:
+        return bare
+    await render_setup(app, pilot, bare)
+    model = seam.projection_for(REGISTRY.by_id[route].key)
+    keys = [row.key for row in getattr(model, "rows", ())]
+    return SessionSetup(route=route, size=SIZE, subjId=keys[0]) if keys else None
+
+
+def test_the_key_walks_cover_every_route_but_entry() -> None:
+    """The per-walk cases leave no registered route unwalked, and walk none twice."""
+    walked = [(param.values[0], param.values[1]) for param in _KEY_WALKS]
+    assert {route for route, _held in walked} == set(REGISTRY.ids) - {"entry"}
+    assert len(walked) == len(set(walked)) == len(_ROUTES) + len(DETAIL_ROUTES)
+
+
+@pytest.mark.parametrize(("route", "held"), _KEY_WALKS)
+def test_live_every_advertised_key_acts_on_every_route(
+    tmp_path: Path, route: str, held: bool
+) -> None:
+    """Each pair on the route's keybar moves the frame when one of its keys is pressed."""
     require_epoch2_repository()
-    before = authority_digests(REPO_ROOT)
+    root = committed_tree(tmp_path)
+    before = authority_digests(root)
 
-    async def body() -> tuple[list[str], int]:
+    async def body() -> tuple[list[str], int] | None:
         silent: list[str] = []
         pressed = 0
         async with (
-            live_console(REPO_ROOT, tmp_path / "runtime") as (app, seam),
+            live_console(root, tmp_path / "runtime") as (app, seam),
             app.run_test(size=SIZES[SIZE]) as pilot,
         ):
-            for setup in await _setups(app, pilot, seam):
-                base = await render_setup(app, pilot, setup)
-                for pair in _pairs(base.split("\n")[-1]):
-                    keys = sorted(advertised(pair), key=lambda k: _FIRST.get(k, 1))
-                    acted = False
-                    for key in keys:
-                        pressed += 1
-                        if await _acts(app, pilot, setup, base, key):
-                            acted = True
-                            break
-                    if keys and not acted:
-                        silent.append(f"{setup.route} {setup.subj_id or ''}: {pair}")
+            setup = await _setup(app, pilot, seam, route, held=held)
+            if setup is None:
+                return None
+            base = await render_setup(app, pilot, setup)
+            for pair in _pairs(base.split("\n")[-1]):
+                keys = sorted(advertised(pair), key=lambda k: _FIRST.get(k, 1))
+                acted = False
+                for key in keys:
+                    pressed += 1
+                    if await _acts(app, pilot, setup, base, key):
+                        acted = True
+                        break
+                if keys and not acted:
+                    silent.append(f"{setup.route} {setup.subj_id or ''}: {pair}")
         return silent, pressed
 
-    silent, pressed = asyncio.run(body())
+    walked = asyncio.run(body())
+    if walked is None:
+        pytest.skip(f"{route} holds no record on this tree")
+    silent, pressed = walked
     assert not silent, "advertised but silent:\n" + "\n".join(silent)
-    assert pressed > 100
-    assert authority_digests(REPO_ROOT) == before, "the live serve wrote to the authority tree"
+    assert pressed > 0, f"{route}: the keybar advertised no key to press"
+    assert authority_digests(root) == before, "the live serve wrote to the authority tree"
 
 
 #: The keys every route is pressed with beside its own table: the global grammar and
@@ -134,7 +179,8 @@ def _claimed(trace: str | None) -> bool:
     return trace is not None and not trace.endswith("→ unclaimed")
 
 
-def test_live_every_claimed_key_acts_or_says_why(tmp_path: Path) -> None:
+@pytest.mark.parametrize(("route", "held"), _KEY_WALKS)
+def test_live_every_claimed_key_acts_or_says_why(tmp_path: Path, route: str, held: bool) -> None:
     """A key some handler claims either changes the frame or raises a toast naming why.
 
     A claimed key whose only answer is a key-log line the frame never draws reads, to the
@@ -142,33 +188,52 @@ def test_live_every_claimed_key_acts_or_says_why(tmp_path: Path) -> None:
     """
     require_epoch2_repository()
 
-    async def body() -> tuple[list[str], int]:
+    async def body() -> tuple[list[str], int] | None:
         silent: list[str] = []
         pressed = 0
         async with (
             live_console(REPO_ROOT, tmp_path / "runtime", launched=True) as (app, seam),
             app.run_test(size=SIZES[SIZE]) as pilot,
         ):
-            for setup in await _setups(app, pilot, seam):
-                table = {k for e in ROUTE_KEYS.get(setup.route, ()) for k in e.keys}
-                for key in dict.fromkeys((*sorted(table), *_CLAIMABLE)):
-                    base = await render_setup(app, pilot, setup)
-                    if key in _BACKWARD:
-                        app.press_key(_BACKWARD[key])
-                        base, _cycles = await settle(pilot)
-                    toasts = len(app.session.toasts)
-                    app.session.trace = None
-                    app.press_key(key)
-                    text, _cycles = await settle(pilot)
-                    pressed += 1
-                    s = app.session
-                    if _claimed(s.trace) and text == base and len(s.toasts) <= toasts:
-                        silent.append(f"{setup.route} {setup.subj_id or ''}: {key} ({s.trace})")
+            setup = await _setup(app, pilot, seam, route, held=held)
+            if setup is None:
+                return None
+            table = {k for e in ROUTE_KEYS.get(setup.route, ()) for k in e.keys}
+            for key in dict.fromkeys((*sorted(table), *_CLAIMABLE)):
+                base = await render_setup(app, pilot, setup)
+                if key in _BACKWARD:
+                    app.press_key(_BACKWARD[key])
+                    base, _cycles = await settle(pilot)
+                toasts = len(app.session.toasts)
+                app.session.trace = None
+                app.press_key(key)
+                text, _cycles = await settle(pilot)
+                pressed += 1
+                s = app.session
+                if _claimed(s.trace) and text == base and len(s.toasts) <= toasts:
+                    silent.append(f"{setup.route} {setup.subj_id or ''}: {key} ({s.trace})")
         return silent, pressed
 
-    silent, pressed = asyncio.run(body())
+    walked = asyncio.run(body())
+    if walked is None:
+        pytest.skip(f"{route} holds no record on this tree")
+    silent, pressed = walked
     assert not silent, "claimed but silent:\n" + "\n".join(silent)
-    assert pressed > 500
+    # Every route is pressed with at least the global and motion keys.
+    assert pressed >= len(set(_CLAIMABLE))
+
+
+def test_an_empty_tree_holds_no_prototype(tmp_path: Path) -> None:
+    (tmp_path / ".ea").mkdir()
+    assert _unheld_prototypes(tmp_path) == PROTOTYPE_IDS
+
+
+def test_a_prototype_key_the_tree_holds_is_not_a_leak(tmp_path: Path) -> None:
+    """A tree that minted its own ``CAM-0001`` may reach it; the other prototypes stay leaks."""
+    ledger = tmp_path / ".ea" / "generations" / "gen-x" / "state.json"
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text('{"campaign": {"CAM-0001": {"status": "CANCELLED"}}}', encoding="utf-8")
+    assert _unheld_prototypes(tmp_path) == PROTOTYPE_IDS - {"CAM-0001"}
 
 
 def test_live_drills_carry_the_row_under_the_caret(tmp_path: Path) -> None:
@@ -203,10 +268,11 @@ def test_live_drills_carry_the_row_under_the_caret(tmp_path: Path) -> None:
         return walked
 
     walked = asyncio.run(body())
+    prototypes = _unheld_prototypes(root)
     for route, caret, subject in walked:
         assert caret is not None, route
         assert subject == caret, f"{route}: the drill opened {subject}, the caret was on {caret}"
-        assert subject not in PROTOTYPE_IDS, route
+        assert subject not in prototypes, route
 
 
 #: Each walk: where it starts, the keys pressed, and the place every key lands on as
@@ -262,7 +328,9 @@ _WALKS: tuple[_Walk, ...] = (
 )
 
 
-async def _walked(app: ConsoleApp, pilot: Any, walks: tuple[_Walk, ...]) -> list[str]:
+async def _walked(
+    app: ConsoleApp, pilot: Any, walks: tuple[_Walk, ...], prototypes: frozenset[str]
+) -> list[str]:
     """Return each step of ``walks`` that landed off its pinned place or on a prototype."""
     wrong: list[str] = []
     for name, setup, steps in walks:
@@ -271,7 +339,7 @@ async def _walked(app: ConsoleApp, pilot: Any, walks: tuple[_Walk, ...]) -> list
             app.press_key(key)
             await settle(pilot)
             got = (app.session.route, app.session.subj_id)
-            if got[1] in PROTOTYPE_IDS or (want is not None and got != want):
+            if got[1] in prototypes or (want is not None and got != want):
                 wrong.append(f"{name}: {key} → {got}, wanted {want}")
     return wrong
 
@@ -286,7 +354,7 @@ def test_live_climbs_and_jumps_land_on_real_records(tmp_path: Path) -> None:
             live_console(root, tmp_path / "runtime", launched=True) as (app, _seam),
             app.run_test(size=SIZES[SIZE]) as pilot,
         ):
-            wrong = await _walked(app, pilot, _WALKS)
+            wrong = await _walked(app, pilot, _WALKS, _unheld_prototypes(root))
             for route in ("evidence", "campaign"):
                 await render_setup(app, pilot, SessionSetup(route=route, size=SIZE))
                 app.press_key("Escape")
@@ -309,7 +377,7 @@ def test_live_u_climbs_a_finished_run_to_its_track(tmp_path: Path) -> None:
             live_console(root, tmp_path / "runtime", launched=True) as (app, _seam),
             app.run_test(size=SIZES[SIZE]) as pilot,
         ):
-            return await _walked(app, pilot, (_RUN_CLIMB,))
+            return await _walked(app, pilot, (_RUN_CLIMB,), _unheld_prototypes(root))
 
     wrong = asyncio.run(body())
     assert not wrong, "\n".join(wrong)

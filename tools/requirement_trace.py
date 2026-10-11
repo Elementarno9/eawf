@@ -208,8 +208,12 @@ class _DecisionView(BaseModel):
 
     @property
     def in_force(self) -> bool:
-        """Whether the decision still binds."""
-        return self.status == "active" and self.superseded_by is None
+        """Whether the decision still binds.
+
+        An imported epoch-1 decision spells its status ``active`` and a native
+        epoch-2 one ``ACTIVE``; both bind.
+        """
+        return self.status.lower() == "active" and self.superseded_by is None
 
 
 class _PhaseView(BaseModel):
@@ -434,8 +438,9 @@ def _generation_view(state_path: Path) -> StateView:
             waves[key] = wave
     decisions: dict[str, _DecisionView] = {}
     for key, (_status, body) in _ledger_bodies(state_path, Epoch2Collection.DECISION).items():
-        # An imported decision carries its epoch-1 record verbatim, status included.
-        source = body.get("payload") if _is_imported(body) else body
+        # An imported decision carries its epoch-1 record verbatim, status
+        # included, and a native one the appended record; both nest it.
+        source = body.get("payload", body)
         decisions[key] = _DecisionView.model_validate({"id": key, **(source or {})})
     milestones = {
         key: status

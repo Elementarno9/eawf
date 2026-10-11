@@ -132,7 +132,7 @@ def test_proof_retried_under_its_key_replays_without_running_a_gate(
     def unreachable(*_args: Any, **_kwargs: Any) -> Any:
         raise AssertionError("a keyed retry must not run a gate again")
 
-    monkeypatch.setattr(delivery_proof, "_run_leg", unreachable)
+    monkeypatch.setattr(delivery_proof, "run_leg", unreachable)
     again = _dispatch(PROVE, tmp_path, urn=TASK_URN, idempotency_key="p", gates=gates)
 
     assert again == first

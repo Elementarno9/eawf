@@ -168,7 +168,9 @@ def test_con_076_ui_008_the_run_frame_draws_the_daemon_s_timeline_groups_live(
         frame = await _until(app, pilot, lambda f: COALESCED.search(f) is not None)
         found = COALESCED.search(frame)
         assert found is not None and found.group("count") == "4"
-        assert re.search(r"! error · observed +sequence \d+ +P0", frame), frame
+        assert re.search(r"! error · observed +Read failed: File does not exist\. +P0", frame), (
+            frame
+        )
         assert "WHAT IS TRUE" not in frame
         # a new chunk lands while the frame is on screen and the re-read folds it in
         await asyncio.to_thread(_outputs, repo, daemon, 1, 4)

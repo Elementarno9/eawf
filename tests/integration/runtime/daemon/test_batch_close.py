@@ -364,11 +364,11 @@ def test_an_unknown_key_is_reported_and_nothing_else_is_tried(tmp_path: Path) ->
     assert live(canary, Epoch2Collection.BATCH)["BAT-0007"]["status"] == "PLANNED"
 
 
-# ---- never two ACTIVE Batches in one repository ------------------------------
+# ---- one exact-head proof per repository -------------------------------------
 
 
-def test_an_active_unready_batch_keeps_a_ready_one_planned(tmp_path: Path) -> None:
-    active = batch("BAT-0007", "ACTIVE", ["EAWF-0042"])
+def test_an_unready_batch_on_its_pinned_head_keeps_a_ready_one_planned(tmp_path: Path) -> None:
+    active = batch("BAT-0007", "READY_TO_MERGE", ["EAWF-0042"])
     canary, _repo = make_tree(
         tmp_path,
         batches={
@@ -390,7 +390,7 @@ def test_an_active_unready_batch_keeps_a_ready_one_planned(tmp_path: Path) -> No
     ]
     assert "batch_wip_admits" in closures[1].reason
     statuses = {key: row["status"] for key, row in live(canary, Epoch2Collection.BATCH).items()}
-    assert statuses == {"BAT-0007": "ACTIVE", "BAT-0008": "PLANNED"}
+    assert statuses == {"BAT-0007": "READY_TO_MERGE", "BAT-0008": "PLANNED"}
 
 
 def test_the_active_batch_closes_first_and_lets_the_planned_one_through(tmp_path: Path) -> None:

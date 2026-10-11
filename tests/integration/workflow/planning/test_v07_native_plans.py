@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from eawf.kernel.state.epoch2.plan_revision import PlanApproval
-from eawf.kernel.store.compaction import read_document
+from eawf.kernel.store.compaction import read_document, write_document
 from eawf.platform.install.canary import CanaryProvision
 from eawf.workflow.planning.apply import PlanRevisionProposal, grade_plan_grounding
 from eawf.workflow.planning.lenses import run_plan_lenses
@@ -37,6 +37,7 @@ from tests.integration.workflow.planning._v07_plans import (
     create_containers,
     foreign_urns,
     land,
+    load_parent,
     load_proposal,
     submit,
 )
@@ -78,6 +79,11 @@ def _canary(tmp_path: Path, code: str) -> CanaryProvision:
         "seed",
     )
     create_containers(canary.root, tmp_path / "runtime")
+    # The rc2 re-plan cancels its parent's Batches onto the project's default
+    # branch, which a migrated tree carries in its imported project row.
+    document = read_document(document_path(canary))
+    document["project"] = {"EAWF": {"payload": {"payload": {"default_branch": "main"}}}}
+    write_document(document_path(canary), document)
     return canary
 
 
@@ -94,7 +100,7 @@ def test_the_roadmap_holds_exactly_the_three_release_milestones() -> None:
     titles = [load_proposal(name)["body"]["milestone"]["title"] for name in PLAN_NAMES]
     assert titles == [
         "Cut 0.7.0rc1 with the epoch-1 TUI retired",
-        "Cut 0.7.0rc2 on cross-provider, platform and recovery evidence",
+        "Cut 0.7.0rc2 on correctness and foundations",
         "Publish 0.7.0 against the complete acceptance gate",
     ]
     assert all(len(title) <= 72 and not title.endswith(".") for title in titles)
@@ -168,6 +174,35 @@ def test_the_three_plans_apply_on_one_epoch_2_tree(tmp_path: Path) -> None:
         assert milestone["status"] == "PLANNED"
         for planned in proposal["body"]["tasks"]:
             assert tasks[planned["urn"].rsplit("/", 1)[1]]["status"] == "PLANNED"
+
+
+def test_the_rc2_plan_rewrites_the_milestone_its_parent_planned(tmp_path: Path) -> None:
+    canary = _canary(tmp_path, "V07REPLAN")
+    parent, child = load_parent("rc2"), load_proposal("rc2")
+
+    land("rc2", canary.root, tmp_path / "runtime")
+
+    assert child["parent_key"] == parent["key"]
+    assert child["body"]["milestone_urn"] == parent["body"]["milestone_urn"]
+    milestone = _collection(canary, "milestone")["MLS-0102"]
+    assert (milestone["status"], milestone["revision"]) == ("PLANNED", 2)
+    assert milestone["title"] == child["body"]["milestone"]["title"]
+    assert milestone["target_date"] == "2026-10-10"
+    batches = _collection(canary, "batch")
+    for batch in parent["body"]["batches"]:
+        assert batches[batch["urn"].rsplit("/", 1)[1]]["status"] == "CANCELLED"
+    tasks = _collection(canary, "task")
+    kept = {planned["urn"] for planned in child["body"]["tasks"]}
+    for planned in parent["body"]["tasks"]:
+        expected = "PLANNED" if planned["urn"] in kept else "CANCELLED"
+        assert tasks[planned["urn"].rsplit("/", 1)[1]]["status"] == expected, planned["urn"]
+    assert tasks["EAWF-0209"]["batch_ref"].endswith("/batch/BAT-0317")
+    assert tasks["EAWF-0209"]["revision"] == 2
+    revisions = _collection(canary, "plan_revision")
+    assert (revisions["PRV-0201"]["status"], revisions["PRV-0303"]["status"]) == (
+        "APPLIED",
+        "APPLIED",
+    )
 
 
 @pytest.mark.parametrize("kind", ["service", "team"])

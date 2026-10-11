@@ -29,6 +29,7 @@ from typing import Final
 
 from pydantic import BaseModel, ConfigDict
 
+from eawf.kernel.projection.transcript import block_text
 from eawf.kernel.runtime.compiled import canonical_digest
 from eawf.kernel.runtime.events import RunEventKind, RunEventRecord
 from eawf.kernel.state.epoch2.base import NonEmptyStr, StrictNonNegativeInt, StrictPositiveInt
@@ -111,6 +112,8 @@ class TimelineGroup(BaseModel):
         count: How many events the row holds.
         first_at: When the daemon recorded the first of them.
         last_at: When it recorded the last.
+        detail: What the row's latest event says, as the transcript states it; ``None``
+            for a kind whose payload states no sentence.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -123,6 +126,7 @@ class TimelineGroup(BaseModel):
     count: StrictPositiveInt
     first_at: UtcDatetime
     last_at: UtcDatetime
+    detail: NonEmptyStr | None = None
 
     @property
     def coalesced(self) -> bool:
@@ -166,6 +170,18 @@ def _target(event: RunEventRecord) -> str | None:
     return None
 
 
+#: What a timeline row says of a reasoning turn opening. The transcript's own words for an
+#: unsummarized turn speak of it as still open, which a row read later cannot vouch for.
+TURN_OPENED: Final = "a reasoning turn opened"
+
+
+def _detail(event: RunEventRecord) -> str | None:
+    """Return what one event says on its timeline row, or ``None`` when it states nothing."""
+    if event.event_kind is RunEventKind.REASONING_STARTED:
+        return TURN_OPENED
+    return block_text(event).value
+
+
 def _joins(group: TimelineGroup, event: RunEventRecord, target: str | None) -> bool:
     """Return whether ``event`` extends ``group`` rather than opening a row of its own."""
     return (
@@ -204,6 +220,7 @@ def reduce_timeline(events: Sequence[RunEventRecord]) -> RunTimeline:
                     "last_sequence": event.run_sequence,
                     "count": last.count + 1,
                     "last_at": event.recorded_at,
+                    "detail": _detail(event) or last.detail,
                 }
             )
             continue
@@ -217,6 +234,7 @@ def reduce_timeline(events: Sequence[RunEventRecord]) -> RunTimeline:
                 count=1,
                 first_at=event.recorded_at,
                 last_at=event.recorded_at,
+                detail=_detail(event),
             )
         )
     p0_events = sum(1 for event in live if EVENT_PRIORITIES[event.event_kind] is EventPriority.P0)
@@ -237,6 +255,7 @@ def reduce_timeline(events: Sequence[RunEventRecord]) -> RunTimeline:
 __all__ = [
     "COALESCE_WINDOW_SECONDS",
     "EVENT_PRIORITIES",
+    "TURN_OPENED",
     "EventPriority",
     "RunTimeline",
     "TimelineGroup",

@@ -64,7 +64,13 @@ def _root(
     ] = False,
     workspace: Annotated[
         Path | None,
-        typer.Option("-w", "--workspace", help="Workspace root used to locate .ea/state.json."),
+        typer.Option(
+            "-w",
+            "--workspace",
+            exists=True,
+            file_okay=False,
+            help="Workspace root used to locate .ea/state.json.",
+        ),
     ] = None,
     daemonless: Annotated[
         bool,
@@ -109,6 +115,13 @@ def _root(
     from eawf.surfaces.cli._mutation import set_daemonless_flag
 
     set_daemonless_flag(daemonless)
+    # Every daemon client, spawn and probe of this invocation dials the
+    # named tree's daemon, whatever the working directory; the pin is
+    # released when the command ends so in-process callers do not inherit it.
+    from eawf.runtime.daemon.runtime_dir import pin_workspace
+
+    previous_pin = pin_workspace(workspace)
+    ctx.call_on_close(lambda: pin_workspace(previous_pin))
     if ctx.invoked_subcommand is None:
         # Bare ``eawf`` on a TTY opens the console; plain / no-input /
         # non-TTY writes the console's plain frame so headless callers

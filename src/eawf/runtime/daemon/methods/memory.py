@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.identity import EntityKind, format_qualified_urn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.migration.epoch2.urn_rekey import spells_single_key
 from eawf.kernel.state.enums import Confidence, MemoryStatus, MemoryTier, StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.models import State
@@ -163,6 +164,7 @@ def project_subject(context: Epoch2RootContext) -> str:
         repository_key=None,
         kind=EntityKind.PROJECT,
         entity_key=code,
+        single_key=spells_single_key(document),
     )
 
 

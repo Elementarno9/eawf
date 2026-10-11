@@ -2,11 +2,12 @@
 
 Per the C09 §5.6 snapshot-update flow: an operator regenerates a golden
 surface with ``eawf snapshot update --kind <surface>``, diffs the tree,
-and commits the rewritten bytes as ``[P##-W##] test: snapshot update
-<kind>``. This gate enforces the contract from the CI side — *every*
-commit in the PR range that mutates a managed golden surface MUST carry
-a wave-form ``test:`` subject so a golden change can never sneak in under
-an unrelated ``feat:`` / ``fix:`` commit.
+and commits the rewritten bytes in the commit of the Batch that caused
+them (historically, as ``[P##-W##] test: snapshot update <kind>``). This
+gate enforces the contract from the CI side — *every* commit in the PR
+range that mutates a managed golden surface MUST name the unit of work
+that owns it (see the accepted forms below) so a golden change can never
+sneak in under an unattributed ``feat:`` / ``fix:`` commit.
 
 The watched directories are sourced from the same C09 §5.6 surface
 inventory the CLI drives (:data:`eawf.surfaces.cli.commands.snapshot.SNAPSHOT_SURFACES`)
@@ -41,15 +42,32 @@ and copy (``C``) entries arrive from ``--name-status -z`` in the three-token
 **destination** (new) path.
 
 For each commit that *modifies / deletes / renames* a managed golden
-file, the subject must match one of:
+file, the commit must name the unit of work that owns the refresh in one
+of these forms:
 
 - ``[P##-W##] test: <summary>`` (planned wave deliverable);
 - ``[P##-I##-W##] test: <summary>`` (iter >= I02 variant);
-- ``test: <summary>`` (bare conventional, out-of-phase only).
+- ``test: <summary>`` (bare conventional, out-of-phase only);
+- any subject whose body carries no ``Batch:`` trailer and exactly one
+  ``Task: <KEY>`` trailer naming a Task of that generation -- the form
+  every delivery commit lands in, one commit per Task with its code,
+  tests and goldens together, its Batch read from the Task's
+  ``batch_ref``;
+- any ``<type>: <summary>`` subject whose body carries exactly one
+  ``Batch: BAT-<NNNN>`` trailer naming a Batch of the repo's epoch-2
+  generation -- the older form, kept so historical ranges keep passing.
 
-``W00`` / ``I00`` are rejected — wave / iter indices are 1-based. A
-commit mutating golden fixtures with any other subject (wrong type,
-missing wave suffix) fails the gate.
+The wave forms stay so historical ranges keep passing. ``W00`` / ``I00``
+are rejected — wave / iter indices are 1-based. A commit carrying any
+``Batch:`` trailer is judged by it alone: two trailers, a malformed key or
+a Batch the generation does not hold leave it unpaired, and a ``Task:``
+trailer cannot rescue it. A golden mutation that names
+neither a wave nor a native Batch or Task fails the gate.
+
+Batch and Task keys are corroborated against the committed generation
+the way phase ids are corroborated against ``state.json``: a fabricated
+key buys nothing, and a tree with no readable epoch-2 generation knows
+no keys, so the native forms fail closed there.
 
 Per-commit pairing is the right contract for managed small-CL PRs. Under
 the one-PR-per-phase model the whole phase ships as a single reviewed unit
@@ -81,7 +99,7 @@ no-ops with exit ``0`` — the pairing contract is a PR-review gate.
 
 Exit codes:
 - ``0`` — every golden-touching commit is correctly paired (or no
-  golden files changed).
+  golden files changed, or the range is a corroborated phase PR).
 - ``1`` — at least one golden-touching commit is unpaired (offending
   commits printed to stderr).
 """
@@ -94,6 +112,8 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+from epoch2_lifecycle_view import _collection_rows, epoch2_generation
 
 from eawf.surfaces.cli.commands.snapshot import SNAPSHOT_SURFACES
 
@@ -130,6 +150,12 @@ _WAVE_TRAILER_RE = re.compile(
     r"^Eawf-Wave:[ \t]*(P\d{2,})-I\d{2,}-W\d{2,}[ \t]*$",
     re.MULTILINE,
 )
+
+# Native trailers of the Batch commit regime. ``[ \t]`` rather than ``\s``
+# keeps a bare ``Batch:`` line from borrowing the next line as its key.
+_BATCH_TRAILER_RE = re.compile(r"^Batch:[ \t]+(\S+)[ \t]*$", re.MULTILINE)
+_TASK_TRAILER_RE = re.compile(r"^Task:[ \t]+(\S+)[ \t]*$", re.MULTILINE)
+_BATCH_KEY_RE = re.compile(r"^BAT-\d{4}$")
 
 # Phase statuses that mean "this phase has been opened and can own commits".
 # PLANNED is excluded on purpose: a planned phase has no commits, so a range
@@ -377,6 +403,81 @@ def opened_phase_ids(start: Path | None = None) -> frozenset[str]:
     return frozenset()
 
 
+@dataclass(frozen=True)
+class NativeScope:
+    """The native Batch and Task keys the repo's epoch-2 generation holds.
+
+    Attributes:
+        batch_keys: Every ``BAT-<NNNN>`` Batch key, whatever its status.
+        task_keys: Every Task key, whatever its status.
+    """
+
+    batch_keys: frozenset[str]
+    task_keys: frozenset[str]
+
+
+_NO_NATIVE_SCOPE = NativeScope(frozenset(), frozenset())
+
+
+def native_scope(start: Path | None = None) -> NativeScope:
+    """Return the Batch and Task keys of the repo's epoch-2 generation.
+
+    Walks up from *start* to the first ``.ea`` directory, as
+    :func:`opened_phase_ids` does, and reads the selected generation's
+    ledgers and document. A tree that is not in epoch 2, or whose
+    generation cannot be read, knows no keys: the native pairing forms then
+    fail closed and only the wave forms can pair a golden mutation.
+
+    Args:
+        start: Directory to begin the upward search from; defaults to the
+            current working directory.
+
+    Returns:
+        The generation's keys, or empty sets when none can be read.
+    """
+    origin = Path.cwd() if start is None else start
+    for parent in [origin, *origin.parents]:
+        ea_dir = parent / _STATE_RELPATH.parent
+        if not ea_dir.is_dir():
+            continue
+        generation = epoch2_generation(ea_dir)
+        if generation is None:
+            return _NO_NATIVE_SCOPE
+        try:
+            batches = _collection_rows(generation, "batch")
+            tasks = _collection_rows(generation, "task")
+        except OSError, ValueError:
+            return _NO_NATIVE_SCOPE
+        return NativeScope(
+            batch_keys=frozenset(key for key in batches if _BATCH_KEY_RE.match(key)),
+            task_keys=frozenset(tasks),
+        )
+    return _NO_NATIVE_SCOPE
+
+
+def names_native_scope(body: str, scope: NativeScope) -> bool:
+    """Return whether a commit *body* names the native Batch or Task it serves.
+
+    A body carrying any ``Batch:`` trailer is judged by that trailer alone:
+    it must be the only one and name a Batch in *scope*. Only a body with no
+    ``Batch:`` trailer falls back to the scratch form, exactly one ``Task:``
+    trailer naming a Task in *scope*.
+
+    Args:
+        body: The raw commit body, below the subject.
+        scope: The keys the repo's generation holds, per :func:`native_scope`.
+
+    Returns:
+        ``True`` when the body names a corroborated Batch, or, lacking any
+        Batch trailer, a corroborated Task.
+    """
+    batches = _BATCH_TRAILER_RE.findall(body)
+    if batches:
+        return len(batches) == 1 and batches[0] in scope.batch_keys
+    tasks = _TASK_TRAILER_RE.findall(body)
+    return len(tasks) == 1 and tasks[0] in scope.task_keys
+
+
 def is_phase_pr(records: list[CommitRecord], *, opened_phases: frozenset[str]) -> bool:
     """Return whether *records* form the PR of one or more opened phases.
 
@@ -405,18 +506,19 @@ def is_phase_pr(records: list[CommitRecord], *, opened_phases: frozenset[str]) -
     return bool(named) and named <= opened_phases
 
 
-def _unpaired_in_records(records: list[CommitRecord]) -> list[tuple[str, str]]:
+def _unpaired_in_records(records: list[CommitRecord], scope: NativeScope) -> list[tuple[str, str]]:
     """Return ``(short_sha, subject)`` for every unpaired golden-mutating record.
 
     A commit is *unpaired* when it modifies / deletes / renames a managed
-    golden file but its subject does not match the wave-form ``test:``
-    grammar. Pure in-memory pass over already-parsed records — no git.
+    golden file but neither its subject matches the wave-form ``test:``
+    grammar nor its body names a Batch or Task in *scope*. Pure in-memory
+    pass over already-parsed records — no git.
     """
     offenders: list[tuple[str, str]] = []
     for record in records:
         if not commit_mutates_golden(record):
             continue
-        if not is_paired(record.subject):
+        if not (is_paired(record.subject) or names_native_scope(record.body, scope)):
             offenders.append((record.sha[:9], record.subject))
     return offenders
 
@@ -425,7 +527,8 @@ def find_unpaired(base: str, head: str) -> list[tuple[str, str]]:
     """Return ``(short_sha, subject)`` for every unpaired golden-mutating commit.
 
     Convenience wrapper: scans ``base..head`` in one git pass
-    (:func:`scan_range`) and applies :func:`_unpaired_in_records`.
+    (:func:`scan_range`) and applies :func:`_unpaired_in_records` against
+    the native keys of the generation above the working directory.
 
     Args:
         base: The PR base SHA.
@@ -435,7 +538,7 @@ def find_unpaired(base: str, head: str) -> list[tuple[str, str]]:
         The offending commits as ``(short_sha, subject)`` tuples; empty
         when every golden-mutating commit is correctly paired.
     """
-    return _unpaired_in_records(scan_range(base, head))
+    return _unpaired_in_records(scan_range(base, head), native_scope())
 
 
 def main(argv: list[str]) -> int:
@@ -453,7 +556,7 @@ def main(argv: list[str]) -> int:
 
     # The single git subprocess for the whole gate run.
     records = scan_range(base, head)
-    offenders = _unpaired_in_records(records)
+    offenders = _unpaired_in_records(records, native_scope())
     if not offenders:
         print("snapshot pairing gate: ok (all golden changes paired)")
         return 0
@@ -477,9 +580,11 @@ def main(argv: list[str]) -> int:
 
     print(
         "snapshot pairing gate: unpaired golden-surface mutation(s) detected.\n"
-        "Every commit that touches a managed golden fixture must carry a valid\n"
-        "'test:' subject, e.g. '[P27-W19] test: snapshot update <kind>' or\n"
-        "'test: snapshot update <kind>' while no phase is active\n"
+        "Every commit that touches a managed golden fixture must name its Task\n"
+        "with exactly one 'Task: <KEY>' trailer (or its Batch with exactly one\n"
+        "'Batch: BAT-<NNNN>' trailer), naming a record of this repo's\n"
+        "generation, or carry a wave-form subject such as\n"
+        "'[P27-W19] test: snapshot update <kind>'\n"
         "(regenerate with `eawf snapshot update --kind <kind>` first).\n"
         "Offending commits:",
         file=sys.stderr,

@@ -13,6 +13,8 @@ that the root callback rejects ``--scope`` to lock that decision in.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from typer.testing import CliRunner
 
@@ -33,10 +35,10 @@ def test_plain_flag_disables_color() -> None:
     assert result.exit_code == 0
 
 
-def test_workspace_flag_propagates_to_context() -> None:
-    result = runner.invoke(app, ["-w", "/tmp/fake-ws", "scope-debug"])
+def test_workspace_flag_propagates_to_context(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["-w", str(tmp_path), "scope-debug"])
     assert result.exit_code == 0
-    assert "workspace=/tmp/fake-ws" in result.stdout
+    assert f"workspace={tmp_path}" in result.stdout
 
 
 def test_scope_flag_is_not_a_global_option() -> None:
@@ -63,10 +65,10 @@ def test_flag_can_appear_before_subcommand(flag: str) -> None:
     assert result.exit_code == 0
 
 
-def test_workspace_long_form_propagates() -> None:
-    result = runner.invoke(app, ["--workspace", "/tmp/another-ws", "scope-debug"])
+def test_workspace_long_form_propagates(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["--workspace", str(tmp_path), "scope-debug"])
     assert result.exit_code == 0
-    assert "workspace=/tmp/another-ws" in result.stdout
+    assert f"workspace={tmp_path}" in result.stdout
 
 
 def test_default_flags_have_unset_values() -> None:
@@ -78,7 +80,7 @@ def test_default_flags_have_unset_values() -> None:
     assert "plain=False" in result.stdout
 
 
-def test_combined_flags_set_independently() -> None:
+def test_combined_flags_set_independently(tmp_path: Path) -> None:
     """All global flags can be combined and each is reported via scope-debug."""
     result = runner.invoke(
         app,
@@ -87,13 +89,13 @@ def test_combined_flags_set_independently() -> None:
             "--plain",
             "--no-input",
             "-w",
-            "/tmp/combo",
+            str(tmp_path),
             "scope-debug",
         ],
     )
     assert result.exit_code == 0
     # JSON output is selected, but scope-debug always echoes a text payload via
     # typer.echo regardless. The handler emits the multi-line text body.
-    assert "workspace=/tmp/combo" in result.stdout
+    assert f"workspace={tmp_path}" in result.stdout
     assert "json=True" in result.stdout
     assert "plain=True" in result.stdout

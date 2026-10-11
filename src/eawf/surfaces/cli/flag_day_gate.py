@@ -268,8 +268,7 @@ def enforce(root: click.Group, ctx: click.Context, args: list[str]) -> None:
         tree = _tree_epoch(_addressed_state(retired, Path(workspace) if workspace else None))
         cli_errors.emit_error(
             cli_errors.ValidationError(
-                f"`eawf {retired}` retired at the flag day; {replacement_guidance(retired)}; "
-                f"{tree}",
+                f"`eawf {retired}` is retired; {replacement_guidance(retired)}; {tree}",
                 kind=cli_errors.LEGACY_OPERATION_REMOVED_KIND,
             ),
             flags=flags,

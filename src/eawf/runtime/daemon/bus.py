@@ -51,6 +51,16 @@ class CatchUpTooLargeError(RuntimeError):
     """
 
 
+class CatchUpCursorUnknownError(CatchUpTooLargeError):
+    """Raised when :func:`catch_up` finds no event with the subscriber's cursor.
+
+    A cursor the log never held, or no longer holds, leaves the gap as
+    unreplayable as a window past the bound, so the JSON-RPC layer answers
+    both with ``-32008 catch_up_too_large`` and the subscriber takes the
+    one snapshot path for either.
+    """
+
+
 @dataclass
 class Subscriber:
     """One live subscription against the bus.
@@ -364,6 +374,8 @@ def catch_up(
     Raises:
         CatchUpTooLargeError: When more than *max_events* envelopes
             match — the caller maps this to ``-32008 catch_up_too_large``.
+        CatchUpCursorUnknownError: When a cursor is set and no envelope
+            in *event_path* carries it, so nothing after it can be found.
     """
     since = subscriber.since_event_id
     seen_since = since is None
@@ -380,4 +392,8 @@ def catch_up(
                 f"catch_up exceeded max_events={max_events} connection={subscriber.connection_id!r}"
             )
         collected.append(env)
+    if not seen_since:
+        raise CatchUpCursorUnknownError(
+            f"catch_up cursor={since!r} not in the log connection={subscriber.connection_id!r}"
+        )
     return collected

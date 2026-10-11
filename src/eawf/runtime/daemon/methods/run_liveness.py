@@ -16,17 +16,20 @@ Run still running that has produced nothing since -- so a surface can say which 
 lost without reading each Run's stream.
 
 The same sweep measures each running Run against the wall-clock ceiling its binding
-sealed. A Run whose elapsed time since it started reached that ceiling, and that has
-shown no event for the notice policy's grace period, opens one non-blocking budget
-notice. The notice is upserted under the Run's key and contract, so a later sweep or a
-restarted daemon finds it on file and writes nothing.
+sealed. A Run whose elapsed time since it started reached that ceiling opens one
+non-blocking budget notice, and the daemon then fails it as ``budget-exhausted`` and
+stops its worker: past the ceiling the gateway refuses every call the worker makes, so
+a worker left running only spends provider tokens. The notice is upserted under the
+Run's key and contract, so a later sweep or a restarted daemon finds it on file and
+writes nothing.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime, timedelta
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -41,6 +44,7 @@ from eawf.kernel.state.epoch2.run import Run, RunScope, RunStatus, TaskScope
 from eawf.kernel.state.epoch2.task import Task
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.compaction import document_rows, read_document
+from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -54,7 +58,7 @@ from eawf.runtime.budget.notices import (
 from eawf.runtime.control.reducer import reduce_run_control
 from eawf.runtime.daemon.admission import load_economics
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
-from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
+from eawf.runtime.daemon.epoch2_transaction import TransactionRefusedError, commit_ledger_append
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.daemon.methods.pause import (
     end_stall_pause,
@@ -62,6 +66,7 @@ from eawf.runtime.daemon.methods.pause import (
     open_stall_pause,
     stall_of,
 )
+from eawf.runtime.daemon.methods.permission import DAEMON_ACTOR
 from eawf.runtime.daemon.methods.run import RUN_CONTROL_REQUEST_METHOD, run_stall_interval
 from eawf.runtime.daemon.native_dispatch import control_facts_of, run_binding_of, stored_run
 from eawf.runtime.daemon.native_guard import native_params, require_native_call
@@ -72,6 +77,7 @@ from eawf.runtime.daemon.run_events import (
     run_events_of,
     stall_facts_of,
 )
+from eawf.runtime.daemon.run_supervisor import end_exhausted_run
 
 logger = logging.getLogger(__name__)
 
@@ -293,18 +299,25 @@ def _notice_audience(document: dict[str, Any], scope: RunScope) -> tuple[str, ..
     return (LOCAL_OPERATOR,)
 
 
-def detect_wall_ceiling_crossings(context: Epoch2RootContext, *, now: datetime) -> tuple[str, ...]:
-    """Open one budget notice for every running Run past its wall ceiling and silent.
+def detect_wall_ceiling_crossings(
+    context: Epoch2RootContext,
+    *,
+    now: datetime,
+    publish: Callable[[Envelope], object] | None = None,
+) -> tuple[str, ...]:
+    """End every running Run that reached its wall ceiling, with its one budget notice.
 
     A Run is measured from ``started_at`` against the wall-clock ceiling its binding
     sealed; a Run bound without one is not measured. Whether the reading opens a notice
     is the notice policy's one rule. A crossing upserts the notice keyed by the Run and
-    its contract, so a Run already noticed -- by this daemon or an earlier one -- writes
-    nothing again, and a notice the operator resolved is never reopened.
+    its contract while the Run is still running, so a Run already noticed -- by this
+    daemon or an earlier one -- writes nothing again, and a notice the operator resolved
+    is never reopened. The Run is then failed and its worker stopped.
 
     Args:
         context: The tree swept.
         now: The daemon's recording clock.
+        publish: Where each committed transition is handed for the fan-out.
 
     Returns:
         The keys of the Runs this sweep opened a notice for.
@@ -329,13 +342,9 @@ def detect_wall_ceiling_crossings(context: Epoch2RootContext, *, now: datetime) 
         ceiling = binding.capsule.budget.wall_seconds
         assert run.started_at is not None, "a running Run always carries its start stamp"
         elapsed = max((now - run.started_at).total_seconds(), 0.0)
-        activity = reduce_run_events(run_events_of(records, run.urn)).last_activity_at
-        last_event = run.started_at if activity is None else max(run.started_at, activity)
         if not policy.opens(
             running=_still_running(records, run.status, run.urn),
-            axis="wall_seconds",
             ceiling_reached=elapsed >= ceiling,
-            silent_for=max(now - last_event, timedelta(0)),
         ):
             continue
         upsert = upsert_notice(
@@ -358,6 +367,22 @@ def detect_wall_ceiling_crossings(context: Epoch2RootContext, *, now: datetime) 
                 f"elapsed_seconds={elapsed:.0f} ceiling_seconds={ceiling}"
             )
             opened.append(run.key)
+        try:
+            ended = end_exhausted_run(
+                context,
+                run.urn,
+                actor=DAEMON_ACTOR,
+                detail=f"the Run ran {int(elapsed)}s against its wall-clock ceiling of {ceiling}s",
+                now=now,
+            )
+        except TransactionRefusedError as refusal:
+            logger.warning(
+                f"detect_wall_ceiling_crossings kept run={run.key} code={refusal.code.value}"
+            )
+            continue
+        if publish is not None:
+            for envelope in ended:
+                publish(envelope)
     return tuple(opened)
 
 

@@ -15,6 +15,7 @@ back unowned and the same check exits nonzero.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -26,10 +27,12 @@ from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.state.epoch2.authority import require_native_authority
 from eawf.kernel.store.compaction import read_document, write_document
 from tests.integration.workflow.planning._v07_plans import (
+    PARENTS,
     PLAN_NAMES,
     REPO_ROOT,
     create_containers,
     land,
+    load_parent,
     load_proposal,
 )
 from tools.requirement_trace import (
@@ -41,6 +44,9 @@ from tools.requirement_trace import (
 )
 
 pytestmark = pytest.mark.integration
+
+#: A requirement id as Task text cites it.
+_ID_RE = re.compile(r"\b[A-Z]+-\d{3}\b")
 
 #: The committed epoch-2 tree, less what the trace and the plan verbs never read.
 _TREE_ENTRIES = (
@@ -82,8 +88,11 @@ def _planned_keys() -> dict[str, set[str]]:
         "track": {"TRK-EAWF-CORE"},
         "repository": {"EAWF"},
     }
-    for name in PLAN_NAMES:
-        proposal = load_proposal(name)
+    proposals = [load_proposal(name) for name in PLAN_NAMES]
+    # A re-planning proposal lands its parent first, so the parent's records
+    # must be absent from the copy too or its submit and apply would collide.
+    proposals += [load_parent(name) for name in PLAN_NAMES if name in PARENTS]
+    for proposal in proposals:
         body = proposal["body"]
         keys["plan_revision"].add(proposal["key"])
         keys["milestone"].add(body["milestone"]["key"])
@@ -135,6 +144,24 @@ def _atom_ids(name: str) -> set[str]:
     return {atom["atom_id"] for atom in load_proposal(name)["body"]["source_atoms"]}
 
 
+def _task_keys(name: str) -> set[str]:
+    return {task["urn"].rsplit("/", 1)[1] for task in load_proposal(name)["body"]["tasks"]}
+
+
+def _planned_ids(name: str) -> set[str]:
+    """Return the ids a plan's Tasks would own: its atoms and every id its Task text cites.
+
+    The trace owns an id by citation, so a Task citing an id beside its atoms
+    (or another plan's atom) owns that id too.
+    """
+    tasks = load_proposal(name)["body"]["tasks"]
+    text = " ".join(
+        " ".join([task["intent"], *(criterion["text"] for criterion in task["criteria"])])
+        for task in tasks
+    )
+    return _atom_ids(name) | set(_ID_RE.findall(text))
+
+
 def _unowned(root: Path) -> set[str]:
     return {
         row.id
@@ -143,17 +170,17 @@ def _unowned(root: Path) -> set[str]:
     }
 
 
-def _owned_outside_the_plans(root: Path) -> set[str]:
-    """Return the ids a native Task the three plans do not create already owns.
+def _accounted_without(root: Path, absent_tasks: set[str]) -> set[str]:
+    """Return the ids that stay accounted for while *absent_tasks* do not exist.
 
-    The copied tree keeps every Task the plans do not create, and a delivered
-    Task that cites a planned id owns it whether or not its plan is applied.
+    An id another Task owns, a deferral moves out or a closed phase satisfied
+    is not returned unowned by the absence, whichever plan's text cites it.
     """
-    planned_tasks = _planned_keys()["task"]
     return {
         row.id
         for row in load_catalog(root / CATALOG_PATH).requirements
-        if any(owner not in planned_tasks for owner in row.owners)
+        if row.status is not TraceStatus.UNOWNED
+        or any(owner not in absent_tasks for owner in row.owners)
     }
 
 
@@ -162,8 +189,10 @@ def test_without_the_plans_exactly_the_planned_ids_are_unowned(tmp_path: Path) -
 
     assert main(["--repo-root", str(root), "write"]) == 0
 
-    planned = set().union(*(_atom_ids(name) for name in PLAN_NAMES))
-    assert _unowned(root) == planned - _owned_outside_the_plans(root)
+    planned = set().union(*(_planned_ids(name) for name in PLAN_NAMES))
+    known = {row.id for row in load_catalog(root / CATALOG_PATH).requirements}
+    absent = _planned_keys()["task"]
+    assert _unowned(root) == (planned & known) - _accounted_without(root, absent)
     assert main(["--repo-root", str(root), "check", "--require-owned"]) == 1
 
 
@@ -179,7 +208,7 @@ def test_after_the_three_plans_apply_every_id_is_accounted_for(tmp_path: Path) -
     assert catalog.summary.satisfied == sum(len(s.ids) for s in catalog.satisfactions)
     # A later follow-up Task may cite an rc1 id too, so each id needs one rc1
     # Task among its owners rather than rc1 Tasks alone.
-    rc1_tasks = {task["urn"].rsplit("/", 1)[1] for task in load_proposal("rc1")["body"]["tasks"]}
+    rc1_tasks = _task_keys("rc1")
     rc1_rows = [row for row in catalog.requirements if row.id in _atom_ids("rc1")]
     assert rc1_rows, "the rc1 ids are in the catalog"
     assert [row.id for row in rc1_rows if not rc1_tasks & set(row.owners)] == []
@@ -196,5 +225,7 @@ def test_leaving_one_plan_unapplied_returns_its_ids_unowned(tmp_path: Path, left
             land(name, root, tmp_path / "runtime")
     assert main(["--repo-root", str(root), "write"]) == 0
 
-    assert _unowned(root) == _atom_ids(left_out) - _owned_outside_the_plans(root)
+    known = {row.id for row in load_catalog(root / CATALOG_PATH).requirements}
+    expected = _planned_ids(left_out) & known
+    assert _unowned(root) == expected - _accounted_without(root, _task_keys(left_out))
     assert main(["--repo-root", str(root), "check", "--require-owned"]) == 1

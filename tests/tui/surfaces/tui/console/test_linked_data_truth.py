@@ -373,8 +373,12 @@ def test_the_artifact_card_takes_an_and_goes_back_as_the_step_card_does() -> Non
 
 @pytest.mark.parametrize("size", range(len(SIZES)))
 def test_the_transcript_reason_is_whole_and_says_its_state_word_once(size: int) -> None:
-    """The reason is wrapped rather than cut, and the word the STATE row printed is not repeated."""
-    app = _linked("transcript", RUN_DOCUMENT, subject=RUN)
+    """The reason is wrapped rather than cut, and the word the STATE row printed is not repeated.
+
+    The thinking cell is drawn only for a Run the register does not hold; a held Run's
+    row states its stored status instead.
+    """
+    app = _linked("transcript", RUN_DOCUMENT, subject="RUN-00000099")
     app.session.size = size
     rows = _frame(app)
     at = next(i for i, row in enumerate(rows) if row.startswith(" STATE"))

@@ -6,7 +6,8 @@ sweeps every native tree it serves on a fixed cadence and closes each ready Batc
 work has since landed, exactly as ``batch close-landed`` would.
 
 The sweep reads the trees the daemon has attached, which is every tree a native request
-has reached since it started.
+has reached since it started. A background proof that settles wakes it at once, so a
+proved Batch closes without waiting out the cadence.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import threading
 from datetime import UTC, datetime
 from typing import Final
 
@@ -29,6 +31,13 @@ SWEEP_ACTOR: Final = "DAEMON"
 #: How often the sweep runs. A cherry-pick is a human step, so closing within half a
 #: minute of it is prompt, and a sweep that finds nothing ready reads no git at all.
 SWEEP_SECONDS: Final = 30.0
+
+#: How often a waiting sweep looks for a settled proof.
+WAKE_SECONDS: Final = 0.5
+
+#: Set when a background proof settles, so the sweep closes its Batch without waiting
+#: out its cadence.
+SWEEP_WAKE: Final = threading.Event()
 
 
 def sweep_once(ctx: MethodContext, *, now: datetime) -> tuple[Envelope, ...]:
@@ -71,10 +80,21 @@ async def run_batch_close_loop(ctx: MethodContext, *, stop_event: asyncio.Event)
         ctx: The daemon context whose attached trees are swept.
         stop_event: Set when the daemon shuts down.
     """
+    loop = asyncio.get_running_loop()
     while not stop_event.is_set():
+        SWEEP_WAKE.clear()
         await asyncio.to_thread(sweep_once, ctx, now=datetime.now(UTC))
-        with contextlib.suppress(TimeoutError):
-            await asyncio.wait_for(stop_event.wait(), timeout=SWEEP_SECONDS)
+        due = loop.time() + SWEEP_SECONDS
+        while not (stop_event.is_set() or SWEEP_WAKE.is_set()) and loop.time() < due:
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(stop_event.wait(), timeout=WAKE_SECONDS)
 
 
-__all__ = ["SWEEP_ACTOR", "SWEEP_SECONDS", "run_batch_close_loop", "sweep_once"]
+__all__ = [
+    "SWEEP_ACTOR",
+    "SWEEP_SECONDS",
+    "SWEEP_WAKE",
+    "WAKE_SECONDS",
+    "run_batch_close_loop",
+    "sweep_once",
+]

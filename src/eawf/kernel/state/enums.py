@@ -768,6 +768,7 @@ class StoreKind(StrEnum):
     OPERATION = "operation"
     RUNTIME_CERTIFICATION = "runtime_certification"
     RUN_EVENTS_APPENDED = "run_events_appended"
+    BATCH_PROOF_NOTED = "batch_proof_noted"
 
 
 class ArtifactKind(StrEnum):

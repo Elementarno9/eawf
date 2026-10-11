@@ -12,8 +12,10 @@ predicates.
 
 ``active_batches_per_repo`` is mechanical. Canonical integration is
 serialised per repository and every Batch binds an exact head, so a
-second active Batch in one repository continuously invalidates the first
-one's exact-head audit and review. :meth:`TrackPolicy.admits_batch_activation`
+second Batch moving the head of one repository continuously invalidates
+the exact-head audit and review of a Batch that is integrating there or
+has pinned its head. A Batch still collecting Tasks holds no such proof
+and is not counted. :meth:`TrackPolicy.admits_batch_activation`
 therefore answers admit-or-refuse.
 
 ``active_milestones`` is advisory. Nothing breaks when a Track carries
@@ -161,20 +163,21 @@ class TrackPolicy(Epoch2Model):
         )
         return self
 
-    def admits_batch_activation(self, *, active_batches_in_repo: int) -> bool:
+    def admits_batch_activation(self, *, proving_batches_in_repo: int) -> bool:
         """Whether one more Batch may activate in a repository.
 
         This is the hard limit: a caller that gets ``False`` refuses the
         activation rather than recording an exception.
 
         Args:
-            active_batches_in_repo: How many Batches of this Track are
-                already ACTIVE in the target repository.
+            proving_batches_in_repo: How many other Batches of this Track
+                hold or are building an exact-head proof in the target
+                repository.
 
         Returns:
             ``True`` when the repository has room for one more.
         """
-        return active_batches_in_repo < self.wip.active_batches_per_repo
+        return proving_batches_in_repo < self.wip.active_batches_per_repo
 
     def exceeds_milestone_advisory(self, *, active_milestones: int) -> bool:
         """Whether the Track carries more active Milestones than advised.

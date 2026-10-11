@@ -191,6 +191,7 @@ def test_a_filed_report_seals_through_integrate_and_verify_opens_the_approval(
             "READY_TO_INTEGRATE",
             "the Run's report is bound, so the Task's work is ready to integrate",
             observations=["run_report_bound"],
+            binding_refs=[planned.run],
         )
         binding = _integrate_and_verify(walker, planned)
         shown = walker.file_evidence(

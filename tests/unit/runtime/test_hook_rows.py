@@ -2,8 +2,9 @@
 
 Each event the packaged manifest subscribes to is fired with the payload the host
 sends, and at least one of its handlers must reach a daemon write verb, so the
-daemon either writes a durable row or answers with its typed refusal, or must
-hand the host a typed decision about what it was asked. An event whose handlers
+daemon either writes a durable row or answers with its typed refusal, must
+hand the host a typed decision about what it was asked, or must stamp the
+ending session's row. An event whose handlers
 all skip on a Claude payload would be a declared no-op.
 """
 
@@ -27,7 +28,6 @@ _AT: Final = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
 #: The daemon verbs that write a durable row or refuse typed.
 _WRITE_VERBS: Final = frozenset(
     {
-        "runtime.capture",
         "runtime.host.context.boundary",
         "runtime.host.error.observe",
         "runtime.host.file_edit.after",
@@ -44,11 +44,7 @@ _WRITE_VERBS: Final = frozenset(
 #: What the host sends for each event, reduced to the fields the handlers read.
 _PAYLOADS: Final[dict[HookEventType, dict[str, Any]]] = {
     HookEventType.SESSION_START: {"session_id": "host-1", "source": "startup"},
-    HookEventType.SESSION_END: {
-        "session_id": "host-1",
-        "usage": {"input_tokens": 10, "output_tokens": 5},
-        "model": {"id": "claude-opus-4-8"},
-    },
+    HookEventType.SESSION_END: {"session_id": "host-1"},
     HookEventType.SUBAGENT_START: {"session_id": "host-1", "agent_id": "agent-1"},
     HookEventType.SUBAGENT_STOP: {"session_id": "host-1", "agent_id": "agent-1"},
     HookEventType.PRE_COMPACT: {"session_id": "host-1", "trigger": "auto"},
@@ -82,6 +78,10 @@ _PAYLOADS: Final[dict[HookEventType, dict[str, Any]]] = {
 
 #: Events whose handler answers the host with a decision rather than writing a row.
 _DECIDING: Final = frozenset({HookEventType.USER_PROMPT_SUBMIT})
+
+#: Events whose handler stamps the ending session's row in-process rather than
+#: through a daemon verb.
+_STAMPING: Final = frozenset({HookEventType.SESSION_END})
 
 
 class _Client:
@@ -136,6 +136,11 @@ def test_surf_102_each_declared_event_writes_through_a_daemon_verb(
         (decision,) = (result for result in results if result.name == HOST_SKILL_HOOK)
         assert decision.block
         assert "unknown_argument" in decision.output
+        return
+    if event_type in _STAMPING:
+        (stamp,) = (result for result in results if result.name == "session.end_stamp")
+        assert not stamp.raised
+        assert calls == []
         return
     assert calls, f"{event_type.value} reached no daemon verb"
     assert set(calls) <= _WRITE_VERBS

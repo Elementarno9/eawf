@@ -1,7 +1,8 @@
 """The seam holds a bounded cache of routes over its one binding.
 
-A route is read once, on the first navigation to it, and never again while it is held:
-the one feed keeps every held route current, so going back costs no read. Attention is
+A route is read once, on the first navigation to it, and never again while it is held
+and no patch moved it: the one feed keeps every held route's statuses current, and a
+route a patch moved is read again on return for the facts a patch cannot state. Attention is
 pinned, because the header prints its count on every route. The cache is bounded, and
 the least recently shown unpinned route is the one evicted.
 
@@ -408,7 +409,8 @@ def test_a_reconnect_drops_the_hidden_routes_it_could_not_replay(retained: set[i
     }
     asyncio.run(seam.reconnect())
     assert seam.held_routes == ("scope.home",)
-    assert seam.owed() == (ATTENTION_ROUTE,)
+    # a replayed route holds rows its patches could not complete, so it owes a read
+    assert seam.owed() == (*(("scope.home",) if replay else ()), ATTENTION_ROUTE)
     home = seam.projection
     assert home is not None
     expected = {"TRK-7001", "TRK-7002"} if replay else {"TRK-7001"}

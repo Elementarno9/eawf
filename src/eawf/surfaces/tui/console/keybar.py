@@ -42,6 +42,7 @@ KEY_NAMES: Mapping[str, str] = MappingProxyType(
         "ArrowLeft": "←",
         "ArrowRight": "→",
         "Escape": "Esc",
+        " ": "Space",
     }
 )
 _ARROWS = frozenset("↑↓←→")

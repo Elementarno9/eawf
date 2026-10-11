@@ -44,8 +44,8 @@ from eawf.surfaces.tui.console.tokens import Severity
 from . import test_native_route_frames as nrf
 from .test_console_live_keys import DETAIL_ROUTES
 from .test_console_live_smoke import (
-    REPO_ROOT,
     authority_digests,
+    committed_tree,
     live_console,
     render_setup,
     require_epoch2_repository,
@@ -330,13 +330,14 @@ def test_live_no_menu_verb_without_a_daemon_verb_opens_a_card(tmp_path: Path) ->
     from eawf.surfaces.tui.console.registry import REGISTRY
 
     require_epoch2_repository()
-    before = authority_digests(REPO_ROOT)
+    root = committed_tree(tmp_path)
+    before = authority_digests(root)
 
     async def body() -> tuple[list[str], int]:
         opened: list[str] = []
         pressed = 0
         async with (
-            live_console(REPO_ROOT, tmp_path / "runtime", launched=True) as (app, seam),
+            live_console(root, tmp_path / "runtime", launched=True) as (app, seam),
             app.run_test(size=SIZES[1]) as pilot,
         ):
             setups: list[SessionSetup] = []
@@ -367,4 +368,4 @@ def test_live_no_menu_verb_without_a_daemon_verb_opens_a_card(tmp_path: Path) ->
     opened, pressed = asyncio.run(body())
     assert not opened, "a card opened for a verb no daemon verb carries:\n" + "\n".join(opened)
     assert pressed > 40
-    assert authority_digests(REPO_ROOT) == before, "the live serve wrote to the authority tree"
+    assert authority_digests(root) == before, "the live serve wrote to the authority tree"

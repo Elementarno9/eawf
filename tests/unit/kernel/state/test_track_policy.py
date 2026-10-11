@@ -156,19 +156,19 @@ def test_track_rejects_a_phrase_declared_both_in_and_out_of_scope() -> None:
 
 def test_track_policy_admits_batch_activation_below_the_hard_limit() -> None:
     policy = TrackPolicy.model_validate(_policy_document())
-    assert policy.admits_batch_activation(active_batches_in_repo=0) is True
+    assert policy.admits_batch_activation(proving_batches_in_repo=0) is True
 
 
 def test_track_policy_refuses_batch_activation_at_the_hard_limit() -> None:
     policy = TrackPolicy.model_validate(_policy_document())
-    assert policy.admits_batch_activation(active_batches_in_repo=1) is False
+    assert policy.admits_batch_activation(proving_batches_in_repo=1) is False
 
 
 def test_track_policy_refuses_batch_activation_above_the_hard_limit() -> None:
     document = _policy_document()
     document["wip"]["active_batches_per_repo"] = 2
     policy = TrackPolicy.model_validate(document)
-    assert policy.admits_batch_activation(active_batches_in_repo=3) is False
+    assert policy.admits_batch_activation(proving_batches_in_repo=3) is False
 
 
 def test_track_policy_exceeds_milestone_advisory_above_the_bound() -> None:

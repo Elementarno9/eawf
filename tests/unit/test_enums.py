@@ -544,6 +544,7 @@ def test_store_kind_values() -> None:
         "runtime_certification",
         # Live feed notice that a Run's event stream moved; never stored.
         "run_events_appended",
+        "batch_proof_noted",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

@@ -17,7 +17,10 @@ field rather than being widened into a second spelling of the wire code.
 This module also registers the one native transition RPC. It sits behind
 the epoch-2 fence, so it cannot be reached on a tree that has not been
 shown to hold native authority, and it runs the transaction off the event
-loop because the transaction blocks on file locks.
+loop because the transaction blocks on file locks. The registry's reducer
+defaults a guard it cannot observe to satisfied, so the RPC first evaluates
+every guard of the edge the document can answer, the same predicates the
+per-entity verbs hold their edges to.
 """
 
 from __future__ import annotations
@@ -33,8 +36,18 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, Validation
 
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import StrictPositiveInt
-from eawf.runtime.daemon.epoch2_recovery import PROJECTION_DEGRADED, publish_projection
+from eawf.kernel.state.epoch2.transitions import DENIAL_REMEDIATION, GUARD_DENIALS, rows_from
+from eawf.kernel.store.compaction import document_rows
+from eawf.kernel.store.tiers import ENTITY_COLLECTIONS
+from eawf.runtime.daemon.epoch2_recovery import (
+    PROJECTION_DEGRADED,
+    publish_projection,
+    read_idempotency_receipt,
+)
+from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.epoch2_transaction import (
+    LIFECYCLE_ENTITIES,
+    RECORD_CLASSES,
     MutationReceipt,
     TransactionRefusalCode,
     TransactionRefusedError,
@@ -42,6 +55,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
     run_transaction,
 )
 from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods.domain_guards import GUARD_COMPUTERS, GuardInputs
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 
 logger = logging.getLogger(__name__)
@@ -276,6 +290,78 @@ def schema_refusal(
     )
 
 
+def _unmet_edge_guard(
+    context: Epoch2RootContext, request: TransitionRequest
+) -> TransactionRefusedError | None:
+    """Return the refusal of an edge one of whose computable guards is false.
+
+    What the document cannot settle is left to the transaction, which reports
+    it against its own locked read: an absent or unreadable record, a stale
+    revision, an edge the registry does not declare. A request whose key
+    already committed is not judged at all, because a retry replays its receipt
+    rather than being held against a document its own commit has since moved.
+
+    Args:
+        context: The native context of the addressed root.
+        request: The validated transition request.
+
+    Returns:
+        A ``transition_guard_failed`` refusal naming the first unmet guard in
+        the registry's order, or ``None`` when the transaction should run.
+    """
+    entity = LIFECYCLE_ENTITIES.get(request.urn.kind)
+    if entity is None:
+        return None
+    try:
+        namespaced = context.idempotency_key(request.idempotency_key)
+        if read_idempotency_receipt(context, namespaced_key=namespaced) is not None:
+            return None
+    except ValueError:
+        return None
+    with context.session([request.urn]) as session:
+        document = session.read_document()
+        document_path = session.document_path
+    row = document_rows(document, ENTITY_COLLECTIONS[request.urn.kind]).get(request.urn.entity_key)
+    if row is None:
+        return None
+    try:
+        record = RECORD_CLASSES[entity].model_validate(row)
+    except ValueError:
+        return None
+    if record.revision != request.expected_revision:
+        return None
+    edge = next(
+        (edge for edge in rows_from(entity, record.status) if str(edge.to) == request.to_status),
+        None,
+    )
+    if edge is None:
+        return None
+    inputs = GuardInputs(
+        document=document,
+        document_path=document_path,
+        record=record,
+        updates=request.updates,
+        reason_code=request.reason_code,
+        actor=request.actor,
+        binding_refs=request.binding_refs,
+    )
+    for guard in edge.guards:
+        computer = GUARD_COMPUTERS.get(guard)
+        if computer is not None and not computer(inputs):
+            return TransactionRefusedError(
+                code=TransactionRefusalCode.TRANSITION_GUARD_FAILED,
+                detail=(
+                    f"{entity.value} {record.status!s} -> {request.to_status} blocked by guard "
+                    f"{guard.value!r}"
+                ),
+                entity_ref=str(request.urn),
+                guard=guard.value,
+                remediation=DENIAL_REMEDIATION[GUARD_DENIALS[guard]],
+                revision=record.revision,
+            )
+    return None
+
+
 @native_mutator(DOMAIN_TRANSITION_METHOD)
 async def _apply_domain_transition(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
@@ -306,6 +392,10 @@ async def _apply_domain_transition(
             mode="json"
         )
     context = ctx.native_root_context(authority.root)
+    unmet = await asyncio.to_thread(_unmet_edge_guard, context, request)
+    if unmet is not None:
+        logger.info(f"_apply_domain_transition refused guard={unmet.guard}")
+        return refused_envelope(unmet, operation=DOMAIN_TRANSITION_METHOD).model_dump(mode="json")
     try:
         committed = await asyncio.to_thread(
             run_transaction,

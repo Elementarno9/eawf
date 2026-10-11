@@ -9,7 +9,8 @@ Resolution rules:
 - ``EAWF_RUNTIME_DIR`` names the directory verbatim.
 - Otherwise the directory is ``<base>/trees/<key>/``, one per tree, where
   ``<key>`` digests the ``state.json`` the daemon would bind to, so a daemon
-  answers only the clients of the tree it serves.
+  answers only the clients of the tree it serves. The CLI pins the tree named
+  by ``-w/--workspace`` (:func:`pin_workspace`) for the whole invocation.
 - ``<base>`` is ``$XDG_RUNTIME_DIR/eawfd/`` on Linux when
   ``XDG_RUNTIME_DIR`` is set, and ``~/.eawfd/`` everywhere else. On Windows
   the listener itself is a named pipe at ``\\\\.\\pipe\\eawfd-<user>-<key>``,
@@ -42,6 +43,34 @@ TREES_DIRNAME: str = "trees"
 #: well inside the 104-byte AF_UNIX path cap while making a collision between
 #: two trees of one user negligible.
 _TREE_KEY_CHARS: int = 16
+
+# The tree the running CLI invocation names with ``-w/--workspace``. Module
+# state rather than a parameter so every daemon client, spawn and doctor probe
+# of the invocation dials that tree without each call site threading it, and
+# rather than a context variable so console worker threads see it too.
+_pinned_workspace: Path | None = None
+
+
+def pin_workspace(workspace: Path | None) -> Path | None:
+    """Make :func:`runtime_dir` resolve the tree rooted at *workspace*.
+
+    Args:
+        workspace: The workspace root from ``-w/--workspace``, or ``None`` to
+            fall back to resolving from the working directory.
+
+    Returns:
+        The previous pin, which the caller restores when its invocation ends.
+    """
+    global _pinned_workspace
+    previous = _pinned_workspace
+    _pinned_workspace = workspace.resolve() if workspace is not None else None
+    logger.debug(f"pin_workspace workspace={str(_pinned_workspace)!r}")
+    return previous
+
+
+def pinned_workspace() -> Path | None:
+    """Return the workspace root :func:`pin_workspace` set, or ``None``."""
+    return _pinned_workspace
 
 
 def runtime_base_dir() -> Path:
@@ -86,8 +115,9 @@ def runtime_dir() -> Path:
        for choosing a path short enough for AF_UNIX (104-byte cap on
        macOS) and for ensuring write access.
     2. ``<base>/trees/<key>`` where *key* names the ``state.json`` the
-       daemon resolves (``EA_STATE``, else upward from the working
-       directory), so clients of two trees never reach one daemon.
+       daemon resolves (``EA_STATE``, else the pinned workspace, else
+       upward from the working directory), so clients of two trees never
+       reach one daemon.
 
     Returns:
         Path to the daemon runtime directory. Caller is responsible for
@@ -96,9 +126,10 @@ def runtime_dir() -> Path:
     override = os.environ.get("EAWF_RUNTIME_DIR")
     if override:
         return Path(override)
-    # The daemon resolves its tree with ``workspace=None`` too, so the key a
-    # client dials is the key of the tree the daemon it spawns will serve.
-    state_path, _reason = resolve_with_reason(workspace=None)
+    # A spawned daemon is handed the pinned tree as ``EA_STATE`` (see
+    # ``spawn.daemon_environ``), so the key a client dials is the key of the
+    # tree the daemon it spawns will serve.
+    state_path, _reason = resolve_with_reason(workspace=_pinned_workspace)
     return runtime_base_dir() / TREES_DIRNAME / tree_key(state_path)
 
 

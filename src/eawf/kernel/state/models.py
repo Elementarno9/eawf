@@ -1925,10 +1925,8 @@ class FleetRun(_StrictModel):
 
     Persisted as the optional top-level :attr:`State.fleet_run` field
     (default ``None`` -- no active run) so a state written before this field
-    existed re-validates unchanged. The loop runner
-    (:mod:`eawf.runtime.daemon.methods.fleet`) is the only mutator; the daemon
-    canonical state writer persists every run-state transition, so the loop
-    never writes ``state.json`` directly.
+    existed re-validates unchanged. The loop that wrote it was epoch-1 code
+    and is gone, so the field now only carries a run an epoch-1 tree recorded.
 
     Attributes:
         run_state: The closed :class:`FleetRunState` the loop is in.
@@ -2034,7 +2032,8 @@ class State(_StrictModel):
     :attr:`Wave.runtime_baseline` claim-time telemetry baseline; it backfills
     ``runtime_baseline: None`` on every wave for an explicit on-disk row.
     ``Wave.runtime_latest`` is likewise additive on top of ``1.9`` and defaults
-    to ``None`` until the runtime.capture daemon RPC records fresh counters.
+    to ``None``; the epoch-1 capture that wrote it is gone, so it carries only
+    counters an epoch-1 tree recorded.
 
     :attr:`fleet_run` is additive on top of ``1.9`` and defaults to ``None``
     (no active auto-drain loop), so a state written before the field existed

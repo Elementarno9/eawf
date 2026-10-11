@@ -591,9 +591,16 @@ def test_the_frame_states_an_observed_thinking_state_without_the_label() -> None
     assert transcript.DERIVED_LABEL not in state
 
 
-def test_the_frame_draws_the_unknown_token_when_no_turn_is_open() -> None:
-    """An absent state is stated as its token and word, and still labelled derived."""
+def test_the_frame_states_the_runs_status_when_no_turn_is_open() -> None:
+    """With no turn open the row leads with the Run's stored status, not an unknown cell."""
     body = _frame(_view((_event(1), _summarized(2))))
+    state = next(line for line in body.split("\n") if line.startswith(" STATE"))
+    assert state.startswith(f" STATE     RUNNING · {transcript.NOT_THINKING} · ")
+
+
+def test_the_frame_draws_the_unknown_token_when_no_run_is_held() -> None:
+    """An absent state with no Run to state is its token and word, and still labelled derived."""
+    body = _frame(_view((_event(1), _summarized(2)), document={"run": {}}))
     state = next(line for line in body.split("\n") if line.startswith(" STATE"))
     assert state.startswith(f" STATE     ? unknown · {transcript.DERIVED_LABEL} · ")
 
@@ -970,12 +977,12 @@ def test_con_172_colour_sits_on_the_kind_cell_only() -> None:
 def test_con_169_the_keybar_walks_blocks_and_folds_them() -> None:
     bar = _rows(_frame(_view(_long_summary()), width=80, sel=1))[-1].split()
     assert bar[:4] == ["↑↓", "block", "Enter", "fold"]
-    assert bar[4:6] == ["f", "follow"]
+    assert bar[4:7] == ["f", "Space", "follow"]
 
 
 def test_enter_fold_is_left_off_a_block_that_folds_nothing() -> None:
     bar = _rows(_frame(_view(_live_run())))[-1].split()
-    assert bar[:4] == ["↑↓", "block", "f", "follow"]
+    assert bar[:5] == ["↑↓", "block", "f", "Space", "follow"]
 
 
 def test_con_172_the_scrollbar_column_is_drawn_only_when_something_is_hidden() -> None:

@@ -4,10 +4,9 @@ A notice reports a hard ceiling a running Run has reached, never an
 estimate it passed nor a prediction that a ceiling is coming: passing an
 estimate proved elapsed-time arithmetic, and every notice it opened was
 the same wall-clock reading that discriminated nothing. So one rule
-remains. On the token axis the ceiling's kill ladder has already acted,
-and the notice opens at once. On the wall-clock axis a long healthy Run
-and a stuck one reach the ceiling alike, so the notice opens only once
-the Run has also shown no event for the grace period.
+remains, the same on every hard axis: the daemon ends a Run at its token
+or wall-clock ceiling and stops its worker, so the notice reports that
+stop and opens at once.
 
 A former estimate or warning fraction, under any name, is an unknown key
 and fails to load, so a later revision cannot reintroduce an interrupt
@@ -18,7 +17,7 @@ the usage gauge; only the interrupt is gone.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Annotated, Any, Final, Literal
+from typing import Annotated, Any, Final
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -33,8 +32,8 @@ class EstimatedTimeNotice(RuntimeRecord):
     """When a Run that reached a hard ceiling opens a budget notice.
 
     Attributes:
-        require_no_progress_for: Seconds a Run must show no event before
-            its wall-clock ceiling crossing opens a notice.
+        require_no_progress_for: Seconds a wave past its estimate must show
+            no progress before its crossing meets the grace.
     """
 
     require_no_progress_for: Annotated[StrictInt, Field(ge=1)] = 600
@@ -67,33 +66,19 @@ class EstimatedTimeNotice(RuntimeRecord):
         """
         return now - last_progress_at >= timedelta(seconds=self.require_no_progress_for)
 
-    def opens(
-        self,
-        *,
-        running: bool,
-        axis: Literal["tokens", "wall_seconds"],
-        ceiling_reached: bool,
-        silent_for: timedelta,
-    ) -> bool:
+    def opens(self, *, running: bool, ceiling_reached: bool) -> bool:
         """Return whether a ceiling reading opens a budget notice: the one notice rule.
 
         Args:
             running: Whether the scope is a Run in ``RUNNING``. Anything
                 else -- a stopped Run, a wave -- never opens a notice.
-            axis: The metered resource the ceiling is set on.
             ceiling_reached: Whether the reading reached the Run's hard
-                ceiling on *axis*.
-            silent_for: How long the Run has shown no event, counted from
-                its start when it has shown none. The token axis ignores it.
+                ceiling on its axis.
 
         Returns:
-            ``True`` for a running Run at its hard ceiling: always on the
-            token axis, and on the wall-clock axis only once the Run has
-            been silent for :attr:`require_no_progress_for` seconds.
+            ``True`` for a running Run at its hard ceiling, on either axis.
         """
-        if not (running and ceiling_reached):
-            return False
-        return axis == "tokens" or silent_for >= timedelta(seconds=self.require_no_progress_for)
+        return running and ceiling_reached
 
 
 class BudgetNoticePolicy(RuntimeRecord):
