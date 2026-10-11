@@ -92,6 +92,9 @@ TOKEN_MAP: tuple[SurfaceToken, ...] = (
     SurfaceToken("focus", Channel.BORDER, "primary", None),
     SurfaceToken("caret", Channel.COLOR, "accent", ".canvas .br"),
     SurfaceToken("cursor", Channel.BACKGROUND, "cursor-ground", None),
+    # Inline code in a title or criterion: the lit accent sibling, apart from the text
+    # around it and from every severity tone, so a quoted name never reads as a state.
+    SurfaceToken("code", Channel.COLOR, "primary", None),
     SurfaceToken("ok", Channel.COLOR, "ok", ".ok"),
     SurfaceToken("info", Channel.COLOR, "status-claimed", ".info"),
     SurfaceToken("warn", Channel.COLOR, "warn", ".canvas .wn"),

@@ -847,6 +847,31 @@ def activate_crumb(ctx: Ctx, step: CrumbRun) -> None:
             return
 
 
+def open_id(ctx: Ctx, entity_id: str, *, here: str | None) -> bool:
+    """Open ``entity_id``'s route onto it, as a drill would, so Escape returns here.
+
+    The page's own subject, and any id while an overlay, the filter, the go prefix or an
+    editor owns the keys, opens nothing; an id no bound route opens is logged as such.
+
+    Args:
+        ctx: The activation's context.
+        entity_id: The typed id that was activated.
+        here: The page's own subject, the leaf its breadcrumb names.
+
+    Returns:
+        Whether a route was opened.
+    """
+    s = ctx.s
+    if busy(s) or entity_id == here:
+        return False
+    route = route_for_id(entity_id)
+    if route is None or not has_renderer(route):
+        ctx.log(CRUMB_KEY, f"no route opens {entity_id}")
+        return False
+    drill.drill_to(ctx, route, entity_id)
+    return True
+
+
 def parent_of(session: Session, fixture: Fixture) -> tuple[str, str | None] | None:
     """Return the place one breadcrumb step up, for an Escape with an empty back stack.
 

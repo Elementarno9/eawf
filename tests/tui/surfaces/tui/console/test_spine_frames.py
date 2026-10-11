@@ -250,7 +250,9 @@ def test_the_batch_frame_lists_its_own_tasks_and_no_sibling() -> None:
     assert frame[1].startswith(" Batch BAT-0100 · ACTIVE")
     assert "BAT-0101" not in text, "a sibling Batch is not the frame's subject"
     assert "TSK-0003" not in text, "a Task of another Batch is not listed"
-    assert _starts(frame, "TASKS").startswith(" TASKS      ▸ TSK-0001 · RUNNING  Bound the replay")
+    assert _starts(frame, "TASKS").startswith(
+        " TASKS      ▸ TSK-0001 · RUNNING    Bound the replay"
+    )
     assert "TSK-0002 · COMPLETED" in text
     assert "TSK-0002 · COMPLETED  Seal the ledger" in text, "every row names its Task"
     assert "2 tasks · 1 completed" in _starts(frame, "COUNT")

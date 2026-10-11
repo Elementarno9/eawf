@@ -136,7 +136,7 @@ batch_app = typer.Typer(
     name="batch",
     help=(
         "Delivery-batch lifecycle (activate, integrate, adopt-landed, ready, merge, reconcile, "
-        "observe-merge, complete)."
+        "observe-merge, complete, set-title)."
     ),
     no_args_is_help=True,
 )

@@ -13,7 +13,10 @@ What each lens catches, given what :class:`PlanBody` and
   ``depends_on`` edge, direct or transitive, ordering one before the
   other. The check runs across the whole plan rather than per-Batch, so
   two Tasks in different Batches that both touch the same path are
-  caught the same way two Tasks in one Batch are.
+  caught the same way two Tasks in one Batch are. On an append to an
+  ACTIVE Milestone the caller names the Tasks already placed, and only a
+  pair with a new Task is judged: two placed Tasks were judged when they
+  were placed, and a finished Task holds no claim.
 - criterion fidelity: a criterion whose response clause cannot resolve an
   oracle tier -- a ``forall`` claim proved somewhere other than the
   hypothesis locus, or a ``gate_ref`` naming a gate kind nothing
@@ -37,14 +40,22 @@ What each lens catches, given what :class:`PlanBody` and
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from types import MappingProxyType
 from typing import Final
 
 from eawf.kernel.spec.common import assign_oracle_tier
 from eawf.kernel.state.epoch2.plan_revision import PlanBody
 from eawf.kernel.state.epoch2.run import MUTATING_PURPOSES
+from eawf.kernel.state.epoch2.task_status import TERMINAL_TASK_STATUSES, TaskStatus
 from eawf.kernel.state.epoch2.urns import RepositoryUrn, TaskUrn
 from eawf.workflow.planning.lenses.structure import PlanFinding, PlanFindingCode, PlanLens
+
+#: No Task already placed: a fresh plan, or a re-plan of a PLANNED Milestone.
+NOTHING_PLACED: Final[Mapping[TaskUrn, TaskStatus]] = MappingProxyType({})
+
+#: The stored states in which a Task's write claim is spent.
+_SETTLED: Final = frozenset({*TERMINAL_TASK_STATUSES, TaskStatus.DROPPED})
 
 
 def _depends_transitively(
@@ -79,11 +90,16 @@ def _depends_transitively(
     return False
 
 
-def _ownership_lens(body: PlanBody) -> tuple[PlanFinding, ...]:
+def _ownership_lens(
+    body: PlanBody, *, placed: Mapping[TaskUrn, TaskStatus]
+) -> tuple[PlanFinding, ...]:
     """Flag two Tasks that claim an overlapping write path with no ordering.
 
     Args:
         body: The plan content.
+        placed: The stored status of each plan Task an append to an
+            ACTIVE Milestone restates. A pair of two such Tasks, or one
+            with a Task already settled, is not judged.
 
     Returns:
         One finding per unordered overlapping pair; empty when every
@@ -99,6 +115,13 @@ def _ownership_lens(body: PlanBody) -> tuple[PlanFinding, ...]:
         for second in tasks[index + 1 :]:
             overlap = first_claims & frozenset(second.write_claims)
             if not overlap:
+                continue
+            first_status, second_status = placed.get(first.urn), placed.get(second.urn)
+            if (
+                first_status in _SETTLED
+                or second_status in _SETTLED
+                or (first_status is not None and second_status is not None)
+            ):
                 continue
             if _depends_transitively(first.urn, second.urn, edges) or _depends_transitively(
                 second.urn, first.urn, edges
@@ -301,29 +324,36 @@ AUTHORITY_LENS_ORDER: Final[tuple[PlanLens, ...]] = (
 )
 
 _AUTHORITY_LENS_FUNCS: Final[dict[PlanLens, Callable[[PlanBody], tuple[PlanFinding, ...]]]] = {
-    PlanLens.OWNERSHIP: _ownership_lens,
     PlanLens.CRITERION_FIDELITY: _criterion_fidelity_lens,
     PlanLens.ROLE_AUTHORITY: _role_authority_lens,
     PlanLens.INTEGRATION_MIGRATION: _integration_migration_lens,
 }
 
 
-def run_authority_lenses(body: PlanBody) -> tuple[PlanFinding, ...]:
+def run_authority_lenses(
+    body: PlanBody, *, placed: Mapping[TaskUrn, TaskStatus] = NOTHING_PLACED
+) -> tuple[PlanFinding, ...]:
     """Run lenses 5-8, in :data:`AUTHORITY_LENS_ORDER`, over *body*.
 
     Args:
         body: The plan content to validate.
+        placed: The stored status of each plan Task an append to an
+            ACTIVE Milestone restates; read only by the ownership lens.
 
     Returns:
         Every finding any of lenses 5-8 produced, in lens order.
     """
     findings: list[PlanFinding] = []
     for lens in AUTHORITY_LENS_ORDER:
-        findings.extend(_AUTHORITY_LENS_FUNCS[lens](body))
+        if lens is PlanLens.OWNERSHIP:
+            findings.extend(_ownership_lens(body, placed=placed))
+        else:
+            findings.extend(_AUTHORITY_LENS_FUNCS[lens](body))
     return tuple(findings)
 
 
 __all__ = [
     "AUTHORITY_LENS_ORDER",
+    "NOTHING_PLACED",
     "run_authority_lenses",
 ]

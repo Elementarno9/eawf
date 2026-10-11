@@ -56,6 +56,10 @@ WRITE_CONSEQUENCES: Final[Mapping[str, tuple[tuple[str, ...], tuple[str, ...]]]]
             ("the milestone's target date is set or cleared, one revision on",),
             ("its status does not move", "no batch, task or release is rescheduled by it"),
         ),
+        "domain.batch.set_title": (
+            ("the batch's title is set, one revision on, finished or not",),
+            ("its status does not move", "no task, head binding or proof changes"),
+        ),
         "runtime.evidence.claim.file": (
             (
                 "a claim is filed under the next CLM key, its spans digested as they read now",

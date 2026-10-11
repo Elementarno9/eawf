@@ -833,8 +833,8 @@ def resolve_attach(chrome: ConsoleChrome, request: AttachRequest) -> AttachResul
         return AttachResult(entry=state, trace=steps)
     if not declared:
         return AttachResult(entry=_epoch1(chrome, request), trace=steps)
-    daemon = AttachStep(name="daemon", result="contacted · waiting on the first projection")
-    return AttachResult(entry=None, trace=(*steps, daemon))
+    # the daemon is not asked here: the console states its progress live once it runs
+    return AttachResult(entry=None, trace=steps)
 
 
 #: The entry state a launch lands in when the daemon answers nothing.
@@ -845,6 +845,13 @@ _OFFLINE_ROUTE: Final = "scope.home"
 
 #: What the offline frame says when there is no snapshot to show.
 NO_SNAPSHOT: Final = "∅ no snapshot held · this console has read nothing from the tree yet"
+
+#: What the offline frame hands over: the daemon answered nothing, so these say why and
+#: bring it back.
+DAEMON_COMMANDS: Final = (
+    EntryCommand(argv=("daemon", "status"), purpose="see whether the daemon is up"),
+    EntryCommand(argv=("daemon", "restart"), purpose="start it again"),
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -910,11 +917,13 @@ def offline_state(chrome: ConsoleChrome, snapshot: OfflineSnapshot | None) -> En
         The offline state, titled with the revision the snapshot holds and its age, one
         row per Track with the Runs filed under it and the time the snapshot is as of.
         What needs you is not read without the daemon, so that cell is the unknown token
-        rather than a count.
+        rather than a count. Either way its tail names :data:`DAEMON_COMMANDS`.
     """
     base = _base(chrome, OFFLINE)
     if snapshot is None:
-        return base.model_copy(update={"rows": (), "tail": (NO_SNAPSHOT,)})
+        return base.model_copy(
+            update={"rows": (), "tail": (NO_SNAPSHOT, "", *_command_lines(DAEMON_COMMANDS))}
+        )
     at = clock_time(snapshot.committed_at)[:5]
     header = snapshot.projection.header
     age = span(max(0, int((header.generated_at - snapshot.committed_at).total_seconds())))
@@ -939,7 +948,11 @@ def offline_state(chrome: ConsoleChrome, snapshot: OfflineSnapshot | None) -> En
         "Controls are gone until the daemon answers again.",
     )
     return base.model_copy(
-        update={"title": title, "rows": rows or None, "tail": tail if rows else (NO_SNAPSHOT,)}
+        update={
+            "title": title,
+            "rows": rows or None,
+            "tail": (*(tail if rows else (NO_SNAPSHOT,)), "", *_command_lines(DAEMON_COMMANDS)),
+        }
     )
 
 
@@ -958,6 +971,7 @@ def with_entry_state(chrome: ConsoleChrome, state: EntryState) -> ConsoleChrome:
 
 
 __all__ = [
+    "DAEMON_COMMANDS",
     "NO_SNAPSHOT",
     "OFFLINE",
     "ONBOARDING",

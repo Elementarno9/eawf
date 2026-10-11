@@ -26,7 +26,6 @@ import typer
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
-from eawf.surfaces.cli.commands.domain import _native_answer
 from eawf.surfaces.cli.flags import GlobalFlags
 
 #: The daemon verb a long command submits through, and the one it is
@@ -96,6 +95,10 @@ def follow_operation(
         DaemonUnreachable: The daemon stayed unreachable for
             :data:`_RECONNECT_ATTEMPTS` consecutive polls.
     """
+    # domain imports, at its end, sibling verbs that import this module back, so a process
+    # whose first command module is this one would read domain while it is half built
+    from eawf.surfaces.cli.commands.domain import _native_answer
+
     cursor = 0
     failures = 0
     while True:

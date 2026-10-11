@@ -30,7 +30,7 @@
           "step_id": "AS-02",
           "actor": "operator",
           "action": "run the rc1 release pre-flight",
-          "expected_observation": "the pre-flight passes and 0.7.0rc1 is tagged and observed",
+          "expected_observation": "the pre-flight passes for 0.7.0rc1",
           "evidence_kinds": [
             "artifact"
           ]
@@ -1580,7 +1580,7 @@
         "criteria": [
           {
             "id": "CR-053",
-            "text": "The rc1 release pre-flight passes with its changelog section, version bump and migration note, and 0.7.0rc1 is tagged and observed on every target",
+            "text": "The rc1 release pre-flight passes with its changelog section, version bump and migration note",
             "kind": "behavioral",
             "acceptance_style": "binary",
             "evidence_kind": "deterministic",

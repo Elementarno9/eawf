@@ -347,7 +347,8 @@ def test_con_003_resolving_lists_each_step_its_result_and_a_derived_elapsed(
     assert f"registered root           matched · {CODE}" in narrow
     assert "workspace                 resolved · DEF" in narrow
     assert f"project membership        member · {CODE}" in narrow
-    assert "daemon                    contacted · waiting on the first projection" in narrow
+    # the daemon's step is the console's live progress, never claimed before it runs
+    assert "daemon" not in narrow.split("elapsed")[0]
     assert "elapsed                   ~" in narrow
     assert "Nothing has been read and nothing has been changed." in narrow
     assert "READS" not in narrow

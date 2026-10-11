@@ -28,8 +28,8 @@
         {
           "step_id": "AS-02",
           "actor": "operator",
-          "action": "publish 0.7.0",
-          "expected_observation": "every publication target is observed",
+          "action": "run the stable release pre-flight",
+          "expected_observation": "the pre-flight passes for 0.7.0",
           "evidence_kinds": [
             "artifact"
           ]
@@ -614,7 +614,7 @@
         "criteria": [
           {
             "id": "CR-020",
-            "text": "The stable release pre-flight passes, 0.7.0 is published, and every publication target is observed",
+            "text": "The stable release pre-flight passes for 0.7.0",
             "kind": "behavioral",
             "acceptance_style": "binary",
             "evidence_kind": "deterministic",

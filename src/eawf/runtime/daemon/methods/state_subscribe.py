@@ -22,16 +22,10 @@ dispatch and routes to the streaming path.
 
 from __future__ import annotations
 
-from typing import Any, Final
+from typing import Any
 
 from eawf.runtime.daemon.methods import MethodContext, register
-
-#: The RPC name a console subscribes to keyed projection patches by.
-PROJECTION_SUBSCRIBE_METHOD: Final = "projection.subscribe"
-
-#: The notification a projection subscriber receives one of per keyed patch,
-#: beside the ``event.push`` the other two verbs push raw envelopes as.
-PROJECTION_PUSH_METHOD: Final = "projection.patch"
+from eawf.runtime.daemon.read_contract import PROJECTION_PUSH_METHOD, PROJECTION_SUBSCRIBE_METHOD
 
 #: The RPC names that route to the subscribe streamer.
 SUBSCRIBE_METHODS: frozenset[str] = frozenset(
@@ -86,3 +80,13 @@ async def projection_subscribe(_ctx: MethodContext, _params: dict[str, Any]) -> 
         f"{PROJECTION_SUBSCRIBE_METHOD} must be dispatched via the streaming hook in "
         "eawf.runtime.daemon.server"
     )
+
+
+__all__ = [
+    "PROJECTION_PUSH_METHOD",
+    "PROJECTION_SUBSCRIBE_METHOD",
+    "SUBSCRIBE_METHODS",
+    "event_subscribe",
+    "projection_subscribe",
+    "state_subscribe",
+]

@@ -16,10 +16,12 @@ from dataclasses import replace
 
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.frame import INSPECT_FROM, View, paint_rack, paint_verbose
+from eawf.surfaces.tui.console.header import CrumbPart, crumb_runs
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.overlays import is_overlay, render_overlay
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.session import Session
+from eawf.surfaces.tui.console.width import pad
 
 #: The list routes that set an inspector beside their list.
 INSPECTED_ROUTES: frozenset[str] = frozenset({"activity", "backlog", "attention"})
@@ -99,11 +101,24 @@ def _draw(view: View) -> list[str]:
     return render_route(view)
 
 
+def _heading(header: str, w: int) -> str:
+    """Return ``header`` cut to its gutter and crumb leaf, padded to ``w`` cells.
+
+    The brand, the scope and the state slot are the whole-width header's to show; the
+    pane names only its subject.
+    """
+    runs = crumb_runs(header)
+    lead = runs[0].text if runs[0].part is CrumbPart.SLOT else ""
+    leaf = next((run.text for run in reversed(runs) if run.part is CrumbPart.LEAF), "")
+    return pad(lead + leaf, w)
+
+
 def pane_lines(view: View) -> list[str]:
     """Return the pane's rows: the inspected frame at the pane's width, less its keybar.
 
     The frame is drawn one row shorter than ``view``'s, so with its keybar left off it
-    fills the rows between the header and the keybar exactly.
+    fills the rows between the header and the keybar exactly. Its header row is cut to
+    the subject's crumb leaf, since the whole-width header already shows the rest.
 
     Raises:
         ValueError: ``view`` holds no inspector.
@@ -111,10 +126,9 @@ def pane_lines(view: View) -> list[str]:
     pane = view.inspector
     if pane is None:
         raise ValueError("the view holds no inspector to draw")
-    drawn = _draw(
-        replace(pane, w=pane_width(view.w), h=view.h - 1, gutter=0, verbose=False, inspector=None)
-    )
-    return drawn[:-1]
+    w = pane_width(view.w)
+    drawn = _draw(replace(pane, w=w, h=view.h - 1, gutter=0, verbose=False, inspector=None))
+    return [_heading(drawn[0], w), *drawn[1:-1]]
 
 
 def beside(view: View) -> list[str]:

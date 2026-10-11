@@ -16,8 +16,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
-from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD, PausesAnswer
-from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD, QuestionsAnswer
+from eawf.runtime.daemon.read_contract import (
+    PAUSE_READ_METHOD,
+    QUESTION_READ_METHOD,
+    PausesAnswer,
+    QuestionsAnswer,
+)
 from eawf.surfaces.tui.console.decisions import PauseRecord, QuestionRecord
 
 if TYPE_CHECKING:

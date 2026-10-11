@@ -450,7 +450,8 @@ def test_with_no_snapshot_the_offline_frame_says_none_is_held() -> None:
     state = offline_state(load_chrome(), None)
     assert state.id == OFFLINE
     assert not state.rows
-    assert state.tail == (NO_SNAPSHOT,)
+    assert state.tail[0] == NO_SNAPSHOT
+    assert "eawf daemon status" in "\n".join(state.tail), "the frame names how to bring it back"
 
 
 def test_the_offline_frame_lists_this_trees_tracks_from_its_last_commit() -> None:

@@ -392,6 +392,7 @@ def register(name: str) -> Callable[[Handler], Handler]:
 #: adding an entry module is a visible edit and a stray file cannot quietly
 #: become part of the surface.
 _METHOD_MODULES: Final[tuple[str, ...]] = (
+    "batch_title",
     "bulk",
     "campaign",
     "campaign_read",

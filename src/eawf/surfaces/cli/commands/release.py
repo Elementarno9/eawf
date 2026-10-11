@@ -377,6 +377,7 @@ def _answer(
     failed_guard: Callable[[dict[str, Any]], str | None] | None = None,
     links: Callable[[dict[str, Any]], dict[str, str]] | None = None,
     spawn: bool = True,
+    extend: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     """Send one release verb and print its answer as the machine envelope.
 
@@ -393,6 +394,8 @@ def _answer(
             exits with the refusal status.
         links: Derives the commands a caller may follow next from the answer.
         spawn: Whether a missing daemon is started for the call.
+        extend: Derives keys the answer carries beside the daemon's own,
+            from facts the daemon does not hold; ``None`` for none.
 
     Returns:
         The answer when it stood; ``None`` after a refusal or an error was
@@ -419,6 +422,8 @@ def _answer(
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return None
+    if extend is not None:
+        result = {**result, **extend(result)}
     record = result.get("release")
     envelope = answer_envelope(
         result,
@@ -529,13 +534,28 @@ def release_show(
     the recorded release, which the daemon reads back -- so an operator
     asking where a checkpoint stands never has to open a store file. A
     rung nobody has opened answers ``record: null`` rather than refusing.
+
+    Whether the rung's source commit is merged into ``origin``'s default
+    branch and whether its tag is on ``origin`` are read from the remote
+    now, not from any record, and reported as ``remote_facts``. When
+    ``origin`` does not answer, the last cached reading is reported with
+    ``source: cache`` and the instant it was observed. The remote is the
+    ``origin`` of the ``--workspace`` tree, and the reading is cached under
+    that tree's ``.ea/local``; a rung the answer names no checkpoint for
+    reports ``remote_facts: null``.
     """
+    from eawf.workflow.release import remote_facts
+
+    flags: GlobalFlags = ctx.obj
+    state_path, _reason = resolve_with_reason(flags.workspace)
+    repo_root = state_path.parent.parent
     _answer(
         ctx,
         RELEASE_RPC_METHODS["show"],
         {"version": version},
         subject=version or "open rung",
         spawn=False,
+        extend=lambda answer: {"remote_facts": remote_facts.show_remote_facts(repo_root, answer)},
     )
 
 

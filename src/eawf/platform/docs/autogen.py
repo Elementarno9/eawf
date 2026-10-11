@@ -232,7 +232,10 @@ def _md_escape(text: str) -> str:
 def cli_page() -> GeneratedPage:
     """Generate ``cli.md`` from the live root Typer app."""
     from eawf.surfaces.cli.app import app
+    from eawf.surfaces.cli.registry import COMMAND_REGISTRY, mount
 
+    # the root mounts its registry rows only when asked, so they are mounted here
+    rows = mount(COMMAND_REGISTRY)
     lines: list[str] = [
         "# eawf CLI reference",
         "",
@@ -248,7 +251,7 @@ def cli_page() -> GeneratedPage:
     top = sorted(
         (
             (c.name or "", _command_help(c.name, c.help, c.callback))
-            for c in app.registered_commands
+            for c in (*app.registered_commands, *rows.registered_commands)
             if c.name and not c.hidden
         ),
         key=lambda row: row[0],
@@ -257,7 +260,7 @@ def cli_page() -> GeneratedPage:
         lines.append(f"| `{name}` | {_md_escape(summary)} |")
 
     groups = sorted(
-        (g for g in app.registered_groups if g.name),
+        (g for g in (*app.registered_groups, *rows.registered_groups) if g.name),
         key=lambda g: g.name or "",
     )
     lines.extend(["", "## Command groups", ""])

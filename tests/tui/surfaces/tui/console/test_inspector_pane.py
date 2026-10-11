@@ -41,6 +41,7 @@ from eawf.surfaces.tui.console.overlays import render_overlay
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.seam import INSPECTOR_READ, ProjectionSeam
 from eawf.surfaces.tui.console.session import Session, SessionSetup
+from eawf.surfaces.tui.console.tokens import BRAND
 from tests.tui.surfaces.tui.console import test_native_route_bodies as bodies
 
 W, H = 180, 40
@@ -130,6 +131,11 @@ def _pane(row: str, w: int = W) -> str:
     return row[w - pane_width(w) :]
 
 
+def _heading(leaf: str) -> str:
+    """Return the pane's first row naming ``leaf``: its gutter and the leaf, padded."""
+    return f" {leaf}".ljust(pane_width(W))
+
+
 # ---------- the pane's geometry ----------
 
 
@@ -183,9 +189,10 @@ def test_activity_pane_is_the_run_frame_enter_opens_at_the_pane_width() -> None:
     expected = render_route(
         replace(_drilled_view(view, pressed), w=pane_width(W), h=H - 1, inspector=None)
     )[:-1]
-    assert [_pane(row) for row in frame[1:-1]] == expected
+    pane = [_pane(row) for row in frame[1:-1]]
+    assert pane[0] == _heading(RUN)
+    assert pane[1:] == expected[1:]
     assert all(row[W - pane_width(W) - 1] == DIVIDER for row in frame[1:-1])
-    assert RUN in expected[0]
     assert len(frame) == H and {len(row) for row in frame} == {W}
 
 
@@ -213,7 +220,9 @@ def test_backlog_pane_is_the_draft_card_enter_opens() -> None:
     pressed = _pressed(view)
     assert pressed.overlay == opened.overlay == "draft"
     card = replace(view, session=pressed, w=pane_width(W), h=H - 1)
-    assert [_pane(row) for row in frame[1:-1]] == render_overlay("draft", card)[:-1]
+    pane = [_pane(row) for row in frame[1:-1]]
+    assert pane[0] == _heading("draft · TSK-0100")
+    assert pane[1:] == render_overlay("draft", card)[1:-1]
 
 
 def test_attention_pane_is_the_card_enter_opens_on_the_row() -> None:
@@ -224,7 +233,9 @@ def test_attention_pane_is_the_card_enter_opens_on_the_row() -> None:
     assert (opened.route, opened.overlay) == (pressed.route, pressed.overlay)
     frame = compose_frame(replace(view, inspector=_drilled_view(view, opened)))
     card = replace(view, session=pressed, w=pane_width(W), h=H - 1)
-    assert [_pane(row) for row in frame[1:-1]] == render_overlay(opened.overlay, card)[:-1]
+    pane = [_pane(row) for row in frame[1:-1]]
+    assert pane[0] == _heading("consequence · ACT-0001")
+    assert pane[1:] == render_overlay(opened.overlay, card)[1:-1]
 
 
 def test_an_empty_list_opens_nothing_so_no_pane_is_set() -> None:
@@ -251,6 +262,28 @@ def test_the_header_and_keybar_span_the_frame_and_offer_enter() -> None:
     joined = compose_frame(replace(view, inspector=_drilled_view(view, opened)))
     assert joined[0] == alone[0]
     assert joined[-1] == alone[-1] and "Enter" in joined[-1]
+
+
+@pytest.mark.parametrize(
+    ("route", "leaf"),
+    [
+        ("activity", RUN),
+        ("backlog", "draft · TSK-0100"),
+        ("attention", "consequence · ACT-0001"),
+    ],
+)
+def test_the_pane_heads_with_its_subject_alone_and_keeps_its_rows(route: str, leaf: str) -> None:
+    view = _list_view(route)
+    opened = entered(_ctx(view))
+    assert opened is not None
+    inspected = replace(view, inspector=_drilled_view(view, opened))
+    pane = pane_lines(inspected)
+    assert pane[0] == _heading(leaf)
+    assert "LIVE" not in pane[0] and BRAND not in pane[0] and "NEEDS YOU" not in pane[0]
+    assert len(pane) == H - 2
+    frame = compose_frame(inspected)
+    assert sum("● LIVE" in row for row in frame) == 1
+    assert [_pane(row) for row in frame[1:-1]] == pane
 
 
 def test_a_view_holding_no_inspector_has_no_pane_to_draw() -> None:

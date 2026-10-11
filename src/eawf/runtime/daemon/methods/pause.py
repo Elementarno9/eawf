@@ -28,7 +28,6 @@ from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.state.epoch2.pause import (
     OpenPause,
     PauseReason,
-    PauseSituation,
     PauseStatus,
     ResumePredicate,
     project_pause,
@@ -41,11 +40,15 @@ from eawf.runtime.daemon.epoch2_root import RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.daemon.native_guard import native_params, require_native_call
+from eawf.runtime.daemon.read_contract import (
+    PAUSE_READ_METHOD,
+    PauseItem,
+    PausesAnswer,
+    stall_of,
+)
 
 logger = logging.getLogger(__name__)
 
-#: The verb every pause of a tree is read through.
-PAUSE_READ_METHOD: Final = "runtime.pause.read"
 
 #: The discriminator a pause line carries on the run ledger.
 _PAYLOAD_KIND: Final = "open_pause"
@@ -76,37 +79,6 @@ class PauseLine(BaseModel):
 
     payload_kind: Literal["open_pause"] = _PAYLOAD_KIND
     pause: OpenPause
-
-
-class PauseItem(BaseModel):
-    """One pause as the read reports it.
-
-    Attributes:
-        pause: The record, at its latest revision.
-        situation: The situation it projects to now.
-        ends_when: What would end it.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    pause: OpenPause
-    situation: PauseSituation
-    ends_when: str
-
-
-class PausesAnswer(BaseModel):
-    """What :data:`PAUSE_READ_METHOD` answers.
-
-    Attributes:
-        pauses: Every pause of the tree, by key.
-        run_states: The state of each Run a pause holds, by Run key; a Run the document
-            no longer holds is absent.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    pauses: tuple[PauseItem, ...] = ()
-    run_states: dict[str, str] = {}
 
 
 class _ReadParams(BaseModel):
@@ -141,11 +113,6 @@ def _append(session: RootSession, pause: OpenPause, *, now: datetime) -> None:
 def _next_key(held: dict[str, OpenPause]) -> str:
     """Return the ``PAU-####`` key after every pause the run ledger holds."""
     return f"PAU-{max((int(key.split('-', 1)[1]) for key in held), default=0) + 1:04d}"
-
-
-def stall_of(pause: OpenPause) -> str | None:
-    """Return the stall fact key a pause over a quiet Run cites, or ``None`` for any other."""
-    return next((ref for ref in pause.health_evidence_refs if isinstance(ref, str)), None)
 
 
 def open_stall_pause(

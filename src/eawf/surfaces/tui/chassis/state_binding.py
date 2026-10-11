@@ -49,12 +49,13 @@ from eawf.kernel.projection.compute import KeyedPatch
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
-from eawf.runtime.daemon.methods.state_subscribe import (
+from eawf.runtime.daemon.read_contract import (
+    CATCH_UP_TOO_LARGE,
     PROJECTION_PUSH_METHOD,
     PROJECTION_SUBSCRIBE_METHOD,
 )
 from eawf.runtime.daemon.runtime_dir import runtime_dir
-from eawf.surfaces.cli._daemon_client import DaemonClient
+from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -108,12 +109,17 @@ class StateBindingCallbacks:
         on_patch: Awaited with each keyed projection patch the daemon pushes.
             Optional and ``None`` for the epoch-1 feed, which subscribes with a
             verb that produces no patch frame at all.
+        on_resync: Awaited once a re-established stream could not replay what
+            it missed, so everything the feed fed must be read again. ``None``
+            re-reads ``state.json`` into ``on_state`` instead, which is all the
+            epoch-1 feed feeds.
     """
 
     on_state: Callable[[State], Awaitable[None]]
     on_degraded: Callable[[bool], Awaitable[None]]
     on_event: Callable[[Envelope], Awaitable[None]] | None = None
     on_patch: Callable[[KeyedPatch], Awaitable[None]] | None = None
+    on_resync: Callable[[], Awaitable[None]] | None = None
 
 
 def load_state(state_path: Path | None) -> State | None:
@@ -217,10 +223,14 @@ class StateBinding:
         self._last_mtime = 0.0
         # Subscription cursor + reconnect throttle: the id of the last
         # event the push stream delivered, resumed via ``since_event_id=`` on
-        # every (re)subscribe so a reconnect never re-requests the backlog; and the
+        # every (re)subscribe so the daemon replays what the gap missed; and the
         # monotonic timestamp of the last connect attempt so a repeatedly-
         # dropping stream reconnects on a bounded cadence, not per probe tick.
         self._last_event_id: str | None = None
+        # Whether a stream was ever established, and whether the next one owes a
+        # full re-read because the gap before it cannot be replayed.
+        self._subscribed_once = False
+        self._resync_owed = False
         # The projection feed's own resume cursor. Event ids order nothing
         # across two records, so a console resumes from the workspace-global
         # ordinal the daemon allocated instead; 0 means nothing acknowledged.
@@ -402,9 +412,10 @@ class StateBinding:
         """
         kinds = [StoreKind.EVENT.value]
         if self._subscribe_method == PROJECTION_SUBSCRIBE_METHOD:
-            # a Run's appended lines move no projection row, so the projection feed
-            # takes their notice beside its patches to follow a live transcript
+            # a Run's appended lines and a Batch's proof move no projection row, so the
+            # projection feed takes their notices beside its patches to show them live
             kinds.append(StoreKind.RUN_EVENTS_APPENDED.value)
+            kinds.append(StoreKind.BATCH_PROOF_NOTED.value)
         params: dict[str, object] = {"kinds": kinds}
         # Resume from the last delivered event so a reconnect continues the
         # stream instead of re-requesting the full backlog (since_event_id=None).
@@ -413,35 +424,74 @@ class StateBinding:
         return params
 
     def _run_subscription(self, loop: asyncio.AbstractEventLoop) -> None:
-        """Subscribe to ``state.subscribe`` and stream pushes (per-platform)."""
-        if os.name == "nt":
-            self._run_subscription_windows(loop)
-            return
+        """Subscribe and stream pushes, starting afresh when the cursor cannot resume.
+
+        A daemon that cannot replay from the cursor -- the log no longer holds it,
+        or the gap exceeds the catch-up bound -- refuses the subscribe. The stream
+        is then opened again from no cursor, owing a full re-read, so the bound
+        state is never left standing before the gap.
+        """
+        stream = self._stream_windows if os.name == "nt" else self._stream_posix
+        try:
+            stream(loop, self._subscribe_params())
+        except DaemonRpcError as exc:
+            if exc.code != CATCH_UP_TOO_LARGE or self._last_event_id is None:
+                raise
+            logger.info(
+                f"_run_subscription unreplayable cursor={self._last_event_id!r} cause={exc}"
+            )
+            self._last_event_id = None
+            self._resync_owed = True
+            stream(loop, self._subscribe_params())
+
+    def _stream_posix(self, loop: asyncio.AbstractEventLoop, params: dict[str, object]) -> None:
+        """Stream pushes over the daemon socket until it ends or the binder stops.
+
+        The client's call timeout bounds the subscribe round-trip only. It is
+        cleared for the stream, because a socket read that times out marks its
+        reader dead ("cannot read from timed out object") and an idle stream
+        would die with it; ``disconnect`` wakes the untimed read by shutting the
+        socket down instead.
+        """
         with self._client_factory() as client:
-            self._subscription_sock = getattr(client, "_sock", None)
+            sock = getattr(client, "_sock", None)
+            self._subscription_sock = sock
             try:
                 # Published before this check so a ``disconnect`` racing the
                 # connect either sees the socket to shut down or is seen here.
                 if self._stopping:
                     return
-                client.call(self._subscribe_method, self._subscribe_params())
-                self._consecutive_failures = 0
-                asyncio.run_coroutine_threadsafe(self._on_subscription_connected(), loop)
+                client.call(self._subscribe_method, params)
+                if sock is not None:
+                    sock.settimeout(None)
+                self._announce_connected(loop, params)
                 while not self._stopping:
                     reader = getattr(client, "_reader", None)
                     if reader is None:
                         raise RuntimeError("daemon reader unavailable")
-                    try:
-                        line = reader.readline()
-                    except TimeoutError:
-                        continue
+                    line = reader.readline()
                     if not line:
                         raise RuntimeError("daemon subscribe stream ended")
                     self._handle_push_line(loop, line)
             finally:
                 self._subscription_sock = None
 
-    def _run_subscription_windows(self, loop: asyncio.AbstractEventLoop) -> None:
+    def _announce_connected(
+        self, loop: asyncio.AbstractEventLoop, params: dict[str, object]
+    ) -> None:
+        """Record an acknowledged subscribe and schedule its delivery-side effects.
+
+        A stream re-established without a cursor resumes nothing, so whatever was
+        committed while the link was down is owed as a full re-read; the first
+        stream owes none, since the caller has only just read the state it binds.
+        """
+        resync = self._resync_owed or (self._subscribed_once and "since_event_id" not in params)
+        self._resync_owed = False
+        self._subscribed_once = True
+        self._consecutive_failures = 0
+        asyncio.run_coroutine_threadsafe(self._on_subscription_connected(resync=resync), loop)
+
+    def _stream_windows(self, loop: asyncio.AbstractEventLoop, params: dict[str, object]) -> None:
         """Stream ``state.subscribe`` pushes over a persistent named pipe.
 
         Unlike the connectionless request/reply pipe path, a subscription
@@ -454,6 +504,10 @@ class StateBinding:
         blocked read raise, which exits the loop cleanly under
         ``self._stopping``. Every pywin32 reference lives in the win32-only
         ``windows_pipe`` module so this binding stays import-clean on POSIX.
+
+        Raises:
+            DaemonRpcError: The daemon refused the subscribe, as the socket
+                client raises it, so a cursor it cannot replay is handled once.
         """
         from eawf.runtime.daemon.windows_pipe import (
             PipeReader,
@@ -467,7 +521,7 @@ class StateBinding:
                 "jsonrpc": "2.0",
                 "id": "tui-subscribe",
                 "method": self._subscribe_method,
-                "params": self._subscribe_params(),
+                "params": params,
             }
         )
         handle = open_subscription_pipe(
@@ -476,10 +530,11 @@ class StateBinding:
         self._win_pipe = handle
         reader = PipeReader(handle)
         try:
-            # First message is the subscribe ack.
-            reader.read_message()
-            self._consecutive_failures = 0
-            asyncio.run_coroutine_threadsafe(self._on_subscription_connected(), loop)
+            # First message is the subscribe ack, or the refusal in its place.
+            error = orjson.loads(reader.read_message()).get("error")
+            if isinstance(error, dict):
+                raise DaemonRpcError(int(error.get("code", 0)), str(error.get("message", "")))
+            self._announce_connected(loop, params)
             while not self._stopping:
                 line = reader.read_message()
                 if not line:
@@ -489,7 +544,7 @@ class StateBinding:
             self._win_pipe = None
             close_pipe(handle)
 
-    async def _on_subscription_connected(self) -> None:
+    async def _on_subscription_connected(self, *, resync: bool) -> None:
         """Clear failures + degraded once push connects; keep the backstop.
 
         The mtime-poll loop is intentionally left running as a backstop
@@ -497,9 +552,21 @@ class StateBinding:
         the poll guarantees eventual consistency if the stream later goes
         silent. The poll is mtime-gated, so it adds no redundant refresh
         while push keeps the bound state current.
+
+        Args:
+            resync: Whether the stream came back unable to replay its gap, so
+                everything it feeds is read again before the pushes after it.
         """
         self._consecutive_failures = 0
         await self._set_degraded(False)
+        if not resync:
+            return
+        if self._callbacks.on_resync is not None:
+            await self._callbacks.on_resync()
+            return
+        refreshed = load_state(self._state_path)
+        if refreshed is not None:
+            await self._callbacks.on_state(refreshed)
 
     def _handle_push_line(self, loop: asyncio.AbstractEventLoop, line: bytes) -> None:
         """Decode one push frame and schedule delivery for the feed it belongs to.
@@ -526,7 +593,7 @@ class StateBinding:
             return
         if self._subscribe_method == PROJECTION_SUBSCRIBE_METHOD:
             # a notice on the projection feed is no state change: it reaches the event
-            # sink alone, and the resume cursor stays the patch ordinal
+            # sink alone, and the resume cursor stays the last patch's event
             asyncio.run_coroutine_threadsafe(self._deliver_notice(envelope), loop)
             return
         # Advance the resume cursor so a later reconnect resumes past this event.
@@ -534,12 +601,13 @@ class StateBinding:
         asyncio.run_coroutine_threadsafe(self._handle_push(envelope), loop)
 
     def _handle_patch_frame(self, loop: asyncio.AbstractEventLoop, params: dict[str, Any]) -> None:
-        """Validate one keyed patch, advance the resume cursor and deliver it.
+        """Validate one keyed patch, advance the resume cursors and deliver it.
 
         A malformed patch is dropped rather than raised: the stream carries every
-        subscriber's patches, so one bad frame must not end the feed. The cursor
-        does not advance over it, so a later reconnect asks from the last ordinal
-        actually applied.
+        subscriber's patches, so one bad frame must not end the feed. The cursors
+        do not advance over it, so a later reconnect asks from the last patch
+        actually applied: the ordinal for the console's own reconnect, and the
+        envelope the patch came from for the stream's.
         """
         if self._callbacks.on_patch is None:
             return
@@ -549,6 +617,9 @@ class StateBinding:
             logger.debug(f"_handle_patch_frame skip cause={exc!r}")
             return
         self._last_canonical_sequence = max(self._last_canonical_sequence, patch.canonical_sequence)
+        event_id = params.get("event_id")
+        if isinstance(event_id, str):
+            self._last_event_id = event_id
         asyncio.run_coroutine_threadsafe(self._deliver_patch(patch), loop)
 
     async def _deliver_notice(self, envelope: Envelope) -> None:

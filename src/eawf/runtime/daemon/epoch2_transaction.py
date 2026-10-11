@@ -151,6 +151,7 @@ from eawf.surfaces.cli.errors import StateConflict
 
 if TYPE_CHECKING:
     from eawf.runtime.daemon.epoch2_create import CreateRequest
+    from eawf.runtime.daemon.methods.batch_title import BatchTitleRequest
     from eawf.runtime.daemon.methods.delivery_approval import ActionCommitRequest
     from eawf.runtime.daemon.methods.milestone_target import MilestoneTargetRequest
 
@@ -404,7 +405,11 @@ class CommittedTransaction:
 #: evaluated lazily, so the shapes defined in modules that import this
 #: one are named without an import cycle.
 type CommittingRequest = (
-    TransitionRequest | CreateRequest | ActionCommitRequest | MilestoneTargetRequest
+    TransitionRequest
+    | CreateRequest
+    | ActionCommitRequest
+    | MilestoneTargetRequest
+    | BatchTitleRequest
 )
 
 

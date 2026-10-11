@@ -38,6 +38,7 @@ from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.tui.console.attach import (
     ONBOARDING,
     AttachRequest,
+    AttachStep,
     offline_snapshot,
     offline_state,
     resolve_attach,
@@ -340,6 +341,7 @@ def launch_tui(
             authority=authority,
             state_path=state_path,
             chrome=with_entry_state(chrome, resolving),
+            attach=attached.trace,
             verbose=verbose,
             operator=operator,
         )
@@ -389,10 +391,15 @@ def _launch_native(
     authority: RootAuthority,
     state_path: Path,
     chrome: ConsoleChrome,
+    attach: tuple[AttachStep, ...],
     verbose: bool,
     operator: Operator | None,
 ) -> int:
-    """Open the console over a live seam bound to the tree's epoch-2 authority."""
+    """Open the console over a live seam bound to the tree's epoch-2 authority.
+
+    ``attach`` is the resolution the launch read, which the console's attach frame lists
+    above the daemon's live progress until the route it opens on is read.
+    """
     from eawf.runtime.daemon.epoch2_root import RootIdentity
     from eawf.surfaces.tui.chassis.theme import persisted_theme
     from eawf.surfaces.tui.console.app import OUTER_GUTTER, ConsoleApp
@@ -418,6 +425,7 @@ def _launch_native(
         chrome=chrome,
         seam=seam,
         clock=Clock(),
+        attach=attach,
         verbose=verbose,
         gutter=OUTER_GUTTER,
         theme=persisted_theme(repo_root),
@@ -482,9 +490,9 @@ def _run_console(app: ConsoleApp, seam: ProjectionSeam | None) -> int:
 
     Args:
         app: The console to run. Blocks until the operator quits.
-        seam: The console's live link, connected before the run and disconnected
-            after; ``None`` for a console that draws no route from a seam at all
-            (the pre-session entry layer).
+        seam: The console's live link, connected once the first frame is on screen and
+            disconnected after the run; ``None`` for a console that draws no route from
+            a seam at all (the pre-session entry layer).
 
     Returns:
         ``0``; a caller that needs a different code (a terminal entry state) applies
@@ -493,7 +501,10 @@ def _run_console(app: ConsoleApp, seam: ProjectionSeam | None) -> int:
 
     async def _drive() -> None:
         if seam is not None:
-            await seam.connect()
+            live = seam
+            # connecting reads the whole state file and probes the socket; the reads the
+            # first frame owes go through their own calls, so the frame need not wait
+            app.call_after_refresh(lambda: app.run_worker(live.connect(), name="seam-connect"))
         try:
             await app.run_async()
         finally:

@@ -314,9 +314,9 @@ def test_milestone_frame_states_tasks_by_status_and_batches_done() -> None:
 
 def test_milestone_batch_rows_carry_their_task_progress_and_the_wait() -> None:
     text = frame("milestone", document(), subject="MLS-0100")
-    assert "BAT-0100 · ACTIVE · 2/2 ready" in text
-    assert f"BAT-0101 · PLANNED · 2/2 ready · {WAITING}" in text
-    assert "BAT-0102 · PLANNED · 1/3 ready · 1 running" in text
+    assert "BAT-0100 · ACTIVE    · 2/2 ready" in text
+    assert f"BAT-0101 · PLANNED   · 2/2 ready · {WAITING}" in text
+    assert "BAT-0102 · PLANNED   · 1/3 ready · 1 running" in text
     assert "BAT-0103 · CANCELLED · no task" in text
 
 

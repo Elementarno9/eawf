@@ -23,9 +23,10 @@ from eawf.surfaces.tui.console.frame import (
     recede,
     window_rows,
 )
+from eawf.surfaces.tui.console.inline import Marked, inline_markdown, lay, prefixed
 from eawf.surfaces.tui.console.renderers.read_model import LABEL_W as GUTTER_W
 from eawf.surfaces.tui.console.session import Session
-from eawf.surfaces.tui.console.width import pad
+from eawf.surfaces.tui.console.width import cell_len, pad
 
 #: The cells a fact label takes before the caret's two cells: the shared gutter less them.
 LABEL_W = GUTTER_W - 2
@@ -64,14 +65,53 @@ def status(row: Record) -> str:
     return value_cell(row.field("status")).slot
 
 
-def named(row: Record) -> str:
-    """Return the record's key followed by its title, when it states one."""
-    return f"{row.key} {row.title}" if row.title else row.key
+def named(row: Record) -> Marked:
+    """Return the record's key followed by its title, when it states one.
+
+    The title is read as inline markdown: the text is what it draws, and a row laid from
+    it keeps the styles; interpolated into other text, only the drawn words remain.
+    """
+    if not row.title:
+        return Marked(row.key)
+    return prefixed(f"{row.key} ", inline_markdown(row.title))
 
 
-def reference(row: Record) -> str:
-    """Return the record as a child row reads it: key, title, then status."""
-    return f"{named(row)} · {status(row)}"
+def status_width(rows: Sequence[Record]) -> int:
+    """Return the cells the widest status of ``rows`` takes; ``0`` for no rows.
+
+    A list pads each status to this width so the column after it starts at one cell;
+    the widest status of the list, not of the enum, so a short list wastes no row.
+    """
+    return max((cell_len(status(row)) for row in rows), default=0)
+
+
+def padded_status(row: Record, width: int) -> str:
+    """Return the record's status padded to ``width`` cells, never clipped below its own."""
+    word = status(row)
+    return pad(word, max(width, cell_len(word)))
+
+
+def reference(row: Record, width: int = 0, after: Sequence[str] = ()) -> Marked:
+    """Return the record as a child row reads it: key, status, ``after``, then title.
+
+    The title comes last because its length varies, so every column before it starts at
+    one cell on every row of a list; a row with no title ends at its last column, with no
+    separator and no trailing pad.
+
+    Args:
+        row: The record.
+        width: The cells the status is padded to, so a column after it aligns; ``0``
+            leaves it unpadded.
+        after: The columns between the status and the title, each already padded to its
+            list's width.
+
+    Returns:
+        The row, its title's inline markdown styled at the title's offset.
+    """
+    lead = " · ".join((row.key, padded_status(row, width), *after))
+    if not row.title:
+        return Marked(lead.rstrip(" "))
+    return prefixed(f"{lead} · ", inline_markdown(row.title))
 
 
 def children[R: Record](rows: Sequence[R], parent: str, collection: Epoch2Collection) -> list[R]:
@@ -132,8 +172,15 @@ def child_rows(
     rows: list[str] = []
     for index in range(win.start, win.stop):
         on = cursor is not None and index == cursor
-        line = lrow(label if index == win.start else "", lines[index], on)
+        value = lines[index]
+        lead = lrow(label if index == win.start else "", "", on)
+        line = lead + value
         held = cursor is not None
+        if held and isinstance(value, Marked):
+            # laid as one row so the value's styles move with it; a receded row is drawn
+            # dim whole, so it keeps no styles to move
+            rows.append(lay(prefixed(lead, value), view.w))
+            continue
         rows.append(line if on else Fixed(pad(line, view.w)) if held else recede(line, view.w))
     if win.hides:
         rows.append(lrow("", win.line().removeprefix(" WINDOW    ")))

@@ -15,6 +15,7 @@ from textual.geometry import Region
 from textual.strip import Strip
 from textual.widget import Widget
 
+from eawf.surfaces.tui.console.inline import Marked
 from eawf.surfaces.tui.console.paint import Part, Stroke, paint
 from eawf.surfaces.tui.console.token_map import SURFACES, TOKEN_MAP
 
@@ -62,7 +63,8 @@ class RowsWidget(Widget):
         A key usually moves a caret across two rows, so repainting only changed rows
         keeps a keystroke's paint cost flat however many rows the frame holds. A row's
         type is part of what changed: a receded or disabled row paints differently from
-        a plain one with the same text.
+        a plain one with the same text, and an inline-styled row whose markup alone changed
+        keeps its text.
         """
         old, self.rows = self.rows, rows
         if len(old) != len(rows):
@@ -72,7 +74,13 @@ class RowsWidget(Widget):
         changed = [
             Region(0, y, width, 1)
             for y, (before, after) in enumerate(zip(old, rows, strict=True))
-            if before != after or type(before) is not type(after)
+            if before != after
+            or type(before) is not type(after)
+            or (
+                isinstance(before, Marked)
+                and isinstance(after, Marked)
+                and before.spans != after.spans
+            )
         ]
         if changed:
             self.refresh(*changed)
@@ -106,6 +114,7 @@ class RowsWidget(Widget):
             stroke.ground,
             stroke.surface,
             stroke.bold,
+            stroke.italic,
             stroke.underline,
             stroke.mark,
         )
@@ -119,8 +128,12 @@ class RowsWidget(Widget):
         for surface in (stroke.ground, stroke.surface):
             if surface is not None:
                 style += self.get_component_rich_style(SURFACES[surface].css_class, partial=True)
-        if stroke.bold or stroke.underline:
-            style += Style(bold=stroke.bold or None, underline=stroke.underline or None)
+        if stroke.bold or stroke.italic or stroke.underline:
+            style += Style(
+                bold=stroke.bold or None,
+                italic=stroke.italic or None,
+                underline=stroke.underline or None,
+            )
         if stroke.mark is not None:
             style += Style(meta={MARK_META: stroke.mark.value})
         return style

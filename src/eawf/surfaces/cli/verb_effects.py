@@ -56,6 +56,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "batch activate": _mutate("domain.batch.activate"),
     "batch ready": _mutate("domain.batch.ready"),
     "batch create": _create("domain.batch.create"),
+    "batch set-title": _mutate("domain.batch.set_title"),
     "batch merge": _mutate("domain.batch.merge"),
     "batch observe-merge": _mutate("domain.batch.observe_merge"),
     "batch complete": _mutate("domain.batch.complete"),

@@ -28,6 +28,11 @@ generation -- so the key is resolved in an unlocked read first and every
 decision is then retaken under the locks. The unlocked read chooses which
 locks to take and nothing else: a body cannot change after submission, and
 a record that moved in the gap fails the compare-and-swap re-check.
+
+What the one write carries -- including the re-plan of a PLANNED
+Milestone by a child of the revision that applied it -- is built by
+:mod:`~eawf.workflow.planning.materialise`; this module owns the
+transaction around it.
 """
 
 from __future__ import annotations
@@ -40,35 +45,37 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, ValidationError
 
 from eawf.kernel.config.layered import resolve_dispatch_provider_tuple
-from eawf.kernel.identity import QualifiedUrn
+from eawf.kernel.identity import QualifiedUrn, parse_qualified_urn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.spec.common import grade_criterion_grounding
 from eawf.kernel.state.canonical_sequence import CanonicalSequenceAllocator
 from eawf.kernel.state.enums import DecisionStatus, StoreKind
 from eawf.kernel.state.epoch2.base import Epoch2Model, PrincipalKey
-from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
-from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
+from eawf.kernel.state.epoch2.pending_action import PendingAction
 from eawf.kernel.state.epoch2.plan_revision import (
     PlanApproval,
     PlanBody,
-    PlannedTask,
     PlanRevision,
     PlanRevisionKey,
     PlanRevisionStatus,
     plan_content_digest,
 )
-from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.kernel.state.epoch2.urns import AnyEntityUrn
-from eawf.kernel.state.epoch2.values import EntityOrigin, OwnerPrincipal
+from eawf.kernel.state.epoch2.values import OwnerPrincipal
 from eawf.kernel.state.io import state_version
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.append import append_json_line
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.ledger import LedgerTornTailError, effective_records, read_ledger_records
+from eawf.kernel.store.ledger import (
+    LedgerError,
+    effective_records,
+    latest_rows,
+    read_ledger_records,
+)
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.logging.state_leak import state_leak_refusal
@@ -87,22 +94,30 @@ from eawf.runtime.daemon.wal import WalRecord, mark_applied, mark_fsynced, write
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence._io import generation_contract_view
 from eawf.workflow.evidence.measured_contract import resolve_contract_citation
-from eawf.workflow.lifecycle.epoch2 import TransitionDenied, apply_transition
 from eawf.workflow.planning.lenses import blocking_findings, run_plan_lenses
+from eawf.workflow.planning.materialise import (
+    PLAN_REVISION_COLLECTION,
+    _claimed_keys,
+    _replan_parent,
+    _row_field,
+    _stored_revision,
+    _str_field,
+    appended_placements,
+    materialise_plan,
+    with_compacted_rows,
+)
 from eawf.workflow.planning.revision import (
     ObservedPlanWorld,
     PlanRefusal,
     PlanRefusalCode,
     PlanRevisionAdvanced,
     advance_plan_revision,
+    approval_action_refusal,
     detect_plan_drift,
 )
 
 logger = logging.getLogger(__name__)
 
-
-#: The collection plan revisions are stored under, at the document tier.
-PLAN_REVISION_COLLECTION: Final = Epoch2Collection.PLAN_REVISION
 
 #: Version of the plan-event payload a firehose row carries.
 PLAN_EVENT_SCHEMA_VERSION: Final = "1"
@@ -118,9 +133,6 @@ _HEAD_FIELD: Final = "head_sha"
 #: submission is the first write of its key, so there is nothing earlier
 #: for it to have moved from.
 _DRAFT_REVISION: Final = 1
-
-#: The origin every natively planned record carries.
-_NATIVE_ORIGIN: Final = EntityOrigin(kind="native", mapping_basis="native", confidence="exact")
 
 
 class PlanRevisionProposal(Epoch2Model):
@@ -170,52 +182,32 @@ class _PlanWrite:
     binding_refs: tuple[str, ...]
 
 
-def _row_field(row: Any, name: str) -> Any:
-    """Return one field of a stored row, or ``None`` when it has none.
-
-    Sibling rows are read raw rather than validated: a drift predicate
-    about a Track must not fail because an unrelated repository row is
-    malformed, and every caller compares the result against a known value,
-    so an unreadable row reads as not matching.
-
-    Args:
-        row: A stored row, or whatever the document held in its place.
-        name: The field to read.
-
-    Returns:
-        The field's value, or ``None``.
-    """
-    return row.get(name) if isinstance(row, dict) else None
-
-
 def _int_field(row: Any, name: str) -> int | None:
     """Return one integer field of a stored row, or ``None``."""
     value = _row_field(row, name)
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
-def _str_field(row: Any, name: str) -> str | None:
-    """Return one string field of a stored row, or ``None``."""
-    value = _row_field(row, name)
-    return value if isinstance(value, str) else None
-
-
-def plan_lock_urns(body: PlanBody) -> tuple[str, ...]:
+def plan_lock_urns(body: PlanBody, *, parent: PlanBody | None = None) -> tuple[str, ...]:
     """Return every entity URN an operation on *body* must hold a lock on.
 
     Args:
         body: The plan content.
+        parent: The body of the revision *body* re-plans, whose Batches
+            and Tasks a re-plan may cancel; ``None`` for any other plan.
 
     Returns:
         The Track, the Milestone, every Batch and every Task the plan
-        names, as canonical URN strings. The session sorts and de-dupes
-        them, so the order here is only for readability.
+        names -- and the parent names, on a re-plan -- as canonical URN
+        strings. The session sorts and de-dupes them, so the order here
+        is only for readability.
     """
+    owned = (body,) if parent is None else (body, parent)
     return (
         str(body.milestone.primary_track_ref),
         str(body.milestone_urn),
-        *(str(batch.urn) for batch in body.batches),
-        *(str(task.urn) for task in body.tasks),
+        *(str(batch.urn) for plan in owned for batch in plan.batches),
+        *(str(task.urn) for plan in owned for task in plan.tasks),
     )
 
 
@@ -245,6 +237,32 @@ def grade_plan_grounding(body: PlanBody) -> PlanBody:
     return body.model_copy(update={"tasks": tasks})
 
 
+def placed_document(session: RootSession, document: dict[str, Any]) -> dict[str, Any]:
+    """Return *document* with the session's compacted Batch and Task rows laid under it.
+
+    Args:
+        session: The locked pass *document* was read in.
+        document: The document as the session read it.
+
+    Returns:
+        The view a plan is judged by (see :func:`with_compacted_rows`);
+        never a document to write.
+
+    Raises:
+        LedgerError: The Batch or Task ledger is torn or its snapshot
+            does not match its digest.
+        pydantic.ValidationError: A Batch or Task ledger line is not a
+            ledger record.
+    """
+    return with_compacted_rows(
+        document,
+        compacted={
+            collection: latest_rows(session.ledger_path(collection))
+            for collection in (Epoch2Collection.BATCH, Epoch2Collection.TASK)
+        },
+    )
+
+
 def validate_plan_proposal(
     document: dict[str, Any],
     *,
@@ -265,7 +283,9 @@ def validate_plan_proposal(
 
     Args:
         document: The locked generation document the bindings are
-            observed from.
+            observed from, with its compacted rows laid under it (see
+            :func:`placed_document`) so an append's finished Tasks count
+            as placed.
         proposal: The strict create document the planner emitted.
         at: When the submission happened, stamped on the successor.
         provider_tuple: The providers the plan's Runs dispatch to, as the
@@ -287,7 +307,7 @@ def validate_plan_proposal(
             detail=f"the document already holds a plan revision keyed {proposal.key!r}",
             remediation="Submit the repair as a child revision under a new key.",
         )
-    world = observe_plan_world(document, body=body)
+    world = observe_plan_world(document, body=body, parent=None)
     if world.track_revision is None or world.policy_revision is None:
         return PlanRefusal(
             code=PlanRefusalCode.IDENTITY_NOT_FOUND,
@@ -321,7 +341,8 @@ def validate_plan_proposal(
                 remediation="Submit the repair against a parent revision the document holds.",
             )
         parent_body = parent_record.body
-    blocking = blocking_findings(run_plan_lenses(body, parent=parent_body))
+    placed = {} if parent_body is None else appended_placements(document, body=body)
+    blocking = blocking_findings(run_plan_lenses(body, parent=parent_body, placed=placed))
     if blocking:
         # Every blocking finding is named at once so one resubmission can
         # repair them all; the guard stays the first lens that refused.
@@ -351,13 +372,18 @@ def validate_plan_proposal(
     return advance_plan_revision(draft, to=PlanRevisionStatus.VALIDATED, at=at)
 
 
-def observe_plan_world(document: dict[str, Any], *, body: PlanBody) -> ObservedPlanWorld:
+def observe_plan_world(
+    document: dict[str, Any], *, body: PlanBody, parent: PlanBody | None
+) -> ObservedPlanWorld:
     """Return what *document* says about the inputs *body* binds.
 
     Args:
         document: The locked generation document.
         body: The plan content, which names the Track and repositories to
             look at.
+        parent: The applied body *body* re-plans, whose still-PLANNED
+            rows the plan may rewrite rather than claim; ``None`` for a
+            plan that creates everything it names.
 
     Returns:
         The observation. Every field a row cannot answer reads ``None``,
@@ -378,57 +404,7 @@ def observe_plan_world(document: dict[str, Any], *, body: PlanBody) -> ObservedP
         track_status=_str_field(track_row, "status"),
         policy_revision=_int_field(_row_field(track_row, "policy"), "revision"),
         heads=heads,
-        claimed_keys=_claimed_keys(document, body=body),
-    )
-
-
-def _promotable_draft(document: dict[str, Any], *, key: str) -> Task | None:
-    """Return the native backlog Task the plan may promote under *key*, if any.
-
-    A plan names an existing Task to promote it: the backlog row keeps its
-    identifier, and the apply takes it through the ordinary promotion edge
-    rather than minting a second record. Only a native ``DRAFT`` qualifies.
-    A row imported from the previous epoch is immutable to this lifecycle,
-    and a row past the backlog is already placed, so either stays a claimed
-    key the apply refuses.
-
-    Args:
-        document: The locked document.
-        key: The Task key the plan names.
-
-    Returns:
-        The validated draft, or ``None``.
-    """
-    row = document_rows(document, Epoch2Collection.TASK).get(key)
-    try:
-        task = None if row is None else Task.model_validate(row)
-    except ValueError:
-        return None
-    if task is None or task.status is not TaskStatus.DRAFT or task.origin.kind == "legacy":
-        return None
-    return task
-
-
-def _claimed_keys(document: dict[str, Any], *, body: PlanBody) -> tuple[str, ...]:
-    """Return the locators the document already holds that the plan creates.
-
-    A backlog draft the plan promotes is not claimed: the plan places it
-    rather than creating it.
-    """
-    wanted: dict[Epoch2Collection, tuple[str, ...]] = {
-        Epoch2Collection.MILESTONE: (body.milestone_urn.entity_key,),
-        Epoch2Collection.BATCH: tuple(batch.urn.entity_key for batch in body.batches),
-        Epoch2Collection.TASK: tuple(
-            task.urn.entity_key
-            for task in body.tasks
-            if _promotable_draft(document, key=task.urn.entity_key) is None
-        ),
-    }
-    return tuple(
-        f"{collection.value}/{key}"
-        for collection, keys in wanted.items()
-        for key in keys
-        if key in document_rows(document, collection)
+        claimed_keys=_claimed_keys(document, body=body, parent=parent),
     )
 
 
@@ -439,166 +415,6 @@ def _head_bindings(world: ObservedPlanWorld) -> tuple[dict[str, str], ...]:
         for ref, head in sorted(world.heads.items())
         if head is not None
     )
-
-
-def _planned_milestone(body: PlanBody, *, at: UtcDatetime) -> Milestone:
-    """Return the PLANNED Milestone *body* materialises."""
-    spec = body.milestone.model_dump(mode="json")
-    return Milestone.model_validate(
-        {
-            **spec,
-            "uid": str(uuid.uuid5(uuid.NAMESPACE_URL, str(body.milestone_urn))),
-            "urn": str(body.milestone_urn),
-            "origin": _NATIVE_ORIGIN.model_dump(mode="json"),
-            "revision": 1,
-            "created_at": at.isoformat(),
-            "updated_at": at.isoformat(),
-            "status": MilestoneStatus.PLANNED.value,
-        }
-    )
-
-
-def _planned_batches(body: PlanBody, *, at: UtcDatetime) -> tuple[DeliveryBatch, ...]:
-    """Return the PLANNED Batches *body* materialises, in declared order."""
-    return tuple(
-        DeliveryBatch.model_validate(
-            {
-                "uid": str(uuid.uuid5(uuid.NAMESPACE_URL, str(batch.urn))),
-                "key": batch.urn.entity_key,
-                "urn": str(batch.urn),
-                "origin": _NATIVE_ORIGIN.model_dump(mode="json"),
-                "revision": 1,
-                "created_at": at.isoformat(),
-                "updated_at": at.isoformat(),
-                "milestone_ref": str(body.milestone_urn),
-                "repository_ref": str(batch.repository_ref),
-                "task_refs": [str(task.urn) for task in body.tasks if task.batch_ref == batch.urn],
-                "status": BatchStatus.PLANNED.value,
-            }
-        )
-        for batch in body.batches
-    )
-
-
-def _planned_task(
-    document: dict[str, Any], *, body: PlanBody, task: PlannedTask, at: UtcDatetime
-) -> Task:
-    """Return the PLANNED Task one plan entry materialises.
-
-    An entry naming a backlog draft promotes that draft through the
-    registry's own promotion edge, so the Task keeps its identifier, its
-    history and any due scope the draft already carried, and takes the
-    plan's placement and graph edges like a created one. Every other entry
-    creates the Task at revision one.
-
-    Args:
-        document: The locked document.
-        body: The plan content.
-        task: The plan entry.
-        at: When the apply happened.
-
-    Returns:
-        The PLANNED Task.
-
-    Raises:
-        ValidationError: The Task does not satisfy its own model.
-    """
-    placement = {
-        "batch_ref": str(task.batch_ref),
-        "priority": task.priority.value,
-        "intent": task.intent,
-        "criteria": [item.model_dump(mode="json") for item in task.criteria],
-        "depends_on": [str(ref) for ref in task.depends_on],
-        "write_claims": list(task.write_claims),
-        "exclusive": task.exclusive,
-    }
-    draft = _promotable_draft(document, key=task.urn.entity_key)
-    if draft is None:
-        return Task.model_validate(
-            {
-                **placement,
-                "uid": str(uuid.uuid5(uuid.NAMESPACE_URL, str(task.urn))),
-                "key": task.urn.entity_key,
-                "urn": str(task.urn),
-                "origin": _NATIVE_ORIGIN.model_dump(mode="json"),
-                "revision": 1,
-                "created_at": at.isoformat(),
-                "updated_at": at.isoformat(),
-                "due_scope": str(body.milestone_urn),
-                "contract_revision": 1,
-                "status": TaskStatus.PLANNED.value,
-            }
-        )
-    due_scope = draft.due_scope if draft.due_scope is not None else body.milestone_urn
-    promoted = apply_transition(
-        draft, to=TaskStatus.PLANNED, at=at, updates={**placement, "due_scope": str(due_scope)}
-    )
-    # The draft was just read as a native DRAFT and every promotion field
-    # is supplied, so the edge cannot be denied here.
-    assert not isinstance(promoted, TransitionDenied), promoted
-    return promoted.record
-
-
-def materialise_plan(
-    document: dict[str, Any], *, record: PlanRevision, at: UtcDatetime
-) -> dict[str, Any]:
-    """Return the whole document an applied plan leaves behind.
-
-    The successor is built by deep-copying and editing rather than by
-    mutating in place, because the leak scrub diffs the two payloads and
-    an in-place edit would leave it comparing one payload with itself.
-
-    Args:
-        document: The locked document as read.
-        record: The revision, already advanced to ``APPLIED``.
-        at: When the apply happened.
-
-    Returns:
-        The successor document, carrying the Milestone, its Batches, its
-        PLANNED Tasks and the applied revision.
-
-    Raises:
-        ValidationError: A materialised record does not satisfy its own
-            model, which refuses before anything is written.
-    """
-    body = record.body
-    new_document = copy.deepcopy(document)
-    milestone = _planned_milestone(body, at=at)
-    new_document.setdefault(Epoch2Collection.MILESTONE.value, {})[milestone.key] = (
-        milestone.model_dump(mode="json")
-    )
-    batches = new_document.setdefault(Epoch2Collection.BATCH.value, {})
-    for batch in _planned_batches(body, at=at):
-        batches[batch.key] = batch.model_dump(mode="json")
-    tasks = new_document.setdefault(Epoch2Collection.TASK.value, {})
-    for entry in body.tasks:
-        task = _planned_task(document, body=body, task=entry, at=at)
-        tasks[task.key] = task.model_dump(mode="json")
-    new_document.setdefault(PLAN_REVISION_COLLECTION.value, {})[record.key] = record.model_dump(
-        mode="json"
-    )
-    return new_document
-
-
-def _stored_revision(document: dict[str, Any], *, key: str) -> PlanRevision | None:
-    """Return the stored revision *key* addresses, or ``None``.
-
-    Args:
-        document: The document to read.
-        key: The plan-revision key.
-
-    Returns:
-        The validated revision, or ``None`` when the document holds no
-        such row or the row does not validate.
-    """
-    row = document_rows(document, PLAN_REVISION_COLLECTION).get(key)
-    if row is None:
-        return None
-    try:
-        return PlanRevision.model_validate(row)
-    except ValueError:
-        logger.warning(f"_stored_revision rejected a stored row plan_revision_key={key!r}")
-        return None
 
 
 def _stale(record: PlanRevision, *, expected_revision: int) -> PlanRefusal | None:
@@ -617,20 +433,20 @@ def _stale(record: PlanRevision, *, expected_revision: int) -> PlanRefusal | Non
     )
 
 
-def resolve_plan_body(context: Epoch2RootContext, *, key: str) -> PlanBody | None:
-    """Return the plan body of a stored revision, read without locks.
+def resolve_plan_revision(context: Epoch2RootContext, *, key: str) -> PlanRevision | None:
+    """Return a stored revision, read without locks.
 
     The result decides which locks the operation takes and nothing else.
-    Every decision is retaken under those locks, and a body is immutable
-    once submitted, so a stale answer here costs at most a lock on a
-    record the compare-and-swap re-check then refuses.
+    Every decision is retaken under those locks, and a body and its
+    parent key are immutable once submitted, so a stale answer here costs
+    at most a lock on a record the compare-and-swap re-check then refuses.
 
     Args:
         context: The native context of the addressed root.
         key: The plan-revision key.
 
     Returns:
-        The stored body, or ``None`` when the key resolves to nothing.
+        The stored revision, or ``None`` when the key resolves to nothing.
 
     Raises:
         NativeAuthorityRequiredError: The tree left epoch 2.
@@ -642,8 +458,7 @@ def resolve_plan_body(context: Epoch2RootContext, *, key: str) -> PlanBody | Non
     path = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
     if not path.exists():
         return None
-    record = _stored_revision(read_document(path), key=key)
-    return None if record is None else record.body
+    return _stored_revision(read_document(path), key=key)
 
 
 def submit_plan_revision(
@@ -690,7 +505,10 @@ def submit_plan_revision(
             return replayed
         document = session.read_document()
         outcome = validate_plan_proposal(
-            document, proposal=proposal, at=at, provider_tuple=provider_tuple
+            placed_document(session, document),
+            proposal=proposal,
+            at=at,
+            provider_tuple=provider_tuple,
         )
         if isinstance(outcome, PlanRefusal):
             return outcome
@@ -725,7 +543,8 @@ def _refuse_every_citation(_ref: str) -> bool:
     """Fail-closed resolver: refuse every citation.
 
     Used when a ledger the citations resolve against could not be read --
-    a torn tail or a line that fails its model. Such a store might resolve
+    a torn tail, a snapshot that fails its digest, or a line that fails
+    its model. Such a store might resolve
     the reference or might not, and admitting a citation on a store this
     call could not read would let corruption forge grounding, so every
     citation refuses instead.
@@ -744,7 +563,8 @@ def _standing_decision_keys(decision_ledger: Path) -> frozenset[str]:
     no longer stands behind the risk it once accepted.
 
     Raises:
-        LedgerTornTailError: The ledger ends mid-line.
+        LedgerError: The ledger ends mid-line or its snapshot does not
+            match its digest.
         pydantic.ValidationError: A line does not satisfy its model.
     """
     latest = {
@@ -789,7 +609,7 @@ def _build_citation_resolvers(
             evidence_ledger=session.ledger_path(Epoch2Collection.EVIDENCE),
         )
         standing = _standing_decision_keys(session.ledger_path(Epoch2Collection.DECISION))
-    except LedgerTornTailError, ValueError, KeyError, OSError:
+    except LedgerError, ValueError, KeyError, OSError:
         return _CitationResolvers(
             contract_is_resolvable=_refuse_every_citation,
             decision_is_resolvable=_refuse_every_citation,
@@ -805,6 +625,33 @@ def _build_citation_resolvers(
     return _CitationResolvers(
         contract_is_resolvable=contract_resolves, decision_is_resolvable=standing.__contains__
     )
+
+
+def _held_action(document: dict[str, Any], ref: AnyEntityUrn) -> PendingAction | None:
+    """Return the PendingAction *document* holds under *ref*, or ``None``.
+
+    A row that does not read as an action is treated as absent: an
+    approval cannot be consent to a record nobody can read.
+    """
+    row = document_rows(document, Epoch2Collection.PENDING_ACTION).get(ref.entity_key)
+    if row is None:
+        return None
+    try:
+        return PendingAction.model_validate(row)
+    except ValidationError:
+        logger.warning(f"_held_action rejected a stored row action_key={ref.entity_key!r}")
+        return None
+
+
+def _approval_spent_by(document: dict[str, Any], ref: AnyEntityUrn) -> str | None:
+    """Return the key of a stored revision whose approval cites *ref*, or ``None``."""
+    for key, row in document_rows(document, PLAN_REVISION_COLLECTION).items():
+        approval = row.get("approval") if isinstance(row, dict) else None
+        if isinstance(approval, dict) and parse_qualified_urn(approval["action_ref"]).same_entity(
+            ref
+        ):
+            return str(key)
+    return None
 
 
 def approve_plan_revision(
@@ -832,6 +679,11 @@ def approve_plan_revision(
     (superseded, reversed, obsolete), refuses the same as a
     criterion still graded assumed.
 
+    The cited PendingAction is dereferenced under the same locks: the tree
+    must hold it sealed, answered with its approving option, asked about
+    this plan's Milestone, and not already spent on another revision --
+    see :func:`~eawf.workflow.planning.revision.approval_action_refusal`.
+
     Args:
         context: The native context of the addressed root.
         key: The plan-revision key.
@@ -852,8 +704,8 @@ def approve_plan_revision(
         ValidationError: The approval is not sealed by a human principal
             or does not address a PendingAction, refused before any lock.
     """
-    body = resolve_plan_body(context, key=key)
-    if body is None:
+    stored = resolve_plan_revision(context, key=key)
+    if stored is None:
         return _missing(key)
     digest = _request_digest(
         "approve",
@@ -865,7 +717,7 @@ def approve_plan_revision(
             "actor": actor,
         },
     )
-    with context.session(plan_lock_urns(body)) as session:
+    with context.session(plan_lock_urns(stored.body)) as session:
         replayed = _replayed(context, idempotency_key=idempotency_key, request_digest=digest)
         if replayed is not None:
             return replayed
@@ -876,6 +728,14 @@ def approve_plan_revision(
         stale = _stale(record, expected_revision=expected_revision)
         if stale is not None:
             return stale
+        unconsented = approval_action_refusal(
+            record,
+            action_key=action_ref.entity_key,
+            action=_held_action(document, action_ref),
+            spent_by=_approval_spent_by(document, action_ref),
+        )
+        if unconsented is not None:
+            return unconsented
         approval = PlanApproval(
             action_ref=action_ref,
             approved_by=approved_by,
@@ -920,6 +780,12 @@ def apply_plan_revision(
 ) -> CommittedTransaction | PlanRefusal:
     """Materialise one APPROVED revision, or refuse it having written nothing.
 
+    Whether the apply is a re-plan is decided first, under the locks,
+    because which existing rows count as claimed depends on it; see
+    :func:`materialise_plan`. A Batch or Task compacted into its ledger
+    counts as already placed, so the apply neither recreates nor rewrites
+    it.
+
     Args:
         context: The native context of the addressed root.
         key: The plan-revision key.
@@ -937,14 +803,29 @@ def apply_plan_revision(
         NativeAuthorityRequiredError: The tree left epoch 2.
         MigrationDualAuthorityError: The tree's select is not whole.
         LockTimeout: A lock stayed held past the lock timeout.
+        LedgerError: The Batch or Task ledger is torn or its snapshot
+            does not match its digest.
+        pydantic.ValidationError: A Batch or Task ledger line is not a
+            ledger record.
     """
-    body = resolve_plan_body(context, key=key)
-    if body is None:
+    stored = resolve_plan_revision(context, key=key)
+    if stored is None:
         return _missing(key)
+    stored_parent = (
+        None if stored.parent_key is None else resolve_plan_revision(context, key=stored.parent_key)
+    )
+    # A same-Milestone parent is locked whatever its status: the status is
+    # only decided under the locks, and a re-plan cancels the parent's rows.
+    lock_parent = (
+        stored_parent.body
+        if stored_parent is not None
+        and stored_parent.body.milestone_urn == stored.body.milestone_urn
+        else None
+    )
     digest = _request_digest(
         "apply", {"key": key, "expected_revision": expected_revision, "actor": actor}
     )
-    with context.session(plan_lock_urns(body)) as session:
+    with context.session(plan_lock_urns(stored.body, parent=lock_parent)) as session:
         replayed = _replayed(context, idempotency_key=idempotency_key, request_digest=digest)
         if replayed is not None:
             return replayed
@@ -958,15 +839,22 @@ def apply_plan_revision(
         outcome = advance_plan_revision(record, to=PlanRevisionStatus.APPLIED, at=at)
         if isinstance(outcome, PlanRefusal):
             return outcome
+        placed = placed_document(session, document)
+        parent = _replan_parent(placed, record=record)
+        if isinstance(parent, PlanRefusal):
+            logger.info(f"apply_plan_revision refused guard={parent.guard} key={key!r}")
+            return parent
         drifted = detect_plan_drift(
-            outcome.record, world=observe_plan_world(document, body=record.body)
+            outcome.record, world=observe_plan_world(placed, body=record.body, parent=parent)
         )
         if drifted is not None:
             logger.info(f"apply_plan_revision refused guard={drifted.guard} key={key!r}")
             return drifted
         write = _PlanWrite(
             document=document,
-            new_document=materialise_plan(document, record=outcome.record, at=at),
+            new_document=materialise_plan(
+                document, placed=placed, record=outcome.record, at=at, parent=parent
+            ),
             record=outcome.record,
             event_name=outcome.event_name,
             revision_before=record.revision,
@@ -1223,14 +1111,13 @@ def _firehose_path(context: Epoch2RootContext) -> Path:
 
 __all__ = [
     "PLAN_EVENT_SCHEMA_VERSION",
-    "PLAN_REVISION_COLLECTION",
     "PlanRevisionProposal",
     "apply_plan_revision",
     "approve_plan_revision",
-    "materialise_plan",
     "observe_plan_world",
+    "placed_document",
     "plan_lock_urns",
-    "resolve_plan_body",
+    "resolve_plan_revision",
     "submit_plan_revision",
     "validate_plan_proposal",
 ]

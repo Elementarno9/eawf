@@ -157,6 +157,21 @@ def _epoch2_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EA_STATE", str(lay_epoch2_tree(tmp_path / "repo")))
 
 
+@pytest.fixture(autouse=True)
+def _remote_facts(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    """Answer ``release show``'s remote read without reaching a network remote."""
+    from eawf.workflow.release import remote_facts
+
+    asked: list[dict[str, Any]] = []
+
+    def derive(repo_root: Path, *, version: str, source_sha: str | None) -> Any:
+        asked.append({"repo_root": repo_root, "version": version, "source_sha": source_sha})
+        raise remote_facts.RemoteUnreachableError("origin did not answer")
+
+    monkeypatch.setattr(remote_facts, "derive_remote_facts", derive)
+    return asked
+
+
 @pytest.fixture
 def calls(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     """Route every CLI daemon call into a recording stand-in."""
@@ -345,6 +360,49 @@ def test_show_sends_the_requested_version(tmp_path: Path, calls: list[dict[str, 
     assert result.exit_code == 0, result.output
     assert calls[0]["params"] == {"version": "0.7.0.dev1"}
     assert "result.record: null" in result.output
+
+
+def test_show_reports_the_remote_facts_of_the_rung(
+    tmp_path: Path, calls: list[dict[str, Any]], _remote_facts: list[dict[str, Any]]
+) -> None:
+    """The rung's version is read back from the remote, and an unanswered read says so."""
+    result = CliRunner().invoke(app, _argv("show", tmp_path))
+    assert result.exit_code == 0, result.output
+    assert [(ask["version"], ask["source_sha"]) for ask in _remote_facts] == [("0.7.0.dev1", None)]
+    assert "unavailable" in result.output
+
+
+def test_show_reads_the_remote_of_the_named_workspace(
+    tmp_path: Path,
+    calls: list[dict[str, Any]],
+    _remote_facts: list[dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``--workspace`` names the tree whose remote is read, not the working directory."""
+    monkeypatch.delenv("EA_STATE")
+    workspace = tmp_path / "other"
+    workspace.mkdir()
+    result = CliRunner().invoke(app, ["--workspace", str(workspace), *_argv("show", tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert [ask["repo_root"].resolve() for ask in _remote_facts] == [workspace.resolve()]
+
+
+def test_show_of_an_answer_with_no_checkpoint_reports_null_remote_facts(
+    tmp_path: Path,
+    _remote_facts: list[dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing checkpoint is reported as absent, as a missing record is, not a crash."""
+    reply = {key: value for key, value in FAKE_REPLY.items() if key != "checkpoint"}
+    client = _RecordingClient([])
+    monkeypatch.setattr(client, "call", lambda method, params=None: reply)
+    monkeypatch.setattr(
+        "eawf.surfaces.cli._daemon_client.DaemonClient", lambda *args, **kwargs: client
+    )
+    result = CliRunner().invoke(app, _argv("show", tmp_path))
+    assert result.exit_code == 0, result.output
+    assert "result.remote_facts: null" in result.output
+    assert _remote_facts == []
 
 
 def test_show_without_a_version_asks_for_the_open_rung(calls: list[dict[str, Any]]) -> None:

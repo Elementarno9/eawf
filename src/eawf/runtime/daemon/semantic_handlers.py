@@ -169,7 +169,11 @@ from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence._io import MEASURED_CONTRACT_STATUS, generation_contract_view
 from eawf.workflow.evidence.measured_contract import submit_evidence as promote_spike_evidence
-from eawf.workflow.planning.apply import PlanRevisionProposal, validate_plan_proposal
+from eawf.workflow.planning.apply import (
+    PlanRevisionProposal,
+    placed_document,
+    validate_plan_proposal,
+)
 from eawf.workflow.planning.revision import PlanRefusal, PlanRefusalCode
 
 logger = logging.getLogger(__name__)
@@ -386,7 +390,9 @@ def _submit_plan(inputs: HandlerInputs) -> SemanticToolOutput:
             field_path=_pointer(error.errors()[0]["loc"]),
         )
     outcome = validate_plan_proposal(
-        inputs.session.read_document(), proposal=proposal, at=inputs.now
+        placed_document(inputs.session, inputs.session.read_document()),
+        proposal=proposal,
+        at=inputs.now,
     )
     if isinstance(outcome, PlanRefusal):
         logger.info(f"_submit_plan refused guard={outcome.guard}")

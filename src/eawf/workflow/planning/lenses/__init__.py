@@ -14,11 +14,18 @@ is what a caller needs regardless of how many lenses currently register.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Final
 
 from eawf.kernel.state.epoch2.plan_revision import PlanBody
+from eawf.kernel.state.epoch2.task_status import TaskStatus
+from eawf.kernel.state.epoch2.urns import TaskUrn
 from eawf.workflow.planning.lenses import structure
-from eawf.workflow.planning.lenses.authority import AUTHORITY_LENS_ORDER, run_authority_lenses
+from eawf.workflow.planning.lenses.authority import (
+    AUTHORITY_LENS_ORDER,
+    NOTHING_PLACED,
+    run_authority_lenses,
+)
 from eawf.workflow.planning.lenses.governance import GOVERNANCE_LENS_ORDER, run_governance_lenses
 from eawf.workflow.planning.lenses.structure import (
     PlanFinding,
@@ -33,13 +40,20 @@ FIXED_LENS_ORDER: Final[tuple[PlanLens, ...]] = (
 )
 
 
-def run_plan_lenses(body: PlanBody, *, parent: PlanBody | None = None) -> tuple[PlanFinding, ...]:
+def run_plan_lenses(
+    body: PlanBody,
+    *,
+    parent: PlanBody | None = None,
+    placed: Mapping[TaskUrn, TaskStatus] = NOTHING_PLACED,
+) -> tuple[PlanFinding, ...]:
     """Run every registered lens over *body*, in :data:`FIXED_LENS_ORDER`.
 
     Args:
         body: The plan content to validate.
         parent: The revision *body* repairs, when it repairs one. Read
             only by the semantic-diff lens; every other lens ignores it.
+        placed: The stored status of each plan Task an append to an
+            ACTIVE Milestone restates. Read only by the ownership lens.
 
     Returns:
         Every finding any lens produced, lenses 1-4's own findings first
@@ -48,7 +62,7 @@ def run_plan_lenses(body: PlanBody, *, parent: PlanBody | None = None) -> tuple[
     """
     return (
         structure.run_plan_lenses(body)
-        + run_authority_lenses(body)
+        + run_authority_lenses(body, placed=placed)
         + run_governance_lenses(body, parent=parent)
     )
 

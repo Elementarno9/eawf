@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import subprocess
 from collections.abc import Iterator, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -67,7 +68,7 @@ _ANCHORED_ELSEWHERE = frozenset(
 
 #: Native writes in the envelope modules that set a field and move no status, so
 #: the registry has no edge for them; each still takes both anchors.
-_FIELD_WRITES = frozenset({("milestone", "set-target")})
+_FIELD_WRITES = frozenset({("milestone", "set-target"), ("batch", "set-title")})
 
 #: Every create command and the URN it admits, one per kind.
 _CREATES: tuple[tuple[str, str, str], ...] = (
@@ -498,7 +499,8 @@ def test_surf_084_a_publication_answers_with_its_operation_reference_on_submissi
 
 # ---- SURF-086 ---------------------------------------------------------------
 
-#: Read verbs of the declared groups that answer from the tree without a daemon.
+#: Read verbs of the declared groups that answer from the tree without a daemon,
+#: plus ``release show``, whose daemon answer is stood in so its own remote read runs.
 #: ``daemon status`` and ``follow`` are absent: they answer only from a running
 #: daemon and exit with the daemon-unreachable code without one, never starting
 #: it; ``tests/integration/surfaces/cli/test_operation_cli.py`` pins that.
@@ -510,7 +512,23 @@ _READ_VERBS: tuple[tuple[str, ...], ...] = (
     ("memory", "stale"),
     ("migrate", "status"),
     ("workspace", "list"),
+    ("release", "show", "0.7.0.dev1"),
 )
+
+#: The one machine-local cache a read verb may write, by verb. ``release
+#: show`` reads its rung's merge and tag facts from ``origin`` and keeps the
+#: last answer under the git-ignored ``.ea/local`` so an offline read still
+#: answers; nothing else in the tree or the home may change, and the cache
+#: must actually be written, so the exemption is never vacuous.
+_LOCAL_CACHES: dict[tuple[str, ...], str] = {
+    ("release", "show", "0.7.0.dev1"): ".ea/local/release-facts/0.7.0.dev1.json",
+}
+
+#: What the stand-in daemon answers ``release.show`` with: a rung nobody opened.
+_SHOW_ANSWER: dict[str, Any] = {
+    "checkpoint": {"version": "0.7.0.dev1", "release_key": "REL-0.7.0.dev1"},
+    "record": None,
+}
 
 
 def _digest(root: Path) -> dict[str, str]:
@@ -530,20 +548,37 @@ def _initialised(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[Pat
     patch.setenv("EAWF_DAEMONLESS", "1")
     result = runner.invoke(app, ["--no-input", "init", "--quick", "--target", str(repo)])
     assert result.exit_code == exit_codes.OK, result.output
+    origin = tmp_path_factory.mktemp("origin")
+    for argv in (
+        ["git", "init", "--quiet", "--bare", str(origin)],
+        ["git", "init", "--quiet", str(repo)],
+        ["git", "-C", str(repo), "remote", "add", "origin", str(origin)],
+    ):
+        subprocess.run(argv, check=True, capture_output=True, timeout=30)
     yield repo, home
     patch.undo()
 
 
 @pytest.mark.parametrize("verb", _READ_VERBS, ids=" ".join)
 def test_surf_086_a_read_verb_leaves_the_tree_and_home_byte_identical(
-    _initialised: tuple[Path, Path], verb: tuple[str, ...]
+    _initialised: tuple[Path, Path], verb: tuple[str, ...], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A successful read writes nothing: no row, no cache, no runtime file."""
+    """A successful read writes nothing: no row, no runtime file, no cache but its own."""
     repo, home = _initialised
+    cache = _LOCAL_CACHES.get(verb)
+    if verb[0] == "release":
+        fake = FakeDaemon()
+        fake.result = _SHOW_ANSWER
+        monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", fake)
+        if cache is not None:
+            (repo / cache).unlink(missing_ok=True)
     before = (_digest(repo), _digest(home))
     result = runner.invoke(app, ["--json", "--workspace", str(repo), *verb])
     assert result.exit_code == exit_codes.OK, result.output
-    assert (_digest(repo), _digest(home)) == before
+    after = (_digest(repo), _digest(home))
+    if cache is not None:
+        assert after[0].pop(cache, None) is not None, f"{cache} was not written"
+    assert after == before
 
 
 def test_surf_086_the_digest_sees_a_write(tmp_path: Path) -> None:

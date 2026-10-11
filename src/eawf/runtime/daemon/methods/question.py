@@ -28,7 +28,6 @@ from eawf.kernel.state.epoch2.question import (
     OpenQuestion,
     QuestionRefusedError,
     QuestionReply,
-    QuestionSituation,
     answer_with_option,
     answer_with_reply,
     project_question,
@@ -55,11 +54,14 @@ from eawf.runtime.daemon.methods.host_question import (
 )
 from eawf.runtime.daemon.methods.pause import resolve_person_pauses
 from eawf.runtime.daemon.native_guard import native_mutator, native_params, require_native_call
+from eawf.runtime.daemon.read_contract import (
+    QUESTION_READ_METHOD,
+    QuestionItem,
+    QuestionsAnswer,
+)
 
 logger = logging.getLogger(__name__)
 
-#: The verb every question of a tree is read through.
-QUESTION_READ_METHOD: Final = "runtime.question.read"
 
 #: The verb an operator's answer to one question is recorded through.
 QUESTION_ANSWER_METHOD: Final = "runtime.question.answer"
@@ -78,39 +80,6 @@ class _ReadParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     principal: PrincipalKey | None = None
-
-
-class QuestionItem(BaseModel):
-    """One question as the read reports it.
-
-    Attributes:
-        question: The record, at its latest revision.
-        asked_by_run: The key of the Run that asked it; ``None`` for a question no Run asked.
-        situation: The situation it projects to for the reading principal.
-        ends_when: What would end it.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    question: OpenQuestion
-    asked_by_run: str | None = None
-    situation: QuestionSituation
-    ends_when: str
-
-
-class QuestionsAnswer(BaseModel):
-    """What :data:`QUESTION_READ_METHOD` answers.
-
-    Attributes:
-        questions: Every question of the tree, by key.
-        run_states: The state of each asking Run, by Run key; a Run the document no
-            longer holds is absent.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    questions: tuple[QuestionItem, ...] = ()
-    run_states: dict[str, str] = {}
 
 
 class AnswerParams(BaseModel):

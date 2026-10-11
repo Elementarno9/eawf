@@ -44,6 +44,12 @@ from enum import StrEnum
 from typing import Final
 
 from eawf.kernel.spec.common import CriterionGrounding
+from eawf.kernel.spec.remote_proof import criteria_needing_remote_ci, remote_proof_reason
+from eawf.kernel.state.epoch2.pending_action import (
+    OptionEffect,
+    PendingAction,
+    PendingActionStatus,
+)
 from eawf.kernel.state.epoch2.plan_revision import (
     PLAN_REVISION_EDGES,
     PlanApproval,
@@ -169,6 +175,56 @@ def citations_are_uncounted(body: PlanBody) -> bool:
     if not body.citations:
         return True
     return milestone_counts(body) == milestone_counts(body.model_copy(update={"citations": ()}))
+
+
+def remote_ci_dependencies(body: PlanBody) -> tuple[str, ...]:
+    """Name every criterion and acceptance step only remote CI, a PR, a push or a tag proves.
+
+    A Milestone closes before its branch is pushed, so a plan carrying one
+    of these commits work whose evidence cannot exist until after the work
+    is closed.
+
+    Args:
+        body: The plan content to scan.
+
+    Returns:
+        ``<task key>/<criterion id>: <reason>`` and ``<step id>: <reason>``
+        entries in plan order; empty when everything is provable locally.
+    """
+    named = [
+        f"{task.urn.entity_key}/{entry}"
+        for task in body.tasks
+        for entry in criteria_needing_remote_ci(task.criteria)
+    ]
+    for step in body.milestone.acceptance_journey:
+        reason = remote_proof_reason(step.action, step.expected_observation)
+        if reason is not None:
+            named.append(f"{step.step_id}: {reason}")
+    return tuple(named)
+
+
+def _remote_ci_refusal(revision: PlanRevision, *, to: PlanRevisionStatus) -> PlanRefusal | None:
+    """Return the refusal a submit or apply earns for remote-only proofs, or ``None``.
+
+    Only the two edges that commit the plan's content are checked; rejecting
+    or superseding a revision carrying such a criterion stays open.
+    """
+    if to not in (PlanRevisionStatus.VALIDATED, PlanRevisionStatus.APPLIED):
+        return None
+    remote = remote_ci_dependencies(revision.body)
+    if not remote:
+        return None
+    return PlanRefusal(
+        code=PlanRefusalCode.TRANSITION_GUARD_FAILED,
+        guard="criterion_needs_remote_ci",
+        detail="; ".join(remote),
+        remediation=(
+            "Rewrite each named criterion or acceptance step so a local command proves it; "
+            "CI runs, pull requests, pushes and tags are checked at the pull-request stop, "
+            "after the Milestone closes."
+        ),
+        revision=revision.revision,
+    )
 
 
 def ungrounded_approval_criteria(
@@ -312,6 +368,78 @@ def approval_binds_content(revision: PlanRevision, approval: PlanApproval) -> Pl
     return None
 
 
+def approval_action_refusal(
+    revision: PlanRevision,
+    *,
+    action_key: str,
+    action: PendingAction | None,
+    spent_by: str | None,
+) -> PlanRefusal | None:
+    """Return why the PendingAction an approval cites does not consent to *revision*.
+
+    An approval reference is only consent when the tree holds the action,
+    a person answered it, the answer was the approving option, the
+    question was asked about this plan's Milestone, and no other revision
+    already spent that answer. Each failure is its own guard so a client
+    can tell which step of the operator's answer is missing.
+
+    Args:
+        revision: The revision the approval is offered for.
+        action_key: The ``ACT-####`` key the approval cites.
+        action: The action the tree holds under that key, or ``None`` when
+            it holds none or the row does not read as an action.
+        spent_by: The key of another revision whose approval already cites
+            the action, or ``None``.
+
+    Returns:
+        The refusal, or ``None`` when the action is a sealed approving
+        answer about this revision's Milestone.
+    """
+    failure: tuple[str, str, str] | None = None
+    milestone = revision.body.milestone_urn
+    if action is None:
+        failure = (
+            "approval_action_held",
+            f"the tree holds no pending action {action_key}, so nobody was asked",
+            "Open the approval question, have the operator answer it, then retry.",
+        )
+    elif action.status is not PendingActionStatus.SEALED:
+        failure = (
+            "approval_action_sealed",
+            f"{action_key} is {action.status.value}: nobody has answered it yet",
+            "Have the operator answer the question, then retry.",
+        )
+    elif (chosen := action.selected_option) is None or chosen.effect is not OptionEffect.APPROVE:
+        answered = "nothing" if chosen is None else repr(chosen.option_id)
+        failure = (
+            "approval_action_approves",
+            f"{action_key} was answered {answered}, which is not the approving option",
+            "Open a new approval question; an answer that declined cannot approve.",
+        )
+    elif not action.subject_ref.same_entity(milestone):
+        failure = (
+            "approval_action_subject",
+            f"{action_key} was asked about {action.subject_ref}, not {milestone}",
+            "Approve with the question asked about this plan's Milestone.",
+        )
+    elif spent_by is not None and spent_by != revision.key:
+        failure = (
+            "approval_action_unspent",
+            f"{action_key} already approved {spent_by}, so it cannot also approve {revision.key}",
+            "Open a new approval question for this revision.",
+        )
+    if failure is None:
+        return None
+    guard, detail, remediation = failure
+    return PlanRefusal(
+        code=PlanRefusalCode.PROTECTED_APPROVAL_REQUIRED,
+        guard=guard,
+        detail=detail,
+        remediation=remediation,
+        revision=revision.revision,
+    )
+
+
 def advance_plan_revision(
     revision: PlanRevision,
     *,
@@ -393,6 +521,9 @@ def advance_plan_revision(
                 ),
                 revision=revision.revision,
             )
+    remote = _remote_ci_refusal(revision, to=to)
+    if remote is not None:
+        return remote
     if to is PlanRevisionStatus.VALIDATED and not citations_are_uncounted(revision.body):
         return PlanRefusal(
             code=PlanRefusalCode.TRANSITION_GUARD_FAILED,
@@ -502,8 +633,10 @@ __all__ = [
     "PlanRefusalCode",
     "PlanRevisionAdvanced",
     "advance_plan_revision",
+    "approval_action_refusal",
     "approval_binds_content",
     "citations_are_uncounted",
     "detect_plan_drift",
+    "remote_ci_dependencies",
     "ungrounded_approval_criteria",
 ]

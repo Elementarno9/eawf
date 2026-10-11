@@ -27,13 +27,16 @@ from eawf.surfaces.tui.console.frame import (
     route_keys_bar,
     thin,
 )
+from eawf.surfaces.tui.console.inline import Marked, inline_markdown, lay, prefixed
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.renderers.children import (
     child_cursor,
     child_rows,
     children,
     lrow,
+    padded_status,
     status,
+    status_width,
 )
 from eawf.surfaces.tui.console.renderers.detail import at, subject_of
 from eawf.surfaces.tui.console.renderers.read_model import UNKNOWN_WORD, cell
@@ -69,10 +72,17 @@ def _subject(view: View, tid: str) -> str:
     return dv.subj_facts(fx, tid, facts) or "∅ name and state unavailable"
 
 
-def _run_line(run: SpineRow) -> str:
-    """Return one Run of the Task as its row reads: key, status and when it started."""
+def _run_line(run: SpineRow, column: int) -> str:
+    """Return one Run of the Task as its row reads: key, status and when it started.
+
+    Args:
+        run: The Run.
+        column: The cells the status is padded to, so every start time aligns.
+    """
     started = run.facts.get("started_at")
-    return f"{run.key} · {status(run)}" + (f" · started {at(started)}" if started else "")
+    if not started:
+        return f"{run.key} · {status(run)}"
+    return f"{run.key} · {padded_status(run, column)} · started {at(started)}"
 
 
 def _newest_proofs(
@@ -89,13 +99,19 @@ def _newest_proofs(
     return newest
 
 
-def _criterion_lines(facts: Mapping[str, str], proofs: Sequence[SpineRow]) -> list[str]:
-    """Return one line per criterion the Task states, each with its newest proof.
+def _criterion_lines(facts: Mapping[str, str], proofs: Sequence[SpineRow], w: int) -> list[Marked]:
+    """Return one row per criterion the Task states, each with its newest proof.
 
     A criterion reads ``id · kind · gates`` and then what the newest receipt naming it
     reached, or that none is filed; its text comes last, so a narrow frame clips it first.
+    The text is authored as inline markdown and drawn as such.
+
+    Args:
+        facts: The Task's facts, its criteria among them.
+        proofs: The receipts filed for the Task.
+        w: The frame width each row is laid out to.
     """
-    lines: list[str] = []
+    lines: list[Marked] = []
     for place, (_ident, newest) in enumerate(_newest_proofs(facts, proofs), start=1):
         ident, kind, gates, text = facts[f"{CRITERION_FACT}{place}"].split(" · ", 3)
         proof = (
@@ -103,7 +119,9 @@ def _criterion_lines(facts: Mapping[str, str], proofs: Sequence[SpineRow]) -> li
             if newest is not None
             else "∅ no receipt"
         )
-        lines.append(" · ".join(part for part in (ident, kind, gates, proof, text) if part))
+        head = " · ".join(part for part in (ident, kind, gates, proof) if part)
+        lead = lrow("", f"{head} · " if text else head)
+        lines.append(lay(prefixed(lead, inline_markdown(text)), w))
     return lines
 
 
@@ -124,7 +142,7 @@ def _proof_text(facts: Mapping[str, str], proofs: Sequence[SpineRow]) -> str:
     return f"{passed} of {len(newest)} criteria pass on their newest receipt · {filed} filed"
 
 
-def _due_text(view: View, key: str) -> str:
+def _due_text(view: View, key: str) -> Marked:
     """Return when a Task is due: its Milestone's target date, else with that Milestone.
 
     A Task is due with the Milestone it is scoped to, so the Milestone's own date is the
@@ -139,10 +157,12 @@ def _due_text(view: View, key: str) -> str:
         None,
     )
     if milestone is None:
-        return f"with {key}"
-    named = f"{key} {milestone.title}" if milestone.title else key
+        return Marked(f"with {key}")
     target = milestone.facts.get("target_date")
-    return f"{target} · with {named}" if target else f"with {named}"
+    lead = f"{target} · with {key}" if target else f"with {key}"
+    if not milestone.title:
+        return Marked(lead)
+    return prefixed(f"{lead} ", inline_markdown(milestone.title))
 
 
 def task_frame(view: View, spine: SpineView) -> list[str]:
@@ -177,18 +197,23 @@ def task_frame(view: View, spine: SpineView) -> list[str]:
         ),
         lrow("INTEGRATED", facts["integrated"][:7] if "integrated" in facts else NOT_INTEGRATED),
         lrow("CRITERIA", criteria or cell(subject.field("criteria"))),
-        *(lrow("", line) for line in _criterion_lines(facts, proofs)),
+        *_criterion_lines(facts, proofs, view.w),
         lrow("PROOF", _proof_text(facts, proofs)),
         lrow("CANDIDATES", cell(subject.field("candidates"))),
         *([lrow("PRIORITY", facts["priority"])] if "priority" in facts else []),
-        *([lrow("DUE", _due_text(view, facts["due"]))] if "due" in facts else []),
+        *(
+            [lay(prefixed(lrow("DUE", ""), _due_text(view, facts["due"])), view.w)]
+            if "due" in facts
+            else []
+        ),
     ]
     top = detail_head(view, spine, subject)
     cursor = child_cursor(session, [run.key for run in runs], subject=subject.key)
+    column = status_width(runs)
     listed = child_rows(
         view,
         "RUNS",
-        [_run_line(run) for run in runs],
+        [_run_line(run, column) for run in runs],
         cursor,
         chrome=len(top) + len(below),
         empty="∅ no Run of this Task is recorded",

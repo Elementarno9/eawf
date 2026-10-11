@@ -301,7 +301,7 @@ _WALKS: tuple[_Walk, ...] = (
         (
             ("]", ("milestone", "MLS-0101")),
             ("[", ("milestone", "MLS-0100")),
-            ("[", ("milestone", "MLS-0103")),
+            ("[", ("milestone", "MLS-0104")),
             ("Escape", ("track", "TRK-EAWF-CORE")),
         ),
     ),

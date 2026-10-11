@@ -45,6 +45,7 @@ from eawf.surfaces.tui.console.renderers.children import (
     named,
     reference,
     status,
+    status_width,
 )
 from eawf.surfaces.tui.console.renderers.read_model import (
     counts,
@@ -435,10 +436,16 @@ def milestone_frame(view: View, model: AcceptanceBundleView, subject: RouteRecor
         *_section_rows(sec, model, subject),
     ]
     cursor = child_cursor(session, [batch.key for batch in batches], subject=subject.key)
+    column = status_width(batches)
+    tallies = [filed.batch_cell(batch) for batch in batches]
+    tally_w = max((cell_len(tally) for tally in tallies), default=0)
     listed = child_rows(
         view,
         "BATCHES",
-        [f"{reference(batch)} · {filed.batch_cell(batch)}" for batch in batches],
+        [
+            reference(batch, column, (pad(tally, tally_w),))
+            for batch, tally in zip(batches, tallies, strict=True)
+        ],
         cursor,
         chrome=len(top) + len(below),
         empty="∅ no Batch is cut under this Milestone",

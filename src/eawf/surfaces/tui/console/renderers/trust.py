@@ -17,14 +17,10 @@ rather than a Brier score.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from eawf.kernel.projection.route_view import RouteReadModel, RouteRecord
 from eawf.kernel.projection.truth import TruthState
-from eawf.observability.eval.trust_projection import (
-    CalibrationGroup,
-    TrackRecordRow,
-    TrustView,
-    build_trust_view,
-)
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, thin, window_rows
@@ -41,6 +37,13 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     native_head,
     route_crumb,
 )
+
+if TYPE_CHECKING:
+    from eawf.observability.eval.trust_projection import (
+        CalibrationGroup,
+        TrackRecordRow,
+        TrustView,
+    )
 
 _KEYS = route_pairs("trust")
 
@@ -148,6 +151,10 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     Returns:
         The full frame, keybar last.
     """
+    # The eval package loads the jury stack on import; deferring it keeps the console's
+    # first frame from paying for a route the operator may never open.
+    from eawf.observability.eval.trust_projection import build_trust_view
+
     s, w = view.session, view.w
     subject = s.subj_id
     trust = build_trust_view(model, milestone=subject)

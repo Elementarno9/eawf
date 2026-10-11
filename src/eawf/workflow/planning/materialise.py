@@ -17,6 +17,18 @@ Batches and Tasks, must still be PLANNED -- so a re-plan never pulls a
 claimed Task or an active Batch out from under its holder. What the
 parent placed and the child drops is cancelled rather than deleted, so
 the history of the dropped work survives the re-plan.
+
+An ACTIVE Milestone takes a re-plan only when every change is an append:
+new Batches and Tasks, and Batch refs added after the required ones it
+already has, including a Batch of its own that was created outside a
+plan. Its existing rows are left exactly as they are, because work on
+them may be underway; anything else is refused like any other re-plan of
+a started Milestone.
+
+A Task or Batch that compacted out of the document into its ledger is
+still placed: every judgement here reads the document with those rows laid
+under it (see :func:`with_compacted_rows`), so a plan never recreates or
+rewrites a row in either tier.
 """
 
 from __future__ import annotations
@@ -24,18 +36,20 @@ from __future__ import annotations
 import copy
 import logging
 import uuid
+from collections.abc import Mapping
 from typing import Any, Final
 
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
 from eawf.kernel.state.epoch2.lifecycle import TransitionDenied, apply_transition
-from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
+from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneCreateSpec, MilestoneStatus
 from eawf.kernel.state.epoch2.plan_revision import (
     PlanBody,
     PlannedTask,
     PlanRevision,
     PlanRevisionStatus,
 )
-from eawf.kernel.state.epoch2.task import Task, TaskStatus
+from eawf.kernel.state.epoch2.task import TERMINAL_TASK_STATUSES, Task, TaskStatus
+from eawf.kernel.state.epoch2.urns import TaskUrn
 from eawf.kernel.state.epoch2.values import EntityOrigin, Epoch2Record
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.compaction import document_rows
@@ -46,6 +60,12 @@ logger = logging.getLogger(__name__)
 
 #: The collection plan revisions are stored under, at the document tier.
 PLAN_REVISION_COLLECTION: Final = Epoch2Collection.PLAN_REVISION
+
+#: The stored states of a Task an append may list in its ``dropped_tasks``.
+_DROPPABLE: Final = frozenset({TaskStatus.CANCELLED.value, TaskStatus.DROPPED.value})
+
+#: The backlog states: a plan naming a Task in one places it for the first time.
+_BACKLOG: Final = frozenset({TaskStatus.DRAFT.value, TaskStatus.DEFERRED.value})
 
 #: The origin every natively planned record carries.
 _NATIVE_ORIGIN: Final = EntityOrigin(kind="native", mapping_basis="native", confidence="exact")
@@ -73,6 +93,57 @@ def _str_field(row: Any, name: str) -> str | None:
     """Return one string field of a stored row, or ``None``."""
     value = _row_field(row, name)
     return value if isinstance(value, str) else None
+
+
+def with_compacted_rows(
+    document: dict[str, Any], *, compacted: Mapping[Epoch2Collection, Mapping[str, dict[str, Any]]]
+) -> dict[str, Any]:
+    """Return *document* with each compacted row laid under its collection.
+
+    The result is for judging a plan only, never for writing: it carries
+    rows that live in the ledger tier, which the document must not regain.
+
+    Args:
+        document: The locked document.
+        compacted: Each collection's latest ledger rows, keyed by record key.
+
+    Returns:
+        A shallow copy whose named collections hold their ledger rows and
+        then their document rows, so a row in the document wins.
+    """
+    return {
+        **document,
+        **{
+            collection.value: {**rows, **document_rows(document, collection)}
+            for collection, rows in compacted.items()
+        },
+    }
+
+
+def appended_placements(document: dict[str, Any], *, body: PlanBody) -> dict[TaskUrn, TaskStatus]:
+    """Return the stored status of each plan Task already placed under an ACTIVE Milestone.
+
+    Args:
+        document: The document with its compacted rows laid under it (see
+            :func:`with_compacted_rows`), so a finished Task counts too.
+        body: The plan content, which appends to the Milestone it names.
+
+    Returns:
+        Each restated Task's stored status, keyed by its URN; empty when the
+        Milestone is not ACTIVE, and without a backlog Task the plan promotes.
+
+    Raises:
+        ValueError: A stored Task holds a status no Task has.
+    """
+    if not _active(document, body=body):
+        return {}
+    tasks = document_rows(document, Epoch2Collection.TASK)
+    return {
+        task.urn: TaskStatus(status)
+        for task in body.tasks
+        if (status := _str_field(tasks.get(task.urn.entity_key), "status")) is not None
+        and status not in _BACKLOG
+    }
 
 
 def _promotable_draft(document: dict[str, Any], *, key: str) -> Task | None:
@@ -109,8 +180,10 @@ def _claimed_keys(
 
     A backlog draft the plan promotes is not claimed: the plan places it
     rather than creating it. Neither is a row a re-plan may rewrite (see
-    :func:`_replannable`); any other row a re-plan names, including one
-    its parent owned that has since moved past PLANNED, stays claimed.
+    :func:`_replannable`) or an ACTIVE Milestone's own row an append
+    leaves in place (see :func:`_kept`); any other row a re-plan names,
+    including one its parent owned that has since moved past PLANNED,
+    stays claimed.
 
     Args:
         document: The locked document.
@@ -130,13 +203,13 @@ def _claimed_keys(
             if _promotable_draft(document, key=task.urn.entity_key) is None
         ),
     }
-    replannable = _replannable(document, parent=parent)
+    owned = _replannable(document, parent=parent) | _kept(document, body=body, parent=parent)
     return tuple(
         locator
         for collection, keys in wanted.items()
         for key in keys
         if key in document_rows(document, collection)
-        and (locator := _locator(collection, key)) not in replannable
+        and (locator := _locator(collection, key)) not in owned
     )
 
 
@@ -148,10 +221,12 @@ def _locator(collection: Epoch2Collection, key: str) -> str:
 def _replannable(document: dict[str, Any], *, parent: PlanBody | None) -> frozenset[str]:
     """Return the locators of the rows a re-plan of *parent* may rewrite or cancel.
 
-    The Milestone is always among them; whether it is still PLANNED is
-    refused separately by :func:`_replan_parent`, which names the cause.
-    A Batch or Task qualifies only while it is PLANNED, because a row
-    past PLANNED has a holder or a history the re-plan must not erase.
+    The Milestone is always among them; whether it is still PLANNED, or
+    ACTIVE and only appended to, is refused separately by
+    :func:`_replan_parent`, which names the cause. A Batch or Task
+    qualifies only while it is PLANNED, because a row past PLANNED has a
+    holder or a history the re-plan must not erase, and never under an
+    ACTIVE Milestone, whose existing rows an append leaves as they are.
 
     Args:
         document: The locked document.
@@ -162,11 +237,14 @@ def _replannable(document: dict[str, Any], *, parent: PlanBody | None) -> frozen
     """
     if parent is None:
         return frozenset()
+    milestone = _locator(Epoch2Collection.MILESTONE, parent.milestone_urn.entity_key)
+    if _active(document, body=parent):
+        return frozenset({milestone})
     batches = document_rows(document, Epoch2Collection.BATCH)
     tasks = document_rows(document, Epoch2Collection.TASK)
     return frozenset(
         {
-            _locator(Epoch2Collection.MILESTONE, parent.milestone_urn.entity_key),
+            milestone,
             *(
                 _locator(Epoch2Collection.BATCH, batch.urn.entity_key)
                 for batch in parent.batches
@@ -180,6 +258,153 @@ def _replannable(document: dict[str, Any], *, parent: PlanBody | None) -> frozen
             ),
         }
     )
+
+
+def _active(document: dict[str, Any], *, body: PlanBody) -> bool:
+    """Return whether the Milestone *body* addresses is stored ACTIVE."""
+    row = document_rows(document, Epoch2Collection.MILESTONE).get(body.milestone_urn.entity_key)
+    return _str_field(row, "status") == MilestoneStatus.ACTIVE.value
+
+
+def _kept(document: dict[str, Any], *, body: PlanBody, parent: PlanBody | None) -> frozenset[str]:
+    """Return the locators of the ACTIVE Milestone's own rows an append leaves as they are.
+
+    A Batch is the Milestone's own when its stored ``milestone_ref``
+    names it, and a Task when its stored Batch is one of those. A row the
+    plan names under any other Milestone is not kept, so it stays claimed
+    and the apply refuses it as a key the plan does not own.
+
+    Args:
+        document: The locked document.
+        body: The plan content.
+        parent: The applied body *body* re-plans, or ``None``.
+
+    Returns:
+        The locators, empty unless *body* re-plans an ACTIVE Milestone.
+    """
+    if parent is None or not _active(document, body=body):
+        return frozenset()
+    batches = document_rows(document, Epoch2Collection.BATCH)
+    tasks = document_rows(document, Epoch2Collection.TASK)
+    own_batches = tuple(
+        batch.urn
+        for batch in body.batches
+        if _str_field(batches.get(batch.urn.entity_key), "milestone_ref") == str(body.milestone_urn)
+    )
+    own_refs = {str(urn) for urn in own_batches}
+    return frozenset(
+        {
+            *(_locator(Epoch2Collection.BATCH, urn.entity_key) for urn in own_batches),
+            *(
+                _locator(Epoch2Collection.TASK, task.urn.entity_key)
+                for task in body.tasks
+                if _str_field(tasks.get(task.urn.entity_key), "batch_ref") in own_refs
+            ),
+        }
+    )
+
+
+def _non_append(document: dict[str, Any], *, body: PlanBody) -> str | None:
+    """Return how *body* edits or removes its ACTIVE Milestone's scope, if it does.
+
+    Only the Milestone's own scope is judged here; a row the plan names
+    under another Milestone is refused by the claimed-key check instead.
+
+    Args:
+        document: The locked document, whose Milestone *body* addresses
+            is stored ACTIVE.
+        body: The plan content.
+
+    Returns:
+        A clause naming the first change that is not an append, or
+        ``None`` when the plan only appends.
+
+    Raises:
+        ValidationError: The stored Milestone, or a stored Task the plan
+            names, does not satisfy its own model.
+    """
+    milestone = Milestone.model_validate(
+        document_rows(document, Epoch2Collection.MILESTONE)[body.milestone_urn.entity_key]
+    )
+    contract = set(MilestoneCreateSpec.model_fields) - {"required_batch_refs"}
+    if body.milestone.model_dump(mode="json", include=contract) != milestone.model_dump(
+        mode="json", include=contract
+    ):
+        return "rewrites the Milestone's contract"
+    required = milestone.required_batch_refs
+    if body.milestone.required_batch_refs[: len(required)] != required:
+        return "removes or reorders a required Batch"
+    batches = document_rows(document, Epoch2Collection.BATCH)
+    for batch in body.batches:
+        row = batches.get(batch.urn.entity_key)
+        if _str_field(row, "milestone_ref") == str(body.milestone_urn) and _str_field(
+            row, "repository_ref"
+        ) != str(batch.repository_ref):
+            return f"moves Batch {batch.urn.entity_key} to another repository"
+    tasks = document_rows(document, Epoch2Collection.TASK)
+    for task in body.tasks:
+        edit = _task_edit(document, task=task)
+        if edit is not None:
+            return edit
+    for dropped in body.dropped_tasks:
+        key = dropped.task_ref.entity_key
+        if _str_field(tasks.get(key), "status") not in _DROPPABLE:
+            return f"drops Task {key}, which is not cancelled or dropped"
+    return None
+
+
+def _task_edit(document: dict[str, Any], *, task: PlannedTask) -> str | None:
+    """Return how one plan Task edits an ACTIVE Milestone's scope, if it does.
+
+    A Task the document does not hold, or holds only as a promotable
+    draft, is new and may land only in a Batch the plan creates, since an
+    existing Batch's Task list is part of the scope an append keeps. A
+    Task the document holds must be restated exactly as stored, except
+    that a terminal Task need only keep its Batch: the append never
+    writes it, and its stored content may carry what a plan cannot
+    restate, such as an operator's criterion waiver or a dependency on a
+    Task the plan drops.
+
+    Args:
+        document: The locked document.
+        task: The plan entry.
+
+    Returns:
+        A clause naming the edit, or ``None`` when the entry appends or
+        restates.
+
+    Raises:
+        ValidationError: The stored Task does not satisfy its own model.
+    """
+    key = task.urn.entity_key
+    row = document_rows(document, Epoch2Collection.TASK).get(key)
+    if row is None or _promotable_draft(document, key=key) is not None:
+        batch_key = task.batch_ref.entity_key
+        if batch_key in document_rows(document, Epoch2Collection.BATCH):
+            return f"adds Task {key} to Batch {batch_key}, which already exists"
+        return None
+    stored = Task.model_validate(row)
+    if stored.status in TERMINAL_TASK_STATUSES:
+        return None if stored.batch_ref == task.batch_ref else f"changes or moves Task {key}"
+    placed = (
+        stored.batch_ref,
+        stored.priority,
+        stored.intent,
+        stored.criteria,
+        stored.depends_on,
+        stored.write_claims,
+        stored.exclusive,
+    )
+    planned = (
+        task.batch_ref,
+        task.priority,
+        task.intent,
+        task.criteria,
+        task.depends_on,
+        task.write_claims,
+        task.exclusive,
+    )
+    return None if placed == planned else f"changes or moves Task {key}"
 
 
 def _dropped(
@@ -233,7 +458,8 @@ def _replan_parent(
     created the Milestone it names, plans the ordinary way: its parent
     only informed the lenses. A child of an unapplied parent whose
     Milestone already exists is refused here, because nothing it could
-    re-plan was ever placed by its parent.
+    re-plan was ever placed by its parent. So is a child of an ACTIVE
+    Milestone that does more than append (see :func:`_non_append`).
 
     Args:
         document: The locked document.
@@ -275,13 +501,30 @@ def _replan_parent(
             revision=record.revision,
         )
     status = _str_field(milestone, "status")
+    if status == MilestoneStatus.ACTIVE.value:
+        edit = _non_append(document, body=record.body)
+        if edit is None:
+            return parent.body
+        return PlanRefusal(
+            code=PlanRefusalCode.TRANSITION_GUARD_FAILED,
+            guard="replanned_milestone_planned",
+            detail=(
+                f"Milestone {milestone_urn.entity_key} is ACTIVE, which a re-plan may only "
+                f"append to, and the plan {edit}"
+            ),
+            remediation=(
+                "Re-plan an ACTIVE Milestone by appending Batches and Tasks only, and change "
+                "its existing scope through its own lifecycle."
+            ),
+            revision=record.revision,
+        )
     if status != MilestoneStatus.PLANNED.value:
         return PlanRefusal(
             code=PlanRefusalCode.TRANSITION_GUARD_FAILED,
             guard="replanned_milestone_planned",
             detail=(
                 f"Milestone {milestone_urn.entity_key} is {status or 'absent'}, and only a "
-                "PLANNED Milestone is re-planned"
+                "PLANNED Milestone is re-planned, or an ACTIVE one appended to"
             ),
             remediation="Change a started Milestone through its own lifecycle, not a re-plan.",
             revision=record.revision,
@@ -395,6 +638,9 @@ def _planned_batches(
             "task_refs": [str(task.urn) for task in body.tasks if task.batch_ref == batch.urn],
             "status": BatchStatus.PLANNED.value,
         }
+        if batch.title is not None:
+            # An untitled plan entry keeps a title the Batch was already given.
+            placement["title"] = batch.title
         key = batch.urn.entity_key
         if _locator(Epoch2Collection.BATCH, key) in replannable:
             prior = DeliveryBatch.model_validate(stored[key])
@@ -500,6 +746,7 @@ def _planned_task(
 def materialise_plan(
     document: dict[str, Any],
     *,
+    placed: dict[str, Any],
     record: PlanRevision,
     at: UtcDatetime,
     parent: PlanBody | None,
@@ -517,10 +764,14 @@ def materialise_plan(
     default branch as its target, because the cancellation edge requires
     the branch the work was aimed at and a PLANNED Batch has none yet.
     Dropped rows already past PLANNED are left as they are: the apply
-    refuses before reaching here if the child still names one.
+    refuses before reaching here if the child still names one. A re-plan
+    of an ACTIVE Milestone rewrites only the Milestone's required Batches
+    and adds the new rows, leaving every row it keeps untouched.
 
     Args:
-        document: The locked document as read.
+        document: The locked document as read, which the successor copies.
+        placed: *document* with its compacted rows laid under it (see
+            :func:`with_compacted_rows`), which every judgement reads.
         record: The revision, already advanced to ``APPLIED``.
         at: When the apply happened.
         parent: The applied body *record* re-plans, as
@@ -537,18 +788,22 @@ def materialise_plan(
             model, which refuses before anything is written.
     """
     body = record.body
-    replannable = _replannable(document, parent=parent)
+    replannable = _replannable(placed, parent=parent)
+    kept = _kept(placed, body=body, parent=parent)
     new_document = copy.deepcopy(document)
-    milestone = _planned_milestone(document, body=body, at=at, replannable=replannable)
+    milestone = _planned_milestone(placed, body=body, at=at, replannable=replannable)
     new_document.setdefault(Epoch2Collection.MILESTONE.value, {})[milestone.key] = (
         milestone.model_dump(mode="json")
     )
     batches = new_document.setdefault(Epoch2Collection.BATCH.value, {})
-    for batch in _planned_batches(document, body=body, at=at, replannable=replannable):
-        batches[batch.key] = batch.model_dump(mode="json")
+    for batch in _planned_batches(placed, body=body, at=at, replannable=replannable):
+        if _locator(Epoch2Collection.BATCH, batch.key) not in kept:
+            batches[batch.key] = batch.model_dump(mode="json")
     tasks = new_document.setdefault(Epoch2Collection.TASK.value, {})
     for entry in body.tasks:
-        task = _planned_task(document, body=body, task=entry, at=at, replannable=replannable)
+        if _locator(Epoch2Collection.TASK, entry.urn.entity_key) in kept:
+            continue
+        task = _planned_task(placed, body=body, task=entry, at=at, replannable=replannable)
         tasks[task.key] = task.model_dump(mode="json")
     dropped_batches = _dropped(
         replannable,
@@ -604,4 +859,9 @@ def _stored_revision(document: dict[str, Any], *, key: str) -> PlanRevision | No
         return None
 
 
-__all__ = ["PLAN_REVISION_COLLECTION", "materialise_plan"]
+__all__ = [
+    "PLAN_REVISION_COLLECTION",
+    "appended_placements",
+    "materialise_plan",
+    "with_compacted_rows",
+]

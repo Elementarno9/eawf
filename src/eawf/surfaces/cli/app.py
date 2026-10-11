@@ -23,11 +23,10 @@ import typer
 
 from eawf.observability.logging.scrub import configure_cli_logging
 from eawf.surfaces.cli._version_display import compose_display_version
-from eawf.surfaces.cli.flag_day_gate import FlagDayTyperGroup
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.help_panels import panel_for
 from eawf.surfaces.cli.output import emit_json_or_text
-from eawf.surfaces.cli.registry import register_commands
+from eawf.surfaces.cli.registry import LazyCommandGroup
 
 if TYPE_CHECKING:
     from eawf.surfaces.tui.console.operations import Operator
@@ -37,7 +36,9 @@ app = typer.Typer(
     help="Eä Workflow — agent-driven development framework.",
     no_args_is_help=False,
     add_completion=False,
-    cls=FlagDayTyperGroup,
+    # every other command (the sub-Typer groups, direct commands and the side-effect
+    # verbs) is declared in eawf.surfaces.cli.registry and mounted when first asked for
+    cls=LazyCommandGroup,
 )
 
 
@@ -245,12 +246,6 @@ def _ui_cmd(
         operator=operator,
     )
     raise typer.Exit(code=rc)
-
-
-# Every other command — the sub-Typer groups, direct commands, and the
-# wave-attached side-effect verbs — is mounted from the declarative table
-# in eawf.surfaces.cli.registry (see register_commands for the mount logic).
-register_commands(app)
 
 
 def _ensure_utf8_console() -> None:

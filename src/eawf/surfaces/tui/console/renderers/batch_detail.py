@@ -37,7 +37,9 @@ from eawf.surfaces.tui.console.renderers.children import (
     child_rows,
     children,
     lrow,
+    padded_status,
     status,
+    status_width,
 )
 from eawf.surfaces.tui.console.renderers.detail import at, state_of, subject_of, unknown_frame
 from eawf.surfaces.tui.console.renderers.git_pr import review_texts
@@ -67,7 +69,7 @@ def _task_rows(view: View, bid: str) -> list[tuple[str, str, str]]:
     return rows
 
 
-def _task_line(task: Record, w: int) -> str:
+def _task_line(task: Record, w: int, column: int) -> str:
     """Return one Task row: its key, its state, then its title cut to the row.
 
     Every row names its Task, so a list reads without walking the caret down it; the
@@ -76,9 +78,11 @@ def _task_line(task: Record, w: int) -> str:
     Args:
         task: The Task.
         w: The cells the row's value may take.
+        column: The cells the state is padded to, so every title starts at one cell.
     """
-    line = f"{task.key} · {status(task)}"
-    return clip(f"{line}  {task.title}", w) if task.title else line
+    if not task.title:
+        return f"{task.key} · {status(task)}"
+    return clip(f"{task.key} · {padded_status(task, column)}  {task.title}", w)
 
 
 #: What the base, review and checks rows say of a Batch that names no branch yet.
@@ -205,10 +209,11 @@ def batch_frame(view: View, spine: SpineView) -> list[str]:
     ]
     top = detail_head(view, spine, subject)
     cursor = child_cursor(session, [task.key for task in tasks], subject=subject.key)
+    column = status_width(tasks)
     listed = child_rows(
         view,
         "TASKS",
-        [_task_line(task, view.w - LABEL_W - 3) for task in tasks],
+        [_task_line(task, view.w - LABEL_W - 3, column) for task in tasks],
         cursor,
         chrome=len(top) + len(below),
         empty="∅ no Task is filed under this Batch",

@@ -26,6 +26,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Final, cast
 
+from eawf.kernel.spec.remote_proof import criteria_needing_remote_ci
 from eawf.kernel.state.epoch2.batch import DeliveryBatch
 from eawf.kernel.state.epoch2.domain_events import DomainEvent, domain_event_name
 from eawf.kernel.state.epoch2.milestone import Milestone
@@ -42,6 +43,7 @@ from eawf.kernel.state.epoch2.transitions import (
     ObservedFact,
     TransitionGuard,
     TransitionRow,
+    TransitionVerb,
     is_terminal,
     row_for,
     rows_from,
@@ -266,7 +268,9 @@ def apply_transition[RecordT: LifecycleRecord](
             head binding a Batch merged at.
 
     Returns:
-        The successor record with its event, or a typed denial.
+        The successor record with its event, or a typed denial. A Task
+        promotion whose criteria only remote CI, a PR, a push or a tag can
+        prove is denied with ``criterion_needs_remote_ci``.
 
     Raises:
         TypeError: *record* is not a driven epoch-2 record.
@@ -302,6 +306,23 @@ def apply_transition[RecordT: LifecycleRecord](
     fields = type(record).model_fields
     cleared = {name: fields[name].default for name in outcome.cleared_fields}
     successor = _successor(record, to=to, at=at, supplied={**cleared, **supplied})
+    # Read off the validated successor so the check sees typed criteria. A
+    # Milestone closes before its push, so a criterion only remote CI, a PR,
+    # a push or a tag can prove could never be evidenced by the Task.
+    if isinstance(successor, Task) and outcome.verb is TransitionVerb.PROMOTED:
+        remote = criteria_needing_remote_ci(successor.criteria)
+        if remote:
+            return _deny(
+                entity=entity,
+                frm=record.status,
+                to=to,
+                code=DenialCode.CRITERION_NEEDS_REMOTE_CI,
+                guard=None,
+                message=(
+                    f"{record.key} carries criteria only remote CI, a PR, a push or a tag "
+                    f"can prove: {'; '.join(remote)}"
+                ),
+            )
     event = DomainEvent(
         name=domain_event_name(entity, outcome.verb),
         subject=record.urn,

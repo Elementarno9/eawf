@@ -16,9 +16,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Annotated, Any, Final, Literal
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.runtime.content import ResolvedContent, StoredContent, bound_content
 from eawf.kernel.runtime.semantic import SemanticResult
@@ -28,18 +28,17 @@ from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.host_calls import HostCallReceipt, host_receipts
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.daemon.native_guard import native_params, require_native_call
+from eawf.runtime.daemon.read_contract import (
+    CONTENT_READ_REFS,
+    RUN_CONTENT_READ_METHOD,
+    ContentRef,
+    ContentRefusal,
+    RunContentAnswer,
+)
 from eawf.runtime.daemon.semantic_gateway import SemanticCallReceipt, run_receipts
 from eawf.runtime.daemon.transcript_store import TRANSCRIPT_REF_PREFIX, read_message
 
 logger = logging.getLogger(__name__)
-
-#: Read the content a Run's transcript references resolve to.
-RUN_CONTENT_READ_METHOD: Final = "runtime.run.content.read"
-
-#: The most references one read resolves.
-CONTENT_READ_REFS: Final = 256
-
-_Ref = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=256)]
 
 
 class RunContentRead(BaseModel):
@@ -53,38 +52,7 @@ class RunContentRead(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     urn: RunUrn
-    refs: Annotated[tuple[_Ref, ...], Field(min_length=1, max_length=CONTENT_READ_REFS)]
-
-
-class ContentRefusal(BaseModel):
-    """A reference the read refuses to resolve, and why.
-
-    Attributes:
-        ref: The reference asked for.
-        code: ``content_pruned`` when the text it named was kept once and the local
-            store has since pruned it.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    ref: _Ref
-    code: Literal["content_pruned"]
-
-
-class RunContentAnswer(BaseModel):
-    """What the read answers with.
-
-    Attributes:
-        contents: The content each resolved reference names, in the order asked.
-        missing: The references this Run holds nothing under.
-        refused: The references whose content the read cannot give, each with its code.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    contents: tuple[ResolvedContent, ...] = ()
-    missing: tuple[str, ...] = ()
-    refused: tuple[ContentRefusal, ...] = ()
+    refs: Annotated[tuple[ContentRef, ...], Field(min_length=1, max_length=CONTENT_READ_REFS)]
 
 
 def _stored(ref: str, content: StoredContent) -> ResolvedContent:

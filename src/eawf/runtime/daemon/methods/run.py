@@ -61,7 +61,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints, V
 
 from eawf.kernel.config.layered import resolve_stall_interval_seconds
 from eawf.kernel.identity import QualifiedUrn
-from eawf.kernel.projection.run_timeline import RunTimeline, reduce_timeline
+from eawf.kernel.projection.run_timeline import reduce_timeline
 from eawf.kernel.runtime.control import (
     TERMINAL_RUN_STATUSES,
     ControlDisposition,
@@ -72,7 +72,7 @@ from eawf.kernel.runtime.control import (
     ReconciliationReceiptId,
     RunBinding,
 )
-from eawf.kernel.runtime.events import EventGapId, RunEventKind, RunEventRecord
+from eawf.kernel.runtime.events import EventGapId, RunEventRecord
 from eawf.kernel.runtime.handshake import (
     RUNTIME_HANDSHAKE_MISMATCH,
     HandshakeDisposition,
@@ -83,12 +83,12 @@ from eawf.kernel.runtime.handshake import (
 )
 from eawf.kernel.runtime.provider import ControlKind, Digest, reject_repeats
 from eawf.kernel.runtime.semantic import SemanticToolId
-from eawf.kernel.runtime.stall import RunStallFact, standing_stall
+from eawf.kernel.runtime.stall import standing_stall
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictNonNegativeInt, StrictPositiveInt
 from eawf.kernel.state.epoch2.run import Run, RunStatus
-from eawf.kernel.state.epoch2.transitions import AmbiguityLabel, LifecycleEntity, ambiguity_label
+from eawf.kernel.state.epoch2.transitions import LifecycleEntity, ambiguity_label
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import (
@@ -123,6 +123,11 @@ from eawf.runtime.daemon.native_dispatch import (
 )
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator, require_native_call
 from eawf.runtime.daemon.native_retry import RetryParams, retry_run
+from eawf.runtime.daemon.read_contract import (
+    RUN_EVENTS_READ_METHOD,
+    RunEventsAnswer,
+    RunStallAnswer,
+)
 from eawf.runtime.daemon.run_capture_updates import terminal_capture_updates
 from eawf.runtime.daemon.run_events import (
     AppendDisposition,
@@ -162,9 +167,8 @@ RUN_CONTRACT_READ_METHOD: Final = "runtime.run.contract.read"
 RUN_WORKER_HELLO_METHOD: Final = "runtime.run.worker.hello"
 RUN_TOOLS_GRANT_METHOD: Final = "runtime.run.tools.grant"
 
-#: The two verbs of a Run's ordered event stream.
+#: The append verb of a Run's ordered event stream; the read verb is the contract's.
 RUN_EVENT_APPEND_METHOD: Final = "runtime.run.event.append"
-RUN_EVENTS_READ_METHOD: Final = "runtime.run.events.read"
 
 #: The ledger-line key a Run's contract binding is filed under. It is
 #: prefixed rather than spelled as the Run key, because the run ledger
@@ -313,69 +317,6 @@ class RunEventAnswer(BaseModel):
     next_sequence: StrictPositiveInt
     gap: dict[str, Any] | None = None
     reason: str
-
-
-class RunStallAnswer(BaseModel):
-    """How long a Run has been quiet, and what clears it.
-
-    Attributes:
-        verdict: Live, stalled, or unknown for a Run with no activity.
-        last_activity_at: The activity the silence is measured from.
-        last_activity_kind: What that activity was.
-        elapsed_seconds: How long the Run has produced nothing.
-        interval_seconds: The interval it was measured against.
-        resume_method: The verb a principal resumes it through. A stall
-            never terminates the Run, so this is an offer and not a
-            record of something the daemon did.
-        resume_control: The control that resume request asks for.
-        ambiguity: ``lost`` for a stalled Run still recorded as running:
-            its outcome is unknown, which is neither a success nor a
-            failure, and only a principal's control ends it.
-        raised: The stall fact the daemon's sweep raised for this silence, or ``None``
-            while none stands: the Run is live, or the sweep has not reached it yet.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    verdict: RunLiveness
-    last_activity_at: str | None = None
-    last_activity_kind: RunEventKind | None = None
-    elapsed_seconds: float
-    interval_seconds: StrictNonNegativeInt
-    resume_method: str
-    resume_control: ControlKind
-    ambiguity: AmbiguityLabel | None = None
-    raised: RunStallFact | None = None
-
-
-class RunEventsAnswer(BaseModel):
-    """What a read of one Run's stream answers with.
-
-    Attributes:
-        events: The derived stream, in sequence order.
-        quarantined: The lines retained as diagnostics and derived from
-            by nothing.
-        gaps: Every recorded hole, in stream order.
-        last_contiguous_sequence: Where derivation is sound up to.
-        next_sequence: The sequence the next event is expected to carry.
-        derivation_stopped: Whether a hole sits inside the stream.
-        run_status: The status the Run's confirmed effects support.
-        stall: The Run's liveness at the moment of the read.
-        timeline: The stream reduced to timeline rows, repeated low-priority events
-            coalesced, so a surface draws the groups rather than recreating them.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    events: tuple[dict[str, Any], ...]
-    quarantined: tuple[dict[str, Any], ...]
-    gaps: tuple[dict[str, Any], ...]
-    last_contiguous_sequence: StrictNonNegativeInt
-    next_sequence: StrictPositiveInt
-    derivation_stopped: bool
-    run_status: RunStatus
-    stall: RunStallAnswer
-    timeline: RunTimeline
 
 
 class RunControlAnswer(BaseModel):

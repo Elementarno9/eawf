@@ -9,6 +9,7 @@ Milestone whose acceptance record is not read yet says that instead of a section
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -370,7 +371,13 @@ def test_the_committed_milestones_draw_their_sections_from_their_records(
     assert "JOURNEY      2 steps · 2 proven · 0 open · 0 not yet run" in rc2
     # the record's own action text, drawn as written
     assert "AS-01 · operator · required · proven · review the exit-criteria logs" in rc2
-    assert "TRY          accepted at head bca031a · tree dda9c87" in frames["MLS-0102", "try"]
+    # every squash rebinds the accepted head, and this file rides in that commit, so the
+    # expected head is read from the committed ledger rather than spelled here
+    (ledger,) = root.glob(".ea/generations/gen-*/ledger/milestone.jsonl")
+    rows = [json.loads(line) for line in ledger.read_text().splitlines() if line]
+    held = [r["payload"] for r in rows if r["record_key"] == "MLS-0102"][-1]["accepted_binding"]
+    head, tree = held["head_sha"][:7], held["tree_sha"][:7]
+    assert f"TRY          accepted at head {head} · tree {tree}" in frames["MLS-0102", "try"]
     assert "EVD-0039 · decision · rc2 acceptance at a0112595e" in frames["MLS-0102", "evidence"]
     assert "nothing open · every required step is proven" in frames["MLS-0102", "risks"]
     for text in frames.values():

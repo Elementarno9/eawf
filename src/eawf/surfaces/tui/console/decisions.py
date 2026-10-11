@@ -34,7 +34,7 @@ from eawf.kernel.state.epoch2.pending_action import AgentPrincipal, PendingActio
 from eawf.kernel.state.epoch2.question import OpenQuestion, QuestionSituation
 from eawf.kernel.state.epoch2.run import RunRuntimeTuple
 from eawf.kernel.state.epoch2.urns import render_qualified_urn
-from eawf.runtime.daemon.methods.pause import stall_of
+from eawf.runtime.daemon.read_contract import stall_of
 
 #: An open question's ``QST-####`` key, or the ``ACT-####`` key of an operator decision,
 #: which the question detail draws the same way: a question with offered answers.

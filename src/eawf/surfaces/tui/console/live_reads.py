@@ -45,33 +45,36 @@ from eawf.kernel.runtime.events import ChildRunPayload, QuestionActionPayload, R
 from eawf.kernel.state.epoch2.transitions import AmbiguityLabel
 from eawf.kernel.store.changes import ChangePage
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.runtime.daemon.methods.campaign import CAMPAIGN_ARTIFACT_METHOD, CAMPAIGN_VIEW_METHOD
-from eawf.runtime.daemon.methods.console_records import (
+from eawf.runtime.daemon.read_contract import (
     BOOT_RECOVERY_READ_METHOD,
+    CAMPAIGN_ARTIFACT_METHOD,
+    CAMPAIGN_VIEW_METHOD,
     CONFLICT_FRAMES_READ_METHOD,
+    CONTENT_READ_REFS,
+    DISPATCH_QUEUE_READ_METHOD,
     GENERATIONS_READ_METHOD,
     HEALTH_VERDICTS_READ_METHOD,
     HISTORY_CHANGES_READ_METHOD,
+    PERMISSION_READ_METHOD,
     PROOF_RECEIPTS_READ_METHOD,
     REPOSITORY_READ_METHOD,
+    RUN_CONTENT_READ_METHOD,
+    RUN_EVENTS_READ_METHOD,
+    RUN_STALLS_READ_METHOD,
+    RUN_USAGE_READ_METHOD,
+    SPEND_CEILING_READ_METHOD,
     TARGET_RESOLVE_METHOD,
     BootRecoveryAnswer,
     ConflictFramesAnswer,
     GenerationsAnswer,
     HealthVerdictsAnswer,
+    PermissionsAnswer,
     ProofReceiptsAnswer,
+    RunContentAnswer,
+    RunEventsAnswer,
+    RunStallsAnswer,
     TargetResolution,
 )
-from eawf.runtime.daemon.methods.dispatch_queue import DISPATCH_QUEUE_READ_METHOD
-from eawf.runtime.daemon.methods.permission import PERMISSION_READ_METHOD, PermissionsAnswer
-from eawf.runtime.daemon.methods.run import RUN_EVENTS_READ_METHOD, RunEventsAnswer
-from eawf.runtime.daemon.methods.run_content import (
-    CONTENT_READ_REFS,
-    RUN_CONTENT_READ_METHOD,
-    RunContentAnswer,
-)
-from eawf.runtime.daemon.methods.run_liveness import RUN_STALLS_READ_METHOD, RunStallsAnswer
-from eawf.runtime.daemon.methods.spend import RUN_USAGE_READ_METHOD, SPEND_CEILING_READ_METHOD
 from eawf.runtime.vcs.repository_read import RepositoryAnswer
 from eawf.surfaces.tui.console.decisions import ArtifactRecord, DecisionRecords, campaign_records
 from eawf.surfaces.tui.console.open_records import (
@@ -326,12 +329,33 @@ async def _children(
     return children
 
 
+async def _follow_children(
+    host: LiveReadHost, held: Mapping[str, tuple[RunEventRecord, ...]]
+) -> dict[str, tuple[RunEventRecord, ...]]:
+    """Read each held child Run past its own cursor; return only the children that grew.
+
+    A child whose read fails keeps what was held for it.
+    """
+    grown: dict[str, tuple[RunEventRecord, ...]] = {}
+    for child, events in held.items():
+        try:
+            new = await _run_events(host, child, after=_through(events))
+        except Exception as exc:
+            logger.warning(f"transcript child unreadable cause={exc!r}")
+            continue
+        if new:
+            grown[child] = (*events, *new)
+    return grown
+
+
 async def _follow_transcript(host: LiveReadHost, urn: str, held: HeldTranscript) -> HeldTranscript:
-    """Grow a held transcript by the lines appended past its cursor.
+    """Grow a held transcript by the lines appended past its cursor and its children's.
 
     Only the new lines are read, with what they hang off: the content they unfold to,
     the deadlines of the permissions they name, and the whole of each child Run they
-    name, since a delegation's later lines are what its new parent line reports.
+    name, since a delegation's later lines are what its new parent line reports. Each
+    child already held is read past its own cursor, so a subagent that appends while
+    its parent is quiet still moves its line.
 
     Args:
         host: The seam the read goes through.
@@ -342,18 +366,21 @@ async def _follow_transcript(host: LiveReadHost, urn: str, held: HeldTranscript)
         *held* itself when nothing was appended past it, else the grown transcript.
     """
     new = await _run_events(host, urn, after=held.through)
-    if not new:
+    grown = await _follow_children(host, held.children)
+    if not new and not grown:
         return held
     contents = await _contents(host, urn, new)
     deadlines = await _permission_deadlines(host, urn, new)
     children = await _children(host, new)
-    logger.debug(f"follow_transcript after={held.through} events={len(new)}")
+    logger.debug(
+        f"follow_transcript after={held.through} events={len(new)} children_grown={len(grown)}"
+    )
     return HeldTranscript(
         events=(*held.events, *new),
-        children={**held.children, **children},
+        children={**held.children, **grown, **children},
         contents={**held.contents, **contents},
         deadlines={**held.deadlines, **deadlines},
-        through=_through(new),
+        through=_through(new) if new else held.through,
     )
 
 

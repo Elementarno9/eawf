@@ -19,9 +19,9 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Final, Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
-from eawf.kernel.state.epoch2.base import BatchKey, BranchName, Epoch2Model
+from eawf.kernel.state.epoch2.base import BatchKey, BranchName, Epoch2Model, TitleStr
 from eawf.kernel.state.epoch2.milestone import reject_duplicate_refs
 from eawf.kernel.state.epoch2.urns import BatchUrn, MilestoneUrn, RepositoryUrn, TaskUrn
 from eawf.kernel.state.epoch2.values import (
@@ -109,6 +109,9 @@ class BatchCreateSpec(Epoch2Model):
     milestone_ref: MilestoneUrn
     repository_ref: RepositoryUrn
     task_refs: tuple[TaskUrn, ...] = ()
+    # Omitted from the dump while unset, so an untitled create keeps the shape
+    # and the request digest it had before Batches carried a title.
+    title: TitleStr | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def _task_refs_are_unique(self) -> Self:
@@ -133,6 +136,8 @@ class DeliveryBatch(Epoch2Record):
     status: BatchStatus
     current_head_binding: ExactRevisionBinding | None = None
     failure: TransitionReason | None = None
+    # Omitted from the dump while unset, so a stored untitled row keeps its bytes.
+    title: TitleStr | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def _task_refs_are_unique(self) -> Self:

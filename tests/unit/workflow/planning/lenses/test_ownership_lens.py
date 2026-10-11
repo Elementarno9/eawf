@@ -21,6 +21,7 @@ from typing import Any
 import pytest
 
 from eawf.kernel.state.epoch2.plan_revision import PlanBody
+from eawf.kernel.state.epoch2.task_status import TaskStatus
 from eawf.workflow.planning.apply import PlanRevisionProposal, validate_plan_proposal
 from eawf.workflow.planning.lenses import PlanFindingCode, PlanLens, run_plan_lenses
 from eawf.workflow.planning.revision import PlanRefusal
@@ -235,6 +236,68 @@ def test_ownership_lens_flags_an_unordered_overlap_across_batches() -> None:
     assert first in findings[0].entity_refs
     assert second in findings[0].entity_refs
     assert "src/eawf/product/base.py" in findings[0].entity_refs
+
+
+# ---- an append to an ACTIVE Milestone judges only pairs with a new Task ------------
+
+
+def _overlapping_body() -> tuple[PlanBody, Any, Any]:
+    """Return a body of two unordered Tasks claiming one path, and their URNs."""
+    body = make_body(
+        tasks=[
+            _task(f"{SLOT}/task/EAWF-0001", write_claims=("src/eawf/product/base.py",)),
+            _task(
+                f"{SLOT}/task/EAWF-0002",
+                batch_ref=BATCH_B,
+                write_claims=("src/eawf/product/base.py",),
+            ),
+        ]
+    )
+    return body, body.tasks[0].urn, body.tasks[1].urn
+
+
+def _ownership(body: PlanBody, placed: dict[Any, TaskStatus]) -> list[Any]:
+    """Return the ownership findings *body* earns with *placed* already stored."""
+    return [f for f in run_plan_lenses(body, placed=placed) if f.lens is PlanLens.OWNERSHIP]
+
+
+@pytest.mark.parametrize(
+    "settled", [TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.FAILED, TaskStatus.DROPPED]
+)
+def test_an_overlap_with_a_settled_task_is_not_judged(settled: TaskStatus) -> None:
+    """A finished Task holds no claim, whether the other Task is new or restated."""
+    body, first, second = _overlapping_body()
+
+    assert _ownership(body, {first: settled}) == []
+    assert _ownership(body, {first: settled, second: TaskStatus.CLAIMED}) == []
+
+
+def test_two_restated_in_flight_tasks_overlapping_are_not_rejudged() -> None:
+    """Two Tasks placed before the append were judged when they were placed."""
+    body, first, second = _overlapping_body()
+
+    assert _ownership(body, {first: TaskStatus.CLAIMED, second: TaskStatus.PLANNED}) == []
+
+
+@pytest.mark.parametrize(
+    "status", [TaskStatus.PLANNED, TaskStatus.CLAIMED, TaskStatus.RUNNING], ids=str
+)
+def test_a_new_task_overlapping_an_in_flight_task_is_still_a_finding(status: TaskStatus) -> None:
+    """Only the pair with a new Task and no edge is judged, and it still refuses."""
+    body, first, second = _overlapping_body()
+
+    findings = _ownership(body, {first: status})
+
+    assert len(findings) == 1
+    assert findings[0].code is PlanFindingCode.WRITE_CLAIM_OVERLAP_UNORDERED
+    assert {str(first), str(second)} <= set(findings[0].entity_refs)
+
+
+def test_a_fresh_plan_with_nothing_placed_still_judges_every_pair() -> None:
+    """With no Task placed, the lens behaves as it always did."""
+    body, _, _ = _overlapping_body()
+
+    assert len(_ownership(body, {})) == 1
 
 
 # ---- CR-01: gate-fire proofs -------------------------------------------------------

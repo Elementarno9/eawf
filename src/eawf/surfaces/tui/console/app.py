@@ -22,7 +22,7 @@ import logging
 import shutil
 import subprocess
 import sys
-from collections.abc import Awaitable, Mapping
+from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from types import MappingProxyType
@@ -72,10 +72,16 @@ from eawf.surfaces.tui.chassis.theme import (
     detect_os_appearance,
     resolve_theme_name,
 )
-from eawf.surfaces.tui.console.attach import OFFLINE, ONBOARDING, with_entry_state
+from eawf.surfaces.tui.console.attach import (
+    OFFLINE,
+    ONBOARDING,
+    AttachStep,
+    resolving_state,
+    with_entry_state,
+)
 from eawf.surfaces.tui.console.bulk import BulkRequest
 from eawf.surfaces.tui.console.cards import settle
-from eawf.surfaces.tui.console.chrome import ConsoleChrome, load_chrome
+from eawf.surfaces.tui.console.chrome import ConsoleChrome, EntryState, load_chrome
 from eawf.surfaces.tui.console.clock import (
     Clock,
     FakeClock,
@@ -83,12 +89,12 @@ from eawf.surfaces.tui.console.clock import (
     notify,
     sweep_toasts,
 )
-from eawf.surfaces.tui.console.dispatch import activate_crumb, dispatch, quit_press
+from eawf.surfaces.tui.console.dispatch import activate_crumb, dispatch, open_id, quit_press
 from eawf.surfaces.tui.console.drawers import DRAWERS
 from eawf.surfaces.tui.console.drill import ROW_DRILLS, destination, say_why
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, paint_rack, thin, unheld
-from eawf.surfaces.tui.console.header import CrumbRun, crumb_at
+from eawf.surfaces.tui.console.header import CrumbPart, CrumbRun, crumb_at, crumb_runs
 from eawf.surfaces.tui.console.inspector import beside, entered, inspects
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS, ENTRY_ROUTE
@@ -100,9 +106,10 @@ from eawf.surfaces.tui.console.operations import (
     VerbRequest,
 )
 from eawf.surfaces.tui.console.overlays import is_overlay, render_overlay
-from eawf.surfaces.tui.console.paint import Part
+from eawf.surfaces.tui.console.paint import Part, id_at
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import loading_frame, render_route
+from eawf.surfaces.tui.console.renderers.entry import render_state
 from eawf.surfaces.tui.console.rows import RowsWidget, row_classes
 from eawf.surfaces.tui.console.session import (
     SIZES,
@@ -155,6 +162,12 @@ UNANSWERED: frozenset[ConnectionValue] = frozenset(
 # How long a route's own read may be in flight before the held frame gives way to a
 # frame naming what is loading; a read answered sooner paints with no frame between.
 LOADING_GRACE_SECONDS = 0.3
+# How long a launch holds its attach frame for the first route's own read before it lands
+# offline. It outlasts the daemon client's wait for a daemon it spawned, so a cold daemon
+# and its first projection still answer inside it.
+ATTACH_DEADLINE_SECONDS = 15.0
+# How long a launch waits after its first route's read failed before asking again.
+ATTACH_RETRY_SECONDS = 0.5
 # The key-log key a daemon answer to a sent verb is recorded under.
 DAEMON_KEY = "daemon"
 # How loudly each control outcome is announced; the toast title is the outcome's own word.
@@ -363,10 +376,16 @@ class Body(RowsWidget):
     DEFAULT_CLASSES = row_classes("canvas", "text")
 
     def on_click(self, event: Click) -> None:
-        """Select the row under the pointer, as the arrow keys would; any other click is none."""
+        """Open the underlined id under the pointer, else select its row as the arrows would.
+
+        Any click but a single left one is none.
+        """
         if isinstance(self.app, ConsoleApp) and event.button == 1 and event.chain == 1:
-            # the header is the frame's first row, so body line ``y`` is frame row ``y + 1``
-            self.app.select_row_at(event.y + 1)
+            row = self.rows[event.y] if event.y < len(self.rows) else ""
+            entity_id = id_at(row, event.x)
+            if entity_id is None or not self.app.open_id(entity_id):
+                # the header is the frame's first row, so body line ``y`` is frame row ``y + 1``
+                self.app.select_row_at(event.y + 1)
 
 
 class KeybarRow(RowsWidget):
@@ -414,6 +433,12 @@ class ConsoleApp(App[None]):
             the terminal.
         first_run: The tree a first run stands in and the daemon link its workspace
             step writes through; ``None`` for any launch that is not a first run.
+        attach: The resolution steps a launch read before it opened a seam. A console
+            given them over a seam draws the attach frame, with the daemon's progress
+            and the time spent, until its route's own projection is held, asking again
+            while the daemon starts; past :data:`ATTACH_DEADLINE_SECONDS` it lands on
+            the offline frame. Empty for a console that did not come through the attach
+            path.
 
     Raises:
         ValueError: both a fixture and a chrome were given, ``gutter`` is negative, or
@@ -437,6 +462,7 @@ class ConsoleApp(App[None]):
         toast_verbosity: ToastVerbosity = "important",
         glyphs: str = "unicode",
         first_run: FirstRun | None = None,
+        attach: Sequence[AttachStep] = (),
     ) -> None:
         if fixture is not None and chrome is not None:
             raise ValueError("a fixture carries its own chrome; pass a fixture or a chrome")
@@ -488,6 +514,13 @@ class ConsoleApp(App[None]):
         self._rest: tuple[str, str] | None = None
         self._rest_since = 0.0
         self._rest_read = False
+        # the resolution the attach frame lists while the first route is unread, ``None``
+        # once it is held or the launch gave up; when the frame went up on the console
+        # clock, how many reads of the route failed, and when it is next asked for
+        self._attach_trace = tuple(attach) if attach and seam is not None else None
+        self._attach_since = self.console_clock.now()
+        self._attach_misses = 0
+        self._attach_retry_at: float | None = None
         self.reset(None)
         self.frame_rows: list[str] = []
         self.render_count = 0
@@ -581,10 +614,20 @@ class ConsoleApp(App[None]):
             rest = tuple(name for name in loaded if name not in painted)
             if rest:
                 self._land(rest)
-            elif not loaded and not seam.held_routes and seam.settings is None and self.is_running:
+            elif (
+                not loaded
+                and not seam.held_routes
+                and seam.settings is None
+                and self.is_running
+                and self._attach_trace is None
+            ):
                 self._land_offline()
         finally:
             self._syncing -= 1
+        if self._attaching() and not seam.is_reading(self.route_key):
+            # the daemon may still be starting: the refusal is not yet the answer
+            self._attach_misses += 1
+            self._attach_retry_at = self.console_clock.now() + ATTACH_RETRY_SECONDS
         if self._syncing == 0 and self._awaiting is not None:
             self._await(None)
             if self.is_running:
@@ -1042,7 +1085,10 @@ class ConsoleApp(App[None]):
             view = self._inspecting(self.view())
             rows = compose_frame(view)
         s = self.session
-        if self._awaiting == self.route_key and s.overlay is None and s.prefix != "g":
+        bare = s.overlay is None and s.prefix != "g"
+        if bare and s.route != ENTRY_ROUTE and self._attaching():
+            rows = render_state(view, self._attach_state())
+        elif bare and self._awaiting == self.route_key:
             if not self._loading:
                 return
             rows = loading_frame(view)
@@ -1057,6 +1103,60 @@ class ConsoleApp(App[None]):
         self.query_one("#body", Body).set_rows(rows[1 : view.h - 1])
         self.query_one("#keybar", KeybarRow).set_rows(rows[view.h - 1 :])
         self._rest_caret()
+
+    def _attaching(self) -> bool:
+        """Return whether the launch still waits on its route's own projection.
+
+        Another read model arriving first -- the pinned Attention register -- is not the
+        route, so it does not end the wait; the route's projection does, for good.
+        """
+        if self._attach_trace is None:
+            return False
+        seam = self.seam
+        assert seam is not None, "a launch attaches only over a seam"
+        if seam.projection_for(self.route_key) is None:
+            return True
+        self._attach_trace = None
+        logger.info(f"attached route={self.route_key} misses={self._attach_misses}")
+        return False
+
+    def _attach_state(self) -> EntryState:
+        """Return the attach frame: the resolution, the daemon's progress and the time spent."""
+        seam, route = self.seam, self.route_key
+        assert seam is not None and self._attach_trace is not None, "drawn only while attaching"
+        if seam.is_reading(route):
+            progress = f"reading {route} · try {self._attach_misses + 1}"
+        elif self._attach_misses:
+            progress = f"not answering yet · {self._attach_misses} tries · asking again"
+        else:
+            progress = f"starting · {route} not asked yet"
+        elapsed = max(0.0, self.console_clock.now() - self._attach_since)
+        steps = (*self._attach_trace, AttachStep(name="daemon", result=progress))
+        return resolving_state(self.fixture.chrome, steps, elapsed=elapsed)
+
+    def _keep_attaching(self, now: float) -> None:
+        """Tick the attach frame: give up past the deadline, else ask again when due.
+
+        The frame is repainted every tick so its elapsed time moves while it is up.
+        """
+        if not self.is_running or not self._attaching():
+            return
+        if now - self._attach_since >= ATTACH_DEADLINE_SECONDS:
+            logger.warning(
+                f"attach gave up route={self.route_key} misses={self._attach_misses} "
+                f"after={ATTACH_DEADLINE_SECONDS}s"
+            )
+            self._attach_trace = None
+            self._land_offline()
+            return
+        due = self._attach_retry_at
+        if due is not None and now >= due:
+            self._attach_retry_at = None
+            seam = self.seam
+            assert seam is not None, "a launch attaches only over a seam"
+            seam.retry_route()
+            self._follow_route()
+        self.render_frame()
 
     def _inspecting(self, view: View) -> View:
         """Return ``view`` holding what Enter would open, where its list sets an inspector.
@@ -1152,6 +1252,7 @@ class ConsoleApp(App[None]):
         if expire_prefix(self.session, self.console_clock) or changed:
             self.render_frame()
         seam, now = self.seam, self.console_clock.now()
+        self._keep_attaching(now)
         self._lapse(now)
         if seam is None or now - self._live_read_at < LIVE_REFRESH_SECONDS:
             return
@@ -1331,6 +1432,17 @@ class ConsoleApp(App[None]):
             if (after > y) if down else (after < y):
                 self.press_key("ArrowUp" if down else "ArrowDown")
                 return
+
+    def open_id(self, entity_id: str) -> bool:
+        """Open ``entity_id``'s route onto it and repaint; ``False`` when none was opened."""
+        here = next(
+            (r.text for r in crumb_runs(self.frame_rows[0]) if r.part is CrumbPart.LEAF), None
+        )
+        if not open_id(self._ctx(), entity_id, here=here):
+            return False
+        self._follow_route()
+        self.render_frame()
+        return True
 
     def activate_crumb(self, step: CrumbRun) -> None:
         """Walk the breadcrumb to ``step`` and repaint."""

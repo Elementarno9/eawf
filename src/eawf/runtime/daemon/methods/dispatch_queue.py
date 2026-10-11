@@ -28,12 +28,13 @@ from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.daemon.methods.memory import project_subject
 from eawf.runtime.daemon.methods.projection import document_path
 from eawf.runtime.daemon.native_guard import native_mutator, native_params, require_native_call
+from eawf.runtime.daemon.read_contract import (
+    DISPATCH_QUEUE_READ_METHOD,
+)
 from eawf.runtime.verification.progress import list_progress_manifests
 
 logger = logging.getLogger(__name__)
 
-#: The read that states the dispatch queue.
-DISPATCH_QUEUE_READ_METHOD: Final = "runtime.dispatch.queue.read"
 
 #: The request that pauses, drains or resumes dispatch.
 DISPATCH_CONTROL_REQUEST_METHOD: Final = "runtime.dispatch.control.request"

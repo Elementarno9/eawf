@@ -33,6 +33,7 @@ from eawf.surfaces.tui.console.frame import (
     Titled,
 )
 from eawf.surfaces.tui.console.header import CrumbPart, crumb_runs
+from eawf.surfaces.tui.console.inline import Inline, Marked
 from eawf.surfaces.tui.console.keybar import GAP
 from eawf.surfaces.tui.console.lifecycle import WORD_CLASSES
 from eawf.surfaces.tui.console.token_map import SURFACES
@@ -56,6 +57,7 @@ class Stroke:
         surface: The surface whose colour the glyphs take; ``None`` keeps the band's own.
         ground: The surface whose background the run sits on; ``None`` keeps the band's.
         bold: Whether the run is drawn bold.
+        italic: Whether the run is drawn italic, as inline markdown's emphasis is.
         underline: Whether the run is underlined, as a typed id that is a link is.
         mark: The truth token or quality marker the run wears, if any.
 
@@ -68,6 +70,7 @@ class Stroke:
     surface: str | None = None
     ground: str | None = None
     bold: bool = False
+    italic: bool = False
     underline: bool = False
     mark: Mark | None = None
 
@@ -209,6 +212,7 @@ class _Canvas:
         self.surface: list[str | None] = [None for _ch in row]
         self.ground: list[str | None] = [None for _ch in row]
         self.bold: list[bool] = [False for _ch in row]
+        self.italic: list[bool] = [False for _ch in row]
         self.underline: list[bool] = [False for _ch in row]
         self.size = len(self.surface)
 
@@ -219,13 +223,15 @@ class _Canvas:
         surface: str | None,
         *,
         bold: bool = False,
+        italic: bool = False,
         underline: bool = False,
     ) -> None:
-        """Paint positions ``start`` to ``end`` with ``surface``, adding bold or underline."""
+        """Paint positions ``start`` to ``end`` with ``surface``, adding any weight or slant."""
         for i in range(start, end):
             if surface is not None:
                 self.surface[i] = surface
             self.bold[i] = self.bold[i] or bold
+            self.italic[i] = self.italic[i] or italic
             self.underline[i] = self.underline[i] or underline
 
     def strokes(self) -> tuple[Stroke, ...]:
@@ -259,6 +265,7 @@ class _Canvas:
                     surface=self.surface[start],
                     ground=self.ground[start],
                     bold=self.bold[start],
+                    italic=self.italic[start],
                     underline=self.underline[start],
                     mark=marks[start][0],
                 )
@@ -266,8 +273,8 @@ class _Canvas:
             start = i
         return tuple(out)
 
-    def _key(self, i: int) -> tuple[str | None, str | None, bool, bool]:
-        return (self.surface[i], self.ground[i], self.bold[i], self.underline[i])
+    def _key(self, i: int) -> tuple[str | None, str | None, bool, bool, bool]:
+        return (self.surface[i], self.ground[i], self.bold[i], self.italic[i], self.underline[i])
 
 
 def paint(row: str, part: Part) -> tuple[Stroke, ...]:
@@ -304,13 +311,48 @@ def paint(row: str, part: Part) -> tuple[Stroke, ...]:
         edge = _RAIL_EDGE.search(row) if isinstance(row, LeadReceded) else None
         if edge is not None:
             _receded(canvas, end=edge.start())
+        _inline(canvas, row)
     return canvas.strokes()
+
+
+# How each inline markdown style is drawn: its surface, bold, italic, underline. A link
+# is underlined as a typed id is, since both name something beyond the row.
+_INLINE_STYLE: Mapping[Inline, tuple[str | None, bool, bool, bool]] = MappingProxyType(
+    {
+        Inline.BOLD: (None, True, False, False),
+        Inline.ITALIC: (None, False, True, False),
+        Inline.CODE: ("code", False, False, False),
+        Inline.LINK: (None, False, False, True),
+    }
+)
+
+
+def _inline(canvas: _Canvas, row: str) -> None:
+    """Draw the styles a marked row's inline markdown asked for, over what its words read as."""
+    if not isinstance(row, Marked):
+        return
+    for span in row.spans:
+        surface, bold, italic, underline = _INLINE_STYLE[span.style]
+        canvas.put(span.start, span.end, surface, bold=bold, italic=italic, underline=underline)
 
 
 def _links(canvas: _Canvas) -> None:
     """Underline every typed entity id, which names a record the console can open."""
     for found in _TYPED_ID.finditer(canvas.row):
         canvas.put(found.start(), found.end(), None, underline=True)
+
+
+def id_at(row: str, x: int) -> str | None:
+    """Return the typed entity id drawn underlined over position ``x`` of ``row``, if any.
+
+    Args:
+        row: One composed frame row.
+        x: The position in the row, from its first character.
+
+    Returns:
+        The id whose run covers ``x``; ``None`` where no id is drawn there.
+    """
+    return next((m.group() for m in _TYPED_ID.finditer(row) if m.start() <= x < m.end()), None)
 
 
 def _cursor(canvas: _Canvas) -> None:

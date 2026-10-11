@@ -13,10 +13,11 @@ Three row kinds drive the mount:
 * :class:`SideEffectRow` — a module imported purely for its import-time
   side effect (it attaches a verb onto an already-mounted group's Typer).
 
-Each row names its source module by dotted path; :func:`register_commands`
-resolves it lazily via :func:`importlib.import_module`, so re-introducing a
-module-level heavy import in any command module is the only way to breach
-the import-budget gate — the registry itself imports nothing heavy.
+Each row names its source module by dotted path. The root group,
+:class:`LazyCommandGroup`, imports a row's module only when something asks
+for that command: running it, drawing its help, or walking the whole tree.
+An ``eawf`` that runs one command, or none, imports one command module, or
+none, rather than all of them.
 
 Every group / command is mounted with ``rich_help_panel=panel_for(name)``,
 exactly as the hand-written wall did, and rows are walked in declaration
@@ -27,10 +28,14 @@ from __future__ import annotations
 
 import importlib
 import logging
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
+import click
 import typer
 
+from eawf.surfaces.cli.flag_day_gate import FlagDayTyperGroup
 from eawf.surfaces.cli.help_panels import panel_for
 
 logger = logging.getLogger(__name__)
@@ -74,14 +79,16 @@ class SideEffectRow:
     """A module imported solely for its import-time registration effect.
 
     The module attaches a verb onto an already-mounted group's Typer at
-    import time, so it carries no name / attribute — importing it is the
-    whole effect.
+    import time, so it carries no attribute — importing it is the whole
+    effect, and it must happen before that group is mounted.
 
     Attributes:
         module: Dotted path of the module to import.
+        group: Name of the group row whose Typer the module attaches onto.
     """
 
     module: str
+    group: str
 
 
 #: Declarative registration table, walked in order by
@@ -179,9 +186,11 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     # Wave-attached verbs (fix-ci, review, policy) — imported for side
     # effect; each attaches its verb onto the already-mounted wave group.
     # The plain-text report of one Run, attached onto the mounted run group.
-    SideEffectRow("eawf.surfaces.cli.commands.run_report"),
+    SideEffectRow("eawf.surfaces.cli.commands.run_report", "run"),
     # The Run controls, attached onto the mounted run group.
-    SideEffectRow("eawf.surfaces.cli.commands.run_control"),
+    SideEffectRow("eawf.surfaces.cli.commands.run_control", "run"),
+    # Dispatching one Task as a new Run, attached onto the mounted run group.
+    SideEffectRow("eawf.surfaces.cli.commands.run_dispatch", "run"),
     # File-impact graph.
     CommandRow(
         "impact",
@@ -232,38 +241,109 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
 )
 
 
-def register_commands(app: typer.Typer) -> None:
-    """Mount every :data:`COMMAND_REGISTRY` row onto *app* in order.
+def mount(rows: Iterable[GroupRow | CommandRow | SideEffectRow]) -> typer.Typer:
+    """Return a Typer carrying *rows*, mounted in order as the root app mounts them.
 
-    Groups are mounted via :meth:`typer.Typer.add_typer`, direct commands
-    via :meth:`typer.Typer.command`, and side-effect rows by importing
-    their module (which attaches a verb onto an already-mounted group).
-    Each group / command uses ``rich_help_panel=panel_for(name)`` so the
-    ``eawf --help`` panel grouping matches the historical wall.
+    Groups are mounted via :meth:`typer.Typer.add_typer`, direct commands via
+    :meth:`typer.Typer.command`, and side-effect rows by importing their module
+    (which attaches a verb onto a group mounted beside it). Each group /
+    command uses ``rich_help_panel=panel_for(name)`` so the ``eawf --help``
+    panel grouping matches the historical wall.
 
     Args:
-        app: The root ``eawf`` Typer app to mount commands onto.
+        rows: The registry rows to mount, in registration order.
+
+    Returns:
+        A bare Typer whose registered commands and groups are exactly *rows*.
+
+    Raises:
+        ModuleNotFoundError: A row names a module that does not exist.
+        AttributeError: A row names an attribute its module does not export.
     """
-    for row in COMMAND_REGISTRY:
-        if isinstance(row, SideEffectRow):
-            importlib.import_module(row.module)
-            continue
+    host = typer.Typer()
+    for row in rows:
         module = importlib.import_module(row.module)
+        if isinstance(row, SideEffectRow):
+            continue
         target = getattr(module, row.attr)
         if isinstance(row, GroupRow):
-            app.add_typer(target, name=row.name, rich_help_panel=panel_for(row.name))
+            host.add_typer(target, name=row.name, rich_help_panel=panel_for(row.name))
         else:
-            app.command(
+            host.command(
                 name=row.name,
                 help=row.help_text,
                 rich_help_panel=panel_for(row.name),
             )(target)
+    return host
+
+
+class LazyCommandGroup(FlagDayTyperGroup):
+    """The root ``eawf`` group: mounts a registry row the first time it is asked for.
+
+    Resolving one command name mounts that row alone, with the side-effect rows that
+    attach onto it. Anything that reads :attr:`commands` (help, completion, a walk of
+    the whole tree) mounts every row still unmounted, so the mapping it sees, and its
+    order, are what mounting every row up front produced.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self._unmounted: dict[str, GroupRow | CommandRow] = {
+            row.name: row for row in COMMAND_REGISTRY if not isinstance(row, SideEffectRow)
+        }
+        self._mounted: dict[str, click.Command] = {}
+        super().__init__(*args, **kwargs)
+
+    @property
+    def commands(self) -> dict[str, click.Command]:
+        """Return every subcommand by name, mounting the rows not mounted yet."""
+        if self._unmounted:
+            self._mount_rest()
+        return self._mounted
+
+    @commands.setter
+    def commands(self, value: Mapping[str, click.Command]) -> None:
+        self._mounted = dict(value)
+
+    def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
+        """Return the subcommand *cmd_name*, mounting its row if it is not mounted yet."""
+        mounted = self._mounted.get(cmd_name)
+        if mounted is not None:
+            return mounted
+        row = self._unmounted.pop(cmd_name, None)
+        if row is None:
+            return None
+        attached = (
+            r for r in COMMAND_REGISTRY if isinstance(r, SideEffectRow) and r.group == row.name
+        )
+        command = typer.main.get_group(mount((row, *attached))).commands[cmd_name]
+        self._mounted[cmd_name] = command
+        logger.debug(f"LazyCommandGroup mounted name={cmd_name}")
+        return command
+
+    def _mount_rest(self) -> None:
+        """Mount every unmounted row, keeping the order an up-front mount gives."""
+        pending = tuple(
+            row
+            for row in COMMAND_REGISTRY
+            if isinstance(row, SideEffectRow) or row.name in self._unmounted
+        )
+        built = typer.main.get_group(mount(pending)).commands
+        self._unmounted.clear()
+        # Typer lists a group's own commands first, then its sub-groups, each in
+        # registration order; the root's inline commands precede every registry row.
+        names = [
+            *(row.name for row in COMMAND_REGISTRY if isinstance(row, CommandRow)),
+            *(row.name for row in COMMAND_REGISTRY if isinstance(row, GroupRow)),
+        ]
+        inline = {name: cmd for name, cmd in self._mounted.items() if name not in names}
+        self._mounted = inline | {name: self._mounted.get(name) or built[name] for name in names}
 
 
 __all__ = [
     "COMMAND_REGISTRY",
     "CommandRow",
     "GroupRow",
+    "LazyCommandGroup",
     "SideEffectRow",
-    "register_commands",
+    "mount",
 ]

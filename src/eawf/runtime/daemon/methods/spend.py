@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Final
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -22,15 +22,13 @@ from eawf.runtime.daemon.admission import EconomicsPolicyError, load_economics
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 from eawf.runtime.daemon.methods.projection import PROJECTION_UNREADABLE, document_path
 from eawf.runtime.daemon.native_guard import require_native_call
+from eawf.runtime.daemon.read_contract import (
+    RUN_USAGE_READ_METHOD,
+    SPEND_CEILING_READ_METHOD,
+)
 from eawf.runtime.daemon.spend import cost_ceiling_view, run_usage_view
 
 logger = logging.getLogger(__name__)
-
-#: The governor ceiling beside what the live Runs spend and hold against it.
-SPEND_CEILING_READ_METHOD: Final = "runtime.spend.ceiling.read"
-
-#: One Run's spend beside the caps its binding sealed.
-RUN_USAGE_READ_METHOD: Final = "runtime.run.usage.read"
 
 
 class CeilingReadParams(BaseModel):

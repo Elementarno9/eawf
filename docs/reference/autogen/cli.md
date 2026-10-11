@@ -47,7 +47,7 @@ Snapshot backups of state.json + config.yaml, plus legacy profile.yaml when pres
 
 ### `eawf batch`
 
-Delivery-batch lifecycle (activate, integrate, adopt-landed, ready, merge, reconcile, observe-merge, complete).
+Delivery-batch lifecycle (activate, integrate, adopt-landed, ready, merge, reconcile, observe-merge, complete, set-title).
 
 | Verb | Summary |
 |---|---|
@@ -63,6 +63,7 @@ Delivery-batch lifecycle (activate, integrate, adopt-landed, ready, merge, recon
 | `ready` | Declare an ACTIVE Batch ready to merge. |
 | `rebind` | Supersede every ledger row naming a commit the squash replaced. |
 | `reconcile` | File what a read-back of a MERGING Batch's target branch found. |
+| `set-title` | Give a Batch, open or finished, the title shown beside its key; its status does not move. |
 | `squash` | Write the branch again as one commit per Batch and a trailing state commit. |
 
 ### `eawf bench`

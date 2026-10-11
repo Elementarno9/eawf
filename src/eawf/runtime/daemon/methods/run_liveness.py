@@ -42,7 +42,6 @@ from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.pause import PauseStatus
 from eawf.kernel.state.epoch2.run import Run, RunScope, RunStatus, TaskScope
 from eawf.kernel.state.epoch2.task import Task
-from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
@@ -70,6 +69,10 @@ from eawf.runtime.daemon.methods.permission import DAEMON_ACTOR
 from eawf.runtime.daemon.methods.run import RUN_CONTROL_REQUEST_METHOD, run_stall_interval
 from eawf.runtime.daemon.native_dispatch import control_facts_of, run_binding_of, stored_run
 from eawf.runtime.daemon.native_guard import native_params, require_native_call
+from eawf.runtime.daemon.read_contract import (
+    RUN_STALLS_READ_METHOD,
+    RunStallsAnswer,
+)
 from eawf.runtime.daemon.run_events import (
     hello_facts_of,
     plan_stall,
@@ -81,8 +84,6 @@ from eawf.runtime.daemon.run_supervisor import end_exhausted_run
 
 logger = logging.getLogger(__name__)
 
-#: The read that lists every stall still standing in a tree.
-RUN_STALLS_READ_METHOD: Final = "runtime.run.stalls.read"
 
 #: The ledger-line key prefix a stall fact is filed under. The run collection holds
 #: compacted Run records too, so the prefix keeps a stall from reading as a Run.
@@ -100,21 +101,6 @@ class RunStallsRead(BaseModel):
     """A read of every standing stall in the addressed tree; it takes no parameter."""
 
     model_config = ConfigDict(extra="forbid")
-
-
-class RunStallsAnswer(BaseModel):
-    """Every stall still standing in a tree, at one instant.
-
-    Attributes:
-        stalls: One fact per running Run that has produced nothing since its stall was
-            raised, in Run key order.
-        read_at: When the daemon answered, which is what a reader ages the answer by.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    stalls: tuple[RunStallFact, ...]
-    read_at: UtcDatetime
 
 
 def stall_key(fact: RunStallFact) -> str:

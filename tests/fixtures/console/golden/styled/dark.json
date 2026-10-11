@@ -89,6 +89,12 @@
       "fg": "#c2c9d1",
       "bg": "#17191d"
     },
+    "code": {
+      "channel": "color",
+      "token": "primary",
+      "fg": "#5ce8bb",
+      "bg": "#0c0e11"
+    },
     "ok": {
       "channel": "color",
       "token": "ok",

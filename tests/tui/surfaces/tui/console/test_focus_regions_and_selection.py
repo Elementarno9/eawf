@@ -681,7 +681,8 @@ def test_con_018_at_180_columns_the_pane_beside_the_list_is_the_route_enter_open
     pressed = session.model_copy(deep=True)
     dispatch(Ctx(session=pressed, fixture=view.fixture, host=_Host(), w=w, h=h), "Enter")
     drawn = View(session=pressed, fixture=_fixture(), w=pane_width(w), h=h - 1)
-    assert pane == render_route(drawn)[:-1]
+    assert pane[0].strip() == "RUN-538453eb"
+    assert pane[1:] == render_route(drawn)[1:-1]
     dispatch(Ctx(session=session, fixture=view.fixture, host=_Host(), w=w, h=h), "Enter")
     assert (session.route, session.subj_id) == (opened.route, opened.subj_id)
     assert (session.route, session.subj_id) == ("run.detail", "RUN-538453eb")
@@ -1220,7 +1221,8 @@ def test_con_025_the_breadcrumb_click_walks_to_the_step_as_escape_would() -> Non
 
 
 def test_con_025_a_click_on_a_row_selects_it_as_the_arrow_keys_would() -> None:
-    before, after, _frame, drawn = _driven(("click", (6, 5), 1))
+    # the click lands on the row's title, clear of its underlined ids, which open instead
+    before, after, _frame, drawn = _driven(("click", (30, 5), 1))
     assert after["sel"] != before["sel"]
     # the clicked line is the row the caret now sits on, and nothing else was opened
     assert drawn[6].lstrip().startswith("▸")

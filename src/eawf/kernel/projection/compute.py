@@ -811,7 +811,14 @@ def _projection_row(*, key: str, row: Any, collection: Epoch2Collection) -> Proj
             collection=collection,
             revision=legacy_revision,
             status=_status_field(status=legacy.status, urn=legacy_urn, revision=legacy_revision),
-            title=title_of(collection, legacy.record.record),
+            # An imported Batch keeps its epoch-1 title among the fields with no
+            # native home, so it is read there when the record states none.
+            title=title_of(collection, legacy.record.record)
+            or (
+                title_of(collection, legacy.record.legacy_refs)
+                if collection is Epoch2Collection.BATCH
+                else None
+            ),
             parent_key=parent_key_of(collection, legacy.record.record),
         )
     urn, revision = row.get("urn"), row.get("revision")

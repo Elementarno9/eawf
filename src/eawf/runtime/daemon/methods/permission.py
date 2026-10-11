@@ -89,6 +89,11 @@ from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, re
 from eawf.runtime.daemon.methods.run import append_run_event
 from eawf.runtime.daemon.native_dispatch import stored_run
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator, require_native_call
+from eawf.runtime.daemon.read_contract import (
+    PERMISSION_READ_METHOD,
+    PermissionAnswer,
+    PermissionsAnswer,
+)
 from eawf.runtime.daemon.run_events import RunEventAppend, ledger_receipt
 from eawf.runtime.runtimes.host_transcript import HostHarness
 from eawf.runtime.session.vendor_id import hash_vendor_session_id
@@ -104,8 +109,6 @@ PERMISSION_DECIDE_METHOD: Final = "runtime.permission.decide"
 #: The verb that records every lapse on one Run.
 PERMISSION_EXPIRE_METHOD: Final = "runtime.permission.expire"
 
-#: The verb that reports one Run's permissions.
-PERMISSION_READ_METHOD: Final = "runtime.permission.read"
 
 #: The verb a host harness's permission hook records a held call through.
 HOST_PERMISSION_REQUEST_METHOD: Final = "runtime.host.permission.request"
@@ -200,40 +203,6 @@ class HostPermissionRequest(BaseModel):
     host_session_id: _HostText
     tool_name: _HostText
     tool_input: dict[str, Any] = Field(default_factory=dict)
-
-
-class PermissionAnswer(BaseModel):
-    """One permission as a surface reads it.
-
-    Attributes:
-        permission: The latest revision of the record.
-        repository_may_approve: Whether the repository principal class may
-            approve. False renders the affordance disabled, never absent.
-        approve_authority: The classes that may approve, which a disabled
-            repository affordance names.
-        hold_supported: Always false: the deadline is the provider's.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    permission: dict[str, Any]
-    repository_may_approve: bool
-    approve_authority: tuple[PrincipalClass, ...]
-    hold_supported: bool
-
-
-class PermissionsAnswer(BaseModel):
-    """What the read and expire verbs answer with.
-
-    Attributes:
-        permissions: The Run's permissions in key order.
-        expired: The keys this call recorded an expiry for.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    permissions: tuple[PermissionAnswer, ...]
-    expired: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

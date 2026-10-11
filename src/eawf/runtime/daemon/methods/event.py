@@ -41,9 +41,6 @@ DEFAULT_LIST_LIMIT = 100
 #: Hard upper bound for ``event.list`` paging.
 MAX_LIST_LIMIT = 10000
 
-#: JSON-RPC error code raised when catch-up exceeds the bound.
-CATCH_UP_TOO_LARGE = -32008
-
 
 class SubscribeParams(BaseModel):
     """Params for :func:`event.subscribe` / :func:`state.subscribe`.

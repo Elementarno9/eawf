@@ -45,6 +45,7 @@ from eawf.kernel.state.epoch2.base import (
     ShaStr,
     StrictNonNegativeInt,
     StrictPositiveInt,
+    TitleStr,
 )
 from eawf.kernel.state.epoch2.milestone import MilestoneCreateSpec, reject_duplicate_refs
 from eawf.kernel.state.epoch2.run import RunPurpose, WriteSetPath
@@ -222,12 +223,17 @@ class PlannedBatch(Epoch2Model):
     Attributes:
         urn: The Batch the apply creates.
         repository_ref: The one repository it integrates into.
+        title: What the Batch delivers, shown beside its key; ``None`` leaves
+            it untitled.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     urn: BatchUrn
     repository_ref: RepositoryUrn
+    # Omitted from the dump while unset, so a plan written before the field
+    # existed keeps the content digest its approval is bound to.
+    title: TitleStr | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class PlannedTask(Epoch2Model):

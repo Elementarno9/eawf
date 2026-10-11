@@ -38,23 +38,18 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Annotated, Any, Final, Literal
+from typing import Annotated, Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from eawf.kernel.delivery.integration import IntegrationConflict, IntegrationGeneration
 from eawf.kernel.delivery.receipts import ProofReceipt
-from eawf.kernel.runtime.boot_recovery import BootRecovery
-from eawf.kernel.runtime.certification import CertificationFailureCode
 from eawf.kernel.state.epoch2.base import BranchName
 from eawf.kernel.state.epoch2.urns import BatchUrn
-from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.changes import MAX_PAGE, ChangePage, read_change_page
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, Epoch2Collection
-from eawf.observability.doctor.models import CheckResult
 from eawf.observability.doctor.runtime_health import runtime_tuple_verdicts
 from eawf.runtime.daemon.epoch2_recovery import read_boot_recovery
 from eawf.runtime.daemon.methods import MethodContext, register
@@ -62,33 +57,26 @@ from eawf.runtime.daemon.methods.delivery import read_conflict_frames, read_gene
 from eawf.runtime.daemon.methods.delivery_completion import PROOF_PAYLOAD_KIND, FiledProof
 from eawf.runtime.daemon.methods.projection import document_path
 from eawf.runtime.daemon.native_guard import native_params, require_native_call
+from eawf.runtime.daemon.read_contract import (
+    BOOT_RECOVERY_READ_METHOD,
+    CONFLICT_FRAMES_READ_METHOD,
+    GENERATIONS_READ_METHOD,
+    HEALTH_VERDICTS_READ_METHOD,
+    HISTORY_CHANGES_READ_METHOD,
+    PROOF_RECEIPTS_READ_METHOD,
+    REPOSITORY_READ_METHOD,
+    TARGET_RESOLVE_METHOD,
+    BootRecoveryAnswer,
+    ConflictFramesAnswer,
+    GenerationsAnswer,
+    HealthVerdictsAnswer,
+    ProofReceiptsAnswer,
+    TargetResolution,
+    TupleVerdict,
+)
 from eawf.runtime.vcs.repository_read import read_repository
 
 logger = logging.getLogger(__name__)
-
-#: Read the newest conformance verdict of every runtime tuple the tree has certified.
-HEALTH_VERDICTS_READ_METHOD: Final = "projection.health.verdicts"
-
-#: Read one Batch's integration generations, oldest first.
-GENERATIONS_READ_METHOD: Final = "projection.git.pr.generations"
-
-#: Read the branch the tree has checked out and the pull request open for it.
-REPOSITORY_READ_METHOD: Final = "projection.git.pr.repository"
-
-#: Read the conflict frames one Batch's blocked integrations left, in record order.
-CONFLICT_FRAMES_READ_METHOD: Final = "projection.merge.conflict.frames"
-
-#: Read what the daemon's last start repaired and what that cost.
-BOOT_RECOVERY_READ_METHOD: Final = "projection.crash.recovery.boot"
-
-#: Read the proof receipt filed under one receipt key.
-PROOF_RECEIPTS_READ_METHOD: Final = "projection.receipt.proofs"
-
-#: Read whether anything was ever written under one key.
-TARGET_RESOLVE_METHOD: Final = "projection.target.resolve"
-
-#: Read one page of the change feed, newest first.
-HISTORY_CHANGES_READ_METHOD: Final = "projection.history.changes"
 
 #: How many records a page of the change feed holds when the read names no limit.
 DEFAULT_HISTORY_PAGE: Final = 50
@@ -108,26 +96,6 @@ class HealthVerdictsRead(_Closed):
     """What the verdicts read is asked for: nothing beyond the tree it addresses."""
 
 
-class TupleVerdict(_Closed):
-    """One runtime tuple's newest verdict on the wire.
-
-    Attributes:
-        check: The doctor check repeating the newest stage record.
-        reason_code: The failure code that record was filed under; ``None`` for a pass.
-        checked_at: When that record's stage completed, which is when the check last ran.
-    """
-
-    check: CheckResult
-    reason_code: CertificationFailureCode | None = None
-    checked_at: UtcDatetime
-
-
-class HealthVerdictsAnswer(_Closed):
-    """The verdicts, ordered by tuple digest; empty for a tree that never certified."""
-
-    verdicts: tuple[TupleVerdict, ...] = ()
-
-
 class BatchRecordsRead(_Closed):
     """What a Batch's generations or conflict frames are read for.
 
@@ -136,18 +104,6 @@ class BatchRecordsRead(_Closed):
     """
 
     urn: BatchUrn
-
-
-class GenerationsAnswer(_Closed):
-    """One Batch's generations, oldest first."""
-
-    generations: tuple[IntegrationGeneration, ...] = ()
-
-
-class ConflictFramesAnswer(_Closed):
-    """The conflict frames one Batch's blocked integrations left, in record order."""
-
-    conflicts: tuple[IntegrationConflict, ...] = ()
 
 
 class RepositoryRead(_Closed):
@@ -165,12 +121,6 @@ class BootRecoveryRead(_Closed):
     """What the recovery read is asked for: nothing beyond the tree it addresses."""
 
 
-class BootRecoveryAnswer(_Closed):
-    """The daemon's last start, or ``None`` when no start on this machine recorded one."""
-
-    last: BootRecovery | None = None
-
-
 class ProofReceiptsRead(_Closed):
     """What the receipt read is asked for.
 
@@ -181,12 +131,6 @@ class ProofReceiptsRead(_Closed):
     key: _Key
 
 
-class ProofReceiptsAnswer(_Closed):
-    """The receipts filed under the key, in record order; empty when none was."""
-
-    receipts: tuple[ProofReceipt, ...] = ()
-
-
 class TargetResolve(_Closed):
     """What the resolve read is asked for.
 
@@ -195,19 +139,6 @@ class TargetResolve(_Closed):
     """
 
     key: _Key
-
-
-class TargetResolution(_Closed):
-    """Whether a key still names something.
-
-    Attributes:
-        key: The key asked about.
-        ending: ``missing`` when no document row and no ledger line holds the key; ``None``
-            when something does, so the route's own frame states where it stands.
-    """
-
-    key: str
-    ending: Literal["missing"] | None = None
 
 
 class HistoryChangesRead(_Closed):

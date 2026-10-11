@@ -161,7 +161,7 @@ class TransitionGuard(StrEnum):
 class DenialCode(StrEnum):
     """The stable code a denied transition returns.
 
-    Four of these are structural -- they describe the request rather than
+    Five of these are structural -- they describe the request rather than
     a predicate -- and the rest are the codes the named guards raise. A
     consumer groups by this value, so the values are part of the public
     contract and are never re-spelled to read better.
@@ -171,6 +171,7 @@ class DenialCode(StrEnum):
     TERMINAL_STATE = "terminal_state"
     LEGACY_ORIGIN_IMMUTABLE = "legacy_origin_immutable"
     MISSING_TRANSITION_FIELDS = "missing_transition_fields"
+    CRITERION_NEEDS_REMOTE_CI = "criterion_needs_remote_ci"
 
     ACCEPTANCE_JOURNEY_INCOMPLETE = "acceptance_journey_incomplete"
     APPROVAL_STALE = "approval_stale"
@@ -330,6 +331,10 @@ DENIAL_REMEDIATION: Final[Mapping[DenialCode, str]] = {
     ),
     DenialCode.MISSING_TRANSITION_FIELDS: (
         "Supply every field the target status makes a fact, then retry the move."
+    ),
+    DenialCode.CRITERION_NEEDS_REMOTE_CI: (
+        "Rewrite each named criterion so a local command proves it; CI runs, pull requests, "
+        "pushes and tags are checked at the pull-request stop, after the Milestone closes."
     ),
     DenialCode.ACCEPTANCE_JOURNEY_INCOMPLETE: (
         "Record a passing result for every acceptance step before completing the Milestone."

@@ -202,6 +202,7 @@ def test_every_denial_code_is_reachable_or_structural() -> None:
         DenialCode.TERMINAL_STATE,
         DenialCode.LEGACY_ORIGIN_IMMUTABLE,
         DenialCode.MISSING_TRANSITION_FIELDS,
+        DenialCode.CRITERION_NEEDS_REMOTE_CI,
     }
     assert set(GUARD_DENIALS.values()) | structural == set(DenialCode)
 

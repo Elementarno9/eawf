@@ -191,3 +191,110 @@ def test_cli_app_cold_import_within_ci_ceiling() -> None:
         f"exceeds CI ceiling {CEILING_COLD_IMPORT_MS:.0f}ms — a heavy module "
         "likely returned to the tree-build path (see FORBIDDEN_MODULES)."
     )
+
+
+#: The package every registry row's module lives in.
+_COMMANDS_PACKAGE = "eawf.surfaces.cli.commands"
+
+
+def _child_output(code: str) -> str:
+    """Return the stdout of *code* run in a fresh interpreter.
+
+    Raises:
+        AssertionError: When the child exits non-zero; its stderr is surfaced.
+    """
+    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
+    assert proc.returncode == 0, f"child failed:\n{proc.stderr}"
+    return proc.stdout
+
+
+def _resolve_in_child(name: str) -> tuple[frozenset[str], list[str]]:
+    """Resolve root command *name* alone in a fresh interpreter.
+
+    Returns:
+        The command modules then loaded, and the subcommand names of what resolved.
+    """
+    code = (
+        "import sys, click, typer\n"
+        "from eawf.surfaces.cli.app import app\n"
+        "root = typer.main.get_command(app)\n"
+        f"cmd = root.get_command(click.Context(root), {name!r})\n"
+        "subs = list(cmd.commands) if isinstance(cmd, click.Group) else []\n"
+        f"mods = [m for m in sys.modules if m.startswith({_COMMANDS_PACKAGE!r} + '.')]\n"
+        "print(' '.join(mods)); print(' '.join(subs))\n"
+    )
+    modules, subcommands = _child_output(code).splitlines()
+    return frozenset(modules.split()), subcommands.split()
+
+
+def test_cli_app_import_mounts_no_command_module() -> None:
+    """Importing the CLI app imports no registry row's module: rows mount on demand."""
+    loaded = sorted(
+        m for m in _loaded_modules_after_app_import() if m.startswith(_COMMANDS_PACKAGE)
+    )
+    assert not loaded, f"import eawf.surfaces.cli.app imported command module(s): {loaded}"
+
+
+def test_resolving_one_command_mounts_its_row_alone() -> None:
+    """Resolving ``wal`` imports its module and leaves an unrelated row unmounted."""
+    loaded, subcommands = _resolve_in_child("wal")
+    assert f"{_COMMANDS_PACKAGE}.wal" in loaded
+    assert f"{_COMMANDS_PACKAGE}.release" not in loaded
+    assert subcommands
+
+
+def test_resolving_a_group_mounts_the_verbs_attached_onto_it() -> None:
+    """``run`` resolved alone carries the verbs its side-effect rows attach onto it."""
+    from eawf.surfaces.cli.registry import COMMAND_REGISTRY, SideEffectRow
+
+    loaded, subcommands = _resolve_in_child("run")
+    attached = [row.module for row in COMMAND_REGISTRY if isinstance(row, SideEffectRow)]
+    assert attached
+    assert all(module in loaded for module in attached)
+    assert {"report", "interrupt", "dispatch"} <= set(subcommands)
+
+
+def test_unknown_or_empty_command_name_resolves_to_nothing() -> None:
+    """A name no row declares mounts nothing and resolves to ``None``."""
+    import click
+    import typer
+
+    from eawf.surfaces.cli.app import app
+
+    root = typer.main.get_command(app)
+    assert isinstance(root, click.Group)
+    ctx = click.Context(root)
+    assert root.get_command(ctx, "no-such-verb") is None
+    assert root.get_command(ctx, "") is None
+
+
+def test_full_mount_after_one_lazy_mount_keeps_registration_order() -> None:
+    """Reading every command after one is mounted gives the up-front mount's order."""
+    import click
+    import typer
+
+    from eawf.surfaces.cli.app import app
+    from eawf.surfaces.cli.registry import COMMAND_REGISTRY, CommandRow, GroupRow
+
+    root = typer.main.get_command(app)
+    assert isinstance(root, click.Group)
+    assert root.get_command(click.Context(root), "wal") is not None
+    inline = [command.name for command in app.registered_commands]
+    expected = [
+        *inline,
+        *(row.name for row in COMMAND_REGISTRY if isinstance(row, CommandRow)),
+        *(row.name for row in COMMAND_REGISTRY if isinstance(row, GroupRow)),
+    ]
+    assert list(root.commands) == expected
+    assert len(expected) == len(set(expected))
+
+
+def test_mount_refuses_a_row_whose_module_or_attribute_is_missing() -> None:
+    """A row naming no module, or no attribute of its module, fails loudly."""
+    from eawf.surfaces.cli.registry import CommandRow, GroupRow, mount
+
+    assert mount(()).registered_commands == []
+    with pytest.raises(ModuleNotFoundError):
+        mount((GroupRow("ghost", "eawf.surfaces.cli.commands.no_such_module", "app"),))
+    with pytest.raises(AttributeError):
+        mount((CommandRow("ghost", "eawf.surfaces.cli.commands.wal", "no_such_cmd", None),))
