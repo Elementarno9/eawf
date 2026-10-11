@@ -1,9 +1,9 @@
 {
-  "bundle": "sha256:15a704d5b585a09ad5893569130218b8f1a452f5d8edd8fb6964edb8654cea94",
-  "catalog": "sha256:21928fedb5f4ac619870c0d3a51c511c68cc3a06bafd04d0aa6a88c71a4be0c0",
+  "bundle": "sha256:84f01c60d3ea05906476e301edd6fd946057d1562e68924aeb527fa21ea4c441",
+  "catalog": "sha256:75df290e66b033119f405cd71a128b75431a70c30b14721c5ecc5d4e8cb9e485",
   "files": [
     {
-      "digest": "sha256:e3ca3f3cd38a9eacc70b9aba428fcfd2a2d83b166e04084a797ae3da117424d8",
+      "digest": "sha256:762a5e2db3c54cc367875caaf52ab98c32662eb624e47d8abc9466456b8df063",
       "kind": "manifest",
       "path": ".codex-plugin/plugin.json"
     },
@@ -13,27 +13,27 @@
       "path": "hooks/hooks.json"
     },
     {
-      "digest": "sha256:47d38e43f3a00fbe4051b769c5a226ec4bc181c4adec78b643d7ba11f0a70615",
+      "digest": "sha256:950f8a0e60f7fd0ce9a9f6db251a40347ebe2fa4c5fec3a5c009de35d2a08abd",
       "kind": "hook",
       "path": "hooks/pre_tool_use.sh"
     },
     {
-      "digest": "sha256:902070faf29b5bca3bdda721aadb91efa6e2d8552336536c010ec84a112e8362",
+      "digest": "sha256:5e7e45f0f6baeef32edbd40517875b0641d168333a29b768d452f99217245f2d",
       "kind": "hook",
       "path": "hooks/session_end.sh"
     },
     {
-      "digest": "sha256:cb0df3573c47552ec2740615aa5a8907c845a6cf1ba7fb1ed8931a5bb69507da",
+      "digest": "sha256:532c22428fce860dc007abc60caa99632456ee885bd0ad97490b6f225dd31ef7",
       "kind": "hook",
       "path": "hooks/session_start.sh"
     },
     {
-      "digest": "sha256:feac1eb9e4b7a4bec690fda9dcb430b2ee7bf72e342097918a46e7ba1adb367f",
+      "digest": "sha256:0691cb500884c5680eb5cb57ad0e21a160030ed70441b91f63437a900329e41a",
       "kind": "hook",
       "path": "hooks/subagent_start.sh"
     },
     {
-      "digest": "sha256:575405dcb92b5cfdc8ecc91f7ab8ed6b722c8b8e49644012481dae19d62c260e",
+      "digest": "sha256:66d01fefbaa8566231601914185d3c61f391eed82b0958541266342cf96b4d2f",
       "kind": "hook",
       "path": "hooks/subagent_stop.sh"
     },
@@ -63,7 +63,7 @@
       "path": "skills/decide/SKILL.md"
     },
     {
-      "digest": "sha256:cd4d3077080921348a44870dbb59a10107028f7bd71dfd4df1df9b83dba7b45c",
+      "digest": "sha256:55cab8b6f0add5104e17800ffea94a04c97f7fc3fcee206843835f53e94571ea",
       "kind": "skill",
       "path": "skills/dispatch/SKILL.md"
     },
@@ -103,7 +103,7 @@
       "path": "skills/reflect/SKILL.md"
     },
     {
-      "digest": "sha256:bd6ee36e1f3e1ea586a0c01b6fc9d48f645372a211c5cb5f9b5bbec93dfe67b3",
+      "digest": "sha256:0fe538a337f8c8b8c839c65c9661bec9ec03731e57e004ea5756606ab8dae234",
       "kind": "skill",
       "path": "skills/release/SKILL.md"
     },
@@ -177,8 +177,8 @@
     {
       "arguments": "sha256:c8451d4f18826004909c590b3e121b0448255f019f1cc78493bba91e591e28bf",
       "output_schema": "sha256:472c425204b31f2b09c37e638245f9c9d47a0113ecf2b48efc227d8849eb1e7b",
-      "prompt": "sha256:bfce76a1547d96e44424e0eeedea2b1de364eec78c6d5802399ec00167520eb2",
-      "rpc_allowlist": "sha256:a5597119126bc8ffe7a142e5e3289df07ab3ce1ac7f83684359493ed8b4df4cd",
+      "prompt": "sha256:0c563506cc402a5b081e3adbbb7927dc23a5d76aa706bea6bb37492ed5c8981a",
+      "rpc_allowlist": "sha256:29386c6a7d40433b671fc248b20956a9d6302c125267004a97ff6e984452e474",
       "skill_id": "dispatch"
     },
     {
@@ -233,8 +233,8 @@
     {
       "arguments": "sha256:e85c9d508eae65edc31e8de5769a68185719f885a6d360eeda88ec1411da0c75",
       "output_schema": "sha256:4e7b5193c84db539498fa28f07e2bfc508a5e04f7994b26f3c8d6bedd3e7605c",
-      "prompt": "sha256:71ddb3669930358b0301219133ca7634908c13985f6e2b22f2caa95399377748",
-      "rpc_allowlist": "sha256:285304b16de3713487a8d25a16473e7803c18024e28023053af427fa8c6521a1",
+      "prompt": "sha256:28f91b340eacb1ff1f9fc0c9812e8320e59a76d94cb479822cc21144017b362d",
+      "rpc_allowlist": "sha256:2691c6431ab6fa364816637ff036cc8f6007ce7083ddca8adb54aaf37191a2c2",
       "skill_id": "release"
     },
     {
@@ -281,5 +281,5 @@
     }
   ],
   "target_epoch": 2,
-  "verb_catalog": "sha256:9be1664c0c95cb8e5b2ca0547b746468d812390b46198b4f829f04886132c2fa"
+  "verb_catalog": "sha256:64aa178b82f372d6eaf80920f373ea4cab2ad314bf7f1827d0906efcc64cd008"
 }

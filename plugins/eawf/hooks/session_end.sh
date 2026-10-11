@@ -30,6 +30,23 @@ if [ -z "${_eawf_uv}" ]; then
     _eawf_uv="uv"
 fi
 
+# The project's own eawf comes first: a global eawf of another version speaks
+# a different hook contract, and the fail-closed pre-tool guard would then
+# refuse every judged tool call. `--no-sync` runs that environment as
+# installed instead of syncing it on every hook. Without a project eawf, an
+# eawf on PATH runs with `--no-project` so uv leaves the host repository's
+# environment alone; failing both, plain `uv run` resolves eawf from the
+# project. The choice is made once up front and never retried on exit status,
+# because exit 2 from the pre-tool hook is a deny, not a failure.
+_eawf_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+if [ -x "${_eawf_root}/.venv/bin/eawf" ] || [ -x "${_eawf_root}/.venv/Scripts/eawf.exe" ]; then
+    _eawf_uv_run=(run --project "${_eawf_root}" --no-sync)
+elif command -v eawf >/dev/null 2>&1; then
+    _eawf_uv_run=(run --no-project)
+else
+    _eawf_uv_run=(run)
+fi
+
 # Escape the minimum set of characters required for a JSON string body
 # (backslash + double-quote) so the fallback payload is portable across
 # bash versions. Only used for the positional-arg fallback below.
@@ -66,4 +83,4 @@ else
         "${_eawf_arg4}")
 fi
 
-printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run session_end --runtime codex --target-epoch 2 >/dev/null
+printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" "${_eawf_uv_run[@]}" eawf hook run session_end --runtime codex --target-epoch 2 >/dev/null
