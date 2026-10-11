@@ -178,6 +178,7 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[SimpleNam
     home.mkdir()
     repo.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("EAWF_REGISTRY_PATH", raising=False)
     monkeypatch.delenv("EA_STATE", raising=False)
     monkeypatch.delenv(launch.WORKSPACE_KEY_ENV, raising=False)
     monkeypatch.chdir(repo)

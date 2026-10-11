@@ -258,6 +258,7 @@ def test_resolve_uses_default_registry_path_when_unset(
     fake_home = tmp_path / "home"
     fake_home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: fake_home)
+    monkeypatch.delenv("EAWF_REGISTRY_PATH", raising=False)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
 

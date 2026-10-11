@@ -10,7 +10,7 @@ instead, keyed by the typed command path, and the error envelope appends it.
 :data:`RETIRED_VERBS` covers the verbs the flag day removed from the tree.
 The root group answers them before click would report an unknown command,
 naming the verb that replaces each, or -- where nothing does -- pointing at
-``eawf migrate epoch2 --plan``, the way to inspect an epoch-1 tree.
+the read-only verbs that show where an epoch-1 tree stands and how it upgrades.
 """
 
 from __future__ import annotations
@@ -18,8 +18,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Final
 
-#: The command a retired verb with no replacement points at.
-MIGRATION_PLAN_VERB: Final = "migrate epoch2 --plan"
+#: The commands a retired verb with no replacement points at; both run on an
+#: epoch-1 tree as written, so the reader can follow them straight away.
+MIGRATION_STATUS_VERB: Final = "migrate status"
+UPGRADE_GUIDE_VERB: Final = "help upgrade-from-0.6"
 
 #: The epoch-1 verbs still on the tree, mapped to the epoch-2 verb that
 #: replaces each, or ``None`` when none does.
@@ -226,7 +228,7 @@ def replacement_guidance(command_path: str) -> str:
 
     Returns:
         One clause naming the replacement, or -- for a verb nothing replaces
-        -- pointing at ``eawf migrate epoch2 --plan``; for a path neither
+        -- pointing at ``eawf migrate status`` and the upgrade guide; for a path neither
         table carries, pointing at the four epoch-2 lifecycle nouns.
     """
     table = RETIRED_VERBS if command_path in RETIRED_VERBS else EPOCH1_REPLACEMENTS
@@ -235,16 +237,17 @@ def replacement_guidance(command_path: str) -> str:
     replacement = table[command_path]
     if replacement is None:
         return (
-            f"no epoch-2 verb replaces `eawf {command_path}`; inspect or migrate an epoch-1 "
-            f"tree with `eawf {MIGRATION_PLAN_VERB}`"
+            f"no epoch-2 verb replaces `eawf {command_path}`; `eawf {MIGRATION_STATUS_VERB}` "
+            f"shows where an epoch-1 tree stands and `eawf {UPGRADE_GUIDE_VERB}` walks the upgrade"
         )
     return f"run `eawf {replacement}` instead, the verb that replaces `eawf {command_path}`"
 
 
 __all__ = [
     "EPOCH1_REPLACEMENTS",
-    "MIGRATION_PLAN_VERB",
+    "MIGRATION_STATUS_VERB",
     "RETIRED_VERBS",
+    "UPGRADE_GUIDE_VERB",
     "replacement_guidance",
     "retired_verb",
 ]

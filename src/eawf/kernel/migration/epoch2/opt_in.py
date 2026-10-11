@@ -22,6 +22,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Annotated
+
+from pydantic import TypeAdapter
 
 from eawf.kernel.migration.epoch2.canary import (
     CANARY_DECLARATION_FILENAME,
@@ -88,7 +91,8 @@ def declare_opt_in(
         MigrationTargetNotDisposableError: The tree already declares itself
             a disposable canary, and a tree may carry only one declaration.
         BackupError: The tree has no ``state.json`` to back up.
-        ValueError: ``declared_by`` or ``purpose`` is empty or too long.
+        ValidationError: ``declared_by`` or ``purpose`` is empty or too
+            long; raised before the backup is taken.
         OSError: The backup or the declaration could not be written.
     """
     tree_root = state_path.parent
@@ -103,6 +107,10 @@ def declare_opt_in(
             f"throwaway or opted in, so remove that declaration before writing "
             f"{OPT_IN_DECLARATION_FILENAME}"
         )
+    # A refused declaration must not leave a backup nothing pins.
+    for name, value in (("declared_by", declared_by), ("purpose", purpose)):
+        field = OptInDeclaration.model_fields[name]
+        TypeAdapter(Annotated[field.annotation, *field.metadata]).validate_python(value)
     snapshot = create_backup(state_path, note=note, when=when)
     declaration = OptInDeclaration(
         opt_in=True,

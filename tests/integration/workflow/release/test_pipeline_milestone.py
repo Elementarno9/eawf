@@ -20,9 +20,9 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.kernel.identity import IdentityError
-from eawf.runtime.vcs import trailer_repin, wave_sha
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import release_pipeline as cli_module
+from eawf.workflow.lifecycle import wave_sha, wave_trailer_repin
 from eawf.workflow.release import pipeline as pipeline_module
 from eawf.workflow.release import pipeline_host as host_module
 from eawf.workflow.release.pipeline import (
@@ -315,7 +315,7 @@ def test_milestone_repin_passes_with_the_epoch1_helpers_patched_to_raise(
     def boom(*_args: object, **_kwargs: object) -> Any:
         raise AssertionError("the milestone path must not reach the epoch-1 helpers")
 
-    for module in (pipeline_module, wave_sha, trailer_repin):
+    for module in (pipeline_module, wave_sha, wave_trailer_repin):
         for name in ("load_drift_acks", "resolve_trailer_repins"):
             monkeypatch.setattr(module, name, boom, raising=False)
     assert _repin(landed.root) == {"milestone": MILESTONE, "batches": "2"}

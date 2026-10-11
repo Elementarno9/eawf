@@ -56,6 +56,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     scratch = tmp_path / "scratch"
     scratch.mkdir()
     monkeypatch.setenv("HOME", str(home_dir))
+    monkeypatch.delenv("EAWF_REGISTRY_PATH", raising=False)
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(runtime))
     monkeypatch.setenv("EAWF_DAEMONLESS", "1")
     monkeypatch.setattr(tempfile, "tempdir", str(scratch))
@@ -200,7 +201,8 @@ def test_init_epoch2_canary_default_init_is_no_canary(tmp_path: Path, home: Path
     assert not (target / ".ea" / CANARY_DECLARATION_FILENAME).exists()
     assert (target / ".ea" / OPT_IN_DECLARATION_FILENAME).is_file()
     assert resolve_authority(target / ".ea").epoch == 2
-    assert not _registry_file(home).exists()
+    # A plain init registers the repository under its own code, not as a canary.
+    assert set(_repos(_registry_file(home))) == {"DEMO"}
 
 
 def test_init_epoch2_canary_provision_refuses_non_empty_target(tmp_path: Path, home: Path) -> None:

@@ -4,7 +4,7 @@ After the flag day the only epoch-1 verbs left on the tree are the
 migration-support verbs a tree needs to reach the cutover, each naming its
 epoch-2 replacement in :data:`EPOCH1_REPLACEMENTS`. Every other epoch-1 verb
 was removed and sits in :data:`RETIRED_VERBS`, where the root group answers it
-with the verb that replaces it or with ``eawf migrate epoch2 --plan``. The
+with the verb that replaces it or with ``eawf migrate status``. The
 census walks the mounted command tree rather than a hand-kept list, so a verb
 added to an epoch-1 command module without a disposition fails here.
 """
@@ -164,11 +164,11 @@ def test_rel_021_guidance_names_the_replacement_verb() -> None:
     )
 
 
-def test_rel_021_guidance_points_a_verb_with_no_replacement_at_the_migration_plan() -> None:
+def test_rel_021_guidance_points_a_verb_with_no_replacement_at_the_migration_status() -> None:
     assert RETIRED_VERBS["wave release"] is None
     assert replacement_guidance("wave release") == (
-        "no epoch-2 verb replaces `eawf wave release`; inspect or migrate an epoch-1 tree "
-        "with `eawf migrate epoch2 --plan`"
+        "no epoch-2 verb replaces `eawf wave release`; `eawf migrate status` shows where an "
+        "epoch-1 tree stands and `eawf help upgrade-from-0.6` walks the upgrade"
     )
 
 

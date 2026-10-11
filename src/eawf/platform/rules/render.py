@@ -1,5 +1,7 @@
 """Render the project card and the policy projection from the compiled rule graph.
 
+# noqa: EAWF010 one render transaction over shared graphs; split seam: view reads
+
 Two projections are rendered, in one transaction, from the rule graph and
 never from each other:
 
@@ -72,6 +74,9 @@ from eawf.platform.rules.compile import (
     RuleGraph,
     compile_card_graph,
     compile_rule_graph,
+    compile_rule_records,
+    registered_enforcement_refs,
+    registered_projection_readers,
 )
 from eawf.platform.rules.compose import BuiltinRuleProvider
 from eawf.platform.rules.conduct import load_conduct_rules
@@ -89,6 +94,7 @@ from eawf.platform.rules.host_facts import (
 from eawf.platform.rules.loader import RULE_SOURCE_PATH, load_rule_source
 from eawf.platform.rules.modules import (
     RuleModule,
+    RuleModuleEntry,
     RuleModuleSelection,
     builtin_rule_modules,
     render_module_index,
@@ -102,6 +108,7 @@ from eawf.platform.rules.records import (
 )
 from eawf.platform.rules.views import (
     ModuleViewRead,
+    RuleViewNotFoundError,
     read_module_view,
     render_module_views,
     view_stamp_matches_body,
@@ -584,6 +591,10 @@ def plan_rule_projections(
 def read_rule_view(repo_root: Path, reference: str, *, home: Path | None = None) -> ModuleViewRead:
     """Read a selected module's view and judge it against the current graph.
 
+    A tree with no ``.ea/rules.yaml`` (a fresh ``eawf init``) has no
+    selection and no rendered views, so the module is read straight from the
+    built-in catalogue instead of refusing.
+
     Args:
         repo_root: The repository root holding ``.ea/rules.yaml``.
         reference: The module reference the module index names.
@@ -591,16 +602,66 @@ def read_rule_view(repo_root: Path, reference: str, *, home: Path | None = None)
             user's home directory.
 
     Returns:
-        The view with its ``current`` / ``stale`` / ``absent`` status.
+        The view with its ``current`` / ``stale`` / ``absent`` status, or
+        ``builtin`` when the rule source is absent.
 
     Raises:
         RuleSourceError: When a rule source fails to load.
         RuleCompileError: When the rules fail compilation.
         RuleViewNotFoundError: When ``reference`` names no selected,
-            available module.
+            available module, or no built-in module when the rule source is
+            absent.
     """
+    if not rule_source_present(repo_root):
+        return _read_builtin_view(reference)
     selection, graph = _policy_graph(repo_root, home=home)
     return read_module_view(repo_root, reference, selection=selection, graph_digest=graph.digest)
+
+
+def _read_builtin_view(reference: str) -> ModuleViewRead:
+    """Render a built-in module's view for a tree without a rule source.
+
+    The graph holds the builtin layer alone, as a repository selecting only
+    this module would resolve it before adding repository rules.
+
+    Args:
+        reference: The module reference.
+
+    Returns:
+        The rendered view with ``builtin`` status and a message saying
+        where it was read from.
+
+    Raises:
+        RuleViewNotFoundError: When no built-in module has ``reference``.
+        RuleCompileError: When the built-in records fail compilation.
+    """
+    catalogue = builtin_rule_modules()
+    module = catalogue.get(reference)
+    if module is None:
+        known = ", ".join(sorted(catalogue))
+        raise RuleViewNotFoundError(
+            f"module {reference!r} is not in the built-in catalogue and "
+            f"{RULE_SOURCE_PATH.as_posix()} is absent; built-in modules: {known}"
+        )
+    selection = RuleModuleSelection(entries=(RuleModuleEntry(reference=reference, module=module),))
+    graph = compile_rule_records(
+        builtin_rule_provider(selection)((reference,)),
+        modules=(reference,),
+        enforcement_refs=registered_enforcement_refs(),
+        projection_readers=registered_projection_readers(),
+    )
+    (view,) = render_module_views(selection, graph)
+    _, _, body = view.text.partition("\n")
+    return ModuleViewRead(
+        reference=view.reference,
+        target=view.target,
+        status="builtin",
+        text=body,
+        message=(
+            f"{RULE_SOURCE_PATH.as_posix()} is absent; {reference} is read from the built-in "
+            f"catalogue, without repository rules"
+        ),
+    )
 
 
 def _policy_graph(repo_root: Path, *, home: Path | None) -> tuple[RuleModuleSelection, RuleGraph]:

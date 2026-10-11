@@ -64,6 +64,7 @@ def test_rules_view_cli_unknown_module_exits_nonzero(repo: Path) -> None:
     assert "not selected" in result.output
 
 
-def test_rules_view_cli_without_rule_source_exits_nonzero(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--workspace", str(tmp_path), "rules", "view", _TEST])
-    assert result.exit_code != 0
+def test_rules_view_cli_without_rule_source_reads_the_builtin_catalogue(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["--json", "--workspace", str(tmp_path), "rules", "view", _TEST])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["status"] == "builtin"

@@ -263,6 +263,10 @@ class ErrorEnvelope(BaseModel):
 #: refused it.
 LEGACY_OPERATION_REMOVED_KIND: Final = "LegacyOperationRemoved"
 
+#: The ``data.kind`` a cutover refused by an importer rule carries, whether the
+#: in-process path or the daemon refused it.
+MIGRATION_REFUSED_KIND: Final = "MigrationRefused"
+
 _DEFAULT_HINTS: dict[str, str] = {
     "UserError": "run `eawf <verb> --help` for option shapes; check ids and env",
     "ValidationError": "run `eawf validate` to inspect schema errors",
@@ -274,8 +278,8 @@ _DEFAULT_HINTS: dict[str, str] = {
         "file an issue with the error envelope; include `eawf daemon logs --lines 200`"
     ),
     "MigrationRequired": (
-        "this tree is still on epoch 1 and refuses writes; run `eawf migrate epoch2 --plan` "
-        "then `--apply` (or `eawf ui` for the guided path), and `eawf init` for a new tree"
+        "this tree is still on epoch 1 and refuses writes; `eawf migrate status` shows its "
+        "schema version and `eawf help upgrade-from-0.6` walks the upgrade"
     ),
 }
 
@@ -304,6 +308,11 @@ _KIND_HINTS: dict[str, str] = {
     "DaemonMutationIndeterminate": (
         "the mutation may or may not have applied; re-check state "
         "(`eawf status`) before retrying to avoid a double-apply"
+    ),
+    MIGRATION_REFUSED_KIND: (
+        "the cutover refused the tree for the reason the error names and wrote nothing; "
+        "`eawf migrate status` shows its schema version and `eawf help upgrade-from-0.6` "
+        "walks the upgrade"
     ),
     LEGACY_OPERATION_REMOVED_KIND: (
         "run the epoch-2 verb the error names; `eawf status` reports which epoch this tree "
@@ -396,6 +405,34 @@ def _flag_day_refusal(message: str) -> str | None:
     return f"{message}; {replacement_guidance(command_path)}"
 
 
+def _is_migration_refusal(err: CliError, message: str) -> bool:
+    """Whether *err* is a cutover refused by an importer rule.
+
+    Every site that surfaces such a refusal leads the message with the
+    rule's stable code, and the daemon path reaches the CLI as a plain RPC
+    message with no exception chain, so the code in the message is the one
+    signal both paths share.
+
+    Args:
+        err: The error being rendered.
+        message: Its message.
+
+    Returns:
+        ``True`` when *err* is a validation error naming an importer rule code.
+    """
+    if not isinstance(err, ValidationError):
+        return False
+    from eawf.kernel.migration.epoch2.errors import MigrationRuleError
+
+    pending: list[type[MigrationRuleError]] = [MigrationRuleError]
+    while pending:
+        rule = pending.pop()
+        if f"{rule.code}: " in message:
+            return True
+        pending.extend(rule.__subclasses__())
+    return False
+
+
 def build_envelope(
     err: CliError,
     *,
@@ -439,6 +476,8 @@ def build_envelope(
     if (refusal := _flag_day_refusal(message)) is not None:
         message = refusal
         threaded = LEGACY_OPERATION_REMOVED_KIND
+    elif threaded is None and _is_migration_refusal(err, message):
+        threaded = MIGRATION_REFUSED_KIND
     if threaded is not None and "kind" not in merged_data:
         merged_data["kind"] = threaded
     kind = merged_data.get("kind")

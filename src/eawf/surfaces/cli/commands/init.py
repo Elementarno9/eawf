@@ -26,6 +26,12 @@ Surface contract:
   registers it; ``--epoch2-canary teardown --target <dir>`` removes the
   registry row, the runtime directory and the tree. Neither changes what
   a plain ``eawf init`` writes.
+- A plain ``eawf init`` lists the repository and a workspace of the same
+  code in the user-scope registry (``--registry-path`` overrides the file),
+  so ``eawf ui`` finds the tree without a separate ``repo register``.
+- A plain ``eawf init`` in a git repository with a commit admits the
+  tree's repository row, as ``eawf repository create`` would; any other
+  target gets no row and a note saying why.
 
 Exit codes (mapped via :class:`eawf.surfaces.cli.errors.CliError` subclasses):
 
@@ -61,6 +67,7 @@ if TYPE_CHECKING:
     from pydantic import ValidationError
 
     from eawf.platform.install.wizard import WizardAnswers, WizardResult
+    from eawf.runtime.daemon.epoch2_create import CreateRequest
 
 logger = logging.getLogger(__name__)
 
@@ -280,7 +287,198 @@ def _refuse_epoch2_reinit(target_dir: Path, state_path: Path, *, flags: GlobalFl
     )
 
 
-def _result_to_payload(result: WizardResult, generation_id: str) -> dict[str, object]:
+def _register_initialised_repo(
+    result: WizardResult, target_dir: Path, *, registry_path: Path | None
+) -> dict[str, object]:
+    """List the repository init just bore, and a workspace it anchors, in the registry.
+
+    Without both rows ``eawf ui`` finds no workspace right after init. The
+    writes go through the daemon when it proxies registry mutations,
+    spawning it first, and in process under the daemonless carve-out. A
+    code already registered at another path is left alone rather than
+    re-pointed, and an existing workspace is never merged into.
+
+    Args:
+        result: What the wizard wrote.
+        target_dir: The repository root.
+        registry_path: Registry file override; ``None`` resolves the default.
+
+    Returns:
+        The registry path and what happened to each row, for the envelope.
+
+    Raises:
+        CliError: The registry is unreadable, the daemon could not be
+            reached, or a write was refused.
+    """
+    from eawf.platform.registry import (
+        RegistryRepoEntry,
+        WorkspaceMutationError,
+        WorkspaceRecord,
+        create_workspace,
+    )
+    from eawf.surfaces.cli._dispatch import ensure_daemon
+    from eawf.surfaces.cli.commands.repo import (
+        _daemon_proxy_enabled_for_registry,
+        _persist_registry,
+        _read_registry_for_write,
+        _resolve_registry_path,
+    )
+    from eawf.surfaces.cli.commands.workspace import _apply_workspace_mutation
+
+    if _daemon_proxy_enabled_for_registry():
+        ensure_daemon()
+    registry_file = _resolve_registry_path(registry_path)
+    registry = _read_registry_for_write(registry_file)
+    code = result.project_code
+    outcome: dict[str, object] = {"registry_path": str(registry_file)}
+    existing = registry.repos.get(code)
+    if existing is not None and existing.path != str(target_dir):
+        logger.warning(f"init registry code_taken code={code} path={existing.path}")
+        outcome.update(repository="code_taken", workspace="skipped")
+        return outcome
+    if existing is None:
+        now = datetime.now(UTC)
+        entry = RegistryRepoEntry(code=code, path=str(target_dir), title=code, last_seen=now)
+        updated = registry.model_copy(
+            update={"updated_at": now, "repos": {**registry.repos, code: entry}}
+        )
+        _persist_registry(updated, registry_file)
+    outcome["repository"] = "registered" if existing is None else "already_registered"
+    record = WorkspaceRecord(
+        key=code, member_project_codes=frozenset({code}), home_project_code=code
+    )
+    try:
+        _apply_workspace_mutation(
+            method="registry.workspace.create",
+            params={"record": record.model_dump(mode="json"), "registry_path": str(registry_file)},
+            target=registry_file,
+            local=lambda current: create_workspace(current, record=record),
+            key=code,
+        )
+    except WorkspaceMutationError as exc:
+        outcome["workspace"] = exc.code
+    else:
+        outcome["workspace"] = "registered"
+    return outcome
+
+
+def _register_or_exit(
+    result: WizardResult, target_dir: Path, *, registry_path: Path | None, flags: GlobalFlags
+) -> dict[str, object]:
+    """Register the initialised repository, or emit why the born tree is unregistered.
+
+    The tree already exists by now, so a second init would be refused; the
+    message names the verb that finishes the registration instead.
+    """
+    try:
+        return _register_initialised_repo(result, target_dir, registry_path=registry_path)
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(
+            type(exc)(
+                f"init bore {result.project_code} at epoch 2 but could not register it: {exc}; "
+                f"once that is fixed, run `eawf repo register {target_dir} --yes` and "
+                f"`eawf workspace add {result.project_code} --home {result.project_code}`",
+                kind=exc.kind,
+            ),
+            flags=flags,
+        )
+        raise  # never reached — emit_error raises typer.Exit
+
+
+def _submit_repository_create(
+    request: CreateRequest, *, target_dir: Path, flags: GlobalFlags
+) -> None:
+    """Send the repository create to the daemon, or commit it here when none serves.
+
+    Raises:
+        CliError: The daemon was unreachable or the create was refused.
+        TransactionRefusedError: The in-process transaction refused it.
+    """
+    from dataclasses import replace
+
+    from eawf.platform.install.repository_row import admit_in_process
+    from eawf.runtime.daemon.methods.domain_envelope import DomainStatus
+    from eawf.surfaces.cli.commands.domain import (
+        REPOSITORY_CREATE,
+        DomainCreateRequest,
+        _call_domain_create,
+    )
+    from eawf.surfaces.cli.commands.repo import _daemon_proxy_enabled_for_registry
+
+    if not _daemon_proxy_enabled_for_registry():
+        admit_in_process(target_dir / ".ea", request, now=datetime.now(UTC))
+        return
+    envelope = _call_domain_create(
+        DomainCreateRequest(
+            method=REPOSITORY_CREATE,
+            urn=str(request.urn),
+            expected_revision=request.expected_revision,
+            idempotency_key=request.idempotency_key,
+            actor=request.actor,
+            document=dict(request.spec),
+        ),
+        flags=replace(flags, workspace=target_dir),
+    )
+    if envelope.status is not DomainStatus.OK:
+        reasons = "; ".join(f"{error.code.value}: {error.message}" for error in envelope.errors)
+        raise cli_errors.StateConflict(f"the repository create was refused: {reasons}")
+
+
+def _admit_repository_row(
+    result: WizardResult, target_dir: Path, *, flags: GlobalFlags
+) -> dict[str, object]:
+    """Admit the born tree's repository row, or emit why it could not be admitted.
+
+    Returns:
+        The row's outcome and URN, plus a note when no row was admitted.
+    """
+    from eawf.platform.install.repository_row import (
+        RepositoryRowOutcome,
+        admit_tree_repository,
+        tree_repository_urn,
+    )
+    from eawf.runtime.daemon.epoch2_transaction import TransactionRefusedError
+
+    try:
+        row = admit_tree_repository(
+            result.state_path.parent,
+            project_code=result.project_code,
+            submit=lambda request: _submit_repository_create(
+                request, target_dir=target_dir, flags=flags
+            ),
+        )
+    except (cli_errors.CliError, TransactionRefusedError, OSError) as exc:
+        urn = tree_repository_urn(result.project_code)
+        cli_errors.emit_error(
+            cli_errors.StateConflict(
+                f"init bore {result.project_code} at epoch 2 but could not admit its "
+                f"repository row: {exc}; once that is fixed, run `eawf repository create "
+                f"{urn}` with its current --expected-revision and a create document "
+                f'{{"key": "{result.project_code}"}}'
+            ),
+            flags=flags,
+        )
+        raise  # never reached — emit_error raises typer.Exit
+    outcome: dict[str, object] = {"outcome": row.outcome.value, "urn": row.urn}
+    if row.outcome is RepositoryRowOutcome.NOT_A_GIT_REPOSITORY:
+        outcome["note"] = (
+            "the target is not a git repository, so no repository row was admitted; "
+            f"after `git init` and a first commit, run `eawf repository create {row.urn}`"
+        )
+    elif row.outcome is RepositoryRowOutcome.NO_COMMIT:
+        outcome["note"] = (
+            "the git repository has no commit yet, so no repository row was admitted; "
+            f"after a first commit, run `eawf repository create {row.urn}`"
+        )
+    return outcome
+
+
+def _result_to_payload(
+    result: WizardResult,
+    generation_id: str,
+    registration: dict[str, object],
+    repository_row: dict[str, object],
+) -> dict[str, object]:
     """Render a :class:`WizardResult` as a JSON-serialisable envelope payload.
 
     Paths are stringified deterministically; lists pass through. Used by
@@ -302,7 +500,21 @@ def _result_to_payload(result: WizardResult, generation_id: str) -> dict[str, ob
         "subagent_spec_preview": result.subagent_spec_preview,
         "epoch": 2,
         "generation_id": generation_id,
+        "registry": registration,
+        "repository_row": repository_row,
     }
+
+
+def _init_text(result: WizardResult, generation_id: str, repository_row: dict[str, object]) -> str:
+    """Return the one-line text summary of an init, and its row note when there is one."""
+    text = (
+        f"eawf init: project={result.project_code} "
+        f"profiles={list(result.profiles_enabled)} state={result.state_path} "
+        f"agents_md={result.agents_md_path} epoch=2 generation={generation_id} "
+        f"repository_row={repository_row['outcome']}"
+    )
+    note = repository_row.get("note")
+    return text if note is None else f"{text}\nnote: {note}"
 
 
 def _provision_canary(
@@ -610,7 +822,7 @@ def init_cmd(
         Path | None,
         typer.Option(
             "--registry-path",
-            help="Override ``~/.eawf/registry.json`` for --epoch2-canary (tests).",
+            help="Override ``~/.eawf/registry.json`` init registers the repository in (tests).",
         ),
     ] = None,
 ) -> None:
@@ -732,14 +944,12 @@ def init_cmd(
             )
             return
         generation_id = _bear_epoch2(result, flags=flags)
-        payload = _result_to_payload(result, generation_id)
-        text = (
-            f"eawf init: project={result.project_code} "
-            f"profiles={list(result.profiles_enabled)} "
-            f"state={result.state_path} agents_md={result.agents_md_path} "
-            f"epoch=2 generation={generation_id}"
+        registration = _register_or_exit(
+            result, target_dir, registry_path=registry_path, flags=flags
         )
-        emit_json_or_text(payload, text, flags=flags)
+        repository_row = _admit_repository_row(result, target_dir, flags=flags)
+        payload = _result_to_payload(result, generation_id, registration, repository_row)
+        emit_json_or_text(payload, _init_text(result, generation_id, repository_row), flags=flags)
         return
 
     # Interactive path. We only attempt the questionary launch if the
@@ -761,10 +971,7 @@ def init_cmd(
         cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
     generation_id = _bear_epoch2(result, flags=flags)
-    payload = _result_to_payload(result, generation_id)
-    text = (
-        f"eawf init: project={result.project_code} "
-        f"profiles={list(result.profiles_enabled)} state={result.state_path} "
-        f"epoch=2 generation={generation_id}"
-    )
-    emit_json_or_text(payload, text, flags=flags)
+    registration = _register_or_exit(result, target_dir, registry_path=registry_path, flags=flags)
+    repository_row = _admit_repository_row(result, target_dir, flags=flags)
+    payload = _result_to_payload(result, generation_id, registration, repository_row)
+    emit_json_or_text(payload, _init_text(result, generation_id, repository_row), flags=flags)

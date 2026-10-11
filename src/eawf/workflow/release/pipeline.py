@@ -59,8 +59,8 @@ from eawf.kernel.spec.release import (
 )
 from eawf.kernel.state.types import UtcDatetime
 from eawf.runtime.lock import portalock
-from eawf.runtime.vcs.trailer_repin import TrailerRepinError, resolve_trailer_repins
-from eawf.runtime.vcs.wave_sha import load_drift_acks
+from eawf.workflow.lifecycle.wave_sha import load_drift_acks
+from eawf.workflow.lifecycle.wave_trailer_repin import TrailerRepinError, resolve_trailer_repins
 from eawf.workflow.release.advance import TrainAdvanceRecord
 from eawf.workflow.release.pipeline_files import flatten_artifacts
 from eawf.workflow.release.pipeline_receipts import RECEIPT_FILENAMES, read_build_receipt
@@ -1265,10 +1265,7 @@ class _PipelineRun:
                 step,
                 PipelineRefusalCode.TRAILER_REPIN_PENDING,
                 detail=f"main rewrote the commits of {', '.join(moved)}",
-                remedy=(
-                    "list those waves under acked_wave_ids in .eawf/drift-acks.json "
-                    "to keep their stale pins, then rerun"
-                ),
+                remedy="apply the commits.repin repair with `eawf doctor --fix`, then rerun",
             )
         return {"pins": str(len(rows)), "acked": str(len(rows) - len(checked))}
 

@@ -40,6 +40,7 @@ module never writes.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -266,13 +267,27 @@ class ImplicitRegistryGrowthError(Exception):
 
 
 def default_registry_path(*, home: Path | None = None) -> Path:
-    """Return the canonical ``~/.eawf/registry.json`` path.
+    """Return the registry file every reader and writer resolves to.
 
-    The ``home`` kwarg is the test seam: pass a ``tmp_path`` root so
-    unit/integration tests never touch the operator's real registry.
+    Resolution order: an explicit *home* root, then the
+    ``EAWF_REGISTRY_PATH`` file, then ``~/.eawf/registry.json``. The
+    daemon already honours the variable, so the CLI must too, or a
+    write the CLI makes in process lands in a different file from the
+    one the daemon serves.
+
+    Args:
+        home: Root whose ``.eawf/registry.json`` is returned, ignoring
+            the environment.
+
+    Returns:
+        The registry file path; it need not exist.
     """
-    base = home if home is not None else Path.home()
-    return base / ".eawf" / "registry.json"
+    if home is not None:
+        return home / ".eawf" / "registry.json"
+    override = os.environ.get("EAWF_REGISTRY_PATH")
+    if override:
+        return Path(override)
+    return Path.home() / ".eawf" / "registry.json"
 
 
 def read_registry(path: Path | None = None, *, home: Path | None = None) -> Registry:

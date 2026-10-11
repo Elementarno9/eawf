@@ -318,7 +318,9 @@ def test_wheel_metadata_version_matches_single_source(tmp_path: Path) -> None:
 def _expected_data_members() -> list[str]:
     """Return the ``eawf/_data/`` members a correct wheel carries."""
     config = _bundle_config()
-    return sorted(f"eawf/_data/service_templates/{name}" for name in config["service_templates"])
+    templates = [f"eawf/_data/service_templates/{name}" for name in config["service_templates"]]
+    topics = [f"eawf/_data/help/{p.name}" for p in (_REPO_ROOT / config["help_dir"]).glob("*.md")]
+    return sorted(templates + topics)
 
 
 def _seed_data_tree() -> None:

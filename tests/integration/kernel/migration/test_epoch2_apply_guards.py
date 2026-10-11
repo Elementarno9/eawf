@@ -538,6 +538,7 @@ def machine_home(root: Path, monkeypatch: pytest.MonkeyPatch, *, registry: Path 
     verb reaches a daemon serving somebody else's home.
     """
     monkeypatch.setenv("HOME", str(root))
+    monkeypatch.delenv("EAWF_REGISTRY_PATH", raising=False)
     monkeypatch.setenv("EAWF_DAEMONLESS", "1")
     if registry is not None:
         target = root / ".eawf" / "registry.json"

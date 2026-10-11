@@ -18,10 +18,13 @@ Configuration lives under ``[tool.eawf.bundle]`` in ``pyproject.toml``:
 
 * ``service_templates_dir`` — repo-relative source directory.
 * ``service_templates`` — explicit filename allow-list to bundle.
+* ``help_dir`` — repo-relative directory of ``eawf help`` topic markdown;
+  every ``*.md`` in it is copied to ``eawf/_data/help/`` so ``eawf help``
+  works from a wheel install, which carries no ``docs/`` tree.
 
 The hook fails fast (``FileNotFoundError``) if a configured template is
-missing so a packaging regression reds the build instead of shipping a
-wheel with an empty ``_data/`` tree.
+missing or the help directory holds no topic, so a packaging regression
+reds the build instead of shipping a wheel with an empty ``_data/`` tree.
 """
 
 from __future__ import annotations
@@ -34,6 +37,9 @@ from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
 #: Subdirectory under ``_data`` that holds the per-OS service templates.
 _SERVICE_TEMPLATES_SUBDIR = "service_templates"
+
+#: Subdirectory under ``_data`` that holds the ``eawf help`` topic markdown.
+_HELP_SUBDIR = "help"
 
 #: Name of the generated data package directory under ``src/eawf``.
 _DATA_DIRNAME = "_data"
@@ -56,7 +62,7 @@ def _bundle_config(metadata_config: dict[str, Any]) -> dict[str, Any]:
 
 
 def populate_data_tree(root: Path, config: dict[str, Any]) -> list[Path]:
-    """Copy the configured service templates into ``src/eawf/_data``.
+    """Copy the service templates and help topics into ``src/eawf/_data``.
 
     The destination tree is rebuilt from scratch on every call so a
     stale file from a prior build never lingers in the wheel.
@@ -71,7 +77,8 @@ def populate_data_tree(root: Path, config: dict[str, Any]) -> list[Path]:
 
     Raises:
         FileNotFoundError: When a configured template does not exist at
-            ``service_templates_dir``.
+            ``service_templates_dir``, or ``help_dir`` holds no ``*.md``
+            topic.
     """
     src_dir = root / config["service_templates_dir"]
     dest_root = root / "src" / "eawf" / _DATA_DIRNAME
@@ -87,6 +94,17 @@ def populate_data_tree(root: Path, config: dict[str, Any]) -> list[Path]:
         if not source.is_file():
             raise FileNotFoundError(f"bundle service template not found: {source!r}")
         target = dest_service_dir / name
+        shutil.copyfile(source, target)
+        written.append(target)
+
+    help_src = root / config["help_dir"]
+    topics = sorted(help_src.glob("*.md"))
+    if not topics:
+        raise FileNotFoundError(f"bundle help topics not found under: {help_src!r}")
+    dest_help_dir = dest_root / _HELP_SUBDIR
+    dest_help_dir.mkdir(parents=True, exist_ok=True)
+    for source in topics:
+        target = dest_help_dir / source.name
         shutil.copyfile(source, target)
         written.append(target)
     return written
@@ -111,5 +129,5 @@ class BundleDataBuildHook(BuildHookInterface):  # type: ignore[type-arg]
         written = populate_data_tree(Path(self.root), config)
         self.app.display_info(
             f"bundle_data wrote files={len(written)} "
-            f"dest={_DATA_DIRNAME}/{_SERVICE_TEMPLATES_SUBDIR}"
+            f"dest={_DATA_DIRNAME}/{{{_SERVICE_TEMPLATES_SUBDIR},{_HELP_SUBDIR}}}"
         )

@@ -4,7 +4,8 @@
 module, the command every module-index line in the project card names. The
 view is read from disk as the render transaction wrote it; the library judges
 it against the current rule graph, so a lagging view prints with a stale
-notice and a missing one names the command that renders it.
+notice and a missing one names the command that renders it. A tree with no
+``.ea/rules.yaml`` reads the module from the built-in catalogue and says so.
 
 ``eawf rules migrate`` checks that every legacy render block and profile field
 has exactly one typed disposition, and exits non-zero naming each gap.

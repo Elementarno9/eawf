@@ -18,9 +18,9 @@ flat markdown otherwise (so CI / pipe consumers get deterministic output).
 An unknown topic exits 1 USER_ERROR with ``data.kind="NotFound"`` and the
 list of registered topics.
 
-Topic files are located relative to the repo root (the ancestor of this
-package that contains ``docs/help/``); AI-summarise-on-miss is YAGNI and
-deferred to v0.5+.
+Topic files are read from ``docs/help/`` in a repository checkout and from
+the ``eawf/_data/help/`` package data the wheel build hook bundles
+otherwise; AI-summarise-on-miss is YAGNI and deferred to v0.5+.
 """
 
 from __future__ import annotations
@@ -30,6 +30,8 @@ import os
 import shutil
 import subprocess
 import sys
+from importlib.resources import files
+from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import Annotated
 
@@ -42,8 +44,9 @@ from eawf.surfaces.cli.output import emit_json_or_text
 logger = logging.getLogger(__name__)
 
 #: Registered help topics in display order. Each maps to a
-#: ``docs/help/<topic>.md`` file. The order is the order ``eawf help``
-#: lists them — grouped by what the operator reaches for first.
+#: ``docs/help/<topic>.md`` file, bundled as ``eawf/_data/help/<topic>.md``.
+#: The order is the order ``eawf help`` lists them — grouped by what the
+#: operator reaches for first.
 TOPICS: tuple[str, ...] = (
     "exit-codes",
     "daemon",
@@ -56,16 +59,16 @@ TOPICS: tuple[str, ...] = (
 
 
 def _topics_dir() -> Path | None:
-    """Return the ``docs/help`` directory, or ``None`` when not found.
+    """Return the repository's ``docs/help`` directory, or ``None``.
 
-    Walks up from this module's location looking for an ancestor that
-    contains ``docs/help``. Works in-repo and in editable installs; a
-    wheel install without the ``docs`` tree returns ``None`` so the caller
-    surfaces a clean error instead of crashing.
+    Walks up from this module looking for an ancestor that contains
+    ``docs/help``. A checkout reads the authored source directly so an
+    edited topic shows at once, never a ``_data`` copy left by an earlier
+    build.
 
     Returns:
         The resolved ``docs/help`` path, or ``None`` when no ancestor
-        carries one.
+        carries one (every wheel install).
     """
     for ancestor in Path(__file__).resolve().parents:
         candidate = ancestor / "docs" / "help"
@@ -74,23 +77,27 @@ def _topics_dir() -> Path | None:
     return None
 
 
-def _topic_path(topic: str) -> Path | None:
-    """Return the markdown path for *topic*, or ``None`` when unavailable.
+def _topic_path(topic: str) -> Traversable | None:
+    """Return the markdown file for *topic*, or ``None`` when unavailable.
+
+    Prefers ``docs/help/<topic>.md`` in a repository checkout, otherwise the
+    copy the build hook bundles at ``eawf/_data/help/<topic>.md``.
 
     Args:
         topic: Registered topic name.
 
     Returns:
-        The ``docs/help/<topic>.md`` path when both the topic is registered
-        and the file exists; otherwise ``None``.
+        The topic file when *topic* is registered and its markdown exists
+        in either location; otherwise ``None``.
     """
     if topic not in TOPICS:
         return None
-    base = _topics_dir()
-    if base is None:
-        return None
-    path = base / f"{topic}.md"
-    return path if path.is_file() else None
+    name = f"{topic}.md"
+    source_dir = _topics_dir()
+    if source_dir is not None and (source_dir / name).is_file():
+        return source_dir / name
+    bundled = files("eawf").joinpath("_data", "help", name)
+    return bundled if bundled.is_file() else None
 
 
 def _page(text: str) -> None:

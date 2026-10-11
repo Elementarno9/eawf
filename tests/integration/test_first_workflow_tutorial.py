@@ -168,6 +168,7 @@ def in_process_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterat
     write is not the operator's.
     """
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("EAWF_REGISTRY_PATH", raising=False)
     monkeypatch.setattr("eawf.surfaces.cli._dispatch.escalate_mutation", lambda *_a, **_k: 0)
     monkeypatch.setattr(domain_cmd, "DaemonClient", InProcessClient)
     InProcessClient.context = method_context(tmp_path / "runtime")

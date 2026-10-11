@@ -193,6 +193,7 @@ class DispatchRefusal(StrEnum):
     ADMISSION_QUEUED = "dispatch_admission_queued"
     ADMISSION_DENIED = "dispatch_admission_denied"
     DISPATCH_HELD = "dispatch_held"
+    WRITE_CLAIMS_REQUIRED = "dispatch_write_claims_required"
     SUCCESSOR_REQUIRED = "retry_successor_required"
     SUCCESSOR_REFUSED = "retry_successor_refused"
     ATTEMPT_ABSENT = "retry_attempt_absent"

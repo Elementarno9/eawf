@@ -656,3 +656,123 @@ def test_unlocked_still_reds_an_import_the_lock_lacks() -> None:
         shipped=shipped_distributions(_SCOPED_LOCK),
     )
     assert _unlocked_imports(manifest) == ("nowhere-to-be-found",)
+
+
+# --- one name locked at two versions -----------------------------------------
+
+#: uv locks one distribution twice when resolution markers pick different
+#: releases; the two tables differ in version and dependencies.
+_FORKED_LOCK = (
+    '[[package]]\nname = "eawf"\nsource = { editable = "." }\n'
+    'dependencies = [{ name = "typing-extensions" }]\n\n'
+    '[[package]]\nname = "typing-extensions"\nversion = "4.16.0"\n'
+    'source = { registry = "https://pypi.org/simple" }\n'
+    "resolution-markers = [\"python_full_version < '3.15'\"]\n\n"
+    '[[package]]\nname = "typing-extensions"\nversion = "4.15.0"\n'
+    'source = { registry = "https://pypi.org/simple" }\n'
+    "resolution-markers = [\"python_full_version >= '3.15'\"]\n"
+    'dependencies = [{ name = "colorama" }]\n\n'
+    '[[package]]\nname = "colorama"\nversion = "0.4.6"\n'
+    'source = { registry = "https://pypi.org/simple" }\n'
+)
+
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+
+
+def _row(version: str, license_id: str = "PSF-2.0") -> LockedPackage:
+    """Return a ``typing-extensions`` row at *version*."""
+    disposition = classify_license(license_id)
+    return LockedPackage(
+        name="typing-extensions", version=version, license_id=license_id, disposition=disposition
+    )
+
+
+def test_build_dependency_manifest_records_both_versions_of_a_forked_name() -> None:
+    """Two marker-selected versions of one name are two rows, version-ordered."""
+    manifest = build_dependency_manifest(
+        _FORKED_LOCK,
+        licenses={"typing_extensions": "PSF-2.0"},
+        shipped=shipped_distributions(_FORKED_LOCK),
+    )
+    assert [(row.name, row.version) for row in manifest.packages] == [
+        ("colorama", "0.4.6"),
+        ("typing-extensions", "4.15.0"),
+        ("typing-extensions", "4.16.0"),
+    ]
+    assert manifest.locked_distributions == ("colorama", "typing-extensions")
+
+
+def test_shipped_distributions_walks_every_table_of_a_forked_name() -> None:
+    """A dependency only the second version declares is still shipped."""
+    assert shipped_distributions(_FORKED_LOCK) == frozenset({"typing-extensions", "colorama"})
+
+
+def test_release_dependency_manifest_accepts_two_versions_of_one_name() -> None:
+    """The uniqueness key is name plus version, not name alone."""
+    manifest = _manifest(packages=(_row("4.15.0"), _row("4.16.0")))
+    assert [row.version for row in manifest.packages] == ["4.15.0", "4.16.0"]
+    assert manifest.names == frozenset({"typing-extensions"})
+
+
+def test_release_dependency_manifest_rejects_an_exact_duplicate_version() -> None:
+    """The same name at the same version twice is still a duplicate."""
+    with pytest.raises(ValidationError, match=r"typing-extensions==4\.15\.0.*more than once"):
+        _manifest(packages=(_row("4.15.0"), _row("4.16.0"), _row("4.15.0")))
+
+
+def test_release_dependency_manifest_rejects_versions_out_of_order() -> None:
+    """Rows of one name are ordered by version so the digest is stable."""
+    with pytest.raises(ValidationError, match="sorted by package name and version"):
+        _manifest(packages=(_row("4.16.0"), _row("4.15.0")))
+
+
+def test_forked_manifest_round_trips_to_an_identical_receipt(tmp_path: Path) -> None:
+    """Building twice writes byte-identical receipts: the record is deterministic."""
+    first = build_dependency_manifest(_FORKED_LOCK, licenses={})
+    second = build_dependency_manifest(_FORKED_LOCK, licenses={})
+    left = write_receipt(tmp_path / "a", "dependency-manifest", first)
+    right = write_receipt(tmp_path / "b", "dependency-manifest", second)
+    assert left.read_bytes() == right.read_bytes()
+    assert ReleaseDependencyManifest.model_validate_json(left.read_text()) == first
+
+
+def test_inventory_component_names_a_forked_undeclared_license_once() -> None:
+    """Two versions without license metadata yield one evidence ref, not two."""
+    manifest = _manifest(
+        packages=(_row("4.15.0", ""), _row("4.16.0", "")), imported_distributions=()
+    )
+    outcome = inventory_component(_inputs(manifest))
+    assert outcome.passing
+    assert outcome.evidence_refs.count("undeclared_license:typing-extensions") == 1
+
+
+def test_inventory_component_names_both_forbidden_versions() -> None:
+    """A forbidden license on two versions names both in the remediation."""
+    manifest = _manifest(packages=(_row("4.15.0", "GPL-3.0"), _row("4.16.0", "GPL-3.0")))
+    outcome = inventory_component(_inputs(manifest))
+    assert outcome.findings == (DependencyFinding.FORBIDDEN_LICENSE,)
+    assert "typing-extensions==4.15.0" in outcome.remediation
+    assert "typing-extensions==4.16.0" in outcome.remediation
+    assert outcome.evidence_refs == ("forbidden_license:typing-extensions:GPL-3.0",)
+
+
+def test_the_repository_lock_builds_a_manifest() -> None:
+    """The checked-in ``uv.lock`` -- which forks a name by marker -- inventories."""
+    lock_text = (_REPO_ROOT / "uv.lock").read_text(encoding="utf-8")
+    manifest = build_dependency_manifest(
+        lock_text, licenses={}, shipped=shipped_distributions(lock_text)
+    )
+    keys = [(row.name, row.version) for row in manifest.packages]
+    assert keys == sorted(set(keys))
+    assert manifest.lock_digest == compute_lock_digest(lock_text)
+
+
+def test_inventory_component_passes_a_mit_0_dependency() -> None:
+    """MIT No Attribution is on the allowlist, so a MIT-0 package is green."""
+    lock = (
+        '[[package]]\nname = "cffi"\nversion = "2.0.0"\n'
+        'source = { registry = "https://pypi.org/simple" }\n'
+    )
+    manifest = build_dependency_manifest(lock, licenses={"cffi": "MIT-0"})
+    assert [row.disposition for row in manifest.packages] == [LicenseDisposition.ALLOWED]
+    assert inventory_component(_inputs(manifest)).passing

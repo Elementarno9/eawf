@@ -26,19 +26,17 @@ Every command that changes a record is a request to the daemon, the background p
 
 - `--actor` names who the change is attributed to.
 - `--idempotency-key` names the request, so a retry replays its receipt instead of applying twice.
-- `--expected-<kind>-revision` is the revision you read the record at; the daemon refuses the change if the record has moved since. A create takes `--expected-revision` instead: the tree's canonical sequence, which starts at `0` and grows by one with every committed change. Each receipt prints the new value as `result.canonical_sequence`.
+- `--expected-<kind>-revision` is the revision you read the record at; the daemon refuses the change if the record has moved since. A create takes `--expected-revision` instead: the tree's canonical sequence, which grows by one with every committed change. Each receipt prints the new value as `result.canonical_sequence`.
 
 The daemon starts on the first command that needs it. Before it commits a change, each command prints a consequence card saying what will move and what will not.
 
-## 1. Initialize and register
+## 1. Initialize
 
 ```bash
 eawf --no-input init --project-code DEMO --project-title "Demo Project" --profiles core
-eawf repo register . --yes
-eawf workspace add DEMO --home DEMO
 ```
 
-`init` bears the tree at authority epoch 2, the native model this page uses. `repo register` and `workspace add` list the repository in your user-scope registry, which is what lets `eawf ui` find it later.
+`init` bears the tree at authority epoch 2, the native model this page uses, and lists the repository and a workspace of the same code in your user-scope registry, which is what lets `eawf ui` find it later. Because the directory is a Git repository with a commit, `init` also admits the tree's repository row, `eawf://DEMO/DEMO/DEMO/repository/DEMO`, at the current `HEAD`. That is the first committed change, so the tree leaves `init` at canonical sequence `1`. In a directory that is not a Git repository `init` admits no row and prints a note naming `eawf repository create`, the verb that admits it later.
 
 ## 2. Plan a track, a milestone, a task and a batch
 
@@ -112,13 +110,13 @@ The batch groups the tasks that integrate together. Save it as `.ea/local/batch.
 }
 ```
 
-Admit the four records. The tree starts at canonical sequence `0` and each create moves it by one:
+Admit the four records. The tree starts at canonical sequence `1` and each create moves it by one:
 
 ```bash
-eawf track create eawf://DEMO/DEMO/DEMO/track/TRK-DEMO --expected-revision 0 --idempotency-key create-track --actor OPERATOR --from-spec .ea/local/track.json
-eawf milestone create eawf://DEMO/DEMO/DEMO/milestone/MLS-0001 --expected-revision 1 --idempotency-key create-milestone --actor OPERATOR --from-spec .ea/local/milestone.json
-eawf task create eawf://DEMO/DEMO/DEMO/task/DEMO-0001 --expected-revision 2 --idempotency-key create-task --actor OPERATOR --from-spec .ea/local/task.json
-eawf batch create eawf://DEMO/DEMO/DEMO/batch/BAT-0001 --expected-revision 3 --idempotency-key create-batch --actor OPERATOR --from-spec .ea/local/batch.json
+eawf track create eawf://DEMO/DEMO/DEMO/track/TRK-DEMO --expected-revision 1 --idempotency-key create-track --actor OPERATOR --from-spec .ea/local/track.json
+eawf milestone create eawf://DEMO/DEMO/DEMO/milestone/MLS-0001 --expected-revision 2 --idempotency-key create-milestone --actor OPERATOR --from-spec .ea/local/milestone.json
+eawf task create eawf://DEMO/DEMO/DEMO/task/DEMO-0001 --expected-revision 3 --idempotency-key create-task --actor OPERATOR --from-spec .ea/local/task.json
+eawf batch create eawf://DEMO/DEMO/DEMO/batch/BAT-0001 --expected-revision 4 --idempotency-key create-batch --actor OPERATOR --from-spec .ea/local/batch.json
 ```
 
 A Milestone may also carry a target date, the day it is aimed at, which places it on the console Timeline in that week. Pass `--date YYYY-MM-DD` to `eawf milestone create`, or set it later on any open Milestone with `eawf milestone set-target <urn> YYYY-MM-DD --expected-milestone-revision <N> --idempotency-key <key> --actor <principal>`; `--clear` removes it. The date moves no status, but it does move the revision, so this walkthrough leaves it unset.
@@ -133,7 +131,7 @@ A batch activates only once the branch it integrates into is pinned. Save `.ea/l
 {"updates": {"target_branch": "main"}}
 ```
 
-Promotion moves the task out of the backlog, and it needs the three things a planned task carries: its batch, its due scope and at least one success criterion. The criterion below is proved deterministically, by the gate `G-01` you will write in step 6. Save `.ea/local/task-promote.json`:
+Promotion moves the task out of the backlog, and it needs the three things a planned task carries: its batch, its due scope and at least one success criterion. The criterion below is proved deterministically, by the gate `G-01` you will write in step 6. The promotion also sets `write_claims`, the repository paths the task's runs may write. It is optional for work you do yourself, but `eawf run dispatch` refuses a task without it, because an agent's run takes its write set from those claims. Save `.ea/local/task-promote.json`:
 
 <!-- eawf:file .ea/local/task-promote.json -->
 
@@ -142,6 +140,7 @@ Promotion moves the task out of the backlog, and it needs the three things a pla
   "updates": {
     "batch_ref": "eawf://DEMO/DEMO/DEMO/batch/BAT-0001",
     "due_scope": "eawf://DEMO/DEMO/DEMO/milestone/MLS-0001",
+    "write_claims": ["src"],
     "criteria": [
       {
         "id": "CR-01",
@@ -196,11 +195,11 @@ A run is one attempt at the task. Save its create document as `.ea/local/run.jso
 {"updates": {"active_run_ref": "eawf://DEMO/DEMO/DEMO/run/RUN-00000001"}}
 ```
 
-Claim the task, open the run, and start both. The eight changes so far put the tree at canonical sequence `8`:
+Claim the task, open the run, and start both. The repository row and the eight changes since put the tree at canonical sequence `9`:
 
 ```bash
 eawf task claim eawf://DEMO/DEMO/DEMO/task/DEMO-0001 --expected-task-revision 2 --idempotency-key claim-task --actor OPERATOR
-eawf run create eawf://DEMO/DEMO/DEMO/run/RUN-00000001 --expected-revision 8 --idempotency-key create-run --actor OPERATOR --from-spec .ea/local/run.json
+eawf run create eawf://DEMO/DEMO/DEMO/run/RUN-00000001 --expected-revision 9 --idempotency-key create-run --actor OPERATOR --from-spec .ea/local/run.json
 eawf run start eawf://DEMO/DEMO/DEMO/run/RUN-00000001 --expected-run-revision 1 --idempotency-key start-run --actor OPERATOR --from-spec .ea/local/run-start.json
 eawf task start eawf://DEMO/DEMO/DEMO/task/DEMO-0001 --expected-task-revision 3 --idempotency-key start-task --actor OPERATOR --from-spec .ea/local/task-start.json
 ```

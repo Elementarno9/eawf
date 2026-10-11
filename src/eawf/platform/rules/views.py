@@ -52,7 +52,7 @@ _VIEW_STAMP: Final[re.Pattern[str]] = re.compile(
     r"body=(?P<body>sha256:[0-9a-f]{64}) module=(?P<module>\S+) .*-->$"
 )
 
-ViewStatus = Literal["current", "stale", "absent"]
+ViewStatus = Literal["current", "stale", "absent", "builtin"]
 
 
 class RuleViewError(ValueError):
@@ -99,7 +99,8 @@ class ModuleViewRead(RuleModel):
         target: Repository-relative path of the view.
         status: ``current`` when the stamp matches the current graph and the
             text below it; ``stale`` when either differs; ``absent`` when no
-            view is on disk.
+            view is on disk; ``builtin`` when the repository has no rule
+            source and the view was rendered from the built-in catalogue.
         text: The view body below the stamp, or ``None`` when absent.
         message: What the reader should do; ``None`` for a current view.
     """

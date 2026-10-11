@@ -619,6 +619,10 @@ service_templates = [
     "eawfd.service.j2",
     "dev.eawf.eawfd.plist.j2",
 ]
+# ``eawf help`` topic markdown: every ``*.md`` here is copied to
+# ``eawf/_data/help/`` because a wheel carries no ``docs/`` tree. The
+# ``docs/help`` files stay the single authored source.
+help_dir = "docs/help"
 # Wheel-size ceiling enforced by the packaging gate (bytes). Every archive
 # member lives under the ``eawf/**`` package tree -- modules, the profile data
 # YAMLs, and the two service templates above -- so the ceiling is a bloat

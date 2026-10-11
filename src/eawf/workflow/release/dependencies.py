@@ -71,6 +71,7 @@ DEFAULT_LICENSE_ALLOWLIST: Final[frozenset[str]] = frozenset(
         "BSD-3-CLAUSE",
         "ISC",
         "MIT",
+        "MIT-0",  # MIT No Attribution: OSI-approved, permissive, no attribution clause
         "MIT-CMU",
         "MPL-2.0",
         "PSF-2.0",
@@ -320,7 +321,10 @@ class ReleaseDependencyManifest(_StrictModel):
             The pin is the point: an inventory that does not name the
             lock it describes cannot be checked against the wheel that
             was actually built.
-        packages: One row per locked package, sorted by name.
+        packages: One row per locked package version, sorted by name
+            then version. A name may appear once per version: uv locks
+            one distribution at two versions when different resolution
+            markers select different releases.
         imported_distributions: Third-party distributions the source
             tree imports, as the producer that walked the tree found
             them. Carried here because "what is locked" is only half an
@@ -341,15 +345,15 @@ class ReleaseDependencyManifest(_StrictModel):
         """Reject a duplicated or unsorted row set.
 
         Raises:
-            ValueError: When a package appears twice, or the rows are
-                not in name order.
+            ValueError: When one name and version appear twice, or the
+                rows are not in name-then-version order.
         """
-        names = [package.name for package in self.packages]
-        if len(names) != len(set(names)):
-            duplicated = sorted({name for name in names if names.count(name) > 1})
+        keys = [(package.name, package.version) for package in self.packages]
+        if len(keys) != len(set(keys)):
+            duplicated = sorted({f"{n}=={v}" for n, v in keys if keys.count((n, v)) > 1})
             raise ValueError(f"dependency manifest locks {duplicated} more than once")
-        if names != sorted(names):
-            raise ValueError("dependency manifest rows must be sorted by package name")
+        if keys != sorted(keys):
+            raise ValueError("dependency manifest rows must be sorted by package name and version")
         return self
 
     @property
@@ -508,8 +512,12 @@ def shipped_distributions(lock_text: str) -> frozenset[str]:
         ValueError: When the lock is not valid TOML or declares no
             packages.
     """
-    rows = {normalized_name(str(row.get("name", ""))): row for row in _package_rows(lock_text)}
-    roots = [row for row in rows.values() if _is_workspace_source(row)]
+    # A name locked at two versions has two tables whose dependencies can
+    # differ, so the walk follows every table carrying the name.
+    rows: dict[str, list[Mapping[str, object]]] = {}
+    for row in _package_rows(lock_text):
+        rows.setdefault(normalized_name(str(row.get("name", ""))), []).append(row)
+    roots = [row for group in rows.values() for row in group if _is_workspace_source(row)]
     if not roots:
         return frozenset()
     frontier = [name for root in roots for name in _dependency_names(root)]
@@ -519,8 +527,7 @@ def shipped_distributions(lock_text: str) -> frozenset[str]:
         if name in seen:
             continue
         seen.add(name)
-        row = rows.get(name)
-        if row is not None:
+        for row in rows.get(name, ()):
             frontier.extend(_dependency_names(row))
     return frozenset(seen)
 
@@ -550,7 +557,7 @@ def build_dependency_manifest(
         allowlist: Identifiers the project has agreed to ship.
 
     Returns:
-        The manifest, rows sorted by normalized name.
+        The manifest, rows sorted by normalized name then version.
 
     Raises:
         TypeError: When *lock_text* is not a string.
@@ -599,7 +606,7 @@ def build_dependency_manifest(
         )
     manifest = ReleaseDependencyManifest(
         lock_digest=digest,
-        packages=tuple(sorted(packages, key=lambda package: package.name)),
+        packages=tuple(sorted(packages, key=lambda package: (package.name, package.version))),
         imported_distributions=tuple(sorted({normalized_name(n) for n in imported_distributions})),
         locked_distributions=tuple(sorted(set(locked))),
     )
@@ -695,7 +702,10 @@ def inventory_component(inputs: DependencyInventoryInputs) -> ComponentOutcome:
             f"{len(forbidden)} locked package(s) carry a license outside the allowlist: "
             f"{named}; drop the dependency, replace it, or add the license to the "
             f"declared allowlist with review",
-            [f"forbidden_license:{row.name}:{row.license_id}" for row in forbidden],
+            # Two versions of one name can share a license; one ref covers both.
+            list(
+                dict.fromkeys(f"forbidden_license:{row.name}:{row.license_id}" for row in forbidden)
+            ),
         )
     unlocked = _unlocked_imports(manifest)
     if unlocked:
@@ -720,7 +730,7 @@ def inventory_component(inputs: DependencyInventoryInputs) -> ComponentOutcome:
         evidence_refs=(
             f"lock_digest:{manifest.lock_digest}",
             f"locked_packages:{len(manifest.packages)}",
-            *(f"undeclared_license:{row.name}" for row in manifest.undeclared),
+            *dict.fromkeys(f"undeclared_license:{row.name}" for row in manifest.undeclared),
         ),
     )
 
