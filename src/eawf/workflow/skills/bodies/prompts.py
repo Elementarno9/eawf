@@ -547,9 +547,13 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
         ),
         method=(
             "Select the action. run reads the tree's Runs, fills their titles, and writes the"
-            " report, to --out when given; show prints the newest report in the local"
-            " collection; export writes the newest report as a static page, to --out when given;"
-            " prune removes local reports and cached titles past their retention class.",
+            " report, to --out when given: --window <N>d keeps the Runs started in the last N"
+            " days, --scope takes project, milestone:<KEY> or track:<KEY>, and --format json"
+            " prints the report document instead of the text; show prints the newest report in"
+            " the local collection; export writes the newest report as a static page, to --out"
+            " when given; serve serves the local collection read-only on loopback until"
+            " interrupted; prune removes local reports and cached titles past their retention"
+            " class.",
             "Aggregate measured rows only. Never substitute an estimate for an actual, never"
             " render a ratio when either side is unavailable, and never compare across"
             " effort-unit mapping revisions without labelling the comparison. Exclude prior runs"
@@ -577,12 +581,15 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " does not make this skill agent-invocable.",
         ),
         output=(
-            "Output one ReflectReport containing the measured totals by Track, Milestone, Batch,"
-            " Task, and Run, estimate-versus-actual variance with its mapping revision, pricing"
-            " quality, the excluded-row section, and every unavailable field named with its"
-            " reason. Emit it in a form an agent can consume without re-deriving it: a"
-            " machine-readable overview and typed highlighted issues beside the rendered prose,"
-            " each issue carrying its subject, its evidence rows, and its quotability mark."
+            "Output one ReflectReport listing every Run of the selected scope and window, live"
+            " or finished, with its status, runtime, model family, wall hours, model steps,"
+            " tool work, subagents, cost and tokens, title and title source, and its"
+            " quotability mark; the money and token totals per project, with unpriced Runs"
+            " counted apart; the highlighted issues, each naming its subject and the Run rows"
+            " that show it; and the excluded sessions with their reasons, beside the fill"
+            " manifest of the titles. Emit it in a form an agent can consume without"
+            " re-deriving it: the machine-readable report document beside the plain-text"
+            " report."
         ),
     ),
     SkillPrompt(

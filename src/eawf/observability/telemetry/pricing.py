@@ -1,7 +1,8 @@
 """Embedded Decimal pricing snapshot + currency-drift detection.
 
-Canonical Anthropic published rates fetched 2026-05-17 12:00 UTC from
-``https://platform.claude.com/docs/en/about-claude/pricing``. This module
+Canonical Anthropic published rates fetched 2026-10-22 21:30 UTC from
+``https://docs.anthropic.com/en/docs/about-claude/pricing`` (served at
+``https://platform.claude.com/docs/en/about-claude/pricing``). This module
 is the cost-ledger source of truth committed at C09 vendor time; every
 cost metric (M02 ``eawf_cost_usd_total``, M08-M10 burn-rate gauges) prices
 tokens through :data:`PRICING`.
@@ -40,10 +41,10 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "CACHE_READ_MULTIPLIER",
+    "CACHE_READ_MULTIPLIER_BY_MODEL",
     "CACHE_WRITE_1H_MULTIPLIER",
     "CACHE_WRITE_5M_MULTIPLIER",
     "FAMILY_ALIAS_GENERATION",
-    "NO_CITED_RATE_SOURCE",
     "PRICING",
     "PRICING_FETCHED_AT",
     "PRICING_VERSION",
@@ -83,8 +84,8 @@ class ModelPricing(BaseModel):
     fetched_at: datetime
 
 
-PRICING_VERSION = "2026.05.17"
-PRICING_FETCHED_AT = datetime(2026, 5, 17, 12, 0, 0, tzinfo=UTC)
+PRICING_VERSION = "2026.10.22"
+PRICING_FETCHED_AT = datetime(2026, 10, 22, 21, 30, 0, tzinfo=UTC)
 
 # Anthropic-stated cache multipliers on base input, encoded explicitly so the
 # currency check can confirm the embedded snapshot is internally consistent.
@@ -92,9 +93,51 @@ CACHE_READ_MULTIPLIER = Decimal("0.1")
 CACHE_WRITE_5M_MULTIPLIER = Decimal("1.25")
 CACHE_WRITE_1H_MULTIPLIER = Decimal("2")
 
+#: Models whose published cache-read rate is not the standard 0.1x of input,
+#: by :data:`PRICING` key. The pricing page states 0.05x for Opus 5.5 and
+#: Sonnet 5.5.
+CACHE_READ_MULTIPLIER_BY_MODEL: dict[str, Decimal] = {
+    "claude-opus-5-5": Decimal("0.05"),
+    "claude-sonnet-5-5": Decimal("0.05"),
+}
+
 
 PRICING: dict[str, ModelPricing] = {
-    # Opus 4.x — $5 / $25 per MTok (2026-05-17 rates).
+    # Opus 5.5: $4 / $20 per MTok, cache read 0.05x input.
+    # Source: https://docs.anthropic.com/en/docs/about-claude/pricing read 2026-10-22
+    "claude-opus-5-5": ModelPricing(
+        input_per_token=Decimal("4e-6"),
+        output_per_token=Decimal("20e-6"),
+        cache_read_per_token=Decimal("0.2e-6"),
+        cache_write_5m_per_token=Decimal("5e-6"),
+        cache_write_1h_per_token=Decimal("8e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    # Sonnet 5.5: $2 / $10 per MTok, cache read 0.05x input. Its own row so
+    # the id never prefix-matches the Sonnet 5 row below and its cache rate.
+    # Source: https://docs.anthropic.com/en/docs/about-claude/pricing read 2026-10-22
+    "claude-sonnet-5-5": ModelPricing(
+        input_per_token=Decimal("2e-6"),
+        output_per_token=Decimal("10e-6"),
+        cache_read_per_token=Decimal("0.1e-6"),
+        cache_write_5m_per_token=Decimal("2.5e-6"),
+        cache_write_1h_per_token=Decimal("4e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    # Sonnet 5: $2 / $10 per MTok (the launch rate, since made standard).
+    # Source: https://docs.anthropic.com/en/docs/about-claude/pricing read 2026-10-22
+    "claude-sonnet-5": ModelPricing(
+        input_per_token=Decimal("2e-6"),
+        output_per_token=Decimal("10e-6"),
+        cache_read_per_token=Decimal("0.2e-6"),
+        cache_write_5m_per_token=Decimal("2.5e-6"),
+        cache_write_1h_per_token=Decimal("4e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    # Opus 4.x — $5 / $25 per MTok.
     "claude-opus-4-8": ModelPricing(
         input_per_token=Decimal("5e-6"),
         output_per_token=Decimal("25e-6"),
@@ -159,7 +202,7 @@ PRICING: dict[str, ModelPricing] = {
         pricing_version=PRICING_VERSION,
         fetched_at=PRICING_FETCHED_AT,
     ),
-    # Haiku 4.5 — $1 / $5 per MTok (2026-05-17 rates).
+    # Haiku 4.5 — $1 / $5 per MTok.
     "claude-haiku-4-5-20251001": ModelPricing(
         input_per_token=Decimal("1e-6"),
         output_per_token=Decimal("5e-6"),
@@ -376,20 +419,13 @@ class UnpricedModel(BaseModel):
     reason: str
 
 
-#: The reason every Claude 5 entry carries until a rate row is sourced.
-NO_CITED_RATE_SOURCE = "no cited published rate source"
-
-UNPRICED_MODELS: dict[str, UnpricedModel] = {
-    model_id: UnpricedModel(model_id=model_id, reason=NO_CITED_RATE_SOURCE)
-    for model_id in ("claude-opus-5-5", "claude-sonnet-5")
-}
+UNPRICED_MODELS: dict[str, UnpricedModel] = {}
 """Model ids eawf dispatches to that have no rate in this snapshot, by id.
 
-Each id prefix-matches a family alias (``claude-opus`` / ``claude-sonnet``)
-that prices at the 4.x rate. No published rate for these generations is
-recorded in-repo, so they resolve unpriced rather than inheriting a rate
-nobody published; add a real :data:`PRICING` row citing its source (and
-drop the id here) once a rate is sourced.
+An id listed here resolves unpriced even when a shorter key (such as a
+family alias) would prefix-match it, so it never inherits a rate nobody
+published; add a real :data:`PRICING` row citing its source (and drop the
+id here) once a rate is sourced.
 """
 
 #: The generation the bare family aliases (``opus``, ``claude-sonnet`` ...)
@@ -515,7 +551,8 @@ def check_pricing_currency() -> PricingDriftReport:
     The check is offline: it confirms (a) every row carries the embedded
     :data:`PRICING_VERSION`, and (b) each row's cache rates equal the
     Anthropic-stated multipliers applied to that row's base input rate
-    (5m write = 1.25x, 1h write = 2x, cache read = 0.1x). Either condition
+    (5m write = 1.25x, 1h write = 2x, cache read = 0.1x unless
+    :data:`CACHE_READ_MULTIPLIER_BY_MODEL` states the row's own). Either condition
     failing produces a :class:`PricingDriftFinding`.
 
     The weekly CI gate may additionally fetch live rates; that network leg
@@ -539,13 +576,14 @@ def check_pricing_currency() -> PricingDriftReport:
                     detail="row pricing_version does not match the embedded snapshot tag",
                 )
             )
+        read_multiplier = CACHE_READ_MULTIPLIER_BY_MODEL.get(model_id, CACHE_READ_MULTIPLIER)
         _check_multiplier(
             findings,
             model_id=model_id,
             field="cache_read_per_token",
             actual=row.cache_read_per_token,
-            expected=row.input_per_token * CACHE_READ_MULTIPLIER,
-            multiplier=CACHE_READ_MULTIPLIER,
+            expected=row.input_per_token * read_multiplier,
+            multiplier=read_multiplier,
         )
         _check_multiplier(
             findings,

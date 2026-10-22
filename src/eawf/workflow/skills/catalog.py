@@ -907,22 +907,32 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             "Report where effort, time and money actually went, without mutating canonical state."
         ),
         grammar=_grammar(
-            "/reflect <run|show|export|prune> [--out <path>] [--local-only]",
+            "/reflect <run|show|export|serve|prune> [--out <path>] [--local-only]"
+            " [--window <days>] [--scope <scope>] [--format <text|json>]"
+            " [--host <address>] [--port <port>] [--root <dir>]",
             "run",
             "show",
             "export",
+            "serve",
             "prune",
-            run=("--out", "--local-only"),
+            run=("--out", "--local-only", "--window", "--scope", "--format"),
             show=(),
             export=("--out",),
+            serve=("--host", "--port", "--root"),
             prune=(),
         ),
         effects=EffectsBoundary(
             summary=(
-                "The reflect run, show, export and prune verbs: read-only apart from the"
+                "The reflect run, show, export, serve and prune verbs: read-only apart from the"
                 " session title fill, which --local-only disables, and the local report files."
             ),
-            verbs=("reflect run", "reflect show", "reflect export", "reflect prune"),
+            verbs=(
+                "reflect run",
+                "reflect show",
+                "reflect export",
+                "reflect serve",
+                "reflect prune",
+            ),
             canonical_mutates=False,
             local_write_scope=".ea/local/reflect",
         ),

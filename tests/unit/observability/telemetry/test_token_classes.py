@@ -365,7 +365,7 @@ def test_dispatch_cost_payload_total_without_price_source_raises() -> None:
 # -- pricing ----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("model", ["claude-opus-5-5", "claude-sonnet-5", "claude-opus-5-5-2026"])
+@pytest.mark.parametrize("model", ["claude-opus-5", "claude-haiku-5", "claude-opus-5-2026"])
 def test_lookup_pricing_unpriced_generation_resolves_none(model: str) -> None:
     assert lookup_pricing(model) is None
 
@@ -388,7 +388,7 @@ def test_resolve_price_source_priced_and_unpriced() -> None:
         PriceSourceKind.LIST_RECONSTRUCTED,
         PRICING_VERSION,
     )
-    assert resolve_price_source("claude-opus-5-5") == (PriceSourceKind.UNPRICED, None)
+    assert resolve_price_source("claude-opus-5") == (PriceSourceKind.UNPRICED, None)
     assert resolve_price_source("") == (PriceSourceKind.UNPRICED, None)
 
 
@@ -403,7 +403,7 @@ def test_price_spawn_result_carries_reasoning_and_source() -> None:
 
 
 def test_price_spawn_result_unknown_model_is_unpriced() -> None:
-    metered = price_spawn_result(_spawn(runtime="claude-code", model="claude-opus-5-5"))
+    metered = price_spawn_result(_spawn(runtime="claude-code", model="claude-opus-5"))
     assert metered.price_source is PriceSourceKind.UNPRICED
     assert metered.cost_usd is None
     assert metered.priced is False
@@ -515,7 +515,7 @@ def test_dispatch_cost_source_legacy_line_derives_source(tmp_path: Path) -> None
 def test_build_snapshot_emits_token_class_and_price_source_families(tmp_path: Path) -> None:
     event_path = tmp_path / "store" / "event.jsonl"
     _append_from_spawn(event_path, _spawn())
-    _append_from_spawn(event_path, _spawn(model="claude-opus-5-5", reasoning_output_tokens=None))
+    _append_from_spawn(event_path, _spawn(model="claude-opus-5", reasoning_output_tokens=None))
     store = SqliteMetricsStore(tmp_path / "telemetry.db")
     store.init_schema()
     for row in DispatchCostSessionSource().iter_rows(event_path):

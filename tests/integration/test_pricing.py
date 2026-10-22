@@ -3,8 +3,9 @@
 Covers (C09 §5.9.6.1):
 
 - :data:`PRICING` snapshot shape — Decimal per-token rates, the
-  ``2026.05.17`` ``pricing_version`` literal, and the explicit cache
-  multipliers stated by Anthropic (5m = 1.25x, 1h = 2x, read = 0.1x).
+  ``2026.10.22`` ``pricing_version`` literal, and the explicit cache
+  multipliers stated by Anthropic (5m = 1.25x, 1h = 2x, read = 0.1x, or
+  the row's own published read multiplier).
 - :func:`lookup_pricing` exact match, longest-prefix fallback, and miss.
 - ``extra="forbid"`` on the row models and ``ModelPricing``.
 - :func:`check_pricing_currency` -> :class:`PricingDriftReport`.
@@ -30,6 +31,7 @@ from eawf.observability.telemetry.models import (
 )
 from eawf.observability.telemetry.pricing import (
     CACHE_READ_MULTIPLIER,
+    CACHE_READ_MULTIPLIER_BY_MODEL,
     CACHE_WRITE_1H_MULTIPLIER,
     CACHE_WRITE_5M_MULTIPLIER,
     PRICING,
@@ -53,8 +55,8 @@ runner = CliRunner()
 
 
 def test_pricing_version_literal() -> None:
-    assert PRICING_VERSION == "2026.05.17"
-    assert datetime(2026, 5, 17, 12, 0, 0, tzinfo=UTC) == PRICING_FETCHED_AT
+    assert PRICING_VERSION == "2026.10.22"
+    assert datetime(2026, 10, 22, 21, 30, 0, tzinfo=UTC) == PRICING_FETCHED_AT
 
 
 def test_pricing_version_stamped_on_every_row() -> None:
@@ -77,7 +79,7 @@ def test_pricing_rates_are_decimal_not_float() -> None:
             assert isinstance(value, Decimal), f"{model_id}.{field} is {type(value)}"
 
 
-def test_opus_4_7_rates_match_2026_05_17_snapshot() -> None:
+def test_opus_4_7_rates_match_snapshot() -> None:
     row = PRICING["claude-opus-4-7"]
     assert row.input_per_token == Decimal("5e-6")
     assert row.output_per_token == Decimal("25e-6")
@@ -86,7 +88,7 @@ def test_opus_4_7_rates_match_2026_05_17_snapshot() -> None:
     assert row.cache_write_1h_per_token == Decimal("10e-6")
 
 
-def test_haiku_4_5_rates_match_2026_05_17_snapshot() -> None:
+def test_haiku_4_5_rates_match_snapshot() -> None:
     row = PRICING["claude-haiku-4-5-20251001"]
     assert row.input_per_token == Decimal("1e-6")
     assert row.output_per_token == Decimal("5e-6")
@@ -99,7 +101,8 @@ def test_cache_multipliers_explicit_and_consistent() -> None:
     assert Decimal("1.25") == CACHE_WRITE_5M_MULTIPLIER
     assert Decimal("2") == CACHE_WRITE_1H_MULTIPLIER
     for model_id, row in PRICING.items():
-        assert row.cache_read_per_token == row.input_per_token * CACHE_READ_MULTIPLIER, model_id
+        read = CACHE_READ_MULTIPLIER_BY_MODEL.get(model_id, CACHE_READ_MULTIPLIER)
+        assert row.cache_read_per_token == row.input_per_token * read, model_id
         assert row.cache_write_5m_per_token == row.input_per_token * CACHE_WRITE_5M_MULTIPLIER, (
             model_id
         )
@@ -483,6 +486,45 @@ def test_check_pricing_currency_detects_injected_drift(monkeypatch: pytest.Monke
         f.model_id == "claude-opus-4-7" and f.field == "cache_read_per_token"
         for f in report.findings
     )
+
+
+def test_cache_read_multiplier_overrides_name_priced_rows() -> None:
+    """Boundary: every per-model read multiplier keys a real row and differs from the default."""
+    assert set(CACHE_READ_MULTIPLIER_BY_MODEL) <= set(PRICING)
+    assert CACHE_READ_MULTIPLIER not in CACHE_READ_MULTIPLIER_BY_MODEL.values()
+    assert CACHE_READ_MULTIPLIER_BY_MODEL["claude-opus-5-5"] == Decimal("0.05")
+
+
+def test_check_pricing_currency_holds_override_row_to_its_own_multiplier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Error path: an Opus 5.5 row at the default 0.1x read rate is drift, not current."""
+    row = PRICING["claude-opus-5-5"]
+    standard_read = row.model_copy(
+        update={"cache_read_per_token": row.input_per_token * CACHE_READ_MULTIPLIER}
+    )
+    monkeypatch.setitem(PRICING, "claude-opus-5-5", standard_read)
+
+    report = check_pricing_currency()
+
+    assert report.is_current is False
+    assert [(f.model_id, f.field) for f in report.findings] == [
+        ("claude-opus-5-5", "cache_read_per_token")
+    ]
+
+
+def test_check_pricing_currency_flags_a_row_on_a_stale_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Error path: a row left on the previous snapshot tag is reported as drift."""
+    stale = PRICING["claude-sonnet-5"].model_copy(update={"pricing_version": "2026.05.17"})
+    monkeypatch.setitem(PRICING, "claude-sonnet-5", stale)
+
+    report = check_pricing_currency()
+
+    assert [(f.model_id, f.field, f.actual) for f in report.findings] == [
+        ("claude-sonnet-5", "pricing_version", "2026.05.17")
+    ]
 
 
 # --------------------------------------------------------------------------

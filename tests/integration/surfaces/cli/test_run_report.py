@@ -347,7 +347,7 @@ def test_a_compacted_run_is_reported_from_the_run_ledger(tree: Path) -> None:
     assert "run revision 3" in text
     assert "purged ranges: 3-4" in text
     assert "timeline 6 " in text
-    assert read_tree_runs(tree) == ()
+    assert [r.run.key for r in read_tree_runs(tree)] == ["RUN-00000001"]
 
 
 def test_the_latest_ledger_line_of_a_compacted_run_is_the_one_reported(tree: Path) -> None:

@@ -13,6 +13,7 @@ The handlers parse, dispatch to :mod:`eawf.observability.reflect` and format.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -33,6 +34,13 @@ _OutOption = Annotated[
     Path | None,
     typer.Option("--out", help="Output path; refused inside the canonical store."),
 ]
+
+
+class _ReportFormat(StrEnum):
+    """What ``reflect run`` prints on stdout."""
+
+    TEXT = "text"
+    JSON = "json"
 
 
 def _tree_root(flags: GlobalFlags) -> Path:
@@ -66,18 +74,38 @@ def reflect_run(
         typer.Option("--local-only", help="Make no call off this machine; titles fall back."),
     ] = False,
     out: _OutOption = None,
+    window: Annotated[
+        str | None,
+        typer.Option("--window", help="Keep only Runs started in the last <N>d, such as 7d."),
+    ] = None,
+    scope: Annotated[
+        str,
+        typer.Option("--scope", help="project, milestone:<KEY> or track:<KEY>."),
+    ] = "project",
+    fmt: Annotated[
+        _ReportFormat,
+        typer.Option("--format", help="Print the text report, or the report JSON."),
+    ] = _ReportFormat.TEXT,
 ) -> None:
     """Read the tree's Runs, fill their titles, and write the report."""
     from eawf.observability.reflect import report as rp
     from eawf.observability.reflect import titles as tt
     from eawf.observability.reflect.runs import read_tree_runs
 
+    try:
+        selected_scope = rp.parse_scope(scope)
+        window_days = None if window is None else rp.parse_window(window)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     flags: GlobalFlags = ctx.obj
     tree_root = _tree_root(flags)
     target = _output(tree_root, out, flags=flags)
     root = rp.reflect_root(tree_root)
     now = datetime.now(UTC)
-    readings = read_tree_runs(tree_root)
+    cohort = rp.select_cohort(
+        read_tree_runs(tree_root), scope=selected_scope, window_days=window_days, now=now
+    )
+    readings = cohort.sessions
     cache_path = root / rp.TITLE_CACHE_FILENAME
     provider = None if local_only else tt.ClaudeTitleProvider.discover()
     titles, account, cache = tt.fill_titles(
@@ -89,9 +117,14 @@ def reflect_run(
     )
     if not local_only:
         tt.save_title_cache(cache_path, cache)
-    report = rp.build_report(readings, titles, local_only=local_only)
+    report = rp.build_report(
+        cohort, titles, scope=selected_scope, window_days=window_days, local_only=local_only
+    )
     manifest = rp.fill_manifest(account, sessions=len(readings))
     stored = rp.store_report(root, report, manifest, on=now.date(), out=target)
+    if fmt is _ReportFormat.JSON:
+        typer.echo(report.model_dump_json(indent=2))
+        return
     emit_json_or_text(
         {
             "report": str(stored.text),

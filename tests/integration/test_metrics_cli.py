@@ -35,6 +35,7 @@ from typer.testing import CliRunner
 
 import eawf.kernel.config.layered as layered
 from eawf.observability.telemetry.models import TelemetrySession
+from eawf.observability.telemetry.pricing import PRICING_VERSION
 from eawf.observability.telemetry.sources.session_history import claude_history_root
 from eawf.observability.telemetry.store import SqliteMetricsStore
 from eawf.surfaces.cli.app import app
@@ -128,7 +129,7 @@ def test_metrics_info_prints_cache_stats(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
     assert payload["db_kind"] == "sqlite"
-    assert payload["pricing_version"] == "2026.05.17"
+    assert payload["pricing_version"] == PRICING_VERSION
     assert payload["telemetry_enabled"] is True
     assert payload["db_path"].endswith("telemetry.db")
 

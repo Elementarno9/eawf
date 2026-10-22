@@ -520,7 +520,8 @@ def test_reflect_grammar_is_exactly_the_reflect_verbs() -> None:
         assert verb is not None
         flags = {flag for p in verb.parameters for flag in p.flags}
         assert set(entry.grammar.options_for(action)) <= flags
-    assert not {"--window", "--scope", "--cohort", "--format"} & set(entry.grammar.options)
+    assert "--cohort" not in entry.grammar.options
+    assert {"--window", "--scope", "--format"} <= set(entry.grammar.options_for("run"))
 
 
 def test_effects_boundary_refuses_a_repeated_verb() -> None:
