@@ -13,14 +13,17 @@ differs from :mod:`eawf.runtime.runtimes.claude.plugin_install`:
         marketplace.json             # gated by ``include_marketplace``
       skills/<name>/SKILL.md         # one per skill catalog entry
       agents/<role>.md               # one per AGENT_REGISTRY entry
+      hooks/hooks.json               # gated by ``include_hooks``
+      hooks/<event>.sh               # one per handler-backed hook event
       README.md                      # gated by ``include_readme``
 
 Crucially, this tree carries NO ``.claude/`` prefix, NO ``settings.json``,
 and NO ``.ea/`` — it is a self-contained plugin, not a per-repo workspace
 render.
 
-The packaged tree also emits a session-level ``hooks.json`` at the plugin
-root plus the corresponding wrapper scripts under ``hooks/``. Only
+The packaged tree also emits a session-level ``hooks/hooks.json``, the
+path Claude Code loads a plugin's hooks from, beside the wrapper scripts
+it names. Only
 handler-backed events — those with a real runner-registered handler, per
 :func:`eawf.runtime.runtimes.claude.hook_map.handler_backed_plugin_hooks`
 (today ``SESSION_START`` and ``SESSION_END``) — appear in the
@@ -135,7 +138,7 @@ class PackageResult:
             (or *would have been*, in a dry-run).
         wrote_readme: True when ``README.md`` was emitted (or would
             have been, in a dry-run).
-        wrote_hooks: True when ``hooks.json`` + ``hooks/*.sh`` were
+        wrote_hooks: True when ``hooks/hooks.json`` + ``hooks/*.sh`` were
             emitted (or would have been, in a dry-run).
     """
 
@@ -458,7 +461,7 @@ def package_plugin(
             keeps the relative ``"./"`` dev source; ``NPM`` emits the
             self-hosted published pointer at the npm artifact.
         include_readme: Emit ``README.md`` describing install steps.
-        include_hooks: Emit ``hooks.json`` at the plugin root plus
+        include_hooks: Emit ``hooks/hooks.json`` plus
             ``hooks/<event>.sh`` wrappers for the handler-backed events in
             :func:`eawf.runtime.runtimes.claude.hook_map.handler_backed_plugin_hooks`.
             Defaults to ``True``; pass ``False`` to package a
@@ -578,9 +581,9 @@ def package_plugin(
         written.append(path)
 
     if hooks_manifest is not None:
-        # hooks.json lives at the plugin tree root (NOT under
-        # ``.claude-plugin/``) per the Claude Code plugin manifest schema.
-        hooks_json_path = target_dir / "hooks.json"
+        # Claude Code loads plugin hooks only from ``hooks/hooks.json``; a
+        # manifest at the plugin root is never read, so no hook would fire.
+        hooks_json_path = target_dir / "hooks" / "hooks.json"
         atomic_write_text(hooks_json_path, hooks_manifest)
         written.append(hooks_json_path)
         for path, body in hook_outputs:

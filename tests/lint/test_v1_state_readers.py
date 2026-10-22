@@ -62,7 +62,6 @@ V1_READERS: Final[dict[str, str]] = {
     "eawf/surfaces/cli/commands/bench.py": f"{_FALLBACK}: the live turn-cost corpus",
     "eawf/surfaces/cli/commands/doc.py": f"{_FALLBACK}: the doc commands' state load",
     "eawf/surfaces/cli/commands/doctor.py": f"{_FALLBACK}: the project-record check",
-    "eawf/surfaces/cli/commands/hook.py": f"{_FALLBACK}: the hooks' state load",
     "eawf/surfaces/cli/commands/impact.py": f"{_FALLBACK}: the impact report's state load",
     "eawf/surfaces/cli/commands/lifecycle.py": f"{_FALLBACK}: the read-only lifecycle load",
     "eawf/surfaces/cli/commands/memory.py": f"{_FALLBACK}: the memory commands' state load",

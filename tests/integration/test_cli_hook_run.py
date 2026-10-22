@@ -24,71 +24,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.render.envelope import OutputEnvelope
+from tests.integration.surfaces.cli._native_run import RUN_KEY, RUN_URN, native_repo
 
 runner = CliRunner()
-
-
-def _workspace_with_session(tmp_path: Path) -> Path:
-    workspace = tmp_path / "ws"
-    state_dir = workspace / ".ea"
-    state_dir.mkdir(parents=True)
-    (state_dir / "state.json").write_text(
-        json.dumps(
-            {
-                "schema_version": "1.0",
-                "scope_kind": "repo",
-                "urn": "urn:eawf:v1:state:QR",
-                "updated_at": "2026-05-14T00:00:00Z",
-                "project": {
-                    "code": "QR",
-                    "slug": "qr",
-                    "title": "QR",
-                    "domains": [],
-                    "default_branch": "main",
-                    "status": "active",
-                    "repo_urn": "urn:eawf:v1:repo:QR",
-                },
-                "current": {
-                    "project_code": "QR",
-                    "track_id": None,
-                    "phase_id": None,
-                    "iter_id": None,
-                    "active_wave_ids": [],
-                    "active_session_ids": ["SES-001"],
-                },
-                "workspace": None,
-                "phases": {},
-                "iters": {},
-                "waves": {},
-                "artifacts": {},
-                "agent_sessions": {
-                    "SES-001": {
-                        "id": "SES-001",
-                        "role": "executor",
-                        "runtime": "generic",
-                        "scope_id": "P18-I01-W04",
-                        "status": "active",
-                        "claimed_wave_ids": [],
-                        "worktree_ids": [],
-                        "artifact_ids": [],
-                        "started_at": "2026-05-14T00:00:00Z",
-                        "ended_at": None,
-                        "summary": None,
-                    }
-                },
-                "plugins": {},
-                "indexes": {},
-            }
-        ),
-        encoding="utf-8",
-    )
-    return workspace
 
 
 def test_hook_run_empty_stdin_exits_zero_with_ok_envelope() -> None:
@@ -156,10 +101,13 @@ def test_hook_run_unknown_runtime_returns_invalid_input() -> None:
     assert result.exit_code == 1, result.stdout
 
 
-def test_hook_run_agent_end_writes_typed_report(tmp_path: Path) -> None:
-    workspace = _workspace_with_session(tmp_path)
+def test_hook_run_agent_end_writes_typed_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("EA_STATE", raising=False)
+    workspace = native_repo(tmp_path / "ws")
     payload = {
-        "session_id": "SES-001",
+        "run_ref": RUN_URN,
         "base_id": "P18-I01-W04",
         "body": {
             "role": "executor",
@@ -184,7 +132,7 @@ def test_hook_run_agent_end_writes_typed_report(tmp_path: Path) -> None:
     stored = Envelope.model_validate_json(store_file.read_text(encoding="utf-8").splitlines()[0])
     stored_payload = AgentReportPayload.model_validate(stored.payload)
     assert stored_payload.header.attempt == 1
-    assert stored_payload.header.session_id == "SES-001"
+    assert stored_payload.header.session_id == RUN_KEY
 
 
 def test_hook_run_emits_canonical_output_envelope_shape() -> None:

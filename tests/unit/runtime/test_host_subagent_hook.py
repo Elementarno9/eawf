@@ -218,7 +218,7 @@ def test_surf_076_every_claude_manifest_event_has_a_registered_handler() -> None
     manifest_events = set(build_plugin_hooks_json()["hooks"])
     assert manifest_events == {
         "SessionStart",
-        "Stop",
+        "SessionEnd",
         "SubagentStart",
         "SubagentStop",
         "PreCompact",

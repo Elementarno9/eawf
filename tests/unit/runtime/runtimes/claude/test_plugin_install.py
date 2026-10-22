@@ -368,17 +368,19 @@ def test_install_plugin_preserves_unrelated_skill_files(tmp_path: Path) -> None:
     assert extra.read_text(encoding="utf-8") == "user-added\n"
 
 
-def test_install_wires_session_end_into_cc_stop_hook(tmp_path: Path) -> None:
-    """The CC Stop hook is wired so session_end -> session.end_stamp fires.
+def test_install_wires_session_end_into_cc_session_end_hook(tmp_path: Path) -> None:
+    """The CC SessionEnd hook is wired so session_end -> session.end_stamp fires.
 
     Without a real ``hooks`` entry CC never invokes the rendered
     ``.claude/hooks/session_end.sh`` wrapper, so the session is never stamped.
+    ``Stop`` fires after every turn, so wiring it would end the session each turn.
     """
     install_plugin(tmp_path)
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     hooks = settings.get("hooks", {})
-    assert "Stop" in hooks, "CC Stop hook must be wired for EU capture"
-    commands = [h["command"] for entry in hooks["Stop"] for h in entry.get("hooks", [])]
+    assert "SessionEnd" in hooks, "CC SessionEnd hook must be wired for EU capture"
+    assert "Stop" not in hooks
+    commands = [h["command"] for entry in hooks["SessionEnd"] for h in entry.get("hooks", [])]
     assert any(c.endswith("session_end.sh") for c in commands)
     # Project-relative via the CC-provided project-root variable.
     assert all("$CLAUDE_PROJECT_DIR/.claude/hooks/" in c for c in commands)
@@ -389,15 +391,25 @@ def test_install_settings_hooks_preserve_user_entries_and_stay_idempotent(tmp_pa
     settings_path = tmp_path / ".claude" / "settings.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     user_hook = {"matcher": "", "hooks": [{"type": "command", "command": "my-own-hook.sh"}]}
+    # An install from before the SessionEnd wiring left its entry under Stop.
+    stale_eawf = {
+        "matcher": "",
+        "hooks": [
+            {"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session_end.sh"}
+        ],
+    }
     settings_path.write_text(
-        json.dumps({"hooks": {"Stop": [user_hook]}}, indent=2) + "\n", encoding="utf-8"
+        json.dumps({"hooks": {"Stop": [user_hook, stale_eawf], "SessionEnd": [user_hook]}}) + "\n",
+        encoding="utf-8",
     )
 
     install_plugin(tmp_path)
-    first = json.loads(settings_path.read_text(encoding="utf-8"))["hooks"]["Stop"]
+    hooks = json.loads(settings_path.read_text(encoding="utf-8"))["hooks"]
+    assert hooks["Stop"] == [user_hook], "the stale eawf Stop entry must go, the user's stay"
+    first = hooks["SessionEnd"]
     assert user_hook in first, "a user hook entry must be preserved"
     assert any("session_end.sh" in h["command"] for e in first for h in e["hooks"])
 
     install_plugin(tmp_path)  # idempotent: no growth
-    second = json.loads(settings_path.read_text(encoding="utf-8"))["hooks"]["Stop"]
+    second = json.loads(settings_path.read_text(encoding="utf-8"))["hooks"]["SessionEnd"]
     assert second == first

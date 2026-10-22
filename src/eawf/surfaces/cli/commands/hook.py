@@ -9,15 +9,19 @@ Surface contract:
   :class:`~eawf.surfaces.render.envelope.OutputEnvelope` to stdout.
 - ``eawf hook dispatch --event-type agent_end [--runtime ...] [--scope ...]
   [--command ...]`` is the interim verdict seeder: it translates one
-  ``agent_end`` event (payload on stdin) into a single seeded verdict row via
+  ``agent_end`` event (payload on stdin, naming a native Run) into a single
+  seeded verdict row via
   :func:`eawf.workflow.dispatch.seed.seed_interim_verdict` so the self-eval +
   jury surfaces read a primed cohort before the live verdict producer lands.
   Only ``agent_end`` is accepted; other event types exit ``3``.
 - ``eawf hook agent-output`` is the streaming sibling of that seeder: an
   orchestrator that spawned the agent itself forwards one output chunk
-  (payload on stdin) and it lands as the same ``agent.output.chunk`` event the
-  in-daemon spawn path writes, so the agent watch surface renders a session the
-  daemon never spawned instead of an empty pane.
+  (payload on stdin, naming a native Run) and it lands as the same
+  ``agent.output.chunk`` event the in-daemon spawn path writes, so the agent
+  watch surface renders a Run the daemon never spawned instead of an empty
+  pane.
+- Both resolve the reporting role and scope from the named Run in the
+  selected generation; neither reads the v1 ``state.json``.
 - Exit ``0`` when no registered hook returns ``block=True``. ``session_end``
   registers the built-in runtime capture hook; other events without hooks keep
   the empty-result no-op path.
@@ -52,6 +56,7 @@ import orjson
 import typer
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
@@ -60,7 +65,6 @@ from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.models import State
     from eawf.observability.logging.state_leak import StateLeakKind
     from eawf.platform.lint import LintConfig
     from eawf.runtime.hooks.event import HookEvent, HookEventType, HookRuntime
@@ -71,11 +75,20 @@ logger = logging.getLogger(__name__)
 
 
 class AgentEndPayload(BaseModel):
-    """Payload accepted by ``eawf hook run agent_end``."""
+    """Payload accepted by ``eawf hook run agent_end``.
+
+    Attributes:
+        run_ref: The native Run the report speaks for; its sealed capsule
+            grants the role the body must claim.
+        base_id: Report ``base_id`` the attempts are grouped under.
+        body: The role-report body.
+        artifact_ids: Artifact ids attached to the row.
+        blob_refs: Blob refs attached to the row.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    session_id: str
+    run_ref: RunUrn
     base_id: str
     body: dict[str, Any]
     artifact_ids: list[str] = Field(default_factory=list)
@@ -85,19 +98,18 @@ class AgentEndPayload(BaseModel):
 class AgentOutputPayload(BaseModel):
     """Payload accepted by ``eawf hook agent-output``.
 
-    Carries only the chunk itself. The scope the chunk routes to and the
-    runtime session id it is attributed to are resolved from the named session
-    row, so a forwarder cannot mis-address its own stream.
+    Carries only the chunk itself. The scope the chunk routes to is resolved
+    from the named Run, so a forwarder cannot mis-address its own stream.
 
     Attributes:
-        session_id: Id of the Eä agent session the chunk belongs to.
-        seq: Per-session monotonic chunk index (0-based).
+        run_ref: The native Run the chunk belongs to.
+        seq: Per-Run monotonic chunk index (0-based).
         text: The forwarded output text for this chunk.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    session_id: str
+    run_ref: RunUrn
     seq: int = Field(ge=0)
     text: str
 
@@ -242,22 +254,6 @@ def _envelope_for(
     return OutputEnvelope(header=header, body=body, footer=footer)
 
 
-def _load_state(state_path: Path) -> State:
-    """Load and validate state from *state_path*."""
-    from eawf.kernel.validate.strict import validate_state
-
-    path = state_path
-    if not path.exists():
-        raise cli_errors.UserError(f"state file not found: {path}", kind="NotFound")
-    payload = orjson.loads(path.read_bytes())
-    report = validate_state(payload, strict_optional=False)
-    if report.state is None:
-        raise cli_errors.ValidationError(
-            f"state schema invalid: {'; '.join(report.schema_errors[:3])}"
-        )
-    return report.state
-
-
 def _envelope_for_agent_report(
     *,
     event: HookEvent,
@@ -305,7 +301,7 @@ def _envelope_for_agent_report(
 
 def _envelope_for_agent_output(
     *,
-    session_id: str,
+    run_key: str,
     scope_id: str,
     seq: int,
     event_id: str | None,
@@ -316,7 +312,7 @@ def _envelope_for_agent_output(
     """Assemble the output envelope for a forwarded output-chunk ingest.
 
     Args:
-        session_id: The Eä session the chunk was forwarded for.
+        run_key: The native Run the chunk was forwarded for.
         scope_id: The scope the chunk was routed to.
         seq: The chunk index the forwarder supplied.
         event_id: Appended envelope id, or ``None`` when the forwarded text
@@ -333,7 +329,7 @@ def _envelope_for_agent_output(
     body: dict[str, object] = {
         "event_type": "agent_output",
         "scope_id": scope_id,
-        "session_id": session_id,
+        "run_key": run_key,
         "seq": seq,
         "event_id": event_id,
         "persisted": event_id is not None,
@@ -392,9 +388,11 @@ def _seed_agent_end_verdict(
     --event-type agent_end``: both translate the same ``agent_end`` payload
     into a seeded verdict row through the library seeder
     :func:`eawf.workflow.dispatch.seed.seed_interim_verdict` (CLI stays
-    dispatch-only; the library implements). All CLI-level failures surface as
-    the canonical error envelope and the function returns without raising.
+    dispatch-only; the library implements), filed as the native Run the
+    payload names. All CLI-level failures surface as the canonical error
+    envelope and the function returns without raising.
     """
+    from eawf.runtime.daemon.dispatch_runner import native_run_author
     from eawf.workflow.agent_report.store import (
         AgentReportRoleMismatchError,
         AgentReportScrubError,
@@ -404,11 +402,9 @@ def _seed_agent_end_verdict(
     try:
         agent_payload = AgentEndPayload.model_validate(payload)
         state_path = resolve_state_path(flags.workspace)
-        state = _load_state(state_path)
         result = seed_interim_verdict(
-            state=state,
+            author=native_run_author(state_path.parent, agent_payload.run_ref),
             state_path=state_path,
-            session_id=agent_payload.session_id,
             base_id=agent_payload.base_id,
             body=agent_payload.body,
             runtime=event.runtime,
@@ -1290,23 +1286,23 @@ def dispatch(
 
 @hook_app.command(name="agent-output")
 def agent_output(ctx: typer.Context) -> None:
-    """Ingest one output chunk forwarded for an externally dispatched session.
+    """Ingest one output chunk forwarded for an externally dispatched Run.
 
     The streaming sibling of ``eawf hook dispatch --event-type agent_end``.
     The watch surface reads persisted ``agent.output.chunk`` rows, whose only
     other producer is the daemon piping a runtime it spawned itself; a session
     an external orchestrator spawned therefore shows a correct row with no
     stream behind it. That orchestrator forwards each output batch here as JSON
-    on stdin (``{"session_id": ..., "seq": ..., "text": ...}``) and it lands as
+    on stdin (``{"run_ref": ..., "seq": ..., "text": ...}``) and it lands as
     the same chunk row the spawn path writes, so the row and its stream agree.
 
-    Routing is resolved from the named session row (its scope and runtime
-    session id), never from the forwarder, so a forwarded chunk cannot land in
-    a scope the watch reader never reads.
+    Routing is resolved from the named Run (its scope), never from the
+    forwarder, so a forwarded chunk cannot land in a scope the watch reader
+    never reads.
 
     Exits ``1`` when the stdin envelope is malformed (``InvalidInput``) or the
-    session id names no session (``NotFound``); nothing is persisted in either
-    case. Appends to the event store only -- no ``state.json`` mutation.
+    Run cannot be resolved (``NotFound``); nothing is persisted in either
+    case. Appends to the event store only; ``state.json`` is never read.
     """
     from eawf.kernel.state.enums import StoreKind
     from eawf.kernel.state.urn import build as build_urn
@@ -1322,8 +1318,8 @@ def agent_output(ctx: typer.Context) -> None:
         state_path = resolve_state_path(flags.workspace)
         result = persist_forwarded_output_chunk(
             store_path(state_path, StoreKind.EVENT),
-            state=_load_state(state_path),
-            session_id=chunk.session_id,
+            tree_root=state_path.parent,
+            run_ref=chunk.run_ref,
             seq=chunk.seq,
             text=chunk.text,
         )
@@ -1349,7 +1345,7 @@ def agent_output(ctx: typer.Context) -> None:
     )
     _emit_envelope(
         _envelope_for_agent_output(
-            session_id=chunk.session_id,
+            run_key=result.run_key,
             scope_id=result.scope_id,
             seq=chunk.seq,
             event_id=result.envelope_id,

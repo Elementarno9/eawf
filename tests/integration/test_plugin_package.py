@@ -75,7 +75,8 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     # idle no-op wrappers are absent while PreCompact, which snapshots the
     # Run's contract anchors, is present.
     assert (target / "hooks").exists()
-    assert (target / "hooks.json").exists()
+    assert (target / "hooks" / "hooks.json").exists()
+    assert not (target / "hooks.json").exists()
     assert (target / "hooks" / "session_end.sh").exists()
     assert (target / "hooks" / "session_start.sh").exists()
     assert not (target / "hooks" / "pre_commit.sh").exists()
@@ -89,11 +90,11 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert (target / "hooks" / "pre_tool_use.sh").exists()
     assert (target / "hooks" / "post_tool_use.sh").exists()
     assert (target / "hooks" / "post_tool_use_failure.sh").exists()
-    assert len(list((target / "hooks").iterdir())) == 10
-    hooks_manifest = json.loads((target / "hooks.json").read_text())
+    assert len(list((target / "hooks").glob("*.sh"))) == 10
+    hooks_manifest = json.loads((target / "hooks" / "hooks.json").read_text())
     assert set(hooks_manifest["hooks"].keys()) == {
         "SessionStart",
-        "Stop",
+        "SessionEnd",
         "SubagentStart",
         "SubagentStop",
         "PreCompact",
@@ -159,7 +160,7 @@ def test_package_dry_run_writes_nothing(tmp_path: Path) -> None:
 
 
 def test_package_skips_hooks_when_disabled(tmp_path: Path) -> None:
-    """``include_hooks=False`` omits ``hooks.json`` and ``hooks/*.sh``."""
+    """``include_hooks=False`` omits ``hooks/hooks.json`` and ``hooks/*.sh``."""
     target = tmp_path / "eawf-plugin"
     result = package_plugin(target, include_hooks=False)
     assert result.wrote_hooks is False
@@ -344,7 +345,7 @@ def test_package_cli_no_marketplace_no_readme(tmp_path: Path) -> None:
 
 
 def test_package_cli_no_hooks(tmp_path: Path) -> None:
-    """``--no-hooks`` omits ``hooks.json`` and ``hooks/*.sh`` from the tree."""
+    """``--no-hooks`` omits ``hooks/hooks.json`` and ``hooks/*.sh`` from the tree."""
     target = tmp_path / "out"
     result = runner.invoke(
         app,

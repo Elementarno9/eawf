@@ -1131,7 +1131,11 @@ def milestone_create_cmd(
     dry_run: DryRun = False,
     yes: Yes = False,
 ) -> None:
-    """Admit a new Milestone's create document into the addressed tree."""
+    """Admit a new Milestone's create document into the addressed tree.
+
+    The Milestone starts PLANNED with no Batches, so it can later take its
+    first plan: applying that plan fills this row in place.
+    """
     _run_create_verb(
         ctx,
         method=MILESTONE_CREATE,

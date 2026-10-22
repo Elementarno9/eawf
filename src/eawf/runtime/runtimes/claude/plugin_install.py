@@ -348,7 +348,7 @@ def _patch_settings_json(
       subscriptions there), preserving every user / other-plugin hook entry
       and replacing only Eä's own (idempotent). This is the wire that makes
       CC actually invoke the rendered ``.claude/hooks/*.sh`` wrappers -- e.g.
-      ``Stop`` -> ``session_end`` -> ``session.end_stamp``.
+      ``SessionEnd`` -> ``session_end`` -> ``session.end_stamp``.
     - Wire ``statusLine`` to ``eawf cc statusline`` so the project renders
       the Eä statusline, unless the operator already set a statusline of
       their own, which is kept.

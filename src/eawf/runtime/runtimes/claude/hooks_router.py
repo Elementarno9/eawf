@@ -2,7 +2,7 @@
 
 Claude Code emits hook payloads with a stable ``hook_event_name`` field
 identifying the event ("PreToolUse", "PostToolUse", "SessionStart",
-"Stop", etc., per the Claude Code hooks reference). This module is the
+"SessionEnd", etc., per the Claude Code hooks reference). This module is the
 lossless translation layer: it inspects the payload, picks the correct
 :class:`~eawf.runtime.hooks.event.HookEventType`, and returns a typed
 :class:`HookEvent`.
@@ -19,7 +19,8 @@ Behaviour rules per Phase 4 W04 design spec §3.3 / acceptance §2:
   CLI invocation.
 - Mapping is intentionally narrow: only payloads with a well-defined Eä
   counterpart map. Claude events without an Eä counterpart
-  (``Notification``, ``UserPromptSubmit``) are warned-and-skipped.
+  (``Notification``, ``Stop``) are warned-and-skipped; ``Stop`` fires after
+  every turn, so reading it as the session's end would end it each turn.
 
 The router never reads or writes state. The CLI handler in
 :mod:`eawf.surfaces.cli.commands.hook` consumes the typed event and dispatches
@@ -44,7 +45,6 @@ logger = logging.getLogger(__name__)
 _CLAUDE_TO_EAWF: dict[str, HookEventType] = {
     "SessionStart": HookEventType.SESSION_START,
     "SessionEnd": HookEventType.SESSION_END,
-    "Stop": HookEventType.SESSION_END,
     "SubagentStart": HookEventType.SUBAGENT_START,
     "SubagentStop": HookEventType.SUBAGENT_STOP,
     "PreCompact": HookEventType.PRE_COMPACT,

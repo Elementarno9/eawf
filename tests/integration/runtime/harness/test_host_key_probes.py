@@ -540,11 +540,11 @@ def test_surf_168_claude_session_hooks_fire(claude_host: _ClaudeHost) -> None:
     claude_host.settings(
         {
             "__eawf_managed": {"version": "probe"},
-            "hooks": _recording_hooks(["SessionStart", "Stop"], sink),
+            "hooks": _recording_hooks(["SessionStart", "SessionEnd"], sink),
         }
     )
     claude_host.run("hello", _claude_stub([]))
-    assert set(_fired(sink)) == {"SessionStart", "Stop"}
+    assert _fired(sink) == ["SessionStart", "SessionEnd"]
 
 
 @needs_claude

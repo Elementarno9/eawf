@@ -10,7 +10,7 @@ Two producers live here:
 
 * the live ``agent.output.chunk`` rows a spawn streams
   (:func:`persist_agent_output_chunk`) or an external orchestrator forwards
-  for its session (:func:`persist_forwarded_output_chunk`);
+  for its native Run (:func:`persist_forwarded_output_chunk`);
 * the typed ``session_closed`` row the session store emits once a session
   row turns terminal (:func:`emit_session_closed`).
 
@@ -31,10 +31,16 @@ from typing import Any, cast, get_args
 
 from pydantic import TypeAdapter
 
+from eawf.kernel.identity import QualifiedUrn
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.runtime.control import RunBinding
 from eawf.kernel.state.enums import AgentSessionStatus, StoreKind
+from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.state.ids import RE_WAVE
-from eawf.kernel.state.models import AgentSession, State
+from eawf.kernel.state.models import AgentSession
 from eawf.kernel.store.append import append_envelope
+from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.events import (
     AgentOutputChunkPayload,
@@ -42,7 +48,11 @@ from eawf.kernel.store.kinds.events import (
     SessionClosedPayload,
 )
 from eawf.kernel.store.kinds.events.base import RuntimeTriple, runtime_triple_label
+from eawf.kernel.store.ledger import effective_records, read_ledger_records
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.telemetry.models import EndMarker
+from eawf.workflow.agent_report.store import ReportAuthor
 
 logger = logging.getLogger(__name__)
 
@@ -196,35 +206,93 @@ def persist_agent_output_chunk(
     return envelope.id
 
 
+def native_run_author(tree_root: Path, run_ref: QualifiedUrn) -> ReportAuthor:
+    """Return who a native Run reports as, read from the tree's selected generation.
+
+    The Run is read from the generation document or, once it turned terminal
+    and was compacted, from its run-ledger record; its scope names what it
+    reports on. The role is the one its sealed authority capsule grants, so a
+    caller cannot claim a role the dispatch never gave the Run. Nothing here
+    opens the v1 ``state.json``.
+
+    Args:
+        tree_root: The tree's ``.ea`` directory.
+        run_ref: The Run the caller speaks for.
+
+    Returns:
+        The author: the Run key as the session id, the capsule's role and the
+        key of the entity the Run is scoped to.
+
+    Raises:
+        KeyError: The tree selects no generation, neither tier holds the Run,
+            or no binding of the Run carries a sealed capsule to read a role
+            from.
+    """
+    key = run_ref.entity_key
+    authority = resolve_authority(tree_root)
+    if authority.target is None or authority.generation_id is None:
+        raise KeyError(f"no native generation is selected, so run {key!r} cannot be read")
+    document_path = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    records = read_ledger_records(ledger_path(document_path, Epoch2Collection.RUN))
+    row = document_rows(read_document(document_path), Epoch2Collection.RUN).get(key)
+    if row is None:
+        row = next(
+            (
+                item.payload
+                for item in effective_records(records)
+                if item.record_key == key and "payload_kind" not in item.payload
+            ),
+            None,
+        )
+    if row is None:
+        raise KeyError(f"unknown run: {key!r}")
+    run = Run.model_validate(row)
+    capsule = next(
+        (
+            binding.capsule
+            for binding in (
+                RunBinding.model_validate(item.payload)
+                for item in records
+                if item.payload.get("payload_kind") == "run_binding"
+            )
+            if binding.run_ref == run_ref and binding.capsule is not None
+        ),
+        None,
+    )
+    if capsule is None:
+        raise KeyError(f"run {key!r} carries no sealed capsule naming its role")
+    scope_ref: QualifiedUrn = getattr(run.scope, f"{run.scope.scope_kind}_ref")
+    return ReportAuthor(session_id=key, role=capsule.agent_role, scope_id=scope_ref.entity_key)
+
+
 @dataclass(frozen=True)
 class ForwardedOutputChunk:
     """One externally forwarded output chunk after ingestion.
 
     Attributes:
-        scope_id: The scope the chunk was routed to -- the session row's own
-            scope, which is the key the Watch tail filters on.
-        runtime_session_id: The runtime session id stamped on the persisted
-            chunk, or ``None`` when the session row carries none.
+        scope_id: The scope the chunk was routed to -- the key of the entity
+            the Run is scoped to, which is the key the Watch tail filters on.
+        run_key: The Run key stamped on the persisted chunk as its session.
         envelope_id: The appended envelope id, or ``None`` when the forwarded
             text held no renderable line (a no-op rather than an empty row).
     """
 
     scope_id: str
-    runtime_session_id: str | None
+    run_key: str
     envelope_id: str | None
 
 
 def persist_forwarded_output_chunk(
     events_path: Path,
     *,
-    state: State,
-    session_id: str,
+    tree_root: Path,
+    run_ref: QualifiedUrn,
     seq: int,
     text: str,
 ) -> ForwardedOutputChunk:
-    """Persist one output chunk an external orchestrator forwarded for its session.
+    """Persist one output chunk an external orchestrator forwarded for its native Run.
 
-    The ingestion half of the streaming seam. A session the daemon did not spawn
+    The ingestion half of the streaming seam. A Run the daemon did not spawn
     has no in-process stdout pipe behind it, so its Watch row renders honest
     empty for the whole run unless whoever owns that process forwards the
     output. This lands one forwarded batch as the very same
@@ -232,17 +300,17 @@ def persist_forwarded_output_chunk(
     :func:`persist_agent_output_chunk`), so the Watch reader cannot tell a
     forwarded chunk from a spawned one.
 
-    Routing identity is read from the session row rather than taken from the
-    forwarder: the Watch tail filters chunks on scope AND runtime session id, so
-    resolving both from state is what guarantees a forwarded chunk reaches the
-    reader instead of landing in a scope nothing reads.
+    Routing identity is read from the Run rather than taken from the
+    forwarder: the Watch tail filters chunks on scope AND session, so
+    resolving both from the Run is what guarantees a forwarded chunk reaches
+    the reader instead of landing in a scope nothing reads.
 
     Args:
         events_path: Path to ``event.jsonl`` for the canonical append.
-        state: Validated state carrying the session row (read-only).
-        session_id: Id of the :class:`~eawf.kernel.state.models.AgentSession`
-            the forwarded chunk belongs to.
-        seq: Per-session monotonic chunk index (0-based) so the chunk order is
+        tree_root: The tree's ``.ea`` directory, whose selected generation
+            holds the Run.
+        run_ref: The Run the forwarded chunk belongs to.
+        seq: Per-Run monotonic chunk index (0-based) so the chunk order is
             reconstructible from the persisted rows.
         text: The forwarded output text for this chunk.
 
@@ -251,26 +319,22 @@ def persist_forwarded_output_chunk(
         when the forwarded text held nothing renderable).
 
     Raises:
-        KeyError: When *session_id* names no session in *state*.
+        KeyError: When the Run cannot be resolved (see :func:`native_run_author`).
     """
-    session = state.agent_sessions.get(session_id)
-    if session is None:
-        raise KeyError(f"unknown agent session: {session_id}")
+    author = native_run_author(tree_root, run_ref)
     envelope_id = persist_agent_output_chunk(
         events_path,
-        scope_id=session.scope_id,
-        session_id=session.runtime_session_id,
+        scope_id=author.scope_id,
+        session_id=author.session_id,
         seq=seq,
         text=text,
     )
     logger.info(
-        f"persist_forwarded_output_chunk session={session_id} scope={session.scope_id} "
+        f"persist_forwarded_output_chunk run={author.session_id} scope={author.scope_id} "
         f"seq={seq} envelope_id={envelope_id!r}"
     )
     return ForwardedOutputChunk(
-        scope_id=session.scope_id,
-        runtime_session_id=session.runtime_session_id,
-        envelope_id=envelope_id,
+        scope_id=author.scope_id, run_key=author.session_id, envelope_id=envelope_id
     )
 
 

@@ -22,7 +22,7 @@ events Claude Code CAN observe reliably; it is not itself the emitted set
 HookEventType       CC event               Matcher
 ==================  =====================  ====================================
 ``SESSION_START``   ``SessionStart``       (none)
-``SESSION_END``     ``Stop``               (none)
+``SESSION_END``     ``SessionEnd``         (none)
 ``SUBAGENT_START``  ``SubagentStart``      (none)
 ``PRE_COMMIT``      ``PreToolUse``         ``Bash`` (cmd starts ``git commit``)
 ``POST_COMMIT``     ``PostToolUse``        ``Bash`` (cmd starts ``git commit``)
@@ -79,7 +79,7 @@ class PluginHookSpec:
             whose wrapper script (``hooks/<value>.sh``) the manifest
             entry will invoke.
         cc_event: The Claude Code event name (one of ``SessionStart``,
-            ``Stop``, ``PreToolUse``, ``PostToolUse``). Determines which
+            ``SessionEnd``, ``PreToolUse``, ``PostToolUse``). Determines which
             top-level array in ``hooks.json`` the entry lands in.
         matcher: The CC matcher string. Empty string means "no matcher"
             (CC fires the hook on every event). ``"Bash"`` filters tool
@@ -98,7 +98,9 @@ class PluginHookSpec:
 # events still fire through explicit ``eawf hook run`` calls.
 PLUGIN_HOOK_REGISTRY: tuple[PluginHookSpec, ...] = (
     PluginHookSpec(event_type=HookEventType.SESSION_START, cc_event="SessionStart"),
-    PluginHookSpec(event_type=HookEventType.SESSION_END, cc_event="Stop"),
+    # ``Stop`` fires at the end of every turn; only ``SessionEnd`` marks the
+    # one point a session actually ends.
+    PluginHookSpec(event_type=HookEventType.SESSION_END, cc_event="SessionEnd"),
     PluginHookSpec(event_type=HookEventType.SUBAGENT_START, cc_event="SubagentStart"),
     PluginHookSpec(event_type=HookEventType.SUBAGENT_STOP, cc_event="SubagentStop"),
     PluginHookSpec(event_type=HookEventType.PRE_COMPACT, cc_event="PreCompact"),

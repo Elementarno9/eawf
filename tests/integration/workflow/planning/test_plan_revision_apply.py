@@ -1227,3 +1227,118 @@ def test_a_child_of_a_parent_on_another_milestone_still_refuses_a_reused_key(
     assert answer["errors"][0]["guard"] == "plan_keys_unclaimed"
     assert "task/EAWF-0001" in answer["errors"][0]["message"]
     assert document_path(canary).read_bytes() == before
+
+
+#: The title ``eawf milestone create`` gave the bare Milestone below, which
+#: the first plan's contract replaces.
+BARE_TITLE: Final = "Bare Milestone awaiting its first plan"
+
+
+def bare_milestone_canary(tmp_path: Path, *, code: str, status: str = "PLANNED") -> CanaryProvision:
+    """Return a canary holding a Milestone made outside a plan, in *status*."""
+    canary = planned_canary(tmp_path, code=code)
+    seed(
+        canary, {"milestone": {"MLS-0030": {**seed_row("milestone", status), "title": BARE_TITLE}}}
+    )
+    return canary
+
+
+def test_a_first_plan_applies_over_a_bare_planned_milestone(tmp_path: Path) -> None:
+    """A Milestone made by the create verb takes its first plan without a key conflict."""
+    canary = bare_milestone_canary(tmp_path, code="BARE")
+    bare = collection(canary, "milestone")["MLS-0030"]
+
+    answer = drive(canary, tmp_path, key=PARENT_KEY, body=PARENT_BODY)
+
+    assert answer["status"] == "ok", answer["errors"]
+    milestone = collection(canary, "milestone")["MLS-0030"]
+    assert (milestone["key"], milestone["uid"], milestone["urn"], milestone["created_at"]) == (
+        bare["key"],
+        bare["uid"],
+        bare["urn"],
+        bare["created_at"],
+    )
+    assert milestone["revision"] == bare["revision"] + 1
+    assert milestone["status"] == "PLANNED"
+    assert milestone["title"] == PARENT_BODY["milestone"]["title"]
+    assert milestone["required_batch_refs"] == [BATCH_A, BATCH_B]
+    assert sorted(collection(canary, "batch")) == ["BAT-0001", "BAT-0002"]
+    tasks = collection(canary, "task")
+    assert sorted(tasks) == ["EAWF-0001", "EAWF-0002", "EAWF-0003"]
+    assert {task["status"] for task in tasks.values()} == {"PLANNED"}
+    assert collection(canary, "plan_revision")[PARENT_KEY]["status"] == "APPLIED"
+
+
+def test_a_first_plan_over_a_milestone_an_applied_plan_placed_is_refused(tmp_path: Path) -> None:
+    """Only a re-plan under the applied plan may rewrite the Milestone it placed."""
+    canary = applied_parent(tmp_path, code="PLACEDMS")
+    body = plan_body(batches={BATCH_C: ((TASK_4, "CR-01"),)})
+    drive(canary, tmp_path, key=CHILD_KEY, body=body, apply=False)
+    before = document_path(canary).read_bytes()
+
+    answer = apply_plan_key(canary, tmp_path, key=CHILD_KEY)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["guard"] == "plan_keys_unclaimed"
+    assert "milestone/MLS-0030" in answer["errors"][0]["message"]
+    assert document_path(canary).read_bytes() == before
+
+
+@pytest.mark.parametrize("status", ["ACTIVE", "CANCELLED"])
+def test_a_first_plan_over_a_milestone_past_planned_is_refused(tmp_path: Path, status: str) -> None:
+    """A started or closed Milestone is never filled by a plan."""
+    canary = bare_milestone_canary(tmp_path, code=f"PAST{status[:3]}", status=status)
+    drive(canary, tmp_path, key=PARENT_KEY, body=PARENT_BODY, apply=False)
+    before = document_path(canary).read_bytes()
+
+    answer = apply_plan_key(canary, tmp_path, key=PARENT_KEY)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["guard"] == "plan_keys_unclaimed"
+    assert "milestone/MLS-0030" in answer["errors"][0]["message"]
+    assert document_path(canary).read_bytes() == before
+
+
+def test_a_first_plan_over_a_milestone_with_a_batch_is_refused(tmp_path: Path) -> None:
+    """A Batch created outside a plan already gives the Milestone work to protect."""
+    canary = bare_milestone_canary(tmp_path, code="HASBATCH")
+    seed(canary, {"batch": {"BAT-0007": seed_row("batch", "PLANNED")}})
+    drive(canary, tmp_path, key=PARENT_KEY, body=PARENT_BODY, apply=False)
+    before = document_path(canary).read_bytes()
+
+    answer = apply_plan_key(canary, tmp_path, key=PARENT_KEY)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["guard"] == "plan_keys_unclaimed"
+    assert answer["errors"][0]["message"].endswith("milestone/MLS-0030")
+    assert document_path(canary).read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("collection_name", "key", "row"),
+    [
+        pytest.param(
+            "batch",
+            "BAT-0001",
+            {**seed_row("batch", "PLANNED"), "milestone_ref": OTHER_MILESTONE_URN},
+            id="batch",
+        ),
+        pytest.param("task", "EAWF-0001", seed_row("task", "PLANNED"), id="task"),
+    ],
+)
+def test_a_first_plan_over_a_bare_milestone_still_refuses_a_key_collision(
+    tmp_path: Path, collection_name: str, key: str, row: dict[str, Any]
+) -> None:
+    """Claiming the Milestone exempts no Batch or Task the plan would overwrite."""
+    canary = bare_milestone_canary(tmp_path, code=f"COLLIDE{collection_name.upper()}")
+    seed(canary, {collection_name: {key: row}})
+    drive(canary, tmp_path, key=PARENT_KEY, body=PARENT_BODY, apply=False)
+    before = document_path(canary).read_bytes()
+
+    answer = apply_plan_key(canary, tmp_path, key=PARENT_KEY)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["guard"] == "plan_keys_unclaimed"
+    assert f"{collection_name}/{key}" in answer["errors"][0]["message"]
+    assert "milestone/MLS-0030" not in answer["errors"][0]["message"]
+    assert document_path(canary).read_bytes() == before

@@ -63,7 +63,7 @@ def test_claude_packager_emits_only_handler_backed_hooks(tmp_path: Path) -> None
     """``eawf plugin package claude`` wires only the session and subagent pairs."""
     target = tmp_path / "claude-pkg"
     claude_package_plugin(target)
-    emitted = {p.stem for p in (target / "hooks").iterdir()}
+    emitted = {p.stem for p in (target / "hooks").glob("*.sh")}
     _assert_emitted_are_handler_backed(emitted, _CLAUDE_HANDLER_BACKED)
     assert emitted == {
         "session_start",

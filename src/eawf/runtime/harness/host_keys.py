@@ -204,7 +204,7 @@ HOST_KEYS: Final[tuple[HostKeyRecord, ...]] = (
     ),
     HostKeyRecord(
         document="claude_settings",
-        path="hooks.Stop",
+        path="hooks.SessionEnd",
         source="REL-009",
         effect="honoured",
         evidence=_probe("test_surf_168_claude_session_hooks_fire"),

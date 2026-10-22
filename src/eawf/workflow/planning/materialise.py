@@ -18,6 +18,12 @@ claimed Task or an active Batch out from under its holder. What the
 parent placed and the child drops is cancelled rather than deleted, so
 the history of the dropped work survives the re-plan.
 
+A plan that is not a re-plan may also claim a bare PLANNED Milestone:
+one made by ``eawf milestone create`` that no applied plan placed and no
+Batch belongs to yet. It rewrites that row in place to its contract, as
+a re-plan would, because the operator created the Milestone precisely so
+that a plan could fill it (see :func:`_milestone_claim_refusal`).
+
 An ACTIVE Milestone takes a re-plan only when every change is an append:
 new Batches and Tasks, and Batch refs added after the required ones it
 already has, including a Batch of its own that was created outside a
@@ -173,17 +179,92 @@ def _promotable_draft(document: dict[str, Any], *, key: str) -> Task | None:
     return task
 
 
+def _milestone_claim_refusal(document: dict[str, Any], *, body: PlanBody) -> str | None:
+    """Return why a plan that is not a re-plan may not claim its stored Milestone, if it may not.
+
+    A Milestone made outside a plan holds no contract a plan wrote and no
+    work, so the first plan to name it fills it in place rather than
+    being refused for reusing its key. Anything that suggests the row is
+    already planned or under way keeps it claimed: a row imported from
+    the previous epoch is immutable to this lifecycle, a row past PLANNED
+    has started, and a row with required Batches, a Batch of its own or
+    an applied plan naming it was placed already. A plan that was applied
+    and later superseded still left its Batches behind, so the Batch
+    check covers it too.
+
+    Args:
+        document: The locked document, with its compacted rows laid under
+            it (see :func:`with_compacted_rows`).
+        body: The plan content, whose Milestone the document holds.
+
+    Returns:
+        A clause naming why the row stays claimed, or ``None`` when the
+        plan may claim it.
+    """
+    urn = str(body.milestone_urn)
+    row = document_rows(document, Epoch2Collection.MILESTONE)[body.milestone_urn.entity_key]
+    status = _str_field(row, "status")
+    if _str_field(_row_field(row, "origin"), "kind") == "legacy":
+        return "it was imported from the previous epoch"
+    if status != MilestoneStatus.PLANNED.value:
+        return f"it is {status or 'unreadable'}, not PLANNED"
+    if _row_field(row, "required_batch_refs"):
+        return "it already requires Batches"
+    owned = sorted(
+        key
+        for key, batch in document_rows(document, Epoch2Collection.BATCH).items()
+        if _str_field(batch, "milestone_ref") == urn
+    )
+    if owned:
+        return f"Batch {owned[0]} already belongs to it"
+    applied = sorted(
+        key
+        for key, revision in document_rows(document, PLAN_REVISION_COLLECTION).items()
+        if _str_field(revision, "status") == PlanRevisionStatus.APPLIED.value
+        and _str_field(_row_field(revision, "body"), "milestone_urn") == urn
+    )
+    if applied:
+        return f"applied plan revision {applied[0]} placed it"
+    return None
+
+
+def _claimable(
+    document: dict[str, Any], *, body: PlanBody, parent: PlanBody | None
+) -> frozenset[str]:
+    """Return the locator of the stored Milestone a plan that is not a re-plan may fill.
+
+    Args:
+        document: The locked document, with its compacted rows laid under it.
+        body: The plan content.
+        parent: The applied body *body* re-plans, or ``None``.
+
+    Returns:
+        The Milestone's locator, or nothing when *body* re-plans, the
+        document holds no such Milestone, or the row stays claimed (see
+        :func:`_milestone_claim_refusal`).
+    """
+    key = body.milestone_urn.entity_key
+    if (
+        parent is not None
+        or key not in document_rows(document, Epoch2Collection.MILESTONE)
+        or _milestone_claim_refusal(document, body=body) is not None
+    ):
+        return frozenset()
+    return frozenset({_locator(Epoch2Collection.MILESTONE, key)})
+
+
 def _claimed_keys(
     document: dict[str, Any], *, body: PlanBody, parent: PlanBody | None
 ) -> tuple[str, ...]:
     """Return the locators the document already holds that the plan creates.
 
     A backlog draft the plan promotes is not claimed: the plan places it
-    rather than creating it. Neither is a row a re-plan may rewrite (see
-    :func:`_replannable`) or an ACTIVE Milestone's own row an append
-    leaves in place (see :func:`_kept`); any other row a re-plan names,
-    including one its parent owned that has since moved past PLANNED,
-    stays claimed.
+    rather than creating it. Neither is a bare PLANNED Milestone a plan
+    that is not a re-plan fills (see :func:`_claimable`), a row a re-plan
+    may rewrite (see :func:`_replannable`) or an ACTIVE Milestone's own
+    row an append leaves in place (see :func:`_kept`); any other row a
+    re-plan names, including one its parent owned that has since moved
+    past PLANNED, stays claimed.
 
     Args:
         document: The locked document.
@@ -203,7 +284,11 @@ def _claimed_keys(
             if _promotable_draft(document, key=task.urn.entity_key) is None
         ),
     }
-    owned = _replannable(document, parent=parent) | _kept(document, body=body, parent=parent)
+    owned = (
+        _replannable(document, parent=parent)
+        | _kept(document, body=body, parent=parent)
+        | _claimable(document, body=body, parent=parent)
+    )
     return tuple(
         locator
         for collection, keys in wanted.items()
@@ -575,7 +660,7 @@ def _restamped[RecordT: Epoch2Record](
 
 
 def _planned_milestone(
-    document: dict[str, Any], *, body: PlanBody, at: UtcDatetime, replannable: frozenset[str]
+    document: dict[str, Any], *, body: PlanBody, at: UtcDatetime, rewritable: frozenset[str]
 ) -> Milestone:
     """Return the PLANNED Milestone *body* materialises.
 
@@ -583,18 +668,20 @@ def _planned_milestone(
         document: The locked document.
         body: The plan content.
         at: When the apply happened.
-        replannable: The rows a re-plan may rewrite (see :func:`_replannable`).
+        rewritable: The rows the plan may rewrite in place: those a
+            re-plan may rewrite (see :func:`_replannable`) or the bare
+            Milestone a first plan fills (see :func:`_claimable`).
 
     Returns:
         The Milestone at revision one, or the stored one rewritten to the
-        child's contract when the apply is a re-plan.
+        plan's contract when the apply is a re-plan or fills a bare one.
 
     Raises:
         ValidationError: The Milestone does not satisfy its own model.
     """
     spec = body.milestone.model_dump(mode="json")
     key = body.milestone_urn.entity_key
-    if _locator(Epoch2Collection.MILESTONE, key) in replannable:
+    if _locator(Epoch2Collection.MILESTONE, key) in rewritable:
         prior = Milestone.model_validate(document_rows(document, Epoch2Collection.MILESTONE)[key])
         return _restamped(prior, updates=spec, at=at)
     return Milestone.model_validate(
@@ -757,6 +844,10 @@ def materialise_plan(
     mutating in place, because the leak scrub diffs the two payloads and
     an in-place edit would leave it comparing one payload with itself.
 
+    A plan that is not a re-plan rewrites a bare PLANNED Milestone it
+    claims (see :func:`_claimable`) at its next revision, keeping its
+    identity, and creates everything else it names.
+
     A re-plan rewrites the PLANNED Milestone and every still-PLANNED Batch
     and Task the child carries at their next revision, keeping each row's
     identity, and cancels each still-PLANNED Batch and Task the parent
@@ -791,7 +882,12 @@ def materialise_plan(
     replannable = _replannable(placed, parent=parent)
     kept = _kept(placed, body=body, parent=parent)
     new_document = copy.deepcopy(document)
-    milestone = _planned_milestone(placed, body=body, at=at, replannable=replannable)
+    milestone = _planned_milestone(
+        placed,
+        body=body,
+        at=at,
+        rewritable=replannable | _claimable(placed, body=body, parent=parent),
+    )
     new_document.setdefault(Epoch2Collection.MILESTONE.value, {})[milestone.key] = (
         milestone.model_dump(mode="json")
     )

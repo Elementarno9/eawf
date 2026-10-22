@@ -30,10 +30,9 @@ def test_router_session_start_maps_to_session_start() -> None:
     assert event.payloads["claude_code"]["hook_event_name"] == "SessionStart"
 
 
-def test_router_session_end_via_stop_maps_to_session_end() -> None:
-    event = route_claude_payload({"hook_event_name": "Stop", "session_id": "abc"})
-    assert isinstance(event, HookEvent)
-    assert event.event_type == HookEventType.SESSION_END
+def test_router_stop_does_not_end_the_session() -> None:
+    # Stop fires after every turn, so it must not read as the session's end.
+    assert route_claude_payload({"hook_event_name": "Stop", "session_id": "abc"}) is None
 
 
 def test_router_explicit_session_end_maps_to_session_end() -> None:

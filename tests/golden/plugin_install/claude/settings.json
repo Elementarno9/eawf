@@ -222,22 +222,22 @@
         "matcher": ""
       }
     ],
-    "SessionStart": [
+    "SessionEnd": [
       {
         "hooks": [
           {
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session_start.sh",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session_end.sh",
             "type": "command"
           }
         ],
         "matcher": ""
       }
     ],
-    "Stop": [
+    "SessionStart": [
       {
         "hooks": [
           {
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session_end.sh",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session_start.sh",
             "type": "command"
           }
         ],
