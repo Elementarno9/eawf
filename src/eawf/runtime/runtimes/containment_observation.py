@@ -70,9 +70,14 @@ _BWRAP_ARITY: Final[Mapping[str, int]] = {
     "--dev": 1,
     "--proc": 1,
     "--tmpfs": 1,
+    "--remount-ro": 1,
     "--unshare-pid": 0,
     "--die-with-parent": 0,
 }
+
+#: The variables a jail sets in the child itself: bubblewrap sets ``PWD`` to the
+#: directory it starts the child in, so seeing it is not seeing the daemon's value.
+_JAIL_INTRINSIC_ENV: Final[frozenset[str]] = frozenset({"PWD"})
 
 #: The program one attempt runs inside the jail. It prints ``denied`` when the
 #: operating system refused the attempt or it obtained nothing, ``escaped <n>``
@@ -98,6 +103,23 @@ def read_size(path):
         return sum(len(name.encode()) for name in os.listdir(path))
     with open(path, "rb") as handle:
         return len(handle.read())
+
+# A bubblewrap mask over the tree's .ea is empty but for the directories its
+# bind of the workspace beneath it had to make, so those, down to the
+# workspace this attempt runs in, are stepped through rather than counted.
+def storage_size(path):
+    here = os.getcwd()
+    total = 0
+    for name in os.listdir(path):
+        entry = os.path.join(path, name)
+        real = os.path.realpath(entry)
+        if real == here:
+            continue
+        if os.path.isdir(entry) and here.startswith(real + os.sep):
+            total += storage_size(entry)
+        else:
+            total += len(name.encode())
+    return total
 
 def credentials():
     if not args:
@@ -131,7 +153,11 @@ def obtained():
     if attempt in ("canonical_git", "write_ahead_log", "outside_writable_roots"):
         return create(args[0])
     if attempt == "daemon_storage":
-        return read_size(args[0]) or None
+        # The tree's .ea exists outside the jail, so not finding it means it is hidden.
+        try:
+            return storage_size(args[0]) or None
+        except FileNotFoundError:
+            return None
     if attempt == "host_process_metadata":
         return process_metadata()
     if attempt == "credential_value":
@@ -198,7 +224,14 @@ def _ambient_names(admitted: frozenset[str]) -> tuple[str, ...]:
     The operating system and the interpreter set a few variables in every
     process they start (on macOS the text encoding and the coerced locale),
     so seeing one is not seeing the daemon's environment; they are read
-    off a child started with an empty environment and left out.
+    off a child started with an empty environment and left out, with the
+    ones the jail sets itself (:data:`_JAIL_INTRINSIC_ENV`).
+
+    Args:
+        admitted: The variable names the launcher's scrub admits.
+
+    Returns:
+        The sorted names the ambient attempt looks for in the jail.
 
     Raises:
         OSError: The interpreter could not be started.
@@ -213,7 +246,7 @@ def _ambient_names(admitted: frozenset[str]) -> tuple[str, ...]:
         check=False,
         **no_window_kwargs(),
     )
-    intrinsic = set(started.stdout.split())
+    intrinsic = set(started.stdout.split()) | _JAIL_INTRINSIC_ENV
     return tuple(sorted({*os.environ, PROBE_SENTINEL_ENV} - admitted - intrinsic))
 
 

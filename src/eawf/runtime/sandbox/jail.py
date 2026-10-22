@@ -585,9 +585,9 @@ def _build_linux_argv(
     # so a worktree leased under the tree's .ea is bound back on top of the
     # mask. An absent directory is skipped: its mount point cannot be made
     # inside the read-only root.
-    for storage in storage_dirs:
-        if storage.is_dir():
-            argv += ["--tmpfs", os.fspath(storage.resolve(strict=False))]
+    masks = [os.fspath(path.resolve(strict=False)) for path in storage_dirs if path.is_dir()]
+    for mask in masks:
+        argv += ["--tmpfs", mask]
     argv += [
         # ...and a single writable bind of the worktree cwd, AFTER the
         # tmpfs so a cwd under the temp root survives it.
@@ -619,13 +619,20 @@ def _build_linux_argv(
     # re-exposes the own-cred file inside that dir, so no separate ro-bind is
     # needed.
     if private_home is not None:
-        return argv + _native_run_binds(
-            cwd_abs, runtime=runtime, home=home, private_home=private_home
-        )
-    state_dir = _own_state_dir(runtime, home=home)
-    if state_dir.exists():
-        argv += ["--bind", os.fspath(state_dir), os.fspath(state_dir)]
+        argv += _native_run_binds(cwd_abs, runtime=runtime, home=home, private_home=private_home)
+    else:
+        state_dir = _own_state_dir(runtime, home=home)
+        if state_dir.exists():
+            argv += ["--bind", os.fspath(state_dir), os.fspath(state_dir)]
 
+    # bwrap mounts a tmpfs writable, so a storage mask would let the child
+    # create files in the daemon's storage and, through the mount-point
+    # directories a bind beneath it leaves, beside its own workspace. The
+    # remount is last because bwrap applies its options in order and every
+    # bind must have made its mount point first; it does not recurse, so
+    # the workspace bound beneath a mask stays writable.
+    for mask in masks:
+        argv += ["--remount-ro", mask]
     return argv
 
 
