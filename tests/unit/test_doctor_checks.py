@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from pydantic import ValidationError
 
 from eawf.observability.doctor import checks
 from eawf.surfaces.cli.errors import UserError
@@ -289,20 +288,20 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         "authority_epoch",
         "gitignore_block",
         "cli_daemon_version",
-        "parallel_cap_enforcement",
         "launchd_agent",
         "stray_daemons",
         "runtime_dir_size",
+        "local_size",
         "render_output_roundtrip",
         "agents_md_byte_cap",
         "agents_override_byte_cap",
     }
 
 
-def test_run_all_reports_version_skew_and_parallel_cap_on_a_native_tree(
+def test_run_all_reports_version_skew_on_a_native_tree(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Doctor reports a daemon version skew and the parallel cap on a born tree."""
+    """Doctor reports a daemon version skew, and no wave cap, on a born tree."""
     from eawf.platform.install.instrument_probe import ProbeResult
     from tests._epoch2_helpers import lay_epoch2_tree
 
@@ -324,8 +323,7 @@ def test_run_all_reports_version_skew_and_parallel_cap_on_a_native_tree(
 
     assert by_name["cli_daemon_version"].status == "warn"
     assert "version skew" in (by_name["cli_daemon_version"].detail or "")
-    assert by_name["parallel_cap_enforcement"].status == "ok"
-    assert "planning.max_parallel_waves=" in (by_name["parallel_cap_enforcement"].detail or "")
+    assert "parallel_cap_enforcement" not in by_name
 
 
 def test_check_cli_daemon_version_absent_match_skew_and_error() -> None:
@@ -343,52 +341,6 @@ def test_check_cli_daemon_version_absent_match_skew_and_error() -> None:
     failed = checks.check_cli_daemon_version(probe_version=broken_probe)
     assert failed.status == "warn"
     assert "probe unavailable" in (failed.detail or "")
-
-
-def test_check_parallel_cap_enforcement_reports_cap_and_resolution_error(
-    tmp_path: Path,
-) -> None:
-    result = checks.check_parallel_cap_enforcement(
-        workspace=tmp_path,
-        resolver=lambda _anchor: 3,
-    )
-    assert result.status == "ok"
-    assert "max_parallel_waves=3" in (result.detail or "")
-
-    def broken_resolver(_anchor: Path | None) -> int:
-        raise ValueError("cap invalid")
-
-    failed = checks.check_parallel_cap_enforcement(
-        workspace=tmp_path,
-        resolver=broken_resolver,
-    )
-    assert failed.status == "warn"
-    assert "cap invalid" in (failed.detail or "")
-
-
-def test_resolve_max_parallel_waves_without_root_is_the_built_in_default() -> None:
-    assert checks.resolve_max_parallel_waves(None) == 4
-
-
-@pytest.mark.parametrize("cap", [1, 16])
-def test_resolve_max_parallel_waves_accepts_the_range_bounds(tmp_path: Path, cap: int) -> None:
-    (tmp_path / ".ea").mkdir()
-    (tmp_path / ".ea" / "config.yaml").write_text(
-        f"planning:\n  max_parallel_waves: {cap}\n", encoding="utf-8"
-    )
-    assert checks.resolve_max_parallel_waves(tmp_path) == cap
-
-
-@pytest.mark.parametrize("raw", ["0", "17", "'four'"])
-def test_resolve_max_parallel_waves_rejects_out_of_range_or_mistyped(
-    tmp_path: Path, raw: str
-) -> None:
-    (tmp_path / ".ea").mkdir()
-    (tmp_path / ".ea" / "config.yaml").write_text(
-        f"planning:\n  max_parallel_waves: {raw}\n", encoding="utf-8"
-    )
-    with pytest.raises(ValidationError):
-        checks.resolve_max_parallel_waves(tmp_path)
 
 
 # ---- P30-I16-W22: anchor resolution (pwd-upward) ---------------------------

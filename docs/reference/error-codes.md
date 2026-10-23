@@ -64,22 +64,6 @@ The daemon UDS socket refused the connection or is stale. Bucket: `DAEMON_UNREAC
 
 The requested scope id collides with an existing scope. Bucket: `USER_ERROR (1)`. Pick a unique id, or run the retired `state resolve` verb to inspect the existing scope.
 
-### WAVE_DEPS_NOT_SATISFIED
-
-A wave was claimed before its declared dependency waves were closed. Bucket: `USER_ERROR (1)`. Close the blocking wave(s) first, or pass `--out-of-order` to opt out of the gate.
-
-### PHASE_NOT_ACTIVE
-
-The verb requires an ACTIVE phase but the target phase is not active. Bucket: `USER_ERROR (1)`. Activate it with `eawf milestone activate` (or reopen a CLOSED phase first).
-
-### ITER_NOT_ACTIVE
-
-The verb requires an ACTIVE iter but the target iter is not active. Bucket: `USER_ERROR (1)`. Open the iter, or target the currently-active one.
-
-### WAVE_OUT_OF_ORDER_REJECTED
-
-A lower-numbered sibling wave is still PENDING with its deps satisfied, so the claim is rejected by the monotonic-ordering gate. Bucket: `USER_ERROR (1)`. Claim the lower-numbered wave first, or pass `--out-of-order`.
-
 ## Worktree / git
 
 ### WORKTREE_DIRTY
@@ -110,11 +94,11 @@ The agent runtime returned a server-side error. Bucket: `INTERNAL_ERROR (5)`. Re
 
 ### DISPATCH_BUDGET_EXCEEDED
 
-A dispatch exceeded its configured token or wall-clock budget. Bucket: `INTERNAL_ERROR (5)`. Raise the budget, narrow the wave scope, or inspect the partial result before re-dispatching.
+A dispatch exceeded its configured token or wall-clock budget. Bucket: `INTERNAL_ERROR (5)`. Raise the budget, narrow the Task scope, or inspect the partial result before re-dispatching.
 
 ### SESSION_LOG_MISSING
 
-The agent session log expected for a dispatch could not be found. Bucket: `INTERNAL_ERROR (5)`. Confirm the runtime wrote its log, then re-dispatch the wave.
+The agent session log expected for a dispatch could not be found. Bucket: `INTERNAL_ERROR (5)`. Confirm the runtime wrote its log, then re-dispatch the Task.
 
 ## Plugin / sync
 

@@ -1,13 +1,13 @@
 <!-- Generated from the eawf profile render block `entity-title-naming`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=entity-title-naming version=1.1 hash=ebc04b9347d05744 -->
+<!-- BEGIN EAWF:managed id=entity-title-naming version=1.2 hash=31c7563218d0b586 -->
 # `entity-title-naming`
 
 Write every entity title as an imperative noun-phrase of at most 72 characters with no trailing period, and put the long-form purpose in the description.
 
 ### Rationale
 
-**Entity-title naming.** Every lifecycle and research entity (``Phase`` / ``Iter`` / ``Wave`` / ``Decision`` / ``Hypothesis`` / ``BacklogItem`` / ``Incident``) carries a bounded ``title`` and an optional long-form ``description``. The bound exists so titles stay scannable in dense renders — the roadmap tree, plan-view table, and dispatch header all lay titles out in a single fixed-width row, and an unbounded sentence either truncates with an ellipsis (losing the tail) or wraps and breaks the column. A trailing period reads as the end of a sentence, but a title is a label, not prose; the period is visual noise that the description, which IS prose, should carry instead.
+**Entity-title naming.** Every lifecycle and research entity (``Track`` / ``Milestone`` / ``Batch`` / ``Task`` / ``Decision`` / ``Hypothesis`` / ``Incident``) carries a bounded ``title`` and an optional long-form ``description``. The bound exists so titles stay scannable in dense renders — the roadmap tree, plan-view table, and dispatch header all lay titles out in a single fixed-width row, and an unbounded sentence either truncates with an ellipsis (losing the tail) or wraps and breaks the column. A trailing period reads as the end of a sentence, but a title is a label, not prose; the period is visual noise that the description, which IS prose, should carry instead.
 
 
 ### Mechanism

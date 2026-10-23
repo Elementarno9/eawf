@@ -2,7 +2,7 @@
 
 *Index of v0.1 invariants that downstream design / implementation may not relitigate without an ADR.*
 
-These decisions are **fixed** for v0.1. Changing one is a `[CORE]` schema bump on the long-running phase branch and requires a recorded decision (`eawf record append`).
+These decisions are **fixed** for v0.1. Changing one is a `[CORE]` schema bump on the long-running Milestone branch and requires a recorded decision (`/decide`).
 
 ## Distribution and runtime
 
@@ -20,7 +20,7 @@ These decisions are **fixed** for v0.1. Changing one is a `[CORE]` schema bump o
 
 - `schema_version` is the string `"1.0"` for current config / state / store schemas.
 - Full strict Pydantic schemas (with `extra="forbid"`) and full command I/O matrix are required before implementation.
-- Lifecycle IDs use two-digit padding by default (`P01`, `P01-I01`, `P01-I01-W01`).
+- Lifecycle keys are zero-padded ordinals under a fixed prefix (`MLS-0001`, `BAT-0001`, `<PROJECT>-0001`); the native generation document carries `schema_version` `"2"`.
 
 ## `.ea/` and `.claude/`
 

@@ -15,9 +15,8 @@ stack:
    criterion 2 of P25-W05).
 3. :func:`missing_test_paths` — given a list of :data:`TestRef` strings
    and a project root, returns the subset that do not exist on disk.
-   Both the loader-side validator (:mod:`eawf.kernel.spec.validators`) and
-   the pre-commit hook (:mod:`tools.pre_commit_spec_paths`) consume
-   this helper.
+   The loader-side validator (:mod:`eawf.kernel.spec.validators`)
+   consumes this helper.
 
 The helpers are pure (no I/O at module import; ``missing_test_paths``
 does its own ``Path.is_file`` lookup at call time) and self-contained

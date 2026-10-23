@@ -37,7 +37,7 @@ _REPO_PROFILE_IDS: tuple[str, ...] = ("core", "python", "research", "agent_drive
 # irreversible "no-tooling-backstop" rules: a lapse cannot be caught by
 # any lint or gate, so the agent must internalise them. Rules that DO
 # have a tooling backstop (e.g. ``planned-scope-revisability`` via the
-# PENDING-only guard, ``agent-report-contract`` via the typed report
+# plan apply's append-only guard, ``agent-report-contract`` via the typed report
 # boundary) are ``reference``, not tier-0.
 #
 # ``project-orientation`` is the one member that is not a rule. It states what
@@ -50,7 +50,7 @@ _EXPECTED_TIER0_BLOCK_IDS = {
     "state-vs-specs",
     "worktree-discipline",
     "prep-plan-mode",
-    "iter-phase-close-timing",
+    "milestone-close-timing",
 }
 
 # Rules with an automated backstop that were reconciled off tier-0.
@@ -64,10 +64,10 @@ _TOOLING_BACKED_REFERENCE_BLOCK_IDS = {
 # profile silently dropping out of the composed set fails loudly instead of
 # shrinking the sweep back to the core/python/research subset.
 _LATE_PROFILE_REFERENCE_BLOCK_IDS = {
-    "agent-driven-phase-equals-release",
-    "agent-driven-large-phase-pr",
+    "agent-driven-milestone-equals-release",
+    "agent-driven-large-milestone-pr",
     "agent-driven-cadence-adr-pointer",
-    "lean-wave-verification",
+    "lean-task-verification",
     "code-craft-dry",
     "code-craft-fail-fast",
     "code-craft-single-responsibility",

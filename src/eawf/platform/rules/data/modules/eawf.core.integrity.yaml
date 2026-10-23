@@ -1,6 +1,6 @@
 schema_version: 1
 module_id: eawf.core.integrity
-version: 1
+version: 3
 kind: core
 topic: integrity
 title: Honest and safe agent work
@@ -8,13 +8,13 @@ when_to_use: stating a result, deleting content, staging a commit, dispatching a
 rules:
   - rule_id: eawf.core.integrity.deletion
     obligation_id: integrity.deletion
-    revision: 3
+    revision: 4
     title: Delete content only when it is recoverable and justified
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Delete code, config or docs only when committed on this branch, motivated by a verdict in state.json, and listed path by path with reasons in the commit or PR body; when in doubt, propose the list and wait. Never delete schemas, golden fixtures, LICENSE, CHANGELOG.md or uncommitted files.
+      Never delete schemas, golden fixtures, LICENSE, CHANGELOG.md or uncommitted files. Delete code, config or docs only when committed on this branch, motivated by a verdict in state.json, and listed path by path with reasons in the commit or PR body. When in doubt, propose the list and wait.
     rationale: >-
       Committed content stays recoverable, a recorded verdict makes the reason auditable, and a listed removal gives the reviewer a chance to object before merge.
     verification:
@@ -74,13 +74,13 @@ rules:
     procedure_ref: docs/rules/orchestrator-decision-surface.md
   - rule_id: eawf.core.integrity.gate-fire-proof
     obligation_id: integrity.gate-fire-proof
-    revision: 1
+    revision: 2
     title: Prove each new gate on a real defect and retire idle gates
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Ship a new lint, doctor check or CI gate with a test that reds on a real defect from the repository, and at phase close retire each gate added in the phase that never fired.
+      Ship a new lint, doctor check or CI gate with a test that reds on a real defect from the repository, and at Milestone acceptance retire each gate added in the Milestone that never fired.
     rationale: >-
       A gate that never fires reads as protection while proving nothing and costs time on every run.
     verification:

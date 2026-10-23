@@ -16,7 +16,7 @@ The surface splits into three parts:
 
 A launch with no interactive terminal (`--plain`, `--no-input` or a stdout that is not a TTY) draws no app: it writes the console's own frame in plain mode [4], the offline snapshot for an attached tree or the entry state for one it could not attach to. Plain mode is the same frame in the ASCII glyph allocation, one row per line, with no escape sequences. The `ui.glyphs` setting picks the allocation the interactive console draws in: `unicode`, `ascii`, or `auto`, which draws ASCII when stdout is not UTF-8 [1].
 
-`eawf workspace registry-status` renders the workspace registry dashboard as plain text through `eawf.surfaces.tui.chassis.offline.offline_render` [5]. It reads the registry, marks stale repos and folds every repo's active-phase waves and effort units into one totals line, without opening a Textual app.
+`eawf workspace registry-status` renders the workspace registry dashboard as plain text through `eawf.surfaces.tui.chassis.offline.offline_render` [5]. It reads the registry, marks stale repos and folds every repo's active work and effort units into one totals line, without opening a Textual app.
 
 ## The console
 

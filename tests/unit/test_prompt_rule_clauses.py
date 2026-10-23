@@ -191,7 +191,7 @@ def test_new_clauses_land_on_all_four_rendered_surfaces() -> None:
 
     # The executor's readiness and evidence obligations are embedded in the
     # Claude agent and the Codex agent alike.
-    readiness = "Start only a wave whose spec is ready to implement."
+    readiness = "Start only a Task whose spec is ready to implement."
     claude_agent = (golden / "plugin_install" / "claude" / "agents" / "executor.md").read_text(
         encoding="utf-8"
     )

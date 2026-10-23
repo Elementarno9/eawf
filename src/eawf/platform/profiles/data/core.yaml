@@ -21,18 +21,18 @@ render_blocks:
   - id: project-orientation
     target: AGENTS.md
     tier: tier0
-    version: "1.0"
+    version: "1.1"
     body_template: |
       ## What this repo runs on
 
-      This repo is managed by eawf, an agent-driven workflow. Work nests as **phase** (one delivery, one pull request, one release) > **iter** (a review-and-close cycle) > **wave** (one agent's unit of work, one commit), with ids ``P<NN>`` / ``I<NN>`` / ``W<NN>``.
+      This repo is managed by eawf, an agent-driven workflow. Work nests as **Track** (a standing line of work) > **Milestone** (one delivery, one pull request, one release) > **Delivery Batch** (Tasks that land and are verified together) > **Task** (one agent's unit of work), and each Task executes in one **Run** (one lease, one workspace). A plan changes only through a **PlanRevision** that is submitted, approved and applied.
 
       Reality lives in ``.ea/state.json``, not here: this file carries the rules, ``eawf status`` carries the current position.
 
   - id: non-negotiable-rules
     target: AGENTS.md
     tier: tier0
-    version: "1.13"
+    version: "1.14"
     body_template: |
       ## Non-negotiable rules (core)
 
@@ -58,13 +58,13 @@ render_blocks:
       18. **Artifact chassis and citations.** See ``artifact-chassis``.
       19. **Typed agent reports.** See ``agent-report-contract``.
       20. **Planned-scope revisability.** See ``planned-scope-revisability``.
-      21. **Roadmap procedure.** See ``roadmap-procedure``.
+      21. **Plan revision procedure.** See ``roadmap-procedure``.
       22. **Spike workflow.** See ``spike-workflow``.
       23. **Engineering principles (DRY/KISS/YAGNI).** See ``engineering-principles``.
       24. **Other engineering practice.** See ``engineering-practice``.
       25. **Source code stays clean of design-decision references.** No inline ``# per Q<N>``, ``# per audit XB##``, ``# per Codex``, or roundtable / operator-decision-id comments in committed source files. Decision provenance lives in the commit body and the typed Decision URN in ``state.json``; source comments are reserved for WHY-the-code-does-X explanations that aid future readers irrespective of provenance. Enforced by the ``eawf012`` lint.
-      26. **/prep always renders the DAG in plan mode.** See ``prep-plan-mode``.
-      27. **Iter and phase close timing.** See ``iter-phase-close-timing``.
+      26. **Plan approval always renders the plan in plan mode.** See ``prep-plan-mode``.
+      27. **Milestone acceptance timing.** See ``milestone-close-timing``.
       28. **Rendered markdown is not manually line-wrapped.** See ``markdown-no-manual-wrap``.
       29. **Release process.** See ``release-process``.
       30. **Ship process.** See ``ship-process``.
@@ -91,15 +91,15 @@ render_blocks:
 
   - id: symbol-conventions
     target: AGENTS.md
-    version: "1.1"
+    version: "1.2"
     body_template: |
       ### Symbol conventions
 
-      Project codes / phase IDs follow ``^[A-Z][A-Z0-9_-]{1,15}$``. Hypothesis IDs: ``H<NN>-<NN>`` (e.g., ``H03-12``). Phase IDs in commits: ``P<NN+>`` (zero-padded, two-or-more digits, e.g., ``P00``, ``P03``, ``P100``). Iter IDs: ``I<NN+>`` and wave IDs: ``W<NN+>`` likewise. The ``\d{2,}`` width matches ``tools/commit_prefix_lint.py`` so 3-digit ids land cleanly once the queue grows past ``P99`` / ``I99`` / ``W99``.
+      Project codes follow ``^[A-Z][A-Z0-9_-]{1,15}$``. Task keys: ``<PROJECT>-<NNNN>`` (e.g., ``EAWF-0042``). Milestone, Batch and PlanRevision keys: ``MLS-<NNNN>``, ``BAT-<NNNN>`` and ``PRV-<NNNN>``; Run keys: ``RUN-`` and eight digits; Track keys: ``TRK-<SYMBOL>``. Hypothesis IDs: ``H<NN>-<NN>`` (e.g., ``H03-12``). The zero-padded width is part of each key's grammar, so ``RUN-0001`` is refused.
 
   - id: naming-conventions
     target: AGENTS.md
-    version: "1.5"
+    version: "1.6"
     placement: reference
     summary: "Every cross-cutting concept has exactly one canonical name; rename an outlier to match the dominant form before merging instead of adding an adapter shim."
     body_template: |
@@ -107,9 +107,9 @@ render_blocks:
 
       To prevent drift across state models, envelopes, parameters, and log keys, every cross-cutting concept has exactly one canonical name. Outliers MUST be renamed to match the dominant form before merging, not papered over with adapter shims.
 
-      **Agent role identifier** — ``agent_role`` (never ``role`` alone on a Wave / SubagentSpec field). Applies to :class:`~eawf.kernel.state.models.Wave.agent_role`, ``RoleSpec.role`` (the inner enum keeps the bare name because ``RoleSpec`` already namespaces it), CLI flags (``--agent-role``), and dispatch envelopes. The bare ``role`` remains valid inside ``RoleSpec`` because the surrounding type disambiguates.
+      **Agent role identifier** — ``agent_role`` (never ``role`` alone on a run-contract / SubagentSpec field). Applies to the compiled run contract and its capsule (:mod:`eawf.kernel.runtime.compiled`, :mod:`eawf.kernel.runtime.capsule`), ``RoleSpec.role`` (the inner enum keeps the bare name because ``RoleSpec`` already namespaces it), and dispatch envelopes. The bare ``role`` remains valid inside ``RoleSpec`` because the surrounding type disambiguates.
 
-      **Effort bucket parameter** — ``effort_bucket`` (never ``size`` or ``effort_size``). Applies to :class:`~eawf.kernel.state.models.Wave.effort_bucket`, CLI flags (``--effort-bucket``), planner output, and EU-projection tables. Allowed values are the closed StrEnum ``XS|S|M|L|XL``.
+      **Effort bucket parameter** — ``effort_bucket`` (never ``size`` or ``effort_size``). Applies to planner output, telemetry rollups, and EU-projection tables. Allowed values are the closed StrEnum ``XS|S|M|L|XL``.
 
       **Evidence kind identifier** — ``evidence_kind`` (never ``kind`` alone on an EvidenceRecord field, and never ``evidence_type``). Applies to :class:`~eawf.kernel.state.models.EvidenceRecord.evidence_kind`, JSON keys, CLI flags (``--evidence-kind``), and gate-pack lookups. Bare ``kind`` remains valid on store envelopes where ``StoreKind`` already disambiguates.
 
@@ -117,23 +117,23 @@ render_blocks:
 
       **Output directory parameter** — ``output_dir`` (never ``out_dir`` or ``target_dir``). Applies to schema dumpers, plugin installers, and any helper that takes a write destination directory.
 
-      **Wave / iter / phase keys in logs and dict payloads** — ``wave=<id>``, ``iter=<id>``, ``phase=<id>``. Bare keys only, never ``wave_id=<id>`` in log lines (the trailing ``_id`` is reserved for typed-model field names where the type system benefits from explicit suffix). Inside structured envelopes (``EventPayload``, ``state.json``) keep the ``_id`` suffix so the schema is unambiguous.
+      **Task / Batch / Milestone keys in logs and dict payloads** — ``task=<key>``, ``batch=<key>``, ``milestone=<key>``. Bare keys only, never ``task_id=<key>`` in log lines (the trailing ``_id`` is reserved for typed-model field names where the type system benefits from explicit suffix). Inside structured envelopes (``EventPayload``, ``state.json``) keep the ``_id`` suffix so the schema is unambiguous.
 
-      **Log format inside library modules** — ``<funcname> key=value key=value`` form, space-separated, no leading ``:`` after the function name. f-strings only (project-wide rule 9). Example: ``logger.info(f"create_worktree wave={wave_id} branch={name!r}")``.
+      **Log format inside library modules** — ``<funcname> key=value key=value`` form, space-separated, no leading ``:`` after the function name. f-strings only (project-wide rule 9). Example: ``logger.info(f"close_landed_batch closed batch={batch.key} head={head}")``.
 
-      **Error message phrasing** — lowercase leading word, no trailing period, no class-name prefix. Use ``!r`` when interpolating user input so quoting is visible. Example: ``raise ValueError(f"unknown wave: {wave_id!r}")``.
+      **Error message phrasing** — lowercase leading word, no trailing period, no class-name prefix. Use ``!r`` when interpolating user input so quoting is visible. Example: ``raise ValueError(f"unknown task: {task_key!r}")``.
 
       **Docstring ``Raises:`` block** — Google-style ``Raises:`` block with one ``ExceptionType: explanation`` line per case. Do NOT use inline prose like ``Raises ValueError if ...`` in the summary; reserve the ``Raises:`` block for that.
 
-      **Mutator-path precision in wave success criteria** — when a wave's success criterion text references a "save through" or "persist via" path, name the **canonical writer** (the daemon, per rule 4) rather than the generic phrase ``state-CLI``. The authority map ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md`` names the canonical writer per file. Conflating the operator-facing surface (the eawf entity verbs) with the daemon-internal subsystem in criterion prose makes audits flag false positives.
+      **Mutator-path precision in Task success criteria** — when a Task's success criterion text references a "save through" or "persist via" path, name the **canonical writer** (the daemon, per rule 4) rather than the generic phrase ``state-CLI``. The authority map ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md`` names the canonical writer per file. Conflating the operator-facing surface (the eawf entity verbs) with the daemon-internal subsystem in criterion prose makes audits flag false positives.
 
   - id: entity-title-naming
     target: AGENTS.md
-    version: "1.1"
+    version: "1.2"
     placement: reference
     summary: "Write every entity title as an imperative noun-phrase of at most 72 characters with no trailing period, and put the long-form purpose in the description."
     rationale: |
-      **Entity-title naming.** Every lifecycle and research entity (``Phase`` / ``Iter`` / ``Wave`` / ``Decision`` / ``Hypothesis`` / ``BacklogItem`` / ``Incident``) carries a bounded ``title`` and an optional long-form ``description``. The bound exists so titles stay scannable in dense renders — the roadmap tree, plan-view table, and dispatch header all lay titles out in a single fixed-width row, and an unbounded sentence either truncates with an ellipsis (losing the tail) or wraps and breaks the column. A trailing period reads as the end of a sentence, but a title is a label, not prose; the period is visual noise that the description, which IS prose, should carry instead.
+      **Entity-title naming.** Every lifecycle and research entity (``Track`` / ``Milestone`` / ``Batch`` / ``Task`` / ``Decision`` / ``Hypothesis`` / ``Incident``) carries a bounded ``title`` and an optional long-form ``description``. The bound exists so titles stay scannable in dense renders — the roadmap tree, plan-view table, and dispatch header all lay titles out in a single fixed-width row, and an unbounded sentence either truncates with an ellipsis (losing the tail) or wraps and breaks the column. A trailing period reads as the end of a sentence, but a title is a label, not prose; the period is visual noise that the description, which IS prose, should carry instead.
     mechanism: |
       Write ``title`` as an imperative noun-phrase of at most 72 characters with no trailing period — e.g. ``Add bounded title to entities`` or ``Enforce sandbox deny-list at dispatch``, never ``Adds a bounded title to every entity.`` (over-cap once the clause grows, and the period is sentence noise). Put the why / the long-form purpose in ``description`` (bounded at 500 characters); the renderers surface it as a detail block under the bounded title, so the two fields split the label from the explanation rather than competing for one line.
     verification: |
@@ -166,7 +166,7 @@ render_blocks:
 
   - id: verify-before-claim
     target: AGENTS.md
-    version: "1.3"
+    version: "1.4"
     body_template: |
       ### Verify before claiming
 
@@ -180,34 +180,34 @@ render_blocks:
 
       Design-intent docs (command matrix, schema inventory, ADRs) are the *design intent*; the source tree is the *implementation* — when they drift, quote the implementation. Treat doc/memory citations as a hypothesis to verify, not as ground truth.
 
-      Wave commit SHA: ``Wave.commit`` is an optional ``ShaStr`` field on the state model — set by ``eawf task complete`` when the operator pins a SHA at close time. Quote the SHA via the retired ``wave show`` verb, which prefers the pinned ``Wave.commit`` and falls back to deriving via ``git log --grep '[P##-W##]'`` so cherry-picked or unpinned waves still resolve.
+      Task commit SHA: a Task's work is the commit carrying its ``Task: <KEY>`` trailer, found with ``git log --grep 'Task: <KEY>'`` so a cherry-picked or squashed commit still resolves, and a landed Batch pins the branch head its Tasks completed on. Quote those, not a remembered SHA.
 
   - id: worktree-discipline
     target: AGENTS.md
     tier: tier0
-    version: "1.2"
+    version: "1.3"
     body_template: |
       ### Worktree discipline
 
-      Worktree subagents MUST branch from the current feature branch HEAD, not ``main``. Their commits are **cherry-picked** into the parent feature branch — never ``git merge``.
+      Task worktrees MUST branch from the current Milestone branch HEAD, not ``main``. Their commits are **cherry-picked** into the Milestone branch — never ``git merge``.
 
       Cherry-pick procedure: ``git -C <main-worktree> cherry-pick <worktree-sha>`` per commit, in order. Resolve conflicts in the parent worktree. Worktree teardown only after cherry-pick lands.
 
-      Claim order (P19-W02): ``eawf task claim`` enforces deps + W## monotonic ordering. Each claim rejects when (a) any wave in ``.deps`` is not CLOSED, or (b) a lower-numbered sibling wave under the same iter is still PENDING with its own deps already satisfied. Parallel-worktree dispatch where multiple siblings of the same dep frontier are claimed at once MUST pass ``--out-of-order`` on each claim to opt out of the gate.
+      Concurrency: which Tasks run side by side is derived from the Batch's Task dependency graph and write claims, never typed at dispatch. A Task is dispatched only once each Task it depends on carries the proof it requires, and two Tasks whose write claims overlap never run at once. One Task, one Run, one lease, one workspace.
 
   - id: branch-currency
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
     body_template: |
       ### Branch currency
 
-      Before opening or resuming a phase, iter, or wave, verify the current branch is based on the intended source branch (normally the repo default branch or the configured phase base). Fetch first, inspect divergence, and rebase or fast-forward the long-running feature branch when it is stale.
+      Before opening or resuming a Milestone, Batch, or Task, verify the current branch is based on the intended source branch (normally the repo default branch or the configured Milestone base). Fetch first, inspect divergence, and rebase or fast-forward the long-running feature branch when it is stale.
 
       If the working tree is dirty, preserve the dirty/untracked work before rebasing. If the branch intentionally remains behind or forked, record the reason in the plan or handoff before dispatching worktrees or starting new commits.
 
   - id: commit-prefix
     target: AGENTS.md
-    version: "2.3"
+    version: "2.4"
     placement: reference
     summary: "A Batch commit is ``<type>: <summary>`` with one ``Batch:`` trailer and a ``Task:`` trailer per Task it delivers; each push ends with one ``state:`` commit."
     body_template: |
@@ -218,27 +218,19 @@ render_blocks:
       - **Batch commit** — ``<type>: <summary>`` with no bracket prefix, exactly one ``Batch: BAT-<NNNN>`` trailer and one ``Task: <KEY>`` trailer for every Task it delivers, each a Task of that Batch. A commit delivering a single Task may carry its ``Task:`` trailer alone. The pre-push ``commit-prefix-lint`` hook refuses a pushed commit naming no Task, several Tasks without a ``Batch`` trailer, a Task twice, two ``Batch`` trailers, or a Task of another Batch.
       - **Trailing state commit** — ``state: <summary>``, one per push, touching only committed state paths.
 
-      **Legacy carriers.** History written before the Batch trailer names a wave instead, through an ``Eawf-Wave`` body trailer or a bracketed subject prefix; the ``vcs.conventions.subject_style`` config leaf selects which one ``tools/commit_prefix_lint.py`` expects, and it defaults to ``trailer``. The lint still reads these forms:
-
-      - **Wave trailer form** — ``<type>: <summary>`` with NO bracket prefix, plus an ``Eawf-Wave: P<NN>-I<NN>-W<NN>`` trailer in the body naming the wave the commit advances.
-      - **Deprecated prefix form** — ``[P<NN>-W<NN>] <type>:`` (or ``[P<NN>-I<NN>-W<NN>] <type>:`` when iter ≥ I02). Still accepted, but the lint exits 0 with a deprecation warning on stderr.
-      - **State-bookkeeping** — ``[P<NN>] state:`` (or ``[P<NN>-I<NN>] state:`` when iter ≥ I02). Allowed paths: ``.ea/state.json``, the typed stores under ``.ea/store/`` (``audit.jsonl``, ``decision.jsonl``, ``evidence.jsonl``, the role reports), ``.secrets.baseline``, and ``.ea/specs/**``. ``.ea/store/event.jsonl`` is NOT among them: the event store is the firehose, so it is gitignored and stays on the machine that produced it.
-      - **Phase/iter-scoped artifact docs** — ``[P<NN>] docs:`` (or ``[P<NN>-I<NN>] docs:``) for promoted documentation artifacts no single wave owns. Restricted to ``.ea/artifacts/**``. A commit that stages at least one artifact may also carry ``.ea/state.json`` and ``.secrets.baseline``: rewriting an artifact re-pins its digest in state, and the baseline tracks state.json line numbers. Without an artifact, those two stay rejected.
-      - **Out-of-phase** — ``<type>: <summary>`` carrying no carrier at all. Accepted ONLY while no phase is PLANNED or ACTIVE (every phase CLOSED or ARCHIVED, and ``state.current.phase_id`` is ``None``). Rejected while any phase is PLANNED or ACTIVE, so work in the gap between phases becomes a wave of the next phase. A bare ``state:`` subject is rejected only while ``state.current.phase_id`` is set.
-
-      The bracketed bookkeeping forms are exempt from the deprecation warning, and the retired ``-CORE`` suffix is rejected in anything new.
+      **Legacy carriers.** History written before the Batch trailer names its scope through an older body trailer or a bracketed subject prefix; the ``vcs.conventions.subject_style`` config leaf selects which one ``tools/commit_prefix_lint.py`` expects, and it defaults to ``trailer``. The lint still reads those forms so old history keeps passing, warns on the deprecated bracket prefix, and rejects the retired ``-CORE`` suffix. Write neither in a new commit: every new commit carries the native trailers above.
 
       Body: a few lines on why. Trailers: the ``Task`` trailer, an optional ``Batch`` trailer, and a recognized Claude or Codex ``Co-Authored-By`` trailer.
 
   - id: branch-naming
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
     body_template: |
       ### Branch naming
 
-      Long-running phase-bundled branch: ``feature/<symbol>-v<X.Y>``. Per-wave worktree branches: ``feature/<symbol>-v<X.Y>-pNN-wMM`` — cherry-picked back into the long-running branch then deleted.
+      Long-running Milestone branch: ``feature/<symbol>-v<X.Y>``. Per-Task worktree branches: ``feature/<symbol>-v<X.Y>-<task-key>``, the Task key in lower case — cherry-picked back into the long-running branch then deleted.
 
-      PRs: one per phase (typical) — phase always ends with a PR.
+      PRs: one per Milestone (typical) — a Milestone always ends with a PR.
 
   - id: secrets-hygiene
     target: AGENTS.md
@@ -268,62 +260,61 @@ render_blocks:
 
   - id: planned-scope-revisability
     target: AGENTS.md
-    version: "1.2"
+    version: "1.3"
     placement: reference
-    summary: "Scope mutability is status-tiered: PLANNED scope is freely editable, ACTIVE scope is append-only with PENDING-only wave edits, and CLOSED scope changes only via a reopen."
+    summary: "Scope mutability is status-tiered: a PLANNED Milestone is freely re-planned, an ACTIVE Milestone only takes appended Batches and Tasks, and started or completed work is never rewritten."
     body_template: |
       ### Planned-scope revisability
 
-      Phases and iters are first-class state records that move through ``PLANNED -> ACTIVE -> CLOSED`` (waves move through ``PENDING -> CLAIMED -> IN_PROGRESS -> CLOSED``). Mutability is status-tiered:
+      Milestones, Delivery Batches and Tasks are first-class state records; a Milestone moves through ``PLANNED -> ACTIVE -> ACCEPTANCE_REVIEW -> COMPLETED`` (or ``CANCELLED``). A plan changes only through a PlanRevision that is submitted, approved and applied, and mutability is status-tiered:
 
-      - **PLANNED** scope is freely mutable. ``eawf plan submit`` edits the phase before it activates.
-      - **ACTIVE** scope is append-only at the phase level — only PENDING waves under it may still be mutated. The W01 ``edit_wave_plan`` / ``remove_wave_plan`` / ``set_wave_deps`` transitions enforce the PENDING-only invariant on their own.
-      - **CLOSED** scope is immutable except via the retired ``phase reopen`` verb (which flips CLOSED back to ACTIVE; audit linkage is preserved for traceability).
+      - **PLANNED** scope is freely mutable. A child of an applied PlanRevision re-plans the PLANNED Milestone its parent created, rewriting only Batches and Tasks that are still PLANNED; what the child drops is cancelled, not deleted, so the history of the dropped work survives.
+      - **ACTIVE** scope is append-only. A re-plan of an ACTIVE Milestone may add new Batches and Tasks, and Batch refs after the required ones, but leaves every existing row exactly as it is, because work on it may be underway; the plan apply refuses any other change.
+      - **Started and completed** work is never rewritten by a plan: a correction to it is delivered as new scope.
 
-      Mid-flight reshapes go through ``eawf plan submit`` too; the same PENDING-only invariant applies. Drop-and-redo (the retired ``roadmap drop`` verb + ``eawf plan submit``) is the escape hatch when more than half the waves need to change.
+      A rejected PlanRevision is repaired by a child revision carrying a disposition for each finding, never by editing the rejected one.
 
   - id: roadmap-procedure
     target: AGENTS.md
-    version: "1.0"
+    version: "2.0"
     body_template: |
-      ### Roadmap procedure
+      ### Plan revision procedure
 
-      The canonical flow for altering the roadmap (one phase at a time):
+      The canonical flow for changing a Milestone's plan (one PlanRevision at a time):
 
       ::
 
-        1. /research <topic> [--final]
-        2. /research <topic2> --final            # optional more briefs
-        3. /roadmap propose --phase P<NN> [--from-briefs RES-...]
-                                                  # status=needs_user envelope
-                                                  # Claude: plan-mode + AUQ
-                                                  # Codex: text-prompt + y/N
-        4. /roadmap revise P<NN> --add-wave ...   # add waves until DAG fits
-        5. /roadmap revise P<NN> --set-deps ...   # iterate on deps
-        6. /roadmap apply P<NN>                   # confirm PLANNED scope
-        7. /prep P<NN>                            # activate_phase
-                                                  # runs V11 hard gate
-                                                  # dispatches waves per DAG
+        1. /research <topic>                    # one-page brief under .ea/local/
+        2. /plan propose <milestone-ref>        # eawf plan submit: VALIDATED,
+                                                # or rejected with findings
+        3. /plan propose <milestone-ref> --feedback <ref>
+                                                # child revision until the
+                                                # Batch and Task graph fits
+        4. /plan approve <revision-ref>         # operator only
+        5. /plan apply <revision-ref>           # operator only: materialise
+                                                # Batches and Tasks
+        6. eawf milestone activate <urn>        # PLANNED -> ACTIVE
+        7. /dispatch <batch-ref>                # each ready Task in its own Run
 
-      Bulk propose (``--bulk --from-briefs RES-12,RES-13,...``) is deferred to a follow-up phase; P19 ships phase-at-a-time only. ``/roadmap reorder`` is also deferred — operator drops + re- proposes to swap order.
+      Approval and apply are separate operator acts. An agent that reaches one files it with ``eawf question open-decision`` and stops; it never chooses the recommended option itself.
 
   - id: spike-workflow
     target: AGENTS.md
-    version: "1.4"
+    version: "1.6"
     placement: reference
-    summary: "A spike is a time-boxed read-only investigation whose brief lands under ``.ea/local/`` and feeds the next plan; the brief stays local, cited by sha256 digest, unless the operator asks to promote it."
+    summary: "A spike is a time-boxed read-only investigation; its text brief stays local under ``.ea/local/research/``, cited by sha256 digest, and heavy artefacts go under ``local.scratch_root``."
     body_template: |
       ### Spike workflow
 
-      A *spike* is a short, time-boxed, read-only investigation run before claiming a real wave — used when the next move is unclear and the operator needs a brief or experimental verdict to write the wave's success criteria. The dedicated ``/spike`` skill (v0.4) wraps the existing ``/research`` surface with the brief-naming + dispatch-prompt conventions below; legacy use of ``/research`` for spikes stays valid and renders identically.
+      A *spike* is a short, time-boxed, read-only investigation run before a Task is planned — used when the next move is unclear and the operator needs a brief or experimental verdict to write the Task's success criteria. ``/research`` answers one question with a one-page brief, and ``/spike`` builds and independently verifies a local proof of concept; both follow the brief-naming conventions below.
 
-      **When to spike.** Reach for a spike when (a) the wave's success criteria cannot yet be written without first reading code or running a probe, (b) two or more design alternatives need a verdict before ``/roadmap propose`` can commit to a DAG, or (c) an audit hypothesis needs an evidence sweep before ``set-verdict``. Skip the spike when the next move is obvious — go straight to ``/roadmap propose`` or ``/prep`` claim.
+      **When to spike.** Reach for a spike when (a) a Task's success criteria cannot yet be written without first reading code or running a probe, (b) two or more design alternatives need a verdict before ``/plan propose`` can commit to a Batch and Task graph, or (c) an audit hypothesis needs an evidence sweep before ``set-verdict``. Skip the spike when the next move is obvious — go straight to ``/plan propose`` or ``/dispatch``.
 
-      **Where the output lives.** Spike output is a research brief under ``.ea/local/<YYYY-MM-DD>-<slug>.md`` (or the conventional ``.ea/local/research/`` sub-directory). Filenames follow the ``<date>-<slug>.md`` stem so the brief sorts chronologically and slug-matches against the wave or phase it informs. Briefs stay local-only — ``.ea/local/`` is gitignored — and a decision they inform cites them by sha256 digest. A brief is promoted to ``.ea/artifacts/`` only when the operator asks (the artifact-chassis rule applies on promotion).
+      **Where the output lives.** A brief is ``.ea/local/research/<YYYY-MM-DD>-<slug>.md``, so it sorts by date and slug-matches the Task or Milestone it informs. ``.ea/local/research/`` holds only text evidence: briefs, notes, logs and small outputs. Heavy artefacts (virtual environments, models, installs, archives) go outside the repository under the scratch root the ``local.scratch_root`` config leaf names, each in its own directory with a ``.retention`` file holding its expiry date as ``YYYY-MM-DD``. A directory under ``.ea/local/`` may carry a ``.retention`` too: ``eawf local gc`` removes each one whose date has passed (``--dry-run`` lists them first), and ``eawf doctor`` warns once ``.ea/local/`` grows past ``local.size_warn_mb``.
 
-      **How the verdict feeds the workflow.** The spike's verdict is the input to the next ``/roadmap propose --phase P<NN>`` or ``/prep`` claim. Reference the brief by repo-relative path in the roadmap proposal, the wave's plan body, or the dispatch prompt — the wave dispatch renderer surfaces spike briefs whose filename matches the wave / iter / phase id under a ``## References`` section so the subagent reads them before starting work.
+      **How the verdict feeds the workflow.** The spike's verdict is the input to the next ``/plan propose``. Reference the brief by repo-relative path in the PlanRevision, the Task's contract, or the dispatch prompt, so the subagent reads it before starting work.
 
-      **No promotion by default.** A spike brief that informs a Decision row stays at ``.ea/local/research/<date>-<slug>.md``; the Decision cites its sha256 digest. Promotion to ``.ea/artifacts/research/`` is an explicit operator request, and it runs the artifact-chassis validator + scrub gate.
+      **No promotion by default.** Briefs stay local (``.ea/local/`` is gitignored), and a Decision they inform cites them by sha256 digest. Promotion to ``.ea/artifacts/research/`` is an explicit operator request, and it runs the artifact-chassis validator and scrub gate.
 
   - id: engineering-principles
     target: AGENTS.md
@@ -352,31 +343,30 @@ render_blocks:
   - id: prep-plan-mode
     target: AGENTS.md
     tier: tier0
-    version: "1.2"
+    version: "2.0"
     body_template: |
-      ### /prep always renders the DAG in plan mode
+      ### Plan approval always renders the plan in plan mode
 
-      Both Case A and Case B of ``/prep`` MUST enter Claude Code plan mode (``EnterPlanMode``) with the rendered wave DAG of the target phase's current iter before surfacing the approve / edit / cancel choice. File that choice with ``eawf question open-decision`` so it is a pending action with typed options, then show the bound question the answer carries: ``AskUserQuestion`` in Claude Code, the answer's numbered prompt printed verbatim in Codex. The operator answers by option, in the session or in the console, and the first answer wins; a free-text approval is not consent.
+      Before a PlanRevision is approved, the agent MUST enter Claude Code plan mode (``EnterPlanMode``) with the rendered Batch and Task graph of that revision — its Batches, Tasks, dependencies and criteria, read with ``eawf plan show`` — before surfacing the approve / revise / cancel choice. File that choice with ``eawf question open-decision`` so it is a pending action with typed options, then show the bound question the answer carries: ``AskUserQuestion`` in Claude Code, the answer's numbered prompt printed verbatim in Codex. The operator answers by option, in the session or in the console, and the first answer wins; a free-text approval is not consent.
 
-      **Case A — PLANNED phase with at least one PENDING wave.**
-      Render the plan via the retired ``roadmap show`` verb → ``EnterPlanMode`` → the bound decision (``use-as-is`` / ``revise`` / ``replace`` / ``cancel``). On ``revise``, hand back to ``/roadmap revise``; on ``replace``, hand back to ``/roadmap drop`` + ``/roadmap propose``.
+      - **approve** — the operator seals the approval with ``eawf plan approve``, then ``eawf plan apply`` materialises its Batches and Tasks into the Milestone.
+      - **revise** — the planner proposes a child revision (``/plan propose --feedback``), and its rendered graph is shown again before the next approval.
+      - **cancel** — nothing is approved or applied.
 
-      **Case B — PLANNED phase with empty wave DAG.** Apply the planner's emitted ``eawf plan submit`` commands **first** (waves land as PENDING on the still-PLANNED iter), then render the resulting DAG via the retired ``roadmap show`` verb → ``EnterPlanMode`` → the bound decision (``approve`` / ``edit`` / ``cancel``). The operator reviews the rendered roadmap, not the planner's raw commands. Edits during plan mode are ``/roadmap revise`` calls (PLANNED scope is mutable). On ``approve``, run ``eawf milestone activate`` (V11 hard gate).
+      The plan-mode-first invariant applies to every revision, an append to an ACTIVE Milestone included: the operator-facing surface is always the rendered graph, not raw mutator commands.
 
-      The plan-mode-first invariant applies to any future ``/prep`` cases (e.g. mid-flight scope expansion of an ACTIVE iter): the operator-facing surface is always the rendered DAG, not raw mutator commands.
-
-  - id: iter-phase-close-timing
+  - id: milestone-close-timing
     target: AGENTS.md
     tier: tier0
-    version: "1.2"
+    version: "2.0"
     body_template: |
-      ### Iter and phase close timing
+      ### Milestone acceptance timing
 
-      Iter close is gated on **audit + polish + ship CI + PR review pass**. Do not close an iter the moment its waves finish — run ``/audit`` and ``/polish`` first, then ``/ship`` (which runs the PR review pass + addresses feedback by appending waves to the same iter), then close.
+      Milestone acceptance is gated on **verification + ship CI + PR review pass**. Do not open a Milestone's acceptance the moment its Batches land — run ``/verify`` in audit and review modes first, then pass the Milestone pull request's CI and review, addressing feedback by appending Batches or Tasks to the same Milestone, then accept it with ``/accept``.
 
-      **Append, don't open a second iter.** When ``/audit`` or ``/polish`` surfaces follow-up work that fits the same delivery, append waves to the current iter via ``eawf plan submit`` (ACTIVE-phase ``add_wave_plan`` keeps the iter ACTIVE and the new waves land PENDING). Opening a second iter under the same phase is reserved for true scope expansions or repair cycles per decision D17 (iter-bump triggers), not for routine follow-ups.
+      **Append, don't open a second Milestone.** When verification or review surfaces follow-up work that fits the same delivery, append it to the active Milestone through a PlanRevision: an ACTIVE Milestone takes appended Batches and Tasks and stays ACTIVE. Opening another Milestone is reserved for true scope expansions, not for routine follow-ups.
 
-      **Phase close goes in the latest commit before merge.** Do not close the phase until ship CI is green AND the review-passed branch is on the remote. The phase-close mutation rides in a single ``[P<NN>] state: close iter + phase (audit=<id>)`` commit that bundles iter close + phase close. Merging that commit ends the phase; pre-merge close keeps ``state.json`` in sync with what reviewers approved.
+      **Acceptance goes in the latest state commit before merge.** Do not accept the Milestone until ship CI is green AND the review-passed branch is on the remote. The acceptance rides the push's single trailing ``state:`` commit; merging that commit ends the Milestone, and a pre-merge acceptance keeps state in sync with what reviewers approved.
 
   - id: markdown-no-manual-wrap
     target: AGENTS.md
@@ -390,34 +380,27 @@ render_blocks:
 
   - id: release-process
     target: AGENTS.md
-    version: "1.4"
+    version: "2.0"
     placement: reference
-    summary: "Releases are opt-in per repo via the release cadence setting; the per-phase cadence gates phase close on a changelog section, a version bump, a migration note, and the release annotation."
+    summary: "A release-train repo tags a merged Milestone only after ``eawf release preflight`` passes, via ``eawf release pipeline --milestone``; other repos keep their own tag flow."
     body_template: |
       ### Release process
 
-      Releases are opt-in per repo via ``vcs.conventions.release.cadence``. The two supported cadences:
+      Releases run through the explicit release verbs: no Milestone acceptance waits on a release, and no config leaf selects a release cadence.
 
-      - ``manual`` — the default for every repo; releases ride a separate operator-driven tag flow.
-      - ``per-phase`` — opt-in, set explicitly in the repo config; each phase PR closes with a release-readiness pre-flight gate and a post-merge release tag. Phase close = at least one minor version bump.
-
-      Under ``per-phase``, ``eawf milestone accept`` refuses until the phase-close audit carries a passing ``release-preflight`` check. That check covers:
+      In a repo that releases through an eawf release train, ``eawf release preflight <version>`` sweeps every readiness signal over the checkout and reports all of them on every run, so one pass shows the whole repair list. Among them:
 
       - ``CHANGELOG.md`` has a new section for the release version with at least one bullet.
       - The package version module (``src/<pkg>/_version.py``) advanced from the prior release.
-      - A migration note exists when ``state.json`` ``schema_version`` changed since the last release.
-      - The phase-close commit subject carries the optional ``(release=v<X.Y.Z>)`` annotation accepted by ``tools/commit_prefix_lint.py``.
+      - A migration note exists when the state ``schema_version`` changed since the last release.
 
-      Post-merge, ``.github/workflows/phase-release.yaml`` reads the annotation, checks it against the package version, and prints the release command. It pushes no tag and creates no release object: a tag pushed with a workflow's default token starts no other workflow, so nothing would publish. Who pushes the tag depends on how the repo releases:
+      A repo that releases through an eawf release train cuts each release from a merged Milestone with ``eawf release pipeline <version> --milestone <MLS-NNNN> --publish``, run from a clean checkout of the merge commit, which walks the checkpoint from tag to BAKED. It runs the readiness sweep before it tags, its push starts the publish workflows, which mark every dev and release-candidate tag as a prerelease, and it then advances the train and checks that ``main`` carries exactly the commits of each completed Batch of the Milestone, found by their ``Task:`` and ``Batch:`` trailers.
 
-      - A repo that releases through an eawf release train runs ``eawf release pipeline <version> --phase P<NN> --publish`` from a clean checkout of the merge commit. The verb runs the readiness sweep before it tags, its push starts the publish workflows, which mark every dev and release-candidate tag as a prerelease, and it then walks the checkpoint to BAKED and advances the train.
-      - Every other repo keeps its own tag flow: the tagging it already runs after a merge stays its tagging path.
-
-      Repos on the default ``manual`` cadence skip the gate and the workflow.
+      Every other repo keeps its own tag flow: the tagging it already runs after a merge stays its tagging path.
 
   - id: ship-process
     target: AGENTS.md
-    version: "1.8"
+    version: "1.9"
     placement: reference
     summary: "Ship a Milestone through one PR: pass CI, address review by appending Batches, then merge so each Batch commit survives; main and tags are never rewritten."
     body_template: |
@@ -425,12 +408,12 @@ render_blocks:
 
       Ship is the Milestone's terminal pass, under decision D87, which superseded D85. The ordered steps from landed Batches to a merged, tagged Milestone:
 
-      1. **Open the Milestone PR.** One PR per Milestone, body per the ``pr-template``. The PR head is the long-running feature branch, squashed before each push to one commit per Batch (a few for a large Batch) carrying its ``Batch:`` and ``Task:`` trailers, plus one trailing ``state:`` commit per push. Each Batch already closed when it landed: the daemon bound the phase-branch head and walked the Batch and its Tasks to COMPLETED.
-      2. **Pass CI gates.** Beyond the per-commit lint + test gauntlet, two gates fire only on the Milestone PR and so are easy to miss locally: the per-package **coverage gate** (CI parses ``coverage.xml`` against the ``[tool.eawf.coverage]`` thresholds) and the **snapshot-pairing gate** (``tools/snapshot_pairing_gate.py`` over the PR base..head range, which rejects a managed golden-surface mutation that lacks a wave-form ``test:`` subject). Run both locally before pushing the PR so they do not surface late.
-      3. **Pass the review.** ``/ship`` runs the PR review pass. Address feedback by appending Batches to the Milestone, not by opening a second PR.
+      1. **Open the Milestone PR.** One PR per Milestone, body per the ``pr-template``. The PR head is the long-running feature branch, squashed before each push to one commit per Batch (a few for a large Batch) carrying its ``Batch:`` and ``Task:`` trailers, plus one trailing ``state:`` commit per push. Each Batch already closed when it landed: the daemon bound the Milestone branch head and walked the Batch and its Tasks to COMPLETED.
+      2. **Pass CI gates.** Beyond the per-commit lint + test gauntlet, two gates fire only on the Milestone PR and so are easy to miss locally: the per-package **coverage gate** (CI parses ``coverage.xml`` against the ``[tool.eawf.coverage]`` thresholds) and the **snapshot-pairing gate** (``tools/snapshot_pairing_gate.py`` over the PR base..head range, which rejects a managed golden-surface mutation whose commit names no Batch or Task of the generation). Run both locally before pushing the PR so they do not surface late.
+      3. **Pass the review.** ``/verify --mode review`` runs the review pass over each Batch. Address feedback by appending Batches to the Milestone, not by opening a second PR.
       4. **Rewrite only under lease.** ``eawf batch squash`` writes the per-Batch history on a new branch and proves its tree equals the source tip's; once the branch points at it, ``eawf batch rebind`` appends a superseding row for every binding that named a source commit. A pushed branch is rewritten only with ``--force-with-lease``, after writing an archive ref of the old head. Ledgers stay append-only: a correction is an appended superseding row.
       5. **Merge.** Once CI is green on the pushed head and review passes, merge so each Batch commit survives: fast-forward ``main`` to the reviewed head, never folding Batches together. main and tags are never rewritten, and old history is not rewritten.
-      6. **Release at merge.** The phase exit criterion is release-ready at merge: under the ``per-phase`` cadence the phase cannot close without a passing release pre-flight (see ``release-process``), and nothing after the merge is phase work. The post-merge ``.github/workflows/phase-release.yaml`` checks the ``(release=v<X.Y.Z>)`` annotation off the phase-close commit against the package version and prints the release command; it pushes no tag. A repo that releases through an eawf release train then runs ``eawf release pipeline <version> --phase P<NN> --publish`` from a clean checkout of the merge commit: one journaled, resumable walk that tags and pushes only with ``--publish``, waits for the publish runs, pins, proves, approves and observes the checkpoint to BAKED, advances the train, checks the phase's wave pins by trailer, and stages the evidence for one ``[P<NN>] state:`` commit. A refused step names its reason and a rerun resumes there, so the next phase carries no release waves; every other repo keeps its own tag flow. Nothing publishes until the tag is pushed.
+      6. **Release at merge.** The Milestone is release-ready at merge: the release verbs check it before anything is tagged (see ``release-process``), and nothing after the merge is Milestone work. A repo that releases through an eawf release train then runs ``eawf release pipeline <version> --milestone <MLS-NNNN> --publish`` from a clean checkout of the merge commit: one journaled, resumable walk that tags and pushes only with ``--publish``, waits for the publish runs, pins, proves, approves and observes the checkpoint to BAKED, advances the train, checks each completed Batch's commits on ``main`` by their ``Task:`` and ``Batch:`` trailers, and stages the evidence for one ``state:`` commit. A refused step names its reason and a rerun resumes there, so the next Milestone carries no release Tasks; every other repo keeps its own tag flow. Nothing publishes until the tag is pushed.
 
   - id: agent-report-contract
     target: AGENTS.md
@@ -446,32 +429,32 @@ render_blocks:
 
   - id: workflow-lifecycle
     target: AGENTS.md
-    version: "1.1"
+    version: "1.2"
     placement: reference
-    summary: "The lifecycle runs research, plan, execute waves, cherry-pick, ship phase, with a branch-currency check before opening or resuming any scope."
+    summary: "The lifecycle runs research, plan, dispatch Tasks, cherry-pick, ship the Milestone, with a branch-currency check before opening or resuming any scope."
     body_template: |
       ## Workflow lifecycle
 
       Agent-driven lifecycle:
 
       ```
-      research → plan → execute waves → cherry-pick → ship phase
+      research → plan → dispatch Tasks → cherry-pick → ship Milestone
       ```
 
       - **Research** is unstructured exploration of the proposal/plan.
-      - **Branch currency gate** = fetch and compare the current branch to the intended source branch before opening or resuming a phase, iter, or wave; rebase or fast-forward first when stale.
-      - **Plan** = open the next phase, enumerate waves, write per-wave success criteria.
-      - **Execute** = dispatch waves. Independent waves go in parallel via worktree-isolated subagents. Sequential waves run inline.
-      - **Cherry-pick** = bring worktree commits into the long-running feature branch. Never merge.
-      - **Ship** = open the phase PR, run CI, address review, merge.
+      - **Branch currency gate** = fetch and compare the current branch to the intended source branch before opening or resuming a Milestone, Batch, or Task; rebase or fast-forward first when stale.
+      - **Plan** = propose a PlanRevision for the Milestone: its Delivery Batches, their Tasks, dependencies and per-Task success criteria; the operator approves and applies it.
+      - **Dispatch** = run each ready Task of a Batch in its own Run, one lease and one workspace per Task. Tasks the dependency graph and write claims leave independent run side by side; a dependent Task waits for the proof it needs.
+      - **Cherry-pick** = bring worktree commits into the long-running Milestone branch. Never merge.
+      - **Ship** = open the Milestone PR, run CI, address review by appending Batches, merge.
 
   - id: pr-template
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
     body_template: |
       ### PR template
 
-      ``## Summary`` (3-6 bullets) + ``## Test plan`` (markdown checklist). Phase PRs include a ``## Phase deliverables`` section linking back to the per-phase plan.
+      ``## Summary`` (3-6 bullets) + ``## Test plan`` (markdown checklist). Milestone PRs include a ``## Milestone deliverables`` section linking back to the Milestone's applied PlanRevision.
 
   - id: clarity-contract
     target: AGENTS.md
@@ -503,13 +486,13 @@ render_blocks:
 
   - id: memory-hygiene
     target: AGENTS.md
-    version: "1.1"
+    version: "1.2"
     placement: reference
     summary: "Remember only facts that stay true across sessions; status is derivable, so query it with ``eawf status`` or ``eawf memory digest`` instead of memorizing it."
     body_template: |
       ### Memory hygiene: remember durable facts, query status
 
-      Curated memory holds **durable facts** — decisions that outlive a session, operator preferences, hard-won gotchas, conventions. It is the wrong place for **status**, which changes every time a wave closes: the current phase and iter, what just closed, the latest verdicts, the open backlog. Memorizing status guarantees drift, because the remembered copy goes stale the moment the real state moves.
+      Curated memory holds **durable facts** — decisions that outlive a session, operator preferences, hard-won gotchas, conventions. It is the wrong place for **status**, which changes every time a Task completes: the active Milestone and Batch, what just landed, the latest verdicts, the open backlog. Memorizing status guarantees drift, because the remembered copy goes stale the moment the real state moves.
 
       The rule: a fact is worth remembering only when it stays true across sessions. Status is **derivable** from state, so it is queried on demand, never memorized. Run ``eawf status`` for the current pointers, recent decisions, and open backlog, and ``eawf memory digest`` for a glance-clear standup of what is in flight, what just closed, and what was recently decided. Both read straight from state, so the answer is always current and costs nothing to keep so.
 
@@ -517,7 +500,7 @@ render_blocks:
 
   - id: comment-economy
     target: AGENTS.md
-    version: "1.1"
+    version: "1.2"
     placement: reference
     summary: "Comments carry why, not what: document every parameter, return and raise, but no restated signatures, change-log narration, or lifecycle ids."
     rationale: |
@@ -529,17 +512,17 @@ render_blocks:
 
       Inline comments are the scarce resource: one per non-obvious decision, none for what the line already says, and a named constant instead of a comment explaining a literal.
 
-      Do not narrate history: no wave, iter, or phase ids, no "previously this did X", no audit or decision references (rule 25 already bars provenance from source; this extends it to bare lifecycle ids).
+      Do not narrate history: no Task, Batch or Milestone keys, no "previously this did X", no audit or decision references (rule 25 already bars provenance from source; this extends it to bare lifecycle ids).
     verification: |
       Read the docstring as a caller who cannot see the body: every parameter, the return value, and each raised exception is accounted for, and each entry adds a unit, range, or meaning the signature does not already carry. Cut any prose sentence that merely restates the signature, and any inline comment narrating the line below it. Grep the diff for lifecycle ids (``P<NN>`` / ``I<NN>`` / ``W<NN>``) inside comments and docstrings; a hit is reworked into a plain statement of the constraint, or dropped.
 
   - id: orchestrator-decision-surface
     target: AGENTS.md
-    version: "1.1"
+    version: "1.2"
     placement: reference
     summary: "Surface every consequential choice as an explicit question with visual option previews, never a silent default."
     rationale: |
-      An orchestrating agent that picks silently spends the operator's budget on a decision the operator never saw, and a choice offered as prose alone is answered on vibes. The cost of a wrong pick is a wave of rework; the cost of asking is one round trip. Options compared side by side, with the trade-off drawn rather than described, are the difference between an informed answer and an agreeable one.
+      An orchestrating agent that picks silently spends the operator's budget on a decision the operator never saw, and a choice offered as prose alone is answered on vibes. The cost of a wrong pick is a Task of rework; the cost of asking is one round trip. Options compared side by side, with the trade-off drawn rather than described, are the difference between an informed answer and an agreeable one.
     mechanism: |
       When two paths would produce materially different work, stop and ask. File the choice with ``eawf question open-decision`` so it is a pending action with typed options, one per path, each carrying its consequence, its cost and a preview: an ASCII sketch of the before / after, the measured cost, and what is given up. Show the bound question the answer carries and stop: ``AskUserQuestion`` in Claude Code, the answer's numbered prompt printed verbatim in Codex, with the reply relayed through ``eawf question answer``. The operator may answer in the session or in the console, and the first answer wins. Expand every abbreviation, mark the option that is best for the long term as recommended, and state the cost of each option rather than only its benefit. Do not ask a question whose answer changes nothing — make the call, state the assumption, and continue. Free-text approval is not a decision record: the choice must be one of the offered options.
     verification: |
@@ -547,29 +530,29 @@ render_blocks:
 
   - id: gate-fire-proof-sunset
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
     placement: reference
-    summary: "A new gate ships with a test proving it reds on a real defect, and sunsets at phase close if it never fired."
+    summary: "A new gate ships with a test proving it reds on a real defect, and sunsets at Milestone acceptance if it never fired."
     rationale: |
       Gates accumulate: each is justified on its own and none is ever removed, so the surface grows while the failures it was built for keep landing. The pathological case is a gate that has never once fired — it reads as protection, costs time on every run, and proves nothing. Bounding growth by evidence rather than by quota keeps the ones that earn their place.
     mechanism: |
-      A new lint, doctor check, or CI gate ships with a test that reds on a **real** defect from this repo, not a synthetic fixture written to satisfy the test. Record what it caught. At phase close, review the gates added during the phase: one that never fired on real work is retired, not kept "just in case". Where the defect population is too large to fix at once, pin it as a ratchet — an exact set or a ceiling that can only shrink — rather than an allowlist that can quietly absorb new entries.
+      A new lint, doctor check, or CI gate ships with a test that reds on a **real** defect from this repo, not a synthetic fixture written to satisfy the test. Record what it caught. At Milestone acceptance, review the gates added during the Milestone: one that never fired on real work is retired, not kept "just in case". Where the defect population is too large to fix at once, pin it as a ratchet — an exact set or a ceiling that can only shrink — rather than an allowlist that can quietly absorb new entries.
     verification: |
-      Each gate added in a phase names the real defect it reds on. The phase-close review lists gates added, whether each fired, and the disposition of those that did not. A ratchet is exact-set or ceiling based, so repairing an entry forces its removal and a new offender fails even while the list is non-empty.
+      Each gate added in a Milestone names the real defect it reds on. The acceptance review lists gates added, whether each fired, and the disposition of those that did not. A ratchet is exact-set or ceiling based, so repairing an entry forces its removal and a new offender fails even while the list is non-empty.
 
   - id: commit-granularity
     target: AGENTS.md
-    version: "1.6"
+    version: "1.7"
     placement: reference
     summary: "One commit per Batch, or a few for a large Batch, squashed before the push; each push ends with one ``state:`` commit, and the bindings a squash replaced are rebound by superseding rows."
     rationale: |
-      Commit count is not progress. A deliverable split across a dozen commits — code here, its test there, the golden it invalidated three commits later — cannot be reviewed as a unit or reverted as one, and ``git bisect`` lands mid-change on a tree that never worked. The opposite failure, one commit for an entire Milestone, is equally unreadable. The unit that builds, passes its tests and is reviewed is the Batch. P30 made the cost concrete: 1,036 commits for 525 waves, 385 of them state-only bookkeeping — a reviewer opening the PR read twice as much bookkeeping as delivery.
+      Commit count is not progress. A deliverable split across a dozen commits — code here, its test there, the golden it invalidated three commits later — cannot be reviewed as a unit or reverted as one, and ``git bisect`` lands mid-change on a tree that never worked. The opposite failure, one commit for an entire Milestone, is equally unreadable. The unit that builds, passes its tests and is reviewed is the Batch. One past delivery made the cost concrete: 1,036 commits for 525 units of work, 385 of them state-only bookkeeping — a reviewer opening the PR read twice as much bookkeeping as delivery.
     mechanism: |
       Decision D87 sets the regime, superseding D85. Scratch and per-Task commits are free while a Batch is in flight; before the push, ``eawf batch squash`` writes the branch again as one commit per Batch holding its code and tests, ordered by each Batch's last commit, carrying one ``Batch:`` trailer and a ``Task:`` trailer per Task, and checks every rewritten commit builds. A large Batch may land as a few buildable commits; two Batches whose work cannot be separated share one commit, and the squash says so.
 
       **One state commit per push.** State changes made while the Tasks ran ride a single trailing ``state:`` commit at the end of the push, touching only committed state paths. Never interleave state commits between Batch commits.
 
-      **A Batch binds when it lands.** A Batch closes as soon as every Task in it is ready and its commits are on the phase branch: the daemon binds the phase-branch head and walks the Batch and its Tasks to COMPLETED. The squash replaces the commits those bindings name, so once the branch points at the squashed tip, ``eawf batch rebind`` appends a superseding row for every ledger line naming a replaced commit, bound to the commit now carrying its Batch; no row is edited. A branch the remote already has is rewritten only with ``--force-with-lease``, after an archive ref.
+      **A Batch binds when it lands.** A Batch closes as soon as every Task in it is ready and its commits are on the Milestone branch: the daemon binds the Milestone branch head and walks the Batch and its Tasks to COMPLETED. The squash replaces the commits those bindings name, so once the branch points at the squashed tip, ``eawf batch rebind`` appends a superseding row for every ledger line naming a replaced commit, bound to the commit now carrying its Batch; no row is edited. A branch the remote already has is rewritten only with ``--force-with-lease``, after an archive ref.
 
       The one exception is a golden-only ``test:`` commit: every path it stages is a non-``.py`` file under a **managed golden surface** (the ``eawf snapshot list`` inventory). The snapshot-pairing gate requires those bytes to land under a ``test:`` subject, so a golden refresh rides its own paired ``test:`` commit immediately after the change that caused it — named for that cause, never as a bare "refresh goldens".
     verification: |
@@ -577,7 +560,7 @@ render_blocks:
 
   - id: anti-patterns
     target: AGENTS.md
-    version: "1.2"
+    version: "1.3"
     body_template: |
       ## Anti-patterns
 
@@ -586,7 +569,7 @@ render_blocks:
       - Merging worktree branches instead of cherry-picking.
       - ``--no-verify`` on a failing pre-commit hook.
       - Quoting design-intent docs as authoritative for current behaviour (verify against the source tree).
-      - Starting a phase, iter, or wave from a stale feature branch.
+      - Starting a Milestone, Batch, or Task from a stale feature branch.
       - Adding a runtime dep without checking it's not already pulled in transitively.
       - Using ``Read`` to verify a file you just wrote with ``Write``/``Edit``.
       - Carrying audit citations or decision-round IDs into source comments (rule 25 violation; provenance lives in commit body

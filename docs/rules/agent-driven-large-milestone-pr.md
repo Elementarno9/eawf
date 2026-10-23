@@ -1,7 +1,7 @@
-<!-- Generated from the eawf profile render block `agent-driven-large-phase-pr`. Do not hand-edit: re-run `eawf sync`. -->
+<!-- Generated from the eawf profile render block `agent-driven-large-milestone-pr`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=agent-driven-large-phase-pr version=1.5 hash=1eee3a08556c680f -->
-# `agent-driven-large-phase-pr`
+<!-- BEGIN EAWF:managed id=agent-driven-large-milestone-pr version=1.6 hash=1855e0c2c3fb95e3 -->
+# `agent-driven-large-milestone-pr`
 
 Ship one PR per Milestone however large it grows, keep each Batch commit individually bisectable, and merge so each Batch commit survives.
 
@@ -18,4 +18,4 @@ Ship one PR per Milestone. A Milestone PR carrying roughly +10k lines across man
 ### Verification
 
 Confirm the Milestone produced exactly one PR and that its commits are per-Batch, each carrying one ``Batch:`` trailer and a ``Task:`` trailer per Task, and individually buildable. A reviewer who proposes splitting the Milestone into multiple PRs is overruled by this rule; a reviewer who finds two Batches folded into one commit without the squash naming why flags it for rework. The target branch shows each Batch commit of the merged PR.
-<!-- END EAWF:managed id=agent-driven-large-phase-pr -->
+<!-- END EAWF:managed id=agent-driven-large-milestone-pr -->

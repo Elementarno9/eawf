@@ -70,13 +70,14 @@ def test_built_in_defaults_hold_a_section_for_every_catalogued_leaf_with_a_value
         "dispatch",
         "agents",
         "research",
-        "planning",
         "preferences",
         "verify",
         "estimation",
         "flow",
         "vcs",
         "daemon",
+        "local",
+        "worktrees",
     }
     assert required == set(BUILT_IN_DEFAULTS) - {"schema_version"}
 
@@ -101,7 +102,6 @@ def test_only_builtin_layer_contributes_for_empty_stack() -> None:
         "jury_max_co_error": 0.10,
         "juror_wall_clock_seconds": 600.0,
         "odr_blocking": False,
-        "require_iter_audit_accepted": False,
         "retyped_rule_threshold": 3,
         "waiver_mode": "B",
     }
@@ -109,7 +109,6 @@ def test_only_builtin_layer_contributes_for_empty_stack() -> None:
     assert sources["verify.jury_max_co_error"] == "built-in"
     assert sources["verify.juror_wall_clock_seconds"] == "built-in"
     assert sources["verify.odr_blocking"] == "built-in"
-    assert sources["verify.require_iter_audit_accepted"] == "built-in"
     assert sources["verify.retyped_rule_threshold"] == "built-in"
     assert sources["verify.waiver_mode"] == "built-in"
 
@@ -170,11 +169,10 @@ def test_verify_strict_leaves_report_source_layer(tmp_path: Path) -> None:
     verify = VerifyConfig.model_validate(merged["verify"])
     assert verify.juror_wall_clock_seconds == pytest.approx(900.0)
     assert verify.odr_blocking is True
-    assert verify.require_iter_audit_accepted is True
+    assert "require_iter_audit_accepted" not in merged["verify"]
     assert verify.waiver_mode == "disabled"
     assert sources["verify.juror_wall_clock_seconds"] == "repo"
     assert sources["verify.odr_blocking"] == "repo"
-    assert sources["verify.require_iter_audit_accepted"] == "repo"
     assert sources["verify.waiver_mode"] == "repo"
 
 
@@ -332,12 +330,12 @@ def test_env_override_of_a_leaf_not_env_writable_is_ignored_with_a_warning(
         merged, sources = merge_config(
             workspace=None,
             repo=None,
-            env={"EAWF_PLANNING__MAX_PARALLEL_WAVES": "9"},
+            env={"EAWF_RESEARCH__AGENT_COUNT": "9"},
             cli_overrides={},
         )
-    assert merged["planning"]["max_parallel_waves"] == 4
-    assert sources["planning.max_parallel_waves"] == "built-in"
-    assert "EAWF_PLANNING__MAX_PARALLEL_WAVES" in caplog.text
+    assert merged["research"]["agent_count"] == 4
+    assert sources["research.agent_count"] == "built-in"
+    assert "EAWF_RESEARCH__AGENT_COUNT" in caplog.text
     assert "not writable from the env layer" in caplog.text
 
 

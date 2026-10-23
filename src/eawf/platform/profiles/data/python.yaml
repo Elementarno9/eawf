@@ -80,19 +80,19 @@ verify:
     - name: pre-commit
       cmd: ["uv", "run", "pre-commit", "run", "--all-files"]
       scope: touched
-      cadence: every-wave
+      cadence: every-task
       policy: warn
       required: true
     - name: mypy
       cmd: ["uv", "run", "mypy", "src/"]
       scope: touched
-      cadence: every-wave
+      cadence: every-task
       policy: warn
       required: true
     - name: pytest
       cmd: ["uv", "run", "pytest", "-q"]
       scope: touched
-      cadence: every-wave
+      cadence: every-task
       policy: warn
       required: true
   waiver_mode: B

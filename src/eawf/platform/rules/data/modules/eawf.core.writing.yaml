@@ -1,6 +1,6 @@
 schema_version: 1
 module_id: eawf.core.writing
-version: 1
+version: 2
 kind: core
 topic: writing
 title: Identifiers, titles and authored prose
@@ -8,13 +8,13 @@ when_to_use: naming an entity, writing a commit or pull request body, a durable 
 rules:
   - rule_id: eawf.core.writing.symbol-conventions
     obligation_id: writing.symbol-conventions
-    revision: 1
+    revision: 2
     title: Spell lifecycle and hypothesis identifiers in the canonical form
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Write phase, iter and wave ids as P<NN>, I<NN> and W<NN> with at least two zero-padded digits, hypothesis ids as H<NN>-<NN>, and project codes as one capital letter followed by 1 to 15 capitals, digits, underscores or hyphens.
+      Write Task keys as <PROJECT>-<NNNN>, Milestone, Batch and PlanRevision keys as MLS-<NNNN>, BAT-<NNNN> and PRV-<NNNN>, Run keys as RUN- and eight digits, hypothesis ids as H<NN>-<NN>, and project codes as one capital letter followed by 1 to 15 capitals, digits, underscores or hyphens.
     rationale: >-
       One spelling lets the commit lint, the renderers and a text search find every reference to a scope.
     verification:

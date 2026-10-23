@@ -20,16 +20,16 @@ For the narrative architecture, read `overview.md`; for the CLI surface, `cli-su
 | `store` | JSONL store envelope + per-kind models + compaction. |
 | `config` | Layered configuration subsystem (built-in / global / workspace / repo / local). |
 | `validate` | Schema layer + invariant layer over `state.json`. |
-| `spec` | Typed spec models for phases, iters, waves, audits. |
+| `spec` | Typed spec models for releases, research, audits and criteria. |
 | `migrations` | State-schema migration chain runner + steps (`eawf migrate`). |
 
 ## Workflow — lifecycle, evidence, skills, dispatch
 
 | Package | Role |
 |---|---|
-| `lifecycle` | Project / subproject / phase / iter / wave lifecycle helpers. |
+| `planning` | PlanRevision submit / approve / apply into a Milestone. |
 | `evidence` | Goals, outcomes, hypotheses, audits, decisions, backlog. |
-| `skills` | Eä workflow skills (`/research`, `/prep`, `/audit`, `/ship`, `/flow`, …). |
+| `skills` | Eä workflow skills (`/plan`, `/dispatch`, `/verify`, `/integrate`, `/research`, …). |
 | `agents` | Subagent spec + role library for dispatch. |
 | `agent_report` | Typed agent-report storage helpers. |
 | `audit_dsl` | Declarative audit-check DSL + check-kind registry. |
@@ -41,13 +41,13 @@ For the narrative architecture, read `overview.md`; for the CLI surface, `cli-su
 
 | Package | Role |
 |---|---|
-| `daemon` | eawfd daemon — single canonical writer of `state.json` + stores. |
+| `daemon` | eawfd daemon — single canonical writer of the generation document + stores. |
 | `runtimes` | Harness adapters (Claude / Codex / OpenCode). |
 | `mcp` | MCP server install / update / remove primitives. |
 | `sandbox` | Sandbox / permission policy enforcement. |
 | `session` | Agent-session start / checkpoint / close / recover. |
 | `lock` | portalocker wrapper, sibling lockfiles, stale recovery. |
-| `budget` | Per-wave token-budget policy + service surface. |
+| `budget` | Token-budget policy + service surface. |
 | `ci_loop` | CI-fix loop subsystem. |
 | `worktree` | Worktree create / merge-back / cleanup. |
 | `hooks` | Eä hook router + runner (`eawf hook run`). |
@@ -90,5 +90,5 @@ For the narrative architecture, read `overview.md`; for the CLI surface, `cli-su
 
 | Package | Contents |
 |---|---|
-| `schemas` | Bundled JSON Schema files (`state`, `config`, `skill-output`, `plan-view`). |
+| `schemas` | Bundled JSON Schema files (`state`, `config`, `skill-output`). |
 | `_data` | Bundled data resources (service-manager unit templates). |

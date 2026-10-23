@@ -1,6 +1,6 @@
 """Loader-side validators for the C03 spec stack.
 
-Three classes of validation:
+Two classes of validation:
 
 1. **Model-time** — Pydantic ``model_validator`` hooks live on the
    models themselves (e.g. :class:`~eawf.kernel.spec.wave.WaveSpec._consistent_ids`
@@ -9,8 +9,6 @@ Three classes of validation:
 2. **Loader-time** — these functions run AFTER ``model_validate`` and
    need a project root or state tree. They enforce WSV-05 / WSV-06 /
    WSV-10 (tests exist on disk, brief paths exist on disk).
-3. **Pre-commit** — out of scope for this module; lives in
-   ``tools/pre_commit_spec_paths.py``.
 
 The loader-time functions raise :class:`SpecValidationError` with a
 multi-line diagnostic so a CLI caller can re-emit it verbatim. Per

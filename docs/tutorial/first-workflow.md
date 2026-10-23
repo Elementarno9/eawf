@@ -262,7 +262,7 @@ A proof runs the gate behind every criterion at the adopted commit and files a r
       "kind": "command_exit_zero",
       "args": {"argv": ["git", "grep", "-q", "hello", "--", "src/hello.py"]},
       "policy": "block",
-      "cadence": "every-wave"
+      "cadence": "every-task"
     }
   ]
 }

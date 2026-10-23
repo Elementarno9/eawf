@@ -59,7 +59,7 @@ def _gate(gate_id: str, *, criterion_id: str = "CR-01") -> GateSpec:
         kind="regex_match",
         args={"pattern": "^ok$"},
         policy="block",
-        cadence="every-wave",
+        cadence="every-task",
         required=True,
         timeout_s=30,
     )
@@ -97,7 +97,7 @@ def test_convert_criterion_carries_the_gate_fields_as_legacy() -> None:
     imported = convert_criterion(criterion=_criterion(gate_ids=["G-01"]), gates=[_gate("G-01")])
     assert imported.legacy_refs["gate_criterion_ids"] == {"G-01": "CR-01"}
     assert imported.legacy_refs["gate_args"] == {"G-01": {"pattern": "^ok$"}}
-    assert imported.legacy_refs["gate_cadences"] == {"G-01": "every-wave"}
+    assert imported.legacy_refs["gate_cadences"] == {"G-01": "every-task"}
     assert imported.legacy_refs["gate_kinds"] == {"G-01": "regex_match"}
     assert imported.legacy_refs["gate_policies"] == {"G-01": "block"}
     assert imported.legacy_refs["gate_required"] == {"G-01": True}

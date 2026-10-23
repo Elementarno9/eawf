@@ -41,8 +41,8 @@ _VALID_BUCKETS = {
 
 
 def test_error_code_member_count_matches_spec() -> None:
-    """The C10 cause-level vocabulary is 34 closed members."""
-    assert len(ErrorCode) == 34
+    """The C10 cause-level vocabulary is 30 closed members."""
+    assert len(ErrorCode) == 30
 
 
 def test_error_code_is_strenum_value_identity() -> None:
@@ -75,7 +75,7 @@ def test_error_code_exit_code_never_ok() -> None:
 @pytest.mark.parametrize(
     ("member", "bucket"),
     [
-        (ErrorCode.WAVE_DEPS_NOT_SATISFIED, exit_codes.USER_ERROR),
+        (ErrorCode.WORKTREE_DIRTY, exit_codes.USER_ERROR),
         (ErrorCode.STATE_VALIDATION_FAILED, exit_codes.VALIDATION_ERROR),
         (ErrorCode.CHERRY_PICK_CONFLICT, exit_codes.STATE_CONFLICT),
         (ErrorCode.DAEMON_SOCKET_UNREACHABLE, exit_codes.DAEMON_UNREACHABLE),
@@ -159,25 +159,25 @@ def test_render_text_cause_next_step_see_order() -> None:
     """With a code the lead order is cause -> next_step -> See <code>."""
     env = errors.ErrorEnvelope(
         error="UserError",
-        message="wave 'P27-I01-W21' has unsatisfied deps",
+        message="worktree has uncommitted changes",
         exit_code=exit_codes.USER_ERROR,
         exit_name="USER_ERROR",
-        suggested_next_step="close the blocking wave(s) first",
-        error_code=ErrorCode.WAVE_DEPS_NOT_SATISFIED.value,
+        suggested_next_step="commit or clean the working tree first",
+        error_code=ErrorCode.WORKTREE_DIRTY.value,
     )
     lines = errors._render_text(env).splitlines()
     assert lines[0].startswith("error: ")  # cause
     assert lines[1].startswith("hint: ")  # next_step
-    assert lines[2] == "See WAVE_DEPS_NOT_SATISFIED"  # see
+    assert lines[2] == "See WORKTREE_DIRTY"  # see
     # cause precedes next_step precedes see.
-    assert lines.index("See WAVE_DEPS_NOT_SATISFIED") > 1
+    assert lines.index("See WORKTREE_DIRTY") > 1
 
 
 def test_build_envelope_threads_error_code() -> None:
     """build_envelope stores the ErrorCode string value, not the member."""
-    err = errors.UserError("bad deps")
-    env = errors.build_envelope(err, error_code=ErrorCode.WAVE_DEPS_NOT_SATISFIED)
-    assert env.error_code == "WAVE_DEPS_NOT_SATISFIED"
+    err = errors.UserError("dirty worktree")
+    env = errors.build_envelope(err, error_code=ErrorCode.WORKTREE_DIRTY)
+    assert env.error_code == "WORKTREE_DIRTY"
     assert isinstance(env.error_code, str)
 
 

@@ -886,14 +886,6 @@
      "1.0–4.0"
     ]
    ],
-   "planning": [
-    [
-     "max_parallel_waves",
-     "i",
-     4,
-     "1–16"
-    ]
-   ],
    "preferences": [
     [
      "auto_choose",
@@ -1018,15 +1010,17 @@
      "ORs onto the profile block · never loosens"
     ],
     [
-     "require_iter_audit_accepted",
-     "b",
-     false
-    ],
-    [
      "waiver_mode",
      "e",
      "B",
      "A · B · C"
+    ]
+   ],
+   "worktrees": [
+    [
+     "remove_when_clean",
+     "b",
+     true
     ]
    ]
   },
@@ -1069,9 +1063,6 @@
    ],
    "flow.budget.multiplier": [
     "how much headroom the enforced cap adds over the base budget"
-   ],
-   "planning.max_parallel_waves": [
-    "how many waves may run at once"
    ],
    "preferences.auto_choose": [
     "whether the planner answers its own questions",
@@ -1143,9 +1134,9 @@
     [
      "dispatch",
      "flow",
-     "planning",
      "research",
-     "runtime"
+     "runtime",
+     "worktrees"
     ]
    ],
    [
@@ -1194,15 +1185,15 @@
     "cat": "EXECUTION"
    },
    {
-    "section": "planning",
-    "cat": "EXECUTION"
-   },
-   {
     "section": "research",
     "cat": "EXECUTION"
    },
    {
     "section": "runtime",
+    "cat": "EXECUTION"
+   },
+   {
+    "section": "worktrees",
     "cat": "EXECUTION"
    },
    {
@@ -1263,15 +1254,15 @@
     "cat": "EXECUTION"
    },
    {
-    "section": "planning",
-    "cat": "EXECUTION"
-   },
-   {
     "section": "research",
     "cat": "EXECUTION"
    },
    {
     "section": "runtime",
+    "cat": "EXECUTION"
+   },
+   {
+    "section": "worktrees",
     "cat": "EXECUTION"
    },
    {
@@ -1310,9 +1301,9 @@
   "sectionOrder": [
    "dispatch",
    "flow",
-   "planning",
    "research",
    "runtime",
+   "worktrees",
    "preferences",
    "profiles",
    "ui",
@@ -1327,7 +1318,6 @@
    "dispatch",
    "estimation",
    "flow",
-   "planning",
    "preferences",
    "profiles",
    "research",

@@ -77,14 +77,21 @@ def test_every_page_ends_with_single_trailing_newline() -> None:
 # --- Coverage ----------------------------------------------------------------
 
 
-def test_schema_pages_cover_every_canonical_model() -> None:
-    """Each canonical model dumps a valid JSON Schema with its title."""
+def test_schema_pages_cover_every_reference_schema() -> None:
+    """Each reference schema dumps a valid JSON Schema with its title."""
     pages = autogen.schema_pages()
-    assert len(pages) == len(autogen.SCHEMA_MODELS)
-    for stem, model in autogen.SCHEMA_MODELS:
+    assert len(pages) == len(autogen.REFERENCE_SCHEMAS)
+    titles: dict[str, str] = {}
+    for stem, build in autogen.REFERENCE_SCHEMAS:
         page = _page(pages, f"{stem}.schema.json")
         schema = json.loads(page.body)
-        assert schema["title"] == model.__name__
+        assert schema == build()
+        titles[stem] = schema["title"]
+    assert titles == {
+        "state": "EawfGenerationDocument",
+        "event": "Event",
+        "output-envelope": "OutputEnvelope",
+    }
 
 
 def test_enums_page_lists_every_state_enum() -> None:
@@ -164,7 +171,7 @@ def test_schema_dump_schema_only_writes_just_json(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
     assert payload["schema_only"] is True
-    assert payload["count"] == len(autogen.SCHEMA_MODELS)
+    assert payload["count"] == len(autogen.REFERENCE_SCHEMAS)
     assert all(p.endswith(".schema.json") for p in payload["written"])
     autogen_dir = tmp_path / autogen.AUTOGEN_RELDIR
     assert not (autogen_dir / "cli.md").exists()

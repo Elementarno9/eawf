@@ -9,14 +9,14 @@ rules:
   - rule_id: eawf.core.roles.executor-ready-spec
     obligation_id: roles.executor.ready-spec
     revision: 1
-    title: Start only a wave whose spec is ready to implement
+    title: Start only a Task whose spec is ready to implement
     zone: steering
     force: must
     effectiveness: behavioral
     instruction: >-
-      Start a wave only when every criterion is typed (kind other than legacy), pins its production call site as file:line and its contracts verbatim, and carries a gate that runs locally, and the file scope is non-empty; otherwise report verdict=blocked naming the gap.
+      Start a Task only when every criterion is typed (kind other than legacy), pins its production call site as file:line and its contracts verbatim, and carries a gate that runs locally, and the file scope is non-empty; otherwise report verdict=blocked naming the gap.
     rationale: >-
-      A criterion that only asks for a function to exist validates existence instead of wiring, so the wave closes green on code nothing calls.
+      A criterion that only asks for a function to exist validates existence instead of wiring, so the Task completes green on code nothing calls.
     scope:
       roles: [executor]
     verification:
@@ -29,9 +29,9 @@ rules:
     force: must
     effectiveness: behavioral
     instruction: >-
-      Accept a wave planned before the legacy-criteria drain despite its kind=legacy rows: flag each legacy row in followups and verify it as written.
+      Accept a Task planned before the legacy-criteria drain despite its kind=legacy rows: flag each legacy row in followups and verify it as written.
     rationale: >-
-      Refusing every pre-drain wave would wall the backlog with blocked verdicts for a defect the wave's author could not have avoided.
+      Refusing every pre-drain Task would wall the backlog with blocked verdicts for a defect the Task's author could not have avoided.
     scope:
       roles: [executor]
     verification:
@@ -44,9 +44,9 @@ rules:
     force: must
     effectiveness: behavioral
     instruction: >-
-      Give evidence_refs one entry per success criterion: a gate command with its exit code, the file:line of the production call site where the behaviour is wired rather than where it is defined, or a store URN; an empty list on a criteria-bearing wave refuses close-ready.
+      Give evidence_refs one entry per success criterion: a gate command with its exit code, the file:line of the production call site where the behaviour is wired rather than where it is defined, or a store URN; an empty list on a criteria-bearing Task refuses completion.
     rationale: >-
-      The parent closes the wave from the report alone, so a criterion without evidence, or evidence pointing at a definition, closes on an unproven claim.
+      The parent settles the Task from the report alone, so a criterion without evidence, or evidence pointing at a definition, completes on an unproven claim.
     scope:
       roles: [executor]
     verification:
@@ -59,7 +59,7 @@ rules:
     force: must
     effectiveness: behavioral
     instruction: >-
-      List in files_changed every repository path the commit actually touched; the parent syncs the wave's file scopes from it before close.
+      List in files_changed every repository path the commit actually touched; the parent syncs the Task's claimed paths from it before completion.
     rationale: >-
       A planned scope drifts from the real diff, and a stale scope makes the close checks inspect the wrong files.
     scope:
@@ -69,12 +69,12 @@ rules:
   - rule_id: eawf.core.roles.executor-no-eawf-in-worktree
     obligation_id: roles.executor.no-eawf-in-worktree
     revision: 1
-    title: Run no eawf command inside a wave worktree
+    title: Run no eawf command inside a Task worktree
     zone: steering
     force: must
     effectiveness: behavioral
     instruction: >-
-      Run no eawf command inside a wave worktree; the parent closes the wave from your report.
+      Run no eawf command inside a Task worktree; the parent settles the Task from your report.
     rationale: >-
       A worktree shares the daemon and the state store with the parent, so a state command run there mutates or reverts the parent's live state.
     scope:
@@ -106,7 +106,7 @@ rules:
     instruction: >-
       Never accept that a function exists as evidence for a wired-at-call-site criterion; demand the file:line of its production call site.
     rationale: >-
-      A defined function with no caller is the most common way a wave closes without delivering its behaviour.
+      A defined function with no caller is the most common way a Task completes without delivering its behaviour.
     scope:
       roles: [auditor]
     verification:

@@ -4,9 +4,7 @@
 (iter or phase) must back its ``--checkpoint`` ref with a commit that
 actually exists. The cadence validates the *one* commit a close names and
 never demands a per-wave pin: a batched close lands several waves under a
-single ``state:`` bookkeeping commit that carries no per-wave proof, which
-is also why ``tools/commit_prefix_lint.py`` exempts ``state:`` commits from
-the CLAIMED-wave-proof branch.
+single ``state:`` bookkeeping commit that carries no per-wave proof.
 
 The cadence stays inert -- it returns no blocker -- whenever it cannot
 answer its own question honestly: no repository root in hand, no git work

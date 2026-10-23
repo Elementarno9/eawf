@@ -30,18 +30,6 @@ def mod():
     return _load_module()
 
 
-@pytest.fixture(autouse=True)
-def _no_prior_wave_commits(mod, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Default every case to a wave with no commit yet on ``HEAD``.
-
-    Without this the one-commit-per-wave cap would shell out to the real
-    repository, where fixture subjects such as ``[P14-W02]`` genuinely exist
-    on trunk — every unrelated case would start failing as history grows. The
-    cap's own cases re-patch this to model a wave that already has a commit.
-    """
-    monkeypatch.setattr(mod, "_prior_wave_commits", lambda *_a, **_kw: [])
-
-
 _CLAUDE_TRAILER = "\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n"
 _CODEX_TRAILER = "\n\nCo-Authored-By: Codex <noreply@openai.com>\n"
 
@@ -53,18 +41,178 @@ def _write_msg(tmp_path: Path, body: str, *, with_trailer: bool = True) -> Path:
     return p
 
 
-def test_accepts_well_formed_wave_commit(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "[P14-W02] feat: add commit-prefix linter\n\nbody\n")
+def _repo_without_vcs_override(tmp_path: Path) -> Path:
+    """Return a repo root whose ``.ea/`` carries no ``vcs`` config block."""
+    repo = tmp_path / "no-override-repo"
+    (repo / ".ea").mkdir(parents=True)
+    return repo
+
+
+# --- subject grammar ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("commit_type", ["feat", "fix", "chore", "docs", "refactor", "test"])
+def test_accepts_conventional_subject(tmp_path: Path, mod, commit_type: str) -> None:
+    msg = _write_msg(tmp_path, f"{commit_type}: add the thing\n\nbody\n")
     code, diag = mod.lint(msg, ["src/eawf/x.py"])
     assert code == 0, diag
 
 
-def test_accepts_codex_coauthor_trailer(tmp_path: Path, mod) -> None:
-    msg = tmp_path / "COMMIT_EDITMSG"
-    msg.write_text(
-        "[P14-W02] feat: add commit-prefix linter\n\nbody" + _CODEX_TRAILER,
+@pytest.mark.parametrize(
+    "subject",
+    [
+        "[P14-W02] feat: a wave-form subject",
+        "[P14-I02-W03] fix: a long wave-form subject",
+        "[P14] state: a bare phase subject",
+        "[P14-I01] docs: a bare iter subject",
+        "[P14-CORE] state: the retired core suffix",
+    ],
+    ids=["wave", "long-wave", "bare-phase", "bare-iter", "core"],
+)
+def test_rejects_retired_lifecycle_subject(tmp_path: Path, mod, subject: str) -> None:
+    msg = _write_msg(tmp_path, f"{subject}\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 1
+    assert "commit subject rejected" in diag
+    assert "'<type>: <summary>'" in diag
+
+
+@pytest.mark.parametrize(
+    "subject",
+    ["gizmo: an unknown type", "feat:no space", "feat: ", "add the thing", "Feat: capital"],
+    ids=["unknown-type", "no-space", "empty-summary", "no-type", "capital-type"],
+)
+def test_rejects_malformed_subject(tmp_path: Path, mod, subject: str) -> None:
+    msg = _write_msg(tmp_path, f"{subject}\n")
+    code, diag = mod.lint(msg, [])
+    assert code == 1
+    assert "commit subject rejected" in diag
+
+
+def test_empty_subject_rejected(tmp_path: Path, mod) -> None:
+    msg = _write_msg(tmp_path, "\n# just a comment\n", with_trailer=False)
+    code, diag = mod.lint(msg, [])
+    assert code == 1
+    assert diag == "empty commit subject"
+
+
+def test_skip_comment_lines_then_real_subject(tmp_path: Path, mod) -> None:
+    msg = _write_msg(
+        tmp_path,
+        "# please enter the commit message\n# another comment\nfix: real subject\n",
+    )
+    code, diag = mod.lint(msg, [])
+    assert code == 0, diag
+
+
+def test_accepts_one_character_summary(tmp_path: Path, mod) -> None:
+    msg = _write_msg(tmp_path, "fix: x\n")
+    code, diag = mod.lint(msg, [])
+    assert code == 0, diag
+
+
+def test_rejects_task_trailer_on_an_unmarked_root(tmp_path: Path, mod) -> None:
+    """A Task trailer names native work, which an unmarked root does not have."""
+    msg = _write_msg(tmp_path, "feat: add the thing\n\nTask: EAWF-0001\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"], state_path=tmp_path / ".ea" / "state.json")
+    assert code == 1
+    assert "not marked epoch 2" in diag
+
+
+def test_rejects_a_misplaced_task_trailer(tmp_path: Path, mod) -> None:
+    msg = _write_msg(tmp_path, "feat: add the thing\n\nTask: EAWF-0001\nRefs: elsewhere\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 1
+    assert "out of place" in diag
+
+
+# --- task-prefix deprecation ---------------------------------------------------
+
+
+def test_trailer_default_resolves_without_a_repo_override(tmp_path: Path, mod) -> None:
+    assert mod._configured_subject_style(_repo_without_vcs_override(tmp_path)) == "trailer"
+
+
+def test_trailer_default_yields_to_a_repo_bracket_override(tmp_path: Path, mod) -> None:
+    repo = _repo_without_vcs_override(tmp_path)
+    (repo / ".ea" / "config.yaml").write_text(
+        "vcs:\n  conventions:\n    subject_style: bracket\n",
         encoding="utf-8",
     )
+    assert mod._configured_subject_style(repo) == "bracket"
+
+
+@pytest.mark.parametrize(
+    ("subject", "subject_style", "expected"),
+    [
+        ("[EAWF-0001] feat: task-prefix form", "trailer", True),
+        ("[EAWF-0001] feat: task-prefix form", "bracket", False),
+        ("feat: trailer form", "trailer", False),
+        ("", "trailer", False),
+    ],
+    ids=["prefix-trailer", "prefix-bracket", "conventional", "empty"],
+)
+def test_task_prefix_deprecation_boundaries(
+    mod, subject: str, subject_style: str, expected: bool
+) -> None:
+    warning = mod._task_prefix_deprecation(subject, subject_style=subject_style)
+    assert bool(warning) is expected
+
+
+def test_task_prefix_warning_yields_to_a_missing_coauthor_trailer(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The co-author backstop outranks the advisory warning."""
+    monkeypatch.setattr(mod, "_check_task_scope", lambda **_kwargs: None)
+    msg = _write_msg(tmp_path, "[EAWF-0001] feat: no co-author\n", with_trailer=False)
+    code, diag = mod.lint(msg, ["src/eawf/x.py"], subject_style="trailer")
+    assert code == 1
+    assert "missing recognized co-author trailer" in diag
+
+
+def test_main_prints_the_task_prefix_warning_and_exits_zero(
+    tmp_path: Path,
+    mod,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo = _repo_without_vcs_override(tmp_path)
+    msg = _write_msg(tmp_path, "[EAWF-0001] feat: prefix-form deliverable\n")
+    monkeypatch.setattr(mod, "_find_repo_root", lambda *_args, **_kwargs: repo)
+    monkeypatch.setattr(mod, "_staged_paths", lambda: ["src/eawf/x.py"])
+    monkeypatch.setattr(mod, "_check_task_scope", lambda **_kwargs: None)
+
+    assert mod.main(["commit_prefix_lint.py", str(msg)]) == 0
+    assert "deprecated task-prefix subject" in capsys.readouterr().err
+
+
+def test_main_rejects_a_missing_message_file(
+    tmp_path: Path, mod, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert mod.main(["commit_prefix_lint.py", str(tmp_path / "absent")]) == 1
+    assert "commit message file missing" in capsys.readouterr().err
+
+
+def test_main_without_arguments_prints_usage(mod, capsys: pytest.CaptureFixture[str]) -> None:
+    assert mod.main(["commit_prefix_lint.py"]) == 1
+    assert "usage: commit_prefix_lint.py" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("mode", ["--pre-push", "--check-rewrite"])
+def test_main_has_no_rewrite_guard_mode(
+    tmp_path: Path, mod, mode: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The wave-trailer rewrite guard is retired; its flags read as a message path."""
+    assert mod.main(["commit_prefix_lint.py", mode]) == 1
+    assert "commit message file missing" in capsys.readouterr().err
+
+
+# --- co-author trailer ----------------------------------------------------------
+
+
+def test_accepts_codex_coauthor_trailer(tmp_path: Path, mod) -> None:
+    msg = tmp_path / "COMMIT_EDITMSG"
+    msg.write_text("feat: add the thing\n\nbody" + _CODEX_TRAILER, encoding="utf-8")
     code, diag = mod.lint(msg, ["src/eawf/x.py"])
     assert code == 0, diag
 
@@ -72,744 +220,110 @@ def test_accepts_codex_coauthor_trailer(tmp_path: Path, mod) -> None:
 def test_accepts_both_supported_coauthor_trailers(tmp_path: Path, mod) -> None:
     msg = tmp_path / "COMMIT_EDITMSG"
     msg.write_text(
-        "[P14-W02] feat: add commit-prefix linter\n\nbody" + _CLAUDE_TRAILER + _CODEX_TRAILER,
-        encoding="utf-8",
+        "feat: add the thing\n\nbody" + _CLAUDE_TRAILER + _CODEX_TRAILER, encoding="utf-8"
     )
     code, diag = mod.lint(msg, ["src/eawf/x.py"])
     assert code == 0, diag
-
-
-def test_rejects_bare_phase_prefix_non_state_non_docs_type(tmp_path: Path, mod) -> None:
-    """P19-W05 + P26-W23 + W28: bare ``[P##]`` rejected for types other than
-    ``state`` / ``docs``.
-
-    Bare ``[P##]`` is accepted only for ``type == 'state'`` (bookkeeping) or
-    ``type == 'docs'`` (phase/iter-scoped artifacts). For ``feat`` / ``fix`` /
-    etc. the ``-W##`` suffix remains mandatory (the legacy ``-CORE`` alias
-    is retired).
-    """
-    msg = _write_msg(tmp_path, "[P14] feat: drive-by feature\n")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"])
-    assert code == 1
-    assert "commit subject rejected" in diag
-
-
-def test_rejects_bare_phase_iter_prefix_non_state_non_docs_type(tmp_path: Path, mod) -> None:
-    """``[P##-I##]`` without -W## rejected for types other than state/docs."""
-    msg = _write_msg(tmp_path, "[P14-I02] feat: iter-scope feature\n")
-    code, _diag = mod.lint(msg, ["src/eawf/x.py"])
-    assert code == 1
-
-
-def test_core_suffix_rejected(tmp_path: Path, mod) -> None:
-    """The retired ``-CORE`` suffix no longer matches any subject grammar.
-
-    ``[P##] state: ...`` is now the sole canonical bookkeeping form; a
-    ``-CORE``-suffixed subject falls through to the generic mismatch
-    diagnostic regardless of how whitelist-friendly the staged paths are.
-    """
-    msg = _write_msg(tmp_path, "[P14-CORE] state: close W01\n")
-    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
-    assert code == 1
-    assert "commit subject rejected" in diag
-
-
-def test_accepts_bare_state_type_commit(tmp_path: Path, mod) -> None:
-    """P26-W23: bare ``[P##] state: ...`` is the sole canonical bookkeeping form.
-
-    ``type == 'state'`` is the semantic signal; the legacy ``-CORE`` carrier
-    is retired, so the bare ``[P##]`` prefix is the only accepted spelling.
-    """
-    msg = _write_msg(tmp_path, "[P26] state: close iter + phase (audit=A31-P26)\n")
-    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
-    assert code == 0, diag
-
-
-def test_accepts_bare_state_type_commit_with_iter_component(tmp_path: Path, mod) -> None:
-    """P26-W23: ``[P##-I##] state: ...`` accepted (the -CORE suffix is retired);
-    iter form valid for type=state.
-
-    D54 narrowed the summary this case may carry: the iter-scoped bracket is
-    still accepted, but a summary that closes one named wave now belongs on
-    that wave's commit, so the claim-batch summary is the accepted shape.
-    """
-    msg = _write_msg(tmp_path, "[P26-I02] state: claim the first wave batch\n")
-    code, diag = mod.lint(msg, [".ea/state.json"])
-    assert code == 0, diag
-
-
-def test_rejects_bare_state_type_touching_src(tmp_path: Path, mod) -> None:
-    """P26-W23: bare ``[P##] state:`` triggers the whitelist via type=state.
-
-    The whitelist is bound to ``type == 'state'`` (the semantic signal);
-    the legacy ``-CORE`` suffix is retired and no longer part of the
-    grammar at all. A bare ``[P##] state:`` commit touching ``src/`` is
-    rejected the same way the retired ``[P##-CORE] state:`` form used to be.
-    """
-    msg = _write_msg(tmp_path, "[P26] state: bogus state commit\n")
-    code, diag = mod.lint(msg, [".ea/state.json", "src/eawf/foo.py"])
-    assert code == 1
-    assert "non-state paths" in diag
-    assert "state-type" in diag
-
-
-def test_rejects_bare_state_type_touching_docs(tmp_path: Path, mod) -> None:
-    """P26-W23: bare ``[P##] state:`` triggers whitelist — docs are non-state."""
-    msg = _write_msg(tmp_path, "[P26] state: bogus state commit\n")
-    code, diag = mod.lint(msg, [".ea/state.json", "docs/architecture.md"])
-    assert code == 1
-    assert "non-state paths" in diag
-
-
-def test_accepts_bare_phase_docs_artifact(tmp_path: Path, mod) -> None:
-    """W28: bare ``[P##] docs:`` accepted for phase-scoped artifacts under .ea/artifacts/**."""
-    msg = _write_msg(tmp_path, "[P27] docs: P27 closure audit report (A37, minor)\n")
-    code, diag = mod.lint(msg, [".ea/artifacts/audits/2026-05-23-p27-closure.md"])
-    assert code == 0, diag
-
-
-def test_accepts_bare_iter_docs_artifact(tmp_path: Path, mod) -> None:
-    """W28: ``[P##-I##] docs:`` accepted for artifacts under .ea/artifacts/**."""
-    msg = _write_msg(tmp_path, "[P27-I03] docs: P27-I03 closure audit (A37)\n")
-    code, diag = mod.lint(msg, [".ea/artifacts/audits/2026-05-23-p27-i03-closure.md"])
-    assert code == 0, diag
-
-
-def test_rejects_bare_docs_touching_non_artifact_paths(tmp_path: Path, mod) -> None:
-    """W28: bare ``[P##] docs:`` is path-gated to .ea/artifacts/**; docs/ is rejected."""
-    msg = _write_msg(tmp_path, "[P27] docs: mkdocs reference page\n")
-    code, diag = mod.lint(msg, ["docs/reference/x.md"])
-    assert code == 1
-    assert "non-artifact paths" in diag
-
-
-def test_rejects_bare_docs_touching_src(tmp_path: Path, mod) -> None:
-    """W28: bare ``[P##] docs:`` touching src/ is rejected (not an artifact path)."""
-    msg = _write_msg(tmp_path, "[P27] docs: sneaky src docstring change\n")
-    code, diag = mod.lint(msg, [".ea/artifacts/x.md", "src/eawf/foo.py"])
-    assert code == 1
-    assert "non-artifact paths" in diag
-
-
-def test_accepts_wave_docs_touching_artifact_and_src(tmp_path: Path, mod) -> None:
-    """W28: wave-form ``[P##-W##] docs:`` stays unrestricted (any path)."""
-    msg = _write_msg(tmp_path, "[P27-I03-W40] docs: closure audit + narrative\n")
-    code, diag = mod.lint(msg, [".ea/artifacts/audits/x.md", "docs/reference/y.md"])
-    assert code == 0, diag
-
-
-def test_rejects_missing_prefix(tmp_path: Path, mod) -> None:
-    """A bare conventional-commits subject IS legal when no ACTIVE phase;
-    inject an ACTIVE-phase state.json so this case stays rejected.
-
-    Pinned to ``subject_style="bracket"`` so it exercises the bracket-mode
-    diagnostic; the trailer-mode default has its own rejection text.
-    """
-    msg = _write_msg(tmp_path, "feat: drive-by change\n")
-    state = _write_state(tmp_path, phase_id="P28")
-    code, diag = mod.lint(msg, [], state_path=state, subject_style="bracket")
-    assert code == 1
-    assert "bare conventional-commits subject rejected" in diag
-
-
-def test_rejects_wrong_wave_id_shape(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "[P14-w2] feat: broken\n")
-    code, _diag = mod.lint(msg, [])
-    assert code == 1
-
-
-def test_rejects_wave_zero(tmp_path: Path, mod) -> None:
-    """``[P##-W00]`` rejected: wave indices are 1-based; reactive waves append the next W##."""
-    msg = _write_msg(tmp_path, "[P14-W00] feat: bogus wave index\n")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"])
-    assert code == 1
-    assert "commit subject rejected" in diag
-
-
-def test_rejects_iter_zero(tmp_path: Path, mod) -> None:
-    """``[P##-I00-...]`` rejected: iter indices are 1-based."""
-    msg = _write_msg(tmp_path, "[P14-I00-W01] feat: bogus iter index\n")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"])
-    assert code == 1
-    assert "commit subject rejected" in diag
-
-
-def test_rejects_iter_zero_core(tmp_path: Path, mod) -> None:
-    """``[P##-I00-W##]`` rejected: iter indices are 1-based.
-
-    Rewritten from the retired ``[P##-I00-CORE]`` legacy spelling onto the
-    surviving wave form -- the ``-CORE`` suffix no longer parses at all, so
-    this isolates the I00 rejection on the form that still exists.
-    """
-    msg = _write_msg(tmp_path, "[P14-I00-W02] state: legacy iter-zero shape\n")
-    code, diag = mod.lint(msg, [".ea/state.json"])
-    assert code == 1
-    assert "commit subject rejected" in diag
-
-
-def test_accepts_wave_one(tmp_path: Path, mod) -> None:
-    """``[P##-W01]`` accepted: lowest legal wave index."""
-    msg = _write_msg(tmp_path, "[P14-W01] feat: first wave\n")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"])
-    assert code == 0, diag
-
-
-def test_accepts_max_two_digit_wave(tmp_path: Path, mod) -> None:
-    """``[P##-W99]`` accepted: highest two-digit wave index."""
-    msg = _write_msg(tmp_path, "[P14-W99] feat: hypothetical late wave\n")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"])
-    assert code == 0, diag
-
-
-def test_rejects_unknown_type(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "[P14-W02] gizmo: broken type\n")
-    code, _diag = mod.lint(msg, [])
-    assert code == 1
-
-
-def test_accepts_state_touching_specs(tmp_path: Path, mod) -> None:
-    """Rewritten from the retired ``[P##-CORE] state:`` form.
-
-    Bare ``[P##] state:`` accepts ``.ea/specs/**`` wave-spec paths.
-    """
-    msg = _write_msg(tmp_path, "[P14] state: wave spec\n")
-    code, diag = mod.lint(msg, [".ea/specs/P14-I01-W01.md"])
-    assert code == 0, diag
-
-
-def test_accepts_state_touching_secrets_baseline(tmp_path: Path, mod) -> None:
-    """Rewritten from the retired ``[P##-CORE] state:`` form.
-
-    Bare ``[P##] state:`` accepts ``.secrets.baseline`` alongside
-    ``state.json`` and ``event.jsonl``.
-    """
-    msg = _write_msg(tmp_path, "[P14] state: reopen P14\n")
-    code, diag = mod.lint(
-        msg,
-        [".ea/state.json", ".ea/store/event.jsonl", ".secrets.baseline"],
-    )
-    assert code == 0, diag
-
-
-def test_accepts_state_carrying_release_publication_evidence(tmp_path: Path, mod) -> None:
-    """The release pipeline's evidence step lands in one bare state commit.
-
-    It stages the release store, the publication evidence directory, the
-    refreshed baseline and the baseline-hash bump in the pre-commit config.
-    """
-    msg = _write_msg(tmp_path, "[P35] state: land dev4 publication evidence\n")
-    code, diag = mod.lint(
-        msg,
-        [
-            ".ea/store/release_record.jsonl",
-            ".ea/artifacts/evidence/2026-09-26-dev4-publication/dev4-baked.json",
-            ".secrets.baseline",
-            ".pre-commit-config.yaml",
-        ],
-    )
-    assert code == 0, diag
-
-
-def test_rejects_state_touching_precommit_config_without_baseline(tmp_path: Path, mod) -> None:
-    """The pre-commit config rides a state commit only beside a baseline refresh."""
-    msg = _write_msg(tmp_path, "[P35] state: land dev4 publication evidence\n")
-    code, diag = mod.lint(msg, [".ea/store/release_record.jsonl", ".pre-commit-config.yaml"])
-    assert code == 1
-    assert "non-state paths" in diag
-    assert ".pre-commit-config.yaml" in diag
-
-
-def test_rejects_state_touching_non_evidence_artifact(tmp_path: Path, mod) -> None:
-    """Only the evidence subtree of ``.ea/artifacts/`` rides a state commit."""
-    msg = _write_msg(tmp_path, "[P35] state: land dev4 publication evidence\n")
-    code, diag = mod.lint(msg, [".ea/state.json", ".ea/artifacts/audits/x.md"])
-    assert code == 1
-    assert "non-state paths" in diag
-    assert ".ea/artifacts/audits/x.md" in diag
 
 
 @pytest.mark.parametrize(
-    "path",
+    "body",
     [
-        ".ea/artifacts/evidence/2026-09-26-dev4-conformance/x.json",
-        ".ea/artifacts/evidence/loose.json",
-        ".ea/artifacts/evidence/2026-09-26-dev4-publication-notes/x.json",
+        "feat: add thing\n\nbody only, no trailer\n",
+        "feat: add thing\n\nbody\n# Co-Authored-By: Codex <noreply@openai.com>\n",
+        "feat: add thing\n\nbody\n\nCo-Authored-By: Other <noreply@example.com>\n",
     ],
+    ids=["missing", "comment-only", "unrecognized"],
 )
-def test_rejects_state_touching_non_publication_evidence(tmp_path: Path, mod, path: str) -> None:
-    """Only a pipeline ``<date>-<label>-publication/`` directory rides a state commit."""
-    msg = _write_msg(tmp_path, "[P35] state: land dev4 publication evidence\n")
-    code, diag = mod.lint(msg, [".ea/store/release_record.jsonl", path])
-    assert code == 1
-    assert "non-state paths" in diag
-    assert path in diag
-
-
-def test_rejects_state_touching_source_beside_evidence(tmp_path: Path, mod) -> None:
-    """Staging evidence does not open a state commit to source paths."""
-    msg = _write_msg(tmp_path, "[P35] state: land dev4 publication evidence\n")
-    code, diag = mod.lint(
-        msg,
-        [
-            ".ea/artifacts/evidence/2026-09-26-dev4-publication/dev4-baked.json",
-            ".secrets.baseline",
-            "src/eawf/foo.py",
-        ],
-    )
-    assert code == 1
-    assert "non-state paths" in diag
-    assert "src/eawf/foo.py" in diag
-
-
-def test_accepts_wave_commit_with_iter_component(tmp_path: Path, mod) -> None:
-    """Iter component is mandatory for I02+ (single-iter phases stay short)."""
-    msg = _write_msg(tmp_path, "[P14-I02-W01] feat: native plugin layout\n")
-    code, diag = mod.lint(msg, ["src/eawf/runtime/runtimes/codex/plugin_install.py"])
-    assert code == 0, diag
-
-
-def test_accepts_state_touching_audit_store(tmp_path: Path, mod) -> None:
-    """Rewritten from the retired ``[P##-CORE] state:`` form.
-
-    Bare ``[P##] state:`` accepts the typed audit store alongside
-    ``event.jsonl``.
-    """
-    msg = _write_msg(tmp_path, "[P14] state: register audit\n")
-    code, diag = mod.lint(
-        msg,
-        [".ea/state.json", ".ea/store/audit.jsonl", ".ea/store/event.jsonl"],
-    )
-    assert code == 0, diag
-
-
-def test_accepts_state_touching_evidence_store(tmp_path: Path, mod) -> None:
-    # The deterministic close gate appends evidence.jsonl rows as a wave
-    # closes; every per-kind JSONL under .ea/store/ is a committed daemon
-    # store and rides the state-bookkeeping surface.
-    msg = _write_msg(tmp_path, "[P29-I13] state: close wave\n")
-    code, diag = mod.lint(
-        msg,
-        [".ea/state.json", ".ea/store/event.jsonl", ".ea/store/evidence.jsonl"],
-    )
-    assert code == 0, diag
-
-
-def test_empty_subject_rejected(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "\n# just a comment\n", with_trailer=False)
-    code, _diag = mod.lint(msg, [])
-    assert code == 1
-
-
-def test_skip_comment_lines_then_real_subject(tmp_path: Path, mod) -> None:
-    msg = _write_msg(
-        tmp_path,
-        "# please enter the commit message\n# another comment\n[P14-W02] fix: real subject\n",
-    )
-    code, diag = mod.lint(msg, [])
-    assert code == 0, diag
-
-
-def test_rejects_missing_coauthor_trailer(tmp_path: Path, mod) -> None:
-    msg = _write_msg(
-        tmp_path,
-        "[P14-W02] feat: add thing\n\nbody only, no trailer\n",
-        with_trailer=False,
-    )
-    code, diag = mod.lint(msg, ["src/eawf/x.py"])
-    assert code == 1
-    assert "missing recognized co-author trailer" in diag
-
-
-def test_rejects_comment_only_coauthor_trailer(tmp_path: Path, mod) -> None:
-    msg = _write_msg(
-        tmp_path,
-        (
-            "[P14-W02] feat: add thing\n\nbody only, no trailer\n"
-            "# Co-Authored-By: Codex <noreply@openai.com>\n"
-        ),
-        with_trailer=False,
-    )
-    code, diag = mod.lint(msg, ["src/eawf/x.py"])
-    assert code == 1
-    assert "missing recognized co-author trailer" in diag
-
-
-def test_rejects_unrecognized_coauthor_trailer(tmp_path: Path, mod) -> None:
-    msg = _write_msg(
-        tmp_path,
-        "[P14-W02] feat: add thing\n\nbody\n\nCo-Authored-By: Other <noreply@example.com>\n",
-        with_trailer=False,
-    )
+def test_rejects_without_a_recognized_coauthor_trailer(tmp_path: Path, mod, body: str) -> None:
+    msg = _write_msg(tmp_path, body, with_trailer=False)
     code, diag = mod.lint(msg, ["src/eawf/x.py"])
     assert code == 1
     assert "missing recognized co-author trailer" in diag
 
 
 def test_disabled_coauthor_policy_rejects_any_trailer(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "[P17-W02] feat: registry coauthor policy\n")
+    msg = _write_msg(tmp_path, "feat: registry coauthor policy\n")
     code, diag = mod.lint(msg, ["src/eawf/x.py"], env={"EAWF_COAUTHOR_MODE": "disabled"})
     assert code == 1
     assert "disabled" in diag
 
 
 def test_disabled_coauthor_policy_accepts_no_trailer(tmp_path: Path, mod) -> None:
-    msg = _write_msg(
-        tmp_path,
-        "[P17-W02] feat: registry coauthor policy\n\nbody only\n",
-        with_trailer=False,
-    )
+    msg = _write_msg(tmp_path, "feat: registry coauthor policy\n\nbody\n", with_trailer=False)
     code, diag = mod.lint(msg, ["src/eawf/x.py"], env={"EAWF_COAUTHOR_MODE": "disabled"})
     assert code == 0, diag
 
 
-# ---------------------------------------------------------------------------
-# Bare conventional-commits form (out-of-phase): ``<type>: <subject>``.
-# Accepted only when ``state.current.phase_id is None``. The state path is
-# injected via the *state_path* kwarg so tests do not need to touch the
-# checkout's own ``.ea/state.json``.
-# ---------------------------------------------------------------------------
+# --- state path whitelist ---------------------------------------------------------
 
 
-def _write_state(tmp_path: Path, *, phase_id: str | None) -> Path:
-    state = {
-        "current": {"phase_id": phase_id, "iter_id": None},
-        "phases": {},
-        "iters": {},
-        "waves": {},
-    }
-    p = tmp_path / "state.json"
-    import json as _json
-
-    p.write_text(_json.dumps(state), encoding="utf-8")
-    return p
-
-
-def test_accepts_pre_flight_chore_when_no_active_phase(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "chore: pre-flight chore before roadmap\n\nbody\n")
-    state = _write_state(tmp_path, phase_id=None)
-    code, diag = mod.lint(msg, ["AGENTS.md", "tools/commit_prefix_lint.py"], state_path=state)
+@pytest.mark.parametrize(
+    "staged",
+    [
+        [],
+        [".ea/specs/spec.md"],
+        [".ea/state.json", ".ea/store/event.jsonl", ".secrets.baseline"],
+        [".ea/state.json", ".ea/store/audit.jsonl", ".ea/store/evidence.jsonl"],
+        [
+            ".ea/store/release_record.jsonl",
+            ".ea/artifacts/evidence/2026-09-26-dev4-publication/dev4-baked.json",
+            ".secrets.baseline",
+            ".pre-commit-config.yaml",
+        ],
+    ],
+    ids=["empty", "specs", "baseline", "stores", "publication-evidence"],
+)
+def test_state_commit_accepts_bookkeeping_paths(tmp_path: Path, mod, staged: list[str]) -> None:
+    msg = _write_msg(tmp_path, "state: land the bookkeeping\n")
+    code, diag = mod.lint(msg, staged)
     assert code == 0, diag
 
 
-def test_accepts_trailer_style_wave_commit_when_configured(tmp_path: Path, mod) -> None:
-    repo = tmp_path / "repo"
-    (repo / ".ea").mkdir(parents=True)
-    (repo / ".ea" / "config.yaml").write_text(
-        "vcs:\n  conventions:\n    subject_style: trailer\n",
-        encoding="utf-8",
-    )
-    msg = _write_msg(
-        tmp_path,
-        "feat: add trailer-style wave commit\n\nEawf-Wave: P28-I03-W02\n",
-    )
-    state = _write_hierarchy_state(tmp_path, wave_status="claimed", iter_token="I03")
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        repo_root=repo,
-        canonical_state_path=state,
-    )
-    assert code == 0, diag
-
-
-def test_trailer_style_rejects_missing_wave_trailer(tmp_path: Path, mod) -> None:
-    repo = tmp_path / "repo"
-    (repo / ".ea").mkdir(parents=True)
-    (repo / ".ea" / "config.yaml").write_text(
-        "vcs:\n  conventions:\n    subject_style: trailer\n",
-        encoding="utf-8",
-    )
-    msg = _write_msg(tmp_path, "feat: missing wave trailer\n\nbody\n")
-    state = _write_state(tmp_path, phase_id="P28")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"], state_path=state, repo_root=repo)
-    assert code == 1
-    assert "missing Eawf-Wave trailer" in diag
-
-
-def test_bracket_style_still_rejects_active_bare_conventional(tmp_path: Path, mod) -> None:
-    msg = _write_msg(
-        tmp_path,
-        "feat: bracket mode ignores trailer escape\n\nEawf-Wave: P28-I03-W02\n",
-    )
-    state = _write_state(tmp_path, phase_id="P28")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"], state_path=state, subject_style="bracket")
-    assert code == 1
-    assert "bare conventional-commits subject rejected" in diag
-
-
-def test_rejects_bare_conventional_when_active_phase(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "chore: pre-flight scrub for v0.4 design\n\nbody\n")
-    state = _write_state(tmp_path, phase_id="P28")
-    code, diag = mod.lint(
-        msg,
-        ["AGENTS.md", "tools/commit_prefix_lint.py"],
-        state_path=state,
-        subject_style="bracket",
-    )
-    assert code == 1
-    assert "bare conventional-commits subject rejected" in diag
-    assert "ACTIVE phase exists" in diag
-
-
-def test_bare_conventional_no_state_file_treated_as_no_active_phase(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "feat: bootstrap module\n\nbody\n")
-    missing = tmp_path / "missing-state.json"
-    assert not missing.exists()
-    code, diag = mod.lint(msg, ["src/x.py"], state_path=missing)
-    assert code == 0, diag
-
-
-def test_bare_conventional_all_supported_types(tmp_path: Path, mod) -> None:
-    state = _write_state(tmp_path, phase_id=None)
-    for ctype in (
-        "feat",
-        "fix",
-        "chore",
+@pytest.mark.parametrize(
+    ("staged", "stray"),
+    [
+        ([".ea/state.json", "src/eawf/x.py"], "src/eawf/x.py"),
+        ([".ea/state.json", "docs/x.md"], "docs/x.md"),
+        ([".ea/store/release_record.jsonl", ".pre-commit-config.yaml"], ".pre-commit-config.yaml"),
+        ([".ea/state.json", ".ea/artifacts/audits/x.md"], ".ea/artifacts/audits/x.md"),
+        (
+            [".ea/state.json", ".ea/artifacts/evidence/2026-09-26-dev4-conformance/x.json"],
+            ".ea/artifacts/evidence/2026-09-26-dev4-conformance/x.json",
+        ),
+        (
+            [".ea/state.json", ".ea/artifacts/evidence/loose.json"],
+            ".ea/artifacts/evidence/loose.json",
+        ),
+        ([".ea/generations/selected.json"], ".ea/generations/selected.json"),
+    ],
+    ids=[
+        "source",
         "docs",
-        "refactor",
-        "test",
-        "build",
-        "perf",
-        "ci",
-        "revert",
-        "state",
-    ):
-        msg = _write_msg(tmp_path, f"{ctype}: something\n\nbody\n")
-        # Bookkeeping is recognised by its type, so a bare state commit
-        # stages bookkeeping paths like a bracketed one.
-        staged = [".ea/state.json"] if ctype == "state" else ["any/path.py"]
-        code, diag = mod.lint(msg, staged, state_path=state)
-        assert code == 0, f"{ctype} rejected: {diag}"
-
-
-def _write_hierarchy_state(
-    tmp_path: Path,
-    *,
-    wave_status: str,
-    iter_token: str = "I01",
-    phase_status: str = "active",
-    iter_status: str = "active",
-    current_phase_id: str | None = "P28",
-    current_iter_id: str | None = None,
-    filename: str = "hierarchy-state.json",
-) -> Path:
-    """Write one bidirectionally-linked phase/iter/wave lint fixture."""
-    phase_id = "P28"
-    iter_id = f"{phase_id}-{iter_token}"
-    wave_id = f"{iter_id}-W02"
-    current_iter = iter_id if current_iter_id is None else current_iter_id
-    payload = {
-        "current": {
-            "phase_id": current_phase_id,
-            "iter_id": current_iter,
-        },
-        "phases": {
-            phase_id: {
-                "id": phase_id,
-                "status": phase_status,
-                "iter_ids": [iter_id],
-            }
-        },
-        "iters": {
-            iter_id: {
-                "id": iter_id,
-                "phase_id": phase_id,
-                "status": iter_status,
-                "wave_ids": [wave_id],
-            }
-        },
-        "waves": {
-            wave_id: {
-                "id": wave_id,
-                "iter_id": iter_id,
-                "status": wave_status,
-            }
-        },
-    }
-    path = tmp_path / filename
-    import json as _json
-
-    path.write_text(_json.dumps(payload), encoding="utf-8")
-    return path
-
-
-def test_managed_state_decode_failure_rejects_bare_commit(tmp_path: Path, mod) -> None:
-    """A present-but-corrupt managed state never fails open."""
-    state = tmp_path / "state.json"
-    state.write_text("{not-json", encoding="utf-8")
-    msg = _write_msg(tmp_path, "fix: cannot authorize against corrupt state\n")
-
-    code, diag = mod.lint(msg, ["src/eawf/x.py"], state_path=state)
-
+        "config-without-baseline",
+        "audit-artifact",
+        "non-publication-evidence",
+        "loose-evidence",
+        "generation-on-unmarked-root",
+    ],
+)
+def test_state_commit_rejects_non_state_paths(
+    tmp_path: Path, mod, staged: list[str], stray: str
+) -> None:
+    msg = _write_msg(tmp_path, "state: land the bookkeeping\n")
+    code, diag = mod.lint(msg, staged)
     assert code == 1
-    assert "managed state decode failed" in diag
+    assert "non-state paths" in diag
+    assert stray in diag
 
 
-def test_wave_subject_rejects_unknown_hierarchy(tmp_path: Path, mod) -> None:
-    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
-    msg = _write_msg(tmp_path, "[P28-I01-W03] fix: unknown wave\n")
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        canonical_state_path=state,
-    )
-
-    assert code == 1
-    assert "unknown wave reference" in diag
-
-
-def test_wave_subject_rejects_wrong_bidirectional_parent(tmp_path: Path, mod) -> None:
-    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
-    import json as _json
-
-    payload = _json.loads(state.read_text(encoding="utf-8"))
-    payload["iters"]["P28-I01"]["wave_ids"] = []
-    state.write_text(_json.dumps(payload), encoding="utf-8")
-    msg = _write_msg(tmp_path, "[P28-W02] fix: detached wave\n")
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        canonical_state_path=state,
-    )
-
-    assert code == 1
-    assert "does not contain wave" in diag
-
-
-def test_short_wave_subject_normalizes_to_i01(tmp_path: Path, mod) -> None:
-    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
-    msg = _write_msg(tmp_path, "[P28-W02] fix: valid short wave\n")
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        canonical_state_path=state,
-    )
-
+def test_non_state_commit_is_not_path_gated(tmp_path: Path, mod) -> None:
+    msg = _write_msg(tmp_path, "docs: refresh the reference\n")
+    code, diag = mod.lint(msg, [".ea/artifacts/research/x.md", "src/eawf/x.py"])
     assert code == 0, diag
 
 
-def test_source_commit_requires_current_active_phase_and_iter(tmp_path: Path, mod) -> None:
-    state = _write_hierarchy_state(
-        tmp_path,
-        wave_status="claimed",
-        phase_status="closed",
-        iter_status="closed",
-    )
-    msg = _write_msg(tmp_path, "[P28-W02] fix: stale source scope\n")
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        canonical_state_path=state,
-    )
-
-    assert code == 1
-    assert "not current ACTIVE phase" in diag
-
-
-def test_trailer_reference_rejects_unknown_hierarchy(tmp_path: Path, mod) -> None:
-    state = _write_hierarchy_state(tmp_path, wave_status="claimed", iter_token="I03")
-    msg = _write_msg(
-        tmp_path,
-        "fix: bad trailer scope\n\nEawf-Wave: P28-I03-W03\n",
-    )
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        subject_style="trailer",
-        canonical_state_path=state,
-    )
-
-    assert code == 1
-    assert "Eawf-Wave trailer rejected" in diag
-    assert "unknown wave reference" in diag
-
-
-def test_claimed_proof_uses_canonical_state_not_stale_child(tmp_path: Path, mod) -> None:
-    child = _write_hierarchy_state(
-        tmp_path,
-        wave_status="pending",
-        filename="child-state.json",
-    )
-    canonical = _write_hierarchy_state(
-        tmp_path,
-        wave_status="claimed",
-        filename="canonical-state.json",
-    )
-    msg = _write_msg(tmp_path, "[P28-W02] fix: canonical claim proof\n")
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=child,
-        canonical_state_path=canonical,
-    )
-
-    assert code == 0, diag
-
-
-@pytest.mark.parametrize("status", ["claimed", "in_progress"])
-def test_claimed_proof_accepts_live_canonical_status(tmp_path: Path, mod, status: str) -> None:
-    state = _write_hierarchy_state(tmp_path, wave_status=status)
-    msg = _write_msg(tmp_path, "[P28-W02] fix: live proof\n")
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        canonical_state_path=state,
-    )
-
-    assert code == 0, diag
-
-
-def test_claimed_proof_rejects_pending_canonical_state(tmp_path: Path, mod) -> None:
-    child = _write_hierarchy_state(
-        tmp_path,
-        wave_status="claimed",
-        filename="child-state.json",
-    )
-    canonical = _write_hierarchy_state(
-        tmp_path,
-        wave_status="pending",
-        filename="canonical-state.json",
-    )
-    msg = _write_msg(tmp_path, "[P28-W02] fix: pending canonical proof\n")
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=child,
-        canonical_state_path=canonical,
-    )
-
-    assert code == 1
-    assert "canonical status 'pending'" in diag
-
-
-def test_claimed_proof_rejects_missing_canonical_state(tmp_path: Path, mod) -> None:
-    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
-    msg = _write_msg(tmp_path, "[P28-W02] fix: missing canonical proof\n")
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        canonical_state_path=tmp_path / "missing-canonical.json",
-    )
-
-    assert code == 1
-    assert "claimed proof unavailable" in diag
+# --- probes -------------------------------------------------------------------------
 
 
 def test_canonical_state_path_uses_supported_git_common_dir(
@@ -826,659 +340,64 @@ def test_canonical_state_path_uses_supported_git_common_dir(
     monkeypatch.setattr(mod.subprocess, "run", _run)
 
     assert mod._canonical_state_path(tmp_path) == tmp_path / "main" / ".ea" / "state.json"
-    assert seen["args"] == [
-        "git",
-        "rev-parse",
-        "--path-format=absolute",
-        "--git-common-dir",
-    ]
+    assert seen["args"] == ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]
     assert seen["cwd"] == tmp_path
 
 
-def test_accepts_three_digit_wave_id(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "[P28-W100] feat: late wave\n\nbody\n")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"])
-    assert code == 0, diag
-
-
-def test_accepts_three_digit_phase_id(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "[P100-W01] feat: distant phase\n\nbody\n")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"])
-    assert code == 0, diag
-
-
-def test_accepts_release_annotation_on_phase_close_state_commit(tmp_path: Path, mod) -> None:
-    msg = _write_msg(
-        tmp_path,
-        "[P28] state: close iter + phase (audit=A44-P28) (release=v0.4.0)\n\nbody\n",
-    )
-    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
-    assert code == 0, diag
-
-
-def test_rejects_malformed_release_annotation(tmp_path: Path, mod) -> None:
-    msg = _write_msg(
-        tmp_path,
-        "[P28] state: close iter + phase (audit=A44-P28) (release=0.4)\n\nbody\n",
-    )
-    code, diag = mod.lint(msg, [".ea/state.json"])
-    assert code == 1
-    assert "release annotation rejected" in diag
-
-
-def test_check_release_annotation_accepts_v060_phase_close_subject(mod) -> None:
-    """P30-I15-W09: the v0.6.0 phase-close annotation is accepted (returns None).
-
-    The deterministic close commit that ends P30 carries
-    ``(release=v0.6.0)``; ``_check_release_annotation`` returns ``None`` (no
-    rejection) so the annotation rides the ``[P30] state:`` close subject.
-    """
-    subject = "[P30] state: close iter + phase (audit=A50-P30) (release=v0.6.0)"
-    assert mod._check_release_annotation(subject) is None
-
-
-@pytest.mark.parametrize(
-    "annotation",
-    [
-        "(release=0.6.0)",  # missing leading 'v'
-        "(release=v0.6)",  # not MAJOR.MINOR.PATCH
-        "(release=v0.6.0.0)",  # too many segments
-        "(release=v0.6.0-rc1)",  # hyphenated pre-release not accepted
-    ],
-)
-def test_check_release_annotation_rejects_malformed_v060_forms(mod, annotation: str) -> None:
-    """P30-I15-W09: a malformed v0.6.0-shaped annotation is rejected.
-
-    The prefix ``(release=`` is present but the version body does not match
-    ``v<MAJOR>.<MINOR>.<PATCH>[aN|bN|rcN]``, so the linter rejects with the
-    ``release annotation rejected`` diagnostic.
-    """
-    subject = f"[P30] state: close iter + phase (audit=A50-P30) {annotation}"
-    result = mod._check_release_annotation(subject)
-    assert result is not None
-    code, diag = result
-    assert code == 1
-    assert "release annotation rejected" in diag
-
-
-# ---------------------------------------------------------------------------
-# P30-I23-W32: harden the release-annotation lint against the BL-1 fused shape
-# ``(audit=..., release=v0.6.0)`` (the one-character malformation that would
-# silently zero tag + PyPI + npm), and dry-run the drafted W22 phase-close
-# subject against the phase-release.yaml:46 extraction regex.
-# ---------------------------------------------------------------------------
-
-# The drafted W22 phase-close subject that re-closes P30 as v0.6.0. Bare
-# ``[P30] state:`` is the canonical phase-close form; a W-suffixed variant is
-# exercised too since the lint accepts the annotation on any state-type subject.
-_W22_SUBJECT = "[P30] state: close iter + phase (audit=A-P30-I22-ship) (release=v0.6.0)"
-_W22_SUBJECT_WAVE = (
-    "[P30-I21-W22] state: close iter + phase (audit=A-P30-I22-ship) (release=v0.6.0)"
-)
-# BL-1 fused shape: the ``release=`` annotation is welded into the audit paren
-# group instead of standing alone, so the workflow regex never matches it.
-_W22_SUBJECT_FUSED = "[P30] state: close iter + phase (audit=A-P30-I22-ship, release=v0.6.0)"
-
-
-def test_check_release_annotation_rejects_fused_shape(mod) -> None:
-    """CR-01: the fused ``(audit=A-x, release=v0.6.0)`` shape is a hard reject.
-
-    ``release=`` is present, but the annotation is welded into the audit paren
-    group rather than standing alone, so ``_check_release_annotation`` rejects
-    with a diagnostic naming the phase-release.yaml workflow regex.
-    """
-    subject = "[P30] state: close iter + phase (audit=A-x, release=v0.6.0)"
-    result = mod._check_release_annotation(subject)
-    assert result is not None
-    code, diag = result
-    assert code == 1
-    assert "release annotation rejected" in diag
-    assert "phase-release.yaml" in diag
-
-
-def test_check_release_annotation_accepts_standalone_paren_group(mod) -> None:
-    """CR-01: the standalone ``(audit=A-x) (release=v0.6.0)`` group is accepted."""
-    subject = "[P30] state: close iter + phase (audit=A-x) (release=v0.6.0)"
-    assert mod._check_release_annotation(subject) is None
-
-
-def test_lint_rejects_fused_release_annotation(tmp_path: Path, mod) -> None:
-    """CR-01: end-to-end lint rejects the fused shape (exit 1, workflow message)."""
-    msg = _write_msg(
-        tmp_path,
-        "[P30] state: close iter + phase (audit=A-x, release=v0.6.0)\n\nbody\n",
-    )
-    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
-    assert code == 1
-    assert "release annotation rejected" in diag
-    assert "phase-release.yaml" in diag
-
-
-def test_lint_accepts_standalone_release_annotation(tmp_path: Path, mod) -> None:
-    """CR-01: end-to-end lint accepts the standalone paren group (exit 0)."""
-    msg = _write_msg(
-        tmp_path,
-        "[P30] state: close iter + phase (audit=A-x) (release=v0.6.0)\n\nbody\n",
-    )
-    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
-    assert code == 0, diag
-
-
-def test_dry_run_w22_subject_passes_lint(tmp_path: Path, mod) -> None:
-    """CR-02: the drafted W22 phase-close subject passes the lint (exit 0)."""
-    msg = _write_msg(tmp_path, f"{_W22_SUBJECT}\n\nbody\n")
-    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
-    assert code == 0, diag
-
-
-def test_dry_run_w22_wave_suffixed_subject_passes_lint(tmp_path: Path, mod) -> None:
-    """CR-02: the W-suffixed W22 variant also passes the lint (exit 0)."""
-    msg = _write_msg(tmp_path, f"{_W22_SUBJECT_WAVE}\n\nbody\n")
-    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
-    assert code == 0, diag
-
-
-def test_dry_run_fused_w22_subject_fails_lint(tmp_path: Path, mod) -> None:
-    """CR-02: the fused BL-1 shape fails the lint up front."""
-    msg = _write_msg(tmp_path, f"{_W22_SUBJECT_FUSED}\n\nbody\n")
-    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
-    assert code == 1
-    assert "release annotation rejected" in diag
-    assert "phase-release.yaml" in diag
-
-
-@pytest.mark.parametrize("version", ["v0.7.0.dev1", "v0.7.0.dev4", "v0.7.0rc1", "v1.0.0"])
-def test_check_release_annotation_accepts_dev_checkpoint_subject(mod, version: str) -> None:
-    """A dev-checkpoint annotation rides the phase-close subject unrejected.
-
-    ``0.7.0.dev1`` through ``0.7.0.dev4`` are real published checkpoints of the
-    v0.7 release train, so a lint that stops at ``rcN`` blocks four consecutive
-    phase closes. The release-candidate and final spellings are carried in the
-    same parametrize so widening for ``dev`` cannot silently narrow them.
-    """
-    subject = f"[P31] state: close iter + phase (audit=A-P31-CLOSEOUT) (release={version})"
-    assert mod._check_release_annotation(subject) is None
-
-
-# ---------------------------------------------------------------------------
-# Trailer-as-default subject style.
-#
-# ``vcs.conventions.subject_style`` defaults to ``trailer``, so a repository
-# with no ``vcs`` override writes ``<type>: <summary>`` plus an ``Eawf-Wave``
-# body trailer. The bracket wave prefix still passes but warns; the bracketed
-# ``state`` / ``docs`` bookkeeping form stays exempt because it advances no
-# single wave and so has no trailer to carry.
-# ---------------------------------------------------------------------------
-
-
-def _repo_without_vcs_override(tmp_path: Path) -> Path:
-    """Return a repo root whose ``.ea/`` carries no ``vcs`` config block."""
-    repo = tmp_path / "no-override-repo"
-    (repo / ".ea").mkdir(parents=True)
-    return repo
-
-
-def test_trailer_default_resolves_without_a_repo_override(tmp_path: Path, mod) -> None:
-    """No ``vcs.conventions.subject_style`` anywhere resolves to ``trailer``."""
-    assert mod._configured_subject_style(_repo_without_vcs_override(tmp_path)) == "trailer"
-
-
-def test_trailer_default_yields_to_a_repo_bracket_override(tmp_path: Path, mod) -> None:
-    """An explicit repo-layer ``bracket`` still wins over the built-in default."""
-    repo = _repo_without_vcs_override(tmp_path)
-    (repo / ".ea" / "config.yaml").write_text(
-        "vcs:\n  conventions:\n    subject_style: bracket\n",
-        encoding="utf-8",
-    )
-    assert mod._configured_subject_style(repo) == "bracket"
-
-
-def test_trailer_default_warns_on_prefix_form_wave_subject(tmp_path: Path, mod) -> None:
-    """The deprecated bracket wave prefix is accepted with a stderr warning."""
-    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
-    msg = _write_msg(tmp_path, "[P28-W02] feat: prefix-form deliverable\n\nbody\n")
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        repo_root=_repo_without_vcs_override(tmp_path),
-        canonical_state_path=state,
-    )
-
-    assert code == 0
-    assert "deprecated bracket-prefix wave subject" in diag
-    assert "Eawf-Wave: P##-I##-W##" in diag
-
-
-def test_trailer_default_rejects_conventional_subject_without_wave_trailer(
-    tmp_path: Path, mod
-) -> None:
-    """A trailer-style subject with no ``Eawf-Wave`` trailer is a hard reject."""
-    state = _write_state(tmp_path, phase_id="P28")
-    msg = _write_msg(tmp_path, "feat: no wave named anywhere\n\nbody\n")
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        repo_root=_repo_without_vcs_override(tmp_path),
-    )
-
-    assert code == 1
-    assert "missing Eawf-Wave trailer" in diag
-
-
-def test_trailer_default_accepts_conventional_subject_with_wave_trailer(
-    tmp_path: Path, mod
-) -> None:
-    """The written form — bare subject plus trailer — passes with no warning."""
-    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
-    msg = _write_msg(
-        tmp_path,
-        "feat: trailer-form deliverable\n\nbody\n\nEawf-Wave: P28-I01-W02\n",
-    )
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        repo_root=_repo_without_vcs_override(tmp_path),
-        canonical_state_path=state,
-    )
-
-    assert code == 0, diag
-    assert diag == ""
-
-
-def test_trailer_default_accepts_bracketed_state_subject(tmp_path: Path, mod) -> None:
-    """The ``[P##-I##] state:`` bookkeeping form stays exempt from the warning."""
-    state = _write_hierarchy_state(tmp_path, wave_status="pending")
-    msg = _write_msg(tmp_path, "[P28-I01] state: close iter + phase (audit=AUD-1)\n")
-
-    code, diag = mod.lint(
-        msg,
-        [".ea/state.json", ".secrets.baseline"],
-        state_path=state,
-        repo_root=_repo_without_vcs_override(tmp_path),
-        canonical_state_path=state,
-    )
-
-    assert code == 0, diag
-    assert diag == ""
-
-
-def test_trailer_default_accepts_bracketed_docs_subject(tmp_path: Path, mod) -> None:
-    """The sibling bare ``docs:`` artifact form is exempt for the same reason."""
-    state = _write_hierarchy_state(tmp_path, wave_status="pending")
-    msg = _write_msg(tmp_path, "[P28-I01] docs: promote the closure audit\n")
-
-    code, diag = mod.lint(
-        msg,
-        [".ea/artifacts/audits/2026-09-04-closure.md"],
-        state_path=state,
-        repo_root=_repo_without_vcs_override(tmp_path),
-        canonical_state_path=state,
-    )
-
-    assert code == 0, diag
-    assert diag == ""
-
-
-def test_trailer_default_accepts_out_of_phase_subject_without_trailer(tmp_path: Path, mod) -> None:
-    """Boundary: no ACTIVE phase means no wave to name, so a bare subject passes."""
-    state = _write_state(tmp_path, phase_id=None)
-    msg = _write_msg(tmp_path, "chore: pre-flight scrub before the next propose\n")
-
-    code, diag = mod.lint(
-        msg,
-        ["AGENTS.md"],
-        state_path=state,
-        repo_root=_repo_without_vcs_override(tmp_path),
-    )
-
-    assert code == 0, diag
-    assert diag == ""
-
-
-def test_trailer_default_warning_yields_to_a_hard_rejection(tmp_path: Path, mod) -> None:
-    """Error path: a rejected prefix-form commit reports the reject, not the warning."""
-    state = _write_hierarchy_state(tmp_path, wave_status="pending")
-    msg = _write_msg(tmp_path, "[P28-W02] feat: unproven claim\n")
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        repo_root=_repo_without_vcs_override(tmp_path),
-        canonical_state_path=state,
-    )
-
-    assert code == 1
-    assert "canonical status 'pending'" in diag
-    assert "deprecated bracket-prefix" not in diag
-
-
-def test_trailer_default_warning_yields_to_a_missing_coauthor_trailer(tmp_path: Path, mod) -> None:
-    """Error path: the co-author backstop outranks the advisory warning."""
-    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
-    msg = _write_msg(tmp_path, "[P28-W02] feat: no co-author\n", with_trailer=False)
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        repo_root=_repo_without_vcs_override(tmp_path),
-        canonical_state_path=state,
-    )
-
-    assert code == 1
-    assert "missing recognized co-author trailer" in diag
-
-
-def test_trailer_default_bracket_override_silences_the_warning(tmp_path: Path, mod) -> None:
-    """An explicit ``bracket`` repo override accepts the prefix form silently."""
-    repo = _repo_without_vcs_override(tmp_path)
-    (repo / ".ea" / "config.yaml").write_text(
-        "vcs:\n  conventions:\n    subject_style: bracket\n",
-        encoding="utf-8",
-    )
-    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
-    msg = _write_msg(tmp_path, "[P28-W02] feat: prefix-form deliverable\n")
-
-    code, diag = mod.lint(
-        msg,
-        ["src/eawf/x.py"],
-        state_path=state,
-        repo_root=repo,
-        canonical_state_path=state,
-    )
-
-    assert code == 0, diag
-    assert diag == ""
-
-
-@pytest.mark.parametrize(
-    ("subject", "is_bare_bracketed", "expected"),
-    [
-        ("[P28-W02] feat: wave form", False, True),
-        ("[P28-I01] state: bookkeeping", True, False),
-        ("feat: trailer form", False, False),
-        ("", False, False),
-    ],
-    ids=["wave-form", "bare-bracketed", "conventional", "empty"],
-)
-def test_trailer_default_deprecation_helper_boundaries(
-    mod, subject: str, is_bare_bracketed: bool, expected: bool
-) -> None:
-    """Boundary sweep of the deprecation predicate, empty subject included."""
-    warning = mod._bracket_form_deprecation(
-        subject,
-        subject_style="trailer",
-        is_bare_bracketed=is_bare_bracketed,
-    )
-    assert bool(warning) is expected
-
-
-def test_trailer_default_main_prints_the_warning_and_exits_zero(
-    tmp_path: Path,
-    mod,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """The CLI entry point routes the advisory warning to stderr at exit 0."""
-    repo = _repo_without_vcs_override(tmp_path)
-    state = _write_hierarchy_state(tmp_path, wave_status="claimed", filename="state.json")
-    (repo / ".ea" / "state.json").write_bytes(state.read_bytes())
-    msg = _write_msg(tmp_path, "[P28-W02] feat: prefix-form deliverable\n")
-
-    monkeypatch.setattr(mod, "_find_repo_root", lambda *_args, **_kwargs: repo)
-    monkeypatch.setattr(mod, "_staged_paths", lambda: ["src/eawf/x.py"])
-    monkeypatch.setattr(mod, "_canonical_state_path", lambda _root: repo / ".ea" / "state.json")
-
-    exit_code = mod.main(["commit_prefix_lint.py", str(msg)])
-
-    assert exit_code == 0
-    assert "deprecated bracket-prefix wave subject" in capsys.readouterr().err
-
-
-# ---------------------------------------------------------------------------
-# D54 — wave-close bookkeeping rides the wave commit, one commit per wave.
-#
-# The per-wave close record used to land as its own ``[P##-I##] state: close
-# W##`` commit, which is why P30 shipped 1,036 commits for 525 waves. Both
-# halves of the fold are pinned here: the state subject that closes one named
-# wave is rejected, and a wave that already has a commit cannot take a second
-# one outside the state-only amend that folds the bookkeeping in.
-# ---------------------------------------------------------------------------
-
-_STATE_PATHS = [".ea/state.json", ".ea/store/evidence.jsonl"]
-
-
-def _prior(mod, monkeypatch: pytest.MonkeyPatch, shas: list[str]) -> list[list[str]]:
-    """Model a wave that already carries *shas*; record the grep terms used."""
-    seen: list[list[str]] = []
-
-    def _lookup(terms: list[str], **_kwargs) -> list[str]:
-        seen.append(terms)
-        return shas
-
-    monkeypatch.setattr(mod, "_prior_wave_commits", _lookup)
-    return seen
-
-
-def test_close_rides_wave_rejects_single_wave_close_state_subject(tmp_path: Path, mod) -> None:
-    """CR-01: ``[P31-I01] state: close W27`` is rejected — it rides W27's commit."""
-    msg = _write_msg(tmp_path, "[P31-I01] state: close W27\n")
-    code, diag = mod.lint(msg, _STATE_PATHS)
-    assert code == 1
-    assert "single-wave close bookkeeping rejected" in diag
-
-
-def test_close_rides_wave_remedy_names_the_wave_commit(tmp_path: Path, mod) -> None:
-    """CR-01: the remedy names the wave, its commit, and the amend that folds it."""
-    msg = _write_msg(tmp_path, "[P31-I01] state: close W27\n")
-    _code, diag = mod.lint(msg, _STATE_PATHS)
-    assert "W27" in diag
-    assert "wave commit" in diag
-    assert "git commit --amend" in diag
-
-
-def test_close_rides_wave_accepts_claim_batch_state_subject(tmp_path: Path, mod) -> None:
-    """CR-01: a claim batch names no single wave, so it stays its own commit."""
-    msg = _write_msg(tmp_path, "[P31] state: claim the fourth executable wave batch\n")
-    code, diag = mod.lint(msg, _STATE_PATHS)
-    assert code == 0, diag
-
-
-def test_close_rides_wave_accepts_batch_close_state_subject(tmp_path: Path, mod) -> None:
-    """CR-01: closing a *batch* carries a close verb but names no wave token."""
-    msg = _write_msg(tmp_path, "[P31] state: close the third executable wave batch\n")
-    code, diag = mod.lint(msg, _STATE_PATHS)
-    assert code == 0, diag
-
-
-def test_close_rides_wave_accepts_iter_close_state_subject(tmp_path: Path, mod) -> None:
-    """CR-01: the iter + phase close subject is the surviving bare-state form."""
-    msg = _write_msg(tmp_path, "[P31] state: close iter + phase (audit=A-P31)\n")
-    code, diag = mod.lint(msg, _STATE_PATHS)
-    assert code == 0, diag
-
-
-def test_close_rides_wave_accepts_multi_wave_close_state_subject(tmp_path: Path, mod) -> None:
-    """CR-01 boundary: two wave tokens is a batch, not a single-wave close."""
-    msg = _write_msg(tmp_path, "[P31-I01] state: close W27 and W28\n")
-    code, diag = mod.lint(msg, _STATE_PATHS)
-    assert code == 0, diag
-
-
-def test_close_rides_wave_ignores_the_bracket_scope_wave(tmp_path: Path, mod) -> None:
-    """CR-01 boundary: a wave-scoped bracket is not a wave the summary closes."""
-    msg = _write_msg(tmp_path, "[P30-I21-W22] state: close iter + phase (audit=A-x)\n")
-    code, diag = mod.lint(msg, _STATE_PATHS)
-    assert code == 0, diag
-
-
-def test_close_rides_wave_accepts_non_close_verb_state_subject(tmp_path: Path, mod) -> None:
-    """CR-01 boundary: appending a single wave is not closing it."""
-    msg = _write_msg(tmp_path, "[P31] state: append W45 for the trailer commit form\n")
-    code, diag = mod.lint(msg, _STATE_PATHS)
-    assert code == 0, diag
-
-
-def test_close_rides_wave_close_check_skips_non_state_types(tmp_path: Path, mod) -> None:
-    """CR-01 boundary: only ``type == 'state'`` carries close bookkeeping."""
-    msg = _write_msg(tmp_path, "[P31-W27] docs: close W27 out in the open\n")
-    code, diag = mod.lint(msg, ["docs/notes.md"])
-    assert code == 0, diag
-
-
-def test_close_rides_wave_rejects_single_wave_close_on_trailer_form(tmp_path: Path, mod) -> None:
-    """CR-01: the trailer subject style carries the same fold rule."""
-    msg = _write_msg(
-        tmp_path,
-        "state: close W27\n\nEawf-Wave: P31-I01-W27\n",
-    )
-    code, diag = mod.lint(msg, _STATE_PATHS)
-    assert code == 1
-    assert "single-wave close bookkeeping rejected" in diag
-
-
-def test_close_rides_wave_rejects_second_code_commit_for_a_wave(
-    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """CR-01: a wave that already has a commit cannot take a second code commit."""
-    seen = _prior(mod, monkeypatch, ["a" * 40])
-    msg = _write_msg(tmp_path, "[P31-W27] fix: a second bite at the same wave\n")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"])
-    assert code == 1
-    assert "second commit for wave P31-I01-W27" in diag
-    assert "aaaaaaaaaaaa" in diag
-    assert "reactive wave" in diag
-    assert seen == [["[P31-I01-W27]", "[P31-W27]", "Eawf-Wave: P31-I01-W27"]]
-
-
-def test_close_rides_wave_accepts_the_first_commit_for_a_wave(
-    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """CR-01 boundary: no prior commit for the wave -> the cap does not fire."""
-    _prior(mod, monkeypatch, [])
-    msg = _write_msg(tmp_path, "[P31-W27] fix: the one and only commit\n")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"])
-    assert code == 0, diag
-
-
-def test_close_rides_wave_accepts_the_state_only_fold_amend(
-    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """CR-01: the amend that folds the bookkeeping in stages only state paths."""
-    _prior(mod, monkeypatch, ["a" * 40])
-    msg = _write_msg(tmp_path, "[P31-W27] fix: the wave deliverable\n")
-    code, diag = mod.lint(msg, _STATE_PATHS)
-    assert code == 0, diag
-
-
-def test_close_rides_wave_accepts_an_amend_that_stages_nothing(
-    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """CR-01 boundary (empty): a reword amend stages no path and is not capped."""
-    _prior(mod, monkeypatch, ["a" * 40])
-    msg = _write_msg(tmp_path, "[P31-W27] fix: reworded subject\n")
-    code, diag = mod.lint(msg, [])
-    assert code == 0, diag
-
-
-def test_close_rides_wave_cap_exempts_the_paired_golden_refresh(
-    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """CR-01: the ``test:`` golden refresh the pairing gate forces stays legal."""
-    _prior(mod, monkeypatch, ["a" * 40])
-    msg = _write_msg(tmp_path, "[P31-W27] test: repin the goldens the fix moved\n")
-    code, diag = mod.lint(msg, ["tests/golden/agents_md/core_only.md"])
-    assert code == 0, diag
-
-
-def test_close_rides_wave_cap_reads_the_wave_from_the_trailer(
-    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """CR-01: with no bracket prefix the cap resolves the wave from the trailer."""
-    seen = _prior(mod, monkeypatch, ["b" * 40])
-    msg = _write_msg(tmp_path, "fix: trailer-form second bite\n\nEawf-Wave: P31-I02-W03\n")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"])
-    assert code == 1
-    assert "second commit for wave P31-I02-W03" in diag
-    assert seen == [["[P31-I02-W03]", "Eawf-Wave: P31-I02-W03"]]
-
-
-def test_close_rides_wave_cap_skips_a_commit_naming_no_wave(
-    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """CR-01 boundary: a phase-scoped docs commit names no wave to cap."""
-    seen = _prior(mod, monkeypatch, ["a" * 40])
-    msg = _write_msg(tmp_path, "[P31] docs: promote the finalization brief\n")
-    code, diag = mod.lint(msg, [".ea/artifacts/research/brief.md"])
-    assert code == 0, diag
-    assert seen == []
-
-
-# The autouse stub above replaces ``_prior_wave_commits`` for the lint-level
-# cases; the probe's own cases load an unstubbed module so they exercise the
-# real lookup with only ``subprocess.run`` swapped out.
-
-
-def test_close_rides_wave_prior_commits_fails_open_when_git_is_missing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """CR-01 error path: an OSError from the probe yields no predecessors."""
-    probe = _load_module()
-
+def test_prior_commits_fails_open_when_git_is_missing(mod, monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom(*_args, **_kwargs):
         raise OSError("binary not on PATH")
 
-    monkeypatch.setattr(probe.subprocess, "run", _boom)
-    assert probe._prior_wave_commits(["[P31-W27]"], repo_root=None) == []
+    monkeypatch.setattr(mod.subprocess, "run", _boom)
+    assert mod._prior_commits(["Task: EAWF-0001"], repo_root=None) == []
 
 
-def test_close_rides_wave_prior_commits_fails_open_on_timeout(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """CR-01 error path: a timed-out probe yields no predecessors."""
-    probe = _load_module()
-
+def test_prior_commits_fails_open_on_timeout(mod, monkeypatch: pytest.MonkeyPatch) -> None:
     def _slow(*_args, **_kwargs):
-        raise probe.subprocess.TimeoutExpired(cmd="log", timeout=1.0)
+        raise mod.subprocess.TimeoutExpired(cmd="log", timeout=1.0)
 
-    monkeypatch.setattr(probe.subprocess, "run", _slow)
-    assert probe._prior_wave_commits(["[P31-W27]"], repo_root=None) == []
+    monkeypatch.setattr(mod.subprocess, "run", _slow)
+    assert mod._prior_commits(["Task: EAWF-0001"], repo_root=None) == []
 
 
-def test_close_rides_wave_prior_commits_skips_a_non_zero_probe(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """CR-01 error path: an unborn HEAD exits non-zero and contributes nothing."""
-    probe = _load_module()
+def test_prior_commits_skips_a_non_zero_probe(mod, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        probe.subprocess,
+        mod.subprocess,
         "run",
         lambda *_a, **_kw: SimpleNamespace(returncode=128, stdout="", stderr="no HEAD"),
     )
-    assert probe._prior_wave_commits(["[P31-W27]"], repo_root=None) == []
+    assert mod._prior_commits(["Task: EAWF-0001"], repo_root=None) == []
 
 
-def test_close_rides_wave_prior_commits_returns_the_matched_sha(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """CR-01: a matching probe returns the SHA the diagnostic quotes."""
-    probe = _load_module()
+def test_prior_commits_returns_the_matched_sha(mod, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        probe.subprocess,
+        mod.subprocess,
         "run",
         lambda *_a, **_kw: SimpleNamespace(returncode=0, stdout="c" * 40 + "\n", stderr=""),
     )
-    assert probe._prior_wave_commits(["[P31-W27]"], repo_root=None) == ["c" * 40]
+    assert mod._prior_commits(["Task: EAWF-0001"], repo_root=None) == ["c" * 40]
 
 
-def test_close_rides_wave_grep_terms_drop_the_short_form_off_i01(mod) -> None:
-    """CR-01 boundary: only I01 waves have a short bracket spelling to cover."""
-    ref = mod._ScopeRef(phase_id="P31", iter_id="P31-I02", wave_id="P31-I02-W03")
-    assert mod._wave_grep_terms(ref) == ["[P31-I02-W03]", "Eawf-Wave: P31-I02-W03"]
+def test_prior_commits_with_no_terms_runs_no_probe(mod, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _unexpected(*_args, **_kwargs):
+        raise AssertionError("no term, no probe")
+
+    monkeypatch.setattr(mod.subprocess, "run", _unexpected)
+    assert mod._prior_commits([], repo_root=None) == []
+
+
+# --- retired wave checks ----------------------------------------------------------------
+
+
+def test_no_wave_check_remains(mod) -> None:
+    records = mod.NativeRecords(
+        batch_keys=frozenset({"BAT-0007"}),
+        task_batches={"EAWF-0001": "BAT-0007", "EAWF-0002": "BAT-0007"},
+    )
+    message = (
+        "refactor: retire the wave checks\n\nbody\n\n"
+        "Batch: BAT-0007\nTask: EAWF-0001\nTask: EAWF-0002\n"
+    )
+    assert mod.pushed_commit_error(message, ["tools/commit_prefix_lint.py"], records) is None
+    source = _LINT_PATH.read_text(encoding="utf-8")
+    assert [token for token in ("Eawf-Wave", "P##", r"P\d", r"W\d") if token in source] == []

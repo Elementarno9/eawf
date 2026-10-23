@@ -109,7 +109,6 @@ class VerifyConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     odr_blocking: bool = False
-    require_iter_audit_accepted: bool = False
     waiver_mode: VerifyWaiverMode = "B"
     juror_wall_clock_seconds: float = Field(default=600.0, gt=0.0)
     retyped_rule_threshold: int = Field(default=3, ge=1)

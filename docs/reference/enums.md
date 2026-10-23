@@ -1,7 +1,21 @@
 # eawf state enums
 
-This file is the canonical reference for all `StrEnum` classes defined in
-`src/eawf/state/enums.py`. Every enum class in that module cites this document.
+## Lifecycle statuses
+
+The native lifecycle entities keep their stored states beside their models under `src/eawf/kernel/state/epoch2/`.
+
+| Entity | Class | Values | Notes |
+|---|---|---|---|
+| Track | `TrackStatus` | `ACTIVE`, `RETIRED` | `RETIRED` is terminal and never reactivated |
+| Milestone | `MilestoneStatus` | `PLANNED`, `ACTIVE`, `ACCEPTANCE_REVIEW`, `COMPLETED`, `CANCELLED` | the unit an operator accepts |
+| Batch | `BatchStatus` | `PLANNED`, `ACTIVE`, `READY_TO_MERGE`, `MERGING`, `MERGED_PENDING_RECONCILIATION`, `COMPLETED`, `CANCELLED`, `FAILED` | one repository's integration unit |
+| Task | `TaskStatus` | `DRAFT`, `DEFERRED`, `DROPPED`, `PLANNED`, `CLAIMED`, `RUNNING`, `READY_TO_INTEGRATE`, `COMPLETED`, `CANCELLED`, `FAILED` | the draft head is the backlog |
+| Run | `RunStatus` | `QUEUED`, `RUNNING`, `SUSPENDED`, `COMPLETED`, `FAILED`, `CANCELLED` | a suspended Run names its reason |
+| PlanRevision | `PlanRevisionStatus` | `DRAFT`, `VALIDATED`, `APPROVED`, `APPLIED`, `REJECTED`, `SUPERSEDED` | an approval binds the content digest |
+
+## Shared enums
+
+This section covers `StrEnum` classes defined in `src/eawf/kernel/state/enums.py`; the generated [enum catalog](autogen/enums.md) lists every one of them with its members.
 
 | Entity | Field | Class | Values | Notes |
 |---|---|---|---|---|
@@ -10,10 +24,6 @@ This file is the canonical reference for all `StrEnum` classes defined in
 | goal | status | `GoalStatus` | `open`, `achieved`, `abandoned` | Strategic goal tracking |
 | outcome | status | `OutcomeStatus` | `pending`, `met`, `missed`, `waived` | Measurable outcome result |
 | outcome | direction | `OutcomeDirection` | `min`, `max`, `equal`, `range` | Optimization direction for metric |
-| phase | status | `PhaseStatus` | `planned`, `active`, `closed`, `archived` | Roadmap phase lifecycle |
-| iter | status | `IterStatus` | `planned`, `active`, `closed`, `abandoned` | Iteration (sprint) lifecycle |
-| wave | status | `WaveStatus` | `pending`, `claimed`, `in_progress`, `closed`, `failed`, `abandoned` | Wave agent work unit lifecycle |
-| wave | effort_bucket | `EffortBucket` | `XS`, `S`, `M`, `L`, `XL` | Default EU estimate bucket for wave roll-ups |
 | hypothesis | status | `HypothesisStatus` | `pending`, `confirmed`, `rejected`, `inconclusive`, `deferred` | Research hypothesis tracking |
 | hypothesis | verdict | `HypothesisVerdict` | `confirmed`, `rejected`, `inconclusive` | Final verdict on a hypothesis |
 | audit | kind | `AuditKind` | `evaluation`, `ship-gate`, `incident`, `review` | Category of audit event |

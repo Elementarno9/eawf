@@ -343,9 +343,11 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "estimation.eu_basis": "eawf.kernel.config.schema.EstimationConfig",
     "estimation.eu_minutes": "eawf.kernel.config.schema.EstimationConfig",
     "flow.budget.enforce": "eawf.runtime.budget.service.load_budget_config",
+    "local.scratch_root": "eawf.observability.doctor.checks_local_size.check_local_size",
+    "local.size_warn_mb": "eawf.observability.doctor.checks_local_size.check_local_size",
+    "worktrees.remove_when_clean": "eawf.runtime.workspace.lease.removes_clean_worktrees",
     "flow.budget.multiplier": "eawf.runtime.budget.service.load_budget_config",
     "operator.principal": "eawf.surfaces.tui.launch.claimed_principal",
-    "planning.max_parallel_waves": "eawf.observability.doctor.checks.resolve_max_parallel_waves",
     "preferences.auto_choose": (
         "eawf.runtime.daemon.methods.question_decision.resolved_preferences"
     ),
@@ -393,9 +395,6 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
         "eawf.runtime.daemon.verdict_observations.resolve_jury_thresholds"
     ),
     "verify.odr_blocking": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
-    "verify.require_iter_audit_accepted": (
-        "eawf.workflow.verify.readiness._overlay_repo_verify_leaves"
-    ),
     "verify.retyped_rule_threshold": (
         "eawf.observability.reflect.retyped.resolve_retyped_rule_threshold"
     ),
@@ -711,9 +710,9 @@ def test_reserved_config_leaf_set_is_exact() -> None:
         "runtime.adapter_catalog.codex.enabled",
         "runtime.adapter_catalog.opencode.enabled",
     } <= reserved
-    strict_audit = leaf_key_lookup("verify.require_iter_audit_accepted")
-    assert strict_audit.consumer == "eawf.workflow.verify.readiness._overlay_repo_verify_leaves"
-    assert strict_audit.reserved is False
+    waiver = leaf_key_lookup("verify.waiver_mode")
+    assert waiver.consumer == "eawf.workflow.verify.readiness._overlay_repo_verify_leaves"
+    assert waiver.reserved is False
 
 
 def test_leaf_key_lookup_known_key_returns_entry() -> None:
@@ -731,7 +730,8 @@ def test_leaf_key_lookup_unknown_key_raises_canonical_message() -> None:
 
 
 def test_is_known_leaf_key_smoke() -> None:
-    assert is_known_leaf_key("planning.max_parallel_waves") is True
+    assert is_known_leaf_key("research.agent_count") is True
+    assert is_known_leaf_key("planning.max_parallel_waves") is False
     assert is_known_leaf_key("planning.approval") is False
     assert is_known_leaf_key("planning.does_not_exist") is False
 

@@ -4,8 +4,8 @@ Per C08 D7 (revised 2026-05-18 per Q24): v0.3 ships exactly three init
 templates — ``research``, ``engineering``, ``reverse-engineering``.
 ``spike`` and ``hybrid`` are deferred to v0.4+.
 
-Each template seeds only leaves some code reads: the profiles it enables,
-and its wave parallelism.
+Each template seeds only leaves some code reads: the profiles it enables
+and the runtime preference.
 """
 
 from __future__ import annotations
@@ -91,24 +91,6 @@ def test_reverse_engineering_template_enables_core_research_re_profiles() -> Non
 def test_no_template_seeds_the_retired_acceptance_leaves(name: str) -> None:
     """Nothing reads the acceptance leaves, so no template seeds them."""
     assert "acceptance" not in load_init_template(name)
-
-
-def test_research_template_planning_max_parallel_waves_is_two() -> None:
-    """Research bundles default to max_parallel_waves=2 per §5.7.1."""
-    payload = load_init_template("research")
-    assert payload["planning"]["max_parallel_waves"] == 2
-
-
-def test_reverse_engineering_template_max_parallel_waves_is_one() -> None:
-    """RE serialises: each decomp builds on prior (max_parallel_waves=1)."""
-    payload = load_init_template("reverse-engineering")
-    assert payload["planning"]["max_parallel_waves"] == 1
-
-
-def test_engineering_template_max_parallel_waves_is_four() -> None:
-    """Engineering bundles default to max_parallel_waves=4."""
-    payload = load_init_template("engineering")
-    assert payload["planning"]["max_parallel_waves"] == 4
 
 
 @pytest.mark.parametrize("template_name", SHIPPED_TEMPLATES)

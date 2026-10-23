@@ -496,18 +496,18 @@ def test_con123_x_removes_a_deprecated_leaf_from_the_lens_layer(
 def test_con123_arrows_stop_at_the_catalog_range_the_readout_states(
     tree: Path, fixture: Fixture
 ) -> None:
-    sr._write(tree / ".ea" / "config.yaml", "planning:\n  max_parallel_waves: 16\n")
+    sr._write(tree / ".ea" / "config.yaml", "research:\n  agent_count: 12\n")
     view = _view(tree)
     leaf = view.leaf(sr.RANGED_KEY)
     session = _on(view, sr.RANGED_KEY)
 
-    assert "max_parallel_waves · int · 1 to 16" in _body(fixture, view, session)
+    assert "agent_count · int · 1 to 12" in _body(fixture, view, session)
     sr._press(fixture, view, session, ["Enter", "ArrowUp", "ArrowUp"])
     edit = session.edit
     assert edit is not None
-    assert edit["text"] == "16"
+    assert edit["text"] == "12"
     assert step(leaf, "1", False) == "1"
-    assert step(leaf, "40", False) == "16"
+    assert step(leaf, "40", False) == "12"
     assert step(leaf.model_copy(update={"value_range": (1.0, None)}), "40", True) == "41"
 
 

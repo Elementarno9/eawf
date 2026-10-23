@@ -151,7 +151,7 @@ def test_lint_031_a_prior_prefix_form_commit_caps_the_task(
     """One commit per Task counts a commit in either grammar."""
     prior = "e" * 40
     monkeypatch.setattr(
-        mod, "_prior_wave_commits", lambda terms, **_kw: [prior] if "[EAWF-0137]" in terms else []
+        mod, "_prior_commits", lambda terms, **_kw: [prior] if "[EAWF-0137]" in terms else []
     )
 
     code, diag = _lint(mod, tmp_path, native, f"feat: more\n\nTask: EAWF-0137\n{_COAUTHOR}\n")

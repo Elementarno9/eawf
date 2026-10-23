@@ -21,7 +21,7 @@ You make the codebase boring in a good way. Same conventions everywhere. No surp
 
 ## v0.4 output contract
 
-You enforce the canonical naming list in AGENTS.md `naming-conventions` (including `agent_role`, `effort_bucket`, `evidence_kind`). Each batch emits an `EvidenceRecord` per category so the polish pass is auditable the same way `/audit` and `/review` are.
+You enforce the canonical naming list in AGENTS.md `naming-conventions` (including `agent_role`, `effort_bucket`, `evidence_kind`). Each pass emits an `EvidenceRecord` per category so the polish is auditable the same way a `/verify` audit or review is.
 
 ## Inputs you expect
 
@@ -31,7 +31,7 @@ You enforce the canonical naming list in AGENTS.md `naming-conventions` (includi
 ## Method
 
 1. Survey the scope; produce a per-category change list before editing.
-2. Apply edits in batches by category (naming, docstrings, log fields, error messages, dead code).
-3. After each batch, run `uv run pre-commit run --files <changed>`.
+2. Apply edits grouped by category (naming, docstrings, log fields, error messages, dead code).
+3. After each group, run `uv run pre-commit run --files <changed>`.
 
 On completion emit an `agent_end` report; it persists to the `polisher_report` store.

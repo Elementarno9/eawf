@@ -228,7 +228,7 @@ class ErrorEnvelope(BaseModel):
 
     error_code: str | None = None
     """Cause-level :class:`~eawf.surfaces.cli.error_codes.ErrorCode` value layered
-    over the five exit buckets — e.g. ``"WAVE_DEPS_NOT_SATISFIED"``.
+    over the five exit buckets — e.g. ``"WORKTREE_DIRTY"``.
 
     Optional (default ``None``) so existing error sites that do not yet
     pass one keep rendering unchanged. When set, the text branch appends a

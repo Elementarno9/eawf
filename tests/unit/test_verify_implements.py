@@ -9,7 +9,7 @@ Coverage:
   rejects malformed ids.
 * ``_parse_frontmatter`` — happy path + missing-open + missing-close
   + non-mapping body.
-* ``_cadence_matches`` — every-wave/iter/phase/manual matrix +
+* ``_cadence_matches`` — every-task/batch/milestone/manual matrix +
   invalid cadence + invalid trigger.
 * ``check_verify_implements`` — cadence short-circuit, missing spec
   dir, no WaveSpec files, empty diff (no scope changes), missing
@@ -50,7 +50,7 @@ def _audit_spec_factory(**overrides: Any) -> AuditSpec:
         "id": "AU-P25-verify",
         "scope_urn": "urn:eawf:v1:phase:eawf/P25",
         "audit_kind": AuditKind.SHIP_GATE,
-        "cadence": "every-phase",
+        "cadence": "every-milestone",
         "checks": [
             CheckSpec(
                 kind="verify_implements",
@@ -89,7 +89,7 @@ def test_audit_spec_rejects_extra_key() -> None:
                 "id": "AU-1",
                 "scope_urn": "urn:eawf:v1:phase:eawf/P25",
                 "audit_kind": "ship-gate",
-                "cadence": "every-phase",
+                "cadence": "every-milestone",
                 "checks": [
                     {
                         "kind": "verify_implements",
@@ -208,15 +208,15 @@ def test_parse_frontmatter_non_mapping_raises() -> None:
 @pytest.mark.parametrize(
     "cadence, current_trigger, expected",
     [
-        ("every-wave", "every-wave", True),
-        ("every-iter", "every-iter", True),
-        ("every-phase", "every-phase", True),
+        ("every-task", "every-task", True),
+        ("every-batch", "every-batch", True),
+        ("every-milestone", "every-milestone", True),
         ("manual", "manual", True),
-        ("every-wave", "every-iter", False),
-        ("every-wave", "every-phase", False),
-        ("every-phase", "every-wave", False),
-        ("every-phase", "manual", False),
-        ("manual", "every-phase", False),
+        ("every-task", "every-batch", False),
+        ("every-task", "every-milestone", False),
+        ("every-milestone", "every-task", False),
+        ("every-milestone", "manual", False),
+        ("manual", "every-milestone", False),
     ],
 )
 def test_cadence_matches_matrix(cadence: str, current_trigger: str, expected: bool) -> None:
@@ -225,12 +225,12 @@ def test_cadence_matches_matrix(cadence: str, current_trigger: str, expected: bo
 
 def test_cadence_matches_rejects_unknown_cadence() -> None:
     with pytest.raises(ValueError, match="unknown cadence"):
-        _cadence_matches("bogus", "every-phase")
+        _cadence_matches("bogus", "every-milestone")
 
 
 def test_cadence_matches_rejects_unknown_trigger() -> None:
     with pytest.raises(ValueError, match="unknown current_trigger"):
-        _cadence_matches("every-phase", "bogus")
+        _cadence_matches("every-milestone", "bogus")
 
 
 # ---- check_verify_implements ------------------------------------------------
@@ -302,7 +302,7 @@ def _build_spec(args: dict[str, Any]) -> CheckSpec:
 def test_cadence_short_circuit_returns_pass(
     fake_phase_tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # cadence=every-wave but trigger=every-phase → short-circuit pass
+    # cadence=every-task but trigger=every-milestone → short-circuit pass
     def fail_if_called(*_args: Any, **_kwargs: Any) -> set[str]:
         raise AssertionError("git diff must not run when cadence skips")
 
@@ -314,23 +314,23 @@ def test_cadence_short_circuit_returns_pass(
         {
             "phase_id": "P25",
             "diff_base": "main",
-            "cadence": "every-wave",
-            "current_trigger": "every-phase",
+            "cadence": "every-task",
+            "current_trigger": "every-milestone",
         }
     )
     result = check_verify_implements(spec, fake_phase_tree)
     assert result.passed is True
     assert result.details is not None
     assert "skipped" in result.details
-    assert "cadence=every-wave" in result.details
+    assert "cadence=every-task" in result.details
 
 
 def test_missing_phase_dir_fails(tmp_path: Path) -> None:
     spec = _build_spec(
         {
             "phase_id": "P99",
-            "cadence": "every-phase",
-            "current_trigger": "every-phase",
+            "cadence": "every-milestone",
+            "current_trigger": "every-milestone",
         }
     )
     result = check_verify_implements(spec, tmp_path)
@@ -348,8 +348,8 @@ def test_phase_dir_with_no_wavespec_fails(tmp_path: Path) -> None:
     spec = _build_spec(
         {
             "phase_id": "P25",
-            "cadence": "every-phase",
-            "current_trigger": "every-phase",
+            "cadence": "every-milestone",
+            "current_trigger": "every-milestone",
         }
     )
     result = check_verify_implements(spec, tmp_path)
@@ -366,8 +366,8 @@ def test_no_files_in_diff_fails(fake_phase_tree: Path, monkeypatch: pytest.Monke
     spec = _build_spec(
         {
             "phase_id": "P25",
-            "cadence": "every-phase",
-            "current_trigger": "every-phase",
+            "cadence": "every-milestone",
+            "current_trigger": "every-milestone",
         }
     )
     result = check_verify_implements(spec, fake_phase_tree)
@@ -391,8 +391,8 @@ def test_marker_missing_in_changed_file_fails(
     spec = _build_spec(
         {
             "phase_id": "P25",
-            "cadence": "every-phase",
-            "current_trigger": "every-phase",
+            "cadence": "every-milestone",
+            "current_trigger": "every-milestone",
         }
     )
     result = check_verify_implements(spec, fake_phase_tree)
@@ -413,8 +413,8 @@ def test_marker_present_passes(fake_phase_tree: Path, monkeypatch: pytest.Monkey
     spec = _build_spec(
         {
             "phase_id": "P25",
-            "cadence": "every-phase",
-            "current_trigger": "every-phase",
+            "cadence": "every-milestone",
+            "current_trigger": "every-milestone",
         }
     )
     result = check_verify_implements(spec, fake_phase_tree)
@@ -446,8 +446,8 @@ def test_marker_in_unrelated_file_does_not_satisfy(
     spec = _build_spec(
         {
             "phase_id": "P25",
-            "cadence": "every-phase",
-            "current_trigger": "every-phase",
+            "cadence": "every-milestone",
+            "current_trigger": "every-milestone",
         }
     )
     result = check_verify_implements(spec, fake_phase_tree)
@@ -502,8 +502,8 @@ def test_multiple_waves_partial_failure(tmp_path: Path, monkeypatch: pytest.Monk
     spec = _build_spec(
         {
             "phase_id": "P25",
-            "cadence": "every-phase",
-            "current_trigger": "every-phase",
+            "cadence": "every-milestone",
+            "current_trigger": "every-milestone",
         }
     )
     result = check_verify_implements(spec, tmp_path)

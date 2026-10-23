@@ -6,7 +6,7 @@ against actual git refs.
 
 Coverage:
 
-* cadence matrix end-to-end — every-wave / every-iter / every-phase
+* cadence matrix end-to-end — every-task / every-batch / every-milestone
   / manual each fire on their matching trigger, short-circuit
   otherwise.
 * git diff actually drives the file_scopes restriction (marker in
@@ -118,14 +118,14 @@ def _build_spec(args: dict[str, Any]) -> CheckSpec:
 
 
 def test_cadence_skip_does_not_invoke_git(repo_with_spec: Path) -> None:
-    # cadence=manual + trigger=every-phase → must short-circuit even
+    # cadence=manual + trigger=every-milestone → must short-circuit even
     # before computing the diff.
     spec = _build_spec(
         {
             "phase_id": "P25",
             "diff_base": "main",
             "cadence": "manual",
-            "current_trigger": "every-phase",
+            "current_trigger": "every-milestone",
         }
     )
     result = check_verify_implements(spec, repo_with_spec)
@@ -144,8 +144,8 @@ def test_marker_in_diff_passes(repo_with_spec: Path) -> None:
         {
             "phase_id": "P25",
             "diff_base": "main~1",
-            "cadence": "every-phase",
-            "current_trigger": "every-phase",
+            "cadence": "every-milestone",
+            "current_trigger": "every-milestone",
         }
     )
     result = check_verify_implements(spec, repo_with_spec)
@@ -165,8 +165,8 @@ def test_marker_missing_yields_canonical_diagnostic(
         {
             "phase_id": "P25",
             "diff_base": "main~1",
-            "cadence": "every-phase",
-            "current_trigger": "every-phase",
+            "cadence": "every-milestone",
+            "current_trigger": "every-milestone",
         }
     )
     result = check_verify_implements(spec, repo_with_spec)
@@ -193,8 +193,8 @@ def test_marker_in_out_of_scope_file_not_counted(
         {
             "phase_id": "P25",
             "diff_base": "main~1",
-            "cadence": "every-phase",
-            "current_trigger": "every-phase",
+            "cadence": "every-milestone",
+            "current_trigger": "every-milestone",
         }
     )
     result = check_verify_implements(spec, repo_with_spec)
@@ -206,14 +206,14 @@ def test_marker_in_out_of_scope_file_not_counted(
 @pytest.mark.parametrize(
     "cadence, current_trigger, should_fire",
     [
-        ("every-wave", "every-wave", True),
-        ("every-iter", "every-iter", True),
-        ("every-phase", "every-phase", True),
+        ("every-task", "every-task", True),
+        ("every-batch", "every-batch", True),
+        ("every-milestone", "every-milestone", True),
         ("manual", "manual", True),
-        ("every-wave", "every-phase", False),
-        ("every-iter", "every-phase", False),
-        ("every-phase", "every-iter", False),
-        ("manual", "every-phase", False),
+        ("every-task", "every-milestone", False),
+        ("every-batch", "every-milestone", False),
+        ("every-milestone", "every-batch", False),
+        ("manual", "every-milestone", False),
     ],
 )
 def test_cadence_matrix_fires_on_match_only(

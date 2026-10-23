@@ -1,51 +1,55 @@
 # Eä JSON Schema reference
 
-Auto-generated from the canonical Pydantic models. The full JSON Schema of each model is dumped to a sibling `.schema.json` file by `eawf schema dump`; this page summarises the top-level properties.
+Auto-generated from the canonical schemas. The full JSON Schema of each is dumped to a sibling `.schema.json` file by `eawf schema dump`; this page summarises the top-level properties.
 
-## `State`
+## `EawfGenerationDocument`
 
 Full schema: [`state.schema.json`](state.schema.json)
 
 | Property | Required |
 |---|---|
-| `actuals` | no |
-| `agent_sessions` | yes |
-| `artifacts` | yes |
-| `audits` | no |
-| `backlog` | no |
-| `claims` | no |
-| `close_attempts` | no |
-| `current` | yes |
-| `decisions` | no |
+| `actual` | no |
+| `artifact` | no |
+| `audit` | no |
+| `batch` | no |
+| `campaign` | no |
+| `campaign_finding` | no |
+| `canonical_sequence` | no |
+| `capability` | no |
+| `claim` | no |
+| `current` | no |
+| `decision` | no |
 | `dispatch_paused` | no |
-| `estimates` | no |
+| `draft` | no |
+| `estimate` | no |
+| `event` | no |
+| `evidence` | no |
 | `fleet_run` | no |
-| `goals` | no |
-| `health` | no |
-| `hypotheses` | no |
-| `incidents` | no |
-| `indexes` | yes |
-| `iters` | yes |
-| `mcp_grants` | no |
-| `mcp_servers` | no |
-| `memory_index` | no |
-| `open_questions` | no |
-| `outcomes` | no |
-| `phases` | yes |
-| `plugins` | yes |
-| `project` | yes |
-| `sandbox_policies` | no |
+| `health_view` | no |
+| `hypothesis` | no |
+| `incident` | no |
+| `indexes` | no |
+| `lease` | no |
+| `legacy` | no |
+| `memory` | no |
+| `milestone` | no |
+| `open_question` | no |
+| `pending_action` | no |
+| `permission` | no |
+| `plan_revision` | no |
+| `project` | no |
+| `receipt` | no |
+| `release` | no |
+| `repository` | no |
+| `run` | no |
+| `sandbox_policy` | no |
 | `schema_version` | yes |
-| `scope_kind` | yes |
-| `tracks` | no |
-| `updated_at` | yes |
-| `urn` | yes |
-| `wave_dependency_barriers` | no |
-| `wave_dependency_bindings` | no |
-| `wave_integrations` | no |
-| `waves` | yes |
-| `workspace` | yes |
-| `worktrees` | no |
+| `task` | no |
+| `telemetry` | no |
+| `tool_authority` | no |
+| `track` | no |
+| `track_outcome` | no |
+| `workspace` | no |
 
 ## `Event`
 

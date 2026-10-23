@@ -2,7 +2,7 @@
 
 AuditSpec extends :class:`~eawf.workflow.audit_dsl.models.CheckFile` with the
 cadence binding, scope linkage, and verdict citations the audit-DSL
-runner needs at phase / iter / wave close. Per the C03 D10 lock the
+runner needs at Task / Batch / Milestone close. Per the C03 D10 lock the
 ``cadence`` field configures *when* the audit fires; the audit-DSL
 runner consults each ``AuditSpec.cadence`` at the close event and
 dispatches the named kinds only when the cadence matches the
@@ -15,28 +15,25 @@ audits attach to scopes already in state.json, not to spec docs).
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal, get_args
 
-from pydantic import Field
+from pydantic import BeforeValidator, Field
 
-from eawf.kernel.spec.common import VerdictCitation, _StrictModel
+from eawf.kernel.spec.cadence import refuse_retired_cadence
+from eawf.kernel.spec.common import GateCadence, VerdictCitation, _StrictModel
 from eawf.kernel.state.enums import AuditKind
 from eawf.workflow.audit_dsl.models import CheckSpec
 
-# The five cadence enum values the AuditSpec.cadence field accepts.
-# Mirrors :data:`eawf.workflow.audit_dsl.kinds.verify_implements._VALID_CADENCES`
-# AND :data:`eawf.kernel.spec.common.GateCadence` — the spec model owns the
-# contract, the audit-DSL kind + the gate / floor-pack callers apply it.
-#
-# P28-I01-W10 widened the enum from 4 to 5 by adding ``"ship"`` so the
-# verify-spine floor pack (compile_floor_pack) and the GateCadence
-# Literal in :mod:`eawf.kernel.spec.common` share one canonical name
-# per AGENTS.md naming rule 17 (no separate FloorCadence enum).
-AuditCadence = Literal["every-wave", "every-iter", "every-phase", "ship", "manual"]
+# One cadence enum serves the audit, the gate and the profile floor check
+# (AGENTS naming rule 17): the spec model owns the contract, the audit-DSL
+# kind and the floor-pack callers apply it.
+AuditCadence = GateCadence
 
-AUDIT_CADENCE_VALUES: frozenset[str] = frozenset(
-    {"every-wave", "every-iter", "every-phase", "ship", "manual"}
-)
+AUDIT_CADENCE_VALUES: frozenset[str] = frozenset(get_args(AuditCadence))
+
+# The cadence of an authored document: an epoch-1 value is refused with the
+# native value that replaced it rather than read silently.
+AuthoredCadence = Annotated[AuditCadence, BeforeValidator(refuse_retired_cadence)]
 
 
 class AuditSpec(_StrictModel):
@@ -44,9 +41,9 @@ class AuditSpec(_StrictModel):
 
     Cadence enum values (per C03 D10, widened by P28-I01-W10):
 
-    * ``every-wave`` — fires on every wave close.
-    * ``every-iter`` — fires on iter close.
-    * ``every-phase`` — fires on phase close.
+    * ``every-task`` — fires on every Task close.
+    * ``every-batch`` — fires on Batch close.
+    * ``every-milestone`` — fires on Milestone close.
     * ``ship`` — fires on the ship-CI / pre-merge gauntlet.
     * ``manual`` — only operator-driven invocation fires the audit.
 
@@ -62,10 +59,10 @@ class AuditSpec(_StrictModel):
     id: str = Field(min_length=1, max_length=120)
     scope_urn: str = Field(min_length=1)
     audit_kind: AuditKind
-    cadence: AuditCadence
+    cadence: AuthoredCadence
     implements: list[VerdictCitation] = Field(default_factory=list)
     checks: list[CheckSpec] = Field(min_length=1)
     fail_fast: bool = False
 
 
-__all__ = ["AUDIT_CADENCE_VALUES", "AuditCadence", "AuditSpec"]
+__all__ = ["AUDIT_CADENCE_VALUES", "AuditCadence", "AuditSpec", "AuthoredCadence"]

@@ -48,7 +48,7 @@ verify:
     - name: diff-check
       cmd: ["git", "diff", "--check"]
       scope: touched
-      cadence: every-wave
+      cadence: every-task
       policy: warn
       required: true
       timeout_class: quick

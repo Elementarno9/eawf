@@ -6,9 +6,10 @@ the switch to the epoch-2 lifecycle -- an ancestor of the commit that
 first added the opt-in declaration -- may carry any epoch-1 bracket
 scope, including the retired ``-CORE`` suffix and types the grammar no
 longer lists, and is accepted without a warning. A commit after the
-switch is held to the grammar the commit-msg hook enforces today: one of
-the accepted subject forms, and a ``Task`` trailer in its fixed place.
-The deprecated bracket-wave and task-prefix forms warn there.
+switch is held to the grammar the commit-msg hook enforces today, plus
+the bracket-wave and bare phase or iter forms it accepted until the wave
+lifecycle was retired, and a ``Task`` trailer in its fixed place. The
+bracket-wave and task-prefix forms warn there.
 
 Only the message is read. State is not: a Task that was live when its
 commit landed has long since completed, so proving it again here would
@@ -28,9 +29,8 @@ from pathlib import Path
 
 from commit_prefix_lint import (
     _SUBJECT_BARE_CONVENTIONAL_RE,
-    _SUBJECT_BARE_RE,
     _SUBJECT_TASK_PREFIX_RE,
-    _SUBJECT_WAVE_RE,
+    _TYPES,
     _extract_subject,
     task_trailer_position_error,
 )
@@ -41,6 +41,14 @@ SWITCH_MARKER = ".ea/epoch2-opt-in.json"
 #: Any epoch-1 bracket scope the grammar was written in before the switch,
 #: the retired ``-CORE`` suffix and the scopeless ``[CORE]`` included.
 _HISTORICAL_SUBJECT_RE = re.compile(r"^\[(?:P\d{2,}(?:-I\d{2,})?(?:-W\d{2,}|-CORE)?|CORE)\]\s+\S")
+
+#: The epoch-1 subject forms the commit-msg hook accepted until the lifecycle
+#: they named was retired: a wave scope with any type, and a bare phase or iter
+#: scope with ``state`` or ``docs``. History written in them keeps passing.
+_SUBJECT_WAVE_RE = re.compile(
+    r"^\[P\d{2,}(-I(?!00)\d{2,})?-W(?!00)\d{2,}\]\s+" rf"(?P<type>{_TYPES}):\s+\S.*$"
+)
+_SUBJECT_BARE_RE = re.compile(r"^\[P\d{2,}(-I(?!00)\d{2,})?\]\s+(?P<type>state|docs):\s+\S.*$")
 
 _GIT_TIMEOUT_SECONDS = 60.0
 # The separators the ``--format`` below spells as ``%x1e`` and ``%x00``.

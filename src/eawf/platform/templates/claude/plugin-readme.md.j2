@@ -1,12 +1,8 @@
-{#- Plugin tree README. Rendered as-is (no Jinja variables today, but
-    keeping a `.j2` extension keeps the renderer codepath uniform with
-    the manifest templates). -#}
+{#- Plugin tree README. The skill and agent lists are the shipped sets, so
+    the README cannot name a skill the tree does not carry. -#}
 # eawf — Claude Code plugin
 
-Eä Workflow as a Claude Code plugin: skills (`/research`, `/prep`,
-`/audit`, `/ship`, `/review`, `/polish`, `/init`, `/roadmap`,
-`/differentiate`, `/flow`) and agents (researcher, planner, executor,
-auditor, reviewer, polisher, operator, domain-specialist).
+Eä Workflow as a Claude Code plugin: skills ({% for name in skills %}`/{{ name }}`{{ ", " if not loop.last }}{% endfor %}) and agents ({{ agents | join(", ") }}).
 
 ## Install (local marketplace)
 
@@ -15,27 +11,21 @@ auditor, reviewer, polisher, operator, domain-specialist).
 /plugin install eawf@eawf
 ```
 
-After install Claude Code surfaces the skills under their slash names
-and the agents under the standard subagent picker.
+After install Claude Code surfaces the skills under their slash names and the agents under the standard subagent picker.
 
 ## What this plugin contains
 
 - `skills/<name>/SKILL.md` — one per Eä skill.
 - `agents/<role>.md` — one per Eä agent role.
+- `hooks/hooks.json` and `hooks/<event>.sh` — one wrapper per Claude Code event an Eä hook handler serves; each forwards the event to `eawf hook`.
 - `.claude-plugin/plugin.json` — plugin manifest.
 - `.claude-plugin/marketplace.json` — local marketplace descriptor.
+- `eawf-publication.json` — the digest of every rendered file, so drift after render is detectable.
 
-## What is NOT included (v0.1)
+## What is NOT included
 
-- **Hooks**. Eä's custom hook events (`phase_open`, `wave_close`,
-  `iter_open`) do not map onto Claude Code's standard event taxonomy
-  (`SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`). A v0.2 release
-  will add a translation layer; tracked as backlog item B015.
-- **`settings.json`**. The plugin install path
-  (`eawf plugin install claude`) writes settings into a per-repo
-  `.claude/` tree. The plugin-package mode (this tree) intentionally
-  emits no settings so it can ship through the CC marketplace.
-- **`.ea/` state**. State lives in your repo, not in the plugin.
+- **`settings.json`**. The plugin install path (`eawf plugin install claude`) writes settings into a per-repo `.claude/` tree. The plugin-package mode (this tree) intentionally emits no settings so it can ship through the Claude Code marketplace.
+- **`.ea/` state**. The Milestones, Batches, Tasks and Runs live in your repository, not in the plugin.
 
 ## Re-render
 

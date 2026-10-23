@@ -77,8 +77,8 @@ _NUMBERED_RULE_OWNERS: dict[int, str] = {
 # it as its procedure.
 _DOCS_RULE_OWNERS: dict[str, str] = {
     "agent-driven-cadence-adr-pointer": "delivery.cadence-provenance",
-    "agent-driven-large-phase-pr": "delivery.phase-pr-size",
-    "agent-driven-phase-equals-release": "release.phase-cadence",
+    "agent-driven-large-milestone-pr": "delivery.milestone-pr-size",
+    "agent-driven-milestone-equals-release": "release.milestone-cadence",
     "artifact-chassis": "writing.artifact-chassis",
     "clarity-contract": "writing.newcomer-clarity",
     "code-craft-dry": "craft.code.duplication",
@@ -92,7 +92,7 @@ _DOCS_RULE_OWNERS: dict[str, str] = {
     "engineering-principles": "engineering.simplicity",
     "entity-title-naming": "writing.entity-title",
     "gate-fire-proof-sunset": "integrity.gate-fire-proof",
-    "lean-wave-verification": "lifecycle.wave-verification-scope",
+    "lean-task-verification": "lifecycle.task-verification-scope",
     "memory-hygiene": "state.memory-hygiene",
     "naming-conventions": "naming.canonical-names",
     "orchestrator-decision-surface": "integrity.decision-surface",

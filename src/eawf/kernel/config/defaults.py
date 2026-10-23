@@ -202,9 +202,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "default_depth": DEFAULT_RESEARCH_DEPTH.value,
         "agent_count": 4,
     },
-    "planning": {
-        "max_parallel_waves": 4,
-    },
     # AskUserQuestion auto-pick default; a closed enum (see
     # :mod:`eawf.kernel.config.schema`).
     "preferences": {
@@ -221,7 +218,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "jury_max_co_error": 0.10,
         "juror_wall_clock_seconds": 600.0,
         "odr_blocking": False,
-        "require_iter_audit_accepted": False,
         # A rule the operator re-types more often than this within a release
         # must be triaged into a mechanism before the release tags.
         "retyped_rule_threshold": 3,
@@ -280,6 +276,15 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # subscriber reconnect after a cache window does not racing-
         # spawn the daemon mid-warmup.
         "idle_timeout_seconds": 300,
+    },
+    # Heavy spike artefacts live under ``scratch_root``, outside the
+    # repository; doctor warns once ``.ea/local`` grows past ``size_warn_mb``.
+    "local": {
+        "scratch_root": "~/.eawf/scratch",
+        "size_warn_mb": 1024,
+    },
+    "worktrees": {
+        "remove_when_clean": True,
     },
 }
 

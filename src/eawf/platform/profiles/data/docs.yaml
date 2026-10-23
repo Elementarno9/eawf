@@ -11,7 +11,7 @@ verify:
     - name: docs-render-smoke
       cmd: ["uv", "run", "pytest", "tests/unit/test_profile_cli.py", "-q"]
       scope: touched
-      cadence: every-iter
+      cadence: every-batch
       policy: warn
       required: true
       timeout_class: quick

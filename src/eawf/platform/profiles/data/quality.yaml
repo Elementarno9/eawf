@@ -110,7 +110,7 @@ verify:
     - name: code-craft-lint
       cmd: ["uv", "run", "pre-commit", "run", "--all-files"]
       scope: touched
-      cadence: every-wave
+      cadence: every-task
       policy: warn
       required: true
   waiver_mode: B

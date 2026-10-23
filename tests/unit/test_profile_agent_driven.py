@@ -4,18 +4,19 @@ The ``agent_driven`` profile encodes two deliberate *divergences* from the
 small-CL / trunk-based defaults that the bundled ``core`` profile renders,
 plus a pointer to the decisions that ratified them:
 
-- **phase = release** — every closed phase ships as at least a minor release;
-  the phase-close commit bumps the package version and the merge tags it.
+- **Milestone = release** — every accepted Milestone ships as at least a minor
+  release; its acceptance commit bumps the package version and the release cut
+  from the merge tags it.
 - **large PR** — one PR per Milestone (≈ +10k lines is acceptable); do not
   split a Milestone into many small PRs; per-Batch bisectable commits give the
   granularity inside the PR.
 - **ADR pointer** — names Decision D-GIT-HISTORY (one-PR-per-Milestone cadence
   and commit-history regime) and the canonical ``docs/architecture/workflow.md``
   reference so the divergence is auditable and reversible.
-- **lean wave verification** — targeted tests per wave; strict close validates
-  audit-link integrity only, while exact-HEAD provenance stays deferred.
+- **lean Task verification** — targeted tests per Task; the full suite and one
+  audit run once per Batch, bound to the Batch at its exact revision.
 
-The contracts under test mirror the W02 ``quality`` profile suite:
+The contracts under test mirror the ``quality`` profile suite:
 
 - The body loads + validates against the closed ``ProfileBody`` schema.
 - Every render block is the structured triad shape and carries a non-empty
@@ -61,10 +62,10 @@ def _rendered_surface(root: Path, body: ProfileBody) -> str:
 
 #: Render-block ids the agent_driven profile contributes (divergence rules).
 _DIVERGENCE_BLOCK_IDS = {
-    "agent-driven-phase-equals-release",
-    "agent-driven-large-phase-pr",
+    "agent-driven-milestone-equals-release",
+    "agent-driven-large-milestone-pr",
     "agent-driven-cadence-adr-pointer",
-    "lean-wave-verification",
+    "lean-task-verification",
 }
 
 
@@ -73,7 +74,7 @@ def test_agent_driven_profile_loads_and_validates() -> None:
     body = load_profile(_PROFILE_ID)
     assert isinstance(body, ProfileBody)
     assert body.name == _PROFILE_ID
-    assert body.version == "1.1"
+    assert body.version == "1.2"
     # The cadence profile carries no state extensions or instrument needs.
     assert body.state_extensions.fields_required == []
     assert body.instrument_requirements == []
@@ -90,7 +91,7 @@ def test_agent_driven_profile_blocks_target_agents_md() -> None:
 def test_agent_driven_profile_every_block_is_structured_with_verification() -> None:
     """Each block is the structured triad and carries a non-empty verification.
 
-    This is the wave's load-bearing criterion: a divergence rule that does not
+    This is the profile's load-bearing criterion: a divergence rule that does not
     carry a verification line cannot be checked by a reviewer, only asserted.
     """
     body = load_profile(_PROFILE_ID)
@@ -111,10 +112,10 @@ def test_agent_driven_profile_block_ids_are_unique() -> None:
 
 
 def test_agent_driven_profile_renders_divergence_rules(tmp_path: Path) -> None:
-    """Rendering the composed profile emits the phase=release + large-PR rules.
+    """Rendering the composed profile emits the Milestone=release + large-PR rules.
 
     Asserts the divergence content survives the full compose -> render path:
-    the rendered AGENTS.md carries the phase=release semantics, the
+    the rendered AGENTS.md carries the Milestone=release semantics, the
     one-PR-per-Milestone / large-PR rule, and the ADR pointer (Decision id +
     workflow doc).
     """
@@ -129,7 +130,7 @@ def test_agent_driven_profile_renders_divergence_rules(tmp_path: Path) -> None:
     assert rendered.count("### Verification") == block_count
     assert rendered.count("### Rationale") == block_count
     assert rendered.count("### Mechanism") == block_count
-    # phase = release: version bump on phase close.
+    # Milestone = release: version bump on Milestone acceptance.
     assert "at least a minor release" in rendered
     # large PR: one PR per Milestone, do not split.
     assert "one PR per Milestone" in rendered
@@ -142,11 +143,9 @@ def test_agent_driven_profile_renders_divergence_rules(tmp_path: Path) -> None:
     assert "src/eawf/_version.py" in rendered
     assert "declares the version dynamically" in rendered
     assert "static ``project.version``" in rendered
-    assert "exact closing HEAD remains deferred" in rendered
-    assert "does not validate evaluated HEAD" in rendered
-    assert "1-in-4 classification for mechanical waves is advisory" in rendered
-    assert "do not trigger a blocking live auditor spawn" in rendered
-    assert "``flow.max_repair_cycles`` does not enforce it" in rendered
+    assert "``/verify`` binds one Batch at one exact revision" in rendered
+    assert "proved again at the Batch head" in rendered
+    assert "is operator procedure, not a production limit" in rendered
     assert "audit bound to the closing head SHA" not in rendered
     # Each moved rule stays reachable: AGENTS.md links its expansion by path.
     root_text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
@@ -175,7 +174,7 @@ def test_default_core_renders_small_cl_cadence_without_divergence(tmp_path: Path
     """The default ``core``-only render keeps small-CL cadence, no divergence.
 
     The bundled default enables just ``core``; its ``branch-naming`` block
-    frames PR cadence for human-team review ("PRs: one per phase (typical)").
+    frames PR cadence for human-team review ("PRs: one per Milestone (typical)").
     This render must NOT contain the agent-driven divergence blocks — those are
     opt-in. Asserts the two profiles render distinct surfaces.
     """
@@ -186,7 +185,7 @@ def test_default_core_renders_small_cl_cadence_without_divergence(tmp_path: Path
     rendered = target.read_text(encoding="utf-8")
 
     # core's small-CL human-cadence framing survives.
-    assert "PRs: one per phase (typical)" in rendered
+    assert "PRs: one per Milestone (typical)" in rendered
     # The agent-driven divergence rules are absent from the default render.
     assert "at least a minor release" not in rendered
     assert "+10k lines" not in rendered

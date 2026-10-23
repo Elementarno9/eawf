@@ -8,7 +8,7 @@ deliberately coarse so the exit-code contract stays stable.
 
 :class:`ErrorCode` adds the missing precision *without* growing the
 exit-code surface: each cause-level member names one specific failure mode
-(``WAVE_DEPS_NOT_SATISFIED``, ``WORKTREE_DIRTY``, ``RUNTIME_AUTH_EXPIRED``,
+(``SCOPE_CONFLICT``, ``WORKTREE_DIRTY``, ``RUNTIME_AUTH_EXPIRED``,
 ...) and folds onto exactly one of the five buckets via
 :func:`ErrorCode.exit_code`. Operators pivot CI on the precise member while
 the process still exits with the stable bucket code.
@@ -52,10 +52,6 @@ class ErrorCode(StrEnum):
 
     # --- Scope / lifecycle -----------------------------------------------
     SCOPE_CONFLICT = "SCOPE_CONFLICT"
-    WAVE_DEPS_NOT_SATISFIED = "WAVE_DEPS_NOT_SATISFIED"
-    PHASE_NOT_ACTIVE = "PHASE_NOT_ACTIVE"
-    ITER_NOT_ACTIVE = "ITER_NOT_ACTIVE"
-    WAVE_OUT_OF_ORDER_REJECTED = "WAVE_OUT_OF_ORDER_REJECTED"
 
     # --- Worktree / git --------------------------------------------------
     WORKTREE_DIRTY = "WORKTREE_DIRTY"
@@ -111,10 +107,6 @@ _EXIT_CODE_FOR: dict[ErrorCode, int] = {
     # USER_ERROR (1) — operator-fixable input / environment / declined gate.
     ErrorCode.MIGRATION_TARGET_UNKNOWN: exit_codes.USER_ERROR,
     ErrorCode.SCOPE_CONFLICT: exit_codes.USER_ERROR,
-    ErrorCode.WAVE_DEPS_NOT_SATISFIED: exit_codes.USER_ERROR,
-    ErrorCode.PHASE_NOT_ACTIVE: exit_codes.USER_ERROR,
-    ErrorCode.ITER_NOT_ACTIVE: exit_codes.USER_ERROR,
-    ErrorCode.WAVE_OUT_OF_ORDER_REJECTED: exit_codes.USER_ERROR,
     ErrorCode.WORKTREE_DIRTY: exit_codes.USER_ERROR,
     ErrorCode.WORKTREE_BRANCH_STALE: exit_codes.USER_ERROR,
     ErrorCode.RUNTIME_AUTH_EXPIRED: exit_codes.USER_ERROR,

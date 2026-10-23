@@ -1,6 +1,6 @@
 <!-- Generated from the eawf profile render block `comment-economy`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=comment-economy version=1.1 hash=7e59db177a3e9d92 -->
+<!-- BEGIN EAWF:managed id=comment-economy version=1.2 hash=eb41426449d6bd59 -->
 # `comment-economy`
 
 Comments carry why, not what: document every parameter, return and raise, but no restated signatures, change-log narration, or lifecycle ids.
@@ -18,7 +18,7 @@ Keep the API surface documented. A caller reads the docstring instead of the bod
 
 Inline comments are the scarce resource: one per non-obvious decision, none for what the line already says, and a named constant instead of a comment explaining a literal.
 
-Do not narrate history: no wave, iter, or phase ids, no "previously this did X", no audit or decision references (rule 25 already bars provenance from source; this extends it to bare lifecycle ids).
+Do not narrate history: no Task, Batch or Milestone keys, no "previously this did X", no audit or decision references (rule 25 already bars provenance from source; this extends it to bare lifecycle ids).
 
 
 ### Verification

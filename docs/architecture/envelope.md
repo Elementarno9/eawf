@@ -9,8 +9,8 @@ Every workflow skill returns a uniform envelope. Canonical form is JSON; markdow
 ```yaml
 ea_skill_output:
   header:
-    skill: /research | /prep | /audit | /ship | /review | /polish | /init | /roadmap | /differentiate | /flow
-    scope: urn:eawf:v1:state:<owner>/<scope-id>
+    skill: /plan | /dispatch | /verify | /integrate | /research | ...   # open: overlays emit envelopes too
+    scope: eawf://<workspace>/<project>/<repository>/<kind>/<key>
     session: urn:eawf:v1:store:<owner>/sessions/<SES-id>
     started_at: 2026-05-08T12:00:00Z
     finished_at: 2026-05-08T12:34:56Z
@@ -23,7 +23,7 @@ ea_skill_output:
   footer:
     persisted_artifacts: [urn:eawf:v1:artifact:QR/ART-...]
     persisted_store_records: [urn:eawf:v1:store:QR/research/...]
-    state_mutations: [phases.P13.status=active]
+    state_mutations: [milestone/MLS-0030.status=ACTIVE]
     evidence_refs: [urn:eawf:v1:audit:..., urn:eawf:v1:commit:QR/abc123]
     next_valid_actions: [eawf status, /verify]
     warnings:
@@ -40,16 +40,19 @@ Render rules:
 
 ## Per-skill body schemas
 
-Each workflow skill defines a typed `body` payload validated by the JSON Schema below. Body schemas:
+Each workflow skill may define a typed `body` payload under `eawf.workflow.skills.bodies`; a skill without one returns a markdown body. The three lifecycle bodies that drive the native delivery path:
 
-- **`/research`**: `{ brief_id, questions: [{q, answer, confidence, sources}], peer_review: {reviewer_id, findings: [], no_flaws_checks: []}, persisted_brief?: urn }`.
-- **`/prep`**: `{ iter_id, objective, non_goals, dag: [{task_id, deps, file_scope, commands, evidence, risk}], waves: [{wave_id, tasks, worktree_policy, estimate_eu}], acceptance: {checks, baselines}, approval_required: bool }`.
-- **`/audit`**: `{ scope_id, kind: evaluation|ship-gate, checks_run: [{check_id, command, status, output_blob}], outcomes_measured: [{outcome_id, value, threshold, verdict}], hypothesis_verdicts: [{hypothesis_id, verdict, evidence_commit}], findings: [{severity, location, summary, kind: blocker|fix-now|follow-up|false-positive}], audit_artifact_urn }`.
-- **`/ship`**: `{ commit_groups: [{message, files, evidence_refs}], push: {ref, status}, pr: {action, url, template, gates: {ci, reviews, state_valid}}, estimate_vs_actual: {…}, rollback_notes }`.
-- **`/review`**: `{ pr_url, base, head, findings: [{severity, location, comment, suggested_fix}], recommendation: approve|comment| request_changes|fix_locally, posted: bool }`.
-- **`/polish`**: `{ groups: [{topic, scope, risk, items: [{kind: stale_doc|duplicate_rule|broken_link|orphan_artifact|stale_memory| naming_drift, location, action, applied: bool}]}], memory_pass: {promotions, prunes, compactions}, report_only: bool }`.
+- **`/dispatch`** (`DispatchBody`): `{ kind, batch_ref, source_cursor, contract, plan, dispatched, frontier, stopped_on, outcome, reason }`.
+- **`/integrate`** (`IntegrateBody`): `{ kind, action, subject_ref, method, candidates, generation_ids, conflict_refs, verification_receipts, unresolved_request_fields, refusal_code, outcome, reason }`.
+- **`/verify`** (`VerifyBody`): `{ kind, subject_ref, mode, method, head_generation, stage, blocking_criterion_ids, settled_criterion_ids, rows, merge_ready, approval_ref, bundle_digest, acceptance_bundle, unresolved_request_fields, refusal_code, outcome, reason }`.
 
-Skills outside the canonical six (`/init`, `/roadmap`, `/differentiate`, `/flow`) reuse the envelope with skill-specific bodies. `/flow` body wraps a list of nested per-skill envelopes for each phase of the run.
+Other typed bodies:
+
+- **`/research`** (`ResearchBody`): `{ brief_id, questions: [{q, answer, confidence, sources}], peer_review: {reviewer_id, findings: [], no_flaws_checks: []}, persisted_brief?: urn }`.
+- **`/memory`** (`MemoryBody`): `{ kind, verb, name, tier, reason }`.
+- **`/mockup`** (`MockupBody`): `{ target_scope, variants }`.
+
+Every body carries the shared optional `user_question` payload, which strict validation requires when `header.status == "needs_user"`.
 
 ## JSON Schema artifact
 
@@ -65,13 +68,13 @@ cat brief.md | eawf render-output --format json
 
 ## JSONL store record envelope
 
-Every JSONL store record (research, audit, incident, estimate, actual, memory, decision, event, flow) shares this envelope:
+Every JSONL store record (research, audit, incident, estimate, actual, memory, decision, event) shares this envelope:
 
 | Field | Type | Required | Notes |
 |---|---|---:|---|
 | `schema_version` | literal `"1.0"` | yes | store schema |
 | `id` | string | yes | unique in store |
-| `kind` | enum | yes | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `flow` |
+| `kind` | enum | yes | the store kind, such as `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event` |
 | `scope_id` | string / null | yes | lifecycle or owner scope |
 | `created_at` | datetime | yes | append time |
 | `updated_at` | datetime / null | yes | null for immutable events |

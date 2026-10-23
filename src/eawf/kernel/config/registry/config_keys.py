@@ -173,16 +173,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         min_value=1.0,
     ),
     ConfigKey(
-        tab="planning",
-        key="planning.max_parallel_waves",
-        label="Maximum parallel waves",
-        type="int",
-        default=4,
-        description="Repo-wide hard cap for waves in claimed or in-progress status.",
-        min_value=1,
-        max_value=16,
-    ),
-    ConfigKey(
         tab="preferences",
         key="preferences.auto_choose",
         label="AskUserQuestion auto-pick policy",
@@ -304,14 +294,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         description="Highest share of known-bad subjects a jury may pass unanimously.",
         min_value=0.0,
         max_value=1.0,
-    ),
-    ConfigKey(
-        tab="verify",
-        key="verify.require_iter_audit_accepted",
-        label="Require an accepted iter audit",
-        type="bool",
-        default=False,
-        description="Require a completed accepted evaluation audit before iter close.",
     ),
     ConfigKey(
         tab="verify",

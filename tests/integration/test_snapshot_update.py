@@ -78,15 +78,11 @@ def test_inventory_covers_spec_locked_kinds() -> None:
     ``tests/snapshots/svg/golden/`` and driven by ``eawf vfl approve``.
     """
     expected = {
-        "state",
         "envelope",
         "dispatch",
-        "spec",
-        "agent_report",
         "plugin_install",
         "audit_dsl",
         "scenarios",
-        "telemetry",
         "metrics_export",
         "agents_md",
         "svg",
@@ -127,11 +123,7 @@ _REFRESH_SWITCHES: tuple[str, ...] = ("EAWF_REFRESH_GOLDEN", "EAWF_SNAPSHOT_REGE
 #: Repairing a surface forces its removal here, and a newly broken surface
 #: fails the test even though the mapping is non-empty.
 _KNOWN_UNREGENERABLE: dict[str, str] = {
-    "state": "absent",
-    "spec": "absent",
-    "telemetry": "absent",
     "envelope": "no-switch",
-    "agent_report": "no-switch",
     "plugin_install": "no-switch",
     "audit_dsl": "no-switch",
     "metrics_export": "no-switch",
@@ -141,8 +133,8 @@ _KNOWN_UNREGENERABLE: dict[str, str] = {
 }
 
 #: Surfaces whose golden tree is missing on disk. The pairing gate watches
-#: these paths, so it guards an empty set for each.
-_MISSING_GOLDEN_DIRS: frozenset[str] = frozenset({"state", "spec", "telemetry"})
+#: these paths, so it would guard an empty set for each; none is declared.
+_MISSING_GOLDEN_DIRS: frozenset[str] = frozenset()
 
 
 def _regen_defect(surface: SnapshotSurface) -> str | None:

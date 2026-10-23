@@ -1,13 +1,13 @@
 <!-- Generated from the eawf profile render block `orchestrator-decision-surface`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=orchestrator-decision-surface version=1.1 hash=b85bfb9d6dc40f78 -->
+<!-- BEGIN EAWF:managed id=orchestrator-decision-surface version=1.2 hash=59a13dbf2f4f0cb9 -->
 # `orchestrator-decision-surface`
 
 Surface every consequential choice as an explicit question with visual option previews, never a silent default.
 
 ### Rationale
 
-An orchestrating agent that picks silently spends the operator's budget on a decision the operator never saw, and a choice offered as prose alone is answered on vibes. The cost of a wrong pick is a wave of rework; the cost of asking is one round trip. Options compared side by side, with the trade-off drawn rather than described, are the difference between an informed answer and an agreeable one.
+An orchestrating agent that picks silently spends the operator's budget on a decision the operator never saw, and a choice offered as prose alone is answered on vibes. The cost of a wrong pick is a Task of rework; the cost of asking is one round trip. Options compared side by side, with the trade-off drawn rather than described, are the difference between an informed answer and an agreeable one.
 
 
 ### Mechanism

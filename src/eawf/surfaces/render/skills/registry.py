@@ -53,13 +53,13 @@ has at least one resolving + entailing reference; the EviBound
 rung-1 gate in `platform/artifacts/validation.validate_markdown_artifact`
 enforces this at promotion time, not at ingestion). The session also
 emits an optional dispatch-plan when the verdict names a follow-up
-wave the brief informs, so `/prep` and `/roadmap propose` can wire
-the brief into the next wave's References block automatically.
+Task the brief informs, so `/plan` can cite the brief in the next
+Task's spec.
 
 ## Options
 
 - `--depth shallow|medium|deep|exhaustive` — survey budget (file
-  reads, external fetches, cross-wave grep sweeps); read from
+  reads, external fetches, cross-module grep sweeps); read from
   `ctx.args["depth"]`, then the `research.default_depth` layered-config
   leaf (reuses `StageProfile`, no new key). Default `medium`.
 - `--final` — persist a research brief with `references`. Default off.
@@ -73,14 +73,14 @@ the brief into the next wave's References block automatically.
 ## Spike convention
 
 A *spike* — a short read-only investigation done before claiming a
-real wave — is run via `/research` and produces a brief under
+real Task — is run via `/research` and produces a brief under
 `.ea/local/<YYYY-MM-DD>-<slug>.md` (or the conventional
 `.ea/local/research/` sub-directory). The filename follows the
 `<date>-<slug>.md` stem so it sorts chronologically and slug-matches
-the wave, iter, or phase it informs. Briefs stay local-only —
+the Task, Batch or Milestone it informs. Briefs stay local-only —
 `.ea/local/` is gitignored — and are promoted to `.ea/artifacts/`
-only when they inform a decision recorded in `state.json` (the
-artifact-chassis rule then applies). See `spike-workflow` in
+only when they inform a recorded Decision (the artifact-chassis rule
+then applies). See `spike-workflow` in
 AGENTS.md for the full convention.
 
 ## Pre-flight checklist
@@ -92,7 +92,7 @@ AGENTS.md for the full convention.
 - [ ] If this run is a spike, name the brief
       `<YYYY-MM-DD>-<slug>.md` and place it under `.ea/local/` (or
       `.ea/local/research/`) so the dispatch renderer can surface it
-      to the next wave's executor.
+      to the next Task's executor.
 
 ## Decision surfaces
 
@@ -150,15 +150,15 @@ _SPIKE_BODY = """# /spike
 
 A *spike* is a time-boxed read-only investigation that produces
 **direction** — picks across many design axes — to unblock the next
-planning skill. Direction-only means no wave plan, no success
+planning skill. Direction-only means no plan revision, no success
 criteria, and no EU estimates fall out of a spike; those belong to
-`/design` and `/roadmap propose`. Spike writes only under
+`/mockup` and `/plan`. Spike writes only under
 `.ea/local/`.
 
 Three failure modes it prevents:
 
 1. Single-verdict context loss. `/research` answers one question; a
-   rebuild or phase-opening decision has many entangled axes. Spike
+   rebuild or Milestone-opening decision has many entangled axes. Spike
    runs them as multi-round AUQ batches in one session with a rolling
    matrix.
 2. Silent scope creep. Mid-session picks can quietly expand or reduce
@@ -170,14 +170,14 @@ Three failure modes it prevents:
 
 ## When to invoke
 
-Reach for `/spike` when multiple decisions block `/roadmap propose`
+Reach for `/spike` when multiple decisions block `/plan`
 and must be picked together to stay coherent, when a prior attempt
-shipped but missed its briefs and the next phase is a rebuild, or when
+shipped but missed its briefs and the next Milestone is a rebuild, or when
 direction picks span scope-expansions and -reductions that need
 explicit acknowledgement. Pick a neighbour instead when one unknown
 blocks progress and a single verdict lands it (`/research`), or when
 direction is locked and an interactive surface needs a full statechart +
-matrix + journey design (`/design`).
+matrix + journey design (`/mockup`, then `/plan`).
 
 ## Canonical algorithm
 
@@ -185,7 +185,7 @@ matrix + journey design (`/design`).
    `<YYYY-MM-DD>-<slug>.md`.
 2. Frame the multi-axis unknown in one paragraph; list the prior
    briefs feeding the spike (`--from-briefs`). On
-   `--postmortem <phase-id>`, declare the phase under postmortem.
+   `--postmortem <milestone-ref>`, declare the Milestone under postmortem.
 3. Survey: read the cited prior briefs, read source on the verdict
    ladder (verify-before-claim), run `git log` for shipped-vs-spec
    drift. Optionally dispatch worktree subagents for independent
@@ -221,7 +221,7 @@ honours, not engine-parsed flags:
 - `--worktree` — make the execution-spike isolation branch explicit
   and mandatory: when passed, code that imports `eawf.*` runs in a
   dedicated worktree branch rather than the local PoC scope.
-- `--final` / `--from-briefs <paths>` / `--postmortem <phase-id>` — see
+- `--final` / `--from-briefs <paths>` / `--postmortem <milestone-ref>` — see
   the canonical algorithm above.
 
 ## PoC allowance + execution-spike isolation
@@ -261,7 +261,7 @@ run guide when >=1 PoC was built, the postmortem arc when
 
 ## Pre-flight checklist
 
-- [ ] No state mutations; `state.json` untouched. PoCs under
+- [ ] No state mutations; the `.ea/` tree untouched. PoCs under
       `.ea/local/{smoke,poc,research/notes}/` only (gitignored).
 - [ ] If an execution spike that landed runnable code — code is
       isolated (worktree branch for internal deps, local PoC scope for
@@ -284,8 +284,8 @@ run guide when >=1 PoC was built, the postmortem arc when
 
 Round axis picks, scope-delta acknowledgement, and the hand-off
 declaration are all surfaced through `AskUserQuestion` batches — the
-hand-off AUQ options name the unblocked skill (`/roadmap propose`,
-another `/spike`, `/research --final`, or `/design`).
+hand-off AUQ options name the unblocked skill (`/plan`, another
+`/spike`, `/research --final`, or `/mockup`).
 
 ## Output contract
 
@@ -615,12 +615,12 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
         skill_name="spike",
         description=(
             "Read-only multi-axis direction investigation that unblocks"
-            " /roadmap propose or /design: N rounds x M axis picks, optional"
+            " /plan or /mockup: N rounds x M axis picks, optional"
             " postmortem + scope deltas. No state mutations."
         ),
         argument_hint=(
             "<spike-slug> [--final] [--from-briefs <path1,path2,...>]"
-            " [--postmortem <phase-id>] [--rounds=<n>] [--axes-per-round=<m>] [--worktree]"
+            " [--postmortem <milestone-ref>] [--rounds=<n>] [--axes-per-round=<m>] [--worktree]"
         ),
         user_invocable=True,
         disable_model_invocation=False,

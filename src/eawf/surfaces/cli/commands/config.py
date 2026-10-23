@@ -107,7 +107,9 @@ class _ConfigSchema(BaseModel):
     # carry the section.
     tui: dict[str, Any] = Field(default_factory=dict)
     research: dict[str, Any]
-    planning: dict[str, Any]
+    # No shipped leaf lives under ``planning`` any more; an older layer may
+    # still carry the section.
+    planning: dict[str, Any] = Field(default_factory=dict)
     estimation: EstimationConfig
     flow: dict[str, Any]
     vcs: VcsConfig
@@ -115,6 +117,8 @@ class _ConfigSchema(BaseModel):
     # ``dict[str, Any]`` until a later wave hardens the per-key contract
     # (see :mod:`eawf.kernel.config.defaults` for the shipped schema).
     daemon: dict[str, Any]
+    local: dict[str, Any]
+    worktrees: dict[str, Any]
     telemetry: dict[str, Any] = Field(default_factory=dict)
     # ``audit`` and ``ship`` hold only reserved compatibility leaves, which the
     # built-in layer does not state; ``acceptance`` holds no live leaf since the
@@ -487,9 +491,7 @@ def _with_values(pairs: list[str]) -> dict[str, Any]:
 @config_app.command("get")
 def config_get(
     ctx: typer.Context,
-    key: Annotated[
-        str, typer.Argument(help="Dotted config key (e.g. 'planning.max_parallel_waves').")
-    ],
+    key: Annotated[str, typer.Argument(help="Dotted config key (e.g. 'research.agent_count').")],
     scope: Annotated[
         str | None,
         typer.Option("--scope", help="Restrict resolution to a single layer (debug)."),

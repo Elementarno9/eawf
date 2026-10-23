@@ -59,9 +59,9 @@ The packaged tree includes a `hooks/hooks.json` manifest plus a `hooks/<event>.s
 | Layer | Surface | Events |
 |---|---|---|
 | CC plugin manifest (`hooks/hooks.json`) | Handler-backed events Claude Code can observe reliably | `SessionStart`, `SessionEnd` (`SESSION_END`), `SubagentStart`, `SubagentStop`, `PreCompact`, `PermissionRequest`, `UserPromptSubmit` and `PreToolUse`/`PostToolUse`/`PostToolUseFailure` on every tool today, the subagent pair adopting each harness-spawned subagent as a Run and `PermissionRequest` recording each call the host holds for its operator as a provider permission and, for up to `runtime.claude.permission_wait_s` seconds, handing the host a principal's recorded decision (otherwise the host's own prompt decides), and the tool-use events bracketing each `Edit`, `Write` and `MultiEdit` so the edit lands on the Run's transcript as a file change with the trees on either side and a stored diff; `PreToolUse(Bash)`/`PostToolUse(Bash)` filtered to `git commit`/`git push` and `PreCompact` are observable but have no runner-registered handler, so they are not wired |
-| State CLI (`eawf hook run`) | Workflow-internal lifecycle the state writer controls | `wave_open`/`wave_close`, `iter_open`/`iter_close`, `phase_open`/`phase_close`, `pre_audit`/`post_audit` |
+| State CLI (`eawf hook run`) | Workflow-internal events the state writer controls | `pre_audit`/`post_audit` and the retired epoch-1 lifecycle open / close members, none of which a live verb emits; the native lifecycle reports through the daemon's domain events |
 
-Wiring an event with no registered handler would ship an idle no-op script that still fires on every matching Claude Code event (e.g. every `Bash` tool call), so both the repo-install and plugin-package paths subscribe only the handler-backed subset. The workflow-internal events stay fired from inside the state CLI because CC's `UserPromptSubmit` matcher cannot observe slash-command sub-skill dispatch (e.g. `/flow` runs sub-skills internally without re-emitting their slash prompts) and agent calls to the state CLI never trigger a prompt at all. A manifest-level subscription to those events would be lossy in both directions, so the state writer keeps ownership.
+Wiring an event with no registered handler would ship an idle no-op script that still fires on every matching Claude Code event (e.g. every `Bash` tool call), so both the repo-install and plugin-package paths subscribe only the handler-backed subset. The workflow-internal events stay owned by the state CLI because CC's `UserPromptSubmit` matcher cannot observe a sub-skill a skill dispatches internally without re-emitting its slash prompt, and agent calls to the state CLI never trigger a prompt at all. A manifest-level subscription to those events would be lossy in both directions, so the state writer keeps ownership.
 
 Each `hooks.json` entry resolves to `${CLAUDE_PLUGIN_ROOT}/hooks/<event>.sh`, the same wrapper script the repo-install path emits -- payload synthesis, CLI dispatch, and exit codes are byte-identical between the two install modes. The mapping table lives in `src/eawf/runtimes/claude/hook_map.py`; the handler-backed subset is derived from `src/eawf/surfaces/render/hooks.py`'s `HookSpec.has_handler` and is the single source of truth for which events surface in the CC plugin manifest.
 
@@ -182,7 +182,7 @@ Drop the Superpowers plugin entirely from Eä installation. Do not offer the ful
 1. **Fresh-context review** before ship / merge.
 2. **Verification before completion**: no done claim without evidence.
 3. **Systematic debugging**: root cause before fix; after repeated failed fixes, re-question assumptions.
-4. **Safe parallel agents**: parallelize independent investigation; coordinate implementation with wave claims.
+4. **Safe parallel agents**: parallelize independent investigation; coordinate implementation with Task claims.
 5. **Worktree isolation** for non-trivial execution.
 6. **Plan / spec before large edits**, but not generic PLAN.md.
 7. **TDD where applicable**, not universal hard law.
@@ -197,11 +197,11 @@ Eä-provided hooks (rendered by the Claude adapter when enabled):
 |---|---|---|---|---|---|
 | `state-validate` | After any `eawf` state / store mutation | Validate schema, refs, locks, URNs | Eä only | State remains parseable | If failed, rollback write and record repair event |
 | `generated-drift` | After `eawf render`, AGENTS / adapter edits, or pre-ship | Detect generated file drift | Eä only | Reproducible runtime files | Advisory by default; `eawf sync` fixes |
-| `pre-ship-check` | Before `/ship` commit / push / PR | Ensure audit / evidence / memory review exists | `git`; optional `gh` | No unevidenced ship | Blocks unless override policy allows |
+| `pre-ship-check` | Before a Batch commit / push / PR | Ensure audit / evidence / memory review exists | `git`; optional `gh` | No unevidenced ship | Blocks unless override policy allows |
 | `post-edit-lint` | After code file edit by runtime hook | Run scoped lints / checks based on profile | profile tools; optional `uv`, `npm`, `docker` | Faster feedback | Skip if tool missing; report `not_configured` |
 | `secret-scan` | Before commit / ship | Prevent secrets in committed files | Eä regex; optional semgrep rules | Safer commits | False positives ask user |
-| `worktree-gate` | Before 2+ write-capable agents or risky wave | Create / assign worktrees and file scopes | `git` | Isolated parallel writes | If `git` missing, disable parallel writers |
-| `memory-capture` | Session end, `/ship`, `/polish` | Promote useful memories, mark stale ones | Eä only | Better future context | Ask before prune / delete |
+| `worktree-gate` | Before 2+ write-capable agents or a risky Task | Create / assign worktrees and file scopes | `git` | Isolated parallel writes | If `git` missing, disable parallel writers |
+| `memory-capture` | Session end, `/memory` | Promote useful memories, mark stale ones | Eä only | Better future context | Ask before prune / delete |
 | `statusline` | Runtime statusline render / prewarm | Show live state / git / context health | Eä; optional `git`, `gh` | Better orientation | Fall back to compact / plain status |
 | `session-restore` | Runtime session start | Detect interrupted sessions and suggest resume | Eä / Python stdlib | Less lost work | Disabled if transcripts unavailable |
 | `runtime-hook-router` | Runtime `Pre`/`Post` tool event | Route runtime hook events to enabled hooks through Eä native dispatcher | Eä native preferred | One hook entrypoint | If runtime lacks hooks, features degrade to explicit skill / CLI calls |

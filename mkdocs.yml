@@ -103,7 +103,7 @@ nav:
       - Code craft - fail fast: rules/code-craft-fail-fast.md
       - Code craft - single responsibility: rules/code-craft-single-responsibility.md
       - Code craft - explicit over implicit: rules/code-craft-explicit-over-implicit.md
-      - Phase equals release: rules/agent-driven-phase-equals-release.md
-      - One PR per phase: rules/agent-driven-large-phase-pr.md
+      - Milestone equals release: rules/agent-driven-milestone-equals-release.md
+      - One PR per Milestone: rules/agent-driven-large-milestone-pr.md
       - Cadence decision pointer: rules/agent-driven-cadence-adr-pointer.md
-      - Lean wave verification: rules/lean-wave-verification.md
+      - Lean Task verification: rules/lean-task-verification.md

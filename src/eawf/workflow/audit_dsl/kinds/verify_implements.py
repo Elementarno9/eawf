@@ -80,7 +80,7 @@ VERDICT_MARKER_RE = re.compile(r"(?:#|//|<!--)\s*IMPLEMENTS:\s*([VDRH]\d+(?:-[A-
 # cadence short-circuit — the spec model owns the contract, the kind
 # applies it). P28-I01-W10 added ``"ship"`` so the verify-spine floor
 # pack + AuditSpec share one cadence enum (AGENTS naming rule 17).
-_VALID_CADENCES = {"every-wave", "every-iter", "every-phase", "ship", "manual"}
+_VALID_CADENCES = {"every-task", "every-batch", "every-milestone", "ship", "manual"}
 
 
 def _require_str(args: dict[str, Any], key: str, *, name: str, kind: str) -> str:
@@ -187,7 +187,7 @@ def _cadence_matches(cadence: str, current_trigger: str) -> bool:
     """Return True when the configured cadence should fire for the current trigger.
 
     The cadence values are exactly the five AuditSpec.cadence enum
-    members: ``every-wave``, ``every-iter``, ``every-phase``, ``ship``,
+    members: ``every-task``, ``every-batch``, ``every-milestone``, ``ship``,
     ``manual``. ``manual`` cadence only fires on a ``manual`` trigger;
     each of the other four cadences fires on its same-named trigger.
     """
@@ -204,11 +204,11 @@ def check_verify_implements(spec: CheckSpec, cwd: Path) -> CheckResult:
     Args (read from ``spec.args``):
         phase_id: ``P##`` of the phase whose WaveSpecs are walked.
         diff_base: Git ref to diff ``HEAD`` against. Default ``main``.
-        cadence: AuditSpec.cadence value — one of ``every-wave``,
-            ``every-iter``, ``every-phase``, ``ship``, ``manual``.
-            Default ``every-phase``.
+        cadence: AuditSpec.cadence value — one of ``every-task``,
+            ``every-batch``, ``every-milestone``, ``ship``, ``manual``.
+            Default ``every-milestone``.
         current_trigger: Close event firing the audit — same enum as
-            ``cadence``. Default ``every-phase``.
+            ``cadence``. Default ``every-milestone``.
 
     Returns:
         :class:`CheckResult` — ``passed=True`` when (a) cadence
@@ -229,10 +229,10 @@ def check_verify_implements(spec: CheckSpec, cwd: Path) -> CheckResult:
         raise ValueError(
             f"check {spec.name!r} kind={spec.kind}: arg 'diff_base' must be a non-empty str"
         )
-    cadence = spec.args.get("cadence", "every-phase")
+    cadence = spec.args.get("cadence", "every-milestone")
     if not isinstance(cadence, str):
         raise ValueError(f"check {spec.name!r} kind={spec.kind}: arg 'cadence' must be a str")
-    current_trigger = spec.args.get("current_trigger", "every-phase")
+    current_trigger = spec.args.get("current_trigger", "every-milestone")
     if not isinstance(current_trigger, str):
         raise ValueError(
             f"check {spec.name!r} kind={spec.kind}: arg 'current_trigger' must be a str"

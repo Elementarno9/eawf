@@ -169,6 +169,7 @@ ROOT_ENTRY_EXCEPTIONS: Final[tuple[RootEntryException, ...]] = (
     _entry("snapshot", "tooling", "regenerates golden fixtures"),
     _entry("vfl", "tooling", "approves visual fidelity goldens"),
     _entry("backup", "tooling", "snapshots and restores the tree's stores"),
+    _entry("local", "tooling", "reclaims expired entries of the machine-local store"),
     _entry("help", "tooling", "prints prose help topics"),
     _entry("version", "tooling", "prints the installed version"),
     _entry("scope-debug", "tooling", "prints the resolved global flags, hidden"),

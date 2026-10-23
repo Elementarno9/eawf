@@ -51,23 +51,23 @@ rules:
     verification:
       method: review
     procedure_ref: docs/rules/naming-conventions.md
-  - rule_id: repo.phase-equals-release
-    obligation_id: release.phase-cadence
-    revision: 2
-    title: Ship every closed phase as at least a minor release
+  - rule_id: repo.milestone-equals-release
+    obligation_id: release.milestone-cadence
+    revision: 3
+    title: Ship every accepted Milestone as at least a minor release
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Close every phase as at least a minor release: the phase-close commit bumps src/eawf/_version.py (pyproject.toml stays dynamically versioned), and merging the phase pull request tags it.
+      Ship every accepted Milestone as at least a minor release: the commit recording its acceptance bumps src/eawf/_version.py (pyproject.toml stays dynamically versioned), and the release cut from its merged pull request tags it.
     rationale: >-
-      A phase is this repository's unit of shipped value, so a tag per phase keeps the published version honest about what landed.
+      A Milestone is this repository's unit of shipped value, so a tag per Milestone keeps the published version honest about what landed.
     verification:
       method: review
-    procedure_ref: docs/rules/agent-driven-phase-equals-release.md
-  - rule_id: repo.large-phase-pr
-    obligation_id: delivery.phase-pr-size
-    revision: 5
+    procedure_ref: docs/rules/agent-driven-milestone-equals-release.md
+  - rule_id: repo.large-milestone-pr
+    obligation_id: delivery.milestone-pr-size
+    revision: 6
     title: Keep one pull request per Milestone regardless of size
     zone: steering
     force: should
@@ -78,7 +78,7 @@ rules:
       The review bottleneck here is coherent deliveries rather than line count, and per-Batch commits already give per-change history inside the pull request.
     verification:
       method: review
-    procedure_ref: docs/rules/agent-driven-large-phase-pr.md
+    procedure_ref: docs/rules/agent-driven-large-milestone-pr.md
   - rule_id: repo.cadence-decisions
     obligation_id: delivery.cadence-provenance
     revision: 5
@@ -172,7 +172,7 @@ legacy:
   - item: block:prep-plan-mode
     disposition: steering_rule
     obligation_id: lifecycle.prep-plan-mode
-  - item: block:iter-phase-close-timing
+  - item: block:milestone-close-timing
     disposition: steering_rule
     obligation_id: lifecycle.close-timing
   - item: block:markdown-no-manual-wrap
@@ -223,18 +223,18 @@ legacy:
   - item: block:research-workflow
     disposition: steering_rule
     obligation_id: research.evidence-chain
-  - item: block:agent-driven-phase-equals-release
+  - item: block:agent-driven-milestone-equals-release
     disposition: steering_rule
-    obligation_id: release.phase-cadence
-  - item: block:agent-driven-large-phase-pr
+    obligation_id: release.milestone-cadence
+  - item: block:agent-driven-large-milestone-pr
     disposition: steering_rule
-    obligation_id: delivery.phase-pr-size
+    obligation_id: delivery.milestone-pr-size
   - item: block:agent-driven-cadence-adr-pointer
     disposition: steering_rule
     obligation_id: delivery.cadence-provenance
-  - item: block:lean-wave-verification
+  - item: block:lean-task-verification
     disposition: steering_rule
-    obligation_id: lifecycle.wave-verification-scope
+    obligation_id: lifecycle.task-verification-scope
   - item: block:code-craft-dry
     disposition: steering_rule
     obligation_id: craft.code.duplication

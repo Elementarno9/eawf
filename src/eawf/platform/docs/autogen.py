@@ -8,10 +8,9 @@ never hand-authored, so a doc/source drift cannot survive a build:
   Typer instance.
 - ``skills.md`` — the Eä skill catalog, read from
   :func:`eawf.workflow.skills.catalog.shipped_skill_specs`.
-- ``schema.md`` — the JSON Schema of the canonical Pydantic models
-  (:class:`~eawf.kernel.migration.v1_state.State`, the event envelope, and the output
-  envelope), with each schema also dumped to a sibling ``.schema.json``
-  file by :func:`dump_schemas`.
+- ``schema.md`` — the JSON Schema of the generation document, the event
+  envelope and the output envelope, with each schema also dumped to a
+  sibling ``.schema.json`` file by :func:`dump_schemas`.
 - ``enums.md`` — the state enum catalog from
   :mod:`eawf.kernel.state.enums`.
 - ``error-codes.md`` — the cause-level :class:`~eawf.surfaces.cli.error_codes.ErrorCode`
@@ -41,33 +40,27 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import orjson
-from pydantic import BaseModel
+from pydantic.json_schema import models_json_schema
 
-from eawf.kernel.migration.v1_state import State
+from eawf.kernel.migration.epoch2.cutover import DOCUMENT_SCHEMA_KEY, ROW_PAYLOAD_FIELD
+from eawf.kernel.migration.epoch2.manifest import MANIFEST_SCHEMA_VERSION
 from eawf.kernel.state import enums as state_enums
+from eawf.kernel.store.compaction import CANONICAL_SEQUENCE_KEY
 from eawf.kernel.store.kinds.event import Event
+from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.kernel.validate.epoch2 import NATIVE_MODELS
 from eawf.surfaces.cli import error_codes as error_codes_mod
 from eawf.surfaces.cli import exit_codes as exit_codes_mod
 from eawf.surfaces.render.envelope import OutputEnvelope
-from eawf.surfaces.render.plan_view import PlanView
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 logger = logging.getLogger(__name__)
 
 
 # Path of the autogen reference directory relative to a repo root.
 AUTOGEN_RELDIR: str = "docs/reference/autogen"
-
-# Canonical Pydantic models dumped as JSON Schema, in deterministic order.
-# Each entry is ``(stem, model)`` — ``stem`` names the ``.schema.json`` file
-# and the schema's section in ``schema.md``.
-SCHEMA_MODELS: tuple[tuple[str, type[BaseModel]], ...] = (
-    ("state", State),
-    ("event", Event),
-    ("output-envelope", OutputEnvelope),
-)
 
 
 @dataclass(frozen=True)
@@ -86,20 +79,14 @@ class GeneratedPage:
 # --- JSON Schema dump --------------------------------------------------------
 
 
-def _schema_json(model: type[BaseModel]) -> str:
-    """Return the deterministic JSON Schema text for *model*."""
-    schema = model.model_json_schema()
-    return json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
-
-
 def schema_pages() -> list[GeneratedPage]:
-    """Return the ``.schema.json`` dump for every canonical model."""
+    """Return the ``.schema.json`` dump for every reference schema."""
     pages: list[GeneratedPage] = []
-    for stem, model in SCHEMA_MODELS:
+    for stem, schema in REFERENCE_SCHEMAS:
         pages.append(
             GeneratedPage(
                 relpath=f"{AUTOGEN_RELDIR}/{stem}.schema.json",
-                body=_schema_json(model),
+                body=json.dumps(schema(), indent=2, sort_keys=True, ensure_ascii=False) + "\n",
             )
         )
     return pages
@@ -107,9 +94,9 @@ def schema_pages() -> list[GeneratedPage]:
 
 # --- Bundled runtime schemas (src/eawf/schemas/) ----------------------------
 #
-# The docs-reference dump above emits validation-mode schemas under
+# The docs-reference dump above emits the reference schemas under
 # ``docs/reference/autogen/``. The bundled runtime schemas below are a
-# distinct surface: serialization-mode JSON Schema for the four canonical
+# distinct surface: serialization-mode JSON Schema for the three canonical
 # wire documents, written via orjson and committed under
 # ``src/eawf/schemas/`` as the loadable runtime contract. ``dump_bundled_schemas``
 # is the single generator for those files (test-verified against the
@@ -125,16 +112,51 @@ _BUNDLED_ORJSON_OPTS = orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS
 
 
 def generate_state_schema() -> dict[str, Any]:
-    """Return the JSON Schema for the ``State`` model as a plain dict.
+    """Return the JSON Schema of a generation document as a plain dict.
 
-    Uses ``mode="serialization"`` so the schema reflects the wire format
-    (StrEnum values as strings, datetimes as ISO-8601 strings, etc.).
-    ``$schema`` and ``title`` are injected so consumers can rely on them.
+    A generation document carries its schema version, an optional
+    canonical sequence and one object of rows per collection, keyed by the
+    row's public key. A row of a modelled collection is either a record of
+    that collection's native model or the wrapper the epoch-2 cutover
+    writes around an imported record, which carries a payload and no URN;
+    a row of any other collection is an object. Any other top-level key is
+    refused, as :func:`eawf.kernel.validate.epoch2.validate_generation`
+    refuses it.
+
+    Uses ``mode="serialization"`` so each row schema reflects the wire
+    format the daemon writes. ``$schema`` and ``title`` are injected so
+    consumers can rely on them.
     """
-    schema: dict[str, Any] = State.model_json_schema(mode="serialization")
-    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
-    schema["title"] = "EawfState"
-    return schema
+    refs, definitions = models_json_schema(
+        [(model, "serialization") for model in NATIVE_MODELS.values()],
+        ref_template="#/$defs/{model}",
+    )
+    imported_row: dict[str, Any] = {
+        "type": "object",
+        "required": [ROW_PAYLOAD_FIELD],
+        "not": {"required": ["urn"]},
+    }
+    properties: dict[str, Any] = {
+        DOCUMENT_SCHEMA_KEY: {"const": MANIFEST_SCHEMA_VERSION},
+        CANONICAL_SEQUENCE_KEY: {"type": "integer", "minimum": 0},
+    }
+    for collection in Epoch2Collection:
+        model = NATIVE_MODELS.get(collection)
+        row: dict[str, Any] = (
+            {"type": "object"}
+            if model is None
+            else {"anyOf": [refs[(model, "serialization")], imported_row]}
+        )
+        properties[collection.value] = {"type": "object", "additionalProperties": row}
+    return {
+        "$defs": definitions["$defs"],
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": False,
+        "properties": properties,
+        "required": [DOCUMENT_SCHEMA_KEY],
+        "title": "EawfGenerationDocument",
+        "type": "object",
+    }
 
 
 def generate_skill_output_schema() -> dict[str, Any]:
@@ -150,28 +172,14 @@ def generate_skill_output_schema() -> dict[str, Any]:
     return schema
 
 
-def generate_plan_view_schema() -> dict[str, Any]:
-    """Return the JSON Schema for :class:`PlanView` as a plain dict.
-
-    Uses ``mode="serialization"`` so the schema mirrors the wire format
-    of a dumped :class:`PlanView`. ``$schema`` and ``title`` are
-    injected so consumers can rely on them.
-    """
-    schema: dict[str, Any] = PlanView.model_json_schema(mode="serialization", by_alias=True)
-    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
-    schema["title"] = "EawfPlanView"
-    return schema
-
-
 def dump_bundled_schemas(output_dir: Path) -> None:
     """Write the bundled runtime schema files to *output_dir*.
 
     Files written (deterministic, sorted keys, orjson two-space indent):
 
-    - ``state.schema.json``        — generated from ``State``.
+    - ``state.schema.json``        — the generation document.
     - ``config.schema.json``       — placeholder until the config model lands.
     - ``skill-output.schema.json`` — generated from ``OutputEnvelope``.
-    - ``plan-view.schema.json``    — generated from ``PlanView``.
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -197,11 +205,15 @@ def dump_bundled_schemas(output_dir: Path) -> None:
     )
     logger.debug(f"dump_bundled_schemas target={output_dir / 'skill-output.schema.json'}")
 
-    plan_view_schema = generate_plan_view_schema()
-    (output_dir / "plan-view.schema.json").write_bytes(
-        orjson.dumps(plan_view_schema, option=_BUNDLED_ORJSON_OPTS) + b"\n"
-    )
-    logger.debug(f"dump_bundled_schemas target={output_dir / 'plan-view.schema.json'}")
+
+# Canonical JSON Schemas dumped for the docs, in deterministic order. Each
+# entry is ``(stem, schema)`` — ``stem`` names the ``.schema.json`` file and
+# the schema's section in ``schema.md``; ``schema`` builds the schema dict.
+REFERENCE_SCHEMAS: tuple[tuple[str, Callable[[], dict[str, Any]]], ...] = (
+    ("state", generate_state_schema),
+    ("event", Event.model_json_schema),
+    ("output-envelope", OutputEnvelope.model_json_schema),
+)
 
 
 # --- CLI inventory -----------------------------------------------------------
@@ -337,16 +349,16 @@ def schema_page() -> GeneratedPage:
     lines: list[str] = [
         "# Eä JSON Schema reference",
         "",
-        "Auto-generated from the canonical Pydantic models. The full JSON Schema "
-        "of each model is dumped to a sibling `.schema.json` file by "
+        "Auto-generated from the canonical schemas. The full JSON Schema "
+        "of each is dumped to a sibling `.schema.json` file by "
         "`eawf schema dump`; this page summarises the top-level properties.",
         "",
     ]
-    for stem, model in SCHEMA_MODELS:
-        schema = model.model_json_schema()
+    for stem, build in REFERENCE_SCHEMAS:
+        schema = build()
         props = schema.get("properties", {})
         required = set(schema.get("required", []))
-        lines.append(f"## `{model.__name__}`")
+        lines.append(f"## `{schema['title']}`")
         lines.append("")
         lines.append(f"Full schema: [`{stem}.schema.json`]({stem}.schema.json)")
         lines.append("")
@@ -551,7 +563,7 @@ def diff_against_disk(repo_root: Path) -> list[AutogenDrift]:
 
 __all__ = [
     "AUTOGEN_RELDIR",
-    "SCHEMA_MODELS",
+    "REFERENCE_SCHEMAS",
     "AutogenDrift",
     "GeneratedPage",
     "all_pages",
@@ -563,7 +575,6 @@ __all__ = [
     "error_codes_page",
     "exit_codes_page",
     "generate_all",
-    "generate_plan_view_schema",
     "generate_skill_output_schema",
     "generate_state_schema",
     "index_page",

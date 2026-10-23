@@ -1,16 +1,16 @@
-# Phase-wide QA-gate register
+# Milestone-wide QA-gate register
 
-This is the living scenario-to-gate acceptance artifact for the eawf binding pass. It generalizes the TUI-only scenario-gate register to every quality domain in the phase: fleet, trust, cadence, and TUI. Each row names a subsystem scenario and the firing gate kind that proves it — the deterministic falsifier a wave cites as its acceptance source. Every iter's waves cite this register rather than re-inventing acceptance prose per wave.
+This is the living scenario-to-gate acceptance artifact for the eawf binding pass. It generalizes the TUI-only scenario-gate register to every quality domain in the Milestone: fleet, trust, cadence, and TUI. Each row names a subsystem scenario and the firing gate kind that proves it — the deterministic falsifier a Task cites as its acceptance source. Every Batch's Tasks cite this register rather than re-inventing acceptance prose per Task.
 
 The register is a contract, not a wishlist. A row's gate-kind column MUST name a kind that resolves against the live registry — either a registered audit-DSL `CheckKind` (the keys of `CHECK_REGISTRY` plus the state-scoring `CLOSE_GATE_KINDS` returned by `registered_audit_dsl_kinds()`) or a known `GateSpec` kind (the production-bound set returned by `wired_audit_dsl_kinds()`). A row that cites a phantom gate is a register defect: the register lint (`eawf.workflow.audit_dsl.register_lint.lint_register`) parses the gate-kind column and reds on any unresolved kind, so the acceptance artifact itself cannot cite a gate that does not exist. This applies the same idle-contract discipline the BIND-1 meta-gate enforces on code to the acceptance artifact.
 
 ## How to read a row
 
-Each domain table is `Scenario | Gate kind | Notes`. The `Gate kind` cell is the canonical kind string the audit-DSL runner dispatches (back-quoted). The `Notes` cell records the binding-proof intent: what the gate falsifies and where it fires. A scenario with no named firing gate is a register gap, surfaced for the owning iter; do not leave the gate-kind cell empty to "fill later".
+Each domain table is `Scenario | Gate kind | Notes`. The `Gate kind` cell is the canonical kind string the audit-DSL runner dispatches (back-quoted). The `Notes` cell records the binding-proof intent: what the gate falsifies and where it fires. A scenario with no named firing gate is a register gap, surfaced for the owning Batch; do not leave the gate-kind cell empty to "fill later".
 
-## How a wave cites the register
+## How a Task cites the register
 
-A wave's success criteria reference the register by repo-relative path (`docs/reference/qa-gate-register.md`) and the scenario it accepts. The wave's authored `GateSpec` rows carry the gate `kind` named in the matching register row, so the criterion's falsifier is the register's firing gate. When a wave adds a new scenario, it appends a row here in the same commit — the register grows with the phase, never trails it.
+A Task's success criteria reference the register by repo-relative path (`docs/reference/qa-gate-register.md`) and the scenario it accepts. The Task's authored `GateSpec` rows carry the gate `kind` named in the matching register row, so the criterion's falsifier is the register's firing gate. When a Task adds a new scenario, it appends a row here in the same commit — the register grows with the Milestone, never trails it.
 
 ## Fleet
 
@@ -20,7 +20,7 @@ The spawn-substrate domain: cross-vendor session spawn, metering, sandbox safety
 |---|---|---|
 | A spawned session returns a metered, priced, sandboxed result on every supported vendor | `command_exit_zero` | The cross-vendor parity gate runs the recording-spawn binding-proof and asserts a non-`$0` `SessionResult` per vendor. |
 | A spawn argv is rejected when it violates the L0 deny-list policy | `schema_validate` | The argv-bearing `GateSpec` validator routes `args['argv']` through the L0 argv-policy; a denied argv fails `model_validate`. |
-| A runaway wave's process group is reaped under the token cap | `command_exit_zero` | The pgid-threaded cap enforcement asserts the spawned pgid is killed; the negative path asserts an over-cap role is rejected at render. |
+| A runaway Run's process group is reaped under the token cap | `command_exit_zero` | The pgid-threaded cap enforcement asserts the spawned pgid is killed; the negative path asserts an over-cap role is rejected at render. |
 | A `$0`-priced spawn (a pricing-alias miss) is caught, never silently billed | `state_field_equals` | The metering binding-proof asserts the recorded cost field is non-zero on the live spawn path. |
 | The headless `eawf run create` caller emits a typed `executor_report` body | `schema_validate` | The dispatch render path validates the emitted body against `AgentReportBody`; a malformed body fails validation. |
 
@@ -41,11 +41,11 @@ The lifecycle-discipline domain: the legacy-to-typed gate conversion, the wired-
 
 | Scenario | Gate kind | Notes |
 |---|---|---|
-| Every wave success criterion has a real falsifying gate, never a grandfathered no-op | `criterion_in_diff` | The converted criterion's verification pattern is greppable across its file scopes; a vacuous criterion fails the diff gate. |
+| Every Task success criterion has a real falsifying gate, never a grandfathered no-op | `criterion_in_diff` | The converted criterion's verification pattern is greppable across its file scopes; a vacuous criterion fails the diff gate. |
 | No registered audit-DSL kind ships registered-but-idle | `command_exit_zero` | The BIND-1 idle-contract meta-gate compares `wired_audit_dsl_kinds()` against the full registered set; an idle kind reds. |
-| A wave-linked backlog item is closed on land with resolution, commit, and audit | `backlog_resolution` | The state-scoring close gate reads wave-linked backlog items; a dangling item blocks close. |
+| A linked backlog item is closed on land with resolution, commit, and audit | `backlog_resolution` | The state-scoring close gate reads the linked backlog items; a dangling item blocks close. |
 | A commit prefix matches the canonical lifecycle grammar | `command_exit_zero` | The commit-prefix lint runs over the subject; a malformed prefix exits non-zero. |
-| A schema migration carries a migration note when `state.json` `schema_version` advances | `regex_in_file` | The release pre-flight greps for a migration note; its absence fails the gate. |
+| A schema migration carries a migration note when the document `schema_version` advances | `regex_in_file` | The release pre-flight greps for a migration note; its absence fails the gate. |
 
 ## TUI
 

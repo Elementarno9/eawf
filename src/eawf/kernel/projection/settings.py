@@ -125,16 +125,16 @@ SETTINGS_CATEGORIES: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
             "dispatch",
             "economics",
             "flow",
-            "planning",
             "research",
             "runtime",
             "ship",
+            "worktrees",
         ),
     ),
     ("identity", ("operator", "preferences", "profiles")),
     ("interface", ("ui",)),
     ("quality", ("audit", "estimation", "verify")),
-    ("system", ("config", "daemon", "telemetry", "vcs")),
+    ("system", ("config", "daemon", "local", "telemetry", "vcs")),
 )
 
 

@@ -426,15 +426,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
         description="Researchers a campaign round fans out to when none is given; clamped to 1-12.",
     ),
-    # --- planning ----------------------------------------------------------
-    LeafKey(
-        key="planning.max_parallel_waves",
-        domain="planning",
-        type="int",
-        default=4,
-        writable_layers=_WRITABLE_GWR,
-        description="Repo-wide hard cap for CLAIMED and IN_PROGRESS waves.",
-    ),
     # --- verify --------------------------------------------------------------
     LeafKey(
         key="verify.odr_blocking",
@@ -444,14 +435,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
         description="Repo opt-in: a below-floor Oracle-Determinism-Ratio refuses iter close.",
         consumer="eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
-    ),
-    LeafKey(
-        key="verify.require_iter_audit_accepted",
-        domain="verify",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-        description="Require a completed accepted audit before iter close.",
     ),
     LeafKey(
         key="verify.waiver_mode",
@@ -723,6 +706,38 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
         description="Seconds after an agent session ends before the daemon prunes its handle.",
     ),
+    # --- local store and worktrees -----------------------------------------
+    LeafKey(
+        key="local.scratch_root",
+        domain="local",
+        type="str",
+        default="~/.eawf/scratch",
+        # A machine path, so only the layers that never leave the machine state it.
+        writable_layers=("global", "local"),
+        description=(
+            "Directory outside the repository that holds heavy spike artefacts such as "
+            "virtual environments, models, installs and archives."
+        ),
+    ),
+    LeafKey(
+        key="local.size_warn_mb",
+        domain="local",
+        type="int",
+        default=1024,
+        writable_layers=_WRITABLE_GWR,
+        description="Size in MB (1024 x 1024 bytes) of .ea/local past which doctor warns.",
+    ),
+    LeafKey(
+        key="worktrees.remove_when_clean",
+        domain="worktrees",
+        type="bool",
+        default=True,
+        writable_layers=_WRITABLE_GWR,
+        description=(
+            "Whether releasing a lease whose worktree holds nothing removes that worktree "
+            "and its branch."
+        ),
+    ),
 )
 
 
@@ -735,7 +750,8 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "estimation.eu_minutes": "eawf.kernel.config.schema.EstimationConfig",
     "flow.budget.enforce": "eawf.runtime.budget.service.load_budget_config",
     "flow.budget.multiplier": "eawf.runtime.budget.service.load_budget_config",
-    "planning.max_parallel_waves": "eawf.observability.doctor.checks.resolve_max_parallel_waves",
+    "local.scratch_root": "eawf.observability.doctor.checks_local_size.check_local_size",
+    "local.size_warn_mb": "eawf.observability.doctor.checks_local_size.check_local_size",
     "preferences.auto_choose": "eawf.runtime.daemon.methods.question_decision.resolved_preferences",
     "profiles.certified": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "profiles.enabled": "eawf.platform.profiles.selection.resolve_enabled_profiles",
@@ -775,9 +791,7 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "vcs.conventions.subject_style": "tools.commit_prefix_lint._configured_subject_style",
     "vcs.integration_commit_unit": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
     "vcs.task_reference": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
-    "verify.require_iter_audit_accepted": (
-        "eawf.workflow.verify.readiness._overlay_repo_verify_leaves"
-    ),
+    "worktrees.remove_when_clean": "eawf.runtime.workspace.lease.removes_clean_worktrees",
     "verify.waiver_mode": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
 }
 
@@ -847,6 +861,10 @@ _RETIRED_KEYS: frozenset[str] = frozenset(
         # release checkpoints are swept and tagged only through the explicit release
         # verbs, and no Milestone close waits on a release, so no cadence is read
         "vcs.conventions.release.cadence",
+        # capped claimed waves and gated an iter close; no wave or iter is claimed or
+        # closed any more
+        "planning.max_parallel_waves",
+        "verify.require_iter_audit_accepted",
         # retired before this catalog tracked them: renamed or never consumed
         "acceptance.lint",
         "acceptance.tests",
@@ -972,7 +990,6 @@ _RETIRED_KEYS: frozenset[str] = frozenset(
         "worktrees.enabled",
         "worktrees.merge_mode",
         "worktrees.preserve_on_conflict",
-        "worktrees.remove_when_clean",
         "worktrees.root",
         "worktrees.use_for_parallel_writers",
         "worktrees.use_for_readonly_research",

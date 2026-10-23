@@ -69,7 +69,7 @@ def _command_exit_zero_gate(
         kind="command_exit_zero",
         args=args,
         policy="block",
-        cadence="every-wave",
+        cadence="every-task",
         required=True,
         timeout_s=timeout_s,
     )
@@ -215,7 +215,7 @@ def test_compile_gate_command_exit_zero_without_argv_returns_none() -> None:
         kind="command_exit_zero",
         args={},  # no argv
         policy="block",
-        cadence="every-wave",
+        cadence="every-task",
         required=True,
         timeout_s=None,
     )
@@ -243,7 +243,7 @@ def test_compile_gate_passthrough_for_non_command_exit_zero_kind() -> None:
             "file_scopes": ["src/eawf/foo.py"],
         },
         policy="block",
-        cadence="every-wave",
+        cadence="every-task",
         required=True,
     )
     criterion = _criterion()
@@ -272,7 +272,7 @@ def test_compile_gate_passthrough_other_kind_jury_still_none() -> None:
             "file_scopes": ["src/eawf/foo.py"],
         },
         policy="block",
-        cadence="every-wave",
+        cadence="every-task",
         required=True,
     )
     criterion = _criterion(cid="CRIT-jury", evidence_kind="jury")
@@ -309,7 +309,7 @@ def _floor_check(
     *,
     cmd: list[str] | None = None,
     scope: str = "touched",
-    cadence: str = "every-wave",
+    cadence: str = "every-task",
     policy: str = "warn",
     timeout_class: str = "standard",
 ) -> FloorCheck:

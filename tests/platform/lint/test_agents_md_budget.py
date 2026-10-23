@@ -12,20 +12,20 @@ from eawf.platform.render_block import DEFAULT_TIER0_TOKEN_CAP
 
 # The always-on tier-0 set tagged in ``core.yaml``. These are the
 # irreversible "no-tooling-backstop" rules: a lapse cannot be caught by
-# any lint or gate, so the agent must internalise them before a wave.
+# any lint or gate, so the agent must internalise them before a Task.
 _EXPECTED_TIER0_BLOCK_IDS = {
     "non-negotiable-rules",
     "state-vs-specs",
     "worktree-discipline",
     "project-orientation",
     "prep-plan-mode",
-    "iter-phase-close-timing",
+    "milestone-close-timing",
 }
 
 # Rules whose discipline has an automated backstop, so they are
 # ``reference`` (off the tier-0 budget), not tier-0.
-#   * planned-scope-revisability -> the PENDING-only guard in
-#     ``edit_wave_plan`` / ``remove_wave_plan``.
+#   * planned-scope-revisability -> the plan apply's append-only guard on
+#     an ACTIVE Milestone.
 #   * agent-report-contract -> the typed ``AgentReportBody`` /
 #     ``AgentReportVerdict`` ingestion boundary.
 _TOOLING_BACKED_REFERENCE_BLOCK_IDS = {

@@ -1,6 +1,6 @@
 <!-- Generated from the eawf profile render block `agent-driven-cadence-adr-pointer`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=agent-driven-cadence-adr-pointer version=1.4 hash=01bcaa041d1d74c4 -->
+<!-- BEGIN EAWF:managed id=agent-driven-cadence-adr-pointer version=1.5 hash=6d87edbd97aefc72 -->
 # `agent-driven-cadence-adr-pointer`
 
 The one-PR-per-Milestone cadence and the commit-history regime are ratified by a typed decision; cite its id in review and reverse the cadence only by superseding it.
@@ -12,7 +12,7 @@ The large-PR cadence contradicts the industry small-CL / trunk-based consensus o
 
 ### Mechanism
 
-The one-PR-per-Milestone cadence and the commit-history regime are ratified by Decision D87, which superseded D85, itself the replacement for D-GIT-HISTORY (D76) and the earlier one-PR-per-phase and rebase-merge decisions: each Batch closes and binds the phase-branch head when it lands, each push is squashed to one commit per Batch (a few for a large Batch) carrying its ``Batch:`` and ``Task:`` trailers plus one trailing ``state:`` commit, the bindings the squash replaced are rebound by appended superseding rows, and main and tags are never rewritten. The canonical workflow reference is ``docs/architecture/workflow.md`` (VCS, commit, PR, and merge policy). Cite the Decision id, not this rule's prose, when a review or roadmap discussion questions the cadence; reverse it only by superseding D87 with a new Decision row.
+The one-PR-per-Milestone cadence and the commit-history regime are ratified by Decision D87, which superseded D85, itself the replacement for D-GIT-HISTORY (D76) and the earlier one-PR-per-delivery and rebase-merge decisions: each Batch closes and binds the Milestone branch head when it lands, each push is squashed to one commit per Batch (a few for a large Batch) carrying its ``Batch:`` and ``Task:`` trailers plus one trailing ``state:`` commit, the bindings the squash replaced are rebound by appended superseding rows, and main and tags are never rewritten. The canonical workflow reference is ``docs/architecture/workflow.md`` (VCS, commit, PR, and merge policy). Cite the Decision id, not this rule's prose, when a review or planning discussion questions the cadence; reverse it only by superseding D87 with a new Decision row.
 
 
 ### Verification

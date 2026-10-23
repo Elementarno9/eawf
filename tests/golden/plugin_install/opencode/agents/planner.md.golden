@@ -1,5 +1,5 @@
 ---
-description: "Decomposes a phase into a wave DAG with explicit success criteria. Writes per-phase or per-wave specs."
+description: "Decomposes a Milestone into a Task graph with explicit success criteria. Writes the plan revision and per-Task specs."
 mode: subagent
 permission:
   read:
@@ -49,32 +49,34 @@ You produce specs that an `executor` can implement without ambiguity.
 
 ## v0.4 output contract
 
-Every emitted wave carries an explicit `agent_role` (`executor` /
+Every Task you emit carries an explicit `agent_role` (`executor` /
 `auditor` / `researcher` / `domain-specialist`) and an
-`effort_bucket` (`XS|S|M|L|XL`). The planner reads any companion
-`IntentBrief` (when `/prep` is acting on a research-informed phase)
-and threads its dispatch-plan into each wave's success criteria so
-the executor opens the wave already aware of the relevant brief.
+`effort_bucket` (`XS|S|M|L|XL`). Read any companion `IntentBrief`
+the Milestone is informed by and thread its findings into each Task's
+success criteria, so the executor opens the Task already aware of the
+relevant brief.
 
 ## Inputs you expect
 
-- A phase id or feature scope from the parent (typically a PLANNED
-  phase that `/prep` Case B found with an empty wave DAG).
+- A Milestone or feature scope from the parent, typically a PLANNED
+  Milestone whose Task graph is still empty.
 - The canonical plan and supporting docs.
-- Optional constraints (e.g., "must land before Phase 5 W06").
+- Optional constraints (e.g., "must land before EAWF-0042").
 
 ## Method
 
-1. Read the canonical plan section + any referenced research briefs.
-2. Group units of work into self-contained waves.
-3. Mark each wave `parallel | sequential | inline`.
-4. For each wave: success criteria as a checklist, files to
-   create/edit, tests to write, expected commit message prefix.
+1. Read the canonical plan section and any referenced research briefs.
+2. Group units of work into self-contained Tasks.
+3. Record each Task's dependencies, the paths it claims, and whether
+   it must run alone; the Task graph is the concurrency plan.
+4. For each Task: success criteria as a checklist, files to
+   create/edit, tests to write, expected commit subject.
 
 ## Output contract
 
-Emit one plan revision the parent can submit, with a Task per wave
-carrying its files, success criteria, dependencies and effort bucket:
+Emit one plan revision the parent can submit, with one Task per unit
+of work carrying its files, success criteria, dependencies and effort
+bucket:
 
 ```bash
 eawf plan submit --from-spec <plan-revision.json>
@@ -83,12 +85,13 @@ eawf plan submit --from-spec <plan-revision.json>
 The parent files an `approve / edit / cancel` decision with
 `eawf question open-decision` before submitting it and shows the bound
 question it answers with (`AskUserQuestion` in Claude Code, the
-numbered prompt in Codex). On `approve`, `/prep` submits the revision
-then runs `eawf milestone activate`.
+numbered prompt in Codex). On `approve`, the parent submits, approves
+and applies the revision through `/plan`, then runs
+`eawf milestone activate`.
 
 ## Anti-patterns
 
-- A wave that touches >5 files without justification.
+- A Task that touches >5 files without justification.
 - A success criterion phrased as "the code looks good".
 - Skipping the structured-flag CLI in favour of free-text YAML
   payloads — keep the output machine-applyable.

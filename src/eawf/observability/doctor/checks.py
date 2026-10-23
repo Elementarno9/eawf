@@ -21,17 +21,17 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING
 
-from pydantic import Field, TypeAdapter, ValidationError
+from pydantic import ValidationError
 
-from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
 from eawf.kernel.config.layered import get_dotted, merge_config
 from eawf.kernel.config.registry import LEAF_KEY_REGISTRY
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.observability.doctor import daemon_checks
 from eawf.observability.doctor.checks_authority import check_authority_epoch
 from eawf.observability.doctor.checks_gitignore import check_gitignore_block
+from eawf.observability.doctor.checks_local_size import check_local_size
 from eawf.observability.doctor.checks_steering_cap import (
     CODEX_PROJECT_DOC_BYTE_CAP as CODEX_PROJECT_DOC_BYTE_CAP,
 )
@@ -665,57 +665,6 @@ def check_cli_daemon_version(
     )
 
 
-_MAX_PARALLEL_WAVES_ADAPTER: TypeAdapter[int] = TypeAdapter(
-    Annotated[int, Field(strict=True, ge=1, le=16)]
-)
-
-
-def resolve_max_parallel_waves(repo_root: Path | None) -> int:
-    """Return the validated ``planning.max_parallel_waves`` value.
-
-    Args:
-        repo_root: Repository root supplying the layered configuration, or
-            ``None`` for the built-in default.
-
-    Returns:
-        The resolved cap.
-
-    Raises:
-        pydantic.ValidationError: When the resolved leaf is not an integer in
-            the supported ``1..16`` range.
-    """
-    if repo_root is None:
-        raw: object = BUILT_IN_DEFAULTS["planning"]["max_parallel_waves"]
-    else:
-        merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
-        raw = get_dotted(merged, "planning.max_parallel_waves")
-    return _MAX_PARALLEL_WAVES_ADAPTER.validate_python(raw)
-
-
-def check_parallel_cap_enforcement(
-    *,
-    workspace: Path | None,
-    resolver: Callable[[Path | None], int] | None = None,
-) -> CheckResult:
-    """Report whether the configured parallel-wave cap resolves to a valid value."""
-    name = "parallel_cap_enforcement"
-    anchor = _resolve_anchor(workspace)
-    resolver = resolver or resolve_max_parallel_waves
-    try:
-        cap = resolver(anchor)
-    except Exception as exc:
-        return CheckResult(
-            name=name,
-            status="warn",
-            detail=f"parallel cap cannot be resolved: {exc}",
-        )
-    return CheckResult(
-        name=name,
-        status="ok",
-        detail=f"planning.max_parallel_waves={cap}",
-    )
-
-
 # ``eawf daemon reclaim`` trims runtime-dir bloat; doctor warns once the
 # runtime dir (WAL records plus the never-auto-GC'd ``eawfd.log``) crosses this
 # size, or the ``.ea/`` migration backups pile up past this count, so the
@@ -1010,6 +959,7 @@ def run_all(
         check_launchd_agent(),
         check_stray_daemons(),
         check_runtime_dir_size(workspace=anchor),
+        check_local_size(workspace=anchor),
         check_render_output_roundtrip(),
         check_agents_md_byte_cap(workspace=anchor),
         check_agents_override_byte_cap(workspace=anchor),

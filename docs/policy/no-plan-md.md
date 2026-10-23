@@ -1,6 +1,6 @@
 # No PLAN.md / DECISIONS.md / BACKLOG.md
 
-*Operational state lives in `state.json` and JSONL stores, not in markdown files.*
+*Operational state lives in the generation document, its ledgers and the JSONL stores, not in markdown files.*
 
 ## Policy
 
@@ -10,28 +10,28 @@ Drop these files from Eä defaults:
 - `DECISIONS.md`
 - `BACKLOG.md`
 
-Everything operational is available from `eawf` reading the active Eä state: workspace-level by default, repo sub-state when enabled.
+Everything operational is available from `eawf` reading the selected generation of the tree.
 
 ## Replacements
 
 ```bash
-eawf status                  # Shows current project / subproject / phase / iter / waves, blockers, next actions.
+eawf status                  # Shows the current Track, Milestone, Batches and Tasks, blockers, next actions.
 
-# Backlog items live in state; query directly when no dedicated CLI verb fits:
-jq '.backlog' .ea/state.json
+# The backlog is the DRAFT Tasks of the generation:
+eawf task list
 ```
 
 Generated markdown specs / reports may still exist as **artifacts** when useful, but they are not source of truth for status. State points to them via artifact IDs.
 
 ## Why
 
-State-first lets agents and humans both read the same source. A `PLAN.md` written by one session and edited by another session creates two competing truths; reconciling them after the fact is pure overhead. Eä keeps the decision history in `decision.jsonl`, the backlog in `backlog` state entries, and the current plan rendered on demand from active iter / wave records.
+State-first lets agents and humans both read the same source. A `PLAN.md` written by one session and edited by another session creates two competing truths; reconciling them after the fact is pure overhead. Eä keeps the decision history in its ledger, the backlog as `DRAFT` Tasks, and the current plan as the applied PlanRevision, rendered on demand from the Milestone, Batch and Task records.
 
 ## Storage model
 
 ```text
 .ea/
-  state.json                  # compact authoritative index / current pointers
+  generations/<id>/           # the selected generation: state.json document, ledger/, history/
   config.yaml                 # human-editable project settings
   schema.json                 # pinned schema
   store/                      # JSONL stores (one file per StoreKind, singular)
@@ -54,7 +54,7 @@ State-first lets agents and humans both read the same source. A `PLAN.md` writte
 
 Rules:
 
-- `state.json` stores IDs, status, summaries, pointers, current fields, metrics, evidence refs.
+- The generation document stores keys, status, summaries, references, metrics and evidence refs of in-flight records; a terminal record moves to its ledger.
 - Estimate / actual state entries store current summaries only; complete estimate versions live in `.ea/store/estimate.jsonl` and actual segments in `.ea/store/actual.jsonl`.
 - JSONL stores append-friendly large records. Each line is one validated object with `id`, `kind`, `schema_version`, timestamps, scope, summary, payload or blob refs.
 - Large command outputs or transcripts go to content-addressed blobs; JSONL stores reference hash / path / summary.

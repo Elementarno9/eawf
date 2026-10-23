@@ -519,15 +519,15 @@ def _render_manifest() -> bytes:
             ),
             "longDescription": (
                 "Eä Workflow (eawf) is an agent-driven software development framework. "
-                "Skills wrap the research → prep → audit → polish → ship pipeline; "
-                "the PR-review pass stays inside ship, and hooks gate state mutations."
+                "Skills plan a Milestone, dispatch its Tasks as Runs, verify each "
+                "Delivery Batch and integrate it; hooks gate state mutations."
             ),
             "developerName": "Eä Workflow",
             "category": "Productivity",
             "capabilities": ["Write"],
             "defaultPrompt": [
-                "Use the Eä Workflow skills to drive this iteration. "
-                "Start with /flow or pick a specific stage like /research, /prep, /ship."
+                "Use the Eä Workflow skills to drive this Milestone. "
+                "Start with /plan or pick a specific stage like /research, /dispatch, /verify."
             ],
             "screenshots": [],
             "brandColor": "#6B7280",

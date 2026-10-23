@@ -40,7 +40,7 @@ from eawf.workflow.verify.readiness import (
 def test_audit_cadence_values_carry_ship() -> None:
     """The 5-value :data:`AUDIT_CADENCE_VALUES` set carries the W10 ``ship`` entry."""
     assert (
-        frozenset({"every-wave", "every-iter", "every-phase", "ship", "manual"})
+        frozenset({"every-task", "every-batch", "every-milestone", "ship", "manual"})
         == AUDIT_CADENCE_VALUES
     )
 
@@ -58,13 +58,13 @@ def test_audit_cadence_is_5_value_literal() -> None:
         policy="warn",
     )
     assert check.cadence == "ship"
-    # The Literal also accepts the legacy 4.
-    for legacy in ("every-wave", "every-iter", "every-phase", "manual"):
+    # The Literal also accepts the other four members.
+    for other in ("every-task", "every-batch", "every-milestone", "manual"):
         FloorCheck(
-            name=f"c-{legacy}",
+            name=f"c-{other}",
             cmd=["uv", "run", "pytest", "-q"],
             scope="all",
-            cadence=legacy,
+            cadence=other,
             policy="warn",
         )
 
@@ -126,7 +126,7 @@ def test_floor_check_rejects_unknown_field() -> None:
                 "name": "x",
                 "cmd": ["uv", "run", "pytest"],
                 "scope": "changed",
-                "cadence": "every-wave",
+                "cadence": "every-task",
                 "policy": "warn",
                 "phantom_field": True,
             }
@@ -139,7 +139,7 @@ def test_floor_check_carries_hil_escape_hatches() -> None:
         name="d",
         cmd=["uv", "run", "pytest"],
         scope="all",
-        cadence="every-wave",
+        cadence="every-task",
         policy="warn",
     )
     assert default.requires_gpu is False
@@ -150,7 +150,7 @@ def test_floor_check_carries_hil_escape_hatches() -> None:
         name="hil",
         cmd=["uv", "run", "pytest"],
         scope="all",
-        cadence="every-phase",
+        cadence="every-milestone",
         policy="warn",
         requires_gpu=True,
         runs_outside_jail=True,
@@ -168,7 +168,7 @@ def test_floor_check_rejects_empty_cmd() -> None:
             name="x",
             cmd=[],
             scope="all",
-            cadence="every-wave",
+            cadence="every-task",
             policy="warn",
         )
 
@@ -195,7 +195,7 @@ def test_floor_check_rejects_invalid_policy() -> None:
                 "name": "x",
                 "cmd": ["uv", "run", "pytest"],
                 "scope": "all",
-                "cadence": "every-wave",
+                "cadence": "every-task",
                 "policy": "bogus",
             }
         )
@@ -222,7 +222,7 @@ def test_profile_body_verify_round_trips_block() -> None:
                         "name": "pytest",
                         "cmd": ["uv", "run", "pytest"],
                         "scope": "touched",
-                        "cadence": "every-wave",
+                        "cadence": "every-task",
                         "policy": "warn",
                     }
                 ],
@@ -379,7 +379,7 @@ def _jury_gate(gate_id: str = "G1", kind: str = "jury_verdict") -> dict[str, obj
         "kind": kind,
         "args": {},
         "policy": "block",
-        "cadence": "every-wave",
+        "cadence": "every-task",
     }
 
 
@@ -621,11 +621,11 @@ def test_robotics_floor_check_carries_hil_flags() -> None:
     hil_check = body.verify.floor_checks[0]
     assert hil_check.requires_gpu is True
     assert hil_check.runs_outside_jail is True
-    assert hil_check.cadence == "every-phase"
+    assert hil_check.cadence == "every-milestone"
 
 
-def test_apps_floor_check_carries_docs_build_at_every_iter() -> None:
-    """The apps profile's docs-build check fires at every-iter cadence."""
+def test_apps_floor_check_carries_docs_build_at_every_batch() -> None:
+    """The apps profile's docs-build check fires at every-batch cadence."""
     body = load_profile("apps")
     assert body.verify is not None
     docs = next(
@@ -633,7 +633,7 @@ def test_apps_floor_check_carries_docs_build_at_every_iter() -> None:
         None,
     )
     assert docs is not None
-    assert docs.cadence == "every-iter"
+    assert docs.cadence == "every-batch"
     assert docs.timeout_class == "slow"
 
 
@@ -812,13 +812,11 @@ def test_overlay_repo_verify_leaves_preserves_profile_values_when_defaults_are_b
     merged = {
         "verify": {
             "odr_blocking": False,
-            "require_iter_audit_accepted": False,
             "waiver_mode": "B",
         }
     }
     source_map = {
         "verify.odr_blocking": "built-in",
-        "verify.require_iter_audit_accepted": "built-in",
         "verify.waiver_mode": "built-in",
     }
 
@@ -834,7 +832,6 @@ def test_overlay_repo_verify_leaves_builtin_only_without_profile_stays_absent() 
         "verify": {
             "juror_wall_clock_seconds": 600.0,
             "odr_blocking": False,
-            "require_iter_audit_accepted": False,
             "waiver_mode": "B",
         }
     }
@@ -848,42 +845,38 @@ def test_overlay_repo_verify_leaves_builtin_only_without_profile_stays_absent() 
 def test_overlay_repo_verify_leaves_explicit_leaf_without_profile_synthesizes() -> None:
     merged = {
         "verify": {
-            "odr_blocking": False,
-            "require_iter_audit_accepted": True,
+            "odr_blocking": True,
             "waiver_mode": "B",
         }
     }
     source_map = {
-        "verify.odr_blocking": "built-in",
-        "verify.require_iter_audit_accepted": "repo",
+        "verify.odr_blocking": "repo",
         "verify.waiver_mode": "built-in",
     }
 
     resolved = _overlay_repo_verify_leaves(None, merged, source_map=source_map)
 
     assert resolved is not None
-    assert resolved.require_iter_audit_accepted is True
+    assert resolved.odr_blocking is True
 
 
-def test_overlay_repo_verify_leaves_tightens_audit_and_disables_waivers() -> None:
-    block = VerifyBlock(require_iter_audit_accepted=False, waiver_mode="A")
+def test_overlay_repo_verify_leaves_tightens_odr_and_disables_waivers() -> None:
+    block = VerifyBlock(odr_blocking=False, waiver_mode="A")
     merged = {
         "verify": {
-            "odr_blocking": False,
-            "require_iter_audit_accepted": True,
+            "odr_blocking": True,
             "waiver_mode": "disabled",
         }
     }
     source_map = {
-        "verify.odr_blocking": "built-in",
-        "verify.require_iter_audit_accepted": "repo",
+        "verify.odr_blocking": "repo",
         "verify.waiver_mode": "repo",
     }
 
     resolved = _overlay_repo_verify_leaves(block, merged, source_map=source_map)
 
     assert resolved is not None
-    assert resolved.require_iter_audit_accepted is True
+    assert resolved.odr_blocking is True
     assert resolved.waiver_mode == "disabled"
 
 
@@ -892,7 +885,6 @@ def test_overlay_repo_verify_leaves_cannot_loosen_disabled_profile() -> None:
     merged = {
         "verify": {
             "odr_blocking": False,
-            "require_iter_audit_accepted": False,
             "waiver_mode": "A",
         }
     }

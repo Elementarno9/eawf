@@ -49,7 +49,7 @@ def _gate(argv: list[str]) -> GateSpec:
         kind="command_exit_zero",
         args={"argv": argv},
         policy="block",
-        cadence="every-wave",
+        cadence="every-task",
     )
 
 
@@ -57,7 +57,7 @@ def _stored_row(argv: list[str]) -> dict[str, Any]:
     """A gate row in the shape stored before gates named a family."""
     return {
         "args": {"argv": argv, "scope": "all", "timeout_class": "quick"},
-        "cadence": "every-wave",
+        "cadence": "every-task",
         "criterion_id": "CR-03",
         "id": "G-03",
         "kind": "command_exit_zero",

@@ -285,7 +285,6 @@ max-complexity = 10
 "src/eawf/surfaces/cli/commands/lifecycle_wave.py" = ["C901"]
 "src/eawf/surfaces/cli/commands/mcp.py" = ["C901"]
 "src/eawf/surfaces/cli/commands/plan.py" = ["C901"]
-"src/eawf/surfaces/cli/commands/roadmap.py" = ["C901"]
 "src/eawf/surfaces/cli/commands/validate.py" = ["C901"]
 "src/eawf/kernel/config/layered.py" = ["C901"]
 "src/eawf/runtime/daemon/methods/state.py" = ["C901"]
@@ -377,8 +376,6 @@ exclude = [
     { path = "src/eawf/kernel/state/models.py", expires = "2027-04-30", reason = "canonical state-entity model module; a declaration-dense typed table, not branching logic. Split by entity-family once the P30 fleet/track substrate settles" },
     { path = "src/eawf/observability/eval/jury_validation.py", expires = "2027-04-30", reason = "cohesive trust-validation reducer (cohort + Fleiss-kappa/Brier/ECE + probes + block-authority gate). The pure metric computers split into a sibling module once the trust surface settles" },
     { path = "src/eawf/surfaces/cli/commands/hook.py", expires = "2027-01-31", reason = "diff-scoped lint dispatcher hub; each command is a thin dispatcher, so this is split-by-command extract-module work rather than logic density" },
-    { path = "src/eawf/surfaces/cli/commands/roadmap.py", expires = "2027-01-31", reason = "roadmap CLI command group grown past the cap while preserving behavior; extract-module split follow-up" },
-    { path = "src/eawf/surfaces/render/plan_view.py", expires = "2027-01-31", reason = "plan-view renderer grown past the cap while preserving behavior; extract-module split follow-up" },
     { path = "src/eawf/surfaces/render/skills/registry.py", expires = "2027-01-31", reason = "data-heavy SkillSpec/AgentSpec declaration table whose body constants carry the length; drops off when a wave extracts the bodies" },
 ]
 
@@ -421,16 +418,16 @@ e2e = "opt-in"
 
 [tool.eawf.agents_md_budget]
 # Tier-0 render blocks are the always-on, load-bearing AGENTS.md rule
-# layer that an agent must internalise before touching a wave. The
+# layer that an agent must internalise before touching a Task. The
 # tagged set is the irreversible "no-tooling-backstop" rules: ones with
 # no automated lint or gate, so a single lapse is unrecoverable and the
 # agent has to carry the rule itself. The five blocks are
 # non-negotiable-rules (the rule index incl. the daemon-sole-writer
 # rule), state-vs-specs, worktree-discipline (cherry-pick-not-merge has
-# no merge guard), prep-plan-mode, and iter-phase-close-timing. Rules
+# no merge guard), prep-plan-mode, and milestone-close-timing. Rules
 # that DO have a backstop are reference, not tier-0:
-# planned-scope-revisability is enforced by the PENDING-only guard in
-# ``edit_wave_plan`` / ``remove_wave_plan``, and agent-report-contract is
+# planned-scope-revisability is enforced by the plan apply's append-only
+# guard on an ACTIVE Milestone, and agent-report-contract is
 # enforced by the ``AgentReportBody`` / ``AgentReportVerdict`` typed
 # boundary. The reconciled tier-0 weight is ~996 tokens, comfortably
 # under the 1200-token cap that this ratchet enforces; every other

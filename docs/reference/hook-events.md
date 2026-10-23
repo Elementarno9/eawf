@@ -8,7 +8,7 @@ Adding or removing a `HookEventType` is a `[CORE]` schema bump on `feature/eawf-
 
 ```yaml
 event_type: <HookEventType>           # one of the values below
-scope_id: <str>                       # Eä scope ID (wave/iter/phase) or ""
+scope_id: <str>                       # Eä scope ID (an entity URN) or ""
 command: <str>                        # originating CLI command, may be ""
 args: dict[str, Any]                  # parsed CLI flags or runtime context
 runtime: claude | opencode | generic
@@ -29,22 +29,18 @@ Idempotence key: `(event_type, scope_id, occurred_at)`. The runner / CLI handler
 | `post_commit`    | After a git commit                                            | `{ "sha": str, "branch": str }`                                                                          |
 | `pre_push`       | Before a git push                                             | `{ "remote": str, "branch": str }`                                                                       |
 | `post_push`      | After a git push                                              | `{ "remote": str, "branch": str, "rejected": bool }`                                                     |
-| `pre_audit`      | Before `/audit` skill runs                                    | `{ "scope": str }`                                                                                       |
-| `post_audit`     | After `/audit` finishes                                       | `{ "scope": str, "verdict": str }`                                                                        |
+| `pre_audit`      | Reserved audit bracket; no live verb emits it                 | `{ "scope": str }`                                                                                       |
+| `post_audit`     | Reserved audit bracket; no live verb emits it                 | `{ "scope": str, "verdict": str }`                                                                        |
 | `session_start`  | New agent session opens (Claude `SessionStart`)               | `{ "session_id": str, "cwd": str }`                                                                      |
 | `session_end`    | Agent session closes (Claude `Stop` / `SessionEnd`)           | `{ "session_id": str, "duration_s": float }`                                                             |
-| `wave_open`      | A wave opens; no live verb emits it                           | `{ "wave_id": str, "iter_id": str }`                                                                     |
-| `wave_close`     | `eawf task complete` succeeds                             | `{ "wave_id": str, "result": str }`                                                                      |
-| `iter_open`      | `eawf batch create` succeeds                              | `{ "iter_id": str, "phase_id": str }`                                                                    |
-| `iter_close`     | `eawf batch complete` succeeds                             | `{ "iter_id": str, "verdict": str }`                                                                     |
-| `phase_open`     | `eawf milestone create` succeeds                            | `{ "phase_id": str }`                                                                                    |
-| `phase_close`    | `eawf milestone accept` succeeds                           | `{ "phase_id": str, "outcome": str }`                                                                    |
 | `permission_request` | The host holds a tool call for its operator (Claude `PermissionRequest`) | `{ "session_id": str, "agent_id": str?, "tool_name": str, "tool_input": dict }` |
 | `pre_tool_use` | The host is about to run a tool call (Claude `PreToolUse`, every tool) | `{ "session_id": str, "agent_id": str?, "tool_name": str, "tool_input": dict, "tool_use_id": str }` |
 | `post_tool_use` | The host ran a tool call (Claude `PostToolUse`, every tool) | `{ "session_id": str, "agent_id": str?, "tool_name": str, "tool_use_id": str, "tool_response": any }` |
 | `post_tool_use_failure` | A host tool call ran and failed (Claude `PostToolUseFailure`) | `{ "session_id": str, "agent_id": str?, "tool_name": str, "tool_use_id": str, "error": str }` |
 | `pre_compact` | The host is about to compact the session (Claude `PreCompact`) | `{ "session_id": str, "trigger": "manual" \| "auto" }` |
 | `user_prompt_submit` | The operator submits a prompt, a slashed skill included (Claude `UserPromptSubmit`) | `{ "session_id": str, "prompt": str }` |
+
+`HookEventType` also still declares the six open / close members of the retired epoch-1 lifecycle; no verb emits them, so they are not listed. The native lifecycle reports through the daemon's domain events instead.
 
 The shapes above are illustrative — at v1 the router merely forwards the incoming dict under the chosen key. Strict shape validation (per `payloads.<key>` Pydantic models) is reserved for a future schema bump.
 
@@ -88,7 +84,7 @@ eawf hook run <event_type> \
 
 - Reads stdin as JSON (empty stdin permitted; treated as `{}`).
 - Folds the decoded payload under `payloads[<event_type>]` on the built `HookEvent`.
-- Dispatches through a fresh `HookRunner` (no hooks registered in v1 — runtime adapters wire registrations in W05).
+- Dispatches through a fresh `HookRunner` (no hooks registered in v1 — runtime adapters wire the registrations).
 - Exit `0` on the no-block path (default), `9` (`HOOK_BLOCKED`) when any hook returns `block=True`, `3` (`INVALID_INPUT`) on malformed stdin or unknown event type.
 
-The command always emits a JSON output envelope on stdout — `header.skill = /audit`, `header.status = "ok"` or `"blocked"`, `body.results` carries one `{name, block, output, duration_ms, raised}` row per registered hook.
+The command always emits a JSON output envelope on stdout — `header.skill` is the fixed skill tag the hook route stamps (`surfaces/cli/commands/hook.py`), `header.status = "ok"` or `"blocked"`, `body.results` carries one `{name, block, output, duration_ms, raised}` row per registered hook.

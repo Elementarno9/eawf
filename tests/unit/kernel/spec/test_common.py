@@ -410,7 +410,7 @@ def _gate(**overrides: object) -> GateSpec:
         "kind": "command_exit_zero",
         "args": {"argv": ["uv", "run", "pytest", "-q"]},
         "policy": "block",
-        "cadence": "every-wave",
+        "cadence": "every-task",
     }
     payload.update(overrides)
     return GateSpec.model_validate(payload)
@@ -438,7 +438,7 @@ def test_gate_spec_each_policy(policy: str) -> None:
 
 @pytest.mark.parametrize(
     "cadence",
-    ["every-wave", "every-iter", "every-phase", "ship", "manual"],
+    ["every-task", "every-batch", "every-milestone", "ship", "manual"],
 )
 def test_gate_spec_each_cadence(cadence: str) -> None:
     """Every member of GateCadence round-trips."""
@@ -484,7 +484,7 @@ def test_gate_spec_rejects_unknown_field() -> None:
                 "kind": "command_exit_zero",
                 "args": {},
                 "policy": "block",
-                "cadence": "every-wave",
+                "cadence": "every-task",
                 "extra_knob": 42,
             }
         )
@@ -501,7 +501,7 @@ def test_gate_spec_rejects_invalid_policy() -> None:
                 "kind": "command_exit_zero",
                 "args": {},
                 "policy": "soft-block",
-                "cadence": "every-wave",
+                "cadence": "every-task",
             }
         )
     message = str(exc_info.value)
@@ -537,7 +537,7 @@ def test_gate_spec_rejects_negative_timeout() -> None:
                 "kind": "command_exit_zero",
                 "args": {},
                 "policy": "block",
-                "cadence": "every-wave",
+                "cadence": "every-task",
                 "timeout_s": -1,
             }
         )
@@ -563,7 +563,7 @@ def test_gate_spec_rejects_missing_required_field() -> None:
                 "kind": "command_exit_zero",
                 "args": {},
                 # missing policy
-                "cadence": "every-wave",
+                "cadence": "every-task",
             }
         )
     assert "policy" in str(exc_info.value)
@@ -653,7 +653,7 @@ def test_gate_spec_command_exit_zero_rejects_shell_deny_argv() -> None:
                 "kind": "command_exit_zero",
                 "args": {"argv": ["sh", "-c", "rm -rf /"]},
                 "policy": "block",
-                "cadence": "every-wave",
+                "cadence": "every-task",
             }
         )
     message = str(exc_info.value)
@@ -671,7 +671,7 @@ def test_gate_spec_command_exit_zero_rejects_missing_argv() -> None:
                 "kind": "command_exit_zero",
                 "args": {},
                 "policy": "block",
-                "cadence": "every-wave",
+                "cadence": "every-task",
             }
         )
     message = str(exc_info.value)
@@ -702,7 +702,7 @@ def test_gate_spec_rejects_shell_metachars_in_argv() -> None:
                 "kind": "command_exit_zero",
                 "args": {"argv": ["pytest", "tests/*"]},
                 "policy": "block",
-                "cadence": "every-wave",
+                "cadence": "every-task",
             }
         )
     message = str(exc_info.value)
@@ -751,7 +751,7 @@ def test_gate_spec_command_exit_zero_rejects_unlisted_head_under_uv_run() -> Non
                 "kind": "command_exit_zero",
                 "args": {"argv": ["uv", "run", "rg", "x"]},
                 "policy": "block",
-                "cadence": "every-wave",
+                "cadence": "every-task",
             }
         )
     message = str(exc_info.value)

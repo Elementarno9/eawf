@@ -47,6 +47,7 @@ from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
 from eawf.kernel.config.layered import unset_dotted
 from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS, LEAF_KEY_REGISTRY
 from eawf.kernel.fsync import fsync_parent_dir
+from eawf.kernel.spec.cadence import LEGACY_CADENCE_ALIASES
 from eawf.runtime.lock import portalock
 from eawf.surfaces.cli.errors import ValidationError
 
@@ -333,6 +334,32 @@ def _split_coauthor_project(payload: dict[str, Any]) -> bool:
     return True
 
 
+def _migrate_cadence_values(value: Any) -> bool:
+    """Rewrite every epoch-1 ``cadence`` value under *value* to its native value, in place.
+
+    Walks nested mappings and lists; only a string held under a ``cadence`` key
+    is rewritten, so the same word elsewhere in the layer is left alone.
+
+    Args:
+        value: One node of a parsed layer body.
+
+    Returns:
+        ``True`` when at least one value was rewritten.
+    """
+    changed = False
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "cadence" and isinstance(item, str) and item in LEGACY_CADENCE_ALIASES:
+                value[key] = LEGACY_CADENCE_ALIASES[item]
+                changed = True
+            else:
+                changed = _migrate_cadence_values(item) or changed
+    elif isinstance(value, list):
+        for item in value:
+            changed = _migrate_cadence_values(item) or changed
+    return changed
+
+
 def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
     """Strip legacy keys + rewrite renamed config leaves.
 
@@ -352,6 +379,9 @@ def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
     5. The whole ``hooks`` section, which was reserved and never read.
     6. A one-string ``vcs.coauthor.project``, split into its ``name`` and
        ``email`` leaves by :func:`_split_coauthor_project`.
+    7. An epoch-1 ``cadence`` value (``every-wave``, ``every-iter``,
+       ``every-phase``), rewritten to its native value by
+       :func:`_migrate_cadence_values`.
 
     The cleanup is idempotent: a body that already passes all cleanup
     checks returns ``False`` and the input is untouched.
@@ -374,6 +404,7 @@ def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
     changed = _migrate_adapter_catalog(payload) or changed
     changed = _normalize_runtime_ids(payload) or changed
     changed = _split_coauthor_project(payload) or changed
+    changed = _migrate_cadence_values(payload) or changed
 
     for key in sorted(DEPRECATED_LEAF_KEYS - LEAF_KEY_REGISTRY.keys()):
         changed = unset_dotted(payload, key.split(".")) or changed

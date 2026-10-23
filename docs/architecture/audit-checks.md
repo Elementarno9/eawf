@@ -2,7 +2,7 @@
 
 *Yaml-declarative check spec + frozen registry of check kinds. Wired into `eawf record append`.*
 
-The DSL replaces the Phase-2 fixture-driven stub of `eawf record append`. A yaml file declares an ordered list of checks; the runner dispatches each through a frozen registry of check kinds and stores the pass/fail booleans on the resulting audit record. The original `--fixture <json>` option is retained for the v0.2 cycle as an escape hatch but is mutually exclusive with `--checks`.
+The DSL replaces the earlier fixture-driven stub of `eawf record append`. A yaml file declares an ordered list of checks; the runner dispatches each through a frozen registry of check kinds and stores the pass/fail booleans on the resulting audit record. The original `--fixture <json>` option is retained for the v0.2 cycle as an escape hatch but is mutually exclusive with `--checks`.
 
 Decision: D02 (yaml-declarative + check-kind registry). Backlog: B019 (DSL skeleton); B074 (sandbox-policy enforcement, v0.4 via `eawf.runtime.sandbox.argv_policy`).
 
@@ -44,10 +44,10 @@ checks:
     args:
       path: pyproject.toml
   - kind: regex_in_file
-    name: phase_p13_in_changelog
+    name: release_in_changelog
     args:
       path: CHANGELOG.md
-      pattern: "P13"
+      pattern: "0\\.7\\.0"
   - kind: state_field_equals
     name: schema_version_pinned
     args:
@@ -81,12 +81,12 @@ The library entrypoint is `eawf.audit_dsl.runner.run_checks(specs, cwd=...)`; im
 
 ## Sandbox-policy boundary (B074)
 
-`command_exit_zero` shells out via `subprocess.run`. In v0.2 the DSL runner does **not** consult the sandbox / permission policy table (rendered by the retired `wave policy show` verb). Enforcement is the caller's responsibility:
+`command_exit_zero` shells out via `subprocess.run`. In v0.2 the DSL runner does **not** consult the sandbox / permission policy table. Enforcement is the caller's responsibility:
 
-- For CI: gate the policy check in the wave's CI pre-step.
+- For CI: gate the policy check in the job's CI pre-step.
 - For developer invocation: surface the policy table before invoking `audit run --checks` against an untrusted yaml file.
 
-Hardening — pulling the policy check inside the runner so a hostile `argv` cannot reach `subprocess.run` — is tracked as backlog item **B074** for v0.4 (delivered for the ship gauntlet by P28-I01-W05; the audit-DSL `command_exit_zero` adoption follows on a later wave). The yaml schema remains stable across that transition; only the runtime check changes.
+Hardening — pulling the policy check inside the runner so a hostile `argv` cannot reach `subprocess.run` — is tracked as backlog item **B074** for v0.4 (delivered for the ship gauntlet first; the audit-DSL `command_exit_zero` adoption follows later). The yaml schema remains stable across that transition; only the runtime check changes.
 
 ## Error handling
 

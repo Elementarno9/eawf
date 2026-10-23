@@ -1,28 +1,21 @@
 <!-- Generated from the eawf profile render block `release-process`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=release-process version=1.4 hash=daaded29edc19453 -->
+<!-- BEGIN EAWF:managed id=release-process version=2.0 hash=24d8818909d50455 -->
 # `release-process`
 
-Releases are opt-in per repo via the release cadence setting; the per-phase cadence gates phase close on a changelog section, a version bump, a migration note, and the release annotation.
+A release-train repo tags a merged Milestone only after ``eawf release preflight`` passes, via ``eawf release pipeline --milestone``; other repos keep their own tag flow.
 
 ### Release process
 
-Releases are opt-in per repo via ``vcs.conventions.release.cadence``. The two supported cadences:
+Releases run through the explicit release verbs: no Milestone acceptance waits on a release, and no config leaf selects a release cadence.
 
-- ``manual`` — the default for every repo; releases ride a separate operator-driven tag flow.
-- ``per-phase`` — opt-in, set explicitly in the repo config; each phase PR closes with a release-readiness pre-flight gate and a post-merge release tag. Phase close = at least one minor version bump.
-
-Under ``per-phase``, ``eawf milestone accept`` refuses until the phase-close audit carries a passing ``release-preflight`` check. That check covers:
+In a repo that releases through an eawf release train, ``eawf release preflight <version>`` sweeps every readiness signal over the checkout and reports all of them on every run, so one pass shows the whole repair list. Among them:
 
 - ``CHANGELOG.md`` has a new section for the release version with at least one bullet.
 - The package version module (``src/<pkg>/_version.py``) advanced from the prior release.
-- A migration note exists when ``state.json`` ``schema_version`` changed since the last release.
-- The phase-close commit subject carries the optional ``(release=v<X.Y.Z>)`` annotation accepted by ``tools/commit_prefix_lint.py``.
+- A migration note exists when the state ``schema_version`` changed since the last release.
 
-Post-merge, ``.github/workflows/phase-release.yaml`` reads the annotation, checks it against the package version, and prints the release command. It pushes no tag and creates no release object: a tag pushed with a workflow's default token starts no other workflow, so nothing would publish. Who pushes the tag depends on how the repo releases:
+A repo that releases through an eawf release train cuts each release from a merged Milestone with ``eawf release pipeline <version> --milestone <MLS-NNNN> --publish``, run from a clean checkout of the merge commit, which walks the checkpoint from tag to BAKED. It runs the readiness sweep before it tags, its push starts the publish workflows, which mark every dev and release-candidate tag as a prerelease, and it then advances the train and checks that ``main`` carries exactly the commits of each completed Batch of the Milestone, found by their ``Task:`` and ``Batch:`` trailers.
 
-- A repo that releases through an eawf release train runs ``eawf release pipeline <version> --phase P<NN> --publish`` from a clean checkout of the merge commit. The verb runs the readiness sweep before it tags, its push starts the publish workflows, which mark every dev and release-candidate tag as a prerelease, and it then walks the checkpoint to BAKED and advances the train.
-- Every other repo keeps its own tag flow: the tagging it already runs after a merge stays its tagging path.
-
-Repos on the default ``manual`` cadence skip the gate and the workflow.
+Every other repo keeps its own tag flow: the tagging it already runs after a merge stays its tagging path.
 <!-- END EAWF:managed id=release-process -->

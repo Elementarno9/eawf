@@ -1,182 +1,125 @@
 # Workflow
 
-*High-automation ADD lifecycle, parallel-wave discipline, and end-to-end DAGs.*
+*Agent-driven delivery lifecycle, parallel-Task discipline, and the Milestone pipeline.*
 
 ## Default lifecycle
 
 ```text
 intake
-  → research fanout
-  → synthesis
-  → state-backed spec / plan
-  → approval gate if risky / large
-  → wave planning
-  → wave claims
-  → parallel research / execution where safe
-  → audit
-  → fresh review
-  → auto-fix loop when bounded
-  → acceptance gate
-  → commit / PR proposal or auto-commit if user selected auto-commit during installation
+  → research (/research, /spike, /campaign)
+  → backlog: draft Tasks (/backlog)
+  → PlanRevision: propose, approve, apply (/plan)
+  → Milestone activation (/milestone activate)
+  → dispatch: claim Tasks, start Runs, reach a candidate per Batch (/dispatch)
+  → verification at one exact revision (/verify)
+  → integration: seal, select, apply (/integrate)
+  → Milestone acceptance (/accept)
+  → release (/release)
 ```
+
+The containment the lifecycle walks is Track, Milestone, Batch, Task; each agent's execution episode is a Run. A Milestone ships through one pull request, and each Batch lands as its own buildable commit on that pull request.
 
 Parallel implementation is allowed only when:
 
-- waves are distinct,
-- file scopes are disjoint or explicitly coordinated,
-- each agent has a wave claim,
-- the state write lock is respected,
-- acceptance checks are defined.
+- the Tasks are distinct and each is `PLANNED` and claimed by the actor that runs it,
+- their write claims are disjoint, or one of them is marked exclusive and the others wait,
+- the daemon's state lock is respected (every mutation goes through it),
+- each Task carries typed success criteria with a gate that runs locally.
 
-Phase close has an explicit scope-collapse guard: when a phase has exactly one closed wave, `eawf milestone accept` fails unless an active decision tied to that phase records the single-wave / scope-collapse rationale. This keeps phase closeout from silently hiding an accidental all-in-one wave.
+## Workflow skills
 
-## Required workflow skills
+| Skill | Purpose |
+|---|---|
+| `/research` | Answer one question with a swift one-page investigation; no Campaign. |
+| `/spike` | Build, test, independently verify and present a local proof of concept. |
+| `/campaign` | Run a complete Campaign from definition through terminal synthesis. |
+| `/backlog` | Add or list draft Tasks and propose their promotion through a plan. |
+| `/track` | Create, show or retire a Track. |
+| `/milestone` | Define, show, activate or cancel a Milestone. |
+| `/plan` | Propose, approve and apply a PlanRevision. |
+| `/dispatch` | Coordinate one Delivery Batch: bring its ready Tasks to a candidate. |
+| `/verify` | Verify one Delivery Batch at one exact revision, as auditor or as reviewer. |
+| `/integrate` | Prepare or execute one daemon-owned integration action on a Delivery Batch. |
+| `/accept` | Decide a Milestone acceptance bundle: prepare, accept, reject or request repair. |
+| `/release` | Prove, preflight, approve, publish, observe and recover a release. |
+| `/attend` | Work the Attention queue: pending actions, open questions and open pauses. |
+| `/decide` | Propose, supersede or show a Decision. |
+| `/why` | Explain the provenance of an entity; read-only. |
+| `/memory` | Search, write, promote or show memory entries. |
+| `/test` | Design, add, repair or run a bounded test contract. |
+| `/refactor` | Inspect or apply a bounded structural refactor. |
+| `/mockup` | Build and compare operator-visible design options. |
+| `/reflect` | Report where effort, time and money actually went, without mutating canonical state. |
 
-| Skill | Purpose | Default automation |
-|---|---|---|
-| `/research [-f] [message]` | Research topic or current-iter unknowns; propose options, tradeoffs, risks, recommendation; peer-review findings; repeated calls extend same brief | Auto fanout, synthesize, review, update state / artifact refs; `-f` stores typed references and the retired `research show` verb renders the brief |
-| `/prep [p##[-i##]] [-i]` | Plan current / selected iter; `-i` plans fixes after `/audit` or `/review` | Build DAG, define waves, acceptance checks, file scopes, worktree needs, wave tags, and bucket roll-ups |
-| `/audit [scope]` | Full iteration audit: metrics / results, code quality, tests, docs / state evidence, integrity checks | Run configured checks, fanout reviewers, record `Audit` artifact / verdict; the retired `audit show` verb renders the audit chassis |
-| `/ship` | Commit / push / PR open-close controller | Respect auto-commit / auto-push; otherwise create pending-ship artifact and ask; review / promote / prune relevant memories before final state update |
-| `/review` | Review active PR and post templated comment / review | Inspect diff / checks, run focused agents, post only when requested or policy allows |
-| `/polish [-y]` | Whole-repo consistency audit across docs, memory, code, configs, state, agent / subagent memory | Parallel search, grouped cleanup table; promote useful memories, prune obsolete ones; `-y` auto-applies safe tasks |
-| `/init` | LLM-guided Ea setup / enrichment for new / existing repo / workspace / subproject | Inspect context, propose identity / profiles / settings / subprojects, ask approval, run init / update CLI, validate; delegate roadmap to `/roadmap` |
-| `/roadmap` | Goal / phase roadmap design for project / subproject | Research context, propose goals / outcomes / phases / iterations / audit gates / estimate envelopes, ask approval, apply state via CLI |
-| `/differentiate` | Generate project / subproject-specialized agents from Eä baselines | Ask desired agent options, adapt roles / tools / prompts / scopes / checks, validate with `/agent-lint`, render agents |
-| `/flow` | One-click resumable ADD iteration pipeline | Wraps the 6 core skills with budget gates and `flow.jsonl` checkpoints |
+The generated [skill catalog](../reference/autogen/skills.md) carries each skill's argument hint, its lanes and its operator-only actions.
 
-Optional skills (per profile / config): `/incident`, `/state`, `/reconcile`, `/memory`, `/handoff`, `/agent-lint`, `/worktree`, `/trace`.
-
-## Skill algorithms (summary)
+## Stage algorithms (summary)
 
 Every skill performs `Probe instruments → Resolve scope → Action → Envelope`. Each step writes evidence; failures degrade per the pipeline fallback ladder rather than fake completion.
 
-### `/research [-f] [message]`
+### Plan
 
-1. Probe instruments via `EA_INSTRUMENT_PROBE`; abort if hard requirement missing.
-2. Resolve scope: explicit message, else active iter unknowns / blockers from state.
-3. Detect continuation: if same scope has open research brief, load and extend.
-4. Define questions: facts to verify, options to compare, risks to audit, decision needed.
-5. Dispatch parallel read-only agents: repo / context search, external / source research, prior-art search, adversarial review.
-6. Synthesize options: 2–4 solutions with tradeoffs, complexity, reversibility, dependencies, risks.
-7. Review findings: cross-check citations, identify stale assumptions, contradictions, hallucination risk, missing data.
-8. Recommend one path with confidence and fallback.
-9. Write / update brief artifact if `-f` or `research.auto_save=true`; otherwise keep session output and optional state summary.
-10. Record artifact / decision candidates / unresolved questions in state when policy allows.
+1. Gather the inputs: accepted research, decisions, draft Tasks, memory, current code and docs.
+2. Propose a PlanRevision: one Milestone, its Batches and their Tasks, each Task with its intent, criteria, write claims and dependencies (`eawf plan submit` records it as `VALIDATED`).
+3. The revision binds the state revision, the repository heads and the policy revision it was written over, and the digest of its own body.
+4. A human principal approves the digest (`eawf plan approve`); an agent cannot approve.
+5. The apply materialises the approved revision into its Milestone (`eawf plan apply`) and refuses when the body no longer matches the approved digest or a bound head has moved.
 
-### `/prep [p##[-i##]] [-i]`
+A `PLANNED` Milestone is re-planned in place through a child revision; an `ACTIVE` one only gains appended Batches or edits to `PLANNED` ones.
 
-1. Probe instruments.
-2. Resolve planning mode: current iter by default; explicit phase / iter if supplied; `-i` means fix-plan for latest audit / review findings.
-3. Load state, accepted research, decisions, backlog, memory, current code / docs, acceptance config.
-4. Define objective and non-goals.
-5. Build task DAG: task ID, deps, file scope, success criteria, `agent_role`, `effort_bucket`, commands, evidence, risk, expected artifact.
-6. Partition into waves: parallel only for disjoint / controlled scopes; assign worktree policy.
-7. Estimate each wave at the one effort constant; a size label changes no figure.
-8. Allocate IDs: `eawf batch create` auto-allocates next `P13-Ixx`; explicit `P13-I04` infers parent.
-9. Write plan / spec artifact, state wave stubs, and estimate records.
-10. Ask approval if `approval=ask`, risky, destructive, ambiguous, or budget exceeds threshold.
+### Dispatch
 
-### `/audit [scope]`
+1. Resolve the Batch and its ready frontier: `PLANNED` Tasks whose dependencies are met.
+2. Claim each Task for the actor that will run it (`eawf task claim`); a claim is a lease that `eawf task release` hands back.
+3. Start the Task under a Run (`eawf task start`); a parallel writer runs in its own worktree.
+4. The Run files its report and evidence; `eawf task submit` records that its leased workspace is ready to integrate.
+5. Stop at the requested boundary: an empty frontier, a candidate ready, or an item on the Attention queue.
 
-1. Probe instruments.
-2. Resolve scope: active iter by default; may target wave / phase / PR.
-3. **Branch on profile composition**:
-   - `research` profile enabled → `/audit --kind=evaluation` runs MLflow integrity (lookahead bias, MZ tautology, OOS overlap, IS / OOS gap), measures outcomes, sets hypothesis verdicts, writes evaluation artifact.
-   - `research` profile not enabled → `/audit --kind=ship-gate` runs tests, lint, typecheck, build, security, docs links, scope-vs-spec drift, writes ship-gate artifact.
-4. Build check plan from `.ea/acceptance.yaml`, profile rules, changed files, outcomes, hypotheses.
-5. Run deterministic checks per the chosen audit kind.
-6. Collect result metrics and compare to thresholds / baselines.
-7. Dispatch fresh reviewers for code quality, docs / state consistency, memory drift, domain integrity.
-8. Mark each finding: blocker, fix-now, follow-up, false-positive.
-9. If `--fix-safe`, apply bounded safe fixes and rerun affected checks.
-10. Write `Audit` artifact with commands, outputs, metrics, review findings, verdicts, estimate / actual telemetry, evidence IDs.
-11. Update outcomes / hypotheses only from audit evidence; update actuals only from measured session / runtime data.
+### Verify
 
-### `/ship`
+1. Bind the exact revision under review.
+2. Run the declared gates (`--mode gates`), an audit, a review or a security pass.
+3. Classify each finding by severity and record the verdict against that revision; a later commit needs a fresh verification.
 
-1. Probe instruments.
-2. Require current audit passed or explicit allowed exception.
-3. Inspect git status / diff / log and state scope.
-4. Review memory: extract durable lessons from session / agent memory, promote useful entries, mark stale / contradicted entries, prune only by policy.
-5. Build pending-ship artifact: commit groups, messages, files, evidence, push / PR action, rollback notes.
-6. Validate durable artifact markdown with the retired `artifact validate` verb; promotion paths fail closed on scrub findings and non-dense citations.
-7. Default new-install policy is ask before commit; if auto-commit is explicitly enabled and `--no-commit` is not set, commit using selected template.
-8. Default new-install policy is ask before push; if auto-push is explicitly enabled and `--no-push` is not set, push safely.
-9. PR action: open draft / ready, update body, close / merge only if configured gates pass.
-10. Merge / close gates: CI green, required reviews, state valid, no unresolved blockers; force may bypass outcomes only with reason, never CI.
-11. Record commits / PR / merge / audit artifacts and final estimate-vs-actual summary in state; close wave / iter / phase as requested. Phase close rejects a single closed wave unless an active phase decision documents a deliberate scope collapse.
-11. Remove clean worktrees if policy says; preserve on conflict / failure.
+### Integrate
 
-### `/review`
+1. Seal each Task's accepted report to its candidate (`eawf task seal`).
+2. Select the candidates and integrate them into the Batch's next generation (`eawf batch integrate`).
+3. Declare the Batch ready to merge, authorise the merge at the head it pinned, and reconcile what the host landed (`eawf batch ready`, `merge`, `observe-merge`, `reconcile`, `complete`).
 
-1. Probe instruments.
-2. Resolve PR from explicit flag or active branch.
-3. Fetch PR metadata: base / head, commits, changed files, checks, comments, requested reviewers.
-4. Review correct diff with merge-base / triple-dot semantics.
-5. Dispatch focused agents by area / risk.
-6. Check PR template completeness, state links, audit evidence, memory / docs drift, tests.
-7. Produce findings table and recommendation: approve, comment, request changes, or fix locally.
-8. If `--post`, publish templated comment / review; otherwise output draft.
-9. If `--fix`, route through `/prep -i` or apply safe fixes then `/audit`.
+### Accept and release
 
-### `/polish [-y]`
-
-1. Probe instruments.
-2. Snapshot repo / state; do not mutate before report.
-3. Fan out read-only agents over code, tests, docs, configs, state, generated files, project memory, agent / subagent memory.
-4. Find inconsistencies: stale docs, duplicate rules, broken links, orphan artifacts, invalid memories, obsolete generated files, naming drift.
-5. Reconcile / merge findings into grouped cleanup tables by topic / scope / risk.
-6. Memory pass: promote useful session / agent facts, compact long memories, mark stale / superseded, propose prune list.
-7. Without `-y`, ask which groups to run.
-8. With `-y`, apply safe groups only; unsafe / destructive tasks still ask.
-9. Run affected checks and write polish report artifact.
-10. State updates record decisions / backlog / memory changes; deletion requires recoverability and explicit reason.
-
-### `/flow [goal] [budgets] [policy]`
-
-`/flow` wraps the 6 core skills as a resumable controller. Algorithm:
-
-1. **Start / Resume**: create or resume flow record in `.ea/store/flow.jsonl` with goal, budgets, current pointers, stop conditions, policy, last safe checkpoint, and next action.
-2. **Research loop**: run `/research` repeatedly within `time_budget`, `research_budget`, `agent_budget`, and `cost_budget` until unknowns are resolved, recommendation confidence reaches threshold, or marginal value stops improving. Use parallel read-only agents; `/research` **auto-invokes `/reconcile`** when subagent verdicts disagree. If `research_budget` is exhausted while confidence remains low, the loop does not silently continue: tag `flow.research_status=inconclusive` and ask the user explicitly with `extend budget | proceed-with-caveat | stop`.
-3. **Plan**: run `/prep` to produce iteration plan, DAG, waves, checks, worktrees, acceptance criteria, risk register, and approval prompt.
-4. **Approval gate**: ask with concrete options: approve, edit scope, research more, defer, stop.
-5. **Execute**: dispatch waves; use worktrees for parallel writers; record wave claims and checkpoints before mutations; agents may ask only for major decisions / blockers. **Worktree teardown happens after each wave's close, before the next wave-group starts**, per `worktrees.merge_mode` in `.ea/config.yaml`.
-6. **Audit**: run `/audit` (branches on `research` profile per the `/audit` algorithm); if major issues found, open fix loop with `/prep -i`, execute bounded fixes, and re-audit until pass, budget exhausted, or user chooses stop / backlog.
-7. **Minor / stale gate**: ask the user fix-now, backlog, ignore with reason, or stop.
-8. **Memory review**: run `/polish --memory-only`; promotion proposals not applied here are deferred to the next session, not silently dropped. The user can opt to skip via `--no-memory-review`.
-9. **Ship**: run `/ship`. If `--ship=auto` is configured **and** the `research` profile is enabled, `/flow` force-degrades to `--ship=ask` because evaluation-kind audits warrant a human gate before publish.
-10. **Close / resume marker**: record final state, pending follow-ups, memory promotions, stale markers, handoff, and safe resume command.
-
-`/flow` is appropriate when scope is well-defined upfront and policy gates are calibrated. The explicit sequence (`/research → /prep → execute → /audit → /ship`) is appropriate when verdicts may surprise mid-iter or scope shifts during execution. Mixed use is fine: an explicit-skill detour during a `/flow` run does not abort the flow; `/flow --resume` picks up from the last safe checkpoint.
+1. Prepare the Milestone's acceptance bundle and walk its acceptance journey.
+2. The operator accepts, rejects or requests repair (`/accept`); a repair appends Batches to the Milestone.
+3. A Release pins accepted Milestones, passes its preflight, is approved and published (`/release`).
 
 ## Worktree usage rules
 
 Use worktrees when:
 
 - two or more write-capable agents run in parallel,
-- task is risky / large and should not dirty root repo,
-- emergency fix interrupts messy root state,
-- review / audit needs to test PR merge ref or alternate branch,
+- a Task is risky or large and should not dirty the root checkout,
+- an emergency fix interrupts messy root state,
+- a review or audit needs to test a PR merge ref or an alternate branch,
 - generated artifacts may be noisy and isolated cleanup is useful.
 
 Avoid worktrees when:
 
-- task is read-only research,
-- edit is single-file / trivial,
-- repository uses submodules heavily and project has not opted in,
-- file scopes overlap without an explicit merge owner.
+- the Task is read-only research,
+- the edit is single-file or trivial,
+- the repository uses submodules heavily and the project has not opted in,
+- write claims overlap without an explicit merge owner.
 
 Contract:
 
-1. Create from current root branch: `git worktree add .worktrees/<wave-branch> -b <wave-branch>`.
-2. Never create detached worktrees for commit-producing waves.
-3. Add `.worktrees/` to `.gitignore` unless repo policy says otherwise.
-4. Each worktree has one owning wave / session and file-scope claim.
-5. Agent commits inside worktree only after checks / evidence pass or after pending-ship approval.
-6. Merge back per `worktrees.merge_mode`. Default `cherry_pick`.
-7. On conflict, preserve worktree, record blocker; do not force-remove.
-8. **Worktree teardown follows wave close, before the next wave-group starts** — never tear down with uncommitted or uncherry-picked work, and never leave a worktree alive across wave-group boundaries.
+1. Branch each worktree from the Batch's branch head, never from the default branch.
+2. Never create detached worktrees for commit-producing Tasks.
+3. Keep worktrees under an ignored path (`.ea/worktrees/` in this repository).
+4. Each worktree has one owning Task and Run, bounded by the Task's write claims.
+5. Commit inside the worktree only after its checks and evidence pass.
+6. Bring commits back per `worktrees.merge_mode`; the default is `cherry_pick`, in order, never a merge.
+7. On conflict, preserve the worktree and record the blocker; do not force-remove.
+8. Remove a worktree only after its commits have landed, and never with uncommitted or uncherry-picked work.
 9. Remove only clean worktrees with `git worktree remove`; use `prune` only for stale metadata.
 10. Worktree policy and branch naming live in `.ea/config.yaml`.
 
@@ -196,25 +139,16 @@ worktrees:
 | Step count | 1 | 2 |
 | Best for | ephemeral worktree, throwaway branch | remote-tracked source, SHA-referenced commits |
 
-Default `cherry_pick` is correct for most Eä waves: the worktree branch is ephemeral, conflict resolution belongs in the parent feature branch where reviewers will read it, and a rewritten SHA is acceptable because the source branch is torn down.
+Default `cherry_pick` is correct for most Eä Tasks: the worktree branch is ephemeral, conflict resolution belongs on the Batch branch where reviewers will read it, and a rewritten SHA is acceptable because the source branch is torn down. A squash that replaces a bound commit is followed by `eawf batch rebind`, so every ledger row naming the old commit is superseded rather than edited.
 
 ## VCS, commit, PR, and merge policy
 
-Recommended commit variants:
+- A Batch commit reads `<type>: <summary>` with one `Batch: BAT-<NNNN>` trailer and one `Task: <KEY>` trailer per Task it delivers; a single-Task commit may carry its `Task:` trailer alone.
+- Each push ends with one `state: <summary>` commit touching only committed state paths.
+- Before a push, the branch is squashed to one buildable commit per Batch (`eawf batch squash`), code with its tests.
+- A Milestone pull request carries a Summary of three to six bullets and a Test plan checklist; review is addressed by appending Batches, and the merge keeps each Batch commit.
 
-1. **Conventional Commits**: `<type>[optional scope]: <description>`.
-2. **State-scoped ADD**: `[P##[-I##[-W##]]] <type>: <summary>` plus body bullets and evidence trailers. Default for state-first projects.
-3. **Minimal solo**: `<type>: <summary>` plus `Refs:` / `Evidence:` trailers.
-4. **Release / phase**: `[P##] docs:` or `[P##] chore:` with outcome summary and PR / release evidence.
-
-Required PR templates:
-
-- **Iter PR**: Summary, Changes, Evidence, Test plan, Risks, State links, Follow-ups.
-- **Phase / release PR**: Outcomes, Audits, Unmet outcomes / force reason, Migration notes, Rollback, Checklist.
-- **Docs / research PR**: Claims changed, Sources, Review findings, Open questions.
-- **Incident fix PR**: Root cause, Fix, Regression guard, Prevention, Verification.
-
-Merge / rebase rules live in `.ea/config.yaml` under `vcs:` and `worktrees:`. Force push is forbidden on protected branches; squash is opt-in; `delete_branch_after_merge` is opt-in.
+Merge / rebase rules live in `.ea/config.yaml` under `vcs:` and `worktrees:`. Force push is forbidden on protected branches, and main and tags are never rewritten.
 
 ## Pipeline fallback rules
 
@@ -224,129 +158,8 @@ Every skill follows the same fallback ladder:
 2. **Classify failure**: missing context, missing tool, failing check, merge conflict, auth / secret, ambiguous user intent, external service, schema / state corruption, destructive-risk gate.
 3. **Write evidence**: append event / log / pending artifact with command, error, scope, attempted fixes.
 4. **Degrade mode** when safe: full TUI → static Rich → plain text; web + repo research → repo-only; auto-fix → report-only; worktree merge → preserve worktree and blocker.
-5. **Ask user** only when blocked by missing secret / auth, destructive choice, repeated failed attempts, ambiguous product decision, or conflict requiring semantic judgment.
-6. **Never fake completion**. Leave state as `blocked`, `failed`, `pending_ack`, or `needs_user` with next valid commands.
-
-## End-to-end DAGs
-
-### `/init` pipeline DAG
-
-```text
-/init [project|subproject] [flags]
-│
-├─ [Detect environment]  (read-only)
-│   ├─ [Probe instruments]  (read-only, cached)
-│   │   ├─ hard tools present → continue
-│   │   └─ hard tool missing → abort + install hint
-│   ├─ git root present?
-│   │   ├─ yes → continue
-│   │   └─ no → {asks: init git repo? Y/N}
-│   ├─ existing .ea/?
-│   │   ├─ yes + complete → enrich mode (preserve, ask before changing)
-│   │   ├─ yes + partial → repair mode
-│   │   └─ no → fresh init
-│   ├─ existing AGENTS.md / CLAUDE.md?
-│   │   ├─ has EAWF managed regions → safe to re-render
-│   │   ├─ no markers + non-empty → wrap content as user-region on first generation
-│   │   └─ absent → generate fresh
-│   └─ language detection (pyproject.toml, package.json, ...) → propose profile set
-│
-├─ [Mode selection]  {asks: new | enrich | add-subproject | roadmap-handoff | repair}
-│
-├─ [State placement]  {asks once}
-├─ [Project identity]  {asks once for code+title; auto-fills others}
-├─ [Lifecycle depth]  {asks once if subprojects detected}
-├─ [Subprojects]  {asks once if depth=multi-workstream}
-├─ [Profile selection]  {asks once}
-├─ [Roadmap delegation]  {asks once: do you want goals/phases now? Y/N}
-├─ [Plugin install]  {asks per-runtime}
-├─ [MCP selection]  {asks per-MCP recommended by profiles}
-├─ [Acceptance commands]  (auto-detect, then asks confirm)
-│
-├─ [Plan + apply]  {asks ONCE for full file-change confirmation}
-│   ├─ show: list of files to create/modify/skip
-│   ├─ ask: apply this plan? Y/N/edit
-│   └─ on Y:
-│       ├─ write .ea/config.yaml + state.json + schema.json + acceptance.yaml
-│       ├─ render AGENTS.md (after profile compose)
-│       ├─ render CLAUDE.md = "@AGENTS.md"
-│       ├─ render .claude/skills, agents, hooks (Eä-managed regions)
-│       ├─ append .gitignore: .ea/local/**, .ea/cache/**, .ea/tmp/**, .ea/secrets/**
-│       └─ register repo in workspace .ea/state.json if linked
-│
-└─ [Validate]  (always last)
-    ├─ eawf validate --strict
-    │   ├─ pass → continue
-    │   └─ fail → keep files, mark needs_setup, print repair hints, exit 4
-    └─ eawf doctor
-```
-
-Required write ordering inside `[Plan + apply]`:
-
-1. `.ea/config.yaml` — profile composition result baked in.
-2. `.ea/state.json` — minimal core only; optional keys materialized per composed profiles.
-3. `.ea/schema.json` + `.ea/acceptance.yaml`.
-4. **Profile compose pass** — resolve `requires` graph, deep-merge rules / agents / hooks / MCPs, persist conflict decisions.
-5. `AGENTS.md` — rendered from composed profile result, never from raw selected list.
-6. `CLAUDE.md` — hardcoded `@AGENTS.md\n` shim.
-7. `.claude/skills/`, `.claude/agents/`, `.claude/hooks/` — rendered from composed profile result.
-8. `.gitignore` append.
-9. Workspace registration if linked.
-
-Profile composition MUST complete before AGENTS.md or any plugin / skill / agent file is rendered.
-
-### `/flow` pipeline DAG
-
-```text
-/flow "goal" [budgets] [--ship ask|auto|none] [--stop-after research|prep|audit|ship] [--resume]
-│
-├─ [Start/Resume]  flow record exists in .ea/store/flow.jsonl?
-│   ├─ yes → resume from last_safe_checkpoint (reconcile drift)
-│   └─ no → create flow record {goal, budgets, current_pointers, policy}
-│
-├─ [Research loop]  ← may iterate
-│   ├─ /research within remaining research_budget
-│   ├─ peer-review red-team if research profile enabled
-│   ├─ confidence ≥ threshold OR plateau OR budget exhausted?
-│   │   ├─ confidence high → exit loop
-│   │   ├─ budget exhausted + confidence low → {asks: extend / proceed-with-caveat / stop}
-│   │   └─ subagents conflict → /reconcile (auto-invoked) → loop
-│   └─ persist research artifact + decisions
-│
-├─ if --stop-after=research → mark paused, exit
-│
-├─ [Prep]  /prep → DAG, waves, file scopes, acceptance, EU estimates
-│   └─ {asks: approve | edit-scope | research-more | defer | stop}
-│
-├─ if --stop-after=prep → mark paused, exit
-│
-├─ [Execute]  ← per wave-group, parallel-disjoint
-│   for each wave-group:
-│   ├─ for each wave (parallel): claim, optional worktree, dispatch executor,
-│   │   post-commit hook → state validate, wave close, merge per merge_mode
-│   ├─ after group: write last_safe_checkpoint
-│   └─ on failure: critical → halt; non-critical → continue, surface in audit
-│
-├─ if --stop-after=execute → mark paused, exit
-│
-├─ [Audit]  branches on profile per /audit algorithm
-│   ├─ research profile enabled → /audit --kind=evaluation
-│   └─ otherwise → /audit --kind=ship-gate
-│   ├─ verdict: pass → continue; major → /prep -i fix loop; minor → ask
-│   └─ persist verdicts
-│
-├─ if --stop-after=audit → mark paused, exit
-│
-├─ [Memory review]  /polish --memory-only → promote / prune per policy
-│
-├─ [Ship]  pending-ship artifact built; ship policy applied
-│   ├─ --ship=auto AND research profile enabled → force-degrade to ask
-│   └─ --ship=ask → {asks: approve commit + PR | commit-only | defer | stop}
-│
-└─ [Close]  flow.status ∈ {done, blocked, abandoned, superseded}
-```
-
-Resume after kill: `/flow --resume` continues from `flow.last_safe_checkpoint`. Drift detection on resume; long actions write pending records before mutation and recovery records after.
+5. **Ask the operator** through a pending action or an open question only when blocked by a missing secret or auth, a destructive choice, repeated failed attempts, an ambiguous product decision, or a conflict requiring semantic judgment; an unattended run records the question and continues on the independent remainder.
+6. **Never fake completion**. A Run that cannot finish ends `FAILED` or `SUSPENDED` with its reason, and a report carries a `fail` or `blocked` verdict with the next valid commands.
 
 ## Cross-references
 

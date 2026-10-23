@@ -4,7 +4,7 @@ Mutation testing for the four load-bearing "core" packages — `state/`, `lifecy
 
 > **Removed (2026-07-15) — pending a real owner.** The `mutation-core` job in `.github/workflows/ci.yaml` and the `[tool.mutmut]` config block in `pyproject.toml` were deleted. The job was publish-not-block (never a merge gate), its source-rewriting sandbox never ran this tree's suite end to end (see [Sandbox caveats](#sandbox-caveats)) so it published no reliable score, and it had no maintainer. The rest of this page is kept as a rebuild reference: restore `[tool.mutmut]` plus the CI job in one change once someone owns the sandbox fix.
 
-## How it works
+## Mechanism
 
 mutmut [1] rewrites small pieces of source (a `+` becomes `-`, a `>` becomes `>=`, a return value is replaced) one mutation at a time, then runs the test suite against each mutant. A mutant the suite catches is **killed**; one the suite still passes against **survived** — a survivor marks a behaviour no test pins down.
 
@@ -29,7 +29,7 @@ The score is review signal, not a merge gate: a PR that lowers the score below 7
 
 ## Score target
 
-The documented target is **>= 70%**, computed as `killed / (killed + survived)` (the conventional mutmut score, which excludes `no_tests` / `skipped` mutants from the denominator). 70% is a pragmatic floor for a first campaign on a large existing surface; it is tightened toward in later waves the same way the coverage ratchet is.
+The documented target is **>= 70%**, computed as `killed / (killed + survived)` (the conventional mutmut score, which excludes `no_tests` / `skipped` mutants from the denominator). 70% is a pragmatic floor for a first campaign on a large existing surface; it is tightened toward in later changes the same way the coverage ratchet is.
 
 ## Running a campaign locally
 
@@ -62,7 +62,7 @@ To scope a faster local run to a single module while iterating, narrow `paths_to
 
 The job is **publish-not-block** by design partly because mutmut's source-rewriting sandbox does not yet run this tree's full suite cleanly:
 
-- **pydantic-core compiled validators.** mutmut's import trampoline can confuse pydantic-core's compiled validators, surfacing as a spurious `ValidationError` (for example "Decimal input should be an integer, float, string or Decimal object" on a value that already *is* a `Decimal`) while collecting tests that pull in the daemon/telemetry models. This aborts the stats phase, so `mutmut-cicd-stats.json` may not be produced. The publish step treats a missing stats file as "no score" and exits cleanly; the CI job never reds the build.
+- **pydantic-core compiled validators.** mutmut's import trampoline can confuse pydantic-core's compiled validators, surfacing as a spurious `ValidationError` (for example "Decimal input should be an integer, float, string or Decimal object" on a value that already *is* a `Decimal`) while collecting tests that pull in the daemon/telemetry models. This aborts the stats step, so `mutmut-cicd-stats.json` may not be produced. The publish step treats a missing stats file as "no score" and exits cleanly; the CI job never reds the build.
 
 Closing this is mutmut-runner tuning (e.g. constraining the trampoline, or a hammett-based runner), tracked as follow-up work — it is intentionally outside the config-only wiring this page documents. Until then the wiring is in place and the score populates as soon as the sandbox runs the suite end to end.
 

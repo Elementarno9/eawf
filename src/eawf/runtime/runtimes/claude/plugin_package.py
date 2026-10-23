@@ -337,11 +337,19 @@ def _render_marketplace(
     return canonical
 
 
-def _render_readme() -> str:
-    """Render the plugin-tree ``README.md``."""
+def _render_readme(skills: Sequence[str], agents: Sequence[str]) -> str:
+    """Render the plugin-tree ``README.md``.
+
+    Args:
+        skills: The shipped skill names, in render order.
+        agents: The shipped agent roles, in render order.
+
+    Returns:
+        The README text, newline-terminated.
+    """
     env = _load_environment()
     template = env.get_template(_README_TEMPLATE)
-    rendered = template.render()
+    rendered = template.render(skills=skills, agents=agents)
     if not rendered.endswith("\n"):
         rendered = rendered + "\n"
     return rendered
@@ -509,7 +517,9 @@ def package_plugin(
         if include_marketplace
         else None
     )
-    readme = _render_readme() if include_readme else None
+    skill_names = [spec.skill_name for spec in shipped_skill_specs()]
+    agent_roles = [spec.role for spec in AGENT_REGISTRY]
+    readme = _render_readme(skill_names, agent_roles) if include_readme else None
 
     skill_outputs: list[tuple[Path, str]] = []
     for spec in shipped_skill_specs():
@@ -540,9 +550,6 @@ def package_plugin(
             seen.add(value)
             path = target_dir / "hooks" / f"{value}.sh"
             hook_outputs.append((path, render_hook_sh(hook_spec.event_type)))
-
-    skill_names = [spec.skill_name for spec in shipped_skill_specs()]
-    agent_roles = [spec.role for spec in AGENT_REGISTRY]
 
     if dry_run:
         logger.info(

@@ -145,7 +145,7 @@ def test_set_layer_value_preserves_other_keys(tmp_path: Path) -> None:
     """Deep-set updates the named key without clobbering siblings."""
     ctx, repo = _build_ctx(tmp_path=tmp_path)
     config_yaml = repo / ".ea" / "config.yaml"
-    config_yaml.write_text("verify:\n  odr_blocking: false\n  require_iter_audit_accepted: false\n")
+    config_yaml.write_text("verify:\n  odr_blocking: false\n  waiver_mode: B\n")
 
     async def body() -> None:
         await set_layer_value(
@@ -157,7 +157,7 @@ def test_set_layer_value_preserves_other_keys(tmp_path: Path) -> None:
             },
         )
         body_disk = yaml.safe_load(config_yaml.read_text())
-        assert body_disk == {"verify": {"odr_blocking": True, "require_iter_audit_accepted": False}}
+        assert body_disk == {"verify": {"odr_blocking": True, "waiver_mode": "B"}}
 
     _run(body)
 
@@ -289,8 +289,8 @@ def test_set_layer_value_sequential_writes_preserve_both_keys(tmp_path: Path) ->
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["verify", "require_iter_audit_accepted"],
-                "value": True,
+                "key_path": ["verify", "waiver_mode"],
+                "value": "C",
             },
         )
 
@@ -298,7 +298,7 @@ def test_set_layer_value_sequential_writes_preserve_both_keys(tmp_path: Path) ->
 
     body_disk = yaml.safe_load(config_yaml.read_text())
     assert body_disk == {
-        "verify": {"odr_blocking": True, "require_iter_audit_accepted": True},
+        "verify": {"odr_blocking": True, "waiver_mode": "C"},
     }
 
 

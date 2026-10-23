@@ -571,8 +571,7 @@ def test_commit_lint_accepts_the_release_stores_as_one_state_commit(
     staged = [".ea/store/release_record.jsonl"]
     message = tmp_path_factory.mktemp("commit") / "COMMIT_EDITMSG"
     message.write_text(
-        "[P35] state: land dev4 publication evidence\n\n"
-        "Co-Authored-By: Claude <noreply@anthropic.com>\n",
+        "state: land dev4 publication evidence\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n",
         encoding="utf-8",
     )
     code, diagnostic = _load_commit_prefix_lint().lint(message, staged)

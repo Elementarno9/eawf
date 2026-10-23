@@ -42,7 +42,7 @@ def _gate(
         "kind": kind,
         "args": {"argv": argv, "scope": "all", "timeout_class": "quick"},
         "policy": "block",
-        "cadence": "every-wave",
+        "cadence": "every-task",
     }
     if family is not None:
         payload["command_family_ref"] = family
@@ -137,7 +137,7 @@ def test_del_035_an_inadmissible_head_is_named_at_compilation() -> None:
         name="fetch",
         cmd=["curl", "https://example.invalid"],
         scope="all",
-        cadence="every-wave",
+        cadence="every-task",
         policy="block",
     )
     with pytest.raises(FloorPackCompileError) as caught:
@@ -149,7 +149,7 @@ def test_del_035_an_inadmissible_head_is_named_at_compilation() -> None:
 
 def test_del_035_compilation_admits_a_registered_family_in_its_shape_only() -> None:
     def check(cmd: list[str]) -> FloorCheck:
-        return FloorCheck(name="cli", cmd=cmd, scope="all", cadence="every-wave", policy="block")
+        return FloorCheck(name="cli", cmd=cmd, scope="all", cadence="every-task", policy="block")
 
     compiled = compile_floor_pack([check(["uv", "run", "eawf", "status"])], allowlist=[])
     assert compiled[0].args["argv"] == ["uv", "run", "eawf", "status"]

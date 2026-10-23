@@ -42,7 +42,7 @@ parser. Example:
         kind: schema_validate
         args: {model: CloseReadiness}
         policy: block
-        cadence: every-wave
+        cadence: every-task
 
 The model is strict (``ConfigDict(extra="forbid")``): an unknown
 top-level key, or an unknown field on any criterion / gate row, raises

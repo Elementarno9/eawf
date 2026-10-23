@@ -28,8 +28,8 @@ from eawf.surfaces.cli.errors import UserError
 
 pytestmark = pytest.mark.unit
 
-#: An int the registry holds to [1, 16].
-RANGED_INT = "planning.max_parallel_waves"
+#: An int the registry holds to [1, 12].
+RANGED_INT = "research.agent_count"
 #: A float the registry holds to at least 1.0.
 RANGED_FLOAT = "flow.budget.multiplier"
 #: A choice among shallow, medium, deep and exhaustive.
@@ -77,7 +77,7 @@ def _written(repo: Path) -> dict[str, Any]:
     [
         (RANGED_INT, 8),
         (RANGED_INT, 1),
-        (RANGED_INT, 16),
+        (RANGED_INT, 12),
         (RANGED_FLOAT, 1.0),
         (RANGED_FLOAT, 2.5),
         (CHOICE, "deep"),
@@ -101,7 +101,7 @@ def test_ui_053_an_in_range_value_is_written(tmp_path: Path, key: str, value: An
     ("value", "reason"),
     [
         (0, "below minimum 1"),
-        (17, "above maximum 16"),
+        (13, "above maximum 12"),
         (-1, "below minimum 1"),
     ],
 )
@@ -150,7 +150,7 @@ def test_ui_053_a_value_is_written_in_its_declared_type(tmp_path: Path) -> None:
 
     result = _set(ctx, RANGED_INT, "8")
 
-    assert _written(repo) == {"planning": {"max_parallel_waves": 8}}
+    assert _written(repo) == {"research": {"agent_count": 8}}
     assert result["value"] == 8
 
 
@@ -160,7 +160,7 @@ def test_ui_053_a_refused_value_leaves_the_layer_as_it_was(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match="above maximum"):
         _set(ctx, RANGED_INT, 20000)
-    assert _written(repo) == {"planning": {"max_parallel_waves": 5}}
+    assert _written(repo) == {"research": {"agent_count": 5}}
 
 
 def test_ui_053_a_leaf_the_registry_does_not_describe_is_written_as_sent(tmp_path: Path) -> None:
@@ -194,9 +194,9 @@ def test_ui_053_the_daemonless_write_holds_the_same_range(
     monkeypatch.setenv("EAWF_DAEMONLESS", "1")
     target = tmp_path / "config.yaml"
 
-    with pytest.raises(UserError, match="above maximum 16"):
-        _save_value_to_layer(target_path=target, key=RANGED_INT, value=17)
+    with pytest.raises(UserError, match="above maximum 12"):
+        _save_value_to_layer(target_path=target, key=RANGED_INT, value=13)
     assert not target.exists()
 
-    _save_value_to_layer(target_path=target, key=RANGED_INT, value=16)
-    assert yaml.safe_load(target.read_text()) == {"planning": {"max_parallel_waves": 16}}
+    _save_value_to_layer(target_path=target, key=RANGED_INT, value=12)
+    assert yaml.safe_load(target.read_text()) == {"research": {"agent_count": 12}}

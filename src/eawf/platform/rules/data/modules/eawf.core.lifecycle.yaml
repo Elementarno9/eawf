@@ -1,45 +1,45 @@
 schema_version: 1
 module_id: eawf.core.lifecycle
-version: 1
+version: 3
 kind: core
 topic: lifecycle
-title: Phase, iter and wave lifecycle
-when_to_use: proposing, activating, closing, shipping or releasing a phase, or writing wave criteria and dispatching waves
+title: Milestone, Batch and Task lifecycle
+when_to_use: proposing, approving, activating, accepting, shipping or releasing a Milestone, or writing Task criteria and dispatching a Batch
 rules:
   - rule_id: eawf.core.lifecycle.flow
     obligation_id: lifecycle.flow
-    revision: 1
-    title: Follow the research, plan, execute, cherry-pick, ship flow
+    revision: 2
+    title: Follow the research, plan, dispatch, cherry-pick, ship flow
     zone: steering
     force: information
     effectiveness: informational
     instruction: >-
-      Work moves through research, plan, execute waves, cherry-pick and ship phase; independent waves run in isolated worktrees and sequential waves run inline.
+      Work moves through research, plan, dispatch the Tasks of each Batch, cherry-pick and ship the Milestone; Tasks the dependency graph leaves independent run side by side, each in its own Run and workspace, and a dependent Task waits for the Tasks it consumes.
     verification:
       method: review
     procedure_ref: docs/rules/workflow-lifecycle.md
   - rule_id: eawf.core.lifecycle.roadmap-procedure
     obligation_id: lifecycle.roadmap-procedure
-    revision: 1
-    title: Change the roadmap one phase at a time
+    revision: 2
+    title: Change a Milestone's plan one PlanRevision at a time
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      Change the roadmap one phase at a time: research, propose the phase, revise its waves and dependencies until the DAG fits, apply it, then activate it with /prep.
+      Change a Milestone's plan one PlanRevision at a time: research, submit the revision with `eawf plan submit`, repair it by a child revision until its Batch and Task graph fits, have the operator approve it, apply it, then activate the Milestone with `eawf milestone activate`.
     rationale: >-
-      Each step leaves the phase in a reviewable PLANNED state, so nothing reaches execution before the operator has seen its shape.
+      Each step leaves the Milestone in a reviewable PLANNED state, so nothing reaches execution before the operator has seen its shape.
     verification:
       method: review
   - rule_id: eawf.core.lifecycle.spike
     obligation_id: lifecycle.spike
-    revision: 3
-    title: Keep spikes read-only and their briefs local
+    revision: 4
+    title: Keep spikes read-only and briefs local
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      Run a spike as a time-boxed read-only investigation with its brief at .ea/local/<date>-<slug>.md; keep the brief local and cite it by sha256 digest from the decision it informs, promoting it to .ea/artifacts/ only when the operator asks.
+      Run a spike read-only; keep its text brief in .ea/local/research/ and heavy files under local.scratch_root.
     rationale: >-
       A spike exists to make the next criteria writable; the pull request, state and docs are the durable record, so a brief stays local and a digest proves which version backed the decision.
     verification:
@@ -47,41 +47,41 @@ rules:
     procedure_ref: docs/rules/spike-workflow.md
   - rule_id: eawf.core.lifecycle.prep-plan-mode
     obligation_id: lifecycle.prep-plan-mode
-    revision: 1
-    title: Show the rendered wave DAG in plan mode before approval
+    revision: 2
+    title: Show the rendered plan in plan mode before approval
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      In /prep, render the phase's wave DAG and present it in plan mode before asking the operator to approve, edit or cancel through a structured question; a free-text reply is not an approval.
+      Before a PlanRevision is approved, render its Batch and Task graph and present it in plan mode, then ask the operator to approve, revise or cancel through a structured question; a free-text reply is not an approval.
     rationale: >-
       The operator approves the plan that will actually run, not the planner's raw commands, and a structured answer leaves a record of which option was chosen.
     verification:
       method: review
   - rule_id: eawf.core.lifecycle.close-timing
     obligation_id: lifecycle.close-timing
-    revision: 1
-    title: Close iters and phases only after review and CI pass
+    revision: 2
+    title: Accept a Milestone only after review and CI pass
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Close an iter only after its audit, polish, ship CI and pull request review pass; append follow-up waves to the current iter instead of opening another; close the phase in the last commit before merge, once CI is green on the pushed branch.
+      Accept a Milestone only after its verification, ship CI and pull request review pass; append follow-up Batches or Tasks to the active Milestone instead of opening another; record the acceptance in the last state commit before merge, once CI is green on the pushed branch.
     rationale: >-
-      Closing before review lets state claim work that reviewers have not approved, and a pre-merge close keeps state in step with what was approved.
+      Accepting before review lets state claim work that reviewers have not approved, and a pre-merge acceptance keeps state in step with what was approved.
     verification:
       method: review
   - rule_id: eawf.core.lifecycle.release-process
     obligation_id: lifecycle.release-process
-    revision: 2
-    title: Release on the cadence the repository configures
+    revision: 3
+    title: Release a merged Milestone through the release verbs
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Follow the configured release cadence; under the per-phase cadence, close a phase only after a passing release pre-flight covering the changelog section, version bump, any migration note and release annotation.
+      Where a repository releases through an eawf release train, tag a merged Milestone only once `eawf release preflight <version>` passes, covering the changelog section, version bump and any migration note, by `eawf release pipeline <version> --milestone <key> --publish`; any other repository keeps its own tag flow.
     rationale: >-
-      A release gate that runs at phase close catches a missing changelog or version bump while the phase is still open to fix it.
+      The preflight sweep catches a missing changelog section or version bump before anything is tagged, while the merged Milestone is still cheap to fix forward, and the pipeline tags only the commits of the Milestone it names.
     verification:
       method: review
     procedure_ref: docs/rules/release-process.md
@@ -99,17 +99,17 @@ rules:
     verification:
       method: review
     procedure_ref: docs/rules/ship-process.md
-  - rule_id: eawf.core.lifecycle.wave-verification-scope
-    obligation_id: lifecycle.wave-verification-scope
-    revision: 2
-    title: Verify waves with targeted tests and iters with the full suite
+  - rule_id: eawf.core.lifecycle.task-verification-scope
+    obligation_id: lifecycle.task-verification-scope
+    revision: 4
+    title: Verify Tasks with targeted tests and Batches with the full suite
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      Name only targeted tests finishing within 60 seconds in wave criteria; run the full suite and one fresh-context audit once per iter at close. Schema-migration and security-scoped waves keep the full run.
+      Never shorten the full test run for a schema-migration or security-scoped change. Name only targeted tests under 60 seconds in other Task criteria. Run the full suite and one fresh-context audit once per Batch before it lands.
     rationale: >-
-      A full suite and audit on every wave serialises the iter for little extra assurance; the iter close is where the whole change is judged once.
+      A full suite and audit on every Task serialises the Batch for little extra assurance; the Batch verification is where the whole change is judged once.
     verification:
       method: review
-    procedure_ref: docs/rules/lean-wave-verification.md
+    procedure_ref: docs/rules/lean-task-verification.md

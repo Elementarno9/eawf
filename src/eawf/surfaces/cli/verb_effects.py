@@ -313,6 +313,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "backup list": _read(),
     "backup prune": _read(),
     "backup restore": _mutate(),
+    "local gc": _read(),
     "help": _read(),
     "version": _read(),
     "scope-debug": _read(),

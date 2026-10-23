@@ -64,12 +64,6 @@ class RuleDisposition:
     epoch1_reference: str | None = None
 
 
-#: The reason a rule may keep reading the epoch-1 commit grammar: history
-#: is never rewritten, so commits written before the switch stay lintable.
-_READS_EPOCH1_HISTORY: Final[str] = (
-    "recognises the bracket and wave-trailer forms commits were written in before the switch"
-)
-
 #: The unnumbered entries, by the module each one lives in. The commit
 #: grammar sits in the repository's own tools directory rather than the
 #: package, so its path is spelled out rather than derived.
@@ -105,12 +99,7 @@ RULE_DISPOSITIONS: Final[tuple[RuleDisposition, ...]] = (
     ),
     RuleDisposition("EAWF027", "committed text quotes only quotable rows", Disposition.CARRY),
     RuleDisposition("EAWF028", "a committed research brief keeps its wording", Disposition.CARRY),
-    RuleDisposition(
-        "commit-prefix",
-        "commit subject and trailer grammar",
-        Disposition.REWRITE,
-        epoch1_reference=_READS_EPOCH1_HISTORY,
-    ),
+    RuleDisposition("commit-prefix", "commit subject and trailer grammar", Disposition.REWRITE),
     RuleDisposition("clarity-anchors", "clarity judge calibration anchors", Disposition.CARRY),
     RuleDisposition("sigil-totality", "no bare status value in a render", Disposition.CARRY),
     RuleDisposition("prose-chokepoint", "the single prose enforcement entry", Disposition.CARRY),

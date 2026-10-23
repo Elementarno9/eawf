@@ -1,6 +1,6 @@
 # Agent Report Architecture
 
-Typed agent reports are append-only JSONL records that capture the final output of an agent session in a role-specific schema. They are separate from `state.json`: state tracks sessions, waves, phases, and pointers; report stores keep the structured agent output.
+Typed agent reports are append-only JSONL records that capture the final output of an agent session in a role-specific schema. They are separate from the generation document: the document tracks Runs, Tasks, Batches and Milestones; report stores keep the structured agent output.
 
 ## Store Flow
 
@@ -30,7 +30,7 @@ Each role has its own `StoreKind` value and JSONL stream:
 Example report store URN:
 
 ```text
-urn:eawf:v1:store:EAWF/executor_report/AR-executor-P18-I01-W04-01
+urn:eawf:v1:store:EAWF/executor_report/AR-executor-EAWF-0042-01
 ```
 
 The `store` URN id starts with the store kind, then the report id. This keeps report rows addressable without inventing a new URN kind.
@@ -52,14 +52,14 @@ Cross-kind report invariants verify the report stream against state context:
 
 - header session id exists;
 - session role and scope match the report header;
-- report scope resolves to a known project, phase, iter, or wave;
+- report scope resolves to a known project, Milestone or Task;
 - attempts are contiguous per `(role, base_id)`;
-- executor reports include the wave commit SHA and match the wave record;
+- executor reports include the commit SHA and name a known Task in `task_key`;
 - reviewer reports include coverage refs;
 - auditor reports include criteria;
-- operator reports list completed waves inside the reported phase.
+- operator reports list, in `completed_task_keys`, completed Tasks inside the Milestone named by `milestone_key`.
 
-The invariant helper is not part of the state-only `ALL_INVARIANTS` tuple because report rows live in JSONL stores rather than inside `state.json`.
+The invariant helper is not part of the state-only `ALL_INVARIANTS` tuple because report rows live in JSONL stores rather than inside the generation document.
 
 ## Rendering And Promotion
 

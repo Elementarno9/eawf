@@ -306,7 +306,7 @@ def test_validate_rejects_non_string_verify_waiver_mode(repo_root: Path) -> None
     ("body", "named"),
     [
         ("ui:\n  theme: purple\n", "ui.theme"),
-        ("planning:\n  max_parallel_waves: -3\n", "planning.max_parallel_waves"),
+        ("research:\n  agent_count: -3\n", "research.agent_count"),
         ("preferences:\n  auto_choose: sometimes\n", "preferences.auto_choose"),
         ("runtime:\n  claude:\n    stall_interval_s: -5\n", "runtime.claude.stall_interval_s"),
         ("ui:\n  tehme: dark\n", "ui.tehme"),
@@ -353,11 +353,25 @@ def test_validate_reports_a_bad_value_a_later_layer_overrides(
     assert "global: ui.theme" in result.output
 
 
+@pytest.mark.parametrize(
+    "body",
+    ["planning:\n  max_parallel_waves: 4\n", "verify:\n  require_iter_audit_accepted: true\n"],
+    ids=["max-parallel-waves", "require-iter-audit-accepted"],
+)
+def test_validate_tolerates_a_retired_epoch1_leaf(repo_root: Path, body: str) -> None:
+    """A layer written before the leaf retired still validates: the merge drops it on read."""
+    (repo_root / ".ea" / "config.yaml").write_text(body, encoding="utf-8")
+
+    result = runner.invoke(app, ["config", "validate"])
+
+    assert result.exit_code == 0, result.output
+
+
 def test_validate_accepts_catalogued_values_in_range(repo_root: Path) -> None:
     (repo_root / ".ea" / "config.yaml").write_text(
         "schema_version: '1.0'\n"
         "ui:\n  theme: light\n"
-        "planning:\n  max_parallel_waves: 16\n"
+        "research:\n  agent_count: 12\n"
         "preferences:\n  auto_choose: always\n"
         "runtime:\n  claude:\n    stall_interval_s: 0\n"
         "agents:\n  extra_tools: {}\n",
@@ -374,13 +388,14 @@ def test_validate_accepts_catalogued_values_in_range(repo_root: Path) -> None:
     [
         ({}, []),
         ({"ui": {"theme": "cb"}}, []),
-        ({"planning": {"max_parallel_waves": 1}}, []),
-        ({"planning": {"max_parallel_waves": 0}}, ["planning.max_parallel_waves"]),
-        ({"planning": {"max_parallel_waves": 17}}, ["planning.max_parallel_waves"]),
-        ({"planning": {"max_parallel_waves": True}}, ["planning.max_parallel_waves"]),
-        ({"planning": {"max_parallel_waves": "4"}}, ["planning.max_parallel_waves"]),
-        ({"planning": "not_a_mapping"}, ["planning"]),
-        ({"planning": None}, []),
+        ({"research": {"agent_count": 1}}, []),
+        ({"research": {"agent_count": 0}}, ["research.agent_count"]),
+        ({"research": {"agent_count": 13}}, ["research.agent_count"]),
+        ({"research": {"agent_count": True}}, ["research.agent_count"]),
+        ({"research": {"agent_count": "4"}}, ["research.agent_count"]),
+        ({"research": "not_a_mapping"}, ["research"]),
+        ({"research": None}, []),
+        ({"planning": {"max_parallel_waves": 4}}, ["planning"]),
         ({"ui": {"theme": None}}, ["ui.theme"]),
         ({"runtime": {"models": {"claude": None}}}, []),
         ({"runtime": {"models": {"claude": ["a", 2, "c"]}}}, ["runtime.models.claude"]),

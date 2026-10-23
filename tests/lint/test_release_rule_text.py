@@ -1,13 +1,14 @@
-"""The release-process rule text spells its cadences consistently.
+"""The release-process rule text names the Milestone release path only.
 
-The core profile renders this rule into every managed repo, so a misspelled
-cadence, a wrong default, or a setting no config model defines sends each
-reader to a configuration that fails validation.
+The core profile renders this rule into every managed repo. The release
+cadence setting is retired, ``eawf release pipeline`` takes ``--milestone``
+as its only subject and the phase release workflow is deleted, so a rule that
+still names a cadence, ``--phase`` or that workflow sends each reader to a
+setting nothing reads or a command that refuses.
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
@@ -20,28 +21,27 @@ _CORE_PROFILE = _REPO_ROOT / "src" / "eawf" / "platform" / "profiles" / "data" /
 _RENDERED_RELEASE_RULE = _REPO_ROOT / "docs" / "rules" / "release-process.md"
 _RENDERED_SHIP_RULE = _REPO_ROOT / "docs" / "rules" / "ship-process.md"
 
-_CADENCE_LIST_LEAD = "supported cadences:"
-_CADENCE_BULLET = re.compile(r"^- ``([^`]+)``(.*)$")
-_MISSPELLED_CADENCE = "``per_phase``"
-#: The cadence vocabulary and default the rule text documents; no config leaf
-#: carries them, so the rule text is held to its own published spelling.
-_CADENCES = frozenset({"manual", "per-phase"})
-_DEFAULT_CADENCE = "manual"
+#: Spellings of the retired release path, each with the problem it reports.
+_RETIRED_RELEASE_TEXT: tuple[tuple[str, str], ...] = (
+    ("vcs.conventions.release.cadence", "names the retired release cadence setting"),
+    ("per-phase", "names the per-phase cadence"),
+    ("per_phase", "names the per-phase cadence"),
+    ("--phase", "names the retired --phase subject"),
+    ("phase-release.yaml", "names the deleted phase release workflow"),
+)
 
 #: The pre-correction rule text, trimmed to the lines the check reads.
 _OLD_RULE_TEXT = (
     "Releases are opt-in per repo via ``vcs.conventions.release.cadence``. "
     "The two supported cadences:\n"
     "\n"
-    "- ``per_phase`` — agent-driven profile default; each phase PR closes with a "
-    "release-readiness pre-flight gate and a post-merge auto-tag.\n"
-    "- ``manual`` — managed-repo default; releases ride a separate operator-driven "
-    "tag flow.\n"
+    "- ``manual`` — the default for every repo.\n"
+    "- ``per-phase`` — opt-in; each phase PR closes with a release-readiness "
+    "pre-flight gate.\n"
     "\n"
-    "Per-phase release pre-flight (gates ``eawf phase close``) requires:\n"
-    "\n"
-    "- ``__version__`` (``src/<pkg>/_version.py`` or the configured ``version_source``) "
-    "advanced from the prior release.\n"
+    "Post-merge, ``.github/workflows/phase-release.yaml`` reads the annotation. A repo "
+    "that releases through an eawf release train runs "
+    "``eawf release pipeline <version> --phase P<NN> --publish``.\n"
 )
 
 
@@ -54,66 +54,47 @@ def _core_rule_bodies() -> dict[str, str]:
     }
 
 
-def _cadence_bullets(body: str) -> dict[str, str]:
-    """Return the cadence bullets under the cadence list lead, by cadence name.
-
-    Only the contiguous bullet run right after the lead counts, so the
-    pre-flight checklist further down never reads as a cadence.
-    """
-    _, _, tail = body.partition(_CADENCE_LIST_LEAD)
-    bullets: dict[str, str] = {}
-    for line in tail.strip().splitlines():
-        match = _CADENCE_BULLET.match(line)
-        if match is None:
-            break
-        bullets[match.group(1)] = match.group(2)
-    return bullets
-
-
-def cadence_rule_mismatches(body: str) -> list[str]:
-    """Return every way a release-process rule *body* disagrees with the config.
+def release_rule_mismatches(body: str) -> list[str]:
+    """Return every way a release rule *body* strays from the Milestone release path.
 
     Args:
         body: The rule body, as authored in the profile or as rendered.
 
     Returns:
-        One message per disagreement; empty when the body agrees.
+        One message per retired spelling present and per native verb
+        missing, deduplicated in that order; empty when the body agrees.
     """
-    problems: list[str] = []
-    bullets = _cadence_bullets(body)
-    if set(bullets) != _CADENCES:
-        problems.append(f"cadence bullets {sorted(bullets)} != cadences {sorted(_CADENCES)}")
-    default = _DEFAULT_CADENCE
-    if "default" not in bullets.get(default, ""):
-        problems.append(f"the {default!r} bullet does not name it the default")
-    problems.extend(
-        f"the {name!r} bullet claims to be a default"
-        for name, rest in bullets.items()
-        if name != default and "default" in rest
-    )
-    if "version_source" in body:
-        problems.append("names version_source, which no config model defines")
-    if "``release-preflight``" not in body:
-        problems.append("does not name the release-preflight check phase close reads")
-    return problems
+    problems = [problem for text, problem in _RETIRED_RELEASE_TEXT if text in body]
+    if "``eawf release preflight <version>``" not in body:
+        problems.append("does not name the eawf release preflight sweep")
+    if "--milestone <MLS-NNNN>" not in body:
+        problems.append("does not name the --milestone subject")
+    return list(dict.fromkeys(problems))
 
 
-def test_release_rule_text_matches_the_cadence_config() -> None:
+def test_release_rule_text_names_the_milestone_release_path() -> None:
     bodies = _core_rule_bodies()
-    assert cadence_rule_mismatches(bodies["release-process"]) == []
+    assert release_rule_mismatches(bodies["release-process"]) == []
     rendered_release = _RENDERED_RELEASE_RULE.read_text(encoding="utf-8")
-    assert cadence_rule_mismatches(rendered_release) == [], "re-render docs/rules with eawf sync"
-    misspelled = sorted(
-        block_id for block_id, body in bodies.items() if _MISSPELLED_CADENCE in body
-    )
-    assert misspelled == [], f"core rule bodies spell the cadence per_phase: {misspelled}"
-    for rendered in (_RENDERED_RELEASE_RULE, _RENDERED_SHIP_RULE):
-        assert _MISSPELLED_CADENCE not in rendered.read_text(encoding="utf-8"), rendered.name
+    assert release_rule_mismatches(rendered_release) == [], "re-render docs/rules"
+    for rendered in (bodies["ship-process"], _RENDERED_SHIP_RULE.read_text(encoding="utf-8")):
+        assert [text for text, _ in _RETIRED_RELEASE_TEXT if text in rendered] == []
+        assert "--milestone <MLS-NNNN>" in rendered
 
 
-def test_cadence_check_reds_on_the_old_rule_text() -> None:
-    problems = cadence_rule_mismatches(_OLD_RULE_TEXT)
-    assert any("per_phase" in problem for problem in problems), problems
-    assert any("claims to be a default" in problem for problem in problems), problems
-    assert any("version_source" in problem for problem in problems), problems
-    assert any("release-preflight" in problem for problem in problems), problems
+def test_release_rule_check_reds_on_the_phase_rule_text() -> None:
+    assert release_rule_mismatches(_OLD_RULE_TEXT) == [
+        "names the retired release cadence setting",
+        "names the per-phase cadence",
+        "names the retired --phase subject",
+        "names the deleted phase release workflow",
+        "does not name the eawf release preflight sweep",
+        "does not name the --milestone subject",
+    ]
+
+
+def test_release_rule_check_passes_an_empty_body_only_with_findings() -> None:
+    assert release_rule_mismatches("") == [
+        "does not name the eawf release preflight sweep",
+        "does not name the --milestone subject",
+    ]

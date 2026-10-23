@@ -2,10 +2,7 @@
 
 *Declarative bundles of rules, generated files, skills, agents, hooks, MCP suggestions, and check commands per domain or runtime.*
 
-Projects can enable multiple profiles. Each profile is a YAML file with
-optional sections that compose deterministically into one merged
-configuration: rules, agents, skills, hooks, MCP recommendations, check
-commands, state extensions, memory policies, and installer questions.
+Projects can enable multiple profiles. Each profile is a YAML file with optional sections that compose deterministically into one merged configuration: rules, agents, skills, hooks, MCP recommendations, check commands, state extensions, memory policies, and installer questions.
 
 ## v0.1 profile shipping status
 
@@ -54,19 +51,13 @@ rules:
 
 Render rules:
 
-- `summary` is the canonical one-line bullet rendered into the rule
-  module's bullet list.
-- `body` is optional markdown rendered as a nested subsection under the
-  bullet. Bullet lists, code fences, tables, and inline links are
-  preserved verbatim.
+- `summary` is the canonical one-line bullet rendered into the rule module's bullet list.
+- `body` is optional markdown rendered as a nested subsection under the bullet. Bullet lists, code fences, tables, and inline links are preserved verbatim.
 - `cite` renders as an inline `→ <path>` link after the summary.
 - Rules without `body` render as plain bullets.
-- `severity: required` rules are always rendered; `recommended` and
-  `optional` may be hidden by `.ea/config.yaml` filters.
+- `severity: required` rules are always rendered; `recommended` and `optional` may be hidden by `.ea/config.yaml` filters.
 
-Composition: when two profiles `add` rules sharing the same `id`, the
-strictest `severity` wins; `body` from the higher-priority profile
-replaces, never concatenates (use `extends` for additive composition).
+Composition: when two profiles `add` rules sharing the same `id`, the strictest `severity` wins; `body` from the higher-priority profile replaces, never concatenates (use `extends` for additive composition).
 
 ## v0.1 profile bodies
 
@@ -149,7 +140,7 @@ rules:
   add:
     - id: research-hypothesis-required
       severity: required
-      summary: Non-trivial scope requires research brief + registered hypothesis before /prep.
+      summary: Non-trivial scope requires research brief + registered hypothesis before /plan.
     - id: research-peer-review
       severity: required
       summary: /research dispatches one red-team reviewer per brief; rubber-stamp forbidden.
@@ -255,23 +246,19 @@ audit_checks_planned_v0_2:
 
 ## Merge / composition algorithm
 
-1. Resolve profile graph: load selected profiles, then `requires`, then
-   `extends`; detect cycles.
+1. Resolve profile graph: load selected profiles, then `requires`, then `extends`; detect cycles.
 2. Sort by priority, then explicit user order; `core` always first.
 3. Deep-merge maps by key; concatenate ordered lists with stable IDs.
-4. For entities with `id` (`rules`, `hooks`, `mcp`, `skills`, `agents`,
-   `checks`), merge by ID.
+4. For entities with `id` (`rules`, `hooks`, `mcp`, `skills`, `agents`, `checks`), merge by ID.
 5. Conflicts:
    - safety: strictest wins,
    - required rule vs removed rule: prompt,
-   - command / check collision: keep all candidates, detect best at
-     install,
+   - command / check collision: keep all candidates, detect best at install,
    - MCP / tool risk downgrade: forbidden unless user confirms,
    - template default collision: prompt and persist decision.
 6. Apply removals / deprecations after additions.
 7. Validate composed config against schema.
-8. Persist composition result and user conflict decisions in
-   `.ea/config.yaml` so `eawf sync` is deterministic.
+8. Persist composition result and user conflict decisions in `.ea/config.yaml` so `eawf sync` is deterministic.
 
 Composition example:
 
@@ -283,14 +270,13 @@ composition:
   conflict_resolution: prompt
   mcp_default: opt_in
   persisted_decisions:
-    template.pr: iter
+    template.pr: milestone
     vcs.commit_template: state_scoped
 ```
 
 ## Cross-references
 
 - AGENTS.md / CLAUDE.md generation policy — `docs/policy/agents-claude-md.md`.
-- Profile composition source — `src/eawf/profiles/compose.py`,
-  `src/eawf/profiles/loader.py`.
+- Profile composition source — `src/eawf/profiles/compose.py`, `src/eawf/profiles/loader.py`.
 - Profile YAML files — `src/eawf/profiles/*.yaml`.
 - Plugin and adapter model — `docs/architecture/plugins.md`.

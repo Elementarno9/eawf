@@ -14,7 +14,7 @@ eawf composes its configuration from layers, later layers overriding earlier one
 | `repo` | `<repo>/.ea/config.yaml` | Committed with the repository. |
 | `branch` | `<repo>/.ea/branches/<branch>.yaml` | One file per branch. |
 | `local` | `<repo>/.ea/local/config.yaml` | Machine-local, never committed. |
-| `wave` | daemon memory | Held for one running unit of work, then dropped. |
+| per-run | daemon memory | Held for one running unit of work, then dropped; no file writes it. |
 | `env` | `EAWF_<SECTION>__<KEY>` variables | Runtime only; see below. |
 | `cli` | command-line overrides | Runtime only. |
 
@@ -48,7 +48,7 @@ Type is the value shape; Layers names the layers that may write the leaf.
 
 | Key | Type | Default | Layers | What it does |
 | --- | --- | --- | --- | --- |
-| `runtime.preference` | list of strings | `[claude-code]` | global, workspace, repo, branch, local, env, `cli`, wave | Runtimes a dispatch may use, in fallback order; the first entry is the default provider. One of `claude-code`, `codex`, `opencode`. |
+| `runtime.preference` | list of strings | `[claude-code]` | global, workspace, repo, branch, local, env, `cli`, per-run | Runtimes a dispatch may use, in fallback order; the first entry is the default provider. One of `claude-code`, `codex`, `opencode`. |
 | `runtime.adapters` | list of strings | `[claude-code]` | global, workspace, repo | Older runtime list, read only when `runtime.preference` is unset. |
 | `runtime.auto_certify` | true or false | `true` | global, workspace, repo | Probes, in the background, a runtime version no certification covers when a Run first reports it. |
 | `runtime.profiles` | list | built-in provider profiles | global, workspace, repo | Provider profiles: whole records on the global and workspace layers, narrowing patches only on the repository layer. |
@@ -94,7 +94,6 @@ Type is the value shape; Layers names the layers that may write the leaf.
 | --- | --- | --- | --- | --- |
 | `research.default_depth` | literal | `medium` | global, workspace, repo | Survey depth a research campaign runs at when none is given: `shallow`, `medium`, `deep` or `exhaustive`. |
 | `research.agent_count` | int, 1 to 12 | `4` | global, workspace, repo | Researchers a campaign round fans out to when none is given; a value outside the band is clamped into it. |
-| `planning.max_parallel_waves` | int, 1 to 16 | `4` | global, workspace, repo | Repository-wide cap on waves (the older unit of planned work) that are claimed or in progress at once; `eawf doctor` reports a breach. |
 | `estimation.eu_minutes` | int, 5 to 240 | `30` | global, workspace, repo | Minutes of agent-driven work one effort unit (EU) stands for. |
 | `estimation.eu_basis` | literal | `api_duration` | global, workspace, repo | Captured quantity converted into elapsed effort units: `api_duration`, `tokens` or `wall_clock`. |
 | `preferences.auto_choose` | literal | `off` | global, workspace, repo | Whether an operator question auto-picks its recommended option: `off`, `recommended` or `always`. |
@@ -103,8 +102,7 @@ Type is the value shape; Layers names the layers that may write the leaf.
 
 | Key | Type | Default | Layers | What it does |
 | --- | --- | --- | --- | --- |
-| `verify.odr_blocking` | true or false | `false` | global, workspace, repo | Repository opt-in: an oracle-determinism ratio (ODR) below its floor refuses an iter close. |
-| `verify.require_iter_audit_accepted` | true or false | `false` | global, workspace, repo | Requires a completed, accepted audit before an iter close. |
+| `verify.odr_blocking` | true or false | `false` | global, workspace, repo | Repository opt-in: an oracle-determinism ratio (ODR) below its floor blocks verification readiness. |
 | `verify.waiver_mode` | literal | `B` | global, workspace, repo | Operator waiver policy: `A`, `B`, `C` or `disabled`; `disabled` wins over every other layer's value. |
 | `verify.retyped_rule_threshold` | int | `3` | global, workspace, repo | Re-typings of one rule within a release above which it is reported for review. |
 | `verify.jury_max_brier` | float, 0 to 1 | `0.25` | global, workspace, repo | Highest jury Brier score that still earns blocking verdicts. |
@@ -143,6 +141,14 @@ Type is the value shape; Layers names the layers that may write the leaf.
 | `daemon.proxy_enabled` | true or false | `true` | global, workspace, repo | When false, mutations bypass the daemon and write under a file lock instead. |
 | `daemon.idle_timeout_seconds` | int, at least 1 | `300` | global, workspace, repo | Seconds the daemon stays up with no client request before it shuts down. `EAWF_DAEMON_IDLE_TIMEOUT` overrides it. |
 | `daemon.session_handle_ttl_seconds` | int, at least 1 | `86400` | global, workspace, repo | Seconds after an agent session ends before the daemon prunes its handle. `EAWF_DAEMON_SESSION_TTL` overrides it. |
+
+### Local store and worktrees
+
+| Key | Type | Default | Layers | What it does |
+| --- | --- | --- | --- | --- |
+| `local.scratch_root` | string | `~/.eawf/scratch` | global, local | Directory outside the repository for heavy spike artefacts (virtual environments, models, installs, archives); `eawf doctor` names it when `.ea/local` grows large. |
+| `local.size_warn_mb` | int, at least 1 | `1024` | global, workspace, repo | Size of `.ea/local` in MB (1024 x 1024 bytes) at which the `local_size` doctor check warns. |
+| `worktrees.remove_when_clean` | true or false | `true` | global, workspace, repo | Whether releasing a lease whose worktree holds nothing removes the worktree and its branch; `false` keeps them. |
 
 ### Reserved leaves
 

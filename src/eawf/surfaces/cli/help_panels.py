@@ -103,6 +103,7 @@ COMMAND_PANELS: dict[str, str] = {
     "backup": "audit",
     "doc": "audit",
     "doctor": "audit",
+    "local": "audit",
     "migrate": "audit",
     "schema": "audit",
     "snapshot": "audit",

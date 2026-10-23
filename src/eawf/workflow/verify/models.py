@@ -88,7 +88,7 @@ class CriterionView(_StrictModel):
             non-required (advisory) criterion is surfaced in the view but
             does NOT flip :attr:`CloseReadiness.ready` when it fails, so an
             advisory gate (e.g. a ``cadence="ship"`` pixel diff) cannot
-            block an every-wave close -- matching the oracle path, which
+            block an every-task close -- matching the oracle path, which
             skips non-required criteria.
     """
 

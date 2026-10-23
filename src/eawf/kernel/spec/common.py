@@ -16,6 +16,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, model_validator
 
+from eawf.kernel.spec.cadence import LEGACY_CADENCE_ALIASES
 from eawf.kernel.spec.criterion_evidence import (
     GATE_RUN_EVIDENCE_KINDS as GATE_RUN_EVIDENCE_KINDS,
 )
@@ -216,12 +217,12 @@ CriterionAcceptanceStyle = Literal["binary", "graded"]
 GatePolicy = Literal["block", "warn", "advisory"]
 
 
-# When a GateSpec runs — per wave, per iter, per phase, on ship CI,
+# When a GateSpec runs — per Task, per Batch, per Milestone, on ship CI,
 # or only when invoked by hand.
 GateCadence = Literal[
-    "every-wave",
-    "every-iter",
-    "every-phase",
+    "every-task",
+    "every-batch",
+    "every-milestone",
     "ship",
     "manual",
 ]
@@ -1043,7 +1044,7 @@ def convert_legacy_criterion(
         kind=gate_kind,
         args=_gate_args_for_kind(gate_kind, pattern=pattern, file_scopes=file_scopes),
         policy="block",
-        cadence="every-wave",
+        cadence="every-task",
     )
     return criterion, gate
 
@@ -1195,6 +1196,15 @@ class GateSpec(_StrictModel):
     timeout_s: StrictInt | None = Field(default=None, gt=0)
     # Never serialized: it is a function of the argv, and storing it moves digests.
     command_family_ref: CommandFamilyId | None = Field(default=None, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _read_legacy_cadence(cls, data: Any) -> Any:
+        """Read the epoch-1 cadence of a stored row, a filed proof's, as its native value."""
+        cadence = data.get("cadence") if isinstance(data, dict) else None
+        if isinstance(cadence, str) and cadence in LEGACY_CADENCE_ALIASES:
+            return {**data, "cadence": LEGACY_CADENCE_ALIASES[cadence]}
+        return data
 
     @model_validator(mode="before")
     @classmethod

@@ -94,18 +94,19 @@ def test_paging_is_kept_when_dropping_it_would_not_save_the_global() -> None:
     assert "Esc" not in bar
 
 
-# ---------- a linked console opens Settings on planning ----------
+# ---------- a linked console opens Settings on the first catalog section ----------
 
 
-def test_a_linked_console_opens_settings_on_planning() -> None:
-    """The section cursor is placed in the kernel catalog's rail order, not the prototype's."""
+def test_a_linked_console_opens_settings_on_the_first_catalog_section() -> None:
+    """The catalog has no planning section, so the cursor opens on its first section."""
     seam = ProjectionSeam(
         route="settings",
         scope_id="EAWF",
     )
     app = ConsoleApp(chrome=load_chrome(), seam=seam, clock=FakeClock())
     app.reset(None)
-    assert catalog_section_order()[app.session.set_sec] == "planning"
+    assert "planning" not in catalog_section_order()
+    assert app.session.set_sec == 0
 
 
 def test_the_catalog_order_is_the_order_a_built_view_draws(tree: Path) -> None:

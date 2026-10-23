@@ -153,7 +153,7 @@ class WizardAnswers(BaseModel):
     # when ``eawf init --template <name>`` is used. The wizard
     # deep-merges these keys into the canonical ``.ea/config.yaml`` after
     # the structured-answer-derived sections, so template-declared
-    # ``planning.max_parallel_waves`` etc. land on disk verbatim.
+    # ``runtime.preference`` etc. land on disk verbatim.
     # ``None`` for the legacy ``--profile`` only path.
     template_extras: dict[str, Any] | None = None
 

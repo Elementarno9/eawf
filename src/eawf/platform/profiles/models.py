@@ -45,7 +45,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from eawf.kernel.spec.audit import AuditCadence
+from eawf.kernel.spec.audit import AuthoredCadence
 from eawf.kernel.spec.research_campaign import ResearchProfileBlock
 from eawf.kernel.state.enums import TrackKind
 from eawf.platform.profiles.clarity import DEFAULT_OUTPUT_STYLE, OutputStyle
@@ -93,7 +93,9 @@ class FloorCheck(BaseModel):
             :data:`~eawf.workflow.audit_dsl.models.Scope`.
         cadence: When the check fires. Reuses the 5-value
             :data:`~eawf.kernel.spec.audit.AuditCadence` per AGENTS
-            naming rule 17.
+            naming rule 17; an epoch-1 value (``every-wave``,
+            ``every-iter``, ``every-phase``) is refused with the native
+            value that replaced it.
         policy: How a failure is escalated — ``block`` / ``warn`` /
             ``advisory``. The profile-level ``enforce`` bit controls
             whether a non-ready close-readiness view rejects the close
@@ -117,7 +119,7 @@ class FloorCheck(BaseModel):
     name: str = Field(min_length=1, max_length=72)
     cmd: list[str] = Field(min_length=1)
     scope: Literal["changed", "touched", "all"]
-    cadence: AuditCadence
+    cadence: AuthoredCadence
     policy: Literal["block", "warn", "advisory"]
     required: bool = True
     requires_gpu: bool = False

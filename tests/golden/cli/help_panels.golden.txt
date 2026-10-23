@@ -1,5 +1,5 @@
 Commands: claim, jury, record, repository, why
-audit: backup, doc, doctor, migrate, schema, snapshot, validate, vfl
+audit: backup, doc, doctor, local, migrate, schema, snapshot, validate, vfl
 estimation: bench, metrics, reflect, telemetry
 planning: action, batch, campaign, decision, memory, milestone, plan, question, run, session, task, track
 runtime: cc, config, daemon, follow, hook, mcp, plugin, profile, rules, runtime, skill

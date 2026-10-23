@@ -42,7 +42,7 @@ verify:
     - name: research-skill-smoke
       cmd: ["uv", "run", "pytest", "tests/unit/test_skill_research.py", "-q"]
       scope: touched
-      cadence: every-wave
+      cadence: every-task
       policy: warn
       required: true
       timeout_class: quick

@@ -44,8 +44,8 @@ track:
 
 # P28-I01-W10 — verify spine floor pack. Adds a docs build step to the
 # python floor so apps profiles also gate on rendered docs surviving a
-# Sphinx build. Cadence steps up to ``every-iter`` because docs builds
-# are slow enough that running per-wave doubles the local-gauntlet
+# Sphinx build. Cadence steps up to ``every-batch`` because docs builds
+# are slow enough that running per-Task doubles the local-gauntlet
 # time for no benefit on a single-file change.
 verify:
   argv_allowlist:
@@ -59,25 +59,25 @@ verify:
     - name: pre-commit
       cmd: ["uv", "run", "pre-commit", "run", "--all-files"]
       scope: touched
-      cadence: every-wave
+      cadence: every-task
       policy: warn
       required: true
     - name: mypy
       cmd: ["uv", "run", "mypy", "src/"]
       scope: touched
-      cadence: every-wave
+      cadence: every-task
       policy: warn
       required: true
     - name: pytest
       cmd: ["uv", "run", "pytest", "-q"]
       scope: touched
-      cadence: every-wave
+      cadence: every-task
       policy: warn
       required: true
     - name: docs-build
       cmd: ["uv", "run", "sphinx-build", "docs/", "build/docs"]
       scope: all
-      cadence: every-iter
+      cadence: every-batch
       policy: warn
       required: true
       timeout_class: slow

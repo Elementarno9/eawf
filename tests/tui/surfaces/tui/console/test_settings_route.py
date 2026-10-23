@@ -96,8 +96,8 @@ LITERAL_KEY = "estimation.eu_basis"
 INT_KEY = "estimation.eu_minutes"
 #: A list writable at all five file layers.
 LIST_KEY = "profiles.enabled"
-#: An int the config registry holds to [1, 16], writable at repo.
-RANGED_KEY = "planning.max_parallel_waves"
+#: An int the config registry holds to [1, 12], writable at repo.
+RANGED_KEY = "research.agent_count"
 #: A key no layer may write.
 LOCKED_KEY = "schema_version"
 #: A mapping no console editor rebuilds, which the console leaves to its file.
@@ -794,7 +794,7 @@ def test_edit_a_refused_write_changes_no_file_and_keeps_the_view(tree: Path) -> 
 
 @pytest.mark.parametrize(
     ("value", "reason"),
-    [(17, "above maximum 16"), (0, "below minimum 1"), ("fast", "cannot coerce")],
+    [(13, "above maximum 12"), (0, "below minimum 1"), ("fast", "cannot coerce")],
 )
 def test_ui_053_the_console_shows_the_daemon_refusing_a_value_the_stack_rules_out(
     tree: Path, value: object, reason: str
@@ -813,7 +813,7 @@ def test_ui_053_the_console_shows_the_daemon_refusing_a_value_the_stack_rules_ou
     seam = ProjectionSeam(route="settings", scope_id=SCOPE, repo_root=tree)
     seam.binding.call = _call  # type: ignore[method-assign]
     before = asyncio.run(seam.load_settings())
-    assert before.leaf(RANGED_KEY).constraint_chain == ("config registry range 1 to 16 · built-in",)
+    assert before.leaf(RANGED_KEY).constraint_chain == ("config registry range 1 to 12 · built-in",)
 
     result = asyncio.run(seam.request(SettingRequest(target=RANGED_KEY, layer="repo", value=value)))
 

@@ -4,7 +4,7 @@
 
 ## Direct command surface
 
-State is the core, so commands are direct: `eawf phase`, `eawf iter`, `eawf wave`, not `eawf state phase`.
+State is the core, so commands are direct: `eawf milestone`, `eawf batch`, `eawf task`, not `eawf state milestone`.
 
 All commands support `--json`, `--plain`, `--no-input`, and deterministic non-TTY behavior unless explicitly TUI-only. All mutating commands acquire the relevant sibling lockfile and append an audit event to `.ea/store/event.jsonl`.
 
@@ -41,7 +41,7 @@ Each row is a CLI verb / group. Mutates → writes state.json, JSONL store, or r
 | `eawf update` | templates / schema source | update plan | yes after approval | version conflict | `cli/commands/sync.py` |
 | `eawf skill list` / `skill run` | runtime / scope, skill, args | skill catalog / CI execution | yes maybe for `run` | unknown skill | `cli/commands/skill.py` |
 | `eawf flow` | goal / budgets / resume | full ADD pipeline result | yes | budget / gate / blocker | `cli/commands/flow.py` |
-| `eawf release changelog` / `notes` | version / phase range / output path | changelog mine / release-notes draft | yes only for `--output` | invalid release prose | `cli/commands/release.py` |
+| `eawf release changelog` / `notes` | version / output path | changelog mine / release-notes draft | yes only for `--output` | invalid release prose | `cli/commands/release.py` |
 
 ## Global flags (every command)
 

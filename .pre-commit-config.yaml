@@ -114,13 +114,6 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-      - id: wave-trailer-guard
-        name: wave-trailer-guard
-        entry: python3 tools/commit_prefix_lint.py --pre-push
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
       - id: ledger-history
         name: ledger-history
         entry: uv run eawf hook ledger-history --range origin/main..HEAD
@@ -140,12 +133,6 @@ repos:
         language: system
         pass_filenames: false
         stages: [manual]
-      - id: spec-paths
-        name: spec-paths
-        entry: python3 tools/pre_commit_spec_paths.py
-        language: system
-        files: '^\.ea/specs/.*\.md$'
-        stages: [pre-commit]
       - id: path-leak-lint
         name: path-leak-lint
         entry: uv run eawf hook path-leak-lint
@@ -267,20 +254,6 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
         verbose: true
-      - id: eawf016-title-clarity
-        name: eawf016-title-clarity
-        entry: uv run eawf hook eawf016-title-clarity
-        language: system
-        # EAWF016 over the staged .ea/state.json delta only (git diff
-        # --cached): scans just the *added* "title": lines so a new unclear
-        # entity title (commit-type prefix, +-join cluster soup, bare id,
-        # over-cap, trailing period) is rejected while the hundreds of
-        # unchanged legacy titles are grandfathered. The mutation-boundary
-        # gate in the lifecycle transitions is the primary enforcement; this
-        # is the backstop for anything that bypasses it.
-        files: '^\.ea/state\.json$'
-        pass_filenames: false
-        stages: [pre-commit]
       - id: eawf017-inline-refs
         name: eawf017-inline-refs
         entry: uv run eawf hook eawf017-inline-refs
@@ -331,6 +304,17 @@ repos:
         # fails open when the binary is absent; the deterministic legs run
         # regardless.
         files: '\.md$'
+        pass_filenames: false
+        stages: [pre-commit]
+        verbose: true
+      - id: ste-prose
+        name: ste-prose
+        entry: uv run python -m eawf.platform.lint.ste_prose
+        language: system
+        # Advisory Simplified Technical English lint over the rule modules,
+        # the profiles and the skill bodies: sentence length and semicolons.
+        # It always exits 0, so verbose output is how its findings surface.
+        files: '^src/eawf/(platform/(rules/data/modules|profiles/data)/.*\.yaml|surfaces/render/skills/registry\.py)$'
         pass_filenames: false
         stages: [pre-commit]
         verbose: true

@@ -1,6 +1,6 @@
 schema_version: 1
 module_id: eawf.core.vcs
-version: 1
+version: 2
 kind: core
 topic: vcs
 title: Branches, worktrees and commits
@@ -8,26 +8,26 @@ when_to_use: creating a branch or worktree, committing, cherry-picking, opening 
 rules:
   - rule_id: eawf.core.vcs.worktree-discipline
     obligation_id: vcs.worktree-discipline
-    revision: 3
+    revision: 4
     title: Branch worktrees from the feature branch and cherry-pick back
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Branch each worktree from the feature branch HEAD, never from main; bring its commits back by in-order cherry-pick, never by merge, and remove the worktree only after they land. Claim parallel sibling waves with `--out-of-order`.
+      Branch each Task's worktree from the Milestone branch HEAD, never from main; bring its commits back by in-order cherry-pick, never by merge, and remove the worktree only after they land. Run side by side only the Tasks the Batch's dependency graph and write claims leave independent.
     rationale: >-
-      A worktree cut from main misses the phase's earlier waves, and a merge buries per-wave commits under a merge node that bisect and wave pins cannot follow.
+      A worktree cut from main misses the Milestone's earlier Tasks, and a merge buries per-Task commits under a merge node that bisect and the Task trailers cannot follow.
     verification:
       method: review
   - rule_id: eawf.core.vcs.branch-currency
     obligation_id: vcs.branch-currency
-    revision: 1
+    revision: 2
     title: Confirm the branch is current before opening or resuming scope
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Before opening or resuming a phase, iter or wave, fetch and confirm the branch is based on its intended source; after preserving any dirty work, rebase or fast-forward a stale branch, or record why it stays behind.
+      Before opening or resuming a Milestone, Batch or Task, fetch and confirm the branch is based on its intended source; after preserving any dirty work, rebase or fast-forward a stale branch, or record why it stays behind.
     rationale: >-
       Work started on a stale base collides with changes already landed and turns into conflict repair at cherry-pick or merge time.
     verification:
@@ -61,20 +61,20 @@ rules:
     procedure_ref: docs/rules/commit-prefix.md
   - rule_id: eawf.core.vcs.branch-naming
     obligation_id: vcs.branch-naming
-    revision: 1
-    title: Name phase and wave branches by the release symbol
+    revision: 2
+    title: Name Milestone and Task branches by the release symbol
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Name the long-running phase branch feature/<symbol>-v<X.Y> and each wave worktree branch feature/<symbol>-v<X.Y>-pNN-wMM, and delete a wave branch once its commits are cherry-picked.
+      Name the long-running Milestone branch feature/<symbol>-v<X.Y> and each Task worktree branch feature/<symbol>-v<X.Y>-<task-key> with the Task key in lower case, and delete a Task branch once its commits are cherry-picked.
     rationale: >-
-      A predictable name lets tooling and reviewers map a branch to its release and wave without opening state.
+      A predictable name lets tooling and reviewers map a branch to its release and Task without opening state.
     verification:
       method: review
   - rule_id: eawf.core.vcs.commit-granularity
     obligation_id: vcs.commit-granularity
-    revision: 5
+    revision: 6
     title: Land one commit per Batch and one state commit per push
     zone: constitution
     force: must
@@ -82,18 +82,18 @@ rules:
     instruction: >-
       Before a push, squash the branch to one buildable commit per Batch, or a few for a large Batch, code with its tests; end each push with one `state:` commit; rebind every binding a squashed commit carried to its new commit with `eawf batch rebind`, never by editing a row.
     rationale: >-
-      A deliverable split across commits cannot be reviewed or reverted as a unit and bisect lands on trees that never worked; a Batch binds the phase-branch head when it lands, so the squash leaves that binding naming a commit no branch reaches until a superseding row rebinds it.
+      A deliverable split across commits cannot be reviewed or reverted as a unit and bisect lands on trees that never worked; a Batch binds the Milestone branch head when it lands, so the squash leaves that binding naming a commit no branch reaches until a superseding row rebinds it.
     verification:
       method: review
     procedure_ref: docs/rules/commit-granularity.md
   - rule_id: eawf.core.vcs.pr-body
     obligation_id: vcs.pr-body
-    revision: 1
+    revision: 2
     title: Shape every pull request body the same way
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      Write a pull request body with a Summary of three to six bullets and a Test plan checklist; a phase pull request adds a Phase deliverables section linking the phase plan.
+      Write a pull request body with a Summary of three to six bullets and a Test plan checklist; a Milestone pull request adds a Milestone deliverables section linking the Milestone's applied PlanRevision.
     verification:
       method: review

@@ -91,5 +91,5 @@ superseded_by: null
 ## Cross-references
 
 - JSONL store envelope — `docs/architecture/state-model.md`.
-- Skills that promote / prune memory (`/polish`, `/ship`, `/memory`) — `docs/architecture/workflow.md`.
+- Skills that write and promote memory (`/memory`) — `docs/architecture/workflow.md`.
 - Statusline memory module — `docs/architecture/statusline.md`.

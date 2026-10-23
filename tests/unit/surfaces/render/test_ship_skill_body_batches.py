@@ -1,13 +1,13 @@
 """The commit rules describe batched pushes and a squashed state tail.
 
 Every push restarts the full CI matrix, so the trailing run of ``state:``
-commits is squashed before each push. The squash rewrites commit hashes, so wave
-pins are repinned after, and work that surfaces after the phase-close commit
-becomes a wave of the next PLANNED or ACTIVE phase because the commit lint
-rejects a bare subject while one exists. The commit-granularity and
-commit-prefix rules state that contract, their ``docs/rules/`` pages match a
-fresh render, and the AGENTS.md card rendered from ``.ea/rules.yaml`` stays
-under the byte cap a Codex consumer truncates at.
+commits is squashed before each push. The squash rewrites commit hashes, so the
+bindings a landed Batch made are rebound after, and every new commit carries its
+``Batch:`` and ``Task:`` trailers while the older carriers stay readable for old
+history only. The commit-granularity and commit-prefix rules state that
+contract, their ``docs/rules/`` pages match a fresh render, and the AGENTS.md
+card rendered from ``.ea/rules.yaml`` stays under the byte cap a Codex consumer
+truncates at.
 """
 
 from __future__ import annotations
@@ -32,11 +32,11 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 _REPO_PROFILE_IDS: tuple[str, ...] = ("core", "python", "research", "agent_driven", "quality")
 
 #: The rule pages this contract touches, plus the one it must leave alone.
-_RULE_PAGE_IDS: tuple[str, ...] = ("commit-granularity", "commit-prefix", "lean-wave-verification")
+_RULE_PAGE_IDS: tuple[str, ...] = ("commit-granularity", "commit-prefix", "lean-task-verification")
 
-#: The commit-rule rewrite must not move the lean-wave-verification rule: the local
-#: full-tree gauntlet a phase ship still runs is defined there.
-_LEAN_WAVE_VERIFICATION_VERSION = "1.3"
+#: The commit-rule rewrite must not move the lean-task-verification rule: the local
+#: full-tree gauntlet a Milestone ship still runs is defined there.
+_LEAN_TASK_VERIFICATION_VERSION = "2.0"
 
 
 def _core_block(block_id: str) -> RenderBlock:
@@ -49,31 +49,23 @@ def _rendered_repo_root(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_commit_prefix_out_of_phase_requires_no_planned_or_active_phase() -> None:
-    """commit-prefix accepts a bare subject only while nothing is PLANNED or ACTIVE."""
+def test_commit_prefix_reads_legacy_carriers_for_old_history_only() -> None:
+    """commit-prefix keeps the older carriers readable but writes only native trailers."""
     body = _core_block("commit-prefix").body_template
 
-    assert "Accepted ONLY while no phase is PLANNED or ACTIVE" in body
-    assert "Rejected while any phase is PLANNED or ACTIVE" in body
-    assert "Accepted ONLY when ``state.current.phase_id`` is ``None``" not in body
-    assert "reserved for the gap after phase close" not in body
+    assert "The lint still reads those forms so old history keeps passing" in body
+    assert "Write neither in a new commit" in body
+    assert "``Batch: BAT-<NNNN>`` trailer" in body
+    assert "Accepted ONLY while no phase is PLANNED or ACTIVE" not in body
 
 
-def test_commit_prefix_bare_docs_carries_digest_companions() -> None:
-    """A bare docs commit may carry the digest refresh only beside an artifact."""
-    body = _core_block("commit-prefix").body_template
-
-    assert "may also carry ``.ea/state.json`` and ``.secrets.baseline``" in body
-    assert "Without an artifact, those two stay rejected" in body
-
-
-def test_lean_wave_verification_stays_at_pinned_version() -> None:
-    """The commit-rule rewrite leaves lean-wave-verification where it was."""
+def test_lean_task_verification_stays_at_pinned_version() -> None:
+    """The commit-rule rewrite leaves lean-task-verification where it was."""
     block = next(
-        b for b in load_profile("agent_driven").render_blocks if b.id == "lean-wave-verification"
+        b for b in load_profile("agent_driven").render_blocks if b.id == "lean-task-verification"
     )
 
-    assert block.version == _LEAN_WAVE_VERIFICATION_VERSION
+    assert block.version == _LEAN_TASK_VERIFICATION_VERSION
 
 
 @pytest.mark.parametrize("block_id", _RULE_PAGE_IDS)

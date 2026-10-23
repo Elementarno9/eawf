@@ -112,14 +112,6 @@ def _op_state_load_validate(corpus: BenchCorpus) -> object:
     return orjson.loads(raw)
 
 
-def _op_plan_view_render(corpus: BenchCorpus) -> object:
-    """Render every wave to a one-line summary — the collection cost a
-    plan-view table walk pays."""
-    waves = corpus.state["waves"]
-    assert isinstance(waves, list)
-    return [f"{w['id']} {w['status']} {w['title']}" for w in waves]
-
-
 def _op_event_append(corpus: BenchCorpus) -> object:
     """Serialise the full event stream — the projection-input cost a
     telemetry rebuild walks line by line."""
@@ -135,11 +127,6 @@ HARNESS_CATALOG: dict[str, HarnessSpec] = {
         name="state_load_validate",
         description="Re-serialise + re-parse state.json (per-call cost).",
         operation=_op_state_load_validate,
-    ),
-    "plan_view_render": HarnessSpec(
-        name="plan_view_render",
-        description="Render every wave row (collection cost).",
-        operation=_op_plan_view_render,
     ),
     "event_append": HarnessSpec(
         name="event_append",

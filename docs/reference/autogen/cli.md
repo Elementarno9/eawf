@@ -226,6 +226,14 @@ Cross-vendor jury calibration surfaces (gold-label writer).
 |---|---|
 | `label` | Append an operator gold label for a wave via the daemon. |
 
+### `eawf local`
+
+Upkeep of the machine-local .ea/local store.
+
+| Verb | Summary |
+|---|---|
+| `gc` | Remove each ``.ea/local`` entry whose ``.retention`` date has passed. |
+
 ### `eawf mcp`
 
 Manage MCP server entries (add/install/update/remove/list/grant/revoke).

@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 from eawf.observability.doctor.checks import (
     check_branch_currency,
     check_cli_daemon_version,
-    check_parallel_cap_enforcement,
 )
 from eawf.observability.doctor.models import CheckResult
 
@@ -24,7 +23,6 @@ def run_workflow_health_checks(
     """Run workflow integrity checks shared by CLI and TUI doctor surfaces."""
     return [
         check_cli_daemon_version(probe_version=daemon_version_probe),
-        check_parallel_cap_enforcement(workspace=workspace),
         check_branch_currency(workspace=workspace),
     ]
 

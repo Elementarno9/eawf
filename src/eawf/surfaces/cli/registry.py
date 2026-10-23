@@ -235,6 +235,7 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("migrate", "eawf.surfaces.cli.commands.migrate", "migrate_app"),
     # Generalized entity-title backfill (all five lifecycle / decision kinds).
     GroupRow("backup", "eawf.surfaces.cli.commands.backup", "backup_app"),
+    GroupRow("local", "eawf.surfaces.cli.commands.local", "local_app"),
     # Completion + prose help topics.
     GroupRow("completion", "eawf.surfaces.cli.commands.completion", "completion_app"),
     GroupRow("help", "eawf.surfaces.cli.commands.help", "help_app"),

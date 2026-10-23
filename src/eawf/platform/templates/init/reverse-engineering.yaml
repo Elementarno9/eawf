@@ -12,5 +12,3 @@ profiles:
   enabled: [core, research, re]
 runtime:
   preference: [claude, codex]
-planning:
-  max_parallel_waves: 1

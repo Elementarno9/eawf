@@ -38,9 +38,18 @@ from pathlib import Path
 from typing import Annotated, Any, Final
 
 import orjson
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StringConstraints,
+    TypeAdapter,
+    ValidationError,
+)
 
 import eawf.runtime.worktree.git as git
+from eawf.kernel.config.layered import get_dotted, merge_config
 from eawf.kernel.identity import parse_qualified_urn
 from eawf.kernel.runtime.lease import (
     INITIAL_LEASE_STATUS,
@@ -766,8 +775,11 @@ def _release_once_proven(
 
 
 def _release(context: Epoch2RootContext, *, lease: WorkLease, now: datetime) -> ReconcileOutcome:
-    """Remove a worktree shown to hold nothing and end its lease."""
-    _remove_workspace(context, lease=lease)
+    """End a lease whose worktree holds nothing, removing the worktree when configured to."""
+    if removes_clean_worktrees(context.identity.tree_root.parent):
+        _remove_workspace(context, lease=lease)
+    else:
+        logger.info(f"_release kept the clean worktree of lease={lease.lease_id}")
     write_lease(context, apply_lease_transition(lease, to=LeaseStatus.RELEASED, at=now))
     return ReconcileOutcome.RELEASED
 
@@ -895,6 +907,26 @@ def lease_residue(context: Epoch2RootContext, *, lease: WorkLease) -> str | None
     if lease.status is LeaseStatus.RELEASED:
         return None
     return _inspect_residue(context, lease=lease).reason
+
+
+def removes_clean_worktrees(repo_root: Path) -> bool:
+    """Return whether ``worktrees.remove_when_clean`` lets a release remove a clean worktree.
+
+    Args:
+        repo_root: The repository the layered config is composed against.
+
+    Returns:
+        The configured switch; ``False`` when a layer states something other
+        than a boolean, since keeping a worktree costs only disk.
+    """
+    merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
+    try:
+        return TypeAdapter(StrictBool).validate_python(
+            get_dotted(merged, "worktrees.remove_when_clean")
+        )
+    except ValidationError:
+        logger.warning("removes_clean_worktrees leaf=worktrees.remove_when_clean usable=false")
+        return False
 
 
 def _remove_workspace(context: Epoch2RootContext, *, lease: WorkLease) -> None:

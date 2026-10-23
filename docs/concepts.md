@@ -2,38 +2,55 @@
 
 *Glossary for Eä lifecycle, state, runtime, and evidence terms.*
 
-Eä is an agent-driven development framework. The CLI and runtime adapters are operator surfaces; durable truth lives in typed state, JSONL stores, and committed artifacts.
+Eä is an agent-driven development framework. The CLI and runtime adapters are operator surfaces; durable truth lives in the typed generation document, its append-only ledgers, the JSONL stores, and committed artifacts.
 
 ## Lifecycle
 
+The containment tree is Workspace, Project, Track, Milestone, Batch, Task. A Run is one agent's execution episode against one of those entities, and a Release packages accepted Milestones across Tracks beside that chain rather than inside it.
+
+**Workspace**
+: The machine-registered group of projects a set of URNs is minted under. A workspace names its home project and its member projects in the machine registry.
+
 **Project**
-: The top-level repository or product tracked by Eä. Project records carry a short code, title, goals, and active lifecycle pointers.
+: The top-level repository or product tracked by Eä. A project carries a short code that prefixes its Task keys.
 
-**Subproject**
-: Optional subdivision inside a project. Use subprojects when one repository has separate workstreams that need separate goals or phase queues.
+**Repository**
+: The integration target a Batch lands its Tasks into. A repository row records the head it was admitted at; a plan binds that head and an apply refuses once it has moved.
 
-**Phase**
-: A bounded delivery slice with a reviewable outcome. A typical phase maps to one long-running feature branch and one pull request.
+**Track**
+: A long-lived line of work that owns Milestones. A Track is either `ACTIVE` or `RETIRED`, and its policy carries the domain variation a profile needs.
 
-**Iter**
-: The active work cycle inside a phase. An iter groups waves plus the audit, polish, and ship pass that prove the work is ready.
+**Milestone**
+: The unit an operator accepts. A Milestone states its outcome, its explicit exclusions, the acceptance journey that proves the outcome and the Batches that must complete first. It moves through `PLANNED`, `ACTIVE`, `ACCEPTANCE_REVIEW` and `COMPLETED`, or ends `CANCELLED`, and it ships through one pull request.
 
-**Wave**
-: The smallest planned execution unit. Waves have success criteria, file scopes, dependencies, an `agent_role`, and an `effort_bucket`.
+**Batch**
+: A delivery Batch: the only thing that merges, into exactly one repository. A Batch binds the exact head it claims to be mergeable at, so a stale proof cannot pass as a fresh one.
 
-**Roadmap**
-: The planned queue of phases, iters, and waves. Roadmap changes go through `eawf plan submit`, `revise`, `apply`, and `drop`.
+**Task**
+: The smallest planned execution unit. A Task carries its intent, priority, success criteria, write claims and Batch. A backlog row is a `DRAFT` Task, so one key survives from first idea to completed delivery; a Task is dispatchable only from `PLANNED`.
 
-**DAG**
-: The dependency graph that controls which waves can run in parallel. Waves with disjoint scopes and satisfied dependencies can be claimed independently.
+**Run**
+: One execution episode of one agent. A Run addresses one scope (a Task, a Batch, a Milestone, a Release and so on), and only a Task-scoped Run may write. A suspended Run names the reason whose clearing resumes it.
+
+**PlanRevision**
+: The immutable plan a Milestone is materialised from: one Milestone, its Batches and their Tasks, bound to the state revision, repository heads and policy it was written over and to the digest of its own content. Plans go through `eawf plan submit`, `approve` and `apply`; an operator approves a digest, never "the plan".
+
+**Release**
+: The packaging of accepted Milestones into one published version, proved, approved and published through `/release`.
+
+**Campaign**
+: A research plan of bounded steps, each a Run over one question, with the artifact revisions those steps wrote.
 
 ## State And Stores
 
 **`.ea/`**
 : The project-local Eä directory. Committed files hold reproducible state and policy; local-only cache, scratch, and secret directories stay ignored.
 
-**`state.json`**
-: The canonical project ledger. It records lifecycle entities, active pointers, outcomes, hypotheses, decisions, and related metadata.
+**Generation**
+: One immutable epoch of the tree's state under `.ea/generations/<id>/`. The selected generation holds the generation document, its ledgers and its history; in-flight status lives in the generation's machine-local `local/` projection.
+
+**Generation document**
+: The generation's `state.json`: one object of rows per collection, keyed by each row's public key. A record leaves the document for its collection's ledger once it reaches a terminal status. The bundled `state.schema.json` describes the document.
 
 **JSONL store**
 : Append-only event or evidence file under `.ea/store/`. Store entries preserve history for audit, research, decision, memory, incident, and runtime events.
@@ -42,7 +59,7 @@ Eä is an agent-driven development framework. The CLI and runtime adapters are o
 : Durable evidence or generated output referenced by state. Artifacts use repo-relative paths, Eä URNs, or external URLs; they must avoid local machine paths and sensitive data.
 
 **URN**
-: Stable identifier in the `urn:eawf:v1:*` namespace. URNs let state records, stores, artifacts, and rendered docs link to the same entity without relying on local paths.
+: Stable identifier. The qualified `eawf://` URN addresses the lifecycle entities; the `urn:eawf:v1:` URN addresses store records, artifacts, blobs and version-control objects. URNs let state records, stores, artifacts, and rendered docs link to the same entity without relying on local paths.
 
 **Layered config**
 : Built-in, global, workspace, repo, and local config combined by strict schema rules. Downstream code consumes validated typed objects, not raw dictionaries.
@@ -53,19 +70,22 @@ Eä is an agent-driven development framework. The CLI and runtime adapters are o
 : The `eawf` command. It parses input, formats output, and dispatches to library code. Domain behavior belongs in the library.
 
 **Daemon**
-: The canonical mutator for state, layered config, registry data, event and audit stores, and telemetry. CLI mutation paths proxy to it when available.
+: The canonical mutator for the generation document, layered config, registry data, event and audit stores, and telemetry. CLI mutation paths proxy to it when available.
 
 **Runtime adapter**
 : Integration layer for tools such as Claude Code, Codex, or OpenCode. Adapters render skills, agents, hooks, and settings without becoming workflow source of truth.
 
 **Skill**
-: Operator-facing workflow command such as `/research`, `/prep`, `/audit`, `/polish`, `/ship`, `/review`, `/roadmap`, or `/flow`. Custom skill overlays (workspace `.ea/skills/` and user `~/.eawf/skills/`) reach `eawf skill run`, not the Claude slash surface — the plugin installer renders builtins only until the P31 overlay merge.
+: Operator-facing workflow command such as `/plan`, `/dispatch`, `/verify`, `/integrate`, `/accept`, `/release`, `/research` or `/attend`. The generated [skill catalog](reference/autogen/skills.md) lists every shipped skill. Custom skill overlays (workspace `.ea/skills/` and user `~/.eawf/skills/`) reach `eawf skill run`, not the Claude slash surface.
 
 **Agent role**
-: Typed role assigned to an agent or wave. The canonical field name is `agent_role`; the bare `role` is reserved for already-namespaced role specs.
+: Typed role assigned to an agent or Run. The canonical field name is `agent_role`; the bare `role` is reserved for already-namespaced role specs.
 
 **Worktree**
-: Per-wave Git worktree used to isolate parallel writers. Worktree changes are cherry-picked back to the parent feature branch, not merged.
+: Per-Task Git worktree used to isolate parallel writers. Worktree changes are cherry-picked back to the Batch branch, not merged.
+
+**Attention queue**
+: The pending actions, open questions and open pauses waiting on an operator, worked through `/attend`. A pending action is a decision the machine deliberately did not take; only a human principal can resolve it.
 
 ## Evidence And Quality
 
@@ -78,18 +98,14 @@ Eä is an agent-driven development framework. The CLI and runtime adapters are o
 **Hypothesis**
 : Testable claim with a measurable verdict. Hypotheses use `H<NN>-<NN>` IDs and are resolved only from audit-backed evidence.
 
-**Audit**
-: Verification pass over an iter, wave, phase, or PR. Audits run configured checks, collect evidence, classify findings, and record a verdict.
+**Verification**
+: A pass over one Batch at one exact revision, as auditor or as reviewer, through `/verify`. It runs the configured gates, collects evidence, classifies findings and records a verdict.
 
-**Polish**
-: Repo-wide consistency sweep after implementation and before shipping. Polish aligns naming, docs, state, generated files, and follow-up hygiene.
-
-**Ship**
-: Closeout controller for commits, PR body rendering, final checks, and state bookkeeping. `/ship` does not replace audit; it consumes audit evidence.
+**Acceptance**
+: The operator's decision on a Milestone's acceptance bundle through `/accept`: accept, reject or request repair.
 
 **Envelope**
-: Structured skill or CLI output that separates metadata from body content.
-  Envelopes make automation parseable while keeping human output readable.
+: Structured skill or CLI output that separates metadata from body content. Envelopes make automation parseable while keeping human output readable.
 
 ## Naming
 
@@ -106,5 +122,5 @@ Eä is an agent-driven development framework. The CLI and runtime adapters are o
 
 - [Architecture overview](architecture/overview.md) for repository and `.ea/` layout.
 - [State model](architecture/state-model.md) for record fields and validation invariants.
-- [Workflow](architecture/workflow.md) for lifecycle algorithms and wave discipline.
+- [Workflow](architecture/workflow.md) for the lifecycle algorithms and Task discipline.
 - [URN namespace](reference/urn-namespace.md) for identifier grammar.

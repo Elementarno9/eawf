@@ -7,7 +7,7 @@ Wave IDs: ``P\\d{2,}-I\\d{2,}-W\\d{2,}`` (e.g., ``P13-I04-W01``).
 Hypothesis IDs: ``H\\d{2,}-\\d{2,}`` plus an optional track prefix.
 Backlog IDs: ``B\\d{3,}`` (e.g., ``B001``, ``B100``).
 
-The ``\\d{2,}`` width matches ``tools/commit_prefix_lint.py`` per AGENTS
+The ``\\d{2,}`` width matches ``tools/commit_grammar_history.py`` per AGENTS
 ``symbol-conventions`` so 3-digit ids (``P100``, ``I100``, ``W100``) parse
 cleanly once the queue grows past ``P99`` / ``I99`` / ``W99``.
 

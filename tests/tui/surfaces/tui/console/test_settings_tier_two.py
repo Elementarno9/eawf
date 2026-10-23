@@ -71,7 +71,7 @@ def test_settings_leaf_states_no_deny_chain() -> None:
 @pytest.mark.parametrize(
     ("key", "stated"),
     [
-        ("planning.max_parallel_waves", "config registry range 1 to 16 · built-in"),
+        ("research.agent_count", "config registry range 1 to 12 · built-in"),
         ("estimation.eu_minutes", "config registry range 5 to 240 · built-in"),
         ("daemon.idle_timeout_seconds", "config registry range at least 1 · built-in"),
     ],
@@ -198,7 +198,7 @@ def test_con_123_every_stated_second_tier_row_fits_an_80_column_card(
         "agents:\n  credentials:\n    gh:\n      env_refs: ['${ENV:GITHUB_TOKEN}']\n",
     )
     for key, label in (
-        ("planning.max_parallel_waves", " CONSTRAINED BY"),
+        ("research.agent_count", " CONSTRAINED BY"),
         ("runtime.opencode.stall_interval_s", " NEEDS"),
         (secret_leaf, " SECRET"),
     ):

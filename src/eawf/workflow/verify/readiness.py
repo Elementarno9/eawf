@@ -514,8 +514,6 @@ def _overlay_repo_verify_leaves(
     updates: dict[str, Any] = {}
     if repo_verify.odr_blocking and not block.odr_blocking:
         updates["odr_blocking"] = True
-    if repo_verify.require_iter_audit_accepted and not block.require_iter_audit_accepted:
-        updates["require_iter_audit_accepted"] = True
     if (
         _verify_leaf_explicitly_supplied(
             "waiver_mode",

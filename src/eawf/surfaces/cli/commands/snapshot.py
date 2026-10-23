@@ -63,18 +63,13 @@ class SnapshotSurface:
     description: str
 
 
-# Locked surface inventory — mirrors the C09 §5.6 table one-for-one. Each
-# surface's golden tree lives under ``tests/golden/<kind>/`` and its bytes
+# Locked surface inventory — the C09 §5.6 table less the state, spec and
+# telemetry surfaces, whose golden trees no longer exist. Each surface's
+# golden tree lives under ``tests/golden/<kind>/`` and its bytes
 # regenerate by running ``regen_target`` with both supported refresh switches.
 SNAPSHOT_SURFACES: dict[str, SnapshotSurface] = {
     surface.kind: surface
     for surface in (
-        SnapshotSurface(
-            kind="state",
-            golden_dir="tests/golden/state",
-            regen_target="tests/golden/state",
-            description="Canonical state.json sample tree per scope-pattern.",
-        ),
         SnapshotSurface(
             kind="envelope",
             golden_dir="tests/golden/envelope",
@@ -88,18 +83,6 @@ SNAPSHOT_SURFACES: dict[str, SnapshotSurface] = {
                 "tests/integration/test_plugin_doctor_strict.py::test_refresh_dispatch_goldens"
             ),
             description="Dispatch envelope per runtime x skill.",
-        ),
-        SnapshotSurface(
-            kind="spec",
-            golden_dir="tests/golden/spec",
-            regen_target="tests/golden/spec",
-            description="PhaseSpec/IterSpec/WaveSpec render per `eawf {noun} spec render`.",
-        ),
-        SnapshotSurface(
-            kind="agent_report",
-            golden_dir="tests/golden/agent_report",
-            regen_target="tests/unit/test_render_agent_report.py",
-            description="Per-role typed-body envelope sample.",
         ),
         SnapshotSurface(
             kind="plugin_install",
@@ -118,12 +101,6 @@ SNAPSHOT_SURFACES: dict[str, SnapshotSurface] = {
             golden_dir="tests/golden/surfaces/cli/scenarios",
             regen_target="tests/golden/surfaces/cli/test_scenarios.py",
             description="End-to-end lifecycle goldens (fresh repo, enrich, full flow).",
-        ),
-        SnapshotSurface(
-            kind="telemetry",
-            golden_dir="tests/golden/telemetry",
-            regen_target="tests/golden/telemetry",
-            description="DuckDB schema dump + projection output for a fixture event.jsonl.",
         ),
         SnapshotSurface(
             kind="metrics_export",

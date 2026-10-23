@@ -1,11 +1,11 @@
 """``tools/commit_prefix_lint.py`` on a root the epoch-2 cutover has marked.
 
 After the cut ``.ea/state.json`` is frozen and the lifecycle lives in the
-selected generation, so the hook's claimed proof, hierarchy check and
-phase-blocking check read the generation instead. The generation here is
-built by the real cutover over a corpus with one ACTIVE phase and iter and
-a CLAIMED, a PLANNED and a RUNNING wave, so the stdlib reader is proved
-against the importer's own output rather than a hand-written imitation.
+selected generation, so the hook's Task proof and state-commit whitelist
+read the generation instead. The generation here is built by the real
+cutover over a corpus with one ACTIVE phase and iter and a CLAIMED, a
+PLANNED and a RUNNING wave, so the stdlib reader is proved against the
+importer's own output rather than a hand-written imitation.
 """
 
 from __future__ import annotations
@@ -71,9 +71,9 @@ def _load(name: str) -> Any:
 @pytest.fixture()
 def mod(monkeypatch: pytest.MonkeyPatch) -> Any:
     lint = _load("commit_prefix_lint")
-    # The one-commit-per-wave cap shells out to the real history; these
+    # The one-commit-per-Task cap shells out to the real history; these
     # cases are about which state the proof reads, not about the cap.
-    monkeypatch.setattr(lint, "_prior_wave_commits", lambda *_a, **_kw: [])
+    monkeypatch.setattr(lint, "_prior_commits", lambda *_a, **_kw: [])
     return lint
 
 
@@ -259,67 +259,6 @@ def test_the_view_projects_the_importer_output_back_onto_the_corpus(
     assert view["current"] == {"phase_id": "P02", "iter_id": "P02-I01"}
 
 
-# --- the trailer proof reads the generation -----------------------------------
-
-
-@pytest.mark.parametrize("wave_id", [_CLAIMED, _RUNNING])
-def test_marked_root_accepts_a_trailer_naming_a_live_imported_task(
-    mod: Any, tmp_path: Path, marked: Path, wave_id: str
-) -> None:
-    code, diag = _lint(
-        mod, tmp_path, marked, f"feat: land it\n\nEawf-Wave: {wave_id}\n", ["src/eawf/x.py"]
-    )
-
-    assert code == 0, diag
-
-
-def test_marked_root_refuses_a_trailer_naming_a_planned_task(
-    mod: Any, tmp_path: Path, marked: Path
-) -> None:
-    """Gate-fire: the frozen document claims the wave, the generation does not."""
-    code, diag = _lint(
-        mod, tmp_path, marked, f"feat: land it\n\nEawf-Wave: {_PLANNED}\n", ["src/eawf/x.py"]
-    )
-
-    assert code == 1
-    assert f"claimed proof rejected for wave {_PLANNED!r}" in diag
-    assert "'pending'" in diag
-
-
-def test_marked_root_refuses_a_trailer_naming_a_task_the_generation_lacks(
-    mod: Any, tmp_path: Path, marked: Path
-) -> None:
-    code, diag = _lint(
-        mod, tmp_path, marked, "feat: land it\n\nEawf-Wave: P02-I01-W09\n", ["src/eawf/x.py"]
-    )
-
-    assert code == 1
-    assert "unknown wave reference" in diag
-
-
-def test_marked_root_blocks_a_bare_subject_while_its_milestone_is_active(
-    mod: Any, tmp_path: Path, marked: Path
-) -> None:
-    code, diag = _lint(mod, tmp_path, marked, "fix: drive-by\n", ["src/eawf/x.py"])
-
-    assert code == 1
-    assert "P02" in diag
-
-
-def test_marked_root_with_a_torn_generation_refuses_rather_than_reading_the_frozen_file(
-    mod: Any, tmp_path: Path, marked: Path
-) -> None:
-    generation = next(p for p in (marked / GENERATIONS_DIRNAME).iterdir() if p.name[:4] == "gen-")
-    (generation / "state.json").write_text("{", encoding="utf-8")
-
-    code, diag = _lint(
-        mod, tmp_path, marked, f"feat: land it\n\nEawf-Wave: {_CLAIMED}\n", ["src/eawf/x.py"]
-    )
-
-    assert code == 1
-    assert "managed state decode failed" in diag
-
-
 # --- a native Task trailer ------------------------------------------------------
 
 _NATIVE_STATUSES = {
@@ -360,7 +299,6 @@ def _task_lint(mod: Any, tmp_path: Path, ea_dir: Path, key: str) -> tuple[int, s
 def test_marked_root_accepts_a_task_trailer_naming_a_live_native_task(
     mod: Any, tmp_path: Path, native: Path, key: str
 ) -> None:
-    """The trailer also satisfies the open-phase rule a bare subject would fail."""
     code, diag = _task_lint(mod, tmp_path, native, key)
 
     assert code == 0, diag
@@ -403,28 +341,13 @@ def test_unmarked_root_refuses_a_task_trailer(mod: Any, tmp_path: Path, unmarked
     assert "this root is not marked epoch 2" in diag
 
 
-def test_a_task_refused_even_beside_a_live_wave_trailer(
-    mod: Any, tmp_path: Path, native: Path
-) -> None:
-    code, diag = _lint(
-        mod,
-        tmp_path,
-        native,
-        f"fix: land it\n\nEawf-Wave: {_CLAIMED}\nTask: EAWF-0139\n",
-        ["src/eawf/x.py"],
-    )
-
-    assert code == 1
-    assert "status 'PLANNED'" in diag
-
-
 def test_a_second_commit_for_a_task_is_capped_and_its_amend_is_not(
     mod: Any, tmp_path: Path, native: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     prior = "f" * 40
     monkeypatch.setattr(
         mod,
-        "_prior_wave_commits",
+        "_prior_commits",
         lambda terms, **_kw: [prior] if "Task: EAWF-0137" in terms else [],
     )
     monkeypatch.setattr(mod, "_head_identity", lambda _root: (prior, "1788883700"))
@@ -523,7 +446,7 @@ _EPOCH2_PATHS = [
 def test_marked_root_admits_generation_paths_in_a_state_commit(
     mod: Any, tmp_path: Path, marked: Path
 ) -> None:
-    code, diag = _lint(mod, tmp_path, marked, "[P02] state: record the move\n", _EPOCH2_PATHS)
+    code, diag = _lint(mod, tmp_path, marked, "state: record the move\n", _EPOCH2_PATHS)
 
     assert code == 0, diag
 
@@ -531,40 +454,23 @@ def test_marked_root_admits_generation_paths_in_a_state_commit(
 def test_marked_root_still_refuses_source_paths_in_a_state_commit(
     mod: Any, tmp_path: Path, marked: Path
 ) -> None:
-    code, diag = _lint(
-        mod, tmp_path, marked, "[P02] state: record\n", [*_EPOCH2_PATHS, "src/eawf/x.py"]
-    )
+    code, diag = _lint(mod, tmp_path, marked, "state: record\n", [*_EPOCH2_PATHS, "src/eawf/x.py"])
 
     assert code == 1
     assert "['src/eawf/x.py']" in diag
 
 
-# --- an unmarked root keeps the epoch-1 behaviour ------------------------------
+# --- an unmarked root admits no generation path ------------------------------
 
 
 def test_unmarked_root_refuses_generation_paths_in_a_state_commit(
     mod: Any, tmp_path: Path, unmarked: Path
 ) -> None:
-    code, diag = _lint(mod, tmp_path, unmarked, "[P02] state: record\n", _EPOCH2_PATHS)
+    code, diag = _lint(mod, tmp_path, unmarked, "state: record\n", _EPOCH2_PATHS)
 
     assert code == 1
     assert "state-type commit touches non-state paths" in diag
     assert ".ea/generations" not in diag.split("\n", 1)[1]
-
-
-def test_unmarked_root_proves_the_trailer_against_its_live_document(
-    mod: Any, tmp_path: Path, unmarked: Path
-) -> None:
-    accepted = _lint(
-        mod, tmp_path, unmarked, f"feat: a\n\nEawf-Wave: {_CLAIMED}\n", ["src/eawf/x.py"]
-    )
-    refused = _lint(
-        mod, tmp_path, unmarked, f"feat: b\n\nEawf-Wave: {_PLANNED}\n", ["src/eawf/x.py"]
-    )
-
-    assert accepted[0] == 0, accepted[1]
-    assert refused[0] == 1
-    assert "'pending'" in refused[1]
 
 
 # --- the hook stays runnable under system python3 ------------------------------

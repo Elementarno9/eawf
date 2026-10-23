@@ -1,0 +1,103 @@
+"""Reclaiming expired entries from a repository's machine-local ``.ea/local`` store.
+
+An entry is a directory under ``.ea/local`` holding a ``.retention`` file
+whose only content is the date it may be removed after, as ``YYYY-MM-DD``.
+Nothing else is ever removed: a directory without a ``.retention``, or with
+one that does not hold exactly such a date, stays where it is, and so does
+every file beside the entries, research briefs included.
+
+Planning and removal are separate so ``eawf local gc --dry-run`` shows the
+exact set the apply step would remove.
+"""
+
+from __future__ import annotations
+
+import logging
+import shutil
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+from typing import Final
+
+logger = logging.getLogger(__name__)
+
+#: The file that marks a directory as reclaimable and names its expiry date.
+RETENTION_FILENAME: Final = ".retention"
+
+
+@dataclass(frozen=True, slots=True)
+class LocalGcPlan:
+    """The entries one pass over a local store would remove.
+
+    Attributes:
+        local_root: The ``.ea/local`` directory the plan was made over.
+        expired: Each directory whose ``.retention`` date has passed, outermost
+            only, in path order.
+        unreadable: Each directory whose ``.retention`` holds no date; kept.
+    """
+
+    local_root: Path
+    expired: tuple[Path, ...] = ()
+    unreadable: tuple[Path, ...] = ()
+
+
+def _retention_date(marker: Path) -> date | None:
+    """Return the expiry a ``.retention`` file states, or ``None`` when it states none."""
+    try:
+        return date.fromisoformat(marker.read_text(encoding="utf-8").strip())
+    except OSError, UnicodeDecodeError, ValueError:
+        return None
+
+
+def plan_local_gc(local_root: Path, *, today: date) -> LocalGcPlan:
+    """Return the entries under *local_root* whose retention has passed.
+
+    The walk does not follow symbolic links, so an entry is always a real
+    directory inside *local_root*. A ``.retention`` on *local_root* itself is
+    ignored: the store as a whole is never an entry.
+
+    Args:
+        local_root: The repository's ``.ea/local`` directory; absent is empty.
+        today: The day judged against. An entry expiring today is kept.
+
+    Returns:
+        The plan; an empty one when *local_root* does not exist.
+    """
+    if not local_root.is_dir():
+        return LocalGcPlan(local_root=local_root)
+    expired: list[Path] = []
+    unreadable: list[Path] = []
+    for marker in sorted(local_root.rglob(RETENTION_FILENAME)):
+        entry = marker.parent
+        if entry == local_root or not marker.is_file():
+            continue
+        expiry = _retention_date(marker)
+        if expiry is None:
+            unreadable.append(entry)
+        elif expiry < today and not any(entry.is_relative_to(outer) for outer in expired):
+            expired.append(entry)
+    return LocalGcPlan(local_root=local_root, expired=tuple(expired), unreadable=tuple(unreadable))
+
+
+def apply_local_gc(plan: LocalGcPlan) -> None:
+    """Remove every expired entry *plan* names.
+
+    Args:
+        plan: A plan :func:`plan_local_gc` returned.
+
+    Raises:
+        ValueError: An entry does not resolve strictly inside the plan's local
+            root; nothing is removed.
+        OSError: An entry could not be removed.
+    """
+    root = plan.local_root.resolve()
+    for entry in plan.expired:
+        resolved = entry.resolve()
+        if resolved == root or not resolved.is_relative_to(root):
+            raise ValueError(f"refusing to remove {entry}: it lies outside {plan.local_root}")
+    for entry in plan.expired:
+        shutil.rmtree(entry)
+        logger.info(f"apply_local_gc removed entry={entry}")
+
+
+__all__ = ["RETENTION_FILENAME", "LocalGcPlan", "apply_local_gc", "plan_local_gc"]

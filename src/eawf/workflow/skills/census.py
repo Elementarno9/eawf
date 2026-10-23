@@ -1,10 +1,11 @@
 """The epoch-1 noun census over shipped skill text and a rendered bundle.
 
 After the cutover the lifecycle is Track, Milestone, Batch, Task and Run.
-A shipped page, manifest or hook that still says phase, iter or wave -- or
-spells a ``P01-I02-W03`` identifier -- sends a model or an operator after an
-entity that no longer exists, so the census finds every such mention and
-the packagers refuse to ship past one.
+A shipped page, manifest or hook that still says phase, iter or wave --
+bare or joined into an identifier such as ``wave_close`` --, spells a
+``P01-I02-W03`` identifier or invokes a retired skill such as ``/prep``
+sends a model or an operator after an entity that no longer exists, so the
+census finds every such mention and the packagers refuse to ship past one.
 """
 
 from __future__ import annotations
@@ -16,11 +17,26 @@ from typing import Final
 
 from pydantic import BaseModel, ConfigDict
 
+from eawf.workflow.skills.catalog import SKILL_CATALOG
+
 logger = logging.getLogger(__name__)
 
-#: The epoch-1 lifecycle nouns and the identifier shape built from them.
+_RETIRED_IDS: Final[str] = "|".join(
+    re.escape(row.skill_id)
+    for row in sorted(SKILL_CATALOG.retired, key=lambda row: -len(row.skill_id))
+)
+
+#: A slash invocation of a retired skill, the epoch-1 lifecycle nouns and
+#: the identifier shape built from them. A noun joined into an identifier by
+#: underscores (``phase_open``, ``active_wave``) matches as the whole
+#: identifier, while a longer word (``phaseless``) and a path segment
+#: (``docs/prep``) do not. The slash branch comes first so ``/wave-spec``
+#: reports whole.
 EPOCH1_NOUN_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"\b(?:phases?|iters?|waves?)\b|\bP\d{2,}-I\d{2,}(?:-W\d{2,})?\b", re.IGNORECASE
+    rf"(?<![\w./-])/(?:{_RETIRED_IDS})(?![\w-])"
+    r"|\b(?:\w+_)?(?:phases?|iters?|waves?)(?:_\w+)?\b"
+    r"|\bP\d{2,}-I\d{2,}(?:-W\d{2,})?\b",
+    re.IGNORECASE,
 )
 
 
