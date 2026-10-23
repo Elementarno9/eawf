@@ -56,6 +56,22 @@ WRITE_CONSEQUENCES: Final[Mapping[str, tuple[tuple[str, ...], tuple[str, ...]]]]
             ("the milestone's target date is set or cleared, one revision on",),
             ("its status does not move", "no batch, task or release is rescheduled by it"),
         ),
+        "domain.milestone.edit": (
+            ("the planned milestone's contract fields are rewritten, one revision on",),
+            ("its status does not move", "an active or closed milestone is refused"),
+        ),
+        "domain.milestone.purge": (
+            ("the cancelled milestone record is removed from the document and its ledger",),
+            ("a record any pushed commit carries is refused", "its batches and tasks stay"),
+        ),
+        "domain.track.rename": (
+            ("the track's title is set, one revision on",),
+            ("its status does not move", "no milestone under it changes"),
+        ),
+        "domain.track.set_policy": (
+            ("the track's advisory active-milestone limit is set, one policy revision on",),
+            ("its status does not move", "nothing is refused or activated by it"),
+        ),
         "domain.batch.set_title": (
             ("the batch's title is set, one revision on, finished or not",),
             ("its status does not move", "no task, head binding or proof changes"),

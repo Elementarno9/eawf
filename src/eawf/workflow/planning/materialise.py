@@ -790,6 +790,11 @@ def _planned_task(
         "depends_on": [str(ref) for ref in task.depends_on],
         "write_claims": list(task.write_claims),
         "exclusive": task.exclusive,
+        # A label the plan leaves unset keeps whatever the promoted draft
+        # or the re-placed Task already carries.
+        **task.model_dump(
+            mode="json", include={"title", "description", "role", "effort"}, exclude_none=True
+        ),
     }
     key = task.urn.entity_key
     if _locator(Epoch2Collection.TASK, key) in replannable:

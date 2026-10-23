@@ -75,6 +75,10 @@ WORKSPACE_REVISION_CONFLICT: Final[str] = "workspace_revision_conflict"
 #: does not own.
 CROSS_WORKSPACE_MUTATION_FORBIDDEN: Final[str] = "cross_workspace_mutation_forbidden"
 
+#: Stable error code: ``remove`` targeted a workspace with two or more
+#: members, whose other members would silently lose their workspace.
+WORKSPACE_HAS_OTHER_MEMBERS: Final[str] = "workspace_has_other_members"
+
 
 class WorkspaceSource(StrEnum):
     """Which rung of the resolution ladder produced the answer."""
@@ -455,10 +459,80 @@ def update_membership(
     return _with_workspaces(registry, workspaces)
 
 
+def remove_workspace(registry: Registry, *, key: str) -> Registry:
+    """Return *registry* without the workspace filed under *key*.
+
+    Only a workspace with exactly one member can go: removing a shared
+    workspace would leave its other members without the workspace they
+    were added to, so that is refused rather than cascaded.
+
+    Args:
+        registry: Already-validated registry document.
+        key: Workspace to remove.
+
+    Returns:
+        A new :class:`Registry`; repository rows are left untouched.
+
+    Raises:
+        WorkspaceMutationError: :data:`WORKSPACE_NOT_REGISTERED` when
+            *key* is absent; :data:`WORKSPACE_HAS_OTHER_MEMBERS` when the
+            workspace has two or more members.
+    """
+    current = get_workspace(registry, key)
+    if len(current.member_project_codes) > 1:
+        members = ", ".join(sorted(current.member_project_codes))
+        raise WorkspaceMutationError(
+            code=WORKSPACE_HAS_OTHER_MEMBERS,
+            message=(
+                f"workspace {key!r} has {len(current.member_project_codes)} members "
+                f"({members}); drop all but one with `eawf workspace member remove` first"
+            ),
+        )
+    workspaces = {other: record for other, record in registry.workspaces.items() if other != key}
+    return _with_workspaces(registry, workspaces)
+
+
+def rekey_repository(registry: Registry, *, codes: frozenset[str], to_key: str) -> Registry:
+    """Return *registry* with the repository *codes* moved into workspace *to_key*.
+
+    ``eawf init`` files every repository under a workspace it anchors, and
+    that anchor is what makes a later join of a shared workspace refuse
+    with :data:`CROSS_WORKSPACE_MUTATION_FORBIDDEN`. Rekeying removes each
+    workspace the repository anchors, which must hold that repository
+    alone, then adds the repository to *to_key* as a superseding revision.
+
+    Args:
+        registry: Already-validated registry document.
+        codes: The project codes registered at the repository root.
+        to_key: Workspace the repository joins.
+
+    Returns:
+        A new :class:`Registry` whose *to_key* record carries
+        ``revision + 1``.
+
+    Raises:
+        WorkspaceMutationError: :data:`WORKSPACE_NOT_REGISTERED` when
+            *codes* is empty or *to_key* is absent;
+            :data:`WORKSPACE_HAS_OTHER_MEMBERS` when an anchored workspace
+            is shared with other repositories.
+    """
+    if not codes:
+        raise WorkspaceMutationError(
+            code=WORKSPACE_NOT_REGISTERED,
+            message="no repository is registered at this root; run `eawf repo register` first",
+        )
+    get_workspace(registry, to_key)
+    for key, record in sorted(registry.workspaces.items()):
+        if key != to_key and record.home_project_code in codes:
+            registry = remove_workspace(registry, key=key)
+    return update_membership(registry, key=to_key, add=sorted(codes))
+
+
 __all__ = [
     "CROSS_WORKSPACE_MUTATION_FORBIDDEN",
     "WORKSPACE_ALREADY_REGISTERED",
     "WORKSPACE_AMBIGUOUS",
+    "WORKSPACE_HAS_OTHER_MEMBERS",
     "WORKSPACE_NOT_A_MEMBER",
     "WORKSPACE_NOT_REGISTERED",
     "WORKSPACE_REVISION_CONFLICT",
@@ -470,6 +544,8 @@ __all__ = [
     "get_workspace",
     "list_workspaces",
     "project_codes_at_root",
+    "rekey_repository",
+    "remove_workspace",
     "resolve_member_workspace",
     "resolve_workspace",
     "update_membership",

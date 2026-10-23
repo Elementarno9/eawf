@@ -54,7 +54,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Final
 
@@ -765,6 +765,7 @@ def _run_create_verb(
     dry_run: bool = False,
     yes: bool = False,
     target_date: str | None = None,
+    stated_flags: tuple[tuple[str, str, str], ...] = (),
 ) -> None:
     """Dispatch one native create verb and render its answer.
 
@@ -787,6 +788,8 @@ def _run_create_verb(
         dry_run: Print the consequence only and send nothing.
         yes: Send after printing the consequence, without asking.
         target_date: The ``--date`` a Milestone create carries, or ``None``.
+        stated_flags: Each other ``(flag, field, value)`` the command's flags
+            state for the create document.
     """
     flags: GlobalFlags = ctx.obj
     try:
@@ -799,17 +802,13 @@ def _run_create_verb(
             from_spec=from_spec,
             correlation_id=correlation_id,
         )
-        if target_date is not None:
-            from eawf.surfaces.cli.commands.domain_target import parse_target_date
+        from eawf.surfaces.cli.commands.domain_target import parse_target_date, with_flag_field
 
+        if target_date is not None:
             day = parse_target_date(target_date).isoformat()
-            stated = request.document.get("target_date")
-            if stated is not None and stated != day:
-                raise cli_errors.UserError(
-                    f"--date {day} disagrees with the create document's target_date {stated!r}",
-                    kind="InvalidInput",
-                )
-            request = replace(request, document={**request.document, "target_date": day})
+            stated_flags = (("--date", "target_date", day), *stated_flags)
+        for flag, field, value in stated_flags:
+            request = with_flag_field(request, flag=flag, field=field, value=value)
         refusal = _create_document_refusal(request)
         if refusal is None and not preview(
             method, urn, expected_revision, flags=flags, dry_run=dry_run, yes=yes
@@ -1324,38 +1323,6 @@ def task_start_cmd(
     )
 
 
-@task_app.command("create")
-def task_create_cmd(
-    ctx: typer.Context,
-    urn: Annotated[str, typer.Argument(help=_CREATE_URN_HELP)],
-    expected_revision: Annotated[
-        int,
-        typer.Option("--expected-revision", "--expected-tree-revision", help=_TREE_REVISION_HELP),
-    ],
-    idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
-    actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
-    from_spec: Annotated[Path, typer.Option("--from-spec", help=_CREATE_SPEC_HELP)],
-    correlation_id: Annotated[
-        str | None, typer.Option("--correlation-id", help=_CORRELATION_HELP)
-    ] = None,
-    dry_run: DryRun = False,
-    yes: Yes = False,
-) -> None:
-    """Admit a new Task's create document into the addressed tree."""
-    _run_create_verb(
-        ctx,
-        method=TASK_CREATE,
-        urn=urn,
-        expected_revision=expected_revision,
-        idempotency_key=idempotency_key,
-        actor=actor,
-        from_spec=from_spec,
-        correlation_id=correlation_id,
-        dry_run=dry_run,
-        yes=yes,
-    )
-
-
 # ---- Command registration ---------------------------------------------------
 # The sibling modules import verb names and runners from this module, so they
 # load here, after every one is defined, rather than from ``lifecycle``: from
@@ -1363,6 +1330,7 @@ def task_create_cmd(
 # first of the two a process imports.
 from eawf.surfaces.cli.commands import batch_squash as _batch_squash  # noqa: E402, F401
 from eawf.surfaces.cli.commands import domain_delivery as _domain_delivery  # noqa: E402, F401
+from eawf.surfaces.cli.commands import domain_maintenance as _domain_maintenance  # noqa: E402, F401
 from eawf.surfaces.cli.commands import domain_target as _domain_target  # noqa: E402, F401
 from eawf.surfaces.cli.commands import record as _record  # noqa: E402, F401
 
@@ -1385,7 +1353,6 @@ __all__ = [
     "milestone_create_cmd",
     "milestone_open_review_cmd",
     "repository_create_cmd",
-    "task_create_cmd",
     "task_promote_cmd",
     "task_start_cmd",
     "track_create_cmd",

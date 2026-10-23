@@ -20,6 +20,9 @@ Subcommands (workspace-record path):
   current directory when no key is given.
 - ``workspace list`` — enumerate the registered workspace records.
 - ``workspace member add|remove <KEY> <CODE>`` — edit membership.
+- ``workspace remove <KEY>`` — remove a workspace with exactly one member.
+- ``workspace rekey-repo --to <KEY>`` — move the current repository out of
+  the workspace ``eawf init`` gave it and into ``<KEY>``.
 - ``workspace select <KEY>`` — session-local selection; writes nothing.
 
 The ``registry-list`` / ``registry-status`` subcommands are STRICTLY
@@ -557,6 +560,81 @@ def workspace_member_remove_cmd(
         registry_path=registry_path,
         verb="member remove",
     )
+
+
+# ---- workspace remove / rekey-repo ------------------------------------------
+# Neither verb has a ``registry.workspace.*`` RPC yet, so both write in
+# process under the same registry lock the daemon's writes take.
+
+
+@workspace_app.command(name="remove")
+def workspace_remove_cmd(
+    ctx: typer.Context,
+    key: Annotated[str, typer.Argument(help="Workspace key to remove.")],
+    registry_path: Annotated[
+        Path | None,
+        typer.Option("--registry-path", help="Override ``~/.eawf/registry.json`` (tests)."),
+    ] = None,
+) -> None:
+    """Remove a workspace that has exactly one member.
+
+    A workspace shared by two or more repositories is refused, registry
+    unchanged; repository rows are never touched.
+    """
+    from eawf.platform.registry import WorkspaceMutationError, get_workspace
+    from eawf.platform.registry.workspace import remove_workspace
+
+    flags: GlobalFlags = ctx.obj
+    target = _registry_target(registry_path)
+    try:
+        registry = _read_registry_or_empty(target)
+        removed = get_workspace(registry, key)
+        _write_registry_locked(remove_workspace(registry, key=key), target)
+    except WorkspaceMutationError as exc:
+        _emit_workspace_error(exc, code=exc.code, flags=flags)
+        return
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+    _emit_workspace(removed, target=target, flags=flags, verb="remove")
+
+
+@workspace_app.command(name="rekey-repo")
+def workspace_rekey_repo_cmd(
+    ctx: typer.Context,
+    to: Annotated[str, typer.Option("--to", help="Workspace key the repository joins.")],
+    registry_path: Annotated[
+        Path | None,
+        typer.Option("--registry-path", help="Override ``~/.eawf/registry.json`` (tests)."),
+    ] = None,
+    repo_root: Annotated[
+        Path | None,
+        typer.Option("--repo-root", help="Repository root to rekey (defaults to cwd)."),
+    ] = None,
+) -> None:
+    """Move the repository at the root out of its own workspace into ``--to``.
+
+    The workspace ``eawf init`` created for the repository is removed, so
+    the repository no longer anchors a workspace of its own and can be a
+    member of ``--to``.
+    """
+    from eawf.platform.registry import WorkspaceMutationError, project_codes_at_root
+    from eawf.platform.registry.workspace import rekey_repository
+
+    flags: GlobalFlags = ctx.obj
+    target = _registry_target(registry_path)
+    try:
+        registry = _read_registry_or_empty(target)
+        codes = project_codes_at_root(registry, repo_root if repo_root is not None else Path.cwd())
+        updated = rekey_repository(registry, codes=codes, to_key=to)
+        _write_registry_locked(updated, target)
+    except WorkspaceMutationError as exc:
+        _emit_workspace_error(exc, code=exc.code, flags=flags)
+        return
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+    _emit_workspace(updated.workspaces[to], target=target, flags=flags, verb="rekey-repo")
 
 
 # ---- workspace show / list / select -----------------------------------------

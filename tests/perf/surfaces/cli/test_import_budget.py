@@ -248,7 +248,11 @@ def test_resolving_a_group_mounts_the_verbs_attached_onto_it() -> None:
     from eawf.surfaces.cli.registry import COMMAND_REGISTRY, SideEffectRow
 
     loaded, subcommands = _resolve_in_child("run")
-    attached = [row.module for row in COMMAND_REGISTRY if isinstance(row, SideEffectRow)]
+    attached = [
+        row.module
+        for row in COMMAND_REGISTRY
+        if isinstance(row, SideEffectRow) and row.group == "run"
+    ]
     assert attached
     assert all(module in loaded for module in attached)
     assert {"report", "interrupt", "dispatch"} <= set(subcommands)

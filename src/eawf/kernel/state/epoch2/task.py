@@ -33,12 +33,14 @@ from typing import Final, Literal, Self
 from pydantic import Field, model_validator
 
 from eawf.kernel.spec.common import CriterionSpec
+from eawf.kernel.state.enums import EffortBucket
 from eawf.kernel.state.epoch2.base import (
     Epoch2Model,
     NonEmptyStr,
     PrincipalKey,
     SlugStr,
     StrictPositiveInt,
+    TitleStr,
 )
 from eawf.kernel.state.epoch2.run import WriteSetPath
 from eawf.kernel.state.epoch2.task_status import TERMINAL_TASK_STATUSES, TaskStatus
@@ -72,21 +74,51 @@ _DRAFT_HEAD: Final = frozenset({TaskStatus.DRAFT, TaskStatus.DEFERRED, TaskStatu
 #: ``PLANNED`` onward the due scope is always a recorded fact.
 _UNDATED: Final = frozenset({TaskStatus.DRAFT, TaskStatus.DEFERRED, TaskStatus.DROPPED})
 
+#: The agent roles a Task may be sized for: the ones that run a Task, not
+#: the ones that plan, review or polish around it.
+TaskRole = Literal["executor", "auditor", "researcher", "domain-specialist"]
+
+#: The longest title a Task shows, matching the bound every other title has.
+_TITLE_MAX: Final = 80
+
+
+def derived_title(intent: str) -> str:
+    """Return the title an untitled Task reads from its intent.
+
+    Intents written before titles existed lead with a label and then a
+    colon, so the text before the first ``": "`` is the label; an intent
+    with no such separator is read whole.
+
+    Args:
+        intent: The Task's stored intent.
+
+    Returns:
+        The label, or the intent, cut to 80 characters, the bound
+        every title has.
+    """
+    label, _, _ = intent.partition(": ")
+    return (label or intent)[:_TITLE_MAX]
+
 
 class TaskCreateSpec(Epoch2Model):
     """The strict create document for a Task.
 
     A Task is created as a ``DRAFT`` backlog row, so the create document
-    holds exactly what a draft holds: a key, an intent, a priority and an
-    optional due scope. Placement and criteria arrive with the promotion
-    edge, and the contract revision starts at one because nothing can
-    have revised a contract that did not exist.
+    holds exactly what a draft holds: a key, an intent, a priority, an
+    optional due scope and the optional labels a reader sorts it by.
+    Placement and criteria arrive with the promotion edge, and the
+    contract revision starts at one because nothing can have revised a
+    contract that did not exist.
     """
 
     key: NonEmptyStr
     priority: TaskPriority
     intent: NonEmptyStr
     due_scope: DueScopeUrn | None = None
+    title: TitleStr | None = Field(default=None, exclude_if=lambda value: value is None)
+    description: NonEmptyStr | None = Field(default=None, exclude_if=lambda value: value is None)
+    role: TaskRole | None = Field(default=None, exclude_if=lambda value: value is None)
+    effort: EffortBucket | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class Task(Epoch2Record):
@@ -102,6 +134,11 @@ class Task(Epoch2Record):
     per-dispatch instruction: the Tasks it must not start ahead of, the
     repository paths its Runs may write (empty means no narrowing was
     declared), and whether it runs alone.
+
+    ``title``, ``description``, ``role`` and ``effort`` are optional
+    labels for a reader: a short name, the long-form purpose, the agent
+    role the Task is sized for and its effort bucket. A Task with no
+    title reads one from its intent (see :func:`derived_title`).
     """
 
     urn: TaskUrn
@@ -123,6 +160,10 @@ class Task(Epoch2Record):
         default=None, exclude_if=lambda value: value is None
     )
     claimed_by: PrincipalKey | None = Field(default=None, exclude_if=lambda value: value is None)
+    title: TitleStr | None = Field(default=None, exclude_if=lambda value: value is None)
+    description: NonEmptyStr | None = Field(default=None, exclude_if=lambda value: value is None)
+    role: TaskRole | None = Field(default=None, exclude_if=lambda value: value is None)
+    effort: EffortBucket | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def _placement_matches_draft_head(self) -> Self:
@@ -233,5 +274,7 @@ __all__ = [
     "TaskCreateSpec",
     "TaskPriority",
     "TaskReleaseRecord",
+    "TaskRole",
     "TaskStatus",
+    "derived_title",
 ]

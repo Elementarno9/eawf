@@ -20,6 +20,7 @@ from typing import Any, Final
 from eawf.kernel.migration.epoch2.continuation import read_legacy_row
 from eawf.kernel.migration.epoch2.cutover import ROW_PAYLOAD_FIELD
 from eawf.kernel.runtime.sandbox_decision import SANDBOX_DECISION_KIND
+from eawf.kernel.state.epoch2.task import derived_title
 from eawf.kernel.store.tiers import Epoch2Collection
 
 #: The payload field that marks a row the cutover converted whole into a native
@@ -152,12 +153,12 @@ def notice_kind(row: Any) -> str | None:
 def title_of(collection: Epoch2Collection, fields: Mapping[str, Any]) -> str | None:
     """Return the title a stored record states, or ``None`` when it states none.
 
-    A Task names itself by its intent rather than a title, so its intent is its title.
+    A Task with no title of its own reads one from its intent.
     """
     for name in TITLE_FIELDS.get(collection, ("title",)):
         value = fields.get(name)
         if isinstance(value, str) and value.strip():
-            return value.strip()
+            return derived_title(value.strip()) if name == "intent" else value.strip()
     return None
 
 

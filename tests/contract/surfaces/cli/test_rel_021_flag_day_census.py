@@ -280,6 +280,8 @@ def test_rel_021_exemptions_are_the_migration_support_and_registry_verbs() -> No
         "workspace add",
         "workspace member add",
         "workspace member remove",
+        "workspace rekey-repo",
+        "workspace remove",
         "workspace select",
         "worktree cleanup",
         "worktree merge-back",
@@ -295,6 +297,8 @@ def test_rel_021_only_workspace_registry_verbs_are_registry_only() -> None:
         "workspace add",
         "workspace member add",
         "workspace member remove",
+        "workspace rekey-repo",
+        "workspace remove",
         "workspace select",
     }
 

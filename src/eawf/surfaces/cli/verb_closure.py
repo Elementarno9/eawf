@@ -387,6 +387,8 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
         "wire_pending",
         "the local fallback cannot check the optional revision yet",
     ),
+    _exempt("workspace remove", "wire_pending", "no registry route serves it yet"),
+    _exempt("workspace rekey-repo", "wire_pending", "no registry route serves it yet"),
     _exempt("release create", "wire_pending", "release.create takes neither anchor yet"),
     _exempt("release approve", "wire_pending", "release.approve takes neither anchor yet"),
     _exempt("release candidate", "wire_pending", "release.candidate takes neither anchor yet"),

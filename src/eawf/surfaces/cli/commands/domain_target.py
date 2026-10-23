@@ -1,4 +1,4 @@
-"""The operator verbs that set one field of a record and move no status.
+"""The operator verbs that set one field of a record, and the create flags that state one.
 
 ``milestone set-target`` sends ``domain.milestone.set_target`` and ``batch
 set-title`` sends ``domain.batch.set_title``. Neither is one of the lifecycle
@@ -7,12 +7,18 @@ answered exactly as they are: the URN, the revision the caller read, a retry
 key and an actor, then the domain envelope printed as it arrived. The day is
 parsed here so a malformed one costs no round trip; whether the Milestone is
 still open, and whether the title fits, is the daemon's to decide.
+
+``task create`` lives here too, because its ``--title`` and ``--description``
+flags state one create-document field each, the way ``milestone create
+--date`` does, and both go through :func:`with_flag_field`.
 """
 
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from datetime import date
+from pathlib import Path
 from typing import Annotated, Any, Final
 
 import typer
@@ -21,14 +27,20 @@ from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.commands.domain import (
     _ACTOR_HELP,
     _CORRELATION_HELP,
+    _CREATE_SPEC_HELP,
+    _CREATE_URN_HELP,
     _DATE_HELP,
     _KEY_HELP,
     _REVISION_HELP,
+    _TREE_REVISION_HELP,
+    TASK_CREATE,
+    DomainCreateRequest,
     _build_request,
     _call_envelope,
+    _run_create_verb,
 )
 from eawf.surfaces.cli.commands.domain_consequence import DryRun, Yes, preview
-from eawf.surfaces.cli.commands.lifecycle import batch_app, milestone_app
+from eawf.surfaces.cli.commands.lifecycle import batch_app, milestone_app, task_app
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.verb_contract import emit_envelope
 
@@ -42,6 +54,8 @@ _URN_HELP: Final = "URN of the Milestone to date."
 _CLEAR_HELP: Final = "Clear the target date instead of setting one."
 _BATCH_URN_HELP: Final = "URN of the Batch to title."
 _TITLE_HELP: Final = "What the Batch delivers, as a short imperative noun phrase."
+_TASK_TITLE_HELP: Final = "The Task's short name, at most 80 characters."
+_TASK_DESCRIPTION_HELP: Final = "The Task's long-form purpose."
 
 #: The one spelling a target date is accepted in. ``date.fromisoformat`` also
 #: reads week dates and compact forms, which an operator never means here.
@@ -69,6 +83,82 @@ def parse_target_date(text: str) -> date:
             f"the target date must be a real day spelled YYYY-MM-DD, got {text!r}",
             kind="InvalidInput",
         ) from exc
+
+
+def with_flag_field(
+    request: DomainCreateRequest, *, flag: str, field: str, value: str
+) -> DomainCreateRequest:
+    """Return *request* with a create-document field a command-line flag states.
+
+    A flag and the document may both state the field only when they agree,
+    so neither silently overrides the other.
+
+    Args:
+        request: The create request read from the document.
+        flag: The flag spelling, for the refusal message.
+        field: The create-document field the flag states.
+        value: The flag's value.
+
+    Returns:
+        The request whose document carries *value* under *field*.
+
+    Raises:
+        UserError: The document states a different value for *field*.
+    """
+    stated = request.document.get(field)
+    if stated is not None and stated != value:
+        raise cli_errors.UserError(
+            f"{flag} {value} disagrees with the create document's {field} {stated!r}",
+            kind="InvalidInput",
+        )
+    return replace(request, document={**request.document, field: value})
+
+
+@task_app.command("create")
+def task_create_cmd(
+    ctx: typer.Context,
+    urn: Annotated[str, typer.Argument(help=_CREATE_URN_HELP)],
+    expected_revision: Annotated[
+        int,
+        typer.Option("--expected-revision", "--expected-tree-revision", help=_TREE_REVISION_HELP),
+    ],
+    idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
+    actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
+    from_spec: Annotated[Path, typer.Option("--from-spec", help=_CREATE_SPEC_HELP)],
+    correlation_id: Annotated[
+        str | None, typer.Option("--correlation-id", help=_CORRELATION_HELP)
+    ] = None,
+    title: Annotated[str | None, typer.Option("--title", help=_TASK_TITLE_HELP)] = None,
+    description: Annotated[
+        str | None, typer.Option("--description", help=_TASK_DESCRIPTION_HELP)
+    ] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
+) -> None:
+    """Admit a new Task's create document into the addressed tree."""
+    stated = tuple(
+        (flag, field, value)
+        for flag, field, value in (
+            ("--title", "title", title),
+            ("--description", "description", description),
+        )
+        if value is not None
+    )
+    _run_create_verb(
+        ctx,
+        method=TASK_CREATE,
+        urn=urn,
+        expected_revision=expected_revision,
+        idempotency_key=idempotency_key,
+        actor=actor,
+        from_spec=from_spec,
+        correlation_id=correlation_id,
+        dry_run=dry_run,
+        yes=yes,
+        stated_flags=tuple(
+            (flag, field, value) for flag, field, value in stated if value is not None
+        ),
+    )
 
 
 @milestone_app.command("set-target")
@@ -174,4 +264,6 @@ __all__ = [
     "batch_set_title_cmd",
     "milestone_set_target_cmd",
     "parse_target_date",
+    "task_create_cmd",
+    "with_flag_field",
 ]

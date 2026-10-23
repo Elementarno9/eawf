@@ -38,6 +38,7 @@ from pydantic import ConfigDict, Field, StringConstraints, field_validator, mode
 from eawf.kernel.identity import EntityKind, QualifiedUrn
 from eawf.kernel.runtime.provider import ProviderTuple
 from eawf.kernel.spec.common import CriterionSpec
+from eawf.kernel.state.enums import EffortBucket
 from eawf.kernel.state.epoch2.base import (
     Epoch2Model,
     NonEmptyStr,
@@ -49,7 +50,7 @@ from eawf.kernel.state.epoch2.base import (
 )
 from eawf.kernel.state.epoch2.milestone import MilestoneCreateSpec, reject_duplicate_refs
 from eawf.kernel.state.epoch2.run import RunPurpose, WriteSetPath
-from eawf.kernel.state.epoch2.task import TaskPriority
+from eawf.kernel.state.epoch2.task import TaskPriority, TaskRole
 from eawf.kernel.state.epoch2.urns import (
     AnyEntityUrn,
     BatchUrn,
@@ -264,6 +265,11 @@ class PlannedTask(Epoch2Model):
         exclusive: Whether this Task runs alone: while its Run holds a
             workspace no other Task's Run is leased one, and it is not
             leased one while another Task's Run holds one.
+        title: A short name the Task is shown by; ``None`` leaves the
+            Task to read one from its intent.
+        description: The long-form purpose, or ``None``.
+        role: The agent role the Task is sized for, or ``None``.
+        effort: The effort bucket the Task is sized at, or ``None``.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -279,6 +285,10 @@ class PlannedTask(Epoch2Model):
     # Omitted from the dump while unset, so a plan written before the
     # field existed keeps the content digest its approval is bound to.
     exclusive: bool = Field(default=False, exclude_if=lambda value: value is False)
+    title: TitleStr | None = Field(default=None, exclude_if=lambda value: value is None)
+    description: NonEmptyStr | None = Field(default=None, exclude_if=lambda value: value is None)
+    role: TaskRole | None = Field(default=None, exclude_if=lambda value: value is None)
+    effort: EffortBucket | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @field_validator("criteria")
     @classmethod

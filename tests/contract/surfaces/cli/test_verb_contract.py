@@ -195,12 +195,12 @@ def test_surf_080_unmounted_groups_are_the_known_gap() -> None:
     ``action`` is mounted: a pending action's snooze and assignment, a provider
     permission's decision and a budget notice's disposition are its verbs, while
     its answer is still sealed through the verb of the entity it gates.
+    ``decision`` is mounted with its ``list`` and ``show`` reads; a Decision is
+    still opened through ``question open-decision``.
     """
     mounted = set(_root().commands)
     declared = verb_contract.ENTITY_GROUPS + verb_contract.CROSS_CUTTING_GROUPS
-    # ``decision`` has no CLI verb since the flag day retired the epoch-1 decision
-    # verbs; a Decision is opened through ``question open-decision``.
-    assert {group for group in declared if group not in mounted} == {"decision"}
+    assert {group for group in declared if group not in mounted} == set()
 
 
 # ---- SURF-081 ---------------------------------------------------------------

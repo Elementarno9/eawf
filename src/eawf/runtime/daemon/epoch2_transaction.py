@@ -153,6 +153,7 @@ if TYPE_CHECKING:
     from eawf.runtime.daemon.epoch2_create import CreateRequest
     from eawf.runtime.daemon.methods.batch_title import BatchTitleRequest
     from eawf.runtime.daemon.methods.delivery_approval import ActionCommitRequest
+    from eawf.runtime.daemon.methods.milestone_maintenance import RecordEditRequest
     from eawf.runtime.daemon.methods.milestone_target import MilestoneTargetRequest
 
 logger = logging.getLogger(__name__)
@@ -410,6 +411,7 @@ type CommittingRequest = (
     | ActionCommitRequest
     | MilestoneTargetRequest
     | BatchTitleRequest
+    | RecordEditRequest
 )
 
 

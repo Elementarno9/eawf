@@ -117,6 +117,7 @@ COMMAND_PANELS: dict[str, str] = {
     "action": "planning",
     "batch": "planning",
     "campaign": "planning",
+    "decision": "planning",
     "memory": "planning",
     "milestone": "planning",
     "plan": "planning",

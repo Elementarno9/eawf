@@ -183,6 +183,13 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("question", "eawf.surfaces.cli.commands.research", "question_app"),
     # The action entity group: what the Attention register asks a principal about.
     GroupRow("action", "eawf.surfaces.cli.commands.action", "action_app"),
+    # The decision entity group: the native decisions, read without a daemon.
+    GroupRow("decision", "eawf.surfaces.cli.commands.entity_read", "decision_app"),
+    # The list and show reads of the entity groups, attached onto each mounted group.
+    SideEffectRow("eawf.surfaces.cli.commands.entity_read", "task"),
+    SideEffectRow("eawf.surfaces.cli.commands.entity_read", "milestone"),
+    SideEffectRow("eawf.surfaces.cli.commands.entity_read", "plan"),
+    SideEffectRow("eawf.surfaces.cli.commands.entity_read", "action"),
     # Wave-attached verbs (fix-ci, review, policy) — imported for side
     # effect; each attaches its verb onto the already-mounted wave group.
     # The plain-text report of one Run, attached onto the mounted run group.

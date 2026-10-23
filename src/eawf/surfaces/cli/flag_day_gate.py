@@ -122,6 +122,16 @@ FLAG_DAY_EXEMPTIONS: Final[tuple[FlagDayExemption, ...]] = (
         reason="undoes a membership the importer would otherwise resolve",
     ),
     FlagDayExemption(
+        verb="workspace remove",
+        kind="registry_only",
+        reason="drops a single-member workspace the importer would otherwise resolve",
+    ),
+    FlagDayExemption(
+        verb="workspace rekey-repo",
+        kind="registry_only",
+        reason="moves the repository into the workspace the importer resolves",
+    ),
+    FlagDayExemption(
         verb="workspace select",
         kind="registry_only",
         reason="picks the session's workspace from the registry and writes nothing",

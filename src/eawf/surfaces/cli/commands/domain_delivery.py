@@ -6,8 +6,8 @@ per daemon verb:
 
 - ``task claim``, ``task release``, ``task ready`` and ``task complete``
   send ``domain.task.claim``, ``domain.task.release``, ``domain.task.ready``
-  and ``domain.task.complete``, and ``task drop`` ends a backlog Task with
-  ``domain.task.drop``;
+  and ``domain.task.complete``, and ``task drop`` ends a backlog Task, or
+  retires a backlog row imported from epoch 1, with ``domain.task.drop``;
 - ``run create``, ``run start``, ``run finish`` and ``run fail`` send
   ``domain.run.create`` and the three Run moves;
 - ``batch merge``, ``batch observe-merge`` and ``batch complete`` send the
@@ -59,7 +59,14 @@ _REVISION_HELP: Final = "Revision the record was read at (compare-and-swap token
 _KEY_HELP: Final = "Caller's name for this request; a retry replays its receipt."
 _ACTOR_HELP: Final = "Principal key the move is attributed to."
 _SPEC_HELP: Final = "JSON file carrying updates, observations, reason_code, binding_refs."
-_REASON_HELP: Final = "Stable reason code the move is recorded with, a lowercase slug."
+_REASON_HELP: Final = (
+    "Why the Task is dropped: a lowercase slug for a native Task, or prose of up to "
+    "500 characters for a row imported from epoch 1."
+)
+_DROP_URN_HELP: Final = (
+    "URN of the Task to drop, or the epoch-1 key (B012) or legacy:task/<key> name of a "
+    "backlog row the cutover imported."
+)
 _CREATE_URN_HELP: Final = "URN of the Run to admit."
 _TREE_REVISION_HELP: Final = (
     "The tree's committed canonical sequence the caller read; 0 for a tree "
@@ -158,7 +165,7 @@ def task_release_cmd(
 @task_app.command("drop")
 def task_drop_cmd(
     ctx: typer.Context,
-    urn: _Urn,
+    urn: Annotated[str, typer.Argument(help=_DROP_URN_HELP)],
     reason: Annotated[str, typer.Option("--reason", help=_REASON_HELP)],
     expected_revision: _TaskRevision,
     idempotency_key: _Key,
@@ -167,7 +174,12 @@ def task_drop_cmd(
     dry_run: DryRun = False,
     yes: Yes = False,
 ) -> None:
-    """Drop a DRAFT or DEFERRED Task from the backlog, recording why."""
+    """Drop a DRAFT or DEFERRED Task from the backlog, recording why.
+
+    A row the epoch-2 cutover imported is addressed by its epoch-1 key and
+    read at revision one plus each move it made since the import; the
+    daemon files it in the Task ledger as DROPPED, so it leaves the backlog.
+    """
     _run_verb(
         ctx,
         dry_run=dry_run,

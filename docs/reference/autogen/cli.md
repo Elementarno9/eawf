@@ -24,13 +24,15 @@ Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and sub
 
 ### `eawf action`
 
-What the Attention register asks a principal about (snooze, assign, decide-permission, notice).
+What the Attention register asks a principal about (list, show, snooze, assign, decide-permission, notice).
 
 | Verb | Summary |
 |---|---|
 | `assign` | Address a waiting pending action to one principal; anyone eligible may still answer. |
 | `decide-permission` | Approve or deny a provider permission as the operator, before its deadline. |
+| `list` | List every pending action of the generation by key. |
 | `notice` | Snooze, acknowledge or resolve a budget notice; none of them touches the work. |
+| `show` | Print one pending action as the generation stores it. |
 | `snooze` | Hide a waiting pending action from yourself alone for a while; it answers nothing. |
 
 ### `eawf backup`
@@ -151,6 +153,15 @@ Manage the eawfd background daemon.
 | `status` | Print operational counters from the running daemon, never starting one. |
 | `stop` | Request graceful daemon shutdown, never starting a daemon to stop it. |
 
+### `eawf decision`
+
+Native decisions of the selected generation (list, show).
+
+| Verb | Summary |
+|---|---|
+| `list` | List every decision of the generation by key. |
+| `show` | Print one decision as the generation stores it. |
+
 ### `eawf doc`
 
 Read-only documentation drift + state-vs-doc cross-checks.
@@ -268,19 +279,25 @@ Milestone lifecycle (activate, open-review, open-approval, accept, cancel, set-t
 | `activate` | Move a PLANNED Milestone to ACTIVE under an active Track. |
 | `cancel` | Cancel a Milestone that has not completed. |
 | `create` | Admit a new Milestone's create document into the addressed tree. |
+| `edit` | Rewrite the contract of a PLANNED Milestone; its status does not move. |
+| `list` | List every Milestone of the generation by key. |
 | `open-approval` | Ask the operator to accept a Milestone in review on its acceptance bundle. |
 | `open-review` | Open acceptance review on an ACTIVE Milestone. |
+| `purge` | Remove a CANCELLED Milestone that no pushed commit carries. |
 | `seal-approval` | Seal the operator's answer onto a waiting acceptance question. |
 | `set-target` | Set or clear the day an open Milestone is aimed at; its status does not move. |
+| `show` | Print one Milestone as the generation stores it. |
 
 ### `eawf plan`
 
-Submit, approve and apply plan revisions.
+List, show, submit, approve and apply plan revisions.
 
 | Verb | Summary |
 |---|---|
 | `apply` | Materialise one APPROVED plan revision into its Milestone. |
 | `approve` | Seal a human principal's approval onto a VALIDATED plan revision. |
+| `list` | List every plan revision of the generation by key. |
+| `show` | Print one plan revision as the generation stores it. |
 | `submit` | Record one planner proposal as a VALIDATED plan revision. |
 
 ### `eawf plugin`
@@ -478,11 +495,13 @@ Task lifecycle (promote, claim, start, submit, seal, prove, assess, ready, compl
 | `create` | Admit a new Task's create document into the addressed tree. |
 | `demote` | Hand a PLANNED Task that was never claimed back to the backlog as a DRAFT. |
 | `drop` | Drop a DRAFT or DEFERRED Task from the backlog, recording why. |
+| `list` | List every Task of the generation by key, with its priority, Batch and due scope. |
 | `promote` | Promote a DRAFT Task to PLANNED once its contract is complete. |
 | `prove` | Run a Task's gates at the generation each leg binds and file the receipts. |
 | `ready` | Declare a RUNNING Task ready to integrate on its bound report and evidence. |
 | `release` | Release a CLAIMED Task's lease, handing it back to PLANNED. |
 | `seal` | Bind a Run's accepted report to its candidate and attempt the seal. |
+| `show` | Print one Task as the generation stores it. |
 | `start` | Start a CLAIMED Task under the Run the payload binds it to. |
 | `submit` | File one Run's claim that its leased workspace is ready to integrate. |
 | `waive-criterion` | Waive one criterion of a promoted Task, so its Batch closes without proving it. |
@@ -502,7 +521,9 @@ Track lifecycle (create, retire).
 | Verb | Summary |
 |---|---|
 | `create` | Admit a new Track's create document into the addressed tree. |
+| `rename` | Give an ACTIVE Track a new title; its status does not move. |
 | `retire` | Retire an ACTIVE Track once no Milestone under it is open. |
+| `set-policy` | Set how many ACTIVE Milestones an ACTIVE Track advises at most. |
 
 ### `eawf vfl`
 
@@ -532,6 +553,8 @@ Workspace-scoped state and repo linkage.
 | `list` | List every registered workspace, ordered by key. Read-only. |
 | `registry-list` | Enumerate repos in ``~/.eawf/registry.json``. |
 | `registry-status` | Render the workspace dashboard as text (top strip + W02 quadrant). |
+| `rekey-repo` | Move the repository at the root out of its own workspace into ``--to``. |
+| `remove` | Remove a workspace that has exactly one member. |
 | `select` | Select a workspace for the current session only. |
 | `show` | Show one workspace record, resolving it when no key is given. |
 

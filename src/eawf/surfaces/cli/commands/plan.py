@@ -79,7 +79,7 @@ _APPROVED_BY_HELP: Final = "Operator principal id approving; must be a human, no
 
 plan_app = typer.Typer(
     name="plan",
-    help="Submit, approve and apply plan revisions.",
+    help="List, show, submit, approve and apply plan revisions.",
     no_args_is_help=True,
     add_completion=False,
 )

@@ -40,8 +40,8 @@ _MINUTES_HELP: Final = "How long a snooze lasts, in minutes."
 action_app = typer.Typer(
     name="action",
     help=(
-        "What the Attention register asks a principal about (snooze, assign, "
-        "decide-permission, notice)."
+        "What the Attention register asks a principal about (list, show, snooze, "
+        "assign, decide-permission, notice)."
     ),
     no_args_is_help=True,
 )

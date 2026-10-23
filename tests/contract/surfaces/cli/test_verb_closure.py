@@ -113,7 +113,12 @@ def test_surf_080_the_exception_row_is_a_closed_model() -> None:
 
 def test_surf_080_track_carries_only_its_native_lifecycle(leaves: dict[str, click.Command]) -> None:
     """The epoch-1 ``track sync`` recompute is retired from the Track group."""
-    assert sorted(p for p in leaves if p.startswith("track ")) == ["track create", "track retire"]
+    assert sorted(p for p in leaves if p.startswith("track ")) == [
+        "track create",
+        "track rename",
+        "track retire",
+        "track set-policy",
+    ]
 
 
 # ---- SURF-081 ---------------------------------------------------------------
@@ -466,7 +471,7 @@ _RETIRED_LEGACY: Final = (
 
 def test_surf_081_the_exemptions_hold_their_pinned_count() -> None:
     verbs = {row.verb for row in verb_closure.ANCHOR_EXEMPTIONS}
-    assert len(verb_closure.ANCHOR_EXEMPTIONS) == 95
+    assert len(verb_closure.ANCHOR_EXEMPTIONS) == 97
     assert "record append" in verbs
     assert not any(verb.endswith("-legacy") for verb in verbs)
 

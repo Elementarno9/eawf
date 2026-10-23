@@ -31,6 +31,8 @@ Surface contract:
 - A plain ``eawf init`` lists the repository and a workspace of the same
   code in the user-scope registry (``--registry-path`` overrides the file),
   so ``eawf ui`` finds the tree without a separate ``repo register``.
+- ``eawf init --workspace <KEY>`` joins the registered workspace ``<KEY>``
+  as a member instead of creating a workspace of the repository's own code.
 - A plain ``eawf init`` in a git repository with a commit admits the
   tree's repository row, as ``eawf repository create`` would; any other
   target gets no row and a note saying why.
@@ -290,20 +292,24 @@ def _refuse_epoch2_reinit(target_dir: Path, state_path: Path, *, flags: GlobalFl
 
 
 def _register_initialised_repo(
-    result: WizardResult, target_dir: Path, *, registry_path: Path | None
+    result: WizardResult, target_dir: Path, *, registry_path: Path | None, workspace: str | None
 ) -> dict[str, object]:
-    """List the repository init just bore, and a workspace it anchors, in the registry.
+    """List the repository init just bore, and the workspace it belongs to, in the registry.
 
     Without both rows ``eawf ui`` finds no workspace right after init. The
     writes go through the daemon when it proxies registry mutations,
     spawning it first, and in process under the daemonless carve-out. A
     code already registered at another path is left alone rather than
-    re-pointed, and an existing workspace is never merged into.
+    re-pointed. Without *workspace* the repository anchors a new
+    workspace of its own code and an existing one is never merged into;
+    with it the repository joins that workspace as a member, so it never
+    anchors a workspace that would refuse the join later.
 
     Args:
         result: What the wizard wrote.
         target_dir: The repository root.
         registry_path: Registry file override; ``None`` resolves the default.
+        workspace: Registered workspace to join, or ``None`` to create one.
 
     Returns:
         The registry path and what happened to each row, for the envelope.
@@ -317,6 +323,7 @@ def _register_initialised_repo(
         WorkspaceMutationError,
         WorkspaceRecord,
         create_workspace,
+        update_membership,
     )
     from eawf.surfaces.cli._dispatch import ensure_daemon
     from eawf.surfaces.cli.commands.repo import (
@@ -346,6 +353,19 @@ def _register_initialised_repo(
         )
         _persist_registry(updated, registry_file)
     outcome["repository"] = "registered" if existing is None else "already_registered"
+    if workspace is not None:
+        try:
+            _apply_workspace_mutation(
+                method="registry.workspace.update_membership",
+                params={"key": workspace, "add": [code], "registry_path": str(registry_file)},
+                target=registry_file,
+                local=lambda current: update_membership(current, key=workspace, add=(code,)),
+                key=workspace,
+            )
+        except WorkspaceMutationError as exc:
+            raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
+        outcome["workspace"] = "joined"
+        return outcome
     record = WorkspaceRecord(
         key=code, member_project_codes=frozenset({code}), home_project_code=code
     )
@@ -364,22 +384,61 @@ def _register_initialised_repo(
     return outcome
 
 
+def _require_registered_workspace(
+    key: str, *, registry_path: Path | None, flags: GlobalFlags
+) -> None:
+    """Refuse ``--workspace`` naming an unregistered workspace before the tree is born.
+
+    Checking after the wizard would leave a born tree the operator then has
+    to register by hand, so a mistyped key is refused while nothing exists.
+    """
+    from eawf.platform.registry import WorkspaceMutationError, get_workspace
+    from eawf.surfaces.cli.commands.repo import _read_registry_for_write, _resolve_registry_path
+
+    try:
+        get_workspace(_read_registry_for_write(_resolve_registry_path(registry_path)), key)
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+    except WorkspaceMutationError as exc:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"{exc}; register it with `eawf workspace add {key} --home <CODE>` first",
+                kind="NotFound",
+            ),
+            flags=flags,
+            data={"code": exc.code},
+        )
+
+
 def _register_or_exit(
-    result: WizardResult, target_dir: Path, *, registry_path: Path | None, flags: GlobalFlags
+    result: WizardResult,
+    target_dir: Path,
+    *,
+    registry_path: Path | None,
+    workspace: str | None,
+    flags: GlobalFlags,
 ) -> dict[str, object]:
     """Register the initialised repository, or emit why the born tree is unregistered.
 
     The tree already exists by now, so a second init would be refused; the
-    message names the verb that finishes the registration instead.
+    message names the verbs that finish the registration instead.
     """
+    code = result.project_code
+    workspace_verb = (
+        f"eawf workspace add {code} --home {code}"
+        if workspace is None
+        else f"eawf workspace member add {workspace} {code}"
+    )
     try:
-        return _register_initialised_repo(result, target_dir, registry_path=registry_path)
+        return _register_initialised_repo(
+            result, target_dir, registry_path=registry_path, workspace=workspace
+        )
     except cli_errors.CliError as exc:
         cli_errors.emit_error(
             type(exc)(
-                f"init bore {result.project_code} at epoch 2 but could not register it: {exc}; "
+                f"init bore {code} at epoch 2 but could not register it: {exc}; "
                 f"once that is fixed, run `eawf repo register {target_dir} --yes` and "
-                f"`eawf workspace add {result.project_code} --home {result.project_code}`",
+                f"`{workspace_verb}`",
                 kind=exc.kind,
             ),
             flags=flags,
@@ -825,6 +884,16 @@ def init_cmd(
             help="Override ``~/.eawf/registry.json`` init registers the repository in (tests).",
         ),
     ] = None,
+    workspace: Annotated[
+        str | None,
+        typer.Option(
+            "--workspace",
+            help=(
+                "Join this registered workspace as a member instead of creating "
+                "a workspace of the repository's own code."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Initialise a new Eä Workflow workspace at *target*."""
     flags: GlobalFlags = ctx.obj
@@ -897,6 +966,9 @@ def init_cmd(
     if force:
         _refuse_epoch2_reinit(target_dir, state_path, flags=flags)
 
+    if workspace is not None:
+        _require_registered_workspace(workspace, registry_path=registry_path, flags=flags)
+
     if quick and resolved_profiles is None:
         resolved_profiles = list(detect_profiles_for_target(target_dir))
 
@@ -945,7 +1017,7 @@ def init_cmd(
             return
         generation_id = _bear_epoch2(result, flags=flags)
         registration = _register_or_exit(
-            result, target_dir, registry_path=registry_path, flags=flags
+            result, target_dir, registry_path=registry_path, workspace=workspace, flags=flags
         )
         repository_row = _admit_repository_row(result, target_dir, flags=flags)
         payload = _result_to_payload(result, generation_id, registration, repository_row)
@@ -971,7 +1043,9 @@ def init_cmd(
         cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
     generation_id = _bear_epoch2(result, flags=flags)
-    registration = _register_or_exit(result, target_dir, registry_path=registry_path, flags=flags)
+    registration = _register_or_exit(
+        result, target_dir, registry_path=registry_path, workspace=workspace, flags=flags
+    )
     repository_row = _admit_repository_row(result, target_dir, flags=flags)
     payload = _result_to_payload(result, generation_id, registration, repository_row)
     emit_json_or_text(payload, _init_text(result, generation_id, repository_row), flags=flags)

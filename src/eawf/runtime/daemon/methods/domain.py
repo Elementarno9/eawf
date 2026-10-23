@@ -62,6 +62,16 @@ queued or working against the Task, and each release files a
 and actor, so an operator abort and a routine replan read differently
 afterwards.
 
+``domain.task.drop`` addressed by an epoch-1 key rather than a URN drops
+the backlog row the cutover imported under that key; the decision and the
+commit are in :mod:`eawf.runtime.daemon.methods.legacy_retire`.
+
+``domain.milestone.cancel`` takes the Milestone's open work down with it in
+the same commit; the cascade is in
+:mod:`eawf.runtime.daemon.methods.milestone_maintenance`, beside the edit and
+purge verbs, and the Track maintenance verbs are in
+:mod:`eawf.runtime.daemon.methods.track_maintenance`.
+
 ``domain.record.append`` files an audit, decision or artifact in the
 generation's ledger. It is thin: the locked reads and commits are in
 :mod:`eawf.runtime.daemon.record_append`.
@@ -118,6 +128,10 @@ from eawf.runtime.daemon.epoch2_transaction import (
     run_transaction,
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+
+# Imported for its registration: this module is the entry the daemon loads
+# the Track maintenance verbs through.
+from eawf.runtime.daemon.methods import track_maintenance as _track_maintenance  # noqa: F401
 from eawf.runtime.daemon.methods.delivery_completion import (
     TaskCompletionInputs,
     TaskCompletionParams,
@@ -138,6 +152,12 @@ from eawf.runtime.daemon.methods.domain_guards import (
     GuardInputs,
     milestone_watchlist,
 )
+from eawf.runtime.daemon.methods.legacy_retire import (
+    LegacyTaskDropParams,
+    names_legacy_row,
+    retire_legacy_task,
+)
+from eawf.runtime.daemon.methods.milestone_maintenance import cancel_with_cascade
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 from eawf.runtime.daemon.record_append import RecordAppendRequest, append_record
 from eawf.runtime.daemon.run_capture_updates import bind_run_capture
@@ -145,6 +165,9 @@ from eawf.runtime.daemon.task_release import TASK_RELEASE_METHOD, file_task_rele
 from eawf.workflow.delivery.acceptance import AcceptanceRefusedError, require_sealed_acceptance
 
 logger = logging.getLogger(__name__)
+
+#: The verb that ends a backlog Task, which also retires an imported backlog row.
+TASK_DROP_METHOD: Final = "domain.task.drop"
 
 
 class LifecycleParams(BaseModel):
@@ -235,6 +258,8 @@ class LifecycleVerb:
             approval receipt reference.
         binds_integration: Whether the daemon derives the integrated
             binding from a passing completion assessment before the move.
+        cascades: Whether the move takes the record's open work with it in
+            the same commit.
     """
 
     method: str
@@ -243,6 +268,7 @@ class LifecycleVerb:
     to_status: LifecycleStatus
     approval_required: bool = False
     binds_integration: bool = False
+    cascades: bool = False
 
 
 #: Every registered per-entity verb, in registration order.
@@ -281,6 +307,7 @@ DOMAIN_LIFECYCLE_VERBS: Final[tuple[LifecycleVerb, ...]] = (
             MilestoneStatus.ACCEPTANCE_REVIEW,
         ),
         to_status=MilestoneStatus.CANCELLED,
+        cascades=True,
     ),
     LifecycleVerb(
         method="domain.batch.activate",
@@ -325,7 +352,7 @@ DOMAIN_LIFECYCLE_VERBS: Final[tuple[LifecycleVerb, ...]] = (
         to_status=TaskStatus.DRAFT,
     ),
     LifecycleVerb(
-        method="domain.task.drop",
+        method=TASK_DROP_METHOD,
         kind=EntityKind.TASK,
         from_statuses=(TaskStatus.DRAFT, TaskStatus.DEFERRED),
         to_status=TaskStatus.DROPPED,
@@ -955,9 +982,10 @@ async def _run_verb(
     if refused is not None:
         logger.info(f"_run_verb refused method={verb.method} code={refused.errors[0].code.value}")
         return refused.model_dump(mode="json")
+    commit = cancel_with_cascade if verb.cascades else run_transaction
     try:
         committed = await asyncio.to_thread(
-            run_transaction,
+            commit,
             context=context,
             request=_transition_request(verb, request_params),
             now=datetime.now(UTC),
@@ -1044,11 +1072,58 @@ def _register_verb(verb: LifecycleVerb) -> None:
     async def handler(
         ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
     ) -> dict[str, Any]:
+        if verb.method == TASK_DROP_METHOD and names_legacy_row(params.get("urn")):
+            return await _drop_legacy_row(ctx, params, authority)
         return await _run_verb(ctx, params, authority, verb=verb)
 
     handler.__name__ = verb.method.replace(".", "_")
     handler.__doc__ = f"Commit the {verb.method} edge on the addressed epoch-2 tree."
     native_mutator(verb.method)(handler)
+
+
+async def _drop_legacy_row(
+    ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
+) -> dict[str, Any]:
+    """Drop a backlog row the cutover imported, which has no native URN to address.
+
+    Args:
+        ctx: Server context, which owns the per-root native contexts and
+            the subscription bus.
+        params: The request parameters, less the routing key the fence
+            already consumed.
+        authority: The epoch-2 answer the fence resolved for the tree.
+
+    Returns:
+        The machine envelope, as a JSON-mode mapping, carrying the drop's
+        receipt on success and ``projection_degraded`` when its firehose
+        row did not reach the projection.
+    """
+    try:
+        request = LegacyTaskDropParams.model_validate(
+            {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
+        )
+    except ValidationError as error:
+        return schema_refusal(error, params=params, operation=TASK_DROP_METHOD).model_dump(
+            mode="json"
+        )
+    context = ctx.native_root_context(authority.root)
+    try:
+        committed = await asyncio.to_thread(
+            retire_legacy_task, context, request, method=TASK_DROP_METHOD, now=datetime.now(UTC)
+        )
+    except TransactionRefusedError as refusal:
+        logger.info(f"_drop_legacy_row refused code={refusal.code.value}")
+        return refused_envelope(refusal, operation=TASK_DROP_METHOD).model_dump(mode="json")
+    receipt = committed.receipt
+    return DomainEnvelope(
+        schema_version=ENVELOPE_SCHEMA_VERSION,
+        status=DomainStatus.OK,
+        operation=TASK_DROP_METHOD,
+        revision_before=receipt.revision_before,
+        revision_after=receipt.revision_after,
+        result=receipt.model_dump(mode="json"),
+        warnings=() if publish_projection(ctx.bus, committed.envelope) else (PROJECTION_DEGRADED,),
+    ).model_dump(mode="json")
 
 
 for _verb in DOMAIN_LIFECYCLE_VERBS:
