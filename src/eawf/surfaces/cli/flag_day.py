@@ -96,6 +96,7 @@ RETIRED_VERBS: Final[Mapping[str, str | None]] = {
     "hypothesis list": None,
     "hypothesis promote": "record append",
     "hypothesis verdict": None,
+    "impact": None,
     "incident close": None,
     "incident open": None,
     "incident promote": "record append",

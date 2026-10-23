@@ -89,35 +89,3 @@ def test_status_porcelain_parses_dirty_tree(
     assert len(rows) == 2
     assert any("foo.py" in row for row in rows)
     assert any("newfile" in row for row in rows)
-
-
-def test_branch_exists_returns_true_when_listed(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Non-empty `branch --list` output -> True."""
-    monkeypatch.setattr("eawf.runtime.worktree.git.shutil.which", lambda _name: "/usr/bin/git")
-
-    class _Result:
-        returncode = 0
-        stdout = "  feature/foo\n"
-        stderr = ""
-
-    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", lambda *_a, **_k: _Result())
-    assert git.branch_exists(tmp_path, "feature/foo") is True
-
-
-def test_current_branch_detached_head_raises_invalid_input(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Non-zero rc from `symbolic-ref --short HEAD` -> :class:`InvalidInput`."""
-    monkeypatch.setattr("eawf.runtime.worktree.git.shutil.which", lambda _name: "/usr/bin/git")
-
-    class _Result:
-        returncode = 1
-        stdout = ""
-        stderr = "fatal: ref HEAD is not a symbolic ref"
-
-    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", lambda *_a, **_k: _Result())
-    with pytest.raises(cli_errors.UserError) as exc_info:
-        git.current_branch(tmp_path)
-    assert "non-detached HEAD" in str(exc_info.value)

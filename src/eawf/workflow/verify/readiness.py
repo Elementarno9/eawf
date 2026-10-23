@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from collections.abc import Collection, Mapping
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Literal
@@ -65,7 +66,8 @@ from eawf.kernel.spec.common import (
     CriterionSpec,
     GateSpec,
 )
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.spec.heuristics import is_ui_scope
+from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, StoreKind
 from eawf.kernel.state.models import State, Wave
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
@@ -945,6 +947,93 @@ def load_active_verify_block(
     )
 
 
+#: Gate kinds whose ground truth needs a jury: a cross-vendor jury vote, or a
+#: UI / visual surface whose final oracle is the visual jury. A wave carrying
+#: one keeps enforcement outside a UI band.
+_JURY_GATE_KINDS: frozenset[str] = frozenset(
+    {
+        "jury_verdict",
+        "cross_vendor_jury",
+        "tui_flow",
+        "svg_well_formed",
+        "svg_pixel_diff",
+        "mockup_golden_diff",
+        "affordance_parity",
+        "transition_coverage",
+    }
+)
+
+#: Effort buckets large enough that a fresh auditor verdict is mandatory.
+_HIGH_RISK_EFFORT: frozenset[EffortBucket] = frozenset({EffortBucket.L, EffortBucket.XL})
+
+#: Roles whose output is a judgment artifact a fresh auditor must confirm,
+#: not a mechanical edit.
+_JUDGMENT_ROLES: frozenset[AgentSessionRole] = frozenset(
+    {
+        AgentSessionRole.AUDITOR,
+        AgentSessionRole.REVIEWER,
+        AgentSessionRole.PLANNER,
+        AgentSessionRole.RESEARCHER,
+        AgentSessionRole.DOMAIN_SPECIALIST,
+        AgentSessionRole.OPERATOR,
+    }
+)
+
+#: Keywords that make a wave security-scoped when its title or a success
+#: criterion names one as a whole word.
+_SECURITY_KEYWORDS: tuple[str, ...] = (
+    "security",
+    "sandbox",
+    "auth",
+    "egress",
+    "secret",
+    "jail",
+    "scrub",
+)
+
+
+def _wave_in_uiux_band(wave: Wave, bands: list[str]) -> bool:
+    """Return whether *wave* is in a UI/UX band.
+
+    A wave is banded when its ``file_scopes`` are UI surface, or when a token
+    in *bands* matches a whole word of the wave id or title, case-insensitively.
+    The whole-word match keeps ``"ui"`` from arming on ``"build"`` or ``"quiz"``.
+
+    Args:
+        wave: The wave being closed.
+        bands: The band tokens; an empty token never matches.
+
+    Returns:
+        ``True`` when either arm matches.
+    """
+    if is_ui_scope(wave.file_scopes):
+        return True
+    corpus = f"{wave.id}\n{wave.title}".lower()
+    return any(token and re.search(rf"\b{re.escape(token.lower())}\b", corpus) for token in bands)
+
+
+def _verdict_always_required(wave: Wave) -> bool:
+    """Return whether *wave* needs a fresh auditor verdict unconditionally.
+
+    A large effort bucket, a judgment-heavy role, or a security keyword in the
+    title or success criteria makes the verdict mandatory. A hyphen counts as
+    part of a word, so a wave code such as ``"AUTH-3"`` does not arm ``"auth"``.
+
+    Args:
+        wave: The wave being closed.
+
+    Returns:
+        ``True`` when any high-risk signal is present.
+    """
+    if wave.effort_bucket in _HIGH_RISK_EFFORT or wave.agent_role in _JUDGMENT_ROLES:
+        return True
+    corpus = "\n".join([wave.title, *(c.text for c in wave.success_criteria)]).lower()
+    return any(
+        re.search(rf"(?<![\w-]){re.escape(keyword)}(?![\w-])", corpus)
+        for keyword in _SECURITY_KEYWORDS
+    )
+
+
 def resolve_wave_verify_block(
     verify_block: VerifyBlock | None,
     wave: Wave,
@@ -959,23 +1048,19 @@ def resolve_wave_verify_block(
     turns it on or off per wave:
 
     * a **band** wave (UI-surface ``file_scopes`` OR a ``uiux_bands`` token
-      match, per :func:`eawf.workflow.dispatch.spec_jury.wave_in_uiux_band`)
+      match, per :func:`_wave_in_uiux_band`)
       keeps the merged block's enforcement bits as authored -- so a
       band-scoped profile resolves to ``enforce=True`` +
       ``cross_vendor_jury=True`` and the close routes through the gate;
-    * a **fleet high-risk** wave (its own gate set classifies
-      :attr:`~eawf.kernel.state.enums.RiskTier.HIGH` or
-      :attr:`~eawf.kernel.state.enums.RiskTier.UI` per
-      :func:`eawf.workflow.verify.oracle.classify_risk_tier` -- it carries a
-      jury / cross-vendor / visual-band gate) ALSO keeps enforcement on even
-      when it is NOT in a UI band: a jury-gated wave's ground truth needs the
-      jury, so narrowing its ``enforce`` to advisory-only would let a
-      high-risk close slip the gate. The band narrowing is for low-risk
+    * a **fleet high-risk** wave (it carries a jury / cross-vendor /
+      visual-band gate, per :data:`_JURY_GATE_KINDS`) ALSO keeps enforcement
+      on even when it is NOT in a UI band: a jury-gated wave's ground truth
+      needs the jury, so narrowing its ``enforce`` to advisory-only would let
+      a high-risk close slip the gate. The band narrowing is for low-risk
       non-band waves, never for a wave whose own gate set demands a jury;
-    * a **verdict-always** wave (its risk-weighted requirement per
-      :func:`eawf.workflow.dispatch.verdict.verdict_requirement` is
-      ``"always"`` -- a large effort bucket, a judgment-heavy ``agent_role``,
-      or a security-scoped surface) ALSO keeps enforcement on even when it is
+    * a **verdict-always** wave (per :func:`_verdict_always_required`:
+      a large effort bucket, a judgment-heavy ``agent_role``, or a
+      security-scoped surface) ALSO keeps enforcement on even when it is
       neither in a UI band nor gate-classified high-risk: a fresh auditor
       verdict is mandatory for such a wave, so narrowing its ``enforce`` to
       advisory-only would de-scope the very gate that produces that verdict.
@@ -1007,47 +1092,33 @@ def resolve_wave_verify_block(
         The band-conditional :class:`VerifyBlock` for *wave*, or ``None``
         when the input was ``None``.
     """
-    from eawf.kernel.state.enums import RiskTier
-    from eawf.workflow.dispatch.spec_jury import wave_in_uiux_band
-    from eawf.workflow.dispatch.verdict import verdict_requirement
-    from eawf.workflow.verify.oracle import classify_risk_tier
-
     if verify_block is None or not verify_block.enforce:
         return verify_block
     if not verify_block.uiux_bands:
         # Not band-scoped -- a whole-fleet enforce profile gates every wave.
         return verify_block
-    if wave_in_uiux_band(wave, bands=verify_block.uiux_bands):
+    if _wave_in_uiux_band(wave, verify_block.uiux_bands):
         return verify_block
-    # Band check failed -- but a wave whose OWN gate set is high-risk
-    # (a jury / cross-vendor / visual-band gate -> RiskTier.HIGH | UI) must
-    # keep enforcement even outside a UI band: its ground truth needs the
-    # jury, so narrowing it to advisory would let a high-risk close slip the
-    # gate. Only low-risk non-band waves (MECH / MED) narrow to advisory.
-    risk_tier = classify_risk_tier(list(wave.gates))
-    if risk_tier in {RiskTier.HIGH, RiskTier.UI}:
+    # Band check failed -- but a wave whose OWN gate set needs a jury must
+    # keep enforcement even outside a UI band: narrowing it to advisory would
+    # let a high-risk close slip the gate.
+    if any(gate.kind in _JURY_GATE_KINDS for gate in wave.gates):
         logger.debug(
-            f"resolve_wave_verify_block wave={wave.id!r} band=False "
-            f"risk_tier={risk_tier.value} enforce=True high_risk_keeps_enforce=True"
+            f"resolve_wave_verify_block wave={wave.id!r} band=False jury_gate=True enforce=True"
         )
         return verify_block
-    # Band + gate-risk checks both missed -- but a wave whose risk-weighted
-    # verdict requirement is "always" (large effort, judgment-heavy role, or a
-    # security-scoped surface) needs a mandatory fresh auditor verdict, so
-    # narrowing it to advisory would de-scope the gate that produces it. This
-    # third preservation arm holds such a wave un-narrowed; only genuinely
-    # mechanical (sampled / skip) non-band waves fall through to advisory.
-    if verdict_requirement(wave) == "always":
+    # A wave that needs a fresh auditor verdict unconditionally keeps
+    # enforcement too: narrowing it would de-scope the gate that produces
+    # that verdict. Only mechanical non-band waves fall through to advisory.
+    if _verdict_always_required(wave):
         logger.debug(
             f"resolve_wave_verify_block wave={wave.id!r} band=False "
-            f"risk_tier={risk_tier.value} verdict_requirement=always "
-            f"enforce=True verdict_always_keeps_enforce=True"
+            f"verdict_always=True enforce=True"
         )
         return verify_block
     narrowed = verify_block.model_copy(update={"enforce": False, "cross_vendor_jury": False})
     logger.debug(
         f"resolve_wave_verify_block wave={wave.id!r} band=False "
-        f"risk_tier={risk_tier.value} "
         f"enforce={narrowed.enforce} cross_vendor_jury={narrowed.cross_vendor_jury}"
     )
     return narrowed

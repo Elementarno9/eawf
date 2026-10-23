@@ -216,12 +216,12 @@ def test_the_doctor_repair_offers_nothing_for_a_canonical_layer(repo: Path) -> N
     assert _config_actions(repo) == []
 
 
-# ---------- the daemon reads its two timing leaves ----------
+# ---------- the daemon reads its timing leaf ----------
 
 
 @pytest.mark.parametrize(
     ("leaf", "built_in"),
-    [("idle_timeout_seconds", 300), ("session_handle_ttl_seconds", 86400)],
+    [("idle_timeout_seconds", 300)],
 )
 def test_a_daemon_leaf_resolves_to_the_built_in_value_when_no_layer_states_it(
     repo: Path, leaf: str, built_in: int
@@ -262,16 +262,6 @@ def test_an_unusable_idle_env_override_falls_back_to_the_config(
     _write(repo / ".ea" / "config.yaml", "daemon:\n  idle_timeout_seconds: 60\n")
     monkeypatch.setenv("EAWF_DAEMON_IDLE_TIMEOUT", raw)
     assert daemon_main._resolve_idle_timeout(_ctx(repo)) == pytest.approx(60.0)
-
-
-def test_the_session_ttl_reads_the_config_when_no_env_override_is_set(
-    repo: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.delenv("EAWF_DAEMON_SESSION_TTL", raising=False)
-    _write(repo / ".ea" / "config.yaml", "daemon:\n  session_handle_ttl_seconds: 3600\n")
-    assert daemon_main._resolve_session_ttl_seconds(_ctx(repo)) == 3600
-    monkeypatch.setenv("EAWF_DAEMON_SESSION_TTL", "120")
-    assert daemon_main._resolve_session_ttl_seconds(_ctx(repo)) == 120
 
 
 # ---------- the toast level reaches both consoles ----------

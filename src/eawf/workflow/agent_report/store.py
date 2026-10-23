@@ -11,7 +11,6 @@ from typing import Any
 from pydantic import TypeAdapter
 
 from eawf.kernel.state.enums import AgentSessionRole
-from eawf.kernel.state.models import AgentSession, State
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import (
@@ -90,7 +89,7 @@ def _scrub_findings(body: AgentReportBody) -> list[ScrubFinding]:
 def scrub_finding_kinds(body: AgentReportBody) -> tuple[str, ...]:
     """Return the distinct scrub finding kinds in *body*'s text, sorted.
 
-    This is the check :func:`append_agent_report` refuses a body on, exposed
+    This is the check :func:`append_report_as` refuses a body on, exposed
     so a producer can run it before the append and re-ask for a clean body.
     Only the kinds are returned, never the matched text, so a caller can name
     the failure without echoing the sensitive value back.
@@ -102,13 +101,6 @@ def scrub_finding_kinds(body: AgentReportBody) -> tuple[str, ...]:
         The sorted distinct finding kinds; empty when the body is clean.
     """
     return tuple(sorted({finding.kind for finding in _scrub_findings(body)}))
-
-
-def _session_for(state: State, session_id: str) -> AgentSession:
-    session = state.agent_sessions.get(session_id)
-    if session is None:
-        raise KeyError(f"unknown agent session: {session_id!r}")
-    return session
 
 
 def _next_attempt(path: Path, *, base_id: str, role_value: str) -> int:
@@ -123,44 +115,6 @@ def _next_attempt(path: Path, *, base_id: str, role_value: str) -> int:
         if payload.header.base_id == base_id and payload.header.role.value == role_value:
             max_attempt = max(max_attempt, payload.header.attempt)
     return max_attempt + 1
-
-
-def append_agent_report(
-    *,
-    state: State,
-    state_path: Path,
-    session_id: str,
-    base_id: str,
-    body: AgentReportBody,
-    runtime: str | None = None,
-    generated_at: datetime | None = None,
-    artifact_ids: list[str] | None = None,
-    blob_refs: list[str] | None = None,
-) -> AgentReportAppendResult:
-    """Append one typed agent report using the session as authority.
-
-    Raises:
-        KeyError: When *session_id* is not present in state.
-        AgentReportRoleMismatchError: When body.role differs from the session role.
-        AgentReportScrubError: When body text contains local or sensitive tokens.
-    """
-    session = _session_for(state, session_id)
-    author = ReportAuthor(
-        session_id=session.id,
-        role=session.role,
-        scope_id=session.scope_id,
-        agent_principal_id=session.agent_principal_id,
-    )
-    return append_report_as(
-        author,
-        state_path=state_path,
-        base_id=base_id,
-        body=body,
-        runtime=runtime or session.runtime,
-        generated_at=generated_at,
-        artifact_ids=artifact_ids,
-        blob_refs=blob_refs,
-    )
 
 
 def append_report_as(

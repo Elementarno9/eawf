@@ -338,9 +338,9 @@ repos:
         name: idle-contract-gate
         entry: uv run python tools/idle_contract_gate.py --cached
         language: system
-        # Guards the B091 idle-verifier regression: fails when the spec-jury
-        # producer (produce_spec_jury_verdict) is wired but no shipped profile
-        # enables it via a non-empty uiux_bands + enforce (idle-forever), OR
+        # Guards the B091 idle-verifier regression: fails when no shipped
+        # profile enables a verify band via a non-empty uiux_bands + enforce
+        # (idle-forever), OR
         # when the band profile would enforce fleet-wide for a non-UI wave
         # instead of band-scoped (global flip). Also proves the W08 runtime
         # zero-EU close gate remains bound to this always-run hook. Reads the
@@ -364,21 +364,6 @@ repos:
         # slash-joined option phrases are skipped (no false positive). Reads
         # the live registry in-process and mutates nothing — so always-run
         # with no file filter. BLOCKS: a drifted reference fails the commit.
-        pass_filenames: false
-        always_run: true
-        stages: [pre-commit]
-      - id: jury-discrimination-gate
-        name: jury-discrimination-gate
-        entry: uv run python tools/jury_discrimination_gate.py
-        language: system
-        # Proves the cross-vendor jury DISCRIMINATES without a jury certifying
-        # a jury (no meta-circularity): feeds the pure per-item reducer
-        # (reduce_per_item_ballots) three canned ballot frames in-process and
-        # asserts a faithful frame -> PASS, a planted-violation frame -> FAIL
-        # citing the violated item + refutation, and a hard near-miss frame
-        # (mostly passing, one credible veto) -> FAIL citing its item. A future
-        # regression that makes the reducer rubber-stamp is caught here. Pure +
-        # deterministic (no live model, mutates nothing) — always-run, no filter.
         pass_filenames: false
         always_run: true
         stages: [pre-commit]

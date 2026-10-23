@@ -55,7 +55,6 @@ from eawf.kernel.store.paths import store_dir
 from eawf.observability.eval.jury import JurorBallot
 from eawf.observability.eval.reputation import (
     VerdictOutcome,
-    _beta_posterior_interval,
     _murphy_decomposition,
     build_verdict_outcomes,
     expected_calibration_error,
@@ -1245,34 +1244,12 @@ def measure_faithfulness(
     )
 
 
-# --- staged advisory-to-block authority gate ----------------
+# --- staged advisory-to-block authority ----------------------------------
 #
-# The keystone TRUST-4 gate: a cross-vendor jury earns the right to BLOCK a
-# close (rather than merely log an advisory veto) only once it has proven
-# itself on eawf's own distribution. The earned-authority decision is a pure
-# function of the W02 :class:`JuryValidationReport` (agreement + calibration +
-# blind-spot metrics) and the W03 :class:`VerbosityBiasReport` (panel bias),
-# so blocking authority is reconstructible from the same validation substrate
-# the trust pane already renders -- never a hidden runtime toggle.
-#
-# Four conditions must ALL hold for the jury to earn blocking authority:
-#
-# 1. the cohort cleared its minimum labelled-wave floor -- a thin cohort has
-#    not been validated on enough ground truth to trust;
-# 2. the Wilson / Beta lower bound on the jury's KNOWN-BAD CATCH rate (the
-#    fraction of known-bad waves the jury did NOT unanimously wave through)
-#    clears its floor -- the conservative LB is used so a small-but-lucky
-#    sample cannot fast-track authority. Reuses :func:`_beta_posterior_interval`;
-# 3. the unanimous-pass-on-known-bad rate is BELOW its ceiling -- a jury that
-#    nods every false-clean wave through has a hot blind spot and is denied
-#    authority even if the catch-rate LB clears;
-# 4. NO juror is length-preferring -- a verbosity-biased panel confuses length
-#    for quality, so its veto is held advisory until the bias clears.
-#
-# Default-advisory by construction: any condition that cannot be evaluated on
-# the available data (an INSUFFICIENT report, a cohort with no known-bad wave,
-# an undefined rate) denies authority. The jury only ever EARNS blocking; it is
-# never granted it by the absence of evidence.
+# A cross-vendor jury earns the right to BLOCK a close only once it has proven
+# itself on eawf's own distribution; until then its veto is advisory. The
+# floors it must clear are profile config, so the authority stays
+# reconstructible from the validation substrate the trust pane renders.
 
 
 class BlockAuthority(StrEnum):
@@ -1282,7 +1259,7 @@ class BlockAuthority(StrEnum):
     uncalibrated, thin, or biased jury logs its veto but never blocks a close.
     :attr:`BLOCKING` is the earned tier -- a jury reaches it only when its
     :class:`JuryValidationReport` and :class:`VerbosityBiasReport` clear every
-    trust floor in :func:`jury_block_authority`.
+    trust floor in :class:`JuryAuthorityConfig`.
     """
 
     ADVISORY = "advisory"
@@ -1343,109 +1320,6 @@ class JuryAuthorityConfig(BaseModel):
     unanimous_pass_ceiling: float = Field(default=_DEFAULT_UNANIMOUS_PASS_CEILING, ge=0.0, le=1.0)
 
 
-def jury_block_authority(
-    report: JuryValidationReport,
-    verbosity: VerbosityBiasReport,
-    config: JuryAuthorityConfig | None = None,
-) -> BlockAuthority:
-    """Return whether the jury has EARNED blocking authority -- a pure function.
-
-    The keystone TRUST-4 computation: a cross-vendor jury earns
-    :attr:`BlockAuthority.BLOCKING` (its veto may block a close) only when ALL
-    FOUR trust conditions hold, else it stays :attr:`BlockAuthority.ADVISORY`
-    (its veto is logged but never blocks):
-
-    1. the validation cohort cleared its
-       :attr:`JuryAuthorityConfig.min_labeled_waves` floor (and was actually
-       scored, not :attr:`JuryValidationStatus.INSUFFICIENT`);
-    2. the Wilson / Beta LOWER bound on the jury's known-bad catch rate -- the
-       fraction of known-bad waves the jury did NOT unanimously wave through,
-       shrunk toward a neutral prior via :func:`_beta_posterior_interval` --
-       clears :attr:`JuryAuthorityConfig.known_bad_catch_lb_floor`. The cohort
-       MUST carry at least one known-bad wave, else the catch rate is undefined
-       and authority is denied (never fabricated from an empty denominator);
-    3. the unanimous-pass-on-known-bad (false-clean) rate is strictly BELOW
-       :attr:`JuryAuthorityConfig.unanimous_pass_ceiling` -- a hot blind spot
-       denies authority even when the catch-rate LB clears;
-    4. NO juror in the verbosity probe is flagged length-preferring (and the
-       probe actually scored, not :attr:`ProbeStatus.INSUFFICIENT`) -- a
-       verbosity-biased panel confuses length for quality, so its veto is held
-       advisory until the bias clears.
-
-    Default-advisory by construction: any condition that cannot be evaluated on
-    the available data (an INSUFFICIENT report, a cohort with no known-bad wave,
-    an unscored verbosity probe) denies authority. The jury only ever EARNS
-    blocking; the absence of evidence never grants it.
-
-    Args:
-        report: The W02 :class:`JuryValidationReport` carrying the cohort size,
-            the known-bad denominator, and the unanimous-pass-on-known-bad rate.
-        verbosity: The W03 :class:`VerbosityBiasReport` carrying the
-            length-preferring-juror flags.
-        config: The :class:`JuryAuthorityConfig` supplying the four trust
-            floors. ``None`` uses the safe advisory-leaning defaults.
-
-    Returns:
-        :attr:`BlockAuthority.BLOCKING` when every trust condition holds, else
-        :attr:`BlockAuthority.ADVISORY`.
-    """
-    cfg = config if config is not None else JuryAuthorityConfig()
-
-    # Condition 1: the cohort cleared the labelled-wave floor and was scored.
-    if report.status is not JuryValidationStatus.SCORED:
-        return _deny("report_insufficient", report=report, verbosity=verbosity)
-    if report.n < cfg.min_labeled_waves:
-        return _deny("cohort_thin", report=report, verbosity=verbosity)
-
-    # Condition 2: the cohort must carry a known-bad wave to define a catch rate,
-    # and the conservative Wilson / Beta LB on that catch rate must clear floor.
-    if report.known_bad_n <= 0 or report.unanimous_pass_on_known_bad_rate is None:
-        return _deny("no_known_bad", report=report, verbosity=verbosity)
-    caught = report.known_bad_n - round(
-        report.unanimous_pass_on_known_bad_rate * report.known_bad_n
-    )
-    catch_lb, _upper, _ci_width = _beta_posterior_interval(
-        held_count=caught, n=report.known_bad_n, prior_rate=_KNOWN_BAD_CATCH_PRIOR
-    )
-    if catch_lb < cfg.known_bad_catch_lb_floor:
-        return _deny("catch_lb_below_floor", report=report, verbosity=verbosity)
-
-    # Condition 3: the false-clean (blind-spot) rate must stay below ceiling.
-    if report.unanimous_pass_on_known_bad_rate >= cfg.unanimous_pass_ceiling:
-        return _deny("blind_spot_hot", report=report, verbosity=verbosity)
-
-    # Condition 4: no length-preferring juror, and the probe actually scored.
-    if verbosity.status is not ProbeStatus.SCORED:
-        return _deny("verbosity_unscored", report=report, verbosity=verbosity)
-    if verbosity.flagged_juror_ids:
-        return _deny("panel_length_preferring", report=report, verbosity=verbosity)
-
-    logger.info(
-        f"jury_block_authority authority=blocking n={report.n} "
-        f"known_bad={report.known_bad_n} catch_lb={catch_lb:.4f} "
-        f"false_clean={report.unanimous_pass_on_known_bad_rate:.4f}"
-    )
-    return BlockAuthority.BLOCKING
-
-
-def _deny(
-    reason: str,
-    *,
-    report: JuryValidationReport,
-    verbosity: VerbosityBiasReport,
-) -> BlockAuthority:
-    """Log the denial reason and return the advisory authority tier.
-
-    The jury did not earn blocking authority; the *reason* travels in the log so
-    an audit can see which trust floor the panel missed.
-    """
-    logger.info(
-        f"jury_block_authority authority=advisory reason={reason} n={report.n} "
-        f"known_bad={report.known_bad_n} verbosity_flagged={len(verbosity.flagged_juror_ids)}"
-    )
-    return BlockAuthority.ADVISORY
-
-
 __all__ = [
     "BlockAuthority",
     "CitedEvidenceRef",
@@ -1466,7 +1340,6 @@ __all__ = [
     "VerbosityBiasConfig",
     "VerbosityBiasReport",
     "build_jury_validation_cohort",
-    "jury_block_authority",
     "measure_faithfulness",
     "measure_verbosity_bias",
     "validate_jury",

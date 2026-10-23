@@ -20,12 +20,14 @@ import pytest
 import typer
 
 from eawf.kernel.store.ledger import SNAPSHOT_DIRNAME, snapshot_name
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.lint import ledger_history
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.commands import domain, research, runtime, status
 from eawf.surfaces.cli.flags import GlobalFlags
 from tests._epoch2_helpers import lay_epoch2_tree
-from tests.integration.test_cli_status import _VALID_STATE, _decision_ledger, _stub_no_git
+from tests.integration.test_cli_status import _document_path, _stub_no_git
 
 
 def _ctx(*, json_output: bool = True, workspace: Path | None = None) -> typer.Context:
@@ -41,9 +43,9 @@ def _ctx(*, json_output: bool = True, workspace: Path | None = None) -> typer.Co
 def _status(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, torn: bool, json_output: bool
 ) -> None:
-    state_path = lay_epoch2_tree(tmp_path, state=_VALID_STATE)
+    state_path = lay_epoch2_tree(tmp_path)
     if torn:
-        ledger = _decision_ledger(state_path)
+        ledger = ledger_path(_document_path(state_path), Epoch2Collection.DECISION)
         ledger.parent.mkdir(parents=True, exist_ok=True)
         ledger.write_text('{"schema_version":"2.0"')
     monkeypatch.setenv("EA_STATE", str(state_path))

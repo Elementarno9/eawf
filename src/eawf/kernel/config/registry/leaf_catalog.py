@@ -730,7 +730,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
 _CONSUMER_BY_KEY: dict[str, str] = {
     "daemon.idle_timeout_seconds": "eawf.runtime.daemon.main._resolve_idle_timeout",
     "daemon.proxy_enabled": "eawf.surfaces.cli._mutation._proxy_enabled",
-    "daemon.session_handle_ttl_seconds": "eawf.runtime.daemon.main._resolve_session_ttl_seconds",
     "dispatch.role_tier_token_cap": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "estimation.eu_basis": "eawf.kernel.config.schema.EstimationConfig",
     "estimation.eu_minutes": "eawf.kernel.config.schema.EstimationConfig",
@@ -785,6 +784,7 @@ _CONSUMER_BY_KEY: dict[str, str] = {
 _DEPRECATED_KEYS: frozenset[str] = frozenset(
     {
         "audit.fix_safe",
+        "daemon.session_handle_ttl_seconds",
         "flow.auto_accept.audit",
         "flow.auto_accept.polish",
         "flow.auto_accept.prep",

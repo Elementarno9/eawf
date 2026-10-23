@@ -161,7 +161,6 @@ ROOT_ENTRY_EXCEPTIONS: Final[tuple[RootEntryException, ...]] = (
     _entry("profile", "tooling", "scaffolds and validates rule profiles"),
     _entry("coauthor", "tooling", "resolves the commit trailer policy"),
     _entry("render-output", "tooling", "converts an output envelope between forms"),
-    _entry("impact", "tooling", "renders the file impact graph"),
     _entry("metrics", "tooling", "reports rolling workflow metrics"),
     _entry("why", "tooling", "explains an entity's trust tier"),
     _entry("jury", "tooling", "writes calibration gold labels"),

@@ -5,7 +5,7 @@ The per-skill body strings in
 canonical algorithm in prose, and that prose names real code symbols and
 real repo paths: a dotted ``module.attr`` reference like
 ``kernel/spec/intent.IntentBrief``, a bare module path like
-``platform/lint/eawf022_propose_coverage``, or a source path like
+``platform/lint/eawf021_measurable_criterion``, or a source path like
 ``src/eawf/``. When a skill body is reskinned (or a referenced symbol is
 renamed / moved) the prose can drift out of sync with the tree -- it
 keeps naming a symbol that no longer imports or a path that no longer

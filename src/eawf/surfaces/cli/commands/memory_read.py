@@ -236,7 +236,9 @@ def memory_digest(
     Markdown branch is one line per paragraph and glosses every lifecycle id
     so it reads as a glance-clear newcomer standup.
     """
-    from eawf.platform.memory.digest import build_digest, render_digest_md
+    from eawf.kernel.state.epoch2.authority import resolve_authority
+    from eawf.observability.reflect.decisions import read_native_decisions
+    from eawf.platform.memory.digest import build_digest, build_native_digest, render_digest_md
 
     flags: GlobalFlags = ctx.obj
     fmt_norm = fmt.strip().lower()
@@ -254,8 +256,11 @@ def memory_digest(
         return
     try:
         state_path = resolve_state_path(flags.workspace)
-        state = _load_state(state_path)
-        digest = build_digest(state)
+        # A tree born at epoch 2 has no v1 document; its generation answers.
+        if not state_path.exists() and resolve_authority(state_path.parent).epoch == 2:
+            digest = build_native_digest(read_native_decisions(state_path.parent))
+        else:
+            digest = build_digest(_load_state(state_path))
         text = render_digest_md(digest)
         payload: dict[str, object] = {
             "format": fmt_norm,

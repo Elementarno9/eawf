@@ -9,17 +9,15 @@ this directory:
    touch pre-existing files outside ``.ea/`` / ``AGENTS.md`` /
    ``CLAUDE.md``.
 
-Goldens are JSON projections (see :func:`conftest.project_state`) plus
-one byte-stable AGENTS.md snapshot from :func:`fresh_repo`. The
-projection is the canonical evidence — state.json itself embeds
-timestamps and per-run urns that are not byte-stable across runs.
+Goldens are JSON projections of the rendered AGENTS.md from
+:func:`fresh_repo`. The wizard writes no v1 ``state.json``, so no state
+projection is pinned.
 
 See ``conftest.py`` for the regen workflow (``EAWF_GOLDEN_SCENARIOS_REGEN=1``).
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -29,7 +27,6 @@ from eawf.platform.install.wizard import WizardAnswers, run_wizard_no_input
 from .conftest import (
     assert_or_regen_json,
     project_agents_md,
-    project_state,
 )
 
 pytestmark = pytest.mark.golden_scenarios
@@ -70,11 +67,11 @@ def test_run_wizard_no_input_fresh_repo(
     fresh_target: Path,
     scenarios_dir: Path,
 ) -> None:
-    """Wizard on an empty target produces the canonical state + agents.md.
+    """Wizard on an empty target produces the canonical agents.md and no v1 state.
 
     Asserts:
 
-    - ``.ea/state.json`` projection matches ``fresh_repo/state.golden.json``.
+    - no ``.ea/state.json`` is written: the CLI bears the tree at epoch 2.
     - ``AGENTS.md`` region projection (ordered region ids + per-region
       body byte-length) matches ``fresh_repo/agents.golden.json``. The
       raw bytes are intentionally NOT committed here: their content is
@@ -91,20 +88,11 @@ def test_run_wizard_no_input_fresh_repo(
     agents_md_path = fresh_target / "AGENTS.md"
     claude_md_path = fresh_target / "CLAUDE.md"
 
-    assert state_path.exists()
+    assert not state_path.exists()
     assert config_path.exists()
     assert agents_md_path.exists()
     assert claude_md_path.exists()
     assert result.project_code == _PROJECT_CODE
-
-    live_state = json.loads(state_path.read_text(encoding="utf-8"))
-    assert live_state["project"]["code"] == _PROJECT_CODE
-    assert live_state["project"]["title"] == _PROJECT_TITLE
-    assert live_state["project"]["domains"] == ["general"]
-    assert_or_regen_json(
-        scenarios_dir / "fresh_repo" / "state.golden.json",
-        project_state(live_state),
-    )
     assert_or_regen_json(
         scenarios_dir / "fresh_repo" / "agents.golden.json",
         project_agents_md(agents_md_path.read_text(encoding="utf-8")),
@@ -137,10 +125,7 @@ def test_run_wizard_no_input_fresh_repo_byte_stable_agents_md(
 # ---- enrich_existing scenario ----------------------------------------------
 
 
-def test_run_wizard_no_input_enrich_existing(
-    enriched_target: Path,
-    scenarios_dir: Path,
-) -> None:
+def test_run_wizard_no_input_enrich_existing(enriched_target: Path) -> None:
     """Wizard does not clobber arbitrary repo files outside ``.ea/``.
 
     The :func:`enriched_target` fixture pre-populates the directory
@@ -148,10 +133,9 @@ def test_run_wizard_no_input_enrich_existing(
     wizard MUST:
 
     - leave those files byte-identical;
-    - create ``.ea/state.json`` / ``.ea/config.yaml`` and a fresh
-      ``AGENTS.md`` / ``CLAUDE.md`` (no pre-existing AGENTS.md → the
-      wizard wholly authors the new file);
-    - emit a state projection matching the committed golden.
+    - create ``.ea/config.yaml`` and a fresh ``AGENTS.md`` /
+      ``CLAUDE.md`` (no pre-existing AGENTS.md → the wizard wholly
+      authors the new file), and no v1 ``.ea/state.json``.
     """
     readme_before = (enriched_target / "README.md").read_bytes()
     user_notes_before = (enriched_target / "user_notes.txt").read_bytes()
@@ -163,10 +147,5 @@ def test_run_wizard_no_input_enrich_existing(
     assert (enriched_target / "user_notes.txt").read_bytes() == user_notes_before
     assert (enriched_target / ".git" / "HEAD").read_bytes() == git_head_before
 
-    state_path = enriched_target / ".ea" / "state.json"
-    assert state_path.exists()
-    live_state = json.loads(state_path.read_text(encoding="utf-8"))
-    assert_or_regen_json(
-        scenarios_dir / "enrich_existing" / "state.golden.json",
-        project_state(live_state),
-    )
+    assert (enriched_target / ".ea" / "config.yaml").exists()
+    assert not (enriched_target / ".ea" / "state.json").exists()

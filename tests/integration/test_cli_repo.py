@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from eawf.surfaces.cli.app import app
@@ -29,7 +30,12 @@ def _init_repo(target: Path, code: str = "DEMO") -> None:
     assert res.exit_code == 0, res.output
 
 
-def test_repo_register_alias_adds_registry_entry(tmp_path: Path) -> None:
+def test_repo_register_alias_adds_registry_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A born tree has no state.json, so the code comes from the row init
+    # wrote; a registry of its own keeps another test's DEMO row out of it.
+    monkeypatch.setenv("EAWF_REGISTRY_PATH", str(tmp_path / "init-registry.json"))
     repo = tmp_path / "Repos" / "demo"
     repo.mkdir(parents=True)
     _init_repo(repo)

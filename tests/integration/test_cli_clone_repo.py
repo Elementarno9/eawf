@@ -70,7 +70,7 @@ def test_cli_clone_repo_runs_init(tmp_path: Path) -> None:
     )
     assert res.exit_code == 0, res.stdout
     assert (target / "README.md").exists(), "git clone payload should be present"
-    assert (target / ".ea" / "state.json").exists()
+    assert (target / ".ea" / "generations" / "EPOCH2_ACTIVE.json").exists()
     assert (target / ".ea" / "config.yaml").exists()
     assert (target / "AGENTS.md").exists()
     assert (target / "CLAUDE.md").exists()

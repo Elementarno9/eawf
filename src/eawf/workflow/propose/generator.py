@@ -1,18 +1,16 @@
-"""Anti-drift generator: deterministic source extraction + coverage diff.
+"""Anti-drift generator: the deterministic coverage diff.
 
 The TUI brief-criteria-drift incident (``.ea/artifacts/incidents/
 2026-06-02-tui-brief-criteria-drift.md``) lost a rich six-mode digit-map
 spec when a JSON generator collapsed each candidate detail into a single
 one-line success criterion with no dropped-detail log and no deferral
-target. This module is the structural fix: a brief is first split into
-:class:`~eawf.kernel.spec.common.SourceUnit` rows, then a coverage diff
-checks every span id against the set the emitted criteria actually cover
-plus the explicit deferral list. The diff is computed over span ids, so
-the generator never trusts an LLM's claim that it dropped nothing.
+target. This module is the structural fix: given a brief's
+:class:`~eawf.kernel.spec.common.SourceUnit` rows, a coverage diff checks
+every span id against the set the emitted criteria actually cover plus the
+explicit deferral list. The diff is computed over span ids, so the
+generator never trusts an LLM's claim that it dropped nothing.
 
-Stage-1 (``extract_units``) and the coverage diff (``coverage_diff``) are
-the deterministic deliverable here. The Stage-2 mapper that turns
-:class:`SourceUnit` rows into the emit-target
+The Stage-2 mapper that turns :class:`SourceUnit` rows into the emit-target
 :class:`~eawf.kernel.spec.common.CriterionSpec` list is an LLM call that
 lives behind the ``/roadmap propose`` skill, not in this module.
 """
@@ -20,7 +18,6 @@ lives behind the ``/roadmap propose`` skill, not in this module.
 from __future__ import annotations
 
 import logging
-import re
 
 from eawf.kernel.spec.common import (
     CoverageReport,
@@ -30,79 +27,6 @@ from eawf.kernel.spec.common import (
 )
 
 logger = logging.getLogger(__name__)
-
-#: Split point between atomic spans. A span boundary is a sentence
-#: terminator (``.``, ``!``, ``?``) or a clause separator (``;``)
-#: followed by whitespace, OR a hard newline. Capturing the boundary
-#: lets the splitter preserve each span's absolute ``char_offset``.
-_SPAN_BOUNDARY = re.compile(r"(?<=[.!?;])\s+|\n+")
-
-
-def extract_units(brief_text: str) -> list[SourceUnit]:
-    """Split a brief into atomic source spans with stable ids and offsets.
-
-    This is EXTRACTION, not summary: every non-empty atomic span (a
-    sentence or a clause delimited by a terminator / separator / hard
-    newline) becomes one :class:`SourceUnit`. The split is deterministic
-    over identical input -- the same brief always yields the same span
-    ids and offsets -- because the generator's whole purpose is a
-    reproducible diff, not a paraphrase.
-
-    Each unit carries ``span_id`` ``f"U-{i:03d}"`` (0-based, zero-padded
-    to three digits) and the 0-based ``char_offset`` of the span's first
-    character in *brief_text*, so a coverage finding traces back to the
-    exact source location.
-
-    Args:
-        brief_text: The raw source brief text to extract spans from.
-
-    Returns:
-        One :class:`SourceUnit` per atomic span, in source order. An empty
-        or whitespace-only brief yields an empty list.
-    """
-    units: list[SourceUnit] = []
-    cursor = 0
-    index = 0
-    for match in _SPAN_BOUNDARY.finditer(brief_text):
-        raw = brief_text[cursor : match.start()]
-        unit = _build_unit(raw, cursor, index)
-        if unit is not None:
-            units.append(unit)
-            index += 1
-        cursor = match.end()
-    tail = brief_text[cursor:]
-    tail_unit = _build_unit(tail, cursor, index)
-    if tail_unit is not None:
-        units.append(tail_unit)
-    logger.debug(f"extract_units spans={len(units)} chars={len(brief_text)}")
-    return units
-
-
-def _build_unit(raw: str, span_start: int, index: int) -> SourceUnit | None:
-    """Build one :class:`SourceUnit` from a raw span slice, or skip it.
-
-    The ``char_offset`` is anchored to the first non-whitespace
-    character so leading whitespace inside a slice does not shift the
-    reported source location. A slice that is empty or all whitespace
-    yields ``None`` (no span).
-
-    Args:
-        raw: The raw text slice between two span boundaries.
-        span_start: The absolute offset of *raw* in the original brief.
-        index: The 0-based ordinal used to mint the span id.
-
-    Returns:
-        A :class:`SourceUnit`, or ``None`` when the slice has no content.
-    """
-    stripped = raw.strip()
-    if not stripped:
-        return None
-    lead = len(raw) - len(raw.lstrip())
-    return SourceUnit(
-        span_id=f"U-{index:03d}",
-        quote=stripped[:1000],
-        char_offset=span_start + lead,
-    )
 
 
 def coverage_diff(
@@ -128,7 +52,7 @@ def coverage_diff(
     Coverage is decided by span id, never by an LLM's self-report.
 
     Args:
-        units: The extracted source spans (from :func:`extract_units`).
+        units: The brief's source spans.
         covered_span_ids: Span ids that at least one emitted criterion
             maps to.
         deferrals: Explicit deferral rows; each names a span id, a

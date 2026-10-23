@@ -4,7 +4,9 @@ After the flag day an epoch-1 tree refuses every mutation, so a tree init
 left at epoch 1 would be born unusable. Each path -- ``--no-input``,
 ``--quick``, the interactive wizard and the ``/init`` skill -- must leave a
 tree carrying an opt-in pinned to a backup that still verifies, a selected
-generation and the epoch marker, so the resolver grants it epoch 2.
+generation and the epoch marker, so the resolver grants it epoch 2. The tree
+is born native, so the backup holds the skeleton's ``config.yaml`` and no v1
+document.
 """
 
 from __future__ import annotations
@@ -21,8 +23,8 @@ from eawf.kernel.migration.epoch2.canary import (
     DisposableTarget,
     OptInDeclaration,
 )
-from eawf.kernel.migration.epoch2.opt_in import verify_opt_in_backup
 from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.platform.backup import BackupStore, snapshot_digest
 from eawf.platform.install import wizard
 from eawf.platform.install.epoch2_birth import INIT_DECLARED_BY
 from eawf.surfaces.cli import exit_codes
@@ -40,11 +42,16 @@ def _assert_born_at_epoch2(root: Path) -> str:
     assert authority.epoch == 2, authority.gap
     assert (tree / GENERATIONS_DIRNAME / MARKER_FILENAME).is_file()
     target = DisposableTarget.require(tree)
-    assert isinstance(target.declaration, OptInDeclaration)
-    assert target.declaration.declared_by == INIT_DECLARED_BY
-    verified = verify_opt_in_backup(target)
-    assert verified is not None
-    assert "state.json" in verified.artifacts
+    declaration = target.declaration
+    assert isinstance(declaration, OptInDeclaration)
+    assert declaration.declared_by == INIT_DECLARED_BY
+    # The pin is checked the way the opt-in verifier checks it: the snapshot
+    # sits in the repository's backup directory and still digests to it.
+    snapshot = BackupStore(root).get_snapshot(declaration.backup_ts)
+    assert snapshot is not None
+    assert snapshot_digest(snapshot) == declaration.backup_digest
+    assert snapshot.artifacts == ("config.yaml",)
+    assert not (tree / "state.json").exists()
     assert authority.generation_id is not None
     return authority.generation_id
 
@@ -93,11 +100,11 @@ def test_rel_021_a_forced_reinit_of_an_epoch2_tree_refuses(tmp_path: Path) -> No
     argv = ["--no-input", "init", "--target", str(tmp_path), "--project-code", "DEMO"]
     assert runner.invoke(app, argv).exit_code == exit_codes.OK
     first = _assert_born_at_epoch2(tmp_path)
-    state_before = (tmp_path / ".ea" / "state.json").read_bytes()
+    config_before = (tmp_path / ".ea" / "config.yaml").read_bytes()
     result = runner.invoke(app, ["--json", *argv, "--force"])
     assert result.exit_code == exit_codes.VALIDATION_ERROR, result.output
     assert json.loads(result.output)["data"]["kind"] == "LegacyOperationRemoved"
-    assert (tmp_path / ".ea" / "state.json").read_bytes() == state_before
+    assert (tmp_path / ".ea" / "config.yaml").read_bytes() == config_before
     assert _assert_born_at_epoch2(tmp_path) == first
 
 

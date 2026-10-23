@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
+from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.render.envelope import OutputEnvelope
 from eawf.workflow.skills.bodies.research import ResearchBody
@@ -61,7 +62,7 @@ def test_phase_04_end_to_end(
     )
     assert result.exit_code == 0, result.stdout
     state_path = repo / ".ea" / "state.json"
-    assert state_path.exists()
+    assert resolve_authority(state_path.parent).epoch == 2
 
     # Step 2 — `eawf plugin install claude` produces the plugin tree.
     result = runner.invoke(

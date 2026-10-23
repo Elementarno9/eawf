@@ -26,15 +26,18 @@ Public API::
     DigestEntry          # one glossed id + title + optional detail row
     MemoryDigest         # typed projection (current / recently_closed / decisions)
     build_digest(state) -> MemoryDigest
+    build_native_digest(decisions) -> MemoryDigest   # a tree born at epoch 2
     render_digest_md(digest) -> str   # pure markdown, prose-lint clean
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from eawf.kernel.state.enums import IterStatus
+from eawf.kernel.state.epoch2.decision import Decision
 from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
@@ -191,6 +194,31 @@ def build_digest(
     return digest
 
 
+def build_native_digest(decisions: Sequence[Decision]) -> MemoryDigest:
+    """Build the standup digest of a tree born at epoch 2 (pure; no I/O).
+
+    Such a tree has no phase or iter pointer, so only its native decisions
+    are projected, newest first like :func:`_recent_decisions`.
+
+    Args:
+        decisions: The native decisions the tree's selected generation holds.
+
+    Returns:
+        A :class:`MemoryDigest` with no current pointers and no closed iters.
+    """
+    ordered = sorted(decisions, key=lambda d: (d.created_at, d.key), reverse=True)
+    digest = MemoryDigest(
+        phase=None,
+        iter=None,
+        recent_decisions=[
+            DigestEntry(ref_id=d.key, title=d.title, detail=d.status.value)
+            for d in ordered[:_DEFAULT_DECISION_LIMIT]
+        ],
+    )
+    logger.info(f"build_native_digest decisions={len(digest.recent_decisions)}")
+    return digest
+
+
 def _gloss(entry: DigestEntry) -> str:
     """Return ``id (title)`` so the lifecycle id is glossed on first use.
 
@@ -251,5 +279,6 @@ __all__ = [
     "DigestEntry",
     "MemoryDigest",
     "build_digest",
+    "build_native_digest",
     "render_digest_md",
 ]

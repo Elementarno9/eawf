@@ -1,10 +1,10 @@
-"""The epoch-1 open-question writers and the research store readers that remain.
+"""The epoch-1 round reconcile and the research store readers that remain.
 
-``research.add_question`` and ``research.resolve_question`` write
-:class:`~eawf.kernel.state.models.OpenQuestion` rows through the canonical
-state writer. The store helpers read and append the epoch-1
-``research_campaign`` and ``research_round`` stores that ``eawf status``
-summarises. Research Campaigns themselves are native records now, planned,
+:func:`reconcile_round_claims` folds a round's findings into
+:class:`~eawf.kernel.state.models.Claim` and
+:class:`~eawf.kernel.state.models.OpenQuestion` rows. The store helpers read
+and append the epoch-1 ``research_campaign`` and ``research_round`` stores
+that ``eawf status`` summarises. Research Campaigns themselves are native records now, planned,
 driven and closed by the ``runtime.campaign.*`` verbs.
 """
 
@@ -18,7 +18,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.spec.campaign_driver import (
     RoundFindings,
@@ -26,7 +26,6 @@ from eawf.kernel.spec.campaign_driver import (
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
     ClaimStatus,
-    OpenQuestionDropReason,
     OpenQuestionStatus,
     StoreKind,
     Urgency,
@@ -39,7 +38,6 @@ from eawf.kernel.store.kinds.research_campaign import (
 )
 from eawf.kernel.store.kinds.research_round import ResearchRoundPayload
 from eawf.kernel.store.paths import store_path
-from eawf.runtime.daemon.methods import MethodContext, register
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import Claim, OpenQuestion, State
@@ -139,21 +137,17 @@ def _resolve_research_scope(state: State, scope_id: str | None) -> str:
 
 
 class AddQuestionParams(BaseModel):
-    """Params for :func:`add_question`.
+    """Params for :func:`_apply_add_question`.
 
-    The campaign control-plane ``add_question`` channel: the operator (via the
-    TUI ``o`` key or the retired headless ``question add`` verb) injects a
-    new :class:`~eawf.kernel.state.models.OpenQuestion` into the campaign ledger
-    mid-run. The TUI sends only ``title``; the other fields default so the row
-    lands as an ordinary advisory open question unless the operator escalates
-    it.
+    The round reconcile raises a researcher's clarification question through
+    these params; the fields default so a row lands as an ordinary advisory
+    open question unless the caller escalates it.
 
     Attributes:
         title: The question text, an imperative noun-phrase bounded to 1..72
             chars to match the :class:`~eawf.kernel.state.models.OpenQuestion`
-            model's title bound. An over-cap / empty title is rejected fail-fast
-            at the params boundary (``-32602 invalid params``) before any side
-            effect.
+            model's title bound. An over-cap / empty title is rejected at the
+            params boundary before any side effect.
         description: Optional long-form framing for the question.
         blocking: Whether the question gates further campaign work (the
             balanced-autonomy interrupt). Defaults ``False`` (advisory).
@@ -178,7 +172,7 @@ class AddQuestionParams(BaseModel):
 
 
 class AddQuestionResult(BaseModel):
-    """Result of :func:`add_question`.
+    """Result of :func:`_apply_add_question`.
 
     Attributes:
         question_id: The id of the open question just written.
@@ -236,213 +230,6 @@ def _apply_add_question(
         status=status.value,
         scope_id=scope_id,
     ).model_dump(mode="json")
-
-
-@register("research.add_question")
-async def add_question(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Write an :class:`OpenQuestion` row through the canonical state writer.
-
-    The daemon-canonical mutator for ``state.open_questions`` (AGENTS rule 4);
-    the TUI ``o`` key + the retired headless ``question add`` verb proxy
-    here. The row lands through the same per-file portalock + WAL + event-append
-    path every state mutator uses (:func:`commit_worktree_state`), so the
-    single-writer invariant holds and the board re-renders the new question on
-    its next refresh.
-
-    Args:
-        ctx: Server context -- must carry ``state_path`` (+ ``event_path`` /
-            ``wal_dir`` for the canonical write).
-        params: JSON-RPC params per :class:`AddQuestionParams`.
-
-    Returns:
-        Dict matching :class:`AddQuestionResult`.
-
-    Raises:
-        ValueError: When *params* does not validate against
-            :class:`AddQuestionParams` (an unknown key, an empty / over-cap
-            title). Mapped to ``-32602 invalid params``.
-    """
-    from eawf.runtime.daemon.methods.state_worktree import (
-        commit_worktree_state as _commit_worktree_state,
-    )
-
-    args = AddQuestionParams.model_validate(params)
-    repo_root = Path(args.repo_root) if args.repo_root else None
-    question_id = args.question_id if args.question_id is not None else f"OQ-{uuid.uuid4().hex[:8]}"
-    return _commit_worktree_state(
-        ctx=ctx,
-        repo_root=repo_root,
-        params=params,
-        command="research.add_question",
-        scope_id=args.scope_id,
-        apply_func=lambda state: _apply_add_question(state, args, question_id=question_id),
-    )
-
-
-class ResolveQuestionParams(BaseModel):
-    """Params for :func:`resolve_question`.
-
-    Attributes:
-        question_id: Id of the :class:`OpenQuestion` to resolve; the lookup key
-            into ``state.open_questions``.
-        drop: When ``True`` mark the question ``DROPPED``; when ``False``
-            (default) mark it ``ANSWERED``. Either terminal status clears the
-            ``blocking`` bit so a campaign halted on the question resumes.
-        drop_reason: The disposition a drop records; ``None`` reads as
-            ``SUPERSEDED`` when *superseded_by_question_ref* names a successor
-            and ``OUT_OF_SCOPE`` otherwise. Only valid with *drop*.
-        superseded_by_question_ref: The successor question that replaces this
-            one; only valid with *drop*, and it must name another question in
-            the ledger.
-        scope_id: Explicit scope threaded to the canonical writer (mirrors
-            :class:`AddQuestionParams`); the resolve itself keys off
-            *question_id*, so this only anchors the write's scope tag.
-        repo_root: Optional per-request repo anchor for the worktree-aware state
-            writer; ``None`` uses the daemon's boot-time state path.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    question_id: str = Field(min_length=1)
-    drop: bool = False
-    drop_reason: OpenQuestionDropReason | None = None
-    superseded_by_question_ref: str | None = None
-    scope_id: str | None = None
-    repo_root: str | None = None
-
-    @model_validator(mode="after")
-    def _refuse_drop_fields_on_an_answer(self) -> ResolveQuestionParams:
-        """Refuse a drop disposition on a resolve that does not drop."""
-        if not self.drop and (
-            self.drop_reason is not None or self.superseded_by_question_ref is not None
-        ):
-            raise ValueError("drop_reason and superseded_by_question_ref require drop")
-        return self
-
-
-class ResolveQuestionResult(BaseModel):
-    """Result of :func:`resolve_question`.
-
-    Attributes:
-        question_id: The id of the question just resolved.
-        status: The question's new terminal status (``"answered"`` /
-            ``"dropped"``).
-        scope_id: The scope the resolved question was bound to.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    question_id: str
-    status: str
-    scope_id: str
-
-
-def _apply_resolve_question(state: State, args: ResolveQuestionParams) -> dict[str, Any]:
-    """Flip one :class:`OpenQuestion` to a terminal status and clear its blocking bit.
-
-    An operator resolve: a ``BLOCKED`` (or still-``OPEN``) question moves to
-    ``ANSWERED`` -- or ``DROPPED`` when *args.drop* -- and its ``blocking`` bit
-    is cleared. Clearing ``blocking`` is load-bearing: the balanced-autonomy
-    interrupt (the RISKS band + the ``BLOCKED_AWAIT_USER`` run phase) counts the
-    ``blocking`` bool, not the status, so a resolve that left the bit set would
-    never drop the count and the run would stay halted. ``answered_by_claim_id``
-    stays ``None`` (an operator resolve has no answering claim, unlike the
-    round-reconcile path). A ``DROPPED`` row always carries a reason, so an
-    unreasoned drop is never left silent: the caller's choice, else
-    ``SUPERSEDED`` when a successor is named, else ``OUT_OF_SCOPE``. The row
-    is re-validated so a reason and successor that disagree are refused.
-
-    Args:
-        state: Loaded :class:`State`. ``state.open_questions`` is mutated in
-            place (copy-then-assign, mirroring :func:`_apply_add_question`).
-        args: Validated :class:`ResolveQuestionParams`.
-
-    Returns:
-        Result dict matching :class:`ResolveQuestionResult`.
-
-    Raises:
-        ValueError: When *args.question_id* names no row in
-            ``state.open_questions``, the successor names no other row, or the
-            reason and successor disagree. Mapped to ``-32002
-            validation_failed`` by the canonical writer.
-    """
-    from eawf.kernel.state.models import OpenQuestion
-
-    questions = dict(state.open_questions or {})
-    question = questions.get(args.question_id)
-    if question is None:
-        raise ValueError(f"unknown question: {args.question_id!r}")
-    successor = args.superseded_by_question_ref
-    if successor is not None and (successor == args.question_id or successor not in questions):
-        raise ValueError(f"unknown successor question: {successor!r}")
-    status = OpenQuestionStatus.DROPPED if args.drop else OpenQuestionStatus.ANSWERED
-    drop_reason = None
-    if args.drop:
-        drop_reason = args.drop_reason or (
-            OpenQuestionDropReason.SUPERSEDED
-            if successor is not None
-            else OpenQuestionDropReason.OUT_OF_SCOPE
-        )
-    questions[args.question_id] = OpenQuestion.model_validate(
-        {
-            **question.model_dump(),
-            "status": status,
-            "blocking": False,
-            "drop_reason": drop_reason,
-            "superseded_by_question_ref": successor,
-            "resolved_at": datetime.now(UTC),
-        }
-    )
-    state.open_questions = questions
-    logger.info(
-        f"_apply_resolve_question question={args.question_id!r} "
-        f"status={status.value} drop={args.drop}"
-    )
-    return ResolveQuestionResult(
-        question_id=args.question_id,
-        status=status.value,
-        scope_id=question.scope_id,
-    ).model_dump(mode="json")
-
-
-@register("research.resolve_question")
-async def resolve_question(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Resolve an :class:`OpenQuestion` through the canonical state writer.
-
-    The daemon-canonical mutator that unblocks a campaign halted on a blocking
-    question (AGENTS rule 4); the TUI ``a`` approve key on a surfaced blocking
-    question + the retired headless ``question resolve`` verb proxy here.
-    The row moves to a terminal status with its ``blocking`` bit cleared through
-    the same per-file portalock + WAL + event-append path every state mutator
-    uses (:func:`commit_worktree_state`), so the single-writer invariant holds
-    and the board re-renders the run as resumed on its next refresh.
-
-    Args:
-        ctx: Server context -- must carry ``state_path`` (+ ``event_path`` /
-            ``wal_dir`` for the canonical write).
-        params: JSON-RPC params per :class:`ResolveQuestionParams`.
-
-    Returns:
-        Dict matching :class:`ResolveQuestionResult`.
-
-    Raises:
-        ValueError: When *params* does not validate against
-            :class:`ResolveQuestionParams` (an unknown key), or when the id
-            names no open-question row. Mapped to ``-32602 invalid params`` /
-            ``-32002 validation_failed``.
-    """
-    from eawf.runtime.daemon.methods.state_worktree import (
-        commit_worktree_state as _commit_worktree_state,
-    )
-
-    args = ResolveQuestionParams.model_validate(params)
-    repo_root = Path(args.repo_root) if args.repo_root else None
-    return _commit_worktree_state(
-        ctx=ctx,
-        repo_root=repo_root,
-        params=params,
-        command="research.resolve_question",
-        scope_id=args.scope_id,
-        apply_func=lambda state: _apply_resolve_question(state, args),
-    )
 
 
 def _normalize_claim_text(text: str) -> str:
@@ -788,9 +575,6 @@ __all__ = [
     "AddQuestionParams",
     "AddQuestionResult",
     "ResearchRoundPayload",
-    "ResolveQuestionParams",
-    "ResolveQuestionResult",
-    "add_question",
     "persist_campaign",
     "persist_round",
     "read_campaign_cost",
@@ -798,5 +582,4 @@ __all__ = [
     "read_campaign_rounds",
     "read_latest_campaign",
     "reconcile_round_claims",
-    "resolve_question",
 ]

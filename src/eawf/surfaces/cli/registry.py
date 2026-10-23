@@ -191,13 +191,6 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     SideEffectRow("eawf.surfaces.cli.commands.run_control", "run"),
     # Dispatching one Task as a new Run, attached onto the mounted run group.
     SideEffectRow("eawf.surfaces.cli.commands.run_dispatch", "run"),
-    # File-impact graph.
-    CommandRow(
-        "impact",
-        "eawf.surfaces.cli.commands.impact",
-        "impact_cmd",
-        "Render decision → wave → file-glob impact graph.",
-    ),
     # Profile scaffolding + trust ledger.
     GroupRow("profile", "eawf.surfaces.cli.commands.profile", "profile_app"),
     # Rolling workflow metrics.

@@ -16,8 +16,10 @@ Surface contract:
   bootstrap template (three v0.3 templates: research, engineering,
   reverse-engineering). Mutually exclusive with
   ``--profiles`` / ``--profile``.
-- ``eawf init --force`` allows the pipeline to overwrite an existing
-  ``.ea/state.json`` or ``.ea/config.yaml`` (otherwise init refuses).
+- ``eawf init --force`` allows the pipeline to proceed over an existing
+  ``.ea/config.yaml`` or epoch-1 ``.ea/state.json`` (otherwise init refuses).
+- Every init path bears the tree native at authority epoch 2: no v1
+  ``state.json`` is written, the generation is built from the project code.
 - ``eawf init --refresh-gitignore`` updates only the managed ignore block
   for ``--state-path`` and skips the wizard pipeline.
 - ``eawf init --epoch2-canary provision --target <dir>`` lays down a
@@ -40,7 +42,7 @@ Exit codes (mapped via :class:`eawf.surfaces.cli.errors.CliError` subclasses):
   membership, missing required field) or pre-existing ``.ea/`` without
   ``--force``.
 - ``5`` (``LOCK_CONFLICT``) — sibling lock contention on the freshly-written
-  state file (rare; concurrent ``eawf init`` against the same target).
+  config file (rare; concurrent ``eawf init`` against the same target).
 
 The handler delegates almost everything to :mod:`eawf.platform.install.wizard` and
 keeps itself confined to argument parsing, error mapping, and JSON-envelope
@@ -250,14 +252,13 @@ def _bear_epoch2(result: WizardResult, *, flags: GlobalFlags) -> str:
     Returns:
         The generation the tree reads from.
     """
-    from eawf.platform.backup import BackupError
     from eawf.platform.install.epoch2_birth import bear_epoch2_tree
 
     try:
         return bear_epoch2_tree(
-            result.state_path, project_code=result.project_code, born_at=datetime.now(UTC)
+            result.state_path.parent, project_code=result.project_code, born_at=datetime.now(UTC)
         )
-    except (BackupError, OSError, RuntimeError, ValueError) as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
         cli_errors.emit_error(
             cli_errors.InternalError(f"init could not bear the tree at epoch 2: {exc}"),
             flags=flags,
@@ -268,9 +269,10 @@ def _bear_epoch2(result: WizardResult, *, flags: GlobalFlags) -> str:
 def _refuse_epoch2_reinit(target_dir: Path, state_path: Path, *, flags: GlobalFlags) -> None:
     """Refuse ``--force`` over a tree that is already at epoch 2.
 
-    The wizard writes the epoch-1 document, which an epoch-2 tree keeps
-    frozen, so even ``--force`` cannot re-initialise one. Without
-    ``--force`` the wizard's own pre-existing-tree refusal answers first.
+    An epoch-2 tree already carries its marker and selected generation,
+    which a second birth would contradict, so even ``--force`` cannot
+    re-initialise one. Without ``--force`` the wizard's own
+    pre-existing-tree refusal answers first.
     """
     from eawf.kernel.state.epoch2.authority import resolve_authority
 
@@ -279,8 +281,8 @@ def _refuse_epoch2_reinit(target_dir: Path, state_path: Path, *, flags: GlobalFl
         return
     cli_errors.emit_error(
         cli_errors.ValidationError(
-            f"{resolved.parent.name} is already an epoch-2 tree, so init will not rewrite "
-            "its frozen epoch-1 document; change it with the epoch-2 verbs instead",
+            f"{resolved.parent.name} is already an epoch-2 tree, so init will not bear it "
+            "again; change it with the epoch-2 verbs instead",
             kind=cli_errors.LEGACY_OPERATION_REMOVED_KIND,
         ),
         flags=flags,
@@ -494,10 +496,8 @@ def _result_to_payload(
         "claude_md_path": str(result.claude_md_path),
         "manifest_path": str(result.manifest_path),
         "gitignore_path": str(result.gitignore_path),
-        "materialised_state_keys": list(result.materialised_state_keys),
         "gitignore_patterns": list(result.gitignore_patterns),
         "auto_installed_plugins": list(result.auto_installed_plugins),
-        "subagent_spec_preview": result.subagent_spec_preview,
         "epoch": 2,
         "generation_id": generation_id,
         "registry": registration,

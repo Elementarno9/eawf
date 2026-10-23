@@ -236,14 +236,21 @@ def migrate_cmd(
 
 @migrate_app.command("status")
 def migrate_status(ctx: typer.Context) -> None:
-    """Show the current ``schema_version`` and available migration edges."""
+    """Show the current ``schema_version`` and available migration edges.
+
+    A tree born at epoch 2 has no v1 document, so it reports no version.
+    """
+    from eawf.kernel.state.epoch2.authority import resolve_authority
+
     flags: GlobalFlags = ctx.obj
     state_path, _reason = resolve_with_reason(workspace=flags.workspace)
-    try:
-        from_version = _read_raw_version(state_path)
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-        return
+    from_version: str | None = None
+    if state_path.exists() or resolve_authority(state_path.parent).epoch != 2:
+        try:
+            from_version = _read_raw_version(state_path)
+        except cli_errors.CliError as exc:
+            cli_errors.emit_error(exc, flags=flags)
+            return
 
     target = current_target_version()
     edges = sorted(f"{step.from_version}->{step.to_version}" for step in DEFAULT_REGISTRY.values())
@@ -253,7 +260,7 @@ def migrate_status(ctx: typer.Context) -> None:
         "edges": edges,
     }
     lines = [
-        f"schema_version: {from_version}",
+        f"schema_version: {from_version or '<none: born at epoch 2>'}",
         f"default target: {target}",
         "available migrations:",
     ]

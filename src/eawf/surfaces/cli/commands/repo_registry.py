@@ -65,6 +65,27 @@ def _derive_code_from_state(repo_path: Path) -> str | None:
     return code if isinstance(code, str) and code else None
 
 
+def _derive_code_from_registry(repo_path: Path) -> str | None:
+    """Return the code the user-scope registry files ``repo_path`` under.
+
+    A tree ``eawf init`` bore carries no ``state.json`` to read the code
+    from, but init registered it under its code, so the default registry
+    names it. Best-effort like :func:`_derive_code_from_state`: an absent
+    or unreadable registry, or no entry at this path, yields ``None``.
+    """
+    from eawf.platform.registry import RegistryReadError, read_registry
+
+    try:
+        registry = read_registry()
+    except RegistryReadError as exc:
+        logger.debug(f"_derive_code_from_registry unreadable err={exc!r}")
+        return None
+    for code, entry in registry.repos.items():
+        if Path(entry.path) == repo_path:
+            return code
+    return None
+
+
 def _derive_title_from_state(repo_path: Path) -> str | None:
     """Return the project title from ``<repo_path>/.ea/state.json`` if present."""
     candidate = repo_path / ".ea" / "state.json"
@@ -155,8 +176,8 @@ def _resolve_add_identity(resolved_path: Path, *, code: str | None, flags: Globa
     """Validate the add path and resolve the repo code, exiting on failure.
 
     Returns:
-        The validated repo code (explicit ``--code`` or derived from the
-        target's ``state.json``).
+        The validated repo code (explicit ``--code``, else derived from the
+        target's ``state.json``, else from the registry entry init wrote).
 
     Raises:
         typer.Exit: via :func:`emit_error` when the path is absent / not a
@@ -173,7 +194,9 @@ def _resolve_add_identity(resolved_path: Path, *, code: str | None, flags: Globa
             cli_errors.UserError(f"path is not a directory: {resolved_path}", kind="InvalidInput"),
             flags=flags,
         )
-    derived_code = code or _derive_code_from_state(resolved_path)
+    derived_code = (
+        code or _derive_code_from_state(resolved_path) or _derive_code_from_registry(resolved_path)
+    )
     if not derived_code:
         cli_errors.emit_error(
             cli_errors.UserError(

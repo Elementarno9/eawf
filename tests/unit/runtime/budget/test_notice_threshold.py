@@ -22,14 +22,14 @@ from pydantic import ValidationError
 from eawf.kernel.economics.governor import economics_policy_from
 from eawf.kernel.economics.notice_policy import DEFAULT_NOTICE_POLICY, EstimatedTimeNotice
 from eawf.kernel.runtime.budget_notice import BudgetNotice
-from eawf.kernel.store.kinds.event import EventPayload
-from eawf.runtime.budget.legacy_notices import PAUSE_EVENT_TYPE, import_legacy_advisories
 from eawf.runtime.budget.notice_inbox import inbox_for
 from eawf.runtime.budget.notices import (
     LOCAL_OPERATOR,
     BudgetCrossing,
     BudgetNoticeLedger,
     BudgetThresholdNotice,
+    RecordedCrossing,
+    apply_crossing,
     load_notice_ledger,
     notice_key_for,
     severity_for,
@@ -135,25 +135,19 @@ def test_the_wall_sweep_opens_at_the_ceiling_even_for_a_run_still_active(tmp_pat
 
 
 def test_legacy_estimate_and_approaching_rows_still_load_for_display(tmp_path: Path) -> None:
-    pause = EventPayload(
-        timestamp=AT,
-        event_type=PAUSE_EVENT_TYPE,
-        event_kind="stale_wave_detected",
-        actor="daemon",
-        command="stale_wave.sweep",
-        args_hash="1" * 16,
-        status="needs_user",
-        message="over-budget advisory",
-        extras={
-            "pause_urn": "urn:p:1",
-            "session": "SES-one",
-            "wave_id": WAVE,
-            "elapsed_minutes": 22.0,
-            "budget_minutes": 27.0,
-            "advisory_band": "warn",
-        },
+    crossing = RecordedCrossing(
+        scope_id=WAVE,
+        axis="wall_seconds",
+        basis="estimate",
+        band="approaching",
+        observed_value=1320,
+        budget_value=1620,
+        observed_at=AT,
+        contract_digest=f"sha256:{'0' * 64}",
+        audience=(LOCAL_OPERATOR,),
+        provenance=("urn:p:1",),
     )
-    imported = import_legacy_advisories([pause], closed_waves=frozenset())
+    imported, _upsert = apply_crossing(BudgetNoticeLedger(), crossing)
     path = tmp_path / "budget_notices.json"
     path.write_text(imported.model_dump_json(), encoding="utf-8")
 

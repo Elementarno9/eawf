@@ -24,7 +24,6 @@ from eawf.kernel.spec.phase import (
     PhaseShipCriterion,
     PhaseSpec,
 )
-from eawf.kernel.spec.rubric import rubric_items
 from eawf.kernel.spec.wave import QualityDimension, WaveBehavior, WaveMockup, WaveSpec
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 
@@ -756,33 +755,3 @@ def test_wave_behavior_defaults_not_scorable() -> None:
     )
     assert behavior.jury_scorable is False
     assert behavior.quality_dimension is None
-
-
-def test_rubric_items_returns_scorable_in_spec_order() -> None:
-    spec = _wave_spec_factory(
-        behaviors=[
-            WaveBehavior(
-                id="B1",
-                text="first scorable behaviour on the interaction axis here",
-                jury_scorable=True,
-                quality_dimension=QualityDimension.INTERACTION_CAPABILITY,
-            ),
-            WaveBehavior(
-                id="B2",
-                text="deterministic behaviour the jury does not score at all",
-            ),
-            WaveBehavior(
-                id="B3",
-                text="second scorable behaviour on the security axis here",
-                jury_scorable=True,
-                quality_dimension=QualityDimension.SECURITY,
-            ),
-        ],
-    )
-    items = rubric_items(spec)
-    assert [b.id for b in items] == ["B1", "B3"]
-
-
-def test_rubric_items_empty_when_none_scorable() -> None:
-    spec = _wave_spec_factory()
-    assert rubric_items(spec) == ()

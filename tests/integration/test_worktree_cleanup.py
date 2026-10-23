@@ -15,10 +15,9 @@ import pytest
 
 from eawf.kernel.state.enums import WorktreeStatus
 from eawf.runtime.worktree.cleanup import cleanup_worktree
-from eawf.runtime.worktree.create import create_worktree
 from eawf.runtime.worktree.git import worktree_list
 from eawf.surfaces.cli import errors as cli_errors
-from tests.integration.test_worktree_create import _claimed_state, _make_repo
+from tests._worktree_create import claimed_state, create_worktree, make_repo
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None,
@@ -28,8 +27,8 @@ pytestmark = pytest.mark.skipif(
 
 def test_cleanup_refuses_dirty(tmp_path: Path) -> None:
     """Uncommitted file in the worktree -> :class:`IntegrityViolation`."""
-    repo = _make_repo(tmp_path / "repo")
-    state = _claimed_state()
+    repo = make_repo(tmp_path / "repo")
+    state = claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     # Leave the worktree dirty (untracked file).
     ((repo / record.path) / "scratch.txt").write_text("dirty\n", encoding="utf-8")
@@ -40,8 +39,8 @@ def test_cleanup_refuses_dirty(tmp_path: Path) -> None:
 
 def test_cleanup_force_removes_dirty(tmp_path: Path) -> None:
     """``--force`` succeeds even when the worktree is dirty."""
-    repo = _make_repo(tmp_path / "repo")
-    state = _claimed_state()
+    repo = make_repo(tmp_path / "repo")
+    state = claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     ((repo / record.path) / "scratch.txt").write_text("dirty\n", encoding="utf-8")
     result = cleanup_worktree(state, repo_root=repo, wave_id="P05-I01-W01", force=True)
@@ -52,8 +51,8 @@ def test_cleanup_force_removes_dirty(tmp_path: Path) -> None:
 
 def test_cleanup_prunes_git_registry(tmp_path: Path) -> None:
     """After cleanup, ``git worktree list --porcelain`` no longer shows the path."""
-    repo = _make_repo(tmp_path / "repo")
-    state = _claimed_state()
+    repo = make_repo(tmp_path / "repo")
+    state = claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     abs_path = str((repo / record.path).resolve())
     pre = worktree_list(repo)
@@ -66,8 +65,8 @@ def test_cleanup_prunes_git_registry(tmp_path: Path) -> None:
 
 def test_cleanup_keep_branch_preserves_branch(tmp_path: Path) -> None:
     """``keep_branch=True`` skips ``git branch -D``."""
-    repo = _make_repo(tmp_path / "repo")
-    state = _claimed_state()
+    repo = make_repo(tmp_path / "repo")
+    state = claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     cleanup_worktree(
         state,
@@ -86,8 +85,8 @@ def test_cleanup_keep_branch_preserves_branch(tmp_path: Path) -> None:
 
 def test_cleanup_active_transitions_to_abandoned(tmp_path: Path) -> None:
     """An ACTIVE+forced cleanup transitions the record to ABANDONED."""
-    repo = _make_repo(tmp_path / "repo")
-    state = _claimed_state()
+    repo = make_repo(tmp_path / "repo")
+    state = claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     assert state.worktrees is not None
     assert state.worktrees[record.id].status == WorktreeStatus.ACTIVE
@@ -97,8 +96,8 @@ def test_cleanup_active_transitions_to_abandoned(tmp_path: Path) -> None:
 
 def test_cleanup_refuses_conflicted_without_force(tmp_path: Path) -> None:
     """A CONFLICTED record refuses cleanup unless ``--force`` is passed."""
-    repo = _make_repo(tmp_path / "repo")
-    state = _claimed_state()
+    repo = make_repo(tmp_path / "repo")
+    state = claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     # Manually transition to CONFLICTED to model post-merge-back state.
     assert state.worktrees is not None

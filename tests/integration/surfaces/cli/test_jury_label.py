@@ -17,6 +17,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf import __version__
+from eawf.kernel.state.models import State
 from eawf.observability.eval.jury_validation import _read_gold_labels
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
@@ -24,9 +25,87 @@ from eawf.runtime.daemon.methods.jury import label as jury_label_rpc
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import jury as jury_cmd
-from tests.eval.jury.test_cross_vendor_jury import _WAVE_ID, _write_state
 
 pytestmark = pytest.mark.integration
+
+_WAVE_ID = "P29-I04-W08"
+
+
+def _write_state(tmp_path: Path) -> Path:
+    """Write a valid State holding the phase, iter and wave for :data:`_WAVE_ID`.
+
+    Args:
+        tmp_path: Per-test scratch root.
+
+    Returns:
+        The path of the written ``<tmp>/.ea/state.json``.
+    """
+    payload: dict[str, Any] = {
+        "schema_version": "1.0",
+        "scope_kind": "repo",
+        "urn": "urn:eawf:v1:state:EAWF",
+        "updated_at": "2026-06-01T00:00:00Z",
+        "project": {
+            "code": "EAWF",
+            "slug": "eawf",
+            "title": "Eawf",
+            "description": "",
+            "domains": ["workflow"],
+            "default_branch": "main",
+            "status": "active",
+            "repo_urn": "urn:eawf:v1:repo:EAWF",
+        },
+        "current": {
+            "project_code": "EAWF",
+            "track_id": None,
+            "phase_id": "P29",
+            "iter_id": "P29-I04",
+            "active_wave_ids": [_WAVE_ID],
+            "active_session_ids": [],
+        },
+        "workspace": None,
+        "phases": {
+            "P29": {
+                "id": "P29",
+                "scope_id": "EAWF",
+                "title": "v0.5",
+                "status": "active",
+                "iter_ids": ["P29-I04"],
+                "outcome_ids": [],
+                "opened_at": "2026-06-01T00:00:00Z",
+            }
+        },
+        "iters": {
+            "P29-I04": {
+                "id": "P29-I04",
+                "phase_id": "P29",
+                "title": "Trust",
+                "status": "active",
+                "wave_ids": [_WAVE_ID],
+                "opened_at": "2026-06-01T00:00:00Z",
+            }
+        },
+        "waves": {
+            _WAVE_ID: {
+                "id": _WAVE_ID,
+                "iter_id": "P29-I04",
+                "title": "label a jury verdict",
+                "status": "claimed",
+                "opened_at": "2026-06-01T00:00:00Z",
+                "claimed_at": "2026-06-01T00:00:00Z",
+            }
+        },
+        "artifacts": {},
+        "agent_sessions": {},
+        "plugins": {},
+        "indexes": {},
+    }
+    state = State.model_validate(payload)
+    ea = tmp_path / ".ea"
+    ea.mkdir()
+    state_path = ea / "state.json"
+    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+    return state_path
 
 
 def _ctx(state_path: Path) -> MethodContext:
@@ -46,7 +125,7 @@ def _ctx(state_path: Path) -> MethodContext:
 
 def test_jury_label_appends_schema_valid_gold_label(tmp_path: Path) -> None:
     """CR-02: the RPC appends a GoldLabel row the reader loads back."""
-    _state, state_path, _events = _write_state(tmp_path)
+    state_path = _write_state(tmp_path)
     ctx = _ctx(state_path)
 
     async def body() -> None:
@@ -69,7 +148,7 @@ def test_jury_label_appends_schema_valid_gold_label(tmp_path: Path) -> None:
 
 
 def test_jury_label_unknown_wave_refused_no_write(tmp_path: Path) -> None:
-    _state, state_path, _events = _write_state(tmp_path)
+    state_path = _write_state(tmp_path)
     ctx = _ctx(state_path)
 
     async def body() -> None:
@@ -89,7 +168,7 @@ def test_jury_label_unknown_wave_refused_no_write(tmp_path: Path) -> None:
 
 def test_jury_label_short_reason_refused(tmp_path: Path) -> None:
     """The >= 20-char reason floor forces a real rationale."""
-    _state, state_path, _events = _write_state(tmp_path)
+    state_path = _write_state(tmp_path)
     ctx = _ctx(state_path)
 
     async def body() -> None:

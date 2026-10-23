@@ -183,67 +183,9 @@ def test_branch_layer_loses_to_local(tmp_path: Path) -> None:
     assert sources["research.default_depth"] == "local"
 
 
-# --- Wave overlay -----------------------------------------------------------
-
-
-def test_wave_overlay_overrides_local(tmp_path: Path) -> None:
-    """Wave layer sits above local; daemon RAM wins."""
-    repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "local" / "config.yaml", "research:\n  default_depth: local\n")
-    merged, sources = merge_config(
-        workspace=None,
-        repo=repo,
-        env={},
-        cli_overrides={},
-        wave_overlay={"research": {"default_depth": "wave_val"}},
-    )
-    assert merged["research"]["default_depth"] == "wave_val"
-    assert sources["research.default_depth"] == "wave"
-
-
-def test_wave_overlay_loses_to_env() -> None:
-    """Env is higher precedence than the wave RAM layer."""
-    merged, sources = merge_config(
-        workspace=None,
-        repo=None,
-        env={"EAWF_UI__THEME": "light"},
-        cli_overrides={},
-        wave_overlay={"ui": {"theme": "cb"}},
-    )
-    assert merged["ui"]["theme"] == "light"
-    assert sources["ui.theme"] == "env"
-
-
-def test_wave_overlay_loses_to_cli() -> None:
-    merged, sources = merge_config(
-        workspace=None,
-        repo=None,
-        env={},
-        cli_overrides={"research": {"default_depth": "cli_val"}},
-        wave_overlay={"research": {"default_depth": "wave_val"}},
-    )
-    assert merged["research"]["default_depth"] == "cli_val"
-    assert sources["research.default_depth"] == "cli"
-
-
-def test_empty_wave_overlay_noop(tmp_path: Path) -> None:
-    """Falsy / empty wave_overlay is a no-op (no source map entry)."""
-    repo = tmp_path / "repo"
-    _write_yaml(repo / ".ea" / "config.yaml", "research:\n  default_depth: r\n")
-    merged, sources = merge_config(
-        workspace=None,
-        repo=repo,
-        env={},
-        cli_overrides={},
-        wave_overlay={},
-    )
-    assert merged["research"]["default_depth"] == "r"
-    assert sources["research.default_depth"] == "repo"
-
-
 @pytest.mark.parametrize(
     "layer",
-    ["global", "workspace", "repo", "branch", "local", "wave"],
+    ["global", "workspace", "repo", "branch", "local"],
 )
 def test_legacy_flow_transition_is_stripped_in_memory_per_layer(
     layer: str,
@@ -260,9 +202,8 @@ def test_legacy_flow_transition_is_stripped_in_memory_per_layer(
         "branch": repo / ".ea" / "branches" / f"{branch}.yaml",
         "local": repo / ".ea" / "local" / "config.yaml",
     }
-    source_path = paths.get(layer)
-    if source_path is not None:
-        _write_yaml(source_path, body)
+    source_path = paths[layer]
+    _write_yaml(source_path, body)
 
     merged, sources = merge_config(
         workspace=workspace if layer == "workspace" else None,
@@ -270,23 +211,19 @@ def test_legacy_flow_transition_is_stripped_in_memory_per_layer(
         env={},
         cli_overrides={},
         branch=branch,
-        wave_overlay=({"flow": {"auto_accept": {"audit": True}}} if layer == "wave" else None),
     )
 
     assert "advance_after" not in merged["flow"]
     assert "auto_accept" not in merged["flow"]
     assert "flow.advance_after.audit" not in sources
-    if source_path is not None:
-        assert source_path.read_text(encoding="utf-8") == body
+    assert source_path.read_text(encoding="utf-8") == body
 
 
-# --- Full nine-layer ordering ------------------------------------------------
+# --- Full layer ordering ----------------------------------------------------
 
 
-def test_full_stack_ordering_with_branch_and_wave(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """All nine layers active; CLI wins, branch/wave correctly placed."""
+def test_full_stack_ordering_with_branch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every composed layer active; CLI wins, branch correctly placed."""
     fake_global = tmp_path / "g.yaml"
     monkeypatch.setattr(layered, "global_config_path", lambda: fake_global)
     _write_yaml(fake_global, "ui:\n  theme: dark\n")
@@ -302,7 +239,6 @@ def test_full_stack_ordering_with_branch_and_wave(
         env={"EAWF_UI__THEME": "dark"},
         cli_overrides={"ui": {"theme": "cb"}},
         branch="main",
-        wave_overlay={"ui": {"theme": "auto"}},
     )
     assert merged["ui"]["theme"] == "cb"
     assert sources["ui.theme"] == "cli"
@@ -400,7 +336,6 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "agents.extra_tools": f"{_LAYERED}.resolve_agent_extra_tools",
     "daemon.idle_timeout_seconds": "eawf.runtime.daemon.main._resolve_idle_timeout",
     "daemon.proxy_enabled": "eawf.surfaces.cli._mutation._proxy_enabled",
-    "daemon.session_handle_ttl_seconds": "eawf.runtime.daemon.main._resolve_session_ttl_seconds",
     "dispatch.role_tier_token_cap": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "economics.governor": _ECONOMICS,
     "economics.notice_policy": _ECONOMICS,

@@ -11,10 +11,6 @@ Public API:
   render it to a self-contained Markdown prompt for one wave.
 - :func:`resolve_routing` — pure ``(agent_role, effort_bucket) ->
   (model, runtime)`` lookup, backed by :data:`DEFAULT_ROUTING_TABLE`.
-- :func:`assist_with_schema` — the bounded re-ask loop that validates a
-  spawn's answer text against the forced ``agent_end`` schema into a typed
-  :class:`LLMAssistResult`, or raises :class:`LLMAssistError` once the retry
-  ceiling is exhausted.
 - :func:`spawn_with_retry` — the bounded spawn-retry loop over the CLI failure
   taxonomy: it classifies a :class:`RuntimeSpawnError` into the V5 ladder action
   (retry-same / switch-runtime / halt), respawns or switches accordingly, and on
@@ -56,13 +52,6 @@ from eawf.workflow.dispatch.cost_ab import (
     recommend_tier,
     summarize_cost_ab,
 )
-from eawf.workflow.dispatch.llm_assist import (
-    DEFAULT_MAX_ATTEMPTS,
-    LLMAssistError,
-    LLMAssistResult,
-    SchemaAttemptFailure,
-    assist_with_schema,
-)
 from eawf.workflow.dispatch.renderer import (
     build_role_contract,
     build_subagent_spec,
@@ -90,7 +79,6 @@ __all__ = [
     "CLARITY_DESCRIPTION_SURFACE",
     "DEFAULT_CLARITY_JUROR_COUNT",
     "DEFAULT_FLIP_THRESHOLD",
-    "DEFAULT_MAX_ATTEMPTS",
     "DEFAULT_PASS_REGRESSION_THRESHOLD",
     "DEFAULT_ROUTING_TABLE",
     "MIN_COST_AB_N",
@@ -104,16 +92,12 @@ __all__ = [
     "CostObservation",
     "FailureNotice",
     "FailureTier",
-    "LLMAssistError",
-    "LLMAssistResult",
     "RetryExhaustedError",
     "RoleTierBudgetError",
     "RoutingDecision",
-    "SchemaAttemptFailure",
     "SpawnAttemptFailure",
     "TierRecommendation",
     "VerdictObservation",
-    "assist_with_schema",
     "build_clarity_judge_prompt",
     "build_role_contract",
     "build_subagent_spec",

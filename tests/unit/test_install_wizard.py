@@ -132,15 +132,6 @@ def test_gitignore_patterns_cover_per_wave_spec_renders() -> None:
     assert ".ea/specs/" in GITIGNORE_PATTERNS
 
 
-def test_wizard_result_carries_subagent_spec_preview(tmp_path: Path) -> None:
-    target = tmp_path / "proj"
-    target.mkdir()
-    result = run_wizard_no_input(_answers(), target, force=False)
-
-    assert "# Wave P00-I00-W00: Bootstrap first wave" in result.subagent_spec_preview
-    assert "## Workflow" in result.subagent_spec_preview
-
-
 def test_quick_profile_detection_adds_python_profile(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
 

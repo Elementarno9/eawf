@@ -8,7 +8,6 @@ Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and sub
 |---|---|
 | `clone-repo` | Clone *url* and run ``eawf init --no-input`` against the result. |
 | `follow` | Stream an operation's states until it succeeds, fails or is lost. |
-| `impact` | Render decision → wave → file-glob impact graph. |
 | `init` | Initialise a new Eä Workflow workspace. |
 | `metrics` | Show rolling workflow metrics — EU variance, audit pass rate, wave elapsed, and planned vs reactive split. |
 | `publish` | Check the commits past origin name one Batch each, then bind the staged adoptions. |

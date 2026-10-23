@@ -10,10 +10,6 @@ Covers the C08 D7 surface contract:
 - ``--profile``, ``--profiles``, and ``--template`` are mutually
   exclusive — pass at most one.
 - ``--list-templates`` prints the bundled set and exits.
-
-The pipeline also scaffolds materialised state keys from the resolved
-profiles (existing wizard behaviour; verified end-to-end here so the
-W16 surface is exercised against the live state writer).
 """
 
 from __future__ import annotations
@@ -138,39 +134,6 @@ def test_template_rejects_unknown_name(tmp_path: Path) -> None:
 
     res = _invoke(tmp_path, "--template", "totally-bogus")
     assert res.exit_code == 1, res.stdout
-
-
-def test_template_materialises_state_keys(tmp_path: Path) -> None:
-    """``--template research`` materialises the research profile state keys.
-
-    Verifies success criterion 2: the pipeline scaffolds materialised
-    state keys (so the daemon doesn't choke on missing required fields).
-    """
-    res = runner.invoke(
-        app,
-        [
-            "--json",
-            "--no-input",
-            "init",
-            "--project-code",
-            "DEMO",
-            "--target",
-            str(tmp_path),
-            "--template",
-            "research",
-        ],
-    )
-    assert res.exit_code == 0, res.stdout
-
-    payload = json.loads(res.stdout)
-    # The research profile body declares ``hypotheses`` + ``audits`` as
-    # required state extensions (see src/eawf/platform/profiles/data/research.yaml).
-    assert "hypotheses" in payload["materialised_state_keys"]
-    assert "audits" in payload["materialised_state_keys"]
-
-    state = json.loads((tmp_path / ".ea" / "state.json").read_text(encoding="utf-8"))
-    assert "hypotheses" in state
-    assert "audits" in state
 
 
 # ---- mutual exclusion ------------------------------------------------------

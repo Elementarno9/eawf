@@ -292,8 +292,7 @@ def test_commit_worktree_state_matches_repo_root_and_bound_path(tmp_path: Path) 
 def test_commit_worktree_state_refuses_home_path(tmp_path: Path) -> None:
     """A mutator that writes a home-anchored path is refused, nothing written.
 
-    ``commit_worktree_state`` serves ``wave land``, ``wave autoland`` and
-    ``track sync`` -- the writers an agent's dispatch drives -- so it must
+    ``commit_worktree_state`` serves the pre-cutover upkeep verbs, so it must
     run the same leak scrub the other canonical mutators run.
     """
     state_path = _seed_state(tmp_path)

@@ -18,6 +18,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from eawf.kernel.migrations import current_target_version
+from eawf.kernel.state.urn import build as build_urn
 from eawf.platform.install.instrument_probe import (
     PROBE_VERSION,
     ProbeReport,
@@ -146,10 +148,32 @@ def test_cli_doctor_warns_when_project_record_missing(
     """Legacy init-only state with ``project=null`` gets a repair hint."""
     monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
     _init_core(tmp_path)
-    state_path = tmp_path / ".ea" / "state.json"
-    payload = json.loads(state_path.read_text(encoding="utf-8"))
-    payload["project"] = None
-    state_path.write_text(json.dumps(payload), encoding="utf-8")
+    # Init writes no v1 document any more, so lay down the legacy shape an
+    # older init left behind.
+    legacy = {
+        "schema_version": current_target_version(),
+        "scope_kind": "repo",
+        "urn": build_urn("state", owner="DEMO"),
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "project": None,
+        "current": {
+            "project_code": "DEMO",
+            "track_id": None,
+            "phase_id": None,
+            "iter_id": None,
+            "active_wave_ids": [],
+            "active_session_ids": [],
+        },
+        "workspace": None,
+        "phases": {},
+        "iters": {},
+        "waves": {},
+        "artifacts": {},
+        "agent_sessions": {},
+        "plugins": {},
+        "indexes": {},
+    }
+    (tmp_path / ".ea" / "state.json").write_text(json.dumps(legacy), encoding="utf-8")
 
     res = runner.invoke(app, ["--json", "-w", str(tmp_path), "doctor"])
     assert res.exit_code == 0, res.output

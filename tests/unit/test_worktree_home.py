@@ -1,19 +1,11 @@
-"""Tests for the worktree-home default + the KISS-007 cycle break.
+"""Tests for the KISS-007 cycle break in the worktree package.
 
-Two invariants live here:
-
-1. **Worktree home default.** :func:`eawf.runtime.worktree.create._default_path`
-   resolves to ``<repo_root>/.ea/worktrees/<branch-suffix>/``. The
-   operator (2026-05-18) flipped the default from the legacy
-   ``.claude/worktrees/`` to ``.ea/worktrees/`` so the working tree
-   stays self-contained alongside ``.ea/locks/`` and ``.ea/local/``
-   (both gitignored).
-2. **KISS-007 cycle break.** Sibling modules in ``src/eawf/runtime/worktree/``
-   import ``eawf.runtime.worktree.git`` *directly* (``import eawf.runtime.worktree.git
-   as git``), never via the ``from eawf.runtime.worktree import git``
-   trampoline. The latter forms a re-export cycle through
-   ``__init__.py`` that future additions can deadlock on. The static
-   AST sweep here is the regression guard.
+Sibling modules in ``src/eawf/runtime/worktree/`` import
+``eawf.runtime.worktree.git`` *directly* (``import eawf.runtime.worktree.git
+as git``), never via the ``from eawf.runtime.worktree import git``
+trampoline. The latter forms a re-export cycle through ``__init__.py`` that
+future additions can deadlock on. The static AST sweep here is the
+regression guard.
 """
 
 from __future__ import annotations
@@ -23,42 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.runtime.worktree.create import _default_path, _slugify_wave
-
 _SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "eawf" / "runtime" / "worktree"
-
-
-# ---- Worktree-home default --------------------------------------------------
-
-
-def test_default_path_under_dot_ea_worktrees(tmp_path: Path) -> None:
-    """``_default_path`` resolves to ``<repo>/.ea/worktrees/<suffix>/``."""
-    repo = tmp_path / "repo"
-    path = _default_path(repo, "P25-I01-W07")
-    assert path == repo / ".ea" / "worktrees" / "p25-w07"
-
-
-def test_default_path_strips_iter_segment(tmp_path: Path) -> None:
-    """Branch slug strips the iter component per AGENTS rule 15."""
-    repo = tmp_path / "repo"
-    # Two different iter ids on the same wave number collapse to the
-    # same slug; that's intentional — the per-wave branch name is
-    # iter-agnostic so cherry-pick history stays linear across re-opens.
-    assert _default_path(repo, "P25-I01-W07").name == "p25-w07"
-    assert _default_path(repo, "P25-I02-W07").name == "p25-w07"
-
-
-def test_default_path_lowercases_wave_id() -> None:
-    """``_slugify_wave`` lowercases the phase/wave segments."""
-    assert _slugify_wave("P25-I01-W07") == "p25-w07"
-
-
-def test_default_path_rejects_non_wave_id() -> None:
-    """Invalid wave-id form raises :class:`InvalidInput`."""
-    from eawf.surfaces.cli import errors as cli_errors
-
-    with pytest.raises(cli_errors.UserError):
-        _slugify_wave("not-a-wave")
 
 
 # ---- KISS-007 cycle break ---------------------------------------------------
@@ -96,7 +53,7 @@ def _collect_worktree_internal_imports(module_path: Path) -> list[str]:
 
 @pytest.mark.parametrize(
     "module_name",
-    ["create.py", "cleanup.py", "merge_back.py", "autoland.py", "locks.py"],
+    ["cleanup.py", "merge_back.py", "locks.py"],
 )
 def test_sibling_modules_avoid_trampoline_import(module_name: str) -> None:
     """No sibling submodule imports ``git`` via the ``__init__`` trampoline.

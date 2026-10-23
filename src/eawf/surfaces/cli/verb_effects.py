@@ -281,7 +281,6 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "profile validate": _read(),
     "coauthor resolve": _read(),
     "render-output": _read(),
-    "impact": _read(),
     "metrics": _mutate("runtime.estimation.refit"),
     "why": _read(),
     "jury label": _mutate("jury.label"),

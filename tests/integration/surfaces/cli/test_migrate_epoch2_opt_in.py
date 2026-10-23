@@ -101,7 +101,7 @@ def test_opt_in_refuses_a_tree_that_declared_itself_disposable(tree: Path) -> No
 
 
 def test_opt_in_refuses_a_tree_already_cut_over(tree: Path) -> None:
-    bear_epoch2_tree(tree / "state.json", project_code="QR", born_at=datetime.now(UTC))
+    bear_epoch2_tree(tree, project_code="QR", born_at=datetime.now(UTC))
     assert (tree / GENERATIONS_DIRNAME / MARKER_FILENAME).is_file()
     before = opt_in_path(tree).read_bytes()
     code, envelope = _opt_in("--target-root", str(tree))

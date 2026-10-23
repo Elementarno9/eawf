@@ -26,7 +26,6 @@ from eawf.platform.lint.kind_taxonomy import (
     gate_tier_for_test_path,
     red_to_green_finding,
     taxonomy_drift,
-    tier_rank,
 )
 from eawf.platform.lint.kind_taxonomy import TestKind as Kind
 
@@ -70,11 +69,6 @@ def test_tier_runtime_budget_rises_with_each_rung() -> None:
     budgets = [TIER_RUNTIME_BUDGET_SECONDS[tier] for tier in GateTier]
     assert budgets == [60, 600, 2700]
     assert budgets == sorted(set(budgets))
-
-
-def test_tier_rank_orders_wave_iter_release() -> None:
-    assert [tier_rank(tier) for tier in GateTier] == [0, 1, 2]
-    assert tier_rank(GateTier.WAVE) < tier_rank(GateTier.RELEASE)
 
 
 def test_gate_tier_for_kind_rejects_a_bare_string() -> None:

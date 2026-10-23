@@ -38,12 +38,9 @@ from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext, registered_methods
 from eawf.runtime.daemon.methods.config import (
-    clear_wave_overlay,
-    get_wave_overlay,
     list_layers,
     read,
     set_layer_value,
-    set_wave_value,
     unset_layer_value,
 )
 
@@ -365,11 +362,11 @@ def test_set_layer_value_rejects_unknown_leaf_key(tmp_path: Path) -> None:
 def test_set_layer_value_rejects_wave_layer_via_set_layer_value(
     tmp_path: Path,
 ) -> None:
-    """Wave layer is daemon-RAM-only; ``set_layer_value`` rejects it."""
+    """Wave layer is not file-backed; ``set_layer_value`` rejects it."""
     ctx, _ = _build_ctx(tmp_path=tmp_path)
 
     async def body() -> None:
-        with pytest.raises(ValueError, match=r"wave.*daemon-RAM-only"):
+        with pytest.raises(ValueError, match=r"wave.*not file-backed"):
             await set_layer_value(
                 ctx,
                 {
@@ -391,7 +388,7 @@ def test_set_layer_value_rejects_locked_leaf_key(tmp_path: Path) -> None:
     Security fix: ``set_layer_value`` previously gated leaf-key *existence*
     only, so a locked key like ``schema_version`` was persistable through the
     layer RPC. The mirrored writable-layers gate now rejects it, naming the
-    key, exactly as ``set_wave_value`` rejects a non-wave-writable leaf.
+    key.
     """
     ctx, repo = _build_ctx(tmp_path=tmp_path)
     config_yaml = repo / ".ea" / "config.yaml"
@@ -705,102 +702,5 @@ def test_set_layer_value_branch_rejects_missing_branch_name(tmp_path: Path) -> N
                     "value": ["core"],
                 },
             )
-
-    _run(body)
-
-
-# ---- Wave overlay RPCs -------------------------------------------
-
-
-def test_set_wave_value_round_trip(tmp_path: Path) -> None:
-    """``set_wave_value`` writes to the per-wave RAM map; get reads it back."""
-    ctx, _ = _build_ctx(tmp_path=tmp_path)
-
-    async def body() -> None:
-        await set_wave_value(
-            ctx,
-            {
-                "wave_id": "P25-W14",
-                "key_path": ["runtime", "preference"],
-                "value": ["codex", "claude"],
-            },
-        )
-        got = await get_wave_overlay(ctx, {"wave_id": "P25-W14"})
-        assert got["overlay"] == {"runtime": {"preference": ["codex", "claude"]}}
-
-    _run(body)
-
-
-def test_set_wave_value_publishes_envelope(tmp_path: Path) -> None:
-    ctx, _ = _build_ctx(tmp_path=tmp_path)
-    bus = ctx.bus
-    assert isinstance(bus, EventBus)
-    sub = bus.register(connection_id="wave-sub")
-
-    async def body() -> None:
-        await set_wave_value(
-            ctx,
-            {
-                "wave_id": "P25-W14",
-                "key_path": ["runtime", "preference"],
-                "value": ["claude"],
-            },
-        )
-        assert len(sub.queue) == 1
-        env = sub.queue[0]
-        assert env.kind is StoreKind.CONFIG_UPDATED
-        assert env.payload["layer"] == "wave"
-
-    _run(body)
-
-
-def test_set_wave_value_rejects_non_wave_writable_leaf(tmp_path: Path) -> None:
-    """A leaf whose ``writable_layers`` excludes ``wave`` is rejected."""
-    ctx, _ = _build_ctx(tmp_path=tmp_path)
-
-    async def body() -> None:
-        with pytest.raises(ValueError, match="not writable from the wave layer"):
-            await set_wave_value(
-                ctx,
-                {
-                    "wave_id": "P25-W14",
-                    "key_path": ["verify", "odr_blocking"],
-                    "value": True,
-                },
-            )
-
-    _run(body)
-
-
-def test_clear_wave_overlay_drops_map(tmp_path: Path) -> None:
-    """Clearing the overlay returns ``cleared=True`` exactly once."""
-    ctx, _ = _build_ctx(tmp_path=tmp_path)
-
-    async def body() -> None:
-        await set_wave_value(
-            ctx,
-            {
-                "wave_id": "P25-W14",
-                "key_path": ["runtime", "preference"],
-                "value": ["claude"],
-            },
-        )
-        first = await clear_wave_overlay(ctx, {"wave_id": "P25-W14"})
-        second = await clear_wave_overlay(ctx, {"wave_id": "P25-W14"})
-        assert first["cleared"] is True
-        assert second["cleared"] is False
-        # Overlay is now empty.
-        empty = await get_wave_overlay(ctx, {"wave_id": "P25-W14"})
-        assert empty["overlay"] == {}
-
-    _run(body)
-
-
-def test_get_wave_overlay_unknown_wave_returns_empty(tmp_path: Path) -> None:
-    ctx, _ = _build_ctx(tmp_path=tmp_path)
-
-    async def body() -> None:
-        got = await get_wave_overlay(ctx, {"wave_id": "P00-W99"})
-        assert got["overlay"] == {}
 
     _run(body)

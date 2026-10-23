@@ -67,11 +67,7 @@ from eawf.runtime.daemon.runtime_dir import (
     socket_path,
 )
 from eawf.runtime.daemon.server import process_frame_bytes, serve_unix
-from eawf.runtime.daemon.session_ttl import DEFAULT_TTL_SECONDS, run_sweep_loop
 from eawf.runtime.daemon.singleton import DaemonAlreadyRunningError, acquire_daemon_singleton
-from eawf.runtime.daemon.stale_wave import (
-    run_sweep_loop as run_stale_wave_loop,
-)
 from eawf.runtime.daemon.stall_sweep import run_stall_loop
 from eawf.runtime.daemon.transcript_store import prune_tree_transcripts
 from eawf.runtime.daemon.wal import (
@@ -129,30 +125,6 @@ def _resolve_idle_timeout(ctx: MethodContext) -> float:
             logger.warning(f"_resolve_idle_timeout non-positive raw={raw!r}; using config")
     configured = configured_daemon_seconds(_bound_repo(ctx), "idle_timeout_seconds")
     return DEFAULT_IDLE_TIMEOUT_SECONDS if configured is None else float(configured)
-
-
-def _resolve_session_ttl_seconds(ctx: MethodContext) -> int:
-    """Return the session-handle TTL: the env override, else ``daemon.session_handle_ttl_seconds``.
-
-    The env var ``EAWF_DAEMON_SESSION_TTL`` wins so a test or a tuning run
-    can override the layered config. A non-positive override falls back to
-    the configured value and logs a warning.
-
-    Args:
-        ctx: The server context whose bound repository's config is read.
-    """
-    raw = os.environ.get("EAWF_DAEMON_SESSION_TTL")
-    if raw:
-        try:
-            value = int(raw)
-        except ValueError:
-            logger.warning(f"_resolve_session_ttl_seconds unparseable raw={raw!r}; using config")
-        else:
-            if value > 0:
-                return value
-            logger.warning(f"_resolve_session_ttl_seconds non-positive raw={raw!r}; using config")
-    configured = configured_daemon_seconds(_bound_repo(ctx), "session_handle_ttl_seconds")
-    return DEFAULT_TTL_SECONDS if configured is None else configured
 
 
 def _resolve_log_max_bytes() -> int:
@@ -492,59 +464,6 @@ def _schedule_mutation_watchdog(ctx: MethodContext) -> asyncio.Task[None] | None
             ctx,
             stop_event=ctx.shutdown_event,
             hard_limit_seconds=hard_limit,
-        )
-    )
-
-
-def _schedule_session_ttl_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
-    """Schedule the session-handle TTL sweep loop on the running loop.
-
-    The sweep walks ``state.json`` once per interval, plans evictions
-    for attempts whose ``ended_at + ttl < now``, and publishes a
-    ``session_handle_pruned`` envelope per eviction. Returns ``None``
-    when the context lacks a state path (unit-test daemonless paths)
-    so the caller can elide the teardown step.
-
-    Args:
-        ctx: Live :class:`MethodContext` with a wired ``shutdown_event``
-            and (optionally) ``bus`` + ``state_path``.
-
-    Returns:
-        The scheduled task, or ``None`` when no state path is available
-        for sweeping or the tree carries the epoch marker.
-    """
-    if ctx.state_path is None or epoch_marker_present(Path(ctx.state_path).parent):
-        return None
-    ttl_seconds = _resolve_session_ttl_seconds(ctx)
-    publish = ctx.bus.publish if ctx.bus is not None else None
-    assert isinstance(ctx.shutdown_event, asyncio.Event)
-    return asyncio.create_task(
-        run_sweep_loop(
-            state_path=ctx.state_path,
-            ttl_seconds=ttl_seconds,
-            publish=publish,
-            stop_event=ctx.shutdown_event,
-        )
-    )
-
-
-def _schedule_stale_wave_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
-    """Schedule the stale-wave detector loop; ``None`` without an unfrozen state path."""
-    if ctx.state_path is None or epoch_marker_present(Path(ctx.state_path).parent):
-        return None
-
-    def _publish(envelope: Envelope) -> None:
-        if ctx.bus is not None and hasattr(ctx.bus, "publish"):
-            ctx.bus.publish(envelope)
-        ctx.last_event_id = envelope.id
-
-    assert isinstance(ctx.shutdown_event, asyncio.Event)
-    return asyncio.create_task(
-        run_stale_wave_loop(
-            state_path=ctx.state_path,
-            event_path=Path(ctx.event_path) if ctx.event_path is not None else None,
-            publish=_publish,
-            stop_event=ctx.shutdown_event,
         )
     )
 
@@ -932,8 +851,6 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
     idle_timeout = _resolve_idle_timeout(ctx)
     watchdog = _build_watchdog(ctx, idle_timeout)
     watchdog_task = asyncio.create_task(watchdog.run(ctx.shutdown_event))
-    ttl_task = _schedule_session_ttl_sweep(ctx)
-    stale_wave_task = _schedule_stale_wave_sweep(ctx)
     permission_expiry_task = _schedule_permission_expiry_sweep(ctx)
     stall_task = _schedule_stall_sweep(ctx)
     batch_close_task = _schedule_batch_close_sweep(ctx)
@@ -947,14 +864,6 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
         watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await watchdog_task
-        if ttl_task is not None:
-            ttl_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await ttl_task
-        if stale_wave_task is not None:
-            stale_wave_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await stale_wave_task
         permission_expiry_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await permission_expiry_task
@@ -1023,8 +932,6 @@ async def _run_windows_server(ctx: MethodContext, rt_dir: Path) -> None:
     idle_timeout = _resolve_idle_timeout(ctx)
     watchdog = _build_watchdog(ctx, idle_timeout)
     watchdog_task = asyncio.create_task(watchdog.run(ctx.shutdown_event))
-    ttl_task = _schedule_session_ttl_sweep(ctx)
-    stale_wave_task = _schedule_stale_wave_sweep(ctx)
     permission_expiry_task = _schedule_permission_expiry_sweep(ctx)
     stall_task = _schedule_stall_sweep(ctx)
     batch_close_task = _schedule_batch_close_sweep(ctx)
@@ -1038,14 +945,6 @@ async def _run_windows_server(ctx: MethodContext, rt_dir: Path) -> None:
         watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await watchdog_task
-        if ttl_task is not None:
-            ttl_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await ttl_task
-        if stale_wave_task is not None:
-            stale_wave_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await stale_wave_task
         permission_expiry_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await permission_expiry_task

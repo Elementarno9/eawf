@@ -23,9 +23,6 @@ from eawf.kernel.state.io import LegacyOperationRemovedError, refuse_legacy_writ
 from eawf.kernel.state.models import (
     State,
 )
-from eawf.kernel.state.mutations import (
-    Mutation,
-)
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.strict import validate_state
 from eawf.runtime.daemon.methods import (
@@ -216,9 +213,3 @@ def read_state(state_path: Path) -> tuple[State, dict[str, Any]]:
     if report.state is None:
         raise ValueError("state schema invalid: " + "; ".join(report.schema_errors[:3]))
     return report.state, payload
-
-
-def args_hash(mutation: Mutation) -> str:
-    """Stable 16-hex-char digest of the mutation params."""
-    raw = orjson.dumps(mutation.params, option=orjson.OPT_SORT_KEYS)
-    return hashlib.sha256(raw).hexdigest()[:16]

@@ -1,11 +1,9 @@
-"""Daemon-owned worktree landing, reconcile and ``track.*`` mutators.
+"""Daemon-owned worktree reconcile and the generic v1 state commit wrapper.
 
-``wave autoland`` / ``track sync`` mutate ``state.json``
-through a generic commit wrapper rather than the ``state.mutate``
-transaction: each runs an arbitrary in-process mutator under the same
-portalock + WAL + event-append discipline the canonical mutator uses.
-``worktree reconcile`` retires rows whose holder is gone through
-:func:`eawf.runtime.worktree.reconcile.reconcile_stale_rows`.
+:func:`commit_worktree_state` runs an arbitrary in-process mutator over
+``state.json`` under the same portalock + WAL + event-append discipline the
+canonical mutator uses. ``worktree reconcile`` retires rows whose holder is
+gone through :func:`eawf.runtime.worktree.reconcile.reconcile_stale_rows`.
 """
 
 from __future__ import annotations
@@ -16,17 +14,14 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import orjson
 
 from eawf.kernel.state.enums import (
     StoreKind,
 )
-from eawf.kernel.state.models import (
-    State,
-    Track,
-)
+from eawf.kernel.state.models import State
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
@@ -39,10 +34,6 @@ from eawf.runtime.daemon.methods import (
     MethodContext,
     register,
 )
-from eawf.runtime.daemon.wal import WalRecord
-
-if TYPE_CHECKING:
-    pass
 from eawf.runtime.daemon.methods.state_context import (
     bus_for_root,
     read_state,
@@ -50,38 +41,13 @@ from eawf.runtime.daemon.methods.state_context import (
     state_version,
 )
 from eawf.runtime.daemon.methods.state_models import (
-    TrackSyncParams,
-    TrackSyncRpcResult,
-    WaveAutolandParams,
-    WaveAutolandRpcResult,
     WorktreeReconcileParams,
     WorktreeReconcileRow,
     WorktreeReconcileRpcResult,
 )
+from eawf.runtime.daemon.wal import WalRecord
 
 logger = logging.getLogger(__name__)
-
-
-def _wave_autoland_row_payload(row: Any) -> dict[str, Any]:
-    """Return the JSON-mode result shape for one autoland row."""
-    return {
-        "wave": row.wave_id,
-        "commits": list(row.commits),
-        "merged_commit": row.merged_commit,
-        "worktree_cleaned": row.worktree_cleaned,
-    }
-
-
-def _wave_autoland_payload(result: Any) -> dict[str, Any]:
-    """Return the JSON-mode result shape for a wave-autoland result."""
-    return WaveAutolandRpcResult(
-        order=list(result.order),
-        landed=[_wave_autoland_row_payload(row) for row in result.landed],
-        failed_wave=result.failed_wave,
-        error=result.error,
-        remaining=list(result.remaining),
-        dry_run=result.dry_run,
-    ).model_dump(mode="json")
 
 
 def _build_worktree_event_envelope(
@@ -89,7 +55,6 @@ def _build_worktree_event_envelope(
     command: str,
     scope_id: str | None,
     params: dict[str, Any],
-    result: dict[str, Any],
     before_version: str,
     after_version: str,
 ) -> Envelope:
@@ -97,14 +62,6 @@ def _build_worktree_event_envelope(
     now = datetime.now(UTC)
     summary = f"{command} scope={scope_id}"
     args_raw = orjson.dumps(params, option=orjson.OPT_SORT_KEYS)
-    extras: dict[str, str | int | float | bool] = {}
-    if command == "state.wave_autoland":
-        extras = {
-            "landed_count": len(result.get("landed", [])),
-            "failed": result.get("failed_wave") is not None,
-            "remaining_count": len(result.get("remaining", [])),
-            "dry_run": bool(result.get("dry_run", False)),
-        }
     payload = EventPayload(
         timestamp=now,
         event_type=command,
@@ -114,9 +71,9 @@ def _build_worktree_event_envelope(
         args_hash=hashlib.sha256(args_raw).hexdigest()[:16],
         before_state_version=before_version,
         after_state_version=after_version,
-        status="warn" if result.get("failed_wave") is not None else "ok",
+        status="ok",
         message=summary,
-        extras=extras,
+        extras={},
     ).model_dump(mode="json")
     return Envelope(
         schema_version="1.0",
@@ -194,7 +151,6 @@ def commit_worktree_state(
                 command=command,
                 scope_id=scope_id,
                 params=params,
-                result=result,
                 before_version=before_version,
                 after_version=after_version,
             )
@@ -226,33 +182,6 @@ def commit_worktree_state(
             return result
     finally:
         ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
-
-
-@register("state.wave_autoland")
-async def wave_autoland_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Daemon-owned implementation of ``eawf batch integrate``."""
-    args = WaveAutolandParams.model_validate(params)
-    repo_root = Path(args.repo_root)
-
-    from eawf.runtime.worktree import wave_autoland, worktree_registry_lock
-
-    with worktree_registry_lock(repo_root, timeout=5.0):
-        return commit_worktree_state(
-            ctx=ctx,
-            repo_root=repo_root,
-            params=params,
-            command="state.wave_autoland",
-            scope_id=args.iter_id,
-            apply_func=lambda state: _wave_autoland_payload(
-                wave_autoland(
-                    state,
-                    repo_root=repo_root,
-                    iter_id=args.iter_id,
-                    keep_worktree=args.keep_worktree,
-                    dry_run=args.dry_run,
-                )
-            ),
-        )
 
 
 @register("state.worktree_reconcile")
@@ -305,68 +234,3 @@ async def worktree_reconcile_rpc(ctx: MethodContext, params: dict[str, Any]) -> 
         dry_run=result.dry_run,
         written=result.written,
     ).model_dump(mode="json")
-
-
-# ---- track.* mutators --------------------------------------------------------
-
-
-def _tracks(state: State) -> dict[str, Track]:
-    """Return ``state.tracks`` as a non-``None`` dict in place.
-
-    Creates a fresh empty dict on the state when the field is currently
-    ``None`` so a first ``track.add`` has somewhere to land.
-    """
-    if state.tracks is None:
-        state.tracks = {}
-    return state.tracks
-
-
-def _apply_track_sync(state: State, args: TrackSyncParams) -> dict[str, Any]:
-    """Recompute a Track's measured outcome statuses from their samples.
-
-    Resolves the target Track (the explicit ``track_id`` param, else the
-    :attr:`CurrentPointers.track_id` cursor) and runs the
-    :func:`eawf.workflow.evidence.outcome.sync_track_outcomes` reducer -- the
-    same reducer the wave-close hook fires -- so an operator can re-derive the
-    standings on demand. An absent target Track (no id and no cursor) yields a
-    typed no-op result with an empty change list rather than raising, so
-    ``track sync`` on a repo with no Track in focus is harmless.
-
-    Args:
-        state: Loaded :class:`State`. Mutated in place by the reducer.
-        args: Validated :class:`TrackSyncParams`.
-
-    Returns:
-        Result dict matching :class:`TrackSyncRpcResult`.
-    """
-    from eawf.workflow.evidence.outcome import sync_track_outcomes
-
-    track_id = args.track_id if args.track_id else state.current.track_id
-    changed = sync_track_outcomes(state, track_id=track_id) if track_id else []
-    logger.info(f"_apply_track_sync track={track_id!r} changed={len(changed)}")
-    return TrackSyncRpcResult(
-        track_id=track_id,
-        changed_outcome_ids=changed,
-        changed=len(changed),
-    ).model_dump(mode="json")
-
-
-@register("track.sync")
-async def track_sync_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Daemon-owned ``track.sync`` mutator.
-
-    Recomputes a Track's measured outcome statuses from their samples via the
-    same reducer the wave-close hook fires. The daemon is the sole canonical
-    mutator (AGENTS rule 4); the CLI ``track sync`` shim routes here over
-    JSON-RPC.
-    """
-    args = TrackSyncParams.model_validate(params)
-    repo_root = Path(args.repo_root) if args.repo_root else None
-    return commit_worktree_state(
-        ctx=ctx,
-        repo_root=repo_root,
-        params=params,
-        command="track.sync",
-        scope_id=args.track_id,
-        apply_func=lambda state: _apply_track_sync(state, args),
-    )

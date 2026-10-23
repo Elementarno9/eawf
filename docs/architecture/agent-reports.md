@@ -1,25 +1,16 @@
 # Agent Report Architecture
 
-Typed agent reports are append-only JSONL records that capture the final
-output of an agent session in a role-specific schema. They are separate
-from `state.json`: state tracks sessions, waves, phases, and pointers;
-report stores keep the structured agent output.
+Typed agent reports are append-only JSONL records that capture the final output of an agent session in a role-specific schema. They are separate from `state.json`: state tracks sessions, waves, phases, and pointers; report stores keep the structured agent output.
 
 ## Store Flow
 
 1. Runtime manifests tell every agent to emit a typed `agent_end` body.
-2. Runtime hook scripts call `eawf hook run agent_end` with the session id,
-   base id, report body, optional artifact ids, and optional blob refs.
-3. The hook loader validates the body against the discriminated
-   `AgentReportBody` union.
-4. `append_agent_report` uses the session as authority for role, scope, and
-   runtime, then computes the next attempt for the role/base pair.
-5. The report is wrapped in a store envelope and appended to the role-specific
-   report JSONL file.
+2. Runtime hook scripts call `eawf hook run agent_end` with the session id, base id, report body, optional artifact ids, and optional blob refs.
+3. The hook loader validates the body against the discriminated `AgentReportBody` union.
+4. `append_report_as` files the report as the native Run the payload names, which is the authority for role and scope, then computes the next attempt for the role/base pair.
+5. The report is wrapped in a store envelope and appended to the role-specific report JSONL file.
 
-Report metadata lives in `AgentReportHeader`. Role output lives in one of
-the eight report bodies: researcher, planner, executor, auditor, reviewer,
-polisher, operator, or domain specialist.
+Report metadata lives in `AgentReportHeader`. Role output lives in one of the eight report bodies: researcher, planner, executor, auditor, reviewer, polisher, operator, or domain specialist.
 
 ## Store Kinds
 
@@ -42,15 +33,11 @@ Example report store URN:
 urn:eawf:v1:store:EAWF/executor_report/AR-executor-P18-I01-W04-01
 ```
 
-The `store` URN id starts with the store kind, then the report id. This
-keeps report rows addressable without inventing a new URN kind.
+The `store` URN id starts with the store kind, then the report id. This keeps report rows addressable without inventing a new URN kind.
 
 ## Attempts
 
-Reports are identified by `(role, base_id, attempt)`. The first report for a
-role/base pair uses attempt `1`; retries increment monotonically. This lets
-operators keep failed, blocked, and superseded attempts instead of rewriting
-history.
+Reports are identified by `(role, base_id, attempt)`. The first report for a role/base pair uses attempt `1`; retries increment monotonically. This lets operators keep failed, blocked, and superseded attempts instead of rewriting history.
 
 ## Validation
 
@@ -72,12 +59,8 @@ Cross-kind report invariants verify the report stream against state context:
 - auditor reports include criteria;
 - operator reports list completed waves inside the reported phase.
 
-The invariant helper is not part of the state-only `ALL_INVARIANTS` tuple
-because report rows live in JSONL stores rather than inside `state.json`.
+The invariant helper is not part of the state-only `ALL_INVARIANTS` tuple because report rows live in JSONL stores rather than inside `state.json`.
 
 ## Rendering And Promotion
 
-Markdown rendering is derived from the typed payload, not stored as source of
-truth. A report can be promoted to an `agent_report` artifact when a durable
-human-facing document is needed, while the store record remains the canonical
-machine-readable form.
+Markdown rendering is derived from the typed payload, not stored as source of truth. A report can be promoted to an `agent_report` artifact when a durable human-facing document is needed, while the store record remains the canonical machine-readable form.

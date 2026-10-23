@@ -14,7 +14,7 @@ cp -R .ea ../PROJ-ea-before-epoch2
 eawf migrate status
 ```
 
-The commit is the git restore point; `--allow-empty` makes it even when everything is already committed. It stages only eawf's own files, so read `git status` first and commit or stash any other work of yours on its own. If `eawf migrate status` lists a pending schema step, run `eawf migrate` and commit the result. The cutover refuses while any agent session or worktree is still live, because a second writer could race it: stop your agent runtimes, read the live session ids with `eawf --json status` (the `active_sessions` list), close each one with `eawf session close <SES-id>`, and retire stale worktree rows with `eawf worktree reconcile`. Step 2 commits what these change.
+The commit is the git restore point; `--allow-empty` makes it even when everything is already committed. It stages only eawf's own files, so read `git status` first and commit or stash any other work of yours on its own. If `eawf migrate status` lists a pending schema step, run `eawf migrate` and commit the result. The cutover refuses while any agent session or worktree is still live, because a second writer could race it: stop your agent runtimes, read the live session ids with `jq -r '.agent_sessions | to_entries[] | select(.value.status == "active") | .key' .ea/state.json` (without jq, open `.ea/state.json` and take each key under `agent_sessions` whose `status` is `active`), close each one with `eawf session close <SES-id>`, and retire stale worktree rows with `eawf worktree reconcile`. Step 2 commits what these change.
 
 ## 2. Opt in, stage, register and plan
 

@@ -1,24 +1,21 @@
-"""Tests for the EAWF021 measurability lint and EAWF022 propose-coverage gate.
+"""Tests for the EAWF021 measurability lint.
 
 EAWF021 rejects an unmeasurable success criterion via two legs: a banned-vague
 token (caught even at the 20-char length floor, proving the floor alone is
 insufficient) and a missing observation contract (no typed response clause and
 no parseable verb plus proof locus). The rewritten measurable form passes both
-legs. EAWF022 surfaces each silently-dropped brief span (coverage_diff
-``uncovered``) as a finding. Both compose behind the ``validate_prose``
-chokepoint with the existing fail-open / fail-closed switch.
+legs. The lint composes behind the ``validate_prose`` chokepoint with the
+existing fail-open / fail-closed switch.
 """
 
 from __future__ import annotations
 
 from eawf.kernel.spec.common import (
     CriterionSpec,
-    DeferredDeliverable,
     ObserveVerb,
     ProofLocus,
     QualityDimension,
     ResponseClause,
-    SourceUnit,
 )
 from eawf.platform.lint.eawf021_measurable_criterion import (
     BANNED_VAGUE_TOKENS,
@@ -30,18 +27,7 @@ from eawf.platform.lint.eawf021_measurable_criterion import (
 from eawf.platform.lint.eawf021_measurable_criterion import (
     check_source as check_eawf021_source,
 )
-from eawf.platform.lint.eawf022_propose_coverage import (
-    RULE_CODE as EAWF022_CODE,
-)
-from eawf.platform.lint.eawf022_propose_coverage import (
-    check_coverage,
-    check_source_brief_coverage,
-)
-from eawf.platform.lint.eawf022_propose_coverage import (
-    check_source as check_eawf022_source,
-)
 from eawf.platform.lint.validate_prose import COMPOSED_RULES, validate_prose
-from eawf.workflow.propose.generator import extract_units
 
 
 def _reasons(violations: list) -> list[str]:
@@ -144,98 +130,11 @@ def _spec(text: str, signal: str, *, response: ResponseClause | None = None) -> 
     )
 
 
-# ---- EAWF022: propose coverage gate -----------------------------------------
-
-
-def test_check_coverage_surfaces_uncovered_span_as_finding() -> None:
-    # Error-path: a span covered by neither a criterion nor a deferral surfaces.
-    units = [
-        SourceUnit(span_id="U-000", quote="first detail", char_offset=0),
-        SourceUnit(span_id="U-001", quote="dropped detail", char_offset=20),
-    ]
-    violations = check_coverage(units, covered_span_ids={"U-000"}, deferrals=[])
-    assert len(violations) == 1
-    assert violations[0].code == EAWF022_CODE
-    assert violations[0].snippet == "U-001"
-    assert "dropped" in violations[0].reason
-
-
-def test_check_coverage_clean_when_all_spans_covered() -> None:
-    units = [
-        SourceUnit(span_id="U-000", quote="first detail", char_offset=0),
-        SourceUnit(span_id="U-001", quote="second detail", char_offset=20),
-    ]
-    violations = check_coverage(units, covered_span_ids={"U-000", "U-001"}, deferrals=[])
-    assert violations == []
-
-
-def test_check_coverage_deferred_span_is_not_a_finding() -> None:
-    units = [SourceUnit(span_id="U-000", quote="filed elsewhere", char_offset=0)]
-    deferral = DeferredDeliverable(
-        span_id="U-000",
-        reason="tracked in the next phase backlog item",
-        target="P30",
-    )
-    assert check_coverage(units, covered_span_ids=set(), deferrals=[deferral]) == []
-
-
-def test_check_coverage_over_extracted_brief_spans() -> None:
-    # End-to-end: extract a brief, cover the first span only, drop the rest.
-    brief = "First claim holds. Second claim is dropped. Third claim is dropped."
-    units = extract_units(brief)
-    assert len(units) == 3
-    violations = check_coverage(units, covered_span_ids={"U-000"}, deferrals=[])
-    assert {v.snippet for v in violations} == {"U-001", "U-002"}
-
-
-def test_check_eawf022_source_is_a_noop_over_prose() -> None:
-    # Coverage needs typed inputs; the prose adapter is always empty.
-    assert check_eawf022_source("any prose with a dropped detail\n") == []
-
-
-# ---- EAWF022: source-brief coverage gate ------------------------------------
-
-
-def test_check_source_brief_coverage_flags_uncovered_unit() -> None:
-    # Error-path: a source-brief unit covered by neither a criterion-span cover
-    # set nor a deferral surfaces as exactly one finding naming the dropped id.
-    units = [
-        SourceUnit(span_id="U-000", quote="covered deliverable", char_offset=0),
-        SourceUnit(span_id="U-001", quote="dropped deliverable", char_offset=20),
-    ]
-    findings = check_source_brief_coverage(units, covered_span_ids={"U-000"}, deferrals=[])
-    assert len(findings) == 1
-    assert findings[0].code == EAWF022_CODE
-    assert findings[0].snippet == "U-001"
-    assert "source-brief unit" in findings[0].reason
-
-
-def test_check_source_brief_coverage_deferred_unit_is_not_a_finding() -> None:
-    # Negative-path: the same uncovered unit marked deferred yields zero findings.
-    units = [SourceUnit(span_id="U-001", quote="dropped deliverable", char_offset=0)]
-    deferral = DeferredDeliverable(
-        span_id="U-001",
-        reason="tracked in the next phase backlog item",
-        target="B999",
-    )
-    assert check_source_brief_coverage(units, covered_span_ids=set(), deferrals=[deferral]) == []
-
-
-def test_check_source_brief_coverage_clean_when_all_units_covered() -> None:
-    # Negative-path: a fully-covered brief yields zero findings.
-    units = [
-        SourceUnit(span_id="U-000", quote="first deliverable", char_offset=0),
-        SourceUnit(span_id="U-001", quote="second deliverable", char_offset=20),
-    ]
-    findings = check_source_brief_coverage(units, covered_span_ids={"U-000", "U-001"}, deferrals=[])
-    assert findings == []
-
-
 # ---- composition behind validate_prose --------------------------------------
 
 
-def test_composed_rules_lists_eawf021_and_eawf022() -> None:
-    assert COMPOSED_RULES == ("EAWF013", "EAWF014", "EAWF017", "EAWF021", "EAWF022")
+def test_composed_rules_lists_eawf021() -> None:
+    assert COMPOSED_RULES == ("EAWF013", "EAWF014", "EAWF017", "EAWF021")
 
 
 def test_validate_prose_aggregates_eawf021_vague_token() -> None:
@@ -258,7 +157,7 @@ def test_validate_prose_eawf021_fail_closed_blocks() -> None:
 
 def test_validate_prose_clean_measurable_corpus_runs_clean() -> None:
     # CR-2 (exits, T2, cli_exit==0): a measurable corpus runs clean in both
-    # modes with EAWF021/022 registered.
+    # modes with EAWF021 registered.
     corpus = (
         "Returns 200 for a valid request, verified by pytest [a].\n"
         "\n"

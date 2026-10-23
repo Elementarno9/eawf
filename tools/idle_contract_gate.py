@@ -1,20 +1,17 @@
-"""Deterministic idle-contract gate for the band-scoped spec-jury QC gate.
+"""Deterministic idle-contract gate for the band-scoped verify block.
 
 This repo has a history of building a verifier and then leaving it IDLE
 forever -- a dead gate that never runs (tracked as the B091 idle-verifier
-regression). The spec-jury close gate is the latest such verifier: W05/W06
-wired the producer
-(:func:`eawf.workflow.dispatch.spec_jury.produce_spec_jury_verdict`) and the
-band-conditional resolver
-(:func:`eawf.workflow.verify.readiness.resolve_wave_verify_block`), and the
-shipped ``quality`` profile turns it on for a non-empty UI/UX band. This gate
-makes "wired + band-scoped, not idle, not global" a CHECKED invariant rather
-than a hope.
+regression). The band-conditional resolver
+(:func:`eawf.workflow.verify.readiness.resolve_wave_verify_block`) and the
+shipped ``quality`` profile turn verify enforcement on for a non-empty UI/UX
+band. This gate makes "wired + band-scoped, not idle, not global" a CHECKED
+invariant rather than a hope.
 
 Four gates run from :func:`main`, in precedence order, and any failing
 exits non-zero:
 
-- :func:`check_idle_contract` -- the original single B091 spec-jury contract
+- :func:`check_idle_contract` -- the original single B091 band contract
   described below.
 - :func:`check_skill_body_binding` -- a *binding-proof* probe that drives a
   deliberately drifted dict body through ``run_skill`` and asserts the emit
@@ -27,15 +24,6 @@ exits non-zero:
 - :func:`check_i03_contracts` -- an in-process probe for the I03 contract:
   ``mockup_golden_diff`` must be a registered ``CheckKind`` with a mapped
   ``OracleTier``.
-- :func:`check_jury_reliability_map_wired` -- a source-scan probe asserting the
-  live convener threads the reputation reliability map into the jury reducer
-  (I09-W06): ``reliability=reliability`` flows into
-  ``aggregate_jury(..., reliability=...)``. Dropping the kwarg re-idles the
-  reputation-weighting seam and reds this row.
-- :func:`check_jury_block_authority_wired` -- a source-scan probe asserting the
-  ordered-oracle jury branch tests ``block_authority is BlockAuthority.BLOCKING``
-  BEFORE it raises ``LifecycleError``, so a veto blocks only an EARNED
-  jury. Bypassing the authority gate reds this row.
 - :func:`check_validate_jury_cli_wired` -- a source-scan probe asserting
   ``validate_jury`` has a live CLI caller: the ``eawf metrics
   jury-validation`` command binds it directly. Orphaning the reducer reds this
@@ -61,10 +49,10 @@ exits non-zero:
 
 Three independent contracts are asserted, in precedence order:
 
-- **not-idle** -- the producer is importable AND at least one shipped profile
-  enables it via a non-empty :attr:`~eawf.platform.profiles.models.VerifyBlock.uiux_bands`
-  with :attr:`~eawf.platform.profiles.models.VerifyBlock.enforce` true. A
-  producer that no profile wires on is idle-forever; this contract fails on
+- **not-idle** -- at least one shipped profile enables a verify band via a
+  non-empty :attr:`~eawf.platform.profiles.models.VerifyBlock.uiux_bands`
+  with :attr:`~eawf.platform.profiles.models.VerifyBlock.enforce` true. Band
+  enforcement that no profile wires on is idle-forever; this contract fails on
   exactly that.
 - **band-scoped (not global)** -- for that band-enabling profile,
   :func:`resolve_wave_verify_block` resolves to ``enforce=True`` for a UI-scope
@@ -100,7 +88,7 @@ Invocation:
     uv run tools/idle_contract_gate.py
 
 Exit codes:
-- ``0`` -- the producer is importable + wired on for a non-empty band that
+- ``0`` -- a profile enables verify enforcement for a non-empty band that
   resolves band-scoped (not global), AND the emit-time body validation rejects
   a drifted body, AND all I03 probes fire, AND no newly-defined contract in the
   staged diff ships idle.
@@ -126,10 +114,6 @@ from eawf.kernel.state.models import Wave
 from eawf.platform.profiles.loader import list_profiles, load_profile
 from eawf.platform.profiles.models import ProfileBody, VerifyBlock
 from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY, registered_audit_dsl_kinds
-from eawf.workflow.dispatch.spec_jury import (
-    SPEC_JURY_FINDINGSET_EVENT_TYPE,
-    produce_spec_jury_verdict,  # noqa: F401
-)
 from eawf.workflow.skills.engine import run_skill as _run_skill
 from eawf.workflow.verify.readiness import (
     resolve_wave_verify_block,
@@ -189,8 +173,6 @@ from idle_contract_wiring import (  # noqa: E402
     check_eawf023_artifact_placement_wired,
     check_eawf024_test_tier_wired,
     check_eawf025_test_placement_wired,
-    check_jury_block_authority_wired,
-    check_jury_reliability_map_wired,
     check_runtime_gate_is_not_idle,
     check_validate_jury_cli_wired,
 )
@@ -228,14 +210,14 @@ def _make_probe_wave(*, scope: str) -> Wave:
 
 
 def _band_enabling_profiles(profiles: Sequence[ProfileBody]) -> list[ProfileBody]:
-    """Return the profiles that wire the spec-jury producer on for a real band.
+    """Return the profiles that enable verify enforcement for a real band.
 
-    A profile wires the producer on when its ``verify`` block declares a
+    A profile enables a band when its ``verify`` block declares a
     non-empty :attr:`~eawf.platform.profiles.models.VerifyBlock.uiux_bands`
     AND :attr:`~eawf.platform.profiles.models.VerifyBlock.enforce` is true: the
     band list is the structural opt-in and ``enforce`` is the gating bit the
     resolver narrows per wave. A profile with an empty band list (or
-    ``enforce=False``, or no verify block at all) leaves the producer idle.
+    ``enforce=False``, or no verify block at all) leaves band enforcement idle.
 
     Args:
         profiles: The candidate profile bodies to scan.
@@ -266,17 +248,15 @@ def check_idle_contract(
     profiles: Sequence[ProfileBody] | None = None,
     resolve_fn: ResolveFn = resolve_wave_verify_block,
 ) -> GateResult:
-    """Assert the spec-jury producer is wired on for a band and resolves band-scoped.
+    """Assert a profile enables a verify band and that it resolves band-scoped.
 
     The two contracts are checked in precedence order:
 
-    1. **not-idle** -- at least one of *profiles* enables the producer via a
+    1. **not-idle** -- at least one of *profiles* enables a verify band via a
        non-empty ``uiux_bands`` with ``enforce=True`` (see
-       :func:`_band_enabling_profiles`). The producer importability is proven
-       by this module importing
-       :func:`eawf.workflow.dispatch.spec_jury.produce_spec_jury_verdict` at
-       module load. When no profile wires it on, the producer is idle-forever
-       and the gate fails :attr:`GateFailure.PRODUCER_IDLE`.
+       :func:`_band_enabling_profiles`). When no profile does, band
+       enforcement is idle-forever and the gate fails
+       :attr:`GateFailure.PRODUCER_IDLE`.
     2. **band-scoped** -- for a band-enabling profile, *resolve_fn* resolves to
        ``enforce=True`` for a UI-scope probe wave AND ``enforce=False`` for a
        non-UI probe wave. A profile that resolves to ``enforce=True`` for the
@@ -293,8 +273,8 @@ def check_idle_contract(
             tests inject a stub to force the global-flip path.
 
     Returns:
-        A :class:`GateResult` whose ``passed`` is ``True`` only when the
-        producer is wired on for a non-empty band AND that band profile
+        A :class:`GateResult` whose ``passed`` is ``True`` only when a
+        profile enables a non-empty band AND that band profile
         resolves band-scoped (UI enforces, non-UI does not); otherwise
         ``failure`` names the first violated contract.
     """
@@ -306,9 +286,8 @@ def check_idle_contract(
             passed=False,
             failure=GateFailure.PRODUCER_IDLE,
             message=(
-                "spec-jury producer is idle: no shipped profile enables a verify band "
-                "(a non-empty 'uiux_bands' with 'enforce: true'); the producer "
-                "'produce_spec_jury_verdict' is importable but never wired on"
+                "band enforcement is idle: no shipped profile enables a verify band "
+                "(a non-empty 'uiux_bands' with 'enforce: true')"
             ),
         )
 
@@ -357,6 +336,10 @@ type StoreRowsFn = Callable[[str], list[dict[str, Any]]]
 #: least once (read from the event store). Injected so a test drives both the
 #: gated-off and gated-on ballot outcomes.
 type JuryConvenedFn = Callable[[], bool]
+
+#: Event type of the evidence-store row a convened spec jury wrote for its raw
+#: per-juror FindingSets. Rows written before the jury was retired still count.
+_SPEC_JURY_FINDINGSET_EVENT_TYPE = "spec_jury_findingset"
 
 
 @dataclass(frozen=True, slots=True)
@@ -503,8 +486,8 @@ def _default_jury_convened(store_rows_fn: StoreRowsFn = _default_store_rows) -> 
     """Return whether the cross-vendor jury has convened at least once.
 
     A convened jury persists its raw per-juror FindingSets as an evidence-store
-    row typed :data:`~eawf.workflow.dispatch.spec_jury.SPEC_JURY_FINDINGSET_EVENT_TYPE`;
-    only that exact type counts. Other jury-named events (an operator's
+    row typed :data:`_SPEC_JURY_FINDINGSET_EVENT_TYPE`; only that exact type
+    counts. Other jury-named events (an operator's
     ``jury_gold_label``, for one) record no convening, so a substring match on
     "jury" would ungate the ballot contract before any ballot could exist.
 
@@ -516,7 +499,7 @@ def _default_jury_convened(store_rows_fn: StoreRowsFn = _default_store_rows) -> 
         otherwise.
     """
     return any(
-        record.get("event_type") == SPEC_JURY_FINDINGSET_EVENT_TYPE
+        record.get("event_type") == _SPEC_JURY_FINDINGSET_EVENT_TYPE
         for record in store_rows_fn("evidence")
     )
 
@@ -650,10 +633,8 @@ def main(argv: list[str]) -> int:
     The original B091 single-contract check (:func:`check_idle_contract`) runs
     first, then the emit-validation binding-proof probe
     (:func:`check_skill_body_binding`), then the I03 contract probe
-    (:func:`check_i03_contracts`), then the three I09 jury-validation
-    binding probes (:func:`check_jury_reliability_map_wired`,
-    :func:`check_jury_block_authority_wired`,
-    :func:`check_validate_jury_cli_wired`), then the runtime-gate binding
+    (:func:`check_i03_contracts`), then the I09 jury-validation CLI
+    binding probe (:func:`check_validate_jury_cli_wired`), then the runtime-gate binding
     check (:func:`check_runtime_gate_is_not_idle`), then the
     console-app construction-reachability check
     (:func:`check_console_app_construction_wired`), then the
@@ -698,17 +679,14 @@ def main(argv: list[str]) -> int:
         )
     )
 
-    # The three I09 jury-validation bindings each read their live call-site off
-    # the working tree (not the monkeypatchable _default_read, so they stay
-    # immune to the meta-gate's reader stub): the reputation reliability map
-    # (W06), the earned block authority, and the validate_jury CLI caller
-    # (W07). Any re-idle of one fails its row and reds the gate.
+    # The I09 validate_jury CLI binding reads its live call-site off the
+    # working tree (not the monkeypatchable _default_read, so it stays immune
+    # to the meta-gate's reader stub). A re-idle fails its row and reds the
+    # gate.
     #
     # The P30-I20 campaign producer class seam is checked opportunistically: W06
     # owns adding the class, and this row reds it if it lands as a stub.
     for source_scan_check in (
-        check_jury_reliability_map_wired(),
-        check_jury_block_authority_wired(),
         check_validate_jury_cli_wired(),
         check_campaign_producer_class_non_stub(),
     ):

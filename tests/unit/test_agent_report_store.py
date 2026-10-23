@@ -10,7 +10,6 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
-from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import (
     AgentReportEvidenceRef,
@@ -24,62 +23,21 @@ from eawf.kernel.store.paths import store_path
 from eawf.workflow.agent_report.store import (
     AgentReportRoleMismatchError,
     AgentReportScrubError,
-    append_agent_report,
+    ReportAuthor,
+    append_report_as,
 )
 
 
-def _state(
+def _author(
     *,
     role: AgentSessionRole = AgentSessionRole.EXECUTOR,
     agent_principal_id: str | None = None,
-) -> State:
-    return State.model_validate(
-        {
-            "schema_version": "1.0",
-            "scope_kind": "repo",
-            "urn": "urn:eawf:v1:state:QR",
-            "updated_at": "2026-05-14T00:00:00Z",
-            "project": {
-                "code": "QR",
-                "slug": "qr",
-                "title": "QR",
-                "domains": [],
-                "default_branch": "main",
-                "status": "active",
-                "repo_urn": "urn:eawf:v1:repo:QR",
-            },
-            "current": {
-                "project_code": "QR",
-                "track_id": None,
-                "phase_id": None,
-                "iter_id": None,
-                "active_wave_ids": [],
-                "active_session_ids": ["SES-001"],
-            },
-            "workspace": None,
-            "phases": {},
-            "iters": {},
-            "waves": {},
-            "artifacts": {},
-            "agent_sessions": {
-                "SES-001": {
-                    "id": "SES-001",
-                    "role": role.value,
-                    "runtime": "codex",
-                    "scope_id": "P18-I01-W04",
-                    "status": "active",
-                    "claimed_wave_ids": [],
-                    "worktree_ids": [],
-                    "artifact_ids": [],
-                    "started_at": "2026-05-14T00:00:00Z",
-                    "ended_at": None,
-                    "summary": None,
-                    "agent_principal_id": agent_principal_id,
-                }
-            },
-            "plugins": {},
-            "indexes": {},
-        }
+) -> ReportAuthor:
+    return ReportAuthor(
+        session_id="SES-001",
+        role=role,
+        scope_id="P18-I01-W04",
+        agent_principal_id=agent_principal_id,
     )
 
 
@@ -125,11 +83,11 @@ def _state_path(tmp_path: Path) -> Path:
     return path
 
 
-def test_append_agent_report_writes_attempt_one(tmp_path: Path) -> None:
-    result = append_agent_report(
-        state=_state(),
+def test_append_report_as_writes_attempt_one(tmp_path: Path) -> None:
+    result = append_report_as(
+        _author(),
         state_path=_state_path(tmp_path),
-        session_id="SES-001",
+        runtime="codex",
         base_id="P18-I01-W04",
         body=_body(),
         generated_at=datetime(2026, 5, 14, tzinfo=UTC),
@@ -160,7 +118,7 @@ def test_report_record_id_role_prefix_appears_once(base_id: str) -> None:
     assert report_id == "AR-auditor-P30-I20-W58-01"
 
 
-def test_append_agent_report_normalizes_role_prefixed_base_id(tmp_path: Path) -> None:
+def test_append_report_as_normalizes_role_prefixed_base_id(tmp_path: Path) -> None:
     """The append path mints a single-prefix auditor id for a role-prefixed base.
 
     CR-02: the store-layer id-shape assertion carries the invariant end to
@@ -174,10 +132,10 @@ def test_append_agent_report_normalizes_role_prefixed_base_id(tmp_path: Path) ->
         summary="re-read the diff against the criteria",
         target_id="P30-I20-W58",
     )
-    result = append_agent_report(
-        state=_state(role=AgentSessionRole.AUDITOR),
+    result = append_report_as(
+        _author(role=AgentSessionRole.AUDITOR),
         state_path=_state_path(tmp_path),
-        session_id="SES-001",
+        runtime="codex",
         base_id="auditor-P30-I20-W58",
         body=body,
         generated_at=datetime(2026, 5, 14, tzinfo=UTC),
@@ -187,11 +145,11 @@ def test_append_agent_report_normalizes_role_prefixed_base_id(tmp_path: Path) ->
     assert result.urn.endswith("/auditor_report/AR-auditor-P30-I20-W58-01")
 
 
-def test_append_agent_report_copies_agent_principal_id_to_header(tmp_path: Path) -> None:
-    result = append_agent_report(
-        state=_state(agent_principal_id="u-12345678"),
+def test_append_report_as_copies_agent_principal_id_to_header(tmp_path: Path) -> None:
+    result = append_report_as(
+        _author(agent_principal_id="u-12345678"),
         state_path=_state_path(tmp_path),
-        session_id="SES-001",
+        runtime="codex",
         base_id="P18-I01-W04",
         body=_body(),
         generated_at=datetime(2026, 5, 14, tzinfo=UTC),
@@ -203,42 +161,42 @@ def test_append_agent_report_copies_agent_principal_id_to_header(tmp_path: Path)
     assert payload.header.agent_principal_id == "u-12345678"
 
 
-def test_append_agent_report_increments_attempt_for_same_role_base(tmp_path: Path) -> None:
+def test_append_report_as_increments_attempt_for_same_role_base(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
-    append_agent_report(
-        state=_state(),
+    append_report_as(
+        _author(),
         state_path=state_path,
-        session_id="SES-001",
+        runtime="codex",
         base_id="P18-I01-W04",
         body=_body("first"),
     )
-    second = append_agent_report(
-        state=_state(),
+    second = append_report_as(
+        _author(),
         state_path=state_path,
-        session_id="SES-001",
+        runtime="codex",
         base_id="P18-I01-W04",
         body=_body("second"),
     )
     assert second.attempt == 2
 
 
-def test_append_agent_report_rejects_role_mismatch(tmp_path: Path) -> None:
+def test_append_report_as_rejects_role_mismatch(tmp_path: Path) -> None:
     body = _body().model_copy(update={"role": "reviewer"})
     with pytest.raises(AgentReportRoleMismatchError, match="does not match session role"):
-        append_agent_report(
-            state=_state(),
+        append_report_as(
+            _author(),
             state_path=_state_path(tmp_path),
-            session_id="SES-001",
+            runtime="codex",
             base_id="P18-I01-W04",
             body=body,
         )
 
 
-def test_append_agent_report_writes_researcher_report_with_evidence_refs(tmp_path: Path) -> None:
-    result = append_agent_report(
-        state=_state(role=AgentSessionRole.RESEARCHER),
+def test_append_report_as_writes_researcher_report_with_evidence_refs(tmp_path: Path) -> None:
+    result = append_report_as(
+        _author(role=AgentSessionRole.RESEARCHER),
         state_path=_state_path(tmp_path),
-        session_id="SES-001",
+        runtime="codex",
         base_id="P18-I01-W04",
         body=_researcher_body(),
         generated_at=datetime(2026, 5, 14, tzinfo=UTC),
@@ -251,25 +209,25 @@ def test_append_agent_report_writes_researcher_report_with_evidence_refs(tmp_pat
     assert payload.body.evidence_refs
 
 
-def test_append_agent_report_rejects_researcher_pass_without_evidence_refs(
+def test_append_report_as_rejects_researcher_pass_without_evidence_refs(
     tmp_path: Path,
 ) -> None:
     with pytest.raises(ValidationError, match="researcher pass requires non-empty"):
-        append_agent_report(
-            state=_state(role=AgentSessionRole.RESEARCHER),
+        append_report_as(
+            _author(role=AgentSessionRole.RESEARCHER),
             state_path=_state_path(tmp_path),
-            session_id="SES-001",
+            runtime="codex",
             base_id="P18-I01-W04",
             body=_researcher_body_without_evidence(),
         )
 
 
-def test_append_agent_report_rejects_unscrubbed_body(tmp_path: Path) -> None:
+def test_append_report_as_rejects_unscrubbed_body(tmp_path: Path) -> None:
     with pytest.raises(AgentReportScrubError, match="absolute_posix_path"):
-        append_agent_report(
-            state=_state(),
+        append_report_as(
+            _author(),
             state_path=_state_path(tmp_path),
-            session_id="SES-001",
+            runtime="codex",
             base_id="P18-I01-W04",
             body=_body("opened /tmp/local-file during execution"),
         )

@@ -3,11 +3,8 @@
 Two calls with identical inputs (and ``--force`` on the second) must
 leave every generated file byte-stable:
 
-- ``.ea/state.json`` — schema_version + scope_kind + project_code do not
-  drift; the only field that *could* drift is ``updated_at`` (and the
-  inner fresh-init payload regenerates it). For idempotence on the
-  rendered files (AGENTS.md, CLAUDE.md, manifest), the identical-inputs
-  contract holds without resorting to time-mocking.
+- The rendered files (AGENTS.md, CLAUDE.md, manifest) hold the
+  identical-inputs contract without resorting to time-mocking.
 - ``AGENTS.md`` — managed regions hash-stable per :mod:`eawf.surfaces.render.agents_md`.
 - ``.ea/indexes/generated.json`` — :mod:`eawf.surfaces.render.manifest` writes
   deterministically (``sort_keys + indent=2``); only ``generated_at``
@@ -69,32 +66,3 @@ def test_cli_init_with_multiple_profiles_combines_render_blocks(tmp_path: Path) 
     assert "BEGIN EAWF:managed id=python-style" in text
     assert "END EAWF:managed id=non-negotiable-rules" in text
     assert "END EAWF:managed id=python-style" in text
-
-
-def test_cli_init_state_json_keys_stable(tmp_path: Path) -> None:
-    """Top-level keys of state.json after init match the documented shape."""
-    res = _invoke_init(tmp_path, "--profile", "core")
-    assert res.exit_code == 0, res.stdout
-
-    import json as _json
-
-    state = _json.loads((tmp_path / ".ea" / "state.json").read_text(encoding="utf-8"))
-    expected_keys = {
-        "schema_version",
-        "scope_kind",
-        "urn",
-        "updated_at",
-        "project",
-        "current",
-        "workspace",
-        "phases",
-        "iters",
-        "waves",
-        "artifacts",
-        "agent_sessions",
-        "plugins",
-        "indexes",
-    }
-    assert expected_keys.issubset(state.keys()), sorted(state.keys())
-    assert state["scope_kind"] == "repo"
-    assert state["current"]["project_code"] == "DEMO"

@@ -26,9 +26,7 @@ import yaml
 from click.testing import Result
 from typer.testing import CliRunner
 
-from eawf.kernel.migrations import current_target_version
 from eawf.kernel.state.epoch2.authority import resolve_authority
-from eawf.kernel.state.models import State
 from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
@@ -45,8 +43,8 @@ def _invoke_init(target: Path, *extra: str) -> Result:
     return runner.invoke(app, args)
 
 
-def test_cli_init_no_input_creates_state_and_config(tmp_path: Path) -> None:
-    """A baseline invocation lays down state.json + config.yaml + AGENTS.md + CLAUDE.md."""
+def test_cli_init_no_input_creates_config_and_epoch2_tree(tmp_path: Path) -> None:
+    """A baseline invocation lays down config.yaml + AGENTS.md + CLAUDE.md and no v1 state."""
     res = _invoke_init(tmp_path, "--profile", "core")
     assert res.exit_code == 0, res.stdout
 
@@ -55,18 +53,11 @@ def test_cli_init_no_input_creates_state_and_config(tmp_path: Path) -> None:
     agents_md = tmp_path / "AGENTS.md"
     claude_md = tmp_path / "CLAUDE.md"
 
-    assert state_path.exists(), "state.json must be written"
+    assert not state_path.exists(), "a born tree carries no v1 state.json"
     assert config_path.exists(), "config.yaml must be written"
     assert agents_md.exists(), "AGENTS.md must be rendered"
     assert claude_md.exists(), "CLAUDE.md shim must be written"
-
-    state = json.loads(state_path.read_text(encoding="utf-8"))
-    State.model_validate(state)
-    assert state["schema_version"] == current_target_version()
-    assert state["scope_kind"] == "repo"
-    assert state["current"]["project_code"] == "DEMO"
-    assert state["goals"]["G01"]["scope_id"] == "DEMO"
-    assert state["goals"]["G01"]["title"] == "Establish DEMO project intent"
+    assert resolve_authority(state_path.parent).epoch == 2
 
     text = agents_md.read_text(encoding="utf-8")
     assert "BEGIN" in text and "END" in text, "AGENTS.md must contain managed-region markers"
@@ -386,11 +377,9 @@ def test_readme_quickstart_commands_each_exit_zero_in_a_fresh_repo(
             f"`eawf {' '.join(argv)}` exited {result.exit_code}\n{result.output}"
         )
 
-    state_path = repo / ".ea" / "state.json"
-    assert state_path.is_file(), "the quick-start block must leave a committed ledger"
-    state = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
-    assert state.project is not None and state.project.code == "DEMO-REPO"
-    assert resolve_authority(state_path.parent).epoch == 2
+    authority = resolve_authority(repo / ".ea")
+    assert authority.epoch == 2
+    assert authority.generation_id is not None
 
 
 def test_quickstart_extractor_rejects_markdown_without_the_marker() -> None:

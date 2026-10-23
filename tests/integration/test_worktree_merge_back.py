@@ -15,13 +15,12 @@ from pathlib import Path
 import pytest
 
 from eawf.kernel.state.enums import WorktreeStatus
-from eawf.runtime.worktree.create import create_worktree
 from eawf.runtime.worktree.merge_back import (
     STRATEGY_REBASE_THEN_FF,
     merge_back,
 )
 from eawf.surfaces.cli import errors as cli_errors
-from tests.integration.test_worktree_create import _claimed_state, _make_repo
+from tests._worktree_create import claimed_state, create_worktree, make_repo
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None,
@@ -46,8 +45,8 @@ def _commit_in(worktree: Path, *, name: str, content: str, msg: str) -> str:
 
 def test_cherry_pick_clean_marks_merged(tmp_path: Path) -> None:
     """Single-commit cherry-pick succeeds and updates record.status to MERGED."""
-    repo = _make_repo(tmp_path / "repo")
-    state = _claimed_state()
+    repo = make_repo(tmp_path / "repo")
+    state = claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     sha = _commit_in((repo / record.path), name="hello.txt", content="x\n", msg="add hello")
 
@@ -61,13 +60,13 @@ def test_cherry_pick_clean_marks_merged(tmp_path: Path) -> None:
 
 def test_cherry_pick_conflict_marks_conflicted(tmp_path: Path) -> None:
     """A synthetic same-file divergence -> CONFLICTED record + envelope files."""
-    repo = _make_repo(tmp_path / "repo")
+    repo = make_repo(tmp_path / "repo")
     # Add `conflict.txt` on the parent first so the worktree can diverge.
     (repo / "conflict.txt").write_text("parent\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
     subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "parent edit"], check=True)
 
-    state = _claimed_state()
+    state = claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     # Worktree edits the same file with different content.
     _commit_in(
@@ -91,12 +90,12 @@ def test_cherry_pick_conflict_marks_conflicted(tmp_path: Path) -> None:
 
 def test_continue_after_resolution_completes(tmp_path: Path) -> None:
     """After staging a resolution, ``--continue`` finishes the cherry-pick."""
-    repo = _make_repo(tmp_path / "repo")
+    repo = make_repo(tmp_path / "repo")
     (repo / "conflict.txt").write_text("parent\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
     subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "parent edit"], check=True)
 
-    state = _claimed_state()
+    state = claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     _commit_in(
         (repo / record.path),
@@ -125,12 +124,12 @@ def test_continue_after_resolution_completes(tmp_path: Path) -> None:
 
 def test_abort_marks_abandoned(tmp_path: Path) -> None:
     """``--abort`` resets the in-progress merge and marks the record ABANDONED."""
-    repo = _make_repo(tmp_path / "repo")
+    repo = make_repo(tmp_path / "repo")
     (repo / "conflict.txt").write_text("parent\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
     subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "parent edit"], check=True)
 
-    state = _claimed_state()
+    state = claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     _commit_in(
         (repo / record.path),
@@ -153,8 +152,8 @@ def test_abort_marks_abandoned(tmp_path: Path) -> None:
 
 def test_rebase_then_ff_clean(tmp_path: Path) -> None:
     """Rebase strategy happy path: worktree commit lands on parent via ff."""
-    repo = _make_repo(tmp_path / "repo")
-    state = _claimed_state()
+    repo = make_repo(tmp_path / "repo")
+    state = claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     _commit_in((repo / record.path), name="hello.txt", content="x\n", msg="add hello")
 
@@ -172,8 +171,8 @@ def test_rebase_then_ff_clean(tmp_path: Path) -> None:
 
 def test_invalid_strategy_raises_invalid_input(tmp_path: Path) -> None:
     """Unknown strategy -> :class:`InvalidInput` (exit 3)."""
-    repo = _make_repo(tmp_path / "repo")
-    state = _claimed_state()
+    repo = make_repo(tmp_path / "repo")
+    state = claimed_state()
     create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     with pytest.raises(cli_errors.UserError) as exc_info:
         merge_back(
@@ -187,8 +186,8 @@ def test_invalid_strategy_raises_invalid_input(tmp_path: Path) -> None:
 
 def test_continue_and_abort_mutually_exclusive(tmp_path: Path) -> None:
     """Passing both ``continue_`` and ``abort`` -> :class:`InvalidInput`."""
-    repo = _make_repo(tmp_path / "repo")
-    state = _claimed_state()
+    repo = make_repo(tmp_path / "repo")
+    state = claimed_state()
     create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     with pytest.raises(cli_errors.UserError):
         merge_back(

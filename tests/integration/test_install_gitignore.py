@@ -9,15 +9,53 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.migrations import current_target_version
+from eawf.kernel.state.enums import ProjectStatus, StoreKind
 from eawf.kernel.state.io import commit_mutation, fallback_wal_dir, state_version
-from eawf.kernel.state.models import State
+from eawf.kernel.state.models import Project, State
+from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_path
 from eawf.platform.install.gitignore_writer import GITIGNORE_PATTERNS, write_gitignore
 from eawf.platform.install.wizard import WizardAnswers, run_wizard_no_input
 from eawf.runtime.lock import portalock, sibling
+
+
+def _legacy_state() -> dict[str, object]:
+    """Return the minimal epoch-1 document an older ``eawf init`` wrote."""
+    return {
+        "schema_version": current_target_version(),
+        "scope_kind": "repo",
+        "urn": build_urn("state", owner="DEMO"),
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "project": Project(
+            code="DEMO",
+            slug="demo",
+            title="DEMO",
+            description=None,
+            domains=["general"],
+            default_branch="main",
+            status=ProjectStatus.ACTIVE,
+            repo_urn=build_urn("repo", owner="DEMO"),
+        ).model_dump(mode="json"),
+        "current": {
+            "project_code": "DEMO",
+            "track_id": None,
+            "phase_id": None,
+            "iter_id": None,
+            "active_wave_ids": [],
+            "active_session_ids": [],
+        },
+        "workspace": None,
+        "phases": {},
+        "iters": {},
+        "waves": {},
+        "artifacts": {},
+        "agent_sessions": {},
+        "plugins": {},
+        "indexes": {},
+    }
 
 
 def _answers(state_path: str = ".ea/state.json") -> WizardAnswers:
@@ -92,8 +130,9 @@ def test_initialized_repo_stays_clean_after_runtime_store_append(tmp_path: Path)
     run_wizard_no_input(_answers(), target, force=False)
     (target / "uv.lock").write_text("", encoding="utf-8")
 
+    # Init writes no state document, so stand in for a fallback writer's lock.
     top_level_lock = target / ".ea" / "state.json.lock"
-    assert top_level_lock.exists()
+    top_level_lock.touch()
     assert _is_ignored(target, top_level_lock)
     assert not _is_ignored(target, target / "uv.lock")
 
@@ -129,10 +168,12 @@ def test_custom_root_state_layout_ignores_only_owned_runtime_artifacts(
     _git(target, "init", "--quiet")
     _configure_git(target)
     run_wizard_no_input(_answers("state.json"), target, force=False)
+    state_path = target / "state.json"
+    # Init writes no v1 document; the fallback writer under test needs one.
+    state_path.write_bytes(orjson.dumps(_legacy_state()))
     (target / "uv.lock").write_text("", encoding="utf-8")
     _commit_all(target, "test: seed custom state repository")
 
-    state_path = target / "state.json"
     for index, kind in enumerate(StoreKind):
         _append_store_row(store_path(state_path, kind), kind, index)
 

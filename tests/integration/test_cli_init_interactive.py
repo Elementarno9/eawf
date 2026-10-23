@@ -15,7 +15,7 @@ Coverage:
 - Cancellation: a Ctrl-C byte at any prompt raises
   :class:`~eawf.platform.install.wizard.WizardCancelled`.
 - End-to-end: feeding every step's input through a single pipe lets the
-  wizard land a real ``state.json`` + ``AGENTS.md`` + render manifest on
+  wizard land a real ``config.yaml`` + ``AGENTS.md`` + render manifest on
   ``tmp_path`` (proves :func:`run_wizard_interactive` delegates to the
   pure pipeline and surfaces a populated :class:`WizardResult`).
 """
@@ -190,7 +190,7 @@ def test_run_wizard_interactive_full_round_trip_writes_state(
         result = run_wizard_interactive(tmp_path, force=False)
     assert result.project_code == project_code
     assert result.profiles_enabled == ["core"]
-    assert (tmp_path / ".ea" / "state.json").exists()
+    assert (tmp_path / ".ea" / "config.yaml").exists()
     assert (tmp_path / "AGENTS.md").exists()
 
 
@@ -202,7 +202,7 @@ def test_run_wizard_interactive_cancels_at_first_prompt(
         with pytest.raises(WizardCancelled):
             run_wizard_interactive(tmp_path, force=False)
     # Cancellation must NOT leave a half-initialised .ea/ behind.
-    assert not (tmp_path / ".ea" / "state.json").exists()
+    assert not (tmp_path / ".ea" / "config.yaml").exists()
 
 
 # Ensure the unused step references are explicit imports rather than
@@ -246,13 +246,12 @@ def test_wizard_inline_validate_rejects_malformed_input_with_friendly_msg() -> N
 
 
 def test_wizard_lowercase_project_code_auto_uppercased(tmp_path: Path) -> None:
-    """End-to-end: a lowercase entry round-trips into an uppercase ``project_code`` in state.json.
+    """End-to-end: a lowercase entry round-trips into an uppercase ``project_code``.
 
     Drives the full questionary wizard via prompt_toolkit pipe input.
     The lowercase entry passes the inline validate (uppercase-then-
     match), then ``filter=str.upper`` normalises the recorded answer,
-    and the wizard pipeline writes a state.json whose ``current.project_code``
-    is uppercase.
+    and the wizard pipeline reports an uppercase ``project_code``.
     """
     project_code_lower = "wztest"
     expected_upper = "WZTEST"
@@ -260,7 +259,3 @@ def test_wizard_lowercase_project_code_auto_uppercased(tmp_path: Path) -> None:
         _send_full_wizard_inputs(inp, project_code=project_code_lower)
         result = run_wizard_interactive(tmp_path, force=False)
     assert result.project_code == expected_upper
-    import orjson
-
-    payload = orjson.loads((tmp_path / ".ea" / "state.json").read_bytes())
-    assert payload["current"]["project_code"] == expected_upper

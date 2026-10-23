@@ -92,11 +92,11 @@ def test_scan_registry_injected_drifted_spec_fails(mod: ModuleType) -> None:
     """An injected spec whose prose drifts fails through the registry walker."""
     drifted = _FakeSpec(
         skill_name="drifted-skill",
-        body="See `workflow/verify/oracle.no_such_runner` for the contract.\n",
+        body="See `workflow/verify/readiness.no_such_runner` for the contract.\n",
     )
     findings = mod.scan_registry([drifted])
     assert len(findings) == 1
-    assert findings[0].token == "workflow/verify/oracle.no_such_runner"
+    assert findings[0].token == "workflow/verify/readiness.no_such_runner"
     assert findings[0].skill_name == "drifted-skill"
     assert findings[0].kind == mod.ReferenceKind.SYMBOL
 
@@ -140,9 +140,10 @@ def test_scan_body_runtime_and_config_dotted_access_skipped(mod: ModuleType) -> 
 def test_scan_body_resolving_references_produce_no_findings(mod: ModuleType) -> None:
     """Real slash / dotted / module-file references all resolve cleanly."""
     body = (
-        "See `kernel/spec/intent.IntentBrief`, `workflow/verify/oracle.run_oracle`, "
+        "See `kernel/spec/intent.IntentBrief`, "
+        "`workflow/verify/readiness.resolve_wave_verify_block`, "
         "`kernel/spec/math.py`, `eawf.surfaces.render.skills.render`, and "
-        "`platform/lint/eawf022_propose_coverage`.\n"
+        "`platform/lint/eawf021_measurable_criterion`.\n"
     )
     assert mod.scan_body("real-refs", body) == []
 

@@ -150,7 +150,7 @@ class GateTier(StrEnum):
 
     ``wave`` is the per-wave targeted run, ``iter`` the batch run at iter
     close, and ``release`` the phase/release-candidate run. Declaration
-    order is the ladder order, so :func:`tier_rank` needs no side table.
+    order is the ladder order.
     """
 
     WAVE = "wave"
@@ -185,18 +185,6 @@ KIND_GATE_TIERS: Mapping[TestKind, GateTier] = {
     TestKind.E2E: GateTier.RELEASE,
     TestKind.PERF: GateTier.RELEASE,
 }
-
-
-def tier_rank(tier: GateTier) -> int:
-    """Return ``tier``'s 0-based position on the ladder (``wave`` is 0).
-
-    Args:
-        tier: The gate tier to rank.
-
-    Returns:
-        The tier's index in ladder order.
-    """
-    return list(GateTier).index(tier)
 
 
 def gate_tier_for_kind(kind: TestKind) -> GateTier:

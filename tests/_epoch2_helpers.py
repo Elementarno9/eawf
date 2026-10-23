@@ -32,5 +32,5 @@ def lay_epoch2_tree(
     state_path = repo_root / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_bytes(orjson.dumps(state if state is not None else {}))
-    bear_epoch2_tree(state_path, project_code=project_code, born_at=datetime.now(UTC))
+    bear_epoch2_tree(state_path.parent, project_code=project_code, born_at=datetime.now(UTC))
     return state_path

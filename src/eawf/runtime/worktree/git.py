@@ -103,34 +103,6 @@ def repo_root(start: Path) -> Path:
     return Path(res.stdout.strip())
 
 
-def current_branch(repo: Path) -> str:
-    """Return the current HEAD branch of *repo*.
-
-    Raises:
-        UserError: with ``kind="InvalidInput"`` when HEAD is detached
-            (no symbolic ref).
-    """
-    res = _run(["git", "-C", str(repo), "symbolic-ref", "--short", "HEAD"])
-    if res.returncode != 0:
-        stderr = (res.stderr or "").strip()
-        raise cli_errors.UserError(
-            f"worktree create requires a non-detached HEAD; got: {stderr or 'unknown'}",
-            kind="InvalidInput",
-        )
-    return res.stdout.strip()
-
-
-def branch_exists(repo: Path, name: str) -> bool:
-    """Return ``True`` iff a local branch named *name* exists in *repo*."""
-    res = _run(["git", "-C", str(repo), "branch", "--list", name])
-    if res.returncode != 0:
-        # `git branch --list` only fails for invalid argv; treat as "no".
-        logger.warning(f"branch_exists rc={res.returncode} stderr={res.stderr!r}")
-        return False
-    # Output is one line per match; non-empty means the branch exists.
-    return bool(res.stdout.strip())
-
-
 def worktree_add(
     repo: Path,
     *,
@@ -577,12 +549,10 @@ def rebase_in_progress(worktree: Path) -> bool:
 
 __all__ = [
     "branch_delete",
-    "branch_exists",
     "cherry_pick",
     "cherry_pick_abort",
     "cherry_pick_continue",
     "cherry_pick_in_progress",
-    "current_branch",
     "head_sha",
     "invoke",
     "is_ancestor",

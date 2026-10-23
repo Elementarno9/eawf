@@ -15,7 +15,7 @@ the CLI gate excludes them: their prose is renderer output, not authored text.
 The Vale leg is deliberately excluded. Vale is a subprocess that fails open when
 its binary is absent or its ``StylesPath`` is unsynced, so asserting on it would
 make this test pass or fail by machine. The deterministic EAWF013 / EAWF014 /
-EAWF017 / EAWF021 / EAWF022 legs are pure functions and are the blocking floor
+EAWF017 / EAWF021 legs are pure functions and are the blocking floor
 that ``--strict`` enforces everywhere.
 """
 

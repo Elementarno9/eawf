@@ -161,7 +161,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "missing_test_paths": ("heuristics", "missing_test_paths"),
     "prune": ("pruning", "prune"),
     "requires_mockup_reference": ("heuristics", "requires_mockup_reference"),
-    "rubric_items": ("rubric", "rubric_items"),
     "run_live_rounds": ("live_rounds", "run_live_rounds"),
     "run_round_loop": ("round_loop", "run_round_loop"),
     "stage_campaign": ("research_campaign", "stage_campaign"),

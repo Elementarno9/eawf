@@ -8,10 +8,9 @@ refuse a budget event outright (see
 
 A producer records one condition only: a running Run reached its hard
 ceiling. Rows recorded before that rule may still carry the estimate basis
-and the approaching band; they load for display, and only the legacy
-import (:mod:`eawf.runtime.budget.legacy_notices`) folds new ones, so the
-band is kept out of the identity and its escalation moves one row through
-two revisions instead of stacking two cards.
+and the approaching band; they load for display. The band is kept out of
+the identity, so an escalation moves one row through two revisions
+instead of stacking two cards.
 
 The upsert runs as one locked read-modify-write over the notice ledger, so
 a restart, a retried dispatch or two concurrent producers crossing the
@@ -122,23 +121,6 @@ def notice_key_for(
         identity = f"{identity}\x1f{contract_digest}"
     digest = hashlib.sha256(identity.encode()).hexdigest()
     return f"sha256:{digest}"
-
-
-def budget_window_digest(claim_ref: str) -> str:
-    """Return the budget-window reference a claim folds into a notice's identity.
-
-    A wave re-claimed after a release is a new attempt at the same budget,
-    so its crossing is a new notice; a restart inside one claim is not, and
-    cannot invent a new window because the claim reference is unchanged.
-
-    Args:
-        claim_ref: What identifies the claim: its session id, or its
-            start stamp where no session was recorded.
-
-    Returns:
-        ``sha256:<hex>`` over the claim reference.
-    """
-    return f"sha256:{hashlib.sha256(f'claim\x1f{claim_ref}'.encode()).hexdigest()}"
 
 
 def severity_for(basis: RecordedBasis, band: RecordedBand) -> NoticeSeverity:
@@ -579,7 +561,6 @@ __all__ = [
     "RecordedCrossing",
     "UpsertOutcome",
     "apply_crossing",
-    "budget_window_digest",
     "imported_pause_urns",
     "load_notice_ledger",
     "notice_key_for",

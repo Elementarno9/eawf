@@ -108,7 +108,7 @@ def test_rel_021_a_group_option_before_the_verb_still_resolves(epoch1_tree: Path
 
 def test_rel_021_an_epoch2_tree_passes_the_gate(epoch1_tree: Path) -> None:
     state_path = epoch1_tree / ".ea" / "state.json"
-    bear_epoch2_tree(state_path, project_code="QR", born_at=datetime.now(UTC))
+    bear_epoch2_tree(state_path.parent, project_code="QR", born_at=datetime.now(UTC))
     assert resolve_authority(state_path.parent).epoch == 2
     _gate(["config", "set", "x", "1"])
 
@@ -126,7 +126,7 @@ def test_rel_021_a_repo_rooted_verb_is_judged_by_the_tree_it_writes(
     """``task create`` writes the ``--workspace`` tree, not the ``EA_STATE`` document."""
     native = tmp_path / "native"
     state_path = _tree(native)
-    bear_epoch2_tree(state_path, project_code="QR", born_at=datetime.now(UTC))
+    bear_epoch2_tree(state_path.parent, project_code="QR", born_at=datetime.now(UTC))
     _gate(["--workspace", str(native), "task", "create"])
     with pytest.raises(click.exceptions.Exit):
         _gate(["--workspace", str(epoch1_tree), "task", "create"])
@@ -172,9 +172,7 @@ def test_a_retired_verb_on_an_epoch1_tree_says_so_and_points_at_the_upgrade_guid
 
 
 def test_a_retired_verb_on_an_epoch2_tree_says_it_runs_on_epoch_2(epoch1_tree: Path) -> None:
-    bear_epoch2_tree(
-        epoch1_tree / ".ea" / "state.json", project_code="QR", born_at=datetime.now(UTC)
-    )
+    bear_epoch2_tree(epoch1_tree / ".ea", project_code="QR", born_at=datetime.now(UTC))
     envelope = _retired("wave", "claim", "P01-I01-W01")
     assert envelope["message"].endswith("this tree runs on epoch 2")
 

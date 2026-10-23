@@ -100,28 +100,6 @@ def test_repo_root_real_dirty_repo_returns_root(dirty_repo: Path) -> None:
     assert git.repo_root(dirty_repo) == dirty_repo.resolve()
 
 
-# --- branch_exists -------------------------------------------------------
-
-
-def test_branch_exists_nonzero_rc_returns_false(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=129, stderr="usage: git branch")
-    assert git.branch_exists(tmp_path, "feature/foo") is False
-
-
-def test_branch_exists_real_repo_known_branch(dirty_repo: Path) -> None:
-    assert git.branch_exists(dirty_repo, "main") is True
-    assert git.branch_exists(dirty_repo, "no/such/branch") is False
-
-
-# --- current_branch ------------------------------------------------------
-
-
-def test_current_branch_real_repo_returns_feature(dirty_repo: Path) -> None:
-    assert git.current_branch(dirty_repo) == "feature/eawf-v0.1"
-
-
 # --- worktree_add error mapping -----------------------------------------
 
 

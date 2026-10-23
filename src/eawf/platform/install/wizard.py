@@ -4,9 +4,11 @@ Per ``docs/architecture/installation.md`` the init wizard has two surfaces shari
 one engine:
 
 1. **Pure pipeline.** :func:`run_wizard_no_input` takes a fully populated
-   :class:`WizardAnswers` and writes ``state.json`` + ``.ea/config.yaml`` +
-   ``AGENTS.md`` + ``CLAUDE.md`` + the render manifest. No user interaction.
-   Re-running with the same answers is byte-stable on the rendered files.
+   :class:`WizardAnswers` and writes ``.ea/config.yaml`` + ``AGENTS.md`` +
+   ``CLAUDE.md`` + the render manifest. No user interaction. Re-running with
+   the same answers is byte-stable on the rendered files. It writes no
+   ``state.json``: the CLI bears the tree at epoch 2 afterwards with
+   :func:`eawf.platform.install.epoch2_birth.bear_epoch2_tree`.
 
 2. **Interactive questionary loop.** :func:`run_wizard_interactive` walks
    :data:`~eawf.platform.install.steps.WIZARD_STEPS` sequentially, dispatching each
@@ -32,41 +34,20 @@ Public API:
   handler maps it to the canonical ``USER_DECLINED`` exit code.
 - :func:`run_wizard_no_input` — pure pipeline.
 - :func:`run_wizard_interactive` — questionary TTY entry-point.
-
-Compatibility note (``enable_profile``):
-
-The existing :func:`eawf.kernel.config.profile.enable_profile` writes through a
-config-layer file and assumes the profile id is recorded under
-``profiles.enabled`` afterwards. The wizard already writes that section
-itself (so the rendered config is byte-stable across re-runs) — calling
-``enable_profile`` again would only matter for state-key materialisation.
-For the v0.1 init flow we sidestep ``enable_profile`` entirely and call the
-private :func:`eawf.kernel.config.profile._materialise_state_keys` helper directly
-on the freshly-written ``state.json``. This keeps the init transaction
-minimal — no second write to ``config.yaml`` from inside ``enable_profile``,
-no risk of a re-ordered ``profiles.enabled`` entry on a re-run — and is the
-documented W05 escape hatch when ``enable_profile`` is intolerant of the
-init flow.
 """
 
 from __future__ import annotations
 
 import logging
 import re
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
-from eawf.kernel.config.profile import _atomic_write_yaml, _materialise_state_keys
-from eawf.kernel.migrations import current_target_version
-from eawf.kernel.state.enums import GoalStatus, ProjectStatus, ScopeKind
+from eawf.kernel.config.profile import _atomic_write_yaml
 from eawf.kernel.state.ids import RE_PROJECT_CODE
-from eawf.kernel.state.io import write_state_unlocked
-from eawf.kernel.state.models import Goal, Project
-from eawf.kernel.state.urn import build as build_urn
 from eawf.platform.install.gitignore_writer import write_gitignore
 from eawf.platform.install.steps import (
     STEP_LIFECYCLE_DEPTH,
@@ -89,8 +70,9 @@ logger = logging.getLogger(__name__)
 
 # Files we treat as "the .ea is already initialised". Anything else inside
 # .ea/ (locks, transient probe caches) is tolerated even on a fresh init —
-# they belong to other tooling. The list mirrors the v0.1 contract: state +
-# config are the persistent on-disk state; everything else is rebuildable.
+# they belong to other tooling. The wizard writes no state document, but one
+# on disk marks an epoch-1 tree whose records a native birth would abandon,
+# so it still refuses a plain init.
 _CANONICAL_EA_FILES: tuple[str, ...] = ("state.json", "config.yaml")
 
 
@@ -110,7 +92,6 @@ assert STEP_RUNTIME.choices is not None, "STEP_RUNTIME.choices must be populated
 assert STEP_LIFECYCLE_DEPTH.choices is not None, "STEP_LIFECYCLE_DEPTH.choices must be populated"
 _RUNTIME_CHOICES: frozenset[str] = frozenset(STEP_RUNTIME.choices)
 _LIFECYCLE_DEPTH_CHOICES: frozenset[str] = frozenset(STEP_LIFECYCLE_DEPTH.choices)
-_BOOTSTRAP_GOAL_ID = "G01"
 _QUICK_PROFILE_SENTINELS: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("python", ("pyproject.toml", "uv.lock", "requirements.txt", "setup.py"), (".py",)),
     ("apps", ("package.json", "vite.config.ts", "next.config.js"), (".js", ".jsx", ".ts", ".tsx")),
@@ -252,10 +233,8 @@ class WizardResult(BaseModel):
     gitignore_path: Path
     profiles_enabled: list[str]
     project_code: str
-    materialised_state_keys: list[str]
     gitignore_patterns: list[str]
     auto_installed_plugins: list[str]
-    subagent_spec_preview: str
 
 
 def _pre_existing_canonical_files(ea_dir: Path) -> list[str]:
@@ -310,24 +289,6 @@ def detect_profiles_for_target(target_dir: Path) -> tuple[str, ...]:
     return tuple(detected)
 
 
-def _build_subagent_spec_preview(*, project_code: str) -> str:
-    """Render a deterministic starter dispatch preview for the init envelope."""
-    from eawf.workflow.agents.specs.models import SubagentSpec
-
-    return SubagentSpec(
-        wave_id="P00-I00-W00",
-        iter_id="P00-I00",
-        title="Bootstrap first wave",
-        scope_id=project_code,
-        agent_role="executor",
-        effort_bucket="S",
-        success_criteria=[
-            "replace this preview with the first real wave before dispatch",
-        ],
-        file_scopes=["src/**", "tests/**"],
-    ).render()
-
-
 def _auto_install_runtime_plugin(
     *,
     target_dir: Path,
@@ -341,96 +302,6 @@ def _auto_install_runtime_plugin(
 
     result = sync_plugins(target_dir, runtimes=(cast(Any, runtime),), force=force)
     return [entry.runtime for entry in result.results]
-
-
-def _build_initial_project(*, project_code: str, project_title: str) -> dict[str, Any]:
-    """Build the repo-level project record seeded by init."""
-    title = project_title or project_code
-    return Project(
-        code=project_code,
-        slug=project_code.lower(),
-        title=title,
-        description=None,
-        domains=["general"],
-        default_branch="main",
-        status=ProjectStatus.ACTIVE,
-        repo_urn=build_urn("repo", owner=project_code),
-    ).model_dump(mode="json")
-
-
-def _bootstrap_goal_title(*, project_code: str, project_title: str) -> str:
-    """Return the initial project-intent goal title for fresh init."""
-    title = project_title or project_code
-    return f"Establish {title} project intent"
-
-
-def _build_initial_goal(
-    *,
-    project_code: str,
-    project_title: str,
-    created_at: datetime,
-) -> dict[str, Any]:
-    """Build the initial goal record seeded by init."""
-    title = _bootstrap_goal_title(project_code=project_code, project_title=project_title)
-    return Goal(
-        id=_BOOTSTRAP_GOAL_ID,
-        scope_id=project_code,
-        title=title,
-        summary=(
-            "Bootstrap goal seeded by eawf init so planning, dispatch, "
-            "and evidence surfaces start with project intent."
-        ),
-        status=GoalStatus.OPEN,
-        outcome_ids=[],
-        created_at=created_at,
-        closed_at=None,
-    ).model_dump(mode="json")
-
-
-def _build_initial_state(*, project_code: str, project_title: str) -> dict[str, Any]:
-    """Build a minimal-but-valid ``state.json`` payload for a fresh init.
-
-    Mirrors the shape used by :func:`eawf.surfaces.cli.commands.lifecycle.project_init_cmd`
-    so the two entry-points produce compatible state files. The wizard
-    now seeds the required :class:`~eawf.kernel.state.models.Project`
-    record directly; legacy init-only states can be repaired with
-    ``eawf repository create``.
-    """
-    now = datetime.now(UTC)
-    timestamp = now.isoformat()
-    return {
-        "schema_version": current_target_version(),
-        "scope_kind": ScopeKind.REPO.value,
-        "urn": build_urn("state", owner=project_code),
-        "updated_at": timestamp,
-        "project": _build_initial_project(
-            project_code=project_code,
-            project_title=project_title,
-        ),
-        "current": {
-            "project_code": project_code,
-            "track_id": None,
-            "phase_id": None,
-            "iter_id": None,
-            "active_wave_ids": [],
-            "active_session_ids": [],
-        },
-        "workspace": None,
-        "goals": {
-            _BOOTSTRAP_GOAL_ID: _build_initial_goal(
-                project_code=project_code,
-                project_title=project_title,
-                created_at=now,
-            ),
-        },
-        "phases": {},
-        "iters": {},
-        "waves": {},
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {"project_title": project_title},
-    }
 
 
 def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
@@ -515,47 +386,29 @@ def run_wizard_no_input(
     *,
     force: bool = False,
 ) -> WizardResult:
-    """Materialise the full ``.ea/`` + AGENTS.md + CLAUDE.md from *answers*.
+    """Materialise the ``.ea/`` skeleton + AGENTS.md + CLAUDE.md from *answers*.
 
     Workflow:
 
-    1. Refuse to overwrite an existing ``.ea/state.json`` or ``.ea/config.yaml``
-       unless ``force=True``. Other detritus under ``.ea/`` (locks, probe
-       caches) is tolerated.
+    1. Refuse a tree that already holds ``.ea/config.yaml`` or an epoch-1
+       ``.ea/state.json`` unless ``force=True``. Other detritus under
+       ``.ea/`` (locks, probe caches) is tolerated.
     2. Resolve the state path. If ``answers.state_path`` is relative it is
-       anchored at ``target_dir``.
-    3. Acquire the sibling lock on the state path and write the minimal
-       state document via :func:`eawf.kernel.state.io.write_state_unlocked`
-       (refuses a leak-shaped answer before it lands). The lock prevents a
-       concurrent ``eawf repository create`` from racing the write.
-    4. Write ``.ea/config.yaml`` via :func:`_atomic_write_yaml` (held under
-       its own lock).
-    5. Materialise ``state_extensions.fields_required`` for every selected
-       profile via :func:`eawf.kernel.config.profile._materialise_state_keys` —
-       the freshly-written state already exists, so the helper is happy.
-    6. Compose the selected profiles, render ``AGENTS.md``, persist the
+       anchored at ``target_dir``; its directory is the tree the CLI bears
+       at epoch 2 and the path the managed ``.gitignore`` block names. No
+       document is written there.
+    3. Write ``.ea/config.yaml`` via :func:`_atomic_write_yaml` under its
+       lock.
+    4. Compose the selected profiles, render ``AGENTS.md``, persist the
        manifest, then write the ``CLAUDE.md`` shim. Manifest path is
        ``<target_dir>/.ea/indexes/generated.json``.
 
     **Failure semantics.** This function is **not transactional**. The
-    write order is ``state.json`` → ``config.yaml`` → ``AGENTS.md`` →
-    manifest → ``CLAUDE.md``; a failure midway leaves whichever files were
-    written before the failure on disk. There is no automatic rollback in
-    v0.1.
-
-    Recovery for v0.1 is one of:
-
-    - **Clean retry.** Re-run with ``--force`` (or call this function with
-      ``force=True``). The pipeline overwrites ``state.json`` /
-      ``config.yaml`` and re-renders ``AGENTS.md`` / manifest / ``CLAUDE.md``
-      from scratch — this is the documented recovery path.
-    - **Manual cleanup.** Delete ``<target_dir>/.ea/``,
-      ``<target_dir>/AGENTS.md`` and ``<target_dir>/CLAUDE.md``, then
-      re-run without ``--force``.
-
-    Phase 6 (or later) is expected to wrap this sequence in a two-phase
-    commit pattern (write to a temp prefix, atomic-rename on success); the
-    public signature stays identical.
+    write order is ``config.yaml`` → ``AGENTS.md`` → manifest →
+    ``CLAUDE.md``; a failure midway leaves whichever files were written
+    before the failure on disk. Recovery is a re-run with ``--force``, or
+    deleting ``<target_dir>/.ea/``, ``<target_dir>/AGENTS.md`` and
+    ``<target_dir>/CLAUDE.md`` and re-running without it.
 
     Args:
         answers: Validated :class:`WizardAnswers` instance.
@@ -566,8 +419,7 @@ def run_wizard_no_input(
             Also the documented recovery path after a partial init.
 
     Returns:
-        :class:`WizardResult` with absolute paths and a list of materialised
-        state keys (so the CLI envelope can surface "added 3 keys to state").
+        :class:`WizardResult` with absolute paths.
 
     Raises:
         UserError: ``.ea/`` already contains canonical files and
@@ -589,34 +441,14 @@ def run_wizard_no_input(
     state_path = state_path.resolve()
     state_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # State first — locked write, holds the same sibling lock the rest of the
-    # CLI honours so a concurrent project-init cannot race.
-    state_payload = _build_initial_state(
-        project_code=answers.project_code,
-        project_title=answers.project_title,
-    )
-    with portalock.acquire(state_path, timeout=5.0):
-        write_state_unlocked(state_path, state_payload)
-
-    # Config yaml — second write, separate lock. Its layout is what the
-    # layered-config loader will see on the next ``eawf config get``.
+    # Its layout is what the layered-config loader will see on the next
+    # ``eawf config get``.
     config_path = (ea_dir / "config.yaml").resolve()
     config_path.parent.mkdir(parents=True, exist_ok=True)
     with portalock.acquire(config_path, timeout=5.0):
         _atomic_write_yaml(config_path, _build_config_yaml(answers))
 
     gitignore_result = write_gitignore(target_dir, state_path=state_path)
-
-    # Materialise state keys per profile. We avoid ``enable_profile`` here
-    # (see module docstring) and call ``_materialise_state_keys`` directly,
-    # collecting the union of newly added keys for the response envelope.
-    materialised: list[str] = []
-    for profile_id in answers.profiles:
-        profile = load_profile(profile_id)
-        required = list(profile.state_extensions.fields_required)
-        if required:
-            added = _materialise_state_keys(state_path, required)
-            materialised.extend(added)
 
     agents_md_path = (target_dir / "AGENTS.md").resolve()
     claude_md_path = (target_dir / "CLAUDE.md").resolve()
@@ -647,13 +479,11 @@ def run_wizard_no_input(
         if answers.auto_install_plugins
         else []
     )
-    subagent_spec_preview = _build_subagent_spec_preview(project_code=answers.project_code)
 
     logger.info(
         f"run_wizard_no_input project_code={answers.project_code} "
-        f"profiles={list(answers.profiles)} state={state_path} "
-        f"config={config_path} agents_md={agents_md_path} "
-        f"materialised={materialised}"
+        f"profiles={list(answers.profiles)} tree={state_path.parent} "
+        f"config={config_path} agents_md={agents_md_path}"
     )
 
     return WizardResult(
@@ -665,10 +495,8 @@ def run_wizard_no_input(
         gitignore_path=gitignore_result.path,
         profiles_enabled=list(answers.profiles),
         project_code=answers.project_code,
-        materialised_state_keys=materialised,
         gitignore_patterns=list(gitignore_result.patterns),
         auto_installed_plugins=auto_installed_plugins,
-        subagent_spec_preview=subagent_spec_preview,
     )
 
 

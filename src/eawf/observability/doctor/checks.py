@@ -197,17 +197,31 @@ def check_tools_available(
 
 
 def check_state_present(*, workspace: Path | None) -> CheckResult:
-    """Return ``ok`` iff ``state.json`` resolves at *workspace*.
+    """Return ``ok`` iff ``state.json`` or a born epoch-2 tree resolves at *workspace*.
 
     *workspace* may be ``None`` to defer to the resolver's pwd-upward walk
     (which is the default behaviour when ``--workspace`` is not supplied).
+    A tree ``eawf init`` bore has no ``state.json``: its selected
+    generation is its state.
     """
+    from eawf.kernel.state.epoch2.authority import resolve_authority
+
     state_path, reason = resolve_with_reason(workspace=workspace)
     if state_path.exists():
         return CheckResult(
             name="state_present",
             status="ok",
             detail=f"state.json found at {state_path} (via {reason})",
+        )
+    authority = resolve_authority(state_path.parent)
+    if authority.epoch == 2:
+        return CheckResult(
+            name="state_present",
+            status="ok",
+            detail=(
+                f"epoch-2 tree at {state_path.parent} reads generation "
+                f"{authority.generation_id} (via {reason})"
+            ),
         )
     return CheckResult(
         name="state_present",

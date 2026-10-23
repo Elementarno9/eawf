@@ -1,9 +1,11 @@
-"""``create_worktree`` — materialise a per-wave worktree branch.
+"""Lay down a per-wave worktree row the way the retired ``worktree create`` verb did.
 
-Public API:
-    create_worktree(state, *, repo_root, wave_id, ...) -> WorktreeRecord
+No ``eawf`` entry point creates a worktree any more, but the exempt
+``worktree merge-back`` and ``worktree cleanup`` verbs still act on one, so
+their tests build it here. :func:`make_repo` and :func:`claimed_state` seed
+the git repository and the claimed wave the row is created for.
 
-The function mutates the supplied :class:`State` in place
+:func:`create_worktree` mutates the supplied :class:`State` in place
 (:attr:`State.worktrees` and the wave's ``worktree_id``) and returns the
 freshly-built :class:`WorktreeRecord`. Caller holds
 ``portalock(state.json)`` via :func:`eawf.surfaces.cli._mutation.state_transaction`
@@ -16,13 +18,28 @@ from __future__ import annotations
 
 import logging
 import re
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
 import eawf.runtime.worktree.git as git
-from eawf.kernel.state.enums import WaveStatus, WorktreeStatus
+from eawf.kernel.state.enums import (
+    PhaseStatus,
+    ProjectStatus,
+    ScopeKind,
+    WaveStatus,
+    WorktreeStatus,
+)
 from eawf.kernel.state.ids import is_wave_id
-from eawf.kernel.state.models import State, Wave, WorktreeRecord
+from eawf.kernel.state.models import (
+    CurrentPointers,
+    Iter,
+    Phase,
+    Project,
+    State,
+    Wave,
+    WorktreeRecord,
+)
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.surfaces.cli import errors as cli_errors
 
@@ -36,6 +53,38 @@ _DEFAULT_BRANCH_PREFIX: str = "feature/eawf-v0.1"
 # trailing ``.lock``, leading ``/``); the validator below piles on a
 # whitespace check so the regex itself can stay permissive.
 _BRANCH_NAME_RE = re.compile(r"^[A-Za-z0-9._/\-]+$")
+
+
+def _current_branch(repo: Path) -> str:
+    """Return the current HEAD branch of *repo*.
+
+    Raises:
+        UserError: with ``kind="InvalidInput"`` when HEAD is detached.
+    """
+    res = subprocess.run(
+        ["git", "-C", str(repo), "symbolic-ref", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if res.returncode != 0:
+        stderr = res.stderr.strip()
+        raise cli_errors.UserError(
+            f"worktree create requires a non-detached HEAD; got: {stderr or 'unknown'}",
+            kind="InvalidInput",
+        )
+    return res.stdout.strip()
+
+
+def _branch_exists(repo: Path, name: str) -> bool:
+    """Return ``True`` iff a local branch named *name* exists in *repo*."""
+    res = subprocess.run(
+        ["git", "-C", str(repo), "branch", "--list", name],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return res.returncode == 0 and bool(res.stdout.strip())
 
 
 def _slugify_wave(wave_id: str) -> str:
@@ -175,7 +224,7 @@ def _resolve_base_branch(
     if base is None:
         # The current-branch resolver already refuses detached HEAD with
         # UserError (kind="InvalidInput").
-        chosen_base = git.current_branch(repo_root)
+        chosen_base = _current_branch(repo_root)
         if guarded_default and chosen_base == guarded_default:
             raise cli_errors.UserError(
                 f"worktree create refuses to branch from {guarded_default!r}; "
@@ -246,7 +295,7 @@ def create_worktree(
         branch: Optional explicit branch name; defaults to
             ``feature/eawf-v0.1-<phase>-<wave>``.
         base: Optional explicit base ref. When ``None``, the helper
-            uses :func:`git.current_branch` and refuses if it is
+            uses :func:`_current_branch` and refuses if it is
             ``main``/the project's ``default_branch``. *explicit_base*
             must be ``True`` when *base* is user-supplied.
         path: Optional explicit on-disk path; defaults to
@@ -286,7 +335,7 @@ def create_worktree(
         explicit_base=explicit_base,
         default_branch=default_branch,
     )
-    if git.branch_exists(repo_root, chosen_branch):
+    if _branch_exists(repo_root, chosen_branch):
         raise cli_errors.UserError(
             f"branch {chosen_branch!r} already exists locally; pick another name "
             f"or delete the existing branch first",
@@ -330,6 +379,83 @@ def create_worktree(
     return record
 
 
-__all__ = [
-    "create_worktree",
-]
+_DT = datetime(2026, 5, 9, tzinfo=UTC)
+
+
+def make_repo(workdir: Path, *, branch: str = "feature/eawf-v0.1") -> Path:
+    """Initialise a git repo with one commit and a feature branch.
+
+    Returns the repo root. The repo starts on ``main`` with one commit
+    and then creates+checks out *branch*. Caller can then point
+    :func:`create_worktree` at the repo via ``repo_root``.
+    """
+    workdir.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "ci@example.com"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "ci"], cwd=workdir, check=True)
+    (workdir / "README.md").write_text("hello\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "initial"], cwd=workdir, check=True)
+    subprocess.run(["git", "checkout", "-q", "-b", branch], cwd=workdir, check=True)
+    return workdir
+
+
+def claimed_state(*, wave_id: str = "P05-I01-W01") -> State:
+    """Build a minimal :class:`State` with one CLAIMED wave."""
+    return State.model_validate(
+        {
+            "schema_version": "1.0",
+            "scope_kind": ScopeKind.REPO.value,
+            "urn": "urn:eawf:v1:state:DEMO",
+            "updated_at": _DT.isoformat(),
+            "project": Project(
+                code="DEMO",
+                slug="demo",
+                title="Demo",
+                description=None,
+                domains=["test"],
+                default_branch="main",
+                status=ProjectStatus.ACTIVE,
+                repo_urn="urn:eawf:v1:repo:DEMO",
+            ).model_dump(mode="json"),
+            "current": CurrentPointers().model_dump(mode="json"),
+            "workspace": None,
+            "phases": {
+                "P05": Phase(
+                    id="P05",
+                    scope_id="DEMO",
+                    title="Phase 5",
+                    status=PhaseStatus.ACTIVE,
+                    iter_ids=["P05-I01"],
+                    outcome_ids=[],
+                    opened_at=_DT,
+                ).model_dump(mode="json"),
+            },
+            "iters": {
+                "P05-I01": Iter(
+                    id="P05-I01",
+                    phase_id="P05",
+                    title="Iter 1",
+                    status="active",  # type: ignore[arg-type]
+                    wave_ids=[wave_id],
+                    opened_at=_DT,
+                ).model_dump(mode="json"),
+            },
+            "waves": {
+                wave_id: Wave(
+                    id=wave_id,
+                    iter_id="P05-I01",
+                    title="W1",
+                    status=WaveStatus.CLAIMED,
+                    deps=[],
+                    file_scopes=["src/eawf/runtime/worktree/"],
+                    claim_session_id="SES-001",
+                    opened_at=_DT,
+                ).model_dump(mode="json"),
+            },
+            "artifacts": {},
+            "agent_sessions": {},
+            "plugins": {},
+            "indexes": {},
+        }
+    )

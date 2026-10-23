@@ -1,12 +1,10 @@
 """Budget notices, driven through the producer, the ledger and the daemon verbs.
 
-Each case runs the code an operator's session runs: the daemon's estimate
-sweep over a real state file and event store, a Run's budget termination,
-the notice ledger on disk,
-the recipient verbs the daemon registers, the pause projection the
-operator surface reads, and the legacy import that reinterprets the old
-over-budget pauses. A restart is a fresh call over the same files, which
-is all a restart is to code that keeps nothing in memory.
+Each case runs the code an operator's session runs: a Run's budget
+termination, the notice ledger on disk, the recipient verbs the daemon
+registers and the pause projection the operator surface reads. A restart
+is a fresh call over the same files, which is all a restart is to code
+that keeps nothing in memory.
 """
 
 from __future__ import annotations
@@ -26,21 +24,14 @@ from pydantic import ValidationError
 
 from eawf import __version__
 from eawf.kernel.economics.governor import economics_policy_from
-from eawf.kernel.economics.notice_policy import DEFAULT_NOTICE_POLICY, EstimatedTimeNotice
+from eawf.kernel.economics.notice_policy import DEFAULT_NOTICE_POLICY
 from eawf.kernel.runtime.budget_notice import BudgetNotice
 from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.models import State
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
-from eawf.runtime.budget.legacy_notices import (
-    AUTO_RESOLVED_CHOICE,
-    PAUSE_EVENT_TYPE,
-    RESUME_EVENT_TYPE,
-    import_legacy_advisories,
-    import_legacy_notices,
-)
+from eawf.runtime.budget.legacy_notices import PAUSE_EVENT_TYPE, RESUME_EVENT_TYPE
 from eawf.runtime.budget.notice_inbox import (
     NoticeDispositionError,
     StaleNoticeRevisionError,
@@ -61,18 +52,10 @@ from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.admission import EconomicsPolicyError, load_economics
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.budget_notice import (
-    deliver_budget_notices,
     dispose_budget_notice,
     list_budget_notices,
 )
 from eawf.runtime.daemon.pause_migration import open_legacy_pauses
-from eawf.runtime.daemon.stale_wave import (
-    ESTIMATE_PASSED_EVENT_TYPE,
-    NOTICE_OPENED_EVENT_TYPE,
-    import_legacy_pauses,
-    sweep_once,
-)
-from eawf.workflow.estimation.thresholds import wave_budget_minutes
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from tests.integration.runtime.daemon.test_native_dispatch import RUN_URN
 
@@ -82,8 +65,6 @@ WAVE = "P24-I02-W20"
 OTHER_WAVE = "P24-I02-W21"
 SESSION = "SES-claim-one"
 CLAIMED = datetime(2026, 9, 1, 9, 0, tzinfo=UTC)
-POLICY = DEFAULT_NOTICE_POLICY.estimated_time
-GRACE = timedelta(seconds=POLICY.require_no_progress_for)
 ALICE = "ALICE"
 BOB = "BOB"
 _QUESTION = UserQuestion(
@@ -146,35 +127,6 @@ def _write_state(tmp_path: Path, waves: dict[str, dict[str, Any]]) -> Path:
     return state_path
 
 
-def _estimate_seconds(state_path: Path) -> float:
-    state = State.model_validate_json(state_path.read_bytes())
-    minutes = wave_budget_minutes(state, WAVE)
-    assert minutes is not None
-    return minutes * 60
-
-
-def _at_fraction(state_path: Path, fraction: float) -> datetime:
-    """Return the moment the wave's elapsed time is *fraction* of its estimate."""
-    return CLAIMED + timedelta(seconds=_estimate_seconds(state_path) * fraction)
-
-
-def _progress(state_path: Path, *, at: datetime, wave_id: str = WAVE) -> None:
-    """Append one event the wave's own work wrote at *at*."""
-    _append(
-        state_path,
-        scope_id=f"{wave_id}::executor",
-        payload=EventPayload(
-            timestamp=at,
-            event_type="agent.output.chunk",
-            actor="agent",
-            command="agent.output",
-            args_hash="0" * 16,
-            status="ok",
-            message="working",
-        ),
-    )
-
-
 def _append(state_path: Path, *, scope_id: str, payload: EventPayload) -> None:
     append_envelope(
         store_path(state_path, StoreKind.EVENT),
@@ -190,21 +142,6 @@ def _append(state_path: Path, *, scope_id: str, payload: EventPayload) -> None:
             artifact_ids=[],
         ),
     )
-
-
-def _event_types(state_path: Path) -> list[str]:
-    path = store_path(state_path, StoreKind.EVENT)
-    if not path.exists():
-        return []
-    return [orjson.loads(line)["payload"]["event_type"] for line in path.read_bytes().splitlines()]
-
-
-def _sweep(state_path: Path, *, now: datetime, policy: EstimatedTimeNotice = POLICY) -> list[Any]:
-    published: list[Envelope] = []
-    crossings = asyncio.run(
-        sweep_once(state_path=state_path, policy=policy, publish=published.append, now=now)
-    )
-    return [crossings, published]
 
 
 def _ctx(state_path: Path) -> MethodContext:
@@ -289,41 +226,6 @@ def _legacy_resume(state_path: Path, *, urn: str, choice: str, at: datetime) -> 
     )
 
 
-def _payloads(state_path: Path) -> list[EventPayload]:
-    path = store_path(state_path, StoreKind.EVENT)
-    return [
-        EventPayload.model_validate(orjson.loads(line)["payload"])
-        for line in path.read_bytes().splitlines()
-    ]
-
-
-# ---- PRX-032: the former progress fraction produces nothing --------------------
-
-
-@pytest.mark.parametrize("fraction", [0.8, 0.999])
-def test_prx_032_the_former_progress_fraction_is_silent_on_every_channel(
-    tmp_path: Path, fraction: float
-) -> None:
-    state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
-    before = state_path.read_bytes()
-    now = _at_fraction(state_path, fraction)
-    assert now - CLAIMED > GRACE  # no progress for longer than the grace, too
-
-    crossings, published = _sweep(state_path, now=now)
-
-    assert crossings == []
-    assert published == []
-    assert _event_types(state_path) == []  # no activity row
-    assert not notices_path(state_path).exists()  # zero notice-store rows
-    assert deliver_pending(notices_path(state_path), principal=LOCAL_OPERATOR, now=now) == ()
-    inbox = inbox_for(
-        load_notice_ledger(notices_path(state_path)), principal=LOCAL_OPERATOR, now=now
-    )
-    assert inbox.active == inbox.acknowledged == inbox.history == ()  # no badge, no attention
-    assert open_legacy_pauses(state_path) == []  # nothing a modal can open
-    assert state_path.read_bytes() == before  # no lifecycle effect
-
-
 # ---- PRX-033: no sub-unity band can load ------------------------------------
 
 
@@ -362,111 +264,6 @@ def test_prx_033_an_empty_table_loads_the_shipped_policy() -> None:
     assert economics_policy_from({}).notice_policy == DEFAULT_NOTICE_POLICY
 
 
-def test_prx_033_a_crossing_with_recent_progress_is_recorded_but_opens_nothing(
-    tmp_path: Path,
-) -> None:
-    state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
-    now = _at_fraction(state_path, 1.2)
-    _progress(state_path, at=now - GRACE / 2)
-
-    crossings, published = _sweep(state_path, now=now)
-
-    assert [c.grace_met for c in crossings] == [False]
-    assert [e.payload["event_type"] for e in published] == [ESTIMATE_PASSED_EVENT_TYPE]
-    assert published[0].payload["status"] == "ok"
-    assert "execution continues" in published[0].payload["message"]
-    assert "stale" not in published[0].payload["message"]
-    assert not notices_path(state_path).exists()
-    assert open_legacy_pauses(state_path) == []
-
-
-# ---- PRX-034: a wave opens no notice; a Run's notice survives restarts ------
-
-
-def test_prx_034_a_wave_past_its_estimate_and_the_grace_opens_no_notice(tmp_path: Path) -> None:
-    state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
-    _progress(state_path, at=CLAIMED + timedelta(minutes=1))
-    now = max(_at_fraction(state_path, 1.0), CLAIMED + timedelta(minutes=1) + GRACE)
-
-    _crossings, published = _sweep(state_path, now=now)
-
-    assert [e.payload["event_type"] for e in published] == [ESTIMATE_PASSED_EVENT_TYPE]
-    assert not notices_path(state_path).exists()
-
-
-def test_prx_034_three_restarts_keep_one_row_one_delivery_and_no_modal(tmp_path: Path) -> None:
-    state_path, _key, now = _opened(tmp_path)
-    _sweep(state_path, now=now)
-    ledger_file = notices_path(state_path)
-    first = deliver_pending(ledger_file, principal=LOCAL_OPERATOR, now=now)
-    settled = ledger_file.read_bytes()
-
-    for restart in range(1, 4):
-        later = now + timedelta(minutes=restart)
-        _sweep(state_path, now=later)  # daemon restart
-        again = deliver_pending(ledger_file, principal=LOCAL_OPERATOR, now=later)  # client restart
-        assert again == ()
-
-    assert len(first) == 1
-    assert ledger_file.read_bytes() == settled
-    assert len(load_notice_ledger(ledger_file).notices) == 1
-    assert NOTICE_OPENED_EVENT_TYPE not in _event_types(state_path)
-    assert PAUSE_EVENT_TYPE not in _event_types(state_path)
-    assert open_legacy_pauses(state_path) == []
-
-
-# ---- PRX-035: escalation over the legacy-import path ----------------------
-
-
-def test_prx_035_an_imported_approaching_notice_escalates_one_identity(tmp_path: Path) -> None:
-    state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
-    _legacy_pause(state_path, wave_id=WAVE, band="warn", at=CLAIMED, urn="urn:p:1")
-    _legacy_pause(
-        state_path, wave_id=WAVE, band="err", at=CLAIMED + timedelta(minutes=5), urn="urn:p:2"
-    )
-
-    import_legacy_pauses(state_path)
-
-    ledger = load_notice_ledger(notices_path(state_path))
-    (notice,) = ledger.notices.values()
-    assert (notice.highest_band, notice.revision, notice.status) == ("limit_reached", 2, "OPEN")
-    assert notice.provenance == ("urn:p:1", "urn:p:2")
-    inbox = inbox_for(ledger, principal=LOCAL_OPERATOR, now=CLAIMED + timedelta(hours=1))
-    assert len(inbox.active) == 1
-
-
-def test_prx_035_the_import_alone_stops_at_the_approaching_band(tmp_path: Path) -> None:
-    state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
-    _legacy_pause(state_path, wave_id=WAVE, band="warn", at=CLAIMED, urn="urn:p:1")
-
-    ledger = import_legacy_advisories(_payloads(state_path), closed_waves=frozenset())
-
-    (notice,) = ledger.notices.values()
-    assert (notice.highest_band, notice.severity, notice.revision) == ("approaching", "info", 1)
-
-
-def test_prx_035_a_reimport_is_byte_identical(tmp_path: Path) -> None:
-    state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
-    _legacy_pause(state_path, wave_id=WAVE, band="warn", at=CLAIMED, urn="urn:p:1")
-    _legacy_pause(
-        state_path, wave_id=WAVE, band="err", at=CLAIMED + timedelta(minutes=5), urn="urn:p:2"
-    )
-    assert import_legacy_pauses(state_path) == 1
-    once = notices_path(state_path).read_bytes()
-
-    assert import_legacy_pauses(state_path) == 0
-    assert notices_path(state_path).read_bytes() == once
-
-
-def test_prx_035_a_live_wave_never_opens_a_notice_at_any_fraction(tmp_path: Path) -> None:
-    state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
-
-    for fraction in (0.5, 0.8, 0.95, 1.0, 1.5, 3.0):
-        _sweep(state_path, now=_at_fraction(state_path, fraction) + GRACE)
-
-    assert not notices_path(state_path).exists()
-
-
 # ---- PRX-036: dispositions survive restart ---------------------------------
 
 
@@ -490,7 +287,7 @@ def _terminated(state_path: Path, *, now: datetime, audience: tuple[str, ...]) -
 
 def _opened(tmp_path: Path) -> tuple[Path, str, datetime]:
     state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
-    now = _at_fraction(state_path, 1.0) + GRACE
+    now = CLAIMED + timedelta(hours=1)
     key = _terminated(state_path, now=now, audience=(LOCAL_OPERATOR,))
     return state_path, key, now
 
@@ -833,7 +630,7 @@ def test_prx_039_concurrent_producers_yield_one_notice(tmp_path: Path) -> None:
     assert delivered == {ALICE: 1, BOB: 1}
 
 
-# ---- PRX-040: legacy bands collapse deterministically -------------------------
+# ---- PRX-040: legacy pauses stay listed ----------------------------------------
 
 
 def _legacy_corpus(tmp_path: Path) -> Path:
@@ -847,17 +644,15 @@ def _legacy_corpus(tmp_path: Path) -> Path:
         },
     )
     t = CLAIMED
-    # An operator answered both of W20's pauses: resolved.
+    # An operator answered both of W20's pauses.
     _legacy_pause(state_path, wave_id=WAVE, band="warn", at=t, urn="urn:a:1")
     _legacy_resume(state_path, urn="urn:a:1", choice="keep", at=t + timedelta(minutes=1))
     _legacy_pause(state_path, wave_id=WAVE, band="err", at=t + timedelta(minutes=9), urn="urn:a:2")
     _legacy_resume(state_path, urn="urn:a:2", choice="keep", at=t + timedelta(minutes=10))
-    # W21 closed and its pause was only retracted by the system: cleared.
+    # W21 closed and its pause was only retracted by the system.
     _legacy_pause(state_path, wave_id=OTHER_WAVE, band="backstop", at=t, urn="urn:b:1")
-    _legacy_resume(
-        state_path, urn="urn:b:1", choice=AUTO_RESOLVED_CHOICE, at=t + timedelta(minutes=2)
-    )
-    # W22 has an unanswered warn and a pre-band row in another claim: two open notices.
+    _legacy_resume(state_path, urn="urn:b:1", choice="auto-resolved", at=t + timedelta(minutes=2))
+    # W22 has an unanswered warn and a pre-band row in another claim: two open pauses.
     _legacy_pause(state_path, wave_id="P24-I02-W22", band="warn", at=t, urn="urn:c:1")
     _legacy_pause(
         state_path,
@@ -870,121 +665,9 @@ def _legacy_corpus(tmp_path: Path) -> Path:
     return state_path
 
 
-def test_prx_040_legacy_bands_collapse_with_no_fabricated_disposition(tmp_path: Path) -> None:
-    state_path = _legacy_corpus(tmp_path)
-    assert len(open_legacy_pauses(state_path)) == 2  # the modal's source before the import
-
-    assert import_legacy_pauses(state_path) == 4
-
-    ledger = load_notice_ledger(notices_path(state_path))
-    fates = sorted(
-        (n.scope_id, n.provenance, n.status, n.highest_band, n.revision)
-        for n in ledger.notices.values()
-    )
-    assert fates == [
-        (WAVE, ("urn:a:1", "urn:a:2"), "RESOLVED", "limit_reached", 2),
-        (OTHER_WAVE, ("urn:b:1",), "CLEARED", "limit_reached", 1),
-        ("P24-I02-W22", ("urn:c:1",), "OPEN", "approaching", 1),
-        ("P24-I02-W22", ("urn:c:2",), "OPEN", "limit_reached", 1),
-    ]
-    for notice in ledger.notices.values():
-        assert notice.basis == "estimate"  # never an inferred hard exhaustion
-        state = notice.recipients[LOCAL_OPERATOR]
-        assert state.delivered_revision == notice.revision  # no delivery storm
-        assert state.acknowledged_revision is None and state.seen_revision is None
-        assert all(entry.principal is None for entry in notice.history)
-    by_wave = {n.scope_id: n for n in ledger.notices.values() if n.status != "OPEN"}
-    assert by_wave[WAVE].history[0].reason == "legacy resume: keep"
-    assert by_wave[OTHER_WAVE].history[0].action == "cleared"
-    assert by_wave[OTHER_WAVE].budget_value is None  # a backstop row recorded no estimate
-    assert deliver_pending(notices_path(state_path), principal=LOCAL_OPERATOR, now=CLAIMED) == ()
-    assert open_legacy_pauses(state_path) == []  # never a pause and a notice at once
-
-
-def test_prx_040_the_import_is_deterministic_over_row_order(tmp_path: Path) -> None:
-    payloads = _payloads(_legacy_corpus(tmp_path))
-
-    forward = import_legacy_advisories(payloads, closed_waves=frozenset({OTHER_WAVE}))
-    backward = import_legacy_advisories(payloads[::-1], closed_waves=frozenset({OTHER_WAVE}))
-
-    assert forward.model_dump_json() == backward.model_dump_json()
-
-
-def test_prx_040_the_migration_rerun_is_byte_identical_and_keeps_dispositions(
-    tmp_path: Path,
-) -> None:
-    state_path = _legacy_corpus(tmp_path)
-    ledger_file = notices_path(state_path)
-    import_legacy_pauses(state_path)
-    open_key = next(
-        k for k, n in load_notice_ledger(ledger_file).notices.items() if n.status == "OPEN"
-    )
-    dispose_notice(
-        ledger_file,
-        notice_key=open_key,
-        principal=LOCAL_OPERATOR,
-        disposition="acknowledge",
-        expected_revision=1,
-        at=CLAIMED,
-    )
-    after_disposition = ledger_file.read_bytes()
-
-    assert (
-        import_legacy_notices(
-            ledger_file, _payloads(state_path), closed_waves=frozenset({OTHER_WAVE})
-        )
-        == 0
-    )
-    assert ledger_file.read_bytes() == after_disposition
-
-
-def test_prx_040_a_store_with_no_legacy_rows_imports_nothing(tmp_path: Path) -> None:
-    state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
-    _progress(state_path, at=CLAIMED)
-
-    assert import_legacy_pauses(state_path) == 0
-    assert not notices_path(state_path).exists()
-    assert import_legacy_pauses(tmp_path / "absent" / "state.json") == 0
-
-
-def test_prx_040_a_legacy_row_with_no_elapsed_time_stays_a_pause(tmp_path: Path) -> None:
-    state_path = _write_state(tmp_path, {WAVE: _wave(WAVE)})
-    _append(
-        state_path,
-        scope_id="urn:eawf:v1:state:QR",
-        payload=EventPayload(
-            timestamp=CLAIMED,
-            event_type=PAUSE_EVENT_TYPE,
-            event_kind="stale_wave_detected",
-            actor="daemon",
-            command="stale_wave.sweep",
-            args_hash="3" * 16,
-            status="needs_user",
-            message="over-budget advisory",
-            extras={
-                "pause_urn": "urn:d:1",
-                "wave_id": WAVE,
-                "user_question": _QUESTION,
-            },
-        ),
-    )
-
-    assert import_legacy_pauses(state_path) == 0
-    assert [p.pause_urn for p in open_legacy_pauses(state_path)] == ["urn:d:1"]
-
-
 def test_prx_040_a_corrupt_ledger_leaves_the_pauses_listed(tmp_path: Path) -> None:
     state_path = _legacy_corpus(tmp_path)
     notices_path(state_path).parent.mkdir(parents=True, exist_ok=True)
     notices_path(state_path).write_text("{not json")
 
     assert len(open_legacy_pauses(state_path)) == 2
-
-
-def test_prx_040_the_daemon_verbs_deliver_imported_rows_nothing(tmp_path: Path) -> None:
-    state_path = _legacy_corpus(tmp_path)
-    import_legacy_pauses(state_path)
-
-    delivered = _rpc(deliver_budget_notices, _ctx(state_path), {"principal": LOCAL_OPERATOR})
-
-    assert delivered == {"delivered": []}

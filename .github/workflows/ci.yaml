@@ -622,8 +622,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path $initDir | Out-Null
           git -C $initDir init -q
           uv run eawf --no-input init --project-code WIN --project-title "Windows smoke" --target $initDir
-          if (-not (Test-Path (Join-Path $initDir ".ea/state.json"))) {
-            throw "eawf init did not create .ea/state.json"
+          if (-not (Test-Path (Join-Path $initDir ".ea/generations/EPOCH2_ACTIVE.json"))) {
+            throw "eawf init did not bear an epoch-2 tree"
           }
           uv run eawf --workspace $initDir status *> $null
 
@@ -632,13 +632,12 @@ jobs:
             Remove-Item -Recurse -Force $daemonlessDir
           }
           New-Item -ItemType Directory -Force -Path (Join-Path $daemonlessDir ".ea") | Out-Null
-          $env:EA_STATE = Join-Path $daemonlessDir ".ea/state.json"
           $env:EAWF_DAEMONLESS = "1"
           uv run eawf --no-input init --project-code WSMK --project-title "Windows daemonless smoke" --target $daemonlessDir
-          if (-not (Test-Path $env:EA_STATE)) {
-            throw "daemonless eawf init did not create state"
+          if (-not (Test-Path (Join-Path $daemonlessDir ".ea/generations/EPOCH2_ACTIVE.json"))) {
+            throw "daemonless eawf init did not bear an epoch-2 tree"
           }
-          uv run eawf status *> $null
+          uv run eawf --workspace $daemonlessDir status *> $null
 
       - name: Pytest (win32 transport set)
         # The win32-marked test set, run serially (-n0) so the per-user

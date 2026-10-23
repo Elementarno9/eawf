@@ -1,48 +1,40 @@
-"""``eawf status`` — current pointers, blockers, last audits, git head.
+"""``eawf status`` — the native summary, recent decisions, blockers, git head.
 
 Output payload (JSON envelope, all keys always present):
 
 .. code-block:: json
 
     {
-      "project": {"code": "QR", "title": "Quant Research", "status": "active"} | null,
-      "scope_kind": "repo" | "workspace",
-      "current": {"project_code", "track_id", "phase_id",
-                  "iter_id", "active_wave_ids", "active_session_ids"},
-      "last_phase_audit": {"id", "verdict", "kind"} | null,
-      "last_iter_audit":  {"id", "verdict", "kind"} | null,
-      "active_waves": [<Wave>...],
-      "active_sessions": [<AgentSession>...],
-      "last_closed_waves": ["P01-I01-W01", ...],
-      "recent_decisions": [{"id", "title", "status"}, ...],
-      "open_backlog": [{"id", "title", "priority", "status"}, ...],
-      "open_backlog_count": <int>,
       "git": {"head": "<sha>" | null,
               "branch": "<name>" | null,
               "dirty": true | false | null},
       "authority": {"epoch": 1 | 2,
                     "gap": "undeclared"|"marker_absent"|"marker_unreadable" | null,
                     "generation_id": "<gen-id>" | null},
-      "native": {"open_task_count": <int>,
+      "native": {"track_key": "<key>" | null,
+                 "milestone_key": "<key>" | null,
+                 "open_task_count": <int>,
                  "open_tasks": [{"key", "status", "title"}, ...]} | null,
+      "recent_decisions": [{"id", "title", "status"}, ...],
       "blockers": ["<short-text>", ...]
     }
 
-On an epoch-2 tree ``state.json`` is frozen at the cutover, so ``native``
-carries the work in flight from the selected generation and the text
-branch prints it in place of the frozen pointers and backlog; ``native``
-is ``null`` on an epoch-1 tree, and on an epoch-2 tree whose generation
-document does not exist. Status reads git once for ``git`` and never per
-wave.
+Status reads only the selected generation of the tree it resolves; the v1
+``state.json`` is never opened, so a tree born by ``eawf init`` without one
+reports like any other. The tree is found by the resolver's walk, which
+stops at the epoch marker as well as at the v1 document. ``native`` is
+``null`` on a tree that is not at epoch 2, whose ``blockers`` then name the
+gap, and on an epoch-2 tree whose generation document does not exist.
+Status reads git once for ``git``.
 
 Exit codes:
 
 - ``0`` on success, including an epoch-2 tree whose decision ledger is
   unreadable: its decisions are left out and ``blockers`` names the cause.
-- ``1`` (``USER_ERROR``) when no ``state.json`` is found via the resolver
-  (``data.kind`` ``NotFound``), or when the resolved state file or the
-  generation document fails to load (``data.kind`` ``InvalidInput``;
-  callers should rerun ``eawf validate`` to inspect).
+- ``1`` (``USER_ERROR``) when the resolved ``.ea`` directory does not exist
+  (``data.kind`` ``NotFound``), or when the generation document fails to
+  load (``data.kind`` ``InvalidInput``; callers should rerun
+  ``eawf validate`` to inspect).
 
 The text branch prints a compact human summary; the JSON branch is the
 canonical machine surface and the only one the acceptance gate inspects.
@@ -52,14 +44,12 @@ from __future__ import annotations
 
 import logging
 import subprocess
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
-import orjson
 import typer
 
-from eawf.kernel.state.enums import BacklogStatus, WaveStatus
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.cli import errors
@@ -68,11 +58,13 @@ from eawf.surfaces.cli.output import emit_json_or_text
 
 if TYPE_CHECKING:
     from eawf.kernel.state.epoch2.decision import Decision
-    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 
 _GIT_TIMEOUT_SECONDS: float = 5.0
+
+#: The console route whose read model holds every Track and Milestone.
+_POINTER_ROUTE = "track"
 
 
 def _run_git(args: list[str], cwd: Path) -> str | None:
@@ -133,307 +125,26 @@ def _git_info(cwd: Path) -> dict[str, str | bool | None]:
     return {"head": head, "branch": branch, "dirty": dirty}
 
 
-def _last_audit(state: State, audit_id: str | None) -> dict[str, str | None] | None:
-    """Resolve *audit_id* against ``state.audits`` and return a small projection."""
-    if audit_id is None or state.audits is None:
-        return None
-    audit = state.audits.get(audit_id)
-    if audit is None:
-        return None
-    return {
-        "id": audit.id,
-        "kind": audit.kind.value,
-        "verdict": audit.verdict.value if audit.verdict is not None else None,
-    }
+def _recent_decisions(native: tuple[Decision, ...], limit: int = 5) -> list[dict[str, str]]:
+    """Return up to *limit* most-recent native decisions, newest first by ``created_at``.
 
-
-def _project_summary(state: State) -> dict[str, str] | None:
-    """Return a compact ``{code, title, status}`` projection of ``state.project``.
-
-    When ``state.project`` is ``None`` but ``state.current.project_code`` is
-    populated (the v0.1 ``eawf init`` contract — project code stamped, full
-    ``Project`` record deferred to ``eawf repository create``), fall back to the
-    current pointer with ``status="uninitialised"`` and the title pulled from
-    ``state.indexes`` (empty string when missing). This stops a fresh init
-    from rendering ``project: <none>`` even though the code is on disk.
-    """
-    if state.project is None:
-        if state.current.project_code is None:
-            return None
-        title_raw = state.indexes.get("project_title", "")
-        title = title_raw if isinstance(title_raw, str) else ""
-        return {
-            "code": state.current.project_code,
-            "title": title,
-            "status": "uninitialised",
-        }
-    return {
-        "code": state.project.code,
-        "title": state.project.title,
-        "status": state.project.status.value,
-    }
-
-
-def _active_waves(state: State) -> list[dict[str, Any]]:
-    """Return JSON-serialisable projections of every active wave.
-
-    "Active" follows the same set used by ``INV.CURRENT.WAVE_NOT_ACTIVE``
-    (``claimed`` or ``in_progress``). Waves listed in
-    ``state.current.active_wave_ids`` but missing from ``state.waves`` are
-    skipped silently — the validator will surface them.
-    """
-    out: list[dict[str, Any]] = []
-    for wave_id in state.current.active_wave_ids:
-        wave = state.waves.get(wave_id)
-        if wave is None:
-            continue
-        out.append(
-            {
-                "id": wave.id,
-                "iter_id": wave.iter_id,
-                "title": wave.title,
-                "status": wave.status.value,
-                "claim_session_id": wave.claim_session_id,
-            }
-        )
-    return out
-
-
-def _active_sessions(state: State) -> list[dict[str, Any]]:
-    """Return JSON-serialisable projections of every session in ``current.active_session_ids``."""
-    out: list[dict[str, Any]] = []
-    for sid in state.current.active_session_ids:
-        sess = state.agent_sessions.get(sid)
-        if sess is None:
-            continue
-        out.append(
-            {
-                "id": sess.id,
-                "role": sess.role.value,
-                "runtime": sess.runtime,
-                "scope_id": sess.scope_id,
-                "status": sess.status.value,
-            }
-        )
-    return out
-
-
-def _last_closed_waves(state: State, limit: int = 10) -> list[str]:
-    """Return up to *limit* recently-closed wave IDs, newest first by ``closed_at``.
-
-    Waves with ``closed_at`` unset are filtered before sorting so the comparator
-    never sees ``None``. We keep ``(closed_at, id)`` pairs and index back to ids
-    after sorting so the lambda's return type is concrete.
-    """
-    pairs: list[tuple[datetime, str]] = [
-        (w.closed_at, w.id)
-        for w in state.waves.values()
-        if w.status == WaveStatus.CLOSED and w.closed_at is not None
-    ]
-    pairs.sort(key=lambda p: p[0], reverse=True)
-    return [wave_id for _, wave_id in pairs[:limit]]
-
-
-def _recent_decisions(
-    state: State, native: tuple[Decision, ...] = (), limit: int = 5
-) -> list[dict[str, str]]:
-    """Return up to *limit* most-recent decisions, newest first by ``created_at``.
-
-    A read-only projection of :attr:`~eawf.kernel.state.models.State.decisions`
-    merged with the decisions an epoch-2 tree files in its generation's
-    ledger, so the operator sees the latest verdicts without opening
-    ``state.json`` or the ledger. The status line carries only the id, the
-    bounded title and the lifecycle status, lower-cased so both epochs spell
-    it alike and a superseded decision is visibly historical.
+    The status line carries only the id, the bounded title and the
+    lifecycle status, lower-cased so a superseded decision reads as
+    visibly historical.
 
     Args:
-        state: The loaded epoch-1 state.
-        native: The selected generation's native decisions; a native key
-            replaces an epoch-1 decision of the same id.
+        native: The selected generation's native decisions.
         limit: How many decisions to list.
 
     Returns:
         One ``{"id", "title", "status"}`` row each, sorted by ``created_at``
-        descending with the id as a stable tiebreaker so two decisions
+        descending with the key as a stable tiebreaker so two decisions
         stamped in the same instant order deterministically across renders.
     """
-    merged: dict[str, tuple[datetime, dict[str, str]]] = {
-        d.id: (d.created_at, {"id": d.id, "title": d.title, "status": d.status.value})
-        for d in state.decisions.values()
-    }
-    for n in native:
-        merged[n.key] = (
-            n.created_at,
-            {"id": n.key, "title": n.title, "status": n.status.value.lower()},
-        )
-    ranked = sorted(merged.items(), key=lambda item: (item[1][0], item[0]), reverse=True)
-    return [projection for _, (_, projection) in ranked[:limit]]
-
-
-def _open_backlog(state: State, limit: int = 10) -> list[dict[str, str]]:
-    """Return up to *limit* open backlog items, highest priority first.
-
-    "Open" means status :attr:`~eawf.kernel.state.enums.BacklogStatus.OPEN` or
-    :attr:`~eawf.kernel.state.enums.BacklogStatus.IN_PROGRESS` — a closed or
-    deferred item is not live work and is filtered out. The projection is a
-    pure read of :attr:`~eawf.kernel.state.models.State.backlog` (``None`` when
-    the optional field is unset, treated as an empty mapping).
-
-    Items are ordered by priority (``P0`` before ``P3``) with the id as a
-    stable tiebreaker so the ordering is deterministic across renders. The
-    ``priority`` enum value sorts lexicographically in the desired order
-    (``"P0" < "P1" < "P2" < "P3"``).
-    """
-    pool = state.backlog or {}
-    live = [
-        item
-        for item in pool.values()
-        if item.status in (BacklogStatus.OPEN, BacklogStatus.IN_PROGRESS)
-    ]
-    live.sort(key=lambda item: (item.priority.value, item.id))
+    ranked = sorted(native, key=lambda d: (d.created_at, d.key), reverse=True)
     return [
-        {
-            "id": item.id,
-            "title": item.title,
-            "priority": item.priority.value,
-            "status": item.status.value,
-        }
-        for item in live[:limit]
+        {"id": d.key, "title": d.title, "status": d.status.value.lower()} for d in ranked[:limit]
     ]
-
-
-def _open_backlog_count(state: State) -> int:
-    """Return how many backlog items are OPEN or IN_PROGRESS, before display truncation.
-
-    ``_open_backlog`` mirrors this same live-status filter but slices its
-    result to ``limit`` rows so the status envelope stays small; reading the
-    count off the truncated preview instead of this full tally is what made
-    ``eawf status`` report a backlog of 10 when 68 items were actually open.
-    """
-    pool = state.backlog or {}
-    return sum(
-        1
-        for item in pool.values()
-        if item.status in (BacklogStatus.OPEN, BacklogStatus.IN_PROGRESS)
-    )
-
-
-def _research_campaign_summary(state: State, state_path: Path) -> dict[str, Any] | None:
-    """Fold the active research campaign's progress into a status summary.
-
-    Reads the executed rounds + staged campaigns off the scope's append-only
-    stores (no Textual import -- the CLI stays off the TUI cold path) and folds
-    the campaign-wide :class:`~eawf.kernel.spec.operator_input.CampaignProgressState`
-    answer to "can the campaign proceed". Returns ``None`` -- the common path --
-    when the scope has staged no campaign, so a non-research repo's status is
-    unchanged.
-
-    Args:
-        state: The loaded state (for the claim / question ledgers).
-        state_path: Path to the scope's ``state.json`` (for the campaign +
-            round stores).
-
-    Returns:
-        A summary dict (``kind`` / ``rounds_run`` / ``campaigns`` /
-        ``open_questions`` / ``saturated``), or ``None`` when no campaign is
-        staged.
-    """
-    from eawf.kernel.spec.operator_input import (
-        CampaignProgressKind,
-        CampaignProgressState,
-        DomainProgress,
-        DomainProgressStatus,
-    )
-    from eawf.kernel.state.enums import OpenQuestionStatus, StoreKind
-    from eawf.kernel.store.envelope import Envelope
-    from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
-    from eawf.kernel.store.paths import store_path
-
-    campaign_path = store_path(state_path, StoreKind.RESEARCH_CAMPAIGN)
-    if not campaign_path.exists():
-        return None
-    latest: dict[str, ResearchCampaignPayload] = {}
-    for line in campaign_path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            envelope = Envelope.model_validate_json(line)
-            payload = ResearchCampaignPayload.model_validate(envelope.payload)
-            latest[payload.campaign_id] = payload
-    active = [p for p in latest.values() if p.status.value == "active"]
-    if not active:
-        return None
-    questions = list((state.open_questions or {}).values())
-    open_count = sum(
-        1 for q in questions if q.status in (OpenQuestionStatus.OPEN, OpenQuestionStatus.BLOCKED)
-    )
-    blocking = sum(1 for q in questions if q.blocking)
-
-    # Read the round store directly (no Textual import) for the rounds-run +
-    # saturated terminal.
-    round_path = store_path(state_path, StoreKind.RESEARCH_ROUND)
-    rounds_run = 0
-    saturated_terminal = False
-    if round_path.exists():
-        for line in round_path.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            envelope = Envelope.model_validate_json(line)
-            rounds_run += 1
-            if envelope.payload.get("saturated", False):
-                saturated_terminal = True
-
-    # SATURATED is a *derived* state (the all-converged table), not an
-    # operator-pinned terminal kind, so a converged run marks every domain
-    # SATURATED rather than passing terminal=SATURATED (which the projection
-    # rejects).
-    domain_status = (
-        DomainProgressStatus.SATURATED if saturated_terminal else DomainProgressStatus.READY
-    )
-    domains = tuple(
-        DomainProgress(domain=dispatch.domain, status=domain_status)
-        for payload in active
-        for dispatch in payload.campaign.dispatches
-    )
-    progress = CampaignProgressState.project(
-        round_index=rounds_run,
-        domains=domains,
-        blocking_count=blocking,
-    )
-    return {
-        "kind": progress.kind.value,
-        "rounds_run": rounds_run,
-        "campaigns": len(active),
-        "open_questions": open_count,
-        "saturated": progress.kind is CampaignProgressKind.SATURATED,
-    }
-
-
-def _blockers(state: State) -> list[str]:
-    """Surface short human-readable blockers from the loaded state.
-
-    The list is best-effort — callers needing the canonical answer should run
-    ``eawf validate``. We only report a few cheap, common cases here:
-
-    - Active wave with no claim session.
-    - Active iter with no open phase.
-    - More than one active session for the same scope (suggests dual-driver).
-    """
-    out: list[str] = []
-    for wave_id in state.current.active_wave_ids:
-        wave = state.waves.get(wave_id)
-        if wave is not None and wave.claim_session_id is None:
-            out.append(f"wave {wave.id} active but unclaimed")
-    cp = state.current
-    if cp.iter_id is not None and cp.phase_id is None:
-        out.append(f"iter {cp.iter_id} active but no phase pointer set")
-    seen: dict[str, str] = {}
-    for sid in cp.active_session_ids:
-        sess = state.agent_sessions.get(sid)
-        if sess is None:
-            continue
-        if sess.scope_id in seen:
-            out.append(f"sessions {seen[sess.scope_id]} and {sess.id} share scope {sess.scope_id}")
-        seen[sess.scope_id] = sess.id
-    return out
 
 
 def status(
@@ -443,7 +154,7 @@ def status(
         typer.Option(
             "-w",
             "--workspace",
-            help="Workspace root for state.json resolution (overrides pwd-upward).",
+            help="Workspace root whose .ea tree status reads (overrides pwd-upward).",
         ),
     ] = None,
     json_output: Annotated[
@@ -454,10 +165,9 @@ def status(
         ),
     ] = False,
 ) -> None:
-    """Print active pointers, blockers, and git head for the current state."""
-    from pydantic import ValidationError
-
-    from eawf.kernel.state.models import State
+    """Print the native summary, recent decisions, blockers and git head of the tree."""
+    from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+    from eawf.kernel.state.epoch2.authority import resolve_authority
     from eawf.kernel.store.ledger import LedgerError
 
     flags: GlobalFlags = ctx.obj
@@ -469,130 +179,133 @@ def status(
     )
 
     state_path, _reason = resolve_with_reason(workspace=effective_flags.workspace)
-    if not state_path.exists():
+    tree_root = state_path.parent
+    if not tree_root.is_dir():
         errors.emit_error(
-            errors.UserError(f"no state.json at {state_path}", kind="NotFound"),
+            errors.UserError(f"no eawf tree at {tree_root}", kind="NotFound"),
             flags=effective_flags,
         )
         return
 
-    try:
-        payload_dict = orjson.loads(state_path.read_bytes())
-        state = State.model_validate(payload_dict)
-    except ValidationError as exc:
-        errors.emit_error(
-            errors.UserError(
-                f"state file failed schema validation: {exc.errors()[0]['msg']}",
-                kind="InvalidInput",
-            ),
-            flags=effective_flags,
+    authority = resolve_authority(tree_root)
+    blockers: list[str] = []
+    native: dict[str, Any] | None = None
+    native_decisions: tuple[Decision, ...] = ()
+    if authority.target is None or authority.generation_id is None:
+        gap = authority.gap.value if authority.gap is not None else None
+        blockers.append(f"tree is at authority epoch 1 ({gap}); status reads only epoch 2")
+    else:
+        document_path = (
+            authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
         )
-        return
-
-    last_phase = (
-        _last_audit(state, state.phases[state.current.phase_id].audit_id)
-        if state.current.phase_id is not None and state.current.phase_id in state.phases
-        else None
-    )
-    last_iter = (
-        _last_audit(state, state.iters[state.current.iter_id].audit_id)
-        if state.current.iter_id is not None and state.current.iter_id in state.iters
-        else None
-    )
-
-    authority = _authority_summary(state_path)
-    try:
-        native = _native_summary(state_path) if authority["epoch"] == 2 else None
-    except FileNotFoundError as exc:
-        # A marked tree whose generation has not written its document yet
-        # still has status to report; only a document that exists and is
-        # broken is worth refusing over.
-        logger.info(f"status native=unavailable cause={exc!s}")
-        native = None
-    except (OSError, ValueError) as exc:
-        errors.emit_error(
-            errors.UserError(f"generation document unreadable: {exc}", kind="InvalidInput"),
-            flags=effective_flags,
-        )
-        return
-    ledger_blockers: list[str] = []
-    try:
-        native_decisions = _native_decisions(state_path) if authority["epoch"] == 2 else ()
-    except (LedgerError, ValueError) as exc:
-        # The decisions are one line of the report; a torn ledger costs that
-        # line, not the pointers, tasks and git head the operator came for.
-        logger.warning(f"status decisions=unavailable cause={exc!s}")
-        native_decisions = ()
-        ledger_blockers.append(f"decision ledger unreadable: {exc}")
+        try:
+            native = _native_summary(
+                tree_root, document_path, generation_id=authority.generation_id
+            )
+        except FileNotFoundError as exc:
+            # A marked tree whose generation has not written its document yet
+            # still has status to report; only a document that exists and is
+            # broken is worth refusing over.
+            logger.info(f"status native=unavailable cause={exc!s}")
+        except (OSError, ValueError) as exc:
+            errors.emit_error(
+                errors.UserError(f"generation document unreadable: {exc}", kind="InvalidInput"),
+                flags=effective_flags,
+            )
+            return
+        try:
+            native_decisions = _native_decisions(tree_root)
+        except (LedgerError, ValueError) as exc:
+            # The decisions are one line of the report; a torn ledger costs that
+            # line, not the tasks and git head the operator came for.
+            logger.warning(f"status decisions=unavailable cause={exc!s}")
+            blockers.append(f"decision ledger unreadable: {exc}")
 
     payload: dict[str, Any] = {
-        "project": _project_summary(state),
-        "scope_kind": state.scope_kind.value,
-        "current": state.current.model_dump(mode="json"),
-        "last_phase_audit": last_phase,
-        "last_iter_audit": last_iter,
-        "active_waves": _active_waves(state),
-        "active_sessions": _active_sessions(state),
-        "last_closed_waves": _last_closed_waves(state),
-        "recent_decisions": _recent_decisions(state, native_decisions),
-        "open_backlog": _open_backlog(state),
-        "open_backlog_count": _open_backlog_count(state),
-        "git": _git_info(cwd=_find_git_root(state_path.parent)),
-        "authority": authority,
+        "git": _git_info(cwd=_find_git_root(tree_root)),
+        "authority": {
+            "epoch": authority.epoch,
+            "gap": authority.gap.value if authority.gap is not None else None,
+            "generation_id": authority.generation_id,
+        },
         "native": native,
-        "blockers": [*_blockers(state), *ledger_blockers],
-        "research_campaign": _research_campaign_summary(state, state_path),
+        "recent_decisions": _recent_decisions(native_decisions),
+        "blockers": blockers,
     }
 
     text = _format_text(payload)
     emit_json_or_text(payload, text, flags=effective_flags)
 
 
-def _authority_summary(state_path: Path) -> dict[str, Any]:
-    """Return which authority epoch the tree holding *state_path* is in.
+def _native_summary(
+    tree_root: Path, document_path: Path, *, generation_id: str, limit: int = 10
+) -> dict[str, Any]:
+    """Return the pointers and open Tasks of the generation at *document_path*.
 
-    The tree root is the directory holding ``state.json`` -- the same root
-    the daemon's native guard resolves -- so status reports the answer a
-    native mutation would actually get, including why epoch 2 was withheld.
-
-    Args:
-        state_path: Path to the scope's ``state.json``.
-
-    Returns:
-        ``{"epoch", "gap", "generation_id"}``; ``gap`` is ``None`` at epoch 2
-        and ``generation_id`` is ``None`` at epoch 1.
-    """
-    from eawf.kernel.state.epoch2.authority import resolve_authority
-
-    authority = resolve_authority(state_path.parent)
-    return {
-        "epoch": authority.epoch,
-        "gap": authority.gap.value if authority.gap is not None else None,
-        "generation_id": authority.generation_id,
-    }
-
-
-def _native_summary(state_path: Path, limit: int = 10) -> dict[str, Any]:
-    """Return the open Tasks the epoch-2 tree holding *state_path* carries.
+    The primary Track is the Track the active Milestone is filed under; with
+    no Milestone active it is the first ACTIVE Track by key. When several
+    Milestones are active the first by key is named.
 
     Args:
-        state_path: Path to the scope's ``state.json``.
+        tree_root: The tree's ``.ea`` directory, which the open Tasks are read from.
+        document_path: The selected generation's document.
+        generation_id: The selected generation, the projection's scope.
         limit: How many open Tasks to list; the count covers all of them.
 
     Returns:
-        ``{"open_task_count", "open_tasks"}``, each listed Task as
-        ``{"key", "status", "title"}``; ``title`` is the Task's intent, or
-        ``None`` when its record states none.
+        ``{"track_key", "milestone_key", "open_task_count", "open_tasks"}``,
+        the keys ``None`` when the generation holds no such record and each
+        listed Task as ``{"key", "status", "title"}``; ``title`` is the
+        Task's intent, or ``None`` when its record states none.
 
     Raises:
         ValueError: The generation document is not a JSON object, or holds a
-            Task row the projection cannot render.
+            Task, Track or Milestone row the projection cannot render.
         OSError: The generation document could not be read.
     """
+    from eawf.kernel.projection.compute import build_route_projection
+    from eawf.kernel.state.epoch2.milestone import MilestoneStatus
+    from eawf.kernel.state.epoch2.track import TrackStatus
+    from eawf.kernel.store.compaction import read_document
+    from eawf.kernel.store.tiers import Epoch2Collection
+    from eawf.observability.reflect.runs import CANONICAL_SEQUENCE_KEY
     from eawf.observability.reflect.tasks import read_open_tasks
 
-    tasks = read_open_tasks(state_path.parent)
+    document = read_document(document_path)
+    projection = build_route_projection(
+        route=_POINTER_ROUTE,
+        document=document,
+        cursor=int(document.get(CANONICAL_SEQUENCE_KEY, 0)),
+        scope_id=generation_id,
+        generated_at=datetime.now(UTC),
+    )
+    rows = sorted(projection.rows, key=lambda row: row.key)
+    milestone = next(
+        (
+            row
+            for row in rows
+            if row.collection is Epoch2Collection.MILESTONE
+            and row.status.value == MilestoneStatus.ACTIVE.value
+        ),
+        None,
+    )
+    track_key = (
+        milestone.parent_key
+        if milestone is not None
+        else next(
+            (
+                row.key
+                for row in rows
+                if row.collection is Epoch2Collection.TRACK
+                and row.status.value == TrackStatus.ACTIVE.value
+            ),
+            None,
+        )
+    )
+    tasks = read_open_tasks(tree_root)
     return {
+        "track_key": track_key,
+        "milestone_key": None if milestone is None else milestone.key,
         "open_task_count": len(tasks),
         "open_tasks": [
             {"key": task.key, "status": task.status.value, "title": task.title}
@@ -601,8 +314,8 @@ def _native_summary(state_path: Path, limit: int = 10) -> dict[str, Any]:
     }
 
 
-def _native_decisions(state_path: Path) -> tuple[Decision, ...]:
-    """Return the native decisions the epoch-2 tree holding *state_path* files.
+def _native_decisions(tree_root: Path) -> tuple[Decision, ...]:
+    """Return the native decisions the epoch-2 tree at *tree_root* files.
 
     Raises:
         LedgerTornTailError: The decision ledger ends mid-line.
@@ -610,73 +323,36 @@ def _native_decisions(state_path: Path) -> tuple[Decision, ...]:
     """
     from eawf.observability.reflect.decisions import read_native_decisions
 
-    return read_native_decisions(state_path.parent)
+    return read_native_decisions(tree_root)
 
 
 def _format_text(payload: dict[str, Any]) -> str:
     """Render *payload* as a compact multi-line summary for human consumption."""
-    proj = payload.get("project")
-    if proj:
-        # Title is the human-friendly slug; when missing (uninitialised
-        # fallback path with no ``--project-title`` set) fall back to the
-        # status string so the operator sees ``project: REPRO (uninitialised)``
-        # instead of an empty parenthesised group.
-        descriptor = proj["title"] or proj["status"]
-        proj_line = f"project: {proj['code']} ({descriptor})"
-    else:
-        proj_line = "project: <none>"
-    cur = payload["current"]
-    cur_line = (
-        f"current: phase={cur['phase_id']} iter={cur['iter_id']} "
-        f"waves={','.join(cur['active_wave_ids']) or '<none>'}"
-    )
     git = payload["git"]
     branch = git["branch"] or "<unknown>"
     git_line = f"git: head={(git['head'] or '<unknown>')[:12]} branch={branch}"
-    authority = payload.get("authority")
-    if authority is None:
-        authority_line = "authority: <unknown>"
-    elif authority["epoch"] == 2:
+    authority = payload["authority"]
+    if authority["epoch"] == 2:
         authority_line = f"authority: epoch 2 (generation {authority['generation_id']})"
     else:
         authority_line = f"authority: epoch 1 ({authority['gap']})"
-    decisions = payload.get("recent_decisions") or []
+    decisions = payload["recent_decisions"]
     decisions_line = (
         f"recent decisions: {', '.join(d['id'] for d in decisions)}"
         if decisions
         else "recent decisions: none"
     )
-    backlog = payload.get("open_backlog") or []
-    backlog_count = payload.get("open_backlog_count", len(backlog))
-    backlog_line = (
-        f"open backlog: {backlog_count} ({', '.join(b['id'] for b in backlog)})"
-        if backlog
-        else "open backlog: none"
-    )
     blockers = payload["blockers"]
     blockers_line = f"blockers: {', '.join(blockers) if blockers else 'none'}"
-    native = payload.get("native")
-    pointer_lines, backlog_lines = [cur_line], [backlog_line]
+    native = payload["native"]
+    native_lines: list[str] = []
     if native is not None:
-        # The frozen epoch-1 pointers and backlog no longer move, so the
-        # generation's open Tasks stand where the pointers stood.
         listed = ", ".join(f"{t['key']} {t['status']}" for t in native["open_tasks"])
         count = native["open_task_count"]
-        pointer_lines = [f"open tasks: {count} ({listed})" if listed else "open tasks: none"]
-        backlog_lines = []
-    lines = [
-        proj_line,
-        *pointer_lines,
-        git_line,
-        authority_line,
-        decisions_line,
-        *backlog_lines,
-        blockers_line,
-    ]
-    campaign = payload.get("research_campaign")
-    if campaign:
-        lines.append(
-            f"research: {campaign['kind']} (rounds={campaign['rounds_run']}, "
-            f"campaigns={campaign['campaigns']}, open_questions={campaign['open_questions']})"
-        )
+        native_lines = [
+            f"track: {native['track_key'] or '<none>'} "
+            f"milestone: {native['milestone_key'] or '<none>'}",
+            f"open tasks: {count} ({listed})" if listed else "open tasks: none",
+        ]
+    lines = [*native_lines, git_line, authority_line, decisions_line, blockers_line]
     return "\n".join(lines)

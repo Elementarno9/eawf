@@ -59,7 +59,6 @@ from eawf.runtime.daemon.methods.state_subscribe import (
     PROJECTION_SUBSCRIBE_METHOD,
     SUBSCRIBE_METHODS,
 )
-from eawf.workflow.verify.dispatch_close import DispatchCloseBlockedError
 
 logger = logging.getLogger(__name__)
 
@@ -361,22 +360,6 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
         return _error(req_id, VALIDATION_FAILED, str(exc))
     except ValueError as exc:
         return _error(req_id, INVALID_PARAMS, str(exc))
-    except DispatchCloseBlockedError as exc:
-        # A FAIL / BLOCKED report verdict is a legitimate agent outcome, not a
-        # server fault. The report is already persisted; only the close-path
-        # advance was refused. Surface a typed error (verdict + reasons in
-        # ``error.data``) so the client can distinguish it from a real internal
-        # error rather than seeing a generic -32603.
-        return _error(
-            req_id,
-            DISPATCH_CLOSE_BLOCKED,
-            str(exc),
-            data={
-                "wave_id": exc.wave_id,
-                "verdict": exc.result.verdict.value,
-                "reasons": list(exc.result.reasons),
-            },
-        )
     except Exception as exc:
         logger.exception(f"_process_frame method={method!r} unhandled")
         return _error(req_id, INTERNAL_ERROR, f"internal error: {exc}")

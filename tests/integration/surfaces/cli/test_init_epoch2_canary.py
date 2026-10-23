@@ -97,7 +97,7 @@ def test_init_epoch2_canary_provision_writes_declaration_marker_and_ref(
     assert payload["epoch"] == 2
     assert (target / ".ea" / CANARY_DECLARATION_FILENAME).is_file()
     assert (target / ".ea" / "generations" / "EPOCH2_ACTIVE.json").is_file()
-    assert (target / ".ea" / "state.json").is_file()
+    assert not (target / ".ea" / "state.json").exists()
     assert (target / ".ea" / PROVISION_RECORD_LOCATOR).is_file()
     authority = resolve_authority(target / ".ea")
     assert authority.epoch == 2

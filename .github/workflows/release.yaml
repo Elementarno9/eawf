@@ -316,8 +316,8 @@ jobs:
           cd "${tmp}"
           git init -q .
           eawf --no-input init --project-code DEMO --target "${tmp}"
-          test -f "${tmp}/.ea/state.json"
-          echo "eawf init produced .ea/state.json OK in ${tmp}"
+          test -f "${tmp}/.ea/generations/EPOCH2_ACTIVE.json"
+          echo "eawf init bore an epoch-2 tree OK in ${tmp}"
 
   inventory-and-reproducibility:
     name: Dependency inventory + reproducible-build receipt

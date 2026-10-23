@@ -1,40 +1,25 @@
-"""Tests for the OpenQuestion + Claim daemon writers.
+"""Tests for the round reconcile that folds findings into Claim rows.
 
-Covers the two halves of the campaign ledger the research board was never
-populating:
-
-* :func:`~eawf.runtime.daemon.methods.research.add_question` writes an
-  :class:`~eawf.kernel.state.models.OpenQuestion` row through the canonical
-  state writer (the same path the TUI ``o`` key drives end to end), with the
-  state write + event append landing.
-* :func:`~eawf.runtime.daemon.methods.research.reconcile_round_claims` folds a
-  round's parsed findings into ``OPEN`` :class:`~eawf.kernel.state.models.Claim`
-  rows carrying the researcher body's evidence refs.
-
-The handler is driven through the module-level coroutine against an on-disk
-state fixture, matching the in-process harness in
-:mod:`tests.daemon.test_track_methods`.
+:func:`~eawf.runtime.daemon.methods.research.reconcile_round_claims` folds a
+round's parsed findings into ``OPEN`` :class:`~eawf.kernel.state.models.Claim`
+rows carrying the researcher body's evidence refs. Each test runs it against an
+on-disk state fixture.
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import orjson
 import pytest
-from pydantic import ValidationError
 
 from eawf import __version__
 from eawf.kernel.spec.campaign_driver import RoundFindings
 from eawf.kernel.state.enums import (
     ClaimStatus,
-    OpenQuestionDropReason,
-    OpenQuestionStatus,
     StoreKind,
 )
 from eawf.kernel.store.kinds.agent_report import ResearcherReportBody
@@ -42,13 +27,7 @@ from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.research import (
-    ResolveQuestionParams,
-    _apply_resolve_question,
-    add_question,
-    reconcile_round_claims,
-    resolve_question,
-)
+from eawf.runtime.daemon.methods.research import reconcile_round_claims
 from eawf.workflow.evidence._io import load_state
 
 pytestmark = pytest.mark.unit
@@ -109,251 +88,6 @@ def _build_ctx(tmp_path: Path) -> tuple[MethodContext, Path]:
         idempotency_cache={},
     )
     return ctx, state_path
-
-
-def _run(body: Callable[[], Awaitable[None]]) -> None:
-    asyncio.run(body())
-
-
-# --------------------------------------------------------------------------
-# add_question -- writes an OpenQuestion through the canonical writer
-# --------------------------------------------------------------------------
-
-
-def test_add_question_writes_open_row_to_state(tmp_path: Path) -> None:
-    """A title-only add (the TUI o-key shape) lands one OPEN question row."""
-    ctx, state_path = _build_ctx(tmp_path)
-
-    async def body() -> None:
-        result: dict[str, Any] = await add_question(
-            ctx, {"title": "which curve model fits the short tenor"}
-        )
-        assert result["status"] == "open"
-        assert result["scope_id"] == "ABC"
-        assert result["question_id"].startswith("OQ-")
-        state = load_state(state_path)
-        assert state.open_questions is not None
-        rows = list(state.open_questions.values())
-        assert len(rows) == 1
-        assert rows[0].title == "which curve model fits the short tenor"
-        assert rows[0].status is OpenQuestionStatus.OPEN
-        assert rows[0].scope_id == "ABC"
-        assert rows[0].blocking is False
-
-    _run(body)
-
-
-def test_add_question_blocking_lands_blocked_status(tmp_path: Path) -> None:
-    """A blocking add lands a BLOCKED question (the interrupt status)."""
-    ctx, state_path = _build_ctx(tmp_path)
-
-    async def body() -> None:
-        result = await add_question(
-            ctx, {"title": "is the venue feed authoritative", "blocking": True, "urgency": "urgent"}
-        )
-        assert result["status"] == "blocked"
-        state = load_state(state_path)
-        assert state.open_questions is not None
-        row = next(iter(state.open_questions.values()))
-        assert row.status is OpenQuestionStatus.BLOCKED
-        assert row.blocking is True
-
-    _run(body)
-
-
-def test_add_question_uses_caller_id(tmp_path: Path) -> None:
-    """A caller-supplied question id is used verbatim."""
-    ctx, state_path = _build_ctx(tmp_path)
-
-    async def body() -> None:
-        await add_question(ctx, {"title": "pin the id", "question_id": "OQ-pinned"})
-        state = load_state(state_path)
-        assert state.open_questions is not None
-        assert "OQ-pinned" in state.open_questions
-
-    _run(body)
-
-
-def test_add_question_emits_event(tmp_path: Path) -> None:
-    """The write appends a research.add_question event row."""
-    ctx, state_path = _build_ctx(tmp_path)
-    event_path = store_path(state_path, StoreKind.EVENT)
-
-    async def body() -> None:
-        await add_question(ctx, {"title": "logs an event"})
-        lines = [
-            line for line in event_path.read_text(encoding="utf-8").splitlines() if line.strip()
-        ]
-        assert any("research.add_question" in line for line in lines)
-
-    _run(body)
-
-
-def test_add_question_rejects_extra_param(tmp_path: Path) -> None:
-    """An unknown param is rejected by extra='forbid'."""
-    ctx, _state_path = _build_ctx(tmp_path)
-
-    async def body() -> None:
-        with pytest.raises(ValidationError):
-            await add_question(ctx, {"title": "ok", "rogue": True})
-
-    _run(body)
-
-
-def test_add_question_rejects_over_cap_title(tmp_path: Path) -> None:
-    """An over-72-char title is rejected fail-fast at the params boundary."""
-    ctx, state_path = _build_ctx(tmp_path)
-
-    async def body() -> None:
-        with pytest.raises(ValidationError):
-            await add_question(ctx, {"title": "x" * 80})
-
-    _run(body)
-    # The rejected params never reached the writer, so no question row landed.
-    state = load_state(state_path)
-    assert not (state.open_questions or {})
-
-
-# --------------------------------------------------------------------------
-# resolve_question -- flip a BLOCKED question terminal + clear blocking
-# --------------------------------------------------------------------------
-
-
-def test_resolve_question_marks_answered_and_clears_blocking(tmp_path: Path) -> None:
-    """Resolving a BLOCKED blocking question lands ANSWERED with blocking cleared.
-
-    Clearing ``blocking`` is the load-bearing bit: the RISKS band +
-    ``BLOCKED_AWAIT_USER`` run phase count the ``blocking`` bool, not the status,
-    so a resolve that left it set would never resume the halted campaign.
-    """
-    ctx, state_path = _build_ctx(tmp_path)
-
-    async def body() -> None:
-        added = await add_question(
-            ctx, {"title": "is the venue feed authoritative", "blocking": True}
-        )
-        qid = added["question_id"]
-        result = await resolve_question(ctx, {"question_id": qid})
-        assert result["status"] == "answered"
-        assert result["question_id"] == qid
-        assert result["scope_id"] == "ABC"
-        state = load_state(state_path)
-        assert state.open_questions is not None
-        row = state.open_questions[qid]
-        assert row.status is OpenQuestionStatus.ANSWERED
-        assert row.blocking is False
-        assert row.resolved_at is not None
-        # An operator resolve links no answering claim.
-        assert row.answered_by_claim_id is None
-
-    _run(body)
-
-
-def test_resolve_question_drop_marks_dropped_and_clears_blocking(tmp_path: Path) -> None:
-    """Resolving with ``drop`` lands DROPPED and still clears the blocking bit."""
-    ctx, state_path = _build_ctx(tmp_path)
-
-    async def body() -> None:
-        added = await add_question(ctx, {"title": "is this in scope", "blocking": True})
-        qid = added["question_id"]
-        result = await resolve_question(ctx, {"question_id": qid, "drop": True})
-        assert result["status"] == "dropped"
-        state = load_state(state_path)
-        assert state.open_questions is not None
-        row = state.open_questions[qid]
-        assert row.status is OpenQuestionStatus.DROPPED
-        assert row.blocking is False
-
-    _run(body)
-
-
-def test_resolve_question_drop_writes_the_chosen_reason(tmp_path: Path) -> None:
-    """A drop records the caller's reason; an unreasoned drop reads out of scope."""
-    ctx, state_path = _build_ctx(tmp_path)
-
-    async def body() -> None:
-        moot = (await add_question(ctx, {"title": "moot"}))["question_id"]
-        plain = (await add_question(ctx, {"title": "plain"}))["question_id"]
-        await resolve_question(ctx, {"question_id": moot, "drop": True, "drop_reason": "moot"})
-        await resolve_question(ctx, {"question_id": plain, "drop": True})
-        state = load_state(state_path)
-        assert state.open_questions is not None
-        assert state.open_questions[moot].drop_reason is OpenQuestionDropReason.MOOT
-        assert state.open_questions[plain].drop_reason is OpenQuestionDropReason.OUT_OF_SCOPE
-        assert state.open_questions[moot].superseded_by_question_ref is None
-
-    _run(body)
-
-
-def test_resolve_question_drop_writes_the_successor_ref(tmp_path: Path) -> None:
-    """Naming a successor writes the ref and reads the drop as superseded."""
-    ctx, state_path = _build_ctx(tmp_path)
-
-    async def body() -> None:
-        old = (await add_question(ctx, {"title": "old framing"}))["question_id"]
-        new = (await add_question(ctx, {"title": "new framing"}))["question_id"]
-        await resolve_question(
-            ctx, {"question_id": old, "drop": True, "superseded_by_question_ref": new}
-        )
-        state = load_state(state_path)
-        assert state.open_questions is not None
-        row = state.open_questions[old]
-        assert row.status is OpenQuestionStatus.DROPPED
-        assert row.drop_reason is OpenQuestionDropReason.SUPERSEDED
-        assert row.superseded_by_question_ref == new
-
-    _run(body)
-
-
-@pytest.mark.parametrize(
-    ("update", "match"),
-    [
-        ({"superseded_by_question_ref": "OQ-missing"}, "unknown successor"),
-        ({"superseded_by_question_ref": "OQ-a"}, "unknown successor"),
-        ({"superseded_by_question_ref": "OQ-b", "drop_reason": "moot"}, "superseded_by"),
-        ({"drop_reason": "superseded"}, "superseded_by"),
-    ],
-)
-def test_resolve_question_refuses_a_mismatched_successor(
-    tmp_path: Path, update: dict[str, str], match: str
-) -> None:
-    """A missing, self or reason-mismatched successor is refused before any write."""
-    ctx, state_path = _build_ctx(tmp_path)
-
-    async def body() -> None:
-        await add_question(ctx, {"title": "a", "question_id": "OQ-a"})
-        await add_question(ctx, {"title": "b", "question_id": "OQ-b"})
-
-    _run(body)
-    state = load_state(state_path)
-    params = ResolveQuestionParams.model_validate({"question_id": "OQ-a", "drop": True, **update})
-    with pytest.raises(ValueError, match=match):
-        _apply_resolve_question(state, params)
-
-
-def test_resolve_question_refuses_drop_fields_without_drop() -> None:
-    """A reason or successor on an answer is refused at the params boundary."""
-    with pytest.raises(ValidationError, match="require drop"):
-        ResolveQuestionParams.model_validate({"question_id": "OQ-a", "drop_reason": "moot"})
-
-
-def test_resolve_question_unknown_id_raises(tmp_path: Path) -> None:
-    """A resolve against an absent question id fails fast with a clear ValueError."""
-    _ctx, state_path = _build_ctx(tmp_path)
-    state = load_state(state_path)
-    with pytest.raises(ValueError, match="unknown question"):
-        _apply_resolve_question(state, ResolveQuestionParams(question_id="OQ-missing"))
-
-
-def test_resolve_question_rejects_extra_param(tmp_path: Path) -> None:
-    """An unknown param is rejected by extra='forbid' at the params boundary."""
-    ctx, _state_path = _build_ctx(tmp_path)
-
-    async def body() -> None:
-        with pytest.raises(ValidationError):
-            await resolve_question(ctx, {"question_id": "OQ-x", "rogue": True})
-
-    _run(body)
 
 
 # --------------------------------------------------------------------------

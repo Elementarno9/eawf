@@ -11,7 +11,7 @@ layer):
 5. branch ``<repo>/.ea/branches/<branch>.yaml`` (subdirectory form;
    e.g. branch ``feature/foo`` lives at ``feature/foo.yaml``)
 6. local ``<repo>/.ea/local/config.yaml``
-7. wave (daemon RAM, no file — keyed by ``Wave.id``, dropped on close)
+7. wave (reserved label; no overlay is composed for it)
 8. env vars / CLI flags
 
 Later layers override earlier layers. Merge semantics: maps deep-merge,
@@ -95,7 +95,7 @@ LAYER_ORDER: tuple[str, ...] = (
 _FILE_LAYERS: tuple[str, ...] = ("global", "workspace", "repo", "branch", "local")
 
 # Subset of :data:`LAYER_ORDER` that ``config set`` may target. Built-in is
-# read-only; env / cli / wave are runtime-only (wave is daemon-RAM-only).
+# read-only; env / cli / wave are not file-backed.
 WRITABLE_LAYERS: tuple[str, ...] = _FILE_LAYERS
 
 # Env-var prefix for the ``env`` config layer (the ``EAWF_FOO__BAR`` form
@@ -519,7 +519,6 @@ def merge_config(
     env: Mapping[str, str] | None = None,
     cli_overrides: Mapping[str, Any] | None = None,
     branch: str | None = None,
-    wave_overlay: Mapping[str, Any] | None = None,
     staged: Mapping[Path, Mapping[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """Compose the layered config and return ``(merged, source_map)``.
@@ -539,10 +538,6 @@ def merge_config(
             When ``None`` and *repo* is given, the helper resolves the
             current branch via ``git symbolic-ref``; detached-HEAD or
             non-git contexts skip the branch layer silently.
-        wave_overlay: Optional daemon-resident wave-layer overlay. The
-            daemon keeps ``wave_config_overrides[wave_id]`` in RAM and
-            passes the relevant dict in; library callers without a
-            daemon context leave this ``None``.
         staged: Layer file bodies to compose in place of what the files hold, keyed
             by file path: a writer composes the body it is about to write, so it can
             refuse one that leaves the config invalid before any file changes.
@@ -633,17 +628,6 @@ def merge_config(
             base_sources=sources,
             overlay=local_overlay,
             overlay_layer="local",
-        )
-
-    # Layer 7: wave (daemon RAM; library callers pass the dict in).
-    if wave_overlay:
-        normalised_wave_overlay = dict(wave_overlay)
-        _normalise_overlay_in_memory(normalised_wave_overlay)
-        merged, sources = _deep_merge_with_sources(
-            base=merged,
-            base_sources=sources,
-            overlay=normalised_wave_overlay,
-            overlay_layer="wave",
         )
 
     # Layer 8: env.

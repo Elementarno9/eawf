@@ -20,14 +20,10 @@ The registry round-trip:
 4. Consumers that need the real path (TUI tail, log inspector) call
    :func:`resolve_session_log` against the handle. Unknown handles
    raise :class:`KeyError` — fail fast, surface the gap.
-5. :func:`prune_handles_for_wave` evicts wave-scoped handles whose
-   parent wave's TTL has elapsed (see
-   :mod:`eawf.runtime.daemon.session_ttl`).
 
 The registry is a **process-local** in-memory map; it is rebuilt on
 daemon restart from ``state.waves[*].sessions[*].session_log_handle``
-plus the runtime adapter's path resolver. The TTL sweep
-(:mod:`eawf.runtime.daemon.session_ttl`) keeps the registry bounded.
+plus the runtime adapter's path resolver.
 """
 
 from __future__ import annotations
@@ -35,7 +31,6 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
-from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,9 +51,8 @@ class _Entry:
         raw_path: Real filesystem path; never serialised outside the
             daemon process.
         wave_id: Owning wave id; populated when the handle was
-            allocated through the dispatcher path so the TTL sweep
-            can scope evictions by wave. ``None`` for synthetic /
-            test-only registrations.
+            allocated through the dispatcher path. ``None`` for
+            synthetic / test-only registrations.
     """
 
     runtime: str
@@ -132,7 +126,7 @@ def resolve_session_log(handle: str) -> Path:
 
     Raises:
         KeyError: When *handle* is not present in the registry —
-            either it was never registered or it has been pruned.
+            either it was never registered or the registry was reset.
     """
     with _LOCK:
         try:
@@ -140,42 +134,6 @@ def resolve_session_log(handle: str) -> Path:
         except KeyError as exc:
             raise KeyError(f"unknown session-log handle: {handle!r}") from exc
     return entry.raw_path
-
-
-def prune_handles_for_wave(wave_id: str) -> int:
-    """Evict every registry entry that belongs to *wave_id*.
-
-    Called by the TTL sweep when the parent wave's TTL has elapsed
-    (default 86_400 s, configurable via
-    ``daemon.session_handle_ttl_seconds``). Idempotent — pruning an
-    unknown wave id is a no-op.
-
-    Args:
-        wave_id: Wave id whose handles should be dropped.
-
-    Returns:
-        Count of evicted handles.
-    """
-    with _LOCK:
-        targets = [h for h, entry in _REGISTRY.items() if entry.wave_id == wave_id]
-        for handle in targets:
-            del _REGISTRY[handle]
-    if targets:
-        logger.info(f"prune_handles_for_wave wave={wave_id!r} dropped={len(targets)}")
-    return len(targets)
-
-
-def known_handles() -> Iterable[str]:
-    """Return a snapshot of registered handles.
-
-    Test-only helper; production callers route through
-    :func:`resolve_session_log` instead.
-
-    Returns:
-        Iterable of handle strings currently held in the registry.
-    """
-    with _LOCK:
-        return tuple(_REGISTRY)
 
 
 def reset_registry() -> None:

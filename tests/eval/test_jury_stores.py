@@ -1,15 +1,12 @@
-"""Juror-ballot persistence + the calibration store readers.
+"""The calibration store reader for persisted juror ballots.
 
-The calibration substrate was empty by construction: every convened
-jury's ballots were dropped. Now the convener appends one
-``jury_ballot`` envelope per juror, ``read_recorded_ballots`` rebuilds
-the per-wave :class:`JurorBallot` map, and the daemon's
-``_load_recorded_ballots`` seam (idle since P30-I23-W50) reads it live.
+``read_recorded_ballots`` rebuilds the per-wave :class:`JurorBallot` map
+from the ``jury_ballot`` envelope rows, and the daemon's
+``_load_recorded_ballots`` seam reads it live.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 
@@ -17,91 +14,64 @@ import pytest
 
 from eawf.kernel.state.enums import AgentReportVerdict, StoreKind
 from eawf.kernel.store.paths import store_path
-from eawf.observability.eval.cross_vendor_jury import (
-    JURY_RUNTIME_FAMILIES,
-    convene_cross_vendor_jury,
-)
 from eawf.observability.eval.jury_validation import read_recorded_ballots
-from tests.eval.jury.test_cross_vendor_jury import (
-    _WAVE_ID as _SIBLING_WAVE_ID,
-)
-from tests.eval.jury.test_cross_vendor_jury import (
-    _auditor_body_json,
-    _RecordingFactory,
-    _RecordingSpawn,
-    _write_state,
-)
 
 pytestmark = pytest.mark.unit
 
-_WAVE = _SIBLING_WAVE_ID
+_WAVE = "P29-I04-W08"
+_RUNTIMES = ("claude-code", "codex", "opencode")
 
 
-def test_convened_jury_persists_one_ballot_row_per_juror(tmp_path: Path) -> None:
-    """CR-01: three stub jurors -> three envelope rows in jury_ballot.jsonl."""
-    state, state_path, events_path = _write_state(tmp_path)
-    wave = state.waves[_WAVE]
-    factory = _RecordingFactory(
-        {
-            "claude-code": _RecordingSpawn("claude-code", [_auditor_body_json(verdict="pass")]),
-            "codex": _RecordingSpawn("codex", [_auditor_body_json(verdict="fail")]),
-            "opencode": _RecordingSpawn("opencode", [_auditor_body_json(verdict="pass")]),
-        }
-    )
+def _seed_state(tmp_path: Path) -> Path:
+    """Create ``<tmp>/.ea/state.json`` and return its path."""
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text("{}", encoding="utf-8")
+    return state_path
 
-    asyncio.run(
-        convene_cross_vendor_jury(
-            state=state,
-            state_path=state_path,
-            events_path=events_path,
-            wave=wave,
-            spawn_factory=factory,
-            repo_root=tmp_path,
-        )
-    )
 
+def _write_ballot_rows(state_path: Path, payloads: list[dict[str, object]]) -> None:
+    """Append one envelope-shaped row per payload to the ballot store."""
     ballot_path = store_path(state_path, StoreKind.JURY_BALLOT)
-    assert ballot_path.is_file()
-    rows = [json.loads(line) for line in ballot_path.read_text().splitlines() if line.strip()]
-    assert len(rows) == len(JURY_RUNTIME_FAMILIES)
-    runtimes = {row["payload"]["runtime"] for row in rows}
-    assert runtimes == set(JURY_RUNTIME_FAMILIES)
-    verdicts = {row["payload"]["runtime"]: row["payload"]["verdict"] for row in rows}
-    assert verdicts["codex"] == "fail"
+    ballot_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [json.dumps({"payload": payload}) for payload in payloads]
+    ballot_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def test_read_recorded_ballots_rebuilds_per_wave_map(tmp_path: Path) -> None:
     """The reader folds the persisted rows into the validate_jury map shape."""
-    state, state_path, events_path = _write_state(tmp_path)
-    wave = state.waves[_WAVE]
-    factory = _RecordingFactory(
-        {
-            runtime: _RecordingSpawn(runtime, [_auditor_body_json(verdict="pass")])
-            for runtime in JURY_RUNTIME_FAMILIES
-        }
-    )
-    asyncio.run(
-        convene_cross_vendor_jury(
-            state=state,
-            state_path=state_path,
-            events_path=events_path,
-            wave=wave,
-            spawn_factory=factory,
-            repo_root=tmp_path,
-        )
+    state_path = _seed_state(tmp_path)
+    _write_ballot_rows(
+        state_path,
+        [{"wave_id": _WAVE, "runtime": runtime, "verdict": "pass"} for runtime in _RUNTIMES],
     )
 
     ballots = read_recorded_ballots(state_path)
     assert set(ballots) == {_WAVE}
-    assert len(ballots[_WAVE]) == len(JURY_RUNTIME_FAMILIES)
+    assert len(ballots[_WAVE]) == len(_RUNTIMES)
+    assert {b.runtime for b in ballots[_WAVE]} == set(_RUNTIMES)
     assert all(b.verdict is AgentReportVerdict.PASS for b in ballots[_WAVE])
+
+
+def test_read_recorded_ballots_skips_abstentions(tmp_path: Path) -> None:
+    """A row with an error and no verdict is an abstention and casts no vote."""
+    state_path = _seed_state(tmp_path)
+    _write_ballot_rows(
+        state_path,
+        [
+            {"wave_id": _WAVE, "runtime": "codex", "verdict": "fail"},
+            {"wave_id": _WAVE, "runtime": "opencode", "error": "spawn failed"},
+        ],
+    )
+
+    ballots = read_recorded_ballots(state_path)
+    assert [b.runtime for b in ballots[_WAVE]] == ["codex"]
+    assert ballots[_WAVE][0].verdict is AgentReportVerdict.FAIL
 
 
 def test_read_recorded_ballots_honest_empty_and_malformed(tmp_path: Path) -> None:
     """Missing store -> {}; malformed lines are skipped, not raised."""
-    state_path = tmp_path / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True)
-    state_path.write_text("{}", encoding="utf-8")
+    state_path = _seed_state(tmp_path)
     assert read_recorded_ballots(state_path) == {}
 
     ballot_path = store_path(state_path, StoreKind.JURY_BALLOT)

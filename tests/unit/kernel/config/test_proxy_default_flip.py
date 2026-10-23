@@ -29,17 +29,18 @@ def test_daemon_proxy_enabled_default_is_true() -> None:
     assert BUILT_IN_DEFAULTS["daemon"]["proxy_enabled"] is True
 
 
-def test_daemon_section_carries_idle_timeout_and_session_ttl() -> None:
-    """Adjacent daemon keys still carry their expected defaults.
+def test_daemon_section_carries_idle_timeout_and_no_session_ttl() -> None:
+    """The idle timeout keeps its default; the deprecated session TTL has none.
 
-    Acts as a canary: an accidental rewrite of the daemon block that
-    drops ``idle_timeout_seconds`` or ``session_handle_ttl_seconds``
-    will fail here rather than at runtime when the watchdog or session
-    sweeper boots without its config.
+    Acts as a canary: an accidental rewrite of the daemon block that drops
+    ``idle_timeout_seconds`` fails here rather than when the watchdog boots
+    without its config. ``session_handle_ttl_seconds`` is deprecated, so the
+    built-in layer must not put it in force.
     """
     from eawf.kernel.config.defaults import built_in_defaults
+    from eawf.kernel.config.registry.leaf_catalog import LEAF_KEY_REGISTRY
 
-    snapshot = built_in_defaults()
-    daemon = snapshot["daemon"]
+    daemon = built_in_defaults()["daemon"]
     assert daemon["idle_timeout_seconds"] == 300
-    assert daemon["session_handle_ttl_seconds"] == 86400
+    assert "session_handle_ttl_seconds" not in daemon
+    assert LEAF_KEY_REGISTRY["daemon.session_handle_ttl_seconds"].consumer_kind == "deprecated"

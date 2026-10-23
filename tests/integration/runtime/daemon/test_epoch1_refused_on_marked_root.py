@@ -211,15 +211,6 @@ def test_daemon_boot_writes_nothing_to_the_epoch1_document(
     assert _active_sessions(repo) == [SESSION_ID]
 
 
-def test_schedule_sweeps_skip_a_marked_root(tmp_path: Path, repo: Path) -> None:
-    """The periodic session-TTL and stale-wave sweeps are never scheduled there."""
-    _mark(repo)
-    ctx = method_context(tmp_path / "runtime")
-    ctx.state_path = _ea(repo) / "state.json"
-    assert daemon_main._schedule_session_ttl_sweep(ctx) is None
-    assert daemon_main._schedule_stale_wave_sweep(ctx) is None
-
-
 # ---- the epoch-2 writer keeps working ---------------------------------------
 
 

@@ -56,54 +56,6 @@ class ReadResult(BaseModel):
     version: str
 
 
-class WaveAutolandParams(BaseModel):
-    """Params for :func:`wave_autoland_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    repo_root: str
-    iter_id: str | None = None
-    keep_worktree: bool = False
-    dry_run: bool = False
-
-
-class WaveAutolandRpcResult(BaseModel):
-    """Result of :func:`wave_autoland_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    order: list[str]
-    landed: list[dict[str, Any]]
-    failed_wave: str | None
-    error: str | None
-    remaining: list[str]
-    dry_run: bool
-
-
-# ---- track.* params + result -------------------------------------------------
-
-
-class TrackSyncParams(BaseModel):
-    """Params for :func:`track_sync_rpc`.
-
-    ``track_id`` names an existing Track whose measured outcome statuses are
-    recomputed from their samples (the same reducer the wave-close hook fires).
-    An unknown id is a no-op (the reducer returns no changes). When omitted the
-    daemon syncs the Track under :attr:`CurrentPointers.track_id`.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    repo_root: str | None = None
-    track_id: str | None = None
-
-
-class TrackSyncRpcResult(BaseModel):
-    """Result of :func:`track_sync_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    track_id: str | None
-    changed_outcome_ids: list[str]
-    changed: int
-
-
 class WorktreeReconcileParams(BaseModel):
     """Params for :func:`worktree_reconcile_rpc`."""
 

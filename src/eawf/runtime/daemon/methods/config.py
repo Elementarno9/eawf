@@ -1,6 +1,5 @@
 """``config.*`` JSON-RPC methods: read / set_layer_value / unset_layer_value /
-set_layer_values / list_layers plus wave-layer overlay management (set_wave_value /
-clear_wave_overlay / get_wave_overlay).
+set_layer_values / list_layers.
 
 Daemon-side canonical writer for layered config YAML (authority map
 rows 5-7): every layered-config write that previously went through the
@@ -9,9 +8,7 @@ in-process ``_save_value_to_layer`` helper now proxies through the
 
 The writer also covers the ``branch`` layer (file-backed at
 ``<repo>/.ea/branches/<branch>.yaml``; subdirectory layout for
-slash-bearing branch names) and the ``wave`` layer (transient daemon
-RAM, keyed by ``Wave.id``, reset on wave close — see
-``set_wave_value`` / ``clear_wave_overlay``).
+slash-bearing branch names).
 
 Algorithm — mirrors the ``state.mutate`` lifecycle so both writers share
 one locking and replay story:
@@ -128,7 +125,7 @@ class SetLayerValueParams(BaseModel):
         layer: Canonical layer label (``global`` | ``workspace`` |
             ``repo`` | ``branch`` | ``local``). The ``built-in`` layer
             is read-only; ``env`` / ``cli`` / ``wave`` are not file-
-            backed (use :func:`set_wave_value` for the wave overlay).
+            backed.
         key_path: Dotted-key as a list (e.g. ``["vcs", "auto_commit"]``).
             List form keeps the wire encoding unambiguous when any
             segment contains a literal ``.``.
@@ -197,56 +194,6 @@ class SetLayerValuesParams(BaseModel):
     branch: str | None = None
     idempotency_key: str | None = None
     repo_root: str | None = None
-
-
-class SetWaveValueParams(BaseModel):
-    """Params for :func:`set_wave_value`.
-
-    Attributes:
-        wave_id: ``Wave.id`` for the transient overlay (one map per
-            wave). The overlay lives in daemon RAM only and is dropped
-            on wave close / daemon shutdown.
-        key_path: Dotted-key as a list.
-        value: Typed value to set.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    wave_id: str
-    key_path: list[str] = Field(min_length=1)
-    value: Any
-
-
-class SetWaveValueResult(BaseModel):
-    """Result of :func:`set_wave_value`."""
-
-    model_config = ConfigDict(extra="forbid")
-    wave_id: str
-    key_path: list[str]
-    value: Any
-    envelope: dict[str, Any]
-
-
-class WaveOverlayParams(BaseModel):
-    """Params for :func:`get_wave_overlay` / :func:`clear_wave_overlay`."""
-
-    model_config = ConfigDict(extra="forbid")
-    wave_id: str
-
-
-class WaveOverlayResult(BaseModel):
-    """Result of :func:`get_wave_overlay`."""
-
-    model_config = ConfigDict(extra="forbid")
-    wave_id: str
-    overlay: dict[str, Any]
-
-
-class ClearWaveOverlayResult(BaseModel):
-    """Result of :func:`clear_wave_overlay`."""
-
-    model_config = ConfigDict(extra="forbid")
-    wave_id: str
-    cleared: bool
 
 
 class SetLayerValueResult(BaseModel):
@@ -549,15 +496,12 @@ def _refuse_file_layer(layer: str) -> None:
     """Refuse a layer label no file write may target.
 
     Raises:
-        ValueError: ``layer`` is the read-only built-in layer or the RAM wave layer.
+        ValueError: ``layer`` is the read-only built-in layer or the file-less wave layer.
     """
     if layer == "built-in":
         raise ValueError("validation_failed: layer 'built-in' is read-only")
     if layer == "wave":
-        raise ValueError(
-            "validation_failed: layer 'wave' is daemon-RAM-only; "
-            "use 'config.set_wave_value' instead"
-        )
+        raise ValueError("validation_failed: layer 'wave' is not file-backed")
 
 
 def _admit_set(dotted: str, layer: str, value: Any) -> Any:
@@ -997,149 +941,11 @@ async def list_layers(ctx: MethodContext, params: dict[str, Any]) -> dict[str, A
     return ListLayersResult(layers=layers).model_dump(mode="json")
 
 
-# ---- Wave layer (transient, daemon-RAM) -------------------------------------
-
-
-def _wave_overlay_map(ctx: MethodContext) -> dict[str, dict[str, Any]]:
-    """Return the per-context wave-overlay map, creating it on first use.
-
-    The map lives on ``ctx`` rather than at module level so each test's
-    :class:`MethodContext` starts with a clean slate.
-    """
-    existing = getattr(ctx, "wave_config_overrides", None)
-    if isinstance(existing, dict):
-        return existing
-    fresh: dict[str, dict[str, Any]] = {}
-    ctx.wave_config_overrides = fresh  # type: ignore[attr-defined]
-    return fresh
-
-
-def _set_dotted_in_overlay(
-    overlay: dict[str, Any],
-    key_path: list[str],
-    value: Any,
-) -> None:
-    """Deep-set ``overlay[a][b]... = value`` for ``key_path = [a, b, ...]``."""
-    cur: dict[str, Any] = overlay
-    for part in key_path[:-1]:
-        nxt = cur.get(part)
-        if not isinstance(nxt, dict):
-            nxt = {}
-            cur[part] = nxt
-        cur = nxt
-    cur[key_path[-1]] = value
-
-
-@register("config.set_wave_value")
-async def set_wave_value(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Set one dotted-key value in the wave-layer overlay for *wave_id*.
-
-    The wave layer is daemon-RAM-only and resets on wave close. Use
-    case: V5 reactive runtime fallback (daemon flips a wave from
-    ``claude`` → ``codex`` mid-dispatch; subsequent envelopes for the
-    same wave honour the override).
-
-    Args:
-        ctx: Server context.
-        params: JSON-RPC params per :class:`SetWaveValueParams`.
-
-    Returns:
-        Dict matching :class:`SetWaveValueResult`.
-
-    Raises:
-        ValueError: When *key_path* references a key absent from the
-            leaf catalog (typo gate).
-    """
-    args = SetWaveValueParams.model_validate(params)
-    dotted = ".".join(args.key_path)
-    entry = leaf_key_lookup(dotted)  # raises ValueError on unknown.
-    if entry.reserved:
-        raise ValueError(f"validation_failed: config leaf {dotted!r} is deprecated")
-    if "wave" not in entry.writable_layers:
-        raise ValueError(f"validation_failed: leaf {dotted!r} is not writable from the wave layer")
-
-    overlay_map = _wave_overlay_map(ctx)
-    per_wave = overlay_map.setdefault(args.wave_id, {})
-    _set_dotted_in_overlay(per_wave, list(args.key_path), args.value)
-
-    envelope = _build_envelope(
-        layer="wave",
-        layer_path=Path(f"<wave:{args.wave_id}>"),
-        key_path=list(args.key_path),
-        value=args.value,
-    )
-    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
-        ctx.bus.publish(envelope)
-    ctx.last_event_id = envelope.id
-
-    logger.info(f"set_wave_value ok wave={args.wave_id!r} key_path={args.key_path}")
-    return SetWaveValueResult(
-        wave_id=args.wave_id,
-        key_path=list(args.key_path),
-        value=args.value,
-        envelope=envelope.model_dump(mode="json"),
-    ).model_dump(mode="json")
-
-
-@register("config.get_wave_overlay")
-async def get_wave_overlay(
-    ctx: MethodContext,
-    params: dict[str, Any],
-) -> dict[str, Any]:
-    """Return the current wave-layer overlay for *wave_id*.
-
-    Args:
-        ctx: Server context.
-        params: JSON-RPC params per :class:`WaveOverlayParams`.
-
-    Returns:
-        Dict matching :class:`WaveOverlayResult`. Empty mapping when
-        the wave has no overlay set.
-    """
-    args = WaveOverlayParams.model_validate(params)
-    overlay_map = _wave_overlay_map(ctx)
-    overlay = overlay_map.get(args.wave_id, {})
-    return WaveOverlayResult(
-        wave_id=args.wave_id,
-        overlay=dict(overlay),
-    ).model_dump(mode="json")
-
-
-@register("config.clear_wave_overlay")
-async def clear_wave_overlay(
-    ctx: MethodContext,
-    params: dict[str, Any],
-) -> dict[str, Any]:
-    """Drop the wave-layer overlay for *wave_id*.
-
-    Idempotent — clearing an absent overlay returns ``cleared=False``.
-
-    Args:
-        ctx: Server context.
-        params: JSON-RPC params per :class:`WaveOverlayParams`.
-
-    Returns:
-        Dict matching :class:`ClearWaveOverlayResult`.
-    """
-    args = WaveOverlayParams.model_validate(params)
-    overlay_map = _wave_overlay_map(ctx)
-    cleared = args.wave_id in overlay_map
-    overlay_map.pop(args.wave_id, None)
-    logger.info(f"clear_wave_overlay wave={args.wave_id!r} cleared={cleared}")
-    return ClearWaveOverlayResult(
-        wave_id=args.wave_id,
-        cleared=cleared,
-    ).model_dump(mode="json")
-
-
 __all__ = [
     "IDEMPOTENCY_TTL_SECONDS",
-    "clear_wave_overlay",
-    "get_wave_overlay",
     "list_layers",
     "read",
     "set_layer_value",
     "set_layer_values",
-    "set_wave_value",
     "unset_layer_value",
 ]

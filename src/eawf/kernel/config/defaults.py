@@ -280,9 +280,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # subscriber reconnect after a cache window does not racing-
         # spawn the daemon mid-warmup.
         "idle_timeout_seconds": 300,
-        # Seconds an ended attempt's session handle is kept before the
-        # daemon's sweep prunes it.
-        "session_handle_ttl_seconds": 86400,
     },
 }
 
