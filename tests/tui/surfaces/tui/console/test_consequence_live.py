@@ -85,7 +85,6 @@ async def _console(walker: Walker, runtime_root: Path) -> AsyncIterator[ConsoleA
             seam = ProjectionSeam(
                 route="task.detail",
                 scope_id=RootIdentity.of(walker.root).root_id,
-                state_path=None,
                 repo_root=walker.root,
                 operator=Operator(principal=OPERATOR),
                 daemon_client_factory=lambda: _LoopbackClient(sock_path),

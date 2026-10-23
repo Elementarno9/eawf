@@ -6,12 +6,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from eawf.observability.doctor.checks import (
-    check_active_phase_without_iter,
     check_branch_currency,
     check_cli_daemon_version,
     check_parallel_cap_enforcement,
-    check_recent_actuals,
-    check_stale_session_count,
 )
 from eawf.observability.doctor.models import CheckResult
 
@@ -26,9 +23,6 @@ def run_workflow_health_checks(
 ) -> list[CheckResult]:
     """Run workflow integrity checks shared by CLI and TUI doctor surfaces."""
     return [
-        check_active_phase_without_iter(workspace=workspace),
-        check_stale_session_count(workspace=workspace),
-        check_recent_actuals(workspace=workspace),
         check_cli_daemon_version(probe_version=daemon_version_probe),
         check_parallel_cap_enforcement(workspace=workspace),
         check_branch_currency(workspace=workspace),

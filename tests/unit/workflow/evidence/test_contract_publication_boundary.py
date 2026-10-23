@@ -23,9 +23,10 @@ import yaml
 from pydantic import ValidationError
 
 from eawf.kernel.config.layered import resolve_dispatch_provider_tuple
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.measured_contract import MeasurementEnvironment
 from eawf.kernel.state.epoch2.plan_revision import PlanBody, PlanRevision, plan_content_digest
-from eawf.kernel.state.models import Artifact, State
+from eawf.kernel.state.models import Artifact
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence import _io
 from eawf.workflow.evidence.measured_contract import CONTRACT_BODY_URI, resolve_contract_citation

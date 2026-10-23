@@ -1,12 +1,9 @@
 """Release tags come from the release verb, and dev tags publish as prereleases.
 
-A tag pushed with a workflow's default ``GITHUB_TOKEN`` starts no workflow
-run, so a post-merge job that tags the merge commit looks green while
-release.yaml and plugin-release.yaml never fire. A release object created
-without the prerelease flag advertises a dev checkpoint as the latest
-release. Both defects sit in workflow source that runs only after a merge or
-a tag push, so these checks read the source, and each ships a companion that
-feeds the checker the defective shape to prove it reds.
+A release object created without the prerelease flag advertises a dev
+checkpoint as the latest release. The defect sits in workflow source that
+runs only after a tag push, so these checks read the source, and each ships
+a companion that feeds the checker the defective shape to prove it reds.
 
 The rule text is checked alongside the workflows: the core profile renders it
 into every managed repo, and most of those repos tag through their own flow
@@ -33,17 +30,9 @@ pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
-_PHASE_RELEASE = _WORKFLOWS / "phase-release.yaml"
 _PLUGIN_RELEASE = _WORKFLOWS / "plugin-release.yaml"
 _CORE_PROFILE = _REPO_ROOT / "src" / "eawf" / "platform" / "profiles" / "data" / "core.yaml"
 _RULE_IDS = ("release-process", "ship-process")
-
-#: Shell commands that create a tag, move one, or publish a release object.
-_TAGGING_COMMANDS: dict[str, re.Pattern[str]] = {
-    "git push": re.compile(r"\bgit\s+push\b"),
-    "git tag": re.compile(r"\bgit\s+tag\b"),
-    "gh release create": re.compile(r"\bgh\s+release\s+create\b"),
-}
 
 _RELEASE_TAG_VERB = re.compile(r"eawf release pipeline\b[^`\n]*--publish")
 
@@ -68,117 +57,6 @@ def _find_step(job: dict[str, Any], name_fragment: str) -> dict[str, Any] | None
         if name_fragment.lower() in str(step.get("name", "")).lower():
             return step
     return None
-
-
-# --- no workflow tags the phase merge ---------------------------------------
-
-
-def tag_push_violations(workflow: dict[str, Any]) -> list[str]:
-    """Report every way the phase-release *workflow* could tag or publish.
-
-    Args:
-        workflow: The parsed phase-release workflow.
-
-    Returns:
-        One problem per violation; empty when no step tags, pushes or
-        creates a release, the token cannot write, the annotation and
-        version checks remain, and the release pipeline command is printed
-        for the annotated version and phase.
-    """
-    job = workflow.get("jobs", {}).get("phase-release")
-    if job is None:
-        return ["phase-release.yaml declares no 'phase-release' job"]
-    problems = [
-        f"step {step.get('name')!r} runs {command}"
-        for step in job.get("steps", [])
-        for command, pattern in _TAGGING_COMMANDS.items()
-        if pattern.search(str(step.get("run", "")))
-    ]
-    for scope in (workflow, job):
-        granted = scope.get("permissions")
-        if granted == "write-all" or (
-            isinstance(granted, dict) and granted.get("contents") == "write"
-        ):
-            problems.append("the workflow token keeps contents: write, so a tag push still lands")
-    annotation = _find_step(job, "release annotation")
-    if annotation is None or "(release=" not in str(annotation.get("run", "")):
-        problems.append("the release annotation check is gone")
-    version = _find_step(job, "version source")
-    if version is None or "version mismatch" not in str(version.get("run", "")):
-        problems.append("the version source check is gone")
-    return problems + _tag_command_problems(job)
-
-
-def _tag_command_problems(job: dict[str, Any]) -> list[str]:
-    """Report the ways the job could finish without naming the release command."""
-    printer = next(
-        (
-            step
-            for step in job.get("steps", [])
-            if "eawf release pipeline" in str(step.get("run", ""))
-        ),
-        None,
-    )
-    if printer is None:
-        return ["no step prints the eawf release pipeline --publish command"]
-    run = str(printer.get("run", ""))
-    problems: list[str] = []
-    if not re.search(r"eawf release pipeline \$\{VERSION\} --phase \$\{PHASE\} --publish", run):
-        problems.append(
-            "the printed command is not eawf release pipeline ${VERSION} --phase ${PHASE} --publish"
-        )
-    env = str(printer.get("env", {}))
-    if "steps.annotation.outputs.version" not in env:
-        problems.append("the printed command is not bound to the annotated version")
-    if "steps.annotation.outputs.phase" not in env:
-        problems.append("the printed command is not bound to the merged phase")
-    if "release_required == 'true'" not in str(printer.get("if", "")):
-        problems.append("the release command prints even when the merge carries no annotation")
-    return problems
-
-
-def test_tag_push_absent_from_phase_release() -> None:
-    """The live workflow only checks the annotation and prints the release verb."""
-    assert tag_push_violations(_load(_PHASE_RELEASE)) == []
-
-
-def test_tag_push_gate_reds_on_a_tagging_workflow() -> None:
-    """The gate fires on the shape that shipped: tag, push, then release.
-
-    The defective workflow is the live one with the print step swapped for
-    the two steps it replaced, and the write token they needed.
-    """
-    old = copy.deepcopy(_load(_PHASE_RELEASE))
-    old["permissions"]["contents"] = "write"
-    job = old["jobs"]["phase-release"]
-    job["steps"] = [s for s in job["steps"] if "eawf release pipeline" not in str(s.get("run", ""))]
-    job["steps"] += [
-        {
-            "name": "Create annotated tag",
-            "if": "steps.annotation.outputs.release_required == 'true'",
-            "run": 'git tag -a "$TAG" "$MERGE_SHA" -m "Release $TAG"\ngit push origin "$TAG"\n',
-        },
-        {
-            "name": "Publish phase release notes",
-            "run": 'gh release create "$TAG" --title "$TAG" --notes-file release-notes.md\n',
-        },
-    ]
-    problems = tag_push_violations(old)
-    assert any("runs git tag" in problem for problem in problems), problems
-    assert any("runs git push" in problem for problem in problems), problems
-    assert any("runs gh release create" in problem for problem in problems), problems
-    assert any("contents: write" in problem for problem in problems), problems
-    assert any("no step prints" in problem for problem in problems), problems
-
-
-def test_tag_push_gate_reds_on_a_workflow_without_its_checks() -> None:
-    """Dropping the checks is a violation even when nothing is tagged."""
-    problems = tag_push_violations(yaml.safe_load("jobs:\n  phase-release:\n    steps: []\n"))
-    assert "the release annotation check is gone" in problems
-    assert "the version source check is gone" in problems
-    assert tag_push_violations(yaml.safe_load("jobs: {}\n")) == [
-        "phase-release.yaml declares no 'phase-release' job"
-    ]
 
 
 # --- every dev and rc tag publishes as a prerelease -------------------------

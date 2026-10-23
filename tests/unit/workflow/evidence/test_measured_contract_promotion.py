@@ -28,6 +28,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.runtime.semantic import SemanticToolId
 from eawf.kernel.spec.measured_contract import (
     MeasuredContract,
@@ -36,7 +37,6 @@ from eawf.kernel.spec.measured_contract import (
     ScaleBand,
     SpikeReport,
 )
-from eawf.kernel.state.models import State
 from eawf.runtime.daemon.semantic_handlers import SEMANTIC_HANDLERS
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence._io import load_state

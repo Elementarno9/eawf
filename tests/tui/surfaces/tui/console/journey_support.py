@@ -339,7 +339,6 @@ def held_app(
     seam = ProjectionSeam(
         route=route,
         scope_id=bodies.SCOPE,
-        state_path=None,
         clock=lambda: bodies.AT,
         daemon_client_factory=daemon.client,
         operator=Operator(principal=principal) if principal is not None else None,

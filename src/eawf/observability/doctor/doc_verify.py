@@ -8,12 +8,9 @@ Consolidates two complementary surfaces:
    underlying check lives in :mod:`eawf.surfaces.render.drift`; this module just
    batches it across every target referenced by the manifest.
 
-2. **State-vs-doc cross-checks** — facts about ``state.json`` that should be
-   reflected in the workspace:
-
-   - Every closed phase has an ``audit_id`` set.
-   - Every artifact whose ``uri`` starts with ``repo:`` resolves to an
-     existing file under the workspace root.
+2. **Artifact cross-checks** — every artifact of the selected generation
+   whose ``uri`` starts with ``repo:`` resolves to an existing file under the
+   workspace root, and a ``#fragment`` on a JSONL file names a row id in it.
 
 The function is read-only — no locks, no writes — so callers can invoke it
 freely inside other commands (``doctor``, CI checks).
@@ -23,12 +20,12 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from eawf.kernel.state.enums import PhaseStatus
-from eawf.kernel.state.models import State
+from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.surfaces.render.drift import DriftReport, detect_drift
 from eawf.surfaces.render.manifest import load as load_manifest
 
@@ -98,30 +95,49 @@ def _jsonl_contains_id(path: Path, fragment: str) -> bool:
     return False
 
 
-def _cross_check_state(state: State, repo_root: Path) -> list[CrossCheckViolation]:
-    """Run the state-vs-doc cross-checks against *state* and the repo tree."""
+def read_artifact_uris(artifact_ledger: Path) -> dict[str, str]:
+    """Return the ``uri`` of every artifact a generation's artifact ledger holds.
+
+    A line the cutover imported carries the epoch-1 artifact row under its
+    ``payload``; a native line carries its fields at the top. A line with
+    no string ``uri`` -- a content artifact, say -- names no file to check.
+
+    Args:
+        artifact_ledger: The generation's ``ledger/artifact.jsonl``.
+
+    Returns:
+        ``record_key -> uri``, the standing line of each artifact; empty
+        when the ledger is absent.
+
+    Raises:
+        LedgerTornTailError: The ledger ends mid-line.
+        pydantic.ValidationError: A line does not satisfy its envelope.
+    """
+    uris: dict[str, str] = {}
+    for record in effective_records(read_ledger_records(artifact_ledger)):
+        row = record.payload.get("payload", record.payload)
+        uri = row.get("uri") if isinstance(row, dict) else None
+        if isinstance(uri, str):
+            uris[record.record_key] = uri
+    return uris
+
+
+def _cross_check_artifacts(
+    artifact_uris: Mapping[str, str], repo_root: Path
+) -> list[CrossCheckViolation]:
+    """Check that every ``repo:`` artifact uri resolves under *repo_root*."""
     findings: list[CrossCheckViolation] = []
-    for phase_id, phase in state.phases.items():
-        if phase.status == PhaseStatus.CLOSED and phase.audit_id is None:
-            findings.append(
-                CrossCheckViolation(
-                    code="DOC.PHASE_MISSING_AUDIT",
-                    target=f"/phases/{phase_id}",
-                    message=f"closed phase {phase_id!r} has no audit_id",
-                )
-            )
-    artifacts = state.artifacts or {}
-    for artifact_id, artifact in artifacts.items():
-        if not artifact.uri.startswith("repo:"):
+    for artifact_id, uri in artifact_uris.items():
+        if not uri.startswith("repo:"):
             continue
-        resolved = _resolve_artifact_uri(repo_root, artifact.uri)
+        resolved = _resolve_artifact_uri(repo_root, uri)
         if resolved is None or not resolved.path.exists():
             findings.append(
                 CrossCheckViolation(
                     code="DOC.ARTIFACT_URI_MISSING",
                     target=f"/artifacts/{artifact_id}",
                     message=(
-                        f"artifact {artifact_id!r} uri {artifact.uri!r} does not resolve to a "
+                        f"artifact {artifact_id!r} uri {uri!r} does not resolve to a "
                         f"file under {repo_root}"
                     ),
                 )
@@ -137,7 +153,7 @@ def _cross_check_state(state: State, repo_root: Path) -> list[CrossCheckViolatio
                     code="DOC.ARTIFACT_URI_FRAGMENT_MISSING",
                     target=f"/artifacts/{artifact_id}",
                     message=(
-                        f"artifact {artifact_id!r} uri {artifact.uri!r} does not resolve to a "
+                        f"artifact {artifact_id!r} uri {uri!r} does not resolve to a "
                         f"JSONL row id under {repo_root}"
                     ),
                 )
@@ -145,11 +161,12 @@ def _cross_check_state(state: State, repo_root: Path) -> list[CrossCheckViolatio
     return findings
 
 
-def verify_docs(state: State, repo_root: Path) -> DocVerifyReport:
-    """Run the drift + cross-check pass against *state* and the repo tree.
+def verify_docs(artifact_uris: Mapping[str, str], repo_root: Path) -> DocVerifyReport:
+    """Run the drift + cross-check pass against the artifacts and the repo tree.
 
     Args:
-        state: Loaded, validated :class:`State`.
+        artifact_uris: The generation's artifact uris, as
+            :func:`read_artifact_uris` reads them.
         repo_root: Workspace root containing ``.ea/indexes/generated.json``.
 
     Returns:
@@ -164,7 +181,7 @@ def verify_docs(state: State, repo_root: Path) -> DocVerifyReport:
     for target in targets:
         drift_reports.extend(detect_drift(target, manifest))
 
-    cross_check = _cross_check_state(state, repo_root)
+    cross_check = _cross_check_artifacts(artifact_uris, repo_root)
     has_any = any(r.kind != "ok" for r in drift_reports) or bool(cross_check)
     status = "drift" if has_any else "ok"
     return DocVerifyReport(
@@ -183,5 +200,6 @@ def verify_docs(state: State, repo_root: Path) -> DocVerifyReport:
 __all__ = [
     "CrossCheckViolation",
     "DocVerifyReport",
+    "read_artifact_uris",
     "verify_docs",
 ]

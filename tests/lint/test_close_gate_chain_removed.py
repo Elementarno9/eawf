@@ -119,7 +119,7 @@ def test_live_importers_of_the_chain_are_rewired() -> None:
 def test_imported_modules_resolves_from_imports() -> None:
     names = _imported_modules(REPO / "src" / "eawf" / "workflow" / "verify" / "__init__.py")
     assert "eawf.workflow.verify.readiness" in names
-    assert "eawf.workflow.verify.readiness.compute" in names
+    assert "eawf.workflow.verify.readiness.load_active_verify_block" in names
 
 
 @pytest.mark.parametrize(

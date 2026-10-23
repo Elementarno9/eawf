@@ -49,7 +49,7 @@ from eawf.surfaces.cli.verb_contract import (
 )
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.models import State
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -82,20 +82,6 @@ release_app = typer.Typer(
 )
 
 
-def _load_state(state_path: Path) -> State:
-    from eawf.kernel.validate.strict import validate_state
-
-    if not state_path.exists():
-        raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")
-    payload = orjson.loads(state_path.read_bytes())
-    report = validate_state(payload, strict_optional=False)
-    if report.state is None:
-        raise cli_errors.ValidationError(
-            f"state schema invalid: {'; '.join(report.schema_errors[:3])}"
-        )
-    return report.state
-
-
 @release_app.command("changelog")
 def release_changelog(ctx: typer.Context) -> None:
     """Mine the current ``CHANGELOG.md`` unreleased section."""
@@ -120,20 +106,12 @@ def release_changelog(ctx: typer.Context) -> None:
 def release_notes(
     ctx: typer.Context,
     version: Annotated[str, typer.Argument(help="Release version label.")],
-    from_phase: Annotated[
-        str | None,
-        typer.Option("--from-phase", help="First phase to include, e.g. P14."),
-    ] = None,
-    to_phase: Annotated[
-        str | None,
-        typer.Option("--to-phase", help="Last phase to include, e.g. P17."),
-    ] = None,
     output: Annotated[
         Path | None,
         typer.Option("--output", help="Optional output path for the draft."),
     ] = None,
 ) -> None:
-    """Render a scrubbed release-notes draft."""
+    """Render a scrubbed release-notes draft from the unreleased changelog."""
     from eawf.surfaces.render.release_notes import (
         ReleaseNotesValidationError,
         build_release_notes,
@@ -142,18 +120,11 @@ def release_notes(
 
     flags: GlobalFlags = ctx.obj
     try:
-        state_path, _reason = resolve_with_reason(flags.workspace)
-        state = _load_state(state_path)
         changelog_text = None
         changelog_path = Path("CHANGELOG.md")
         if changelog_path.exists():
             changelog_text = changelog_path.read_text(encoding="utf-8")
-        body = build_release_notes(
-            state,
-            from_phase=from_phase,
-            to_phase=to_phase,
-            changelog_text=changelog_text,
-        )
+        body = build_release_notes(changelog_text=changelog_text)
         if output is not None:
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(body, encoding="utf-8")
@@ -165,9 +136,6 @@ def release_notes(
             cli_errors.UserError(f"cannot write release notes: {exc}", kind="InvalidInput"),
             flags=flags,
         )
-        return
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
         return
 
     payload = {

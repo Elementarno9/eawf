@@ -115,7 +115,6 @@ def test_surf_070_enable_and_render_resolve_the_same_layer(
     agents_md = _render(repo, flag)
 
     assert enabled["state_keys_required"] == [f"probe_{expected}"]
-    assert enabled["state_keys_materialised"] == []
     assert _rendered_layers(agents_md) == [expected]
 
 

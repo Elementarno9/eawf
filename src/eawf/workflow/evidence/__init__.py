@@ -2,7 +2,7 @@
 incidents, artifacts, backlog.
 
 Each module exposes pure mutator functions that take an in-memory
-:class:`~eawf.kernel.state.models.State` plus arguments and return a tuple of
+:class:`~eawf.kernel.migration.v1_state.State` plus arguments and return a tuple of
 ``(updated_state, jsonl_record, event_record)`` so the CLI handler layer can
 serialise them under the sibling lock without leaking I/O concerns into the
 business logic. The audit-evidence invariant from

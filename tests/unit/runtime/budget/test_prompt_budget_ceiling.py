@@ -20,7 +20,6 @@ from pydantic import ValidationError
 
 from eawf.kernel.economics.governor import DEFAULT_GOVERNOR
 from eawf.kernel.identity import EntityKind, parse_qualified_urn
-from eawf.kernel.state.models import State
 from eawf.kernel.store.compaction import read_document
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
@@ -43,25 +42,20 @@ from eawf.runtime.daemon.budget_interlock import (
 )
 from eawf.runtime.daemon.methods import run_budget
 from eawf.runtime.daemon.methods.run_budget import InFlightRunMeter
-from eawf.runtime.runtimes.claude import statusline as statusline_orchestrator
 from eawf.runtime.runtimes.claude.plugin_install import _patch_settings_json
-from eawf.runtime.runtimes.claude.statusline_modules import budget as budget_module
 from eawf.runtime.runtimes.metering import UsageSample
 from eawf.surfaces.render.statusline import (
     SegmentSource,
     budget_segment,
     budget_unavailable_segment,
 )
+from tests._epoch2_helpers import lay_epoch2_tree
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     document_path,
     provision,
     root_context,
     seed,
     seed_row,
-)
-from tests.unit.runtime.budget._wave_payload import (
-    _WAVE_ID,
-    _state_payload,
 )
 
 pytestmark = pytest.mark.unit
@@ -79,19 +73,6 @@ def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
-
-
-def write_repo(tmp_path: Path, *, budget: int | None, config: str | None = None) -> Path:
-    """Write a repo whose active wave carries *budget*; return its state path."""
-    payload = _state_payload()
-    payload["waves"][_WAVE_ID]["token_budget"] = budget
-    state_dir = tmp_path / "repo" / ".ea"
-    state_dir.mkdir(parents=True)
-    state_path = state_dir / "state.json"
-    state_path.write_text(State.model_validate(payload).model_dump_json(), encoding="utf-8")
-    if config is not None:
-        (state_dir / "config.yaml").write_text(config, encoding="utf-8")
-    return state_path
 
 
 # ---------- the one ceiling and its duplicate refusal ----------
@@ -153,15 +134,23 @@ def test_prompt_budget_ceiling_refuses_negative_tokens() -> None:
         PromptBudgetCeiling(tokens=-1, enforce="soft")
 
 
+def write_native_repo(tmp_path: Path, *, config: str) -> Path:
+    """Bear a native repo whose repo config layer is *config*; return the repo root."""
+    repo = tmp_path / "repo"
+    state_path = lay_epoch2_tree(repo)
+    (state_path.parent / "config.yaml").write_text(config, encoding="utf-8")
+    return repo
+
+
 def test_load_budget_config_reads_the_repo_layer(tmp_path: Path) -> None:
-    state_path = write_repo(tmp_path, budget=1000, config="flow:\n  budget:\n    multiplier: 2.0\n")
-    assert load_budget_config(state_path.parent.parent) == BudgetConfig(multiplier=2.0)
+    repo = write_native_repo(tmp_path, config="flow:\n  budget:\n    multiplier: 2.0\n")
+    assert load_budget_config(repo) == BudgetConfig(multiplier=2.0)
 
 
 def test_load_budget_config_second_ceiling_in_a_layer_is_refused(tmp_path: Path) -> None:
-    state_path = write_repo(tmp_path, budget=1000, config="flow:\n  budget:\n    cap: 900\n")
+    repo = write_native_repo(tmp_path, config="flow:\n  budget:\n    cap: 900\n")
     with pytest.raises(DuplicateCeilingError):
-        load_budget_config(state_path.parent.parent)
+        load_budget_config(repo)
 
 
 # ---------- the governor stops the metered work at the ceiling ----------
@@ -231,16 +220,6 @@ def test_in_flight_run_meter_crossing_the_sealed_ceiling_cancels_the_run(
 _SEGMENT_SOURCE = SegmentSource(producer="test", provenance="test#waves.token_budget")
 
 
-def test_statusline_render_pipeline_never_draws_an_epoch1_ceiling(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    state_path = write_repo(tmp_path, budget=40_000)
-    monkeypatch.setattr(statusline_orchestrator, "_safe_resolve_state_path", lambda _w: state_path)
-    line = statusline_orchestrator.render_pipeline({}, workspace=None, theme_name="ascii-fallback")
-    assert "budget:n/a(epoch1-undeclared)" in line
-    assert "60.0k" not in line
-
-
 @pytest.mark.parametrize(
     ("spent", "limit", "notice", "text"),
     [
@@ -268,12 +247,6 @@ def test_budget_segment_negative_spend_raises() -> None:
 def test_budget_unavailable_segment_refuses_a_bad_reason(reason: str) -> None:
     with pytest.raises(ValueError, match="one non-empty token"):
         budget_unavailable_segment(reason, _SEGMENT_SOURCE)
-
-
-def test_budget_module_names_why_it_cannot_draw(tmp_path: Path) -> None:
-    assert budget_module.build({}, None).text == "budget:n/a(no-state)"
-    epoch1 = write_repo(tmp_path / "a", budget=None)
-    assert budget_module.build({}, epoch1).text == "budget:n/a(epoch1-undeclared)"
 
 
 def test_plugin_settings_wire_the_statusline_and_keep_a_foreign_one(tmp_path: Path) -> None:

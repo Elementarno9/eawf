@@ -65,7 +65,10 @@ NAMED_TARGETS = {
 
 def _seam(route: str = "scope.home") -> ProjectionSeam:
     """Return a seam bound to no tree; nothing here opens a transport."""
-    return ProjectionSeam(route=route, scope_id="EAWF", state_path=None)
+    return ProjectionSeam(
+        route=route,
+        scope_id="EAWF",
+    )
 
 
 def _at(seam: ProjectionSeam, value: ConnectionValue) -> ProjectionSeam:

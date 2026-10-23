@@ -21,178 +21,10 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from eawf.kernel.state.enums import ProjectStatus, ScopeKind, WaveStatus
-from eawf.kernel.state.models import CurrentPointers, Principal, Project, RuntimeLatest, State
-from tests._epoch1_seed import seed_iter, seed_phase, seed_wave
-from tests.conftest import make_claim_criterion, make_intent
-
-
-def _empty_state() -> State:
-    return State.model_validate(
-        {
-            "schema_version": "1.0",
-            "scope_kind": ScopeKind.REPO.value,
-            "urn": "urn:eawf:v1:state:QR",
-            "updated_at": datetime.now(UTC).isoformat(),
-            "project": Project(
-                code="QR",
-                slug="qr",
-                title="QR",
-                description=None,
-                domains=["x"],
-                default_branch="main",
-                status=ProjectStatus.ACTIVE,
-                repo_urn="urn:eawf:v1:repo:QR",
-            ).model_dump(mode="json"),
-            "current": CurrentPointers(project_code="QR").model_dump(mode="json"),
-            "workspace": None,
-            "phases": {},
-            "iters": {},
-            "waves": {},
-            "artifacts": {},
-            "agent_sessions": {},
-            "plugins": {},
-            "indexes": {},
-        }
-    )
-
-
-def _seed_chain() -> State:
-    """Seed a linear chain W01 -> W02 -> W03 under P01-I01."""
-    state = _empty_state()
-    seed_phase(state, phase_id="P01", title="Bootstrap")
-    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    seed_wave(
-        state,
-        wave_id="P01-I01-W01",
-        iter_id="P01-I01",
-        title="A",
-        file_scopes=["src/"],
-        effort_bucket="M",
-        success_criteria=[make_claim_criterion()],
-        intent=make_intent(),
-    )
-    seed_wave(
-        state,
-        wave_id="P01-I01-W02",
-        iter_id="P01-I01",
-        title="B",
-        file_scopes=["src/"],
-        deps=["P01-I01-W01"],
-        effort_bucket="M",
-        success_criteria=[make_claim_criterion()],
-        intent=make_intent(),
-    )
-    seed_wave(
-        state,
-        wave_id="P01-I01-W03",
-        iter_id="P01-I01",
-        title="C",
-        file_scopes=["src/"],
-        deps=["P01-I01-W02"],
-        effort_bucket="M",
-        success_criteria=[make_claim_criterion()],
-        intent=make_intent(),
-    )
-    return state
-
-
-def _seed_diamond() -> State:
-    """Seed a diamond W01 -> {W02, W03} -> W04 under P01-I01."""
-    state = _empty_state()
-    seed_phase(state, phase_id="P01", title="Bootstrap")
-    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    seed_wave(
-        state,
-        wave_id="P01-I01-W01",
-        iter_id="P01-I01",
-        title="A",
-        file_scopes=["src/"],
-        effort_bucket="M",
-        success_criteria=[make_claim_criterion()],
-        intent=make_intent(),
-    )
-    seed_wave(
-        state,
-        wave_id="P01-I01-W02",
-        iter_id="P01-I01",
-        title="B",
-        file_scopes=["src/"],
-        deps=["P01-I01-W01"],
-        effort_bucket="M",
-        success_criteria=[make_claim_criterion()],
-        intent=make_intent(),
-    )
-    seed_wave(
-        state,
-        wave_id="P01-I01-W03",
-        iter_id="P01-I01",
-        title="C",
-        file_scopes=["src/"],
-        deps=["P01-I01-W01"],
-        effort_bucket="M",
-        success_criteria=[make_claim_criterion()],
-        intent=make_intent(),
-    )
-    seed_wave(
-        state,
-        wave_id="P01-I01-W04",
-        iter_id="P01-I01",
-        title="D",
-        file_scopes=["src/"],
-        deps=["P01-I01-W02", "P01-I01-W03"],
-        effort_bucket="M",
-        success_criteria=[make_claim_criterion()],
-        intent=make_intent(),
-    )
-    return state
-
+from eawf.kernel.state.enums import ProjectStatus, WaveStatus
+from eawf.kernel.state.models import Principal, Project
 
 # ---- dispatch_paused --------------------------------------------------------
-
-
-def test_state_dispatch_paused_defaults_false() -> None:
-    """``dispatch_paused`` defaults to ``False`` when omitted from the payload."""
-    state = _empty_state()
-    assert state.dispatch_paused is False
-
-
-def test_state_accepts_explicit_dispatch_paused_true() -> None:
-    """``State`` accepts an explicit ``dispatch_paused=True`` and round-trips it."""
-    state = _empty_state()
-    state.dispatch_paused = True
-    reloaded = State.model_validate(state.model_dump(mode="json"))
-    assert reloaded.dispatch_paused is True
-
-
-def test_state_rejects_non_bool_dispatch_paused() -> None:
-    """A non-bool ``dispatch_paused`` is rejected at the ingestion boundary."""
-    payload = _empty_state().model_dump(mode="json")
-    payload["dispatch_paused"] = "not-a-bool"
-    with pytest.raises(ValidationError):
-        State.model_validate(payload)
-
-
-def test_wave_runtime_latest_defaults_none_and_forbids_extra_keys() -> None:
-    """``Wave.runtime_latest`` is optional and strictly shaped when present."""
-    state = _empty_state()
-    seed_phase(state, phase_id="P01", title="Bootstrap")
-    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    seed_wave(
-        state,
-        wave_id="P01-I01-W01",
-        iter_id="P01-I01",
-        title="A",
-        file_scopes=["src/"],
-        effort_bucket="M",
-        intent=make_intent(),
-    )
-
-    assert state.waves["P01-I01-W01"].runtime_latest is None
-    with pytest.raises(ValidationError):
-        RuntimeLatest.model_validate(
-            {"api_duration_ms": 1, "captured_at": datetime.now(UTC).isoformat(), "extra": 1}
-        )
 
 
 # ---- deps -------------------------------------------------------------------
@@ -274,16 +106,6 @@ def test_project_extra_field_still_forbidden() -> None:
         Project(**_project_kwargs(), bogus=1.0)  # type: ignore[arg-type,call-arg]
 
 
-def test_project_schema_version_pin_unchanged() -> None:
-    """Adding an optional field must NOT bump State.schema_version.
-
-    P20-I01-W09 spec: keep weekly_eu_target strictly optional (default
-    None) so the schema_version literal stays at "1.0".
-    """
-    state = _empty_state()
-    assert state.schema_version == "1.0"
-
-
 # ---------------------------------------------------------------------------
 # Wave.claimed_at — work-start anchor
 # ---------------------------------------------------------------------------
@@ -335,30 +157,6 @@ def test_wave_without_claimed_at_key_loads() -> None:
     assert wave.claimed_at is None
 
 
-def test_state_accepts_schema_version_1_3() -> None:
-    """The State model accepts the v1.3 ``schema_version`` literal."""
-    payload = _empty_state().model_dump(mode="json")
-    payload["schema_version"] = "1.3"
-    state = State.model_validate(payload)
-    assert state.schema_version == "1.3"
-
-
-def test_state_accepts_schema_version_1_4() -> None:
-    """The State model accepts the v1.4 ``schema_version`` literal (candidate_tag bump)."""
-    payload = _empty_state().model_dump(mode="json")
-    payload["schema_version"] = "1.4"
-    state = State.model_validate(payload)
-    assert state.schema_version == "1.4"
-
-
-def test_state_accepts_schema_version_1_9() -> None:
-    """The State model accepts the v1.9 ``schema_version`` literal."""
-    payload = _empty_state().model_dump(mode="json")
-    payload["schema_version"] = "1.9"
-    state = State.model_validate(payload)
-    assert state.schema_version == "1.9"
-
-
 # ---------------------------------------------------------------------------
 # Principal (C01-IMPL W02 placeholder — c01-foundations §5.3.19 + Q3 2026-05-18)
 # ---------------------------------------------------------------------------
@@ -405,13 +203,3 @@ def test_principal_strict_forbids_extra_field() -> None:
             display_name="x",
             email="x@example.com",  # type: ignore[call-arg]
         )
-
-
-def test_principal_state_schema_version_unchanged() -> None:
-    """Adding the Principal class must NOT bump State.schema_version.
-
-    Principal is a placeholder model — not yet referenced from State —
-    so the schema literal stays at "1.0" per c01-foundations §5.3.19.
-    """
-    state = _empty_state()
-    assert state.schema_version == "1.0"

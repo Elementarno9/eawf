@@ -30,10 +30,10 @@ These tests pin the per-subprocess isolation contract:
 * the instrument version-probe (:func:`eawf.platform.install.instrument_probe.probe_one`)
   passes ``stdin=subprocess.DEVNULL`` AND ``start_new_session=True`` (POSIX) to
   ``subprocess.run``;
-* the per-wave ``git log`` drift scan
-  (:func:`eawf.runtime.vcs.wave_sha.build_wave_sha_index`), the merge-base
-  lookup, and the ``git log --grep`` derive all pass ``stdin=subprocess.DEVNULL``
-  AND ``start_new_session=True`` (POSIX) to ``subprocess.run``;
+* the merge-base diff-base lookup
+  (:func:`eawf.runtime.vcs.diff_base.derive_diff_base`) passes
+  ``stdin=subprocess.DEVNULL`` AND ``start_new_session=True`` (POSIX) to
+  ``subprocess.run``;
 * the shared :func:`detached_subprocess_kwargs` helper returns the
   platform-appropriate detach knobs;
 * the process-global ``detached_tty_stdin`` redirect is GONE from the doctor
@@ -53,7 +53,7 @@ from eawf.observability.doctor import checks
 from eawf.platform.install import instrument_probe
 from eawf.platform.install.instrument_probe import InstrumentSpec, probe_one
 from eawf.platform.subprocess_detach import detached_subprocess_kwargs
-from eawf.runtime.vcs import wave_sha
+from eawf.runtime.vcs import diff_base
 
 
 class _FakeProc:
@@ -103,39 +103,12 @@ def test_instrument_version_probe_passes_devnull_stdin(monkeypatch: pytest.Monke
         assert captured.get("creationflags") == getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
-def test_wave_sha_drift_scan_passes_devnull_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The per-wave ``git log`` drift scan runs with ``stdin=DEVNULL`` + detach.
-
-    The drift scan is the second TTY-touching probe the Doctor gather fans out
-    to; under the live TUI its child must inherit a dead stdin AND be detached
-    from the controlling terminal. Mock ``shutil.which`` (so git resolves) and
-    capture the ``subprocess.run`` kwargs.
-    """
-    captured: dict[str, Any] = {}
-
-    def fake_run(*args: Any, **kwargs: Any) -> _FakeProc:
-        captured.update(kwargs)
-        return _FakeProc(stdout="", returncode=0)
-
-    monkeypatch.setattr(wave_sha.shutil, "which", lambda _name: "/usr/bin/git")
-    monkeypatch.setattr(wave_sha.subprocess, "run", fake_run)
-
-    wave_sha.build_wave_sha_index(repo_root=Path("/tmp"))
-
-    assert captured.get("stdin") is subprocess.DEVNULL
-    assert captured.get("capture_output") is True
-    if sys.platform != "win32":
-        assert captured.get("start_new_session") is True
-    else:
-        assert captured.get("creationflags") == getattr(subprocess, "CREATE_NO_WINDOW", 0)
-
-
-def test_wave_sha_merge_base_passes_detach_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_diff_base_merge_base_passes_detach_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
     """The ``git merge-base`` diff-base lookup runs detached + with dead stdin.
 
-    :func:`eawf.runtime.vcs.wave_sha.derive_diff_base` falls back to a
-    ``git merge-base HEAD main`` shell-out; that child fans out from the same
-    Doctor gather, so it must also be detached from the controlling terminal.
+    :func:`eawf.runtime.vcs.diff_base.derive_diff_base` shells out
+    ``git merge-base HEAD main``; that child must be detached from the
+    controlling terminal like the other probes.
     """
     captured: dict[str, Any] = {}
 
@@ -143,38 +116,11 @@ def test_wave_sha_merge_base_passes_detach_kwargs(monkeypatch: pytest.MonkeyPatc
         captured.update(kwargs)
         return _FakeProc(stdout="deadbeef\n", returncode=0)
 
-    monkeypatch.setattr(wave_sha.shutil, "which", lambda _name: "/usr/bin/git")
-    monkeypatch.setattr(wave_sha.subprocess, "run", fake_run)
+    monkeypatch.setattr(diff_base.shutil, "which", lambda _name: "/usr/bin/git")
+    monkeypatch.setattr(diff_base.subprocess, "run", fake_run)
 
-    wave_sha._git_merge_base_head_main(repo_root=Path("/tmp"))
+    assert diff_base.derive_diff_base(repo_root=Path("/tmp")) == "deadbeef"
 
-    assert captured.get("stdin") is subprocess.DEVNULL
-    assert captured.get("capture_output") is True
-    if sys.platform != "win32":
-        assert captured.get("start_new_session") is True
-    else:
-        assert captured.get("creationflags") == getattr(subprocess, "CREATE_NO_WINDOW", 0)
-
-
-def test_wave_sha_derive_grep_passes_detach_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The ``git log --grep`` wave-SHA derive runs detached + with dead stdin.
-
-    :func:`eawf.runtime.vcs.wave_sha.derive_wave_sha` shells out a
-    ``git log --grep=[P##-W##]`` lookup per candidate prefix; each child must be
-    detached from the controlling terminal like the other Doctor-gather probes.
-    """
-    captured: dict[str, Any] = {}
-
-    def fake_run(*args: Any, **kwargs: Any) -> _FakeProc:
-        captured.update(kwargs)
-        return _FakeProc(stdout="cafef00d\n", returncode=0)
-
-    monkeypatch.setattr(wave_sha.shutil, "which", lambda _name: "/usr/bin/git")
-    monkeypatch.setattr(wave_sha.subprocess, "run", fake_run)
-
-    sha = wave_sha.derive_wave_sha("P30-I19-W10", repo_root=Path("/tmp"))
-
-    assert sha == "cafef00d"
     assert captured.get("stdin") is subprocess.DEVNULL
     assert captured.get("capture_output") is True
     if sys.platform != "win32":

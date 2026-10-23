@@ -15,20 +15,17 @@ from eawf.observability.doctor import checks
 
 
 def _stub_project_branch(monkeypatch: pytest.MonkeyPatch, default_branch: str | None) -> None:
-    """Force ``check_branch_currency`` to read *default_branch* off the project.
+    """Force ``check_branch_currency`` to read *default_branch* off the project record.
 
-    The check reads only ``state.project.default_branch``, so a namespace is a
-    faithful stand-in; ``None`` stands for a state carrying no project record.
+    The check reads only the brief's ``default_branch`` from the generation's
+    project record, so a namespace is a faithful stand-in; ``None`` stands
+    for a generation whose project names no branch.
     """
     from types import SimpleNamespace
 
-    project = None if default_branch is None else SimpleNamespace(default_branch=default_branch)
-    stub_state = SimpleNamespace(project=project)
-
-    def fake_load(workspace: Path, *, name: str) -> tuple[object, Path]:
-        return stub_state, workspace / ".ea" / "state.json"
-
-    monkeypatch.setattr("eawf.observability.doctor.checks._load_state_for_check", fake_load)
+    brief = SimpleNamespace(default_branch=default_branch)
+    monkeypatch.setattr(checks, "_tree_for_check", lambda workspace, *, name: workspace / ".ea")
+    monkeypatch.setattr("eawf.platform.rules.render.load_project_brief", lambda _root: brief)
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -70,11 +67,11 @@ def test_check_branch_currency_no_workspace_ok() -> None:
 def test_check_branch_currency_no_project_ok(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A state without a project record has no base branch to compare."""
+    """A generation whose project names no branch has no base branch to compare."""
     _stub_project_branch(monkeypatch, None)
     result = checks.check_branch_currency(workspace=tmp_path)
     assert result.status == "ok"
-    assert "no project record" in (result.detail or "")
+    assert "no project default branch" in (result.detail or "")
 
 
 def test_check_branch_currency_without_remote_ref_ok(
@@ -139,3 +136,32 @@ def test_check_branch_currency_stale_fetch_warns(
     result = checks.check_branch_currency(workspace=repo)
     assert result.status == "warn"
     assert "last fetch" in (result.detail or "")
+
+
+def test_check_branch_currency_reads_the_generation_project_row(tmp_path: Path) -> None:
+    """A migrated tree's imported project row names the base branch the check compares."""
+    from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+    from eawf.kernel.state.epoch2.authority import resolve_authority
+    from eawf.kernel.store.compaction import read_document, write_document
+    from tests._epoch2_helpers import lay_epoch2_tree
+
+    clone = _repo_with_origin(tmp_path)
+    state_path = lay_epoch2_tree(clone)
+    authority = resolve_authority(state_path.parent)
+    assert authority.target is not None and authority.generation_id is not None
+    document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    body = read_document(document)
+    project = {
+        "code": "QR",
+        "slug": "qr",
+        "title": "QR",
+        "description": None,
+        "domains": ["quant"],
+        "default_branch": "trunk",
+        "status": "active",
+        "repo_urn": "urn:eawf:v1:repo:QR",
+    }
+    body["project"] = {"QR": {"payload": {"payload": project}, "status": "imported"}}
+    write_document(document, body)
+    result = checks.check_branch_currency(workspace=clone)
+    assert (result.status, result.detail) == ("ok", "no origin/trunk to compare")

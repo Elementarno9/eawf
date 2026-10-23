@@ -1,18 +1,18 @@
-"""One resumable pipeline from a merged phase to a baked, advanced checkpoint.
+"""One resumable pipeline from a merged Milestone to a baked, advanced checkpoint.
 
 A checkpoint cannot be pinned before its tag is pushed from ``main``:
 the candidate manifest is frozen from the publication receipts only the
 tag's publish jobs write. Walking the rest by hand after every merge
-made each rung's approval and bake a wave of the *next* phase. This
+made each rung's approval and bake a separate piece of work. This
 module runs the whole post-merge walk as one verb instead:
 
 pin the source, fetch the build receipts, tag and push (only with the
 operator's publish flag), wait for the publish runs, open the record,
 pin the candidate, prove the gates, sweep readiness, approve, publish,
 reconcile, observe to BAKED, advance the train, check by trailer that
-main carries what was released -- a phase's wave pins, or the commits
-each Batch of a Milestone pinned -- and land the evidence locally,
-recording each file's sha256 in the evidence step's journal row.
+main carries the commits each Batch of the released Milestone pinned,
+and land the evidence locally, recording each file's sha256 in the
+evidence step's journal row.
 
 Every step is journaled once it completes, one row per step, under the
 checkout's ignored ``.ea/local`` tree. A rerun skips the journaled steps
@@ -59,8 +59,6 @@ from eawf.kernel.spec.release import (
 )
 from eawf.kernel.state.types import UtcDatetime
 from eawf.runtime.lock import portalock
-from eawf.runtime.vcs.trailer_repin import TrailerRepinError, resolve_trailer_repins
-from eawf.runtime.vcs.wave_sha import load_drift_acks
 from eawf.workflow.release.advance import TrainAdvanceRecord
 from eawf.workflow.release.pipeline_files import flatten_artifacts
 from eawf.workflow.release.pipeline_receipts import RECEIPT_FILENAMES, read_build_receipt
@@ -117,9 +115,6 @@ class PipelineRefusalCode(StrEnum):
     GATE_RECEIPTS_REFUSED = "gate_receipts_refused"
     PUBLICATION_LEG_FAILED = "publication_leg_failed"
     OBSERVATION_INCONCLUSIVE = "observation_inconclusive"
-    TRAILER_REPIN_UNDECIDED = "trailer_repin_undecided"
-    TRAILER_REPIN_PENDING = "trailer_repin_pending"
-    PHASE_PINS_MISSING = "phase_pins_missing"
     MILESTONE_UNREADABLE = "milestone_unreadable"
     MILESTONE_BATCHES_MISSING = "milestone_batches_missing"
     BATCH_TRAILER_MISSING = "batch_trailer_missing"
@@ -209,28 +204,16 @@ class PipelineResult:
     advance: TrainAdvanceRecord | None
 
 
-#: A phase id, e.g. ``P35``. The workflow that prints the pipeline
-#: command falls back to the literal ``P<NN>`` when it cannot extract
-#: one from the merge commit subject, and that literal would otherwise
-#: reach ``phase_wave_pins`` as a real phase id and read no wave pins
-#: at all rather than refusing.
-_PHASE_ID_RE: Final[re.Pattern[str]] = re.compile(r"^P\d{2,}$")
-
-
 @dataclass(frozen=True, slots=True)
 class PipelineOptions:
     """What the operator asked the pipeline to do.
-
-    Exactly one of ``phase_id`` and ``milestone_key`` names what was
-    released, and so what the repin step checks on ``main``.
 
     Attributes:
         version: The checkpoint version the merge released.
         publish: Whether the operator decided to publish; without it the
             tag step refuses before pushing anything.
-        phase_id: The merged phase whose wave pins the repin step checks.
-        milestone_key: The Milestone whose COMPLETED Batches the repin
-            step checks, each by its ``Batch:`` trailer.
+        milestone_key: The released Milestone, whose COMPLETED Batches the
+            repin step checks on ``main`` by their trailers.
         membership_refs: Acceptance bundles the record is opened with.
         remote: The remote ``main`` and the tag live on.
         observe_attempts: Read-backs per target before an inconclusive
@@ -240,30 +223,19 @@ class PipelineOptions:
 
     version: str
     publish: bool
-    phase_id: str | None = None
-    milestone_key: str | None = None
+    milestone_key: str
     membership_refs: tuple[str, ...] = ()
     remote: str = "origin"
     observe_attempts: int = 10
     observe_backoff_seconds: float = 60.0
 
     def __post_init__(self) -> None:
-        """Require exactly one of a real phase id and a real Milestone key.
+        """Require a real Milestone key.
 
         Raises:
-            ValueError: When both or neither are named, ``phase_id`` does
-                not match ``P<NN>``, or ``milestone_key`` is not a
-                ``MLS-NNNN`` key.
+            IdentityError: When ``milestone_key`` is not a ``MLS-NNNN`` key.
         """
-        if (self.phase_id is None) == (self.milestone_key is None):
-            raise ValueError(
-                "name exactly one of the phase (--phase) and the milestone (--milestone) "
-                "the release checks"
-            )
-        if self.phase_id is not None and not _PHASE_ID_RE.fullmatch(self.phase_id):
-            raise ValueError(f"phase_id {self.phase_id!r} is not a phase id (want P<NN>, e.g. P35)")
-        if self.milestone_key is not None:
-            validate_entity_key(EntityKind.MILESTONE, self.milestone_key)
+        validate_entity_key(EntityKind.MILESTONE, self.milestone_key)
 
 
 #: One ``release.*`` JSON-RPC call: method, params -> result. Raises
@@ -321,10 +293,6 @@ class PipelineHost(Protocol):
 
     def prove_gates(self, version: str) -> dict[str, Any]:
         """Run ``release receipts`` with the proof PATH isolated; return its reply."""
-        ...
-
-    def phase_wave_pins(self, phase_id: str) -> dict[str, str]:
-        """Return wave id -> pinned commit for the closed waves of *phase_id*."""
         ...
 
     def milestone_batch_heads(self, milestone_key: str) -> dict[str, str]:
@@ -749,14 +717,9 @@ class _PipelineRun:
                 remedy="install them; the gate proofs run uv and uvx",
             )
         run_date = self.now().date().isoformat()
-        released = (
-            {"phase": self.options.phase_id}
-            if self.options.phase_id is not None
-            else {"milestone": str(self.options.milestone_key)}
-        )
         return {
             "source_sha": head,
-            **released,
+            "milestone": self.options.milestone_key,
             "evidence_dir": f"{EVIDENCE_DIRNAME}/{run_date}-{self.label}-publication",
         }
 
@@ -1157,15 +1120,9 @@ class _PipelineRun:
         }
 
     def _repin(self, step: PipelineStep) -> dict[str, str]:
-        if self.options.milestone_key is not None:
-            return self._repin_milestone(step, self.options.milestone_key)
-        assert self.options.phase_id is not None  # PipelineOptions names exactly one
-        return self._repin_phase(step, self.options.phase_id)
-
-    def _repin_milestone(self, step: PipelineStep, milestone_key: str) -> dict[str, str]:
         # A Batch landed as it closed when main carries exactly the commits of its work
-        # that the head it pinned carries; a Batch may land as several commits. Epoch-1
-        # wave pins and drift acks play no part.
+        # that the head it pinned carries; a Batch may land as several commits.
+        milestone_key = self.options.milestone_key
         remote = self.options.remote
         target_ref = f"refs/remotes/{remote}/main"
         unreadable = (
@@ -1216,55 +1173,6 @@ class _PipelineRun:
                 remedy="merge the phase branch into main so each commit survives, then rerun",
             )
         return {"milestone": milestone_key, "batches": str(len(heads))}
-
-    def _repin_phase(self, step: PipelineStep, phase_id: str) -> dict[str, str]:
-        pins = self.host.phase_wave_pins(phase_id)
-        # A well-formed but mistyped phase id reads no pins, and verifying
-        # zero pins would pass without checking the merged phase at all.
-        if not pins:
-            raise PipelineRefusal(
-                step,
-                PipelineRefusalCode.PHASE_PINS_MISSING,
-                detail=f"phase {phase_id} has no closed waves with a pinned commit",
-                remedy="rerun with the merged phase's id in --phase",
-            )
-        target_ref = f"refs/remotes/{self.options.remote}/main"
-        try:
-            rows = resolve_trailer_repins(
-                pins, target_ref=target_ref, repo_root=self.host.repo_root
-            )
-        except TrailerRepinError as exc:
-            raise PipelineRefusal(
-                step,
-                PipelineRefusalCode.TRAILER_REPIN_UNDECIDED,
-                detail=str(exc),
-                remedy=f"fetch {self.options.remote} and rerun",
-            ) from exc
-        # A wave the repository acknowledged as drifted keeps its stale pin on
-        # purpose; `doctor` honours the same acknowledgement, so the release
-        # must not demand a repin that no repair will ever offer.
-        acked = load_drift_acks(self.host.repo_root)
-        checked = [row for row in rows if row.wave_id not in acked]
-        undecided = [f"{row.wave_id}={row.outcome}" for row in checked if row.new_commit is None]
-        if undecided:
-            raise PipelineRefusal(
-                step,
-                PipelineRefusalCode.TRAILER_REPIN_UNDECIDED,
-                detail=f"no single landed commit for {', '.join(undecided)}",
-                remedy="repin those waves by hand with `eawf task complete`",
-            )
-        moved = [row.wave_id for row in checked if row.outcome != "unchanged"]
-        if moved:
-            raise PipelineRefusal(
-                step,
-                PipelineRefusalCode.TRAILER_REPIN_PENDING,
-                detail=f"main rewrote the commits of {', '.join(moved)}",
-                remedy=(
-                    "list those waves under acked_wave_ids in .eawf/drift-acks.json "
-                    "to keep their stale pins, then rerun"
-                ),
-            )
-        return {"pins": str(len(rows)), "acked": str(len(rows) - len(checked))}
 
     def _evidence(self, step: PipelineStep) -> dict[str, str]:
         staged = sorted(self.layout.staged.glob("*.json"))

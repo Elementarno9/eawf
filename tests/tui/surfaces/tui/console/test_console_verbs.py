@@ -550,7 +550,6 @@ def _seam(daemon: _Daemon, *, route: str = "attention", **options: Any) -> Proje
     return ProjectionSeam(
         route=route,
         scope_id=SCOPE,
-        state_path=None,
         clock=lambda: AT,
         daemon_client_factory=daemon.client,
         **options,

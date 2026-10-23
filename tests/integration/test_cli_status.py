@@ -252,13 +252,7 @@ def test_status_resolves_no_wave_commit_from_git(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Status reads git once for its head and never per wave."""
-
-    def _raise(*_args: Any, **_kwargs: Any) -> Any:
-        raise AssertionError("status must not resolve a wave commit from git")
-
-    monkeypatch.setattr("eawf.runtime.vcs.wave_sha.derive_wave_sha", _raise)
-    monkeypatch.setattr("eawf.runtime.vcs.wave_sha.build_wave_sha_index", _raise)
+    """Status reports no wave-commit drift on a native tree."""
     state_path = lay_epoch2_tree(tmp_path)
     assert "drift" not in _status_json(state_path, monkeypatch)
     text = _invoke(state_path, monkeypatch, "status")

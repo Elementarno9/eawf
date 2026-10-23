@@ -1,7 +1,7 @@
 """REL-026: the known-flaky set is green on five consecutive fresh runs.
 
-Two tests carried the suite's shared-state flakes. Both are re-run here as
-real subprocesses under ``-n auto``, five times in a row, with every run
+One test carried the suite's shared-state flake. It is re-run here as a
+real subprocess under ``-n auto``, five times in a row, with every run
 required to exit ``0`` -- one green run proves nothing about a race, and a
 single in-process re-run would reuse the parent session's already-warmed
 runtime dir.
@@ -17,13 +17,6 @@ in a fully-written file, because that would move the inode the advisory lock
 is bound to, so the test's unlocked reader retries across the window instead;
 it fired on a loaded macOS runner while the reader still parsed once. The
 loop below is the standing witness that the reader tolerates it.
-
-**Concurrent evidence writes**
-(``test_evidence_concurrent_property.py``). N threads race the same
-``state.json`` through ``state_transaction``; the macOS portalock-plus-unlink
-layer admits an in-process race the module documents. Contention is
-sensitive to worker count, so the run is pinned to ``-n auto`` where the
-flake was observed rather than to a fixed pool.
 
 Each child run gets its own ``EAWF_RUNTIME_DIR``: the variable is dropped
 from the child environment so the child's own session fixture mints a fresh
@@ -47,7 +40,6 @@ REPO_ROOT: Path = Path(__file__).resolve().parents[2]
 #: The tests whose flakes REL-026 root-caused, as repo-relative node ids.
 FLAKE_TARGETS: tuple[str, ...] = (
     "tests/unit/test_lock_portalock.py::test_ticker_refreshes_heartbeat_during_hold",
-    "tests/property/test_evidence_concurrent_property.py",
 )
 
 #: How many consecutive green runs the acceptance criterion demands.

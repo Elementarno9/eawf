@@ -1,13 +1,14 @@
 """Concrete ``1.5`` -> ``1.6`` migration step.
 
-The v1.6 schema delta adds the top-level :attr:`~eawf.kernel.state.models.State.dispatch_paused`
-flag — the cooperative dispatch-gate marker the ``agent.pause`` / ``agent.resume``
-RPCs persist and the epoch-1 wave claim read to block a claim while dispatch
-is paused.
+The v1.6 schema delta adds the top-level
+:attr:`~eawf.kernel.migration.v1_state.State.dispatch_paused` flag — the
+cooperative dispatch-gate marker the ``agent.pause`` / ``agent.resume`` RPCs
+persist and the epoch-1 wave claim read to block a claim while dispatch is
+paused.
 
 Adding a field with a model default is purely additive: no existing state row
 carries ``dispatch_paused`` (the field is brand new), and the
-:class:`~eawf.kernel.state.models.State` model supplies the ``False`` default on
+:class:`~eawf.kernel.migration.v1_state.State` model supplies the ``False`` default on
 load, so there is no historical fact to recover and no row to rewrite. The
 transform therefore *only* bumps the ``schema_version`` marker ``1.5`` -> ``1.6``
 — there is no field backfill, the step is a lossless round-trip of the on-disk
@@ -60,7 +61,7 @@ class MigrationV15ToV16:
         """Bump ``schema_version`` ``1.5`` -> ``1.6`` (purely additive).
 
         The v1.6 edge only adds the top-level
-        :attr:`~eawf.kernel.state.models.State.dispatch_paused` flag, which
+        :attr:`~eawf.kernel.migration.v1_state.State.dispatch_paused` flag, which
         the model defaults to ``False`` on load, so the transform rewrites
         only the version marker and leaves every row untouched.
 

@@ -2,11 +2,11 @@
 
 Split out of :mod:`eawf.surfaces.cli.commands.memory`. The
 :data:`memory_app` Typer group and the shared helpers (the note loader,
-the read-only state loader, the status parser, the inlined default
-budget) live in the parent module; this module attaches the query command
-bodies via ``@memory_app.command(...)``. The note verbs read the notes
-from the tree's own epoch -- the generation's memory ledger on an epoch-2
-tree -- through the one loader. Every ``eawf.platform.memory.*`` import
+the status parser, the inlined default budget) live in the parent module;
+this module attaches the query command bodies via
+``@memory_app.command(...)``. The note verbs read the notes from the
+selected generation's memory ledger through the one loader, and the
+digest reads the generation's decisions. Every ``eawf.platform.memory.*`` import
 stays inside the handler bodies so the command-tree build path stays off
 the import-budget heavy graph.
 """
@@ -25,7 +25,6 @@ if TYPE_CHECKING:
 from eawf.surfaces.cli.commands.memory import (
     _DEFAULT_BUDGET,
     _load_notes,
-    _load_state,
     _resolve_status,
     memory_app,
 )
@@ -229,16 +228,16 @@ def memory_digest(
         typer.Option("--json", help="Shorthand for --format json."),
     ] = False,
 ) -> None:
-    """Emit a state-derived standup: current focus, recent closes, decisions.
+    """Emit a standup of the selected generation's recent decisions.
 
-    A pure projection of ``state.json`` — it writes nothing, so the state
-    document and the stores are byte-equal before and after the command. The
-    Markdown branch is one line per paragraph and glosses every lifecycle id
-    so it reads as a glance-clear newcomer standup.
+    A pure projection of the generation -- it writes nothing. The Markdown
+    branch is one line per paragraph so it reads as a glance-clear newcomer
+    standup. An epoch-1 tree is refused as needing migration.
     """
     from eawf.kernel.state.epoch2.authority import resolve_authority
     from eawf.observability.reflect.decisions import read_native_decisions
-    from eawf.platform.memory.digest import build_digest, build_native_digest, render_digest_md
+    from eawf.platform.memory.digest import build_native_digest, render_digest_md
+    from eawf.surfaces.cli.flag_day_gate import MIGRATION_REQUIRED_KIND, MIGRATION_VERB
 
     flags: GlobalFlags = ctx.obj
     fmt_norm = fmt.strip().lower()
@@ -256,11 +255,13 @@ def memory_digest(
         return
     try:
         state_path = resolve_state_path(flags.workspace)
-        # A tree born at epoch 2 has no v1 document; its generation answers.
-        if not state_path.exists() and resolve_authority(state_path.parent).epoch == 2:
-            digest = build_native_digest(read_native_decisions(state_path.parent))
-        else:
-            digest = build_digest(_load_state(state_path))
+        if resolve_authority(state_path.parent).epoch != 2:
+            raise cli_errors.MigrationRequired(
+                f"{state_path.parent} is an epoch-1 tree and the digest reads only an "
+                f"epoch-2 generation; migrate it with `{MIGRATION_VERB} --plan` then `--apply`",
+                kind=MIGRATION_REQUIRED_KIND,
+            )
+        digest = build_native_digest(read_native_decisions(state_path.parent))
         text = render_digest_md(digest)
         payload: dict[str, object] = {
             "format": fmt_norm,

@@ -55,32 +55,10 @@ from eawf.surfaces.render.manifest import load as load_manifest
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from eawf.kernel.state.models import State
     from eawf.runtime.daemon.service_install import SupervisedAgentReport
 
 logger = logging.getLogger(__name__)
 
-
-# The single-file ``state.json`` model holds to roughly this many waves before
-# read/parse/serialise latency and the daemon's whole-file rewrite cost push an
-# operator toward sharding. The bound is advisory, not a hard limit: doctor
-# warns as the live wave count approaches it so the operator can plan a split
-# ahead of the cliff. See AGENTS rule 4 (daemon is the sole state mutator) and
-# the v0.5 roadmap's scale notes.
-STATE_WAVE_SCALE_CEILING = 5000
-
-# Warn once the live wave count reaches this fraction of the ceiling, leaving
-# head-room to plan a shard before the single-file model degrades.
-STATE_WAVE_WARN_FRACTION = 0.8
-
-# Materialised warn trigger: the lowest wave count that flips the advisory note
-# from ``ok`` to ``warn``. Derived from the ceiling and the warn fraction so the
-# two knobs stay the single source of truth.
-STATE_WAVE_WARN_THRESHOLD = int(STATE_WAVE_SCALE_CEILING * STATE_WAVE_WARN_FRACTION)
-
-# Bound the diagnostic to a recent, deterministic slice. This is an
-# operability summary, not a historical accounting report.
-RECENT_ACTUAL_WINDOW = 20
 
 # Compatibility seam: callers and tests historically patched this name on
 # ``checks``. The public wrapper below reads it at call time.
@@ -425,34 +403,25 @@ def check_manifest_in_sync(*, workspace: Path | None) -> CheckResult:
     )
 
 
-def _load_state_for_check(workspace: Path, *, name: str) -> tuple[State, Path] | CheckResult:
-    """Resolve + parse ``state.json`` for a state-reading doctor check.
+def _tree_for_check(workspace: Path, *, name: str) -> Path | CheckResult:
+    """Resolve the ``.ea`` tree a tree-reading doctor check reads.
 
-    Returns ``(state, state_path)``, or an early ``ok`` :class:`CheckResult`
-    (carrying *name*) when there is no resolvable / parseable state. Schema
-    errors stay quiet here: :func:`check_state_present` already surfaces an
-    unresolvable / malformed state, so a second check that reads state must
-    not double-flip doctor's overall status for the same root cause.
+    Returns the tree directory, or an early ``ok`` :class:`CheckResult`
+    (carrying *name*) when no tree resolves: :func:`check_state_present`
+    already surfaces that, so a second check must not double-flip doctor's
+    overall status for the same root cause.
 
     Args:
-        workspace: Workspace anchor to resolve ``state.json`` against.
-        name: Check name stamped onto any early-return :class:`CheckResult`.
+        workspace: Workspace anchor to resolve the tree against.
+        name: Check name stamped onto an early-return :class:`CheckResult`.
     """
-    import json as _json
-
-    from eawf.kernel.state.models import State
-
     try:
         state_path, _reason = resolve_with_reason(workspace)
     except FileNotFoundError, ValueError:
-        return CheckResult(name=name, status="ok", detail="no state.json")
-    if not state_path.exists():
-        return CheckResult(name=name, status="ok", detail="no state.json")
-    try:
-        raw = _json.loads(state_path.read_text(encoding="utf-8"))
-        return State.model_validate(raw), state_path
-    except _json.JSONDecodeError, ValidationError:
-        return CheckResult(name=name, status="ok", detail="state.json unparseable")
+        return CheckResult(name=name, status="ok", detail="no eawf tree")
+    if not state_path.parent.is_dir():
+        return CheckResult(name=name, status="ok", detail="no eawf tree")
+    return state_path.parent
 
 
 def _grant_triple_from_state(server: object) -> tuple[str, list[str], dict[str, str]]:
@@ -539,21 +508,22 @@ def check_mcp_drift(*, workspace: Path | None) -> CheckResult:
     name = "mcp_drift"
     if workspace is None:
         return CheckResult(name=name, status="ok", detail="no workspace anchor")
-    loaded = _load_state_for_check(workspace, name=name)
-    if isinstance(loaded, CheckResult):
-        return loaded
-    state, state_path = loaded
+    tree = _tree_for_check(workspace, name=name)
+    if isinstance(tree, CheckResult):
+        return tree
     from eawf.runtime.mcp.book import registered, tree_servers
 
-    # An epoch-2 tree keeps its registry in the selected generation; the
-    # frozen document beside it stops at the cutover.
-    epoch2 = tree_servers(state_path.parent)
-    servers = (state.mcp_servers or {}) if epoch2 is None else registered(epoch2)
+    # The registry lives in the selected generation; an epoch-1 tree has
+    # none to compare, which check_authority_epoch already reports.
+    standing = tree_servers(tree)
+    if standing is None:
+        return CheckResult(name=name, status="ok", detail="no epoch-2 mcp registry")
+    servers = registered(standing)
     eawf_owned = {sid: s for sid, s in servers.items() if s.owner == "eawf"}
     if not eawf_owned:
         return CheckResult(name=name, status="ok", detail="no eawf-owned mcp servers")
 
-    repo_root = state_path.parent.parent
+    repo_root = tree.parent
     materialised: set[str] = set()
     orphans: list[str] = []
     drifted: list[str] = []
@@ -588,85 +558,6 @@ def check_mcp_drift(*, workspace: Path | None) -> CheckResult:
         status="ok",
         detail=f"{len(eawf_owned)} eawf-owned server(s) match runtime emit",
     )
-
-
-def check_state_scale_ceiling(*, workspace: Path | None) -> CheckResult:
-    """Warn as the live wave count approaches the single-file scale ceiling.
-
-    The single-file ``state.json`` model holds to roughly
-    :data:`STATE_WAVE_SCALE_CEILING` waves before parse / serialise / whole-file
-    rewrite cost pushes the operator toward sharding. This check is purely
-    advisory: it returns ``warn`` once ``len(state.waves)`` reaches
-    :data:`STATE_WAVE_WARN_THRESHOLD` (``STATE_WAVE_WARN_FRACTION`` of the
-    ceiling) so the operator has head-room to plan a split, and ``ok``
-    otherwise. It NEVER returns ``fail`` — crossing the ceiling is a capacity
-    signal, not a broken install, and must not flip doctor's exit code to a
-    failure.
-
-    Like :func:`check_mcp_drift`, a missing / unresolvable / unparseable state
-    yields ``ok`` (the absent-state angle is :func:`check_state_present`'s job)
-    so this check never double-flips doctor's overall status.
-
-    Args:
-        workspace: Workspace anchor to resolve ``state.json`` against; ``None``
-            means no anchor and the check returns ``ok``.
-    """
-    name = "state_scale_ceiling"
-    if workspace is None:
-        return CheckResult(name=name, status="ok", detail="no workspace anchor")
-    loaded = _load_state_for_check(workspace, name=name)
-    if isinstance(loaded, CheckResult):
-        return loaded
-    state, _state_path = loaded
-    wave_count = len(state.waves)
-    if wave_count >= STATE_WAVE_WARN_THRESHOLD:
-        pct = round(100 * wave_count / STATE_WAVE_SCALE_CEILING)
-        return CheckResult(
-            name=name,
-            status="warn",
-            detail=(
-                f"wave count {wave_count} is {pct}% of the single-file ceiling "
-                f"(~{STATE_WAVE_SCALE_CEILING}); plan a state shard"
-            ),
-        )
-    return CheckResult(
-        name=name,
-        status="ok",
-        detail=f"{wave_count} wave(s); under ~{STATE_WAVE_SCALE_CEILING} ceiling",
-    )
-
-
-def check_active_phase_without_iter(*, workspace: Path | None) -> CheckResult:
-    """Warn when an ACTIVE phase has no ACTIVE child iter."""
-    name = "active_phase_without_iter"
-    if workspace is None:
-        return CheckResult(name=name, status="ok", detail="no workspace anchor")
-    loaded = _load_state_for_check(workspace, name=name)
-    if isinstance(loaded, CheckResult):
-        return loaded
-    state, _state_path = loaded
-
-    from eawf.kernel.state.enums import IterStatus, PhaseStatus
-
-    offenders = sorted(
-        phase_id
-        for phase_id, phase in state.phases.items()
-        if phase.status is PhaseStatus.ACTIVE
-        and not any(
-            state.iters.get(iter_id) is not None
-            and state.iters[iter_id].status is IterStatus.ACTIVE
-            for iter_id in phase.iter_ids
-        )
-    )
-    if offenders:
-        shown = ", ".join(offenders[:5])
-        suffix = f" (+{len(offenders) - 5} more)" if len(offenders) > 5 else ""
-        return CheckResult(
-            name=name,
-            status="warn",
-            detail=f"{len(offenders)} active phase(s) have no active iter: {shown}{suffix}",
-        )
-    return CheckResult(name=name, status="ok", detail="every active phase has an active iter")
 
 
 def _git_output(cwd: Path, *args: str) -> str | None:
@@ -725,14 +616,18 @@ def check_branch_currency(*, workspace: Path | None) -> CheckResult:
     name = "branch_currency"
     if workspace is None:
         return CheckResult(name=name, status="ok", detail="no workspace anchor")
-    loaded = _load_state_for_check(workspace, name=name)
-    if isinstance(loaded, CheckResult):
-        return loaded
-    state, _state_path = loaded
-    if state.project is None:
-        return CheckResult(name=name, status="ok", detail="no project record")
+    tree = _tree_for_check(workspace, name=name)
+    if isinstance(tree, CheckResult):
+        return tree
+    from eawf.platform.rules.render import RuleProjectionError, load_project_brief
 
-    base = state.project.default_branch
+    try:
+        base = load_project_brief(tree.parent).default_branch
+    except RuleProjectionError as exc:
+        return CheckResult(name=name, status="ok", detail=f"project record unreadable: {exc}")
+    if base is None:
+        return CheckResult(name=name, status="ok", detail="no project default branch")
+
     remote_ref = f"origin/{base}"
     # One git call, not three. This check runs inside `run_all`, which the TUI
     # doctor pane awaits on mount, so each subprocess here is latency the whole
@@ -758,125 +653,6 @@ def check_branch_currency(*, workspace: Path | None) -> CheckResult:
     if faults:
         return CheckResult(name=name, status="warn", detail="; ".join(faults) + "; run git fetch")
     return CheckResult(name=name, status="ok", detail=f"local {base} is current with {remote_ref}")
-
-
-def check_stale_session_count(*, workspace: Path | None) -> CheckResult:
-    """Warn only for stale sessions that still affect live lifecycle state.
-
-    A stale session attached solely to a terminal wave is historical
-    provenance, not a live health fault. A stale session remains actionable
-    when it is still named by ``current.active_session_ids`` or its scope is a
-    non-terminal wave.
-    """
-    name = "stale_session_count"
-    if workspace is None:
-        return CheckResult(name=name, status="ok", detail="no workspace anchor")
-    loaded = _load_state_for_check(workspace, name=name)
-    if isinstance(loaded, CheckResult):
-        return loaded
-    state, _state_path = loaded
-
-    from eawf.kernel.state.enums import AgentSessionStatus, WaveStatus
-
-    terminal_wave_statuses = {
-        WaveStatus.CLOSED,
-        WaveStatus.FAILED,
-        WaveStatus.ABANDONED,
-    }
-    stale_sessions = {
-        session_id: session
-        for session_id, session in state.agent_sessions.items()
-        if session.status is AgentSessionStatus.STALE
-    }
-    active_pointers = set(state.current.active_session_ids)
-    actionable_ids = sorted(
-        session_id
-        for session_id, session in stale_sessions.items()
-        if session_id in active_pointers
-        or (
-            (wave := state.waves.get(session.scope_id)) is not None
-            and wave.status not in terminal_wave_statuses
-        )
-    )
-    historical_count = len(stale_sessions) - len(actionable_ids)
-    if actionable_ids:
-        shown = ", ".join(actionable_ids[:5])
-        suffix = f" (+{len(actionable_ids) - 5} more)" if len(actionable_ids) > 5 else ""
-        return CheckResult(
-            name=name,
-            status="warn",
-            detail=(
-                f"{len(actionable_ids)} stale session(s) still affect live state: "
-                f"{shown}{suffix}; {historical_count} historical"
-            ),
-        )
-    return CheckResult(
-        name=name,
-        status="ok",
-        detail=f"{historical_count} terminal-scope stale session(s) historical",
-    )
-
-
-def check_recent_actuals(*, workspace: Path | None) -> CheckResult:
-    """Summarize recent close metrics without treating absence or zero as faults.
-
-    Missing telemetry is informational, as is an explicitly recorded zero-use
-    actual. Warn only when a present actual contradicts the closed wave it is
-    keyed to.
-    """
-    name = "recent_actuals"
-    if workspace is None:
-        return CheckResult(name=name, status="ok", detail="no workspace anchor")
-    loaded = _load_state_for_check(workspace, name=name)
-    if isinstance(loaded, CheckResult):
-        return loaded
-    state, _state_path = loaded
-
-    from eawf.kernel.state.enums import ActualStatus, WaveStatus
-
-    closed = [wave for wave in state.waves.values() if wave.status is WaveStatus.CLOSED]
-    closed.sort(
-        key=lambda wave: (
-            wave.closed_at.isoformat() if wave.closed_at is not None else "",
-            wave.id,
-        ),
-        reverse=True,
-    )
-    sampled = closed[:RECENT_ACTUAL_WINDOW]
-    actuals = state.actuals or {}
-    missing_ids = [wave.id for wave in sampled if wave.id not in actuals]
-    zero_ids = [
-        wave.id
-        for wave in sampled
-        if (actual := actuals.get(wave.id)) is not None
-        and actual.actual_tokens == 0
-        and actual.actual_cost_usd == 0.0
-    ]
-    contradictory_ids = [
-        wave.id
-        for wave in sampled
-        if (actual := actuals.get(wave.id)) is not None
-        and (actual.scope_id != wave.id or actual.status is not ActualStatus.DONE)
-    ]
-    if contradictory_ids:
-        shown = ", ".join(contradictory_ids[:5])
-        suffix = f" (+{len(contradictory_ids) - 5} more)" if len(contradictory_ids) > 5 else ""
-        return CheckResult(
-            name=name,
-            status="warn",
-            detail=(
-                f"last {len(sampled)} closed wave(s): {len(contradictory_ids)} "
-                f"contradictory actual(s): {shown}{suffix}"
-            ),
-        )
-    return CheckResult(
-        name=name,
-        status="ok",
-        detail=(
-            f"last {len(sampled)} closed wave(s): {len(missing_ids)} metrics unavailable, "
-            f"{len(zero_ids)} measured zero-use"
-        ),
-    )
 
 
 def check_cli_daemon_version(
@@ -937,96 +713,6 @@ def check_parallel_cap_enforcement(
         name=name,
         status="ok",
         detail=f"planning.max_parallel_waves={cap}",
-    )
-
-
-def _store_fold_parity(
-    *, workspace: Path, name: str, store_filename: str, state_map: Mapping[str, object]
-) -> CheckResult:
-    """Shared fold-parity core: distinct store base-ids ⊆ state map keys.
-
-    The append-only kind stores and the ``state.json`` entity maps are written
-    by the same mutators, but a stale-cache clobber (an incident-map wipe is
-    the failure this check was born from) can drop state rows while the store keeps
-    the append-only history. Parity broken = state lost a fold the store still
-    proves -- a data-loss signal, so the mismatch is ``fail``, not ``warn``.
-
-    A ``-CLOSE``-suffixed record id is the close event for its base id, not a
-    distinct entity, so it folds onto the base id before comparison.
-    """
-    import json as _json
-
-    store_path = workspace / ".ea" / "store" / store_filename
-    if not store_path.is_file():
-        return CheckResult(name=name, status="ok", detail=f"no {store_filename} store")
-    base_ids: set[str] = set()
-    for line in store_path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            row = _json.loads(line)
-        except _json.JSONDecodeError:
-            continue
-        record_id = str(row.get("id") or "")
-        if not record_id:
-            continue
-        base_ids.add(record_id.removesuffix("-CLOSE"))
-    missing = sorted(base_ids - set(state_map))
-    if missing:
-        return CheckResult(
-            name=name,
-            status="fail",
-            detail=(
-                f"{len(missing)} store id(s) missing from state: "
-                f"{', '.join(missing[:5])}{'...' if len(missing) > 5 else ''}"
-            ),
-        )
-    return CheckResult(
-        name=name,
-        status="ok",
-        detail=f"{len(base_ids)} store id(s) all present in state",
-    )
-
-
-def check_incident_fold_parity(*, workspace: Path | None) -> CheckResult:
-    """Verify every distinct incident store base-id has a ``state.incidents`` row.
-
-    Like :func:`check_state_scale_ceiling`, a missing / unparseable state
-    yields ``ok`` (:func:`check_state_present` owns that angle).
-    """
-    name = "incident_fold_parity"
-    if workspace is None:
-        return CheckResult(name=name, status="ok", detail="no workspace anchor")
-    loaded = _load_state_for_check(workspace, name=name)
-    if isinstance(loaded, CheckResult):
-        return loaded
-    state, state_path = loaded
-    return _store_fold_parity(
-        workspace=state_path.parent.parent,
-        name=name,
-        store_filename="incident.jsonl",
-        state_map=state.incidents or {},
-    )
-
-
-def check_backlog_fold_parity(*, workspace: Path | None) -> CheckResult:
-    """Verify every distinct backlog store base-id has a ``state.backlog`` row.
-
-    Like :func:`check_state_scale_ceiling`, a missing / unparseable state
-    yields ``ok`` (:func:`check_state_present` owns that angle).
-    """
-    name = "backlog_fold_parity"
-    if workspace is None:
-        return CheckResult(name=name, status="ok", detail="no workspace anchor")
-    loaded = _load_state_for_check(workspace, name=name)
-    if isinstance(loaded, CheckResult):
-        return loaded
-    state, state_path = loaded
-    return _store_fold_parity(
-        workspace=state_path.parent.parent,
-        name=name,
-        store_filename="backlog.jsonl",
-        state_map=state.backlog or {},
     )
 
 
@@ -1287,8 +973,8 @@ def run_all(
     envelope shape mirrors the order operators see in the doctor table.
 
     Anchor resolution: a plain ``eawf doctor`` (no ``-w``) passes
-    ``workspace=None``. The anchor-dependent checks (manifest / mcp drift /
-    scale ceiling) resolve the ``.ea/`` parent by walking upward from pwd via
+    ``workspace=None``. The anchor-dependent checks (manifest / mcp drift)
+    resolve the ``.ea/`` parent by walking upward from pwd via
     :func:`_resolve_anchor` so they verify THIS repo instead of degrading to a
     "no workspace anchor" note. The probe cache is pinned to a per-user
     location (:func:`_resolve_probe_cache_path`) so probing never litters an
@@ -1317,13 +1003,10 @@ def run_all(
         ),
         check_manifest_in_sync(workspace=anchor),
         check_mcp_drift(workspace=anchor),
-        check_state_scale_ceiling(workspace=anchor),
         check_authority_epoch(workspace=anchor),
         check_gitignore_block(workspace=anchor),
         *run_workflow_health_checks(workspace=anchor, daemon_version_probe=daemon_version_probe),
         *run_runtime_tuple_health_checks(workspace=anchor),
-        check_incident_fold_parity(workspace=anchor),
-        check_backlog_fold_parity(workspace=anchor),
         check_launchd_agent(),
         check_stray_daemons(),
         check_runtime_dir_size(workspace=anchor),

@@ -17,6 +17,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
@@ -30,7 +31,7 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.ids import parents_of
-from eawf.kernel.state.models import Iter, State, Wave
+from eawf.kernel.state.models import Iter, Wave
 from eawf.kernel.state.urn import parse as parse_urn
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import (
@@ -99,7 +100,7 @@ class ValidationIndex:
     Several invariants need to enumerate the children of a parent entity
     (e.g. the iters under a phase, the waves under an iter). Computing those
     groupings inline forces a nested ``O(parents * children)`` scan of
-    :class:`~eawf.kernel.state.models.State` per invariant. Building the groupings
+    :class:`~eawf.kernel.migration.v1_state.State` per invariant. Building the groupings
     once per :func:`~eawf.kernel.validate.strict.validate_state` call collapses each
     such scan to a single ``O(children)`` pass plus an ``O(1)`` lookup.
 

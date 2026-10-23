@@ -416,7 +416,6 @@ def _launch_native(
     seam = ProjectionSeam(
         route=_HOME_ROUTE,
         scope_id=scope_id,
-        state_path=state_path,
         repo_root=repo_root,
         operator=operator,
         scope_name=project_name(state_path, repo_root),

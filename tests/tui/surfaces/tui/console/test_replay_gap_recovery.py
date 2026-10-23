@@ -237,7 +237,6 @@ def _seam(canary: CanaryProvision, factory: Any) -> ProjectionSeam:
     return ProjectionSeam(
         route=ROUTE,
         scope_id="EAWF",
-        state_path=None,
         repo_root=canary.root,
         daemon_client_factory=factory,
     )
@@ -716,7 +715,6 @@ def test_reconnect_reconciles_outstanding_operation(
             seam = ProjectionSeam(
                 route=ROUTE,
                 scope_id="EAWF",
-                state_path=None,
                 repo_root=canary.root,
                 daemon_client_factory=losing,
                 operator=Operator(principal=ACTOR),

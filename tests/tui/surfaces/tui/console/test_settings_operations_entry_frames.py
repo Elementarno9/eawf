@@ -99,7 +99,10 @@ def test_paging_is_kept_when_dropping_it_would_not_save_the_global() -> None:
 
 def test_a_linked_console_opens_settings_on_planning() -> None:
     """The section cursor is placed in the kernel catalog's rail order, not the prototype's."""
-    seam = ProjectionSeam(route="settings", scope_id="EAWF", state_path=None)
+    seam = ProjectionSeam(
+        route="settings",
+        scope_id="EAWF",
+    )
     app = ConsoleApp(chrome=load_chrome(), seam=seam, clock=FakeClock())
     app.reset(None)
     assert catalog_section_order()[app.session.set_sec] == "planning"

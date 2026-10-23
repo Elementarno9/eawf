@@ -630,7 +630,7 @@ def test_the_daemon_writes_a_pair_and_refuses_one_key_of_it_removed_alone(tree: 
                 raise sr.DaemonRpcError(-32602, str(error)) from error
         return _view(tree).model_dump(mode="json")
 
-    seam = sr.ProjectionSeam(route="settings", scope_id=sr.SCOPE, state_path=None, repo_root=tree)
+    seam = sr.ProjectionSeam(route="settings", scope_id=sr.SCOPE, repo_root=tree)
     seam.binding.call = _call  # type: ignore[method-assign]
     asyncio.run(seam.load_settings())
     pair = SettingRequest(

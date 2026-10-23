@@ -239,7 +239,6 @@ async def live_console(
             seam = ProjectionSeam(
                 route=JOURNEYS[0],
                 scope_id=RootIdentity.of(repo_root).root_id,
-                state_path=None,
                 repo_root=repo_root,
                 daemon_client_factory=lambda: _LoopbackClient(sock_path),
                 scope_name=project_name(repo_root / ".ea/state.json", repo_root)

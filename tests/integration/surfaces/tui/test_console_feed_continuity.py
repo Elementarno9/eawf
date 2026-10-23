@@ -101,14 +101,11 @@ class _Feed:
         self.resyncs = 0
         self.expected: list[int] = []
         self.binding = StateBinding(
-            None,
             StateBindingCallbacks(
-                on_state=self._ignore,
                 on_degraded=self._ignore,
                 on_patch=self._on_patch,
                 on_resync=self._on_resync,
             ),
-            poll_interval_s=3600.0,
             daemon_probe_interval_s=3600.0,
             daemon_client_factory=lambda: _SocketClient(
                 runtime_dir=runtime, call_timeout_seconds=CALL_TIMEOUT_SECONDS
@@ -410,7 +407,6 @@ def _seam(answers: list[dict[str, Any] | Exception]) -> ProjectionSeam:
     return ProjectionSeam(
         route=ROUTE,
         scope_id="EAWF",
-        state_path=None,
         daemon_client_factory=lambda: _ReadClient(answers),
     )
 

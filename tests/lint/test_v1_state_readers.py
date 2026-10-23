@@ -4,13 +4,13 @@ An epoch-2 tree reads its selected generation, and the v1 document leaves
 git once nothing live needs it. A module opens the document through one of
 its loaders, validators or writers (:data:`V1_DOCUMENT_CALLS`), so a call to
 one of them is what this lint counts. Each module that makes such a call is
-either on the migration keep closure -- the v1 chain to schema 1.20, the
-epoch-2 cutover, the v1 ``State`` model and the pre-cutover ``session`` and
-``worktree`` verbs -- or is a fallback that reads the document an unmigrated
-epoch-1 tree still has, named with what it reads it for. A module that starts
-opening the document fails the lint until it is classified, and a module
-that stops must leave the table, so the table never claims a reader that is
-gone.
+on the migration keep closure -- the v1 chain to schema 1.20, the epoch-2
+cutover, the v1 ``State`` model and the pre-cutover ``session`` and
+``worktree`` verbs. Every other reader was ported to the selected generation
+or retired, so no fallback reader for an unmigrated epoch-1 tree remains. A
+module that starts opening the document fails the lint until it reads the
+generation instead or joins the keep closure, and a module that stops must
+leave the table, so the table never claims a reader that is gone.
 """
 
 from __future__ import annotations
@@ -40,39 +40,24 @@ V1_DOCUMENT_CALLS: Final = frozenset(
 )
 
 _KEEP: Final = "keep"
-_FALLBACK: Final = "fallback"
 
 #: Every module that opens the v1 document, and why it may.
 V1_READERS: Final[dict[str, str]] = {
-    "eawf/kernel/config/profile.py": f"{_FALLBACK}: materialises profile keys into the document",
     "eawf/kernel/migrations/_base.py": f"{_KEEP}: the v1 migration chain to schema 1.20",
     "eawf/kernel/state/io.py": f"{_KEEP}: the marker fence and the daemonless fallback writer",
     "eawf/kernel/validate/strict.py": f"{_KEEP}: the v1 State validator the migration chain runs",
-    "eawf/observability/doctor/checks.py": f"{_FALLBACK}: the doctor checks' state load",
-    "eawf/runtime/daemon/methods/release.py": f"{_FALLBACK}: the release methods' state load",
     "eawf/runtime/daemon/methods/state.py": f"{_KEEP}: serves state.read",
     "eawf/runtime/daemon/methods/state_context.py": f"{_KEEP}: anchors the kept state methods",
     "eawf/runtime/daemon/methods/state_worktree.py": f"{_KEEP}: serves the quiescence remediations",
     "eawf/runtime/session/store.py": f"{_KEEP}: the pre-cutover session verbs",
     "eawf/runtime/worktree/reconcile.py": f"{_KEEP}: the exempt worktree reconcile verb",
     "eawf/surfaces/cli/_mutation.py": f"{_KEEP}: the transaction behind the exempt verbs",
-    "eawf/surfaces/cli/commands/bench.py": f"{_FALLBACK}: the live turn-cost corpus",
-    "eawf/surfaces/cli/commands/doc.py": f"{_FALLBACK}: the doc commands' state load",
-    "eawf/surfaces/cli/commands/doctor.py": f"{_FALLBACK}: the project-record check",
-    "eawf/surfaces/cli/commands/lifecycle.py": f"{_FALLBACK}: the read-only lifecycle load",
-    "eawf/surfaces/cli/commands/memory.py": f"{_FALLBACK}: the memory commands' state load",
-    "eawf/surfaces/cli/commands/metrics.py": f"{_FALLBACK}: workflow, jury and variance metrics",
-    "eawf/surfaces/cli/commands/release.py": f"{_FALLBACK}: the release commands' state load",
     "eawf/surfaces/cli/commands/session.py": f"{_KEEP}: the pre-cutover session verbs",
-    "eawf/surfaces/cli/commands/sync.py": f"{_FALLBACK}: the sync's optional state load",
-    "eawf/surfaces/cli/commands/why.py": f"{_FALLBACK}: the provenance lookup",
     "eawf/surfaces/cli/commands/worktree.py": f"{_KEEP}: the pre-cutover worktree verbs",
-    "eawf/surfaces/tui/chassis/state_binding.py": f"{_FALLBACK}: the TUI's polled state binding",
-    "eawf/workflow/skills/research.py": f"{_FALLBACK}: the research skill's open questions",
 }
 
-#: A disposition is the keep closure or a fallback, each with its reason.
-_DISPOSITION: Final = re.compile(r"^(keep|fallback): \S.*$")
+#: A disposition is the keep closure, with its reason.
+_DISPOSITION: Final = re.compile(r"^keep: \S.*$")
 
 
 def v1_document_calls(source: str) -> frozenset[str]:
@@ -130,8 +115,13 @@ def test_no_listed_module_has_stopped_reading() -> None:
 
 
 @pytest.mark.parametrize("module", sorted(V1_READERS))
-def test_each_disposition_names_the_keep_closure_or_a_fallback(module: str) -> None:
+def test_each_disposition_names_the_keep_closure(module: str) -> None:
     assert _DISPOSITION.match(V1_READERS[module]), V1_READERS[module]
+
+
+def test_no_fallback_reader_remains() -> None:
+    fallbacks = sorted(m for m, why in V1_READERS.items() if not why.startswith(f"{_KEEP}:"))
+    assert not fallbacks, f"modules still read .ea/state.json as a fallback: {fallbacks}"
 
 
 @pytest.mark.parametrize(
@@ -143,6 +133,20 @@ def test_each_disposition_names_the_keep_closure_or_a_fallback(module: str) -> N
         "eawf/workflow/verify/release_probes.py",
         "eawf/platform/lint/exclusion_expiry.py",
         "eawf/surfaces/cli/commands/status.py",
+        "eawf/kernel/config/profile.py",
+        "eawf/observability/doctor/checks.py",
+        "eawf/runtime/daemon/methods/release.py",
+        "eawf/surfaces/cli/commands/bench.py",
+        "eawf/surfaces/cli/commands/doc.py",
+        "eawf/surfaces/cli/commands/doctor.py",
+        "eawf/surfaces/cli/commands/lifecycle.py",
+        "eawf/surfaces/cli/commands/memory.py",
+        "eawf/surfaces/cli/commands/metrics.py",
+        "eawf/surfaces/cli/commands/release.py",
+        "eawf/surfaces/cli/commands/sync.py",
+        "eawf/surfaces/cli/commands/why.py",
+        "eawf/surfaces/tui/chassis/state_binding.py",
+        "eawf/workflow/skills/research.py",
     ],
 )
 def test_the_moved_paths_read_the_generation(module: str) -> None:

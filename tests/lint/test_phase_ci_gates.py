@@ -45,7 +45,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PLUGIN_RELEASE = _REPO_ROOT / ".github" / "workflows" / "plugin-release.yaml"
 _CI = _REPO_ROOT / ".github" / "workflows" / "ci.yaml"
 _RELEASE = _REPO_ROOT / ".github" / "workflows" / "release.yaml"
-_PHASE_RELEASE = _REPO_ROOT / ".github" / "workflows" / "phase-release.yaml"
 
 #: The shell expansion the source-host job names the published version
 #: with. Substituting it into the library's asset names yields the exact
@@ -1305,12 +1304,6 @@ def test_inventory_job_gate_reds_on_a_missing_job() -> None:
 # --- source-host release assets ---------------------------------------------
 
 
-def _load_phase_release() -> dict[str, Any]:
-    """Parse ``.github/workflows/phase-release.yaml``."""
-    workflow: dict[str, Any] = yaml.safe_load(_PHASE_RELEASE.read_text(encoding="utf-8"))
-    return workflow
-
-
 def _expected_source_host_assets() -> tuple[str, ...]:
     """Return the three asset filenames the workflow must name, in order."""
     assets = source_host_assets(_VERSION_EXPANSION)
@@ -1561,86 +1554,6 @@ def test_publication_receipt_gate_reds_on_a_missing_job() -> None:
     assert publication_receipt_violations(yaml.safe_load("jobs: {}\n"), "publish-pypi", "pypi") == [
         "the workflow declares no 'publish-pypi' job"
     ]
-
-
-# --- phase-release annotation grammar ----------------------------------------
-
-
-def _annotation_pattern() -> re.Pattern[str]:
-    """Return the release-annotation regex phase-release.yaml actually runs.
-
-    Extracted from the workflow source rather than restated here: a
-    pattern the test spells for itself proves the test's grammar, not
-    the pipeline's.
-
-    Returns:
-        The compiled pattern.
-
-    Raises:
-        AssertionError: When the annotation step carries no regex.
-    """
-    job = _load_phase_release()["jobs"]["phase-release"]
-    step = _find_step(job, "release annotation")
-    assert step is not None, "phase-release.yaml has no annotation-extracting step"
-    match = re.search(r'r"(\\\(release=.+?)"', str(step.get("run", "")))
-    assert match is not None, "the annotation step carries no release= regex"
-    return re.compile(match.group(1))
-
-
-@pytest.mark.parametrize(
-    ("subject", "tag"),
-    [
-        ("[P31] state: close iter + phase (release=v0.7.0.dev1)", "v0.7.0.dev1"),
-        ("[P31] state: close iter + phase (release=v0.7.0.dev12)", "v0.7.0.dev12"),
-        ("[P32] state: close iter + phase (release=v0.7.0rc1)", "v0.7.0rc1"),
-        ("[P33] state: close iter + phase (release=v0.7.0)", "v0.7.0"),
-        ("[P30] state: close iter + phase (release=v0.6.9a1)", "v0.6.9a1"),
-        ("[P30] state: close iter + phase (release=v0.6.9b2)", "v0.6.9b2"),
-    ],
-)
-def test_release_annotation_dev_segments_are_accepted(subject: str, tag: str) -> None:
-    """The live grammar tags every checkpoint the v0.7 train walks through."""
-    match = _annotation_pattern().search(subject)
-    assert match is not None, subject
-    assert match.group(1) == tag
-
-
-@pytest.mark.parametrize(
-    "subject",
-    [
-        "[P31] state: close iter + phase",
-        "[P31] state: close iter + phase (release=0.7.0.dev1)",
-        "[P31] state: close iter + phase (release=v0.7.dev1)",
-        "[P31] state: close iter + phase (release=v0.7.0.dev)",
-    ],
-)
-def test_release_annotation_dev_grammar_rejects_a_malformed_annotation(subject: str) -> None:
-    """A subject that names no well-formed tag must not tag anything."""
-    assert _annotation_pattern().search(subject) is None
-
-
-def test_release_annotation_dev_version_check_compares_normalised_forms() -> None:
-    """The version-source step normalises both sides before comparing them."""
-    job = _load_phase_release()["jobs"]["phase-release"]
-    step = _find_step(job, "version source")
-    assert step is not None, "phase-release.yaml has no version-source verification step"
-    run = str(step.get("run", ""))
-    assert "def normalise(" in run
-    assert "normalise(actual) != normalise(expected)" in run
-
-
-def test_release_annotation_dev_gate_reds_on_the_prerelease_only_grammar() -> None:
-    """The gate fires on the real defect: the grammar that stopped at ``rcN``.
-
-    That regex is what shipped before the v0.7 train needed dev
-    checkpoints, and its failure mode is silent -- a dev-checkpoint merge
-    reads as "no release annotation" and the phase ships untagged rather
-    than reding anything.
-    """
-    stale = re.compile(r"\(release=(v\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)")
-    subject = "[P31] state: close iter + phase (release=v0.7.0.dev1)"
-    assert stale.search(subject) is None
-    assert _annotation_pattern().search(subject) is not None
 
 
 # --- test paths named by the build config still exist -----------------------

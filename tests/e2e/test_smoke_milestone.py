@@ -781,7 +781,6 @@ class Console:
         self.seam = ProjectionSeam(
             route="scope.home",
             scope_id=RootIdentity.of(authority.root).root_id,
-            state_path=state_path,
             repo_root=world.repo,
             scope_name=project_name(state_path, world.repo),
         )

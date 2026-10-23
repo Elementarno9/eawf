@@ -39,7 +39,7 @@ schema — a transform emitting a model-invalid *final* payload would
 otherwise be written silently and fault only on the next read, bricking
 the repo with no migration-time signal. After the chain completes (and
 before :func:`write_canonical`), :func:`run_chain` round-trips the final
-candidate through the live :class:`eawf.kernel.state.models.State` model. On a
+candidate through the live :class:`eawf.kernel.migration.v1_state.State` model. On a
 :class:`pydantic.ValidationError` it restores from the backup the runner
 already took and re-raises as a ``post``-phase
 :class:`MigrationStepError`. This validates only the *final* payload at
@@ -193,7 +193,7 @@ def _version_key(version: str) -> tuple[int, ...]:
 def model_supported_max_version() -> str:
     """Return the highest ``schema_version`` the live ``State`` model loads.
 
-    Derived from :class:`eawf.kernel.state.models.State`'s ``schema_version``
+    Derived from :class:`eawf.kernel.migration.v1_state.State`'s ``schema_version``
     ``Literal`` args so the migrate guard never advances past a version
     the model cannot re-validate. Read-only: bumping the supported set is
     owned by the model, not this helper.
@@ -203,7 +203,7 @@ def model_supported_max_version() -> str:
     # shell-completion cold path must not load. Resolving the import at
     # call time keeps ``import eawf.surfaces.cli.app`` (which eagerly registers the
     # ``migrate`` command) off those modules' import graph.
-    from eawf.kernel.state.models import State
+    from eawf.kernel.migration.v1_state import State
 
     supported: tuple[str, ...] = tuple(
         str(arg) for arg in get_args(State.model_fields["schema_version"].annotation)
@@ -507,7 +507,7 @@ def _validate_final_payload(
     to-version marker, so a transform emitting a model-invalid *final*
     payload would be written silently and fault only on the next read
     (MIG-F6). This boundary loads *candidate* against the full
-    :class:`eawf.kernel.state.models.State` model; on a validation failure it
+    :class:`eawf.kernel.migration.v1_state.State` model; on a validation failure it
     restores the on-disk state from the backup the runner already took
     (when one exists) and re-raises as a ``post``-phase step error so a
     bricking payload never lands.
@@ -530,7 +530,7 @@ def _validate_final_payload(
     # path, matching :func:`model_supported_max_version`.
     from pydantic import ValidationError
 
-    from eawf.kernel.state.models import State
+    from eawf.kernel.migration.v1_state import State
 
     try:
         State.model_validate(candidate)

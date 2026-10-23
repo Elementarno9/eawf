@@ -31,7 +31,6 @@ from typing import Any, Final
 import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.state.models import State
 from eawf.kernel.store.compaction import read_document, write_document
 from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record
 from eawf.kernel.store.paths import ledger_path
@@ -45,7 +44,7 @@ from eawf.runtime.daemon.methods.planning import (
     PLAN_SUBMIT_METHOD,
 )
 from eawf.runtime.daemon.wal import list_records
-from eawf.workflow.evidence._io import MEASURED_CONTRACT_STATUS
+from eawf.workflow.evidence._io import MEASURED_CONTRACT_STATUS, generation_contract_view
 from eawf.workflow.evidence.measured_contract import PREFLIGHT_CONTRACTS, promote_measured_contract
 from eawf.workflow.planning.apply import apply_plan_revision
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
@@ -235,7 +234,11 @@ def seed_generation_store(
     document = document_path(canary)
     if promote is not None:
         contract = PREFLIGHT_CONTRACTS[promote]
-        view = State.model_construct(project=None, artifacts={}, updated_at=AT)
+        view = generation_contract_view(
+            read_document(document),
+            artifact_ledger=ledger_path(document, Epoch2Collection.ARTIFACT),
+            evidence_ledger=ledger_path(document, Epoch2Collection.EVIDENCE),
+        )
         promote_measured_contract(
             view,
             contract=contract,

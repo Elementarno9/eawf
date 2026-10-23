@@ -2,28 +2,25 @@
 
 The seam owns no transport. It holds one
 :class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding` and uses its socket push, its
-always-on poll backstop, its resume cursor and its client for request/response calls.
+daemon probe, its resume cursor and its client for request/response calls.
 A second socket would be a second thing to authorise, probe, throttle and reconnect,
 and the console would then hold two answers to "am I live" that could disagree.
 
 The other half of the claim matters as much: the epoch-1 feed was already on this
 binder, and it must be exactly where it was. So the suite drives a default-constructed
 binder beside the seam's and pins that it still subscribes with the epoch-1 verb, still
-refreshes state from an ``event.push`` frame, still advances the event resume cursor
-and never advances the projection one -- and that a patch frame arriving at it is
-dropped rather than delivered anywhere.
+forwards an ``event.push`` frame, still advances the event resume cursor and never
+advances the projection one -- and that a patch frame arriving at it is dropped rather
+than delivered anywhere.
 
-Nothing here waits on a clock. Push frames are handed to the decoder directly, the
-subscribe task is awaited rather than slept past, and the one file the poll backstop
-watches has its mtime advanced explicitly so two writes inside one filesystem tick
-cannot be mistaken for one.
+Nothing here waits on a clock. Push frames are handed to the decoder directly and the
+subscribe task is awaited rather than slept past.
 """
 
 from __future__ import annotations
 
 import asyncio
 import dataclasses
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -34,7 +31,7 @@ import pytest
 from eawf.kernel.projection.compute import KeyedPatch, RouteProjection, build_route_projection
 from eawf.kernel.projection.connection import ConnectionValue
 from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.models import State
+from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.methods.state_subscribe import (
     PROJECTION_PUSH_METHOD,
     PROJECTION_SUBSCRIBE_METHOD,
@@ -45,7 +42,6 @@ from eawf.surfaces.tui.chassis.state_binding import (
     StateBindingCallbacks,
 )
 from eawf.surfaces.tui.console.seam import ProjectionSeam
-from tests.integration.runtime.daemon._epoch1_state_fixtures import state_payload, write_state
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import MILESTONE_URN
 
 #: How long a delivery that is already in flight is waited for. A failure guard,
@@ -55,9 +51,6 @@ DELIVERY_TIMEOUT_SECONDS = 10.0
 #: The route the suite binds, and the collection key its rows live under.
 ROUTE = "roadmap"
 
-#: The title the rewritten state file carries, so a backstop delivery is
-#: distinguishable from the initial load.
-REFRESHED_TITLE = "refreshed by the poll backstop"
 
 #: When a rebuilt projection is stamped. The digest does not cover the stamp, so a
 #: fixed clock only keeps the suite's own output reproducible.
@@ -156,20 +149,6 @@ def _event_frame(event_id: str) -> bytes:
     )
 
 
-def _rewrite_state(state_path: Path) -> None:
-    """Rewrite the state file with a distinguishable title and a later mtime.
-
-    The mtime is advanced explicitly rather than left to the clock: the poll is
-    mtime-gated, and two writes inside one filesystem tick would otherwise be
-    indistinguishable on a coarse-grained mount.
-    """
-    payload = state_payload()
-    payload["phases"]["P30"]["title"] = REFRESHED_TITLE
-    state_path.write_text(State.model_validate(payload).model_dump_json(), encoding="utf-8")
-    stamp = state_path.stat().st_mtime + 10.0
-    os.utime(state_path, (stamp, stamp))
-
-
 def _patch_barrier(binding: StateBinding) -> asyncio.Event:
     """Return an event the suite awaits instead of sleeping for a delivery.
 
@@ -189,25 +168,11 @@ def _patch_barrier(binding: StateBinding) -> asyncio.Event:
     return arrived
 
 
-def _state_barrier(binding: StateBinding) -> asyncio.Event:
-    """Return an event set once the binder has delivered one state refresh."""
-    arrived = asyncio.Event()
-    inner = binding._callbacks.on_state
-
-    async def sink(state: State) -> None:
-        await inner(state)
-        arrived.set()
-
-    binding._callbacks = dataclasses.replace(binding._callbacks, on_state=sink)
-    return arrived
-
-
-def _seam(state_path: Path | None, calls: list[str], **options: Any) -> ProjectionSeam:
+def _seam(calls: list[str], **options: Any) -> ProjectionSeam:
     """Return a seam whose binder talks to the recording client."""
     return ProjectionSeam(
         route=ROUTE,
         scope_id="EAWF",
-        state_path=state_path,
         clock=lambda: AT,
         daemon_client_factory=lambda: _RecordingClient(calls),
         **options,
@@ -218,15 +183,11 @@ def test_the_seam_subscribes_with_the_projection_verb_on_the_one_binder(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """One socket, one subscribe, and the verb that makes it a projection feed."""
-    state_path = tmp_path / ".ea" / "state.json"
-    write_state(state_path)
     calls: list[str] = []
 
     async def body() -> None:
         seam = _seam(
-            state_path,
             calls,
-            poll_interval_s=0.0,
             daemon_probe_interval_s=3600.0,
             daemon_failure_threshold=1,
         )
@@ -249,7 +210,7 @@ def test_the_seam_subscribes_with_the_projection_verb_on_the_one_binder(
 def test_the_seam_holds_exactly_one_transport(tmp_path: Path) -> None:
     """Every binding the seam holds is the one it exposes; there is no second."""
     calls: list[str] = []
-    seam = _seam(None, calls)
+    seam = _seam(calls)
 
     bindings = [value for value in vars(seam).values() if isinstance(value, StateBinding)]
 
@@ -260,7 +221,7 @@ def test_the_seam_holds_exactly_one_transport(tmp_path: Path) -> None:
 def test_the_call_leg_runs_over_the_binders_own_client(tmp_path: Path) -> None:
     """A request/response call is the same transport, not a second one."""
     calls: list[str] = []
-    seam = _seam(None, calls)
+    seam = _seam(calls)
 
     answer = asyncio.run(seam.binding.call("daemon.ping", {}))
 
@@ -268,66 +229,12 @@ def test_the_call_leg_runs_over_the_binders_own_client(tmp_path: Path) -> None:
     assert calls == ["daemon.ping"]
 
 
-def test_the_poll_backstop_still_refreshes_the_seam_when_push_drops(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """When the projection push dies, the backstop the binder already ran carries on."""
-    state_path = tmp_path / ".ea" / "state.json"
-    write_state(state_path)
-    calls: list[str] = []
-    delivered: list[State] = []
-    degraded: list[bool] = []
-
-    async def body() -> None:
-        arrivals: asyncio.Queue[State] = asyncio.Queue()
-
-        async def on_state(state: State) -> None:
-            delivered.append(state)
-            await arrivals.put(state)
-
-        async def on_degraded(flag: bool) -> None:
-            degraded.append(flag)
-
-        seam = _seam(
-            state_path,
-            calls,
-            on_state=on_state,
-            on_degraded=on_degraded,
-            poll_interval_s=0.0,
-            daemon_probe_interval_s=3600.0,
-            daemon_failure_threshold=1,
-        )
-        try:
-            await seam.connect()
-            assert seam.binding._subscribe_task is not None
-            await seam.binding._subscribe_task
-
-            assert calls == [PROJECTION_SUBSCRIBE_METHOD]
-            assert degraded == [True]
-            assert seam.connection is ConnectionValue.DISCONNECTED
-            initial = await asyncio.wait_for(arrivals.get(), timeout=DELIVERY_TIMEOUT_SECONDS)
-            assert initial.phases["P30"].title != REFRESHED_TITLE
-
-            _rewrite_state(state_path)
-            refreshed = await asyncio.wait_for(arrivals.get(), timeout=DELIVERY_TIMEOUT_SECONDS)
-
-            assert refreshed.phases["P30"].title == REFRESHED_TITLE
-            # The drop cost exactly one subscribe on one socket.
-            assert calls == [PROJECTION_SUBSCRIBE_METHOD]
-            assert seam.backstop_ticks >= 2
-        finally:
-            await seam.disconnect()
-
-    monkeypatch.setattr(StateBinding, "_daemon_socket_available", lambda _self: True)
-    asyncio.run(body())
-
-
 def test_a_pushed_patch_advances_the_binder_cursor_and_the_seam(tmp_path: Path) -> None:
     """The resume cursor the seam reconnects from is the binder's own."""
     calls: list[str] = []
 
     async def body() -> None:
-        seam = _seam(None, calls)
+        seam = _seam(calls)
         seam._projection = _projection(1)
         arrived = _patch_barrier(seam.binding)
         loop = asyncio.get_running_loop()
@@ -352,7 +259,7 @@ def test_a_pushed_patch_leaves_the_seam_where_a_clean_read_would(tmp_path: Path)
     calls: list[str] = []
 
     async def body() -> None:
-        seam = _seam(None, calls)
+        seam = _seam(calls)
         seam._projection = _projection(1)
         arrived = _patch_barrier(seam.binding)
         loop = asyncio.get_running_loop()
@@ -372,7 +279,7 @@ def test_a_malformed_patch_frame_does_not_advance_the_cursor(tmp_path: Path) -> 
     calls: list[str] = []
 
     async def body() -> None:
-        seam = _seam(None, calls)
+        seam = _seam(calls)
         seam._projection = _projection(1)
         loop = asyncio.get_running_loop()
 
@@ -397,7 +304,6 @@ def test_a_patch_for_another_route_is_ignored(tmp_path: Path) -> None:
         seam = ProjectionSeam(
             route="track",
             scope_id="EAWF",
-            state_path=None,
             clock=lambda: AT,
             daemon_client_factory=lambda: _RecordingClient(calls),
         )
@@ -424,22 +330,14 @@ def test_the_epoch_one_feed_still_subscribes_with_its_own_verb(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A binder built the way the app builds it is exactly where it was."""
-    state_path = tmp_path / ".ea" / "state.json"
-    write_state(state_path)
     calls: list[str] = []
-    delivered: list[State] = []
 
     async def body() -> None:
-        async def on_state(state: State) -> None:
-            delivered.append(state)
-
         async def on_degraded(_flag: bool) -> None:
             return None
 
         binding = StateBinding(
-            state_path,
-            StateBindingCallbacks(on_state=on_state, on_degraded=on_degraded),
-            poll_interval_s=3600.0,
+            StateBindingCallbacks(on_degraded=on_degraded),
             daemon_probe_interval_s=3600.0,
             daemon_failure_threshold=1,
             daemon_client_factory=lambda: _RecordingClient(calls),
@@ -458,26 +356,25 @@ def test_the_epoch_one_feed_still_subscribes_with_its_own_verb(
     asyncio.run(body())
 
 
-def test_the_epoch_one_feed_still_refreshes_from_an_event_push(tmp_path: Path) -> None:
-    """The event leg is untouched: same frame, same refresh, same resume cursor."""
-    state_path = tmp_path / ".ea" / "state.json"
-    write_state(state_path)
-    delivered: list[State] = []
+def test_the_epoch_one_feed_still_forwards_an_event_push(tmp_path: Path) -> None:
+    """The event leg is untouched: same frame, same delivery, same resume cursor."""
+    delivered: list[Envelope] = []
     calls: list[str] = []
 
     async def body() -> None:
-        async def on_state(state: State) -> None:
-            delivered.append(state)
+        arrived = asyncio.Event()
+
+        async def on_event(envelope: Envelope) -> None:
+            delivered.append(envelope)
+            arrived.set()
 
         async def on_degraded(_flag: bool) -> None:
             return None
 
         binding = StateBinding(
-            state_path,
-            StateBindingCallbacks(on_state=on_state, on_degraded=on_degraded),
+            StateBindingCallbacks(on_degraded=on_degraded, on_event=on_event),
             daemon_client_factory=lambda: _RecordingClient(calls),
         )
-        arrived = _state_barrier(binding)
         loop = asyncio.get_running_loop()
 
         binding._handle_push_line(loop, _event_frame("EV-001"))
@@ -494,21 +391,18 @@ def test_the_epoch_one_feed_still_refreshes_from_an_event_push(tmp_path: Path) -
 
 def test_an_epoch_one_binder_drops_a_projection_patch_frame(tmp_path: Path) -> None:
     """A binder that registered no patch sink is not reached by a patch."""
-    state_path = tmp_path / ".ea" / "state.json"
-    write_state(state_path)
-    delivered: list[State] = []
+    delivered: list[Envelope] = []
     calls: list[str] = []
 
     async def body() -> None:
-        async def on_state(state: State) -> None:
-            delivered.append(state)
+        async def on_event(envelope: Envelope) -> None:
+            delivered.append(envelope)
 
         async def on_degraded(_flag: bool) -> None:
             return None
 
         binding = StateBinding(
-            state_path,
-            StateBindingCallbacks(on_state=on_state, on_degraded=on_degraded),
+            StateBindingCallbacks(on_degraded=on_degraded, on_event=on_event),
             daemon_client_factory=lambda: _RecordingClient(calls),
         )
         loop = asyncio.get_running_loop()

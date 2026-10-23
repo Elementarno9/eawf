@@ -11,11 +11,9 @@ Covers the three behaviours W15 layered onto ``_check_command_exit_zero``:
   separated — POSIX env vars cannot carry NUL bytes). The env var is set
   even when the resolved set is empty so the child can distinguish
   "scope evaluated to empty" from "scope=all".
-* ``diff_base`` is derived from
-  :func:`eawf.runtime.vcs.wave_sha.derive_diff_base` so wave-anchored
-  gates compare against the wave's own delta, with a
-  ``git merge-base HEAD main`` fallback when the wave SHA cannot be
-  resolved.
+* ``diff_base`` is the ``git merge-base HEAD main`` from
+  :func:`eawf.runtime.vcs.diff_base.derive_diff_base`; a gate's
+  ``wave_id`` no longer anchors it.
 
 Also pins the :class:`CommandExitZeroArgs` strict-args schema and the
 :data:`CheckStatus` consistency invariant on :class:`CheckResult`.
@@ -972,46 +970,13 @@ def test_gate_files_env_empty_string_when_no_files(
 # ---- diff-base derivation --------------------------------------------------
 
 
-def test_diff_base_from_wave_id_uses_derive_wave_sha(
+def test_diff_base_ignores_a_wave_id_and_uses_merge_base(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """When wave_id resolves, diff_base = derived_sha + '~1'."""
-    fake_sha = (
-        "deadbeef" + "cafebabe" + "12345678" + "90abcdef" + "12345678"
-    )  # pragma: allowlist secret
+    """A gate that still names a wave_id diffs against the merge-base."""
     monkeypatch.setattr(
-        "eawf.runtime.vcs.wave_sha.derive_wave_sha",
-        lambda wid, repo_root=None: fake_sha if wid == "P28-I01-W15" else None,
-    )
-    captured: dict[str, str] = {}
-
-    def _spy(base: str, *, cwd: Any = None) -> list[str]:
-        captured["base"] = base
-        return []
-
-    with patch("eawf.workflow.audit_dsl.registry.changed_files", side_effect=_spy):
-        _run_command_check(
-            {
-                "argv": _NOOP_ARGV,
-                "timeout_class": "quick",
-                "scope": "changed",
-                "wave_id": "P28-I01-W15",
-            },
-            tmp_path,
-        )
-    assert captured["base"] == f"{fake_sha}~1"
-
-
-def test_diff_base_falls_back_to_merge_base_when_wave_sha_missing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Unknown wave => diff_base falls back to merge-base helper."""
-    monkeypatch.setattr(
-        "eawf.runtime.vcs.wave_sha.derive_wave_sha", lambda wid, repo_root=None: None
-    )
-    monkeypatch.setattr(
-        "eawf.runtime.vcs.wave_sha._git_merge_base_head_main",
-        lambda *, repo_root=None, fallback="origin/main": "MERGEBASESHA",
+        "eawf.workflow.audit_dsl.registry.derive_diff_base",
+        lambda *, repo_root=None: "MERGEBASESHA",
     )
     captured: dict[str, str] = {}
 
@@ -1035,10 +1000,10 @@ def test_diff_base_falls_back_to_merge_base_when_wave_sha_missing(
 def test_diff_base_without_wave_id_uses_merge_base(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """No wave_id => skip derive_wave_sha entirely; merge-base only."""
+    """No wave_id => merge-base only."""
     monkeypatch.setattr(
-        "eawf.runtime.vcs.wave_sha._git_merge_base_head_main",
-        lambda *, repo_root=None, fallback="origin/main": "JUSTMERGEBASE",
+        "eawf.workflow.audit_dsl.registry.derive_diff_base",
+        lambda *, repo_root=None: "JUSTMERGEBASE",
     )
     captured: dict[str, str] = {}
 
@@ -1062,8 +1027,8 @@ def test_command_exit_zero_back_compat_no_new_kwargs(
 ) -> None:
     """Pre-W15 YAML (only ``argv``) still works — defaults pick up the rest."""
     monkeypatch.setattr(
-        "eawf.runtime.vcs.wave_sha._git_merge_base_head_main",
-        lambda *, repo_root=None, fallback="origin/main": "BASE",
+        "eawf.workflow.audit_dsl.registry.derive_diff_base",
+        lambda *, repo_root=None: "BASE",
     )
     with patch("eawf.workflow.audit_dsl.registry.changed_files", return_value=[]):
         result = _run_command_check(

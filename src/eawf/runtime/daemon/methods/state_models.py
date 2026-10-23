@@ -48,7 +48,7 @@ class ReadResult(BaseModel):
 
     The ``state`` field carries the full validated state payload as a
     JSON-mode dict; callers re-validate against
-    :class:`eawf.kernel.state.models.State` if they need a typed object.
+    :class:`eawf.kernel.migration.v1_state.State` if they need a typed object.
     """
 
     model_config = ConfigDict(extra="forbid")

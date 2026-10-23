@@ -1,6 +1,6 @@
 """Subagent prompt renderer.
 
-The renderer takes a validated :class:`~eawf.kernel.state.models.State` and a
+The renderer takes a validated :class:`~eawf.kernel.migration.v1_state.State` and a
 target wave id and returns a self-contained Markdown prompt suitable
 for handing to an executor subagent. The prompt mirrors the agent-side
 context: the wave's scope, its file_scopes, its blocking deps, any
@@ -61,16 +61,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import AgentSessionRole, DecisionStatus, StoreKind
 from eawf.kernel.state.ids import natural_key
-from eawf.kernel.state.models import (
-    Audit,
-    Decision,
-    Hypothesis,
-    State,
-    Wave,
-    WorktreeRecord,
-)
+from eawf.kernel.state.models import Audit, Decision, Hypothesis, Wave, WorktreeRecord
 from eawf.kernel.store.paths import store_path
 from eawf.platform.lint.tools.agents_md_budget import count_tokens
 from eawf.platform.memory.render_context import DEFAULT_BUDGET, render_context

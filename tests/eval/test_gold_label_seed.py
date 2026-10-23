@@ -6,22 +6,17 @@ never earn (or be denied) authority on real evidence. W18 seeds the
 committed ``.ea/store/gold_label.jsonl`` from known outcomes: known-bad
 waves from the reopen / incident population (INC-P30-01..03/06 classes)
 and known-good waves from clean audited closes. This suite pins the seed's
-shape and proves the seed alone does NOT flip any authority floor.
+shape.
 """
 
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
 
-from eawf.kernel.state.models import State
-from eawf.observability.eval.jury_validation import (
-    GoldLabel,
-    build_jury_validation_cohort,
-)
+from eawf.observability.eval.jury_validation import GoldLabel
 
 pytestmark = pytest.mark.unit
 
@@ -80,29 +75,3 @@ def test_gold_label_waves_all_present_in_state() -> None:
     waves = raw.get("waves") or {}
     for row in _load_rows():
         assert row.wave_id in waves, f"label anchors on unknown wave {row.wave_id}"
-
-
-def test_cohort_reads_non_empty() -> None:
-    """CR-02: the validation cohort is no longer honest-empty."""
-    state = State.model_validate_json(_STATE_PATH.read_text(encoding="utf-8"))
-    cohort = build_jury_validation_cohort(state, _STATE_PATH)
-    # Cohort rows are the JOIN of gold labels with observed verdict
-    # outcomes -- a label without a recorded verdict does not fabricate a
-    # row. The seed makes the join non-empty; the 20-row floor on the raw
-    # store is CR-01's assertion above.
-    assert len(cohort.gold) >= 1
-
-
-def test_metrics_cli_survives_ballotless_labelled_cohort(tmp_path: Path) -> None:
-    """CR-02: ``eawf metrics jury-validation`` reports the seeded cohort
-    honestly (no crash on labelled waves that predate the ballot store)
-    with block authority still advisory."""
-    from typer.testing import CliRunner
-
-    from eawf.surfaces.cli.app import app
-
-    shutil.copytree(_SNAPSHOT, tmp_path / ".ea")
-    result = CliRunner().invoke(app, ["--workspace", str(tmp_path), "metrics", "jury-validation"])
-    assert result.exit_code == 0, result.output
-    assert "advisory" in result.output.lower()
-    assert "labelled cohort rows" in result.output

@@ -20,7 +20,7 @@ from eawf.runtime.daemon.methods.daemon import ping
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec, GateFreshnessInput
 from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY
 from eawf.workflow.audit_dsl.runner import run_checks
-from tests.integration.runtime.daemon._epoch1_state_fixtures import build_ctx
+from tests.integration.runtime.daemon._method_context import build_ctx
 
 
 def _spec() -> CheckSpec:

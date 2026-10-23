@@ -50,10 +50,9 @@ W08 compile-gate + W10 profile-floor packs can lean on the runner:
   the repo actually contains). The var is set even when the resolved
   set is empty so the child can distinguish "no scope evaluation"
   from "scope evaluated to empty".
-* The ``diff_base`` for ``changed``/``touched`` is derived from
-  ``derive_diff_base(wave_id)`` so wave-anchored gates compare against
-  the wave's own delta; the merge-base-with-main fallback keeps the
-  fresh-clone / CI path fail-open.
+* The ``diff_base`` for ``changed``/``touched`` is the merge-base with
+  ``main`` from ``derive_diff_base``; its ``origin/main`` fallback keeps
+  the fresh-clone / CI path fail-open.
 """
 
 from __future__ import annotations
@@ -91,7 +90,7 @@ from eawf.runtime.sandbox.env_scrub import (
     build_child_env,
     resolve_binary_dir,
 )
-from eawf.runtime.vcs.wave_sha import derive_diff_base
+from eawf.runtime.vcs.diff_base import derive_diff_base
 from eawf.workflow.audit_dsl.kinds.backlog_resolution import BACKLOG_RESOLUTION_KIND
 from eawf.workflow.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
 from eawf.workflow.audit_dsl.kinds.journal_chain import check_journal_chain
@@ -787,7 +786,7 @@ def _check_command_exit_zero(
     timeout_class = args.timeout_class
     seconds = resolve_timeout_seconds(args)
 
-    diff_base = "all" if args.scope == "all" else derive_diff_base(args.wave_id, repo_root=cwd)
+    diff_base = "all" if args.scope == "all" else derive_diff_base(repo_root=cwd)
     selected_files = _resolve_scope_files(
         scope=args.scope,
         wave_file_scopes=args.wave_file_scopes,

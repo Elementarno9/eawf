@@ -229,7 +229,6 @@ async def _live(
         seam = ProjectionSeam(
             route=route,
             scope_id="EAWF",
-            state_path=None,
             repo_root=canary.root,
             daemon_client_factory=(lambda: client(daemon)) if client else daemon.client,
             daemon_probe_interval_s=PROBE_SECONDS,
@@ -301,7 +300,10 @@ def test_ui_010_each_outcome_is_announced_under_its_own_title(
 
 
 def test_ui_010_idle_is_stated_rather_than_left_blank() -> None:
-    seam = ProjectionSeam(route="run.detail", scope_id="EAWF", state_path=None)
+    seam = ProjectionSeam(
+        route="run.detail",
+        scope_id="EAWF",
+    )
     result = asyncio.run(seam.request(ControlRequest(target=RUN_KEY, control=ControlKind.CANCEL)))
 
     assert result.disposition is ControlDisposition.IDLE
@@ -822,7 +824,10 @@ def test_every_write_verb_refuses_outside_live_naming_the_state(
 
 @pytest.mark.parametrize("value", _NOT_LIVE, ids=[v.value for v in _NOT_LIVE])
 def test_ui_061_an_unvouched_count_is_never_zero_dash_or_unknown(value: ConnectionValue) -> None:
-    seam = ProjectionSeam(route="attention", scope_id="EAWF", state_path=None)
+    seam = ProjectionSeam(
+        route="attention",
+        scope_id="EAWF",
+    )
     seam._connection = value
     assert seam.count(0) == f"0 {KNOWN_COUNT_LABEL}"
     assert seam.count(None) == "∅ unavailable"

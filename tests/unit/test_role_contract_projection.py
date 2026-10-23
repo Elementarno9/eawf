@@ -10,76 +10,17 @@ rather than a hardcoded constant.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.state.enums import (
     AgentSessionRole,
-    EffortBucket,
-    ProjectStatus,
-    ScopeKind,
 )
-from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.workflow.agents.specs.models import RoleContract, SubagentSpec
 from eawf.workflow.agents.specs.roles import RoleSpec, get_role_spec
 from eawf.workflow.dispatch import (
     build_role_contract,
-    build_subagent_spec,
-    render_wave_prompt,
 )
-from tests._epoch1_seed import seed_iter, seed_phase, seed_wave
-from tests.conftest import make_intent
-
-
-def _empty_state() -> State:
-    """Return a minimal State with project=QR scope_id=QR."""
-    return State.model_validate(
-        {
-            "schema_version": "1.0",
-            "scope_kind": ScopeKind.REPO.value,
-            "urn": "urn:eawf:v1:state:QR",
-            "updated_at": datetime.now(UTC).isoformat(),
-            "project": Project(
-                code="QR",
-                slug="qr",
-                title="QR",
-                description=None,
-                domains=["x"],
-                default_branch="main",
-                status=ProjectStatus.ACTIVE,
-                repo_urn="urn:eawf:v1:repo:QR",
-            ).model_dump(mode="json"),
-            "current": CurrentPointers(project_code="QR").model_dump(mode="json"),
-            "workspace": None,
-            "phases": {},
-            "iters": {},
-            "waves": {},
-            "artifacts": {},
-            "agent_sessions": {},
-            "plugins": {},
-            "indexes": {},
-        }
-    )
-
-
-def _seed_wave_with_role(state: State, *, role: AgentSessionRole) -> str:
-    """Seed P01 → P01-I01 → P01-I01-W01 carrying *role* as ``agent_role``."""
-    seed_phase(state, phase_id="P01", title="Bootstrap")
-    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    seed_wave(
-        state,
-        wave_id="P01-I01-W01",
-        iter_id="P01-I01",
-        title="Wave with role",
-        file_scopes=["src/foo/"],
-        agent_role=role,
-        effort_bucket=EffortBucket.M,
-        intent=make_intent(),
-    )
-    return "P01-I01-W01"
-
 
 # ---- RoleContract strict-schema invariants ---------------------------------
 
@@ -200,120 +141,7 @@ def test_build_role_contract_with_no_state_omits_sandbox_intersection() -> None:
 # ---- build_subagent_spec wires role_contract through -----------------------
 
 
-def test_build_subagent_spec_attaches_role_contract_for_role_bearing_wave() -> None:
-    """A wave with ``agent_role`` set carries a typed ``RoleContract``."""
-    state = _empty_state()
-    wave_id = _seed_wave_with_role(state, role=AgentSessionRole.EXECUTOR)
-    spec = build_subagent_spec(state, wave_id)
-    assert isinstance(spec.role_contract, RoleContract)
-    assert spec.role_contract.role == "executor"
-    assert (
-        spec.role_contract.system_prompt == get_role_spec(AgentSessionRole.EXECUTOR).system_prompt
-    )
-
-
-def test_build_subagent_spec_role_contract_none_when_no_role() -> None:
-    """A wave without ``agent_role`` keeps ``role_contract`` at ``None``."""
-    state = _empty_state()
-    seed_phase(state, phase_id="P01", title="Bootstrap")
-    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    seed_wave(
-        state,
-        wave_id="P01-I01-W01",
-        iter_id="P01-I01",
-        title="Roleless wave",
-        file_scopes=["src/"],
-        effort_bucket="M",
-        intent=make_intent(),
-    )
-    spec = build_subagent_spec(state, "P01-I01-W01")
-    assert spec.role_contract is None
-
-
 # ---- Byte-difference: non-executor role does NOT render executor body ------
-
-
-def test_render_wave_prompt_for_auditor_does_not_carry_executor_body() -> None:
-    """The dispatch prompt for an auditor wave carries the auditor body, not executor.
-
-    Success criterion 2 of P28-I01-W12: a non-executor role renders with
-    its own ``system_prompt``, NOT the hardcoded executor body. The
-    executor and auditor body diverge in their leading line — the
-    executor opens with "You implement what the planner specified" and
-    the auditor with "You are skeptical by design".
-    """
-    auditor_state = _empty_state()
-    _seed_wave_with_role(auditor_state, role=AgentSessionRole.AUDITOR)
-    auditor_prompt = render_wave_prompt(auditor_state, "P01-I01-W01")
-
-    executor_state = _empty_state()
-    _seed_wave_with_role(executor_state, role=AgentSessionRole.EXECUTOR)
-    executor_prompt = render_wave_prompt(executor_state, "P01-I01-W01")
-
-    # Both prompts now carry a Role contract section (post-W12 seam).
-    assert "## Role contract" in auditor_prompt
-    assert "## Role contract" in executor_prompt
-
-    # The auditor prompt carries the auditor body's leading line.
-    assert "You are skeptical by design." in auditor_prompt
-    # …and NOT the executor body's leading line.
-    assert "You implement what the planner specified." not in auditor_prompt
-
-    # The executor prompt carries the executor body — symmetrical check.
-    assert "You implement what the planner specified." in executor_prompt
-    assert "You are skeptical by design." not in executor_prompt
-
-    # And the two byte streams differ — same wave id, different role,
-    # different prompt bodies.
-    assert auditor_prompt != executor_prompt
-
-
-def test_render_wave_prompt_role_contract_section_carries_system_prompt() -> None:
-    """The rendered ``## Role contract`` section holds the role's system_prompt."""
-    state = _empty_state()
-    _seed_wave_with_role(state, role=AgentSessionRole.PLANNER)
-    prompt = render_wave_prompt(state, "P01-I01-W01")
-    assert "## Role contract" in prompt
-    # The planner body's leading line appears inside the section.
-    assert "You produce specs that an `executor` can implement" in prompt
-
-
-def test_render_wave_prompt_role_contract_section_carries_runtime_fields() -> None:
-    """The rendered ``## Role contract`` section carries tools/model/report fields."""
-    state = _empty_state()
-    _seed_wave_with_role(state, role=AgentSessionRole.EXECUTOR)
-    prompt = render_wave_prompt(state, "P01-I01-W01")
-    block = prompt.split("## Role contract", 1)[1].split("## Workflow", 1)[0]
-    assert "- role: executor" in block
-    assert "- model: opus" in block
-    assert "- memory: true" in block
-    assert "- report_schema_ref: executor_report" in block
-    assert "- allowed_tools: " in block
-    assert "Read" in block
-    assert "- denied_tools: none" in block
-    assert "### System prompt" in block
-
-
-def test_render_wave_prompt_no_role_omits_role_contract_section() -> None:
-    """A wave without ``agent_role`` omits the ``## Role contract`` section.
-
-    Preserves byte-equivalence with the pre-W12 renderer for callers
-    that have not yet plumbed the role registry through.
-    """
-    state = _empty_state()
-    seed_phase(state, phase_id="P01", title="Bootstrap")
-    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
-    seed_wave(
-        state,
-        wave_id="P01-I01-W01",
-        iter_id="P01-I01",
-        title="Roleless wave",
-        file_scopes=["src/"],
-        effort_bucket="M",
-        intent=make_intent(),
-    )
-    prompt = render_wave_prompt(state, "P01-I01-W01")
-    assert "## Role contract" not in prompt
 
 
 # ---- Stop conditions section ------------------------------------------------

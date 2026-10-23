@@ -111,7 +111,7 @@ def create_wave_worktree(repo: Path, state_path: Path, wave_id: str) -> Path:
     """
     from eawf.runtime.worktree import worktree_registry_lock
     from eawf.surfaces.cli._mutation import state_transaction
-    from tests._worktree_create import create_worktree
+    from tests.fixtures.migration.worktree_create import create_worktree
 
     with worktree_registry_lock(repo, timeout=5.0), state_transaction(state_path) as state:
         record = create_worktree(state, repo_root=repo, wave_id=wave_id)

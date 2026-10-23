@@ -1,34 +1,16 @@
-"""Render release-note drafts from committed state and artifacts."""
+"""Render release-note drafts from the unreleased section of the changelog."""
 
 from __future__ import annotations
 
 import re
 
-from eawf.kernel.state.ids import natural_key
-from eawf.kernel.state.models import State
 from eawf.platform.artifacts.references import Citation
 from eawf.platform.artifacts.validation import validate_markdown_artifact
 from eawf.surfaces.render.artifact_chassis import render_references
-from eawf.surfaces.render.narrative import (
-    NarrativeBundle,
-    build_narrative,
-    generated_changelog_lines,
-)
 
 
 class ReleaseNotesValidationError(ValueError):
     """Raised when rendered release notes fail artifact validation."""
-
-
-def _phase_sort_key(phase_id: str) -> int:
-    return int(phase_id.removeprefix("P"))
-
-
-def _phase_in_range(phase_id: str, from_phase: str | None, to_phase: str | None) -> bool:
-    value = _phase_sort_key(phase_id)
-    if from_phase is not None and value < _phase_sort_key(from_phase):
-        return False
-    return not (to_phase is not None and value > _phase_sort_key(to_phase))
 
 
 def mine_unreleased_changelog(changelog_text: str) -> list[str]:
@@ -47,123 +29,43 @@ def mine_unreleased_changelog(changelog_text: str) -> list[str]:
     return mined
 
 
-def _artifact_ids_for_phases(state: State, phase_ids: set[str]) -> set[str]:
-    """Return artifact IDs tied to the selected phase range."""
-    artifact_ids: set[str] = set()
-    for audit in (state.audits or {}).values():
-        report_artifact_id = audit.report_artifact_id
-        if report_artifact_id is None:
-            continue
-        if audit.scope_id in phase_ids or any(phase_id in audit.id for phase_id in phase_ids):
-            artifact_ids.add(report_artifact_id)
-    return artifact_ids
+def build_release_notes(*, changelog_text: str | None = None) -> str:
+    """Render a chassis-valid release notes draft from the unreleased changelog.
 
+    Args:
+        changelog_text: The text of ``CHANGELOG.md``, or ``None`` when the
+            repository has none.
 
-def _artifact_matches_phase(artifact_id: str, uri: str, phase_ids: set[str]) -> bool:
-    haystack = f"{artifact_id}\n{uri}"
-    return any(phase_id in haystack for phase_id in phase_ids)
+    Returns:
+        The draft, whose Changelog section holds the lines under the
+        ``[Unreleased]`` heading.
 
-
-def _artifact_rows(state: State, phase_ids: set[str]) -> list[str]:
-    rows: list[str] = []
-    audit_artifact_ids = _artifact_ids_for_phases(state, phase_ids)
-    for artifact in sorted((state.artifacts or {}).values(), key=lambda a: natural_key(a.id)):
-        if not artifact.uri.startswith("repo:.ea/artifacts/"):
-            continue
-        if artifact.id not in audit_artifact_ids and not _artifact_matches_phase(
-            artifact.id,
-            artifact.uri,
-            phase_ids,
-        ):
-            continue
-        rows.append(f"- `{artifact.id}` `{artifact.kind}` {artifact.uri}")
-    return rows
-
-
-def _bundle_rows(bundles: list[NarrativeBundle], section: str) -> list[str]:
-    rows: list[str] = []
-    for bundle in bundles:
-        if section == "what":
-            items = bundle.what
-        elif section == "why":
-            items = bundle.why
-        elif section == "validation":
-            items = bundle.validation
-        else:
-            items = bundle.risks
-        for item in items:
-            prefix = "" if item.startswith(f"`{bundle.scope_id}`") else f"`{bundle.scope_id}` "
-            rows.append(f"- {prefix}{item}")
-    return rows
-
-
-def build_release_notes(
-    state: State,
-    *,
-    from_phase: str | None = None,
-    to_phase: str | None = None,
-    changelog_text: str | None = None,
-) -> str:
-    """Render a chassis-valid release notes draft."""
-    phases = [
-        phase
-        for phase in sorted(state.phases.values(), key=lambda p: natural_key(p.id))
-        if _phase_in_range(phase.id, from_phase, to_phase)
-    ]
-    phase_ids = {phase.id for phase in phases}
-    bundles = [build_narrative(state, phase.id) for phase in phases]
-    mined_changelog_lines = mine_unreleased_changelog(changelog_text or "")
-    generated_changelog = [line for bundle in bundles for line in generated_changelog_lines(bundle)]
-    changelog_lines = mined_changelog_lines or generated_changelog
-    summary_rows = [
-        f"- `{phase.id}` {phase.title} ({phase.status.value}) [1]" for phase in phases
-    ] or ["- No phases matched the requested range [1]."]
-    if mined_changelog_lines:
-        summary_rows.append("- Unreleased changelog entries mined from `CHANGELOG.md` [2].")
-    elif generated_changelog:
-        summary_rows.append("- Changelog entries generated from narrative bundles [1].")
-    artifact_rows = _artifact_rows(state, phase_ids)
-    citations = [Citation(n=1, ref=".ea/state.json")]
-    if mined_changelog_lines:
-        citations.append(Citation(n=2, ref="CHANGELOG.md"))
-    reference_lines = render_references(citations)
+    Raises:
+        ReleaseNotesValidationError: The draft fails artifact validation.
+    """
+    changelog_lines = mine_unreleased_changelog(changelog_text or "")
+    summary = (
+        "- Unreleased changelog entries mined from `CHANGELOG.md` [1]."
+        if changelog_lines
+        else "- `CHANGELOG.md` holds no unreleased entry yet [1]."
+    )
     body = "\n".join(
         [
             "# Release Notes Draft",
             "",
             "## Summary",
             "",
-            *summary_rows,
-            "",
-            "## What",
-            "",
-            *(_bundle_rows(bundles, "what") or ["- No narrative entries found."]),
-            "",
-            "## Why",
-            "",
-            *(_bundle_rows(bundles, "why") or ["- No narrative entries found."]),
-            "",
-            "## Validation",
-            "",
-            *(_bundle_rows(bundles, "validation") or ["- No validation entries found."]),
-            "",
-            "## Risks",
-            "",
-            *(_bundle_rows(bundles, "risks") or ["- No risk entries found."]),
-            "",
-            "## Artifacts",
-            "",
-            *(artifact_rows or ["- No committed artifact rows found."]),
+            summary,
             "",
             "## Changelog",
             "",
             *(changelog_lines or ["- No unreleased changelog entries found."]),
             "",
-            *reference_lines,
+            *render_references([Citation(n=1, ref="CHANGELOG.md")]),
             "",
             "## Provenance",
             "",
-            "- source: committed state and artifact metadata",
+            "- source: the unreleased section of CHANGELOG.md",
             "- renderer: eawf.surfaces.render.release_notes",
             "",
             "## Scrub",

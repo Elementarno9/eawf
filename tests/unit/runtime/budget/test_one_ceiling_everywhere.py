@@ -1,11 +1,8 @@
-"""One ceiling at every budget boundary, and one notice row per crossing.
+"""One notice row per budget crossing.
 
-The wave claim guard and ``eawf wave budget consume`` measure a wave against the
-ceiling ``flow.budget`` derives, never against the raw ``token_budget``.
-Every producer that observes a crossing -- the consume verb and a native
-Run's budget termination -- lands it
-as the one row of the notice ledger, and a second observation of the same
-crossing leaves that row alone.
+A native Run's budget termination lands its crossing as the one row of the
+notice ledger, and a second observation of the same crossing leaves that row
+alone.
 """
 
 from __future__ import annotations
@@ -18,11 +15,9 @@ from typing import Any
 import pytest
 
 from eawf.kernel.identity import EntityKind, parse_qualified_urn
-from eawf.kernel.state.models import State
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.budget.notices import load_notice_ledger, notices_path
-from eawf.runtime.budget.policy import BudgetAction, BudgetConfig
-from eawf.runtime.budget.service import TerminationResult, consume_against_ceiling
+from eawf.runtime.budget.service import TerminationResult
 from eawf.runtime.daemon.budget_interlock import InFlightBudgetOutcome, guard_in_flight_budget
 from eawf.runtime.daemon.methods import run_budget
 from eawf.runtime.daemon.methods.run_budget import InFlightRunMeter
@@ -32,10 +27,6 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     root_context,
     seed,
     seed_row,
-)
-from tests.unit.runtime.budget._wave_payload import (
-    _WAVE_ID,
-    _state_payload,
 )
 from tests.unit.runtime.budget.test_prompt_budget_ceiling import (
     RUN_KEY,
@@ -62,44 +53,6 @@ def ledger_rows(state_path: Path) -> list[Any]:
 
 
 # ---------- consume decides against the ceiling ----------
-
-
-def test_consume_against_ceiling_no_budget_continues() -> None:
-    state = State.model_validate(_state_payload())
-    outcome = consume_against_ceiling(state, _WAVE_ID, 10**6, budget=BudgetConfig())
-    assert (outcome.ceiling, outcome.decision.action) == (None, BudgetAction.CONTINUE)
-
-
-@pytest.mark.parametrize(
-    ("delta", "enforce", "action"),
-    [
-        (0, "soft", BudgetAction.CONTINUE),
-        (1499, "soft", BudgetAction.CONTINUE),
-        (1500, "soft", BudgetAction.WARN),
-        (1499, "hard", BudgetAction.CONTINUE),
-        (1500, "hard", BudgetAction.HALT),
-    ],
-)
-def test_consume_against_ceiling_boundaries(delta: int, enforce: Any, action: BudgetAction) -> None:
-    payload = _state_payload()
-    payload["waves"][_WAVE_ID]["token_budget"] = 1000
-    state = State.model_validate(payload)
-    outcome = consume_against_ceiling(state, _WAVE_ID, delta, budget=BudgetConfig(enforce=enforce))
-    assert outcome.decision.action is action
-    assert (outcome.tokens_before, outcome.wave.tokens_consumed) == (0, delta)
-    assert outcome.decision.cap == 1500
-
-
-def test_consume_against_ceiling_negative_tokens_raises() -> None:
-    state = State.model_validate(_state_payload())
-    with pytest.raises(ValueError, match="non-negative"):
-        consume_against_ceiling(state, _WAVE_ID, -1, budget=BudgetConfig())
-
-
-def test_consume_against_ceiling_unknown_wave_raises() -> None:
-    state = State.model_validate(_state_payload())
-    with pytest.raises(KeyError):
-        consume_against_ceiling(state, "P99-I99-W99", 1, budget=BudgetConfig())
 
 
 # ---------- the consume verb notices, and one crossing is one row ----------

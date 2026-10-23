@@ -127,7 +127,6 @@ def frames(events: tuple[RunEventRecord, ...], keys: Sequence[str] = ()) -> list
         seam = ProjectionSeam(
             route=TRANSCRIPT_ROUTE,
             scope_id=tb.SCOPE,
-            state_path=None,
             clock=lambda: tb.AT,
             daemon_client_factory=daemon.client,
         )

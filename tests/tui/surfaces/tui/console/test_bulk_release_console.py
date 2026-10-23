@@ -318,7 +318,6 @@ def _sent(daemon: _Daemon, *, operator: Operator | None, reconcile: bool = False
     seam = ProjectionSeam(
         route="backlog",
         scope_id="EAWF",
-        state_path=None,
         clock=lambda: AT,
         daemon_client_factory=daemon.client,
         operator=operator,

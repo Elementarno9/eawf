@@ -92,9 +92,7 @@ class _Clipped(ConsoleApp):
 
 def _linked(route: str, document: dict[str, Any], *, subject: str | None = None) -> ConsoleApp:
     """Return a console linked to a seam already holding ``route``'s projection."""
-    seam = ProjectionSeam(
-        route=route, scope_id=SCOPE, state_path=None, clock=lambda: AT, scope_name="eawf"
-    )
+    seam = ProjectionSeam(route=route, scope_id=SCOPE, clock=lambda: AT, scope_name="eawf")
     seam._projection = ds.projection(route, document)
     app = _Clipped(chrome=load_chrome(), seam=seam, clock=FakeClock())
     app.session.route = route
@@ -128,7 +126,7 @@ class _Calls:
 
 def test_the_seam_owes_an_acceptance_read_for_the_milestone_on_screen() -> None:
     """The read is owed for the subject alone, answered per key, and not owed twice."""
-    seam = ProjectionSeam(route="milestone", scope_id=SCOPE, state_path=None, clock=lambda: AT)
+    seam = ProjectionSeam(route="milestone", scope_id=SCOPE, clock=lambda: AT)
     seam._projection = ds.projection("milestone", DOCUMENT)
     calls = _Calls({"MLS-0030": MilestoneAcceptanceRecord(milestone_key="MLS-0030")})
     seam._binding.call = calls  # type: ignore[method-assign]
@@ -147,7 +145,7 @@ def test_the_seam_owes_an_acceptance_read_for_the_milestone_on_screen() -> None:
 
 def test_a_moved_milestone_drops_the_read_so_it_is_asked_again() -> None:
     """A patch on a Milestone or a sealed question may move what it was accepted at."""
-    seam = ProjectionSeam(route="milestone", scope_id=SCOPE, state_path=None, clock=lambda: AT)
+    seam = ProjectionSeam(route="milestone", scope_id=SCOPE, clock=lambda: AT)
     seam._projection = ds.projection("milestone", DOCUMENT)
     seam._acceptance["MLS-0030"] = MilestoneAcceptanceRecord(milestone_key="MLS-0030")
     seam.about("MLS-0030")
@@ -202,7 +200,10 @@ def test_an_acceptance_read_that_names_no_milestone_is_refused() -> None:
     with pytest.raises(DaemonValidationError):
         asyncio.run(read_milestone_acceptance(None, {"milestone_key": ""}))  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="names the Milestone"):
-        seam = ProjectionSeam(route="milestone", scope_id=SCOPE, state_path=None)
+        seam = ProjectionSeam(
+            route="milestone",
+            scope_id=SCOPE,
+        )
         asyncio.run(seam.load_acceptance())
 
 
@@ -487,7 +488,7 @@ def test_a_console_whose_daemon_answers_nothing_lands_on_the_offline_frame() -> 
     async def refused(method: str, params: dict[str, Any]) -> dict[str, Any]:
         raise ConnectionRefusedError("no daemon")
 
-    seam = ProjectionSeam(route="scope.home", scope_id=SCOPE, state_path=None, clock=lambda: AT)
+    seam = ProjectionSeam(route="scope.home", scope_id=SCOPE, clock=lambda: AT)
     seam._binding.call = refused  # type: ignore[method-assign]
     chrome_ = load_chrome()
     offline = next(i for i, state in enumerate(chrome_.entry) if state.id == OFFLINE)

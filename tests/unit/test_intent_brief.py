@@ -28,19 +28,9 @@ from eawf.kernel.state.enums import (
     BacklogStatus,
     IterStatus,
     PhaseStatus,
-    ProjectStatus,
-    ScopeKind,
     WaveStatus,
 )
-from eawf.kernel.state.models import (
-    BacklogItem,
-    CurrentPointers,
-    Iter,
-    Phase,
-    Project,
-    State,
-    Wave,
-)
+from eawf.kernel.state.models import BacklogItem, Iter, Phase, Wave
 from eawf.surfaces.render.agents_md import render_intent_line
 
 
@@ -286,111 +276,6 @@ def test_backlog_intent_default_none() -> None:
         created_at=_now(),
     )
     assert item.intent is None
-
-
-# ---- Replay-safe: existing on-disk rows without `intent` re-validate --------
-
-
-def test_state_validates_without_intent_field_on_entities() -> None:
-    """A payload mirroring the pre-W11 wire format (no `intent` keys) loads."""
-    payload = {
-        "schema_version": "1.0",
-        "scope_kind": ScopeKind.REPO.value,
-        "urn": "urn:eawf:v1:state:QR",
-        "updated_at": _now().isoformat(),
-        "project": Project(
-            code="QR",
-            slug="qr",
-            title="QR",
-            description=None,
-            domains=["x"],
-            default_branch="main",
-            status=ProjectStatus.ACTIVE,
-            repo_urn="urn:eawf:v1:repo:QR",
-        ).model_dump(mode="json"),
-        "current": CurrentPointers(project_code="QR").model_dump(mode="json"),
-        "workspace": None,
-        "phases": {
-            "P01": Phase(
-                id="P01",
-                scope_id="QR",
-                title="t",
-                status=PhaseStatus.ACTIVE,
-                opened_at=_now(),
-            ).model_dump(mode="json", exclude={"intent"}),
-        },
-        "iters": {
-            "P01-I01": Iter(
-                id="P01-I01",
-                phase_id="P01",
-                title="t",
-                status=IterStatus.ACTIVE,
-                opened_at=_now(),
-            ).model_dump(mode="json", exclude={"intent"}),
-        },
-        "waves": {
-            "P01-I01-W01": Wave(
-                id="P01-I01-W01",
-                iter_id="P01-I01",
-                title="t",
-                status=WaveStatus.PENDING,
-                opened_at=_now(),
-            ).model_dump(mode="json", exclude={"intent"}),
-        },
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {},
-        "backlog": {
-            "B001": BacklogItem(
-                id="B001",
-                scope_id="QR",
-                title="t",
-                priority=BacklogPriority.P2,
-                status=BacklogStatus.OPEN,
-                created_at=_now(),
-            ).model_dump(mode="json", exclude={"intent"}),
-        },
-    }
-    state = State.model_validate(payload)
-    assert state.waves["P01-I01-W01"].intent is None
-    assert state.iters["P01-I01"].intent is None
-    assert state.phases["P01"].intent is None
-    assert state.backlog is not None
-    assert state.backlog["B001"].intent is None
-
-
-def test_state_schema_version_accepts_supported_set() -> None:
-    """The accepted schema-version set is the migrate-chain supported range."""
-    from typing import get_args
-
-    from eawf.kernel.state.models import State as StateModel
-
-    field = StateModel.model_fields["schema_version"]
-    versions = set(get_args(field.annotation))
-    assert versions == {
-        "1.0",
-        "1.1",
-        "1.2",
-        "1.3",
-        "1.4",
-        "1.5",
-        "1.6",
-        "1.7",
-        "1.8",
-        "1.9",
-        "1.10",
-        "1.11",
-        "1.12",
-        "1.13",
-        "1.14",
-        "1.15",
-        "1.16",
-        "1.17",
-        "1.18",
-        "1.19",
-        "1.20",
-    }
 
 
 # ---- Render + TUI -----------------------------------------------------------

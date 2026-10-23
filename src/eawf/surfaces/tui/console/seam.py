@@ -5,7 +5,7 @@
 
 Everything the console draws arrives through this seam, and the seam owns no transport of
 its own: it holds a :class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding` and uses
-its socket push, its always-on poll backstop and its resume cursor. That is the point of
+its socket push, its daemon probe and its resume cursor. That is the point of
 binding it this way rather than opening a second connection -- a second socket would be a
 second thing to authorise, probe, throttle and reconnect, and the console would then have
 two answers to "am I live" that could disagree.
@@ -59,7 +59,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import Any, Final
 
 from eawf.kernel.projection.compute import (
     ROUTE_COLLECTIONS,
@@ -114,9 +114,6 @@ from eawf.workflow.projection.acceptance import (
     MILESTONE_ROUTE,
     MilestoneAcceptanceRecord,
 )
-
-if TYPE_CHECKING:
-    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -230,9 +227,7 @@ class ProjectionSeam:
         *,
         route: str,
         scope_id: str,
-        state_path: Path | None,
         repo_root: Path | None = None,
-        on_state: Callable[[State], Awaitable[None]] | None = None,
         on_degraded: Callable[[bool], Awaitable[None]] | None = None,
         clock: Callable[[], datetime] | None = None,
         capacity: int = DEFAULT_ROUTE_CAPACITY,
@@ -245,12 +240,8 @@ class ProjectionSeam:
         Args:
             route: The console route key the seam opens on.
             scope_id: The scope the projection is stated for.
-            state_path: The tree's ``state.json``, which the poll backstop watches.
             repo_root: The repository the daemon should answer for; omitted when
                 the daemon's own bound tree is the right one.
-            on_state: The app's epoch-1 state sink, awaited on every backstop
-                delivery. The seam counts the deliveries either way, so a silent
-                push stream is still visible to it.
             on_degraded: The app's degraded sink. The seam also takes the flag as
                 its own transport signal: a daemon that cannot be reached is a
                 disconnected link, not a live one.
@@ -261,8 +252,8 @@ class ProjectionSeam:
                 refuses every write with that reason and sends nothing.
             scope_name: The name an operator knows the scope by, which the header shows
                 in place of ``scope_id``; empty shows the id.
-            **binding_options: Passed through to the binding, for the poll and probe
-                cadences and the client factory a test drives it with.
+            **binding_options: Passed through to the binding, for the probe cadence
+                and the client factory a test drives it with.
 
         Raises:
             ValueError: *capacity* leaves no room for a visible route beside the
@@ -278,7 +269,6 @@ class ProjectionSeam:
         self._repo_root = repo_root
         self._clock = clock or projection_now
         self._capacity = capacity
-        self._app_state = on_state
         self._app_degraded = on_degraded
         self._held: OrderedDict[str, RouteProjection] = OrderedDict()
         # the record each held route was read for, since its closed rows are read per record
@@ -318,14 +308,11 @@ class ProjectionSeam:
         self._filters: dict[str, str] = {}
         self._connection = ConnectionValue.DISCONNECTED
         self._replay: ReplayNote | None = None
-        self._backstop_ticks = 0
         self._operator = operator
         self._scope_name = scope_name
         self._writes = SeamWrites(self)
         self._binding = StateBinding(
-            state_path,
             StateBindingCallbacks(
-                on_state=self._on_state,
                 on_degraded=self._on_degraded,
                 on_event=self.take_notice,
                 on_patch=self.apply_patch,
@@ -878,11 +865,6 @@ class ProjectionSeam:
         return max(held, self._binding.resume_cursor)
 
     @property
-    def backstop_ticks(self) -> int:
-        """Return how many times the poll backstop has delivered state to this seam."""
-        return self._backstop_ticks
-
-    @property
     def vouches_for_counts(self) -> bool:
         """Return whether a count taken now may be called complete."""
         return vouches_for_counts(self._connection)
@@ -1422,7 +1404,7 @@ class ProjectionSeam:
         )
 
     async def connect(self) -> None:
-        """Start the one transport: push, probe and the always-on poll backstop."""
+        """Start the one transport: push and probe."""
         await self._binding.connect()
 
     async def disconnect(self) -> None:
@@ -1555,12 +1537,6 @@ class ProjectionSeam:
             )
         if sequences != sorted(sequences):
             raise ValueError(f"replay for route {self._route!r} arrived out of order: {sequences}")
-
-    async def _on_state(self, state: State) -> None:
-        """Count one poll-backstop delivery and pass it to the app's own sink."""
-        self._backstop_ticks += 1
-        if self._app_state is not None:
-            await self._app_state(state)
 
     async def _on_degraded(self, degraded: bool) -> None:
         """Take the transport flag as the link's own, and pass it on.

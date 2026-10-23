@@ -323,7 +323,7 @@ class _Daemon:
 
 
 def _seam(daemon: _Daemon, route: str = "activity") -> ProjectionSeam:
-    seam = ProjectionSeam(route=route, scope_id=bodies.SCOPE, state_path=None, clock=lambda: AT)
+    seam = ProjectionSeam(route=route, scope_id=bodies.SCOPE, clock=lambda: AT)
     seam._binding.call = daemon  # type: ignore[method-assign]
     return seam
 

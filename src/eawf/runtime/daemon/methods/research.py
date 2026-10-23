@@ -40,7 +40,8 @@ from eawf.kernel.store.kinds.research_round import ResearchRoundPayload
 from eawf.kernel.store.paths import store_path
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.models import Claim, OpenQuestion, State
+    from eawf.kernel.migration.v1_state import State
+    from eawf.kernel.state.models import Claim, OpenQuestion
 
 logger = logging.getLogger(__name__)
 

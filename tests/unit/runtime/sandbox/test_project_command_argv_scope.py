@@ -14,7 +14,6 @@ scope's own gates.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, Final
 
@@ -28,13 +27,10 @@ from eawf.kernel.release.gate_binding import (
 )
 from eawf.kernel.spec.common import CriterionSpec, GateSpec, validate_criterion_gate_refs
 from eawf.kernel.spec.promotion import SpecPromoteValidationError, validate_argv_gates
-from eawf.kernel.state.models import State
 from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, resolve_command_family
 from eawf.workflow.audit_dsl.models import CheckSpec
 from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY
 
-_REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[4]
-_STATE_PATH: Final[Path] = _REPO_ROOT / "tests" / "fixtures" / "epoch1-snapshot" / "state.json"
 _DRY_RUN_ARGV: Final[list[str]] = [
     "uv",
     "run",
@@ -114,22 +110,6 @@ def test_auth_039_a_stored_row_with_a_null_family_is_migrated_on_load() -> None:
         {**_stored_row(["git", "log", "--stat"]), "command_family_ref": None}
     )
     assert gate.command_family_ref == "git"
-
-
-def test_auth_039_the_committed_closed_wave_dry_run_gate_still_loads() -> None:
-    raw = json.loads(_STATE_PATH.read_bytes())
-    stored = next(g for g in raw["waves"]["P31-I01-W26"]["gates"] if g["id"] == "G-03")
-    assert stored["args"]["argv"] == _DRY_RUN_ARGV
-
-    state = State.model_validate(raw)
-
-    wave = state.waves["P31-I01-W26"]
-    gate = next(g for g in wave.gates if g.id == "G-03")
-    assert gate.args["argv"] == _DRY_RUN_ARGV
-    assert gate.command_family_ref == "eawf"
-    argv_gates = [g for w in state.waves.values() for g in w.gates if g.kind == "command_exit_zero"]
-    assert argv_gates
-    assert all(g.command_family_ref is not None for g in argv_gates)
 
 
 def test_auth_039_a_gate_row_on_a_mutating_form_does_not_construct() -> None:

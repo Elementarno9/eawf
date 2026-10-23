@@ -18,10 +18,10 @@ from typing import Any
 
 import orjson
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import (
     StoreKind,
 )
-from eawf.kernel.state.models import State
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope

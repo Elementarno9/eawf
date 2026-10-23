@@ -19,8 +19,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import Confidence, MemoryStatus
-from eawf.kernel.state.models import State
 from eawf.kernel.store.kinds.memory import MemoryNote
 
 logger = logging.getLogger(__name__)

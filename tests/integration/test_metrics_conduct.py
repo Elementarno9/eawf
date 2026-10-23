@@ -10,16 +10,13 @@ from typer.testing import CliRunner
 from eawf.kernel.state.enums import IncidentSeverity
 from eawf.platform.rules import conduct_obligation_ids, record_conduct_deviation
 from eawf.surfaces.cli.app import app
-
-FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "states"
+from tests._epoch2_helpers import lay_epoch2_tree
 
 
 def _seed_state(tmp_path: Path) -> Path:
+    """Bear an epoch-2 tree whose Task ledger records no completed Task."""
     workspace = tmp_path / "ws"
-    state_dir = workspace / ".ea"
-    state_dir.mkdir(parents=True)
-    source = FIXTURES / "valid" / "09-estimates-and-actuals.json"
-    (state_dir / "state.json").write_bytes(source.read_bytes())
+    lay_epoch2_tree(workspace)
     return workspace
 
 

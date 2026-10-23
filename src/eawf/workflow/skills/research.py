@@ -241,41 +241,50 @@ class ResearchSkill(SkillAction):
 
     @staticmethod
     def _live_open_questions(run: ActionRun) -> list[ResearchQuestion]:
-        """Read the scope's :class:`OpenQuestion` ledger into question slots.
+        """Read the selected generation's open questions into question slots.
 
-        Loads the active ``state.json`` and folds every still-open
-        (``OPEN`` / ``BLOCKED``) :class:`~eawf.kernel.state.models.OpenQuestion`
-        row into a :class:`ResearchQuestion`. A scope with no loadable state,
-        no question ledger, or no open question yields an empty list.
+        Folds every still-open (``OPEN`` / ``BLOCKED``) native
+        :class:`~eawf.kernel.state.epoch2.question.OpenQuestion` of the
+        tree's generation into a :class:`ResearchQuestion`. A row the
+        cutover imported from epoch 1 carries no ``urn`` and is no native
+        question, so it is passed over, as is every question of a tree that
+        selects no generation.
 
         Args:
             run: The active skill run (carries the resolved ``state_path``).
 
         Returns:
-            The live open questions as research-question slots, in natural-id
-            order; empty when the ledger carries none.
-        """
-        from eawf.kernel.state.enums import OpenQuestionStatus
-        from eawf.kernel.state.ids import natural_key
-        from eawf.workflow.evidence._io import load_state
+            The live open questions as research-question slots, in key
+            order; empty when the generation holds none.
 
-        if not run.state_path.exists():
+        Raises:
+            pydantic.ValidationError: A native question row does not satisfy
+                its model.
+        """
+        from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+        from eawf.kernel.state.enums import OpenQuestionStatus
+        from eawf.kernel.state.epoch2.authority import resolve_authority
+        from eawf.kernel.state.epoch2.question import OpenQuestion
+        from eawf.kernel.state.ids import natural_key
+        from eawf.kernel.store.compaction import document_rows, read_document
+        from eawf.kernel.store.tiers import Epoch2Collection
+
+        authority = resolve_authority(run.state_path.parent)
+        if authority.target is None or authority.generation_id is None:
             return []
-        try:
-            state = load_state(run.state_path)
-        except Exception as exc:  # pragma: no cover - defensive only
-            logger.debug(f"_live_open_questions load_error={exc!r}")
-            return []
-        rows = state.open_questions or {}
+        document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+        rows = document_rows(read_document(document), Epoch2Collection.OPEN_QUESTION)
         live_statuses = {OpenQuestionStatus.OPEN, OpenQuestionStatus.BLOCKED}
         slots: list[ResearchQuestion] = []
         for key in sorted(rows, key=natural_key):
-            question = rows[key]
+            if "urn" not in rows[key]:
+                continue
+            question = OpenQuestion.model_validate(rows[key])
             if question.status not in live_statuses:
                 continue
             slots.append(
                 ResearchQuestion(
-                    q=question.title,
+                    q=question.question,
                     answer="(blocking)" if question.blocking else "(open)",
                     confidence="low",
                     sources=[],

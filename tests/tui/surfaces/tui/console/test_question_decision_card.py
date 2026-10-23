@@ -175,7 +175,6 @@ def _seam(daemon: _Daemon, route: str = "attention") -> ProjectionSeam:
     return ProjectionSeam(
         route=route,
         scope_id="EAWF",
-        state_path=None,
         clock=lambda: AT,
         operator=Operator(principal="OP-0001"),
         daemon_client_factory=daemon.client,

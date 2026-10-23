@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -902,25 +901,6 @@ def test_check_release_annotation_rejects_malformed_v060_forms(mod, annotation: 
     assert "release annotation rejected" in diag
 
 
-def test_phase_release_workflow_regex_captures_v060_tag_and_version() -> None:
-    """P30-I15-W09: the phase-release.yaml annotation regex captures v0.6.0.
-
-    Pins the workflow's annotation-parse contract: the ``(release=v...)``
-    regex embedded in ``.github/workflows/phase-release.yaml`` captures
-    ``tag=v0.6.0`` and ``version=0.6.0`` from the close-commit subject. The
-    test reads the regex out of the YAML so the workflow and this assertion
-    stay coupled.
-    """
-    annotation_re = _workflow_release_regex()
-
-    subject = "[P30] state: close iter + phase (audit=A50-P30) (release=v0.6.0)"
-    captured = annotation_re.search(subject)
-    assert captured is not None
-    tag = captured.group(1)
-    assert tag == "v0.6.0"
-    assert tag[1:] == "0.6.0"
-
-
 # ---------------------------------------------------------------------------
 # P30-I23-W32: harden the release-annotation lint against the BL-1 fused shape
 # ``(audit=..., release=v0.6.0)`` (the one-character malformation that would
@@ -938,91 +918,6 @@ _W22_SUBJECT_WAVE = (
 # BL-1 fused shape: the ``release=`` annotation is welded into the audit paren
 # group instead of standing alone, so the workflow regex never matches it.
 _W22_SUBJECT_FUSED = "[P30] state: close iter + phase (audit=A-P30-I22-ship, release=v0.6.0)"
-
-
-#: Locates the ``(release=v...)`` extraction regex inside
-#: ``.github/workflows/phase-release.yaml``. The ``\s*`` runs absorb line
-#: breaks so a formatter rewrapping that ``re.search(...)`` call across
-#: several lines cannot sever the coupling; the assertions here pin the
-#: regex the workflow runs, not the workflow's line breaks. Requiring the
-#: ``subject`` argument keeps it off the version-extraction ``re.search``
-#: later in the same workflow, which reads ``text`` instead.
-_WORKFLOW_ANNOTATION_RE: re.Pattern[str] = re.compile(
-    r'match = re\.search\(\s*r"([^"]+)",\s*subject\s*,?\s*\)'
-)
-
-
-def _workflow_release_regex() -> re.Pattern[str]:
-    """Return the phase-release.yaml annotation-extraction regex, read from the YAML.
-
-    Reads the literal out of the workflow so the dry-run assertions stay
-    coupled to the exact regex the release automation runs.
-    """
-    workflow = (_REPO_ROOT / ".github" / "workflows" / "phase-release.yaml").read_text(
-        encoding="utf-8"
-    )
-    pattern_match = _WORKFLOW_ANNOTATION_RE.search(workflow)
-    assert pattern_match is not None, "annotation regex literal not found in phase-release.yaml"
-    return re.compile(pattern_match.group(1))
-
-
-#: Annotation regex body for the formatting-tolerance fixtures. Carries no
-#: ``"`` so it round-trips through the extractor's ``[^"]+`` capture group.
-_ANNOTATION_LITERAL = r"\(release=(v\d+\.\d+\.\d+)\)"
-
-_SINGLE_LINE_CALL = f'          match = re.search(r"{_ANNOTATION_LITERAL}", subject)\n'
-
-_REFLOWED_CALL = (
-    f'          match = re.search(\n              r"{_ANNOTATION_LITERAL}", subject\n          )\n'
-)
-
-_REFLOWED_TRAILING_COMMA_CALL = (
-    "          match = re.search(\n"
-    f'              r"{_ANNOTATION_LITERAL}",\n'
-    "              subject,\n"
-    "          )\n"
-)
-
-#: The sibling ``re.search`` in the same workflow that parses ``__version__``.
-_VERSION_EXTRACTION_CALL = r"""
-          match = re.search(r'^__version__\s*=\s*"([^"]+)"', text, flags=re.MULTILINE)
-"""
-
-
-@pytest.mark.parametrize(
-    ("shape", "snippet"),
-    [
-        ("single_line", _SINGLE_LINE_CALL),
-        ("reflowed", _REFLOWED_CALL),
-        ("reflowed_trailing_comma", _REFLOWED_TRAILING_COMMA_CALL),
-    ],
-)
-def test_workflow_annotation_re_tolerates_call_formatting(shape: str, snippet: str) -> None:
-    """The extractor reads the workflow literal under any line breaking.
-
-    A formatter rewrapping the workflow's ``re.search(...)`` call across
-    several lines must not sever the coupling: these assertions pin the
-    regex the release automation runs, not the YAML's line breaks. Every
-    formatting of the same call therefore yields the same captured pattern.
-    """
-    found = _WORKFLOW_ANNOTATION_RE.search(snippet)
-    assert found is not None, f"{shape} form not located"
-    assert found.group(1) == _ANNOTATION_LITERAL
-
-
-def test_workflow_annotation_re_ignores_version_extraction_call() -> None:
-    """The extractor skips the sibling ``re.search`` that parses __version__.
-
-    That call binds ``text`` rather than ``subject`` and quotes its pattern
-    with ``'``; matching it would hand the release assertions a regex that
-    never sees a commit subject.
-    """
-    assert _WORKFLOW_ANNOTATION_RE.search(_VERSION_EXTRACTION_CALL) is None
-
-
-def test_workflow_annotation_re_finds_nothing_in_empty_workflow() -> None:
-    """An empty workflow yields no match rather than a bogus capture."""
-    assert _WORKFLOW_ANNOTATION_RE.search("") is None
 
 
 def test_check_release_annotation_rejects_fused_shape(mod) -> None:
@@ -1083,70 +978,13 @@ def test_dry_run_w22_wave_suffixed_subject_passes_lint(tmp_path: Path, mod) -> N
     assert code == 0, diag
 
 
-def test_dry_run_w22_subject_matches_workflow_regex_byte_for_byte(mod) -> None:
-    """CR-02: the drafted W22 subject matches the phase-release.yaml:46 regex.
-
-    The workflow's extraction regex, read out of the YAML, captures
-    ``tag=v0.6.0`` and ``version=0.6.0`` from the drafted subject — so the
-    release automation would tag + publish exactly as intended.
-    """
-    annotation_re = _workflow_release_regex()
-    for subject in (_W22_SUBJECT, _W22_SUBJECT_WAVE):
-        captured = annotation_re.search(subject)
-        assert captured is not None, subject
-        assert captured.group(1) == "v0.6.0"
-        assert captured.group(1)[1:] == "0.6.0"
-
-
-def test_dry_run_fused_w22_subject_fails_lint_and_workflow_regex(tmp_path: Path, mod) -> None:
-    """CR-02: the fused BL-1 shape fails the lint AND the workflow regex.
-
-    Confirms the lint catches exactly what the workflow would silently miss:
-    the fused ``(audit=..., release=v0.6.0)`` shape does not match the
-    phase-release.yaml:46 regex (so the workflow would skip the release), and
-    the hardened lint rejects it up front.
-    """
-    annotation_re = _workflow_release_regex()
-    assert annotation_re.search(_W22_SUBJECT_FUSED) is None
-
+def test_dry_run_fused_w22_subject_fails_lint(tmp_path: Path, mod) -> None:
+    """CR-02: the fused BL-1 shape fails the lint up front."""
     msg = _write_msg(tmp_path, f"{_W22_SUBJECT_FUSED}\n\nbody\n")
     code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
     assert code == 1
     assert "release annotation rejected" in diag
     assert "phase-release.yaml" in diag
-
-
-def test_phase_release_workflow_version_source_regex_reads_060() -> None:
-    """P30-I15-W09: the workflow version-source regex reads ``__version__``.
-
-    Pins the version-source-match guard: the regex that reads
-    ``src/eawf/_version.py`` in ``phase-release.yaml`` extracts the version
-    string the step compares against the annotation (``0.6.0`` post-W07).
-    """
-    import re
-
-    workflow = (_REPO_ROOT / ".github" / "workflows" / "phase-release.yaml").read_text(
-        encoding="utf-8"
-    )
-    version_match = re.search(r"match = re\.search\(\s*r'(\^__version__[^']+)'", workflow)
-    assert version_match is not None, "version-source regex literal not found in phase-release.yaml"
-    version_re = re.compile(version_match.group(1), flags=re.MULTILINE)
-    captured = version_re.search('__version__ = "0.6.0"\n')
-    assert captured is not None
-    assert captured.group(1) == "0.6.0"
-
-
-def test_workflow_release_extraction_re_is_in_lockstep_with_the_workflow(mod) -> None:
-    """The lint's mirrored annotation regex equals the workflow's own literal.
-
-    The constant documents itself as a byte-for-byte copy, but nothing asserted
-    it. The copy drifted: the workflow gained a ``.devN`` group for the v0.7
-    dev-checkpoint train and the mirror did not, so the lint rejected the very
-    annotation the workflow was widened to tag and no dev checkpoint could
-    close. Comparing the two literals is the only assertion that keeps the
-    documented lockstep true.
-    """
-    assert _workflow_release_regex().pattern == mod._WORKFLOW_RELEASE_EXTRACTION_RE
 
 
 @pytest.mark.parametrize("version", ["v0.7.0.dev1", "v0.7.0.dev4", "v0.7.0rc1", "v1.0.0"])

@@ -1,33 +1,21 @@
-"""Read-only bridge from ``state.json`` into the TUI's reactive data.
+"""Daemon push transport feeding the TUI's reactive data.
 
-The operator surface binds the daemon ``state.json`` into its reactive
-layer. The shape is
-*daemon-push primary + always-on mtime-poll backstop*: the TUI
-subscribes to the daemon ``state.subscribe`` stream when the daemon is
-up (the fast path — a refresh lands within one frame of the event
-append) and ALSO runs a slow mtime-poll loop that stays alive even
-while push is connected. The backstop guarantees eventual consistency:
-if the push stream goes silent for any reason — the stream stalls, the
-daemon emits no frame for a given append, or a ``scope_id`` filter
-drops the envelope on the daemon side — the next poll tick still
-re-reads ``state.json`` and re-delivers fresh state, so a wave or iter
-added or closed becomes visible within the poll interval without an app
-restart. The poll loop is mtime-gated, so when push is healthy it adds
-no redundant ``on_state`` deliveries (the mtime has not advanced since
-the push-driven refresh already bumped it).
+The operator surface rides one daemon subscription: the binder subscribes
+when the daemon socket answers, delivers each pushed frame to the App's
+callbacks, and resumes from its cursor after a drop. A stream that comes
+back unable to replay what it missed owes a full re-read, which the
+``on_resync`` callback performs.
 
-The degraded banner is independent of the backstop: ``on_degraded`` is
-driven purely by the daemon-socket probe crossing its failure
-threshold, not by whether the poll task is running. The backstop is a
-silent safety net, not a degraded-mode signal.
+``on_degraded`` is driven purely by the daemon-socket probe crossing its
+failure threshold: ``True`` while the daemon cannot be reached, ``False``
+once a subscription connects again.
 
 Why a callback rather than a Textual ``reactive`` on this class: a
 ``reactive`` descriptor only fires watchers on a ``DOMNode`` (App /
 Widget / Screen). :class:`StateBinding` is a plain helper, so the App
-owns the reactive ``state`` attribute and this binder pushes fresh state
-into the App through :class:`StateBindingCallbacks`. That keeps the
-single source of mutation (the daemon, per AGENTS rule 4) untouched —
-this path is read-only and never writes ``state.json``.
+owns its reactive attributes and this binder pushes into the App through
+:class:`StateBindingCallbacks`. The binder never writes: mutation stays
+with the daemon.
 """
 
 from __future__ import annotations
@@ -39,7 +27,6 @@ import os
 import socket
 import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import orjson
@@ -47,7 +34,6 @@ from pydantic import ValidationError
 
 from eawf.kernel.projection.compute import KeyedPatch
 from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.read_contract import (
     CATCH_UP_TOO_LARGE,
@@ -62,13 +48,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: Default mtime-poll cadence in seconds for the daemonless fallback
-#: leg. Overridable via ``EAWF_POLL_INTERVAL_S`` so tests can drive a
-#: tight loop without sleeping for the full production interval.
-DEFAULT_POLL_INTERVAL_S: float = 2.0
-
 #: Minimum number of consecutive socket-probe failures before the binding
-#: enters degraded mode and starts the mtime-poll fallback.
+#: enters degraded mode.
 DEFAULT_DAEMON_FAILURE_THRESHOLD: int = 3
 
 #: Default cadence in seconds for repeated daemon-socket reconnect probes.
@@ -82,8 +63,7 @@ DEFAULT_SUBSCRIBE_METHOD: str = "state.subscribe"
 #: Minimum seconds between subscription (re)connect attempts. A stream the
 #: daemon repeatedly drops must NOT be re-subscribed at the probe cadence
 #: (~2/s), which floods the daemon with full re-subscribes (the storm this
-#: throttle fixes). The always-on mtime-poll backstop covers freshness during
-#: the gap, and the ``since`` cursor makes each reconnect cheap. Overridable via
+#: throttle fixes). The ``since`` cursor makes each reconnect cheap. Overridable via
 #: ``EAWF_RECONNECT_MIN_INTERVAL_S`` so a test can drive a tight loop.
 DEFAULT_RECONNECT_MIN_INTERVAL_S: float = 5.0
 
@@ -98,72 +78,34 @@ class StateBindingCallbacks:
     """Async callbacks the App registers to receive binding updates.
 
     Attributes:
-        on_state: Awaited with the freshly loaded :class:`State` each
-            time the binder reads a new ``state.json`` revision.
-        on_degraded: Awaited with the degraded flag whenever the binder
-            flips between daemon-push and mtime-poll mode. ``True`` means
-            the mtime-poll fallback is active (daemon unreachable).
-        on_event: Awaited with live daemon envelopes before the matching
-            state refresh is delivered. Optional because older tests only
-            care about state/degraded callbacks.
+        on_degraded: Awaited with the degraded flag whenever it flips.
+            ``True`` means the daemon cannot be reached.
+        on_event: Awaited with each live daemon envelope the stream pushes.
         on_patch: Awaited with each keyed projection patch the daemon pushes.
             Optional and ``None`` for the epoch-1 feed, which subscribes with a
             verb that produces no patch frame at all.
         on_resync: Awaited once a re-established stream could not replay what
-            it missed, so everything the feed fed must be read again. ``None``
-            re-reads ``state.json`` into ``on_state`` instead, which is all the
-            epoch-1 feed feeds.
+            it missed, so everything the feed fed must be read again.
     """
 
-    on_state: Callable[[State], Awaitable[None]]
     on_degraded: Callable[[bool], Awaitable[None]]
     on_event: Callable[[Envelope], Awaitable[None]] | None = None
     on_patch: Callable[[KeyedPatch], Awaitable[None]] | None = None
     on_resync: Callable[[], Awaitable[None]] | None = None
 
 
-def load_state(state_path: Path | None) -> State | None:
-    """Read + validate ``state.json`` into a typed :class:`State`.
-
-    Read-only: this never mutates the file. Returns ``None`` when the
-    path is unset, missing, unreadable, or fails schema validation so
-    the TUI degrades to an empty-scope placeholder rather than crashing
-    on a fresh or corrupt workspace.
-
-    Args:
-        state_path: Path to ``<scope>/.ea/state.json``. ``None`` short-
-            circuits to ``None`` (no scope resolved).
-
-    Returns:
-        The validated :class:`State`, or ``None`` when no usable state
-        is on disk.
-    """
-    if state_path is None or not state_path.is_file():
-        return None
-    try:
-        payload = orjson.loads(state_path.read_bytes())
-        return State.model_validate(payload)
-    except (orjson.JSONDecodeError, OSError, ValidationError) as exc:
-        logger.warning(f"load_state path={state_path!s} unreadable cause={exc!r}")
-        return None
-
-
 class StateBinding:
-    """Read-only mtime-poll binder feeding the App's reactive state.
+    """Read-only daemon push binder feeding the App's reactive data.
 
-    The binder owns the disk read and the poll task; the App owns the
+    The binder owns the subscription and the probe task; the App owns the
     Textual ``reactive`` attributes and supplies
-    :class:`StateBindingCallbacks` to receive updates. Mutation of
-    ``state.json`` stays with the daemon (AGENTS rule 4) — this class
-    only reads.
+    :class:`StateBindingCallbacks` to receive updates.
     """
 
     def __init__(
         self,
-        state_path: Path | None,
         callbacks: StateBindingCallbacks,
         *,
-        poll_interval_s: float | None = None,
         daemon_probe_interval_s: float | None = None,
         daemon_failure_threshold: int = DEFAULT_DAEMON_FAILURE_THRESHOLD,
         daemon_client_factory: Callable[[], DaemonClient] | None = None,
@@ -172,11 +114,8 @@ class StateBinding:
         """Construct the binder.
 
         Args:
-            state_path: Path to the scope's ``state.json`` (read-only).
-            callbacks: App-supplied async hooks for state / degraded
-                updates.
-            poll_interval_s: Override the mtime-poll cadence. Defaults to
-                ``EAWF_POLL_INTERVAL_S`` then :data:`DEFAULT_POLL_INTERVAL_S`.
+            callbacks: App-supplied async hooks for pushed frames and
+                degraded updates.
             daemon_client_factory: Test seam for the JSON-RPC client. The
                 production default uses :class:`DaemonClient`.
             subscribe_method: The verb the push stream subscribes with. The
@@ -184,10 +123,8 @@ class StateBinding:
                 console's projection seam passes the projection verb so its
                 feed rides this same socket rather than opening a second.
         """
-        self._state_path = state_path
         self._callbacks = callbacks
         self._subscribe_method = subscribe_method
-        self._poll_task: asyncio.Task[None] | None = None
         self._subscribe_task: asyncio.Task[None] | None = None
         self._probe_task: asyncio.Task[None] | None = None
         self._client_factory = daemon_client_factory or (
@@ -206,21 +143,13 @@ class StateBinding:
         # shuts it down to wake the read instead of waiting out the call timeout.
         self._subscription_sock: socket.socket | None = None
         self._daemon_failure_threshold = max(1, int(daemon_failure_threshold))
-        env_interval = os.environ.get("EAWF_POLL_INTERVAL_S")
         probe_env = os.environ.get("EAWF_DAEMON_PROBE_INTERVAL_S")
-        if poll_interval_s is not None:
-            self._poll_interval = poll_interval_s
-        elif env_interval is not None:
-            self._poll_interval = float(env_interval)
-        else:
-            self._poll_interval = DEFAULT_POLL_INTERVAL_S
         if daemon_probe_interval_s is not None:
             self._daemon_probe_interval = daemon_probe_interval_s
         elif probe_env is not None:
             self._daemon_probe_interval = float(probe_env)
         else:
             self._daemon_probe_interval = DEFAULT_DAEMON_PROBE_INTERVAL_S
-        self._last_mtime = 0.0
         # Subscription cursor + reconnect throttle: the id of the last
         # event the push stream delivered, resumed via ``since_event_id=`` on
         # every (re)subscribe so the daemon replays what the gap missed; and the
@@ -243,21 +172,7 @@ class StateBinding:
             self._reconnect_min_interval = DEFAULT_RECONNECT_MIN_INTERVAL_S
 
     async def connect(self) -> None:
-        """Load initial state, then run daemon push + an always-on poll backstop.
-
-        Push is the fast path; the mtime-poll loop is started here as a
-        backstop and stays alive even once the push stream connects, so a
-        stalled / silent push stream cannot leave the bound state stale
-        until a restart (the poll is mtime-gated, so it adds no redundant
-        refreshes while push is healthy).
-        """
-        initial = load_state(self._state_path)
-        if initial is not None:
-            await self._callbacks.on_state(initial)
-        if self._state_path is not None and self._state_path.is_file():
-            with contextlib.suppress(OSError):
-                self._last_mtime = self._state_path.stat().st_mtime
-        self._start_poll_backstop()
+        """Probe the daemon, subscribe when it answers, and keep probing."""
         await self._process_daemon_probe()
         await self._start_probe_loop()
 
@@ -307,7 +222,7 @@ class StateBinding:
         )
         if self._consecutive_failures < self._daemon_failure_threshold:
             return
-        await self._start_poll_fallback()
+        await self._set_degraded(True)
 
     async def _start_probe_loop(self) -> None:
         """Start periodic socket probes and reconnect attempts."""
@@ -325,31 +240,6 @@ class StateBinding:
                 return
             await self._process_daemon_probe()
 
-    def _start_poll_backstop(self) -> None:
-        """Start the mtime-poll loop once as an always-on backstop.
-
-        Unlike :meth:`_start_poll_fallback`, this does NOT touch the
-        degraded flag — the poll runs as a silent safety net alongside
-        the push stream so a stalled / silent push cannot strand the
-        bound state. Idempotent: a second call while the task is live is
-        a no-op.
-        """
-        if self._poll_task is None or self._poll_task.done():
-            self._poll_task = asyncio.create_task(self._poll_loop())
-
-    async def _start_poll_fallback(self) -> None:
-        """Mark degraded and ensure the mtime-poll loop is running."""
-        await self._set_degraded(True)
-        self._start_poll_backstop()
-
-    async def _stop_poll_loop(self) -> None:
-        if self._poll_task is None:
-            return
-        self._poll_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await self._poll_task
-        self._poll_task = None
-
     async def _start_subscribe_loop(self) -> None:
         """Start the daemon subscription loop, holding ONE durable subscription.
 
@@ -358,8 +248,7 @@ class StateBinding:
         :attr:`_reconnect_min_interval`: a stream the daemon repeatedly drops
         would otherwise be re-subscribed on every probe tick (~2/s), flooding
         the daemon with full re-subscribes -- the storm this throttle fixes.
-        The always-on mtime-poll backstop keeps the bound state fresh across the
-        throttled gap, and the ``since`` cursor makes each reconnect cheap.
+        The ``since`` cursor makes each reconnect cheap.
         """
         if self._subscribe_task is not None and not self._subscribe_task.done():
             return
@@ -393,7 +282,7 @@ class StateBinding:
                 f" threshold={self._daemon_failure_threshold}"
             )
             if self._consecutive_failures >= self._daemon_failure_threshold:
-                await self._start_poll_fallback()
+                await self._set_degraded(True)
         else:
             if not self._stopping:
                 self._consecutive_failures = 0
@@ -406,9 +295,7 @@ class StateBinding:
         bus filter keyed on the state URN would drop every one of them and
         the feed would never see a claim / close / spawn. The App fans each
         delivered envelope out to the panes, which filter client-side (the
-        agent-watch zoom narrows to one session); the state-refresh leg
-        re-reads ``state.json`` on any push regardless of scope, so it needs
-        no server-side narrowing either.
+        agent-watch zoom narrows to one session).
         """
         kinds = [StoreKind.EVENT.value]
         if self._subscribe_method == PROJECTION_SUBSCRIBE_METHOD:
@@ -545,13 +432,7 @@ class StateBinding:
             close_pipe(handle)
 
     async def _on_subscription_connected(self, *, resync: bool) -> None:
-        """Clear failures + degraded once push connects; keep the backstop.
-
-        The mtime-poll loop is intentionally left running as a backstop
-        (see :meth:`_start_poll_backstop`) — push is the fast path but
-        the poll guarantees eventual consistency if the stream later goes
-        silent. The poll is mtime-gated, so it adds no redundant refresh
-        while push keeps the bound state current.
+        """Clear failures + degraded once push connects, and owe a re-read if asked.
 
         Args:
             resync: Whether the stream came back unable to replay its gap, so
@@ -559,14 +440,8 @@ class StateBinding:
         """
         self._consecutive_failures = 0
         await self._set_degraded(False)
-        if not resync:
-            return
-        if self._callbacks.on_resync is not None:
+        if resync and self._callbacks.on_resync is not None:
             await self._callbacks.on_resync()
-            return
-        refreshed = load_state(self._state_path)
-        if refreshed is not None:
-            await self._callbacks.on_state(refreshed)
 
     def _handle_push_line(self, loop: asyncio.AbstractEventLoop, line: bytes) -> None:
         """Decode one push frame and schedule delivery for the feed it belongs to.
@@ -659,43 +534,9 @@ class StateBinding:
         return await asyncio.to_thread(_blocking_call)
 
     async def _handle_push(self, envelope: Envelope) -> None:
-        """Forward live event envelope and refresh bound state from disk."""
+        """Forward one live event envelope to the event callback, if one is set."""
         if self._callbacks.on_event is not None:
             await self._callbacks.on_event(envelope)
-        refreshed = load_state(self._state_path)
-        if refreshed is None:
-            return
-        if self._state_path is not None and self._state_path.is_file():
-            with contextlib.suppress(OSError):
-                self._last_mtime = self._state_path.stat().st_mtime
-        await self._callbacks.on_state(refreshed)
-
-    async def _poll_loop(self) -> None:
-        """Re-read ``state.json`` whenever its mtime advances.
-
-        Sleeps :attr:`_poll_interval` between probes so an idle terminal
-        does not busy-loop. A failed read is logged and skipped — the
-        next tick retries.
-        """
-        while True:
-            await asyncio.sleep(self._poll_interval)
-            if self._stopping:
-                return
-            if self._state_path is None or not self._state_path.is_file():
-                continue
-            try:
-                mtime = self._state_path.stat().st_mtime
-            except OSError:
-                # TOCTOU: the file vanished (or became unreadable) between the
-                # is_file() check and the stat(); skip this tick rather than
-                # letting the exception kill the poll loop.
-                continue
-            if mtime <= self._last_mtime:
-                continue
-            self._last_mtime = mtime
-            refreshed = load_state(self._state_path)
-            if refreshed is not None:
-                await self._callbacks.on_state(refreshed)
 
     def _cancel_win_pipe_read(self) -> None:
         """Cancel the streaming-pipe read on Windows via ``CancelIoEx``.
@@ -756,17 +597,10 @@ class StateBinding:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._probe_task
             self._probe_task = None
-        if self._poll_task is not None:
-            self._poll_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._poll_task
-            self._poll_task = None
 
 
 __all__ = [
-    "DEFAULT_POLL_INTERVAL_S",
     "DEFAULT_SUBSCRIBE_METHOD",
     "StateBinding",
     "StateBindingCallbacks",
-    "load_state",
 ]

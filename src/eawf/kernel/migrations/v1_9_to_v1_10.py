@@ -3,7 +3,7 @@
 The v1.10 schema delta is a **rename**, not an additive field: the
 ``Subproject`` entity is renamed to :class:`~eawf.kernel.state.models.Track`,
 the top-level ``subprojects`` key to
-:attr:`~eawf.kernel.state.models.State.tracks`, the cursor field
+:attr:`~eawf.kernel.migration.v1_state.State.tracks`, the cursor field
 ``current.subproject_id`` to
 :attr:`~eawf.kernel.state.models.CurrentPointers.track_id`, and each phase's
 ``subproject_id`` link to :attr:`~eawf.kernel.state.models.Phase.track_id`.

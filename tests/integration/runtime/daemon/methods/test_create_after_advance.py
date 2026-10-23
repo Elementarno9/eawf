@@ -24,10 +24,9 @@ from uuid import UUID
 
 import pytest
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.release import Release, ReleaseChannel, ReleaseStatus
 from eawf.kernel.spec.release_config import load_release_config
-from eawf.kernel.state.io import write_state_unlocked
-from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import create, show
 from eawf.runtime.daemon.methods.release_receipts import advance
@@ -53,6 +52,7 @@ from eawf.workflow.verify.checkpoint_succession import (
     SuccessionDenialCode,
     assert_predecessor_terminal,
 )
+from tests._epoch2_helpers import lay_contract_tree
 from tests._release_helpers import (
     accepted_canary_export,
     dev1_adoption,
@@ -131,9 +131,7 @@ def context(
     The checkout also carries a canary export accepting the dev3 bundle,
     so a dev3 open is decided on succession rather than on membership.
     """
-    state_path = tmp_path / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    write_state_unlocked(state_path, state.model_dump(mode="json"))
+    state_path = lay_contract_tree(tmp_path, state.artifacts.values(), project_code=SCOPE)
     stage_canary_export(tmp_path, accepted_canary_export())
     for record in records:
         record_release(state_path, record, recorded_at=datetime.now(UTC), summary="seed")

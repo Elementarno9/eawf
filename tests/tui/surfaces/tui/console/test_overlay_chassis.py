@@ -90,7 +90,7 @@ def _held_seam(route: str) -> ProjectionSeam:
         scope_id=SCOPE,
         generated_at=AT,
     )
-    seam = ProjectionSeam(route=route, scope_id=SCOPE, state_path=None, clock=lambda: AT)
+    seam = ProjectionSeam(route=route, scope_id=SCOPE, clock=lambda: AT)
     seam._projection = projection
     return seam
 

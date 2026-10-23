@@ -52,6 +52,7 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.publication import PublicationOperation, PublicationOperationStatus
 from eawf.kernel.spec.release import (
     Release,
@@ -60,8 +61,6 @@ from eawf.kernel.spec.release import (
     ReleaseTrain,
 )
 from eawf.kernel.spec.release_config import ReleaseConfig
-from eawf.kernel.state.io import write_state_unlocked
-from eawf.kernel.state.models import State
 from eawf.platform.artifacts.validation import (
     REQUIRED_CHASSIS_HEADINGS,
     validate_markdown_artifact,
@@ -111,7 +110,7 @@ from eawf.workflow.release.settlement import observe_target
 from eawf.workflow.release.target_machine import advance_target_attempt
 from eawf.workflow.release.train import V07_TRAIN
 from eawf.workflow.verify.release_readiness import ReleaseReadiness, compute_readiness
-from tests._epoch2_helpers import lay_epoch2_tree
+from tests._epoch2_helpers import lay_contract_tree, lay_epoch2_tree
 from tests._release_helpers import (
     MANIFEST_DIGEST,
     NOW,
@@ -333,10 +332,7 @@ def walk_to_recovery() -> tuple[list[ReleaseStatus], Release, PublicationOperati
 @pytest.fixture
 def state_path(tmp_path: Path) -> Path:
     """Return a throwaway state root the burn may record into."""
-    path = tmp_path / ".ea" / "state.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    write_state_unlocked(path, load_state(_EMPTY_STATE).model_dump(mode="json"))
-    return path
+    return lay_contract_tree(tmp_path, (), project_code="QR")
 
 
 @pytest.fixture
@@ -863,7 +859,7 @@ def test_train_advance_refuses_the_burned_rung_as_not_terminal(
     assert ReleaseStatus.PARTIALLY_RELEASED not in ADVANCING_STATUSES
 
 
-def test_train_create_admits_dev2_against_the_promoted_state_json(tmp_path: Path) -> None:
+def test_train_create_admits_dev2_against_the_promoted_generation(tmp_path: Path) -> None:
     """dev2 opens once its measured contract resolves and dev1 is burned.
 
     Both preconditions are staged because both are real: the rung below
@@ -872,9 +868,9 @@ def test_train_create_admits_dev2_against_the_promoted_state_json(tmp_path: Path
     """
     from eawf.runtime.daemon.methods.release import create
 
-    state_path = tmp_path / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    write_state_unlocked(state_path, state_with_dev2_contracts().model_dump(mode="json"))
+    state_path = lay_contract_tree(
+        tmp_path, state_with_dev2_contracts().artifacts.values(), project_code=SCOPE
+    )
     dev2_ctx = MethodContext(
         started_at="2026-09-11T00:00:00+00:00",
         pid=7712,

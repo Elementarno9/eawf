@@ -863,20 +863,11 @@ def profile_enable(
         emit_error(UserError(str(exc), kind="InvalidInput"), flags=flags)
         return  # pragma: no cover
 
-    from eawf.kernel.state.io import epoch_marker_present
-
-    state_path = repo / ".ea" / "state.json"
-    # An epoch-2 tree keeps its epoch-1 document frozen, so the required
-    # keys are reported rather than materialised into it.
-    frozen = epoch_marker_present(state_path.parent)
-    state_arg = state_path if state_path.exists() and not frozen else None
-
     try:
         result = enable_profile(
             profile_id,
             layer=scope,
             layer_file_path=target_path,
-            state_path=state_arg,
             repo=repo,
             workspace=workspace,
         )
@@ -905,7 +896,7 @@ def profile_enable(
     text = (
         f"profile enable: {result['profile']} (layer: {result['layer']}, "
         f"already_enabled: {result['already_enabled']}, "
-        f"state_keys: {result['state_keys_materialised']})"
+        f"state_keys: {result['state_keys_required']})"
     )
     emit_json_or_text(result, text, flags=flags)
 

@@ -36,14 +36,11 @@ if TYPE_CHECKING:
 
 
 def _binding() -> StateBinding:
-    async def _noop_state(_s: object) -> None:
-        return None
-
     async def _noop_degraded(_d: bool) -> None:
         return None
 
-    callbacks = StateBindingCallbacks(on_state=_noop_state, on_degraded=_noop_degraded)
-    return StateBinding(None, callbacks)
+    callbacks = StateBindingCallbacks(on_degraded=_noop_degraded)
+    return StateBinding(callbacks)
 
 
 def _event_push_frame(event_id: str) -> bytes:
@@ -230,16 +227,11 @@ class _BlockingClient:
 def _blocking_binding(client: _BlockingClient) -> tuple[StateBinding, threading.Event]:
     """Bind ``client`` and report when the subscription thread has returned."""
 
-    async def _noop_state(_s: object) -> None:
-        return None
-
     async def _noop_degraded(_d: bool) -> None:
         return None
 
-    callbacks = StateBindingCallbacks(on_state=_noop_state, on_degraded=_noop_degraded)
-    binding = StateBinding(
-        None, callbacks, daemon_client_factory=lambda: cast("DaemonClient", client)
-    )
+    callbacks = StateBindingCallbacks(on_degraded=_noop_degraded)
+    binding = StateBinding(callbacks, daemon_client_factory=lambda: cast("DaemonClient", client))
     exited = threading.Event()
     run = binding._run_subscription
 

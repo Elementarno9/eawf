@@ -159,7 +159,6 @@ def _lose_then_reconnect(canary: CanaryProvision, ctx: MethodContext) -> _Reconn
         seam = ProjectionSeam(
             route=ROUTE,
             scope_id="EAWF",
-            state_path=None,
             repo_root=canary.root,
             daemon_client_factory=lambda: _InProcessClient(ctx, harness),
             operator=Operator(principal=ACTOR),

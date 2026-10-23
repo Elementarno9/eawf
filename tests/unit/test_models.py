@@ -160,45 +160,6 @@ def test_phase_rejects_bad_id() -> None:
         )
 
 
-def test_state_root_with_no_optional_keys() -> None:
-    state = models.State.model_validate(
-        {
-            "schema_version": "1.0",
-            "scope_kind": "repo",
-            "urn": "urn:eawf:v1:state:QR",
-            "updated_at": "2026-05-08T00:00:00Z",
-            "project": {
-                "code": "QR",
-                "slug": "quant-research",
-                "title": "Quant Research",
-                "description": "",
-                "domains": ["quant"],
-                "default_branch": "main",
-                "status": "active",
-                "repo_urn": "urn:eawf:v1:repo:QR",
-            },
-            "current": {
-                "project_code": "QR",
-                "track_id": None,
-                "phase_id": None,
-                "iter_id": None,
-                "active_wave_ids": [],
-                "active_session_ids": [],
-            },
-            "workspace": None,
-            "phases": {},
-            "iters": {},
-            "waves": {},
-            "artifacts": {},
-            "agent_sessions": {},
-            "plugins": {},
-            "indexes": {},
-        }
-    )
-    assert state.scope_kind == "repo"
-    assert state.tracks is None or state.tracks == {}
-
-
 def test_wave_deps_validation() -> None:
     now = datetime.now(UTC)
     wave = models.Wave(
@@ -375,35 +336,6 @@ def test_worktree_record_missing_base_branch_raises() -> None:
             owner_session_id=None,
             created_at=now,
             merged_commit=None,
-        )
-
-
-def test_state_schema_version_literal() -> None:
-    with pytest.raises(ValidationError):
-        models.State.model_validate(
-            {
-                "schema_version": "2.0",
-                "scope_kind": "repo",
-                "urn": "urn:eawf:v1:state:QR",
-                "updated_at": "2026-05-08T00:00:00Z",
-                "project": None,
-                "current": {
-                    "project_code": "QR",
-                    "track_id": None,
-                    "phase_id": None,
-                    "iter_id": None,
-                    "active_wave_ids": [],
-                    "active_session_ids": [],
-                },
-                "workspace": None,
-                "phases": {},
-                "iters": {},
-                "waves": {},
-                "artifacts": {},
-                "agent_sessions": {},
-                "plugins": {},
-                "indexes": {},
-            }
         )
 
 
@@ -647,35 +579,6 @@ def test_phase_track_id_optional() -> None:
     assert phase.track_id is None
 
 
-def test_decisions_default_factory_dict() -> None:
-    state = models.State.model_validate(
-        {
-            "schema_version": "1.0",
-            "scope_kind": "repo",
-            "urn": "urn:eawf:v1:state:QR",
-            "updated_at": "2026-05-08T00:00:00Z",
-            "project": None,
-            "current": {
-                "project_code": "QR",
-                "track_id": None,
-                "phase_id": None,
-                "iter_id": None,
-                "active_wave_ids": [],
-                "active_session_ids": [],
-            },
-            "workspace": None,
-            "phases": {},
-            "iters": {},
-            "waves": {},
-            "artifacts": {},
-            "agent_sessions": {},
-            "plugins": {},
-            "indexes": {},
-        }
-    )
-    assert state.decisions == {}
-
-
 def test_plugin_install_owner_required() -> None:
     now = datetime.now(UTC)
     with pytest.raises(ValidationError):
@@ -807,56 +710,6 @@ def test_id_str_accepts_minimum_token() -> None:
         closed_at=None,
     )
     assert goal.id == "x"
-
-
-def _minimal_state_payload(updated_at: str) -> dict[str, object]:
-    return {
-        "schema_version": "1.0",
-        "scope_kind": "repo",
-        "urn": "urn:eawf:v1:state:QR",
-        "updated_at": updated_at,
-        "project": {
-            "code": "QR",
-            "slug": "quant-research",
-            "title": "Quant Research",
-            "description": "",
-            "domains": ["quant"],
-            "default_branch": "main",
-            "status": "active",
-            "repo_urn": "urn:eawf:v1:repo:QR",
-        },
-        "current": {
-            "project_code": "QR",
-            "track_id": None,
-            "phase_id": None,
-            "iter_id": None,
-            "active_wave_ids": [],
-            "active_session_ids": [],
-        },
-        "workspace": None,
-        "phases": {},
-        "iters": {},
-        "waves": {},
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {},
-    }
-
-
-def test_naive_datetime_rejected_in_state_root() -> None:
-    payload = _minimal_state_payload("2026-05-08T00:00:00")  # no tz
-    with pytest.raises(ValidationError) as excinfo:
-        models.State.model_validate(payload)
-    assert "timezone-aware" in str(excinfo.value)
-
-
-def test_offset_datetime_normalised_to_utc() -> None:
-    payload = _minimal_state_payload("2026-01-01T00:00:00+05:00")
-    state = models.State.model_validate(payload)
-    assert state.updated_at.tzinfo is UTC
-    expected = datetime(2025, 12, 31, 19, 0, 0, tzinfo=UTC)
-    assert state.updated_at == expected
 
 
 # ---- Bounded title + description ------------------------------

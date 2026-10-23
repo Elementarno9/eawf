@@ -48,7 +48,7 @@ from eawf.observability.doctor.repair import (
 )
 from eawf.platform.lint.ledger_history import UnreachableSha, scan_ledger_history
 from eawf.runtime.daemon import methods
-from eawf.runtime.vcs.wave_sha import commit_identity_digest
+from eawf.runtime.vcs.diff_base import commit_identity_digest
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import method_context

@@ -2,9 +2,9 @@
 
 A repository that tracks legacy-codepage text (cp1251 sources, say) makes
 ``git show`` emit bytes that are not valid UTF-8. The git probes in
-:mod:`eawf.runtime.vcs.wave_sha` must decode them leniently instead of
+:mod:`eawf.runtime.vcs.diff_base` must decode them leniently instead of
 losing stdout to a reader-thread ``UnicodeDecodeError`` and crashing
-``eawf status`` / ``eawf doctor`` on the drift scan.
+``eawf doctor`` on a commit-identity repair.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.runtime.vcs.wave_sha import commit_identity_digest
+from eawf.runtime.vcs.diff_base import commit_identity_digest
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
 

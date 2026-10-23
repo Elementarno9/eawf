@@ -70,9 +70,7 @@ class _Clipped(ConsoleApp):
 
 def _linked(route: str, *, subject: str | None = None, sel: str | None = None) -> ConsoleApp:
     """Return a console linked to a seam holding ``route``'s projection over the probe tree."""
-    seam = ProjectionSeam(
-        route=route, scope_id=ROOT_ID, state_path=None, clock=lambda: AT, scope_name="eawf"
-    )
+    seam = ProjectionSeam(route=route, scope_id=ROOT_ID, clock=lambda: AT, scope_name="eawf")
     seam._projection = build_route_projection(
         route=route, document=nrf.DOCUMENT, cursor=nrf.CURSOR, scope_id=ROOT_ID, generated_at=AT
     )

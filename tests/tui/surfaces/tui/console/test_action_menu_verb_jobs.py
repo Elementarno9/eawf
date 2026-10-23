@@ -79,7 +79,6 @@ def _linked(route: str, *, subject: str | None = None, sel: str | None = None) -
     seam = ProjectionSeam(
         route=route,
         scope_id=ROOT_ID,
-        state_path=None,
         clock=lambda: AT,
         scope_name="eawf",
         operator=OPERATOR,

@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import (
     BacklogPriority,
     BacklogStatus,
@@ -30,14 +31,7 @@ from eawf.kernel.state.enums import (
     PhaseStatus,
     WaveStatus,
 )
-from eawf.kernel.state.models import (
-    BacklogItem,
-    Decision,
-    Iter,
-    Phase,
-    State,
-    Wave,
-)
+from eawf.kernel.state.models import BacklogItem, Decision, Iter, Phase, Wave
 from eawf.workflow.evidence import _io
 
 FIXTURE = (

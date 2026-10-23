@@ -9,7 +9,7 @@ never hand-authored, so a doc/source drift cannot survive a build:
 - ``skills.md`` — the Eä skill catalog, read from
   :func:`eawf.workflow.skills.catalog.shipped_skill_specs`.
 - ``schema.md`` — the JSON Schema of the canonical Pydantic models
-  (:class:`~eawf.kernel.state.models.State`, the event envelope, and the output
+  (:class:`~eawf.kernel.migration.v1_state.State`, the event envelope, and the output
   envelope), with each schema also dumped to a sibling ``.schema.json``
   file by :func:`dump_schemas`.
 - ``enums.md`` — the state enum catalog from
@@ -43,8 +43,8 @@ from typing import TYPE_CHECKING, Any
 import orjson
 from pydantic import BaseModel
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state import enums as state_enums
-from eawf.kernel.state.models import State
 from eawf.kernel.store.kinds.event import Event
 from eawf.surfaces.cli import error_codes as error_codes_mod
 from eawf.surfaces.cli import exit_codes as exit_codes_mod

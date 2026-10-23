@@ -1,241 +1,150 @@
-"""Empty-data contract for the estimate-vs-actual variance metrics.
+"""Empty-data and error contract for the ledger roll-up behind ``eawf metrics``.
 
-Wave claim no longer seeds a derived estimate row from the effort bucket,
-so ``state.estimates`` is legitimately ``None`` (key absent) or ``{}``
-(key present, no rows) on a healthy repo. Both variance roll-ups must
-return their declared empty-data shape in that case rather than raising
-or fabricating a ``0%`` reading:
-
-- :func:`compute_estimate_actual_variance` -> zero counts and
-  ``variance_pct is None`` (the "no data" branch the ship-gate and the
-  VarianceTile render).
-- :func:`compute_eu_variance` -> an all-zero :class:`EuVarianceMetric`.
-
-Boundary coverage runs empty -> single -> two samples; the error paths
-cover a CLOSED wave with an actual but no estimate (must not contribute)
-and a malformed estimate row (must not validate).
+:func:`compute_ledger_metrics` reads a generation's estimate and actual
+ledgers. A born tree holds neither, so the roll-up must return its declared
+empty shape -- zero counts and ``variance_pct is None`` -- rather than
+raising or fabricating a ``0%`` reading. Boundary coverage runs empty ->
+single -> two subjects; the error paths cover a subject with an actual but no
+estimate, an excluded actual, a mapping revision filed on the estimate ledger
+and a line that does not read as its kind.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
-from eawf.kernel.state.enums import (
-    ActualStatus,
-    Confidence,
-    ScopeKind,
-    WaveStatus,
-)
-from eawf.kernel.state.models import (
-    ActualSummary,
-    EstimateSummary,
-    State,
-    Wave,
-)
+from eawf.kernel.state.enums import ActualStatus, Confidence
+from eawf.kernel.state.models import ActualSummary, EstimateSummary
+from eawf.kernel.store.ledger import LedgerRecord
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.workflow.estimation.metrics import (
+    METRICS_SCHEMA_VERSION,
     EstimateActualVarianceMetric,
-    EuVarianceMetric,
-    compute_estimate_actual_variance,
-    compute_eu_variance,
+    LedgerMetrics,
+    compute_ledger_metrics,
 )
 
 _T0 = datetime(2026, 5, 1, tzinfo=UTC)
 
 
-def _empty_state() -> State:
-    """Return a minimal valid State with no waves, estimates, or actuals."""
-    return State.model_validate(
-        {
-            "schema_version": "1.0",
-            "scope_kind": ScopeKind.REPO.value,
-            "urn": "urn:eawf:v1:state:QR",
-            "updated_at": _T0.isoformat(),
-            "project": {
-                "code": "QR",
-                "slug": "qr",
-                "title": "QR",
-                "domains": ["x"],
-                "default_branch": "main",
-                "status": "active",
-                "repo_urn": "urn:eawf:v1:repo:QR",
-            },
-            "current": {"project_code": "QR"},
-            "workspace": None,
-            "phases": {},
-            "iters": {},
-            "waves": {},
-            "artifacts": {},
-            "agent_sessions": {},
-            "plugins": {},
-            "indexes": {},
-        }
+def _line(
+    collection: Epoch2Collection, key: str, payload: dict[str, Any], **kw: Any
+) -> LedgerRecord:
+    return LedgerRecord(
+        collection=collection,
+        record_key=key,
+        status=kw.get("status", "imported"),
+        recorded_at=_T0,
+        supersedes=None,
+        payload=payload,
     )
 
 
-def _closed_wave(*, wave_id: str) -> Wave:
-    return Wave(
-        id=wave_id,
-        iter_id="-".join(wave_id.split("-")[:2]),
-        title=f"wave {wave_id}",
-        status=WaveStatus.CLOSED,
-        deps=[],
-        blocks=[],
-        file_scopes=[],
-        success_criteria=[],
-        effort_bucket=None,
-        opened_at=_T0,
-        closed_at=_T0 + timedelta(minutes=30),
-    )
-
-
-def _estimate(*, wave_id: str, expected_eu: float, pessimistic_eu: float) -> EstimateSummary:
-    return EstimateSummary(
-        id=f"EST-{wave_id}",
-        scope_id=wave_id,
+def _estimate(key: str, expected_eu: float, *, revision: int | None = None) -> LedgerRecord:
+    row = EstimateSummary(
+        id=f"EST-{key}",
+        scope_id=key,
         expected_eu=expected_eu,
-        pessimistic_eu=pessimistic_eu,
-        expected_minutes=expected_eu * 30.0,
-        pessimistic_minutes=pessimistic_eu * 30.0,
+        pessimistic_eu=expected_eu * 2,
+        expected_minutes=expected_eu * 30,
+        pessimistic_minutes=expected_eu * 60,
         display=f"{expected_eu} EU",
-        reference_class="operator",
+        current_store_record_id=f"EST-{key}-1",
         confidence=Confidence.MEDIUM,
-        current_store_record_id=f"REC-{wave_id}",
+        reference_class="bucket:M",
+        mapping_revision=revision,
         updated_at=_T0,
     )
+    return _line(Epoch2Collection.ESTIMATE, key, {"payload": row.model_dump(mode="json")})
 
 
-def _actual(*, wave_id: str, elapsed_eu: float) -> ActualSummary:
-    return ActualSummary(
-        id=f"ACT-{wave_id}",
-        scope_id=wave_id,
-        status=ActualStatus.DONE,
+def _actual(key: str, elapsed_eu: float, *, excluded: bool = False) -> LedgerRecord:
+    row = ActualSummary(
+        id=f"ACT-{key}",
+        scope_id=key,
         elapsed_eu=elapsed_eu,
-        current_store_record_id=f"REC-{wave_id}",
+        status=ActualStatus.DONE,
+        calibration_excluded=excluded,
+        current_store_record_id=f"ACT-{key}-1",
         updated_at=_T0,
     )
+    return _line(Epoch2Collection.ACTUAL, key, {"payload": row.model_dump(mode="json")})
 
 
-# ---- compute_estimate_actual_variance ---------------------------------------
-
-
-@pytest.mark.parametrize("estimates", [None, {}])
-def test_compute_estimate_actual_variance_empty_map_returns_no_data(
-    estimates: dict[str, EstimateSummary] | None,
-) -> None:
-    """Boundary: a ``None`` or empty estimate map yields the no-data shape."""
-    state = _empty_state()
-    state.estimates = estimates
-
-    result = compute_estimate_actual_variance(state)
-
-    assert result == EstimateActualVarianceMetric(
-        sample_count=0,
-        planned_eu=0.0,
-        actual_eu=0.0,
-        variance_pct=None,
+def test_empty_ledgers_report_no_data() -> None:
+    metrics = compute_ledger_metrics([], [])
+    assert metrics == LedgerMetrics(
+        estimate_count=0,
+        actual_count=0,
+        unreadable_count=0,
+        variance=EstimateActualVarianceMetric(
+            sample_count=0, planned_eu=0.0, actual_eu=0.0, variance_pct=None
+        ),
     )
+    assert metrics.schema_version == METRICS_SCHEMA_VERSION
 
 
-def test_compute_estimate_actual_variance_closed_wave_without_estimate_is_no_data() -> None:
-    """Error path: a CLOSED wave with an actual but no estimate contributes nothing.
-
-    This is the post-seeding steady state -- actuals are recorded at close,
-    estimates only when an operator authors one -- so the metric must report
-    "no data" rather than dividing by a zero planned-EU denominator.
-    """
-    state = _empty_state()
-    wave = _closed_wave(wave_id="P01-I01-W01")
-    state.waves[wave.id] = wave
-    state.actuals = {wave.id: _actual(wave_id=wave.id, elapsed_eu=2.0)}
-    state.estimates = {}
-
-    result = compute_estimate_actual_variance(state)
-
-    assert result.sample_count == 0
-    assert result.planned_eu == pytest.approx(0.0)
-    assert result.variance_pct is None
+def test_a_single_subject_reports_its_variance() -> None:
+    metrics = compute_ledger_metrics([_estimate("T1", 2.0, revision=3)], [_actual("T1", 3.0)])
+    assert (metrics.estimate_count, metrics.actual_count) == (1, 1)
+    assert metrics.variance.sample_count == 1
+    assert metrics.variance.variance_pct == pytest.approx(50.0)
+    assert metrics.variance.mapping_revisions == ["3"]
 
 
-def test_compute_estimate_actual_variance_single_estimated_wave_reports_pct() -> None:
-    """Boundary: exactly one estimated + closed wave yields a real percentage."""
-    state = _empty_state()
-    wave = _closed_wave(wave_id="P01-I01-W01")
-    state.waves[wave.id] = wave
-    state.estimates = {wave.id: _estimate(wave_id=wave.id, expected_eu=2.0, pessimistic_eu=4.0)}
-    state.actuals = {wave.id: _actual(wave_id=wave.id, elapsed_eu=3.0)}
-
-    result = compute_estimate_actual_variance(state)
-
-    assert result.sample_count == 1
-    assert result.planned_eu == pytest.approx(2.0)
-    assert result.actual_eu == pytest.approx(3.0)
-    assert result.variance_pct == pytest.approx(50.0)
-
-
-# ---- compute_eu_variance ----------------------------------------------------
-
-
-@pytest.mark.parametrize("estimates", [None, {}])
-def test_compute_eu_variance_empty_map_returns_zero_sample(
-    estimates: dict[str, EstimateSummary] | None,
-) -> None:
-    """Boundary: a ``None`` or empty estimate map yields the zero-sample shape."""
-    state = _empty_state()
-    state.estimates = estimates
-
-    result = compute_eu_variance(state)
-
-    assert result == EuVarianceMetric(
-        sample_count=0,
-        mean_delta_eu=0.0,
-        stdev_delta_eu=0.0,
-        inside_pessimistic_share=0.0,
+def test_two_subjects_aggregate_and_label_an_unrecorded_revision() -> None:
+    metrics = compute_ledger_metrics(
+        [_estimate("T1", 1.0), _estimate("T2", 3.0, revision=2)],
+        [_actual("T1", 1.0), _actual("T2", 1.0)],
     )
+    assert metrics.variance.sample_count == 2
+    assert metrics.variance.planned_eu == pytest.approx(4.0)
+    assert metrics.variance.actual_eu == pytest.approx(2.0)
+    assert metrics.variance.variance_pct == pytest.approx(-50.0)
+    assert metrics.variance.mapping_revisions == ["2", "unrecorded"]
 
 
-def test_compute_eu_variance_closed_wave_without_estimate_is_zero_sample() -> None:
-    """Error path: an actual without a matching estimate never contributes."""
-    state = _empty_state()
-    wave = _closed_wave(wave_id="P01-I01-W01")
-    state.waves[wave.id] = wave
-    state.actuals = {wave.id: _actual(wave_id=wave.id, elapsed_eu=1.0)}
-    state.estimates = {}
-
-    result = compute_eu_variance(state)
-
-    assert result.sample_count == 0
-    assert result.mean_delta_eu == pytest.approx(0.0)
-    assert result.inside_pessimistic_share == pytest.approx(0.0)
+def test_an_actual_without_an_estimate_or_an_excluded_actual_does_not_contribute() -> None:
+    metrics = compute_ledger_metrics(
+        [_estimate("T1", 1.0)], [_actual("T1", 9.0, excluded=True), _actual("T2", 1.0)]
+    )
+    assert (metrics.estimate_count, metrics.actual_count) == (1, 2)
+    assert metrics.variance.sample_count == 0
+    assert metrics.variance.variance_pct is None
 
 
-def test_compute_eu_variance_single_estimated_wave_counts_one_sample() -> None:
-    """Boundary: one estimated + closed wave inside the pessimistic band."""
-    state = _empty_state()
-    wave = _closed_wave(wave_id="P01-I01-W01")
-    state.waves[wave.id] = wave
-    state.estimates = {wave.id: _estimate(wave_id=wave.id, expected_eu=1.0, pessimistic_eu=2.0)}
-    state.actuals = {wave.id: _actual(wave_id=wave.id, elapsed_eu=1.5)}
-
-    result = compute_eu_variance(state)
-
-    assert result.sample_count == 1
-    assert result.mean_delta_eu == pytest.approx(0.5)
-    assert result.inside_pessimistic_share == pytest.approx(1.0)
-
-
-# ---- the map itself ---------------------------------------------------------
+def test_a_native_line_reads_without_an_import_envelope() -> None:
+    native = ActualSummary(
+        id="ACT-T1",
+        scope_id="T1",
+        elapsed_eu=2.0,
+        status=ActualStatus.DONE,
+        current_store_record_id="ACT-T1-1",
+        updated_at=_T0,
+    )
+    line = _line(Epoch2Collection.ACTUAL, "T1", native.model_dump(mode="json"), status="recorded")
+    metrics = compute_ledger_metrics([_estimate("T1", 1.0)], [line])
+    assert metrics.variance.variance_pct == pytest.approx(100.0)
 
 
-def test_estimates_map_rejects_row_missing_required_field() -> None:
-    """Error path: a partial estimate row fails strict validation, not the metric."""
-    state = _empty_state()
+def test_a_mapping_revision_is_no_estimate_and_a_bad_line_is_unreadable() -> None:
+    mapping = _line(Epoch2Collection.ESTIMATE, "mapping-1", {"mapping": {}}, status="applied")
+    garbage = _line(Epoch2Collection.ACTUAL, "T9", {"payload": {"elapsed_eu": "lots"}})
+    metrics = compute_ledger_metrics([mapping], [garbage])
+    assert (metrics.estimate_count, metrics.actual_count, metrics.unreadable_count) == (0, 0, 1)
+
+
+def test_ledger_metrics_refuses_a_negative_count() -> None:
     with pytest.raises(ValidationError):
-        State.model_validate(
-            {
-                **state.model_dump(mode="json"),
-                "estimates": {"P01-I01-W01": {"id": "EST-P01-I01-W01"}},
-            }
+        LedgerMetrics(
+            estimate_count=-1,
+            actual_count=0,
+            unreadable_count=0,
+            variance=EstimateActualVarianceMetric(
+                sample_count=0, planned_eu=0.0, actual_eu=0.0, variance_pct=None
+            ),
         )

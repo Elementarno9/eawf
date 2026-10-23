@@ -22,7 +22,6 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.state.models import State
 from eawf.kernel.state.resolve import (
     GATE_LIVE_STATE_ENV,
     GATE_SANDBOX_STATE_ENV,
@@ -31,10 +30,10 @@ from eawf.kernel.state.resolve import (
 from eawf.runtime.daemon import gate_execution
 from eawf.runtime.sandbox.env_scrub import GATE_RUNTIME_LANE, build_child_env, resolve_binary_dir
 from eawf.workflow.audit_dsl.models import CheckSpec
+from tests._epoch2_helpers import lay_epoch2_tree
 
 pytestmark = pytest.mark.integration
 
-_T0 = "2026-09-28T00:00:00+00:00"
 
 #: A suite that drives the CLI against a workspace it builds itself: the shape
 #: of every CLI test that failed under the harness while ``EA_STATE`` was
@@ -134,41 +133,10 @@ def test_reach_for_the_live_ledger(monkeypatch: pytest.MonkeyPatch) -> None:
 """
 
 
-def _state_payload() -> dict[str, Any]:
-    """Return a minimal valid state with dispatch running."""
-    return {
-        "schema_version": "1.0",
-        "scope_kind": "repo",
-        "urn": "urn:eawf:v1:state:ABC",
-        "updated_at": _T0,
-        "project": {
-            "code": "ABC",
-            "slug": "abc",
-            "title": "ABC",
-            "domains": ["x"],
-            "default_branch": "main",
-            "status": "active",
-            "repo_urn": "urn:eawf:v1:repo:ABC",
-        },
-        "current": {"project_code": "ABC"},
-        "workspace": None,
-        "phases": {},
-        "iters": {},
-        "waves": {},
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {},
-        "dispatch_paused": False,
-    }
-
-
 def _write_live_repo(root: Path) -> Path:
     """Build a fixture live repository under *root* and return its ledger."""
-    state_path = root / "live" / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True)
-    state_path.write_text(State.model_validate(_state_payload()).model_dump_json(), "utf-8")
-    (state_path.parent / "store").mkdir()
+    state_path = lay_epoch2_tree(root / "live", project_code="ABC")
+    (state_path.parent / "store").mkdir(exist_ok=True)
     (state_path.parent / "store" / "event.jsonl").write_text('{"id": "EV-LIVE"}\n', "utf-8")
     return state_path
 

@@ -1,100 +1,38 @@
-"""Unit tests for the M26 estimate-actual variance.
+"""CLI tests for ``eawf metrics variance`` and ``eawf metrics refit``.
 
-Covers :func:`eawf.workflow.estimation.metrics.compute_estimate_actual_variance`,
-the C09 §5.9.6 M26 ``eawf_estimate_actual_variance_pct`` gauge.
-
-Plus CLI dispatch smoke for ``eawf metrics variance``. Per AGENTS test
-discipline: boundary (empty / single / off-by-one) AND error-path coverage;
-float aggregates via :func:`pytest.approx`.
+The variance gauge reads the selected generation's estimate and actual
+ledgers (its roll-up arithmetic is pinned in
+``tests/unit/workflow/estimation/test_metrics_empty_estimates.py``); the
+re-fit forwards to the daemon. Float aggregates via :func:`pytest.approx`.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 from typer.testing import CliRunner
 
 import eawf.kernel.config.layered as layered
-from eawf.kernel.state.enums import ActualStatus, Confidence, EffortBucket, WaveStatus
-from eawf.kernel.state.models import ActualSummary, EstimateSummary, State, Wave
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.state.enums import ActualStatus, Confidence
+from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.state.models import ActualSummary, EstimateSummary
+from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import domain
 from eawf.surfaces.cli.commands.metrics import _render_variance
-from eawf.workflow.estimation.metrics import (
-    EstimateActualVarianceMetric,
-    compute_estimate_actual_variance,
-    compute_weekly_burn,
-)
+from tests._epoch2_helpers import lay_epoch2_tree
 
 runner = CliRunner()
 
 _T0 = datetime(2026, 5, 1, tzinfo=UTC)
-
-
-def _empty_state() -> State:
-    """Return a minimal but valid State with no waves/estimates/actuals."""
-    payload = {
-        "schema_version": "1.0",
-        "scope_kind": "repo",
-        "urn": "urn:eawf:v1:state:QR",
-        "updated_at": "2026-05-08T00:00:00Z",
-        "project": {
-            "code": "QR",
-            "slug": "quant",
-            "title": "Quant",
-            "domains": ["quant"],
-            "default_branch": "main",
-            "status": "active",
-            "repo_urn": "urn:eawf:v1:repo:QR",
-        },
-        "current": {
-            "project_code": "QR",
-            "track_id": None,
-            "phase_id": None,
-            "iter_id": None,
-            "active_wave_ids": [],
-            "active_session_ids": [],
-        },
-        "workspace": None,
-        "phases": {},
-        "iters": {},
-        "waves": {},
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {},
-    }
-    return State.model_validate(payload)
-
-
-def _wave(
-    *,
-    wave_id: str,
-    status: WaveStatus = WaveStatus.CLOSED,
-    effort_bucket: EffortBucket | None = None,
-) -> Wave:
-    """Return a CLOSED ``Wave`` carrying the fields the calibration relies on."""
-    iter_id = "-".join(wave_id.split("-")[:2])
-    closed = _T0 + timedelta(minutes=30) if status == WaveStatus.CLOSED else None
-    return Wave(
-        id=wave_id,
-        iter_id=iter_id,
-        title=f"wave {wave_id}",
-        status=status,
-        deps=[],
-        blocks=[],
-        file_scopes=[],
-        success_criteria=[],
-        effort_bucket=effort_bucket,
-        opened_at=_T0,
-        closed_at=closed,
-    )
 
 
 def _estimate(*, wave_id: str, expected_eu: float) -> EstimateSummary:
@@ -131,136 +69,7 @@ def _actual(
     )
 
 
-# ---- compute_estimate_actual_variance (M26) --------------------------------
-
-
-def test_compute_estimate_actual_variance_empty_state_is_none() -> None:
-    """Boundary: no contributing wave yields a None variance gauge."""
-    result = compute_estimate_actual_variance(_empty_state())
-    assert result == EstimateActualVarianceMetric(
-        sample_count=0,
-        planned_eu=0.0,
-        actual_eu=0.0,
-        variance_pct=None,
-    )
-
-
-def test_compute_estimate_actual_variance_single_over_run_positive() -> None:
-    """One CLOSED wave that ran 50 % over the estimate yields +50 %."""
-    state = _empty_state()
-    wave = _wave(wave_id="P01-I01-W01")
-    state.waves[wave.id] = wave
-    state.estimates = {wave.id: _estimate(wave_id=wave.id, expected_eu=1.0)}
-    state.actuals = {wave.id: _actual(wave_id=wave.id, elapsed_eu=1.5)}
-
-    result = compute_estimate_actual_variance(state)
-    assert result.sample_count == 1
-    assert result.planned_eu == pytest.approx(1.0)
-    assert result.actual_eu == pytest.approx(1.5)
-    assert result.variance_pct == pytest.approx(50.0)
-
-
-def test_compute_estimate_actual_variance_under_run_negative() -> None:
-    """A wave that finished under the estimate yields a negative variance."""
-    state = _empty_state()
-    wave = _wave(wave_id="P01-I01-W01")
-    state.waves[wave.id] = wave
-    state.estimates = {wave.id: _estimate(wave_id=wave.id, expected_eu=2.0)}
-    state.actuals = {wave.id: _actual(wave_id=wave.id, elapsed_eu=1.0)}
-
-    result = compute_estimate_actual_variance(state)
-    assert result.variance_pct == pytest.approx(-50.0)
-
-
-def test_compute_estimate_actual_variance_aggregates_over_waves() -> None:
-    """Variance aggregates summed actual vs summed planned over the waves."""
-    state = _empty_state()
-    waves = {
-        "P01-I01-W01": (1.0, 1.0),  # on estimate
-        "P01-I01-W02": (1.0, 3.0),  # 2 EU over
-    }
-    estimates: dict[str, EstimateSummary] = {}
-    actuals: dict[str, ActualSummary] = {}
-    for wid, (planned, actual) in waves.items():
-        state.waves[wid] = _wave(wave_id=wid)
-        estimates[wid] = _estimate(wave_id=wid, expected_eu=planned)
-        actuals[wid] = _actual(wave_id=wid, elapsed_eu=actual)
-    state.estimates = estimates
-    state.actuals = actuals
-
-    result = compute_estimate_actual_variance(state)
-    # planned=2.0, actual=4.0 -> (4-2)/2 * 100 = 100 %
-    assert result.sample_count == 2
-    assert result.variance_pct == pytest.approx(100.0)
-
-
-def test_compute_estimate_actual_variance_drops_a_calibration_excluded_actual() -> None:
-    """An excluded actual cannot move the M26 headline.
-
-    Both waves are CLOSED with an estimate and an actual, so only the
-    exclusion flag separates them. The excluded row ran 4 EU over; if the
-    filter is removed the aggregate variance stops being 0 %.
-    """
-    state = _empty_state()
-    clean = _wave(wave_id="P01-I01-W01")
-    excluded = _wave(wave_id="P01-I01-W02")
-    for wave in (clean, excluded):
-        state.waves[wave.id] = wave
-    state.estimates = {
-        clean.id: _estimate(wave_id=clean.id, expected_eu=1.0),
-        excluded.id: _estimate(wave_id=excluded.id, expected_eu=1.0),
-    }
-    state.actuals = {
-        clean.id: _actual(wave_id=clean.id, elapsed_eu=1.0),
-        excluded.id: _actual(wave_id=excluded.id, elapsed_eu=5.0, calibration_excluded=True),
-    }
-
-    result = compute_estimate_actual_variance(state)
-    assert result.sample_count == 1
-    assert result.planned_eu == pytest.approx(1.0)
-    assert result.actual_eu == pytest.approx(1.0)
-    assert result.variance_pct == pytest.approx(0.0)
-
-
-def test_compute_weekly_burn_counts_a_calibration_excluded_actual() -> None:
-    """Burn measures spend, so an excluded row still counts toward it.
-
-    The flag disqualifies the figure as a reference class for estimating
-    future work, not as a record of work already done — the mirror of the
-    two estimate-quality metrics, which drop the same row.
-    """
-    state = _empty_state()
-    wave = _wave(wave_id="P01-I01-W01")
-    state.waves[wave.id] = wave
-    state.actuals = {wave.id: _actual(wave_id=wave.id, elapsed_eu=3.0, calibration_excluded=True)}
-
-    result = compute_weekly_burn(state, now=_T0)
-    assert result.consumed_eu == pytest.approx(3.0)
-
-
-def test_compute_estimate_actual_variance_excludes_non_closed_and_missing() -> None:
-    """Error/boundary: in-progress + estimate-only waves drop out of the gauge."""
-    state = _empty_state()
-    in_progress = _wave(wave_id="P01-I01-W01", status=WaveStatus.IN_PROGRESS)
-    estimate_only = _wave(wave_id="P01-I01-W02")
-    counted = _wave(wave_id="P01-I01-W03")
-    for wave in (in_progress, estimate_only, counted):
-        state.waves[wave.id] = wave
-    state.estimates = {
-        in_progress.id: _estimate(wave_id=in_progress.id, expected_eu=1.0),
-        estimate_only.id: _estimate(wave_id=estimate_only.id, expected_eu=1.0),
-        counted.id: _estimate(wave_id=counted.id, expected_eu=1.0),
-    }
-    # Only the in-progress + counted waves have actuals; estimate_only has none.
-    state.actuals = {
-        in_progress.id: _actual(wave_id=in_progress.id, elapsed_eu=5.0),
-        counted.id: _actual(wave_id=counted.id, elapsed_eu=2.0),
-    }
-
-    result = compute_estimate_actual_variance(state)
-    # Only "counted" contributes: (2-1)/1 * 100 = 100 %.
-    assert result.sample_count == 1
-    assert result.variance_pct == pytest.approx(100.0)
+# ---- compute_weekly_burn ----------------------------------------------------
 
 
 # ---- CLI dispatch smoke -----------------------------------------------------
@@ -275,29 +84,33 @@ def _isolate_global_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def _write_state(tmp_path: Path) -> Path:
-    """Persist a state.json with one over-run CLOSED wave + an M-bucket actual."""
+    """Bear an epoch-2 tree whose ledgers hold one subject that ran 50 % over."""
     workspace = tmp_path / "ws"
-    ea_dir = workspace / ".ea"
-    ea_dir.mkdir(parents=True)
-    (ea_dir / "config.yaml").write_text(yaml.safe_dump({"schema_version": "1.0"}), encoding="utf-8")
-
-    state = _empty_state()
-    wid = "P01-I01-W01"
-    state.waves[wid] = _wave(wave_id=wid, effort_bucket=EffortBucket.M)
-    state.estimates = {wid: _estimate(wave_id=wid, expected_eu=1.0)}
-    state.actuals = {
-        wid: _actual(
-            wave_id=wid,
-            elapsed_eu=1.5,
-            updated_at=datetime.now(UTC),
+    state_path = lay_epoch2_tree(workspace)
+    authority = resolve_authority(state_path.parent)
+    assert authority.target is not None and authority.generation_id is not None
+    document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    key = "T1"
+    for collection, row in (
+        (Epoch2Collection.ESTIMATE, _estimate(wave_id=key, expected_eu=1.0)),
+        (Epoch2Collection.ACTUAL, _actual(wave_id=key, elapsed_eu=1.5)),
+    ):
+        append_ledger_record(
+            ledger_path(document, collection),
+            LedgerRecord(
+                collection=collection,
+                record_key=key,
+                status="imported",
+                recorded_at=_T0,
+                supersedes=None,
+                payload={"payload": row.model_dump(mode="json")},
+            ),
         )
-    }
-    (ea_dir / "state.json").write_text(state.model_dump_json(), encoding="utf-8")
     return workspace
 
 
 def test_cli_metrics_variance_emits_gauge(tmp_path: Path) -> None:
-    """``--json metrics variance`` emits the M26 gauge payload from state.json."""
+    """``--json metrics variance`` emits the M26 gauge from the generation's ledgers."""
     workspace = _write_state(tmp_path)
     result = runner.invoke(app, ["--json", "-w", str(workspace), "metrics", "variance"])
     assert result.exit_code == 0, result.output
@@ -309,7 +122,7 @@ def test_cli_metrics_variance_emits_gauge(tmp_path: Path) -> None:
 
 
 def test_cli_metrics_variance_not_found_exits_one(tmp_path: Path) -> None:
-    """Error path: no state.json -> NotFound exit 1."""
+    """Error path: no eawf tree -> NotFound exit 1."""
     workspace = tmp_path / "no-state"
     workspace.mkdir()
     result = runner.invoke(app, ["-w", str(workspace), "metrics", "variance"])
@@ -318,26 +131,7 @@ def test_cli_metrics_variance_not_found_exits_one(tmp_path: Path) -> None:
 
 def test_meas_018_variance_labels_the_mapping_revisions_it_spans() -> None:
     """A roll-up over estimates of two revisions names both instead of blending silently."""
-    state = _empty_state()
-    for index, revision in enumerate((2, None), 1):
-        wave = _wave(wave_id=f"P01-I01-W0{index}")
-        state.waves[wave.id] = wave
-        estimate = _estimate(wave_id=wave.id, expected_eu=1.0)
-        state.estimates = {
-            **(state.estimates or {}),
-            wave.id: estimate.model_copy(update={"mapping_revision": revision}),
-        }
-        state.actuals = {
-            **(state.actuals or {}),
-            wave.id: _actual(wave_id=wave.id, elapsed_eu=1.0),
-        }
-
-    result = compute_estimate_actual_variance(state)
-
-    assert result.mapping_revisions == ["2", "unrecorded"]
-    assert "across mapping revisions 2, unrecorded" in _render_variance(
-        result.variance_pct, result.sample_count, result.mapping_revisions
-    )
+    assert "across mapping revisions 2, unrecorded" in _render_variance(0.0, 2, ["2", "unrecorded"])
     assert "across" not in _render_variance(0.0, 1, ["2"])
 
 

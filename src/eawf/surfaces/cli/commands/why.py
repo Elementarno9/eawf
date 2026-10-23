@@ -1,8 +1,14 @@
-"""``eawf why`` provenance surface."""
+"""``eawf why`` provenance surface.
+
+Explains one native decision of the tree's selected generation: what was
+decided and why, the scope it governs, the evidence and questions it cites
+and its supersession links. An epoch-1 tree selects no generation, so it is
+refused as needing migration.
+"""
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
@@ -11,78 +17,54 @@ from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
 
+if TYPE_CHECKING:
+    from eawf.observability.reflect.decisions import WhyResult
+
 
 def why_cmd(
     ctx: typer.Context,
     urn: Annotated[
         str,
-        typer.Argument(
-            help=("Supported URN or bare id: phase, iter, wave, hypothesis, decision, or audit.")
-        ),
+        typer.Argument(help="Decision key, or an address ending in /decision/<key>."),
     ],
 ) -> None:
-    """Explain why an EAWF entity has its current trust tier."""
-    from eawf.workflow.estimation.trust_scorecard import assemble_why, read_store_projection
-    from eawf.workflow.evidence._io import load_state
+    """Explain why a native decision stands as it does."""
+    from eawf.kernel.state.epoch2.authority import resolve_authority
+    from eawf.observability.reflect.decisions import explain_decision, read_native_decisions
+    from eawf.surfaces.cli.flag_day_gate import MIGRATION_REQUIRED_KIND, MIGRATION_VERB
 
     flags: GlobalFlags = ctx.obj
     try:
-        state_path = resolve_state_path(flags.workspace)
-        state = load_state(state_path)
-        projection = read_store_projection(state_path)
-        result = assemble_why(state, urn, store_projection=projection)
+        tree = resolve_state_path(flags.workspace).parent
+        if resolve_authority(tree).epoch != 2:
+            raise cli_errors.MigrationRequired(
+                f"{tree} is an epoch-1 tree and why explains only the decisions of an "
+                f"epoch-2 generation; migrate it with `{MIGRATION_VERB} --plan` then `--apply`",
+                kind=MIGRATION_REQUIRED_KIND,
+            )
+        result = explain_decision(read_native_decisions(tree), urn)
     except FileNotFoundError as exc:
         cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
-        return
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
-        return
-    except (KeyError, ValueError) as exc:
+    except KeyError as exc:
         cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
-        return
 
-    payload: dict[str, Any] = result.model_dump(mode="json")
-    emit_json_or_text(payload, _render_why(result), flags=flags)
+    emit_json_or_text(result.model_dump(mode="json"), _render_why(result), flags=flags)
 
 
-def _render_why(result: Any) -> str:
+def _render_why(result: WhyResult) -> str:
     lines = [
-        f"{result.kind}: {result.id}",
-        f"tier: {result.tier}",
+        f"{result.kind}: {result.id} ({result.status})",
+        f"title: {result.title}",
         f"summary: {result.summary}",
     ]
     if result.refs:
         lines.append("refs:")
-        for ref in result.refs:
-            lines.append(f"- {ref.kind} {ref.tier}: {ref.summary} ({ref.urn})")
+        lines.extend(f"- {ref.kind}: {ref.ref}" for ref in result.refs)
     else:
         lines.append("refs: none")
-    if result.scorecard is not None:
-        lines.extend(_render_scorecard(result.scorecard))
     return "\n".join(lines)
-
-
-def _render_value(label: str, value: Any) -> str:
-    """Render one scorecard rate with its sample, an undefined rate as unavailable."""
-    if value.value is None:
-        return f"- {label}: unavailable ({value.sample_size} {value.sample})"
-    return (
-        f"- {label}: {value.value:.0%} over {value.sample_size} {value.sample} "
-        f"({value.measurement_quality})"
-    )
-
-
-def _render_scorecard(scorecard: Any) -> list[str]:
-    """Render the advisory scorecard with its coverage."""
-    coverage = scorecard.coverage
-    scope = "sampled window" if coverage.sampled else "all waves"
-    return [
-        "scorecard (advisory, gates nothing):",
-        _render_value("verified", scorecard.verified_share),
-        _render_value("verifier pass rate", scorecard.verifier_reliability.pass_rate),
-        f"- coverage: {coverage.subjects_contributing} of {coverage.subjects_total} "
-        f"waves carry evidence ({scope})",
-    ]
 
 
 __all__ = ["why_cmd"]

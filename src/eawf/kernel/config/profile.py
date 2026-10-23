@@ -1,23 +1,9 @@
-"""Profile enable: write to a config layer + materialise required state keys.
+"""Profile enable: write the profile to a config layer.
 
-Per ``docs/architecture/profiles.md``, each profile may declare
-``state_extensions.fields_required`` — a list of top-level state keys that
-must exist for the profile's skills/audits to function. ``config profile
-enable <id>`` is responsible for two things:
-
-1. Update the chosen layer's ``config.yaml`` to record ``profiles.enabled``
-   contains *id* (idempotent — duplicate enables are no-ops).
-2. Materialise any *fields_required* on ``state.json`` as empty containers
-   ``{}`` so later mutations write into typed dicts instead of attribute
-   errors. This mirrors the "materialize newly-required keys as ``{}``" rule
-   from ``docs/architecture/installation.md``.
-
-Mutation discipline (per ``AGENTS.md`` rule 4 + spec):
-
-- Layer file write: acquire ``portalock.acquire(layer_path)`` → read existing
-  YAML → merge → atomic temp-file → fsync → ``os.replace`` → release.
-- State write: route through :func:`eawf.kernel.state.writer.atomic_write_json`
-  which already handles the lock + atomic write.
+``config profile enable <id>`` updates the chosen layer's ``config.yaml``
+so ``profiles.enabled`` contains *id* (idempotent -- duplicate enables are
+no-ops). The layer file is written under ``portalock.acquire(layer_path)``:
+read the existing YAML, merge, write a temp file, fsync, ``os.replace``.
 
 ``enable_profile`` resolves *profile_id* and its ``fields_required`` through
 :mod:`eawf.platform.profiles.loader` (repository overlay > workspace overlay >
@@ -29,7 +15,7 @@ overlay enables the same way a built-in one does.
 Public API:
 
     KNOWN_PROFILES               # built-in-only id -> required state field keys
-    enable_profile(profile_id, *, layer, layer_file_path, state_path,
+    enable_profile(profile_id, *, layer, layer_file_path,
                     repo=None, workspace=None) -> dict
 """
 
@@ -42,7 +28,6 @@ import secrets
 from pathlib import Path
 from typing import Any
 
-import orjson
 import yaml
 
 from eawf.kernel.config.layered import LAYER_ORDER, WRITABLE_LAYERS
@@ -101,77 +86,15 @@ def _atomic_write_yaml(target: Path, payload: dict[str, Any]) -> None:
             tmp.unlink(missing_ok=True)
 
 
-def _materialise_state_keys(state_path: Path, fields: list[str]) -> list[str]:
-    """Add missing top-level keys to ``state.json`` as empty dicts.
-
-    Returns the list of keys actually added (so the caller can include them in
-    the response envelope). Idempotent: keys already present are left alone.
-    Skips materialisation entirely if ``state_path`` does not exist (the
-    profile is being enabled before ``eawf repository create``).
-
-    The read+mutate+write of ``state.json`` is serialised under
-    ``portalock(state_path)`` so a concurrent writer (e.g. an
-    ``eawf.surfaces.cli._mutation.state_transaction``) cannot drop the freshly-added
-    top-level keys via a stale-view dump. Routing through
-    ``state_transaction`` itself is unsuitable here because that wrapper
-    raises ``UserError`` (``kind="NotFound"``) on missing state, breaking
-    the profile-enable-before-init flow.
-    """
-    if not state_path.exists():
-        logger.info(
-            f"_materialise_state_keys state-file-absent path={state_path}; "
-            "skipping materialisation; the next eawf init/sync will pick the "
-            "profile up from the config file."
-        )
-        return []
-
-    from eawf.kernel.state.io import write_state_unlocked
-
-    try:
-        with portalock.acquire(state_path, timeout=5.0):
-            try:
-                raw = state_path.read_bytes()
-            except OSError as exc:
-                raise UserError(
-                    f"cannot read state file {state_path}: {exc}", kind="NotFound"
-                ) from exc
-            try:
-                body = orjson.loads(raw)
-            except orjson.JSONDecodeError as exc:
-                raise UserError(
-                    f"state file {state_path} is not valid JSON: {exc}", kind="NotFound"
-                ) from exc
-            if not isinstance(body, dict):
-                raise UserError(
-                    f"state file {state_path} top-level must be a mapping", kind="NotFound"
-                )
-
-            added: list[str] = []
-            for key in fields:
-                if key not in body:
-                    body[key] = {}
-                    added.append(key)
-            if not added:
-                return []
-
-            write_state_unlocked(state_path, body)
-            return added
-    except portalock.LockTimeout as exc:
-        raise UserError(
-            f"could not acquire state lock for {state_path}: {exc}", kind="NotFound"
-        ) from exc
-
-
 def enable_profile(
     profile_id: str,
     *,
     layer: str,
     layer_file_path: Path,
-    state_path: Path | None = None,
     repo: Path | None = None,
     workspace: Path | None = None,
 ) -> dict[str, Any]:
-    """Enable *profile_id* by writing it to *layer* and materialising state keys.
+    """Enable *profile_id* by writing it to *layer*.
 
     Args:
         profile_id: Profile name. Resolved through the same
@@ -185,11 +108,6 @@ def enable_profile(
             ``"built-in"`` layer is rejected with :class:`UserError`
             (``kind="InvalidInput"``).
         layer_file_path: Resolved on-disk path to the layer's ``config.yaml``.
-        state_path: Optional state-file path. When given, missing
-            ``fields_required`` for the profile are materialised as ``{}``.
-            When ``None``, materialisation is skipped: the next
-            ``eawf init/sync`` performs it, and an epoch-2 tree, whose
-            epoch-1 document is frozen, never takes it.
         repo: Optional repository root. When given, its ``.ea/profiles/``
             overlay is consulted first when resolving *profile_id*.
         workspace: Optional workspace root. When given, its
@@ -199,14 +117,12 @@ def enable_profile(
 
     Returns:
         Response envelope (dict) with keys ``profile``, ``layer``,
-        ``layer_path``, ``already_enabled``, ``state_keys_required`` (the
-        profile's ``fields_required``, whether or not they were written) and
-        ``state_keys_materialised`` (the ones this call wrote).
+        ``layer_path``, ``already_enabled`` and ``state_keys_required`` (the
+        profile's ``fields_required``).
 
     Raises:
         UserError: ``profile_id`` unknown or ``layer`` not writable
-            (``kind="InvalidInput"``); or state file is malformed
-            (read-time only) (``kind="NotFound"``).
+            (``kind="InvalidInput"``).
         ValidationError: A workspace or user overlay profile with a
             matching id is present but its YAML body is malformed or
             fails schema validation.
@@ -250,15 +166,10 @@ def enable_profile(
                 f"layer={layer_file_path}; no write performed"
             )
 
-    materialised: list[str] = []
-    if state_path is not None and required_fields:
-        materialised = _materialise_state_keys(state_path, required_fields)
-
     return {
         "profile": profile_id,
         "layer": layer,
         "layer_path": str(layer_file_path),
         "already_enabled": already_enabled,
         "state_keys_required": required_fields,
-        "state_keys_materialised": materialised,
     }

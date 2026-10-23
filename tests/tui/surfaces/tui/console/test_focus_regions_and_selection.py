@@ -146,7 +146,7 @@ def _seam_holding(projection: RouteProjection) -> ProjectionSeam:
     The held projection is normally adopted from a read; a test that wants one particular
     starting projection states it directly, as the connection-state suite does.
     """
-    seam = ProjectionSeam(route=ROUTE, scope_id=SCOPE, state_path=None, clock=lambda: AT)
+    seam = ProjectionSeam(route=ROUTE, scope_id=SCOPE, clock=lambda: AT)
     seam._projection = projection
     return seam
 

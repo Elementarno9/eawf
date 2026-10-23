@@ -141,14 +141,8 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "reserved_config_key",
         "manifest_in_sync",
         "mcp_drift",
-        "state_scale_ceiling",
         "authority_epoch",
         "gitignore_block",
-        "active_phase_without_iter",
-        "stale_session_count",
-        "recent_actuals",
-        "incident_fold_parity",
-        "backlog_fold_parity",
         "cli_daemon_version",
         "parallel_cap_enforcement",
         "launchd_agent",
@@ -158,7 +152,6 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "agents_md_byte_cap",
         "agents_override_byte_cap",
         "branch_currency",
-        "project_record_present",
         "plugin_cross_scope_dup",
     }
 

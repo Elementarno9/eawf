@@ -22,14 +22,13 @@ from typing import Any
 import pytest
 
 from eawf.kernel.spec.release import Release, ReleaseStatus, release_key
-from eawf.kernel.state.io import write_state_unlocked
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import burn, create
 from eawf.runtime.daemon.methods.release_disposition import adopt
-from eawf.workflow.evidence._io import load_state
 from eawf.workflow.evidence.provider_certification import CANARY_EVIDENCE_DIRS
 from eawf.workflow.release.admission import required_contract_ids
 from eawf.workflow.release.records import read_release_record, record_release
+from tests._epoch2_helpers import lay_contract_tree
 from tests._release_helpers import dev1_adoption, release_record
 
 pytestmark = pytest.mark.integration
@@ -64,8 +63,7 @@ def ctx(tmp_path: Path) -> MethodContext:
     assert required_contract_ids(DEV5) == ()
     evidence = Path(*CANARY_EVIDENCE_DIRS[DEV5_KEY])
     shutil.copytree(_REPO_ROOT / evidence, tmp_path / evidence)
-    state_path = tmp_path / ".ea" / "state.json"
-    write_state_unlocked(state_path, load_state(_EMPTY_STATE).model_dump(mode="json"))
+    state_path = lay_contract_tree(tmp_path, (), project_code="QR")
     record_release(state_path, dev4_candidate(), recorded_at=datetime.now(UTC), summary="seed")
     return MethodContext(
         started_at="2026-09-27T00:00:00+00:00",

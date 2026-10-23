@@ -39,13 +39,11 @@ from pydantic import ValidationError
 
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.projection.row_facts import parent_key_of, stored_fields
-from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.epoch2.authority import (
     NativeAuthorityRequiredError,
     require_native_authority,
 )
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
-from eawf.kernel.state.models import State
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.ledger import LedgerError, latest_rows
 from eawf.kernel.store.paths import ledger_path
@@ -131,8 +129,8 @@ class GitHubReleaseHost:
 
         Args:
             repo_root: The checkout the pipeline runs in.
-            state_path: The ``state.json`` wave pins are read from; its
-                directory is the native tree Milestone Batches are read from.
+            state_path: The project's ``state.json``; its directory is the
+                native tree Milestone Batches and Tasks are read from.
             remote: The remote ``main`` and the tags live on.
             sleep: How the host waits between polls.
         """
@@ -354,18 +352,6 @@ class GitHubReleaseHost:
             detail = (result.stdout or result.stderr).strip()[-400:]
             raise PipelineHostError(f"release receipts exited {result.returncode}: {detail}")
         return reply
-
-    def phase_wave_pins(self, phase_id: str) -> dict[str, str]:
-        """Return wave id -> pinned commit for the closed waves of *phase_id*."""
-        state = State.model_validate_json(self._state_path.read_bytes())
-        prefix = f"{phase_id}-"
-        return {
-            wave_id: wave.commit
-            for wave_id, wave in state.waves.items()
-            if wave_id.startswith(prefix)
-            and wave.status == WaveStatus.CLOSED
-            and wave.commit is not None
-        }
 
     def _tree_rows(self, collection: Epoch2Collection) -> dict[str, Mapping[str, Any]]:
         """Return every record of *collection* in the native tree beside ``state_path``.

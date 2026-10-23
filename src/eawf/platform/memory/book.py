@@ -43,7 +43,7 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.memory.store import read_envelopes
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.models import State
+    from eawf.kernel.migration.v1_state import State
 
 logger = logging.getLogger(__name__)
 

@@ -89,7 +89,7 @@ def _chrome() -> ConsoleChrome:
 def _console(
     daemon: _Daemon, *, attach: Sequence[AttachStep] = TRACE
 ) -> tuple[_Recording, ProjectionSeam, FakeClock]:
-    seam = ProjectionSeam(route=HOME, scope_id=SCOPE, state_path=None, clock=lambda: AT)
+    seam = ProjectionSeam(route=HOME, scope_id=SCOPE, clock=lambda: AT)
     seam._binding.call = daemon  # type: ignore[method-assign]
     clock = FakeClock()
     app = _Recording(chrome=_chrome(), seam=seam, clock=clock, attach=attach)
@@ -258,7 +258,7 @@ def test_an_attach_trace_without_a_seam_draws_no_attach_frame() -> None:
 
 def test_retry_route_owes_only_the_visible_routes_failed_read() -> None:
     """A failed register read stays failed; the visible route's own read is owed again."""
-    seam = ProjectionSeam(route=HOME, scope_id=SCOPE, state_path=None, clock=lambda: AT)
+    seam = ProjectionSeam(route=HOME, scope_id=SCOPE, clock=lambda: AT)
     seam._failed.update({(HOME, None), (ATTENTION_ROUTE, None)})
     assert seam.owed() == ()
     seam.retry_route()

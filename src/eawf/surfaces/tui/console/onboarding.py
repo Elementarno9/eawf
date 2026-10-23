@@ -23,7 +23,7 @@ from typing import Any, Final, Protocol
 
 from pydantic import ValidationError
 
-from eawf.kernel.state.models import State
+from eawf.kernel.migration.v1_state import State
 from eawf.platform.registry import (
     Registry,
     WorkspaceRecord,

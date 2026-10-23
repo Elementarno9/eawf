@@ -21,10 +21,12 @@ from typing import Any
 
 import orjson
 import pytest
+import yaml
 
 import eawf.runtime.daemon.server as server_mod
 from eawf.runtime.daemon.server import handle_connection
-from tests.integration.runtime.daemon._epoch1_state_fixtures import build_ctx, write_state
+from tests._epoch2_helpers import lay_epoch2_tree
+from tests.integration.runtime.daemon._method_context import build_ctx
 
 pytestmark = pytest.mark.integration
 
@@ -60,14 +62,31 @@ class _RecordingWriter:
         return None
 
 
+#: The mutation every shield case sends: one repo-layer config write.
+_MUTATION_METHOD = "config.set_layer_value"
+
+
 def _mutation_frame(repo_root: Path) -> bytes:
     frame = {
         "jsonrpc": "2.0",
         "id": "shield-1",
-        "method": "state.session_recover",
-        "params": {"repo_root": str(repo_root), "age_minutes": 0},
+        "method": _MUTATION_METHOD,
+        "params": {
+            "repo_root": str(repo_root),
+            "layer": "repo",
+            "key_path": ["verify", "odr_blocking"],
+            "value": True,
+        },
     }
     return orjson.dumps(frame) + b"\n"
+
+
+def _landed(config_yaml: Path) -> bool:
+    """Return whether the mutation's value reached the repo config layer."""
+    if not config_yaml.is_file():
+        return False
+    body = yaml.safe_load(config_yaml.read_text(encoding="utf-8")) or {}
+    return body.get("verify", {}).get("odr_blocking") is True
 
 
 def test_mutation_survives_client_disconnect(
@@ -77,10 +96,10 @@ def test_mutation_survives_client_disconnect(
 ) -> None:
     """CR: the peer leaves mid-mutation; the daemon still lands the commit
     and the undeliverable response is logged rather than lost."""
-    state_path = tmp_path / ".ea" / "state.json"
-    write_state(state_path)
+    state_path = lay_epoch2_tree(tmp_path)
     ctx = build_ctx(tmp_path, state_path)
-    written_at = orjson.loads(state_path.read_bytes())["updated_at"]
+    config_yaml = state_path.parent / "config.yaml"
+    assert not _landed(config_yaml)
 
     stalled = asyncio.Event()
     release = asyncio.Event()
@@ -112,8 +131,7 @@ def test_mutation_survives_client_disconnect(
 
             # The shielded dispatch must still land the commit.
             for _ in range(50):
-                payload = orjson.loads(state_path.read_bytes())
-                if payload["updated_at"] != written_at:
+                if _landed(config_yaml):
                     return
                 await asyncio.sleep(0.1)
             raise AssertionError(
@@ -134,8 +152,7 @@ def test_mutation_survives_client_disconnect(
 
 def test_delivered_response_logs_nothing(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """Boundary: a connected client gets its response; no warning fires."""
-    state_path = tmp_path / ".ea" / "state.json"
-    write_state(state_path)
+    state_path = lay_epoch2_tree(tmp_path)
     ctx = build_ctx(tmp_path, state_path)
 
     sock_path = _short_socket_path()
@@ -173,8 +190,7 @@ def test_abandoned_probe_leaves_no_undeliverable_warning(
     routine, not forensic — the daemon must not warn about it. The probe
     caller loses nothing it cannot get by asking again, and the volume is
     the point: abandoned probes alone produced 1,724 of these warnings."""
-    state_path = tmp_path / ".ea" / "state.json"
-    write_state(state_path)
+    state_path = lay_epoch2_tree(tmp_path)
     ctx = build_ctx(tmp_path, state_path)
 
     stalled = asyncio.Event()
@@ -267,7 +283,7 @@ def test_abandoned_probe_severity_is_method_scoped(caplog: pytest.LogCaptureFixt
             record.levelno for record in caplog.records if "undeliverable" in record.message
         }
         caplog.clear()
-        asyncio.run(body("state.session_recover"))
+        asyncio.run(body(_MUTATION_METHOD))
         mutation_levels = {
             record.levelno for record in caplog.records if "undeliverable" in record.message
         }

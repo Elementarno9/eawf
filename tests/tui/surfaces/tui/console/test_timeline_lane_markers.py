@@ -49,7 +49,6 @@ def _timeline() -> ConsoleApp:
     seam = ProjectionSeam(
         route="roadmap",
         scope_id=ROOT_ID,
-        state_path=None,
         clock=lambda: AT,
         scope_name="eawf",
         operator=Operator(principal="OP-0001"),

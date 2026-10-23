@@ -20,7 +20,7 @@ from eawf.runtime.worktree.merge_back import (
     merge_back,
 )
 from eawf.surfaces.cli import errors as cli_errors
-from tests._worktree_create import claimed_state, create_worktree, make_repo
+from tests.fixtures.migration.worktree_create import claimed_state, create_worktree, make_repo
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None,

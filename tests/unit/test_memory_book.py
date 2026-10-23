@@ -11,7 +11,6 @@ import pytest
 
 from eawf.kernel.migration.epoch2.envelopes import LedgerCollection, map_ledger_row
 from eawf.kernel.state.enums import Confidence, MemoryStatus, MemoryTier
-from eawf.kernel.state.models import State
 from eawf.kernel.store.kinds.memory import MemoryNote
 from eawf.kernel.store.ledger import (
     LedgerError,
@@ -24,7 +23,6 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.memory.book import (
     next_note_id,
     note_line,
-    notes_from_state,
     read_book,
     select_archivable,
     select_prunable,
@@ -32,8 +30,6 @@ from eawf.platform.memory.book import (
 from eawf.platform.memory.markdown_view import SCOPE_ALL, render_note_view, render_note_views
 from eawf.platform.memory.staleness import stale_notes
 from eawf.runtime.daemon import methods
-from tests._memory_epoch1 import add_epoch1_note
-from tests.integration._memory_native import QR_DOCUMENT
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import method_context
 
 NOW = datetime(2026, 9, 30, tzinfo=UTC)
@@ -196,24 +192,6 @@ def test_select_archivable_takes_only_old_stale_working_notes() -> None:
 def test_select_archivable_over_no_notes_selects_nothing() -> None:
     selection = select_archivable({}, threshold_days=0, now=NOW)
     assert (selection.selected, selection.skipped) == ([], [])
-
-
-def test_notes_from_state_reads_bodies_from_the_latest_envelope(tmp_path: Path) -> None:
-    state = State.model_validate(QR_DOCUMENT)
-    memory_path = tmp_path / "memory.jsonl"
-    record = add_epoch1_note(
-        state=state, memory_path=memory_path, scope_id="QR", title="t", body="the body", now=NOW
-    )
-    assert state.memory_index is not None
-    orphan = record.summary.model_copy(update={"id": "MEM-ORPHAN"})
-    state.memory_index["MEM-ORPHAN"] = orphan
-
-    notes = notes_from_state(state, memory_path)
-
-    assert notes[record.summary.id].body == "the body"
-    assert notes[record.summary.id].created_at == NOW
-    assert notes["MEM-ORPHAN"].body == ""
-    assert notes["MEM-ORPHAN"].created_at is None
 
 
 def test_memory_add_is_refused_on_a_tree_outside_epoch_2(tmp_path: Path) -> None:

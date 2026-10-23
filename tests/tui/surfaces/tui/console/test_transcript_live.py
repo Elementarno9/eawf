@@ -811,9 +811,9 @@ def test_only_the_projection_feed_subscribes_to_append_notices() -> None:
     async def nothing(_value: object) -> None:
         return None
 
-    callbacks = StateBindingCallbacks(on_state=nothing, on_degraded=nothing)
-    projection = StateBinding(None, callbacks, subscribe_method=PROJECTION_SUBSCRIBE_METHOD)
-    epoch_one = StateBinding(None, callbacks)
+    callbacks = StateBindingCallbacks(on_degraded=nothing)
+    projection = StateBinding(callbacks, subscribe_method=PROJECTION_SUBSCRIBE_METHOD)
+    epoch_one = StateBinding(callbacks)
     assert projection._subscribe_params()["kinds"] == [
         StoreKind.EVENT.value,
         StoreKind.RUN_EVENTS_APPENDED.value,
@@ -823,23 +823,18 @@ def test_only_the_projection_feed_subscribes_to_append_notices() -> None:
 
 
 def test_a_pushed_notice_reaches_the_event_sink_without_a_state_read() -> None:
-    """The projection feed hands a notice to its event sink alone; no resume id is taken."""
+    """The projection feed hands a notice to its event sink; no resume id is taken."""
     heard: list[Envelope] = []
-    states: list[object] = []
 
     async def on_event(envelope: Envelope) -> None:
         heard.append(envelope)
-
-    async def on_state(state: object) -> None:
-        states.append(state)
 
     async def on_degraded(_flag: bool) -> None:
         return None
 
     async def body() -> None:
         binding = StateBinding(
-            None,
-            StateBindingCallbacks(on_state=on_state, on_degraded=on_degraded, on_event=on_event),
+            StateBindingCallbacks(on_degraded=on_degraded, on_event=on_event),
             subscribe_method=PROJECTION_SUBSCRIBE_METHOD,
         )
         loop = asyncio.get_running_loop()
@@ -853,4 +848,3 @@ def test_a_pushed_notice_reaches_the_event_sink_without_a_state_read() -> None:
 
     asyncio.run(body())
     assert [envelope.kind for envelope in heard] == [StoreKind.RUN_EVENTS_APPENDED]
-    assert states == []

@@ -121,7 +121,6 @@ def _console(
     seam = ProjectionSeam(
         route=ATTENTION_ROUTE,
         scope_id=SCOPE,
-        state_path=None,
         clock=lambda: AT,
         operator=Operator(principal=principal) if principal is not None else None,
     )

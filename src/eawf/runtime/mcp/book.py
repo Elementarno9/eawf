@@ -26,9 +26,10 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.migration.epoch2.native_records import ImportedNativeRecord
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.epoch2.base import StrictPositiveInt
-from eawf.kernel.state.models import McpGrant, McpServer, State
+from eawf.kernel.state.models import McpGrant, McpServer
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.tiers import Epoch2Collection

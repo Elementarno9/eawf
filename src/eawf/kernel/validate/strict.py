@@ -27,7 +27,7 @@ import orjson
 from pydantic import ValidationError
 from pydantic_core import ErrorDetails
 
-from eawf.kernel.state.models import State
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.validate.invariants import (
     ALL_INVARIANTS,
     Violation,
@@ -86,7 +86,7 @@ class ValidationReport:
 
     ``state`` is ``None`` when schema validation failed; in that case
     ``violations`` is always empty because invariant checks require a typed
-    :class:`~eawf.kernel.state.models.State`.
+    :class:`~eawf.kernel.migration.v1_state.State`.
     """
 
     state: State | None

@@ -16,13 +16,11 @@ from typing import TYPE_CHECKING, Any, Final
 
 import orjson
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import (
     StoreKind,
 )
 from eawf.kernel.state.io import LegacyOperationRemovedError, refuse_legacy_write
-from eawf.kernel.state.models import (
-    State,
-)
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.strict import validate_state
 from eawf.runtime.daemon.methods import (

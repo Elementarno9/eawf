@@ -211,7 +211,7 @@ def _app(route: str, *, verdicts: Any = ()) -> ConsoleApp:
     The held projection is normally adopted from a read; a test that wants one particular
     starting projection states it directly, as the connection-state suite does.
     """
-    seam = ProjectionSeam(route=route, scope_id=SCOPE, state_path=None, clock=lambda: AT)
+    seam = ProjectionSeam(route=route, scope_id=SCOPE, clock=lambda: AT)
     seam._projection = _projection(route)
     app = ConsoleApp(
         load_fixture(Path(__file__).resolve().parents[4] / "fixtures/console/golden/fixture"),

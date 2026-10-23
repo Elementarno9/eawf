@@ -2,9 +2,8 @@
 
 Boundary + error-path coverage for the public surface introduced to replace the
 per-consumer budget literals:
-:func:`~eawf.kernel.state.models.resolve_close_budget`,
-:class:`~eawf.kernel.state.models.CloseBudget` and
-:func:`~eawf.kernel.state.models.latest_close_attempt`.
+:func:`~eawf.kernel.state.models.resolve_close_budget` and
+:class:`~eawf.kernel.state.models.CloseBudget`.
 """
 
 from __future__ import annotations
@@ -22,8 +21,6 @@ from eawf.kernel.state.models import (
     DEFAULT_CLOSE_REPAIR_BUDGET,
     CloseAttempt,
     CloseBudget,
-    State,
-    latest_close_attempt,
     resolve_close_budget,
 )
 
@@ -68,37 +65,6 @@ def _attempt(
         requested_at=_T0,
         updated_at=_T0,
         idempotency_key=f"close:{wave_id}:{generation}",
-    )
-
-
-def _state(*attempts: CloseAttempt) -> State:
-    """Build a minimal repo state carrying the given close attempts."""
-    return State.model_validate(
-        {
-            "schema_version": "1.20",
-            "scope_kind": "repo",
-            "urn": "urn:eawf:v1:state:QR",
-            "updated_at": _T0.isoformat(),
-            "project": {
-                "code": "QR",
-                "slug": "quant-research",
-                "title": "Quant Research",
-                "domains": ["quant"],
-                "default_branch": "main",
-                "status": "active",
-                "repo_urn": "urn:eawf:v1:repo:QR",
-            },
-            "current": {"project_code": "QR"},
-            "workspace": None,
-            "close_attempts": {row.id: row.model_dump(mode="json") for row in attempts},
-            "phases": {},
-            "iters": {},
-            "waves": {},
-            "artifacts": {},
-            "agent_sessions": {},
-            "plugins": {},
-            "indexes": {},
-        }
     )
 
 
@@ -196,40 +162,3 @@ def test_close_budget_receipt_ref_rejects_an_unknown_axis() -> None:
             attempt_id="CA-01",
             axis="repare",  # type: ignore[arg-type]
         )
-
-
-# --------------------------------------------------------------------------
-# latest_close_attempt
-# --------------------------------------------------------------------------
-
-
-def test_latest_close_attempt_empty_state_returns_none() -> None:
-    """A state with no close attempt yields ``None`` (the honest-empty path)."""
-    assert latest_close_attempt(_state(), _WAVE) is None
-
-
-def test_latest_close_attempt_single_row_returns_it() -> None:
-    """A single attempt is trivially the newest generation."""
-    row = _attempt()
-    assert latest_close_attempt(_state(row), _WAVE) == row
-
-
-def test_latest_close_attempt_returns_the_newest_generation() -> None:
-    """Generation order wins: a repair generation supersedes its parent."""
-    first = _attempt(attempt_id="CA-01", generation=1, repair=1)
-    second = _attempt(attempt_id="CA-02", generation=2, repair=0)
-    latest = latest_close_attempt(_state(first, second), _WAVE)
-    assert latest is not None
-    assert latest.id == "CA-02"
-    assert resolve_close_budget(attempt=latest).repair == 0
-
-
-def test_latest_close_attempt_ignores_other_waves() -> None:
-    """A sibling wave's attempt never leaks into this wave's budget."""
-    other = _attempt(attempt_id="CA-09", wave_id="P01-I01-W02", generation=9, repair=0)
-    assert latest_close_attempt(_state(other), _WAVE) is None
-
-
-def test_latest_close_attempt_unknown_wave_returns_none() -> None:
-    """An unknown wave id resolves to no attempt rather than raising."""
-    assert latest_close_attempt(_state(_attempt()), "P99-I99-W99") is None

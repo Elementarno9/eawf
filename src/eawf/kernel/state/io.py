@@ -46,7 +46,7 @@ from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILE
 from eawf.kernel.state.enums import StoreKind
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.models import State
+    from eawf.kernel.migration.v1_state import State
     from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
@@ -565,7 +565,7 @@ def _validate_or_raise(payload: dict[str, Any]) -> State:
         payload: JSON-mode candidate state payload.
 
     Returns:
-        The validated typed :class:`~eawf.kernel.state.models.State`.
+        The validated typed :class:`~eawf.kernel.migration.v1_state.State`.
 
     Raises:
         StateValidationError: When schema validation or any cross-entity

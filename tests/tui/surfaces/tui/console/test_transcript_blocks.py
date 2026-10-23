@@ -219,7 +219,7 @@ def _frame(model: TranscriptReadModel | None, *, width: int = 120, sel: int | No
 
 def _app(**kwargs: Any) -> ConsoleApp:
     """Return a console bound to a seam already holding the transcript's projection."""
-    seam = ProjectionSeam(route=TRANSCRIPT_ROUTE, scope_id=SCOPE, state_path=None, clock=lambda: AT)
+    seam = ProjectionSeam(route=TRANSCRIPT_ROUTE, scope_id=SCOPE, clock=lambda: AT)
     seam._projection = _projection()
     app = ConsoleApp(_fixture(), FakeClock(), seam=seam, **kwargs)
     app.session.route = TRANSCRIPT_ROUTE
@@ -245,7 +245,6 @@ def test_run_062_the_console_reads_the_runs_lines_through_the_seam() -> None:
     seam = ProjectionSeam(
         route=TRANSCRIPT_ROUTE,
         scope_id=SCOPE,
-        state_path=None,
         clock=lambda: AT,
         daemon_client_factory=daemon.client,
     )

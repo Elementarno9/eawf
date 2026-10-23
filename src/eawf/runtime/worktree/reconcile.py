@@ -26,9 +26,9 @@ from enum import StrEnum
 from pathlib import Path
 
 import eawf.runtime.worktree.git as git
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import AgentSessionStatus, WorktreeStatus
 from eawf.kernel.state.io import append_event, state_version, write_state_unlocked
-from eawf.kernel.state.models import State
 from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)

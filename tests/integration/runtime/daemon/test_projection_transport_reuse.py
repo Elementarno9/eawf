@@ -4,14 +4,11 @@
 and ``event.subscribe`` already ride. It registers the same subscriber on the same
 bus over the same connection handler, and differs only in what the streamer writes
 per envelope. Nothing else about the transport moves, which is the whole point of
-ruling it this way: a console that already holds a push stream and an always-on
-mtime-poll backstop gains a projection feed without a second connection to open,
-authorise, probe or reconnect.
+ruling it this way: a console that already holds a push stream gains a projection
+feed without a second connection to open, authorise, probe or reconnect.
 
-The suite therefore proves two halves. The daemon half: one server, one bus, one
-publish, and both verbs are served from the one hook, each with its own frame. The
-console half: the poll backstop still refreshes a binder whose push stream dropped,
-and the drop cost exactly one subscribe attempt on one socket.
+The suite proves it on the daemon side: one server, one bus, one publish, and both
+verbs are served from the one hook, each with its own frame.
 """
 
 from __future__ import annotations
@@ -31,7 +28,6 @@ import pytest
 import eawf.runtime.daemon.server as server_mod
 from eawf.kernel.projection.compute import patches_for_event
 from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import dispatch
@@ -41,8 +37,6 @@ from eawf.runtime.daemon.methods.state_subscribe import (
     SUBSCRIBE_METHODS,
 )
 from eawf.runtime.daemon.server import handle_connection
-from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
-from tests.integration.runtime.daemon._epoch1_state_fixtures import state_payload, write_state
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     MILESTONE_URN,
     method_context,
@@ -50,13 +44,9 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
 
 pytestmark = pytest.mark.integration
 
-#: How long a frame or a refresh that is already in flight is waited for. A
+#: How long a frame that is already in flight is waited for. A
 #: failure guard, never the thing that orders the run.
 FRAME_TIMEOUT_SECONDS = 10.0
-
-#: The title the rewritten state file carries, so a delivered refresh is
-#: distinguishable from the initial load.
-REFRESHED_TITLE = "refreshed by the poll backstop"
 
 
 def _socket_path() -> str:
@@ -197,66 +187,3 @@ class _DroppingClient:
         """
         self.attempts.append(method)
         raise ConnectionError("push stream dropped")
-
-
-def _rewrite_state(state_path: Path) -> None:
-    """Rewrite the state file with a distinguishable title and a later mtime.
-
-    The mtime is advanced explicitly rather than left to the clock: the poll is
-    mtime-gated, and two writes inside one filesystem tick would otherwise be
-    indistinguishable on a coarse-grained mount.
-    """
-    payload = state_payload()
-    payload["phases"]["P30"]["title"] = REFRESHED_TITLE
-    state_path.write_text(State.model_validate(payload).model_dump_json(), encoding="utf-8")
-    stamp = state_path.stat().st_mtime + 10.0
-    os.utime(state_path, (stamp, stamp))
-
-
-def test_poll_backstop_refreshes_a_client_whose_push_stream_drops(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The console keeps one socket: when its push dies, the backstop carries it."""
-    state_path = tmp_path / ".ea" / "state.json"
-    write_state(state_path)
-    attempts: list[str] = []
-    degraded: list[bool] = []
-
-    async def body() -> None:
-        delivered: asyncio.Queue[State] = asyncio.Queue()
-
-        async def on_state(state: State) -> None:
-            await delivered.put(state)
-
-        async def on_degraded(flag: bool) -> None:
-            degraded.append(flag)
-
-        binding = StateBinding(
-            state_path,
-            StateBindingCallbacks(on_state=on_state, on_degraded=on_degraded),
-            poll_interval_s=0.0,
-            daemon_probe_interval_s=3600.0,
-            daemon_failure_threshold=1,
-            daemon_client_factory=lambda: _DroppingClient(attempts),
-        )
-        try:
-            await binding.connect()
-            assert binding._subscribe_task is not None
-            await binding._subscribe_task
-
-            # One socket was attempted, for the one stream the console holds.
-            assert attempts == ["state.subscribe"]
-            assert degraded == [True]
-            initial = await asyncio.wait_for(delivered.get(), timeout=FRAME_TIMEOUT_SECONDS)
-            assert initial.phases["P30"].title != REFRESHED_TITLE
-
-            _rewrite_state(state_path)
-            refreshed = await asyncio.wait_for(delivered.get(), timeout=FRAME_TIMEOUT_SECONDS)
-
-            assert refreshed.phases["P30"].title == REFRESHED_TITLE
-            assert attempts == ["state.subscribe"]
-        finally:
-            await binding.disconnect()
-
-    monkeypatch.setattr(StateBinding, "_daemon_socket_available", lambda _self: True)
-    asyncio.run(body())

@@ -1,4 +1,4 @@
-"""The post-merge release pipeline walks a merged phase to BAKED, resumably.
+"""The post-merge release pipeline walks a merged Milestone to BAKED, resumably.
 
 Every step runs its real logic against a fake daemon and a fake host:
 the daemon keeps one record in memory and moves it the way the
@@ -10,7 +10,7 @@ the isolated gate proofs. What is pinned here:
 - a walk interrupted after the candidate resumes at the gate receipts
   with no earlier step repeated, and the journal holds one row per step;
 - against fake adapters the record bakes, the train advance row comes
-  back, and the trailer repin runs after the landing;
+  back, and the Batch trailer check runs after the landing;
 - each lesson of the first hand walk refuses by name or is handled:
   nested artifact downloads, a HEAD off ``main``, a toolchain hidden with
   the agent CLIs, a dirty tree, a lagging registry, and a baseline that
@@ -42,7 +42,6 @@ from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import create as real_release_create
 from eawf.runtime.daemon.methods.release import show as real_release_show
 from eawf.runtime.daemon.methods.release_candidate import candidate as real_release_candidate
-from eawf.runtime.vcs.trailer_repin import TrailerRepin
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import release_pipeline as cli_module
 from eawf.workflow.release import pipeline as pipeline_module
@@ -70,6 +69,7 @@ from eawf.workflow.release.pipeline_receipts import RECEIPT_FILENAMES
 from eawf.workflow.release.publication_receipt import receipt_filename
 from eawf.workflow.release.records import read_release_record
 from eawf.workflow.release.train import V07_TRAIN
+from tests._epoch2_helpers import lay_contract_tree
 from tests._release_helpers import stage_passing_receipts
 
 VERSION = "0.7.0.dev4"
@@ -85,7 +85,8 @@ PRE_COMMIT_CONFIG = ".pre-commit-config.yaml"
 SOURCE = hashlib.sha1(b"pipeline-source").hexdigest()
 OTHER = hashlib.sha1(b"pipeline-other").hexdigest()
 DIGEST = f"sha256:{hashlib.sha256(b'pipeline-manifest').hexdigest()}"
-WAVE_PIN = hashlib.sha1(b"pipeline-wave").hexdigest()
+MILESTONE = "MLS-0035"
+BATCH = "BAT-0035"
 NOW = datetime(2026, 9, 25, 12, 0, tzinfo=UTC)
 
 
@@ -105,7 +106,7 @@ class FakeHost:
     receipt_conclusion: str = "success"
     prove_error: BaseException | None = None
     refused_gates: tuple[str, ...] = ()
-    pins: dict[str, str] = field(default_factory=lambda: {"P35-I01-W01": WAVE_PIN})
+    batch_heads: dict[str, str] = field(default_factory=lambda: {BATCH: SOURCE})
     pushes: list[str] = field(default_factory=list)
     sleeps: list[float] = field(default_factory=list)
 
@@ -179,8 +180,13 @@ class FakeHost:
             "refused": [{"gate": gate, "detail": "red"} for gate in self.refused_gates],
         }
 
-    def phase_wave_pins(self, phase_id: str) -> dict[str, str]:
-        return dict(self.pins)
+    def milestone_batch_heads(self, milestone_key: str) -> dict[str, str]:
+        self.calls.append(f"host.milestone_batch_heads {milestone_key}")
+        return dict(self.batch_heads)
+
+    def batch_carrier_commits(self, ref: str) -> dict[str, tuple[str, ...]]:
+        self.calls.append(f"host.batch_carrier_commits {ref}")
+        return {key: (head,) for key, head in self.batch_heads.items()}
 
     def sleep(self, seconds: float) -> None:
         self.sleeps.append(seconds)
@@ -293,11 +299,13 @@ class World:
     calls: list[str]
     host: FakeHost
     daemon: FakeDaemon
-    repins: list[tuple[dict[str, str], str]]
 
     def run(self, *, publish: bool = True, redo: PipelineStep | None = None) -> Any:
         options = PipelineOptions(
-            version=VERSION, phase_id="P35", publish=publish, observe_backoff_seconds=5.0
+            version=VERSION,
+            milestone_key=MILESTONE,
+            publish=publish,
+            observe_backoff_seconds=5.0,
         )
         return run_post_merge_pipeline(
             options, host=self.host, rpc=self.daemon, redo=redo, now=lambda: NOW
@@ -334,28 +342,14 @@ def _seed_baseline(root: Path) -> None:
 
 
 @pytest.fixture
-def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
+def world(tmp_path: Path) -> World:
     calls: list[str] = []
-    repins: list[tuple[dict[str, str], str]] = []
-
-    def spy_repins(
-        pins: Mapping[str, str], *, target_ref: str, repo_root: Path
-    ) -> list[TrailerRepin]:
-        calls.append("resolve_trailer_repins")
-        repins.append((dict(pins), target_ref))
-        return [
-            TrailerRepin(wave_id=wave_id, old_commit=sha, new_commit=sha, outcome="unchanged")
-            for wave_id, sha in sorted(pins.items())
-        ]
-
-    monkeypatch.setattr(pipeline_module, "resolve_trailer_repins", spy_repins)
     _seed_baseline(tmp_path)
     return World(
         root=tmp_path,
         calls=calls,
         host=FakeHost(root=tmp_path, calls=calls),
         daemon=FakeDaemon(calls=calls),
-        repins=repins,
     )
 
 
@@ -379,7 +373,7 @@ def test_release_pipeline_cli_exits_nonzero_before_any_push(
     monkeypatch.chdir(world.root)
     monkeypatch.setattr(host_module, "GitHubReleaseHost", lambda *_a, **_k: world.host)
     monkeypatch.setattr(cli_module, "_daemon_rpc", world.daemon)
-    result = CliRunner().invoke(app, ["release", "pipeline", VERSION, "--phase", "P35"])
+    result = CliRunner().invoke(app, ["release", "pipeline", VERSION, "--milestone", MILESTONE])
     assert result.exit_code == 3, result.output
     assert "publish_flag_missing" in result.output
     assert world.host.pushes == []
@@ -390,7 +384,7 @@ def test_release_pipeline_cli_rejects_an_unknown_redo_step(
 ) -> None:
     monkeypatch.chdir(world.root)
     result = CliRunner().invoke(
-        app, ["release", "pipeline", VERSION, "--phase", "P35", "--redo", "bake"]
+        app, ["release", "pipeline", VERSION, "--milestone", MILESTONE, "--redo", "bake"]
     )
     assert result.exit_code != 0
     assert "is not a step" in result.output
@@ -489,8 +483,11 @@ def test_run_post_merge_pipeline_bakes_advances_and_repins(world: World) -> None
     assert world.daemon.record["status"] == "baked"
     assert isinstance(result.advance, TrainAdvanceRecord)
     assert (result.advance.closed_key, result.advance.opened_key) == (KEY, NEXT_KEY)
-    assert world.repins == [({"P35-I01-W01": WAVE_PIN}, "refs/remotes/origin/main")]
-    assert world.calls.index("resolve_trailer_repins") > world.calls.index("release.advance_train")
+    landed = world.calls.index("host.batch_carrier_commits refs/remotes/origin/main")
+    assert world.calls.index(f"host.milestone_batch_heads {MILESTONE}") < landed
+    assert landed > world.calls.index("release.advance_train")
+    repin = next(o for o in result.outcomes if o.step is PipelineStep.REPIN)
+    assert dict(repin.facts) == {"milestone": MILESTONE, "batches": "1"}
     publish = world.daemon.params["release.publish"]
     assert publish["proof_digest"] == publish["approved_manifest_digest"] == DIGEST
     assert world.journal_steps() == list(PIPELINE_STEPS)
@@ -662,88 +659,13 @@ def test_run_post_merge_pipeline_refuses_refused_gate_receipts(world: World) -> 
     assert "release.approve" not in world.calls
 
 
-@pytest.mark.parametrize(
-    ("outcome", "code"),
-    [
-        ("unique_trailer", PipelineRefusalCode.TRAILER_REPIN_PENDING),
-        ("ambiguous", PipelineRefusalCode.TRAILER_REPIN_UNDECIDED),
-    ],
-)
-def test_run_post_merge_pipeline_refuses_unsettled_wave_pins(
-    world: World, monkeypatch: pytest.MonkeyPatch, outcome: str, code: PipelineRefusalCode
-) -> None:
-    def moved(pins: Mapping[str, str], *, target_ref: str, repo_root: Path) -> list[TrailerRepin]:
-        new = OTHER if outcome == "unique_trailer" else None
-        return [TrailerRepin("P35-I01-W01", WAVE_PIN, new, outcome)]  # type: ignore[arg-type]
-
-    monkeypatch.setattr(pipeline_module, "resolve_trailer_repins", moved)
-    with pytest.raises(PipelineRefusal) as refused:
-        world.run()
-    assert (refused.value.step, refused.value.code) == (PipelineStep.REPIN, code)
-    assert "P35-I01-W01" in refused.value.detail
-
-
-@pytest.mark.parametrize("outcome", ["unique_trailer", "ambiguous"])
-def test_run_post_merge_pipeline_skips_wave_pins_acknowledged_as_drift(
-    world: World, monkeypatch: pytest.MonkeyPatch, outcome: str
-) -> None:
-    """A pin the repository acknowledged as drifted is not a pending repin.
-
-    `doctor` honours `.eawf/drift-acks.json` and so offers no repair for such a
-    wave; the release must not refuse over a repin nothing will ever apply.
-    """
-
-    def moved(pins: Mapping[str, str], *, target_ref: str, repo_root: Path) -> list[TrailerRepin]:
-        new = OTHER if outcome == "unique_trailer" else None
-        return [TrailerRepin("P35-I01-W01", WAVE_PIN, new, outcome)]  # type: ignore[arg-type]
-
-    monkeypatch.setattr(pipeline_module, "resolve_trailer_repins", moved)
-    acks = world.root / ".eawf" / "drift-acks.json"
-    acks.parent.mkdir()
-    acks.write_text(json.dumps({"acked_wave_ids": ["P35-I01-W01"]}), encoding="utf-8")
-    world.run()
-    assert PipelineStep.REPIN in world.journal_steps()
-
-
-def test_run_post_merge_pipeline_still_refuses_a_drifted_pin_acked_for_another_wave(
-    world: World, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def moved(pins: Mapping[str, str], *, target_ref: str, repo_root: Path) -> list[TrailerRepin]:
-        return [TrailerRepin("P35-I01-W01", WAVE_PIN, OTHER, "unique_trailer")]
-
-    monkeypatch.setattr(pipeline_module, "resolve_trailer_repins", moved)
-    acks = world.root / ".eawf" / "drift-acks.json"
-    acks.parent.mkdir()
-    acks.write_text(json.dumps({"acked_wave_ids": ["P35-I01-W02"]}), encoding="utf-8")
-    with pytest.raises(PipelineRefusal) as refused:
-        world.run()
-    assert refused.value.code is PipelineRefusalCode.TRAILER_REPIN_PENDING
-    # The remedy names the acknowledgement this step honours, not a repair
-    # `doctor` no longer offers.
-    assert ".eawf/drift-acks.json" in refused.value.remedy
-    assert "doctor" not in refused.value.remedy
-
-
-def test_run_post_merge_pipeline_refuses_a_phase_with_no_wave_pins(world: World) -> None:
-    """A well-formed but mistyped phase id reads no pins; verifying zero pins is no check."""
-    world.host.pins = {}
-    with pytest.raises(PipelineRefusal) as refused:
-        world.run()
-    assert (refused.value.step, refused.value.code) == (
-        PipelineStep.REPIN,
-        PipelineRefusalCode.PHASE_PINS_MISSING,
-    )
-    assert "P35" in refused.value.detail
-    assert "resolve_trailer_repins" not in world.calls
-
-
 def test_run_post_merge_pipeline_refuses_a_daemon_refusal_by_name(world: World) -> None:
     def refusing(method: str, params: Mapping[str, Any]) -> dict[str, Any]:
         if method == "release.create":
             raise PipelineRpcError("daemon rejected release.create: invalid_membership_cardinality")
         return world.daemon(method, params)
 
-    options = PipelineOptions(version=VERSION, phase_id="P35", publish=True)
+    options = PipelineOptions(version=VERSION, milestone_key=MILESTONE, publish=True)
     with pytest.raises(PipelineRefusal) as refused:
         run_post_merge_pipeline(options, host=world.host, rpc=refusing, now=lambda: NOW)
     assert (refused.value.step, refused.value.code) == (
@@ -754,45 +676,9 @@ def test_run_post_merge_pipeline_refuses_a_daemon_refusal_by_name(world: World) 
 
 
 def test_run_post_merge_pipeline_rejects_a_non_train_version(world: World) -> None:
-    options = PipelineOptions(version="0.7", phase_id="P35", publish=True)
+    options = PipelineOptions(version="0.7", milestone_key=MILESTONE, publish=True)
     with pytest.raises(ValueError, match="not a train version"):
         run_post_merge_pipeline(options, host=world.host, rpc=world.daemon)
-
-
-# ---- phase id validation ------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "phase_id",
-    [
-        "P<NN>",  # the workflow's un-substituted fallback (.github/workflows/phase-release.yaml)
-        "p35",  # lowercase
-        "P5",  # below the two-digit floor
-        "P",  # no digits at all
-        "35",  # no P prefix
-        "",  # empty
-    ],
-)
-def test_pipeline_options_rejects_a_non_phase_id(phase_id: str) -> None:
-    """The workflow prints the literal ``P<NN>`` when its subject has no ``[P<NN>]``
-    prefix; opening the pipeline against that literal must refuse, not read
-    wave pins for a phase that does not exist."""
-    with pytest.raises(ValueError, match="not a phase id"):
-        PipelineOptions(version=VERSION, phase_id=phase_id, publish=True)
-
-
-@pytest.mark.parametrize("phase_id", ["P35", "P05", "P100"])
-def test_pipeline_options_accepts_a_real_phase_id(phase_id: str) -> None:
-    assert PipelineOptions(version=VERSION, phase_id=phase_id, publish=True).phase_id == phase_id
-
-
-def test_release_pipeline_cli_rejects_the_unsubstituted_phase_placeholder(
-    world: World, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.chdir(world.root)
-    result = CliRunner().invoke(app, ["release", "pipeline", VERSION, "--phase", "P<NN>"])
-    assert result.exit_code != 0
-    assert "not a phase id" in result.output
 
 
 # ---- journal -------------------------------------------------------------------------
@@ -925,8 +811,11 @@ class _StopAfterCandidateHost:
     def prove_gates(self, version: str) -> dict[str, Any]:
         raise PipelineHostError("stub: gate proofs are out of scope for this test")
 
-    def phase_wave_pins(self, phase_id: str) -> dict[str, str]:
-        raise AssertionError("phase_wave_pins must not run: the walk stops at receipts")
+    def milestone_batch_heads(self, milestone_key: str) -> dict[str, str]:
+        raise AssertionError("milestone_batch_heads must not run: the walk stops at receipts")
+
+    def batch_carrier_commits(self, ref: str) -> dict[str, tuple[str, ...]]:
+        raise AssertionError("batch_carrier_commits must not run: the walk stops at receipts")
 
     def sleep(self, seconds: float) -> None:
         raise AssertionError("sleep must not run: no lagging registry here")
@@ -977,9 +866,9 @@ def test_run_post_merge_pipeline_drives_the_real_daemon_through_create_and_candi
     """CREATE and CANDIDATE run the real ``release.*`` handlers, not a fake daemon.
 
     A ``MethodContext`` is bound to a throwaway git checkout carrying the
-    dev1 checkpoint's empty-repo state; the real ``show`` / ``create`` /
-    ``candidate`` handlers persist to and read back its actual
-    ``state.json`` and resolve the source tree with real ``git``. The
+    dev1 checkpoint's empty epoch-2 tree; the real ``show`` / ``create`` /
+    ``candidate`` handlers persist to and read back its actual stores
+    and resolve the source tree with real ``git``. The
     walk is stopped right after CANDIDATE by a host that refuses to
     prove gates, since only the daemon boundary is under test here.
     """
@@ -991,12 +880,7 @@ def test_run_post_merge_pipeline_drives_the_real_daemon_through_create_and_candi
     _run_git(repo, "config", "user.email", "test@example.invalid")
     _run_git(repo, "config", "commit.gpgSign", "false")
     _run_git(repo, "config", "core.hooksPath", ".git/hooks")
-    state_path = repo / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True)
-    empty_state = Path(__file__).resolve().parents[3] / "fixtures" / "states" / "valid"
-    state_path.write_text(
-        (empty_state / "01-empty-repo.json").read_text(encoding="utf-8"), encoding="utf-8"
-    )
+    state_path = lay_contract_tree(repo, (), project_code="QR")
     _run_git(repo, "add", "--all")
     _run_git(repo, "commit", "--quiet", "--message", "chore: seed the throwaway checkout")
     source = _run_git(repo, "rev-parse", "HEAD")
@@ -1036,7 +920,7 @@ def test_run_post_merge_pipeline_drives_the_real_daemon_through_create_and_candi
         state_path=state_path,
     )
     host = _StopAfterCandidateHost(repo, source)
-    options = PipelineOptions(version=version, phase_id="P35", publish=False)
+    options = PipelineOptions(version=version, milestone_key=MILESTONE, publish=False)
 
     with pytest.raises(PipelineRefusal) as refused:
         run_post_merge_pipeline(options, host=host, rpc=_real_release_rpc(ctx), now=lambda: NOW)

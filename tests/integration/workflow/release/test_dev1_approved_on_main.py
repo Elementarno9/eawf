@@ -55,17 +55,17 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf import __version__
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.release.signals import ReleaseSignalName, ReleaseSignalStatus
 from eawf.kernel.spec.release import Release, ReleaseStatus
 from eawf.kernel.spec.release_config import ReleaseConfig, load_release_config
 from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.io import write_state_unlocked
+from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import approve, create, show
 from eawf.surfaces.cli.app import app
-from eawf.workflow.evidence._io import load_state
 from eawf.workflow.release.advance import draft_release_for
 from eawf.workflow.release.dependencies import (
     LicenseDisposition,
@@ -94,6 +94,7 @@ from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
 from eawf.workflow.release.vulnerability import VulnerabilityReport
 from eawf.workflow.verify.release_probes import TagPreflightInputs, build_tag_probes
 from eawf.workflow.verify.release_readiness import ReleaseReadiness, compute_readiness
+from tests._epoch2_helpers import lay_contract_tree
 
 pytestmark = pytest.mark.integration
 
@@ -124,8 +125,6 @@ REQUIRED_DEV1_SIGNALS = (
     ReleaseSignalName.DEPENDENCIES,
 )
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
-_EMPTY_STATE = _REPO_ROOT / "tests" / "fixtures" / "states" / "valid" / "01-empty-repo.json"
 
 #: A lock body the fixture digests. Its contents are irrelevant; that
 #: the manifest names *this* lock's digest is the whole check.
@@ -237,10 +236,7 @@ def merged_main(tmp_path: Path) -> Path:
 @pytest.fixture
 def state_path(tmp_path: Path) -> Path:
     """Return a state root the release verbs may record into."""
-    path = tmp_path / ".ea" / "state.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    write_state_unlocked(path, load_state(_EMPTY_STATE).model_dump(mode="json"))
-    return path
+    return lay_contract_tree(tmp_path, (), project_code="QR")
 
 
 @pytest.fixture
@@ -349,12 +345,15 @@ def test_approve_persists_the_dev1_record_at_approved(
 def test_approve_leaves_state_validating_beside_the_releases_collection(
     ctx: MethodContext, state_path: Path, merged_main: Path
 ) -> None:
-    """The collection is a store, so state.json still loads unchanged."""
-    before = load_state(state_path)
+    """The collection is a store, so the generation document is left unchanged."""
+    authority = resolve_authority(state_path.parent)
+    assert authority.target is not None and authority.generation_id is not None
+    document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    before = document.read_bytes()
     asyncio.run(create(ctx, {"version": DEV1_VERSION}))
     approve_via_rpc(ctx, merged_main)
 
-    assert load_state(state_path) == before
+    assert document.read_bytes() == before
     collection = read_release_records(state_path)
     assert set(collection) == {DEV1_KEY}
     assert collection[DEV1_KEY].status is ReleaseStatus.APPROVED

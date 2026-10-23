@@ -50,7 +50,7 @@ are not blocked by a lower-numbered ready sibling under the same iter. The
 predicate mirrors the claim-time gate
 (the epoch-1 wave claim) but is computed purely off
 the injected view -- it never constructs or mutates a
-:class:`~eawf.kernel.state.models.State`. :func:`drain_frontier` is the
+:class:`~eawf.kernel.migration.v1_state.State`. :func:`drain_frontier` is the
 driver: it walks the ready frontier in claim order and, for each wave a
 caller-injected predicate marks as needing operator confirmation, yields one
 :class:`FrontierDrainStep` carrying that wave's :class:`AUQRequest`. The
@@ -477,7 +477,7 @@ class WaveFrontierItem:
     four fields the claimability predicate needs -- so
     :func:`compute_ready_frontier` reduces the frontier purely off the view
     and never constructs or mutates a
-    :class:`~eawf.kernel.state.models.State`. The caller projects the live
+    :class:`~eawf.kernel.migration.v1_state.State`. The caller projects the live
     state into these rows.
 
     Attributes:

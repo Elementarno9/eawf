@@ -5,17 +5,11 @@ The measurement itself lives in
 supplies the two things a bench verb needs around it — *where the corpus
 comes from* and *what it means to compare one record against a baseline*.
 
-Two corpus sources exist:
-
-- :func:`seed_turn_cost_corpus` replays a deterministic in-memory fixture.
-  Replaying the same fixture id twice yields a byte-identical record, which
-  is what makes a threshold check meaningful at all: without a fixed
-  corpus, a moved p90 cannot be told apart from a different corpus.
-- :func:`collect_live_corpus` joins the projected telemetry sessions onto
-  the closed waves in ``state.json``. An empty result is an ordinary
-  outcome rather than an error — a project that has never projected a
-  session has nothing to measure, and saying so is more useful than
-  raising.
+The corpus comes from :func:`seed_turn_cost_corpus`, which replays a
+deterministic in-memory fixture. Replaying the same fixture id twice yields
+a byte-identical record, which is what makes a threshold check meaningful at
+all: without a fixed corpus, a moved p90 cannot be told apart from a
+different corpus.
 
 The comparison is deliberately three-valued. A baseline recorded against a
 different fixture or a different harness revision is **not** comparable to
@@ -54,27 +48,21 @@ from eawf.observability.telemetry.turn_cost import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
     from pathlib import Path
 
-    from eawf.kernel.state.models import State
-    from eawf.observability.telemetry.models import TelemetrySession
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "COMPARABILITY_FIELDS",
-    "LIVE_FIXTURE_ID",
     "TURN_COST_FIXTURE_IDS",
     "TURN_COST_HARNESS_REVISION",
-    "CorpusResolution",
     "TurnCostBaseline",
     "TurnCostComparison",
     "TurnCostCorpus",
     "TurnCostVerdict",
     "baseline_from_record",
     "build_corpus_record",
-    "collect_live_corpus",
     "compare_turn_cost",
     "load_baseline",
     "seed_turn_cost_corpus",
@@ -90,9 +78,6 @@ unchanged corpus. The check refuses across revisions, so a stale baseline
 surfaces as an explicit refusal instead of a phantom regression.
 """
 
-LIVE_FIXTURE_ID: Final[str] = "live"
-"""Fixture id selecting the live corpus instead of a seeded one."""
-
 _SMALL_FIXTURE_ID: Final[str] = "turn-cost-small"
 
 TURN_COST_FIXTURE_IDS: Final[tuple[str, ...]] = (_SMALL_FIXTURE_ID,)
@@ -104,14 +89,6 @@ _FIXTURE_UNIT_COUNT: Final[int] = 10
 _FIXTURE_RUNTIME: Final[RuntimeName] = "claude"
 _FIXTURE_MODEL: Final[str] = "fixture-model-v1"
 _FIXTURE_RATE_TABLE_VERSION: Final[str] = "fixture-v1"
-
-_LIVE_PRICE_SOURCE: Final[PriceSourceKind] = PriceSourceKind.LIST_RECONSTRUCTED
-"""Provenance stamped on a run sourced from a projected session rollup.
-
-The projector prices the session against the embedded rate table, so the
-cost is list-reconstructed. ``rate_table_version`` stays ``None`` because
-the session row does not stamp which snapshot produced the total.
-"""
 
 
 class TurnCostVerdict(StrEnum):
@@ -218,25 +195,6 @@ class TurnCostCorpus:
     runs: tuple[CompletedUnitRun, ...]
 
 
-@dataclass(frozen=True, slots=True)
-class CorpusResolution:
-    """A resolved corpus, or the honest reason there is nothing to measure.
-
-    Attributes:
-        corpus: The measurable corpus, or ``None`` when there is nothing to
-            measure. ``None`` is an ordinary outcome, not a failure.
-        skipped_session_count: Sessions dropped because the source row could
-            not be turned into a run (no wave, an unknown or still-open
-            wave, a wave with no role, or no model). Surfaced so an empty
-            result is visibly distinguishable from an unread one.
-        reason: Why *corpus* is ``None``; ``None`` when a corpus was built.
-    """
-
-    corpus: TurnCostCorpus | None
-    skipped_session_count: int
-    reason: str | None
-
-
 def seed_turn_cost_corpus(fixture_id: str) -> TurnCostCorpus:
     """Return the deterministic corpus for *fixture_id*.
 
@@ -304,74 +262,6 @@ def seed_turn_cost_corpus(fixture_id: str) -> TurnCostCorpus:
         model=_FIXTURE_MODEL,
         waves=waves,
         runs=tuple(runs),
-    )
-
-
-def collect_live_corpus(
-    *,
-    state: State,
-    sessions: Sequence[TelemetrySession],
-) -> CorpusResolution:
-    """Join projected telemetry *sessions* onto the closed waves in *state*.
-
-    A session becomes a run only when it names a closed wave that carries an
-    agent role and the session records a model. Everything else is counted
-    into ``skipped_session_count``: those are gaps in the source rows, not
-    measurement facts, and the record's own counters already carry the
-    measurement-level exclusions.
-
-    Args:
-        state: The loaded project state supplying the waves.
-        sessions: Projected session rows from the telemetry cache.
-
-    Returns:
-        A :class:`CorpusResolution`. Its ``corpus`` is ``None`` when no session
-        survived the join, or when the surviving runs span more than one
-        ``(runtime, model)`` tuple — a percentile taken across models
-        measures the mix rather than the work.
-    """
-    runs: list[CompletedUnitRun] = []
-    waves: dict[str, Wave] = {}
-    skipped = 0
-    for session in sessions:
-        run = _run_from_session(session, state=state)
-        if run is None:
-            skipped += 1
-            continue
-        runs.append(run)
-        waves[run.wave_id] = state.waves[run.wave_id]
-
-    if not runs:
-        logger.debug(f"collect_live_corpus runs=0 skipped={skipped}")
-        return CorpusResolution(
-            corpus=None,
-            skipped_session_count=skipped,
-            reason="no projected session joins a closed wave with an agent role",
-        )
-
-    declared = sorted({(run.runtime, run.model) for run in runs})
-    if len(declared) > 1:
-        rendered = ", ".join(f"{runtime}/{model}" for runtime, model in declared)
-        return CorpusResolution(
-            corpus=None,
-            skipped_session_count=skipped,
-            reason=(
-                f"live corpus spans {len(declared)} runtime/model tuples ({rendered}): "
-                "a percentile across models measures the mix, not the work"
-            ),
-        )
-
-    runtime, model = declared[0]
-    return CorpusResolution(
-        corpus=TurnCostCorpus(
-            fixture_id=LIVE_FIXTURE_ID,
-            runtime=runtime,
-            model=model,
-            waves=tuple(waves[wave_id] for wave_id in sorted(waves)),
-            runs=tuple(runs),
-        ),
-        skipped_session_count=skipped,
-        reason=None,
     )
 
 
@@ -587,27 +477,4 @@ def _fixture_run(
         cost_usd=cost_usd,
         price_source=PriceSourceKind.LIST_RECONSTRUCTED if priced else PriceSourceKind.UNPRICED,
         rate_table_version=_FIXTURE_RATE_TABLE_VERSION if priced else None,
-    )
-
-
-def _run_from_session(session: TelemetrySession, *, state: State) -> CompletedUnitRun | None:
-    """Return the run *session* contributes, or ``None`` when it contributes none."""
-    if session.wave_id is None or session.model_primary is None:
-        return None
-    wave = state.waves.get(session.wave_id)
-    if wave is None or wave.status is not WaveStatus.CLOSED or wave.agent_role is None:
-        return None
-    return CompletedUnitRun(
-        run_id=session.session_id,
-        wave_id=session.wave_id,
-        role=wave.agent_role,
-        runtime=session.runtime,
-        model=session.model_primary,
-        wall_clock_ms=session.duration_ms if session.duration_ms is not None else 0,
-        input_tokens=session.total_input_tokens,
-        output_tokens=session.total_output_tokens,
-        cache_read_tokens=session.total_cache_read,
-        cache_write_tokens=session.total_cache_write,
-        cost_usd=session.total_cost_usd,
-        price_source=_LIVE_PRICE_SOURCE,
     )

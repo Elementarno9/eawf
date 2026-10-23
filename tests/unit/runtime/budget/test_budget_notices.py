@@ -25,7 +25,7 @@ from pydantic import ValidationError
 from eawf.kernel.state.budget_signal import BUDGET_SIGNAL_FIELDS, refuse_budget_signal
 from eawf.kernel.state.epoch2 import Hold
 from eawf.kernel.state.epoch2.pending_action import PendingAction
-from eawf.kernel.state.models import OpenQuestion, State
+from eawf.kernel.state.models import OpenQuestion
 from eawf.runtime.budget.notices import (
     BudgetCrossing,
     BudgetNoticeLedger,
@@ -40,10 +40,6 @@ from eawf.runtime.budget.notices import (
 )
 from eawf.runtime.budget.policy import PromptBudgetCeiling
 from eawf.runtime.budget.service import emit_budget_notice
-from tests.unit.runtime.budget._wave_payload import (
-    _WAVE_ID,
-    _state_payload,
-)
 
 pytestmark = pytest.mark.unit
 
@@ -416,13 +412,3 @@ def test_emit_budget_notice_corrupt_ledger_degrades_to_none(tmp_path: Path) -> N
         path, scope_id=SCOPE, running=True, consumed=100, ceiling=CEILING, observed_at=AT
     )
     assert result is None
-
-
-def _write_budgeted_state(tmp_path: Path, *, budget: int) -> Path:
-    payload = _state_payload()
-    payload["waves"][_WAVE_ID]["token_budget"] = budget
-    state_dir = tmp_path / ".ea"
-    state_dir.mkdir()
-    path = state_dir / "state.json"
-    path.write_text(State.model_validate(payload).model_dump_json(), encoding="utf-8")
-    return path

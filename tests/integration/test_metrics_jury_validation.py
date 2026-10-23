@@ -3,8 +3,8 @@
 The sub-verb renders the cross-vendor jury validated against its ground-truth
 cohort. Two halves are pinned:
 
-- the honest-negative path through the live CLI: a seeded state whose ballot /
-  gold stores are empty reduces to an empty cohort, so the reducer refuses to
+- the honest-negative path through the live CLI: an epoch-2 tree whose Batch
+  ledger holds no verification cycle reduces to an empty cohort, so the reducer refuses to
   score and the render carries the "insufficient signal (n=0)" banner with a
   zero exit code -- never a fabricated number;
 - the pure renderer + the BlockAuthority derivation over directly-constructed
@@ -23,6 +23,7 @@ from eawf.observability.eval.jury_validation import (
     JuryValidationReport,
     JuryValidationStatus,
 )
+from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands.metrics import (
     _AUTHORITY_ADVISORY,
@@ -30,18 +31,15 @@ from eawf.surfaces.cli.commands.metrics import (
     _block_authority,
     _render_jury_validation,
 )
+from tests._epoch2_helpers import lay_epoch2_tree
 
 runner = CliRunner()
-FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "states"
 
 
 def _seed_state(tmp_path: Path) -> Path:
-    """Copy a valid state fixture into a temp workspace with an empty store."""
+    """Bear an epoch-2 tree whose Batch ledger holds no verification cycle."""
     workspace = tmp_path / "ws"
-    state_dir = workspace / ".ea"
-    state_dir.mkdir(parents=True)
-    src = FIXTURES / "valid" / "09-estimates-and-actuals.json"
-    (state_dir / "state.json").write_bytes(src.read_bytes())
+    lay_epoch2_tree(workspace)
     return workspace
 
 
@@ -86,8 +84,20 @@ def test_jury_validation_empty_cohort_json_envelope(tmp_path: Path) -> None:
     assert payload["block_authority"] == _AUTHORITY_ADVISORY
 
 
+def test_jury_validation_refuses_an_epoch1_tree(tmp_path: Path) -> None:
+    """An epoch-1 tree selects no generation, so the sub-verb asks for migration."""
+    state_dir = tmp_path / "v1" / ".ea"
+    state_dir.mkdir(parents=True)
+    (state_dir / "state.json").write_text("{}", encoding="utf-8")
+    result = runner.invoke(
+        app, ["--json", "-w", str(tmp_path / "v1"), "metrics", "jury-validation"]
+    )
+    assert result.exit_code == exit_codes.ATTACH_FAILURE, result.output
+    assert "migrate" in result.stdout
+
+
 def test_jury_validation_no_state_exits_nonzero(tmp_path: Path) -> None:
-    """With no reachable ``state.json`` the sub-verb fails closed (NotFound)."""
+    """With no reachable tree the sub-verb fails closed (NotFound)."""
     workspace = tmp_path / "no-state"
     workspace.mkdir()
     result = runner.invoke(app, ["-w", str(workspace), "metrics", "jury-validation"])

@@ -1,24 +1,14 @@
-"""The readiness floor pack executes out of process, never against the live tree.
+"""Deterministic gates execute out of process, never against the live tree.
 
-The close-readiness compute used to run its deterministic falsifiers in the
-calling process. In the daemon that meant a floor check -- routinely a whole
-test suite that drives eawf's own RPCs -- reached the live runtime directory
-and the live ledger: it wrote the live state, flipped the live dispatch pause
-flag, and drove the production dispatch path for real.
-
-The suite below pins the two properties that close that hole for the floor
-pack and for the advisory single-gate path:
-
-* the checks run in a child interpreter whose ``EAWF_RUNTIME_DIR`` /
-  live ledger are bound to a throwaway sandbox, not to the live pair; and
-* a floor-pack gate that deliberately mutates whatever ledger it resolves
-  leaves the live tree byte identical.
+A readiness gate is routinely a whole test suite that drives eawf's own
+RPCs; run in the calling process it would reach the live runtime directory
+and the live ledger. The suite below pins that the advisory single-gate
+path and :func:`~eawf.workflow.verify.sandboxed_checks.run_checks_out_of_process`
+run their checks in a child interpreter whose ``EAWF_RUNTIME_DIR`` and live
+ledger are bound to a throwaway sandbox, not to the live pair.
 
 Every "live" tree in this file is a fixture directory built under
-``tmp_path``. The repository's own ``.ea`` is never read or written: the
-readiness compute reaches the live tree only through the ``store_dir``
-argument and the ``EAWF_RUNTIME_DIR`` env var, both of which each test
-points at its fixture.
+``tmp_path``. The repository's own ``.ea`` is never read or written.
 """
 
 from __future__ import annotations
@@ -31,144 +21,17 @@ from typing import Any
 import pytest
 
 from eawf.kernel.spec.common import CriterionSpec, GateSpec
-from eawf.kernel.state.enums import ProjectStatus, ScopeKind
-from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.kernel.state.resolve import GATE_LIVE_STATE_ENV, GATE_SANDBOX_STATE_ENV
-from eawf.kernel.store.paths import store_dir as _store_dir
-from eawf.platform.profiles.models import FloorCheck, VerifyBlock
 from eawf.runtime.daemon import gate_execution
 from eawf.workflow.audit_dsl.models import CheckSpec
 from eawf.workflow.verify import readiness as readiness_mod
 from eawf.workflow.verify import sandboxed_checks
-from tests._criteria_helpers import legacy_criteria
-from tests._epoch1_seed import seed_iter, seed_phase, seed_wave
-from tests._session_helpers import claim_wave_with_session as claim_wave
-from tests.conftest import make_claim_criterion, make_floor_waiver, make_intent
+from tests._epoch2_helpers import lay_epoch2_tree
 
 pytestmark = pytest.mark.integration
 
-WAVE_ID = "P01-I01-W01"
-
-_T0 = "2026-09-08T00:00:00+00:00"
-
-#: The floor-pack probe. ``pytest`` is the allowlisted vehicle for running
-#: arbitrary observation code inside a gate, so the probe is a collected
-#: module: import time reports what the gate resolved, and the collected
-#: test keeps the gate's exit status zero.
-_PROBE_MODULE = "test_floor_probe.py"
-
-#: Mutator probe: resolves its ledger and runtime directory exactly the way
-#: every eawf RPC does, then writes to BOTH -- the shape of a floor suite
-#: that drives the pause RPC and the dispatch path behind it. The report is
-#: written to an absolute path handed in by env so the parent can read what
-#: the gate actually reached after the sandbox is gone.
-_MUTATOR_SOURCE = """
-import json
-import os
-from pathlib import Path
-
-from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.resolve import resolve_with_reason
-from eawf.kernel.store.paths import store_path
-from eawf.runtime.daemon.runtime_dir import runtime_dir, socket_path
-
-state_path, reason = resolve_with_reason(None)
-resolved_runtime = runtime_dir()
-
-mutated = False
-events_after = []
-if state_path.is_file():
-    payload = json.loads(state_path.read_text(encoding="utf-8"))
-    payload["dispatch_paused"] = True
-    state_path.write_text(json.dumps(payload), encoding="utf-8")
-    events = store_path(state_path, StoreKind.EVENT)
-    events.parent.mkdir(parents=True, exist_ok=True)
-    with events.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps({"id": "EV-FLOOR"}) + "\\n")
-    events_after = events.read_text(encoding="utf-8").splitlines()
-    mutated = True
-
-resolved_runtime.mkdir(parents=True, exist_ok=True)
-(resolved_runtime / "floor-probe.marker").write_text("reached\\n", encoding="utf-8")
-
-Path(os.environ["LC_FLOOR_PROBE_REPORT"]).write_text(
-    json.dumps(
-        {
-            "state_path": str(state_path),
-            "reason": reason,
-            "runtime_dir": str(resolved_runtime),
-            "socket_path": str(socket_path()),
-            "mutated": mutated,
-            "events_after": events_after,
-        }
-    ),
-    encoding="utf-8",
-)
-
-
-def test_probe_collected() -> None:
-    pass
-"""
-
 
 # ---- fixtures ---------------------------------------------------------------
-
-
-def _state_payload() -> dict[str, Any]:
-    """Return a minimal valid state with dispatch running."""
-    return {
-        "schema_version": "1.0",
-        "scope_kind": ScopeKind.REPO.value,
-        "urn": "urn:eawf:v1:state:ISO",
-        "updated_at": _T0,
-        "project": Project(
-            code="ISO",
-            slug="iso",
-            title="ISO",
-            description=None,
-            domains=["x"],
-            default_branch="main",
-            status=ProjectStatus.ACTIVE,
-            repo_urn="urn:eawf:v1:repo:ISO",
-        ).model_dump(mode="json"),
-        "current": CurrentPointers(project_code="ISO").model_dump(mode="json"),
-        "workspace": None,
-        "phases": {},
-        "iters": {},
-        "waves": {},
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {},
-        "dispatch_paused": False,
-    }
-
-
-def _seed_wave(state: State, *, typed: bool) -> None:
-    """Plan + claim the scored wave.
-
-    Args:
-        state: The in-memory state the wave is planned on.
-        typed: When ``False`` the wave keeps only legacy criteria, which is
-            what makes the profile floor pack render; when ``True`` the
-            typed criterion stays and the floor pack is suppressed.
-    """
-    seed_phase(state, phase_id="P01", title="phase")
-    seed_iter(state, iter_id="P01-I01", phase_id="P01", title="iter")
-    seed_wave(
-        state,
-        wave_id=WAVE_ID,
-        iter_id="P01-I01",
-        title="wave",
-        file_scopes=["src/"],
-        success_criteria=[make_claim_criterion()],
-        effort_bucket="M",
-        intent=make_intent(),
-    )
-    claim_wave(state, wave_id=WAVE_ID, session_id="SES-iso")
-    if not typed:
-        state.waves[WAVE_ID].success_criteria = legacy_criteria("legacy a")
-        state.waves[WAVE_ID].criteria_floor_waiver = make_floor_waiver()
 
 
 def _git(repo_root: Path, *args: str) -> None:
@@ -198,12 +61,7 @@ def _write_live_state(root: Path) -> Path:
     that reaches an operator's real ``.ea``. A ledger tucked out of that walk
     would make the byte-identity assertions pass for the wrong reason.
     """
-    state_path = root / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    state_path.write_text(
-        State.model_validate(_state_payload()).model_dump_json(),
-        encoding="utf-8",
-    )
+    state_path = lay_epoch2_tree(root, project_code="ABC")
     store = state_path.parent / "store"
     store.mkdir(parents=True, exist_ok=True)
     (store / "event.jsonl").write_text('{"id": "EV-LIVE"}\n', encoding="utf-8")
@@ -220,46 +78,6 @@ def _write_live_runtime_dir(root: Path) -> Path:
     (live / "eawfd.lock").write_text("{}\n", encoding="utf-8")
     (live / "eawfd.sock").write_text("", encoding="utf-8")
     return live
-
-
-def _tree_signature(root: Path) -> dict[str, bytes]:
-    """Return a path -> bytes map of every regular file under *root*."""
-    return {
-        entry.relative_to(root).as_posix(): entry.read_bytes()
-        for entry in sorted(root.rglob("*"))
-        if entry.is_file()
-    }
-
-
-def _passing_floor(name: str) -> FloorCheck:
-    """A floor check whose argv exits zero in a seeded repo."""
-    return FloorCheck(
-        name=name,
-        cmd=["git", "status", "--porcelain"],
-        scope="all",
-        cadence="every-wave",
-        policy="warn",
-    )
-
-
-def _probe_floor(name: str) -> FloorCheck:
-    """A floor check that runs the probe module planted in the repo root."""
-    return FloorCheck(
-        name=name,
-        cmd=["pytest", "-p", "no:cacheprovider", "-q", _PROBE_MODULE],
-        scope="all",
-        cadence="every-wave",
-        policy="warn",
-    )
-
-
-def _attach_block(monkeypatch: pytest.MonkeyPatch, block: VerifyBlock) -> None:
-    """Make *block* the active profile verify block for the readiness compute."""
-    monkeypatch.setattr(
-        readiness_mod,
-        "_load_active_verify_block",
-        lambda scope_id, state_arg, **kwargs: block,
-    )
 
 
 def _capture_child_envs(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, str]]:
@@ -281,134 +99,7 @@ def _capture_child_envs(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, str]]
     return seen
 
 
-# ---- CR-01: the floor pack runs out of process in the sandbox ---------------
-
-
-def test_floor_pack_runs_out_of_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """CR-01: the floor pack executes in a child bound to a sandbox.
-
-    Asserts the whole chain at once: the readiness compute reached the
-    sandboxed runner, the child's runtime dir and ledger fence name a
-    throwaway sandbox rather than the live fixture pair, the sandbox carried
-    the live snapshot content (so gate reads stay faithful) without the live
-    daemon's transport handles, and the floor views came from a real run.
-    """
-    repo_root = tmp_path / "repo"
-    _init_repo(repo_root)
-    live_state = _write_live_state(tmp_path)
-    live_runtime = _write_live_runtime_dir(tmp_path)
-    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(live_runtime))
-    envs = _capture_child_envs(monkeypatch)
-
-    state = State.model_validate(_state_payload())
-    _seed_wave(state, typed=False)
-    _attach_block(
-        monkeypatch,
-        VerifyBlock(argv_allowlist=[], floor_checks=[_passing_floor("c-1"), _passing_floor("c-2")]),
-    )
-
-    result = readiness_mod.compute(
-        WAVE_ID,
-        state=state,
-        store_dir=_store_dir(live_state),
-        repo_root=repo_root,
-    )
-
-    floor_views = [view for view in result.criteria if view.source == "floor"]
-    assert [view.id for view in floor_views] == ["c-1", "c-2"]
-    assert {view.status for view in floor_views} == {"pass"}
-
-    assert len(envs) == 1, "the floor pack did not run as one sandboxed batch"
-    child_env = envs[0]
-    child_runtime = Path(child_env["EAWF_RUNTIME_DIR"])
-    child_state = Path(child_env[GATE_SANDBOX_STATE_ENV])
-    assert "EA_STATE" not in child_env, "a ledger pin would outrank the gate's own -w"
-    assert child_runtime != live_runtime, "the floor pack inherited the live runtime directory"
-    assert live_runtime not in child_runtime.parents
-    assert child_state != live_state, "the floor pack inherited the live ledger"
-    assert live_state.parent not in child_state.parents
-    assert "EAWF_SPEC_CACHE_DIR" not in child_env
-    assert not child_runtime.exists(), "the sandbox outlived the floor pack that owned it"
-
-
-def test_floor_pack_sandbox_is_seeded_from_the_live_snapshot(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """CR-01: the sandbox is a faithful copy, minus the live daemon handles.
-
-    Isolation that answered reads with an empty tree would break every floor
-    check that reads the ledger, so the copy has to be real; the live
-    daemon's socket / PID / lock must NOT be in it, because copying them
-    points a sandboxed client straight back at the live process.
-    """
-    repo_root = tmp_path / "repo"
-    _init_repo(repo_root)
-    live_state = _write_live_state(tmp_path)
-    live_runtime = _write_live_runtime_dir(tmp_path)
-    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(live_runtime))
-
-    seeded: dict[str, bool] = {}
-    real_seed = gate_execution.seed_gate_sandbox
-
-    def _spy(**kwargs: Any) -> gate_execution.GateSandbox:
-        sandbox = real_seed(**kwargs)
-        seeded["wal"] = (sandbox.runtime_dir / "wal" / "0001.json").is_file()
-        seeded["sock"] = (sandbox.runtime_dir / "eawfd.sock").exists()
-        seeded["pid"] = (sandbox.runtime_dir / "eawfd.pid").exists()
-        seeded["ledger"] = sandbox.state_path.is_file()
-        seeded["store"] = (sandbox.state_path.parent / "store" / "event.jsonl").is_file()
-        return sandbox
-
-    monkeypatch.setattr(gate_execution, "seed_gate_sandbox", _spy)
-
-    state = State.model_validate(_state_payload())
-    _seed_wave(state, typed=False)
-    _attach_block(monkeypatch, VerifyBlock(argv_allowlist=[], floor_checks=[_passing_floor("c-1")]))
-
-    readiness_mod.compute(
-        WAVE_ID,
-        state=state,
-        store_dir=_store_dir(live_state),
-        repo_root=repo_root,
-    )
-
-    assert seeded == {
-        "wal": True,
-        "sock": False,
-        "pid": False,
-        "ledger": True,
-        "store": True,
-    }
-
-
-def test_floor_pack_waived_check_spawns_no_child(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Boundary: an all-waived floor pack runs zero checks and spawns no child."""
-    repo_root = tmp_path / "repo"
-    _init_repo(repo_root)
-    live_state = _write_live_state(tmp_path)
-    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(_write_live_runtime_dir(tmp_path)))
-    envs = _capture_child_envs(monkeypatch)
-
-    state = State.model_validate(_state_payload())
-    _seed_wave(state, typed=False)
-    _attach_block(monkeypatch, VerifyBlock(argv_allowlist=[], floor_checks=[_passing_floor("c-1")]))
-    monkeypatch.setattr(readiness_mod, "_floor_check_waived", lambda name, evidence: True)
-
-    result = readiness_mod.compute(
-        WAVE_ID,
-        state=state,
-        store_dir=_store_dir(live_state),
-        repo_root=repo_root,
-    )
-
-    floor_views = [view for view in result.criteria if view.source == "floor"]
-    assert [view.status for view in floor_views] == ["waived"]
-    assert envs == [], "a fully waived floor pack still spawned a runner child"
-
-
-# ---- CR-02: the advisory single-gate path + live-state byte identity --------
+# ---- the advisory single-gate path ------------------------------------------
 
 
 def test_advisory_single_gate_runs_out_of_process(
@@ -453,71 +144,6 @@ def test_advisory_single_gate_runs_out_of_process(
     assert Path(envs[0]["EAWF_RUNTIME_DIR"]) != live_runtime
     assert Path(envs[0][GATE_SANDBOX_STATE_ENV]) != live_state
     assert Path(envs[0][GATE_LIVE_STATE_ENV]) == live_state
-
-
-def test_live_state_byte_identical_after_floor_pack(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """CR-02: a state-mutating floor gate leaves the live tree byte identical.
-
-    The floor check flips ``dispatch_paused``, appends an event row, and
-    writes into the runtime directory -- all through the resolvers every RPC
-    uses. Post-conditions: the live ``state.json`` bytes, the live event
-    store bytes, the live ``dispatch_paused`` value, and the whole live
-    runtime directory are unchanged, while the gate's own report proves the
-    mutation really happened somewhere else.
-    """
-    repo_root = tmp_path / "repo"
-    _init_repo(repo_root)
-    live_state = _write_live_state(tmp_path)
-    live_runtime = _write_live_runtime_dir(tmp_path)
-    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(live_runtime))
-    report = tmp_path / "probe-report.json"
-    # ``LC_*`` is the one prefix family the gate env-scrub floor carries, so
-    # it is how the probe learns where to write a report that outlives the
-    # sandbox it ran in.
-    monkeypatch.setenv("LC_FLOOR_PROBE_REPORT", str(report))
-    (repo_root / _PROBE_MODULE).write_text(_MUTATOR_SOURCE, encoding="utf-8")
-
-    live_events = live_state.parent / "store" / "event.jsonl"
-    state_before = live_state.read_bytes()
-    events_before = live_events.read_bytes()
-    runtime_before = _tree_signature(live_runtime)
-    assert State.model_validate_json(state_before).dispatch_paused is False
-
-    state = State.model_validate(_state_payload())
-    _seed_wave(state, typed=False)
-    _attach_block(
-        monkeypatch, VerifyBlock(argv_allowlist=[], floor_checks=[_probe_floor("mutate")])
-    )
-
-    result = readiness_mod.compute(
-        WAVE_ID,
-        state=state,
-        store_dir=_store_dir(live_state),
-        repo_root=repo_root,
-    )
-
-    floor_views = [view for view in result.criteria if view.source == "floor"]
-    assert [view.status for view in floor_views] == ["pass"], floor_views
-
-    assert live_state.read_bytes() == state_before, "the floor gate rewrote the live ledger"
-    assert live_events.read_bytes() == events_before, "the floor gate appended to the live store"
-    assert State.model_validate_json(live_state.read_bytes()).dispatch_paused is False
-    assert _tree_signature(live_runtime) == runtime_before, (
-        "the floor gate wrote the live runtime directory"
-    )
-
-    seen = json.loads(report.read_text(encoding="utf-8"))
-    assert seen["mutated"] is True, "the gate mutated nothing; the test proved no isolation"
-    assert seen["reason"] == "pwd_upward"
-    assert Path(seen["state_path"]) != live_state
-    assert live_state.parent not in Path(seen["state_path"]).parents
-    assert len(seen["events_after"]) == 2, "the gate appended to some other event store"
-    assert Path(seen["runtime_dir"]) != live_runtime
-    assert Path(seen["socket_path"]).parent != live_runtime, (
-        "a dispatch RPC from the floor gate would have reached the live daemon"
-    )
 
 
 # ---- run_checks_out_of_process: boundaries + error paths --------------------

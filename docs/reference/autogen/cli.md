@@ -164,11 +164,11 @@ Native decisions of the selected generation (list, show).
 
 ### `eawf doc`
 
-Read-only documentation drift + state-vs-doc cross-checks.
+Read-only documentation drift + artifact cross-checks.
 
 | Verb | Summary |
 |---|---|
-| `verify` | Verify that rendered docs match state.json + manifest hashes. |
+| `verify` | Verify that rendered docs match their manifest hashes and artifacts resolve. |
 
 ### `eawf doctor`
 
@@ -250,7 +250,7 @@ Manage curated durable memory entries.
 |---|---|
 | `add` | File a new memory note on the generation's memory ledger. |
 | `compact` | Compact ``memory.jsonl`` (dedup by content; idempotent). |
-| `digest` | Emit a state-derived standup: current focus, recent closes, decisions. |
+| `digest` | Emit a standup of the selected generation's recent decisions. |
 | `gc` | Archive matched memory notes by moving them to the ARCHIVAL tier. |
 | `list` | List the memory notes the tree stands at. |
 | `promote` | Promote a record. ``--to memory`` (default) or ``--to artifact``. |
@@ -368,7 +368,7 @@ Tag releases and drive the release train's checkpoint records.
 | `changelog` | Mine the current ``CHANGELOG.md`` unreleased section. |
 | `create` | Open one checkpoint's DRAFT record, after measured admission. |
 | `discharge-debt` | Discharge a verification debt once its deferred gate has passed. |
-| `notes` | Render a scrubbed release-notes draft. |
+| `notes` | Render a scrubbed release-notes draft from the unreleased changelog. |
 | `observe` | Read one publication target back and settle it against the manifest. |
 | `pipeline` | Take a merged checkpoint from tag to BAKED and the train advance. |
 | `preflight` | Sweep every readiness signal for one checkpoint over this checkout. |

@@ -33,8 +33,9 @@ from pathlib import Path
 from typing import Any
 
 import eawf.runtime.worktree.git as git
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import WorktreeStatus
-from eawf.kernel.state.models import State, WorktreeRecord
+from eawf.kernel.state.models import WorktreeRecord
 from eawf.surfaces.cli import errors as cli_errors
 
 logger = logging.getLogger(__name__)

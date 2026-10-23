@@ -22,8 +22,8 @@ from typing import Any
 
 import orjson
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import AgentSessionStatus, StoreKind
-from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.session.store import append_event
 

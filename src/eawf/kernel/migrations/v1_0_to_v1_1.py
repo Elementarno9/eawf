@@ -10,7 +10,7 @@ with a placeholder (the row ``id`` when present, else ``"(untitled)"``)
 so the migrated row stays model-valid.
 
 The transform operates on the **raw** state dict and never re-validates the
-input against the full :class:`eawf.kernel.state.models.State` model — the v1.0
+input against the full :class:`eawf.kernel.migration.v1_state.State` model — the v1.0
 input still carries the dropped ``summary`` / ``text`` keys and over-cap
 titles, neither of which the current model accepts. For every entity row
 whose ``title`` exceeds 72 chars, the FULL title is copied into

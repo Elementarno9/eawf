@@ -44,6 +44,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.runtime.compiled import canonical_digest
 from eawf.kernel.spec.measured_contract import (
     MeasuredContract,
@@ -55,7 +56,7 @@ from eawf.kernel.spec.measured_contract import (
 )
 from eawf.kernel.state import urn as urn_mod
 from eawf.kernel.state.enums import ArtifactKind, StoreKind
-from eawf.kernel.state.models import Artifact, State
+from eawf.kernel.state.models import Artifact
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord, mint_evidence_id
 from eawf.surfaces.cli.errors import UserError

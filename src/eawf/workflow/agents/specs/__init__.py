@@ -4,7 +4,7 @@ Public API:
 
 - :class:`~eawf.workflow.agents.specs.models.SubagentSpec` — typed dispatch spec
   for one wave. The dispatch renderer builds it from a validated
-  :class:`~eawf.kernel.state.models.State` snapshot and calls
+  :class:`~eawf.kernel.migration.v1_state.State` snapshot and calls
   :meth:`SubagentSpec.render` to produce the wave prompt, so the prompt
   is rendered from a typed spec rather than ad-hoc string concatenation.
 - :class:`~eawf.workflow.agents.specs.roles.RoleSpec` + :data:`ROLE_REGISTRY` —

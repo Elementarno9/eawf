@@ -29,7 +29,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import eawf.runtime.worktree.git as git
-from eawf.kernel.state.models import State, WorktreeRecord
+from eawf.kernel.migration.v1_state import State
+from eawf.kernel.state.models import WorktreeRecord
 from eawf.runtime.worktree.cleanup import CleanupResult, cleanup_worktree
 from eawf.runtime.worktree.locks import worktree_registry_lock
 from eawf.runtime.worktree.merge_back import (

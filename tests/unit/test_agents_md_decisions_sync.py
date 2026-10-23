@@ -1,19 +1,9 @@
 """Unit tests for the typed-Decisions render path on AGENTS.md.
 
-Covers :func:`eawf.surfaces.render.agents_md.render_decisions_section` (pure body
-builder) and the opt-in ``state``/``decisions_scope_id`` plumbing on
-:func:`eawf.surfaces.render.agents_md.render_agents_md` (managed-region injection).
-
-Round-trip contract:
-
-    typed Decision rows  ->  render_decisions_section / render_agents_md
-                          ->  Markdown section containing every Decision's
-                              id + summary + rationale + alternatives
-                          ->  parseable via eawf.surfaces.render.regions.find_regions
-
-The round-trip test seeds the same 23 ids the P19-I02 plan-absorption
-commit writes to .ea/state.json (D01..D23) so the section emitted by
-the renderer mirrors what ``eawf sync`` would write on a real project.
+Covers :func:`eawf.surfaces.render.agents_md.render_decisions_section`, the
+pure body builder, and pins that
+:func:`eawf.surfaces.render.agents_md.render_agents_md` called without a
+``state`` emits no managed Decisions region.
 """
 
 from __future__ import annotations
@@ -26,20 +16,12 @@ from pydantic import ValidationError
 
 from eawf.kernel.state.enums import (
     DecisionStatus,
-    ProjectStatus,
-    ScopeKind,
 )
-from eawf.kernel.state.models import (
-    CurrentPointers,
-    Decision,
-    Project,
-    State,
-)
+from eawf.kernel.state.models import Decision
 from eawf.platform.profiles.models import ComposedProfile, RenderBlock
 from eawf.surfaces.render import regions
 from eawf.surfaces.render.agents_md import (
     DECISIONS_REGION_ID,
-    DECISIONS_REGION_VERSION,
     render_agents_md,
     render_decisions_section,
 )
@@ -69,38 +51,6 @@ def _decision(
         status=status,
         created_at=datetime.now(UTC),
         superseded_by=None,
-    )
-
-
-def _state_with_decisions(decisions: dict[str, Decision]) -> State:
-    """Return a minimal State carrying the supplied decisions dict."""
-    return State.model_validate(
-        {
-            "schema_version": "1.0",
-            "scope_kind": ScopeKind.REPO.value,
-            "urn": "urn:eawf:v1:state:QR",
-            "updated_at": datetime.now(UTC).isoformat(),
-            "project": Project(
-                code="QR",
-                slug="qr",
-                title="QR",
-                description=None,
-                domains=["x"],
-                default_branch="main",
-                status=ProjectStatus.ACTIVE,
-                repo_urn="urn:eawf:v1:repo:QR",
-            ).model_dump(mode="json"),
-            "current": CurrentPointers(project_code="QR").model_dump(mode="json"),
-            "workspace": None,
-            "phases": {},
-            "iters": {},
-            "waves": {},
-            "artifacts": {},
-            "agent_sessions": {},
-            "plugins": {},
-            "indexes": {},
-            "decisions": {did: d.model_dump(mode="json") for did, d in decisions.items()},
-        }
     )
 
 
@@ -262,7 +212,7 @@ def test_render_decisions_section_does_not_mutate_input() -> None:
     assert pool == snapshot
 
 
-# ---- render_agents_md state-injection plumbing ------------------------------
+# ---- render_agents_md without state -----------------------------------------
 
 
 def test_render_agents_md_state_none_skips_decisions_region(tmp_path: Path) -> None:
@@ -276,193 +226,6 @@ def test_render_agents_md_state_none_skips_decisions_region(tmp_path: Path) -> N
     parsed = {r.id for r in regions.find_regions(text)}
     assert DECISIONS_REGION_ID not in parsed
     assert DECISIONS_REGION_ID not in result.regions_added
-
-
-def test_render_agents_md_state_injects_decisions_region(tmp_path: Path) -> None:
-    """With *state* the renderer appends a managed ``decisions`` region."""
-    target = tmp_path / "AGENTS.md"
-    composed = _composed_with_blocks(
-        [RenderBlock(id="rules", target="AGENTS.md", body_template="## Rules\n\n- one")]
-    )
-    state = _state_with_decisions(
-        {
-            "D01": _decision("D01", summary="First decision"),
-            "D02": _decision("D02", summary="Second decision"),
-        }
-    )
-
-    result, manifest_after = render_agents_md(
-        composed,
-        target,
-        Manifest(version=1, generated={}),
-        state=state,
-    )
-
-    text = target.read_text(encoding="utf-8")
-    parsed = {r.id: r for r in regions.find_regions(text)}
-    assert DECISIONS_REGION_ID in parsed
-    decisions_region = parsed[DECISIONS_REGION_ID]
-    assert decisions_region.version == DECISIONS_REGION_VERSION
-    assert "### D01: First decision" in decisions_region.body
-    assert "### D02: Second decision" in decisions_region.body
-    assert DECISIONS_REGION_ID in result.regions_added
-    # Manifest carries the new region.
-    composite_key = f"{target.as_posix()}::{DECISIONS_REGION_ID}"
-    assert composite_key in manifest_after.generated
-    entry = manifest_after.generated[composite_key]
-    assert entry.region_id == DECISIONS_REGION_ID
-    assert entry.version == DECISIONS_REGION_VERSION
-    assert entry.hash == regions.compute_hash(decisions_region.body)
-
-
-def test_render_agents_md_decisions_scope_filter(tmp_path: Path) -> None:
-    """``decisions_scope_id`` forwards to render_decisions_section."""
-    target = tmp_path / "AGENTS.md"
-    composed = _composed_with_blocks()
-    state = _state_with_decisions(
-        {
-            "D10": _decision("D10", scope_id="QR", summary="In-scope"),
-            "D99": _decision("D99", scope_id="OTHER", summary="Out-of-scope"),
-        }
-    )
-
-    render_agents_md(
-        composed,
-        target,
-        Manifest(version=1, generated={}),
-        state=state,
-        decisions_scope_id="QR",
-    )
-
-    text = target.read_text(encoding="utf-8")
-    parsed = {r.id: r for r in regions.find_regions(text)}
-    body = parsed[DECISIONS_REGION_ID].body
-    assert "### D10: In-scope" in body
-    assert "D99" not in body
-
-
-def test_render_agents_md_re_render_with_unchanged_state_is_unchanged(
-    tmp_path: Path,
-) -> None:
-    """Identical state on a second pass reports ``regions_unchanged``."""
-    target = tmp_path / "AGENTS.md"
-    composed = _composed_with_blocks()
-    state = _state_with_decisions({"D11": _decision("D11")})
-
-    _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}), state=state)
-    result, _ = render_agents_md(composed, target, manifest, state=state)
-
-    assert DECISIONS_REGION_ID in result.regions_unchanged
-    assert DECISIONS_REGION_ID not in result.regions_updated
-    assert DECISIONS_REGION_ID not in result.regions_added
-
-
-def test_render_agents_md_re_render_with_changed_state_marks_updated(
-    tmp_path: Path,
-) -> None:
-    """Changing a Decision rationale flips the region to ``regions_updated``."""
-    target = tmp_path / "AGENTS.md"
-    composed = _composed_with_blocks()
-    state_a = _state_with_decisions({"D12": _decision("D12", rationale="First.")})
-    state_b = _state_with_decisions({"D12": _decision("D12", rationale="Second.")})
-
-    _, manifest = render_agents_md(
-        composed, target, Manifest(version=1, generated={}), state=state_a
-    )
-    result, _ = render_agents_md(composed, target, manifest, state=state_b)
-
-    assert DECISIONS_REGION_ID in result.regions_updated
-    text = target.read_text(encoding="utf-8")
-    parsed = {r.id: r for r in regions.find_regions(text)}
-    assert "Second." in parsed[DECISIONS_REGION_ID].body
-    assert "First." not in parsed[DECISIONS_REGION_ID].body
-
-
-# ---- Round-trip with the P19-I02 D01..D23 fixture ---------------------------
-
-
-def _build_d01_through_d23() -> dict[str, Decision]:
-    """Build the 23-row Decision fixture mirroring the P19-I02 plan absorption.
-
-    The actual P19-I02 decisions live in ``.ea/state.json``; this fixture
-    uses synthetic summary/rationale text per id but covers the same id
-    population (D01..D23) so the round-trip test demonstrates that every
-    id surfaces in the rendered AGENTS.md section.
-    """
-    pool: dict[str, Decision] = {}
-    for n in range(1, 24):
-        did = f"D{n:02d}"
-        pool[did] = _decision(
-            did,
-            summary=f"{did} policy summary",
-            rationale=f"{did} rationale block — multiple sentences. Second sentence.",
-            alternatives=[f"{did}-alt-a", f"{did}-alt-b"] if n % 3 == 0 else [],
-        )
-    return pool
-
-
-def test_render_agents_md_round_trip_d01_through_d23(tmp_path: Path) -> None:
-    """Typed D01..D23 -> rendered AGENTS.md -> parseable section with every id."""
-    target = tmp_path / "AGENTS.md"
-    composed = _composed_with_blocks(
-        [
-            RenderBlock(
-                id="non-negotiable-rules",
-                target="AGENTS.md",
-                body_template="## Non-negotiable rules (core)\n\n- placeholder",
-            )
-        ]
-    )
-    decisions = _build_d01_through_d23()
-    state = _state_with_decisions(decisions)
-
-    result, manifest_after = render_agents_md(
-        composed,
-        target,
-        Manifest(version=1, generated={}),
-        state=state,
-    )
-
-    # File parses back into managed regions including the Decisions region.
-    text = target.read_text(encoding="utf-8")
-    parsed = {r.id: r for r in regions.find_regions(text)}
-    assert DECISIONS_REGION_ID in parsed
-    assert "non-negotiable-rules" in parsed
-    decisions_body = parsed[DECISIONS_REGION_ID].body
-    # Every D## id, summary, and rationale survives the round-trip.
-    for did in decisions:
-        assert f"### {did}: {did} policy summary" in decisions_body, did
-        assert f"{did} rationale block" in decisions_body, did
-    # Ids appear in lexicographic order in the rendered text.
-    positions = [decisions_body.index(f"### {did}") for did in sorted(decisions)]
-    assert positions == sorted(positions)
-    # Manifest reports the typed-region delta correctly.
-    assert DECISIONS_REGION_ID in result.regions_added
-    composite_key = f"{target.as_posix()}::{DECISIONS_REGION_ID}"
-    assert composite_key in manifest_after.generated
-
-
-def test_render_agents_md_decisions_region_preserves_hand_edits(
-    tmp_path: Path,
-) -> None:
-    """User content outside the Decisions managed region round-trips byte-stably."""
-    target = tmp_path / "AGENTS.md"
-    composed = _composed_with_blocks()
-    state = _state_with_decisions({"D13": _decision("D13")})
-
-    _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}), state=state)
-
-    hand_edit = "\n\n## Hand-written addendum\n\nNot managed by the renderer.\n"
-    with target.open("a", encoding="utf-8") as fh:
-        fh.write(hand_edit)
-    before = target.read_text(encoding="utf-8")
-
-    result, _ = render_agents_md(composed, target, manifest, state=state)
-    after = target.read_text(encoding="utf-8")
-
-    assert before == after, "decisions region re-render must preserve hand-edits"
-    assert "## Hand-written addendum" in after
-    assert result.hand_edits_preserved is True
 
 
 # ---- Error-path tests -------------------------------------------------------

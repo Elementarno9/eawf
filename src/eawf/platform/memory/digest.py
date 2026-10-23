@@ -36,9 +36,9 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import IterStatus
 from eawf.kernel.state.epoch2.decision import Decision
-from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 

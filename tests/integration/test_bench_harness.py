@@ -26,8 +26,8 @@ import yaml
 from pydantic import ValidationError as PydanticValidationError
 from typer.testing import CliRunner
 
-from eawf.kernel.state.enums import AgentSessionRole, ScopeKind, WaveStatus
-from eawf.kernel.state.models import CurrentPointers, State, Wave
+from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
+from eawf.kernel.state.models import Wave
 from eawf.observability.bench.harness import (
     HARNESS_CATALOG,
     BenchResult,
@@ -40,18 +40,15 @@ from eawf.observability.bench.harness import (
 from eawf.observability.bench.seed import FIXTURE_SIZES, seed_corpus, seed_fixture
 from eawf.observability.bench.turn_cost import (
     COMPARABILITY_FIELDS,
-    LIVE_FIXTURE_ID,
     TURN_COST_HARNESS_REVISION,
     TurnCostVerdict,
     baseline_from_record,
     build_corpus_record,
-    collect_live_corpus,
     compare_turn_cost,
     load_baseline,
     seed_turn_cost_corpus,
     write_baseline,
 )
-from eawf.observability.telemetry.models import RuntimeName, TelemetrySession
 from eawf.observability.telemetry.turn_cost import TurnCostRecord
 from eawf.surfaces.cli.app import app
 
@@ -344,28 +341,6 @@ def _turn_cost_record() -> TurnCostRecord:
     return build_corpus_record(seed_turn_cost_corpus(_TURN_COST_FIXTURE))
 
 
-def _live_state(waves: list[Wave]) -> State:
-    """Build the smallest State that carries *waves*."""
-    return State.model_validate(
-        {
-            "schema_version": "1.0",
-            "scope_kind": ScopeKind.REPO.value,
-            "urn": "urn:eawf:v1:state:TC",
-            "updated_at": datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
-            "project": None,
-            "current": CurrentPointers().model_dump(mode="json"),
-            "workspace": None,
-            "phases": {},
-            "iters": {},
-            "waves": {w.id: w.model_dump(mode="json") for w in waves},
-            "artifacts": {},
-            "agent_sessions": {},
-            "plugins": {},
-            "indexes": {},
-        }
-    )
-
-
 def _live_wave(
     wave_id: str,
     *,
@@ -379,31 +354,6 @@ def _live_wave(
         status=status,
         agent_role=role,
         opened_at=datetime(2026, 1, 1, tzinfo=UTC),
-    )
-
-
-def _live_session(
-    session_id: str,
-    *,
-    wave_id: str | None,
-    runtime: RuntimeName = "claude",
-    model: str | None = "claude-opus-4-7",
-) -> TelemetrySession:
-    return TelemetrySession(
-        session_id=session_id,
-        project_id="proj",
-        runtime=runtime,
-        wave_id=wave_id,
-        attempt_id=None,
-        session_log_path="urn:eawf:v1:session-log:claude:x",
-        started_at=None,
-        ended_at=None,
-        duration_ms=4_000,
-        model_primary=model,
-        total_input_tokens=100,
-        total_output_tokens=10,
-        total_cost_usd=Decimal("0.40"),
-        end_marker="clean_stop",
     )
 
 
@@ -540,61 +490,6 @@ def test_load_baseline_round_trips_written_artifact(tmp_path: Path) -> None:
     assert load_baseline(path) == baseline
 
 
-def test_collect_live_corpus_without_sessions_is_honest_empty() -> None:
-    """No projected session means nothing to measure, not an error."""
-    resolution = collect_live_corpus(state=_live_state([]), sessions=[])
-    assert resolution.corpus is None
-    assert resolution.skipped_session_count == 0
-    assert resolution.reason is not None
-
-
-def test_collect_live_corpus_skips_sessions_that_cannot_become_runs() -> None:
-    """Sessions with no wave, an open wave, no role or no model are counted out."""
-    waves = [
-        _live_wave("P31-I01-W01"),
-        _live_wave("P31-I01-W02", status=WaveStatus.IN_PROGRESS),
-        _live_wave("P31-I01-W03", role=None),
-    ]
-    sessions = [
-        _live_session("s-none", wave_id=None),
-        _live_session("s-unknown", wave_id="P31-I01-W99"),
-        _live_session("s-open", wave_id="P31-I01-W02"),
-        _live_session("s-roleless", wave_id="P31-I01-W03"),
-        _live_session("s-modelless", wave_id="P31-I01-W01", model=None),
-        _live_session("s-good", wave_id="P31-I01-W01"),
-    ]
-    resolution = collect_live_corpus(state=_live_state(waves), sessions=sessions)
-    assert resolution.skipped_session_count == 5
-    assert resolution.corpus is not None
-    assert [run.run_id for run in resolution.corpus.runs] == ["s-good"]
-
-
-def test_collect_live_corpus_refuses_a_mixed_runtime_model_corpus() -> None:
-    """A percentile across models measures the mix, so the corpus is refused."""
-    waves = [_live_wave("P31-I01-W01"), _live_wave("P31-I01-W02")]
-    sessions = [
-        _live_session("s-a", wave_id="P31-I01-W01"),
-        _live_session("s-b", wave_id="P31-I01-W02", runtime="codex", model="gpt-x"),
-    ]
-    resolution = collect_live_corpus(state=_live_state(waves), sessions=sessions)
-    assert resolution.corpus is None
-    assert resolution.reason is not None
-    assert "runtime/model tuples" in resolution.reason
-
-
-def test_collect_live_corpus_builds_a_single_tuple_corpus() -> None:
-    """A homogeneous corpus measures, declaring the tuple its runs share."""
-    waves = [_live_wave("P31-I01-W01")]
-    resolution = collect_live_corpus(
-        state=_live_state(waves), sessions=[_live_session("s-a", wave_id="P31-I01-W01")]
-    )
-    assert resolution.corpus is not None
-    assert (resolution.corpus.runtime, resolution.corpus.model) == ("claude", "claude-opus-4-7")
-    record = build_corpus_record(resolution.corpus)
-    assert record.fixture_id == LIVE_FIXTURE_ID
-    assert record.unit_count == 1
-
-
 # --- turn-cost: CLI render -------------------------------------------------
 
 
@@ -643,19 +538,6 @@ def test_cli_bench_turn_cost_render_rejects_negative_threshold() -> None:
         ["bench", "turn-cost", "--fixture", _TURN_COST_FIXTURE, "--threshold", "-0.1"],
     )
     assert result.exit_code == 1, result.output
-
-
-def test_cli_bench_turn_cost_render_without_cache_is_honest_empty(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A project with no projected telemetry renders nothing-measured, exit 0."""
-    monkeypatch.delenv("EA_STATE", raising=False)
-    result = runner.invoke(app, ["--json", "--workspace", str(tmp_path), "bench", "turn-cost"])
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
-    assert payload["measured"] is False
-    assert "telemetry cache" in payload["reason"]
-    assert not (tmp_path / ".ea" / "telemetry.db").exists()
 
 
 # --- turn-cost: CLI check --------------------------------------------------
@@ -806,24 +688,25 @@ def test_cli_bench_turn_cost_check_malformed_baseline_exits_user_error(
     assert result.exit_code == 1, result.output
 
 
-def test_cli_bench_turn_cost_check_empty_corpus_refuses(
+def test_cli_bench_turn_cost_measures_the_seeded_corpus_by_default(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Nothing to measure is a refusal under --check, never a false green."""
+    """With no --fixture the seeded corpus is measured; no tree or cache is read."""
     monkeypatch.delenv("EA_STATE", raising=False)
-    path = tmp_path / "baseline.json"
-    _write_turn_cost_baseline(path)
+    result = runner.invoke(app, ["--json", "--workspace", str(tmp_path), "bench", "turn-cost"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["record"]["fixture_id"] == _TURN_COST_FIXTURE
+    assert set(payload) == {"record"}
+
+
+def test_cli_bench_turn_cost_refuses_the_retired_live_corpus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``live`` is no seeded fixture id, so it is refused as unknown."""
+    monkeypatch.delenv("EA_STATE", raising=False)
     result = runner.invoke(
-        app,
-        [
-            "--workspace",
-            str(tmp_path),
-            "bench",
-            "turn-cost",
-            "--check",
-            "--baseline",
-            str(path),
-        ],
+        app, ["--workspace", str(tmp_path), "bench", "turn-cost", "--fixture", "live"]
     )
     assert result.exit_code == 1, result.output
-    assert "cannot check turn-cost" in result.output
+    assert "unknown turn-cost fixture" in result.output

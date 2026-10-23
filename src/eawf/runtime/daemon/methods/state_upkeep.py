@@ -23,8 +23,8 @@ from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import AgentSessionStatus
-from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.daemon.methods.state_context import resolve_mutator_paths
 from eawf.runtime.daemon.methods.state_worktree import commit_worktree_state

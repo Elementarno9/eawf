@@ -75,8 +75,9 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.intent import IntentBrief
-from eawf.kernel.state.models import Decision, State
+from eawf.kernel.state.models import Decision
 from eawf.platform.profiles.models import ComposedProfile, RenderBlock
 from eawf.platform.render_block import RULE_REFERENCE_DIR
 from eawf.surfaces.render import regions
@@ -406,7 +407,7 @@ def render_decisions_section(
 
     Args:
         decisions: Typed Decision records keyed by id (the
-            :attr:`~eawf.kernel.state.models.State.decisions` mapping). ``None`` is
+            :attr:`~eawf.kernel.migration.v1_state.State.decisions` mapping). ``None`` is
             treated as an empty dict for caller convenience (the state field
             defaults to ``{}`` but optional-typed sister fields sometimes
             arrive as ``None``).
@@ -810,7 +811,7 @@ def render_agents_md(
     5. When *state* is supplied, append/replace a managed
        ``DECISIONS_REGION_ID`` region whose body is produced by
        :func:`render_decisions_section` against the typed
-       :attr:`~eawf.kernel.state.models.State.decisions` map. This is how the
+       :attr:`~eawf.kernel.migration.v1_state.State.decisions` map. This is how the
        AGENTS.md "Decisions" section stays in sync with state.json
        rather than carrying hardcoded prose in a YAML profile body.
     6. Acquire portalock on *target*, atomically write the new text via
@@ -833,7 +834,7 @@ def render_agents_md(
         generator: Recorded on each :class:`ManifestEntry`. Defaults to
             ``"eawf-render"``; init / sync may pass profile-scoped names like
             ``"profile:python"``.
-        state: Optional typed :class:`~eawf.kernel.state.models.State`. When
+        state: Optional typed :class:`~eawf.kernel.migration.v1_state.State`. When
             supplied, a managed ``DECISIONS_REGION_ID`` region is emitted
             with body computed from ``state.decisions`` via
             :func:`render_decisions_section`. When ``None`` (current default)

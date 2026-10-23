@@ -20,10 +20,10 @@ Verbs:
 
 Exit codes:
 
-- ``0`` — success / no regression / nothing measurable.
+- ``0`` — success / no regression.
 - ``1`` (``USER_ERROR``) — bad size / harness / unreadable input, and the
-  ``turn-cost`` refusals: an unknown fixture, a ``--check`` with nothing to
-  measure, and a baseline that is not comparable to the current record.
+  ``turn-cost`` refusals: an unknown fixture and a baseline that is not
+  comparable to the current record.
 - ``2`` (``VALIDATION_ERROR``) — ``compare`` or ``turn-cost --check``
   detected a regression.
 
@@ -51,10 +51,7 @@ from eawf.surfaces.cli.output import emit_json_or_text
 
 if TYPE_CHECKING:
     from eawf.observability.bench.harness import BenchResult
-    from eawf.observability.bench.turn_cost import (
-        CorpusResolution,
-        TurnCostComparison,
-    )
+    from eawf.observability.bench.turn_cost import TurnCostComparison, TurnCostCorpus
     from eawf.observability.telemetry.turn_cost import TurnCostRecord
 
 logger = logging.getLogger(__name__)
@@ -238,9 +235,9 @@ def bench_turn_cost(
         str,
         typer.Option(
             "--fixture",
-            help="Corpus to measure: 'live' (state + telemetry cache) or a seeded fixture id.",
+            help="Seeded corpus fixture id to measure.",
         ),
-    ] = "live",
+    ] = "turn-cost-small",
     check: Annotated[
         bool,
         typer.Option("--check", help="Compare the record against --baseline instead of rendering."),
@@ -298,12 +295,7 @@ def bench_turn_cost(
             cli_errors.UserError(f"--threshold must be >= 0, got {threshold}"), flags=flags
         )
 
-    resolution = _resolve_turn_cost_corpus(flags, fixture=fixture)
-    if resolution.corpus is None:
-        _emit_turn_cost_empty(flags, resolution, fixture=fixture, check=check)
-        return
-
-    record = build_corpus_record(resolution.corpus)
+    record = build_corpus_record(_resolve_turn_cost_corpus(flags, fixture=fixture))
     if write_baseline is not None:
         write_baseline_artifact(
             baseline_from_record(record, threshold=Decimal(str(threshold))),
@@ -311,7 +303,7 @@ def bench_turn_cost(
         )
 
     if baseline is None:
-        _emit_turn_cost_record(flags, record, skipped=resolution.skipped_session_count)
+        _emit_turn_cost_record(flags, record)
         return
 
     try:
@@ -389,129 +381,23 @@ def _resolve_path(flags: GlobalFlags, rel: Path) -> Path:
     return rel
 
 
-def _resolve_turn_cost_corpus(flags: GlobalFlags, *, fixture: str) -> CorpusResolution:
-    """Resolve the corpus *fixture* names, seeded or live.
-
-    Args:
-        flags: The resolved global CLI flags.
-        fixture: ``"live"`` or a seeded fixture id.
-
-    Returns:
-        The resolution, whose ``corpus`` is ``None`` when nothing is
-        measurable.
+def _resolve_turn_cost_corpus(flags: GlobalFlags, *, fixture: str) -> TurnCostCorpus:
+    """Return the seeded corpus *fixture* names.
 
     Raises:
         typer.Exit: ``1`` when *fixture* is not a known seeded fixture.
     """
-    from eawf.observability.bench.turn_cost import (
-        LIVE_FIXTURE_ID,
-        CorpusResolution,
-        seed_turn_cost_corpus,
-    )
+    from eawf.observability.bench.turn_cost import seed_turn_cost_corpus
 
-    if fixture == LIVE_FIXTURE_ID:
-        return _resolve_live_turn_cost_corpus(flags)
     try:
-        corpus = seed_turn_cost_corpus(fixture)
+        return seed_turn_cost_corpus(fixture)
     except ValueError as exc:
         cli_errors.emit_error(cli_errors.UserError(str(exc)), flags=flags)
-    return CorpusResolution(corpus=corpus, skipped_session_count=0, reason=None)
 
 
-def _resolve_live_turn_cost_corpus(flags: GlobalFlags) -> CorpusResolution:
-    """Join the projected telemetry sessions onto the closed waves in state.
-
-    The telemetry cache is read but never created. Opening a store through
-    ``init_schema`` writes ``telemetry.db`` as a side effect, and a bench
-    render must not be the thing that starts collecting for an operator who
-    never opted in — so a missing cache resolves to "nothing measured"
-    instead. Its existence is itself the evidence that telemetry was
-    enabled, which is why no separate opt-in check is repeated here.
-
-    Args:
-        flags: The resolved global CLI flags.
-
-    Returns:
-        The live corpus resolution.
-
-    Raises:
-        typer.Exit: ``1`` when the state path or file cannot be read.
-    """
-    from eawf.observability.bench.turn_cost import CorpusResolution, collect_live_corpus
-    from eawf.observability.telemetry.models import TelemetrySession
-    from eawf.observability.telemetry.store import metrics_db_path, open_store
-    from eawf.surfaces.cli.scope import resolve_state_path
-
-    try:
-        state_path = resolve_state_path(flags.workspace)
-    except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
-
-    db_path = metrics_db_path(state_path)
-    if not db_path.exists():
-        return CorpusResolution(
-            corpus=None,
-            skipped_session_count=0,
-            reason="no telemetry cache projected yet; run `eawf metrics rebuild` first",
-        )
-
-    from eawf.kernel.config.layered import get_dotted, merge_config
-    from eawf.workflow.evidence._io import load_state
-
-    try:
-        state = load_state(state_path)
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-
-    merged, _sources = merge_config(repo=state_path.parent.parent)
-    db_kind = str(get_dotted(merged, "telemetry.db_kind"))
-    store = open_store(db_kind, db_path)  # type: ignore[arg-type]
-    try:
-        store.init_schema()
-        rows = store.fetch_all("telemetry_sessions", TelemetrySession)
-    finally:
-        store.close()
-    sessions = [row for row in rows if isinstance(row, TelemetrySession)]
-    return collect_live_corpus(state=state, sessions=sessions)
-
-
-def _emit_turn_cost_empty(
-    flags: GlobalFlags,
-    resolution: CorpusResolution,
-    *,
-    fixture: str,
-    check: bool,
-) -> None:
-    """Emit the honest "nothing measured" outcome.
-
-    Under ``--check`` this is a refusal rather than a pass: a check that
-    silently succeeds because there was nothing to measure is a false green.
-
-    Raises:
-        typer.Exit: ``1`` when *check* is set.
-    """
-    payload: dict[str, object] = {
-        "measured": False,
-        "fixture": fixture,
-        "reason": resolution.reason,
-        "skipped_session_count": resolution.skipped_session_count,
-    }
-    if check:
-        cli_errors.emit_error(
-            cli_errors.UserError(f"cannot check turn-cost: {resolution.reason}"),
-            flags=flags,
-            data=payload,
-        )
-    emit_json_or_text(payload, f"turn-cost: nothing measured ({resolution.reason})", flags=flags)
-
-
-def _emit_turn_cost_record(flags: GlobalFlags, record: TurnCostRecord, *, skipped: int) -> None:
+def _emit_turn_cost_record(flags: GlobalFlags, record: TurnCostRecord) -> None:
     """Render one turn-cost record."""
-    payload: dict[str, object] = {
-        "measured": True,
-        "record": record.model_dump(mode="json"),
-        "skipped_session_count": skipped,
-    }
+    payload: dict[str, object] = {"record": record.model_dump(mode="json")}
     lines = [
         f"turn-cost: fixture={record.fixture_id} harness={record.harness_revision} "
         f"runtime={record.runtime} model={record.model}",

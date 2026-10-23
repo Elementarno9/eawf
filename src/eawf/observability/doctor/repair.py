@@ -61,7 +61,7 @@ from eawf.platform.lint.ledger_history import (
     scan_ledger_history,
 )
 from eawf.platform.subprocess_detach import no_window_kwargs
-from eawf.runtime.vcs.wave_sha import commit_identity_digest
+from eawf.runtime.vcs.diff_base import commit_identity_digest
 
 DoctorRepairMutationClass = Literal[
     "local_diagnostics",

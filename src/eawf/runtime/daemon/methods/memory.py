@@ -25,9 +25,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from eawf.kernel.identity import EntityKind, format_qualified_urn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.migration.epoch2.urn_rekey import spells_single_key
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import Confidence, MemoryStatus, MemoryTier, StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.kernel.state.models import State
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.kinds.memory import MemoryNote
 from eawf.kernel.store.ledger import effective_records, read_ledger_records

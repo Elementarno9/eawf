@@ -18,8 +18,6 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.kernel.migrations import current_target_version
-from eawf.kernel.state.urn import build as build_urn
 from eawf.platform.install.instrument_probe import (
     PROBE_VERSION,
     ProbeReport,
@@ -110,14 +108,8 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "reserved_config_key",
         "manifest_in_sync",
         "mcp_drift",
-        "state_scale_ceiling",
         "authority_epoch",
         "gitignore_block",
-        "active_phase_without_iter",
-        "stale_session_count",
-        "recent_actuals",
-        "incident_fold_parity",
-        "backlog_fold_parity",
         "cli_daemon_version",
         "parallel_cap_enforcement",
         "launchd_agent",
@@ -127,60 +119,13 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "agents_md_byte_cap",
         "agents_override_byte_cap",
         "branch_currency",
-        "project_record_present",
         "plugin_cross_scope_dup",
     }
     statuses = {c["name"]: c["status"] for c in payload["checks"]}
     assert statuses["manifest_in_sync"] == "ok"
-    assert statuses["incident_fold_parity"] == "ok"
-    assert statuses["backlog_fold_parity"] == "ok"
     assert statuses["render_output_roundtrip"] == "ok"
     assert statuses["mcp_drift"] == "ok"
-    assert statuses["state_scale_ceiling"] == "ok"
-    assert statuses["project_record_present"] == "ok"
     assert statuses["plugin_cross_scope_dup"] == "ok"
-
-
-@pytest.mark.integration
-def test_cli_doctor_warns_when_project_record_missing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Legacy init-only state with ``project=null`` gets a repair hint."""
-    monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
-    _init_core(tmp_path)
-    # Init writes no v1 document any more, so lay down the legacy shape an
-    # older init left behind.
-    legacy = {
-        "schema_version": current_target_version(),
-        "scope_kind": "repo",
-        "urn": build_urn("state", owner="DEMO"),
-        "updated_at": "2026-01-01T00:00:00+00:00",
-        "project": None,
-        "current": {
-            "project_code": "DEMO",
-            "track_id": None,
-            "phase_id": None,
-            "iter_id": None,
-            "active_wave_ids": [],
-            "active_session_ids": [],
-        },
-        "workspace": None,
-        "phases": {},
-        "iters": {},
-        "waves": {},
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {},
-    }
-    (tmp_path / ".ea" / "state.json").write_text(json.dumps(legacy), encoding="utf-8")
-
-    res = runner.invoke(app, ["--json", "-w", str(tmp_path), "doctor"])
-    assert res.exit_code == 0, res.output
-    payload = json.loads(res.output)
-    entry = next(c for c in payload["checks"] if c["name"] == "project_record_present")
-    assert entry["status"] == "warn"
-    assert "repository create" in entry["detail"]
 
 
 @pytest.mark.integration

@@ -39,8 +39,9 @@ from typing import Any, Final
 
 import orjson
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.models import Artifact, Project, State
+from eawf.kernel.state.models import Artifact, Project
 from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.store.append import append_envelope as append_jsonl
 from eawf.kernel.store.compaction import document_rows

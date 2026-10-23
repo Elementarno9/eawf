@@ -736,7 +736,7 @@ def test_edit_end_to_end_the_daemon_writes_the_layer_and_the_frame_shows_its_rer
         assert method == SETTINGS_READ_METHOD
         return _view(tree).model_dump(mode="json")
 
-    seam = ProjectionSeam(route="settings", scope_id=SCOPE, state_path=None, repo_root=tree)
+    seam = ProjectionSeam(route="settings", scope_id=SCOPE, repo_root=tree)
     seam.binding.call = _call  # type: ignore[method-assign]
     view = asyncio.run(seam.load_settings())
     link = _Link()
@@ -779,7 +779,7 @@ def test_edit_a_refused_write_changes_no_file_and_keeps_the_view(tree: Path) -> 
                 raise DaemonRpcError(-32602, str(error)) from error
         return _view(tree).model_dump(mode="json")
 
-    seam = ProjectionSeam(route="settings", scope_id=SCOPE, state_path=None, repo_root=tree)
+    seam = ProjectionSeam(route="settings", scope_id=SCOPE, repo_root=tree)
     seam.binding.call = _call  # type: ignore[method-assign]
     before = asyncio.run(seam.load_settings())
 
@@ -810,7 +810,7 @@ def test_ui_053_the_console_shows_the_daemon_refusing_a_value_the_stack_rules_ou
                 raise DaemonRpcError(-32602, str(error)) from error
         return _view(tree).model_dump(mode="json")
 
-    seam = ProjectionSeam(route="settings", scope_id=SCOPE, state_path=None, repo_root=tree)
+    seam = ProjectionSeam(route="settings", scope_id=SCOPE, repo_root=tree)
     seam.binding.call = _call  # type: ignore[method-assign]
     before = asyncio.run(seam.load_settings())
     assert before.leaf(RANGED_KEY).constraint_chain == ("config registry range 1 to 16 · built-in",)

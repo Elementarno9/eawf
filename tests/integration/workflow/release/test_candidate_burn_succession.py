@@ -17,9 +17,8 @@ from typing import Any
 
 import pytest
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.release import Release, ReleaseStatus, release_key
-from eawf.kernel.state.io import write_state_unlocked
-from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import burn, create
 from eawf.runtime.daemon.methods.release_disposition import adopt
@@ -32,6 +31,7 @@ from eawf.workflow.evidence.measured_contract import (
 from eawf.workflow.release.admission import required_contract_ids
 from eawf.workflow.release.records import read_release_record, record_release
 from eawf.workflow.verify import checkpoint_succession
+from tests._epoch2_helpers import lay_contract_tree
 from tests._release_helpers import dev1_adoption, release_record
 
 pytestmark = pytest.mark.integration
@@ -63,9 +63,9 @@ def dev2_admitted_state() -> State:
 @pytest.fixture
 def ctx(tmp_path: Path) -> MethodContext:
     """Return a context whose store holds the pinned dev1 candidate."""
-    state_path = tmp_path / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    write_state_unlocked(state_path, dev2_admitted_state().model_dump(mode="json"))
+    state_path = lay_contract_tree(
+        tmp_path, dev2_admitted_state().artifacts.values(), project_code=SCOPE
+    )
     record_release(state_path, release_record(), recorded_at=datetime.now(UTC), summary="seed")
     return MethodContext(
         started_at="2026-09-26T00:00:00+00:00",

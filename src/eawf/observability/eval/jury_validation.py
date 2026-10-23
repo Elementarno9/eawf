@@ -1,41 +1,24 @@
-"""Jury-validation cohort: silver-labelled + gold-subset verdict outcomes.
+"""Jury validation: the labelled cohort model and the reducer that scores a jury.
 
-A reliability scorer (:mod:`eawf.observability.eval.reputation`) can already turn
-a stream of :class:`~eawf.observability.eval.reputation.VerdictOutcome` rows into
-a held-rate, but it has no *ground truth* to validate the jury against -- no
-answer to "was the verdict actually right?". This module builds that validation
-substrate: it joins each observed ``VerdictOutcome`` from
-:func:`~eawf.observability.eval.reputation.build_verdict_outcomes` to a boolean
-``ground_truth`` and packages the result as a :class:`ValidationCohort` of
-:class:`LabeledVerdict` rows.
+A reliability scorer (:mod:`eawf.observability.eval.reputation`) turns a
+stream of :class:`~eawf.observability.eval.reputation.VerdictOutcome` rows
+into a held-rate, but it has no *ground truth* to validate the jury against.
+This module holds the validation substrate: a :class:`ValidationCohort` of
+:class:`LabeledVerdict` rows, each an observed outcome joined to a boolean
+``ground_truth``, and :func:`validate_jury`, which scores the jurors'
+ballots against it. The native cohort is built from the Batch ledger by
+:mod:`eawf.observability.eval.native_cohort`.
 
 Two label tiers, ordered by trust:
 
-- **Silver** is the cheap, automatic label -- it reuses the held-outcome signal
-  the outcome loop already observes from state alone. A refuted wave
-  (reactive / rework / revert / reopen, i.e. ``held is False``) is known-bad
-  ground truth; a clean closed wave (``held is True``) is known-good. An
-  in-flight verdict (``held is None``) has no settled outcome, so it carries no
-  silver label and is excluded from the cohort -- never a fabricated truth.
-- **Gold** is the operator override -- an append-only :class:`GoldLabel` record
-  pins the ground truth for a specific wave by hand, overriding whatever silver
-  the held-outcome implied. The gold subset is the high-confidence validation
-  set the jury is scored against when the cheap silver signal is wrong or
-  absent.
+- **Silver** is the cheap, automatic label: the observed outcome of the
+  verdict's subject. An unsettled subject carries no silver label and is
+  excluded from the cohort -- never a fabricated truth.
+- **Gold** is the operator override: a :class:`GoldLabel` pins the ground
+  truth for a subject by hand, overriding whatever silver the outcome
+  implied.
 
-Fail-fast at ingestion: a :class:`GoldLabel` naming a ``wave_id`` absent from
-*state* raises :class:`ValueError` -- there is no wave to anchor the label on,
-so a typo or stale id is a hard error rather than a silently dropped row.
-
-Honest-empty by construction: with no verdict rows and no gold store the cohort
-is ``ValidationCohort(silver=[], gold=[])``. The substrate is empty today (zero
-AUDITOR verdict rows on disk), so :func:`build_jury_validation_cohort` returns an
-empty cohort right now -- and that empty cohort IS the deliverable. It never
-fabricates a label.
-
-The gold store is a plain append-only JSONL file of :class:`GoldLabel` records
-under ``<state_dir>/store/`` (one record per line), read honest-empty when the
-file is absent. The reducer is pure: no mutation, no git, no daemon.
+The reducer is pure: no mutation, no git, no daemon.
 """
 
 from __future__ import annotations
@@ -44,19 +27,15 @@ import logging
 import math
 from collections.abc import Mapping
 from enum import StrEnum
-from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.enums import AgentReportVerdict
-from eawf.kernel.state.models import State
 from eawf.kernel.state.types import UtcDatetime
-from eawf.kernel.store.paths import store_dir
 from eawf.observability.eval.jury import JurorBallot
 from eawf.observability.eval.reputation import (
     VerdictOutcome,
     _murphy_decomposition,
-    build_verdict_outcomes,
     expected_calibration_error,
 )
 from eawf.workflow.evidence.rung2 import (
@@ -75,11 +54,6 @@ logger = logging.getLogger(__name__)
 #: (the minimum a non-degenerate Fleiss / Brier needs) only in a test that
 #: pins a tiny cohort.
 _DEFAULT_MIN_VALIDATION_N: int = 20
-
-#: Filename of the append-only gold-label store under ``<state_dir>/store/``.
-#: A plain JSONL of :class:`GoldLabel` records (one per line), distinct from the
-#: typed-envelope stores so it needs no ``StoreKind`` registration.
-_GOLD_LABEL_STORE = "gold_label.jsonl"
 
 
 class LabelSource(StrEnum):
@@ -110,8 +84,7 @@ class GoldLabel(BaseModel):
 
     Attributes:
         wave_id: The wave the label is about (the verdict's ``base_id`` /
-            ``VerdictOutcome.base_id``). MUST name a wave present in state --
-            :func:`build_jury_validation_cohort` raises on an absent id.
+            ``VerdictOutcome.base_id``).
         ground_truth: The operator's verdict on the wave -- ``True`` when the
             wave was actually a good outcome, ``False`` when it was bad.
         labeled_at: When the operator pinned the label (UTC). The latest
@@ -182,138 +155,6 @@ class ValidationCohort(BaseModel):
 
     silver: list[LabeledVerdict]
     gold: list[LabeledVerdict]
-
-
-def _read_gold_labels(state_path: Path) -> list[GoldLabel]:
-    """Read the append-only gold-label store, honest-empty when absent.
-
-    Reads the plain JSONL store at ``<state_dir>/store/gold_label.jsonl`` (one
-    :class:`GoldLabel` per line). Returns ``[]`` when the file does not exist --
-    the honest-empty path for the gold tier today.
-
-    Args:
-        state_path: Path to ``state.json``; the gold-label store resolves under
-            its sibling ``store/`` directory.
-
-    Returns:
-        Every :class:`GoldLabel` record on disk, oldest-first, or ``[]`` when no
-        store file exists.
-    """
-    path = store_dir(state_path) / _GOLD_LABEL_STORE
-    if not path.exists():
-        return []
-    labels: list[GoldLabel] = []
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        if not raw_line.strip():
-            continue
-        labels.append(GoldLabel.model_validate_json(raw_line))
-    return labels
-
-
-def _latest_gold_by_wave(labels: list[GoldLabel]) -> dict[str, GoldLabel]:
-    """Reduce gold records to the latest label per wave (latest ``labeled_at`` wins).
-
-    The store is append-only, so a wave the operator re-labelled carries several
-    records; only the most recent one is the live ground truth. Ties on
-    ``labeled_at`` resolve to the last record seen (later append wins).
-
-    Args:
-        labels: Gold-label records, in store (oldest-first) order.
-
-    Returns:
-        A ``wave_id -> GoldLabel`` map holding the live label per wave.
-    """
-    latest: dict[str, GoldLabel] = {}
-    for label in labels:
-        current = latest.get(label.wave_id)
-        if current is None or label.labeled_at >= current.labeled_at:
-            latest[label.wave_id] = label
-    return latest
-
-
-def build_jury_validation_cohort(
-    state: State,
-    state_path: Path,
-    *,
-    iter_id: str | None = None,
-) -> ValidationCohort:
-    """Build the silver-labelled cohort with its gold-override subset -- pure.
-
-    Joins each observed verdict outcome (from
-    :func:`~eawf.observability.eval.reputation.build_verdict_outcomes`) to a
-    boolean ground truth and splits the result into a silver set and a
-    gold-override subset:
-
-    - the cheap **silver** label reuses the held-outcome signal -- a refuted
-      wave (``held is False``) is known-bad ground truth, a clean closed wave
-      (``held is True``) is known-good. An in-flight verdict (``held is None``)
-      has no settled outcome and so no silver label, and is excluded from the
-      cohort -- never a fabricated truth;
-    - an operator **gold** label (read from the append-only gold-label store)
-      OVERRIDES the silver ground truth for its wave; that row moves to the gold
-      subset carrying the operator's truth instead of the held-outcome's.
-
-    Fail-fast: a gold label naming a ``wave_id`` absent from *state* raises
-    :class:`ValueError` at ingestion -- there is no wave to anchor it on.
-
-    Honest-empty: with no observed verdict rows and no gold store this returns
-    ``ValidationCohort(silver=[], gold=[])`` -- the substrate is empty today, so
-    that is the real result.
-
-    Args:
-        state: Loaded, validated :class:`~eawf.kernel.state.models.State`
-            supplying the wave tree the outcomes and gold labels are anchored
-            against.
-        state_path: Path to ``state.json``; the AUDITOR verdict store and the
-            gold-label store both resolve under its sibling ``store/`` directory.
-        iter_id: Optional filter passed through to
-            :func:`~eawf.observability.eval.reputation.build_verdict_outcomes` --
-            restrict the cohort to verdicts whose wave belongs to this iter.
-            ``None`` includes every wave with a verdict row.
-
-    Returns:
-        The :class:`ValidationCohort` whose *silver* list holds the
-        held-outcome-labelled verdicts and whose *gold* list holds the
-        operator-overridden subset.
-
-    Raises:
-        ValueError: When a gold label names a ``wave_id`` not present in
-            *state*.
-    """
-    gold_by_wave = _latest_gold_by_wave(_read_gold_labels(state_path))
-    for wave_id in gold_by_wave:
-        if wave_id not in state.waves:
-            raise ValueError(f"gold label names unknown wave: {wave_id!r}")
-
-    outcomes = build_verdict_outcomes(state, state_path, iter_id=iter_id)
-    silver: list[LabeledVerdict] = []
-    gold: list[LabeledVerdict] = []
-    for outcome in outcomes:
-        if outcome.held is None:
-            continue
-        gold_label = gold_by_wave.get(outcome.base_id)
-        if gold_label is not None:
-            gold.append(
-                LabeledVerdict(
-                    outcome=outcome,
-                    ground_truth=gold_label.ground_truth,
-                    label_source=LabelSource.GOLD,
-                )
-            )
-        else:
-            silver.append(
-                LabeledVerdict(
-                    outcome=outcome,
-                    ground_truth=outcome.held,
-                    label_source=LabelSource.SILVER,
-                )
-            )
-
-    logger.debug(
-        f"build_jury_validation_cohort outcomes={len(outcomes)} "
-        f"silver={len(silver)} gold={len(gold)} iter={iter_id!r}"
-    )
-    return ValidationCohort(silver=silver, gold=gold)
 
 
 # --- jury-validation reducer --------------------------------
@@ -431,62 +272,6 @@ class JuryValidationReport(BaseModel):
     ece: float | None = Field(default=None, ge=0.0, le=1.0)
     unanimous_pass_on_known_bad_rate: float | None = Field(default=None, ge=0.0, le=1.0)
     known_bad_n: int = Field(default=0, ge=0)
-
-
-#: Sibling JSONL store the convener appends one juror-ballot envelope to per
-#: convened juror.
-_JURY_BALLOT_STORE = "jury_ballot.jsonl"
-
-
-def read_recorded_ballots(state_path: Path) -> dict[str, tuple[JurorBallot, ...]]:
-    """Return the persisted per-wave juror ballots, keyed by wave id.
-
-    Reads the envelope rows the convener appends to
-    ``<state_dir>/store/jury_ballot.jsonl`` and rebuilds the per-wave
-    :class:`~eawf.observability.eval.jury.JurorBallot` map the calibration
-    scorer (:func:`validate_jury`) consumes. Abstentions (rows carrying an
-    ``error`` and no verdict) are skipped -- an errored lane cast no vote.
-    A missing store or a malformed line yields the honest subset rather
-    than raising: calibration reads are advisory.
-
-    Args:
-        state_path: Path to ``state.json``; the ballot store resolves
-            under its sibling ``store/`` directory.
-
-    Returns:
-        ``wave_id -> tuple[JurorBallot, ...]``; empty when no ballot has
-        ever been persisted.
-    """
-    import json as _json
-
-    from eawf.kernel.state.enums import AgentSessionRole
-
-    path = state_path.parent / "store" / _JURY_BALLOT_STORE
-    if not path.is_file():
-        return {}
-    ballots: dict[str, list[JurorBallot]] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        if not raw_line.strip():
-            continue
-        try:
-            row = _json.loads(raw_line)
-            payload = row.get("payload") or {}
-            wave_id = payload.get("wave_id")
-            verdict_raw = payload.get("verdict")
-            if not wave_id or verdict_raw is None:
-                continue
-            ballot = JurorBallot(
-                juror_id=str(payload.get("runtime") or "unknown")[:64],
-                acceptance_style="binary",
-                verdict=AgentReportVerdict(verdict_raw),
-                agent_role=AgentSessionRole.AUDITOR,
-                runtime=payload.get("runtime"),
-            )
-        except (ValueError, TypeError) as exc:
-            logger.debug(f"read_recorded_ballots skip-line cause={exc!r}")
-            continue
-        ballots.setdefault(wave_id, []).append(ballot)
-    return {wave_id: tuple(rows) for wave_id, rows in ballots.items()}
 
 
 def _ballots_for_wave(
@@ -1339,7 +1124,6 @@ __all__ = [
     "ValidationCohort",
     "VerbosityBiasConfig",
     "VerbosityBiasReport",
-    "build_jury_validation_cohort",
     "measure_faithfulness",
     "measure_verbosity_bias",
     "validate_jury",

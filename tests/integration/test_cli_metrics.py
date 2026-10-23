@@ -1,21 +1,10 @@
-"""End-to-end CLI smoke tests for ``eawf metrics``.
+"""End-to-end CLI smoke tests for the bare ``eawf metrics`` view.
 
-The bare command + the read-only sub-verbs never mutate ``state.json`` or
-append to the store. The tests drive the Typer app via :class:`CliRunner`
-against a seeded ``.ea/state.json`` fixture and check three things:
-
-1. Default text render: the Rich table is present and the four canonical
-   metric labels appear.
-2. JSON envelope: ``--json`` emits a payload with ``schema_version=1`` and
-   the four sub-metric objects.
-3. Plain render: ``--plain`` emits an ANSI-free table that callers (TUI
-   overlay / release-notes paste) can consume.
-
-A fourth case covers the error path: with no ``.ea/state.json`` reachable
-the command exits 4 (NotFound) without panicking.
-
-All ``metrics`` sub-verbs are read-only over ``state.json`` (the
-wall-clock ``backfill-actuals`` mutator was retired in P27-I05-W28).
+The bare command renders the selected generation's estimation roll-up and
+never writes. The tests drive the Typer app via :class:`CliRunner` against
+a born epoch-2 tree and check the Rich table, the JSON envelope and the
+ANSI-free plain render, plus the refusals: an absent tree exits 1
+(NotFound) and an epoch-1 tree exits 4 (MigrationRequired).
 """
 
 from __future__ import annotations
@@ -27,92 +16,68 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
+from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
+from tests._epoch2_helpers import lay_epoch2_tree
+
+pytestmark = pytest.mark.integration
 
 runner = CliRunner()
-FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "states"
+
+_LABELS = ("Estimates", "Actuals", "Estimate-actual variance")
 
 
-def _seed_state(tmp_path: Path) -> Path:
-    """Copy ``09-estimates-and-actuals.json`` into a temp workspace."""
+def _born_workspace(tmp_path: Path) -> Path:
+    """Bear an epoch-2 tree with empty estimate and actual ledgers."""
     workspace = tmp_path / "ws"
-    state_dir = workspace / ".ea"
-    state_dir.mkdir(parents=True)
-    src = FIXTURES / "valid" / "09-estimates-and-actuals.json"
-    state_path = state_dir / "state.json"
-    state_path.write_bytes(src.read_bytes())
+    lay_epoch2_tree(workspace)
     return workspace
 
 
 def test_metrics_default_render_emits_rich_table(tmp_path: Path) -> None:
-    """Default invocation prints the four-metric rich table to stdout."""
-    workspace = _seed_state(tmp_path)
-    result = runner.invoke(app, ["-w", str(workspace), "metrics"])
-    assert result.exit_code == 0, result.output
+    result = runner.invoke(app, ["-w", str(_born_workspace(tmp_path)), "metrics"])
+    assert result.exit_code == exit_codes.OK, result.output
     assert "eawf metrics" in result.stdout
-    assert "EU variance" in result.stdout
-    assert "Audit pass rate" in result.stdout
-    assert "Wave elapsed" in result.stdout
-    assert "Planned vs reactive" in result.stdout
-
-
-def test_metrics_json_envelope_schema_version_one(tmp_path: Path) -> None:
-    """``--json`` emits a typed envelope with schema_version=1 and four metrics."""
-    workspace = _seed_state(tmp_path)
-    result = runner.invoke(app, ["--json", "-w", str(workspace), "metrics"])
-    assert result.exit_code == 0, result.output
-    payload: dict[str, Any] = json.loads(result.stdout)
-    assert payload["schema_version"] == 1
-    assert set(payload.keys()) == {
-        "schema_version",
-        "eu_variance",
-        "audit_pass_rate",
-        "wave_elapsed",
-        "planned_vs_reactive",
-    }
-    # Fixture has one IN_PROGRESS wave with no closed_at: every wave-derived
-    # metric should read as zero samples.
-    assert payload["eu_variance"]["sample_count"] == 0
-    assert payload["wave_elapsed"]["sample_count"] == 0
-    # Fixture has no audits ⇒ decided_count == 0.
-    assert payload["audit_pass_rate"]["decided_count"] == 0
-    # Single wave under a proactive-trigger iter ⇒ planned=1, reactive=0.
-    assert payload["planned_vs_reactive"]["planned_count"] == 1
-    assert payload["planned_vs_reactive"]["reactive_count"] == 0
-
-
-def test_metrics_plain_render_is_ansi_free(tmp_path: Path) -> None:
-    """``--plain`` emits a header + four metric rows without ANSI escape codes."""
-    workspace = _seed_state(tmp_path)
-    result = runner.invoke(app, ["--plain", "-w", str(workspace), "metrics"])
-    assert result.exit_code == 0, result.output
-    # The plain renderer uses a literal header string; the rich branch wraps
-    # the title in box-drawing characters. Spotting either rules out the
-    # branches accidentally swapping.
-    assert "\x1b[" not in result.stdout
-    assert "eawf metrics" in result.stdout
-    for label in (
-        "EU variance",
-        "Audit pass rate",
-        "Wave elapsed (min)",
-        "Planned vs reactive",
-    ):
+    for label in _LABELS:
         assert label in result.stdout
 
 
-def test_metrics_missing_state_exits_not_found(
+def test_metrics_json_envelope_reports_empty_ledgers(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["--json", "-w", str(_born_workspace(tmp_path)), "metrics"])
+    assert result.exit_code == exit_codes.OK, result.output
+    payload: dict[str, Any] = json.loads(result.stdout)
+    assert payload["schema_version"] == 2
+    assert (payload["estimate_count"], payload["actual_count"]) == (0, 0)
+    assert payload["unreadable_count"] == 0
+    assert payload["variance"]["sample_count"] == 0
+    assert payload["variance"]["variance_pct"] is None
+
+
+def test_metrics_plain_render_is_ansi_free(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["--plain", "-w", str(_born_workspace(tmp_path)), "metrics"])
+    assert result.exit_code == exit_codes.OK, result.output
+    assert "\x1b[" not in result.stdout
+    assert "eawf metrics" in result.stdout
+    assert "n/a (samples=0)" in result.stdout
+    for label in _LABELS:
+        assert label in result.stdout
+
+
+def test_metrics_missing_tree_exits_not_found(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A workspace pointer that resolves to a missing state file → exit 2 (NotFound).
-
-    Using ``-w <empty-dir>`` is the most reliable way to drive the
-    NotFound path under Typer's CliRunner: the resolver appends
-    ``.ea/state.json`` to the workspace, and the load attempt fails
-    closed with the canonical NotFound error rather than panicking.
-    """
     monkeypatch.delenv("EA_STATE", raising=False)
     workspace = tmp_path / "no-state"
     workspace.mkdir()
-    result = runner.invoke(app, ["-w", str(workspace), "metrics"])
-    # Exit code 2 maps to NotFound in :mod:`eawf.surfaces.cli.exit_codes`.
-    assert result.exit_code == 1
+    result = runner.invoke(app, ["--json", "-w", str(workspace), "metrics"])
+    assert result.exit_code == exit_codes.USER_ERROR, result.output
+    assert json.loads(result.stdout)["data"]["kind"] == "NotFound"
+
+
+def test_metrics_epoch1_tree_exits_migration_required(tmp_path: Path) -> None:
+    workspace = tmp_path / "ws"
+    (workspace / ".ea").mkdir(parents=True)
+    (workspace / ".ea" / "state.json").write_text("{}", encoding="utf-8")
+    result = runner.invoke(app, ["--json", "-w", str(workspace), "metrics"])
+    assert result.exit_code == exit_codes.ATTACH_FAILURE, result.output
+    assert json.loads(result.stdout)["data"]["kind"] == "MigrationRequired"

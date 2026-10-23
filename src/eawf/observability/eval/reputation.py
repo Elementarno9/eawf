@@ -42,6 +42,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
@@ -53,7 +54,7 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.ids import natural_key
-from eawf.kernel.state.models import Iter, State, Wave
+from eawf.kernel.state.models import Iter, Wave
 from eawf.workflow.agent_report.rollup import iter_agent_reports
 
 logger = logging.getLogger(__name__)
@@ -248,7 +249,7 @@ def build_verdict_outcomes(
     outcome; it simply has no verdict rows to project yet.
 
     Args:
-        state: Loaded, validated :class:`~eawf.kernel.state.models.State`
+        state: Loaded, validated :class:`~eawf.kernel.migration.v1_state.State`
             supplying the phase / iter / wave tree the outcomes are observed
             against.
         state_path: Path to ``state.json``; the AUDITOR report store resolves
@@ -512,9 +513,7 @@ class RoleReliability(BaseModel):
             display :attr:`posterior_lower_bound` maps onto, set only on a
             SCORED row. ``None`` exactly when :attr:`status` is
             :attr:`ReliabilityStatus.INSUFFICIENT` -- the honest-empty surface,
-            since an unscored group has no display LB to ladder. Distinct from
-            the output-quality ``TrustTier`` in
-            :mod:`eawf.workflow.estimation.trust_scorecard`.
+            since an unscored group has no display LB to ladder.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -864,11 +863,8 @@ DEFAULT_TIER_THRESHOLDS: dict[str, float] = {"C": 0.0, "B": 0.6, "A": 0.85}
 class ReputationTier(StrEnum):
     """Earned-autonomy tier a role's display score maps onto: C -> B -> A.
 
-    Distinct from the output-quality ``TrustTier`` in
-    :mod:`eawf.workflow.estimation.trust_scorecard` -- that one answers "was
-    this artifact verified?" (a property of one deliverable). This ladder
-    answers "has this agent earned autonomy?" (a property of an agent's track
-    record), so the two never share a value space and must not be conflated.
+    This ladder answers "has this agent earned autonomy?" (a property of an
+    agent's track record), never whether one deliverable was verified.
 
     The order is ascending trust:
 

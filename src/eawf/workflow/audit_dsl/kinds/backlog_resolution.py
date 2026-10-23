@@ -46,8 +46,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import BacklogStatus
-from eawf.kernel.state.models import BacklogItem, State
+from eawf.kernel.state.models import BacklogItem
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,10 @@
 """``eawf metrics`` — workflow + telemetry metrics surface.
 
-The bare ``eawf metrics`` invocation renders the rolling **workflow**
-metrics (estimation calibration) from ``state.json`` — EU variance, audit
-pass rate, wave elapsed, and the planned-vs-reactive split. This view is
-read-only: it never writes back to ``state.json``.
+The bare ``eawf metrics`` invocation renders the estimation roll-up of the
+selected generation: how many estimates and actuals its ledgers hold, and
+the estimate-actual variance over the subjects that carry both. This view
+is read-only. An epoch-1 tree selects no generation, so it is refused as
+needing migration.
 
 The C09 telemetry capstone adds four sub-verbs behind the
 same ``metrics`` command — selected by a leading positional sub-verb so the
@@ -22,21 +23,17 @@ existing single-command registration in :mod:`eawf.surfaces.cli.app` stays intac
   projected) with a typed reason per dropped file.
 - ``eawf metrics info`` — print cache stats: DB kind, path, schema +
   pricing version, and row counts.
-- ``eawf metrics variance`` — emit the C09 §5.9.6 M26
-  ``eawf_estimate_actual_variance_pct`` gauge from ``state.json`` and feed
-  the ship-gate Variance section + the C06 VarianceTile. Actuals are
-  measured-only (manual the retired ``actual start`` verb segments now, per-wave
-  token accounting in v0.4); the variance gauge reads the empty state
-  until a measured actual exists. The old wall-clock auto-record +
-  ``backfill-actuals`` derivation were retired because wall-clock time
-  overstated agent effort.
+- ``eawf metrics variance`` — emit the M26
+  ``eawf_estimate_actual_variance_pct`` gauge over the selected
+  generation's estimate and actual ledgers. Actuals are measured-only; the
+  gauge reads "no data" until a subject carries both.
 - ``eawf metrics jury-validation`` — render the cross-vendor jury validated
   against its ground-truth cohort (Fleiss kappa / Brier / ECE /
-  unanimous-pass-on-known-bad catch rate) from ``state.json`` plus the
-  append-only gold-label + AUDITOR stores under it, with the derived
-  BlockAuthority tier. Under the cohort floor the reducer refuses to score
-  and the render is the honest "insufficient signal (n=k)" banner -- it reads
-  no telemetry cache, so it is not gated on ``telemetry.enabled``.
+  unanimous-pass-on-known-bad catch rate) built from the selected
+  generation's Batch ledger, with the derived BlockAuthority tier. Under the
+  cohort floor the reducer refuses to score and the render is the honest
+  "insufficient signal (n=k)" banner -- it reads no telemetry cache, so it
+  is not gated on ``telemetry.enabled``.
 - ``eawf metrics refit --actor KEY`` — re-fit the effort-unit mapping
   through the daemon against the recorded actuals. A move within the
   threshold is stored as the next revision; a larger one files an operator
@@ -45,7 +42,9 @@ existing single-command registration in :mod:`eawf.surfaces.cli.app` stays intac
 - ``eawf metrics conduct`` — render the conduct deviation rate: deviations
   per completed wave, per obligation (every compiled conduct obligation,
   so a never-breached one reads as zero) and per runtime, read from the
-  machine-local deviation store. Not gated on ``telemetry.enabled``.
+  machine-local deviation store, against the Tasks the selected
+  generation's Task ledger records as completed. Not gated on
+  ``telemetry.enabled``.
 
 CLI is dispatch (AGENTS rule 1): every handler resolves the state path,
 reads the typed config, and routes the heavy lifting into
@@ -71,20 +70,21 @@ from eawf.surfaces.cli.scope import resolve_state_path
 if TYPE_CHECKING:
     from eawf.observability.eval.jury_validation import JuryValidationReport
     from eawf.observability.measurement.coverage import PricingCoverage
+    from eawf.workflow.estimation.metrics import LedgerMetrics
 
 logger = logging.getLogger(__name__)
 
 _TELEMETRY_SUBCOMMANDS = frozenset({"show", "export", "rebuild", "info", "variance"})
+
+_CONDUCT_SUBCOMMAND = "conduct"
+
+_REFIT_SUBCOMMAND = "refit"
 
 #: The jury-validation sub-verb renders the jury validated against its
 #: ground-truth cohort (Fleiss kappa / Brier / ECE / unanimous-pass-on-known-bad
 #: catch rate), with an honest "insufficient signal" banner under the cohort
 #: floor. It reads no telemetry cache, so it is not gated on ``telemetry.enabled``.
 _JURY_VALIDATION_SUBCOMMAND = "jury-validation"
-
-_CONDUCT_SUBCOMMAND = "conduct"
-
-_REFIT_SUBCOMMAND = "refit"
 
 #: The daemon verb ``metrics refit`` forwards to, spelled here so the Typer tree
 #: builds without the daemon method registry on the path.
@@ -182,65 +182,88 @@ def metrics_cmd(
 
 
 def _workflow_metrics(flags: GlobalFlags) -> None:
-    """Render the rolling estimation metrics from ``state.json``.
+    """Render the selected generation's estimation roll-up.
 
-    Read-only — does not acquire a lock, append events, or mutate
-    ``state.json``. Failures map to the canonical CLI exit codes:
-
-    - :class:`~eawf.surfaces.cli.errors.UserError` (``kind="NotFound"``, ``exit=1``)
-      when no ``.ea/state.json`` is locatable from the cwd / ``-w`` /
-      ``EA_STATE`` precedence chain.
-    - :class:`~eawf.surfaces.cli.errors.ValidationError` (``exit=2``) when the
-      on-disk payload fails strict schema validation.
+    Read-only. Failures map to the canonical CLI exit codes: UserError
+    (``kind="NotFound"``) when no tree resolves, MigrationRequired on an
+    epoch-1 tree.
     """
     from eawf.surfaces.render.metrics_view import render_metrics_plain, render_metrics_table
-    from eawf.workflow.estimation.metrics import compute_metrics
-    from eawf.workflow.evidence._io import load_state
 
-    try:
-        state_path = resolve_state_path(flags.workspace)
-    except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
+    metrics = _ledger_metrics_or_emit(flags)
+    if metrics is None:
         return
-
-    try:
-        state = load_state(state_path)
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-        return
-
-    summary = compute_metrics(state)
-    payload: dict[str, Any] = summary.model_dump(mode="json")
-    text = render_metrics_plain(summary) if flags.plain_output else render_metrics_table(summary)
+    payload: dict[str, Any] = metrics.model_dump(mode="json")
+    text = render_metrics_plain(metrics) if flags.plain_output else render_metrics_table(metrics)
     emit_json_or_text(payload, text, flags=flags)
 
 
 def _estimate_actual_variance(flags: GlobalFlags) -> None:
-    """Emit the M26 estimate-actual variance pct from ``state.json``.
+    """Emit the M26 estimate-actual variance pct of the selected generation.
 
-    Read-only — computes the C09 §5.9.6 M26 gauge over CLOSED waves with
-    both an estimate and an actual and feeds the ship-gate Variance section
-    + the C06 VarianceTile. Failures map to the canonical CLI exit codes:
-    UserError (``kind="NotFound"``, ``exit=1``) when no ``state.json``
-    resolves, ValidationError (``exit=2``) on a schema mismatch.
+    Read-only. Failures map to the canonical CLI exit codes as
+    :func:`_workflow_metrics` does.
     """
-    from eawf.workflow.estimation.metrics import compute_estimate_actual_variance
-    from eawf.workflow.evidence._io import load_state
-
-    state_path = _resolve_state_or_emit(flags)
-    if state_path is None:
+    metrics = _ledger_metrics_or_emit(flags)
+    if metrics is None:
         return
-
-    try:
-        state = load_state(state_path)
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-        return
-
-    metric = compute_estimate_actual_variance(state)
+    metric = metrics.variance
     payload: dict[str, Any] = metric.model_dump(mode="json")
     text = _render_variance(metric.variance_pct, metric.sample_count, metric.mapping_revisions)
     emit_json_or_text(payload, text, flags=flags)
+
+
+def _generation_document_or_emit(flags: GlobalFlags) -> tuple[Path, Path] | None:
+    """Return the tree's ``state.json`` slot and its selected generation's document.
+
+    Emits the refusal and returns ``None`` instead when there is none.
+
+    An absent tree is a UserError (``kind="NotFound"``); an epoch-1 tree
+    selects no generation, so it is refused as needing migration.
+    """
+    from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+    from eawf.kernel.state.epoch2.authority import resolve_authority
+    from eawf.surfaces.cli.flag_day_gate import MIGRATION_REQUIRED_KIND, MIGRATION_VERB
+
+    state_path = _resolve_state_or_emit(flags)
+    if state_path is None:
+        return None
+    if not state_path.parent.is_dir():
+        cli_errors.emit_error(
+            cli_errors.UserError(f"no eawf tree at {state_path.parent}", kind="NotFound"),
+            flags=flags,
+        )
+        return None
+    authority = resolve_authority(state_path.parent)
+    if authority.target is None or authority.generation_id is None:
+        cli_errors.emit_error(
+            cli_errors.MigrationRequired(
+                f"{state_path.parent} is an epoch-1 tree and metrics read only an epoch-2 "
+                f"generation; migrate it with `{MIGRATION_VERB} --plan` then `--apply`",
+                kind=MIGRATION_REQUIRED_KIND,
+            ),
+            flags=flags,
+        )
+        return None
+    document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    return state_path, document
+
+
+def _ledger_metrics_or_emit(flags: GlobalFlags) -> LedgerMetrics | None:
+    """Roll up the selected generation's estimate and actual ledgers, or emit why not."""
+    from eawf.kernel.store.ledger import read_ledger_records
+    from eawf.kernel.store.paths import ledger_path
+    from eawf.kernel.store.tiers import Epoch2Collection
+    from eawf.workflow.estimation.metrics import compute_ledger_metrics
+
+    resolved = _generation_document_or_emit(flags)
+    if resolved is None:
+        return None
+    _state_path, document = resolved
+    return compute_ledger_metrics(
+        read_ledger_records(ledger_path(document, Epoch2Collection.ESTIMATE)),
+        read_ledger_records(ledger_path(document, Epoch2Collection.ACTUAL)),
+    )
 
 
 def _render_variance(
@@ -312,94 +335,66 @@ _AUTHORITY_BLOCKING: str = "blocking"
 
 
 def _jury_validation(flags: GlobalFlags) -> None:
-    """Render the jury validated against its ground-truth cohort.
+    """Render the jury validated against its native ground-truth cohort.
 
-    Read-only -- builds the validation cohort from ``state.json`` + the
-    append-only gold-label / AUDITOR stores under it, scores the jury against
-    it, and renders the Fleiss kappa / Brier / ECE / unanimous-pass-on-known-bad
-    catch rate plus the cohort ``n`` and the derived BlockAuthority tier. Under
-    the cohort floor the reducer refuses to score, and the render is the honest
-    "insufficient signal (n=k)" banner -- never a fabricated number. Failures
-    map to the canonical CLI exit codes: UserError (``kind="NotFound"``,
-    ``exit=1``) when no ``state.json`` resolves, ValidationError (``exit=2``) on
-    a schema mismatch.
+    Read-only -- builds the labelled cohort from the selected generation's
+    Batch ledger (every verdict a verification cycle held, joined to its
+    subject's observed outcome or a principal's gold label), scores the jury
+    against it, and renders the Fleiss kappa / Brier / ECE /
+    unanimous-pass-on-known-bad catch rate plus the cohort ``n`` and the
+    derived BlockAuthority tier. Under the cohort floor the reducer refuses to
+    score, and the render is the honest "insufficient signal (n=k)" banner --
+    never a fabricated number. Failures map to the canonical CLI exit codes
+    as :func:`_workflow_metrics` does.
     """
-    from eawf.observability.eval.jury_validation import (
-        ValidationCohort,
-        build_jury_validation_cohort,
-        read_recorded_ballots,
-        validate_jury,
-    )
-    from eawf.workflow.evidence._io import load_state
+    from eawf.kernel.store.compaction import read_document
+    from eawf.kernel.store.ledger import read_ledger_records
+    from eawf.kernel.store.paths import ledger_path
+    from eawf.kernel.store.tiers import Epoch2Collection
+    from eawf.observability.eval.jury_validation import validate_jury
+    from eawf.runtime.daemon.verdict_observations import native_jury_cohort
 
-    state_path = _resolve_state_or_emit(flags)
-    if state_path is None:
+    resolved = _generation_document_or_emit(flags)
+    if resolved is None:
         return
-
-    try:
-        state = load_state(state_path)
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-        return
-
-    cohort = build_jury_validation_cohort(state, state_path)
-    ballots_by_wave = read_recorded_ballots(state_path)
-    # Only cohort rows whose wave has recorded juror ballots can score
-    # juror-level metrics; a labelled wave from before the ballot store
-    # existed is excluded from scoring, never fabricated -- the excluded
-    # count is surfaced so the starvation stays visible.
-    scorable = ValidationCohort(
-        silver=[row for row in cohort.silver if row.outcome.base_id in ballots_by_wave],
-        gold=[row for row in cohort.gold if row.outcome.base_id in ballots_by_wave],
+    _state_path, document = resolved
+    cohort, ballots = native_jury_cohort(
+        document,
+        read_document(document),
+        batch_lines=read_ledger_records(ledger_path(document, Epoch2Collection.BATCH)),
     )
-    labelled_rows = len(cohort.silver) + len(cohort.gold)
-    ballotless_rows = labelled_rows - (len(scorable.silver) + len(scorable.gold))
-    report = validate_jury(scorable, ballots_by_wave=ballots_by_wave)
+    report = validate_jury(cohort, ballots)
     payload = report.model_dump(mode="json")
     payload["block_authority"] = _block_authority(report)
-    payload["labelled_rows"] = labelled_rows
-    payload["ballotless_rows"] = ballotless_rows
-    text = _render_jury_validation(report)
-    if ballotless_rows:
-        text += (
-            f"\nlabelled cohort rows: {labelled_rows} "
-            f"({ballotless_rows} without recorded ballots, excluded from scoring)"
-        )
-    emit_json_or_text(payload, text, flags=flags)
+    emit_json_or_text(payload, _render_jury_validation(report), flags=flags)
 
 
 def _conduct_deviation_rate(flags: GlobalFlags) -> None:
     """Render the conduct deviation rate from the machine-local store.
 
-    Read-only. A completed task is a CLOSED wave. Failures map to the
-    canonical CLI exit codes: UserError (``kind="NotFound"``, ``exit=1``)
-    when no ``state.json`` resolves, ValidationError (``exit=2``) on a
-    schema mismatch.
+    Read-only. A completed task is a Task the selected generation's Task
+    ledger records as COMPLETED. Failures map to the canonical CLI exit
+    codes as :func:`_workflow_metrics` does.
     """
-    from eawf.kernel.state.enums import WaveStatus
+    from eawf.kernel.state.epoch2.task_status import TaskStatus
+    from eawf.kernel.store.ledger import effective_records, read_ledger_records
+    from eawf.kernel.store.paths import ledger_path
+    from eawf.kernel.store.tiers import Epoch2Collection
     from eawf.platform.rules.conduct import (
         conduct_deviation_rate,
         conduct_obligation_ids,
         read_conduct_deviations,
     )
-    from eawf.workflow.evidence._io import load_state
 
-    state_path = _resolve_state_or_emit(flags)
-    if state_path is None:
+    resolved = _generation_document_or_emit(flags)
+    if resolved is None:
         return
-
-    try:
-        state = load_state(state_path)
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-        return
-
+    state_path, document = resolved
+    tasks = effective_records(read_ledger_records(ledger_path(document, Epoch2Collection.TASK)))
     rate = conduct_deviation_rate(
         read_conduct_deviations(state_path),
         obligations=conduct_obligation_ids(),
-        completed_task_count=sum(
-            1 for wave in state.waves.values() if wave.status == WaveStatus.CLOSED
-        ),
+        completed_task_count=sum(1 for line in tasks if line.status == TaskStatus.COMPLETED),
     )
     per_task = (
         "no completed tasks"

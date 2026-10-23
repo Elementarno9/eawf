@@ -3,8 +3,8 @@
 This module is the facade for the ``memory`` command group
 (P27-I05-W09). It owns the :data:`memory_app` Typer group and the
 shared helpers every handler composes (store-path resolvers, the
-read-only state loader, the confidence / status flag parsers, the
-args-hash helper). The concrete command bodies live in two sibling
+note loader, the confidence / status flag parsers, the args-hash
+helper). The concrete command bodies live in two sibling
 modules:
 
 - :mod:`eawf.surfaces.cli.commands.memory_write` — mutating verbs ``add`` /
@@ -32,12 +32,12 @@ Sub-commands:
 - ``view``           — show one memory note with its body.
 - ``stale``          — list stale candidates (low-confidence + over-age).
 
-On an epoch-2 tree the notes live on the selected generation's memory
-ledger. The mutating verbs send the daemon's native ``memory.*`` verbs,
-which commit each revision as a ledger line; the reads read the ledger
-directly, since reading needs no daemon. On an epoch-1 tree the reads
-still answer from ``state.memory_index`` and ``memory.jsonl``; the
-flag-day gate refuses the mutating verbs there before they dispatch.
+The notes live on the selected generation's memory ledger. The mutating
+verbs send the daemon's native ``memory.*`` verbs, which commit each
+revision as a ledger line; the reads read the ledger directly, since
+reading needs no daemon. An epoch-1 tree selects no generation, so the
+reads refuse it as needing migration, and the flag-day gate refuses the
+mutating verbs there before they dispatch.
 """
 
 from __future__ import annotations
@@ -55,7 +55,6 @@ from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.models import State
     from eawf.kernel.store.kinds.memory import MemoryNote
 
 #: Mirrors :data:`eawf.platform.memory.render_context.DEFAULT_BUDGET`; inlined as a
@@ -96,32 +95,23 @@ def _events_path_for(state_path: Path) -> Path:
     return store_path(state_path, StoreKind.EVENT)
 
 
-def _load_state(state_path: Path) -> State:
-    """Read + schema-validate a state document. Used by read-only handlers."""
-    from eawf.kernel.validate.strict import validate_state
-
-    if not state_path.exists():
-        raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")
-    payload = orjson.loads(state_path.read_bytes())
-    report = validate_state(payload, strict_optional=False)
-    if report.state is None:
-        raise cli_errors.ValidationError(
-            f"state validation failed: {'; '.join(report.schema_errors)}"
-        )
-    if report.violations:
-        raise cli_errors.ValidationError(
-            f"state invariant violations: {[v.code for v in report.violations]}"
-        )
-    return report.state
-
-
 def _load_notes(state_path: Path) -> dict[str, MemoryNote]:
-    """Return the notes the tree holding *state_path* stands at, from its epoch's store."""
-    from eawf.platform.memory.book import generation_memory_ledger, notes_from_state, read_book
+    """Return the notes the selected generation of the tree holding *state_path* stands at.
+
+    Raises:
+        MigrationRequired: The tree is still at epoch 1, so it selects no
+            generation to read the notes from.
+    """
+    from eawf.platform.memory.book import generation_memory_ledger, read_book
+    from eawf.surfaces.cli.flag_day_gate import MIGRATION_REQUIRED_KIND, MIGRATION_VERB
 
     ledger = generation_memory_ledger(state_path.parent)
     if ledger is None:
-        return notes_from_state(_load_state(state_path), _memory_path_for(state_path))
+        raise cli_errors.MigrationRequired(
+            f"{state_path.parent} is an epoch-1 tree and memory reads only an epoch-2 "
+            f"generation; migrate it with `{MIGRATION_VERB} --plan` then `--apply`",
+            kind=MIGRATION_REQUIRED_KIND,
+        )
     return {mid: standing.note for mid, standing in read_book(ledger).items()}
 
 

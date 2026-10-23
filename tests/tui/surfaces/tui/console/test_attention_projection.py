@@ -188,7 +188,7 @@ def _pause_envelope(*, sequence: int = 41209, status: str = "OPEN") -> Envelope:
 
 def _seam_holding(projection: RouteProjection) -> ProjectionSeam:
     """Return a seam bound to no tree, already holding ``projection``."""
-    seam = ProjectionSeam(route=projection.route, scope_id=SCOPE, state_path=None, clock=lambda: AT)
+    seam = ProjectionSeam(route=projection.route, scope_id=SCOPE, clock=lambda: AT)
     seam._projection = projection
     return seam
 
@@ -569,7 +569,6 @@ def test_ui_009_an_answer_is_addressed_to_the_revision_shown_and_a_stale_one_rer
     seam = ProjectionSeam(
         route=ATTENTION_ROUTE,
         scope_id=SCOPE,
-        state_path=None,
         clock=lambda: AT,
         daemon_client_factory=daemon.client,
         operator=Operator(
@@ -693,7 +692,7 @@ def test_a_pause_stating_no_status_is_refused_rather_than_patched_blank() -> Non
 
 def test_a_patch_the_seam_never_loaded_is_ignored() -> None:
     """A patch arriving before the first read has no rows to replace."""
-    seam = ProjectionSeam(route=ATTENTION_ROUTE, scope_id=SCOPE, state_path=None, clock=lambda: AT)
+    seam = ProjectionSeam(route=ATTENTION_ROUTE, scope_id=SCOPE, clock=lambda: AT)
     patch = next(p for p in patches_for_event(_pause_envelope()) if ATTENTION_ROUTE in p.routes)
     asyncio.run(seam.apply_patch(patch))
     assert seam.projection is None

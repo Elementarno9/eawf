@@ -19,16 +19,29 @@ The tests use ``EA_STATE`` to redirect the active state path under a
 
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import Final, cast
 
 import orjson
 import pytest
 
+from eawf.kernel.identity.urn import parse_qualified_urn
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.state.enums import OpenQuestionDropReason, OpenQuestionStatus
+from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.state.epoch2.question import OpenQuestion
+from eawf.kernel.state.epoch2.values import EntityOrigin
+from eawf.kernel.store.compaction import read_document, write_document
 from eawf.surfaces.render.envelope import EnvelopeWarning, OutputEnvelope
 from eawf.workflow.skills.bodies.research import ResearchBody
 from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
 from eawf.workflow.skills.research import ResearchSkill
+from tests._epoch2_helpers import lay_epoch2_tree
+
+_AT: Final = datetime(2026, 6, 11, 12, 0, tzinfo=UTC)
+_DROPPER: Final = "OP-0001"
 
 
 @pytest.fixture
@@ -220,57 +233,53 @@ def test_research_budget_absent_is_none(state_dir: Path) -> None:
 
 
 def _write_state_with_open_questions(state_dir: Path, *, live: int = 2) -> None:
-    """Write a valid state.json carrying *live* open questions plus one dropped."""
+    """Bear the tree at epoch 2 with *live* open questions plus one dropped and one imported."""
     titles = ["which curve model fits the short tenor", "is the venue feed authoritative"]
     titles += [f"extra question {i}" for i in range(live - len(titles))]
+    statuses = [
+        OpenQuestionStatus.BLOCKED if i == 1 else OpenQuestionStatus.OPEN for i in range(live)
+    ]
     rows = {
-        f"OQ-{i + 1}": {
-            "id": f"OQ-{i + 1}",
-            "scope_id": "QR",
-            "title": title,
-            "status": "blocked" if i == 1 else "open",
-            "blocking": i == 1,
-            "urgency": "normal",
-            "created_at": "2026-06-11T12:00:00+00:00",
-        }
-        for i, title in enumerate(titles[:live])
+        f"QST-{i + 1:04d}": _native_question(i + 1, title, status)
+        for i, (title, status) in enumerate(zip(titles[:live], statuses, strict=True))
     }
-    rows["OQ-99"] = {
-        "id": "OQ-99",
-        "scope_id": "QR",
-        "title": "should we drop the stale source",
-        "status": "dropped",
-        "blocking": False,
-        "urgency": "low",
-        "created_at": "2026-06-11T12:00:00+00:00",
+    rows["QST-0099"] = _native_question(
+        99, "should we drop the stale source", OpenQuestionStatus.DROPPED
+    )
+    # A row the cutover imported carries no urn; it is history, not a live question.
+    rows["legacy:open_questions/OQ-1"] = {
+        "payload": {"payload": {"id": "OQ-1", "title": "an imported question", "status": "open"}},
+        "status": "imported",
     }
-    payload = {
-        "schema_version": "1.0",
-        "scope_kind": "repo",
-        "urn": "urn:eawf:v1:state:QR",
-        "updated_at": "2026-06-11T12:00:00+00:00",
-        "project": {
-            "code": "QR",
-            "slug": "qr",
-            "title": "QR",
-            "description": None,
-            "domains": ["quant"],
-            "default_branch": "main",
-            "status": "active",
-            "repo_urn": "urn:eawf:v1:repo:QR",
-        },
-        "current": {"project_code": "QR"},
-        "workspace": None,
-        "phases": {},
-        "iters": {},
-        "waves": {},
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {},
-        "open_questions": rows,
-    }
-    (state_dir / "state.json").write_bytes(orjson.dumps(payload))
+    lay_epoch2_tree(state_dir.parent)
+    authority = resolve_authority(state_dir)
+    assert authority.target is not None and authority.generation_id is not None
+    document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    body = read_document(document)
+    body["open_question"] = rows
+    write_document(document, body)
+
+
+def _native_question(number: int, title: str, status: OpenQuestionStatus) -> dict[str, object]:
+    """Return one native question row as the generation document holds it."""
+    resolved = status is OpenQuestionStatus.DROPPED
+    question = OpenQuestion(
+        uid=uuid.UUID(int=number),
+        key=f"QST-{number:04d}",
+        urn=parse_qualified_urn(f"eawf://WSP-MAIN/PRJ-QR/_/question/QST-{number:04d}"),
+        origin=EntityOrigin(kind="native", mapping_basis="native", confidence="exact"),
+        revision=1,
+        created_at=_AT,
+        updated_at=_AT,
+        scope_ref=parse_qualified_urn("eawf://WSP-MAIN/PRJ-QR/REP-QR/run/RUN-00000001"),
+        question=title,
+        blocking=status is OpenQuestionStatus.BLOCKED,
+        status=status,
+        drop_reason=OpenQuestionDropReason.OUT_OF_SCOPE if resolved else None,
+        resolution_actor=_DROPPER if resolved else None,
+        resolved_at=_AT if resolved else None,
+    )
+    return question.model_dump(mode="json")
 
 
 @pytest.fixture

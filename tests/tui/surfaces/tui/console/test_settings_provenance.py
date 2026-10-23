@@ -140,7 +140,10 @@ def test_the_console_reads_the_settings_view_through_that_verb(tree: Path) -> No
         asked.append(method)
         return view.model_dump(mode="json")
 
-    seam = ProjectionSeam(route=SETTINGS_ROUTE, scope_id=SCOPE, state_path=None)
+    seam = ProjectionSeam(
+        route=SETTINGS_ROUTE,
+        scope_id=SCOPE,
+    )
     seam.binding.call = _call  # type: ignore[method-assign]
 
     assert seam.settings is None

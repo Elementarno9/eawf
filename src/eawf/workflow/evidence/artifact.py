@@ -17,7 +17,8 @@ from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import urlsplit
 
-from eawf.kernel.state.models import Artifact, State
+from eawf.kernel.migration.v1_state import State
+from eawf.kernel.state.models import Artifact
 from eawf.kernel.store.envelope import Envelope
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence import _io

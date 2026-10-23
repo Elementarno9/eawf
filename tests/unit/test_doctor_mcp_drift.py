@@ -8,57 +8,30 @@ from pathlib import Path
 
 import pytest
 
-from eawf.kernel.state.enums import (
-    McpRisk,
-    McpStatus,
-    ProjectStatus,
-    ScopeKind,
-)
-from eawf.kernel.state.models import (
-    CurrentPointers,
-    McpServer,
-    Project,
-    State,
-)
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.state.enums import McpRisk, McpStatus
+from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.state.models import McpServer
+from eawf.kernel.store.compaction import read_document, write_document
 from eawf.observability.doctor.checks import check_config_resolves, check_mcp_drift, run_all
+from eawf.runtime.mcp.book import capability_row
+from tests._epoch2_helpers import lay_epoch2_tree
 
 
 def _seed_state(workspace: Path, *, servers: dict[str, McpServer] | None = None) -> Path:
-    """Write a minimal state.json under <workspace>/.ea/ for the drift check."""
-    ea = workspace / ".ea"
-    ea.mkdir(parents=True, exist_ok=True)
-    state = State.model_validate(
-        {
-            "schema_version": "1.0",
-            "scope_kind": ScopeKind.REPO.value,
-            "urn": "urn:eawf:v1:state:DEMO",
-            "updated_at": datetime.now(UTC).isoformat(),
-            "project": Project(
-                code="DEMO",
-                slug="demo",
-                title="Demo",
-                description=None,
-                domains=["x"],
-                default_branch="main",
-                status=ProjectStatus.ACTIVE,
-                repo_urn="urn:eawf:v1:repo:DEMO",
-            ).model_dump(mode="json"),
-            "current": CurrentPointers(project_code="DEMO").model_dump(mode="json"),
-            "workspace": None,
-            "phases": {},
-            "iters": {},
-            "waves": {},
-            "artifacts": {},
-            "agent_sessions": {},
-            "plugins": {},
-            "indexes": {},
-        }
-    )
-    if servers:
-        state.mcp_servers = servers
-    payload = state.model_dump(mode="json")
-    (ea / "state.json").write_text(json.dumps(payload, sort_keys=True) + "\n")
-    return ea / "state.json"
+    """Bear <workspace>/.ea at epoch 2 with *servers* registered in its generation."""
+    state_path = lay_epoch2_tree(workspace, project_code="DEMO")
+    authority = resolve_authority(state_path.parent)
+    assert authority.target is not None and authority.generation_id is not None
+    document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    body = read_document(document)
+    now = datetime.now(UTC)
+    body["capability"] = {
+        sid: capability_row(server, status="registered", revision=1, at=now)
+        for sid, server in (servers or {}).items()
+    }
+    write_document(document, body)
+    return state_path
 
 
 def _server(server_id: str) -> McpServer:
@@ -234,3 +207,11 @@ def test_check_warns_on_unreadable_codex_toml(tmp_path: Path) -> None:
     config.write_text("this is = = not toml")
     result = check_mcp_drift(workspace=tmp_path)
     assert result.status == "warn"
+
+
+def test_check_returns_ok_on_an_epoch1_tree(tmp_path: Path) -> None:
+    """An epoch-1 tree selects no generation, so there is no registry to compare."""
+    (tmp_path / ".ea").mkdir()
+    (tmp_path / ".ea" / "state.json").write_text("{}", encoding="utf-8")
+    result = check_mcp_drift(workspace=tmp_path)
+    assert (result.status, result.detail) == ("ok", "no epoch-2 mcp registry")

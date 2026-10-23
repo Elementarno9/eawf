@@ -4,7 +4,7 @@ Two concerns live here:
 
 * **State mutation** — :func:`set_budget`, :func:`record_consumption`,
   and :func:`check_budget` operate on a live
-  :class:`~eawf.kernel.state.models.State` and mutate the targeted
+  :class:`~eawf.kernel.migration.v1_state.State` and mutate the targeted
   :class:`~eawf.kernel.state.models.Wave` in place. They do **not** touch
   ``state.json`` directly — persistence is the CLI / daemon handler's
   job (it wraps the call in the locked transaction).
@@ -59,8 +59,9 @@ from pydantic import ValidationError
 
 from eawf.kernel.config.layered import merge_config
 from eawf.kernel.economics.notice_policy import DEFAULT_NOTICE_POLICY
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.runtime.budget_notice import BudgetNotice
-from eawf.kernel.state.models import State, Wave
+from eawf.kernel.state.models import Wave
 from eawf.runtime.budget.notices import (
     LOCAL_OPERATOR,
     BudgetCrossing,

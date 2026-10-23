@@ -315,9 +315,8 @@ class CommandExitZeroArgs(BaseModel):
     #: wins over :attr:`timeout_class`; ``None`` selects the class default.
     timeout_s: StrictInt | None = Field(default=None, gt=0)
     scope: Scope = "changed"
-    #: Optional wave id; resolved into ``diff_base = derive_wave_sha(wave_id) + "~1"``
-    #: when set, with a ``git merge-base HEAD main`` fallback when the
-    #: wave's SHA cannot be derived.
+    #: Optional wave id, still accepted on authored gates; the runner's
+    #: ``diff_base`` is the ``git merge-base HEAD main`` whether or not it is set.
     wave_id: str | None = None
     #: Optional wave ``file_scopes`` list; unioned into the ``touched``
     #: scope's file set. Callers pass the wave's own ``file_scopes`` so

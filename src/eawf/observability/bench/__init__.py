@@ -11,8 +11,8 @@ split across three modules:
 - :mod:`eawf.observability.bench.harness` — the harness catalog plus the
   measure / compare logic. ``compare`` flags a regression when a
   harness's ``after`` wall-clock crosses ``before * (1 + threshold)``.
-- :mod:`eawf.observability.bench.turn_cost` — the turn-cost corpus sources
-  (a deterministic fixture, or the live state x telemetry join) plus the
+- :mod:`eawf.observability.bench.turn_cost` — the deterministic turn-cost
+  corpus fixture plus the
   baseline check that reads its threshold off the baseline artifact and
   refuses rather than rebaselines when the two are not comparable.
 
@@ -43,17 +43,14 @@ from eawf.observability.bench.seed import (
     seed_fixture,
 )
 from eawf.observability.bench.turn_cost import (
-    LIVE_FIXTURE_ID,
     TURN_COST_FIXTURE_IDS,
     TURN_COST_HARNESS_REVISION,
-    CorpusResolution,
     TurnCostBaseline,
     TurnCostComparison,
     TurnCostCorpus,
     TurnCostVerdict,
     baseline_from_record,
     build_corpus_record,
-    collect_live_corpus,
     compare_turn_cost,
     load_baseline,
     seed_turn_cost_corpus,
@@ -63,12 +60,10 @@ from eawf.observability.bench.turn_cost import (
 __all__ = [
     "FIXTURE_SIZES",
     "HARNESS_CATALOG",
-    "LIVE_FIXTURE_ID",
     "TURN_COST_FIXTURE_IDS",
     "TURN_COST_HARNESS_REVISION",
     "BenchResult",
     "Comparison",
-    "CorpusResolution",
     "FixtureSize",
     "HarnessSpec",
     "TurnCostBaseline",
@@ -77,7 +72,6 @@ __all__ = [
     "TurnCostVerdict",
     "baseline_from_record",
     "build_corpus_record",
-    "collect_live_corpus",
     "compare_results",
     "compare_turn_cost",
     "load_baseline",

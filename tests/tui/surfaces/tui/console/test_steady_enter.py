@@ -104,7 +104,10 @@ class _Daemon:
 
 def _app(daemon: _Daemon) -> ConsoleApp:
     """Return a console on scope home whose seam reads through ``daemon``, on a held clock."""
-    seam = ProjectionSeam(route="scope.home", scope_id=bodies.SCOPE, state_path=None)
+    seam = ProjectionSeam(
+        route="scope.home",
+        scope_id=bodies.SCOPE,
+    )
     seam._binding.call = daemon  # type: ignore[method-assign]
     return ConsoleApp(clock=FakeClock(), seam=seam)
 
@@ -310,7 +313,10 @@ def test_a_rested_caret_reads_its_target_ahead_so_enter_paints_it_at_once() -> N
 
 
 def _seam(daemon: _Daemon) -> ProjectionSeam:
-    seam = ProjectionSeam(route="scope.home", scope_id=bodies.SCOPE, state_path=None)
+    seam = ProjectionSeam(
+        route="scope.home",
+        scope_id=bodies.SCOPE,
+    )
     seam._binding.call = daemon  # type: ignore[method-assign]
     return seam
 

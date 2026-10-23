@@ -110,6 +110,7 @@ from pydantic import (
     model_validator,
 )
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.release.waiver import ReleaseWaiver
 from eawf.kernel.spec.release import (
     Release,
@@ -120,7 +121,10 @@ from eawf.kernel.spec.release import (
     semver_equivalent,
 )
 from eawf.kernel.spec.release_config import ReleaseConfig
-from eawf.kernel.state.models import State
+from eawf.kernel.store.compaction import read_document
+from eawf.kernel.store.ledger import LedgerTornTailError
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 from eawf.runtime.daemon.methods.release_context import (
     assert_revision,
@@ -138,9 +142,10 @@ from eawf.runtime.daemon.methods.release_keyed import (
     replayed_operation,
     request_identity,
 )
+from eawf.runtime.mcp.book import generation_document
 from eawf.runtime.release.chokepoint import sweep_pinned_source
-from eawf.surfaces.cli.errors import CliError, UserError
-from eawf.workflow.evidence._io import load_state
+from eawf.surfaces.cli.errors import UserError
+from eawf.workflow.evidence._io import generation_contract_view
 from eawf.workflow.evidence.provider_certification import CanaryEvidence, load_canary_evidence
 from eawf.workflow.release.adapters import collect_observation
 from eawf.workflow.release.admission import (
@@ -1154,28 +1159,23 @@ class CreateParams(BaseModel):
     membership_refs: list[str] = Field(default_factory=list)
 
 
-def _require_state(ctx: MethodContext) -> State:
-    """Return the daemon's typed state, or refuse the verb.
-
-    Args:
-        ctx: Server context.
-
-    Returns:
-        The loaded :class:`~eawf.kernel.state.models.State`.
+def _promoted_contracts(state_path: Path) -> State:
+    """Return the measured contracts the selected generation of *state_path*'s tree holds.
 
     Raises:
-        DaemonValidationError: When the daemon runs without on-disk
-            state, or the state on disk does not validate. A checkpoint
-            admitted against state nobody could read would be admitted
-            against nothing.
+        DaemonValidationError: When the tree selects no generation or it does
+            not read; a checkpoint admitted against unread contracts is unfounded.
     """
-    if ctx.state_path is None:
-        raise DaemonValidationError(
-            "validation_failed: release.create requires an on-disk state root"
-        )
+    document = generation_document(state_path.parent)
+    if document is None:
+        raise DaemonValidationError("validation_failed: release.create needs an epoch-2 tree")
     try:
-        return load_state(Path(ctx.state_path))
-    except CliError as exc:
+        return generation_contract_view(
+            read_document(document),
+            artifact_ledger=ledger_path(document, Epoch2Collection.ARTIFACT),
+            evidence_ledger=ledger_path(document, Epoch2Collection.EVIDENCE),
+        )
+    except (OSError, LedgerTornTailError, ValidationError, ValueError, KeyError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
 
@@ -1344,8 +1344,8 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             finished, or when the train declares no such rung.
     """
     args = CreateParams.model_validate(params)
-    state = _require_state(ctx)
     state_path = require_state_path(ctx)
+    state = _promoted_contracts(state_path)
     try:
         record = create_checkpoint_release(
             state,

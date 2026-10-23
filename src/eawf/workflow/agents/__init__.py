@@ -3,7 +3,7 @@
 The :mod:`eawf.workflow.agents.specs` subpackage owns the typed
 :class:`~eawf.workflow.agents.specs.models.SubagentSpec` model and the role
 registry. The dispatch renderer (:mod:`eawf.workflow.dispatch.renderer`) builds a
-``SubagentSpec`` from a validated :class:`~eawf.kernel.state.models.State`
+``SubagentSpec`` from a validated :class:`~eawf.kernel.migration.v1_state.State`
 snapshot and renders it, so the wave prompt is produced from a typed
 spec rather than an ad-hoc string concatenation.
 

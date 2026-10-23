@@ -135,6 +135,9 @@ _KNOWN_UNREGENERABLE: dict[str, str] = {
     "plugin_install": "no-switch",
     "audit_dsl": "no-switch",
     "metrics_export": "no-switch",
+    # The wave prompt renderer the dispatch goldens pin reads only a v1 State
+    # and has no production caller, so its render and refresh tests are gone.
+    "dispatch": "no-switch",
 }
 
 #: Surfaces whose golden tree is missing on disk. The pairing gate watches

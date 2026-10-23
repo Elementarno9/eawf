@@ -44,6 +44,8 @@ from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.ledger import LedgerRecord, effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.observability.eval.jury import JurorBallot
+from eawf.observability.eval.jury_validation import ValidationCohort
 from eawf.observability.eval.native_cohort import native_cohort, observe_verdict_outcomes
 from eawf.observability.eval.trust_projection import calibrate, score_jurors
 from eawf.runtime.daemon.methods.delivery import CYCLE_KEY_PREFIX
@@ -218,6 +220,40 @@ def resolve_jury_thresholds(repo_root: Path) -> tuple[float, float]:
     return verify.jury_max_brier, verify.jury_max_co_error
 
 
+def native_jury_cohort(
+    document_file: Path, document: dict[str, Any], *, batch_lines: tuple[LedgerRecord, ...]
+) -> tuple[ValidationCohort, Mapping[str, tuple[JurorBallot, ...]]]:
+    """Return the labelled cohort of every verdict the Batch ledger holds, and its ballots.
+
+    Each verdict any cycle line held is joined to the outcome its subject went on
+    to have, or to the gold label a principal pinned on the subject.
+
+    Args:
+        document_file: The selected generation's document, which the ledgers sit beside.
+        document: That document, as read.
+        batch_lines: The generation's Batch ledger, as read.
+
+    Returns:
+        The cohort and the ballots each labelled verdict cast, by the verdict's key;
+        an empty cohort when no Batch has filed a verification cycle.
+
+    Raises:
+        pydantic.ValidationError: A cycle, label, binding or Run line does not
+            validate, which means the ledger is corrupt.
+    """
+    run_lines = read_ledger_records(ledger_path(document_file, Epoch2Collection.RUN))
+    merged = frozenset(
+        key
+        for key, row in _stored(document, batch_lines, Epoch2Collection.BATCH).items()
+        if row.get("status") in MERGED_STATUSES
+    )
+    return native_cohort(
+        observe_verdict_outcomes(_cycle_lines(batch_lines), merged_batches=merged),
+        producers=jury_producers(document, run_lines),
+        labels=latest_gold_labels(batch_lines),
+    )
+
+
 def jury_calibration_rows(
     document_file: Path, document: dict[str, Any], *, max_brier: float, max_co_error: float
 ) -> tuple[dict[str, Any], ...]:
@@ -243,17 +279,7 @@ def jury_calibration_rows(
     lines = _cycle_lines(batch_lines)
     if not lines:
         return ()
-    run_lines = read_ledger_records(ledger_path(document_file, Epoch2Collection.RUN))
-    merged = frozenset(
-        key
-        for key, row in _stored(document, batch_lines, Epoch2Collection.BATCH).items()
-        if row.get("status") in MERGED_STATUSES
-    )
-    cohort, ballots = native_cohort(
-        observe_verdict_outcomes(lines, merged_batches=merged),
-        producers=jury_producers(document, run_lines),
-        labels=latest_gold_labels(batch_lines),
-    )
+    cohort, ballots = native_jury_cohort(document_file, document, batch_lines=batch_lines)
     group = calibrate(cohort, ballots, max_brier=max_brier, max_co_error=max_co_error)
     report = group.report
     jurors = score_jurors(cohort, ballots)
@@ -296,6 +322,7 @@ __all__ = [
     "VERIFICATION_SITE",
     "jury_calibration_rows",
     "jury_producers",
+    "native_jury_cohort",
     "resolve_jury_thresholds",
     "verdict_observation_rows",
 ]

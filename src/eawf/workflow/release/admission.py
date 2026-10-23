@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 from uuid import UUID
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.release import (
     Release,
     ReleaseGateProfile,
@@ -49,7 +50,7 @@ from eawf.kernel.spec.release import (
     validate_release_against_train,
 )
 from eawf.kernel.state.epoch2.milestone import MilestoneStatus
-from eawf.kernel.state.models import Artifact, State
+from eawf.kernel.state.models import Artifact
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence.measured_contract import PROMOTION_GAP as PROMOTION_GAP_TEXT
 from eawf.workflow.evidence.measured_contract import resolve_contract_citation

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from eawf.kernel.state.models import ActualSummary, State
+from eawf.kernel.migration.v1_state import State
+from eawf.kernel.state.models import ActualSummary
 
 
 def resolve_wave_actual(state: State, wave_id: str) -> ActualSummary | None:

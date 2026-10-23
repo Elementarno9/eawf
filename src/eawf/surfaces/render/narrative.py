@@ -18,20 +18,14 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
     DispatchNote,
     WaveStatus,
 )
 from eawf.kernel.state.ids import natural_key
-from eawf.kernel.state.models import (
-    ActualSummary,
-    BacklogItem,
-    Iter,
-    Phase,
-    State,
-    Wave,
-)
+from eawf.kernel.state.models import ActualSummary, BacklogItem, Iter, Phase, Wave
 
 
 class NarrativeNotFoundError(LookupError):

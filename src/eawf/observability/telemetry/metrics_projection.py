@@ -9,8 +9,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import EffortBucket, WaveStatus
-from eawf.kernel.state.models import ActualSummary, EstimateSummary, State, Wave
+from eawf.kernel.state.models import ActualSummary, EstimateSummary, Wave
 from eawf.observability.telemetry.aggregator import percentile_ms, session_durations_ms
 from eawf.observability.telemetry.models import (
     RuntimeErrorClass,

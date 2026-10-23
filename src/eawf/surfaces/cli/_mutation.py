@@ -7,7 +7,7 @@ mutating verb consults to decide proxy-vs-fallback:
   common chokepoint every state-mutating CLI verb routes through (and
   the fallback the daemon-proxy entry falls back to). Acquires the
   sibling lock for ``state.json``, yields the typed
-  :class:`~eawf.kernel.state.models.State` for the caller to mutate in place,
+  :class:`~eawf.kernel.migration.v1_state.State` for the caller to mutate in place,
   then validates and atomically writes it back. The full read-modify-
   write runs under one lock acquisition so concurrent writers serialise.
   Because it is the shared write path, the ``--daemonless`` rejection
@@ -46,8 +46,8 @@ from typing import Literal
 
 import orjson
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.io import LegacyOperationRemovedError, refuse_legacy_write
-from eawf.kernel.state.models import State
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.validate.strict import validate_state
 from eawf.observability.logging.state_leak import state_leak_refusal

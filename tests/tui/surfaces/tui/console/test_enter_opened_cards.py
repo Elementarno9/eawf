@@ -279,7 +279,7 @@ def _frame(model: Any, *, subject: str | None = None, width: int = 120) -> list[
 
 def _app(route: str, **kwargs: Any) -> ConsoleApp:
     """Return a console bound to a seam already holding ``route``'s projection."""
-    seam = ProjectionSeam(route=route, scope_id=SCOPE, state_path=None, clock=lambda: AT)
+    seam = ProjectionSeam(route=route, scope_id=SCOPE, clock=lambda: AT)
     seam._projection = _projection(route)
     app = ConsoleApp(_fixture(), FakeClock(), seam=seam, **kwargs)
     app.session.route = route

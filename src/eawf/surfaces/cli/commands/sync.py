@@ -18,11 +18,11 @@ steering files to the rule graph: ``AGENTS.md`` (the project card) and
 renderer does not write ``AGENTS.md``. ``--check`` compares the planned
 projections against disk, so a hand edit to either counts as drift.
 
-The command also regenerates Markdown projections of ``memory.jsonl`` under
-``.ea/artifacts/rendered/memory/<scope>.md`` (plus ``_all.md`` union view).
-The whole projection lives inside one managed region per file so re-running
-sync overwrites curated bytes — memory content is curated in
-``memory.jsonl``, not the views.
+The command also regenerates Markdown projections of the selected
+generation's memory ledger under ``.ea/artifacts/rendered/memory/<scope>.md``
+(plus ``_all.md`` union view). The whole projection lives inside one managed
+region per file so re-running sync overwrites curated bytes — memory content
+is curated in the ledger, not the views.
 
 Implementation note (``--dry-run`` / ``--check``)
 -------------------------------------------------
@@ -61,17 +61,14 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
-import orjson
 import typer
 
-from eawf.kernel.state.enums import StoreKind
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.models import State
     from eawf.platform.rules.chain_budget import RenderMode
     from eawf.surfaces.render.agents_md import RenderResult
     from eawf.surfaces.render.manifest import Manifest
@@ -83,56 +80,28 @@ _AGENTS_MD: str = "AGENTS.md"
 _CLAUDE_MD: str = "CLAUDE.md"
 _GITIGNORE: str = ".gitignore"
 _MANIFEST_RELPATH: str = ".ea/indexes/generated.json"
-_STATE_RELPATH: str = ".ea/state.json"
 _MEMORY_VIEWS_RELDIR: str = ".ea/artifacts/rendered/memory"
-
-
-def _load_state_or_none(state_path: Path) -> State | None:
-    """Best-effort state load; returns None when the workspace has no ``state.json``.
-
-    Sync runs against bare directories at ``init`` time — the memory view
-    pipeline must degrade gracefully when there is no state yet rather than
-    explode. Validation errors propagate to the caller as
-    :class:`cli_errors.UserError` (``kind="InvalidInput"``) so the existing
-    error envelope still fires.
-    """
-    from eawf.kernel.validate.strict import validate_state
-
-    if not state_path.exists():
-        return None
-    payload = orjson.loads(state_path.read_bytes())
-    report = validate_state(payload, strict_optional=False)
-    if report.state is None:
-        raise cli_errors.UserError(
-            f"state schema invalid: {'; '.join(report.schema_errors[:3])}", kind="InvalidInput"
-        )
-    return report.state
 
 
 def _render_memory_views(*, source_root: Path, output_root: Path, write: bool) -> list[Path]:
     """Render ``<state_dir>/artifacts/rendered/memory/<scope>.md`` files.
 
-    The notes are read from *source_root*'s own epoch -- the generation's
-    memory ledger on an epoch-2 tree -- and the views are rendered under
-    *output_root*, which is the tree itself or the ``--check`` shadow.
+    The notes are read from the memory ledger of *source_root*'s selected
+    generation, and the views are rendered under *output_root*, which is
+    the tree itself or the ``--check`` shadow.
 
     Returns the sorted list of view paths (or paths that *would* be written
-    when ``write=False``). When the workspace has no ``.ea/state.json`` (e.g.
-    the bare-directory init path) the function returns an empty list.
+    when ``write=False``). A tree that selects no generation -- a bare
+    directory, or an epoch-1 tree -- has no notes to render, so the
+    function returns an empty list.
     """
-    from eawf.kernel.store.paths import store_path
-    from eawf.platform.memory.book import generation_memory_ledger, notes_from_state, read_book
+    from eawf.platform.memory.book import generation_memory_ledger, read_book
     from eawf.platform.memory.markdown_view import render_note_views
 
-    state_path = source_root / _STATE_RELPATH
-    ledger = generation_memory_ledger(state_path.parent)
-    if ledger is not None:
-        notes = {mid: standing.note for mid, standing in read_book(ledger).items()}
-    else:
-        state = _load_state_or_none(state_path)
-        if state is None:
-            return []
-        notes = notes_from_state(state, store_path(state_path, StoreKind.MEMORY))
+    ledger = generation_memory_ledger(source_root / ".ea")
+    if ledger is None:
+        return []
+    notes = {mid: standing.note for mid, standing in read_book(ledger).items()}
     return render_note_views(notes, output_dir=output_root / _MEMORY_VIEWS_RELDIR, write=write)
 
 

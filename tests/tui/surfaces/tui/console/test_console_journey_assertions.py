@@ -854,7 +854,6 @@ def test_prx_061_an_item_raised_on_settings_is_delivered_once_and_stays_counted(
         seam = ProjectionSeam(
             route="scope.home",
             scope_id=bodies.SCOPE,
-            state_path=None,
             clock=lambda: bodies.AT,
             daemon_client_factory=js.DocumentDaemon(bodies.DOCUMENT).client,
             operator=Operator(principal=bodies.ME),
@@ -999,7 +998,6 @@ def _transcript_frames(
         seam = ProjectionSeam(
             route=TRANSCRIPT_ROUTE,
             scope_id=tb.SCOPE,
-            state_path=None,
             clock=lambda: tb.AT,
             daemon_client_factory=daemon.client,
             operator=Operator(principal=bodies.ME),

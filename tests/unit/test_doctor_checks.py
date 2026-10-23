@@ -6,7 +6,6 @@ so the suite stays hermetic (no calls to the host's ``shutil.which``).
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -230,84 +229,6 @@ def test_check_reserved_config_keys_warns_when_merge_fails(
     assert "broken overlay" in (result.detail or "")
 
 
-def _stub_state_with_wave_count(monkeypatch: pytest.MonkeyPatch, count: int) -> None:
-    """Force ``check_state_scale_ceiling`` to see a state of *count* waves.
-
-    The check only reads ``len(state.waves)``, so a :class:`SimpleNamespace`
-    with a sized ``waves`` mapping is a faithful stand-in — and far cheaper
-    than validating thousands of real :class:`Wave` rows near the ceiling.
-    """
-    from types import SimpleNamespace
-
-    stub_state = SimpleNamespace(waves=dict.fromkeys(range(count)))
-
-    def fake_load(workspace: Path, *, name: str) -> tuple[object, Path]:
-        return stub_state, workspace / ".ea" / "state.json"
-
-    monkeypatch.setattr("eawf.observability.doctor.checks._load_state_for_check", fake_load)
-
-
-def test_check_state_scale_ceiling_no_workspace_ok() -> None:
-    """A missing workspace anchor is informational, not a failure."""
-    result = checks.check_state_scale_ceiling(workspace=None)
-    assert result.status == "ok"
-    assert result.name == "state_scale_ceiling"
-
-
-def test_check_state_scale_ceiling_no_state_ok(tmp_path: Path) -> None:
-    """No resolvable ``state.json`` yields ``ok`` (state_present owns absence)."""
-    result = checks.check_state_scale_ceiling(workspace=tmp_path)
-    assert result.status == "ok"
-    assert result.name == "state_scale_ceiling"
-
-
-def test_check_state_scale_ceiling_zero_waves_ok(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Boundary: an empty wave map is well under the ceiling."""
-    _stub_state_with_wave_count(monkeypatch, 0)
-    result = checks.check_state_scale_ceiling(workspace=tmp_path)
-    assert result.status == "ok"
-    assert "0 wave(s)" in (result.detail or "")
-
-
-def test_check_state_scale_ceiling_just_below_threshold_ok(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Boundary: one wave below the warn threshold stays ``ok``."""
-    _stub_state_with_wave_count(monkeypatch, checks.STATE_WAVE_WARN_THRESHOLD - 1)
-    result = checks.check_state_scale_ceiling(workspace=tmp_path)
-    assert result.status == "ok"
-
-
-def test_check_state_scale_ceiling_at_threshold_warns(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Boundary: exactly at the warn threshold flips to the advisory warn."""
-    _stub_state_with_wave_count(monkeypatch, checks.STATE_WAVE_WARN_THRESHOLD)
-    result = checks.check_state_scale_ceiling(workspace=tmp_path)
-    assert result.status == "warn"
-    assert "shard" in (result.detail or "")
-
-
-def test_check_state_scale_ceiling_above_ceiling_warns_not_fail(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Above the ceiling stays ``warn`` — never ``fail`` (advisory only)."""
-    _stub_state_with_wave_count(monkeypatch, checks.STATE_WAVE_SCALE_CEILING + 500)
-    result = checks.check_state_scale_ceiling(workspace=tmp_path)
-    assert result.status == "warn"
-    assert result.status != "fail"
-
-
-def test_state_wave_warn_threshold_derives_from_ceiling_and_fraction() -> None:
-    """The materialised threshold is the ceiling times the warn fraction."""
-    assert (
-        int(checks.STATE_WAVE_SCALE_CEILING * checks.STATE_WAVE_WARN_FRACTION)
-        == checks.STATE_WAVE_WARN_THRESHOLD
-    )
-
-
 def _stub_supervised_agent_none(monkeypatch: pytest.MonkeyPatch) -> None:
     """Force ``detect_supervised_agent`` to report no supervised agent.
 
@@ -356,7 +277,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "eawfd"))
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 23
+    assert len(results) == 17
     assert {r.name for r in results} == {
         "branch_currency",
         "tools_available",
@@ -365,14 +286,8 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         "reserved_config_key",
         "manifest_in_sync",
         "mcp_drift",
-        "state_scale_ceiling",
         "authority_epoch",
         "gitignore_block",
-        "active_phase_without_iter",
-        "stale_session_count",
-        "recent_actuals",
-        "incident_fold_parity",
-        "backlog_fold_parity",
         "cli_daemon_version",
         "parallel_cap_enforcement",
         "launchd_agent",
@@ -384,123 +299,14 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     }
 
 
-def _write_sanitized_workflow_failure_shape(workspace: Path) -> None:
-    """Write a PII-free state matching the consumer workflow failure shape."""
-    from eawf.kernel.state.enums import (
-        ActualStatus,
-        AgentSessionRole,
-        AgentSessionStatus,
-        IterStatus,
-        PhaseStatus,
-        WaveStatus,
-    )
-    from eawf.kernel.state.models import (
-        ActualSummary,
-        AgentSession,
-        Iter,
-        Phase,
-        State,
-        Wave,
-    )
-
-    opened = datetime(2026, 7, 20, tzinfo=UTC)
-    closed = opened + timedelta(hours=2)
-    state = State.model_validate(
-        {
-            "schema_version": "1.19",
-            "scope_kind": "repo",
-            "urn": "urn:eawf:v1:state:DEMO",
-            "updated_at": closed.isoformat(),
-            "project": {
-                "code": "DEMO",
-                "slug": "demo",
-                "title": "Demo",
-                "domains": ["workflow"],
-                "default_branch": "main",
-                "status": "active",
-                "repo_urn": "urn:eawf:v1:repo:DEMO",
-            },
-            "current": {
-                "project_code": "DEMO",
-                "track_id": None,
-                "phase_id": "P01",
-                "iter_id": None,
-                "active_wave_ids": [],
-                "active_session_ids": [],
-            },
-            "workspace": None,
-            "phases": {},
-            "iters": {},
-            "waves": {},
-            "actuals": {},
-            "audits": {},
-            "artifacts": {},
-            "agent_sessions": {},
-            "plugins": {},
-            "indexes": {},
-        }
-    )
-    wave_ids = ["P01-I01-W01", "P01-I01-W02"]
-    state.phases["P01"] = Phase(
-        id="P01",
-        scope_id="DEMO",
-        title="Workflow health",
-        status=PhaseStatus.ACTIVE,
-        iter_ids=["P01-I01"],
-        opened_at=opened,
-    )
-    state.iters["P01-I01"] = Iter(
-        id="P01-I01",
-        phase_id="P01",
-        title="Initial delivery",
-        status=IterStatus.CLOSED,
-        wave_ids=wave_ids,
-        audit_id="AUD-MISSING",
-        opened_at=opened,
-        closed_at=closed,
-    )
-    for offset, wave_id in enumerate(wave_ids):
-        state.waves[wave_id] = Wave(
-            id=wave_id,
-            iter_id="P01-I01",
-            title=f"Delivery slice {offset + 1}",
-            status=WaveStatus.CLOSED,
-            opened_at=opened,
-            claimed_at=opened,
-            closed_at=closed + timedelta(minutes=offset),
-        )
-    assert state.actuals is not None
-    state.actuals["P01-I01-W02"] = ActualSummary(
-        id="ACT-P01-I01-W02",
-        scope_id="P01-I01-W02",
-        status=ActualStatus.DONE,
-        elapsed_eu=0.0,
-        actual_tokens=0,
-        actual_cost_usd=0.0,
-        current_store_record_id="REC-P01-I01-W02",
-        updated_at=closed,
-    )
-    state.agent_sessions["SES-STALE"] = AgentSession(
-        id="SES-STALE",
-        role=AgentSessionRole.EXECUTOR,
-        runtime="fixture-runtime",
-        scope_id="P01-I01-W01",
-        status=AgentSessionStatus.STALE,
-        started_at=opened,
-        ended_at=closed,
-    )
-    state_path = workspace / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True)
-    state_path.write_text(state.model_dump_json(indent=2), encoding="utf-8")
-
-
-def test_run_all_detects_sanitized_workflow_failure_shape(
+def test_run_all_reports_version_skew_and_parallel_cap_on_a_native_tree(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Doctor detects every state/runtime symptom in the sanitized fixture."""
+    """Doctor reports a daemon version skew and the parallel cap on a born tree."""
     from eawf.platform.install.instrument_probe import ProbeResult
+    from tests._epoch2_helpers import lay_epoch2_tree
 
-    _write_sanitized_workflow_failure_shape(tmp_path)
+    lay_epoch2_tree(tmp_path)
     _stub_probe_ok(
         monkeypatch,
         [ProbeResult(name="git", kind="hard", status="ok", path="/x/git")],
@@ -516,66 +322,10 @@ def test_run_all_detects_sanitized_workflow_failure_shape(
     )
     by_name = {result.name: result for result in results}
 
-    assert by_name["active_phase_without_iter"].status == "warn"
-    assert by_name["stale_session_count"].status == "ok"
-    assert "1 terminal-scope" in (by_name["stale_session_count"].detail or "")
-    assert by_name["recent_actuals"].status == "ok"
-    assert "1 metrics unavailable" in (by_name["recent_actuals"].detail or "")
-    assert "1 measured zero-use" in (by_name["recent_actuals"].detail or "")
     assert by_name["cli_daemon_version"].status == "warn"
     assert "version skew" in (by_name["cli_daemon_version"].detail or "")
     assert by_name["parallel_cap_enforcement"].status == "ok"
     assert "planning.max_parallel_waves=" in (by_name["parallel_cap_enforcement"].detail or "")
-
-
-@pytest.mark.parametrize(
-    "check",
-    [
-        checks.check_active_phase_without_iter,
-        checks.check_stale_session_count,
-        checks.check_recent_actuals,
-    ],
-)
-def test_state_diagnostic_without_workspace_is_ok(check: Any) -> None:
-    result = check(workspace=None)
-    assert result.status == "ok"
-    assert "no workspace anchor" in (result.detail or "")
-
-
-def test_check_stale_session_count_warns_for_live_pointer(tmp_path: Path) -> None:
-    """A stale session still named by the active pointer remains actionable."""
-    from eawf.kernel.state.models import State
-
-    _write_sanitized_workflow_failure_shape(tmp_path)
-    state_path = tmp_path / ".ea" / "state.json"
-    state = State.model_validate_json(state_path.read_text(encoding="utf-8"))
-    state.current.active_session_ids = ["SES-STALE"]
-    state_path.write_text(state.model_dump_json(indent=2), encoding="utf-8")
-
-    result = checks.check_stale_session_count(workspace=tmp_path)
-
-    assert result.status == "warn"
-    assert "SES-STALE" in (result.detail or "")
-    assert "still affect live state" in (result.detail or "")
-
-
-def test_check_recent_actuals_warns_for_contradictory_scope(tmp_path: Path) -> None:
-    """A present actual keyed to a different scope is a real health warning."""
-    from eawf.kernel.state.models import State
-
-    _write_sanitized_workflow_failure_shape(tmp_path)
-    state_path = tmp_path / ".ea" / "state.json"
-    state = State.model_validate_json(state_path.read_text(encoding="utf-8"))
-    assert state.actuals is not None
-    actual = state.actuals["P01-I01-W02"]
-    state.actuals["P01-I01-W02"] = actual.model_copy(update={"scope_id": "P01-I01-W01"})
-    state_path.write_text(state.model_dump_json(indent=2), encoding="utf-8")
-
-    result = checks.check_recent_actuals(workspace=tmp_path)
-
-    assert result.status == "warn"
-    assert "contradictory actual" in (result.detail or "")
-    assert "P01-I01-W02" in (result.detail or "")
 
 
 def test_check_cli_daemon_version_absent_match_skew_and_error() -> None:

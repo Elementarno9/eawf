@@ -36,14 +36,13 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.state.models import State
 from eawf.kernel.state.resolve import GATE_LIVE_STATE_ENV, GATE_SANDBOX_STATE_ENV
 from eawf.runtime.daemon import gate_execution
 from eawf.workflow.audit_dsl.models import CheckSpec
+from tests._epoch2_helpers import lay_epoch2_tree
 
 pytestmark = pytest.mark.integration
 
-_T0 = "2026-09-08T00:00:00+00:00"
 
 #: Probe gate: records what the runtime-dir and state resolvers answer INSIDE
 #: the gate command, so the parent can assert no live seam reached it.
@@ -119,41 +118,9 @@ def test_pause_dispatch_on_resolved_state() -> None:
 '''
 
 
-def _state_payload() -> dict[str, Any]:
-    """Return a minimal valid state with dispatch running."""
-    return {
-        "schema_version": "1.0",
-        "scope_kind": "repo",
-        "urn": "urn:eawf:v1:state:ABC",
-        "updated_at": _T0,
-        "project": {
-            "code": "ABC",
-            "slug": "abc",
-            "title": "ABC",
-            "domains": ["x"],
-            "default_branch": "main",
-            "status": "active",
-            "repo_urn": "urn:eawf:v1:repo:ABC",
-        },
-        "current": {"project_code": "ABC"},
-        "workspace": None,
-        "phases": {},
-        "iters": {},
-        "waves": {},
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {},
-        "dispatch_paused": False,
-    }
-
-
 def _write_live_state(root: Path) -> Path:
     """Build a fixture "live" workspace under *root* and return its ledger."""
-    state_path = root / "live" / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    state = State.model_validate(_state_payload())
-    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+    state_path = lay_epoch2_tree(root / "live", project_code="ABC")
     store = state_path.parent / "store"
     store.mkdir(parents=True, exist_ok=True)
     (store / "event.jsonl").write_text('{"id": "EV-LIVE"}\n', encoding="utf-8")
@@ -322,7 +289,7 @@ def test_live_state_byte_identical_after_mutating_gate(
     state_before = live_state.read_bytes()
     events_before = live_events.read_bytes()
     runtime_before = _tree_signature(live_runtime)
-    assert State.model_validate_json(state_before).dispatch_paused is False
+    assert json.loads(state_before).get("dispatch_paused") is not True
     observed = tmp_path / "observed.json"
     workdir = tmp_path / "gate-cwd"
     workdir.mkdir()
@@ -334,7 +301,7 @@ def test_live_state_byte_identical_after_mutating_gate(
     assert result.passed is True, result.stderr_tail
     assert live_state.read_bytes() == state_before, "the gate rewrote the live ledger"
     assert live_events.read_bytes() == events_before, "the gate appended to the live event store"
-    assert State.model_validate_json(live_state.read_bytes()).dispatch_paused is False
+    assert json.loads(live_state.read_bytes()).get("dispatch_paused") is not True
     assert "EV-GATE" not in live_events.read_text(encoding="utf-8")
     assert _tree_signature(live_runtime) == runtime_before, "the gate wrote the live runtime dir"
     sandbox_state = Path(spy.envs[0][GATE_SANDBOX_STATE_ENV])

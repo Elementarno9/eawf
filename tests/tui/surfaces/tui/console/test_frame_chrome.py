@@ -164,7 +164,7 @@ def test_an_unreadable_project_falls_back_to_the_repository_name(
 def test_the_seam_hands_its_name_to_every_render() -> None:
     from eawf.surfaces.tui.console.seam import ProjectionSeam
 
-    seam = ProjectionSeam(route="scope.home", scope_id=ROOT_ID, state_path=None, scope_name="eawf")
+    seam = ProjectionSeam(route="scope.home", scope_id=ROOT_ID, scope_name="eawf")
     app = ConsoleApp(chrome=load_chrome(), clock=FakeClock(), seam=seam)
     assert app.view().scope_name == "eawf"
     assert ConsoleApp(chrome=load_chrome(), clock=FakeClock()).view().scope_name == ""

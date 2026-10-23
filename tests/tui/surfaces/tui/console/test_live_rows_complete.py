@@ -144,7 +144,6 @@ def _seam(daemon: DocumentDaemon, route: str, subject: str | None = None) -> Pro
     seam = ProjectionSeam(
         route=route,
         scope_id=SCOPE,
-        state_path=None,
         clock=lambda: AT,
         daemon_client_factory=daemon.client,
     )

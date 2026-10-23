@@ -37,10 +37,9 @@ from uuid import UUID
 
 import pytest
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.measured_contract import ScaleBand
 from eawf.kernel.spec.release import Release, ReleaseStatus
-from eawf.kernel.state.io import write_state_unlocked
-from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import create
 from eawf.surfaces.cli.errors import UserError
@@ -67,6 +66,7 @@ from eawf.workflow.release.publication import burn_release
 from eawf.workflow.release.records import read_release_record, record_release
 from eawf.workflow.release.train import V07_TRAIN
 from eawf.workflow.release.train_store import record_train_advance
+from tests._epoch2_helpers import lay_contract_tree
 from tests._release_helpers import (
     NOW,
     accepted_canary_export,
@@ -368,9 +368,7 @@ def _context(tmp_path: Path, state: State) -> MethodContext:
     refused before its measurements are ever consulted. Staging it keeps
     these cases about admission rather than about succession.
     """
-    state_path = tmp_path / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    write_state_unlocked(state_path, state.model_dump(mode="json"))
+    state_path = lay_contract_tree(tmp_path, state.artifacts.values(), project_code=SCOPE)
     adopted = adopt_publication(dev1_draft(), dev1_config(), adoption=dev1_adoption())
     burned, _operation = burn_release(adopted, dev1_config(), None)
     record_release(state_path, burned, recorded_at=NOW, summary=f"burn {burned.key}")

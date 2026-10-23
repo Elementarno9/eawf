@@ -26,9 +26,8 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.release import Release, ReleaseStatus, release_key
-from eawf.kernel.state.io import write_state_unlocked
-from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.release import _superseding, create
 from eawf.runtime.daemon.methods.release_candidate import candidate
@@ -42,6 +41,7 @@ from eawf.workflow.release.admission import required_contract_ids
 from eawf.workflow.release.adoption import adopt_publication
 from eawf.workflow.release.publication import burn_release
 from eawf.workflow.release.records import read_release_record, record_release
+from tests._epoch2_helpers import lay_contract_tree
 from tests._release_helpers import dev1_adoption, dev1_config, dev1_draft
 
 pytestmark = pytest.mark.integration
@@ -128,9 +128,7 @@ def context(tmp_path: Path, *, state: State, records: Sequence[Release] = ()) ->
     (repo_root / "README.md").write_text("supersedes fixture\n", encoding="utf-8")
     git(repo_root, "add", "README.md")
     git(repo_root, "commit", "--quiet", "-m", "seed")
-    state_path = repo_root / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    write_state_unlocked(state_path, state.model_dump(mode="json"))
+    state_path = lay_contract_tree(repo_root, state.artifacts.values(), project_code=SCOPE)
     for record in records:
         record_release(state_path, record, recorded_at=datetime.now(UTC), summary="seed")
     return MethodContext(

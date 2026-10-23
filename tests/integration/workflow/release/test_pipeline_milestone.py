@@ -1,13 +1,13 @@
 """``eawf release pipeline --milestone`` checks a Milestone's Batches on main by trailer.
 
-The options take exactly one of ``--phase`` and ``--milestone``. The repin
+The options take ``--milestone`` as the only subject. The repin
 step of a Milestone release runs against a real repository: two Batches
 land as five commits each carrying only its Task's ``Task:`` trailer, the
 branch lands on ``refs/remotes/origin/main``, and both Batches close on
 their last commit and compact out of the document into the Batch ledger,
 as a Batch closed on landing does. The step passes there, and refuses by
 name when main carries no commit for a Batch or carries other commits than
-the head it pinned. It never reaches the epoch-1 wave-pin helpers.
+the head it pinned.
 """
 
 from __future__ import annotations
@@ -24,10 +24,8 @@ from eawf.kernel.identity import IdentityError
 from eawf.kernel.store.compaction import compact_terminal_record, document_rows, read_document
 from eawf.kernel.store.ledger import LedgerRecord
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.runtime.vcs import trailer_repin, wave_sha
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import release_pipeline as cli_module
-from eawf.workflow.release import pipeline as pipeline_module
 from eawf.workflow.release import pipeline_host as host_module
 from eawf.workflow.release.pipeline import (
     PIPELINE_STEPS,
@@ -155,17 +153,7 @@ def _repin(repo: Path, *, milestone: str = MILESTONE) -> PipelineRefusal | dict[
     return dict(ran[0].facts)
 
 
-# ---- CR-1: exactly one of --phase and --milestone ------------------------------------
-
-
-def test_options_refuse_both_a_phase_and_a_milestone() -> None:
-    with pytest.raises(ValueError, match="exactly one"):
-        PipelineOptions(version=VERSION, phase_id="P35", milestone_key=MILESTONE, publish=True)
-
-
-def test_options_refuse_neither_a_phase_nor_a_milestone() -> None:
-    with pytest.raises(ValueError, match="exactly one"):
-        PipelineOptions(version=VERSION, publish=True)
+# ---- CR-1: --milestone is the only subject --------------------------------------------
 
 
 @pytest.mark.parametrize("key", ["", "MLS-1", "mls-0030", "BAT-0007", "MLS-0030 "])
@@ -174,28 +162,18 @@ def test_options_refuse_a_key_that_is_not_a_milestone_key(key: str) -> None:
         PipelineOptions(version=VERSION, milestone_key=key, publish=True)
 
 
-def test_options_accept_a_milestone_alone() -> None:
+def test_options_accept_a_milestone() -> None:
     options = PipelineOptions(version=VERSION, milestone_key=MILESTONE, publish=True)
-    assert (options.milestone_key, options.phase_id) == (MILESTONE, None)
+    assert options.milestone_key == MILESTONE
 
 
-@pytest.mark.parametrize(
-    "argv",
-    [
-        ["--phase", "P35", "--milestone", MILESTONE],
-        [],
-    ],
-    ids=["both", "neither"],
-)
-def test_cli_options_refuse_both_or_neither(
-    world: World, monkeypatch: pytest.MonkeyPatch, argv: list[str]
-) -> None:
+def test_cli_options_require_a_milestone(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(world.root)
     monkeypatch.setattr(host_module, "GitHubReleaseHost", lambda *_a, **_k: world.host)
     monkeypatch.setattr(cli_module, "_daemon_rpc", world.daemon)
-    result = CliRunner().invoke(app, ["release", "pipeline", VERSION, *argv])
-    assert result.exit_code != 0
-    assert "exactly one" in result.output
+    result = CliRunner().invoke(app, ["release", "pipeline", VERSION])
+    assert result.exit_code == 2, result.output
+    assert "--milestone" in result.output
     assert world.calls == []
 
 
@@ -314,18 +292,3 @@ def test_carriers_read_task_and_batch_trailers_from_the_whole_message(
         "BAT-0007": (second, commits[1], commits[0]),
         "BAT-0008": (commits[4], commits[3], commits[2]),
     }
-
-
-# ---- CR-3: the Milestone path never touches the epoch-1 helpers ----------------------
-
-
-def test_milestone_repin_passes_with_the_epoch1_helpers_patched_to_raise(
-    landed: Scratch, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def boom(*_args: object, **_kwargs: object) -> Any:
-        raise AssertionError("the milestone path must not reach the epoch-1 helpers")
-
-    for module in (pipeline_module, wave_sha, trailer_repin):
-        for name in ("load_drift_acks", "resolve_trailer_repins"):
-            monkeypatch.setattr(module, name, boom, raising=False)
-    assert _repin(landed.root) == {"milestone": MILESTONE, "batches": "2"}

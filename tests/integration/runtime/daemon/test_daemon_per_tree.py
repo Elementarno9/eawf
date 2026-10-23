@@ -23,11 +23,10 @@ from pathlib import Path
 
 import pytest
 
-from eawf.kernel.state.models import State
 from eawf.observability.doctor import daemon_strays
 from eawf.runtime.daemon.runtime_dir import runtime_base_dir
 from eawf.runtime.daemon.spawn import daemon_pid_if_ready, request_daemon_shutdown
-from tests.integration.runtime.daemon._epoch1_state_fixtures import state_payload
+from tests._epoch2_helpers import lay_epoch2_tree
 
 pytestmark = [
     pytest.mark.integration,
@@ -37,18 +36,20 @@ pytestmark = [
 #: Upper bound on one client run, cold spawn included.
 CLIENT_TIMEOUT_SECONDS = 60.0
 
-#: Reads the bound tree's state through the daemon the client's own tree
-#: resolves to, spawning it when absent, and reports which daemon answered.
+#: Reads the repo config layer of the tree the answering daemon is bound to,
+#: through the daemon the client's own tree resolves to, spawning it when
+#: absent, and reports which daemon answered and which tree it serves.
 _CLIENT = """
 import json
+from pathlib import Path
 from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.surfaces.cli._daemon_client import DaemonClient
 
 with DaemonClient() as client:
-    result = client.call("state.read")
+    result = client.call("config.read")
 print(json.dumps({
     "pid": client.pid,
-    "title": result["state"]["project"]["title"],
+    "tree": str(Path(result["layer_path"]).parent.parent),
     "runtime": str(runtime_dir()),
 }))
 """
@@ -59,16 +60,12 @@ class ClientReply:
     """What one client run saw."""
 
     pid: int
-    title: str
+    tree: Path
     runtime: Path
 
 
-def _write_tree(root: Path, title: str) -> Path:
-    payload = state_payload()
-    payload["project"]["title"] = title
-    state_path = root / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True)
-    state_path.write_text(State.model_validate(payload).model_dump_json(), encoding="utf-8")
+def _write_tree(root: Path, project_code: str) -> Path:
+    lay_epoch2_tree(root, project_code=project_code)
     return root
 
 
@@ -104,7 +101,7 @@ class Sandbox:
         )
         assert completed.returncode == 0, completed.stderr
         raw = json.loads(completed.stdout.strip().splitlines()[-1])
-        reply = ClientReply(pid=raw["pid"], title=raw["title"], runtime=Path(raw["runtime"]))
+        reply = ClientReply(pid=raw["pid"], tree=Path(raw["tree"]), runtime=Path(raw["runtime"]))
         self.runtimes.add(reply.runtime)
         return reply
 
@@ -136,8 +133,8 @@ def sandbox() -> Iterator[Sandbox]:
     home = Path(tempfile.mkdtemp(prefix="eawf-h-", dir="/tmp"))
     box = Sandbox(
         home=home,
-        tree_a=_write_tree(home / "ta", "tree-a"),
-        tree_b=_write_tree(home / "tb", "tree-b"),
+        tree_a=_write_tree(home / "ta", "TA"),
+        tree_b=_write_tree(home / "tb", "TB"),
         runtimes=set(),
     )
     try:
@@ -174,8 +171,8 @@ def test_client_of_each_tree_reaches_its_own_tree_daemon(sandbox: Sandbox) -> No
     first_a = sandbox.client(sandbox.tree_a)
     first_b = sandbox.client(sandbox.tree_b)
 
-    assert first_a.title == "tree-a"
-    assert first_b.title == "tree-b"
+    assert first_a.tree == sandbox.tree_a
+    assert first_b.tree == sandbox.tree_b
     assert first_a.pid != first_b.pid
     assert first_a.runtime != first_b.runtime
     assert {first_a.runtime.parent, first_b.runtime.parent} == {sandbox.home / ".eawfd" / "trees"}
@@ -190,7 +187,7 @@ def test_repeat_client_of_one_tree_reuses_its_daemon(sandbox: Sandbox) -> None:
 
     assert again.pid == first.pid
     assert again.runtime == first.runtime
-    assert again.title == "tree-a"
+    assert again.tree == sandbox.tree_a
 
 
 def test_daemon_on_the_per_user_address_is_bypassed_then_listed(
@@ -205,7 +202,7 @@ def test_daemon_on_the_per_user_address_is_bypassed_then_listed(
     fresh = host_view.client(host_view.tree_a)
 
     assert fresh.pid != legacy.pid
-    assert fresh.title == "tree-a"
+    assert fresh.tree == host_view.tree_a
     assert daemon_pid_if_ready(legacy_dir) == legacy.pid
     _scan_only(monkeypatch, {legacy.pid, fresh.pid})
     strays = daemon_strays.find_stray_daemons()

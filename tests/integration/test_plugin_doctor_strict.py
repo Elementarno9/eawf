@@ -27,7 +27,6 @@ Three concerns are covered here:
 
 from __future__ import annotations
 
-import os
 import threading
 import time
 from pathlib import Path
@@ -35,13 +34,6 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.kernel.state.enums import (
-    AgentSessionRole,
-    EffortBucket,
-    ProjectStatus,
-    ScopeKind,
-)
-from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.runtime.lock.portalock import LockTimeout
 from eawf.runtime.runtimes.claude.plugin_doctor import (
     doctor_plugin_strict,
@@ -50,10 +42,6 @@ from eawf.runtime.runtimes.claude.plugin_doctor import (
 )
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.exit_codes import STATE_CONFLICT
-from eawf.workflow.dispatch import render_wave_prompt
-from tests._criteria_helpers import legacy_criteria
-from tests._epoch1_seed import seed_iter, seed_phase, seed_wave
-from tests.conftest import make_floor_waiver, make_intent
 
 runner = CliRunner()
 
@@ -250,160 +238,6 @@ def test_shared_lock_serialises_doctor_after_sync(tmp_path: Path) -> None:
 
 
 # ---- 3. Per-runtime dispatch goldens ----------------------------------------
-
-# Fixed surface catalog driving the dispatch goldens. Each entry pairs a
-# workflow surface with the agent role / effort / scope that wave carries.
-_SURFACES: list[tuple[str, AgentSessionRole, EffortBucket, list[str], list[str]]] = [
-    (
-        "research",
-        AgentSessionRole.RESEARCHER,
-        EffortBucket.S,
-        ["src/eawf/research/"],
-        ["research brief written under .ea/local/research/"],
-    ),
-    (
-        "prep",
-        AgentSessionRole.PLANNER,
-        EffortBucket.M,
-        ["src/eawf/lifecycle/"],
-        ["phase DAG rendered; waves planned PENDING"],
-    ),
-    (
-        "audit",
-        AgentSessionRole.AUDITOR,
-        EffortBucket.S,
-        ["src/eawf/validate/"],
-        ["audit verdict recorded with evidence chain"],
-    ),
-    (
-        "ship",
-        AgentSessionRole.REVIEWER,
-        EffortBucket.M,
-        ["src/eawf/surfaces/cli/"],
-        ["PR review pass complete; CI green"],
-    ),
-    (
-        "flow",
-        AgentSessionRole.EXECUTOR,
-        EffortBucket.L,
-        ["src/eawf/", "tests/"],
-        ["autonomous execute loop drains the ready frontier"],
-    ),
-]
-
-# surface -> wave id (W## index into _SURFACES, 1-based).
-_SURFACE_WAVE_ID: dict[str, str] = {
-    surface: f"P07-I01-W{idx:02d}" for idx, (surface, *_rest) in enumerate(_SURFACES, start=1)
-}
-
-
-def _build_dispatch_state() -> State:
-    """Deterministic state: project ABC, P07 → P07-I01 → five surface waves."""
-    state = State.model_validate(
-        {
-            "schema_version": "1.0",
-            "scope_kind": ScopeKind.REPO.value,
-            "urn": "urn:eawf:v1:state:ABC",
-            "updated_at": "2026-01-01T00:00:00+00:00",
-            "project": Project(
-                code="ABC",
-                slug="abc",
-                title="ABC",
-                description=None,
-                domains=["x"],
-                default_branch="main",
-                status=ProjectStatus.ACTIVE,
-                repo_urn="urn:eawf:v1:repo:ABC",
-            ).model_dump(mode="json"),
-            "current": CurrentPointers(project_code="ABC").model_dump(mode="json"),
-            "workspace": None,
-            "phases": {},
-            "iters": {},
-            "waves": {},
-            "artifacts": {},
-            "agent_sessions": {},
-            "plugins": {},
-            "indexes": {},
-        }
-    )
-    seed_phase(state, phase_id="P07", title="Surfaces")
-    seed_iter(state, iter_id="P07-I01", phase_id="P07", title="Iter1")
-    for surface, role, bucket, files, crit in _SURFACES:
-        seed_wave(
-            state,
-            wave_id=_SURFACE_WAVE_ID[surface],
-            iter_id="P07-I01",
-            title=f"{surface} surface",
-            file_scopes=files,
-            success_criteria=legacy_criteria(*crit),
-            criteria_floor_waiver=make_floor_waiver(),
-            agent_role=role,
-            effort_bucket=bucket,
-            intent=make_intent(),
-        )
-    return state
-
-
-def test_refresh_dispatch_goldens() -> None:
-    """Regenerate every dispatch golden through the snapshot-update surface."""
-    if os.environ.get("EAWF_REFRESH_GOLDEN") != "1":
-        pytest.skip("set EAWF_REFRESH_GOLDEN=1 via `eawf snapshot update --kind dispatch`")
-
-    state = _build_dispatch_state()
-    output_dir = os.environ.get("EAWF_SNAPSHOT_OUT")
-    target_dir = Path(output_dir) if output_dir is not None else _GOLDEN_DIR
-    target_dir.mkdir(parents=True, exist_ok=True)
-    fixtures = {
-        "cc_research.txt": "research",
-        "cc_prep.txt": "prep",
-        "cc_audit.txt": "audit",
-        "cc_ship.txt": "ship",
-        "cc_flow.txt": "flow",
-        "codex_research.txt": "research",
-        "codex_audit.txt": "audit",
-    }
-    for fixture_name, surface in fixtures.items():
-        rendered = render_wave_prompt(state, _SURFACE_WAVE_ID[surface])
-        (target_dir / fixture_name).write_text(rendered, encoding="utf-8")
-
-
-@pytest.mark.parametrize(
-    ("surface", "fixture_name"),
-    [
-        ("research", "cc_research.txt"),
-        ("prep", "cc_prep.txt"),
-        ("audit", "cc_audit.txt"),
-        ("ship", "cc_ship.txt"),
-        ("flow", "cc_flow.txt"),
-    ],
-)
-def test_cc_dispatch_golden_matches(surface: str, fixture_name: str) -> None:
-    """Each Claude Code surface renders byte-identically to its golden."""
-    state = _build_dispatch_state()
-    rendered = render_wave_prompt(state, _SURFACE_WAVE_ID[surface])
-    expected = (_GOLDEN_DIR / fixture_name).read_text(encoding="utf-8")
-    assert rendered == expected, (
-        f"dispatch golden {fixture_name!r} drifted. If intentional, "
-        "regenerate the goldens and commit the new bytes."
-    )
-
-
-@pytest.mark.parametrize(
-    ("surface", "fixture_name"),
-    [
-        ("research", "codex_research.txt"),
-        ("audit", "codex_audit.txt"),
-    ],
-)
-def test_codex_dispatch_golden_matches(surface: str, fixture_name: str) -> None:
-    """The Codex subset renders the same runtime-agnostic prompt body."""
-    state = _build_dispatch_state()
-    rendered = render_wave_prompt(state, _SURFACE_WAVE_ID[surface])
-    expected = (_GOLDEN_DIR / fixture_name).read_text(encoding="utf-8")
-    assert rendered == expected, (
-        f"dispatch golden {fixture_name!r} drifted. If intentional, "
-        "regenerate the goldens and commit the new bytes."
-    )
 
 
 def test_dispatch_goldens_have_no_machine_paths() -> None:
