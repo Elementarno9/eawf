@@ -1,0 +1,658 @@
+{
+  "calls": [
+    {
+      "byte_count": 8459,
+      "completed_at": "2026-10-22T19:53:03.449822Z",
+      "content_key": "c0001",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 7578,
+      "completed_at": "2026-10-22T19:53:05.065223Z",
+      "content_key": "c0002",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 8638,
+      "completed_at": "2026-10-22T19:53:22.773827Z",
+      "content_key": "c0003",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 7751,
+      "completed_at": "2026-10-22T19:53:26.653503Z",
+      "content_key": "c0004",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 7991,
+      "completed_at": "2026-10-22T19:53:36.932186Z",
+      "content_key": "c0005",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 8658,
+      "completed_at": "2026-10-22T19:53:38.534506Z",
+      "content_key": "c0006",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 2413,
+      "completed_at": "2026-10-22T19:53:45.368262Z",
+      "content_key": "c0007",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": false
+    },
+    {
+      "byte_count": 7805,
+      "completed_at": "2026-10-22T19:53:47.457035Z",
+      "content_key": "c0008",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": null,
+      "completed_at": "2026-10-22T19:53:53.027557Z",
+      "content_key": null,
+      "status": "succeeded",
+      "tool_id": "repo_search",
+      "truncated": null
+    },
+    {
+      "byte_count": null,
+      "completed_at": "2026-10-22T19:53:57.092368Z",
+      "content_key": null,
+      "status": "succeeded",
+      "tool_id": "repo_search",
+      "truncated": null
+    },
+    {
+      "byte_count": 7156,
+      "completed_at": "2026-10-22T19:54:02.530578Z",
+      "content_key": "c0009",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 7630,
+      "completed_at": "2026-10-22T19:54:07.732932Z",
+      "content_key": "c0010",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 6647,
+      "completed_at": "2026-10-22T19:54:14.810625Z",
+      "content_key": "c0011",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": false
+    },
+    {
+      "byte_count": 7112,
+      "completed_at": "2026-10-22T19:54:16.724634Z",
+      "content_key": "c0012",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 8215,
+      "completed_at": "2026-10-22T19:54:24.785642Z",
+      "content_key": "c0013",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": null,
+      "completed_at": "2026-10-22T19:54:28.170240Z",
+      "content_key": null,
+      "status": "succeeded",
+      "tool_id": "repo_search",
+      "truncated": null
+    },
+    {
+      "byte_count": 5407,
+      "completed_at": "2026-10-22T19:54:34.826040Z",
+      "content_key": "c0014",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": false
+    },
+    {
+      "byte_count": 4193,
+      "completed_at": "2026-10-22T19:54:36.907362Z",
+      "content_key": "c0015",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 8626,
+      "completed_at": "2026-10-22T19:55:24.474105Z",
+      "content_key": "c0016",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 7933,
+      "completed_at": "2026-10-22T19:55:32.484418Z",
+      "content_key": "c0017",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 7721,
+      "completed_at": "2026-10-22T19:55:38.861448Z",
+      "content_key": "c0018",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": null,
+      "completed_at": "2026-10-22T19:55:54.726638Z",
+      "content_key": null,
+      "status": "succeeded",
+      "tool_id": "repo_search",
+      "truncated": null
+    },
+    {
+      "byte_count": 7987,
+      "completed_at": "2026-10-22T19:55:56.731656Z",
+      "content_key": "c0019",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 4585,
+      "completed_at": "2026-10-22T19:56:04.374612Z",
+      "content_key": "c0020",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": false
+    },
+    {
+      "byte_count": null,
+      "completed_at": "2026-10-22T19:56:06.175360Z",
+      "content_key": null,
+      "status": "succeeded",
+      "tool_id": "repo_search",
+      "truncated": null
+    },
+    {
+      "byte_count": 3977,
+      "completed_at": "2026-10-22T19:56:11.524932Z",
+      "content_key": "c0021",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": null,
+      "completed_at": "2026-10-22T19:56:23.367883Z",
+      "content_key": null,
+      "status": "succeeded",
+      "tool_id": "repo_search",
+      "truncated": null
+    },
+    {
+      "byte_count": 4353,
+      "completed_at": "2026-10-22T19:56:27.716047Z",
+      "content_key": "c0022",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": false
+    },
+    {
+      "byte_count": 3987,
+      "completed_at": "2026-10-22T19:56:37.544028Z",
+      "content_key": "c0023",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 6680,
+      "completed_at": "2026-10-22T19:57:10.349932Z",
+      "content_key": "c0024",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 8482,
+      "completed_at": "2026-10-22T19:57:16.449427Z",
+      "content_key": "c0025",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": true
+    },
+    {
+      "byte_count": 8162,
+      "completed_at": "2026-10-22T19:57:22.450900Z",
+      "content_key": "c0026",
+      "status": "succeeded",
+      "tool_id": "repo_read",
+      "truncated": false
+    },
+    {
+      "byte_count": null,
+      "completed_at": "2026-10-22T19:59:01.181802Z",
+      "content_key": null,
+      "status": "succeeded",
+      "tool_id": "repo_search",
+      "truncated": null
+    },
+    {
+      "byte_count": null,
+      "completed_at": "2026-10-22T19:59:03.379304Z",
+      "content_key": null,
+      "status": "succeeded",
+      "tool_id": "repo_search",
+      "truncated": null
+    },
+    {
+      "byte_count": null,
+      "completed_at": "2026-10-22T19:59:09.788433Z",
+      "content_key": null,
+      "status": "succeeded",
+      "tool_id": "repo_search",
+      "truncated": null
+    },
+    {
+      "byte_count": null,
+      "completed_at": "2026-10-22T19:59:12.028604Z",
+      "content_key": null,
+      "status": "succeeded",
+      "tool_id": "repo_search",
+      "truncated": null
+    },
+    {
+      "byte_count": null,
+      "completed_at": "2026-10-22T20:00:08.285440Z",
+      "content_key": null,
+      "status": "succeeded",
+      "tool_id": "submit_report",
+      "truncated": null
+    }
+  ],
+  "ended_at": "2026-10-22T20:00:17.757847Z",
+  "run_key": "RUN-00000505",
+  "schema_version": "dispatch-extract/v1",
+  "started_at": "2026-10-22T19:52:55.889095Z",
+  "status": "COMPLETED",
+  "usage": [
+    {
+      "budget_remaining": null,
+      "cache_tokens": 5895,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 2,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 8,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 14145,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 3,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 17,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 28237,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 4,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 26,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 48351,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 5,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 34,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 74419,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 6,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 42,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 104513,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 7,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 78,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 135881,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 8,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 86,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 172940,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 9,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 94,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 215407,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 10,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 95,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 262249,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 11,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 103,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 313242,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 12,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 132,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 370060,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 13,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 140,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 429626,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 14,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 148,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 491951,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 15,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 156,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 558681,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 16,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 185,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 627858,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 17,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 198,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 698899,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 18,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 227,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 770919,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 19,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 235,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 845172,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 20,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 243,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 921440,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 21,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 251,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 1002394,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 22,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 287,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 1087093,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 23,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 296,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 1175333,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 24,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 297,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 1270602,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 25,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 298,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 1366920,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 28,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 306,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 1463317,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 29,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 307,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    },
+    {
+      "budget_remaining": null,
+      "cache_tokens": 1463317,
+      "cost_microusd": null,
+      "coverage_fraction": null,
+      "input_tokens": 29,
+      "is_cumulative": true,
+      "measurement_quality": "measured",
+      "output_tokens": 20214,
+      "payload_kind": "usage",
+      "price_source": null,
+      "usage_source": "provider_transcript"
+    }
+  ]
+}

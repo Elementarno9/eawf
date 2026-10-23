@@ -34,6 +34,7 @@ from eawf.workflow.release.admission import (
 from eawf.workflow.release.signal_probes import membership_probe, provider_probe
 from eawf.workflow.release.train import CHECKPOINT_CONFIGS, V07_TRAIN
 from eawf.workflow.verify.release_readiness import ReleaseSignalContext
+from tests.integration.workflow.verify.test_provider_os_class import certified_on, smoke_filed
 
 pytestmark = pytest.mark.integration
 
@@ -118,7 +119,7 @@ def test_the_dev4_export_carries_the_dev3_certification_forward() -> None:
     assert dev3 is not None and dev4 is not None
     assert dev4.certifications == dev3.certifications
     assert dev4.advertised == dev3.advertised
-    assert provider_findings(dev4) == ()
+    assert provider_findings(dev4) == provider_findings(dev3)
 
 
 def test_an_unmapped_key_reads_as_no_export() -> None:
@@ -253,16 +254,20 @@ def test_the_dev4_membership_ref_is_bound_to_the_dev4_walk() -> None:
     assert earlier.bundle_digest != accepted.bundle_digest
 
 
-def test_the_provider_and_membership_rows_pass_for_dev4() -> None:
+def test_the_provider_and_membership_rows_pass_for_dev4(tmp_path: Path) -> None:
+    """The dev4 export, certified and smoked on both classes it ships on, passes both rows."""
     config = checkpoint_release_config(DEV4_VERSION, repo_root=REPO_ROOT)
     assert config.release_key == DEV4_KEY
     assert config.membership_refs == (dev4_walk_reference(),)
+    root = smoke_filed(
+        stage(tmp_path, DEV4_KEY, certified_on(committed_document(DEV4_KEY), "linux")), DEV4_KEY
+    )
 
     provider = provider_probe(
-        ReleaseSignalContext(config, ReleaseSignalName.PROVIDER, None), repo_root=REPO_ROOT
+        ReleaseSignalContext(config, ReleaseSignalName.PROVIDER, None), repo_root=root
     )
     membership = membership_probe(
-        ReleaseSignalContext(config, ReleaseSignalName.MEMBERSHIP, None), repo_root=REPO_ROOT
+        ReleaseSignalContext(config, ReleaseSignalName.MEMBERSHIP, None), repo_root=root
     )
 
     assert provider.status is ReleaseSignalStatus.PASS, provider.remediation

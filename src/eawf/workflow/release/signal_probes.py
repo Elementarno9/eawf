@@ -73,6 +73,11 @@ from eawf.workflow.evidence.provider_certification import (
     provider_findings,
     summarise_findings,
 )
+from eawf.workflow.release.canary_receipts import (
+    DISPATCH_SMOKE_RECEIPTS_FILENAME,
+    dispatch_smoke_gaps,
+    load_dispatch_smoke_receipts,
+)
 from eawf.workflow.release.dependencies import (
     ComponentOutcome,
     DependencyInventoryInputs,
@@ -311,12 +316,13 @@ def _unmapped_export(release_key: str) -> str:
     return f"no canary evidence directory is mapped for {release_key} in CANARY_EVIDENCE_DIRS"
 
 
-def _unreadable_export(exc: ValueError, release_key: str) -> ReleaseSignalOutcome:
-    """Return the outcome for an export that is present and does not parse.
+def _unreadable_export(exc: ValueError, location: str, remedy: str) -> ReleaseSignalOutcome:
+    """Return the outcome for committed evidence that is present and does not parse.
 
     Args:
         exc: What the loader refused the document with.
-        release_key: The checkpoint whose export was read.
+        location: The repo-relative path of the document that was read.
+        remedy: How the document is produced again.
 
     Returns:
         A ``fail`` outcome. An unreadable export is not an absent one:
@@ -326,9 +332,8 @@ def _unreadable_export(exc: ValueError, release_key: str) -> ReleaseSignalOutcom
     return ReleaseSignalOutcome(
         status=ReleaseSignalStatus.FAIL,
         remediation=(
-            f"the canary evidence export at {_export_location(release_key)} does not read "
-            f"back: {exc}; "
-            f"re-export the conformance records rather than editing the document by hand"
+            f"the canary evidence export at {location} does not read back: {exc}; "
+            f"{remedy} rather than editing the document by hand"
         ),
     )
 
@@ -350,7 +355,9 @@ def _read_export(
     try:
         return load_canary_evidence(repo_root, release_key), None
     except ValueError as exc:
-        return None, _unreadable_export(exc, release_key)
+        return None, _unreadable_export(
+            exc, _export_location(release_key), "re-export the conformance records"
+        )
 
 
 def provider_probe(
@@ -367,7 +374,10 @@ def provider_probe(
     quarantined, and a ``verified`` row for every capability the claim
     requires. An advertised tuple backed by a run log and nothing else
     fails like one backed by nothing at all, because a run log records
-    that the binary ran rather than that the contract holds.
+    that the binary ran rather than that the contract holds. Every
+    os_class the tuples claim also needs a passing live dispatch smoke
+    receipt, because a certification proves the runtime's contract and
+    not that a dispatched agent finishes a Task within the scorecard.
 
     Args:
         context: The signal request, carrying the loaded configuration.
@@ -375,8 +385,10 @@ def provider_probe(
 
     Returns:
         ``unavailable`` when no export is committed or it advertises no
-        tuple, ``fail`` naming every gap otherwise, and ``pass`` citing
-        each certification's URN when nothing is outstanding.
+        tuple, ``fail`` naming every gap otherwise -- an unreadable
+        smoke receipt file, ``dispatch_smoke_missing`` or
+        ``dispatch_smoke_failed`` included -- and ``pass`` citing each
+        certification's URN when nothing is outstanding.
     """
     evidence, refused = _read_export(repo_root, context.config.release_key)
     if refused is not None:
@@ -420,9 +432,32 @@ def provider_probe(
             ),
             evidence_refs=refs,
         )
+    release_key = context.config.release_key
+    try:
+        smoke = load_dispatch_smoke_receipts(repo_root, release_key)
+    except ValueError as exc:
+        return _unreadable_export(
+            exc,
+            "/".join((*CANARY_EVIDENCE_DIRS[release_key], DISPATCH_SMOKE_RECEIPTS_FILENAME)),
+            "re-run the live dispatch smoke",
+        )
+    claimed = tuple(os_class for claim in evidence.advertised for os_class in claim.os_classes)
+    gaps = dispatch_smoke_gaps(smoke, claimed)
+    if gaps:
+        return ReleaseSignalOutcome(
+            status=ReleaseSignalStatus.FAIL,
+            remediation=(
+                f"{len(gaps)} claimed os_class(es) lack a passing live dispatch smoke: "
+                f"{'; '.join(f'{os_class}: {gap.value}' for os_class, gap in gaps)}; run "
+                f"EAWF_SMOKE_PROVIDER=claude uv run pytest -m e2e "
+                f"tests/e2e/test_smoke_milestone.py on each class and commit its "
+                f"{DISPATCH_SMOKE_RECEIPTS_FILENAME}"
+            ),
+            evidence_refs=refs,
+        )
     logger.info(
-        f"provider_probe release_key={context.config.release_key!r} "
-        f"advertised={len(evidence.advertised)} certified={len(refs)}"
+        f"provider_probe release_key={release_key!r} "
+        f"advertised={len(evidence.advertised)} certified={len(refs)} smoked={len(set(claimed))}"
     )
     return ReleaseSignalOutcome(status=ReleaseSignalStatus.PASS, evidence_refs=refs)
 

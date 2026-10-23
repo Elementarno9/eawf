@@ -74,6 +74,7 @@ Perf bench harness — seed corpora, time harnesses, flag regressions.
 | Verb | Summary |
 |---|---|
 | `compare` | Flag any harness that regressed past the per-OS threshold. |
+| `dispatch` | Score one dispatched Run's efficiency against a tier's limits. |
 | `list` | List every fixture size x harness in the catalog. |
 | `run` | Seed a corpus in-memory and time each harness against it. |
 | `turn-cost` | Render wall clock + cost per completed unit of work, or check it. |

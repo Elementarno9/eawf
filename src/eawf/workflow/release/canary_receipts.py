@@ -24,7 +24,7 @@ import logging
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Final
+from typing import Annotated, Final, Literal
 
 from pydantic import AfterValidator, ConfigDict, Field, ValidationError, model_validator
 
@@ -36,7 +36,7 @@ from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.spec.release import ReleaseKeyStr
 from eawf.kernel.spec.release_config import ReleaseGateName
 from eawf.surfaces.cli.errors import UserError
-from eawf.workflow.evidence.provider_certification import CANARY_EVIDENCE_DIRS
+from eawf.workflow.evidence.provider_certification import CANARY_EVIDENCE_DIRS, OsClass
 
 logger = logging.getLogger(__name__)
 
@@ -258,15 +258,160 @@ def assert_pre_merge_receipts_bound(release_key: str, receipts: CanaryReceiptSet
         )
 
 
+#: The live dispatch smoke's receipt file, beside the canary receipts in
+#: the same per-release evidence directory.
+DISPATCH_SMOKE_RECEIPTS_FILENAME: Final[str] = "dispatch-smoke-receipts.json"
+
+
+class DispatchSmokeReceipt(_StrictModel):
+    """One live dispatch smoke on one host class, scored by ``eawf bench dispatch``.
+
+    Attributes:
+        os_class: The operating-system class the smoke ran on.
+        runtime_id: The runtime the smoke dispatched its Tasks to.
+        run_refs: The dispatched Runs the scorecard was checked over.
+        scorecard: ``pass`` when every Run met the ``fixture`` tier.
+        evidence_refs: The per-Run check documents filed beside the
+            receipt.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    os_class: OsClass
+    runtime_id: Annotated[str, Field(min_length=1, max_length=64)]
+    run_refs: Annotated[tuple[EvidenceRef, ...], Field(min_length=1)]
+    scorecard: Literal["pass", "fail"]
+    evidence_refs: tuple[EvidenceRef, ...] = ()
+
+
+class DispatchSmokeReceiptSet(_StrictModel):
+    """The committed dispatch smoke receipts of one checkpoint.
+
+    Attributes:
+        release_key: The checkpoint the smokes were run for.
+        receipts: At most one receipt per os_class and runtime.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    release_key: ReleaseKeyStr
+    receipts: tuple[DispatchSmokeReceipt, ...]
+
+    @model_validator(mode="after")
+    def _refuses_a_repeated_receipt(self) -> DispatchSmokeReceiptSet:
+        """Reject a set that files two receipts for one os_class and runtime.
+
+        Raises:
+            ValueError: When an ``(os_class, runtime_id)`` pair repeats,
+                since a reader could not tell which smoke stands.
+        """
+        pairs = [(receipt.os_class, receipt.runtime_id) for receipt in self.receipts]
+        repeated = sorted({pair for pair in pairs if pairs.count(pair) > 1})
+        if repeated:
+            raise ValueError(f"(os_class, runtime_id) {repeated} carry more than one receipt")
+        return self
+
+
+class DispatchSmokeGap(StrEnum):
+    """Why a claimed os_class is not backed by a passing dispatch smoke.
+
+    Values:
+        MISSING: No receipt was filed for the class.
+        FAILED: A receipt for the class carries a failing scorecard.
+    """
+
+    MISSING = "dispatch_smoke_missing"
+    FAILED = "dispatch_smoke_failed"
+
+
+def read_dispatch_smoke_receipts(path: Path) -> DispatchSmokeReceiptSet | None:
+    """Return the receipt set filed at *path*, or ``None`` when no file is there.
+
+    Args:
+        path: A ``dispatch-smoke-receipts.json`` file.
+
+    Returns:
+        The validated set, or ``None`` when *path* is not a file.
+
+    Raises:
+        ValueError: When the file is not valid JSON or does not validate.
+    """
+    if not path.is_file():
+        return None
+    try:
+        return DispatchSmokeReceiptSet.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise ValueError(f"{DISPATCH_SMOKE_RECEIPTS_FILENAME} is invalid: {exc}") from exc
+
+
+def load_dispatch_smoke_receipts(
+    repo_root: Path, release_key: str
+) -> DispatchSmokeReceiptSet | None:
+    """Return *release_key*'s committed dispatch smoke receipts, or ``None`` when absent.
+
+    Args:
+        repo_root: Checkout the receipts were committed in.
+        release_key: The checkpoint whose receipts are wanted.
+
+    Returns:
+        The validated set, or ``None`` when no file is committed.
+
+    Raises:
+        KeyError: When no canary evidence directory is mapped for
+            *release_key*.
+        ValueError: When the file does not read back or was filed for
+            another checkpoint.
+    """
+    path = repo_root.joinpath(*CANARY_EVIDENCE_DIRS[release_key], DISPATCH_SMOKE_RECEIPTS_FILENAME)
+    receipts = read_dispatch_smoke_receipts(path)
+    if receipts is not None and receipts.release_key != release_key:
+        raise ValueError(
+            f"{DISPATCH_SMOKE_RECEIPTS_FILENAME} under {release_key} was filed for "
+            f"{receipts.release_key}"
+        )
+    return receipts
+
+
+def dispatch_smoke_gaps(
+    receipts: DispatchSmokeReceiptSet | None, os_classes: tuple[OsClass, ...]
+) -> tuple[tuple[OsClass, DispatchSmokeGap], ...]:
+    """Return each claimed os_class a passing dispatch smoke does not back.
+
+    Args:
+        receipts: The committed set, or ``None`` when none is committed.
+        os_classes: The classes the checkpoint claims, in claim order.
+
+    Returns:
+        One ``(os_class, gap)`` per class with no receipt or with a
+        failing one; empty when every class has only passing receipts.
+    """
+    filed = receipts.receipts if receipts is not None else ()
+    gaps: list[tuple[OsClass, DispatchSmokeGap]] = []
+    for os_class in dict.fromkeys(os_classes):
+        scorecards = {receipt.scorecard for receipt in filed if receipt.os_class == os_class}
+        if not scorecards:
+            gaps.append((os_class, DispatchSmokeGap.MISSING))
+        elif "fail" in scorecards:
+            gaps.append((os_class, DispatchSmokeGap.FAILED))
+    return tuple(gaps)
+
+
 __all__ = [
     "CANARY_RECEIPTS_FILENAME",
+    "DISPATCH_SMOKE_RECEIPTS_FILENAME",
     "CanaryReadiness",
     "CanaryReadinessVerdict",
     "CanaryReceipt",
     "CanaryReceiptSet",
+    "DispatchSmokeGap",
+    "DispatchSmokeReceipt",
+    "DispatchSmokeReceiptSet",
     "EvidenceRef",
     "assert_pre_merge_receipts_bound",
     "assess_canary_receipts",
     "canary_receipts_path",
+    "dispatch_smoke_gaps",
     "load_canary_receipts",
+    "load_dispatch_smoke_receipts",
+    "read_dispatch_smoke_receipts",
 ]

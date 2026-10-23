@@ -465,10 +465,12 @@ jobs:
         # Serial (-n0) and coverage-free: this is the focused sandbox gate,
         # not a suite re-run. The whole sandbox set runs so the argv-shape,
         # env-scrub TMPDIR and sunset cases are checked on the same host that
-        # executes the real launch.
+        # executes the real launch. The containment cases skip without bwrap,
+        # so this is the only host where they run at all.
         run: >
           uv run pytest -n0 --no-cov
           tests/integration/runtime/sandbox/test_jail.py
+          tests/integration/runtime/sandbox/test_bwrap_containment.py
           tests/unit/runtime/sandbox/test_jail_expiry.py
           tests/unit/runtime/sandbox/test_env_scrub.py
 

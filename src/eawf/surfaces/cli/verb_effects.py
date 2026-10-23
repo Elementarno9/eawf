@@ -303,6 +303,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "bench run": _read(),
     "bench compare": _read(),
     "bench turn-cost": _read(),
+    "bench dispatch": _read(),
     "bench fixture seed": _create(),
     "telemetry pricing-currency-check": _read(),
     "snapshot list": _read(),

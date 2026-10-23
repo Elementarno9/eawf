@@ -17,15 +17,18 @@ Verbs:
 - ``eawf bench turn-cost`` — render the wall-clock + cost record per
   completed unit of work, and optionally check it against a recorded
   baseline.
+- ``eawf bench dispatch`` — score one dispatched Run's efficiency from
+  its receipts and usage readings against a tier's limits.
 
 Exit codes:
 
 - ``0`` — success / no regression.
 - ``1`` (``USER_ERROR``) — bad size / harness / unreadable input, and the
   ``turn-cost`` refusals: an unknown fixture and a baseline that is not
-  comparable to the current record.
+  comparable to the current record; and a ``dispatch`` Run or extract
+  that cannot be read.
 - ``2`` (``VALIDATION_ERROR``) — ``compare`` or ``turn-cost --check``
-  detected a regression.
+  detected a regression, or ``dispatch --check`` a breached limit.
 
 The two non-zero ``turn-cost --check`` codes are deliberately distinct: a
 ``2`` says the measurement moved, a ``1`` says the two artifacts were never
@@ -44,12 +47,15 @@ from typing import TYPE_CHECKING, Annotated
 import orjson
 import typer
 
+from eawf.observability.bench.dispatch_scorecard import DispatchTier
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
+from eawf.surfaces.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
+    from eawf.observability.bench.dispatch_scorecard import DispatchCheck
     from eawf.observability.bench.harness import BenchResult
     from eawf.observability.bench.turn_cost import TurnCostComparison, TurnCostCorpus
     from eawf.observability.telemetry.turn_cost import TurnCostRecord
@@ -328,6 +334,76 @@ def bench_turn_cost(
         raise typer.Exit(code=exit_codes.VALIDATION_ERROR)
 
 
+@bench_app.command("dispatch")
+def bench_dispatch(
+    ctx: typer.Context,
+    run: Annotated[str, typer.Argument(help="The Run's key or URN.")],
+    check: Annotated[
+        bool,
+        typer.Option("--check", help="Exit 2 when any metric breaches the tier's limit."),
+    ] = False,
+    tier: Annotated[
+        DispatchTier,
+        typer.Option("--tier", help="Limits to check against: fixture (smoke Tasks) or real."),
+    ] = DispatchTier.FIXTURE,
+    extract: Annotated[
+        Path | None,
+        typer.Option("--extract", help="Score a written extract instead of the tree's ledgers."),
+    ] = None,
+    write_extract: Annotated[
+        Path | None,
+        typer.Option("--write-extract", help="Write the Run's scrubbed extract to this path."),
+    ] = None,
+) -> None:
+    """Score one dispatched Run's efficiency against a tier's limits.
+
+    The scorecard folds the Run's per-call receipts and usage readings into
+    turns, read truncation and identical re-read rates, billable and
+    cache-read tokens, time to the first succeeded patch and wall clock,
+    and prints each beside the tier's limit. With ``--check`` a breach of
+    any limit exits ``2``.
+
+    Raises:
+        typer.Exit: ``1`` when the Run or the extract cannot be read, ``2``
+            on a breach under ``--check``.
+    """
+    from eawf.observability.bench.dispatch_scorecard import (
+        check_scorecard,
+        load_extract,
+        read_dispatch_extract,
+        score_dispatch,
+    )
+    from eawf.observability.bench.dispatch_scorecard import (
+        write_extract as write_extract_artifact,
+    )
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        if extract is not None:
+            source = load_extract(extract)
+        else:
+            source = read_dispatch_extract(resolve_state_path(flags.workspace).parent, run)
+    except (FileNotFoundError, LookupError) as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
+    except ValueError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
+    asked = run.rsplit("/", 1)[-1]
+    if source.run_key != asked:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"extract {extract} holds {source.run_key}, not {asked}", kind="InvalidInput"
+            ),
+            flags=flags,
+        )
+    if write_extract is not None:
+        write_extract_artifact(source, write_extract)
+
+    outcome = check_scorecard(score_dispatch(source), tier)
+    _emit_dispatch_check(flags, outcome)
+    if check and not outcome.passed:
+        raise typer.Exit(code=exit_codes.VALIDATION_ERROR)
+
+
 @fixture_app.command("seed")
 def fixture_seed(
     ctx: typer.Context,
@@ -436,6 +512,29 @@ def _emit_turn_cost_check(
         f"{comparison.baseline_p90_cost_usd} -> {comparison.candidate_p90_cost_usd} USD",
     ]
     emit_json_or_text(payload, "\n".join(lines), flags=flags)
+
+
+#: The metrics the text rendering rounds to four places; JSON keeps them exact.
+_RATE_METRICS = frozenset({"read_truncation_rate", "identical_reread_rate"})
+
+
+def _emit_dispatch_check(flags: GlobalFlags, outcome: DispatchCheck) -> None:
+    """Render one dispatch scorecard, each metric beside its limit."""
+    card = outcome.scorecard
+    lines = [
+        f"bench dispatch: {'ok' if outcome.passed else 'BREACHED'} "
+        f"(run={card.run_key} tier={outcome.tier.value})"
+    ]
+    for row in outcome.checks:
+        limit = "none" if row.limit is None else row.limit
+        observed = "unmeasured" if row.observed is None else row.observed
+        if row.metric in _RATE_METRICS and isinstance(observed, Decimal):
+            observed = f"{observed:.4f}"
+        lines.append(
+            f"{'!!' if row.breached else '  '} {row.metric.value}: {observed} (limit {limit})"
+        )
+    lines.append(f"   cache_read_tokens: {card.cache_read_tokens}")
+    emit_json_or_text({"check": outcome.model_dump(mode="json")}, "\n".join(lines), flags=flags)
 
 
 def _load_results(path: Path) -> list[BenchResult]:

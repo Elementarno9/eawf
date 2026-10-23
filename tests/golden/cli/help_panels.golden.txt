@@ -1,4 +1,4 @@
-Commands: claim, jury, record, repository, why
+Commands: claim, record, repository, why
 audit: backup, doc, doctor, local, migrate, schema, snapshot, validate, vfl
 estimation: bench, metrics, reflect, telemetry
 planning: action, batch, campaign, decision, memory, milestone, plan, question, run, session, task, track

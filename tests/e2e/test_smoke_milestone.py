@@ -19,8 +19,10 @@ The default provider is a deterministic stub: the real ``eawfd`` with only the
 claude launcher replaced (``_smoke_stub_daemon.py``), so the supervisor, the Run
 lifecycle, the lease, the commit of the worker's edits and the report binding
 all run as shipped. ``EAWF_SMOKE_PROVIDER=claude`` runs the same flow on the
-real claude-code runtime; ``EAWF_SMOKE_EVIDENCE_DIR`` then receives the log and
-the frame timeline.
+real claude-code runtime; ``EAWF_SMOKE_EVIDENCE_DIR`` then receives the log, the
+frame timeline and a dispatch smoke receipt: every dispatched Run is scored with
+``eawf bench dispatch --check --tier fixture`` and the host's os_class is filed in
+``dispatch-smoke-receipts.json``, which the release ``provider`` row reads.
 
 Nothing reaches the operator's environment: ``HOME``, the user config layer,
 ``EAWF_HOME``, the registry and the daemon runtime directory all live under the
@@ -46,9 +48,12 @@ import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import pytest
+
+if TYPE_CHECKING:
+    from eawf.workflow.release.canary_receipts import DispatchSmokeReceiptSet
 
 pytestmark = pytest.mark.e2e
 
@@ -127,6 +132,14 @@ class Smoke:
 
     def eawf(self, *args: str) -> dict[str, Any]:
         """Run one ``eawf --json`` command in the scratch repository; require exit 0."""
+        done = self.run_eawf(*args)
+        assert done.returncode == 0, json.dumps(self.log[-1], indent=2)
+        answer = json.loads(done.stdout)
+        assert isinstance(answer, dict), answer
+        return answer
+
+    def run_eawf(self, *args: str) -> subprocess.CompletedProcess[str]:
+        """Run one ``eawf --json`` command in the scratch repository and log its outcome."""
         argv = [sys.executable, "-m", "eawf", "--json", "--no-input", *args]
         started = time.time()
         done = subprocess.run(
@@ -146,10 +159,7 @@ class Smoke:
             "stderr": done.stderr[-4000:],
         }
         self.log.append(entry)
-        assert done.returncode == 0, json.dumps(entry, indent=2)
-        answer = json.loads(done.stdout)
-        assert isinstance(answer, dict), answer
-        return answer
+        return done
 
     def git(self, *args: str) -> str:
         """Run one git command in the scratch repository, logged as the operator's."""
@@ -159,7 +169,13 @@ class Smoke:
 
 
 #: What every dispatch names beyond the Task: the runtime and a token ceiling.
-PROVIDER_ARGS: Final = ("--provider", "claude-code", "--budget", "200000")
+PROVIDER_ARGS: Final = ("--provider", "claude-code", "--budget", "600000")
+
+#: The runtime a dispatch smoke receipt names.
+SMOKE_RUNTIME_ID: Final = PROVIDER_ARGS[1]
+
+#: The os_class a dispatch smoke receipt records, by ``sys.platform``.
+OS_CLASSES: Final = {"linux": "linux", "darwin": "macos", "win32": "windows"}
 
 #: The prefix every record of the scratch tree is spelled under (``init --quick``
 #: infers the project code ``SMOKE`` from the directory name).
@@ -1121,6 +1137,80 @@ def _save_evidence(world: Smoke, frames: list[Frame], latency: Latency) -> Path:
     return out
 
 
+def _dispatch_checks(world: Smoke) -> dict[str, tuple[bool, str]]:
+    """Score every dispatched Run against the ``fixture`` tier.
+
+    Returns:
+        Whether each Run passed, beside the ``--json`` check document, by Run key.
+    """
+    checks: dict[str, tuple[bool, str]] = {}
+    for run_key in world.dispatched:
+        done = world.run_eawf("bench", "dispatch", run_key, "--check", "--tier", "fixture")
+        assert done.returncode in {0, 2}, json.dumps(world.log[-1], indent=2)
+        checks[run_key] = (done.returncode == 0, done.stdout)
+    return checks
+
+
+def _file_smoke_receipt(
+    directory: Path, checks: dict[str, tuple[bool, str]], *, os_class: str, release_key: str
+) -> DispatchSmokeReceiptSet:
+    """File this host's dispatch smoke receipt in *directory*'s receipt set.
+
+    Each Run's check document is written beside the receipt file, and a receipt
+    already filed there for another os_class or runtime is kept, so the Linux and
+    macOS smokes can be filed into one committed set.
+
+    Args:
+        directory: Where ``dispatch-smoke-receipts.json`` is filed.
+        checks: Whether each Run passed, beside its check document, by Run key.
+        os_class: The class this host's receipt records.
+        release_key: The checkpoint the smoke is run for.
+
+    Returns:
+        The set as written.
+
+    Raises:
+        ValueError: When the filed set does not read back or names another
+            checkpoint.
+    """
+    from eawf.workflow.release.canary_receipts import (
+        DISPATCH_SMOKE_RECEIPTS_FILENAME,
+        DispatchSmokeReceipt,
+        DispatchSmokeReceiptSet,
+        read_dispatch_smoke_receipts,
+    )
+
+    directory.mkdir(parents=True, exist_ok=True)
+    names = []
+    for run_key, (_passed, document) in checks.items():
+        name = f"dispatch-check-{run_key}.json"
+        (directory / name).write_text(document, encoding="utf-8")
+        names.append(name)
+    receipt = DispatchSmokeReceipt.model_validate(
+        {
+            "os_class": os_class,
+            "runtime_id": SMOKE_RUNTIME_ID,
+            "run_refs": [_urn("run", run_key) for run_key in checks],
+            "scorecard": "pass" if all(passed for passed, _doc in checks.values()) else "fail",
+            "evidence_refs": names,
+        }
+    )
+    path = directory / DISPATCH_SMOKE_RECEIPTS_FILENAME
+    filed = read_dispatch_smoke_receipts(path)
+    if filed is not None and filed.release_key != release_key:
+        raise ValueError(f"{path} was filed for {filed.release_key}, not {release_key}")
+    kept = () if filed is None else filed.receipts
+    receipts = DispatchSmokeReceiptSet(
+        release_key=release_key,
+        receipts=(
+            *(r for r in kept if (r.os_class, r.runtime_id) != (os_class, SMOKE_RUNTIME_ID)),
+            receipt,
+        ),
+    )
+    path.write_text(f"{receipts.model_dump_json(indent=2)}\n", encoding="utf-8")
+    return receipts
+
+
 def test_smoke_milestone(smoke: Smoke) -> None:
     """Carry a three-Batch Milestone from init to acceptance with the console attached."""
     world = smoke
@@ -1161,6 +1251,19 @@ def test_smoke_milestone(smoke: Smoke) -> None:
     assert len(world.dispatched) == len(plan.tasks)
     for run_key in world.dispatched:
         assert _status(world.repo, "run", run_key) == "COMPLETED", run_key
+    if PROVIDER != "stub":
+        from eawf._version import __version__
+
+        target = os.environ.get(EVIDENCE_DIR_ENV)
+        filed = _file_smoke_receipt(
+            Path(target) if target else out,
+            _dispatch_checks(world),
+            os_class=OS_CLASSES[sys.platform],
+            release_key=f"REL-{__version__}",
+        )
+        assert [r.scorecard for r in filed.receipts if r.os_class == OS_CLASSES[sys.platform]] == [
+            "pass"
+        ], f"a dispatched Run breached the fixture scorecard; see {target or out}"
     for run_key in {c.key for c in changes if c.kind == "run"}:
         assert _status(world.repo, "run", run_key) in {"COMPLETED", "FAILED", "CANCELLED"}
     milestone = _stored(world.repo, "milestone", "MLS-0001")

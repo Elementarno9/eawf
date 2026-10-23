@@ -19,11 +19,13 @@ promises: a passed ``certify`` sitting on the contiguous passed
 or whose certify was refused is refused here even though it validates as
 a model.
 
-**The committed export is real evidence.** The last group runs the probe
-against this repository rather than a fixture: one tuple installed on
-the producing host walked the three stages, and the dev3 readiness cites
-its certification by URN. That is the ``PRX-050`` bootstrap, and it is
-asserted rather than described.
+**The committed export is real evidence.** The first group reads this
+repository's export rather than a fixture: one tuple installed on the
+producing host walked the three stages, and the dev3 readiness cites its
+certification by URN. That is the ``PRX-050`` bootstrap. The export
+certifies macOS only while the claim ships on Linux too, so every case
+that means a passing release stages the export with the record repeated
+on Linux, beside a passing live dispatch smoke receipt for each class.
 """
 
 from __future__ import annotations
@@ -61,6 +63,7 @@ from eawf.workflow.verify.release_readiness import (
     ReleaseSignalContext,
     compute_readiness,
 )
+from tests.integration.workflow.verify.test_provider_os_class import certified_on, smoke_filed
 
 pytestmark = pytest.mark.integration
 
@@ -79,6 +82,9 @@ MEMBERSHIP_REF = "milestone://epoch2/native-canary"
 #: The URN the committed certification is cited by.
 CERTIFICATION_URN = "certification://claude-code/2026-09-18"
 
+#: The URN of the Linux record :func:`committed` adds.
+LINUX_CERTIFICATION_URN = f"{CERTIFICATION_URN}-linux"
+
 #: The manifest the committed export advertises and certifies.
 MANIFEST_REF = "driver://claude-code/2.1.274"
 
@@ -87,10 +93,15 @@ OTHER_DIGEST = f"sha256:{'b' * 64}"
 
 
 def committed() -> dict[str, Any]:
-    """Return a mutable copy of this checkout's committed export."""
+    """Return this checkout's committed export, certified on Linux and macOS.
+
+    The committed record is the macOS one; a Linux copy is appended so the
+    export certifies both classes the claim ships on, and each case below
+    breaks exactly the axis it names.
+    """
     path = REPO_ROOT.joinpath(*CANARY_EVIDENCE_DIRS[DEV3_RELEASE_KEY], CANARY_EVIDENCE_FILENAME)
     document: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    return copy.deepcopy(document)
+    return certified_on(document, "linux")
 
 
 def staged(tmp_path: Path, document: dict[str, Any] | str) -> Path:
@@ -170,16 +181,18 @@ def test_the_committed_export_advertises_a_tuple_it_certifies() -> None:
     assert evidence.certification_for(MANIFEST_REF) is not None
 
 
-def test_provider_probe_passes_over_this_checkout() -> None:
-    outcome = probe_at(REPO_ROOT)
+def test_provider_probe_passes_over_this_checkout_certified_on_both_classes(
+    tmp_path: Path,
+) -> None:
+    outcome = probe_at(smoke_filed(staged(tmp_path, committed()), DEV3_RELEASE_KEY))
 
-    assert outcome.status is ReleaseSignalStatus.PASS
-    assert outcome.evidence_refs == (CERTIFICATION_URN,)
+    assert outcome.status is ReleaseSignalStatus.PASS, outcome.remediation
+    assert outcome.evidence_refs == (LINUX_CERTIFICATION_URN, CERTIFICATION_URN)
 
 
-def test_the_dev3_readiness_cites_the_certification_by_urn() -> None:
+def test_the_dev3_readiness_cites_the_certification_by_urn(tmp_path: Path) -> None:
     """PRX-050: the row an approver reads names the record, not the claim."""
-    row = provider_row(REPO_ROOT)
+    row = provider_row(smoke_filed(staged(tmp_path, committed()), DEV3_RELEASE_KEY))
 
     assert row.status is ReleaseSignalStatus.PASS
     assert row.failure_code is None
@@ -420,7 +433,7 @@ def test_a_second_uncertified_claim_is_named_and_the_certified_one_is_not(
     assert outcome.status is ReleaseSignalStatus.FAIL
     assert "driver://codex/0.9.0" in outcome.remediation
     assert outcome.remediation.count(CanaryEvidenceGap.NO_CERTIFICATION.value) == 1
-    assert outcome.evidence_refs == (CERTIFICATION_URN,)
+    assert outcome.evidence_refs == (LINUX_CERTIFICATION_URN, CERTIFICATION_URN)
 
 
 # --- the module's own boundaries -------------------------------------

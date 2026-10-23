@@ -117,6 +117,10 @@ CERTIFYING_STAGES: Final[tuple[ConformanceStage, ...]] = ("probe", "canary", "ce
 #: an export naming a code no registry could carry fails at load.
 _PROJECT_CODE_PATTERN: Final[str] = RE_PROJECT_CODE.pattern
 
+#: An operating-system class a runtime tuple is certified on, spelled as
+#: :attr:`DriverCertification.os_class` spells it.
+OsClass = Literal["linux", "macos", "windows"]
+
 
 class CanaryEvidenceGap(StrEnum):
     """Why the committed evidence does not back a checkpoint's claims.
@@ -139,6 +143,8 @@ class CanaryEvidenceGap(StrEnum):
             installation trust does not admit the claim.
         CAPABILITY_UNCERTIFIED: A capability the claim requires is not
             certified ``verified``.
+        OS_CLASS_UNCERTIFIED: An operating-system class the claim ships on
+            carries no certification of the claim's manifest.
         MEMBERSHIP_UNRESOLVED: A declared acceptance bundle resolves to no
             recorded Milestone.
         MILESTONE_INCOMPLETE: A declared bundle's Milestone is recorded
@@ -158,6 +164,7 @@ class CanaryEvidenceGap(StrEnum):
     NO_CERTIFY_STAGE = "no_certify_stage"
     CERTIFICATION_NOT_VERIFIED = "certification_not_verified"
     CAPABILITY_UNCERTIFIED = "capability_uncertified"
+    OS_CLASS_UNCERTIFIED = "os_class_uncertified"
     MEMBERSHIP_UNRESOLVED = "membership_unresolved"
     MILESTONE_INCOMPLETE = "milestone_incomplete"
     UNDECLARED_CANARY = "undeclared_canary"
@@ -215,6 +222,10 @@ class RuntimeClaim(_StrictModel):
             another build of the same manifest would not carry.
         required_capabilities: The capability ids the advertised contract
             needs, each of which must be certified ``verified``.
+        os_classes: The operating-system classes the tuple ships on, each
+            of which needs its own certification. A certification records
+            the one host it ran on, so a macOS run proves nothing about the
+            Linux jail. Defaults to the two classes a release ships on.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -223,6 +234,7 @@ class RuntimeClaim(_StrictModel):
     manifest_ref: DriverManifestUrn
     manifest_digest: Digest
     required_capabilities: Annotated[tuple[CapabilityId, ...], Field(min_length=1)]
+    os_classes: Annotated[tuple[OsClass, ...], Field(min_length=1)] = ("linux", "macos")
 
 
 class RuntimeRunLog(_StrictModel):
@@ -634,6 +646,31 @@ def load_canary_evidence(repo_root: Path, release_key: str) -> CanaryEvidence | 
     return evidence
 
 
+def _claimed_records(
+    evidence: CanaryEvidence, claim: RuntimeClaim
+) -> tuple[CertificationRecord, ...]:
+    """Return the first certification of the claim's manifest per claimed os_class.
+
+    Args:
+        evidence: The committed export.
+        claim: The advertised runtime tuple.
+
+    Returns:
+        One record per claimed os_class that a certification covers, in
+        the claim's os_class order; a certification taken on a class the
+        claim does not ship on is left out.
+    """
+    by_os_class: dict[str, CertificationRecord] = {}
+    for record in evidence.certifications:
+        if record.certification.manifest_ref == claim.manifest_ref:
+            by_os_class.setdefault(record.certification.os_class, record)
+    return tuple(
+        by_os_class[os_class]
+        for os_class in dict.fromkeys(claim.os_classes)
+        if os_class in by_os_class
+    )
+
+
 def _claim_findings(evidence: CanaryEvidence, claim: RuntimeClaim) -> tuple[CanaryFinding, ...]:
     """Return every gap between one advertised claim and the export.
 
@@ -644,8 +681,7 @@ def _claim_findings(evidence: CanaryEvidence, claim: RuntimeClaim) -> tuple[Cana
     Returns:
         The findings, empty when the claim is fully certified.
     """
-    record = evidence.certification_for(claim.manifest_ref)
-    if record is None:
+    if evidence.certification_for(claim.manifest_ref) is None:
         logs = evidence.run_logs_for(claim.manifest_ref)
         if logs:
             return (
@@ -670,22 +706,38 @@ def _claim_findings(evidence: CanaryEvidence, claim: RuntimeClaim) -> tuple[Cana
                 ),
             ),
         )
-    findings: list[CanaryFinding] = []
-    if record.certification.manifest_digest != claim.manifest_digest:
-        findings.append(
-            CanaryFinding(
-                subject=claim.runtime_id,
-                gap=CanaryEvidenceGap.NO_CERTIFICATION,
-                detail=(
-                    f"the certification of {claim.manifest_ref!r} carries manifest_digest "
-                    f"{_short(record.certification.manifest_digest)}, but the claim advertises "
-                    f"{_short(claim.manifest_digest)}, so it certifies another build"
-                ),
-            )
+    records = _claimed_records(evidence, claim)
+    certified = {record.certification.os_class for record in records}
+    findings: list[CanaryFinding] = [
+        CanaryFinding(
+            subject=claim.runtime_id,
+            gap=CanaryEvidenceGap.OS_CLASS_UNCERTIFIED,
+            detail=(
+                f"{claim.runtime_id!r} is advertised on {os_class!r} and no certification of "
+                f"{claim.manifest_ref!r} was taken there; certify the tuple on {os_class!r} or "
+                f"drop it from os_classes"
+            ),
         )
-    findings.extend(record.certify_findings())
-    findings.extend(record.freshness_findings())
-    findings.extend(record.capability_findings(claim.required_capabilities))
+        for os_class in dict.fromkeys(claim.os_classes)
+        if os_class not in certified
+    ]
+    for record in records:
+        if record.certification.manifest_digest != claim.manifest_digest:
+            findings.append(
+                CanaryFinding(
+                    subject=claim.runtime_id,
+                    gap=CanaryEvidenceGap.NO_CERTIFICATION,
+                    detail=(
+                        f"the certification of {claim.manifest_ref!r} carries manifest_digest "
+                        f"{_short(record.certification.manifest_digest)}, but the claim "
+                        f"advertises {_short(claim.manifest_digest)}, so it certifies another "
+                        f"build"
+                    ),
+                )
+            )
+        findings.extend(record.certify_findings())
+        findings.extend(record.freshness_findings())
+        findings.extend(record.capability_findings(claim.required_capabilities))
     return tuple(findings)
 
 
@@ -697,8 +749,9 @@ def provider_findings(evidence: CanaryEvidence) -> tuple[CanaryFinding, ...]:
 
     Returns:
         The findings in advertised order; empty exactly when every
-        advertised tuple carries a runner-written certification that
-        earned itself and covers the capabilities the claim requires.
+        advertised tuple carries, on every os_class it claims, a
+        runner-written certification that earned itself and covers the
+        capabilities the claim requires.
     """
     findings: list[CanaryFinding] = []
     for claim in evidence.advertised:
@@ -714,15 +767,13 @@ def provider_evidence_refs(evidence: CanaryEvidence) -> tuple[str, ...]:
         evidence: The committed export.
 
     Returns:
-        One URN per advertised tuple that carries a certification, in
-        advertised order. A readiness row cites these, so an approver
-        reads the record rather than the claim about it.
+        One URN per certified os_class of each advertised tuple, in
+        advertised then os_class order. A readiness row cites these, so
+        an approver reads the record rather than the claim about it.
     """
     refs: list[str] = []
     for claim in evidence.advertised:
-        record = evidence.certification_for(claim.manifest_ref)
-        if record is not None:
-            refs.append(record.certification_urn)
+        refs.extend(record.certification_urn for record in _claimed_records(evidence, claim))
     return tuple(refs)
 
 

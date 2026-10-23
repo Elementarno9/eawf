@@ -219,7 +219,7 @@ Rendered and authored markdown — PR bodies, issue/review comments, audit / res
 The ~72-column wrap convention is reserved for **commit messages** (subject + body), where tooling and ``git log`` assume it. Fenced code blocks keep their own formatting. Skill output contracts inherit this rule: a skill that emits markdown emits unwrapped paragraphs.
 
 <!-- END EAWF:managed id=markdown-no-manual-wrap -->
-<!-- BEGIN EAWF:managed id=release-process version=2.0 hash=e8a3b534cfd81643 -->
+<!-- BEGIN EAWF:managed id=release-process version=2.1 hash=e8a3b534cfd81643 -->
 `release-process` — A release-train repo tags a merged Milestone only after ``eawf release preflight`` passes, via ``eawf release pipeline --milestone``; other repos keep their own tag flow. Full text: [docs/rules/release-process.md](docs/rules/release-process.md)
 <!-- END EAWF:managed id=release-process -->
 <!-- BEGIN EAWF:managed id=ship-process version=1.9 hash=37dd04d0ac8a855f -->

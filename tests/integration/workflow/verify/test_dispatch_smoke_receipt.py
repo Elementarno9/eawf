@@ -1,0 +1,488 @@
+"""The ``provider`` row needs a passing live dispatch smoke on every claimed os_class.
+
+A certification proves a runtime honours its contract; it does not prove that
+a dispatched agent carries a Task to a sealed candidate within the dispatch
+scorecard. The live smoke (``tests/e2e/test_smoke_milestone.py`` under
+``EAWF_SMOKE_PROVIDER=claude``) proves that, scores every Run with
+``eawf bench dispatch --check --tier fixture`` and files the host's os_class
+in ``dispatch-smoke-receipts.json`` beside the canary receipts. These checks
+pin how the row reads that file, how the smoke writes it, and the
+release-process step that tells an operator to run it.
+"""
+
+from __future__ import annotations
+
+import inspect
+import json
+import subprocess
+from pathlib import Path
+from typing import Any, Final
+
+import pytest
+import yaml
+from pydantic import ValidationError
+
+import tests.e2e.test_smoke_milestone as smoke_module
+from eawf.kernel.release.signals import ReleaseSignalName, ReleaseSignalStatus
+from eawf.workflow.evidence.provider_certification import CANARY_EVIDENCE_DIRS
+from eawf.workflow.release.admission import checkpoint_release_config
+from eawf.workflow.release.canary_receipts import (
+    DISPATCH_SMOKE_RECEIPTS_FILENAME,
+    DispatchSmokeGap,
+    DispatchSmokeReceiptSet,
+    dispatch_smoke_gaps,
+    load_dispatch_smoke_receipts,
+    read_dispatch_smoke_receipts,
+)
+from eawf.workflow.release.signal_probes import build_receipt_probes, provider_probe
+from eawf.workflow.verify.release_readiness import ReleaseSignalContext
+from tests.integration.workflow.verify.test_provider_os_class import (
+    certified_on,
+    committed,
+    smoke_filed,
+    staged,
+)
+
+pytestmark = pytest.mark.integration
+
+REPO_ROOT: Final = Path(__file__).resolve().parents[4]
+DEV4_VERSION: Final = "0.7.0.dev4"
+DEV4_KEY: Final = f"REL-{DEV4_VERSION}"
+
+#: Where the dev4 smoke receipts sit, relative to a checkout.
+RECEIPTS: Final = "/".join((*CANARY_EVIDENCE_DIRS[DEV4_KEY], DISPATCH_SMOKE_RECEIPTS_FILENAME))
+
+#: The operator command the release-process step names.
+SMOKE_COMMAND: Final = (
+    "EAWF_SMOKE_PROVIDER=claude EAWF_SMOKE_EVIDENCE_DIR=<canary evidence directory> "
+    "uv run pytest -m e2e tests/e2e/test_smoke_milestone.py"
+)
+
+
+def certified(tmp_path: Path, os_classes: list[str] | None = None) -> Path:
+    """Stage a dev4 export certified on Linux and macOS, claiming *os_classes*."""
+    document = certified_on(committed(os_classes=os_classes), "linux")
+    return staged(tmp_path, document)
+
+
+def probe_at(repo_root: Path) -> Any:
+    """Return the dev4 ``provider`` outcome for a checkout at *repo_root*."""
+    config = checkpoint_release_config(DEV4_VERSION, repo_root=REPO_ROOT)
+    return provider_probe(
+        ReleaseSignalContext(config, ReleaseSignalName.PROVIDER, None), repo_root=repo_root
+    )
+
+
+def receipts_file(root: Path, document: dict[str, Any] | str) -> Path:
+    """Write *document* as the dev4 smoke receipt file of the checkout at *root*."""
+    path = root / RECEIPTS
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(document if isinstance(document, str) else json.dumps(document), "utf-8")
+    return root
+
+
+def receipt(os_class: str = "linux", **overrides: Any) -> dict[str, Any]:
+    """Return one valid receipt row on *os_class* with *overrides* applied."""
+    return {
+        "os_class": os_class,
+        "runtime_id": "claude-code",
+        "run_refs": ["eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000001"],
+        "scorecard": "pass",
+        "evidence_refs": ["dispatch-check-RUN-00000001.json"],
+        **overrides,
+    }
+
+
+# --- CR-0507-1: the row passes on a passing receipt per claimed class --
+
+
+def test_smoke_receipt_passes_when_every_claimed_class_has_a_passing_receipt(
+    tmp_path: Path,
+) -> None:
+    outcome = probe_at(smoke_filed(certified(tmp_path), DEV4_KEY))
+
+    assert outcome.status is ReleaseSignalStatus.PASS, outcome.remediation
+
+
+def test_smoke_receipt_passes_for_a_single_claimed_class(tmp_path: Path) -> None:
+    root = smoke_filed(certified(tmp_path, ["macos"]), DEV4_KEY, ("macos",))
+
+    assert probe_at(root).status is ReleaseSignalStatus.PASS
+
+
+def test_smoke_receipt_passes_beside_a_receipt_on_an_unclaimed_class(tmp_path: Path) -> None:
+    root = smoke_filed(certified(tmp_path, ["macos"]), DEV4_KEY, ("macos",))
+    receipts_file(
+        root,
+        {
+            "release_key": DEV4_KEY,
+            "receipts": [receipt("macos"), receipt("windows", scorecard="fail")],
+        },
+    )
+
+    assert probe_at(root).status is ReleaseSignalStatus.PASS
+
+
+def test_smoke_receipt_passes_through_the_bound_probe(tmp_path: Path) -> None:
+    """The production registry reads the file, not only the bare probe."""
+    root = smoke_filed(certified(tmp_path), DEV4_KEY)
+    config = checkpoint_release_config(DEV4_VERSION, repo_root=REPO_ROOT)
+    probe = build_receipt_probes(root)[ReleaseSignalName.PROVIDER]
+
+    outcome = probe(ReleaseSignalContext(config, ReleaseSignalName.PROVIDER, None))
+
+    assert outcome.status is ReleaseSignalStatus.PASS, outcome.remediation
+
+
+def test_smoke_receipt_passes_loads_as_a_closed_receipt_set(tmp_path: Path) -> None:
+    root = smoke_filed(tmp_path, DEV4_KEY)
+
+    receipts = load_dispatch_smoke_receipts(root, DEV4_KEY)
+
+    assert receipts is not None
+    assert receipts.release_key == DEV4_KEY
+    assert [(r.os_class, r.runtime_id, r.scorecard) for r in receipts.receipts] == [
+        ("linux", "claude-code", "pass"),
+        ("macos", "claude-code", "pass"),
+    ]
+    assert receipts.receipts[0].run_refs == ("eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000001",)
+    assert receipts.receipts[1].evidence_refs == ("dispatch-check-RUN-00000002.json",)
+
+
+def test_smoke_receipt_passes_with_no_gap_for_passing_classes(tmp_path: Path) -> None:
+    receipts = load_dispatch_smoke_receipts(smoke_filed(tmp_path, DEV4_KEY), DEV4_KEY)
+
+    assert dispatch_smoke_gaps(receipts, ("linux", "macos", "linux")) == ()
+    assert dispatch_smoke_gaps(receipts, ()) == ()
+
+
+# --- CR-0507-2: missing, failing and unreadable receipts ----------------
+
+
+def test_smoke_receipt_refusals_without_a_receipt_file(tmp_path: Path) -> None:
+    outcome = probe_at(certified(tmp_path))
+
+    assert outcome.status is ReleaseSignalStatus.FAIL
+    assert "linux: dispatch_smoke_missing; macos: dispatch_smoke_missing" in outcome.remediation
+    assert "EAWF_SMOKE_PROVIDER=claude" in outcome.remediation
+
+
+def test_smoke_receipt_refusals_name_only_the_class_lacking_a_receipt(tmp_path: Path) -> None:
+    outcome = probe_at(smoke_filed(certified(tmp_path), DEV4_KEY, ("linux",)))
+
+    assert outcome.status is ReleaseSignalStatus.FAIL
+    assert "macos: dispatch_smoke_missing" in outcome.remediation
+    assert "linux:" not in outcome.remediation
+
+
+def test_smoke_receipt_refusals_on_a_failing_scorecard(tmp_path: Path) -> None:
+    outcome = probe_at(smoke_filed(certified(tmp_path), DEV4_KEY, scorecard="fail"))
+
+    assert outcome.status is ReleaseSignalStatus.FAIL
+    assert "linux: dispatch_smoke_failed; macos: dispatch_smoke_failed" in outcome.remediation
+
+
+def test_smoke_receipt_refusals_when_one_runtime_fails_a_class(tmp_path: Path) -> None:
+    """A passing claude-code smoke does not clear a failing one on the same class."""
+    root = receipts_file(
+        certified(tmp_path, ["linux"]),
+        {
+            "release_key": DEV4_KEY,
+            "receipts": [receipt(), receipt(runtime_id="codex", scorecard="fail")],
+        },
+    )
+
+    outcome = probe_at(root)
+
+    assert outcome.status is ReleaseSignalStatus.FAIL
+    assert "linux: dispatch_smoke_failed" in outcome.remediation
+
+
+def test_smoke_receipt_refusals_keep_the_certification_refs(tmp_path: Path) -> None:
+    outcome = probe_at(certified(tmp_path))
+
+    assert outcome.evidence_refs == (
+        "certification://claude-code/2026-09-18-linux",
+        "certification://claude-code/2026-09-18",
+    )
+
+
+def test_smoke_receipt_refusals_report_a_certification_gap_first(tmp_path: Path) -> None:
+    """An uncertified class is the certification's gap, not the smoke's."""
+    outcome = probe_at(staged(tmp_path, committed()))
+
+    assert outcome.status is ReleaseSignalStatus.FAIL
+    assert "os_class_uncertified" in outcome.remediation
+    assert "dispatch_smoke" not in outcome.remediation
+
+
+def test_smoke_receipt_refusals_on_a_file_that_is_not_json(tmp_path: Path) -> None:
+    outcome = probe_at(receipts_file(certified(tmp_path), "{not json"))
+
+    assert outcome.status is ReleaseSignalStatus.FAIL
+    assert f"the canary evidence export at {RECEIPTS} does not read back" in outcome.remediation
+    assert "re-run the live dispatch smoke" in outcome.remediation
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        pytest.param([], id="not-a-mapping"),
+        pytest.param({"release_key": DEV4_KEY}, id="missing-receipts"),
+        pytest.param({"release_key": DEV4_KEY, "receipts": [], "extra": 1}, id="unknown-key"),
+        pytest.param({"release_key": DEV4_KEY, "receipts": [receipt(run_refs=[])]}, id="no-run"),
+        pytest.param(
+            {"release_key": DEV4_KEY, "receipts": [receipt(scorecard="maybe")]}, id="scorecard"
+        ),
+        pytest.param({"release_key": DEV4_KEY, "receipts": [receipt("beos")]}, id="os-class"),
+        pytest.param(
+            {"release_key": DEV4_KEY, "receipts": [receipt(evidence_refs=["/abs/check.json"])]},
+            id="absolute-ref",
+        ),
+        pytest.param(
+            {"release_key": DEV4_KEY, "receipts": [receipt(runtime_id="x" * 65)]},
+            id="runtime-too-long",
+        ),
+        pytest.param(
+            {"release_key": DEV4_KEY, "receipts": [receipt(), receipt()]}, id="repeated-pair"
+        ),
+        pytest.param({"release_key": "REL-0.7.0.dev3", "receipts": []}, id="other-release"),
+    ],
+)
+def test_smoke_receipt_refusals_on_a_file_that_does_not_validate(
+    tmp_path: Path, document: Any
+) -> None:
+    outcome = probe_at(receipts_file(certified(tmp_path), json.dumps(document)))
+
+    assert outcome.status is ReleaseSignalStatus.FAIL
+    assert "does not read back" in outcome.remediation
+
+
+def test_smoke_receipt_refusals_read_an_absent_file_as_none(tmp_path: Path) -> None:
+    assert read_dispatch_smoke_receipts(tmp_path / DISPATCH_SMOKE_RECEIPTS_FILENAME) is None
+    assert load_dispatch_smoke_receipts(tmp_path, DEV4_KEY) is None
+
+
+def test_smoke_receipt_refusals_raise_on_an_unmapped_release(tmp_path: Path) -> None:
+    with pytest.raises(KeyError):
+        load_dispatch_smoke_receipts(tmp_path, "REL-0.7.0.dev2")
+
+
+def test_smoke_receipt_refusals_raise_value_error_on_a_bad_file(tmp_path: Path) -> None:
+    receipts_file(tmp_path, "{")
+
+    with pytest.raises(ValueError, match=r"dispatch-smoke-receipts\.json is invalid"):
+        load_dispatch_smoke_receipts(tmp_path, DEV4_KEY)
+
+
+def test_smoke_receipt_refusals_name_each_gap_once_in_claim_order() -> None:
+    receipts = DispatchSmokeReceiptSet.model_validate(
+        {"release_key": DEV4_KEY, "receipts": [receipt("macos", scorecard="fail")]}
+    )
+
+    assert dispatch_smoke_gaps(receipts, ("windows", "macos", "windows")) == (
+        ("windows", DispatchSmokeGap.MISSING),
+        ("macos", DispatchSmokeGap.FAILED),
+    )
+    assert dispatch_smoke_gaps(None, ("linux",)) == (("linux", DispatchSmokeGap.MISSING),)
+
+
+def test_smoke_receipt_refusals_reject_a_repeated_pair_in_the_model() -> None:
+    with pytest.raises(ValidationError, match="carry more than one receipt"):
+        DispatchSmokeReceiptSet.model_validate(
+            {"release_key": DEV4_KEY, "receipts": [receipt(), receipt(scorecard="fail")]}
+        )
+
+
+# --- CR-0507-3: the smoke's budget and its receipt writer ---------------
+
+
+class _BenchStub(smoke_module.Smoke):
+    """A smoke world whose CLI answers each bench check with a canned exit code."""
+
+    def __init__(self, root: Path, exits: dict[str, int]) -> None:
+        super().__init__(root=root, repo=root, runtime_dir=root, env={})
+        self.exits = exits
+        self.argvs: list[tuple[str, ...]] = []
+        self.dispatched = list(exits)
+
+    def run_eawf(self, *args: str) -> subprocess.CompletedProcess[str]:
+        self.argvs.append(args)
+        self.log.append({"argv": ["eawf", *args]})
+        code = self.exits[args[2]]
+        return subprocess.CompletedProcess(args, code, json.dumps({"check": args[2]}), "")
+
+
+def checks(passed: dict[str, bool]) -> dict[str, tuple[bool, str]]:
+    """Return a stub scorecard per Run key: its verdict beside a check document."""
+    return {key: (ok, json.dumps({"check": {"run": key}})) for key, ok in passed.items()}
+
+
+def test_smoke_budget_and_receipt_writer_budget_is_600000() -> None:
+    assert smoke_module.PROVIDER_ARGS == ("--provider", "claude-code", "--budget", "600000")
+    assert smoke_module.SMOKE_RUNTIME_ID == "claude-code"
+
+
+def test_smoke_budget_and_receipt_writer_maps_each_host_platform() -> None:
+    assert smoke_module.OS_CLASSES == {"linux": "linux", "darwin": "macos", "win32": "windows"}
+
+
+def test_smoke_budget_and_receipt_writer_runs_the_fixture_check_per_run(tmp_path: Path) -> None:
+    world = _BenchStub(tmp_path, {"RUN-00000001": 0, "RUN-00000002": 2})
+
+    result = smoke_module._dispatch_checks(world)
+
+    assert world.argvs == [
+        ("bench", "dispatch", "RUN-00000001", "--check", "--tier", "fixture"),
+        ("bench", "dispatch", "RUN-00000002", "--check", "--tier", "fixture"),
+    ]
+    assert {key: ok for key, (ok, _doc) in result.items()} == {
+        "RUN-00000001": True,
+        "RUN-00000002": False,
+    }
+    assert json.loads(result["RUN-00000002"][1]) == {"check": "RUN-00000002"}
+
+
+def test_smoke_budget_and_receipt_writer_refuses_an_unreadable_run(tmp_path: Path) -> None:
+    """Exit 1 means the Run could not be scored, which is neither pass nor fail."""
+    with pytest.raises(AssertionError):
+        smoke_module._dispatch_checks(_BenchStub(tmp_path, {"RUN-00000001": 1}))
+
+
+def test_smoke_budget_and_receipt_writer_files_a_passing_receipt(tmp_path: Path) -> None:
+    out = tmp_path / "evidence"
+
+    written = smoke_module._file_smoke_receipt(
+        out,
+        checks({"RUN-00000001": True, "RUN-00000002": True}),
+        os_class="linux",
+        release_key=DEV4_KEY,
+    )
+
+    assert read_dispatch_smoke_receipts(out / DISPATCH_SMOKE_RECEIPTS_FILENAME) == written
+    (row,) = written.receipts
+    assert (row.os_class, row.runtime_id, row.scorecard) == ("linux", "claude-code", "pass")
+    assert row.run_refs == (
+        "eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000001",
+        "eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000002",
+    )
+    assert row.evidence_refs == (
+        "dispatch-check-RUN-00000001.json",
+        "dispatch-check-RUN-00000002.json",
+    )
+    check = json.loads((out / "dispatch-check-RUN-00000002.json").read_text(encoding="utf-8"))
+    assert check == {"check": {"run": "RUN-00000002"}}
+
+
+def test_smoke_budget_and_receipt_writer_fails_on_one_breached_run(tmp_path: Path) -> None:
+    written = smoke_module._file_smoke_receipt(
+        tmp_path,
+        checks({"RUN-00000001": True, "RUN-00000002": False}),
+        os_class="macos",
+        release_key=DEV4_KEY,
+    )
+
+    assert [r.scorecard for r in written.receipts] == ["fail"]
+
+
+def test_smoke_budget_and_receipt_writer_keeps_the_other_class(tmp_path: Path) -> None:
+    """The Linux and macOS smokes file into one set; a rerun replaces its own row."""
+    smoke_module._file_smoke_receipt(
+        tmp_path, checks({"RUN-00000001": True}), os_class="macos", release_key=DEV4_KEY
+    )
+    smoke_module._file_smoke_receipt(
+        tmp_path, checks({"RUN-00000002": False}), os_class="linux", release_key=DEV4_KEY
+    )
+
+    written = smoke_module._file_smoke_receipt(
+        tmp_path, checks({"RUN-00000003": True}), os_class="linux", release_key=DEV4_KEY
+    )
+
+    assert [(r.os_class, r.scorecard, r.run_refs[0][-12:]) for r in written.receipts] == [
+        ("macos", "pass", "RUN-00000001"),
+        ("linux", "pass", "RUN-00000003"),
+    ]
+
+
+def test_smoke_budget_and_receipt_writer_written_set_passes_the_row(tmp_path: Path) -> None:
+    root = certified(tmp_path)
+    directory = root.joinpath(*CANARY_EVIDENCE_DIRS[DEV4_KEY])
+    for os_class in ("linux", "macos"):
+        smoke_module._file_smoke_receipt(
+            directory, checks({"RUN-00000001": True}), os_class=os_class, release_key=DEV4_KEY
+        )
+
+    assert probe_at(root).status is ReleaseSignalStatus.PASS
+
+
+def test_smoke_budget_and_receipt_writer_refuses_another_release(tmp_path: Path) -> None:
+    smoke_module._file_smoke_receipt(
+        tmp_path, checks({"RUN-00000001": True}), os_class="linux", release_key=DEV4_KEY
+    )
+
+    with pytest.raises(ValueError, match=f"was filed for {DEV4_KEY}"):
+        smoke_module._file_smoke_receipt(
+            tmp_path,
+            checks({"RUN-00000001": True}),
+            os_class="linux",
+            release_key="REL-0.7.0.dev3",
+        )
+
+
+def test_smoke_budget_and_receipt_writer_refuses_an_unknown_class(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError):
+        smoke_module._file_smoke_receipt(
+            tmp_path, checks({"RUN-00000001": True}), os_class="beos", release_key=DEV4_KEY
+        )
+
+
+def test_smoke_budget_and_receipt_writer_refuses_no_runs(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError):
+        smoke_module._file_smoke_receipt(tmp_path, {}, os_class="linux", release_key=DEV4_KEY)
+
+
+def test_smoke_budget_and_receipt_writer_is_wired_into_the_live_smoke() -> None:
+    source = inspect.getsource(smoke_module.test_smoke_milestone)
+
+    assert 'if PROVIDER != "stub":' in source
+    assert "_file_smoke_receipt(" in source
+    assert "_dispatch_checks(world)" in source
+    assert "os_class=OS_CLASSES[sys.platform]" in source
+
+
+# --- CR-0507-4: the release-process preflight step ----------------------
+
+
+def release_process_block() -> dict[str, Any]:
+    """Return the ``release-process`` render block of the core profile."""
+    core = REPO_ROOT / "src" / "eawf" / "platform" / "profiles" / "data" / "core.yaml"
+    document: dict[str, Any] = yaml.safe_load(core.read_text(encoding="utf-8"))
+    (block,) = [b for b in document["render_blocks"] if b["id"] == "release-process"]
+    found: dict[str, Any] = block
+    return found
+
+
+def test_release_process_bullet_is_in_the_profile_block() -> None:
+    block = release_process_block()
+
+    assert block["version"] == "2.1"
+    bullets = [line for line in block["body_template"].splitlines() if line.startswith("- ")]
+    (smoke,) = [line for line in bullets if "dispatch smoke" in line]
+    assert "Before cutting a release candidate, run the live dispatch smoke on Linux (bwrap) " in (
+        smoke
+    )
+    assert "and on macOS (seatbelt)" in smoke
+    assert f"``{SMOKE_COMMAND}``" in smoke
+    assert smoke.endswith("and commit its ``dispatch-smoke-receipts.json``.")
+
+
+def test_release_process_bullet_is_in_the_rendered_page() -> None:
+    page = (REPO_ROOT / "docs" / "rules" / "release-process.md").read_text(encoding="utf-8")
+    (smoke,) = [
+        line
+        for line in release_process_block()["body_template"].splitlines()
+        if "dispatch smoke" in line
+    ]
+
+    assert "id=release-process version=2.1 " in page
+    assert smoke in page.splitlines()
