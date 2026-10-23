@@ -93,6 +93,7 @@ handed alongside it for the same reason.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import re
 import subprocess
@@ -102,7 +103,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Final, Literal, Self
+from typing import TYPE_CHECKING, Any, Final, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError, model_validator
 
@@ -114,10 +115,12 @@ from eawf.kernel.runtime.content import (
     CONTENT_LINE_CHARS,
     CONTENT_LINE_LIMIT,
     bound_content,
+    scrub_line,
 )
 from eawf.kernel.runtime.lease import WorkLease
 from eawf.kernel.runtime.provider import ArtifactUrn, Digest, RuntimeRecord
 from eawf.kernel.runtime.semantic import (
+    REPO_READ_TEXT_CHARS,
     BudgetStatusOutput,
     BudgetUsage,
     FindingCode,
@@ -148,6 +151,7 @@ from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.store.ledger import LedgerRecord, LedgerTornTailError, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.observability.logging.state_leak import default_allowed_emails
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.candidate.seal import (
     accepted_report_of,
@@ -175,6 +179,10 @@ from eawf.workflow.planning.apply import (
     validate_plan_proposal,
 )
 from eawf.workflow.planning.revision import PlanRefusal, PlanRefusalCode
+
+if TYPE_CHECKING:
+    # The gateway imports this module's handler table, so its receipt is named here only.
+    from eawf.runtime.daemon.semantic_gateway import SemanticCallReceipt
 
 logger = logging.getLogger(__name__)
 
@@ -315,6 +323,7 @@ class HandlerInputs:
         capsule: The authority it runs under.
         run: The stored Run record.
         calls_so_far: How many receipts the Run already holds.
+        held: The receipts the Run already holds, in ledger order.
         now: The instant the answer is stamped at.
         lease: The Run's active workspace lease, already resolved by the
             gateway's own lease check. ``None`` for a tool the lease check
@@ -326,6 +335,7 @@ class HandlerInputs:
     capsule: AuthorityCapsule
     run: Run
     calls_so_far: int
+    held: tuple[SemanticCallReceipt, ...]
     now: datetime
     lease: WorkLease | None = None
 
@@ -600,11 +610,13 @@ def _inside(root: Path, path: str) -> Path:
 
 
 def _repo_read(inputs: HandlerInputs) -> SemanticToolOutput:
-    """Return a bounded window of one file of the tree this Run reads.
+    """Return a window of one file of the tree this Run reads.
 
-    The window is cut at whole lines and at the content store's bounds,
-    so ``byte_count`` names exactly the bytes the text covers and the
-    next window resumes where this one stopped.
+    The window runs to ``byte_cap`` and is cut at whole lines, so
+    ``byte_count`` names exactly the bytes the text covers and the next
+    window resumes where this one stopped. Each line is scrubbed as the
+    content store scrubs it, but the store's line and character bounds
+    apply only to the content ``content_ref`` names.
 
     Raises:
         HandlerRefusalError: The path escapes the tree, lies under a
@@ -629,30 +641,70 @@ def _repo_read(inputs: HandlerInputs) -> SemanticToolOutput:
     if more and len(lines) > 1 and not lines[-1].endswith(b"\n"):
         # A window cut mid-line would split a line, or a character, across two reads.
         lines.pop()
-    kept: list[str] = []
+    allowed = default_allowed_emails()
+    decoded: list[str] = []
+    shown: list[str] = []
     spent = consumed = 0
-    for raw in lines[:CONTENT_LINE_LIMIT]:
+    cut = False
+    for raw in lines:
         line = raw.decode("utf-8", errors="replace")
-        if kept and spent + len(line) > CONTENT_CHAR_LIMIT:
+        scrubbed, _ = scrub_line(line, allowed_emails=allowed)
+        # A withheld line can be longer than the bytes it replaces, so the
+        # inline bound is checked on the shown text, not on the bytes read.
+        if spent + len(scrubbed) > REPO_READ_TEXT_CHARS:
             break
-        kept.append(line)
-        spent += len(line)
+        decoded.append(line)
+        shown.append(scrubbed)
+        spent += len(scrubbed) + 1
         consumed += len(raw)
-    source = "".join(kept)
-    bounded = bound_content(source)
-    cut = len(bounded.lines) < bounded.total_lines or any(
-        len(line.rstrip()) > CONTENT_LINE_CHARS for line in kept
-    )
+        cut = cut or len(line.rstrip()) > CONTENT_LINE_CHARS
+    source = "".join(decoded)
+    text = "\n".join(shown) if source.strip() else ""
+    digest = f"sha256:{hashlib.sha256(text.encode('utf-8')).hexdigest()}"
+    if not payload.reread:
+        repeat = _earlier_read(inputs.held, content_digest=digest, byte_count=consumed)
+        if repeat is not None:
+            call_id, earlier = repeat
+            logger.info(f"_repo_read run={inputs.run.key!r} same_as_call={call_id}")
+            return earlier.model_copy(update={"text": "", "same_as_call": call_id})
     ref = file_content(inputs.session, run_ref=inputs.call.run_ref, text=source, now=inputs.now)
-    logger.info(f"_repo_read run={inputs.run.key!r} bytes={consumed} lines={len(bounded.lines)}")
+    logger.info(f"_repo_read run={inputs.run.key!r} bytes={consumed} lines={len(shown)}")
     return RepoReadOutput(
         tool_id="repo_read",
         content_ref=ref,
-        content_digest=f"sha256:{bounded.digest}",
+        content_digest=digest,
         byte_count=consumed,
         truncated=cut or more or consumed < len(window),
-        text="\n".join(bounded.lines),
+        text=text,
     )
+
+
+def _earlier_read(
+    held: tuple[SemanticCallReceipt, ...], *, content_digest: str, byte_count: int
+) -> tuple[str, RepoReadOutput] | None:
+    """Return the latest succeeded read of *held* that returned this same text.
+
+    Only a read that carried its text is named, so a worker following the
+    reference always lands on the text, never on another reference.
+
+    Args:
+        held: The Run's receipts, in ledger order.
+        content_digest: The digest of the text the current read would return.
+        byte_count: How many file bytes that text covers.
+
+    Returns:
+        That read's call id and output, or ``None`` when the Run holds none.
+    """
+    for receipt in reversed(held):
+        output = receipt.result.bounded_output
+        if (
+            isinstance(output, RepoReadOutput)
+            and output.same_as_call is None
+            and output.content_digest == content_digest
+            and output.byte_count == byte_count
+        ):
+            return receipt.call_id, output
+    return None
 
 
 def _listed_files(root: Path, prefix: str | None) -> list[str]:

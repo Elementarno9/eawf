@@ -173,8 +173,8 @@ def _render_prompt(task: Task, *, report_schema_ref: str) -> str:
     """Return the prompt a Task Run's provider process is started with.
 
     The role's agent body comes first so the worker reads its conduct
-    before its assignment; the Task follows, then the one way to change
-    files and the one way to finish.
+    before its assignment; the Task follows, then where to start reading,
+    the one way to change files and the one way to finish.
 
     Args:
         task: The Task the Run executes.
@@ -186,12 +186,22 @@ def _render_prompt(task: Task, *, report_schema_ref: str) -> str:
     body = {spec.role: spec.body for spec in AGENT_REGISTRY}[_TASK_ROLE.value]
     criteria = "\n".join(f"- {criterion.id} {criterion.text}" for criterion in task.criteria)
     claims = "\n".join(f"- {path}" for path in task.write_claims)
+    # A worker given only criterion text searches the tree one read per turn;
+    # naming the claimed paths and each criterion's proof locus up front lets
+    # it open them at once. dict.fromkeys keeps Task order and drops repeats.
+    loci = [c.response.object for c in task.criteria if c.response is not None]
+    starts = "\n".join(f"- {path}" for path in dict.fromkeys([*task.write_claims, *loci]))
     return (
         f"{body.rstrip()}\n\n"
         f"# Task {task.key}\n\n"
         f"## Intent\n\n{task.intent}\n\n"
         f"## Criteria\n\n{criteria}\n\n"
         f"## Write claims\n\n{claims}\n\n"
+        "## Where to start\n\n"
+        "Open these paths first: the write claims, then where each criterion is proved.\n\n"
+        f"{starts}\n\n"
+        f"Issue independent reads together in one turn: several {_READ_TOOLS[0]} and "
+        f"{_READ_TOOLS[1]} calls in one response, not one call per turn.\n\n"
         "## Changing files\n\n"
         f"Read the workspace through `{_READ_TOOLS[0]}` and `{_READ_TOOLS[1]}`. "
         f"Make every file change through `{_PATCH_TOOL}`: pass `files`, a list of "

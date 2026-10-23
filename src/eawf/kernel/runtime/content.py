@@ -62,6 +62,23 @@ class BoundedContent:
         return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
+def scrub_line(raw: str, *, allowed_emails: frozenset[str]) -> tuple[str, bool]:
+    """Return one line as it may be shown, and whether the leak scan withheld it.
+
+    Args:
+        raw: One source line, with or without its line break.
+        allowed_emails: The casefolded addresses the leak scan lets through.
+
+    Returns:
+        :data:`WITHHELD_LINE` and true when the state-leak scan flags *raw*;
+        otherwise *raw* without trailing whitespace, cut to
+        :data:`CONTENT_LINE_CHARS`, and false.
+    """
+    if scan_state_leaks(raw, allowed_emails=allowed_emails):
+        return WITHHELD_LINE, True
+    return raw.rstrip()[:CONTENT_LINE_CHARS], False
+
+
 def bound_content(text: str) -> BoundedContent:
     """Return *text* as the lines the store may keep.
 
@@ -79,10 +96,8 @@ def bound_content(text: str) -> BoundedContent:
     withheld = 0
     spent = 0
     for raw in source[:CONTENT_LINE_LIMIT]:
-        line = raw.rstrip()[:CONTENT_LINE_CHARS]
-        if scan_state_leaks(raw, allowed_emails=allowed):
-            line = WITHHELD_LINE
-            withheld += 1
+        line, flagged = scrub_line(raw, allowed_emails=allowed)
+        withheld += int(flagged)
         if spent + len(line) > CONTENT_CHAR_LIMIT:
             break
         kept.append(line)
@@ -156,4 +171,5 @@ __all__ = [
     "ResolvedContent",
     "StoredContent",
     "bound_content",
+    "scrub_line",
 ]

@@ -1,5 +1,7 @@
 """Turning a native Task into a running provider process, once.
 
+# noqa: EAWF010 the four dispatch steps share one attempt record; split seam: launch and metering
+
 Dispatch is four steps and their order is the contract. The spec is
 compiled first, because compilation is the only step that can refuse: a
 required capability that is unknown, expired, degraded or mismatched
@@ -1024,6 +1026,7 @@ async def launch_worker(
     lease: WorkLease,
     launchers: Mapping[str, NativeRunLauncher],
     notice_policy: BudgetNoticePolicy,
+    cache_read_weight: float,
     now: datetime,
     publish: Publish | None = None,
 ) -> tuple[DispatchAttempt, NativeLaunchOutcome | None]:
@@ -1032,7 +1035,8 @@ async def launch_worker(
     An attempt already at the spawned stage is not launched again: the
     provider accepted it, and starting a second process would give one
     attempt identity two workers. A crossing of the Run's token cap is
-    judged under *notice_policy*. The launch returns once the worker is
+    judged under *notice_policy*, with cache reads metered at
+    *cache_read_weight*. The launch returns once the worker is
     announced; the rest of its turn is handed to the root's supervisor,
     which ends the Run and publishes through *publish* when the turn does.
 
@@ -1066,7 +1070,14 @@ async def launch_worker(
         policy_digest=canonical_digest(notice_policy.model_dump(mode="json")),
         policy_revision=notice_policy.revision,
     )
-    meter = run_meter(context, args, attempt=attempt, capsule=capsule, identity=identity)
+    meter = run_meter(
+        context,
+        args,
+        attempt=attempt,
+        capsule=capsule,
+        identity=identity,
+        cache_read_weight=cache_read_weight,
+    )
     workspace = workspace_path(context, handle=lease.workspace_handle)
     before = await worker_tree(workspace)
     try:
@@ -1150,12 +1161,14 @@ def run_meter(
     attempt: DispatchAttempt,
     capsule: AuthorityCapsule,
     identity: BudgetIdentity,
+    cache_read_weight: float,
 ) -> InFlightRunMeter | None:
     """Return the in-flight meter of a capped Run, or ``None`` when uncapped.
 
     The control and the transition key are derived from the attempt, so a
     dispatch resumed after a lost daemon opens the same control instead of
-    a second one. A crossing names its ceiling by *identity*.
+    a second one. A crossing names its ceiling by *identity*, and a
+    cache-read token counts as *cache_read_weight* of one against the cap.
     """
     cap = capsule.budget.tokens
     if cap is None:
@@ -1169,6 +1182,7 @@ def run_meter(
         idempotency_key=f"budget-{attempt.attempt_ref}",
         cap_tokens=cap,
         identity=identity,
+        cache_read_weight=cache_read_weight,
     )
 
 
@@ -1297,6 +1311,7 @@ async def dispatch_run(
             lease=lease,
             launchers=table,
             notice_policy=economics.notice_policy,
+            cache_read_weight=economics.governor.cache_read_weight,
             now=now,
             publish=publish,
         )

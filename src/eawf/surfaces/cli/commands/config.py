@@ -200,6 +200,46 @@ def _coerce_value(raw: str) -> Any:
     return raw
 
 
+def _coerce_for_key(key: str, raw: str) -> Any:
+    """Return a CLI value as *key* takes it: a mapping for a mapping leaf, else a scalar.
+
+    A mapping leaf such as ``economics.governor`` holds one whole record, so its value
+    is read as YAML (a flow mapping such as ``{admission: queue}``, or JSON); every
+    other key keeps the scalar coercion of :func:`_coerce_value`.
+
+    Args:
+        key: Dotted config key the value is written under.
+        raw: The value as typed on the command line.
+
+    Returns:
+        The parsed mapping for a mapping leaf, else the coerced scalar.
+
+    Raises:
+        UserError: *key* is a mapping leaf and *raw* does not parse to a mapping
+            (``kind="InvalidInput"``).
+    """
+    import yaml
+
+    from eawf.kernel.config.registry import LEAF_KEY_REGISTRY
+
+    entry = LEAF_KEY_REGISTRY.get(key)
+    if entry is None or entry.type != "mapping":
+        return _coerce_value(raw)
+    try:
+        parsed = yaml.safe_load(raw)
+    except yaml.YAMLError as exc:
+        raise UserError(
+            f"{key} takes a YAML mapping such as '{{name: value}}'; {raw!r} does not parse: {exc}",
+            kind="InvalidInput",
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise UserError(
+            f"{key} takes a YAML mapping such as '{{name: value}}', got {raw!r}",
+            kind="InvalidInput",
+        )
+    return parsed
+
+
 def _atomic_write_yaml(target: Path, payload: dict[str, Any]) -> None:
     """Atomic YAML write (tempfile + fsync + rename). Caller holds the lock."""
     import yaml
@@ -474,14 +514,15 @@ def _with_values(pairs: list[str]) -> dict[str, Any]:
     """Return ``--with KEY=VALUE`` options as coerced values by key.
 
     Raises:
-        UserError: An option names no ``=``.
+        UserError: An option names no ``=``, or gives a mapping key a value that is
+            not a mapping.
     """
     values: dict[str, Any] = {}
     for pair in pairs:
         dotted, sep, raw = pair.partition("=")
         if not sep or not dotted:
             raise UserError(f"--with takes KEY=VALUE, got {pair!r}", kind="InvalidInput")
-        values[dotted] = _coerce_value(raw)
+        values[dotted] = _coerce_for_key(dotted, raw)
     return values
 
 
@@ -517,7 +558,12 @@ def config_get(
         emit_error(UserError(f"key not found: {key}", kind="NotFound"), flags=flags)
         return  # pragma: no cover
 
-    source = sources.get(key, "built-in")
+    # A mapping merges key by key, so the merge credits each leaf beneath it; the
+    # mapping comes from the highest layer that states any part of it.
+    credited = [
+        layer for dotted, layer in sources.items() if dotted == key or dotted.startswith(f"{key}.")
+    ]
+    source = max(credited, key=LAYER_ORDER.index, default="built-in")
     if scope is not None and source != scope:
         emit_error(
             UserError(f"key {key} not provided by scope {scope}", kind="NotFound"), flags=flags
@@ -533,7 +579,10 @@ def config_get(
 def config_set(
     ctx: typer.Context,
     key: Annotated[str, typer.Argument(help="Dotted config key.")],
-    value: Annotated[str, typer.Argument(help="Value to write (string-coerced).")],
+    value: Annotated[
+        str,
+        typer.Argument(help="Value to write: a scalar, or a YAML mapping for a mapping key."),
+    ],
     scope: Annotated[
         str,
         typer.Option(
@@ -584,8 +633,8 @@ def config_set(
         emit_error(UserError(str(exc), kind="InvalidInput"), flags=flags)
         return  # pragma: no cover
 
-    coerced = _coerce_value(value)
     try:
+        coerced = _coerce_for_key(key, value)
         also = _with_values(with_ or [])
         _save_value_to_layer(
             target_path=target_path, key=key, value=coerced, repo_root=repo, also=also

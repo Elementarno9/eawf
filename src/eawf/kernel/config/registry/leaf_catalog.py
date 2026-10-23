@@ -395,7 +395,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         domain="economics",
         type="mapping",
         default=None,
-        writable_layers=_WRITABLE_GWR,
+        writable_layers=_WRITABLE_ALL_DURABLE,
         description="In-flight governor: concurrent Runs, in-flight tokens and cost, admission.",
         consumer="eawf.kernel.economics.governor.economics_policy_from",
     ),

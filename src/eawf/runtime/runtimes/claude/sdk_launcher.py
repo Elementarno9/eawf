@@ -253,14 +253,17 @@ class _UsageFold:
     """Fold the provider's per-call usage into the running total the meter expects.
 
     An assistant message's usage is what one API call billed, and the
-    provider repeats one message once per content block, so readings are
-    deduplicated by message and summed. The result message's usage is the
-    turn's own total; it is adopted only where it exceeds the sum.
+    provider repeats one message once per content block. The first copy
+    carries a streaming snapshot whose output count is near zero, so each
+    message is counted at its latest reading: a later copy adds only its
+    increase over what is already folded for that message, field by field.
+    The result message's usage is the turn's own total; it is adopted only
+    where it exceeds the sum.
     """
 
     def __init__(self) -> None:
         """Start the fold at zero, with no call yet seen."""
-        self._seen: set[str] = set()
+        self._folded: dict[str, tuple[int, int, int]] = {}
         self._input_tokens = 0
         self._output_tokens = 0
         self._cache_read_input_tokens = 0
@@ -273,8 +276,9 @@ class _UsageFold:
 
         Returns:
             The running total after *message*, or ``None`` when it adds
-            nothing: no usage, a malformed usage block, a repeated call, or
-            a turn total no larger than the sum already relayed.
+            nothing: no usage, a malformed usage block, a repeated reading
+            of a message no larger than the one already folded, or a turn
+            total no larger than the sum already relayed.
         """
         usage = message.usage
         if not isinstance(usage, dict):
@@ -297,14 +301,33 @@ class _UsageFold:
                 return None
             self._input_tokens, self._output_tokens, self._cache_read_input_tokens = totals
         else:
+            counts = (reading.input_tokens, reading.output_tokens, reading.cache_read_input_tokens)
             key = message.message_id or message.uuid
-            if key is not None:
-                if key in self._seen:
-                    return None
-                self._seen.add(key)
-            self._input_tokens += reading.input_tokens
-            self._output_tokens += reading.output_tokens
-            self._cache_read_input_tokens += reading.cache_read_input_tokens
+            if key is None:
+                increase = counts
+            else:
+                folded = self._folded.get(key)
+                if folded is None:
+                    increase = counts
+                    self._folded[key] = counts
+                else:
+                    # A lower reading than the one folded never lowers the total.
+                    latest = (
+                        max(counts[0], folded[0]),
+                        max(counts[1], folded[1]),
+                        max(counts[2], folded[2]),
+                    )
+                    if latest == folded:
+                        return None
+                    increase = (
+                        latest[0] - folded[0],
+                        latest[1] - folded[1],
+                        latest[2] - folded[2],
+                    )
+                    self._folded[key] = latest
+            self._input_tokens += increase[0]
+            self._output_tokens += increase[1]
+            self._cache_read_input_tokens += increase[2]
         return UsageSample(
             input_tokens=self._input_tokens,
             output_tokens=self._output_tokens,

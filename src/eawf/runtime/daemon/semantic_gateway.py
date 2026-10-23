@@ -1022,7 +1022,7 @@ def _serve_once(
         receipt = (
             _denied_receipt(call, check=outcome.check, error=outcome.error, now=now)
             if outcome.verdict == "refused"
-            else _served_receipt(call, session=session, inputs=inputs, now=now)
+            else _served_receipt(call, session=session, inputs=inputs, held=held, now=now)
         )
         _append_receipt(session, receipt, now=now)
         _state_phase(session, call, phase="result", now=now, result=receipt.result)
@@ -1071,7 +1071,12 @@ def _denied_receipt(
 
 
 def _served_receipt(
-    call: SemanticCall, *, session: RootSession, inputs: GuardInputs, now: datetime
+    call: SemanticCall,
+    *,
+    session: RootSession,
+    inputs: GuardInputs,
+    held: tuple[SemanticCallReceipt, ...],
+    now: datetime,
 ) -> SemanticCallReceipt:
     """Answer an admitted call, or refuse to fabricate an answer for it.
 
@@ -1101,6 +1106,7 @@ def _served_receipt(
                 capsule=inputs.capsule,
                 run=inputs.run,
                 calls_so_far=inputs.calls_so_far,
+                held=held,
                 now=now,
                 lease=inputs.lease,
             )

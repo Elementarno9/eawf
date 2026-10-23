@@ -23,7 +23,7 @@ from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from typing import Annotated, Any, Final, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictFloat, StrictInt, model_validator
 
 from eawf.kernel.economics.notice_policy import DEFAULT_NOTICE_POLICY, BudgetNoticePolicy
 from eawf.kernel.economics.prompt_budget import (
@@ -51,12 +51,17 @@ class InFlightGovernor(RuntimeRecord):
             same null meaning.
         admission: Whether a Run that would breach a ceiling waits in the
             queue or is refused outright.
+        cache_read_weight: What one prompt-cache read token counts as
+            against a Run's token cap, in [0, 1]. A cache read bills at a
+            fraction of base input, so counting it one for one would end a
+            long cached session on tokens it barely paid for.
     """
 
     max_concurrent_runs: Annotated[StrictInt, Field(ge=1)]
     max_in_flight_tokens: _Ceiling = None
     max_in_flight_cost_microusd: _Ceiling = None
     admission: Literal["queue", "deny"]
+    cache_read_weight: Annotated[StrictFloat, Field(ge=0.0, le=1.0)] = 0.1
 
     @property
     def governor_digest(self) -> Digest:

@@ -624,6 +624,7 @@ class InFlightRunMeter:
         idempotency_key: str,
         cap_tokens: int,
         identity: BudgetIdentity | None = None,
+        cache_read_weight: float = 1.0,
     ) -> None:
         """Bind the meter to one Run and its hard token cap.
 
@@ -640,6 +641,8 @@ class InFlightRunMeter:
             identity: The contract and notice policy a crossing names, so it is
                 stated as ``budget_exhausted`` on the Run's stream; ``None``
                 records the notice and the control alone.
+            cache_read_weight: What one cache-read token counts as against
+                the cap; the default counts it one for one.
 
         Raises:
             pydantic.ValidationError: An argument breaks the verb's own
@@ -655,7 +658,7 @@ class InFlightRunMeter:
             multiplier=SEALED_BUDGET.multiplier,
             idempotency_key=idempotency_key,
         )
-        self._meter = InFlightMeter()
+        self._meter = InFlightMeter(cache_read_weight)
         self._identity = identity
         self.outcome: InFlightBudgetOutcome | None = None
 

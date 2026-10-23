@@ -85,7 +85,7 @@ Type is the value shape; Layers names the layers that may write the leaf.
 | `dispatch.role_tier_token_cap` | int | `2400` | global, workspace, repo | Intended token ceiling per injected role-tier dispatch block. Not wired: its named reader has no production caller yet, so setting it changes nothing. |
 | `agents.extra_tools` | mapping | `{}` | global, workspace, repo | Per-role extra tool names appended to each rendered subagent's allowlist; the `*` key grants to every role. |
 | `economics.prompt_budget` | mapping | shipped policy | global, workspace, repo | Prompt budget: the input window, reserved output and per-class ceilings. |
-| `economics.governor` | mapping | shipped policy | global, workspace, repo | In-flight governor: concurrent Runs, in-flight tokens and cost, admission. |
+| `economics.governor` | mapping | shipped policy | global, workspace, repo, branch, local | In-flight governor: concurrent Runs, in-flight tokens and cost, admission. |
 | `economics.notice_policy` | mapping | shipped policy | global, workspace, repo | When a Run at its hard ceiling opens a budget notice: the no-event grace. |
 
 ### Research, planning and estimation

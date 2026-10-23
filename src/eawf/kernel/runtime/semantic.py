@@ -38,7 +38,7 @@ from pydantic import (
 )
 
 from eawf.kernel.runtime.compiled import BoundedText, JsonPointer, canonical_digest
-from eawf.kernel.runtime.content import CONTENT_CHAR_LIMIT, CONTENT_LINE_CHARS, CONTENT_LINE_LIMIT
+from eawf.kernel.runtime.content import CONTENT_LINE_CHARS, CONTENT_LINE_LIMIT
 from eawf.kernel.runtime.lease import LeaseId, WorkspaceHandle
 from eawf.kernel.runtime.provider import (
     ArtifactUrn,
@@ -316,13 +316,20 @@ class StateQueryInput(SemanticToolInputBase):
 
 
 class RepoReadInput(SemanticToolInputBase):
-    """Read a bounded byte range of one repository-relative file."""
+    """Read a file window; a window held already returns same_as_call, no text, unless reread.
+
+    A window whose text this Run was already given is answered by naming
+    the call that gave it, because sending it again would spend a model
+    turn's context on text the worker holds. ``reread`` asks for the text
+    anyway, for a worker whose context no longer holds it.
+    """
 
     tool_id: Literal["repo_read"]
     resource_handle: WorkspaceHandle
     path: RepoRelativePath
     start_byte: Annotated[StrictInt, Field(ge=0)] = 0
     byte_cap: Annotated[StrictInt, Field(ge=1, le=1_048_576)] = 65_536
+    reread: StrictBool = False
 
 
 class RepoSearchInput(SemanticToolInputBase):
@@ -656,19 +663,25 @@ class StateQueryOutput(SemanticToolOutputBase):
     next_cursor: BoundedText | None = None
 
 
-#: The longest text a read carries inline: the content store's character
-#: bound plus one line break per kept line.
-REPO_READ_TEXT_CHARS: Final = CONTENT_CHAR_LIMIT + CONTENT_LINE_LIMIT
+#: The longest text a read carries inline, equal to the largest ``byte_cap``
+#: a read admits; a withheld line can outgrow the bytes it replaces, so the
+#: handler also stops a window before its shown text passes this bound.
+REPO_READ_TEXT_CHARS: Final = 1_048_576
 
 
 class RepoReadOutput(SemanticToolOutputBase):
     """The text a repository read returned, inline and by reference and digest.
 
-    The text is the bounded, scrubbed form the content store keeps, so a
-    worker with no file tool of its own can read it from the answer.
+    The text is the whole window, cut at whole lines, with each line
+    scrubbed as the content store scrubs it, so a worker with no file tool
+    of its own can read it from the answer. ``content_digest`` covers that
+    text; ``content_ref`` names the bounded form the content store keeps.
     ``byte_count`` is how many bytes of the file from ``start_byte`` the
     text covers, so the next window starts at ``start_byte + byte_count``;
     ``truncated`` says the file continues past it or a line was cut.
+    ``same_as_call`` names the earlier call of the Run that returned this
+    same text, in which case ``text`` is empty and every other field is
+    that call's.
     """
 
     tool_id: Literal["repo_read"]
@@ -677,6 +690,7 @@ class RepoReadOutput(SemanticToolOutputBase):
     byte_count: Annotated[StrictInt, Field(ge=0)]
     truncated: StrictBool = False
     text: Annotated[str, StringConstraints(strict=True, max_length=REPO_READ_TEXT_CHARS)]
+    same_as_call: CallId | None = None
 
 
 class RepoSearchMatch(RuntimeRecord):

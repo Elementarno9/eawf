@@ -187,7 +187,7 @@ def test_a_read_past_the_end_of_the_file_returns_nothing(
     assert (output["text"], output["byte_count"], output["truncated"]) == ("", 0, False)
 
 
-def test_a_read_longer_than_the_store_keeps_is_cut_at_its_line_limit(
+def test_a_read_longer_than_the_store_keeps_returns_its_whole_window(
     canary: CanaryProvision, ctx: MethodContext, capsule: AuthorityCapsule, tree: Path
 ) -> None:
     body = "".join(f"{index}\n" for index in range(CONTENT_LINE_LIMIT + 1))
@@ -195,9 +195,9 @@ def test_a_read_longer_than_the_store_keeps_is_cut_at_its_line_limit(
 
     output = output_of(read(ctx, canary, capsule, path="src/long.txt"))
 
-    assert len(output["text"].splitlines()) == CONTENT_LINE_LIMIT
-    assert output["truncated"] is True
-    assert output["byte_count"] == len(body) - len(f"{CONTENT_LINE_LIMIT}\n")
+    assert len(output["text"].splitlines()) == CONTENT_LINE_LIMIT + 1
+    assert output["truncated"] is False
+    assert output["byte_count"] == len(body)
 
 
 def test_a_line_longer_than_the_store_keeps_is_cut_and_flagged(

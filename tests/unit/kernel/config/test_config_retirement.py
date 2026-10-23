@@ -164,14 +164,21 @@ def test_the_settings_route_offers_no_skill_only_leaf_a_layer_still_states(repo:
 
 
 @pytest.mark.parametrize(
-    "key", ["economics.prompt_budget", "economics.governor", "economics.notice_policy"]
+    ("key", "layers"),
+    [
+        ("economics.prompt_budget", ("global", "workspace", "repo")),
+        ("economics.governor", ("global", "workspace", "repo", "branch", "local")),
+        ("economics.notice_policy", ("global", "workspace", "repo")),
+    ],
 )
-def test_an_economics_table_is_a_mapping_leaf_the_policy_reader_consumes(key: str) -> None:
+def test_an_economics_table_is_a_mapping_leaf_the_policy_reader_consumes(
+    key: str, layers: tuple[str, ...]
+) -> None:
     entry = LEAF_KEY_REGISTRY[key]
     assert entry.type == "mapping"
     assert entry.default is None
     assert entry.consumer == "eawf.kernel.economics.governor.economics_policy_from"
-    assert entry.writable_layers == ("global", "workspace", "repo")
+    assert entry.writable_layers == layers
 
 
 # ---------- the migration strips every retired leaf ----------

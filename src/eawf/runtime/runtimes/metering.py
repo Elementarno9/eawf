@@ -82,6 +82,7 @@ adapter layer — a static import here would invert that edge).
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Iterable
 from decimal import Decimal
 from typing import TYPE_CHECKING, Protocol, Self
@@ -173,7 +174,8 @@ class MeterReading(BaseModel):
     """What a turn's usage samples have metered so far.
 
     Attributes:
-        observed_tokens: The billed total the cap is tested against.
+        observed_tokens: The billed total the cap is tested against, cache
+            reads counted at the meter's weight.
         output_tokens: The output slice of it, reasoning included.
         reasoning_output_tokens: The reasoning slice of ``output_tokens``.
         sample_count: How many readings the meter has adopted.
@@ -200,7 +202,14 @@ class InFlightMeter:
     the one direction a safety meter must never move.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, cache_read_weight: float = 1.0) -> None:
+        """Start an empty fold.
+
+        Args:
+            cache_read_weight: What one cache-read token counts as in the
+                metered total; the default counts it one for one.
+        """
+        self._cache_read_weight = cache_read_weight
         self._reading = MeterReading()
 
     @property
@@ -218,8 +227,14 @@ class InFlightMeter:
         Returns:
             The updated fold. Every tally is the larger of the running one
             and the sample's, so the total is monotonic in arrival order.
+            Cache reads count at the meter's weight, rounded up so a
+            fractional share is never metered as nothing.
         """
-        billable = sample.billable_tokens
+        billable = (
+            sample.input_tokens
+            + sample.output_tokens
+            + math.ceil(sample.cache_read_input_tokens * self._cache_read_weight)
+        )
         ratcheted = self._reading.ratcheted or billable < self._reading.observed_tokens
         if billable < self._reading.observed_tokens:
             logger.warning(
