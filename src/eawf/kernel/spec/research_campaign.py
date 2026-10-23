@@ -19,7 +19,7 @@ depth / budget / focus. This module owns two halves of that surface:
 
 The "Level-1" name marks the rung on the autonomy ladder: Level-0 is the
 single-question ``/research`` body, Level-1 stages a whole campaign
-without execution, and a higher level (out of this wave's scope) drives
+without execution, and a higher level (out of this module's scope) drives
 the live spawn. Keeping staging pure means the campaign shape is unit-
 testable without a runtime and a campaign can be staged, reviewed, and
 persisted (as a :class:`~eawf.kernel.store.kinds.research_campaign.ResearchCampaignPayload`
@@ -85,10 +85,10 @@ class ResearchProfileBlock(BaseModel):
 
     A profile body mounts this block under its ``research:`` leaf (the
     profile-side field wiring lands in
-    :class:`eawf.platform.profiles.models.ProfileBody`; see this wave's
-    follow-up note). The block carries a campaign-wide default depth plus
-    a map of per-domain overrides; :func:`stage_campaign` reads it to
-    decide how many dispatches to stage and how each is tuned.
+    :class:`eawf.platform.profiles.models.ProfileBody`). The block carries
+    a campaign-wide default depth plus a map of per-domain overrides;
+    :func:`stage_campaign` reads it to decide how many dispatches to stage
+    and how each is tuned.
 
     Attributes:
         default_depth: Campaign-wide survey depth a domain inherits when
@@ -146,7 +146,7 @@ class StagedCampaign(BaseModel):
     ``spawned`` field is a fixed ``Literal[False]`` discriminator: it is
     the type-level proof that this object came out of the *plan-only*
     runner and that no subprocess / runtime session was opened. A live
-    runner (a higher level, out of this wave's scope) would emit a
+    runner (a higher level, out of this module's scope) would emit a
     distinct result type; the closed ``False`` here means a reviewer (or
     a test) can assert plan-only-ness from the value alone.
 

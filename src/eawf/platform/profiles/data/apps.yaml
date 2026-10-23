@@ -42,7 +42,7 @@ track:
       outcome_template: ""
       overview_view: leaderboard
 
-# P28-I01-W10 — verify spine floor pack. Adds a docs build step to the
+# Verify spine floor pack. Adds a docs build step to the
 # python floor so apps profiles also gate on rendered docs surviving a
 # Sphinx build. Cadence steps up to ``every-batch`` because docs builds
 # are slow enough that running per-Task doubles the local-gauntlet

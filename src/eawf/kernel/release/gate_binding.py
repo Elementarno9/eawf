@@ -172,7 +172,7 @@ NATIVE_CANARY_ADDED_GATES: Final[tuple[ReleaseGateName, ...]] = (
 )
 
 #: The six canary-window receipts ``product_canary`` adds that can be
-#: settled before the phase merges. The product canary is the first rung
+#: settled before the Milestone merges. The product canary is the first rung
 #: that runs the native path on this repository rather than on a
 #: disposable canary, so it is the first that can be asked whether a
 #: plan revision was approved, Tasks were dispatched into worktrees of
@@ -213,7 +213,7 @@ CROSS_PROVIDER_ADDED_GATES: Final[tuple[ReleaseGateName, ...]] = (ReleaseGateNam
 
 #: The gate names each profile admits. ``dev1`` through
 #: ``cross_provider`` are authored: the later profiles add their gates
-#: with the waves that build their producers, and an unauthored profile
+#: with the Tasks that build their producers, and an unauthored profile
 #: is a loud :attr:`GateBindingRejection.UNDECLARED_PROFILE` rather than
 #: a silently empty gate set.
 PROFILE_GATES: Final[Mapping[ReleaseGateProfile, tuple[ReleaseGateName, ...]]] = {

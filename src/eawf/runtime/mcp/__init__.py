@@ -5,7 +5,7 @@ The CLI surface (`eawf mcp ...`) is in
 write logic, the env-ref token parser, and the (currently empty)
 v0.1 known-MCP catalog.
 
-Design contract (Phase 5 W04):
+Design contract:
 
 - ``state.mcp_servers`` is the canonical persistence location. The
   CLI writes there via :func:`eawf.surfaces.cli._mutation.state_transaction`,

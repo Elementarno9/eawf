@@ -109,6 +109,7 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "manifest_in_sync",
         "mcp_drift",
         "authority_epoch",
+        "canonical_sequence_drift",
         "gitignore_block",
         "cli_daemon_version",
         "launchd_agent",
@@ -125,6 +126,7 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
     assert statuses["manifest_in_sync"] == "ok"
     assert statuses["render_output_roundtrip"] == "ok"
     assert statuses["mcp_drift"] == "ok"
+    assert statuses["canonical_sequence_drift"] == "ok"
     assert statuses["plugin_cross_scope_dup"] == "ok"
 
 

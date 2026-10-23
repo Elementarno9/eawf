@@ -2,7 +2,7 @@ name: robotics
 version: "1.0"
 description: "Robotics / hardware-in-the-loop (HIL) profile."
 
-# P28-I01-W10 — verify spine floor pack for HIL pipelines. The
+# Verify spine floor pack for HIL pipelines. The
 # ``hil-smoke --sentinel`` check is a hardware-touching sentinel that
 # MUST run outside the sandbox jail (``runs_outside_jail: true``) and
 # requires GPU access (``requires_gpu: true``). Cadence is

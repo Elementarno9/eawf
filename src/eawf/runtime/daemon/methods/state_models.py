@@ -27,7 +27,7 @@ class ReadParams(BaseModel):
 
     Attributes:
         scope_id: Optional scope filter (not yet enforced; returns
-            the full state — projection lands in a later wave).
+            the full state — projection lands in a later change).
         fields: Optional projection list (not yet enforced — see above).
         repo_root: Optional absolute path of the repo whose ``state.json``
             the daemon should read. The CLI proxy forwards ``flags.workspace``

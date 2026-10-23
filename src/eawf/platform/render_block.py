@@ -34,7 +34,7 @@ DEFAULT_RENDER_BLOCK_PLACEMENT: RenderBlockPlacement = "root"
 RULE_REFERENCE_DIR: str = "docs/rules"
 
 #: ``RenderBlock.target`` value that marks a block as a per-role dispatch
-#: render block (FLEET-5 / P30-I06-W05). A block carrying this target plus a
+#: render block (FLEET-5). A block carrying this target plus a
 #: non-``None`` :attr:`~eawf.platform.profiles.models.RenderBlock.agent_role`
 #: is the "Zone 3" role tier: its body is injected into the dispatched system
 #: prompt for waves whose ``agent_role`` matches. The target name is namespaced

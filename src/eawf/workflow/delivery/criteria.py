@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 #: Declared ceiling on criteria in one scope. Past this a scope is an
 #: agenda rather than a deliverable, and its audit stops being readable.
-#: Authored policy: most shipped waves carry one to five criteria.
+#: Authored policy: most shipped Tasks carry one to five criteria.
 MAX_CRITERIA_PER_SCOPE: Final = 8
 
 #: Loci only a judgment can observe. A machine verb placed here names a

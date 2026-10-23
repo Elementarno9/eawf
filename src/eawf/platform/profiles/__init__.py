@@ -7,10 +7,10 @@ declares:
 - ``state_extensions`` — top-level state-keys the profile requires (e.g.
   ``research`` → ``hypotheses``, ``audits``).
 - ``instrument_requirements`` — external tools the profile expects on PATH.
-- ``render_blocks`` — chunks of templated text the renderer (Phase 3 W04)
+- ``render_blocks`` — chunks of templated text the renderer
   emits into AGENTS.md / .claude/ skill files.
 - ``skills_referenced`` / ``hooks_referenced`` — opt-in inventories that the
-  Phase 5 skill registry consumes.
+  skill registry consumes.
 
 Schema v2 adds three composability fields on each
 :class:`ProfileBody`:

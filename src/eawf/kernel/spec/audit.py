@@ -39,7 +39,7 @@ AuthoredCadence = Annotated[AuditCadence, BeforeValidator(refuse_retired_cadence
 class AuditSpec(_StrictModel):
     """Declarative audit document — extends CheckFile with cadence + scope.
 
-    Cadence enum values (per C03 D10, widened by P28-I01-W10):
+    Cadence enum values (per C03 D10):
 
     * ``every-task`` — fires on every Task close.
     * ``every-batch`` — fires on Batch close.

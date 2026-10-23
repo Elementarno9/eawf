@@ -1,6 +1,6 @@
 """Runtime layer: daemon, harness adapters, and execution substrate.
 
-The runtime super-package groups the packages that execute waves and own
+The runtime super-package groups the packages that execute Runs and own
 the live process substrate on top of the kernel and workflow layers:
 :mod:`~eawf.runtime.daemon` (the canonical state mutator + JSON-RPC
 service), :mod:`~eawf.runtime.runtimes` (per-harness adapters such as

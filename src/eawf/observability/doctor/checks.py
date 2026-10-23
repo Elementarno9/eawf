@@ -32,6 +32,7 @@ from eawf.observability.doctor import daemon_checks
 from eawf.observability.doctor.checks_authority import check_authority_epoch
 from eawf.observability.doctor.checks_gitignore import check_gitignore_block
 from eawf.observability.doctor.checks_local_size import check_local_size
+from eawf.observability.doctor.checks_sequence import check_canonical_sequence_drift
 from eawf.observability.doctor.checks_steering_cap import (
     CODEX_PROJECT_DOC_BYTE_CAP as CODEX_PROJECT_DOC_BYTE_CAP,
 )
@@ -953,6 +954,7 @@ def run_all(
         check_manifest_in_sync(workspace=anchor),
         check_mcp_drift(workspace=anchor),
         check_authority_epoch(workspace=anchor),
+        check_canonical_sequence_drift(workspace=anchor),
         check_gitignore_block(workspace=anchor),
         *run_workflow_health_checks(workspace=anchor, daemon_version_probe=daemon_version_probe),
         *run_runtime_tuple_health_checks(workspace=anchor),

@@ -1,4 +1,4 @@
-"""Register lint for the phase-wide QA-gate register (QUAL-7).
+"""Register lint for the Milestone-wide QA-gate register (QUAL-7).
 
 The living scenario-to-gate acceptance artifact at
 ``docs/reference/qa-gate-register.md`` maps each subsystem scenario to

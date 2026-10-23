@@ -100,7 +100,7 @@ def reject_daemonless_on_mutating(verb: str) -> None:
     failure mode without growing the exit-code surface.
 
     Args:
-        verb: The operator-facing verb name (e.g. ``"wave claim"``),
+        verb: The operator-facing verb name (e.g. ``"task show"``),
             interpolated into the error body for the envelope.
 
     Raises:

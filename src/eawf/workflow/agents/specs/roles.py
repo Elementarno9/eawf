@@ -92,7 +92,7 @@ class RoleSpec(BaseModel):
         report_schema_ref: The typed-report store-kind reference for
             this role's ``agent_end`` reports (e.g.
             ``"executor_report"``). Equal to :attr:`report_store_kind`
-            today; a future wave may evolve this to a full schema URN
+            today; a future change may evolve this to a full schema URN
             without touching :attr:`report_store_kind`.
         report_store_kind: Legacy alias of :attr:`report_schema_ref`
             (preserved because rendered goldens already persist this
@@ -197,7 +197,7 @@ def _role_spec_from_agent_spec(spec: AgentSpec, role: AgentSessionRole) -> RoleS
     carries them.
 
     ``stop_conditions`` and ``denied_tools`` are intentionally empty
-    here — the seam exists for future waves to fill the
+    here — the seam exists for future changes to fill the
     bodies without re-walking the registry.
 
     Args:

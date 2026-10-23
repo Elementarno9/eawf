@@ -27,7 +27,7 @@ branch has no publish boundary, so its adoptions bind at once.
 
 The reconciliation verb is handed an observation because nothing in the
 tree talks to a host. When the target branch is a branch of the tree's
-own repository -- a fast-forward landing, or a phase branch merged
+own repository -- a fast-forward landing, or a feature branch merged
 locally -- the daemon can read it back itself. This verb reads the
 branch's head and whether the Batch's pinned head is among its commits,
 builds the observation from that, and hands it to the same

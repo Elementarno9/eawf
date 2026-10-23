@@ -1,4 +1,4 @@
-"""Daemon-owned Wave integration and dependency-barrier mutations."""
+"""Daemon-owned integration and dependency-barrier mutations."""
 
 from __future__ import annotations
 

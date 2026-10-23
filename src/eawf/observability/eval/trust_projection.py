@@ -54,7 +54,7 @@ COHORT_METRIC: Final = "n"
 #: The metric it refuses on when the jury's forecast is too poorly calibrated.
 BRIER_METRIC: Final = "Brier"
 
-#: The metric it refuses on when the jury waves known-bad subjects through, or was never
+#: The metric it refuses on when the jury lets known-bad subjects through, or was never
 #: tested against one.
 CO_ERROR_METRIC: Final = "co-error"
 

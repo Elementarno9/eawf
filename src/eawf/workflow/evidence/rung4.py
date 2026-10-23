@@ -7,7 +7,7 @@ above the W07 reference resolver
 deterministic gate (:func:`eawf.workflow.evidence.evibound.run_rung1_gate`),
 and the W09 rung-2 in-process NLI scorer
 (:func:`eawf.workflow.evidence.rung2.run_rung2_gate`). The rung-3 spawned
-jury is a later iter; rung-4 here is the attested floor.
+jury is a later change; rung-4 here is the attested floor.
 
 Rung ladder, by assurance (high -> low)
 ---------------------------------------

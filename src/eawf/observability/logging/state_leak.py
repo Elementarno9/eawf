@@ -193,7 +193,7 @@ class StateStringLeak:
     Attributes:
         field_path: Where the string sits in the state payload: object keys
             joined by dots, list positions in brackets, such as
-            ``waves.P01-I01-W01.success_criteria[0].text``.
+            ``waves.<wave id>.success_criteria[0].text``.
         hit: The leak shape the string carries.
     """
 

@@ -32,7 +32,7 @@ Subcommands:
 
 - ``repo init`` — for v0.1 this is a thin alias of :func:`eawf.surfaces.cli.commands.init.init_cmd`.
   The "real divergence" between repo init and the top-level ``eawf init``
-  lands in Phase 5 W06 (``eawf init`` self-apply); for v0.1 the surface is
+  lands with the ``eawf init`` self-apply; for v0.1 the surface is
   identical so existing callers can opt into the noun-based UX without
   behaviour change. ``--refresh-gitignore`` remains the same non-destructive
   managed-block-only path on both aliases.
@@ -192,7 +192,7 @@ def repo_init_cmd(
     """Initialise a repo-scoped workspace at *target*.
 
     For v0.1 this delegates verbatim to :func:`eawf.surfaces.cli.commands.init.init_cmd`.
-    The Phase 5 W06 self-apply will fork the body so ``repo init`` records
+    The ``eawf init`` self-apply will fork the body so ``repo init`` records
     the optional ``--workspace`` linkage in one shot.
     """
     from eawf.surfaces.cli.commands.init import init_cmd as _init_cmd

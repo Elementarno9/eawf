@@ -1,4 +1,4 @@
-"""Theme-aware statusline rendering for ``eawf cc statusline`` (Phase 4 W06).
+"""Theme-aware statusline rendering for ``eawf cc statusline``.
 
 The orchestrator in :mod:`eawf.runtime.runtimes.claude.statusline` collects a list of
 :class:`StatuslineSegment` records (one per module — see

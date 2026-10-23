@@ -1,4 +1,4 @@
-"""``jury_calibrated`` close-gate kind (P30-I10 QUAL-3, closes B091).
+"""``jury_calibrated`` close-gate kind (QUAL-3, closes B091).
 
 A close-gate that decides whether the cross-vendor jury has earned
 *blocking authority* -- the right to refuse a wave's close -- by reading

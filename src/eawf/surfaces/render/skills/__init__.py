@@ -1,6 +1,6 @@
 """Render Claude Code ``SKILL.md`` files for installed Eä skills.
 
-Per Phase 4 W05 acceptance §1/§5, ``eawf plugin install claude`` emits
+``eawf plugin install claude`` emits
 one ``.claude/skills/<name>/SKILL.md`` per skill. The output mirrors the
 hand-written placeholders that already live under ``.claude/skills/``:
 YAML frontmatter (``name``/``description``/``argument-hint``/

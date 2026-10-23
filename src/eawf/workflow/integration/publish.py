@@ -367,7 +367,10 @@ def _state_paths(repo: Path) -> list[str]:
     listing = _git(repo, "status", "--porcelain", "--untracked-files=all", "--", ".ea")
     paths: list[str] = []
     for line in listing.splitlines():
-        path = line[3:].split(" -> ")[-1]
+        # The listing is stripped, so the first line of an unstaged change
+        # has lost the leading blank of its status code; split past the
+        # code rather than slicing a fixed width.
+        path = line.split(maxsplit=1)[1].split(" -> ")[-1]
         try:
             committed = classify_path(path).policy is CommitPolicy.COMMITTED
         except CommitPolicyError:

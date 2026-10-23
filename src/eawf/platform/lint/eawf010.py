@@ -17,7 +17,7 @@ EAWF010 is demoted to an **advisory coarse alarm** that catches only
 modules so large they are a structural emergency irrespective of their
 internal complexity. Its budget is set well above the old precise cap so
 the per-module grandfather list collapses to the genuine outliers, and a
-module drops off that list as soon as a wave touches it (un-grandfather
+module drops off that list as soon as a change touches it (un-grandfather
 on touch).
 
 **Waiver.** A genuinely irreducible module (a generated table, a

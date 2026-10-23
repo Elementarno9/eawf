@@ -43,8 +43,7 @@ logger = logging.getLogger(__name__)
 def _build_known_profiles() -> dict[str, list[str]]:
     """Derive the ``id → fields_required`` registry from ``profiles/data/``.
 
-    Replaces the hand-coded table that lived here through Phase 2: the source
-    of truth is now the on-disk profile body. Adding a new profile is one
+    The source of truth is the on-disk profile body. Adding a new profile is one
     YAML file under :mod:`eawf.platform.profiles.data` plus an entry in any test that
     enumerates the v0.1 profile set.
 

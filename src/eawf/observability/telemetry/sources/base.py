@@ -14,7 +14,7 @@ type each adapter yields:
 - :class:`~eawf.observability.telemetry.sources.claude_session.ClaudeSessionSource` yields
   :class:`~eawf.observability.telemetry.models.TelemetrySession` rows.
 
-Sibling waves add per-runtime adapters to this package; they implement this
+Sibling modules add per-runtime adapters to this package; they implement this
 same protocol and are driven identically by the projector.
 """
 

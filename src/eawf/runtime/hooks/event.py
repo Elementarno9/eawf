@@ -1,7 +1,7 @@
 """Typed :class:`HookEvent` Pydantic model + frozen v1 :class:`HookEventType`.
 
 The hook event carries the canonical metadata every runtime adapter sees
-when an Eä lifecycle transition fires. Per Phase 4 W04 design spec §3.3,
+when an Eä lifecycle transition fires. Per the hook design spec §3.3,
 the model is frozen for v0.1 with ``extra="forbid"`` so additive
 extensions require an explicit schema bump.
 
@@ -34,7 +34,7 @@ from eawf.kernel.state.types import UtcDatetime
 class HookEventType(StrEnum):
     """Frozen v1 enumeration of Eä hook events.
 
-    Mirrors the Phase 4 W04 design spec §3.3 list. Adding a new event
+    Mirrors the hook design spec §3.3 list. Adding a new event
     requires a `[CORE]` schema bump and an entry in
     ``docs/hook-events.md``; the strict ``extra="forbid"`` on
     :class:`HookEvent` blocks ad-hoc extensions.
@@ -94,7 +94,7 @@ class HookEvent(BaseModel):
         runtime: Adapter that produced the event.
         occurred_at: UTC timestamp when the runtime adapter raised the
             event. Idempotence is keyed on ``(event_type, scope_id,
-            occurred_at)`` per Phase 4 W04 acceptance §4.
+            occurred_at)`` per the hook acceptance §4.
         payloads: Per-event extension mapping. Keys are
             :class:`HookEventType` string values; values are
             JSON-serialisable mappings whose v1 shape is documented in

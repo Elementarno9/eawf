@@ -2,7 +2,7 @@
 
 A Batch closes on its own when the Run that readies its last Task completes. This verb
 is the operator's way to ask for the same close: after a cherry-pick put a ready Task's
-commit on the phase branch, or for a Batch that waited on another one holding its
+commit on the feature branch, or for a Batch that waited on another one holding its
 repository's active slot. The close itself is
 :func:`~eawf.runtime.daemon.batch_close.close_landed_batches`; the verb answers one line
 per Batch it tried, closed or not and why.
@@ -30,7 +30,7 @@ from eawf.runtime.daemon.epoch2_recovery import publish_projection
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 
-#: The verb that closes each ready Batch whose work is on its phase branch.
+#: The verb that closes each ready Batch whose work is on its feature branch.
 DELIVERY_CLOSE_LANDED_METHOD: Final = "runtime.delivery.close_landed"
 
 

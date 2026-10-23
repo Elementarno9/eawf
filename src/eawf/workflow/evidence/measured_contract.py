@@ -127,7 +127,7 @@ _EPOCH1_STATE_AT_SCALE = MeasuredContract(
             value=25794.0,
             unit="bytes",
             direction="ceiling",
-            basis="P6 largest single row, waves/P30-I25-W25",
+            basis="P6 largest single row, in the waves collection",
         ),
         ObservedLimit(
             name="float_roundtrip_failures",

@@ -10,7 +10,7 @@ the campaign was staged from, so the record is a self-contained
 reconstruction of how the plan was produced.
 
 The wrapped campaign's ``spawned`` flag is a fixed ``False`` — persisting
-a campaign record never implies execution. A later wave that adds a
+a campaign record never implies execution. A later change that adds a
 live-spawn result store keeps that outcome in its own kind; this kind is
 the plan-only half.
 

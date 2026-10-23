@@ -122,7 +122,7 @@ async def status(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
     Args:
         ctx: Server context — counters are updated by subsystems
-            (subscription bus, mutator) as they land in later waves.
+            (subscription bus, mutator) as they land in later changes.
         params: JSON-RPC params; must be empty.
 
     Returns:

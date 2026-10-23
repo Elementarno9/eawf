@@ -1,7 +1,7 @@
 """Shared subprocess-detachment kwargs for TUI-spawned child processes.
 
 Every blocking subprocess the live TUI fans out to (the instrument
-version-probes, the per-wave ``git log`` drift scan, the daemon cold-spawn)
+version-probes, the ``git log`` drift scan, the daemon cold-spawn)
 runs while the parent's fd 0 is the controlling TTY. ``stdin=DEVNULL`` stops a
 child from *reading* that TTY, but the child still SHARES the parent's
 controlling terminal (same session / process-group). On a graphics terminal a

@@ -17,7 +17,7 @@ deviations the conventions call out:
 
 * a colon directly after the function-name token (``_run: ...``);
 * a free-prose colon before the structured body (``oops: {detail}``);
-* whitespace around ``=`` in a pair (``phase = P27``);
+* whitespace around ``=`` in a pair (``kind = gate``);
 * a leading token that is not a valid identifier (so the line does
   not start with a function name at all).
 

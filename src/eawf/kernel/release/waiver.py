@@ -63,7 +63,7 @@ class ReleaseWaiver(_StrictModel):
     caller would drop the row and report a bare count instead.
 
     Attributes:
-        scope: What the waiver was granted on, e.g. a wave id.
+        scope: What the waiver was granted on, e.g. a criterion's scope id.
         reason: Why the evidence could not be produced.
         protected_principal: The protection the waiver suspends, stated
             so the acknowledging operator knows what they are giving up.

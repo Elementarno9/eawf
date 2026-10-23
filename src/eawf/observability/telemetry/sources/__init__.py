@@ -3,10 +3,10 @@
 Each adapter implements the :class:`~eawf.observability.telemetry.sources.base.SessionSource`
 protocol: it discovers source files under a root and yields typed rows the
 projector upserts into the metrics store. The package is additive — sibling
-waves land per-runtime adapters (``codex_session``, ``opencode_session``)
+modules hold per-runtime adapters (``codex_session``, ``opencode_session``)
 that import :class:`SessionSource` from :mod:`eawf.observability.telemetry.sources.base`.
 
-This wave lands:
+The package holds:
 
 - :class:`~eawf.observability.telemetry.sources.base.SessionSource` — the shared protocol.
 - :class:`~eawf.observability.telemetry.sources.event_jsonl.EventJsonlSource` — reader for

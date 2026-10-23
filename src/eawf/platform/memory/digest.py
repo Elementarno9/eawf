@@ -56,7 +56,7 @@ class DigestEntry:
     """One row in the digest: a glossed lifecycle id plus its detail.
 
     Attributes:
-        ref_id: The lifecycle / decision id (e.g. ``"P29"``, ``"P29-I08"``,
+        ref_id: The lifecycle / decision id (e.g. ``"P29"`` or
             ``"D01"``). Kept raw so the JSON surface stays machine-joinable
             against ``state.json``.
         title: The entity's bounded title — the gloss that makes the id

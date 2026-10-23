@@ -2,8 +2,8 @@
 
 Project codes: ``^[A-Z][A-Z0-9_-]{1,15}$``.
 Phase IDs: ``P\\d{2,}`` (e.g., ``P01``, ``P100``).
-Iter IDs: ``P\\d{2,}-I\\d{2,}`` (e.g., ``P13-I04``).
-Wave IDs: ``P\\d{2,}-I\\d{2,}-W\\d{2,}`` (e.g., ``P13-I04-W01``).
+Iter IDs: ``P\\d{2,}-I\\d{2,}`` (e.g., ``P<NN>-I<NN>``).
+Wave IDs: ``P\\d{2,}-I\\d{2,}-W\\d{2,}`` (e.g., ``P<NN>-I<NN>-W<NN>``).
 Hypothesis IDs: ``H\\d{2,}-\\d{2,}`` plus an optional track prefix.
 Backlog IDs: ``B\\d{3,}`` (e.g., ``B001``, ``B100``).
 
@@ -68,7 +68,7 @@ def natural_key(id_str: str) -> tuple[object, ...]:
 
     Examples:
         ``P9 < P10 < P100`` instead of ``P10 < P100 < P9``.
-        ``P13-I04-W09 < P13-I04-W10 < P13-I04-W100``.
+        ``W09 < W10 < W100`` within one iter.
         ``B001 < B010 < B100``.
 
     Args:
@@ -95,12 +95,12 @@ def is_phase_id(s: str) -> bool:
 
 
 def is_iter_id(s: str) -> bool:
-    """Return ``True`` if ``s`` is a valid iter ID (e.g., ``P13-I04``)."""
+    """Return ``True`` if ``s`` is a valid iter ID (e.g., ``P<NN>-I<NN>``)."""
     return bool(RE_ITER.fullmatch(s))
 
 
 def is_wave_id(s: str) -> bool:
-    """Return ``True`` if ``s`` is a valid wave ID (e.g., ``P13-I04-W01``)."""
+    """Return ``True`` if ``s`` is a valid wave ID (e.g., ``P<NN>-I<NN>-W<NN>``)."""
     return bool(RE_WAVE.fullmatch(s))
 
 
@@ -113,8 +113,8 @@ def parents_of(lifecycle_id: str) -> tuple[str, ...]:
     """Return the chain of parent IDs for a lifecycle ID.
 
     - Phase ID ``P03`` → ``()``.
-    - Iter ID ``P03-I02`` → ``("P03",)``.
-    - Wave ID ``P13-I04-W01`` → ``("P13", "P13-I04")``.
+    - Iter ID ``P<NN>-I<NN>`` → its phase id alone.
+    - Wave ID ``P<NN>-I<NN>-W<NN>`` → its phase id, then its iter id.
 
     Raises:
         ValueError: ``lifecycle_id`` does not match any lifecycle pattern.

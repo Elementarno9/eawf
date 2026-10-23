@@ -215,7 +215,7 @@ class ReleaseSignalOutcome:
 #: A probe: given a context, return one signal's outcome. Probes are
 #: injected rather than imported so the observation adapters, the
 #: dependency inventory producer and the reproducibility build can each
-#: land in their own wave without the sweep importing them.
+#: land in their own Task without the sweep importing them.
 ReleaseSignalProbe = Callable[[ReleaseSignalContext], ReleaseSignalOutcome]
 
 

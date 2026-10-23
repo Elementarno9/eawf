@@ -31,7 +31,7 @@ from eawf.platform.lint.kind_taxonomy import REPRO_TEST_NAME
 class RoleTierBudgetError(ValueError):
     """A role-tier dispatch block exceeds its token budget.
 
-    Raised at the role-block injection point (FLEET-6 / P30-I06-W06) when a
+    Raised at the role-block injection point (FLEET-6) when a
     per-role "Zone 3" block body's
     :func:`~eawf.platform.lint.tools.agents_md_budget.count_tokens` weight
     exceeds the configured role-tier cap. The role zone honours a budget the
@@ -205,8 +205,8 @@ class RoleContract(_SpecModel):
 
     A :class:`RoleContract` is the keystone projection that lets every
     per-role plugin surface (Claude / Codex / OpenCode / dispatch
-    :class:`SubagentSpec`) share one canonical source of role data
-    (P28-I01-W12). The dispatch
+    :class:`SubagentSpec`) share one canonical source of role data.
+    The dispatch
     :func:`~eawf.workflow.dispatch.renderer.build_role_contract`
     helper reads a :class:`~eawf.workflow.agents.specs.roles.RoleSpec`
     and emits a :class:`RoleContract`; :class:`SubagentSpec` carries the
@@ -293,8 +293,8 @@ class SubagentSpec(_SpecModel):
         estimate: Typed estimate hints rendered after ``## Out of
             scope``. Defaults to unknown values so all prompts carry the
             section even when no estimate has been seeded.
-        role_contract: Typed projection of the dispatched wave's role
-            (P28-I01-W12). When set, the spec renders a
+        role_contract: Typed projection of the dispatched wave's role.
+            When set, the spec renders a
             ``## Role contract`` section carrying the role's
             ``system_prompt`` plus role-driven tool / model wiring; a
             ``## Stop conditions`` section follows when the role lists
@@ -707,7 +707,7 @@ def _commit_prefix_for_wave(wave_id: str, iter_id: str) -> str:
 
     The helper reads :attr:`SubagentSpec.iter_id` rather than re-splitting
     the wave id because the wave id alone cannot disambiguate
-    ``P10-I02-W03`` from a (hand-crafted) ``P10-X-W03`` whose iter is
+    ``P<NN>-I02-W03`` from a (hand-crafted) ``P<NN>-X-W03`` whose iter is
     actually I04 — the iter id is the canonical source.
 
     Args:
@@ -718,8 +718,8 @@ def _commit_prefix_for_wave(wave_id: str, iter_id: str) -> str:
             stays valid against the lint.
 
     Returns:
-        The bracketed commit prefix, e.g. ``"[P28-W57]"`` for an
-        I01 wave or ``"[P28-I03-W57]"`` for an I03 wave.
+        The bracketed commit prefix, e.g. ``"[P<NN>-W<NN>]"`` for
+        an I01 wave or ``"[P<NN>-I03-W<NN>]"`` for an I03 wave.
     """
     phase_segment, wave_segment = _phase_wave_segments(wave_id)
     iter_segment = _iter_segment(iter_id)

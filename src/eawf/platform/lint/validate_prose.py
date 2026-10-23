@@ -34,7 +34,7 @@ The Vale leg fails open at its own seam (an absent binary yields no
 ``vale_rows``); the deterministic EAWF013/014/017/021 legs always run, so
 strict mode still rejects a known-bad artifact even on a machine without Vale.
 The two-mode contract is the fail-open / fail-closed switch the new rules ride:
-at ``/roadmap propose`` the render runs in fail-open (advisory) mode by default
+at plan proposal the render runs in fail-open (advisory) mode by default
 so vague-token findings are surfaced without blocking; a
 profile opt-in flips the strict (fail-closed) CI gate that rejects them.
 """

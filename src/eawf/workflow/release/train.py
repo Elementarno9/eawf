@@ -459,7 +459,7 @@ DEV2_GATE_BINDINGS_YAML: Final[str] = (
 #: a checkout that settles it -- only a run. The rehearsal drives a whole
 #: native Milestone inside a disposable repository and the proof is that
 #: the production root is byte-identical afterwards. Its test lands with
-#: the rehearsal wave, so the gate reports red until then, which is the
+#: the rehearsal Task, so the gate reports red until then, which is the
 #: honest state of a protection that has not been demonstrated.
 NATIVE_CANARY_GATE_BINDINGS_YAML: Final[str] = (
     DEV2_GATE_BINDINGS_YAML
@@ -591,7 +591,7 @@ CROSS_PROVIDER_GATE_BINDINGS_YAML: Final[str] = (
 )
 
 #: Authored gate binding tables by profile. ``dev1`` through
-#: ``cross_provider`` are authored; the later profiles land with the waves
+#: ``cross_provider`` are authored; the later profiles land with the Tasks
 #: that build their producers.
 PROFILE_GATE_BINDINGS: Final[dict[ReleaseGateProfile, str]] = {
     ReleaseGateProfile.DEV1: DEV1_GATE_BINDINGS_YAML,
@@ -655,7 +655,7 @@ def checkpoint_config_yaml(version: str) -> str:
 
     Raises:
         KeyError: When no configuration has been authored for *version*
-            yet -- the later rungs land with the waves that build them.
+            yet -- the later rungs land with the Tasks that build them.
     """
     try:
         return CHECKPOINT_CONFIGS[version]

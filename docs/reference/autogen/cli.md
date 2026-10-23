@@ -54,7 +54,7 @@ Delivery-batch lifecycle (activate, integrate, adopt-landed, ready, merge, recon
 |---|---|
 | `activate` | Move a PLANNED delivery Batch to ACTIVE. |
 | `adopt-landed` | Adopt work that already landed on the Batch's target branch. |
-| `close-landed` | Close each ready Batch whose Tasks' commits are on its phase branch. |
+| `close-landed` | Close each ready Batch whose Tasks' commits are on its feature branch. |
 | `complete` | Complete a merged Batch whose landed commit matches the head it pinned. |
 | `create` | Admit a new delivery Batch's create document into the addressed tree. |
 | `integrate` | Integrate a Batch's sealed candidates into its next generation. |

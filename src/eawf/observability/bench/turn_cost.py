@@ -83,7 +83,9 @@ _SMALL_FIXTURE_ID: Final[str] = "turn-cost-small"
 TURN_COST_FIXTURE_IDS: Final[tuple[str, ...]] = (_SMALL_FIXTURE_ID,)
 """Every seeded fixture id :func:`seed_turn_cost_corpus` accepts."""
 
-_FIXTURE_ITER_ID: Final[str] = "P00-I00"
+_FIXTURE_PHASE_ID: Final[str] = "P00"
+# The fixture seeds epoch-1 Wave rows, whose id grammar is P<NN>-I<NN>-W<NN>.
+_FIXTURE_ITER_ID: Final[str] = f"{_FIXTURE_PHASE_ID}-I00"
 _FIXTURE_OPENED_AT: Final[datetime] = datetime(2026, 1, 1, tzinfo=UTC)
 _FIXTURE_UNIT_COUNT: Final[int] = 10
 _FIXTURE_RUNTIME: Final[RuntimeName] = "claude"

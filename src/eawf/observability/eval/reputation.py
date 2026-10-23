@@ -186,8 +186,8 @@ def _has_later_reactive_iter(state: State, *, phase_id: str | None, wave_iter_id
 
     A repair / mid-flight scope add opens a later iter under the same phase
     tagged :attr:`~eawf.kernel.state.enums.IterTrigger.REACTIVE`. "Later" is
-    the natural-key ordering of the iter id, so ``P01-I02`` is later than
-    ``P01-I01``. The presence of any such iter refutes the wave's verdict --
+    the natural-key ordering of the iter id, so iter ``I02`` of a phase is
+    later than its ``I01``. The presence of any such iter refutes the wave's verdict --
     the wave's scope needed follow-up work.
     """
     if phase_id is None:

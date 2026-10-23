@@ -1,4 +1,4 @@
-"""Shared helpers for the six core skill subclasses (Phase 4 W02).
+"""Shared helpers for the six core skill subclasses.
 
 The W02 skills all follow the same shape::
 

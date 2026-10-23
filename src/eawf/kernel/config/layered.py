@@ -261,7 +261,7 @@ def _deep_merge_with_sources(
 
     Maps merge per-key; lists and scalars replace wholesale ("ordinary
     lists replace" per the layered-config rules above). The keyed-list
-    merge by stable ``id`` is deferred to Phase 3 W02 — for v0.1 P02 we
+    merge by stable ``id`` is deferred to a later change — for v0.1 P02 we
     treat all lists as ordinary.
 
     Returns:

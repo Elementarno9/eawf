@@ -8,7 +8,7 @@ attempting to evaluate invariants over a half-typed payload.
 as violations.  Schema errors and invariant violations are always reported
 regardless of this flag.
 
-Phase 4 W01 adds :func:`validate_envelope` and :class:`EnvelopeValidationReport`:
+This module also holds :func:`validate_envelope` and :class:`EnvelopeValidationReport`:
 the strict validator for skill output envelopes. It enforces the two
 strict-mode contracts from `docs/architecture/envelope.md`:
 

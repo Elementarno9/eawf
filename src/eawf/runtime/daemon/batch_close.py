@@ -1,6 +1,6 @@
 """Closing a Delivery Batch as soon as its Tasks are ready and their work has landed.
 
-Work reaches the phase branch by cherry-pick, so by the time every Task of a Batch is
+Work reaches the feature branch by cherry-pick, so by the time every Task of a Batch is
 ready and its commits are on that branch there is nothing left for the merge verbs to
 decide. The daemon then pins the branch head and walks the Batch PLANNED -> ACTIVE ->
 READY_TO_MERGE -> MERGING -> MERGED_PENDING_RECONCILIATION -> COMPLETED itself, and
@@ -734,7 +734,7 @@ def close_landed_batch(
     now: datetime,
     rerun_failed: bool = False,
 ) -> tuple[BatchClosure, tuple[Envelope, ...]]:
-    """Close one Batch whose Tasks are all ready and whose work is on its phase branch.
+    """Close one Batch whose Tasks are all ready and whose work is on its feature branch.
 
     Nothing moves unless every Task is ready, completed or cancelled, every ready Task
     has landed and every criterion naming a verify command is proved at the head; a

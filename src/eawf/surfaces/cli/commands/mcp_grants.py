@@ -152,8 +152,7 @@ def grant_cmd(
         str,
         typer.Argument(
             help=(
-                "Scope identifier (e.g. wave id `P10-I01-W04`, profile name, or "
-                "the literal `global`)."
+                "Scope identifier: the scoped entity id, a profile name, or the literal `global`."
             ),
             metavar="SCOPE_ID",
         ),

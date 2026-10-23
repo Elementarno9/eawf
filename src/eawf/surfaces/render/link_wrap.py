@@ -205,9 +205,9 @@ def _target_from_label(kind: ReferenceKind, label: str) -> str:
 def iter_refs(text: str) -> tuple[LinkRef, ...]:
     """Return non-overlapping references in *text*.
 
-    Longest refs win when patterns start at the same position, so
-    ``P28-I03-W35`` becomes one wave ref instead of phase + iter + wave.
-    Earlier-starting refs win over nested refs, so ``spec:P28-I03`` stays
+    Longest refs win when patterns start at the same position, so a
+    ``P<NN>-I<NN>-W<NN>`` id becomes one wave ref instead of phase + iter + wave.
+    Earlier-starting refs win over nested refs, so ``spec:P<NN>-I<NN>`` stays
     one spec ref instead of also linking its lifecycle suffix.
     """
     matches: list[tuple[int, int, int, LinkRef]] = []

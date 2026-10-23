@@ -349,8 +349,7 @@ def render_agent_md(ctx: AgentTemplateContext) -> str:
 # Frozen v0.1 agent registry. Mirrors the hand-written
 # .claude/agents/<role>.md placeholders so the swap from hand-written to
 # Eä-rendered files is byte-clean. Bodies are intentionally short
-# pointers (operator's full contract lives in docs/agents/<role>.md
-# starting Phase 5).
+# pointers (operator's full contract lives in docs/agents/<role>.md).
 # ---------------------------------------------------------------------------
 
 _RESEARCHER_BODY = """# Researcher

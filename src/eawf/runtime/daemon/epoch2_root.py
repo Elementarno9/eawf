@@ -506,11 +506,16 @@ class RootSession:
         self._require_current()
         return read_document(self.document_path)
 
-    def write_document(self, document: dict[str, Any]) -> None:
+    def write_document(
+        self, document: dict[str, Any], *, appends_to: Epoch2Collection | None = None
+    ) -> None:
         """Replace the selected generation's document.
 
         Args:
             document: The whole document to leave behind.
+            appends_to: The ledger the caller appends one line to as part
+                of this write, so a committed ledger's line advances the
+                committed sequence; ``None`` when it appends none.
 
         Raises:
             RuntimeError: The session is closed.
@@ -521,7 +526,7 @@ class RootSession:
             TypeError: The document holds a value JSON cannot encode.
         """
         self._require_current()
-        write_document(self.document_path, document)
+        write_document(self.document_path, document, appends_to=appends_to)
         logger.info(
             f"write_document root={self._context.identity.root_id} "
             f"generation={self.authority.generation_id}"

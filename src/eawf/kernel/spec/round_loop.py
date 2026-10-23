@@ -14,7 +14,7 @@ Live round execution is NOT wired here. The driver is a **pure** loop in
 the same spirit as the W14 plan-only stager and the W13 saturation
 reducer: it allocates no subprocess, opens no runtime session, and
 imports no adapter. The per-round work is injected as a ``round_runner``
-callback returning a :class:`RoundOutcome`; a later iter supplies the
+callback returning a :class:`RoundOutcome`; a later change supplies the
 callback that actually spawns the survey. Keeping the driver pure means
 the loop shape — budget arithmetic, halt precedence, checkpoint cadence —
 is unit-testable without a runtime.

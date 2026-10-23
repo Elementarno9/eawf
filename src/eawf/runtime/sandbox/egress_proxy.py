@@ -75,7 +75,7 @@ class SandboxEnforcementEvent(BaseModel):
 
     A TUI denial-timeline surface reads these rows to show, per session,
     what the floor refused and why. The shape is intentionally flat + the
-    five named fields the wave's C2 success criterion pins: ``ts``,
+    five named fields the C2 success criterion pins: ``ts``,
     ``session``, ``kind``, ``target``, ``severity``.
     """
 

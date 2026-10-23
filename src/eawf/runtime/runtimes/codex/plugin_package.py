@@ -87,7 +87,7 @@ _MARKETPLACE_FILE: str = "marketplace.json"
 #: emits under any local target.
 _PUBLISHED_SUBDIR: str = f"./plugins/{_PLUGIN_NAME}"
 #: Branch the self-hosted CI publish step pushes the rendered tree onto. The
-#: pointer references it declaratively; the branch itself lands in a later wave.
+#: pointer references it declaratively; the branch itself lands in a later change.
 _PUBLISHED_REF: str = "plugins-dist"
 #: Fallback repo URL when pyproject metadata cannot be located (wheel install).
 #: Kept in sync with ``pyproject.toml [project.urls].Repository``.

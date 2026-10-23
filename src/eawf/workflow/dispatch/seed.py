@@ -5,7 +5,7 @@ reducer (``eawf.observability.eval.jury``) both read their cohort off the
 per-role agent-report stores via
 :func:`eawf.workflow.agent_report.rollup.iter_agent_reports`, deriving one
 :class:`~eawf.kernel.state.enums.AgentReportVerdict` per row. Those surfaces
-ship before the live per-wave verdict producer (a later iter), so until the
+ship before the live per-wave verdict producer (a later change), so until the
 live producer lands the stores carry **zero** verdict rows and self-eval
 honestly refuses to score.
 

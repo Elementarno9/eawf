@@ -8,7 +8,7 @@ output choices. ``--scope`` is intentionally *not* hoisted to the root — see
 :mod:`eawf.surfaces.cli.flags` for the rationale.
 
 The bare invocation (``eawf`` with no subcommand) prints the version banner —
-this matches the Phase 1 behaviour and avoids breaking the validate test
+this matches the original behaviour and avoids breaking the validate test
 suite. ``--version`` short-circuits via the eager callback and exits.
 """
 

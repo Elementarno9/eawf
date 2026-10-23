@@ -27,7 +27,8 @@ needs to plan, resolve and number work stays in the committed
 - committed: every row of every collection but ``run``; each Task row's
   definition (every field not listed below); a Task's status and status
   fields while it is ``DRAFT``, ``DEFERRED``, ``DROPPED``, ``PLANNED`` or
-  terminal; and ``canonical_sequence`` as of the last committed write.
+  terminal; and ``canonical_sequence`` as of the last write that changed a
+  committed file: a committed row, or a line of a committed ledger.
 - local: the ``run`` collection whole; for a Task in an in-flight status
   (``CLAIMED``, ``RUNNING``, ``READY_TO_INTEGRATE``) its
   :data:`IN_FLIGHT_TASK_FIELDS`, while the committed row keeps the
@@ -251,7 +252,12 @@ def read_document(state_path: Path) -> dict[str, Any]:
     return _merged(committed, _read_projection(state_path), _digest(raw))
 
 
-def write_document(state_path: Path, document: dict[str, Any]) -> None:
+def write_document(
+    state_path: Path,
+    document: dict[str, Any],
+    *,
+    appends_to: Epoch2Collection | None = None,
+) -> None:
     """Replace the tree's document atomically, committed and local parts apart.
 
     The projection is written first, carrying the one it replaces, and
@@ -262,6 +268,11 @@ def write_document(state_path: Path, document: dict[str, Any]) -> None:
     Args:
         state_path: Path to the tree's ``state.json``.
         document: The whole document to leave behind.
+        appends_to: The ledger the caller appends one line to as part of
+            this write, ``None`` when it appends none. A line in a
+            committed ledger changes a tracked file, so the committed
+            sequence advances with it even when no committed row changes;
+            a line in a local ledger leaves the committed file as it is.
 
     Raises:
         TypeError: The document holds a value ``json`` cannot encode.
@@ -271,7 +282,8 @@ def write_document(state_path: Path, document: dict[str, Any]) -> None:
     settle_status_ledgers(state_path)
     old_raw = state_path.read_bytes() if state_path.is_file() else None
     old_committed = {} if old_raw is None else _decode_object(old_raw, state_path)
-    committed, status = _split(document, old_committed)
+    committed_append = appends_to is not None and appends_to not in STATUS_PROJECTION_COLLECTIONS
+    committed, status = _split(document, old_committed, committed_append=committed_append)
     payload = _render(committed)
     projection = status_projection_path(state_path)
     projection.parent.mkdir(parents=True, exist_ok=True)
@@ -369,7 +381,7 @@ def migrate_status_projection(state_path: Path) -> bool:
 
 
 def _split(
-    document: dict[str, Any], old_committed: dict[str, Any]
+    document: dict[str, Any], old_committed: dict[str, Any], *, committed_append: bool = False
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Return *document*'s committed half and its local half.
 
@@ -378,6 +390,8 @@ def _split(
         old_committed: The committed file as it stands, whose Task rows
             supply the status an in-flight Task's committed row keeps and
             whose sequence is kept while nothing else committed changes.
+        committed_append: The write also lands a line in a committed
+            ledger, so the committed sequence advances to the live one.
 
     Returns:
         ``(committed, status)`` per the module docstring's field split.
@@ -412,7 +426,7 @@ def _split(
         }
         # A status-only write keeps the committed copy, so the committed file
         # stays byte-identical, unless the copy is ahead of the live value.
-        if not unchanged or (kept is not None and kept > sequence):
+        if not unchanged or committed_append or (kept is not None and kept > sequence):
             committed[CANONICAL_SEQUENCE_KEY] = sequence
         elif kept is not None:
             committed[CANONICAL_SEQUENCE_KEY] = kept

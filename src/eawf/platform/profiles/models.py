@@ -508,7 +508,7 @@ class InstrumentReq(BaseModel):
     """A single external-tool requirement declared by a profile.
 
     Mirrors :class:`eawf.platform.install.instrument_probe.InstrumentSpec` field-for-
-    field so the Phase 3 W01 probe can consume composed profile output
+    field so the instrument probe can consume composed profile output
     directly. ``kind`` participates in strictest-wins composition: when two
     profiles declare the same instrument, ``hard`` overrides ``soft``.
     """
@@ -554,7 +554,7 @@ class RenderBlock(BaseModel):
     :class:`ValidationError`. An empty ``body_template`` (the ``""`` default)
     means "not the prose shape"; non-empty means prose.
 
-    ``agent_role`` (FLEET-5 / P30-I06-W05) binds a block to one subagent role
+    ``agent_role`` (FLEET-5) binds a block to one subagent role
     for the per-role dispatch tier. When ``target`` is
     :data:`~eawf.platform.render_block.DISPATCH_SYSTEM_PROMPT_TARGET` the block
     is a "Zone 3" role rule: its body is injected into the dispatched system

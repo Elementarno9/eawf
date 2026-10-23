@@ -91,8 +91,8 @@ class WaveSpec(_StrictModel):
     """Wave deliverable spec.
 
     The ``_consistent_ids`` model validator enforces that the wave id,
-    iter id, and phase id nest by prefix (``P25-I01-W01`` lives under
-    iter ``P25-I01`` which lives under phase ``P25``). Mismatches fail
+    iter id, and phase id nest by prefix (a wave ``P<NN>-I<NN>-W<NN>`` lives under
+    the iter ``P<NN>-I<NN>`` which lives under the phase ``P<NN>``). Mismatches fail
     at load time so the spec cannot drift away from the state tree.
     """
 

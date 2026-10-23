@@ -1170,7 +1170,7 @@ class _PipelineRun:
                 step,
                 PipelineRefusalCode.BATCH_HEAD_MISMATCH,
                 detail=f"main landed other commits than the Batches pinned: {'; '.join(moved)}",
-                remedy="merge the phase branch into main so each commit survives, then rerun",
+                remedy="merge the Milestone branch into main so each commit survives, then rerun",
             )
         return {"milestone": milestone_key, "batches": str(len(heads))}
 

@@ -1,6 +1,6 @@
 """Render subsystem for eawf — managed-region markers, manifest, drift detection.
 
-Public surface (Phase 3 W04 + P25-W09):
+Public surface:
 
 - :mod:`eawf.surfaces.render.regions` — marker parsing, ``replace_region``,
   ``extract_region``, ``find_regions``, ``compute_hash``,

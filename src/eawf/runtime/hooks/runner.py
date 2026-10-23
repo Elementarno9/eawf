@@ -6,7 +6,7 @@ registered hook is a callable taking the event and returning either a
 :class:`HookResult` (or a ``(block, output)`` tuple — see
 :meth:`HookRunner.run_event`'s coercion rules below).
 
-Design rules per Phase 4 W04 design spec §3.3 / acceptance §3:
+Design rules per the hook design spec §3.3 / acceptance §3:
 
 - The runner MUST NOT propagate exceptions raised by hook callables.
   Exceptions are captured into a :class:`HookResult` with
@@ -331,7 +331,7 @@ def _normalise_iso8601(value: str) -> str:
 def _event_idempotence_key(event: HookEvent) -> tuple[str, str, str]:
     """Return the ``(event_type, scope_id, occurred_at)`` triple.
 
-    The triple is the canonical idempotence key per Phase 4 W04
+    The triple is the canonical idempotence key per the hook
     acceptance §4. The ``occurred_at`` value is normalised through the
     ISO-8601 string form so comparing across re-loaded events is stable
     regardless of the serializer's UTC-suffix choice (``Z`` vs ``+00:00``).

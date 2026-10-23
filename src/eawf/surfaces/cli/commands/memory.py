@@ -1,7 +1,7 @@
 """Typer sub-app for ``eawf memory ...``.
 
-This module is the facade for the ``memory`` command group
-(P27-I05-W09). It owns the :data:`memory_app` Typer group and the
+This module is the facade for the ``memory`` command group.
+It owns the :data:`memory_app` Typer group and the
 shared helpers every handler composes (store-path resolvers, the
 note loader, the confidence / status flag parsers, the args-hash
 helper). The concrete command bodies live in two sibling

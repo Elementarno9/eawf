@@ -1,4 +1,4 @@
-"""``journal_chain`` audit-DSL kind (P30-I16, T2 structural).
+"""``journal_chain`` audit-DSL kind (T2 structural).
 
 Validates that a digest-chained WAL / journal directory is intact: every
 record's stored :attr:`~eawf.runtime.daemon.wal.WalRecord.digest` matches a

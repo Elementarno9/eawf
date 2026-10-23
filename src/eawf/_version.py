@@ -9,7 +9,7 @@ The version string is **PEP-440-compatible** so ``pip install
 eawf==0.3.0a1`` resolves; the semver core (``MAJOR.MINOR.PATCH``)
 plus an optional PEP-440 pre-release segment (``a`` / ``b`` / ``rc``
 + a number) is the only shape this module carries. The
-human-readable build-metadata long form (``0.3.0-alpha.1+phase.PNN``)
+human-readable build-metadata long form (``0.3.0-alpha.1+<build>``)
 is composed by the version-display surface, not stored here.
 
 Bump this value with ``tools/version_bump.py`` rather than editing

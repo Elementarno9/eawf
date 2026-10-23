@@ -734,7 +734,7 @@ def commit_ledger_append(
             state_path=str(session.document_path),
         )
         write_pending(context.wal_dir, wal_record)
-        session.write_document(new_document)
+        session.write_document(new_document, appends_to=record.collection)
         mark_applied(context.wal_dir, wal_record.record_id)
         append_ledger_record(ledger, record)
         append_json_line(_firehose_path(context), envelope.model_dump_json())

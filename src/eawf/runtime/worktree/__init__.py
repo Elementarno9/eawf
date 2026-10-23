@@ -1,4 +1,4 @@
-"""Worktree subsystem (Phase 5 W01).
+"""Worktree subsystem.
 
 Public API surface:
 

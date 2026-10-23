@@ -7,7 +7,7 @@ context: the wave's scope, its file_scopes, its blocking deps, any
 decisions / hypotheses recorded under the same scope, the most recent
 audits in scope, and the working-tree wire-up.
 
-P27-I03-W14 reshapes the render path around a typed spec: instead of
+The render path is built around a typed spec: instead of
 concatenating section strings straight out of ``State``,
 :func:`build_subagent_spec` projects ``State`` into a typed
 :class:`~eawf.workflow.agents.specs.models.SubagentSpec`, and
@@ -252,7 +252,7 @@ def build_role_contract(
 ) -> RoleContract:
     """Project a :class:`RoleSpec` into a typed :class:`RoleContract`.
 
-    P28-I01-W12 introduces this projection as the keystone seam every
+    This projection is the keystone seam every
     per-role plugin surface (Claude / Codex / OpenCode / dispatch
     :class:`SubagentSpec`) reads from. The contract is the role-level
     invariants — ``system_prompt``, ``allowed_tools``, ``denied_tools``,

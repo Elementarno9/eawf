@@ -453,7 +453,7 @@ def builtin_rule_provider(selection: RuleModuleSelection) -> BuiltinRuleProvider
 def load_project_brief(repo_root: Path) -> ProjectBrief:
     """Read the project brief from the committed project record and package data.
 
-    Only stable orientation is read: never the current phase, branch
+    Only stable orientation is read: never the current Milestone, branch
     position, daemon health or recent decisions.
 
     Args:

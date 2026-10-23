@@ -3,7 +3,7 @@
 Combines :func:`eawf.runtime.daemon.spawn.auto_spawn_daemon` (cold-spawn the
 daemon if needed) with a thin newline-delimited JSON-RPC transport
 over the UDS / named pipe surface. Used by W09 to wire ``state.mutate``
-through the daemon and by every later wave that needs typed
+through the daemon and by every later caller that needs typed
 JSON-RPC. W08 ships only the transport — wiring lives downstream.
 
 The cold-spawn is silent: stdout/stderr stay clean unless the operator

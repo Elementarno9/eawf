@@ -2,7 +2,7 @@
 
 The sibling ``mockup_golden_diff`` text path captures the live TUI as a
 **normalised ASCII frame** and byte-compares it to an approved text golden.
-That path is blind to the failure mode that shipped the P30-I15 redesign
+That path is blind to the failure mode that shipped an earlier console redesign
 "faithfully" and yet wrong: a *square* border where the mockup asked for a
 *round* one, and a *one-column* body where the mockup asked for *two
 columns*. ASCII normalisation collapses round-vs-square box-drawing glyphs

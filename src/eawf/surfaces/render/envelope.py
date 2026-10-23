@@ -4,7 +4,7 @@ Eä commands and skills exchange a structured envelope with three parts:
 
 - ``header`` — typed :class:`EnvelopeHeader` carrying ``skill``, ``scope_id``,
   ``session``, ``started_at``/``finished_at``, ``status``, and
-  ``instrument_probe``. Frozen at Phase 4 W01.
+  ``instrument_probe``. Frozen.
 - ``body`` — free-form payload. The payload is either a markdown string
   (legacy/raw passthrough) or a typed Pydantic body model (one of the 17
   per-skill bodies under :mod:`eawf.workflow.skills.bodies`). The wire-form keeps
@@ -25,7 +25,7 @@ exact inverses for any envelope built from JSON-safe values:
 ``from_markdown(to_markdown(env)) == env`` and
 ``to_markdown(env) == to_markdown(from_markdown(to_markdown(env)))``.
 
-Back-compat. Phase 0-3 callers (and the doctor smoke check) pass raw
+Back-compat. Older callers (and the doctor smoke check) pass raw
 ``dict`` objects to ``OutputEnvelope(header=..., footer=...)``. Pydantic
 v2's :meth:`model_validate` adapts those dicts into the typed
 :class:`EnvelopeHeader`/:class:`EnvelopeFooter` automatically — no
@@ -91,8 +91,8 @@ class EnvelopeWarning(BaseModel):
 class EnvelopeHeader(BaseModel):
     """Typed envelope header.
 
-    Frozen at Phase 4 W01 per design spec §3.1. All Phase 4 W02-W07
-    skills populate this directly; pre-W01 callers (e.g. the doctor smoke
+    Frozen per design spec §3.1. Every skill populates
+    this directly; older callers (e.g. the doctor smoke
     check) get implicit coercion via :meth:`OutputEnvelope.model_validate`.
 
     Attributes:
@@ -129,7 +129,7 @@ class EnvelopeHeader(BaseModel):
 class EnvelopeFooter(BaseModel):
     """Typed envelope footer.
 
-    Frozen at Phase 4 W01 per design spec §3.1. ``repair_commands`` is
+    Frozen per design spec §3.1. ``repair_commands`` is
     optional in the schema but the strict validator requires it for
     ``status in {blocked, failed}``.
 
@@ -157,12 +157,12 @@ class EnvelopeFooter(BaseModel):
     repair_commands: list[str] | None = None
 
 
-# Body shape: either a free-form markdown string (Phase 0-3 raw bodies) or
+# Body shape: either a free-form markdown string (raw bodies) or
 # any of the typed body models from :mod:`eawf.workflow.skills.bodies`. We use
 # ``dict[str, Any]`` (rather than a discriminated union) for the typed
 # branch because skills can attach arbitrary skill-specific bodies; the
 # CLI adapter validates the dict against the named body model when
-# wiring up Phase 4 W02/W03 skills.
+# wiring up a skill.
 EnvelopeBody = str | dict[str, Any]
 
 

@@ -23,7 +23,7 @@ such verb:
   presented observation, or ``runtime.delivery.read_back_merge`` to have
   the daemon read the branch back itself;
 - ``batch close-landed`` sends ``runtime.delivery.close_landed``, which
-  closes each ready Batch whose work is on its phase branch;
+  closes each ready Batch whose work is on its feature branch;
 - ``milestone open-approval`` and ``milestone seal-approval`` send the two
   acceptance-approval verbs; ``--bundle-out`` writes the bundle
   ``milestone accept --acceptance-bundle`` takes;
@@ -711,7 +711,7 @@ def batch_close_landed_cmd(
     batch_keys: Annotated[list[str] | None, typer.Argument(help=_CLOSE_KEYS_HELP)] = None,
     rerun_failed: Annotated[bool, typer.Option("--rerun-failed", help=_RERUN_FAILED_HELP)] = False,
 ) -> None:
-    """Close each ready Batch whose Tasks' commits are on its phase branch.
+    """Close each ready Batch whose Tasks' commits are on its feature branch.
 
     The daemon pins the branch head, walks the Batch to COMPLETED and completes its
     ready Tasks; a Batch it leaves open is listed with why: a criterion still being

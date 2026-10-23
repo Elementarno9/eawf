@@ -84,7 +84,7 @@ def _emit_anchor_fallback_warning(ctx: MethodContext) -> None:
         f"daemon_anchor_fallback state_path={ctx.state_path!r}; "
         f"caller omitted 'repo_root' param, resolving against the boot-time "
         f"state_path — update the caller to pass repo_root explicitly "
-        f"(the boot-time fallback will be removed in a future wave)"
+        f"(the boot-time fallback will be removed in a future release)"
     )
     _ANCHOR_FALLBACK_WARN_EMITTED = True
 

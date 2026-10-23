@@ -64,7 +64,7 @@ _LANE_ALLOW: dict[str, frozenset[str]] = {
     _CODEX_LANE: _CODEX_ALLOW,
 }
 
-#: Gate/push-only allowlist: package indexes the gate/push waves need.
+#: Gate/push-only allowlist: package indexes the gate/push steps need.
 #: Opened ONLY under ``gate_phase=True`` (exact-hostname), never on the
 #: read-only assist path. The configured git-remote host is threaded in
 #: per call via ``extra_allow`` rather than hardcoded here.

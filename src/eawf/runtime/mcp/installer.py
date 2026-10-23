@@ -92,8 +92,7 @@ class InstallEntryResult:
         action: ``"created" | "updated" | "unchanged"``.
         user_entries_preserved: Sorted list of ``mcpServers`` keys
             that were not Eä-owned. Each is byte-equal across the
-            install (verified by integration test 5 in §7 of the
-            wave spec).
+            install (verified by an integration test).
     """
 
     target_path: Path

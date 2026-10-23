@@ -8,7 +8,7 @@ mutation, so three deadlines have to agree about how long that close may take:
   every legitimate long audit,
 * the CLI's wire timeout, which must sit above BOTH or the operator is told the
   mutation is indeterminate while the daemon is still working on it -- which is
-  exactly what happened for the whole of P30-I25: the wire timeout was a 30s
+  exactly what once happened for a whole release cycle: the wire timeout was a 30s
   constant, so every gated close reported ``DaemonMutationIndeterminate``
   (exit 4) while the daemon went on to apply it successfully.
 

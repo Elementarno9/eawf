@@ -1,4 +1,4 @@
-"""``backlog_resolution`` close-gate kind (P30-I10 QUAL-2).
+"""``backlog_resolution`` close-gate kind (QUAL-2).
 
 A close-gate that reads the backlog items linked to a closing wave and
 refuses the close when any linked item is left dangling -- still
@@ -15,7 +15,7 @@ A backlog item is *linked* to a wave when its
 :attr:`~eawf.kernel.state.models.BacklogItem.scope_id` equals the wave
 id (the URN-or-bare wave id the close mutation names). The state model
 carries no separate wave-link field, so ``scope_id`` IS the link: a
-P30-I10-W02 dogfood item triaged at ``scope_id="P30-I10-W02"`` is the
+dogfood item triaged at ``scope_id="<wave id>"`` is the
 item this gate enforces on that wave's close.
 
 Resolution contract
@@ -83,8 +83,7 @@ def linked_backlog_items(state: State, *, wave_id: str) -> list[BacklogItem]:
 
     A backlog item is linked when its
     :attr:`~eawf.kernel.state.models.BacklogItem.scope_id` equals
-    *wave_id*. The wave's own backlog dogfood items (e.g. the
-    P30-I10-W02 owned rows) are triaged at the wave scope so they
+    *wave_id*. The wave's own backlog dogfood items are triaged at the wave scope so they
     resolve here.
 
     Args:

@@ -313,7 +313,7 @@ def note_cross_root_serve(
 ) -> None:
     """Log when a mutation targets a state root other than the boot root.
 
-    Multi-root serve (supersedes the EP3 refusal from P30-I23-W11): a
+    Multi-root serve (supersedes the earlier EP3 refusal): a
     mutation carrying an explicit ``repo_root`` is honoured against THAT
     root — the mutator path resolves state / event / WAL routing from the
     request, the WAL record is stamped with the target ``state_path`` so

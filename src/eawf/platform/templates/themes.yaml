@@ -1,4 +1,4 @@
-# Statusline themes for `eawf cc statusline` (Phase 4 W06).
+# Statusline themes for `eawf cc statusline`.
 #
 # Each theme overrides:
 #   - separator: string joined between rendered segments (e.g. " | ").

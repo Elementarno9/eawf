@@ -14,7 +14,7 @@ Public API (menu surface — pre-P25):
 - :func:`keys_for_tab` — alphabetical :class:`ConfigKey` list for one tab.
 - :func:`registry_lookup` — locate an entry by dotted key.
 
-Ordering policy (success criteria, P20-W10 wave brief):
+Ordering policy:
 
 * Tabs are returned alphabetical.
 * Fields **within** a tab are returned alphabetical by dotted key.

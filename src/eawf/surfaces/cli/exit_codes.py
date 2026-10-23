@@ -10,7 +10,7 @@ The v0.3 surface (``OK``, ``USER_ERROR``, ``VALIDATION_ERROR``,
 ``NEEDS_OPERATOR`` is the sole public contract. The legacy 0..9 alias block
 (``GENERIC_ERROR`` / ``NOT_FOUND`` / ``INVALID_INPUT`` / ``VALIDATION_FAILED``
 / ``LOCK_CONFLICT`` / ``INSTRUMENT_MISSING`` / ``USER_DECLINED`` /
-``INTEGRITY_VIOLATION`` / ``HOOK_BLOCKED``) was deleted in P28-I02-W21
+``INTEGRITY_VIOLATION`` / ``HOOK_BLOCKED``) was deleted
 after every downstream callsite migrated to the canonical names. The
 historical bucket mapping (legacy name → canonical bucket) is recorded in
 ``docs/reference/exit-codes.md`` for archival purposes.

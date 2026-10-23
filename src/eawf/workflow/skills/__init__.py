@@ -1,10 +1,10 @@
 """Eä skills package.
 
-Phase 4 W01 freezes the skill output envelope (:mod:`eawf.surfaces.render.envelope`),
-the :class:`Skill` ABC and :func:`run_skill` orchestrator
-(:mod:`eawf.workflow.skills.engine`), and the per-skill body schemas under
-:mod:`eawf.workflow.skills.bodies`. Phase 4 W02/W03 fill in the production
-``probe → action → envelope`` implementations for the ten skills.
+The package builds on the frozen skill output envelope
+(:mod:`eawf.surfaces.render.envelope`) and holds the :class:`Skill` ABC, the
+:func:`run_skill` orchestrator (:mod:`eawf.workflow.skills.engine`) and the
+per-skill body schemas under :mod:`eawf.workflow.skills.bodies`. Each skill
+subclass carries its production ``probe → action → envelope`` implementation.
 
 This file is intentionally empty of business logic so importing
 ``eawf.workflow.skills`` is cheap and side-effect-free.

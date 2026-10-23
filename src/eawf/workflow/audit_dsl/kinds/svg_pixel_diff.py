@@ -18,7 +18,7 @@ inputs are pinned: the font set and the resvg version. We pin both:
   (``.github/workflows/ci.yaml``). Any ``resvg`` version bump is a
   GOLDEN-REFRESH event: the rendered bytes can shift between resvg
   releases, so the committed golden must be regenerated (the refresh
-  command lands in a sibling wave as ``eawf vfl approve``).
+  command lands separately as ``eawf vfl approve``).
 
 Because the render is bit-identical under those pins, the pixel diff is
 realized as the strictest possible comparison: EXACT BYTE EQUALITY of

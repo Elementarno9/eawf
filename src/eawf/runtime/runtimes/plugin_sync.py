@@ -28,8 +28,8 @@ Per the authority map (row 14, 2026-05-18 ratification), the
 **daemon** is the canonical writer for the plugin output paths
 ``.claude/`` + ``.codex/`` + ``.opencode/``. During v0.3-v0.5 the
 operator-facing CLI calls into ``plugin_sync.sync_plugins`` which
-in turn calls the per-runtime ``install_plugin`` functions; the
-v0.4 hygiene wave migrates those file writes through the
+in turn calls the per-runtime ``install_plugin`` functions; a
+later hygiene change migrates those file writes through the
 ``daemon.plugin.sync`` RPC. Until that migration lands the call
 chain is in-process — V1 fallback under daemonless contexts
 preserves the same write surface.

@@ -10,7 +10,7 @@ Storing the steps as ``dict[str, Any]`` rather than ``OutputEnvelope``
 avoids a circular import between :mod:`eawf.surfaces.render.envelope` and the
 bodies package while preserving the typed shape on the wire.
 
-Phase 5 W02 widens the body with two strictly-additive optional fields:
+The body carries two strictly-additive optional fields:
 ``resume_from_checkpoint_id`` (the ``EV-...`` id of the checkpoint a
 ``--resume`` invocation replayed from) and ``drift`` (the structured
 drift report when a resume refuses with ``INTEGRITY_VIOLATION``). Both

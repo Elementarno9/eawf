@@ -5,7 +5,7 @@ The workspace-state pointer verbs (``init``, ``add-repo``, ``remove-repo``,
 verbs below are canonical, and a workspace lives in the registry rather
 than in a pointer document.
 
-Subcommands (registry-reader path, P20-I01-W05):
+Subcommands (registry-reader path):
 
 - ``workspace registry-list`` — enumerate the repos in
   ``~/.eawf/registry.json``.

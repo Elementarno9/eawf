@@ -7,7 +7,7 @@ render state, the determinism recipe that makes a render byte-stable
 across hosts, and the jury rubric for the perceptual tier.
 
 This module is types-only: the oracle runner and the SVG render stack
-that consume these models land in later waves. Defining the typed shape
+that consume these models land later. Defining the typed shape
 first lets the producers and consumers agree on a single contract before
 either side exists.
 """

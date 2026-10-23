@@ -1,6 +1,6 @@
 """Runtime adapters for Eä.
 
-Phase 4 W04 creates this package as the home for per-runtime adapters
+This package is the home for per-runtime adapters
 that translate platform-specific hook payloads into Eä canonical
 :class:`~eawf.runtime.hooks.event.HookEvent` instances. W05 layers
 ``runtimes/claude/plugin_install.py`` on top; W06 adds the statusline

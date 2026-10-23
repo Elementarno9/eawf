@@ -7,7 +7,7 @@ description: "Opt-in code-craft profile: structured rules with a verification li
 # quality`` when a repo wants the code-craft rules rendered into AGENTS.md.
 #
 # Every render block uses the structured RenderBlock triad
-# (rationale / mechanism / verification — the P27-I03-W01 schema). The triad
+# (rationale / mechanism / verification). The triad
 # guarantees each code-craft rule carries an explicit *verification* line so a
 # reviewer can check the rule was followed, not just asserted. The renderer
 # emits a fixed ``Rationale`` / ``Mechanism`` / ``Verification`` sub-heading

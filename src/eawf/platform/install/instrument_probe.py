@@ -124,8 +124,8 @@ class ProbeReport(BaseModel):
     results: list[ProbeResult]
 
 
-# Per-profile registry. v0.1 only ships the ``core`` set; other profiles wire
-# in via Wave W02 once the profile composition lands.
+# Per-profile registry. Only the ``core`` set ships; other profiles wire in
+# once the profile composition lands.
 INSTRUMENT_REQUIREMENTS: dict[str, list[InstrumentSpec]] = {
     "core": [
         InstrumentSpec(

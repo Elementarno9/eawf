@@ -3,7 +3,7 @@
 CLI dispatch only (AGENTS rule 1): every handler parses args, calls into
 :mod:`eawf.observability.telemetry`, and routes output through
 :func:`eawf.surfaces.cli.output.emit_json_or_text`. The pricing snapshot, drift
-detection, and (later waves) the projection all live in the library.
+detection, and the projection all live in the library.
 
 Verbs:
 

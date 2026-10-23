@@ -114,7 +114,7 @@ class _ConfigSchema(BaseModel):
     flow: dict[str, Any]
     vcs: VcsConfig
     # ``daemon`` section pairs with the ``state.mutate`` RPC. Treated as
-    # ``dict[str, Any]`` until a later wave hardens the per-key contract
+    # ``dict[str, Any]`` until a later change hardens the per-key contract
     # (see :mod:`eawf.kernel.config.defaults` for the shipped schema).
     daemon: dict[str, Any]
     local: dict[str, Any]

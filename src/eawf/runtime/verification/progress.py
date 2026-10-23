@@ -826,7 +826,7 @@ class _PytestProgressPlugin:
             items[:] = [item for item in items if item.nodeid in selected]
 
     def pytest_runtest_logreport(self, report: Any) -> None:
-        """Record each test once its teardown ends, failed if any phase failed."""
+        """Record each test once its teardown ends, failed if setup, call or teardown failed."""
         if report.failed:
             self._failed.add(report.nodeid)
         if report.when != "teardown":

@@ -12,7 +12,7 @@ kwarg, e.g. ``UserError(msg, kind="NotFound")`` or
 The eight deprecated subclass aliases (``NotFound``, ``InvalidInput``,
 ``ValidationFailed``, ``LockConflict``, ``InstrumentMissing``,
 ``UserDeclined``, ``IntegrityViolation``, ``HookBlocked``) were removed
-in P27-I03-W18 once every callsite migrated to the bucket + ``kind=``
+once every callsite migrated to the bucket + ``kind=``
 form. Domain-specific subclasses that remain (e.g.
 :class:`eawf.platform.install.wizard.WizardCancelled`,
 :class:`eawf.platform.profiles.compose.ProfileConflict`) still fold their concrete

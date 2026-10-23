@@ -7,7 +7,7 @@ lossless translation layer: it inspects the payload, picks the correct
 :class:`~eawf.runtime.hooks.event.HookEventType`, and returns a typed
 :class:`HookEvent`.
 
-Behaviour rules per Phase 4 W04 design spec §3.3 / acceptance §2:
+Behaviour rules:
 
 - Recognised payloads → fully populated :class:`HookEvent` (the original
   Claude payload is preserved verbatim under

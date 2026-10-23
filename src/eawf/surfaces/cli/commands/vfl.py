@@ -9,8 +9,8 @@ path ``eawf snapshot update`` drives, so the two surfaces never diverge.
 ``eawf vfl approve`` exists for the SVG visual-fidelity oracle workflow
 (FS17): after a deliberate render change, the operator runs ``approve`` on
 a renderer host (e.g. one with ``resvg``) to bless the new golden bytes,
-then commits them under a wave-form ``[P##-W##] test:`` subject so the CI
-snapshot-pairing gate accepts the mutation.
+then commits them in a commit that names the unit of work owning them so
+the CI snapshot-pairing gate accepts the mutation.
 
 The verifiable guard: ``approve`` refuses a no-op. The handler regenerates
 the surface in place, then inspects the working-tree diff scoped to the

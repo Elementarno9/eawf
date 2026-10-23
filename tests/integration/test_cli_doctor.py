@@ -142,6 +142,7 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "manifest_in_sync",
         "mcp_drift",
         "authority_epoch",
+        "canonical_sequence_drift",
         "gitignore_block",
         "cli_daemon_version",
         "launchd_agent",

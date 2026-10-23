@@ -28,8 +28,8 @@ to stdout (or to the path passed as ``argv[1]``). It is invoked as::
 
     uv run python -m eawf.runtime.runtimes.probes.sdk_baseline [output_path]
 
-The intent is captured once now (2026-05-19) and re-probed by a v0.4
-hygiene wave after the 2026-06-15 SDK reinstatement, with the two
+The intent is captured once now (2026-05-19) and re-probed by a later
+hygiene change after the 2026-06-15 SDK reinstatement, with the two
 snapshots compared field-by-field to detect drift.
 """
 

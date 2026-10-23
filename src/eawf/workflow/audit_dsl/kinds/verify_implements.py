@@ -78,7 +78,7 @@ VERDICT_MARKER_RE = re.compile(r"(?:#|//|<!--)\s*IMPLEMENTS:\s*([VDRH]\d+(?:-[A-
 # of :data:`eawf.kernel.spec.audit.AUDIT_CADENCE_VALUES` (declared here too so
 # this module has no eager dependency on :mod:`eawf.kernel.spec.audit` for the
 # cadence short-circuit — the spec model owns the contract, the kind
-# applies it). P28-I01-W10 added ``"ship"`` so the verify-spine floor
+# applies it). ``"ship"`` is included so the verify-spine floor
 # pack + AuditSpec share one cadence enum (AGENTS naming rule 17).
 _VALID_CADENCES = {"every-task", "every-batch", "every-milestone", "ship", "manual"}
 

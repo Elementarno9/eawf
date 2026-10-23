@@ -12,7 +12,7 @@ generator never trusts an LLM's claim that it dropped nothing.
 
 The Stage-2 mapper that turns :class:`SourceUnit` rows into the emit-target
 :class:`~eawf.kernel.spec.common.CriterionSpec` list is an LLM call that
-lives behind the ``/roadmap propose`` skill, not in this module.
+lives behind the plan proposal skill, not in this module.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def coverage_diff(
     than reading a ``source_span`` field off :class:`CriterionSpec`: the
     persisted criterion schema is left untouched (no store migration, no
     golden regen), and the diff stays a pure function of three plain
-    inputs. The caller -- the ``/roadmap propose`` Stage-2 mapper -- owns
+    inputs. The caller -- the plan proposal Stage-2 mapper -- owns
     the criterion -> span mapping and passes the resulting cover set in.
     Coverage is decided by span id, never by an LLM's self-report.
 

@@ -4,15 +4,15 @@ The ``[tool.eawf.lint.eawf010] exclude`` list is a grandfather list: a
 module on it is exempt from the length cap. Left as a bare path list it
 is an *unbounded* exemption -- nothing in the configuration says when
 the exemption stops being reasonable, so the only pressure on an entry
-is the un-grandfather-on-touch rule, which fires only when some wave
+is the un-grandfather-on-touch rule, which fires only when some change
 happens to edit the file. A module nobody touches sits there forever.
 
 This module makes every entry a **bounded grant**: a path, the date the
 grant lapses, and the reason it was given. The two pressures compose
-rather than compete. Un-grandfather-on-touch stays the fast path (a wave
+rather than compete. Un-grandfather-on-touch stays the fast path (a change
 that edits the module drops its entry immediately, well before the
 date); the expiry is the backstop that puts a deadline on the modules no
-wave touches. An entry is therefore never renewed by inaction -- the
+change touches. An entry is therefore never renewed by inaction -- the
 only way past the date is an explicit renewal that cites a typed
 decision and names an owner, so someone is on record for the extension.
 

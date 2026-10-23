@@ -1,7 +1,7 @@
 """The batch-close sweep: a Batch whose work lands after its Tasks are ready still closes.
 
 A Batch closes when the Run readying its last Task completes, but its work may reach the
-phase branch only later, when a lease commit is cherry-picked by hand. So the daemon
+feature branch only later, when a lease commit is cherry-picked by hand. So the daemon
 sweeps every native tree it serves on a fixed cadence and closes each ready Batch whose
 work has since landed, exactly as ``batch close-landed`` would.
 

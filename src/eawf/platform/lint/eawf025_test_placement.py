@@ -12,7 +12,7 @@ mirror the source layout, so the hook feeds it only the paths a commit
 ADDS. Sub-directories listed in
 :data:`~eawf.platform.lint.kind_taxonomy.NON_KIND_TEST_DIRS` are exempt
 entirely -- they partition by subsystem, not by kind, and are re-filed
-by dedicated waves rather than by this gate.
+by dedicated Tasks rather than by this gate.
 
 Two checks run over the scoped set:
 

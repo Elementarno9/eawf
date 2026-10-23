@@ -94,7 +94,7 @@ class FlowCheckpointPayload(BaseModel):
             adjacency).
         last_safe: ``True`` when the step's terminal envelope status is
             ``ok`` or ``partial`` AND no follow-on safety constraints
-            apply (see §4.2 of the wave spec).
+            apply (see §4.2 of the design spec).
         payload_hash: ``sha256:<hex>`` of the step envelope's body JSON.
             Used by future replay-detector tools to spot a step that
             re-ran with different inputs.

@@ -12,8 +12,8 @@ invariant:
 
 * :func:`cancel_process_group` — the raw one-shot group signal. ``soft``
   delivers SIGTERM to the group; ``hard`` delivers SIGKILL. This is the
-  primitive the safety-floor HALT (a later wave, FLOOR-6) wires to when
-  a budget / wall-clock cap trips and a runaway wave's whole process
+  primitive the safety-floor HALT (FLOOR-6) wires to when
+  a budget / wall-clock cap trips and a runaway Run's whole process
   tree must be stopped.
 * :func:`cancel_with_grace` — the soft -> grace-window -> hard
   escalation. It does **not** re-implement the SIGTERM/SIGKILL ladder:

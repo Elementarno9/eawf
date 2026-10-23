@@ -6,7 +6,7 @@ Surface contract:
   (:mod:`eawf.workflow.skills.catalog`) with each skill's output schema,
   argument hint and an ``installed``/``missing`` status. A retired skill
   name is refused with its successor named, never aliased.
-- ``eawf skill render <name>`` (Phase 10 W01) prints a registered
+- ``eawf skill render <name>`` prints a registered
   skill's canonical ``SKILL.md`` body (``--format=skill-md``, default)
   or a metadata+body JSON object (``--format=json``). Bytes are
   byte-equal to the SKILL.md :mod:`eawf.runtime.runtimes.claude.plugin_install`

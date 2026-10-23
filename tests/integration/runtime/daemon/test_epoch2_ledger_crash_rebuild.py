@@ -289,7 +289,7 @@ def test_crash_before_the_document_write_leaves_nothing(
     """An intent with no document write behind it is abandoned, not finished."""
     before = document_path(canary).read_bytes()
 
-    def killed(_session: RootSession, _document: dict[str, Any]) -> None:
+    def killed(_session: RootSession, _document: dict[str, Any], **_kwargs: object) -> None:
         raise _Kill
 
     monkeypatch.setattr(RootSession, "write_document", killed)
