@@ -56,12 +56,14 @@ def test_lint_001_the_table_names_no_rule_the_tree_does_not_ship() -> None:
     assert {row.rule for row in RULE_DISPOSITIONS} == set(shipped_rules(_REPO))
 
 
-def test_lint_001_the_census_is_read_from_rule_codes_not_the_top_level_listing() -> None:
-    """The one numbered rule under the tools sub-directory is still counted."""
-    rules = shipped_rules(_REPO)
+def test_lint_001_the_census_is_read_from_rule_codes_not_the_top_level_listing(
+    tmp_path: Path,
+) -> None:
+    """A numbered rule under the tools sub-directory is still counted."""
+    root = _package(tmp_path, {"tools/eawf099.py": _rule("EAWF099")})
 
-    assert rules["EAWF020"].parent.name == "tools"
-    assert rules["commit-prefix"] == _REPO / "tools" / "commit_prefix_lint.py"
+    assert shipped_rules(root)["EAWF099"].parent.name == "tools"
+    assert shipped_rules(_REPO)["commit-prefix"] == _REPO / "tools" / "commit_prefix_lint.py"
 
 
 def test_lint_001_a_rule_with_no_disposition_is_a_finding(tmp_path: Path) -> None:

@@ -5,7 +5,7 @@ W02-W14) that asserts each contract boundary still holds: the CLI help
 surface, the daemonless ``config validate`` deprecation-clean output, the
 0..5 exit-code surface, the ``ErrorEnvelope`` strict shape, the catalog-backed
 skill registry, the ``SkillManifest`` invariants (BOT-06), the per-runtime
-cache-control injection gate, and the skill -> adapter handshake reject.
+cache-control injection gate.
 
 Each assertion exercises the real symbol path (no mocks of the unit
 under test) so a regression in any surface fails here fast, independent
@@ -39,7 +39,6 @@ from typer.testing import CliRunner
 
 from eawf.kernel.config import layered
 from eawf.runtime.runtimes.cache_control import inject_cache_control
-from eawf.runtime.runtimes.dispatch import AdapterManifestMismatchError, resolve_adapter
 from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
@@ -225,20 +224,6 @@ def test_inject_cache_control_claude_appends_marker() -> None:
 @pytest.mark.parametrize("runtime_id", ["opencode", "codex"])
 def test_inject_cache_control_no_op_runtimes_unchanged(runtime_id: str) -> None:
     assert inject_cache_control(runtime_id=runtime_id, cache_prefix="HEAD") == "HEAD"
-
-
-# --- assertion 8: skill -> adapter handshake reject ------------------
-
-
-def test_resolve_adapter_override_off_manifest_rejected() -> None:
-    manifest = SkillManifest(
-        name="/claude-only",
-        description="claude-only skill",
-        runtime=["claude-code"],
-        output_envelope_kind="probe_result",
-    )
-    with pytest.raises(AdapterManifestMismatchError):
-        resolve_adapter(manifest=manifest, preference=None, override="codex")
 
 
 # --- assertion 9: daemonless rejection breadth -----------------------

@@ -179,8 +179,8 @@ def test_shipped_skill_manifests_use_canonical_session_policy() -> None:
     """Every shipped skill manifest's ``session_policy`` is on the canonical set.
 
     The resolved dispatch session policy is one of ``fresh`` / ``continue`` /
-    ``hybrid`` (:attr:`~eawf.runtime.runtimes.dispatch.AdapterHandshake.session_policy`);
-    an off-vocabulary value (e.g. the legacy ``reuse``) would never match it.
+    ``hybrid``; an off-vocabulary value (e.g. the legacy ``reuse``) would
+    never match it.
     """
     from eawf.workflow.skills.memory import MANIFEST as MEMORY_MANIFEST
 

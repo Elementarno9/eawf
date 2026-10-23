@@ -70,7 +70,7 @@ def _root(
             "--workspace",
             exists=True,
             file_okay=False,
-            help="Workspace root used to locate .ea/state.json.",
+            help="Workspace root whose .ea tree the command reads and writes.",
         ),
     ] = None,
     daemonless: Annotated[

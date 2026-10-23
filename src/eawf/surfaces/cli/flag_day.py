@@ -34,8 +34,9 @@ EPOCH1_REPLACEMENTS: Final[Mapping[str, str | None]] = {
 }
 
 #: Verbs the flag day removed from the command tree, and the legacy
-#: continuation verbs 0.7.0rc2 removed, mapped to the verb that replaces each,
-#: or ``None`` when none does.
+#: continuation verbs 0.7.0rc2 removed, and the wave-keyed ``jury label``
+#: 0.7.0rc3 removed, mapped to the verb that replaces each, or ``None`` when
+#: none does.
 RETIRED_VERBS: Final[Mapping[str, str | None]] = {
     "actual recover": None,
     "actual start": None,
@@ -105,6 +106,7 @@ RETIRED_VERBS: Final[Mapping[str, str | None]] = {
     "iter close": "batch complete",
     "iter open": "batch create",
     "iter plan": "plan submit",
+    "jury label": "batch label",
     "milestone cancel-legacy": None,
     "milestone close-legacy": None,
     "operator rollup": None,

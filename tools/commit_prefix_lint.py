@@ -183,10 +183,7 @@ _MANAGED_GOLDEN_DIRS = (
     "tests/golden/envelope/",
     "tests/golden/metrics_export/",
     "tests/golden/plugin_install/",
-    "tests/golden/spec/",
-    "tests/golden/state/",
     "tests/golden/surfaces/cli/scenarios/",
-    "tests/golden/telemetry/",
     "tests/snapshots/svg/golden/",
 )
 _GIT_TIMEOUT_SECONDS = 20.0

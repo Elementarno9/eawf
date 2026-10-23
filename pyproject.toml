@@ -227,15 +227,13 @@ target-version = "py314"
 select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF", "C901"]
 ignore = []
 # ``EAWF0##`` are external lint codes owned by eawf's own pre-commit hooks
-# (EAWF001-020), not ruff rules. Declaring them keeps ruff
+# (EAWF001-025), not ruff rules. Declaring them keeps ruff
 # from treating an inline ``# noqa: EAWF0##`` waiver as RUF102 (invalid code) /
 # RUF100 (unused) and auto-stripping it — the waiver is honored by the
 # matching eawf hook. EAWF016 is the entity-title-clarity rule; EAWF017 is the
 # inline-reference tabulation rule; EAWF018 is the structure-smell advisory
 # (block-bloat heuristics over Markdown + docstrings); EAWF019 is the
-# math-explainer facet-presence + citation-resolution rule; EAWF020 is the
-# changelog-laconic-bullet rule (renumbered from the original EAWF016 so the
-# title-clarity rule could take 016 per the doc-clarity code map); EAWF023 is
+# math-explainer facet-presence + citation-resolution rule; EAWF023 is
 # the artifact-placement + mandatory date-stem rule; EAWF024 is the test-tier
 # contract (a tests/unit/ file must not import subprocess/textual/CliRunner);
 # EAWF025 is the test-placement rule (each new test file lands under
@@ -254,7 +252,6 @@ external = [
     "EAWF017",
     "EAWF018",
     "EAWF019",
-    "EAWF020",
     "EAWF023",
     "EAWF024",
     "EAWF025",
@@ -293,7 +290,6 @@ max-complexity = 10
 "src/eawf/platform/memory/prune.py" = ["C901"]
 "src/eawf/platform/memory/store.py" = ["C901"]
 "src/eawf/platform/profiles/compose.py" = ["C901"]
-"src/eawf/surfaces/render/agent_report.py" = ["C901"]
 "src/eawf/surfaces/render/regions.py" = ["C901"]
 "src/eawf/runtime/runtimes/claude/plugin_package.py" = ["C901"]
 "src/eawf/runtime/runtimes/codex/plugin_install.py" = ["C901"]
@@ -315,8 +311,7 @@ max-complexity = 10
 # EAWF003 logger acquisition, EAWF010 module-length advisory alarm,
 # EAWF011 cognitive-complexity gate, EAWF016 entity-title-clarity, EAWF017
 # inline-reference tabulation, EAWF018 structure-smell advisory, EAWF019
-# math-explainer facet-presence + citation-resolution, EAWF020
-# changelog-laconic-bullet, EAWF023 artifact-placement + date-stem, EAWF024
+# math-explainer facet-presence + citation-resolution, EAWF023 artifact-placement + date-stem, EAWF024
 # test-tier contract, EAWF025 test placement under
 # tests/<kind>/<source-package-path>/). Ruff carries
 # no ``EAWF`` plugin, so these checks read their config from this table rather
@@ -333,7 +328,6 @@ enabled = [
     "EAWF017",
     "EAWF018",
     "EAWF019",
-    "EAWF020",
     "EAWF023",
     "EAWF024",
     "EAWF025",

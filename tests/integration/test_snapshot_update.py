@@ -253,7 +253,7 @@ def test_run_regen_omits_snapshot_out_when_in_place(
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    run_regen(resolve_surface("state"), workspace=None, output_dir=None)
+    run_regen(resolve_surface("scenarios"), workspace=None, output_dir=None)
     assert "EAWF_SNAPSHOT_OUT" not in seen["env"]
     assert seen["env"]["EAWF_REFRESH_GOLDEN"] == "1"
     assert seen["env"]["EAWF_SNAPSHOT_REGEN"] == "1"

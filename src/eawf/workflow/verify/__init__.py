@@ -11,8 +11,6 @@
   the checks in a child interpreter pinned to a throwaway sandbox, so a
   check that drives eawf's own RPCs cannot reach the caller's live
   runtime directory or live ledger.
-* Waivers — operator-attested gate overrides, counted per scope by
-  :func:`~eawf.workflow.verify.hosted_close.count_scope_waivers`.
 * :func:`~eawf.workflow.verify.readiness.load_active_verify_block` — the
   ``verify`` block the enabled profiles declare.
 
@@ -22,9 +20,6 @@ This package also owns the typed view models (:mod:`models`).
 from __future__ import annotations
 
 from eawf.workflow.verify.compile import compile_gate
-from eawf.workflow.verify.hosted_close import (
-    count_scope_waivers,
-)
 from eawf.workflow.verify.models import (
     CloseReadiness,
     CriterionView,
@@ -38,7 +33,6 @@ __all__ = [
     "CriterionView",
     "GateResult",
     "compile_gate",
-    "count_scope_waivers",
     "load_active_verify_block",
     "run_checks_out_of_process",
 ]

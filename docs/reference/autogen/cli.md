@@ -218,14 +218,6 @@ Dispatch hook events through the Eä hook runner.
 | `vale-prose` | Run the Vale prose linter over Markdown and emit the findings. |
 | `validate-prose` | Compose every Layer-2 prose check over changed Markdown — the chokepoint. |
 
-### `eawf jury`
-
-Cross-vendor jury calibration surfaces (gold-label writer).
-
-| Verb | Summary |
-|---|---|
-| `label` | Append an operator gold label for a wave via the daemon. |
-
 ### `eawf local`
 
 Upkeep of the machine-local .ea/local store.

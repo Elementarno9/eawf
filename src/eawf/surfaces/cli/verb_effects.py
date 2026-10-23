@@ -299,7 +299,6 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "render-output": _read(),
     "metrics": _mutate("runtime.estimation.refit"),
     "why": _read(),
-    "jury label": _mutate("jury.label"),
     "bench list": _read(),
     "bench run": _read(),
     "bench compare": _read(),

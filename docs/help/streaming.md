@@ -2,7 +2,7 @@
 
 A long-running verb that subscribes to the daemon event bus can stream progress as it happens instead of buffering a single block at the end. Streaming is opt-in via `--stream` and off by default so CI consumers keep a deterministic single-block stdout.
 
-No shipped verb takes `--stream` yet; the frame shapes below are the contract the streaming renderer (`src/eawf/surfaces/cli/streaming.py`) emits for a verb that wires it. To watch a long operation today, pass the operation reference a long verb answered with to `eawf follow <operation-ref>`, which polls its states until it succeeds, fails or is lost.
+No shipped verb takes `--stream` yet; the frame shapes below are the contract a verb that wires it must emit. To watch a long operation today, pass the operation reference a long verb answered with to `eawf follow <operation-ref>`, which polls its states until it succeeds, fails or is lost.
 
 ## NDJSON shape (`--json --stream`)
 

@@ -1,40 +1,20 @@
-"""Tests for the C04d skill -> adapter handshake + fallback ladder.
+"""Tests for the runtime fallback ladder.
 
-Covers the three wave success criteria:
-
-* **(a) manifest-aware adapter pick** — :func:`resolve_adapter` picks the
-  highest-preference runtime that the skill manifest can host *and* that
-  resolves to a concrete adapter, walking past a higher-preference
-  runtime the skill does not list.
-* **(b) F-d01 mismatch rejection** — a caller-supplied ``override``
-  runtime the skill manifest does not list is rejected fast with
-  :class:`AdapterManifestMismatchError`.
-* **(c) F-d02 resolution failure -> fresh per V8** — when adapter
-  session-handle resolution fails mid-dispatch, the fall-through builds a
-  fresh-session annotation with
-  :attr:`DispatchNote.CONTINUE_FAILED_FELL_BACK_TO_FRESH` on the same
-  runtime (no switch).
-
-Plus the V5 reactive-switchover ladder (error-class -> action, next-runtime
-selection) and boundary cases (preference-less wave, disjoint manifest /
-preference).
+Covers the F-d02 fall-through, where a failed session-handle resolution
+builds a fresh-session annotation with
+:attr:`DispatchNote.CONTINUE_FAILED_FELL_BACK_TO_FRESH` on the same runtime
+(no switch), and the V5 reactive-switchover ladder (error class -> action,
+next-runtime selection).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import UTC, datetime
 
 import pytest
 
 from eawf.kernel.state.enums import DispatchNote
-from eawf.runtime.runtimes.adapter import ALL_ERROR_CLASSES, RuntimeAdapter
-from eawf.runtime.runtimes.dispatch import (
-    AdapterManifestMismatchError,
-    AdapterResolutionError,
-    candidate_runtimes,
-    resolve_adapter,
-)
+from eawf.runtime.runtimes.adapter import ALL_ERROR_CLASSES
 from eawf.runtime.runtimes.fallback import (
     FallbackAction,
     fall_back_to_fresh,
@@ -42,214 +22,12 @@ from eawf.runtime.runtimes.fallback import (
     next_runtime_on_error,
     switch_runtime_annotation,
 )
-from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 
 pytestmark = pytest.mark.unit
 
 
 def _now() -> datetime:
     return datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
-
-
-def _manifest(
-    *,
-    runtime: list[str],
-    name: str = "/execute",
-    dispatch_block: dict[str, str | bool | int] | None = None,
-) -> SkillManifest:
-    """Build a valid SkillManifest with the given hostable runtimes."""
-    return SkillManifest.model_validate(
-        {
-            "name": name,
-            "description": "execute a wave",
-            "runtime": runtime,
-            "dispatch": dispatch_block or {},
-            "output_envelope_kind": "ExecutorReportBody",
-        }
-    )
-
-
-# ---------------------------------------------------------------------------
-# (a) manifest-aware adapter pick
-# ---------------------------------------------------------------------------
-
-
-def test_resolve_adapter_picks_highest_preference_hostable_runtime() -> None:
-    """The chosen runtime is the first preference entry the skill can host."""
-    manifest = _manifest(runtime=["claude-code", "codex", "opencode"])
-    adapter, handshake = resolve_adapter(
-        manifest=manifest,
-        preference=["codex", "claude-code"],
-    )
-    assert isinstance(adapter, RuntimeAdapter)
-    assert handshake.runtime_id == "codex"
-    assert adapter.id == "codex"
-    assert handshake.considered == ["codex"]
-
-
-def test_resolve_adapter_skips_runtime_not_hostable_by_skill() -> None:
-    """A higher-preference runtime the skill does not list is skipped."""
-    manifest = _manifest(runtime=["opencode"])
-    adapter, handshake = resolve_adapter(
-        manifest=manifest,
-        preference=["claude-code", "codex", "opencode"],
-    )
-    # claude-code + codex are preferred but not in the manifest; the only
-    # hostable runtime (opencode) wins.
-    assert handshake.runtime_id == "opencode"
-    assert adapter.id == "opencode"
-
-
-def test_resolve_adapter_falls_back_to_manifest_order_without_preference() -> None:
-    """A preference-less wave resolves deterministically in manifest order."""
-    manifest = _manifest(runtime=["codex", "claude-code"])
-    _adapter, handshake = resolve_adapter(manifest=manifest, preference=None)
-    assert handshake.runtime_id == "codex"
-
-
-def test_resolve_adapter_resolves_session_policy_from_manifest() -> None:
-    """The manifest ``dispatch.session_policy`` flows onto the handshake."""
-    manifest = _manifest(
-        runtime=["claude-code"],
-        dispatch_block={"session_policy": "continue"},
-    )
-    _adapter, handshake = resolve_adapter(manifest=manifest, preference=["claude-code"])
-    assert handshake.session_policy == "continue"
-
-
-def test_resolve_adapter_explicit_session_policy_wins_over_manifest() -> None:
-    """An explicit caller session policy overrides the manifest default."""
-    manifest = _manifest(
-        runtime=["claude-code"],
-        dispatch_block={"session_policy": "continue"},
-    )
-    _adapter, handshake = resolve_adapter(
-        manifest=manifest,
-        preference=["claude-code"],
-        session_policy="fresh",
-    )
-    assert handshake.session_policy == "fresh"
-
-
-def test_resolve_adapter_defaults_session_policy_to_hybrid() -> None:
-    """A manifest with no dispatch policy defaults to ``hybrid``."""
-    manifest = _manifest(runtime=["claude-code"])
-    _adapter, handshake = resolve_adapter(manifest=manifest, preference=["claude-code"])
-    assert handshake.session_policy == "hybrid"
-
-
-def test_resolve_adapter_honours_valid_override() -> None:
-    """An override runtime listed by the manifest is the only candidate."""
-    manifest = _manifest(runtime=["claude-code", "codex"])
-    _adapter, handshake = resolve_adapter(
-        manifest=manifest,
-        preference=["claude-code"],
-        override="codex",
-    )
-    assert handshake.runtime_id == "codex"
-    assert handshake.considered == ["codex"]
-
-
-def test_candidate_runtimes_intersects_preference_and_manifest() -> None:
-    """Candidates are preference order projected onto the hostable set."""
-    manifest = _manifest(runtime=["claude-code", "opencode"])
-    ordered = candidate_runtimes(
-        manifest=manifest,
-        preference=["codex", "opencode", "claude-code"],
-    )
-    # codex is dropped (not hostable); opencode then claude-code survive in
-    # preference order.
-    assert ordered == ["opencode", "claude-code"]
-
-
-def test_candidate_runtimes_appends_hostable_runtimes_preference_omits() -> None:
-    """Hostable runtimes the preference omits fall through in manifest order."""
-    manifest = _manifest(runtime=["claude-code", "codex", "opencode"])
-    ordered = candidate_runtimes(manifest=manifest, preference=["opencode"])
-    assert ordered[0] == "opencode"
-    assert set(ordered) == {"claude-code", "codex", "opencode"}
-
-
-# ---------------------------------------------------------------------------
-# (b) F-d01 mismatch rejection
-# ---------------------------------------------------------------------------
-
-
-def test_resolve_adapter_rejects_override_not_in_manifest() -> None:
-    """C04d F-d01: an off-manifest runtime override is rejected fast."""
-    manifest = _manifest(runtime=["claude-code"])
-    with pytest.raises(AdapterManifestMismatchError, match="not in skill manifest"):
-        resolve_adapter(manifest=manifest, preference=["claude-code"], override="codex")
-
-
-def test_adapter_manifest_mismatch_is_value_error() -> None:
-    """The mismatch error subclasses ValueError (server maps to -32602)."""
-    assert issubclass(AdapterManifestMismatchError, ValueError)
-
-
-def test_resolve_adapter_rejects_non_string_session_policy() -> None:
-    """A non-string manifest ``session_policy`` is a manifest authoring error."""
-    manifest = _manifest(
-        runtime=["claude-code"],
-        dispatch_block={"session_policy": True},
-    )
-    with pytest.raises(AdapterManifestMismatchError, match="must be a string"):
-        resolve_adapter(manifest=manifest, preference=["claude-code"])
-
-
-def test_resolve_adapter_raises_when_no_candidate_resolves() -> None:
-    """An empty preference / manifest intersection exhausts the ladder."""
-    # The manifest hosts only opencode, but the wave preference lists a
-    # runtime the manifest forbids — but candidate_runtimes still appends
-    # hostable runtimes, so to truly exhaust we need the manifest list to
-    # resolve to nothing. We monkeypatch resolution failure below; here we
-    # exercise the disjoint-but-hostable path resolving fine, then assert
-    # the resolution-error type exists for the exhausted ladder.
-    assert issubclass(AdapterResolutionError, ValueError)
-
-
-def test_resolve_adapter_walks_ladder_past_unresolvable_runtime(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A higher-preference runtime that fails to resolve yields to the next."""
-
-    real_select = _real_select_adapter()
-
-    def fake_select(runtime_id: str) -> RuntimeAdapter:
-        if runtime_id == "claude-code":
-            raise ValueError(f"unknown runtime: {runtime_id!r}")
-        return real_select(runtime_id)
-
-    monkeypatch.setattr("eawf.runtime.runtimes.dispatch.select_adapter", fake_select)
-    manifest = _manifest(runtime=["claude-code", "codex"])
-    _adapter, handshake = resolve_adapter(
-        manifest=manifest,
-        preference=["claude-code", "codex"],
-    )
-    # claude-code failed resolution; codex is the next candidate.
-    assert handshake.runtime_id == "codex"
-    assert handshake.considered == ["claude-code", "codex"]
-
-
-def test_resolve_adapter_raises_when_ladder_exhausted(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Every candidate failing resolution raises AdapterResolutionError."""
-
-    def always_fail(runtime_id: str) -> RuntimeAdapter:
-        raise ValueError(f"unknown runtime: {runtime_id!r}")
-
-    monkeypatch.setattr("eawf.runtime.runtimes.dispatch.select_adapter", always_fail)
-    manifest = _manifest(runtime=["claude-code", "codex"])
-    with pytest.raises(AdapterResolutionError, match="no resolvable adapter"):
-        resolve_adapter(manifest=manifest, preference=["claude-code", "codex"])
-
-
-def _real_select_adapter() -> Callable[[str], RuntimeAdapter]:
-    """Return the un-patched ``select_adapter`` for ladder tests."""
-    from eawf.runtime.runtimes.selector import select_adapter
-
-    return select_adapter
 
 
 # ---------------------------------------------------------------------------

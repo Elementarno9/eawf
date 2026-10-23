@@ -58,7 +58,7 @@ def _model_prior_commit(mod: Any, monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.parametrize(
     "staged",
     [
-        ["tests/golden/state/closed_phase.json"],
+        ["tests/golden/envelope/ok.json"],
         ["tests/snapshots/svg/golden/modes_feed.png", "tests/golden/agents_md/core_only.md"],
         ["tests/golden/surfaces/cli/scenarios/wave_close.txt"],
     ],
@@ -77,11 +77,11 @@ def test_golden_only_test_commit_skips_the_cap(
     "staged",
     [
         ["tests/unit/test_x.py"],
-        ["tests/golden/state/closed_phase.json", "tests/unit/test_x.py"],
+        ["tests/golden/envelope/ok.json", "tests/unit/test_x.py"],
         ["tests/golden/cli/help.txt"],
         ["tests/golden/surfaces/cli/scenarios/conftest.py"],
-        ["tests/golden/state_extra/closed_phase.json"],
-        ["tests/golden/state/closed_phase.json", ".ea/state.json", "src/eawf/x.py"],
+        ["tests/golden/envelope_extra/ok.json"],
+        ["tests/golden/envelope/ok.json", ".ea/state.json", "src/eawf/x.py"],
     ],
     ids=[
         "unit-test",
@@ -135,10 +135,10 @@ def test_managed_golden_dirs_match_the_snapshot_inventory(mod: Any) -> None:
     ("path", "expected"),
     [
         ("", False),
-        ("tests/golden/state/", True),
-        ("tests/golden/state/x.json", True),
-        ("tests/golden/state/test_x.py", False),
-        ("tests/golden/state", False),
+        ("tests/golden/envelope/", True),
+        ("tests/golden/envelope/x.json", True),
+        ("tests/golden/envelope/test_x.py", False),
+        ("tests/golden/envelope", False),
         ("tests/golden/cli/x.txt", False),
         ("tests/snapshots/svg/golden/x.svg", True),
         ("tests/snapshots/statusline/x.txt", False),

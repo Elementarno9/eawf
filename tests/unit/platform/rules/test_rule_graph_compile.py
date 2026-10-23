@@ -319,7 +319,7 @@ def test_compile_rule_records_non_builtin_shadowing_builtin_namespace_raises() -
 
 def test_registered_enforcement_refs_resolves_gate_kinds_and_lint_rules() -> None:
     refs = registered_enforcement_refs()
-    assert {"gate.command_exit_zero", "lint.eawf010", "lint.eawf012", "lint.eawf020"} <= refs
+    assert {"gate.command_exit_zero", "lint.eawf010", "lint.eawf012"} <= refs
     assert "lint.exclusion_expiry" not in refs
     assert all(ref.split(".", 1)[0] in {"gate", "lint"} for ref in refs)
 

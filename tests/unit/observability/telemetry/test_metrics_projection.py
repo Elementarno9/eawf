@@ -1,4 +1,4 @@
-"""Tests for the TUI metrics projection aggregator."""
+"""Tests for the telemetry session-duration aggregator."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from decimal import Decimal
 from typing import Literal
 
 import pytest
-from pydantic import ValidationError
 
 from eawf.observability.telemetry.aggregator import percentile_ms, session_durations_ms
 from eawf.observability.telemetry.models import TelemetrySession
@@ -90,11 +89,3 @@ def test_percentile_ms_rejects_out_of_range_quantile(quantile: float) -> None:
     """Error path: a quantile outside [0.0, 1.0] fails fast at the boundary."""
     with pytest.raises(ValueError, match=r"within \[0.0, 1.0\]"):
         percentile_ms([1, 2, 3], quantile)
-
-
-def test_session_duration_projection_rejects_negative_sample_count() -> None:
-    """Error path: the projection tile refuses a negative cohort size."""
-    from eawf.observability.telemetry.metrics_projection import SessionDurationProjection
-
-    with pytest.raises(ValidationError):
-        SessionDurationProjection(sample_count=-1)

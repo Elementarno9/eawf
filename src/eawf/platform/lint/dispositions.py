@@ -8,9 +8,9 @@ rules the tree actually ships.
 
 The authority is the set of rule codes, not a file listing: a numbered
 rule is whatever module under the lint package declares a module-level
-``RULE_CODE``, wherever it sits -- one lives in the package's ``tools``
-sub-directory, which is exactly how a top-level file count once missed
-it. The unnumbered entries have no code to scan for, so
+``RULE_CODE``, wherever it sits -- a rule in the package's ``tools``
+sub-directory is exactly what a top-level file count once missed. The
+unnumbered entries have no code to scan for, so
 :data:`UNNUMBERED_RULE_MODULES` names each one's module.
 
 A rewrite with no alias layer means a rule stops naming epoch-1 lifecycle
@@ -89,7 +89,6 @@ RULE_DISPOSITIONS: Final[tuple[RuleDisposition, ...]] = (
     RuleDisposition("EAWF017", "reference soup moves into a numbered table", Disposition.CARRY),
     RuleDisposition("EAWF018", "advisory structure-smell heuristics", Disposition.CARRY),
     RuleDisposition("EAWF019", "facets and citations in explainer docs", Disposition.CARRY),
-    RuleDisposition("EAWF020", "laconic-bullet prose shape", Disposition.CARRY),
     RuleDisposition("EAWF021", "success criteria are measurable", Disposition.REWRITE),
     RuleDisposition("EAWF023", "artifact placement and date stem", Disposition.REWRITE),
     RuleDisposition("EAWF024", "test-tier contract for the unit tier", Disposition.REWRITE),

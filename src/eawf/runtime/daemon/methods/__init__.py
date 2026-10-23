@@ -430,7 +430,6 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "host_subagent",
     "host_tool",
     "integration",
-    "jury",
     "mcp",
     "memory",
     "migration",
