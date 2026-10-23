@@ -135,6 +135,24 @@ def _edit_module(repo: Path) -> str:
     )
 
 
+def _read_module(repo: Path, tool_use_id: str) -> str:
+    """Bracket a Read of the module with the two tool hooks; it changes no file."""
+    path = repo / MODULE
+    base = {
+        "session_id": HOST_SESSION,
+        "cwd": str(repo),
+        "tool_name": "Read",
+        "tool_input": {"file_path": str(path)},
+        "tool_use_id": tool_use_id,
+    }
+    _hook(repo, "pre_tool_use", {**base, "hook_event_name": "PreToolUse"})
+    return _hook(
+        repo,
+        "post_tool_use",
+        {**base, "hook_event_name": "PostToolUse", "tool_response": {"file": ORIGINAL}},
+    )
+
+
 def _write_notes(repo: Path) -> str:
     path = repo / NOTES
 
@@ -179,6 +197,9 @@ def test_con_170_run_062_live_host_edits_render_as_file_blocks_that_unfold(
     and appears without a relaunch.
     """
     repo, _daemon = git_tree
+    # two Reads first, so the short frame still holds more rows than it can show
+    for tool_use_id in ("toolu_01ReadModuleM4N5O6", "toolu_01ReadModuleP7Q8R9"):
+        assert "skipped: Read edits no file" in _read_module(repo, tool_use_id)
     assert "event=EVT-" in _edit_module(repo)
 
     async def scenario(app: ConsoleApp, seam: ProjectionSeam, pilot: Any) -> None:
@@ -194,11 +215,11 @@ def test_con_170_run_062_live_host_edits_render_as_file_blocks_that_unfold(
         assert "-    return 'hello'" in opened and "+    return 'hello, world'" in opened
         assert re.search(r"BEFORE +sha256:[0-9a-f]", opened), opened
         if size == (120, 30):
-            before, after = _field(opened, "BEFORE", "AFTER"), _field(opened, "AFTER", "─")
+            before, after = _field(opened, "BEFORE", "AFTER"), _field(opened, "AFTER", "⋯")
             assert DIGEST.fullmatch(before) and DIGEST.fullmatch(after), opened
             assert before != after
         else:
-            assert re.search(r"… \d+ below", opened), "a short frame counts what it hides"
+            assert re.search(r"… \d+ (above|below)", opened), "a short frame counts what it hides"
         assert "▾" in _caret_row(opened)
         await pilot.press("enter")
 

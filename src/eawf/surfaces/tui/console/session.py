@@ -296,6 +296,9 @@ class Session(BaseModel):
     # how many blocks the transcript drew when it was held, so a held view counts what
     # arrived since; ``None`` while it follows
     tr_held_from: int | None = None
+    # how many block heads the transcript's last drawn window showed: a page key moves
+    # the cursor that far, so a page is what the reader just saw
+    tr_page: int = 1
     tr_fold: dict[int, bool] | None = None
     tr_t0: float | None = None
     rec_at: Any = None

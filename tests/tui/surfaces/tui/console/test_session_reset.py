@@ -102,6 +102,7 @@ DIRTY: dict[str, Any] = {
     "hist_sel": 2,
     "tr_sel": 6,
     "tr_held_from": 3,
+    "tr_page": 7,
     "tr_fold": {1: True},
     "tr_t0": 99.0,
     "rec_at": 98.0,

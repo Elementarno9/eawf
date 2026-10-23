@@ -138,19 +138,16 @@ def test_the_fixture_is_the_recorded_native_turn() -> None:
 # ---------- 1: a usage reading states its counters ----------
 
 
-def test_every_usage_reading_states_its_counters() -> None:
+def test_every_usage_reading_states_its_counters_in_the_runs_totals() -> None:
+    """The three readings open no block; the latest running total ends the STATE row."""
     model = _model()
-    usage = [block for block in model.blocks if block.kind is RunEventKind.USAGE_OBSERVED]
-    assert len(usage) == 3
-    assert all(block.text.value is not None for block in usage)
-    assert usage[-1].text.value == (
-        "3 in · 1,014 out · 11,539 cache tokens · running total · unpriced · measured"
-    )
-    assert {block.lane for block in usage} == {"usage"}
+    assert all(block.kind is not RunEventKind.USAGE_OBSERVED for block in model.blocks)
     frame = _frame(model)
     assert NO_TEXT_REASON.split(" the")[0] not in frame
     assert "this event kind states no text" not in frame
-    assert "# usage" in frame
+    assert "# usage" not in frame
+    state = next(row for row in frame.split("\n") if " STATE " in row).rstrip()
+    assert state.endswith("in 3 · out 1,014 · cache 11,539 · cost unpriced")
 
 
 def test_a_usage_reading_states_only_the_counters_it_carries() -> None:
@@ -186,11 +183,8 @@ def test_the_semantic_prefix_is_the_launchers_spelling() -> None:
 def test_a_semantic_tool_call_is_drawn_once_under_the_gateways_lines() -> None:
     model = _model()
     tools = [block for block in model.blocks if block.lane == "tool"]
-    assert [block.text.value for block in tools] == [
-        "submit_report · requested",
-        "submit_report · accepted",
-        "submit_report · result · succeeded",
-    ]
+    # the gateway's requested, accepted and result lines fold into the call's one row
+    assert [block.text.value for block in tools] == ["submit_report · succeeded"]
     assert SEMANTIC_TOOL_PREFIX not in _frame(model)
 
 

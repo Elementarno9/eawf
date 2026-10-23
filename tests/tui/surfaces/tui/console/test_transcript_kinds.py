@@ -149,11 +149,12 @@ def _kinds(frame: str) -> list[tuple[str, str]]:
 
 
 def test_con_169_con_170_every_kind_renders_as_its_glyph_and_word_at_every_width() -> None:
-    """CON-169, CON-170, RUN-062: all nine kinds, each glyph beside its full word."""
+    """CON-169, CON-170, RUN-062: all nine kinds, each glyph beside its full word.
+
+    A tool call's requested, accepted and result lines draw one tool row.
+    """
     expected = [
         "message",
-        "tool",
-        "tool",
         "tool",
         "file",
         "error",
@@ -190,17 +191,18 @@ def test_con_170_work_in_flight_states_how_long_and_a_question_what_it_waits_for
 def _opened(kind: str) -> str:
     """Return the wide frame with the block of *kind* unfolded."""
     events = nine_kinds()
-    shots = frames(events, keys=[*(["ArrowUp"] * (len(events) - 1 - _index(kind))), "Enter"])
+    blocks, _ = build_transcript_blocks(events)
+    shots = frames(events, keys=[*(["ArrowUp"] * (len(blocks) - 1 - _index(kind))), "Enter"])
     return shots[1]
 
 
 def _index(kind: str) -> int:
-    return {"tool": 3, "file": 4, "error": 5, "question": 8}[kind]
+    return {"tool": 1, "file": 2, "error": 3, "question": 6}[kind]
 
 
 def test_con_170_a_tool_opens_on_the_receipt_its_output_is_held_under() -> None:
     opened = _opened("tool")
-    assert "repo_read · result · succeeded" in opened
+    assert "repo_read · succeeded" in opened
     assert re.search(rf"OUTPUT +held under receipt {RECEIPT}", opened)
 
 
@@ -273,7 +275,7 @@ def test_an_empty_stream_draws_no_provider_tool_block() -> None:
 
 
 def test_provider_tools_render_edits_as_file_and_the_rest_as_tool_at_every_width() -> None:
-    expected = ["file", "file", "tool", "tool", "running"]
+    expected = ["file", "tool", "running"]
     for shot in frames(provider_tools()):
         drawn = _kinds(shot)
         assert drawn, "every width draws at least one block"
@@ -285,17 +287,16 @@ def test_provider_tools_render_edits_as_file_and_the_rest_as_tool_at_every_width
 def test_a_provider_tool_block_states_its_name_phase_and_outcome() -> None:
     blocks, _ = build_transcript_blocks(provider_tools())
 
+    # one row per call, reading where the call stands now
     assert [block.text.value for block in blocks] == [
-        "edit · requested",
-        "edit · result · succeeded",
-        "bash · requested",
-        "bash · result · failed",
+        "edit · succeeded",
+        "bash · failed",
         "grep · requested",
     ]
     # a request opens the call and its result closes it; the typical time is per tool
-    assert [block.in_flight for block in blocks] == [False, False, False, False, True]
-    assert blocks[2].typical_seconds == 3
-    assert blocks[4].typical_seconds is None
+    assert [block.in_flight for block in blocks] == [False, False, True]
+    assert blocks[1].typical_seconds == 3
+    assert blocks[2].typical_seconds is None
 
 
 # ---- a native turn's thinking closes on what follows; a lost provider is an error ------

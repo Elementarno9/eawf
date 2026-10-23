@@ -150,6 +150,9 @@ MOTION: frozenset[str] = frozenset(
         "End",
         "Enter",
         "Tab",
+        # one notch of the mouse wheel, which the console hands on as a key
+        "WheelUp",
+        "WheelDown",
     }
 )
 #: The keys a route's native frame draws nothing for, so its bar neither advertises nor

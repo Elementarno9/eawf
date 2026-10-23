@@ -827,9 +827,16 @@ def test_con_022_the_first_escape_clears_the_bucket_and_the_second_leaves(route:
     assert session.route == "scope.home"
 
 
+#: The app's only pointer handlers: each wheel notch is handed on as a key.
+_WHEEL_HANDLERS = frozenset({"on_mouse_scroll_up", "on_mouse_scroll_down"})
+
+
 def test_con_026_pane_geometry_answers_to_the_terminal_shape_alone() -> None:
-    """CON-026: the console binds no pointer handler, so no drag can resize a pane."""
-    own = vars(ConsoleApp)
+    """CON-026: the console binds no drag or click handler, so no drag can resize a pane.
+
+    The wheel pair only hands a notch on as a key, so it moves no pane.
+    """
+    own = set(vars(ConsoleApp)) - _WHEEL_HANDLERS
     assert not [name for name in own if "mouse" in name or "click" in name or "drag" in name]
     session = _session("activity")
     assert _draw(session) == _draw(session)
@@ -1163,7 +1170,7 @@ def _pointer_handlers(cls: type) -> set[str]:
 
 
 def test_con_025_the_breadcrumb_and_the_row_click_are_the_only_pointer_handlers() -> None:
-    assert _pointer_handlers(ConsoleApp) == set()
+    assert _pointer_handlers(ConsoleApp) == _WHEEL_HANDLERS
     assert _pointer_handlers(ProjectionHeader) == {"on_click"}
     assert _pointer_handlers(Body) == {"on_click"}
     assert _pointer_handlers(KeybarRow) == set()

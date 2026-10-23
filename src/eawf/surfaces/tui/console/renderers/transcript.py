@@ -17,7 +17,7 @@ from __future__ import annotations
 import textwrap
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import MappingProxyType
 from typing import Any
 
@@ -28,6 +28,8 @@ from eawf.kernel.projection.transcript import (
     TranscriptReadModel,
 )
 from eawf.kernel.projection.truth import TruthField, TruthKind
+from eawf.kernel.runtime.events import RunEventKind
+from eawf.kernel.runtime.usage import UsageTotals
 from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import value_cell
@@ -36,6 +38,7 @@ from eawf.surfaces.tui.console.format import clock_time, group
 from eawf.surfaces.tui.console.frame import (
     Breadth,
     Fixed,
+    Receded,
     View,
     acting_pairs,
     bar,
@@ -46,7 +49,7 @@ from eawf.surfaces.tui.console.frame import (
     strip_chips,
     thin,
 )
-from eawf.surfaces.tui.console.keybar import CHROME_KEYS, KeyEntry, keybar, route_pairs
+from eawf.surfaces.tui.console.keybar import CHROME_KEYS, KEY, KeyEntry, keybar, route_pairs
 from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.live_reads import held_usage
 from eawf.surfaces.tui.console.navigation import Ctx, busy, copied
@@ -60,6 +63,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     route_crumb,
 )
 from eawf.surfaces.tui.console.session import Session
+from eawf.surfaces.tui.console.tokens import RAIL
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 PREVIEW = 2
@@ -84,6 +88,7 @@ _NATIVE_KEYS = tuple(
     entry.pair() for entry in native_keys("transcript", windowed=False) if entry not in CHROME_KEYS
 )
 _NEWEST = KeyEntry("newest", ("End",)).pair()
+_PAGE = KEY["page"].pair()
 Block = Mapping[str, Any]
 
 
@@ -235,6 +240,27 @@ def _window(flat: list[Line], sel: int, track_h: int) -> Window:
     return Window(lines, top, take, above, below)
 
 
+def _scrollbar(body: list[str], win: Window, total: int) -> list[str]:
+    """Return ``body`` with the scrollbar column appended: a thumb on a thin track.
+
+    The thumb's length is the share of the transcript on screen and its offset the share
+    above it, both scaled to the track and kept inside it, so a reader sees where the
+    window sits in a long run as well as that it was cut.
+
+    Args:
+        body: The block section's rows, one per track row.
+        win: The window the rows draw.
+        total: How many transcript lines the window was cut from; more than ``win`` shows.
+
+    Returns:
+        Each row followed by a space and ``█`` on a thumb row or ``│`` on a track row.
+    """
+    track = len(body)
+    size = min(track, max(1, round(track * len(win.lines) / total)))
+    start = max(0, min(track - size, round(track * win.top / total)))
+    return [f"{row} {'█' if start <= i < start + size else RAIL}" for i, row in enumerate(body)]
+
+
 def _state(view: View, blocks: Sequence[Block]) -> str:
     """Return the Run's state word: thinking, running, idle under a held clock, or done."""
     think = next((b for b in blocks if b["k"] == "thinking" and _running(b)), None)
@@ -327,7 +353,6 @@ NATIVE_GLYPH: Mapping[str, str] = MappingProxyType(
         "running": "⋯",
         "purged": "✗",
         "event": "·",
-        "usage": "#",
     }
 )
 
@@ -342,9 +367,21 @@ DERIVED_LABEL = "derived"
 #: What the state row says beside the Run's status when no reasoning turn is open.
 NOT_THINKING = "no reasoning turn open"
 
+#: What the state row ends on before the Run's first usage reading.
+USAGE_NOT_READ = "usage not read yet"
+
 #: What the line under the header says of a RUNNING Run with no block open: the Run
 #: itself is still in flight, between the things it does.
 RUN_IN_FLIGHT = "in flight"
+
+#: What the in-progress row says of a running Run waiting on no tool: the model has the turn.
+MODEL_TURN = "model turn"
+
+#: What the in-progress row says of a queued Run, which the daemon has not admitted yet.
+AWAITING_ADMISSION = "waiting on admission"
+
+# The lanes whose block is a tool call a running Run can be waiting on.
+_TOOL_LANES = frozenset({"tool", "file"})
 
 #: What the block section says for a Run that has produced nothing.
 NO_BLOCK = "∅ this Run has produced no event · nothing has been observed of it yet"
@@ -360,6 +397,10 @@ _LABEL_W = 10
 
 # The kind column's width: the longest kind word and its gap.
 _KIND_W = 11
+
+# The in-progress row's head: no clock time, since it is no recorded line, then the
+# running glyph and its kind word in the columns a block head puts them in.
+_LIVE_HEAD = f" {' ' * 8}  {NATIVE_GLYPH['running']} " + pad("now", _KIND_W)
 
 
 def _purged_text(purged: PurgedRange) -> str:
@@ -443,11 +484,14 @@ def _seconds(block: TranscriptBlock, to: datetime | None) -> int:
 def _note(
     block: TranscriptBlock, *, hidden: int, is_open: bool, to: datetime | None, breadth: Breadth
 ) -> str:
-    """Return a block head's right-hand note: its elapsed, its fold or its hole.
+    """Return a block head's right-hand note: its elapsed, its durations, its fold or its hole.
 
     A block in flight states how long it has run and, where width allows, how long its
     kind of work usually takes -- a derived comparison, never a countdown: the wide
-    layout shows it and the widest labels it.
+    layout shows it and the widest labels it. A finished block states the input and
+    output tokens and the seconds of the model turn that produced it and how long its
+    call took, before its fold mark, so a slow Run shows whether its time went to the
+    model or to its tools.
     """
     if block.purged is not None:
         return PURGED_MARK
@@ -460,15 +504,25 @@ def _note(
             text += f" · {typical}" + (" typical" if breadth is Breadth.XWIDE else "")
         # work in flight that folds lines away still says so, before its elapsed
         return (("▾ " if is_open else "▸ ") if hidden else "") + text
+    spent = [
+        f"+{group(tokens)} {word}"
+        for tokens, word in ((block.turn_input_tokens, "in"), (block.turn_output_tokens, "out"))
+        if tokens is not None
+    ]
+    if block.turn_seconds is not None:
+        spent.append(f"turn {fmt_dur(block.turn_seconds)}")
+    if block.duration_seconds is not None:
+        spent.append(fmt_dur(block.duration_seconds))
+    mark = ""
     if block.delegation is not None and not block.delegation.readable and not is_open:
-        return UNAVAILABLE_MARK
-    if hidden:
-        return f"▾ {plural(hidden, 'line')}" if is_open else f"▸ {plural(hidden, 'line')}"
-    return ""
+        mark = UNAVAILABLE_MARK
+    elif hidden:
+        mark = f"▾ {plural(hidden, 'line')}" if is_open else f"▸ {plural(hidden, 'line')}"
+    return " · ".join(part for part in (*spent, mark) if part)
 
 
-# The cells a fold note takes with its gap, at most: ``▾ 999 lines``.
-_FOLD_NOTE_W = 13
+# The most lines a fold note is sized for, so its widest form is ``▾ 999 lines``.
+_MOST_HIDDEN = 999
 
 
 def _wrap_two(text: str, first: int, rest: int) -> list[str]:
@@ -499,17 +553,17 @@ def _layout(view: View, model: TranscriptReadModel, index: int) -> _Laid:
     """Return one block laid out at the frame's width.
 
     The preview shows the first two lines of the text and the fold opens the rest and
-    the body. The first line leaves room for the note; a block whose note is a fold
-    reserves the widest fold note, and work in flight its fold mark beside its elapsed,
-    so the count it states is the count of lines it really hides.
+    the body. The first line leaves room for the note as wide as it can grow: its
+    durations or elapsed beside the widest fold mark, so the count it states is the
+    count of lines it really hides.
     """
     block, w = model.blocks[index], view.w
     word = native_word(block)
     head = f" {clock_time(block.at)}  {NATIVE_GLYPH.get(word, UNGLYPHED)} " + pad(word, _KIND_W)
     room = max(8, (w - 2) - cell_len(head) - 1)
     to = reference(view, model)
-    fixed = _note(block, hidden=0, is_open=False, to=to, breadth=view.breadth)
-    reserve = cell_len(fixed) + 2 + (2 if block.in_flight else 0) if fixed else _FOLD_NOTE_W
+    widest = _note(block, hidden=_MOST_HIDDEN, is_open=False, to=to, breadth=view.breadth)
+    reserve = cell_len(widest) + 2
     wrapped = _wrap_two(_block_text(block), max(4, room - reserve), room)
     body = _body_lines(block, room)
     hidden = max(0, len(wrapped) - PREVIEW) + len(body)
@@ -538,6 +592,64 @@ def _native_block_lines(view: View, model: TranscriptReadModel, index: int) -> l
 def native_hidden(view: View, model: TranscriptReadModel, index: int) -> int:
     """Return how many lines block ``index`` folds away at the frame's width."""
     return _layout(view, model, index).hidden
+
+
+def _awaited_tool(model: TranscriptReadModel) -> TranscriptBlock | None:
+    """Return the newest tool call the Run is held by, or ``None`` when it waits on none.
+
+    A call is awaited while it is in flight, and also as the newest block while it is
+    only requested: a gateway call is in flight from its acceptance, yet the Run already
+    waits on it. Work detached into the background holds nothing.
+    """
+    last = model.blocks[-1] if model.blocks else None
+    return next(
+        (
+            b
+            for b in reversed(model.blocks)
+            if b.lane in _TOOL_LANES
+            and not b.background
+            and (b.in_flight or (b is last and b.kind is RunEventKind.TOOL_REQUESTED))
+        ),
+        None,
+    )
+
+
+def _in_progress(view: View, model: TranscriptReadModel) -> str | None:
+    """Return what the Run is doing now and for how long, or ``None`` once it is not live.
+
+    A running Run waits on the tool call it is held by, timed from its request, or else
+    on the model, timed from when the latest block's work ended; a queued Run waits on
+    admission, timed from its latest block. A Run with no block yet has nothing to time
+    from, so the row names the wait alone.
+
+    Args:
+        view: The render being built; its clock is the instant the elapsed runs to.
+        model: The route's read model, whose stored Run status says whether it is live.
+
+    Returns:
+        The row's words, or ``None`` for a Run in any status but queued or running.
+    """
+    run = view.session.subj_id or (model.rows[0].key if model.rows else None)
+    status = _run_status(model, run)
+    stored = status.value if status is not None else None
+    if stored not in (RunStatus.RUNNING, RunStatus.QUEUED):
+        return None
+    tool = _awaited_tool(model) if stored == RunStatus.RUNNING else None
+    since: datetime | None = None
+    if tool is not None:
+        # the block's first words name the call: its tool id, tool name or command family
+        words = f"waiting on tool {_block_text(tool).split(' · ')[0]}"
+        since = tool.at
+    else:
+        words = MODEL_TURN if stored == RunStatus.RUNNING else AWAITING_ADMISSION
+        if model.blocks:
+            latest = model.blocks[-1]
+            # a finished call's line is its request, so its work ended a duration later
+            since = latest.at + timedelta(seconds=latest.duration_seconds or 0)
+    to = reference(view, model)
+    if since is None or to is None:
+        return words
+    return f"{words} · {fmt_dur(max(0, int((to - since).total_seconds())))}"
 
 
 def native_context(view: View, model: TranscriptReadModel) -> str:
@@ -602,6 +714,28 @@ def _run_status(model: TranscriptReadModel, run: str | None) -> TruthField[str] 
     return model.rows[found].field("status") if found is not None else None
 
 
+def _usage_words(usage: UsageTotals | None) -> str:
+    """Return the Run's totals as the state row ends on them.
+
+    A counter no reading reported is left out rather than drawn as zero, and a Run whose
+    readings priced nothing says so rather than stating a cost of nothing.
+    """
+    if usage is None:
+        return USAGE_NOT_READ
+    counts = [
+        f"{word} {group(tokens)}"
+        for word, tokens in (
+            ("in", usage.input_tokens),
+            ("out", usage.output_tokens),
+            ("cache", usage.cache_tokens),
+        )
+        if tokens is not None
+    ]
+    cost = usage.cost_microusd
+    priced = "cost unpriced" if cost is None else f"cost {cost / 1_000_000:.4f} USD"
+    return " · ".join((*counts, priced))
+
+
 def _state_rows(view: View, model: TranscriptReadModel, w: int) -> list[str]:
     """Return the state row, and the thinking cell's reason under it when the cell is marked.
 
@@ -609,7 +743,8 @@ def _state_rows(view: View, model: TranscriptReadModel, w: int) -> list[str]:
     run reaches; the reason goes on its own rows, wrapped at the frame width rather than
     cut, and without the state word the row above already printed. With no reasoning turn
     open the row leads with the Run's stored status instead, since a Run that is not
-    thinking is still in a state the register knows.
+    thinking is still in a state the register knows. The row ends on what the Run's
+    usage readings add up to.
     """
     run = view.session.subj_id or (model.rows[0].key if model.rows else None)
     status = _run_status(model, run)
@@ -630,6 +765,7 @@ def _state_rows(view: View, model: TranscriptReadModel, w: int) -> list[str]:
     ]
     if model.quarantined:
         parts.append(f"{group(model.quarantined)} quarantined")
+    parts.append(_usage_words(model.usage))
     rows = [" STATE     " + " · ".join(parts)]
     if thinking.reason:
         indent = " " * 11
@@ -699,10 +835,28 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
         for index in range(len(model.blocks))
         for n, line in enumerate(_native_block_lines(view, model, index))
     ]
+    live = _in_progress(view, model)
+    live_shown = live is not None
     body: list[str] = []
     if flat:
+        # the in-progress row sits under the blocks as a line of a block past the last,
+        # so the caret, which marks a real block, never lands on it
+        if live is not None:
+            flat.append(Line(len(model.blocks), True, _LIVE_HEAD + live))
         win = _window(flat, sel, track)
+        if live is not None and session.follow:
+            tail = _window(flat, len(model.blocks), track)
+            # a following window ends on the row, unless that scrolls the caret's own
+            # head away, as opening a block longer than the section would
+            if any(line.head and line.block == sel for line in tail.lines):
+                win = tail
+        session.tr_page = sum(
+            1 for line in win.lines if line.head and line.block < len(model.blocks)
+        )
+        live_shown = live_shown and not win.below
         sliced = bool(win.above or win.below)
+        # a cut window is what the page keys page through, so the bar offers them then
+        session.windowed = session.windowed or sliced
         width = w - 2 if sliced else w
         if win.above:
             body.append(pad(f" … {win.above} above", width))
@@ -715,10 +869,16 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
         # the feed fills from the bottom, so a short run sits against the section's foot
         body[:0] = [pad("", width)] * max(0, track - len(body))
         if sliced:
-            body = [f"{row} █" for row in body]
+            body = _scrollbar(body, win, len(flat))
     else:
         body.append(f" BLOCKS    {NO_BLOCK}")
-    rows = [*opening, *(Fixed(pad(strip_chips(row), w)) for row in body), *closing]
+        if live is not None:
+            body.append(_LIVE_HEAD + live)
+    drawn: list[str] = [Fixed(pad(strip_chips(row), w)) for row in body]
+    if live_shown:
+        # the in-progress row is always the last row drawn, and greyed as not yet a block
+        drawn[-1] = Receded(drawn[-1])
+    rows = [*opening, *drawn, *closing]
     session.nav_rows = len(model.blocks)
     folded = native_hidden(view, model, sel) if model.block_at(sel) is not None else 0
     # Enter folds the block under the caret, so a block with nothing folded offers nothing,
@@ -731,6 +891,9 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
     # following it, sits beside follow; the prototype's golden bars stay the table's own
     after_follow = next(i for i, pair in enumerate(pairs) if pair[1] == "follow") + 1
     pairs.insert(after_follow, _NEWEST)
+    # the page keys step as the arrows do, a window at a time, so they sit beside them
+    after_block = next(i for i, pair in enumerate(pairs) if pair[1] == "block") + 1
+    pairs.insert(after_block, _PAGE)
     return build(view, rows, keybar(acting_pairs(view, pairs), w))
 
 
@@ -768,21 +931,68 @@ def _resume(s: Session, total: int) -> None:
     s.tr_sel = max(0, total - 1)
 
 
+#: How many blocks one notch of the mouse wheel moves the cursor.
+WHEEL_BLOCKS = 3
+
+# The keys that move the cursor and the way each one moves it; a page key's step is
+# scaled by the blocks the last window showed.
+_MOVES: Mapping[str, int] = MappingProxyType(
+    {
+        "ArrowUp": -1,
+        "ArrowDown": 1,
+        "PageUp": -1,
+        "PageDown": 1,
+        "WheelUp": -WHEEL_BLOCKS,
+        "WheelDown": WHEEL_BLOCKS,
+    }
+)
+
+
+def _move(ctx: Ctx, key: str, model: TranscriptReadModel, sel: int) -> None:
+    """Move the cursor from block ``sel`` as ``key`` does, holding or following.
+
+    The move is clamped to the first and the newest block. Landing on the newest block
+    follows the tail, as ``End`` does; landing anywhere above it holds the view.
+
+    Args:
+        ctx: The keystroke's context; its session's cursor and follow flag change.
+        key: One of the moving keys, an arrow, a page key or a wheel notch.
+        model: The read model whose blocks the cursor walks.
+        sel: The block the cursor sat on before the key.
+    """
+    s = ctx.s
+    total = len(model.blocks)
+    newest = max(0, total - 1)
+    page = max(1, s.tr_page) if key in ("PageUp", "PageDown") else 1
+    to = max(0, min(newest, sel + _MOVES[key] * page))
+    was = s.follow
+    s.tr_sel = to
+    if to == newest:
+        _resume(s, total)
+    else:
+        _hold(s, total)
+    if (to, s.follow) == (sel, was):
+        # a move at the edge changes nothing, and a log line would toast every notch
+        return
+    block = model.block_at(to)
+    note = f"{block.lane} · {clock_time(block.at)}" if block else "no block"
+    ctx.log(key, note + (" · following the tail" if s.follow else ""))
+
+
 def _native_seam(ctx: Ctx, key: str, model: TranscriptReadModel) -> bool:
     """Walk, fold, hold, follow and copy the blocks of a held read model.
 
     ``Space`` and ``f`` toggle between holding the cursor where it is and following the
-    newest block, ``End`` jumps to the newest block and follows it, and the arrows hold.
+    newest block, and ``End`` jumps to the newest block and follows it. An arrow, a page
+    key or a wheel notch holds the view, unless it lands on the newest block, which
+    follows the tail again as ``End`` does.
     """
     s = ctx.s
     total = len(model.blocks)
     sel = max(0, total - 1) if s.tr_sel is None else s.tr_sel
     s.tr_sel = sel
-    if key in ("ArrowDown", "ArrowUp"):
-        s.tr_sel = max(0, min(total - 1, sel + (1 if key == "ArrowDown" else -1)))
-        _hold(s, total)
-        block = model.block_at(s.tr_sel)
-        ctx.log(key, f"{block.lane} · {clock_time(block.at)}" if block else "no block")
+    if key in _MOVES:
+        _move(ctx, key, model, sel)
         return True
     block = model.block_at(sel)
     if key in _EMPTY_ANSWERS and block is None:

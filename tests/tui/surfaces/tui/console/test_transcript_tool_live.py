@@ -138,7 +138,7 @@ def _unfold(frame: str) -> str:
 def test_con_170_run_062_live_host_tool_calls_render_with_their_output(
     live_tree: tuple[Path, _Daemon], monkeypatch: pytest.MonkeyPatch, size: tuple[int, int]
 ) -> None:
-    """CON-170, RUN-062: each host call is three tool blocks; a result unfolds to its output.
+    """CON-170, RUN-062: each host call is one tool block that unfolds to its output.
 
     The failed command states the gateway's error code and the trace it failed with; the
     successful one its output, with the line carrying a home path withheld whole; the
@@ -154,7 +154,7 @@ def test_con_170_run_062_live_host_tool_calls_render_with_their_output(
         await pilot.press("up")
         frame = await _frame(app, pilot)
         assert re.search(rf"\d\d:\d\d:\d\d  {re.escape(NATIVE_GLYPH['tool'])} tool", frame)
-        assert "bash · result · failed" in _caret_row(frame)
+        assert "bash · failed" in _caret_row(frame)
         # the failed command unfolds to the gateway's code and the trace it failed with
         hidden = _unfold(frame)
         await pilot.press("enter")
@@ -164,10 +164,10 @@ def test_con_170_run_062_live_host_tool_calls_render_with_their_output(
         assert re.search(r"OUTPUT +Exit code 1", failed), failed
         assert "No rule to make target 'nope'." in failed
         await pilot.press("enter")
-        # three blocks up: the build's result, whose leaked line is withheld whole
-        await pilot.press("up", "up", "up")
+        # one block up: the build, whose leaked line is withheld whole
+        await pilot.press("up")
         folded = await _frame(app, pilot)
-        assert "bash · result · succeeded" in _caret_row(folded)
+        assert "bash · succeeded" in _caret_row(folded)
         _unfold(folded)
         await pilot.press("enter")
         built = await _frame(app, pilot)
@@ -175,10 +175,10 @@ def test_con_170_run_062_live_host_tool_calls_render_with_their_output(
         assert WITHHELD_LINE.split(",")[0] in built
         assert "jdoe" not in built
         await pilot.press("enter")
-        # three more up: the file read, which unfolds to the file's lines
-        await pilot.press("up", "up", "up")
+        # one more up: the file read, which unfolds to the file's lines
+        await pilot.press("up")
         folded = await _frame(app, pilot)
-        assert "read · result · succeeded" in _caret_row(folded)
+        assert "read · succeeded" in _caret_row(folded)
         await pilot.press("enter")
         read = await _frame(app, pilot)
         assert re.search(r"OUTPUT +alpha is the first line", read), read
@@ -194,7 +194,7 @@ def test_con_170_run_062_live_host_tool_calls_render_with_their_output(
 def test_run_062_every_host_call_phase_is_one_tool_block_in_run_order(
     live_tree: tuple[Path, _Daemon], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RUN-062: nine lines, one per phase, and a retried hook adds none."""
+    """RUN-062: three rows, one per call however many phases it wrote; a retried hook adds none."""
     repo, _daemon = live_tree
     _session(repo)
     _session(repo)
@@ -202,27 +202,21 @@ def test_run_062_every_host_call_phase_is_one_tool_block_in_run_order(
     async def scenario(app: ConsoleApp, seam: ProjectionSeam, pilot: Any) -> None:
         await _open(app, pilot, PARENT)
         await _until(app, pilot, lambda f: "Bash failed: Exit code 1" in f)
-        # the failed call's error block is the one line past the nine tool phases
+        # the failed call's error block is the one line past the three tool rows
         await pilot.press("up")
         frame = await _frame(app, pilot)
         assert set(_kinds(frame)) == {"tool", "error"}, frame
-        assert "bash · result · failed" in _caret_row(frame)
+        assert "bash · failed" in _caret_row(frame)
         rows = [_caret_row(frame)]
-        for _ in range(9):
+        for _ in range(3):
             await pilot.press("up")
             rows.append(_caret_row(await _frame(app, pilot)))
-        found = [re.search(r"(read|bash) · (requested|accepted|result)", row) for row in rows]
+        found = [re.search(r"(read|bash) · (succeeded|failed)", row) for row in rows]
         assert [(m.group(1), m.group(2)) for m in reversed(found) if m] == [
-            ("read", "requested"),
-            ("read", "requested"),
-            ("read", "accepted"),
-            ("read", "result"),
-            ("bash", "requested"),
-            ("bash", "accepted"),
-            ("bash", "result"),
-            ("bash", "requested"),
-            ("bash", "accepted"),
-            ("bash", "result"),
-        ], "nine blocks in run order; the cursor rests on the first past the top"
+            ("read", "succeeded"),
+            ("read", "succeeded"),
+            ("bash", "succeeded"),
+            ("bash", "failed"),
+        ], "three rows in run order; the cursor rests on the first past the top"
 
     _launch(repo, monkeypatch, scenario, (120, 30))

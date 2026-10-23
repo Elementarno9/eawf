@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any
 from textual._time import get_time
 from textual.app import App, ComposeResult
 from textual.constants import ESCAPE_DELAY
-from textual.events import Click, Key, Resize
+from textual.events import Click, Key, MouseScrollDown, MouseScrollUp, Resize
 
 from eawf.kernel.config.schema import ToastVerbosity
 from eawf.kernel.projection.attention import delivered_revisions, deliveries
@@ -1570,3 +1570,13 @@ class ConsoleApp(App[None]):
         named = dispatcher_key(event.key, event.character)
         if named is not None:
             self.press_key(named[0], shift=named[1], at=at)
+
+    def on_mouse_scroll_up(self, event: MouseScrollUp) -> None:
+        """Hand one notch of the wheel up to the dispatcher as the ``WheelUp`` key."""
+        event.stop()
+        self.press_key("WheelUp")
+
+    def on_mouse_scroll_down(self, event: MouseScrollDown) -> None:
+        """Hand one notch of the wheel down to the dispatcher as the ``WheelDown`` key."""
+        event.stop()
+        self.press_key("WheelDown")

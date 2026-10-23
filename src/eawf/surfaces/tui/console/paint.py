@@ -198,6 +198,8 @@ _CRUMB_STYLE: Mapping[CrumbPart, tuple[str | None, bool, bool]] = MappingProxyTy
     }
 )
 _GAP_GLYPH = "▲"
+# The scrollbar thumb a cut transcript window draws in its last column.
+_THUMB = "█"
 
 
 class _Canvas:
@@ -294,9 +296,11 @@ def paint(row: str, part: Part) -> tuple[Stroke, ...]:
     canvas = _Canvas(row)
     if part is Part.HEADER:
         _header(canvas)
-    elif part is Part.KEYBAR:
+        return canvas.strokes()
+    if part is Part.KEYBAR:
         _keybar(canvas)
-    elif isinstance(row, Receded):
+        return canvas.strokes()
+    if isinstance(row, Receded):
         _receded(canvas)
     elif isinstance(row, Disabled):
         canvas.put(0, canvas.size, "dim")
@@ -312,7 +316,29 @@ def paint(row: str, part: Part) -> tuple[Stroke, ...]:
         if edge is not None:
             _receded(canvas, end=edge.start())
         _inline(canvas, row)
+    _scrollbar(canvas)
     return canvas.strokes()
+
+
+def _scrollbar(canvas: _Canvas) -> None:
+    """Draw a row's trailing scrollbar cell: the thumb in the accent, the track as the rail.
+
+    The column is a space and one glyph at the row's end, and is set apart from the row
+    whatever drew the rest: a block head, a receded row or the caret's ground.
+    """
+    row = canvas.row
+    if canvas.size < 2 or row[-2] != " ":
+        return
+    if row[-1] == _THUMB:
+        surface = "brand"
+    elif row[-1] == RAIL and row.count(RAIL) == 1:
+        # a row with another rail is a box or a split pane, whose last rail is its edge
+        surface = "rail"
+    else:
+        return
+    end = canvas.size
+    canvas.put(end - 1, end, surface)
+    canvas.ground[end - 1] = None
 
 
 # How each inline markdown style is drawn: its surface, bold, italic, underline. A link

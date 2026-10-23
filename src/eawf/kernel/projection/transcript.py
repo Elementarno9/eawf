@@ -90,7 +90,7 @@ from eawf.kernel.runtime.events import (
     RunEventRecord,
     ToolPayload,
 )
-from eawf.kernel.runtime.usage import UsagePayload
+from eawf.kernel.runtime.usage import UsagePayload, UsageTotals, aggregate_usage
 from eawf.kernel.state.enums import MeasurementQuality
 from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.runtime.daemon.run_events import reduce_run_events
@@ -214,7 +214,8 @@ class TranscriptBlock:
     Attributes:
         sequence: The block's position in the Run's stream. A purged block carries the
             first missing sequence of its range.
-        kind: The event kind the block was folded out of.
+        kind: The event kind the block was folded out of; for a tool call, the kind of
+            its latest line.
         at: When the daemon recorded the line. The provider's own stamp is not used: a
             worker that has stopped responding is in no position to be believed about
             what time it is.
@@ -239,6 +240,16 @@ class TranscriptBlock:
             tool call returned, the diff a file change is held at, what a question waits
             on, an error's code, retry class and trace. Every line is read off the
             event's own payload, or off the content its reference resolved to.
+        duration_seconds: On a tool call, the whole seconds from its request line to its
+            result line; ``None`` until the result lands and on every other block.
+        turn_seconds: On the first block after a usage reading, the whole seconds of the
+            model turn that reading closed: from the latest tool result before it, or
+            from the Run's first line when none came before; ``None`` on every other block.
+        turn_input_tokens: On the block carrying ``turn_seconds``, the input tokens the
+            turn spent: its reading less the reading the previous turn was drawn with,
+            or the reading itself when it is not a running total or none came before;
+            ``None`` where the reading reported no input counter and on every other block.
+        turn_output_tokens: The same for the output tokens.
     """
 
     sequence: int
@@ -252,6 +263,10 @@ class TranscriptBlock:
     typical_seconds: int | None = None
     delegation: SubagentLine | None = None
     body: tuple[tuple[str, str], ...] = ()
+    duration_seconds: int | None = None
+    turn_seconds: int | None = None
+    turn_input_tokens: int | None = None
+    turn_output_tokens: int | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -267,6 +282,9 @@ class TranscriptReadModel(RouteReadModel):
         derivation_stopped: Whether a hole sits between the start of the stream and its
             end, which is what makes the block run shorter than the episode.
         quarantined: The lines retained as diagnostics and drawn by nothing.
+        usage: What the Run's usage readings add up to: input, output and cache tokens
+            and cost in micro-USD, each ``None`` when no reading reported it; ``None``
+            before the Run's first reading.
     """
 
     blocks: tuple[TranscriptBlock, ...] = ()
@@ -275,6 +293,7 @@ class TranscriptReadModel(RouteReadModel):
     last_contiguous_sequence: int = 0
     derivation_stopped: bool = False
     quarantined: int = 0
+    usage: UsageTotals | None = None
 
     def block_at(self, position: int) -> TranscriptBlock | None:
         """Return the block at a zero-based offset, or ``None`` past either end."""
@@ -362,15 +381,9 @@ RETRY_WORDS: Final[Mapping[str, str]] = MappingProxyType(
 def _gateway_text(payload: object) -> str | None:
     """Return the first line of a tool, file, question, error or loss block; else ``None``."""
     if isinstance(payload, ToolPayload):
-        outcome = ""
-        if payload.phase == "result":
-            outcome = " · succeeded" if payload.error_code is None else " · failed"
-        return f"{payload.tool_id} · {payload.phase}{outcome}"
+        return f"{payload.tool_id} · {_tool_status(payload)}"
     if isinstance(payload, ProviderToolPayload):
-        outcome = ""
-        if payload.outcome is not None:
-            outcome = " · succeeded" if payload.outcome == "ok" else " · failed"
-        return f"{payload.tool_name} · {payload.phase}{outcome}"
+        return f"{payload.tool_name} · {_tool_status(payload)}"
     if isinstance(payload, FileChangePayload):
         first, *rest = payload.changed_paths
         return first + (f" and {_more_paths(len(rest))}" if rest else "")
@@ -384,6 +397,19 @@ def _gateway_text(payload: object) -> str | None:
     if isinstance(payload, UsagePayload):
         return _usage_text(payload)
     return None
+
+
+def _tool_status(payload: ToolPayload | ProviderToolPayload) -> str:
+    """Return where a tool call stands: ``requested``, ``accepted``, ``succeeded`` or ``failed``.
+
+    A result is named by how it ended rather than as a phase, since a reader scanning
+    calls wants the outcome, not the lifecycle step that carried it.
+    """
+    if payload.phase != "result":
+        return payload.phase
+    if isinstance(payload, ToolPayload):
+        return "succeeded" if payload.error_code is None else "failed"
+    return "succeeded" if payload.outcome == "ok" else "failed"
 
 
 def _usage_text(payload: UsagePayload) -> str:
@@ -639,7 +665,8 @@ def _thinking_field(events: Sequence[RunEventRecord], *, scope_id: str) -> Truth
 
 
 #: What sort of work each event kind records, as the transcript's kind column names it.
-#: A kind not listed is drawn as a plain event rather than refused.
+#: A kind not listed is drawn as a plain event rather than refused. A usage reading is
+#: drawn as no block: its spend is stated on the turn it closed and in the Run's totals.
 LANES: Final[Mapping[RunEventKind, str]] = MappingProxyType(
     {
         RunEventKind.MESSAGE_SUMMARIZED: "message",
@@ -663,7 +690,6 @@ LANES: Final[Mapping[RunEventKind, str]] = MappingProxyType(
         RunEventKind.CHILD_RUN_STARTED: "subagent",
         RunEventKind.CHILD_RUN_TERMINAL: "subagent",
         RunEventKind.HEARTBEAT: "heartbeat",
-        RunEventKind.USAGE_OBSERVED: "usage",
         RunEventKind.EVENT_GAP: "purged",
     }
 )
@@ -815,7 +841,10 @@ def _delegation(
     held = children.get(child)
     if held is None:
         return SubagentLine(child_key=key, reports_to=reports_to, readable=False, outcome=outcome)
-    lines = tuple(e for e in _ordered(held) if not isinstance(e.payload, EventGapPayload))
+    # a gap and a usage reading open no block, so neither is what the child does now
+    lines = tuple(
+        e for e in _ordered(held) if not isinstance(e.payload, EventGapPayload | UsagePayload)
+    )
     return SubagentLine(
         child_key=key,
         reports_to=reports_to,
@@ -870,6 +899,111 @@ def _reasoning_text(event: RunEventRecord, *, going: bool) -> TruthField[str]:
     return block_text(event)
 
 
+def _tool_calls(events: tuple[RunEventRecord, ...]) -> dict[str, tuple[RunEventRecord, ...]]:
+    """Return every tool call's lines in stream order, by the call they report on.
+
+    A call's requested, accepted and result lines share its ``call_ref``, so grouping by
+    it is what lets the transcript draw one row per call instead of one per step.
+    """
+    calls: dict[str, list[RunEventRecord]] = {}
+    for event in events:
+        if isinstance(event.payload, ToolPayload | ProviderToolPayload):
+            calls.setdefault(event.payload.call_ref, []).append(event)
+    return {call: tuple(lines) for call, lines in calls.items()}
+
+
+def _is_tool_result(event: RunEventRecord) -> bool:
+    """Return whether one line is the result of a tool call, gateway or provider."""
+    payload = event.payload
+    return isinstance(payload, ToolPayload | ProviderToolPayload) and payload.phase == "result"
+
+
+def _call_seconds(lines: tuple[RunEventRecord, ...]) -> int | None:
+    """Return the seconds from a call's request line to its result, or ``None`` before one.
+
+    The first line is the request, so a gateway call is timed from when it was asked
+    for rather than from when the gateway accepted it.
+    """
+    result = next((line for line in lines if _is_tool_result(line)), None)
+    return _elapsed(lines[0], result) if result is not None else None
+
+
+@dataclass(frozen=True, slots=True)
+class _Turn:
+    """One model turn as the block after its reading states it; all ``None`` for no turn."""
+
+    seconds: int | None
+    input_tokens: int | None
+    output_tokens: int | None
+
+
+#: What a block that closes no model turn states of one.
+_NO_TURN: Final = _Turn(seconds=None, input_tokens=None, output_tokens=None)
+
+
+def _spent(reading: UsagePayload, before: UsagePayload | None, counter: str) -> int | None:
+    """Return one counter of what a reading adds over the reading before it.
+
+    A running total is less the one before it; a reading that is already a delta, or
+    one with no running total before it, stands as it is.
+    """
+    value: int | None = getattr(reading, counter)
+    prior: int | None = None
+    if before is not None and reading.is_cumulative and before.is_cumulative:
+        prior = getattr(before, counter)
+    if value is None or prior is None:
+        return value
+    return value - prior
+
+
+def _turns(
+    events: tuple[RunEventRecord, ...], calls: Mapping[str, tuple[RunEventRecord, ...]]
+) -> dict[str, _Turn]:
+    """Return each model turn, by the line of the first block after its reading.
+
+    A usage reading closes the turn the model spent producing it; the turn began at the
+    latest tool result handed back to it, or at the Run's first line before any. The
+    turn is drawn on the block after the reading, which is the work the turn produced;
+    a later line of a tool call and a usage reading open no block. Readings with no
+    block between them close one turn, so its tokens run from the reading the previous
+    turn was drawn with to the latest.
+
+    Args:
+        events: The Run's live lines in stream order.
+        calls: Every tool call's lines in stream order, by call.
+
+    Returns:
+        The turn's whole seconds and input and output tokens, by the ``event_ref`` of
+        the line opening the block that carries it; a reading the stream ends on
+        carries none.
+    """
+    turns: dict[str, _Turn] = {}
+    if not events:
+        return turns
+    since = events[0]
+    drawn: UsagePayload | None = None
+    closed: tuple[int, UsagePayload] | None = None
+    for event in events:
+        payload = event.payload
+        if isinstance(payload, UsagePayload):
+            closed = (_elapsed(since, event), payload)
+            continue
+        folded = isinstance(payload, ToolPayload | ProviderToolPayload) and (
+            calls[payload.call_ref][0] is not event
+        )
+        if closed is not None and not folded:
+            seconds, reading = closed
+            turns[event.event_ref] = _Turn(
+                seconds=seconds,
+                input_tokens=_spent(reading, drawn, "input_tokens"),
+                output_tokens=_spent(reading, drawn, "output_tokens"),
+            )
+            drawn, closed = reading, None
+        if _is_tool_result(event):
+            since = event
+    return turns
+
+
 def _subject_deadline(payload: object, deadlines: Mapping[str, datetime]) -> datetime | None:
     """Return the deadline of the record a question or approval block waits on, if held."""
     if isinstance(payload, QuestionActionPayload):
@@ -900,8 +1034,13 @@ def build_transcript_blocks(
             in flight, whatever line the stream ended on.
 
     Returns:
-        One block per live line, a recorded gap becoming a purged block in its own
-        position, and the purged ranges on their own in the same order.
+        One block per live line, except that every line of one tool call folds into one
+        block at its request's position and time, stating where the call stands now,
+        what its result returned and how long it took; a usage reading opens no block,
+        and the block after it states how long the model turn it closed took and the
+        input and output tokens that turn spent; a recorded gap becomes a purged block
+        in its own position. The purged ranges follow on their own in the same
+        order.
     """
     blocks: list[TranscriptBlock] = []
     purged: list[PurgedRange] = []
@@ -909,6 +1048,8 @@ def build_transcript_blocks(
     going, typical = _in_flight(ordered)
     if ended:
         going = set()
+    calls = _tool_calls(ordered)
+    turns = _turns(ordered, calls)
     reports_to = ordered[0].run_ref.entity_key if ordered else ""
     outcomes = {
         e.payload.delegation_request_ref: e.payload.terminal_status.value.lower()
@@ -917,6 +1058,7 @@ def build_transcript_blocks(
     }
     for event in ordered:
         payload = event.payload
+        turn = turns.get(event.event_ref, _NO_TURN)
         if isinstance(payload, EventGapPayload):
             covered = _purged_range(payload)
             purged.append(covered)
@@ -928,17 +1070,31 @@ def build_transcript_blocks(
                     text=_purged_field(covered, urn=event.event_ref),
                     purged=covered,
                     lane=LANES[RunEventKind.EVENT_GAP],
+                    turn_seconds=turn.seconds,
+                    turn_input_tokens=turn.input_tokens,
+                    turn_output_tokens=turn.output_tokens,
                 )
             )
             continue
+        if isinstance(payload, UsagePayload):
+            continue
+        lines: tuple[RunEventRecord, ...] = (event,)
+        duration: int | None = None
+        if isinstance(payload, ToolPayload | ProviderToolPayload):
+            lines = calls[payload.call_ref]
+            if lines[0] is not event:
+                continue
+            duration = _call_seconds(lines)
+        latest = lines[-1]
+        running = any(line.event_ref in going for line in lines)
         blocks.append(
             TranscriptBlock(
                 sequence=event.run_sequence,
-                kind=event.event_kind,
+                kind=latest.event_kind,
                 at=event.recorded_at,
-                text=_reasoning_text(event, going=event.event_ref in going),
+                text=_reasoning_text(latest, going=running),
                 lane=_block_lane(event),
-                in_flight=event.event_ref in going,
+                in_flight=running,
                 background=isinstance(payload, CommandPayload)
                 and payload.execution == "background",
                 typical_seconds=typical.get(_typical_key(payload) or ""),
@@ -949,7 +1105,11 @@ def build_transcript_blocks(
                     if isinstance(payload, ChildRunPayload)
                     else None
                 ),
-                body=block_body(event, contents, deadline=_subject_deadline(payload, deadlines)),
+                body=block_body(latest, contents, deadline=_subject_deadline(payload, deadlines)),
+                duration_seconds=duration,
+                turn_seconds=turn.seconds,
+                turn_input_tokens=turn.input_tokens,
+                turn_output_tokens=turn.output_tokens,
             )
         )
     logger.debug(f"build_transcript_blocks blocks={len(blocks)} purged={len(purged)}")
@@ -986,8 +1146,8 @@ def build_transcript_view(
             the record's URN.
 
     Returns:
-        The route's rows, the Run's blocks, the ranges the console does not hold, and
-        the derived thinking state.
+        The route's rows, the Run's blocks, the ranges the console does not hold, the
+        derived thinking state, and what the Run's usage readings add up to.
 
     Raises:
         ValueError: The projection is for another route, or the live lines are not a
@@ -1006,6 +1166,7 @@ def build_transcript_view(
         if ended
         else _thinking_field(events, scope_id=model.scope_id)
     )
+    readings = [e.payload for e in _ordered(events) if isinstance(e.payload, UsagePayload)]
     return TranscriptReadModel(
         route=model.route,
         read_model=model.read_model,
@@ -1022,6 +1183,7 @@ def build_transcript_view(
         last_contiguous_sequence=state.last_contiguous_sequence,
         derivation_stopped=state.derivation_stopped,
         quarantined=len(state.quarantined),
+        usage=aggregate_usage(readings) if readings else None,
     )
 
 

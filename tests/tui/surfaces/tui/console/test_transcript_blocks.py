@@ -874,7 +874,9 @@ def test_con_170_a_short_run_fills_from_the_bottom_of_its_section() -> None:
     rows = _rows(_frame(_view((_event(1),))))
     block = next(i for i, r in enumerate(rows) if _BLOCK_ROW.match(r))
     closing = next(i for i, r in enumerate(rows) if i > block and r.startswith("─"))
-    assert closing == block + 1
+    # the running Run's in-progress row sits between its last block and the rule
+    assert closing == block + 2
+    assert "⋯ now        model turn" in rows[block + 1]
     assert rows[block - 1].strip() == ""
 
 
