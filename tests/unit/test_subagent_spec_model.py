@@ -420,7 +420,7 @@ def test_render_headless_executor_emits_report_output_schema() -> None:
     assert '"evidence_refs": [{"kind": "artifact"' in out
     assert '"followups": []' in out
     # The dispatched wave id is injected into the schema, not a placeholder.
-    assert '"wave_id": "P01-I01-W01"' in out
+    assert '"task_key": "P01-I01-W01"' in out
     assert "<THE-WAVE-ID>" not in out
     # The nested-shape fields are pinned EMPTY so a model cannot invent a
     # wrong entry shape (the live e2e showed codex populating evidence_refs
@@ -461,7 +461,7 @@ def test_render_headless_operator_pins_parent_phase_not_wave_id() -> None:
         file_scopes=["src/"],
     ).render(headless=True)
     assert '"title": "OperatorReportBody"' in out
-    assert "Set `phase_id` to the parent phase `P01` exactly" in out
+    assert "Set `milestone_key` to the parent phase `P01` exactly" in out
     assert "phase `P01-I01-W01`" not in out
 
 

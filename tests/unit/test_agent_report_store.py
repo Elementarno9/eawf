@@ -47,7 +47,7 @@ def _body(summary: str = "implemented report writer") -> ExecutorReportBody:
         verdict=AgentReportVerdict.PASS,
         confidence=Confidence.HIGH,
         summary=summary,
-        wave_id="P18-I01-W04",
+        task_key="P18-I01-W04",
         outcome="done",
     )
 
@@ -241,7 +241,7 @@ def test_executor_report_body_verdict_outside_enum_raises_validationerror() -> N
                 "verdict": "approved",
                 "confidence": Confidence.HIGH,
                 "summary": "implemented report writer",
-                "wave_id": "P18-I01-W04",
+                "task_key": "P18-I01-W04",
                 "outcome": "done",
             }
         )

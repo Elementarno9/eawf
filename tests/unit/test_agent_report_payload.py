@@ -23,7 +23,7 @@ from eawf.kernel.store.kinds.agent_report import (
     DomainSpecialistReportBody,
     ExecutorReportBody,
     OperatorReportBody,
-    PlannedWaveSummary,
+    PlannedTaskSummary,
     PlannerReportBody,
     PolishChange,
     PolisherReportBody,
@@ -69,7 +69,7 @@ def _body() -> ExecutorReportBody:
                 priority="P2",
             )
         ],
-        wave_id="P18-I01-W01",
+        task_key="P18-I01-W01",
         files_changed=["src/eawf/store/kinds/agent_report.py"],
         tests_run=["uv run pytest tests/unit/test_agent_report_payload.py -q"],
         commit_sha="commit1",
@@ -179,9 +179,9 @@ def test_all_role_bodies_validate_through_payload() -> None:
             confidence=Confidence.MEDIUM,
             summary="planned",
             objective="split work",
-            waves=[
-                PlannedWaveSummary(
-                    wave_id="P18-I01-W01",
+            tasks=[
+                PlannedTaskSummary(
+                    task_key="P18-I01-W01",
                     title="Shared primitives",
                     success_criteria=["tests pass"],
                 )
@@ -231,8 +231,8 @@ def test_all_role_bodies_validate_through_payload() -> None:
             verdict=AgentReportVerdict.BLOCKED,
             confidence=Confidence.MEDIUM,
             summary="operated",
-            phase_id="P18",
-            completed_wave_ids=["P18-I01-W01"],
+            milestone_key="P18",
+            completed_task_keys=["P18-I01-W01"],
             next_actions=["continue W02"],
         ),
         DomainSpecialistReportBody(

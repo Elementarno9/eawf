@@ -30,7 +30,7 @@ def _report(*runs: dict[str, str], **overrides: Any) -> ExecutorReportBody:
         "verdict": "pass",
         "confidence": "high",
         "summary": "done",
-        "wave_id": _WAVE_ID,
+        "task_key": _WAVE_ID,
         "outcome": "done",
         "commit_sha": "abcdef1",
         "test_runs": list(runs),

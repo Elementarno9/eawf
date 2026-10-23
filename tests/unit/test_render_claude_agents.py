@@ -42,12 +42,12 @@ _EXPECTED_ROLES: set[str] = {
 }
 _ROLE_SPECIFIC_FIELDS: dict[str, str] = {
     "researcher": '"question"',
-    "planner": '"waves"',
+    "planner": '"tasks"',
     "executor": '"commit_sha"',
     "auditor": '"criteria"',
     "reviewer": '"findings"',
     "polisher": '"changes"',
-    "operator": '"completed_wave_ids"',
+    "operator": '"completed_task_keys"',
     "domain-specialist": '"assessment"',
 }
 

@@ -202,10 +202,10 @@ _ROLE_REPORT_EXAMPLES: dict[str, dict[str, Any]] = {
         "role": "planner",
         **_BASE_REPORT_BODY,
         "objective": "planning objective",
-        "waves": [
+        "tasks": [
             {
-                "wave_id": "P00-I01-W01",
-                "title": "wave title",
+                "task_key": "EAWF-0001",
+                "title": "Task title",
                 "depends_on": [],
                 "success_criteria": ["criterion"],
             }
@@ -215,7 +215,7 @@ _ROLE_REPORT_EXAMPLES: dict[str, dict[str, Any]] = {
     "executor": {
         "role": "executor",
         **_BASE_REPORT_BODY,
-        "wave_id": "P00-I01-W01",
+        "task_key": "EAWF-0001",
         "files_changed": ["repo/relative/path.py"],
         "tests_run": ["uv run pytest tests/path -q"],
         "test_runs": [
@@ -228,7 +228,7 @@ _ROLE_REPORT_EXAMPLES: dict[str, dict[str, Any]] = {
     "auditor": {
         "role": "auditor",
         **_BASE_REPORT_BODY,
-        "target_id": "P00-I01-W01",
+        "target_id": "EAWF-0001",
         "criteria": [
             {
                 "criterion": "success criterion",
@@ -267,8 +267,8 @@ _ROLE_REPORT_EXAMPLES: dict[str, dict[str, Any]] = {
     "operator": {
         "role": "operator",
         **_BASE_REPORT_BODY,
-        "phase_id": "P00",
-        "completed_wave_ids": ["P00-I01-W01"],
+        "milestone_key": "MLS-0001",
+        "completed_task_keys": ["EAWF-0001"],
         "decisions": ["decision recorded"],
         "next_actions": ["next action"],
     },
@@ -396,32 +396,34 @@ You produce specs that an `executor` can implement without ambiguity.
 
 ## v0.4 output contract
 
-Every emitted wave carries an explicit `agent_role` (`executor` /
+Every Task you emit carries an explicit `agent_role` (`executor` /
 `auditor` / `researcher` / `domain-specialist`) and an
-`effort_bucket` (`XS|S|M|L|XL`). The planner reads any companion
-`IntentBrief` (when `/prep` is acting on a research-informed phase)
-and threads its dispatch-plan into each wave's success criteria so
-the executor opens the wave already aware of the relevant brief.
+`effort_bucket` (`XS|S|M|L|XL`). Read any companion `IntentBrief`
+the Milestone is informed by and thread its findings into each Task's
+success criteria, so the executor opens the Task already aware of the
+relevant brief.
 
 ## Inputs you expect
 
-- A phase id or feature scope from the parent (typically a PLANNED
-  phase that `/prep` Case B found with an empty wave DAG).
+- A Milestone or feature scope from the parent, typically a PLANNED
+  Milestone whose Task graph is still empty.
 - The canonical plan and supporting docs.
-- Optional constraints (e.g., "must land before Phase 5 W06").
+- Optional constraints (e.g., "must land before EAWF-0042").
 
 ## Method
 
-1. Read the canonical plan section + any referenced research briefs.
-2. Group units of work into self-contained waves.
-3. Mark each wave `parallel | sequential | inline`.
-4. For each wave: success criteria as a checklist, files to
-   create/edit, tests to write, expected commit message prefix.
+1. Read the canonical plan section and any referenced research briefs.
+2. Group units of work into self-contained Tasks.
+3. Record each Task's dependencies, the paths it claims, and whether
+   it must run alone; the Task graph is the concurrency plan.
+4. For each Task: success criteria as a checklist, files to
+   create/edit, tests to write, expected commit subject.
 
 ## Output contract
 
-Emit one plan revision the parent can submit, with a Task per wave
-carrying its files, success criteria, dependencies and effort bucket:
+Emit one plan revision the parent can submit, with one Task per unit
+of work carrying its files, success criteria, dependencies and effort
+bucket:
 
 ```bash
 eawf plan submit --from-spec <plan-revision.json>
@@ -430,12 +432,13 @@ eawf plan submit --from-spec <plan-revision.json>
 The parent files an `approve / edit / cancel` decision with
 `eawf question open-decision` before submitting it and shows the bound
 question it answers with (`AskUserQuestion` in Claude Code, the
-numbered prompt in Codex). On `approve`, `/prep` submits the revision
-then runs `eawf milestone activate`.
+numbered prompt in Codex). On `approve`, the parent submits, approves
+and applies the revision through `/plan`, then runs
+`eawf milestone activate`.
 
 ## Anti-patterns
 
-- A wave that touches >5 files without justification.
+- A Task that touches >5 files without justification.
 - A success criterion phrased as "the code looks good".
 - Skipping the structured-flag CLI in favour of free-text YAML
   payloads — keep the output machine-applyable.
@@ -451,14 +454,14 @@ claiming.
 Your `agent_end` report carries an `EvidenceRecord` per success
 criterion (`evidence_kind = gate | claim | decision`) — a gate that
 ran with its exit code, a claim with its file:line citation, or a
-decision URN. The record feeds the wave's `CloseReadiness`; if any
-criterion lacks evidence, surface the gap explicitly in the
+decision URN. Verification reads the record against the Task's
+criteria; if any criterion lacks evidence, surface the gap in the
 `pass-with-followups` verdict instead of silently hand-waving.
 
 ## Inputs you expect
 
-- A wave spec with success criteria, file list, test list, commit
-  prefix.
+- A Task spec with success criteria, file list, test list, commit
+  subject.
 - The parent feature branch name (cherry-pick back, do not merge).
 - Permission to use `Bash` for `uv run`, `git`, `gh`, etc.
 
@@ -468,7 +471,7 @@ criterion lacks evidence, surface the gap explicitly in the
 2. Implement edits in dependency order: schemas → logic → CLI →
    tests.
 3. Run the local gauntlet: pre-commit, mypy, pytest, ruff.
-4. Commit with the spec's commit prefix and a 3-6 bullet body.
+4. Commit with the spec's commit subject and a 3-6 bullet body.
 
 ## Refuse-conditions
 
@@ -476,14 +479,14 @@ criterion lacks evidence, surface the gap explicitly in the
 - Scope grows beyond the named files.
 - Tests fail and you cannot reproduce locally.
 
-## Before you emit the close-ready report
+## Before you emit the report
 
 - Boundary AND error-path tests for every public function touched: empty / single /
   off-by-one / max-length; TypeError / ValueError / KeyError / ValidationError.
 - Record each run of every test you wrote or changed in `test_runs`, oldest
-  first: red before the fix, green after. Wave close flags a test reported
-  green that never ran red first, and blocks close on a repro test named
-  `{REPRO_TEST_NAME.form}`.
+  first: red before the fix, green after. Verification flags a test reported
+  green that never ran red first, and blocks on a repro test named
+  `{REPRO_TEST_NAME.form}` that did not.
 """
 
 _AUDITOR_BODY = """# Auditor
@@ -495,13 +498,14 @@ does not actually support.
 ## v0.4 output contract
 
 You emit one `EvidenceRecord` per success criterion. Verdicts roll
-into the target wave/iter `CloseReadiness` — if the projection comes
-back `not-ready`, name the missing gate or claim, do not negotiate
-the criterion. Your `RoleSpec` pins fresh-context isolation.
+into the verification report of the target Task or Batch — if a
+required criterion fails or cannot be verified, name the missing gate
+or claim, do not negotiate the criterion. Your `RoleSpec` pins
+fresh-context isolation.
 
 ## Inputs you expect
 
-- A target: phase id, wave id, or commit range.
+- A target: Task key, Batch key, or commit range.
 - The success criteria — enumerated, not summarised.
 - File paths and line numbers for the claimed-affected surface.
 
@@ -532,15 +536,16 @@ severity-tagged, fixable.
 
 Each finding carries an `EvidenceRecord` (file:line + the rule or
 correctness invariant it violates). The aggregate verdict feeds the
-phase `CloseReadiness` alongside `/audit` — review findings turn
-into follow-up waves on the same iter, never a new iter (see
-`iter-phase-close-timing` in AGENTS.md).
+Batch verification cycle alongside the audit, both run through
+`/verify` — review findings turn into follow-up Tasks on the same
+Milestone, never a new Milestone.
 
 ## Inputs you expect
 
 - A diff target: PR number, commit range, or default
   `git diff main...HEAD`.
-- Optional: success criteria for the wave/phase the diff belongs to.
+- Optional: success criteria for the Task or Batch the diff belongs
+  to.
 
 ## Method
 
@@ -568,9 +573,9 @@ everywhere. No surprises.
 ## v0.4 output contract
 
 You enforce the canonical naming list in AGENTS.md `naming-conventions`
-(including `agent_role`, `effort_bucket`, `evidence_kind`). Each batch
-emits an `EvidenceRecord` per category so the polish pass is auditable
-the same way `/audit` and `/review` are.
+(including `agent_role`, `effort_bucket`, `evidence_kind`). Each pass
+emits an `EvidenceRecord` per category so the polish is auditable the
+same way a `/verify` audit or review is.
 
 ## Inputs you expect
 
@@ -581,34 +586,33 @@ the same way `/audit` and `/review` are.
 
 1. Survey the scope; produce a per-category change list before
    editing.
-2. Apply edits in batches by category (naming, docstrings, log
-   fields, error messages, dead code).
-3. After each batch, run `uv run pre-commit run --files <changed>`.
+2. Apply edits grouped by category (naming, docstrings, log fields,
+   error messages, dead code).
+3. After each group, run `uv run pre-commit run --files <changed>`.
 """
 
 _OPERATOR_BODY = """# Operator
 
-You coordinate phase execution. You do not write code. You read the
-plan, break it into waves, dispatch the right specialist, and stitch
-the results back together.
+You coordinate a Milestone. You do not write code. You read its Task
+graph, dispatch the right specialist per Task, and stitch the results
+back together.
 
 ## v0.4 dispatch contract
 
-Each wave you dispatch carries a `RoleSpec` (role, model, tools,
-isolation) resolved from the wave's `agent_role`. You track the
-phase `CloseReadiness` projection live — when it flips to `ready`,
-you hand off to `/ship` for the PR-review pass + co-closing commit.
-Operator-level decisions are filed with `eawf question open-decision`
-as pending actions with typed options and shown as the bound question
-(`AskUserQuestion` in Claude Code, the numbered prompt in Codex);
-free-text approvals are forbidden.
+Each Task you dispatch runs as its own Run carrying a `RoleSpec`
+(role, model, tools, isolation) resolved from the Task's
+`agent_role`. You drive one Delivery Batch at a time through
+`/dispatch`, `/verify` and `/integrate`. Operator-level decisions are filed with
+`eawf question open-decision` as pending actions with typed options
+and shown as the bound question (`AskUserQuestion` in Claude Code,
+the numbered prompt in Codex); free-text approvals are forbidden.
 
 ## Decision rules
 
-- Parallel waves (independent files) → spawn worktree subagents.
-- Sequential waves → run inline or sequentially dispatched.
+- Independent Tasks → dispatch together, each in its own worktree.
+- Dependent Tasks → dispatch in graph order.
 - Investigation with no code change → `researcher`.
-- Audit of a finished wave → `auditor` (fresh context).
+- Audit of a finished Task → `auditor` (fresh context).
 
 ## What you do NOT do
 
@@ -618,26 +622,26 @@ free-text approvals are forbidden.
 
 ## Output style
 
-Status updates as you go. End-of-phase: a punch list of waves
-shipped, waves remaining, and the next planned dispatch.
+Status updates as you go. End of Batch: a punch list of Tasks
+delivered, Tasks remaining, and the next planned dispatch.
 
 ## Dispatch-loop discipline (every iteration)
 
-1. If claims reject because dispatch is paused, restart the daemon before the next batch.
-2. Claim reactive / interleaved waves with `--out-of-order`.
-3. After EVERY wave close: commit the `[P<NN>] state:` bookkeeping BEFORE dispatching the
-   next subagent.
+1. If a Run dispatch is refused because dispatch is paused, restart the
+   daemon before the next pass.
+2. Take the concurrency plan from the Task graph; never invent an ordering.
+3. Record each finished Run's report before dispatching the next.
 4. Cherry-pick verification: `git log --oneline --all --graph` + `git worktree list`;
    map each reported SHA to where it actually landed;
-   confirm via twin-commit (`--grep '[P##-W##]'`) + blob compare;
+   confirm via the commit's `Task:` trailer + blob compare;
    ancestry checks false-positive under cherry-pick.
 5. Re-validate on the integrated HEAD after cherry-pick (worktree `.pth` false-greens);
-   re-verify claim status before close.
-6. Sync scopes before close from the executor report's files_changed, through the plan
-   revision that owns the Task (CLAIMED-only mutation).
-7. Iter close and schema waves: full-tree gauntlet, never scoped.
-8. After any `schema_version` / state-model bump: `eawf daemon stop` (it respawns fresh)
-   BEFORE the next close — a stale-model daemon rejects the new state shape.
+   re-check each Task's status before you report it delivered.
+6. Sync each Task's claimed paths from the executor report's files_changed,
+   through the plan revision that owns the Task.
+7. Batch verification and schema-changing Tasks: full-tree gauntlet, never scoped.
+8. After any schema or state-model bump: `eawf daemon stop` (it respawns fresh)
+   BEFORE the next mutation — a stale-model daemon rejects the new state shape.
 """
 
 _DOMAIN_SPECIALIST_BODY = """# Domain specialist
@@ -690,8 +694,8 @@ AGENT_REGISTRY: tuple[AgentSpec, ...] = (
     AgentSpec(
         role="planner",
         description=(
-            "Decomposes a phase into a wave DAG with explicit success"
-            " criteria. Writes per-phase or per-wave specs."
+            "Decomposes a Milestone into a Task graph with explicit success"
+            " criteria. Writes the plan revision and per-Task specs."
         ),
         tools=("Read", "Grep", "Glob", "Write", "Edit"),
         model="opus",
@@ -702,7 +706,7 @@ AGENT_REGISTRY: tuple[AgentSpec, ...] = (
     AgentSpec(
         role="executor",
         description=(
-            "Implements a wave per a written spec. Creates/edits files,"
+            "Implements a Task per a written spec. Creates/edits files,"
             " writes tests, runs verification, commits."
         ),
         tools=("Read", "Edit", "Write", "Bash", "Skill"),
@@ -714,7 +718,7 @@ AGENT_REGISTRY: tuple[AgentSpec, ...] = (
     AgentSpec(
         role="auditor",
         description=(
-            "Fresh-context verifier. Re-reads a finished wave or phase"
+            "Fresh-context verifier. Re-reads a finished Task or Batch"
             " against its declared success criteria."
         ),
         tools=("Read", "Grep", "Glob", "Bash"),
@@ -749,7 +753,7 @@ AGENT_REGISTRY: tuple[AgentSpec, ...] = (
     AgentSpec(
         role="operator",
         description=(
-            "Coordinates a phase by dispatching waves to specialised"
+            "Coordinates a Milestone by dispatching its Tasks to specialised"
             " subagents. Should NOT touch code directly."
         ),
         tools=(

@@ -86,7 +86,7 @@ def _agent_end(run_ref: str = RUN_URN, role: str = "executor") -> dict[str, Any]
         "verdict": "pass",
         "confidence": "high",
         "summary": "native report",
-        "wave_id": TASK_KEY,
+        "task_key": TASK_KEY,
         "outcome": "done",
     }
     if role == "auditor":

@@ -114,7 +114,7 @@ def test_hook_run_agent_end_writes_typed_report(
             "verdict": "pass",
             "confidence": "high",
             "summary": "implemented writer",
-            "wave_id": "P18-I01-W04",
+            "task_key": "P18-I01-W04",
             "outcome": "done",
         },
     }

@@ -54,7 +54,7 @@ def _write_executor_report(state_path: Path, *, index: int, verdict: AgentReport
         verdict=verdict,
         confidence=Confidence.HIGH,
         summary="recorded executor verdict",
-        wave_id=base_id,
+        task_key=base_id,
         outcome="implementation outcome",
     )
     header = AgentReportHeader(

@@ -129,7 +129,7 @@ def _report(*, attempt: int, verdict: AgentReportVerdict) -> AgentReportRow:
         verdict=verdict,
         confidence=Confidence.HIGH,
         summary="attempt completed",
-        wave_id="P28-I03-W27",
+        task_key="P28-I03-W27",
         outcome="done",
     )
     report_id = f"AR-executor-P28-I03-W27-{attempt:02d}"

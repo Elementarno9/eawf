@@ -267,7 +267,7 @@ class SubagentSpec(_SpecModel):
         iter_id: The wave's parent iter id (rendered into the scope
             rationale verbatim, matching the legacy ``wave.iter_id``).
         phase_id: The wave's parent phase id. Headless operator dispatches
-            use this as the authoritative ``OperatorReportBody.phase_id``;
+            use this as the authoritative ``OperatorReportBody.milestone_key``;
             ``None`` is retained for manually-built legacy specs.
         title: The wave title (rendered into the ``# Wave ...`` header).
         description: The wave's optional long-form purpose (the ≤500-char
@@ -529,7 +529,7 @@ class SubagentSpec(_SpecModel):
                 '"verdict": "pass|pass-with-followups|fail|blocked", '
                 '"confidence": "high|medium|low", '
                 '"summary": "<=4000 chars", '
-                f'"wave_id": "{self.wave_id}", '
+                f'"task_key": "{self.wave_id}", '
                 '"outcome": "1-1000 chars", '
                 '"files_changed": [], '
                 '"tests_run": [], '
@@ -542,7 +542,7 @@ class SubagentSpec(_SpecModel):
                 '"followups": []}'
             )
             role_instruction = (
-                f"Set `wave_id` to `{self.wave_id}` exactly. `verdict` is one of "
+                f"Set `task_key` to `{self.wave_id}` exactly. `verdict` is one of "
                 "`pass`, `pass-with-followups`, `fail`, `blocked`; `confidence` "
                 "is one of `high`, `medium`, `low`. `summary` and `outcome` are "
                 "required non-empty strings. `files_changed` and `tests_run` are "
@@ -581,8 +581,8 @@ class SubagentSpec(_SpecModel):
             elif role is AgentSessionRole.OPERATOR:
                 phase_id = self.phase_id or _phase_wave_segments(self.wave_id)[0]
                 target_instruction = (
-                    f"Set `phase_id` to the parent phase `{phase_id}` exactly. "
-                    "Every `completed_wave_ids` entry must belong to that phase."
+                    f"Set `milestone_key` to the parent phase `{phase_id}` exactly. "
+                    "Every `completed_task_keys` entry must belong to that phase."
                 )
             role_instruction = (
                 f"Set `role` to `{role.value}` exactly. {target_instruction} "

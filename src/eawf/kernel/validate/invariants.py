@@ -770,12 +770,13 @@ def _check_report_body(
                 path=_report_path(header.report_id, "body/commit_sha"),
                 message=f"executor report {header.report_id!r} has no commit_sha",
             )
-        elif body.wave_id not in state.waves:
+        elif body.task_key not in state.waves:
             yield Violation(
                 code="INV.AGENT_REPORT.EXECUTOR_WAVE_MISSING",
-                path=_report_path(header.report_id, "body/wave_id"),
+                path=_report_path(header.report_id, "body/task_key"),
                 message=(
-                    f"executor report {header.report_id!r} references missing wave {body.wave_id!r}"
+                    f"executor report {header.report_id!r} references missing wave "
+                    f"{body.task_key!r}"
                 ),
             )
     elif isinstance(body, ReviewerReportBody) and not body.coverage_refs:
@@ -798,33 +799,34 @@ def _check_operator_report_body(
     state: State, header: AgentReportHeader, body: OperatorReportBody
 ) -> Iterable[Violation]:
     """Yield phase-presence + completed-wave linkage violations for an operator report."""
-    if body.phase_id not in state.phases:
+    if body.milestone_key not in state.phases:
         yield Violation(
             code="INV.AGENT_REPORT.OPERATOR_PHASE_MISSING",
-            path=_report_path(header.report_id, "body/phase_id"),
+            path=_report_path(header.report_id, "body/milestone_key"),
             message=(
-                f"operator report {header.report_id!r} references missing phase {body.phase_id!r}"
+                f"operator report {header.report_id!r} references missing phase "
+                f"{body.milestone_key!r}"
             ),
         )
-    for wave_id in body.completed_wave_ids:
+    for wave_id in body.completed_task_keys:
         wave_phase_id = _wave_phase_id(state, wave_id)
         if wave_phase_id is None:
             yield Violation(
                 code="INV.AGENT_REPORT.OPERATOR_WAVE_MISSING",
-                path=_report_path(header.report_id, "body/completed_wave_ids"),
+                path=_report_path(header.report_id, "body/completed_task_keys"),
                 message=(
                     f"operator report {header.report_id!r} references "
                     f"missing completed wave {wave_id!r}"
                 ),
             )
-        elif wave_phase_id != body.phase_id:
+        elif wave_phase_id != body.milestone_key:
             yield Violation(
                 code="INV.AGENT_REPORT.OPERATOR_WAVE_PHASE_MISMATCH",
-                path=_report_path(header.report_id, "body/completed_wave_ids"),
+                path=_report_path(header.report_id, "body/completed_task_keys"),
                 message=(
                     f"operator report {header.report_id!r} lists wave "
                     f"{wave_id!r} from phase {wave_phase_id!r}, not "
-                    f"{body.phase_id!r}"
+                    f"{body.milestone_key!r}"
                 ),
             )
 

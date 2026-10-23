@@ -180,7 +180,7 @@ def _executor_body(commit_sha: str | None = "abcdef1") -> ExecutorReportBody:
         verdict=AgentReportVerdict.PASS,
         confidence=Confidence.HIGH,
         summary="executor summary",
-        wave_id="P18-I01-W01",
+        task_key="P18-I01-W01",
         files_changed=["src/eawf/validate/invariants.py"],
         tests_run=["uv run pytest tests/unit/test_validate_agent_report_invariants.py -q"],
         commit_sha=commit_sha,
@@ -218,14 +218,14 @@ def _auditor_body(*, criteria: bool = True) -> AuditorReportBody:
     )
 
 
-def _operator_body(completed_wave_ids: list[str] | None = None) -> OperatorReportBody:
+def _operator_body(completed_task_keys: list[str] | None = None) -> OperatorReportBody:
     return OperatorReportBody(
         role="operator",
         verdict=AgentReportVerdict.PASS,
         confidence=Confidence.HIGH,
         summary="operator summary",
-        phase_id="P18",
-        completed_wave_ids=completed_wave_ids or ["P18-I01-W01"],
+        milestone_key="P18",
+        completed_task_keys=completed_task_keys or ["P18-I01-W01"],
         decisions=[],
         next_actions=[],
     )
@@ -407,7 +407,7 @@ def test_check_agent_report_invariants_flags_auditor_missing_criteria() -> None:
 def test_check_agent_report_invariants_flags_operator_phase_coverage_mismatch() -> None:
     report = _envelope(
         AgentSessionRole.OPERATOR,
-        _operator_body(completed_wave_ids=["P19-I01-W01"]),
+        _operator_body(completed_task_keys=["P19-I01-W01"]),
         session_id="SES-operator",
         scope_id="P18",
         base_id="P18",

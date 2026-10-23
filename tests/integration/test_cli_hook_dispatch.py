@@ -62,7 +62,7 @@ def _agent_end_payload(verdict: str = "pass") -> dict[str, object]:
             "verdict": verdict,
             "confidence": "high",
             "summary": "seeded interim verdict",
-            "wave_id": _SCOPE_ID,
+            "task_key": _SCOPE_ID,
             "outcome": "seed",
         },
     }
@@ -122,7 +122,7 @@ def test_dispatch_agent_end_malformed_body_rejected(tmp_path: Path) -> None:
     payload = {
         "run_ref": RUN_URN,
         "base_id": _SCOPE_ID,
-        # Executor body missing required wave_id / outcome.
+        # Executor body missing required task_key / outcome.
         "body": {"role": "executor", "verdict": "pass", "confidence": "high", "summary": "x"},
     }
     result = runner.invoke(

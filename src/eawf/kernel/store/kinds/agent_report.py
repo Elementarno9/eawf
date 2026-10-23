@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -136,10 +136,10 @@ class AgentReportCommonBody(_StrictModel):
     followups: list[AgentReportFollowup] = Field(default_factory=list)
 
 
-class PlannedWaveSummary(_StrictModel):
-    """Planner summary for one proposed wave."""
+class PlannedTaskSummary(_StrictModel):
+    """Planner summary for one proposed Task."""
 
-    wave_id: Annotated[str, Field(min_length=1)]
+    task_key: Annotated[str, Field(min_length=1)]
     title: Annotated[str, Field(min_length=1, max_length=160)]
     depends_on: list[str] = Field(default_factory=list)
     success_criteria: list[str] = Field(default_factory=list)
@@ -194,7 +194,7 @@ class PlannerReportBody(AgentReportCommonBody):
 
     role: Literal["planner"] = "planner"
     objective: Annotated[str, Field(min_length=1, max_length=500)]
-    waves: list[PlannedWaveSummary] = Field(default_factory=list)
+    tasks: list[PlannedTaskSummary] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
 
 
@@ -225,7 +225,7 @@ class ExecutorReportBody(AgentReportCommonBody):
     """
 
     role: Literal["executor"] = "executor"
-    wave_id: Annotated[str, Field(min_length=1)]
+    task_key: Annotated[str, Field(min_length=1)]
     files_changed: list[str] = Field(default_factory=list)
     tests_run: list[str] = Field(default_factory=list)
     test_runs: list[ExecutorTestRun] = Field(default_factory=list)
@@ -264,8 +264,8 @@ class OperatorReportBody(AgentReportCommonBody):
     """Report body emitted by an operator."""
 
     role: Literal["operator"] = "operator"
-    phase_id: Annotated[str, Field(min_length=1)]
-    completed_wave_ids: list[str] = Field(default_factory=list)
+    milestone_key: Annotated[str, Field(min_length=1)]
+    completed_task_keys: list[str] = Field(default_factory=list)
     decisions: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)
 
@@ -292,11 +292,68 @@ type AgentReportBody = Annotated[
 ]
 
 
+#: The epoch-1 body keys a stored row of each role may carry, mapped to the
+#: native key each was renamed to.
+_EPOCH1_BODY_KEYS: dict[str, dict[str, str]] = {
+    "executor": {"wave_id": "task_key"},
+    "planner": {"waves": "tasks"},
+    "operator": {"phase_id": "milestone_key", "completed_wave_ids": "completed_task_keys"},
+}
+_EPOCH1_TASK_SUMMARY_KEYS: dict[str, str] = {"wave_id": "task_key"}
+
+
+def _rename_keys(row: dict[str, Any], renames: dict[str, str]) -> dict[str, Any]:
+    """Return a copy of *row* with each key in *renames* moved to its new name.
+
+    A key moves only when its new name is absent, so a row spelling one field
+    both ways keeps the old key and the closed model refuses it instead of
+    one of the two values being dropped silently.
+    """
+    return {
+        (renames[key] if key in renames and renames[key] not in row else key): value
+        for key, value in row.items()
+    }
+
+
+def _upgrade_epoch1_body(body: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of a stored *body* with epoch-1 field names made native.
+
+    Args:
+        body: One stored report body mapping; it is not mutated.
+
+    Returns:
+        The body under the native field names, every value unchanged.
+    """
+    upgraded = _rename_keys(body, _EPOCH1_BODY_KEYS.get(str(body.get("role")), {}))
+    tasks = upgraded.get("tasks")
+    if upgraded.get("role") == "planner" and isinstance(tasks, list):
+        upgraded["tasks"] = [
+            _rename_keys(item, _EPOCH1_TASK_SUMMARY_KEYS) if isinstance(item, dict) else item
+            for item in tasks
+        ]
+    return upgraded
+
+
 class AgentReportPayload(_StrictModel):
-    """Store payload wrapper for a typed agent report."""
+    """Store payload wrapper for a typed agent report.
+
+    This is the model every stored report row is read through, so it is
+    also where a row written under the epoch-1 body field names is upgraded
+    to the native ones, in memory and once per read; the stored file is
+    never rewritten. A new body is validated on its own, through the body
+    union, before it is wrapped here, so a new report naming an epoch-1
+    field is still refused.
+    """
 
     header: AgentReportHeader
     body: AgentReportBody
+
+    @model_validator(mode="before")
+    @classmethod
+    def _read_epoch1_body(cls, data: Any) -> Any:
+        if isinstance(data, dict) and isinstance(data.get("body"), dict):
+            return {**data, "body": _upgrade_epoch1_body(data["body"])}
+        return data
 
     @model_validator(mode="after")
     def _body_role_matches_header(self) -> Self:
@@ -387,7 +444,7 @@ def body_class_for_role(role: AgentSessionRole) -> type[AgentReportCommonBody]:
 
     The dispatch runner uses this to construct the right-typed body for
     a non-executor session role on completion. Executor remains the rich
-    path (commit_sha + wave_id + files_changed + tests_run + outcome); the
+    path (commit_sha + task_key + files_changed + tests_run + outcome); the
     other seven roles build a minimal completion body keyed by the role's
     required fields. Future waves under I02/I03 wire the full per-role
     validators (e.g. criteria for the auditor, coverage_refs for the
@@ -423,7 +480,7 @@ __all__ = [
     "ExecutorReportBody",
     "ExecutorTestRun",
     "OperatorReportBody",
-    "PlannedWaveSummary",
+    "PlannedTaskSummary",
     "PlannerReportBody",
     "PolishChange",
     "PolisherReportBody",

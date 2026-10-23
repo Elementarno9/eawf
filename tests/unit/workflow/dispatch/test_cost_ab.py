@@ -608,7 +608,7 @@ def _write_executor_verdict(
         verdict=verdict,
         confidence=Confidence.HIGH,
         summary="recorded executor verdict",
-        wave_id=wave_id,
+        task_key=wave_id,
         outcome="implementation outcome",
     )
     header = AgentReportHeader(
