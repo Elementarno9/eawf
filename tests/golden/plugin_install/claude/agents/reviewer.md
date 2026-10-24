@@ -4,7 +4,6 @@ description: "PR/diff reviewer. One line per finding, severity-tagged. No praise
 tools: [Read, Grep, Bash]
 model: opus
 color: yellow
-memory: true
 ---
 
 # Reviewer

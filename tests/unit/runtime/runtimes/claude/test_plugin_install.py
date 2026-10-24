@@ -470,7 +470,10 @@ def test_update_rewrites_old_managed_hooks_key_without_drift(tmp_path: Path) -> 
         update={"hash": hashlib.blake2b(old_bytes, digest_size=8).hexdigest()}
     )
     save_atomic(manifest_path, manifest)
-    assert doctor_plugin(tmp_path).drifted == []
+    stale = doctor_plugin(tmp_path).drifted
+    assert [(e.region_id, e.fix) for e in stale] == [
+        ("plugin.claude.settings.managed_hooks", "eawf plugin update claude")
+    ]
 
     update_plugin(tmp_path)
 

@@ -4,7 +4,6 @@ description: "Fresh-context verifier. Re-reads a finished Task or Batch against 
 tools: [Read, Grep, Glob, Bash]
 model: opus
 color: red
-memory: false
 ---
 
 # Auditor

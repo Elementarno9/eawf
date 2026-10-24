@@ -14,6 +14,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.runtime.runtimes.claude.plugin_conflict import CCPluginConflict
+from eawf.runtime.runtimes.claude.plugin_install import install_plugin
 from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
@@ -391,6 +392,27 @@ def test_doctor_without_marketplace_still_reports_missing(
     res = runner.invoke(app, ["-w", str(tmp_path), "plugin", "doctor", "claude"])
     assert res.exit_code != 0, res.output
     assert "mode=marketplace" not in res.output
+
+
+def test_doctor_reports_project_hooks_doubled_by_marketplace(
+    tmp_path: Path, fake_conflict: CCPluginConflict
+) -> None:
+    """A project install beside the marketplace plugin fires each hook twice."""
+    install_plugin(tmp_path)
+    res = runner.invoke(app, ["-w", str(tmp_path), "plugin", "doctor", "claude"])
+    assert res.exit_code != 0, res.output
+    assert "mode=marketplace" not in res.output
+    assert "fix: keep one install mode" in res.output
+
+
+def test_doctor_json_names_the_double_load_fix(
+    tmp_path: Path, fake_conflict: CCPluginConflict
+) -> None:
+    install_plugin(tmp_path)
+    res = runner.invoke(app, ["-w", str(tmp_path), "--json", "plugin", "doctor", "claude"])
+    assert res.exit_code != 0, res.output
+    assert '"region_id": "plugin.claude.hooks.double_load"' in res.output
+    assert '"fix": "keep one install mode' in res.output
 
 
 @pytest.mark.parametrize(

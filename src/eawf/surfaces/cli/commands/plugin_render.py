@@ -62,6 +62,7 @@ def _doctor_payload(report: DoctorReport) -> dict[str, object]:
                 "kind": e.kind,
                 "on_disk_hash": e.on_disk_hash,
                 "expected_hash": e.expected_hash,
+                "fix": e.fix,
             }
             for e in report.drifted
         ],
@@ -287,6 +288,8 @@ def _doctor_text(report: DoctorReport) -> str:
         parts.append("  drifted files:")
         for entry in report.drifted:
             parts.append(f"    - {entry.path} (on-disk={entry.on_disk_hash})")
+            if entry.fix is not None:
+                parts.append(f"      {entry.region_id}; fix: {entry.fix}")
     if report.missing:
         parts.append("  missing files:")
         for entry in report.missing:

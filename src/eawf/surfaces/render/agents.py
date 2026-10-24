@@ -3,8 +3,8 @@
 ``eawf plugin install claude`` emits one
 ``.claude/agents/<role>.md`` per Eä subagent role. The output mirrors
 the hand-written ``.claude/agents/<role>.md`` placeholder files: YAML
-frontmatter (``name``/``description``/``tools``/``model``/``color``/
-``memory``) terminated by ``---`` and followed by a markdown body that
+frontmatter (``name``/``description``/``tools``/``model``/``color``)
+terminated by ``---`` and followed by a markdown body that
 documents the agent's contract.
 
 Roles enumerated per ``enums.md`` ``AgentSession.role``:
@@ -92,8 +92,6 @@ class AgentTemplateContext:
             output mirrors the hand-written ``[Read, Grep]`` shape.
         model: Claude model identifier (e.g. ``"opus"``).
         color: Glyph colour (``"blue"``, ``"green"``, …).
-        memory: Whether the subagent retains memory between
-            invocations. Frontmatter ``memory: true|false``.
     body: Agent body markdown (method, output contract,
             anti-patterns). Inserted verbatim after the frontmatter.
         output_contract: Optional explicit typed report-body contract.
@@ -105,7 +103,6 @@ class AgentTemplateContext:
     tools: tuple[str, ...]
     model: str
     color: str
-    memory: bool
     body: str
     output_contract: str | None = None
 
@@ -336,7 +333,6 @@ def render_agent_md(ctx: AgentTemplateContext) -> str:
         tools=list(ctx.tools),
         model=ctx.model,
         color=ctx.color,
-        memory=ctx.memory,
         body=embed_role_rules(ctx.role, unwrap_markdown_paragraphs(ctx.body)).rstrip("\n"),
         output_contract=unwrap_markdown_paragraphs(contract).rstrip("\n"),
     )

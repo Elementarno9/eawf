@@ -4,7 +4,6 @@ description: "Read-only investigator. Surveys code, docs, git history, and exter
 tools: [Read, Grep, Glob, WebFetch, WebSearch, Bash]
 model: opus
 color: blue
-memory: true
 ---
 
 # Researcher

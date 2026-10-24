@@ -11,15 +11,19 @@ Covers:
 - Every AGENT_REGISTRY role renders without raising.
 - ``tools`` list emits inline (``[Read, Grep]``) — matches the existing
   hand-written shape.
-- Boolean ``memory`` field emits lowercase ``true``/``false``.
+- No page carries a ``memory`` key, in either install mode.
 - ``effective_agent_tools`` widens a spec's allowlist from the configured
   ``agents.extra_tools`` grant without disturbing the unconfigured render.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
+from eawf.runtime.runtimes.claude.plugin_install import install_plugin
+from eawf.runtime.runtimes.claude.plugin_package import package_plugin
 from eawf.surfaces.render.agents import (
     AGENT_REGISTRY,
     ROLES,
@@ -59,7 +63,6 @@ def _ctx(role: str = "researcher") -> AgentTemplateContext:
         tools=("Read", "Grep", "Bash"),
         model="opus",
         color="blue",
-        memory=True,
         body="# Researcher\n\nbody",
     )
 
@@ -77,7 +80,6 @@ def test_render_agent_md_includes_all_frontmatter_fields() -> None:
     assert '\ndescription: "one-sentence agent description"\n' in output
     assert "\nmodel: opus\n" in output
     assert "\ncolor: blue\n" in output
-    assert "\nmemory: true\n" in output
 
 
 def test_render_agent_md_emits_inline_tools_list() -> None:
@@ -88,27 +90,10 @@ def test_render_agent_md_emits_inline_tools_list() -> None:
         tools=("Read", "Grep", "Glob", "Bash"),
         model="opus",
         color="red",
-        memory=False,
         body="# Auditor\nbody",
     )
     output = render_agent_md(ctx)
     assert "\ntools: [Read, Grep, Glob, Bash]\n" in output
-
-
-def test_render_agent_md_memory_false_emits_lowercase() -> None:
-    ctx = AgentTemplateContext(
-        role="auditor",
-        description="d",
-        tools=("Read",),
-        model="opus",
-        color="red",
-        memory=False,
-        body="# Auditor",
-    )
-    output = render_agent_md(ctx)
-    assert "\nmemory: false\n" in output
-    assert "True" not in output
-    assert "False" not in output
 
 
 def test_agent_registry_carries_all_eight_roles() -> None:
@@ -125,7 +110,6 @@ def test_each_registry_role_renders_without_raising(role: str) -> None:
         tools=spec.tools,
         model=spec.model,
         color=spec.color,
-        memory=spec.memory,
         body=spec.body,
     )
     output = render_agent_md(ctx)
@@ -143,7 +127,6 @@ def test_each_registry_role_includes_typed_output_contract(role: str) -> None:
         tools=spec.tools,
         model=spec.model,
         color=spec.color,
-        memory=spec.memory,
         body=spec.body,
     )
     output = render_agent_md(ctx)
@@ -166,7 +149,6 @@ def test_render_agent_md_empty_tools_renders_empty_list() -> None:
         tools=(),
         model="opus",
         color="magenta",
-        memory=True,
         body="# Domain",
     )
     output = render_agent_md(ctx)
@@ -236,7 +218,6 @@ def _render_with(spec: AgentSpec, tools: tuple[str, ...]) -> str:
             tools=tools,
             model=spec.model,
             color=spec.color,
-            memory=spec.memory,
             body=spec.body,
         )
     )
@@ -373,3 +354,26 @@ def test_serena_triple_is_absent_from_the_ungranted_role_frontmatter() -> None:
             continue
         rendered = _render_with(spec, effective_agent_tools(spec, {}))
         assert "mcp__serena__" not in rendered.split("\n---\n", 1)[0]
+
+
+def _frontmatter_keys(page: str) -> set[str]:
+    """Return the top-level keys of an agent page's YAML frontmatter."""
+    head = page.split("---\n", 2)[1]
+    return {line.split(":", 1)[0] for line in head.splitlines() if line and line[0] != " "}
+
+
+def test_agent_pages_carry_no_memory_key(tmp_path: Path) -> None:
+    """Claude Code refuses ``memory: true|false``; both install modes omit the key.
+
+    Its valid values (``user``, ``project``, ``local``) turn on a persistent
+    memory directory, which no eawf role asks for.
+    """
+    install_plugin(tmp_path / "repo", persist_manifest=False)
+    package_plugin(tmp_path / "package")
+    repo_pages = sorted((tmp_path / "repo" / ".claude" / "agents").glob("*.md"))
+    package_pages = sorted((tmp_path / "package" / "agents").glob("*.md"))
+    assert {p.stem for p in repo_pages} == _EXPECTED_ROLES
+    assert {p.stem for p in package_pages} == _EXPECTED_ROLES
+    for page in (*repo_pages, *package_pages):
+        keys = _frontmatter_keys(page.read_text(encoding="utf-8"))
+        assert keys == {"name", "description", "tools", "model", "color"}, page

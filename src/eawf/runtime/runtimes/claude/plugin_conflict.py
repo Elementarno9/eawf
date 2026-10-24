@@ -7,7 +7,9 @@ packaged plugin via ``/plugin marketplace add ./build/eawf-plugin`` +
 ``~/.claude/plugins/`` and is global to the user.
 
 Running both modes simultaneously makes Claude Code see every skill / agent /
-hook twice. CC dedups by name but the active body is undefined. This module
+hook twice. CC dedups skills and agents by name, but the active body is
+undefined, and it runs both hook entries, so every eawf handler fires twice;
+``plugin doctor`` reports the doubled hooks as drift. This module
 surfaces the conflict so ``install claude`` can prompt the operator to pick
 one path (or pass ``--force`` to acknowledge).
 

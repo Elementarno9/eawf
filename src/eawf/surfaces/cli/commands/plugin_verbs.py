@@ -426,21 +426,22 @@ def _doctor_single_runtime(
         if not oc_report.clean:
             raise typer.Exit(exit_codes.STATE_CONFLICT)
         return
-    claude_report = doctor_plugin(target)
-    # No project-local render at all, while the plugin is installed from the
-    # marketplace, is the correct state — not 37 faults. Reporting it as drift
-    # invited a reinstall that recreates the duplicate the conflict gate
-    # exists to prevent, so the nag was itself the trap.
     # Resolved through the module, not a from-import: the detector is the
     # patch seam the conflict-gate tests set, and a captured binding would
     # ignore it.
     from eawf.surfaces.cli.commands import plugin as _plugin
 
+    marketplace_installed = _plugin.detect_marketplace_install() is not None
+    claude_report = doctor_plugin(target, marketplace_installed=marketplace_installed)
+    # No project-local render at all, while the plugin is installed from the
+    # marketplace, is the correct state — not 37 faults. Reporting it as drift
+    # invited a reinstall that recreates the duplicate the conflict gate
+    # exists to prevent, so the nag was itself the trap.
     marketplace_only = (
         not claude_report.ok
         and not claude_report.drifted
         and bool(claude_report.missing)
-        and _plugin.detect_marketplace_install() is not None
+        and marketplace_installed
     )
     if marketplace_only:
         emit_json_or_text(

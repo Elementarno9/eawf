@@ -4,7 +4,6 @@ description: "Repo-wide consistency sweeper. Aligns naming, docstring style, log
 tools: [Read, Grep, Glob, Edit, Bash]
 model: opus
 color: cyan
-memory: true
 ---
 
 # Polisher

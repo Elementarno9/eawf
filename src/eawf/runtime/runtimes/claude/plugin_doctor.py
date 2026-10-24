@@ -8,6 +8,11 @@ file the installer claims ownership of:
   bytes → :attr:`DoctorReport.drifted` grows.
 - The file matches expectation → :attr:`DoctorReport.ok` grows.
 
+``settings.json`` is also read for wiring an older install left behind
+(its recorded hash still matches, so the byte check alone passes it), and,
+when the marketplace plugin is installed too, for project hooks that make
+Claude Code run every eawf handler twice.
+
 Exit code mapping (the CLI surface in
 :mod:`eawf.surfaces.cli.commands.plugin`):
 
@@ -42,11 +47,16 @@ from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from eawf.kernel.config.layered import resolve_agent_extra_tools
 from eawf.runtime.harness.fan_out import unwritten_plan_keys
 from eawf.runtime.lock import portalock
+from eawf.runtime.runtimes.claude.hook_map import build_plugin_hooks_json
 from eawf.runtime.runtimes.claude.plugin_install import (
+    _HOOK_COMMAND_MARKER,
+    _MANAGED_KEY,
+    _eawf_settings_hooks,
     _event_type_for,
     _expected_bytes_for,
     expected_paths,
@@ -113,6 +123,8 @@ class DoctorEntry:
             when the file is missing.
         expected_hash: Hash of the bytes the installer would emit for
             this region.
+        fix: The command or step that clears this entry, when it is not
+            the generic reinstall.
     """
 
     region_id: str
@@ -120,6 +132,7 @@ class DoctorEntry:
     kind: str  # Literal["ok", "missing", "drifted"]
     on_disk_hash: str | None
     expected_hash: str
+    fix: str | None = None
 
 
 @dataclass(frozen=True)
@@ -176,11 +189,25 @@ def _settings_managed_hash_from_manifest(manifest: Manifest, settings_path: Path
     return entry.hash
 
 
-def doctor_plugin(target_dir: Path) -> DoctorReport:
+#: Clears the wiring an older install left in ``settings.json``: the
+#: re-install drops every eawf hook entry and rewrites ``__eawf_managed``.
+_UPDATE_FIX: str = "eawf plugin update claude"
+
+#: Clears a project install's hooks doubling the marketplace plugin's.
+_DOUBLE_LOAD_FIX: str = (
+    "keep one install mode: run /plugin uninstall eawf@eawf in Claude Code, "
+    "or remove the project install's eawf entries from .claude/settings.json hooks"
+)
+
+
+def doctor_plugin(target_dir: Path, *, marketplace_installed: bool = False) -> DoctorReport:
     """Inspect the Claude plugin tree under *target_dir*.
 
     Args:
         target_dir: Workspace root that hosts ``.claude/``.
+        marketplace_installed: The eawf plugin is also installed for the
+            user from the marketplace, so its ``hooks/hooks.json`` loads
+            beside the project ``settings.json`` hooks.
 
     Returns:
         :class:`DoctorReport` summarising every file Eä installs.
@@ -276,9 +303,32 @@ def doctor_plugin(target_dir: Path) -> DoctorReport:
                 expected_hash=expected_settings_hash,
             )
             (ok if kind == "ok" else drifted).append(entry)
+            document = _settings_document(live)
+            for region_id in _stale_settings_regions(document):
+                drifted.append(
+                    DoctorEntry(
+                        region_id=region_id,
+                        path=settings_path,
+                        kind="drifted",
+                        on_disk_hash=live_hash,
+                        expected_hash=expected_settings_hash,
+                        fix=_UPDATE_FIX,
+                    )
+                )
+            if marketplace_installed and _doubled_hook_events(document):
+                drifted.append(
+                    DoctorEntry(
+                        region_id="plugin.claude.hooks.double_load",
+                        path=settings_path,
+                        kind="drifted",
+                        on_disk_hash=live_hash,
+                        expected_hash=expected_settings_hash,
+                        fix=_DOUBLE_LOAD_FIX,
+                    )
+                )
             # A concurrency plan Claude Code's own scheduler never reads is
             # prose, so an unwritten fan-out key is drift on its own.
-            if _unwritten_fan_out(live):
+            if unwritten_plan_keys("claude", document):
                 drifted.append(
                     DoctorEntry(
                         region_id="plugin.claude.fan_out",
@@ -296,16 +346,54 @@ def doctor_plugin(target_dir: Path) -> DoctorReport:
     return DoctorReport(target_dir=target_dir, ok=ok, drifted=drifted, missing=missing)
 
 
-def _unwritten_fan_out(settings_bytes: bytes) -> tuple[str, ...]:
-    """Return the fan-out plan keys ``settings.json`` leaves unset.
-
-    A file that does not parse as a JSON object sets none of them.
-    """
+def _settings_document(settings_bytes: bytes) -> dict[str, Any]:
+    """Parse ``settings.json``; a file that is not a JSON object reads as empty."""
     try:
         document = json.loads(settings_bytes)
     except UnicodeDecodeError, json.JSONDecodeError:
-        document = {}
-    return unwritten_plan_keys("claude", document if isinstance(document, dict) else {})
+        return {}
+    return document if isinstance(document, dict) else {}
+
+
+def _eawf_hook_events(document: Mapping[str, Any]) -> set[str]:
+    """Return the Claude Code events whose ``hooks`` entries run an eawf wrapper."""
+    hooks = document.get("hooks")
+    events: set[str] = set()
+    for event, entries in hooks.items() if isinstance(hooks, dict) else ():
+        for entry in entries if isinstance(entries, list) else ():
+            commands = entry.get("hooks") if isinstance(entry, dict) else None
+            if any(
+                isinstance(command, dict)
+                and _HOOK_COMMAND_MARKER in str(command.get("command", ""))
+                for command in (commands if isinstance(commands, list) else ())
+            ):
+                events.add(event)
+    return events
+
+
+def _stale_settings_regions(document: Mapping[str, Any]) -> list[str]:
+    """Return a region per piece of wiring an older install left in ``settings.json``.
+
+    The rc2 install nested its hook list under ``__eawf_managed.hooks``,
+    which Claude Code 2.1.310 refuses, and wired the session-end wrapper
+    under ``Stop``, whose payload the router no longer maps, so the session
+    end was never stamped. Any eawf wrapper under an event the current
+    install does not wire is the same defect.
+    """
+    regions: list[str] = []
+    managed = document.get(_MANAGED_KEY)
+    if isinstance(managed, dict) and "hooks" in managed:
+        regions.append("plugin.claude.settings.managed_hooks")
+    regions.extend(
+        f"plugin.claude.settings.hook.{event}"
+        for event in sorted(_eawf_hook_events(document) - set(_eawf_settings_hooks()))
+    )
+    return regions
+
+
+def _doubled_hook_events(document: Mapping[str, Any]) -> set[str]:
+    """Return the events the project hooks and the marketplace plugin both wire."""
+    return _eawf_hook_events(document) & set(build_plugin_hooks_json()["hooks"])
 
 
 def doctor_plugin_strict(target_dir: Path, *, timeout: float = 5.0) -> DoctorReport:

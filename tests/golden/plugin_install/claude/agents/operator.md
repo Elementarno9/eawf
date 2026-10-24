@@ -4,7 +4,6 @@ description: "Coordinates a Milestone by dispatching its Tasks to specialised su
 tools: [Agent, TaskCreate, TaskUpdate, TaskList, TaskGet, Read, Bash, Skill, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__get_symbols_overview]
 model: opus
 color: orange
-memory: true
 ---
 
 # Operator

@@ -4,7 +4,6 @@ description: "Decomposes a Milestone into a Task graph with explicit success cri
 tools: [Read, Grep, Glob, Write, Edit]
 model: opus
 color: purple
-memory: true
 ---
 
 # Planner

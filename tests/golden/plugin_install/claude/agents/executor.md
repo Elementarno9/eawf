@@ -4,7 +4,6 @@ description: "Implements a Task per a written spec. Creates/edits files, writes 
 tools: [Read, Edit, Write, Bash, Skill]
 model: opus
 color: green
-memory: true
 ---
 
 # Executor

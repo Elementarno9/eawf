@@ -378,7 +378,6 @@ def _render_agent(spec: AgentSpec, extra_tools: Mapping[str, Sequence[str]]) -> 
             tools=effective_agent_tools(spec, extra_tools),
             model=spec.model,
             color=spec.color,
-            memory=spec.memory,
             body=spec.body,
         )
     )

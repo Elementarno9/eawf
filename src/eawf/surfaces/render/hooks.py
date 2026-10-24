@@ -176,8 +176,8 @@ def _spec_for(event_type: HookEventType) -> HookSpec:
 # - PreToolUse / PostToolUse: Claude fires one hook per tool call; the
 #   router resolves git commit/push commands to PRE_COMMIT/PRE_PUSH /
 #   POST_COMMIT/POST_PUSH via ``_BASH_PREFIX_TO_PRE/POST``.
-# - SessionStart / SessionEnd / Stop: routed verbatim; ``Stop`` collapses
-#   to SESSION_END.
+# - SessionStart / SessionEnd: routed verbatim. ``Stop`` fires after every
+#   turn, so the router skips it rather than read it as the session's end.
 # - Lifecycle events without a Claude counterpart (PRE_AUDIT, POST_AUDIT,
 #   WAVE_OPEN, WAVE_CLOSE, ITER_OPEN, ITER_CLOSE, PHASE_OPEN, PHASE_CLOSE,
 #   AGENT_END) carry the eawf-native value as ``hook_event_name`` so the
