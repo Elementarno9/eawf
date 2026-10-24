@@ -176,7 +176,7 @@ def test_cli_init_no_input_emits_json_envelope(tmp_path: Path) -> None:
     payload = json.loads(res.stdout)
     assert payload["project_code"] == "DEMO"
     assert payload["profiles_enabled"] == ["core"]
-    assert payload["state_path"].endswith(".ea/state.json")
+    assert payload["state_path"].endswith(f"/.ea/generations/{payload['generation_id']}/state.json")
     assert payload["config_path"].endswith(".ea/config.yaml")
     assert payload["agents_md_path"].endswith("AGENTS.md")
     assert payload["claude_md_path"].endswith("CLAUDE.md")

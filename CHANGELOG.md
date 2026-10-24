@@ -27,6 +27,7 @@ This is the third release candidate of v0.7.0. The epoch-1 engine is gone from e
 - **Console transcript.** One row per tool call, updated in place as the call moves; each finished row shows its call and model turn seconds and a turn's input and output tokens; usage totals end the STATE row; a queued or running Run ends on a greyed row naming its wait; Page Up, Page Down and the mouse wheel move through blocks and landing on the newest block follows the tail again; and the scrollbar draws an accent thumb on a track.
 - **Doctor checks.** `canonical_sequence_drift` warns when the committed sequence lags the daemon's live one, and an advisory STE (Simplified Technical English) prose lint and an always-passing `ste-prose` hook check the rule modules, profiles and skill bodies.
 - **Reopen an acceptance review.** `eawf milestone reopen-review <URN>` returns a Milestone in acceptance review to ACTIVE with a recorded reason, so it can take an appended Batch; the next `eawf milestone open-review` files a successor acceptance bundle, and an approval sealed on the earlier bundle can no longer accept the Milestone.
+- **Reopen an accepted Milestone.** `eawf milestone reopen <URN>` returns a COMPLETED Milestone to ACTIVE with a recorded reason, so a fix can land in it before it ships. Only an operator principal may reopen it, and a Milestone that a release record or a pushed release tag names is refused. The acceptance stays in the ledger as history, and the approval it was accepted on can never accept it again.
 
 ### Changed
 
@@ -43,6 +44,7 @@ This is the third release candidate of v0.7.0. The epoch-1 engine is gone from e
 - **Render lock files are bounded.** Render targets map onto 256 fixed stripe lock files instead of one file per target path, and the daemon test harnesses remove each whole runtime directory on teardown.
 - **`eawf doctor` warns instead of crashing on a malformed config layer;** the local-size check degrades to a warning naming the merge failure.
 - **Repository settings load in current Claude Code.** The managed metadata block in `.claude/settings.json` now names its hook list `hook_scripts`: Claude Code 2.1.310 refused the whole file while that block carried its own `hooks` key, which dropped every eawf hook, the status line and the env settings of a repository install. `eawf plugin update claude` rewrites an rc2 install.
+- **A reopened review cannot reuse an earlier seal.** `eawf milestone open-review` now requires the acceptance bundle revision after the newest filed bundle, or revision 1 when none is filed. Before, a review reopened and opened again on revision 1 let an approval sealed in the earlier review accept the Milestone. The console no longer suggests `eawf milestone accept`, or an earlier review's waiting question, for a reopened Milestone.
 
 ### Migration
 

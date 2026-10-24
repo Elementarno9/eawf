@@ -3,7 +3,7 @@
 After the flag day ``eawf init`` must not leave an epoch-1 tree behind: every
 mutating verb refuses on one. A new tree is therefore born native: it carries
 an opt-in declaration pinned to a backup of the skeleton the wizard just
-wrote, a generation built from the project code, the selection pointer and
+wrote, a generation holding the project row, the selection pointer and
 then the epoch marker, so the authority resolver grants it epoch 2 for the
 same reason it grants a migrated tree. No v1 document is written or read on
 the way; the skeleton (``config.yaml`` and any ``profile.yaml``) is what the
@@ -22,7 +22,10 @@ from typing import Final
 
 from eawf.kernel.migration.epoch2.canary import DisposableTarget, OptInDeclaration, opt_in_path
 from eawf.kernel.migration.epoch2.generation import atomic_write_json, verify_selected_generation
+from eawf.kernel.state.enums import ProjectStatus
 from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.state.models import Project
+from eawf.kernel.state.urn import build as build_urn
 from eawf.platform.backup import BackupStore, snapshot_digest
 from eawf.platform.install.canary import activate_born_generation, write_born_generation
 
@@ -40,8 +43,37 @@ INIT_BACKUP_NOTE: Final = "eawf init: the skeleton an epoch-2 tree was born from
 #: The backup store's snapshot directory name: filesystem-safe ISO-8601 UTC.
 _SNAPSHOT_TS_FORMAT: Final = "%Y-%m-%dT%H-%M-%SZ"
 
+#: The branch a born project delivers into until the operator says otherwise.
+INIT_DEFAULT_BRANCH: Final = "main"
 
-def bear_epoch2_tree(tree_root: Path, *, project_code: str, born_at: datetime) -> str:
+
+def _initial_project(*, project_code: str, project_title: str) -> Project:
+    """Return the project row a tree is born with.
+
+    Args:
+        project_code: The project the tree was initialised for.
+        project_title: The operator's title; empty falls back to the code.
+
+    Returns:
+        The active project, delivering into :data:`INIT_DEFAULT_BRANCH`.
+
+    Raises:
+        ValidationError: The code is not a project code.
+    """
+    return Project(
+        code=project_code,
+        slug=project_code.lower(),
+        title=project_title or project_code,
+        domains=["general"],
+        default_branch=INIT_DEFAULT_BRANCH,
+        status=ProjectStatus.ACTIVE,
+        repo_urn=build_urn("repo", owner=project_code),
+    )
+
+
+def bear_epoch2_tree(
+    tree_root: Path, *, project_code: str, project_title: str, born_at: datetime
+) -> str:
     """Make ``tree_root`` an activated epoch-2 tree born for ``project_code``.
 
     The backup is looked up later under the tree's parent directory, the
@@ -51,7 +83,9 @@ def bear_epoch2_tree(tree_root: Path, *, project_code: str, born_at: datetime) -
     Args:
         tree_root: The ``.ea`` directory the wizard wrote the skeleton into.
         project_code: The project the tree was initialised for; the
-            generation is built from it.
+            generation is built from it and holds its row.
+        project_title: The operator's project title; empty falls back to
+            the code.
         born_at: When the skeleton is backed up and the tree activated.
 
     Returns:
@@ -62,7 +96,9 @@ def bear_epoch2_tree(tree_root: Path, *, project_code: str, born_at: datetime) -
             back through the public readers.
         RuntimeError: The finished tree does not resolve to epoch 2.
         OSError: A file could not be written.
+        ValidationError: The code is not a project code.
     """
+    project = _initial_project(project_code=project_code, project_title=project_title)
     snapshot = BackupStore(tree_root.parent).write_snapshot(
         born_at.astimezone(UTC).strftime(_SNAPSHOT_TS_FORMAT), note=INIT_BACKUP_NOTE
     )
@@ -78,7 +114,7 @@ def bear_epoch2_tree(tree_root: Path, *, project_code: str, born_at: datetime) -
     )
     target = DisposableTarget.require(tree_root)
     generation_id, birth_digest = write_born_generation(
-        target, birth={"init": {"project_code": project_code}}
+        target, birth={"init": {"project_code": project_code}}, project=project
     )
     activate_born_generation(
         target, generation_id=generation_id, birth_digest=birth_digest, activated_at=born_at
@@ -92,4 +128,9 @@ def bear_epoch2_tree(tree_root: Path, *, project_code: str, born_at: datetime) -
     return generation_id
 
 
-__all__ = ["INIT_DECLARED_BY", "INIT_PURPOSE", "bear_epoch2_tree"]
+__all__ = [
+    "INIT_DECLARED_BY",
+    "INIT_DEFAULT_BRANCH",
+    "INIT_PURPOSE",
+    "bear_epoch2_tree",
+]

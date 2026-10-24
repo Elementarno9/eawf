@@ -252,14 +252,15 @@ class ProjectionRecord(RuleModel):
             token measure every runtime is declared against.
         line_count: Rendered line count.
         cap_bytes: The byte cap the projection was held to: the smallest
-            certified default among the runtimes that read it.
+            certified default among the runtimes that read it; ``None`` when
+            every certified reader is uncapped.
         cap_runtime: The runtime that certified ``cap_bytes``.
         cap_scope: Whether ``cap_runtime`` applies the cap per file or as a
             combined budget across its document chain.
         uncertified_readers: Runtimes that read the projection with no
             certified cap of their own; ``cap_bytes`` does not certify
             delivery to them.
-        headroom_bytes: ``cap_bytes - byte_count``.
+        headroom_bytes: ``cap_bytes - byte_count``; ``None`` with no byte cap.
         rule_spans: One span per rendered rule.
     """
 
@@ -271,11 +272,11 @@ class ProjectionRecord(RuleModel):
     byte_count: PositiveInt
     token_count: PositiveInt
     line_count: PositiveInt
-    cap_bytes: PositiveInt
+    cap_bytes: PositiveInt | None
     cap_runtime: RuntimeName
     cap_scope: CapScope
     uncertified_readers: tuple[RuntimeName, ...] = ()
-    headroom_bytes: NonNegativeInt
+    headroom_bytes: NonNegativeInt | None
     rule_spans: tuple[RuleSpan, ...]
 
 
@@ -315,8 +316,9 @@ class ProjectionManifest(RuleModel):
         """Return one operator line per uncertified reader and stale fact."""
         uncertified = tuple(
             f"{record.target} is read by {', '.join(record.uncertified_readers)} with no "
-            f"certified project-document cap; the {record.cap_bytes}-byte cap certified for "
-            f"{record.cap_runtime} does not certify delivery to them"
+            f"certified project-document cap; the "
+            f"{'uncapped' if record.cap_bytes is None else f'{record.cap_bytes}-byte'} cap "
+            f"certified for {record.cap_runtime} does not certify delivery to them"
             for record in self.projections
             if record.uncertified_readers
         )
@@ -967,14 +969,15 @@ def _render_projection(
             f"{target} has no certified project-document cap: no runtime that reads it "
             f"has one, and a render never publishes against an assumed limit"
         )
-    if size > cap.cap_bytes:
+    cap_bytes = cap.cap_bytes
+    if cap_bytes is not None and size > cap_bytes:
         lost = next(
-            (span.rule_id for span in builder.spans if span.end_byte + offset > cap.cap_bytes),
+            (span.rule_id for span in builder.spans if span.end_byte + offset > cap_bytes),
             None,
         )
         first_lost = f"; the first rule lost past the cut is {lost}" if lost else ""
         raise RuleProjectionBudgetError(
-            f"{target} renders {size} bytes, over the {cap.cap_bytes}-byte project-document "
+            f"{target} renders {size} bytes, over the {cap_bytes}-byte project-document "
             f"cap certified for {cap.runtime}{first_lost}; move rules out of the "
             f"constitution or into a module"
         )
@@ -987,11 +990,11 @@ def _render_projection(
         byte_count=size,
         token_count=count_tokens(text),
         line_count=text.count("\n"),
-        cap_bytes=cap.cap_bytes,
+        cap_bytes=cap_bytes,
         cap_runtime=cap.runtime,
         cap_scope=cap.scope,
         uncertified_readers=cap.uncertified,
-        headroom_bytes=cap.cap_bytes - size,
+        headroom_bytes=None if cap_bytes is None else cap_bytes - size,
         rule_spans=tuple(
             RuleSpan(
                 rule_id=span.rule_id,

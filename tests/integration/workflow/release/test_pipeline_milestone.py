@@ -17,6 +17,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+import click
 import pytest
 from typer.testing import CliRunner
 
@@ -173,7 +174,8 @@ def test_cli_options_require_a_milestone(world: World, monkeypatch: pytest.Monke
     monkeypatch.setattr(cli_module, "_daemon_rpc", world.daemon)
     result = CliRunner().invoke(app, ["release", "pipeline", VERSION])
     assert result.exit_code == 2, result.output
-    assert "--milestone" in result.output
+    # A CI host forces colour, and the usage panel styles each option name.
+    assert "--milestone" in click.unstyle(result.output)
     assert world.calls == []
 
 

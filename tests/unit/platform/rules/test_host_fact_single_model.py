@@ -118,7 +118,7 @@ def test_from_host_facts_carries_uncertified_facts_as_absent() -> None:
 
 
 def test_from_host_facts_with_nothing_certified_is_none() -> None:
-    assert CertifiedRuntimeFacts.from_host_facts(rule_facts.load_host_facts().claude) is None
+    assert CertifiedRuntimeFacts.from_host_facts(rule_facts.load_host_facts().opencode) is None
 
 
 def test_from_host_facts_takes_the_oldest_measurement_date() -> None:

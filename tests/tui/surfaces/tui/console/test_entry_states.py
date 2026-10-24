@@ -60,7 +60,7 @@ from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.entry import render_state
 from eawf.surfaces.tui.console.session import SIZES, Session
 from eawf.surfaces.tui.console.tokens import CONNECTION, TRUTH
-from tests.integration._memory_native import QR_DOCUMENT
+from tests._epoch2_helpers import lay_epoch2_tree
 
 from .overlay_support import chrome
 
@@ -924,21 +924,18 @@ class _InProcessDaemon:
 
 
 def _first_run(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> ConsoleApp:
-    """Land a first run on a tree whose state records project ``CODE``, daemon in process."""
+    """Land a first run on a born tree whose generation records project ``CODE``."""
     import eawf.surfaces.cli._daemon_client as daemon_client
 
     _InProcessDaemon.calls = []
     monkeypatch.setattr(daemon_client, "DaemonClient", _InProcessDaemon)
     world.ea.mkdir(parents=True, exist_ok=True)
-    project = {**QR_DOCUMENT["project"], "code": CODE, "repo_urn": f"urn:eawf:v1:repo:{CODE}"}
-    document = {
-        **QR_DOCUMENT,
-        "urn": f"urn:eawf:v1:state:{CODE}",
-        "project": project,
-        "current": {**QR_DOCUMENT["current"], "project_code": CODE},
-    }
-    (world.ea / "state.json").write_text(json.dumps(document))
-    return _land(world, monkeypatch, "onboarding")
+    lay_epoch2_tree(world.repo, project_code=CODE)
+    (world.ea / "state.json").unlink()
+    _rc, app = _launch(monkeypatch)
+    assert app is not None
+    assert _state(app).id == "onboarding"
+    return app
 
 
 def _drive(app: ConsoleApp, *keys: str) -> tuple[list[str], list[str]]:

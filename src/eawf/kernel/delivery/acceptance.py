@@ -71,6 +71,9 @@ EvidenceKey = Annotated[
 #: The first revision every acceptance bundle starts at.
 FIRST_BUNDLE_REVISION = 1
 
+#: The ledger-line key prefix an acceptance bundle revision is filed under.
+BUNDLE_KEY_PREFIX = "MAB-"
+
 
 class _FrozenModel(Epoch2Model):
     """Strict and immutable: a bundle edited after approval is not the approved one."""
@@ -365,6 +368,7 @@ class EvidenceView(_FrozenModel):
 
 
 __all__ = [
+    "BUNDLE_KEY_PREFIX",
     "FIRST_BUNDLE_REVISION",
     "AcceptanceBundleLedger",
     "AcceptanceStepOutcome",

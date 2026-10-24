@@ -1,3 +1,4 @@
+# noqa: EAWF010 the one command surface of every native lifecycle verb; split per entity next
 """The operator surface of the native per-entity lifecycle verbs.
 
 The daemon registers one JSON-RPC verb per lifecycle move a Track, a
@@ -97,6 +98,7 @@ MILESTONE_OPEN_REVIEW: Final = "domain.milestone.open_review"
 MILESTONE_REOPEN_REVIEW: Final = "domain.milestone.reopen_review"
 MILESTONE_ACCEPT: Final = "domain.milestone.accept"
 MILESTONE_CANCEL: Final = "domain.milestone.cancel"
+MILESTONE_REOPEN: Final = "domain.milestone.reopen"
 BATCH_ACTIVATE: Final = "domain.batch.activate"
 BATCH_READY: Final = "domain.batch.ready"
 BATCH_MERGE: Final = "domain.batch.merge"
@@ -125,6 +127,7 @@ DOMAIN_CLI_METHODS: Final[tuple[str, ...]] = (
     MILESTONE_REOPEN_REVIEW,
     MILESTONE_ACCEPT,
     MILESTONE_CANCEL,
+    MILESTONE_REOPEN,
     BATCH_ACTIVATE,
     BATCH_READY,
     BATCH_MERGE,
@@ -1147,6 +1150,40 @@ def milestone_cancel_cmd(
     )
 
 
+@milestone_app.command("reopen")
+def milestone_reopen_cmd(
+    ctx: typer.Context,
+    urn: Annotated[str, typer.Argument(help=_URN_HELP)],
+    expected_revision: Annotated[
+        int,
+        typer.Option("--expected-revision", "--expected-milestone-revision", help=_REVISION_HELP),
+    ],
+    idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
+    actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
+    from_spec: Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
+) -> None:
+    """Return an accepted Milestone to ACTIVE, with a recorded reason, before any release.
+
+    The spec's ``reason_code`` is required and the actor must be an operator
+    principal. A Milestone a release record or a pushed release tag names is
+    refused. The next ``open-review`` names the revision after the newest
+    filed bundle, so the approval it was accepted on accepts nothing again.
+    """
+    _run_verb(
+        ctx,
+        dry_run=dry_run,
+        yes=yes,
+        method=MILESTONE_REOPEN,
+        urn=urn,
+        expected_revision=expected_revision,
+        idempotency_key=idempotency_key,
+        actor=actor,
+        from_spec=from_spec,
+    )
+
+
 @milestone_app.command("create")
 def milestone_create_cmd(
     ctx: typer.Context,
@@ -1387,6 +1424,7 @@ __all__ = [
     "milestone_cancel_cmd",
     "milestone_create_cmd",
     "milestone_open_review_cmd",
+    "milestone_reopen_cmd",
     "milestone_reopen_review_cmd",
     "repository_create_cmd",
     "task_promote_cmd",

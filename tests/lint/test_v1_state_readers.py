@@ -27,7 +27,8 @@ pytestmark = pytest.mark.unit
 SRC: Final = Path(__file__).resolve().parents[2] / "src"
 
 #: The calls that open the v1 document: its loaders, its validators and its
-#: writers. ``State.model_validate`` is matched only on the ``State`` name.
+#: writers. ``State.model_validate`` and ``State.model_validate_json`` are
+#: matched only on the ``State`` name.
 V1_DOCUMENT_CALLS: Final = frozenset(
     {
         "commit_mutation",
@@ -39,6 +40,9 @@ V1_DOCUMENT_CALLS: Final = frozenset(
     }
 )
 
+#: The ``State`` model's validators; either one parses the v1 document.
+_STATE_VALIDATORS: Final = frozenset({"model_validate", "model_validate_json"})
+
 _KEEP: Final = "keep"
 
 #: Every module that opens the v1 document, and why it may.
@@ -49,6 +53,7 @@ V1_READERS: Final[dict[str, str]] = {
     "eawf/runtime/daemon/methods/state.py": f"{_KEEP}: serves state.read",
     "eawf/runtime/daemon/methods/state_context.py": f"{_KEEP}: anchors the kept state methods",
     "eawf/runtime/daemon/methods/state_worktree.py": f"{_KEEP}: serves the quiescence remediations",
+    "eawf/runtime/mcp/book.py": f"{_KEEP}: the pre-cutover mcp grants listing",
     "eawf/runtime/session/store.py": f"{_KEEP}: the pre-cutover session verbs",
     "eawf/runtime/worktree/reconcile.py": f"{_KEEP}: the exempt worktree reconcile verb",
     "eawf/surfaces/cli/_mutation.py": f"{_KEEP}: the transaction behind the exempt verbs",
@@ -68,7 +73,8 @@ def v1_document_calls(source: str) -> frozenset[str]:
 
     Returns:
         The called names drawn from :data:`V1_DOCUMENT_CALLS`, plus
-        ``State.model_validate``; empty for a module that makes none.
+        ``State.model_validate`` and ``State.model_validate_json``; empty
+        for a module that makes none.
 
     Raises:
         SyntaxError: *source* is not Python.
@@ -84,11 +90,11 @@ def v1_document_calls(source: str) -> frozenset[str]:
             calls.add(func.attr)
         elif (
             isinstance(func, ast.Attribute)
-            and func.attr == "model_validate"
+            and func.attr in _STATE_VALIDATORS
             and isinstance(func.value, ast.Name)
             and func.value.id == "State"
         ):
-            calls.add("State.model_validate")
+            calls.add(f"State.{func.attr}")
     return frozenset(calls)
 
 
@@ -146,12 +152,27 @@ def test_no_fallback_reader_remains() -> None:
         "eawf/surfaces/cli/commands/sync.py",
         "eawf/surfaces/cli/commands/why.py",
         "eawf/surfaces/tui/chassis/state_binding.py",
+        "eawf/surfaces/tui/console/onboarding.py",
+        "eawf/runtime/daemon/methods/memory.py",
         "eawf/workflow/skills/research.py",
     ],
 )
 def test_the_moved_paths_read_the_generation(module: str) -> None:
     assert not v1_document_calls((SRC / module).read_text(encoding="utf-8"))
     assert module not in V1_READERS
+
+
+def test_a_json_validated_reader_fails_the_lint(tmp_path: Path) -> None:
+    """Gate-fire proof: the shape the memory project fallback had, validating the bytes."""
+    module = tmp_path / "eawf" / "json_reader.py"
+    module.parent.mkdir()
+    module.write_text(
+        "from eawf.kernel.migration.v1_state import State\n"
+        "def code(path):\n"
+        "    return State.model_validate_json(path.read_bytes()).project.code\n",
+        encoding="utf-8",
+    )
+    assert v1_readers(tmp_path) == {"eawf/json_reader.py"}
 
 
 def test_a_new_reader_fails_the_lint(tmp_path: Path) -> None:
@@ -179,6 +200,8 @@ def test_a_new_reader_fails_the_lint(tmp_path: Path) -> None:
         ("from m import load_state\nref = load_state\n", frozenset()),
         ("import m\nm.load_state(p)\n", frozenset({"load_state"})),
         ("State.model_validate(d)\n", frozenset({"State.model_validate"})),
+        ("State.model_validate_json(b)\n", frozenset({"State.model_validate_json"})),
+        ("Project.model_validate_json(b)\n", frozenset()),
         ("Project.model_validate(d)\n", frozenset()),
         (
             "read_state(p)\nwrite_state_unlocked(p, d)\n",
@@ -191,6 +214,8 @@ def test_a_new_reader_fails_the_lint(tmp_path: Path) -> None:
         "bare-reference",
         "attribute-call",
         "state-model",
+        "state-model-json",
+        "other-model-json",
         "other-model",
         "two",
     ],

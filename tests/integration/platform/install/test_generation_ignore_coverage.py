@@ -23,7 +23,7 @@ import pytest
 
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.changes import ChangeTier, change_log_path
-from eawf.kernel.store.commit_policy import EA_PATH_CLASSES, CommitPolicy
+from eawf.kernel.store.commit_policy import EA_PATH_CLASSES, PROMOTED_ARTIFACTS, CommitPolicy
 from eawf.kernel.store.paths import (
     index_path,
     ledger_path,
@@ -146,7 +146,13 @@ def test_block_ignores_the_cutover_scratch_a_v068_tree_reports(tmp_path: Path) -
 
 
 def test_block_leaves_every_committed_path_tracked(tmp_path: Path) -> None:
+    """A promoted artifact is committed where the repository holds it, so each is laid down."""
     repo = _block_only_repo(tmp_path)
+    for row in PROMOTED_ARTIFACTS:
+        promoted = repo / row.pattern
+        promoted.parent.mkdir(parents=True, exist_ok=True)
+        promoted.write_text("{}\n", encoding="utf-8")
+    write_gitignore(repo)
 
     assert _ignored(repo, _committed_paths(repo)) == set()
 

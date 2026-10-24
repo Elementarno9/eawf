@@ -72,6 +72,9 @@ DAEMON_GUARDS: Final = frozenset(
         TransitionGuard.RECONCILIATION_MATCHED,
         TransitionGuard.RELEASER_HOLDS_LEASE,
         TransitionGuard.NO_ACTIVE_RUN,
+        TransitionGuard.OPERATOR_PRINCIPAL,
+        TransitionGuard.NO_RELEASE_CITES,
+        TransitionGuard.BUNDLE_REVISION_NEXT,
     }
 )
 
@@ -92,6 +95,7 @@ GUARD_CONDITIONS: Final[Mapping[TransitionGuard, str]] = MappingProxyType(
         TransitionGuard.ACCEPTANCE_JOURNEY_PASSED: "every acceptance step has a passing result",
         TransitionGuard.APPROVAL_FRESH: "the approval is against the exact manifest digest",
         TransitionGuard.BATCH_WIP_ADMITS: "the track has room for another active batch here",
+        TransitionGuard.BUNDLE_REVISION_NEXT: "review names the revision after the filed bundle",
         TransitionGuard.CLEARING_FACT_OBSERVED: "the fact the suspension names is observed",
         TransitionGuard.CRITERIA_EVIDENCE_BOUND: "evidence is bound to every criterion",
         TransitionGuard.GATES_GREEN: "every required readiness signal is green",
@@ -106,8 +110,10 @@ GUARD_CONDITIONS: Final[Mapping[TransitionGuard, str]] = MappingProxyType(
         TransitionGuard.NO_EXTERNAL_EFFECT: "no externally visible effect has landed",
         TransitionGuard.NEVER_CLAIMED: "the task has never been claimed",
         TransitionGuard.NO_OPEN_MILESTONES: "no milestone under the track is still open",
+        TransitionGuard.NO_RELEASE_CITES: "no release record or pushed tag names the milestone",
         TransitionGuard.OBSERVED_PRERELEASE: "the prerelease is read back from every target",
         TransitionGuard.OBSERVED_STABLE: "the stable release is read back from every target",
+        TransitionGuard.OPERATOR_PRINCIPAL: "an operator principal asks for it",
         TransitionGuard.PROMOTION_CONTRACT_COMPLETE: "a batch, criteria and a due scope are set",
         TransitionGuard.PUBLICATION_ADOPTED: "the publication is adopted",
         TransitionGuard.REASON_RECORDED: "a transition reason is recorded",
@@ -217,6 +223,18 @@ CANONICAL_MUTATIONS: Final[tuple[CanonicalMutation, ...]] = (
         MilestoneStatus.CANCELLED,
         "cancel",
         ("no completed batch is undone", "no run is stopped by it"),
+    ),
+    CanonicalMutation(
+        "domain.milestone.reopen",
+        _E.MILESTONE,
+        (MilestoneStatus.COMPLETED,),
+        MilestoneStatus.ACTIVE,
+        "reopen",
+        (
+            "the recorded acceptance and its sealed approval stay in history",
+            "no batch or task moves",
+        ),
+        authority="accept",
     ),
     CanonicalMutation(
         "domain.batch.activate",

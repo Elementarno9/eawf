@@ -90,6 +90,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
     CommittedTransaction,
     MutationReceipt,
 )
+from eawf.runtime.daemon.methods.domain_envelope import MESSAGE_WIDTH
 from eawf.runtime.daemon.wal import WalRecord, mark_applied, mark_fsynced, write_pending
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence._io import generation_contract_view
@@ -263,6 +264,37 @@ def placed_document(session: RootSession, document: dict[str, Any]) -> dict[str,
     )
 
 
+def _named_within_message(messages: tuple[str, ...]) -> str:
+    """Join *messages* into one refusal detail no wider than an envelope message.
+
+    The leading findings are named whole and the rest are counted, so a
+    plan with many findings still reaches the operator as a refusal
+    rather than as the envelope's own width error.
+
+    Args:
+        messages: Every blocking finding's message, in lens order.
+
+    Returns:
+        The messages joined by ``"; "``, or as many leading ones as fit
+        followed by ``"and <n> more finding(s)"``; when even the first
+        does not fit whole, that one clipped and the rest counted.
+    """
+    joined = "; ".join(messages)
+    if len(joined) <= MESSAGE_WIDTH:
+        return joined
+    for shown in range(len(messages) - 1, 0, -1):
+        omitted = len(messages) - shown
+        tail = f"and {omitted} more finding{'s' if omitted > 1 else ''}"
+        detail = "; ".join((*messages[:shown], tail))
+        if len(detail) <= MESSAGE_WIDTH:
+            return detail
+    # Not even the first message fits whole: one finding can list every
+    # offender it names, so it is clipped rather than dropped.
+    rest = len(messages) - 1
+    tail = f"; and {rest} more finding{'s' if rest > 1 else ''}" if rest else ""
+    return f"{messages[0][: MESSAGE_WIDTH - len(tail) - 3]}...{tail}"
+
+
 def validate_plan_proposal(
     document: dict[str, Any],
     *,
@@ -349,7 +381,7 @@ def validate_plan_proposal(
         return PlanRefusal(
             code=PlanRefusalCode.TRANSITION_GUARD_FAILED,
             guard=f"plan_lens_{blocking[0].lens.value}",
-            detail="; ".join(finding.message for finding in blocking),
+            detail=_named_within_message(tuple(finding.message for finding in blocking)),
             remediation=" ".join(dict.fromkeys(finding.remediation for finding in blocking)),
         )
     draft = PlanRevision.model_validate(

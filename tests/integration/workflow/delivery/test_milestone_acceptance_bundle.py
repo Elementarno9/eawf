@@ -70,6 +70,7 @@ from eawf.kernel.store.ledger import (
     read_ledger_records,
     render_ledger_line,
 )
+from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
@@ -1220,19 +1221,36 @@ def move_milestone(
     )
 
 
-def review_again(canary: CanaryProvision, tmp_path: Path, *, bundle_revision: int = 2) -> None:
-    """Reopen the review, append one verified Batch, and open review on *bundle_revision*."""
+def append_batch(canary: CanaryProvision) -> None:
+    """Seed one more verified Batch, the work a reopened Milestone takes on."""
+    appended = rekeyed(seed_row("batch", "READY_TO_MERGE"), key=APPENDED_BATCH)
+    seed(canary, {"batch": {APPENDED_BATCH: appended}})
+
+
+def reopen_and_append(canary: CanaryProvision, tmp_path: Path) -> None:
+    """Reopen the review at revision one and append one verified Batch."""
     reopened = move_milestone(
         canary, tmp_path, REOPEN_METHOD, revision=1, key="req-reopen-0001",
         reason_code="batch-appended",
     )  # fmt: skip
     assert reopened["status"] == "ok", reopened
-    appended = rekeyed(seed_row("batch", "READY_TO_MERGE"), key=APPENDED_BATCH)
-    seed(canary, {"batch": {APPENDED_BATCH: appended}})
-    reviewed = move_milestone(
-        canary, tmp_path, OPEN_REVIEW_METHOD, revision=2, key="req-review-0002",
+    append_batch(canary)
+
+
+def open_review_on(
+    canary: CanaryProvision, tmp_path: Path, *, bundle_revision: int, revision: int = 2
+) -> dict[str, Any]:
+    """Open review at Milestone *revision* naming *bundle_revision*, and return the envelope."""
+    return move_milestone(
+        canary, tmp_path, OPEN_REVIEW_METHOD, revision=revision, key="req-review-0002",
         updates={"acceptance_bundle_revision": bundle_revision},
     )  # fmt: skip
+
+
+def review_again(canary: CanaryProvision, tmp_path: Path) -> None:
+    """Reopen the review, append one verified Batch, and open review on revision two."""
+    reopen_and_append(canary, tmp_path)
+    reviewed = open_review_on(canary, tmp_path, bundle_revision=2)
     assert reviewed["status"] == "ok", reviewed
 
 
@@ -1288,17 +1306,92 @@ def test_an_approval_of_the_reopened_revision_cannot_accept(tmp_path: Path) -> N
     assert accept_at(canary, tmp_path, second, key="req-accept-0002")["status"] == "ok"
 
 
-def test_a_reopened_review_skipping_a_revision_is_not_asked_about(tmp_path: Path) -> None:
-    """Review must name the revision after the filed head; a gap would break the chain."""
-    canary = verified_canary(tmp_path, code="GAP")
+@pytest.mark.parametrize("bundle_revision", [1, 3], ids=["reused", "skipped"])
+def test_a_reopened_review_names_only_the_revision_after_the_filed_head(
+    tmp_path: Path, bundle_revision: int
+) -> None:
+    """Off by one either way: review opens only on revision two once revision one is filed."""
+    canary = verified_canary(tmp_path, code=f"GAP{bundle_revision}")
     open_approval(canary, tmp_path)
-    review_again(canary, tmp_path, bundle_revision=3)
+    reopen_and_append(canary, tmp_path)
     before = document_path(canary).read_bytes()
 
-    with pytest.raises(DaemonValidationError, match="acceptance_bundle_diverged"):
-        open_approval(canary, tmp_path)
+    row = refusal(open_review_on(canary, tmp_path, bundle_revision=bundle_revision))
 
+    assert row["code"] == DomainErrorCode.TRANSITION_GUARD_FAILED.value
+    assert row["guard"] == "bundle_revision_next"
     assert document_path(canary).read_bytes() == before
+
+
+def test_reopened_review_repro_stale_seal_accepts(tmp_path: Path) -> None:
+    """Review reopened and opened again on revision one must not accept on the earlier seal."""
+    canary = verified_canary(tmp_path, code="REUSED")
+    first = open_approval(canary, tmp_path)
+    seal_approval(canary, tmp_path, first)
+    reopen_and_append(canary, tmp_path)
+
+    reviewed = open_review_on(canary, tmp_path, bundle_revision=1)
+    accepted = accept_at(canary, tmp_path, first, key="req-accept-stale")
+
+    assert reviewed["status"] == "error", reviewed
+    assert accepted["status"] == "error", accepted
+    milestone = read_document(document_path(canary))["milestone"]["MLS-0030"]
+    assert milestone["status"] == "ACTIVE"
+
+
+# ---------- an accepted Milestone reopened to take on a fix ----------
+
+REVOKE_METHOD: Final = "domain.milestone.reopen"
+
+
+def milestone_lines(canary: CanaryProvision) -> list[LedgerRecord]:
+    """Return every line the Milestone ledger holds under MLS-0030's own key."""
+    path = ledger_path(document_path(canary), Epoch2Collection.MILESTONE)
+    return [item for item in read_ledger_records(path) if item.record_key == "MLS-0030"]
+
+
+def accept_with(
+    canary: CanaryProvision, tmp_path: Path, opened: dict[str, Any], *, revision: int, key: str
+) -> dict[str, Any]:
+    """Accept the Milestone at *revision* on what *opened* answered with."""
+    return move_milestone(
+        canary, tmp_path, ACCEPT_METHOD, revision=revision, key=key,
+        updates={"accepted_binding": ACCEPTED_BINDING},
+        approval_receipt_ref=opened["action_ref"],
+        acceptance_bundle=opened["acceptance_bundle"],
+    )  # fmt: skip
+
+
+def test_an_accepted_milestone_reopens_and_accepts_only_on_a_fresh_approval(
+    tmp_path: Path,
+) -> None:
+    """The ledgered acceptance stays in history; only a seal on the next revision accepts."""
+    canary = verified_canary(tmp_path, code="REVOKE")
+    first = open_approval(canary, tmp_path)
+    seal_approval(canary, tmp_path, first)
+    assert accept_with(canary, tmp_path, first, revision=1, key="req-accept-0001")["status"] == "ok"
+    assert "MLS-0030" not in read_document(document_path(canary)).get("milestone", {})
+    history = milestone_lines(canary)
+
+    reopened = move_milestone(
+        canary, tmp_path, REVOKE_METHOD, revision=2, key="req-revoke-0001",
+        reason_code="fix-appended",
+    )  # fmt: skip
+
+    assert reopened["status"] == "ok", reopened
+    row = read_document(document_path(canary))["milestone"]["MLS-0030"]
+    assert (row["status"], row["revision"], row.get("accepted_binding")) == ("ACTIVE", 3, None)
+    assert milestone_lines(canary)[: len(history)] == history
+    append_batch(canary)
+    assert open_review_on(canary, tmp_path, bundle_revision=2, revision=3)["status"] == "ok"
+    stale = refusal(accept_with(canary, tmp_path, first, revision=4, key="req-accept-stale"))
+    assert AcceptanceRefusal.BUNDLE_SUPERSEDED.value in stale["message"]
+    second = open_approval(canary, tmp_path)
+    assert second["bundle_revision"] == 2
+    seal_approval(canary, tmp_path, second, key="req-seal-0002")
+    again = accept_with(canary, tmp_path, second, revision=4, key="req-accept-0002")
+    assert again["status"] == "ok", again
+    assert "MLS-0030" not in read_document(document_path(canary)).get("milestone", {})
 
 
 # ---------- an approval given before the URN re-key ----------

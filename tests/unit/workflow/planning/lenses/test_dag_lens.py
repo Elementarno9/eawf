@@ -24,6 +24,8 @@ from typing import Any
 import pytest
 
 from eawf.kernel.state.epoch2.plan_revision import PlanBody
+from eawf.runtime.daemon.methods.domain_envelope import MESSAGE_WIDTH, DomainError
+from eawf.runtime.daemon.methods.planning import refused_plan_envelope
 from eawf.workflow.planning.apply import PlanRevisionProposal, validate_plan_proposal
 from eawf.workflow.planning.lenses import PlanFindingCode, PlanLens, run_plan_lenses
 from eawf.workflow.planning.revision import PlanRefusal
@@ -258,3 +260,75 @@ def test_submit_refuses_an_unmapped_source_atom_writing_nothing() -> None:
     assert isinstance(outcome, PlanRefusal)
     assert outcome.guard == "plan_lens_source_atomization"
     assert document == before
+
+
+# ---- a lens refusal longer than the envelope's message cap ---------------------
+
+
+def _unmapped_atoms(count: int) -> PlanBody:
+    """Return a plan whose *count* source atoms each raise one equal-width finding."""
+    atoms = [{"atom_id": f"AT-{n:03d}", "text": "the design names this"} for n in range(count)]
+    return make_body(source_atoms=atoms)
+
+
+def _refused_row(body: PlanBody) -> DomainError:
+    """Return the envelope row a client reads for *body*'s submit refusal."""
+    outcome = validate_plan_proposal(make_document(), proposal=make_proposal(body), at=AT)
+    assert isinstance(outcome, PlanRefusal)
+    envelope = refused_plan_envelope(outcome, operation="plan.submit", subject="PRV-0001")
+    (row,) = envelope.errors
+    return row
+
+
+def _fitting_count() -> int:
+    """Return how many unmapped-atom findings one envelope message holds whole."""
+    message = run_plan_lenses(_unmapped_atoms(1))[0].message
+    return (MESSAGE_WIDTH + 2) // (len(message) + 2)
+
+
+def test_lens_refusal_of_a_single_finding_names_it_whole() -> None:
+    row = _refused_row(_unmapped_atoms(1))
+    assert row.message == run_plan_lenses(_unmapped_atoms(1))[0].message
+
+
+def test_lens_refusal_at_the_message_cap_names_every_finding() -> None:
+    count = _fitting_count()
+    row = _refused_row(_unmapped_atoms(count))
+    assert row.message.count("source atom ") == count
+    assert "more finding" not in row.message
+    assert len(row.message) <= MESSAGE_WIDTH
+
+
+def test_lens_refusal_one_past_the_message_cap_counts_what_it_omits() -> None:
+    count = _fitting_count() + 1
+    row = _refused_row(_unmapped_atoms(count))
+    shown = row.message.count("source atom ")
+    omitted = count - shown
+    assert len(row.message) <= MESSAGE_WIDTH
+    assert 0 < shown < count
+    assert row.message.endswith(f"; and {omitted} more finding{'s' if omitted > 1 else ''}")
+
+
+def test_lens_refusal_far_past_the_message_cap_reaches_the_operator() -> None:
+    """Forty findings join to about twice the cap; the refusal still builds."""
+    row = _refused_row(_unmapped_atoms(40))
+    shown = row.message.count("source atom ")
+    assert len(row.message) <= MESSAGE_WIDTH
+    assert row.message.startswith("source atom 'AT-000'")
+    assert row.message.endswith(f"; and {40 - shown} more findings")
+    assert row.guard == "plan_lens_source_atomization"
+
+
+def test_lens_refusal_of_one_finding_wider_than_the_cap_is_clipped() -> None:
+    """One cycle finding lists every Task in it, which alone can pass the cap."""
+    urns = [f"{SLOT}/task/EAWF-{n:04d}" for n in range(1, 41)]
+    tasks = [_task(urn, depends_on=(urns[n - 1],)) for n, urn in enumerate(urns)]
+    body = make_body(tasks=tasks)
+    (finding,) = run_plan_lenses(body)
+    assert len(finding.message) > MESSAGE_WIDTH
+
+    row = _refused_row(body)
+
+    assert len(row.message) == MESSAGE_WIDTH
+    assert row.message == f"{finding.message[: MESSAGE_WIDTH - 3]}..."
+    assert row.guard == "plan_lens_dag"

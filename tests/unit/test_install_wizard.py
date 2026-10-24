@@ -9,7 +9,7 @@ import yaml
 from pydantic import ValidationError
 
 from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
-from eawf.platform.install.gitignore_writer import GITIGNORE_PATTERNS
+from eawf.platform.install.gitignore_writer import GITIGNORE_PATTERNS, target_patterns
 from eawf.platform.install.wizard import (
     WizardAnswers,
     _build_config_yaml,
@@ -112,7 +112,7 @@ def test_wizard_writes_managed_gitignore_block(tmp_path: Path) -> None:
     text = result.gitignore_path.read_text(encoding="utf-8")
     assert "# BEGIN EAWF:gitignore" in text
     assert "# END EAWF:gitignore" in text
-    assert result.gitignore_patterns == list(GITIGNORE_PATTERNS)
+    assert result.gitignore_patterns == list(target_patterns(target.resolve()))
     for pattern in result.gitignore_patterns:
         assert pattern in text
 

@@ -56,6 +56,7 @@ from typing import Any, Final
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.delivery.acceptance import (
+    BUNDLE_KEY_PREFIX,
     AcceptanceBundleLedger,
     AcceptanceStepOutcome,
     EvidenceRow,
@@ -114,9 +115,6 @@ EVIDENCE_STATUS: Final = "recorded"
 
 #: The verb that opens the successor revision a repair request earns.
 DELIVERY_ACCEPTANCE_REPAIR_METHOD: Final = "runtime.delivery.request_acceptance_repair"
-
-#: The ledger-line key prefix an acceptance bundle revision is filed under.
-BUNDLE_KEY_PREFIX: Final = "MAB-"
 
 #: The status a reconciliation line records: the outcome it established.
 #: A line whose status is ``unknown`` is the record of a question still

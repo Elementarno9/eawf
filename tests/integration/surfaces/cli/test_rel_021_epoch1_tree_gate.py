@@ -108,7 +108,9 @@ def test_rel_021_a_group_option_before_the_verb_still_resolves(epoch1_tree: Path
 
 def test_rel_021_an_epoch2_tree_passes_the_gate(epoch1_tree: Path) -> None:
     state_path = epoch1_tree / ".ea" / "state.json"
-    bear_epoch2_tree(state_path.parent, project_code="QR", born_at=datetime.now(UTC))
+    bear_epoch2_tree(
+        state_path.parent, project_code="QR", project_title="", born_at=datetime.now(UTC)
+    )
     assert resolve_authority(state_path.parent).epoch == 2
     _gate(["config", "set", "x", "1"])
 
@@ -126,7 +128,9 @@ def test_rel_021_a_repo_rooted_verb_is_judged_by_the_tree_it_writes(
     """``task create`` writes the ``--workspace`` tree, not the ``EA_STATE`` document."""
     native = tmp_path / "native"
     state_path = _tree(native)
-    bear_epoch2_tree(state_path.parent, project_code="QR", born_at=datetime.now(UTC))
+    bear_epoch2_tree(
+        state_path.parent, project_code="QR", project_title="", born_at=datetime.now(UTC)
+    )
     _gate(["--workspace", str(native), "task", "create"])
     with pytest.raises(click.exceptions.Exit):
         _gate(["--workspace", str(epoch1_tree), "task", "create"])
@@ -172,7 +176,9 @@ def test_a_retired_verb_on_an_epoch1_tree_says_so_and_points_at_the_upgrade_guid
 
 
 def test_a_retired_verb_on_an_epoch2_tree_says_it_runs_on_epoch_2(epoch1_tree: Path) -> None:
-    bear_epoch2_tree(epoch1_tree / ".ea", project_code="QR", born_at=datetime.now(UTC))
+    bear_epoch2_tree(
+        epoch1_tree / ".ea", project_code="QR", project_title="", born_at=datetime.now(UTC)
+    )
     envelope = _retired("wave", "claim", "P01-I01-W01")
     assert envelope["message"].endswith("this tree runs on epoch 2")
 
@@ -189,3 +195,21 @@ def test_the_retired_tui_alias_names_ui(epoch1_tree: Path) -> None:
     envelope = _retired("tui")
     assert "run `eawf ui` instead" in envelope["message"]
     assert envelope["data"]["kind"] == "LegacyOperationRemoved"
+
+
+def test_a_retired_verb_on_a_native_tree_says_it_runs_on_epoch_2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tree ``eawf init`` bore holds no ``state.json``; its marker says a tree is here."""
+    repo = tmp_path / "repo"
+    monkeypatch.delenv("EA_STATE", raising=False)
+    monkeypatch.setenv("EAWF_REGISTRY_PATH", str(tmp_path / "registry.json"))
+    init = runner.invoke(
+        app, ["--json", "--no-input", "init", "--project-code", "QR", "--target", str(repo)]
+    )
+    assert init.exit_code == exit_codes.OK, init.output
+    assert not (repo / ".ea" / "state.json").exists()
+    monkeypatch.chdir(repo)
+    envelope = _retired("impact")
+    assert envelope["message"].endswith("this tree runs on epoch 2"), envelope["message"]
+    assert flag_day_gate.INIT_VERB not in envelope["message"]

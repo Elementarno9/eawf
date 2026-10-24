@@ -36,7 +36,11 @@ from eawf.kernel.state.epoch2.consequence import (
     MUTATIONS_BY_METHOD,
     CanonicalMutation,
 )
-from eawf.kernel.state.epoch2.transitions import TERMINAL_STATUSES, LifecycleEntity
+from eawf.kernel.state.epoch2.transitions import (
+    SETTLED_STATUSES,
+    TERMINAL_STATUSES,
+    LifecycleEntity,
+)
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb
 from eawf.surfaces.tui.console.attention import listed_items, selected_open_row
@@ -102,6 +106,7 @@ NATIVE_KEYS: Final[Mapping[str, str]] = MappingProxyType(
         "domain.milestone.reopen_review": "e",
         "domain.milestone.accept": "a",
         "domain.milestone.cancel": "x",
+        "domain.milestone.reopen": "u",
         "domain.batch.activate": "t",
         "domain.batch.ready": "d",
         "domain.batch.merge": "m",
@@ -147,6 +152,25 @@ def _ended(row: ProjectionRow) -> bool:
     """Return whether ``row`` is a lifecycle record whose stated status has no way out."""
     entity, status = entity_of(row), status_of(row)
     return entity is not None and status is not None and status in TERMINAL_STATUSES[entity]
+
+
+def _offered(
+    entity: LifecycleEntity, selected: Sequence[ProjectionRow]
+) -> tuple[CanonicalMutation, ...]:
+    """Return the verbs a menu lists for ``selected``: only a reopen when every row is settled.
+
+    A settled record, such as an accepted Milestone, is finished but for the operator's
+    reopen, so listing every other verb of its entity as unavailable would read as work
+    still owed on it.
+    """
+    statuses = {status_of(row) for row in selected}
+    if not statuses <= SETTLED_STATUSES[entity]:
+        return verbs_for(entity)
+    return tuple(
+        mutation
+        for mutation in verbs_for(entity)
+        if any(str(frm) in statuses for frm in mutation.from_statuses)
+    )
 
 
 def verbs_for(entity: LifecycleEntity) -> tuple[CanonicalMutation, ...]:
@@ -233,7 +257,7 @@ def lifecycle_verbs(
                 available=True,
                 authority=mutation.authority,
             )
-            for mutation in verbs_for(entity)
+            for mutation in _offered(entity, selection(session, rows))
         ),
     )
 

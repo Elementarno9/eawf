@@ -258,7 +258,10 @@ def _bear_epoch2(result: WizardResult, *, flags: GlobalFlags) -> str:
 
     try:
         return bear_epoch2_tree(
-            result.state_path.parent, project_code=result.project_code, born_at=datetime.now(UTC)
+            result.state_path.parent,
+            project_code=result.project_code,
+            project_title=result.project_title,
+            born_at=datetime.now(UTC),
         )
     except (OSError, RuntimeError, ValueError) as exc:
         cli_errors.emit_error(
@@ -266,6 +269,26 @@ def _bear_epoch2(result: WizardResult, *, flags: GlobalFlags) -> str:
             flags=flags,
         )
         raise  # never reached — emit_error raises typer.Exit
+
+
+def _render_rule_projections(target_dir: Path, *, flags: GlobalFlags) -> None:
+    """Render a rule-authoring repository's projections now its project row exists.
+
+    A repository without ``.ea/rules.yaml`` already holds the AGENTS.md the
+    wizard composed, and nothing renders here.
+    """
+    from eawf.platform.rules.render import refresh_rule_projections
+
+    try:
+        refresh_rule_projections(target_dir)
+    except (OSError, ValueError) as exc:
+        cli_errors.emit_error(
+            cli_errors.InternalError(
+                f"init bore the tree at epoch 2 but could not render its rule projections: "
+                f"{exc}; once that is fixed, run `eawf sync`"
+            ),
+            flags=flags,
+        )
 
 
 def _refuse_epoch2_reinit(target_dir: Path, state_path: Path, *, flags: GlobalFlags) -> None:
@@ -534,6 +557,14 @@ def _admit_repository_row(
     return outcome
 
 
+def _generation_document(result: WizardResult, generation_id: str) -> Path:
+    """Return the document of the generation init bore the tree into."""
+    from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME
+    from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+
+    return result.state_path.parent / GENERATIONS_DIRNAME / generation_id / GENERATION_DOCUMENT
+
+
 def _result_to_payload(
     result: WizardResult,
     generation_id: str,
@@ -545,11 +576,13 @@ def _result_to_payload(
     Paths are stringified deterministically; lists pass through. Used by
     both the JSON branch (``--json``) and the text branch (which only
     emits a one-line "wrote N files" summary built from this payload).
+    ``state_path`` names the born generation's document, the one state
+    file init writes.
     """
     return {
         "project_code": result.project_code,
         "profiles_enabled": list(result.profiles_enabled),
-        "state_path": str(result.state_path),
+        "state_path": str(_generation_document(result, generation_id)),
         "config_path": str(result.config_path),
         "agents_md_path": str(result.agents_md_path),
         "claude_md_path": str(result.claude_md_path),
@@ -568,7 +601,8 @@ def _init_text(result: WizardResult, generation_id: str, repository_row: dict[st
     """Return the one-line text summary of an init, and its row note when there is one."""
     text = (
         f"eawf init: project={result.project_code} "
-        f"profiles={list(result.profiles_enabled)} state={result.state_path} "
+        f"profiles={list(result.profiles_enabled)} "
+        f"state={_generation_document(result, generation_id)} "
         f"agents_md={result.agents_md_path} epoch=2 generation={generation_id} "
         f"repository_row={repository_row['outcome']}"
     )
@@ -1016,6 +1050,7 @@ def init_cmd(
             )
             return
         generation_id = _bear_epoch2(result, flags=flags)
+        _render_rule_projections(target_dir, flags=flags)
         registration = _register_or_exit(
             result, target_dir, registry_path=registry_path, workspace=workspace, flags=flags
         )
@@ -1043,6 +1078,7 @@ def init_cmd(
         cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
     generation_id = _bear_epoch2(result, flags=flags)
+    _render_rule_projections(target_dir, flags=flags)
     registration = _register_or_exit(
         result, target_dir, registry_path=registry_path, workspace=workspace, flags=flags
     )

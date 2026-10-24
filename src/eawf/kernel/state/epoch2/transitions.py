@@ -77,6 +77,7 @@ class TransitionVerb(StrEnum):
     verb here is what makes a new event name exist at all.
     """
 
+    ACCEPTANCE_REVOKED = "acceptance_revoked"
     ACTIVATED = "activated"
     APPROVED = "approved"
     BAKED = "baked"
@@ -126,6 +127,7 @@ class TransitionGuard(StrEnum):
     ACCEPTANCE_JOURNEY_PASSED = "acceptance_journey_passed"
     APPROVAL_FRESH = "approval_fresh"
     BATCH_WIP_ADMITS = "batch_wip_admits"
+    BUNDLE_REVISION_NEXT = "bundle_revision_next"
     CLEARING_FACT_OBSERVED = "clearing_fact_observed"
     CRITERIA_EVIDENCE_BOUND = "criteria_evidence_bound"
     GATES_GREEN = "gates_green"
@@ -140,8 +142,10 @@ class TransitionGuard(StrEnum):
     NO_ACTIVE_RUN = "no_active_run"
     NO_EXTERNAL_EFFECT = "no_external_effect"
     NO_OPEN_MILESTONES = "no_open_milestones"
+    NO_RELEASE_CITES = "no_release_cites"
     OBSERVED_PRERELEASE = "observed_prerelease"
     OBSERVED_STABLE = "observed_stable"
+    OPERATOR_PRINCIPAL = "operator_principal"
     PROMOTION_CONTRACT_COMPLETE = "promotion_contract_complete"
     PUBLICATION_ADOPTED = "publication_adopted"
     REASON_RECORDED = "reason_recorded"
@@ -173,6 +177,7 @@ class DenialCode(StrEnum):
     MISSING_TRANSITION_FIELDS = "missing_transition_fields"
     CRITERION_NEEDS_REMOTE_CI = "criterion_needs_remote_ci"
 
+    ACCEPTANCE_BUNDLE_REVISION_NOT_NEXT = "acceptance_bundle_revision_not_next"
     ACCEPTANCE_JOURNEY_INCOMPLETE = "acceptance_journey_incomplete"
     APPROVAL_STALE = "approval_stale"
     BATCH_HEAD_BINDING_MISSING = "batch_head_binding_missing"
@@ -183,7 +188,9 @@ class DenialCode(StrEnum):
     HOST_MERGE_NOT_REFUSED = "host_merge_not_refused"
     HOST_MERGE_UNOBSERVED = "host_merge_unobserved"
     MILESTONE_BATCHES_OPEN = "milestone_batches_open"
+    MILESTONE_RELEASED = "milestone_released"
     MILESTONE_TRACK_RETIRED = "milestone_track_retired"
+    OPERATOR_PRINCIPAL_REQUIRED = "operator_principal_required"
     PUBLICATION_NOT_OBSERVED = "publication_not_observed"
     RECOVERY_BUDGET_AVAILABLE = "recovery_budget_available"
     RELEASE_EFFECT_ALREADY_STARTED = "release_effect_already_started"
@@ -282,6 +289,7 @@ GUARD_DENIALS: Final[Mapping[TransitionGuard, DenialCode]] = {
     TransitionGuard.ACCEPTANCE_JOURNEY_PASSED: DenialCode.ACCEPTANCE_JOURNEY_INCOMPLETE,
     TransitionGuard.APPROVAL_FRESH: DenialCode.APPROVAL_STALE,
     TransitionGuard.BATCH_WIP_ADMITS: DenialCode.BATCH_WIP_CEILING_REACHED,
+    TransitionGuard.BUNDLE_REVISION_NEXT: DenialCode.ACCEPTANCE_BUNDLE_REVISION_NOT_NEXT,
     TransitionGuard.CLEARING_FACT_OBSERVED: DenialCode.RUN_CLEARING_FACT_UNOBSERVED,
     TransitionGuard.CRITERIA_EVIDENCE_BOUND: DenialCode.TASK_EVIDENCE_UNBOUND,
     TransitionGuard.GATES_GREEN: DenialCode.RELEASE_NOT_READY,
@@ -296,8 +304,10 @@ GUARD_DENIALS: Final[Mapping[TransitionGuard, DenialCode]] = {
     TransitionGuard.NO_ACTIVE_RUN: DenialCode.TASK_RUN_ACTIVE,
     TransitionGuard.NO_EXTERNAL_EFFECT: DenialCode.RELEASE_EFFECT_ALREADY_STARTED,
     TransitionGuard.NO_OPEN_MILESTONES: DenialCode.TRACK_HAS_OPEN_MILESTONES,
+    TransitionGuard.NO_RELEASE_CITES: DenialCode.MILESTONE_RELEASED,
     TransitionGuard.OBSERVED_PRERELEASE: DenialCode.PUBLICATION_NOT_OBSERVED,
     TransitionGuard.OBSERVED_STABLE: DenialCode.PUBLICATION_NOT_OBSERVED,
+    TransitionGuard.OPERATOR_PRINCIPAL: DenialCode.OPERATOR_PRINCIPAL_REQUIRED,
     TransitionGuard.PROMOTION_CONTRACT_COMPLETE: DenialCode.TASK_PROMOTION_INCOMPLETE,
     TransitionGuard.PUBLICATION_ADOPTED: DenialCode.PUBLICATION_NOT_OBSERVED,
     TransitionGuard.REASON_RECORDED: DenialCode.TRANSITION_REASON_MISSING,
@@ -336,6 +346,10 @@ DENIAL_REMEDIATION: Final[Mapping[DenialCode, str]] = {
         "Rewrite each named criterion so a local command proves it; CI runs, pull requests, "
         "pushes and tags are checked at the pull-request stop, after the Milestone closes."
     ),
+    DenialCode.ACCEPTANCE_BUNDLE_REVISION_NOT_NEXT: (
+        "Open review on the revision after the newest filed acceptance bundle, or on revision "
+        "one when none is filed, so an approval sealed in an earlier review cannot accept."
+    ),
     DenialCode.ACCEPTANCE_JOURNEY_INCOMPLETE: (
         "Record a passing result for every acceptance step before completing the Milestone."
     ),
@@ -366,8 +380,16 @@ DENIAL_REMEDIATION: Final[Mapping[DenialCode, str]] = {
     DenialCode.MILESTONE_BATCHES_OPEN: (
         "Complete or cancel every required DeliveryBatch before opening acceptance review."
     ),
+    DenialCode.MILESTONE_RELEASED: (
+        "A release names this Milestone, so its acceptance stands; deliver the fix through a "
+        "new Milestone."
+    ),
     DenialCode.MILESTONE_TRACK_RETIRED: (
         "Move the Milestone to a live Track, or reopen work under an active one."
+    ),
+    DenialCode.OPERATOR_PRINCIPAL_REQUIRED: (
+        "Only an operator takes an acceptance back: retry with --actor set to an operator "
+        "principal (OP- followed by digits, such as OP-0001)."
     ),
     DenialCode.PUBLICATION_NOT_OBSERVED: (
         "Read every required target back independently; an adapter's own report never bakes."
@@ -473,7 +495,7 @@ _MILESTONE_ROWS: Final[tuple[TransitionRow, ...]] = (
         frm=MilestoneStatus.ACTIVE,
         to=MilestoneStatus.ACCEPTANCE_REVIEW,
         verb=TransitionVerb.REVIEW_OPENED,
-        guards=(TransitionGuard.REQUIRED_BATCHES_COMPLETED,),
+        guards=(TransitionGuard.REQUIRED_BATCHES_COMPLETED, TransitionGuard.BUNDLE_REVISION_NEXT),
         required_updates=("acceptance_bundle_revision",),
     ),
     TransitionRow(
@@ -504,6 +526,20 @@ _MILESTONE_ROWS: Final[tuple[TransitionRow, ...]] = (
         to=MilestoneStatus.CANCELLED,
         verb=TransitionVerb.CANCELLED,
         guards=(TransitionGuard.REASON_RECORDED,),
+    ),
+    # Taking an acceptance back is an operator's correction of a Milestone no
+    # release has shipped; once one has, the fix is a new Milestone.
+    TransitionRow(
+        entity=LifecycleEntity.MILESTONE,
+        frm=MilestoneStatus.COMPLETED,
+        to=MilestoneStatus.ACTIVE,
+        verb=TransitionVerb.ACCEPTANCE_REVOKED,
+        guards=(
+            TransitionGuard.REASON_RECORDED,
+            TransitionGuard.OPERATOR_PRINCIPAL,
+            TransitionGuard.NO_RELEASE_CITES,
+        ),
+        cleared_fields=("accepted_binding",),
     ),
 )
 
@@ -1062,6 +1098,24 @@ TERMINAL_STATUSES: Final[Mapping[LifecycleEntity, frozenset[str]]] = {
 }
 
 
+#: The verbs that take a record back out of a status that otherwise ends it.
+REOPENING_VERBS: Final[frozenset[TransitionVerb]] = frozenset({TransitionVerb.ACCEPTANCE_REVOKED})
+
+
+#: The states whose only ways out, if any, are reopening verbs. A settled
+#: record is history to every reader but the operator who reopens it, so
+#: it leaves the document for its ledger exactly as a terminal one does,
+#: and a reopen reads it back from there.
+SETTLED_STATUSES: Final[Mapping[LifecycleEntity, frozenset[str]]] = {
+    entity: frozenset(
+        str(status)
+        for status in status_enum
+        if all(row.verb in REOPENING_VERBS for row in _ROWS_BY_SOURCE[(entity, str(status))])
+    )
+    for entity, status_enum in ENTITY_STATUS_ENUM.items()
+}
+
+
 #: Where an operator may land a record whose real outcome is unknown.
 #: Reaching one of these is not a claim about what happened; it records
 #: that the work was abandoned or the version burned, which is the honest
@@ -1165,6 +1219,19 @@ def is_terminal(entity: LifecycleEntity, status: LifecycleStatus) -> bool:
     return str(status) in TERMINAL_STATUSES[entity]
 
 
+def is_settled(entity: LifecycleEntity, status: LifecycleStatus) -> bool:
+    """Return whether *status* is terminal or left only by a reopening verb.
+
+    Args:
+        entity: The entity whose machine is consulted.
+        status: The status to classify.
+
+    Returns:
+        ``True`` when the record in *status* belongs in its ledger.
+    """
+    return str(status) in SETTLED_STATUSES[entity]
+
+
 def ambiguity_label(entity: LifecycleEntity, status: LifecycleStatus) -> AmbiguityLabel | None:
     """Return how a surface should label *status*, or ``None``.
 
@@ -1186,6 +1253,8 @@ __all__ = [
     "GUARD_DENIALS",
     "OBSERVED_GUARD_FACTS",
     "RECOVERY_STATES",
+    "REOPENING_VERBS",
+    "SETTLED_STATUSES",
     "SUCCESS_TERMINALS",
     "TERMINAL_STATUSES",
     "TRANSITION_ROWS",
@@ -1199,6 +1268,7 @@ __all__ = [
     "TransitionVerb",
     "ambiguity_label",
     "index_rows",
+    "is_settled",
     "is_terminal",
     "row_for",
     "rows_from",

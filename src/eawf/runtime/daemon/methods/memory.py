@@ -20,12 +20,11 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Annotated, Any, Final
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.identity import EntityKind, format_qualified_urn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.migration.epoch2.urn_rekey import spells_single_key
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import Confidence, MemoryStatus, MemoryTier, StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.store.compaction import document_rows, read_document
@@ -57,8 +56,8 @@ MEMORY_PRUNE_METHOD: Final = "memory.prune"
 MEMORY_GC_METHOD: Final = "memory.gc"
 MEMORY_TIER_METHOD: Final = "memory.tier"
 
-#: The frozen epoch-1 document beside the generations; it names the
-#: project of a tree born at epoch 2, whose generation imported none.
+#: The frozen epoch-1 document beside the generations; its stores are what
+#: a note is promoted from.
 _FROZEN_DOCUMENT: Final = "state.json"
 
 _Text = Annotated[str, Field(min_length=1)]
@@ -133,9 +132,8 @@ def project_subject(context: Epoch2RootContext) -> str:
     """Return the project URN a project-wide session locks and its events are scoped to.
 
     Raises:
-        DaemonValidationError: Neither the generation nor the frozen
-            document names exactly one project, or the frozen document
-            does not validate.
+        DaemonValidationError: The selected generation does not hold
+            exactly one project row.
     """
     authority = context.require_selected_generation()
     assert authority.target is not None and authority.generation_id is not None
@@ -143,21 +141,12 @@ def project_subject(context: Epoch2RootContext) -> str:
         authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
     )
     projects = sorted(document_rows(document, Epoch2Collection.PROJECT))
-    code = projects[0] if len(projects) == 1 else None
-    frozen = context.identity.tree_root / _FROZEN_DOCUMENT
-    if code is None and frozen.exists():
-        try:
-            project = State.model_validate_json(frozen.read_bytes()).project
-        except ValidationError as error:
-            raise _refusal(
-                "project_unresolved", f"the frozen document does not validate: {error}"
-            ) from error
-        code = project.code if project is not None else None
-    if code is None:
+    if len(projects) != 1:
         raise _refusal(
             "project_unresolved",
             "the tree names no single project to file the record under",
         )
+    code = projects[0]
     return format_qualified_urn(
         workspace_key=code,
         project_key=code,

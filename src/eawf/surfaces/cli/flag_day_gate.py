@@ -217,14 +217,18 @@ def _tree_epoch(state_path: Path) -> str:
 
     A retired verb is answered before anything resolves it, so the clause
     says which tree it looked at; an epoch-1 tree is pointed at the upgrade
-    guide, because no replacement verb writes there until it migrates.
+    guide, because no replacement verb writes there until it migrates. A
+    native tree holds no ``state.json``, so its epoch marker is what says a
+    tree is here.
     """
-    if not state_path.is_file():
-        return f"no eawf tree is here; create one with `{INIT_VERB}`"
     from eawf.kernel.state.epoch2.authority import resolve_authority
+    from eawf.kernel.state.io import epoch_marker_present
 
-    if resolve_authority(state_path.parent).epoch == 2:
-        return "this tree runs on epoch 2"
+    if epoch_marker_present(state_path.parent):
+        if resolve_authority(state_path.parent).epoch == 2:
+            return "this tree runs on epoch 2"
+    elif not state_path.is_file():
+        return f"no eawf tree is here; create one with `{INIT_VERB}`"
     return (
         f"this tree still runs on epoch 1, so migrate it first: `{UPGRADE_GUIDE}` walks the upgrade"
     )

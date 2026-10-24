@@ -446,6 +446,33 @@ def read_journal(path: Path) -> list[PipelineJournalRow]:
     return rows
 
 
+def tagged_versions_of(repo_root: Path, milestone_key: str) -> tuple[str, ...]:
+    """Return each checkpoint whose pipeline pinned *milestone_key* and pushed its tag.
+
+    The journal is the one place a pipeline run records which Milestone it
+    released: the pin step names it and the tag step's row means the tag
+    reached the remote. A run that stopped before the tag released nothing.
+
+    Args:
+        repo_root: The checkout the pipelines ran from.
+        milestone_key: The Milestone's ``MLS-NNNN`` key.
+
+    Returns:
+        The tagged versions, sorted; empty when no journal names the key.
+
+    Raises:
+        ValueError: When a journal does not validate.
+    """
+    tagged: list[str] = []
+    for path in sorted((repo_root / PIPELINE_DIRNAME).glob("*/journal.jsonl")):
+        steps = {row.step: row for row in read_journal(path)}
+        pinned = steps.get(PipelineStep.PIN_SOURCE)
+        released = PipelineStep.TAG in steps
+        if released and pinned is not None and pinned.facts.get("milestone") == milestone_key:
+            tagged.append(pinned.version)
+    return tuple(tagged)
+
+
 #: Seconds a journal mutation waits for a sibling process's lock before
 #: raising. A pipeline step can run for minutes, but two runs of the
 #: same checkpoint racing the same journal file is an operator mistake
@@ -1260,4 +1287,5 @@ __all__ = [
     "read_journal",
     "run_post_merge_pipeline",
     "rung_label",
+    "tagged_versions_of",
 ]

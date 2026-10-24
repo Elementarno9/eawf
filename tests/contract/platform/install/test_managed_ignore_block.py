@@ -18,6 +18,7 @@ from eawf.platform.install import gitignore_writer
 from eawf.platform.install.gitignore_writer import (
     GITIGNORE_PATTERNS,
     plan_gitignore_block,
+    target_patterns,
     unenumerated_paths,
 )
 from eawf.platform.rules.render import (
@@ -77,7 +78,7 @@ def test_surf_174_fresh_write_ignores_every_generated_path(repo: Path) -> None:
     text = (repo / ".gitignore").read_text(encoding="utf-8")
     assert text.startswith(f"{_BEGIN}\n") and text.endswith(f"{_END}\n")
     assert ".gitignore" in written.changed
-    assert written.gitignore_patterns_added == tuple(dict.fromkeys(GITIGNORE_PATTERNS))
+    assert written.gitignore_patterns_added == target_patterns(repo.resolve())
     generated = _generated(repo)
     assert generated
     for relative in generated:
@@ -229,11 +230,25 @@ def test_fresh_block_ignores_a_local_artifact(repo: Path, relative: str) -> None
 
 
 @pytest.mark.parametrize("relative", _PROMOTED)
-def test_fresh_block_keeps_a_promoted_artifact(repo: Path, relative: str) -> None:
+def test_fresh_block_keeps_a_promoted_artifact_the_repository_holds(
+    repo: Path, relative: str
+) -> None:
+    promoted = repo / relative
+    promoted.parent.mkdir(parents=True)
+    promoted.write_text("{}\n", encoding="utf-8")
     render_rule_projections(repo)
     assert not _ignored_by_git(repo, relative)
     directory, _, name = relative.rpartition("/")
     assert _ignored_by_git(repo, f"{directory}/x-{name}")
+
+
+@pytest.mark.parametrize("relative", _PROMOTED)
+def test_fresh_block_ignores_a_promoted_artifact_the_repository_lacks(
+    repo: Path, relative: str
+) -> None:
+    render_rule_projections(repo)
+    assert f"!{relative}" not in (repo / ".gitignore").read_text(encoding="utf-8")
+    assert _ignored_by_git(repo, relative)
 
 
 @pytest.mark.parametrize("relative", _LOCAL_ARTIFACTS)

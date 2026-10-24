@@ -179,7 +179,14 @@ def test_the_windows_claim_names_a_job_the_ci_workflow_declares() -> None:
     assert workflow["jobs"][job]["runs-on"].startswith("windows-")
 
 
-@pytest.mark.parametrize("version", sorted(set(CHECKPOINT_CONFIGS) - {RC2_VERSION}))
+@pytest.mark.parametrize(
+    "version",
+    sorted(
+        version
+        for version in CHECKPOINT_CONFIGS
+        if V07_TRAIN.checkpoint_for_version(version).gate_profile is not PROFILE
+    ),
+)
 def test_no_earlier_rung_gains_the_windows_claim(version: str) -> None:
     """The deferred claim leaves every already-configured rung as it rendered."""
     claims = parse_release_config(CHECKPOINT_CONFIGS[version]).platform_claims

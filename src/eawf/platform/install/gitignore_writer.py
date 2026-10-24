@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.io import fallback_wal_dir
-from eawf.kernel.store.commit_policy import EA_PATH_CLASSES, CommitPolicy
+from eawf.kernel.store.commit_policy import EA_PATH_CLASSES, PROMOTED_ARTIFACTS, CommitPolicy
 from eawf.kernel.store.paths import store_path
 from eawf.platform.install.managed_block import (
     managed_block_lines,
@@ -118,6 +118,27 @@ GITIGNORE_PATTERNS: tuple[str, ...] = tuple(
         )
     )
 )
+
+
+def target_patterns(target_dir: Path) -> tuple[str, ...]:
+    """Return the shipped patterns as the block of the repository at *target_dir*.
+
+    The commit policy promotes the artifacts eawf's own source reads, and a
+    product repository shares that declaration without the files. A
+    repository's block therefore re-includes only the promoted artifacts it
+    holds, so eawf's release evidence paths never reach a user's ignore file.
+
+    Args:
+        target_dir: The repository root, resolved.
+
+    Returns:
+        :data:`GITIGNORE_PATTERNS` less the re-include of every promoted
+        artifact *target_dir* does not hold, in shipped order.
+    """
+    absent = frozenset(
+        f"!{row.pattern}" for row in PROMOTED_ARTIFACTS if not (target_dir / row.pattern).is_file()
+    )
+    return tuple(line for line in GITIGNORE_PATTERNS if line not in absent)
 
 
 @dataclass(frozen=True)
@@ -225,7 +246,7 @@ def write_gitignore(
     patterns = tuple(
         dict.fromkeys(
             (
-                *GITIGNORE_PATTERNS,
+                *target_patterns(target_dir),
                 *_dynamic_patterns(target_dir, state_path),
             )
         )
@@ -259,7 +280,7 @@ class GitignoreBlockPlan:
 
 
 def plan_gitignore_block(target_dir: Path) -> GitignoreBlockPlan:
-    """Regenerate the managed block from the shipped patterns, without writing.
+    """Regenerate the managed block from the target's shipped patterns, without writing.
 
     The block is machine-maintained, so a hand edit inside it is overwritten.
     The one exception is a root-anchored line: only ``eawf init`` derives
@@ -278,11 +299,12 @@ def plan_gitignore_block(target_dir: Path) -> GitignoreBlockPlan:
         ManagedBlockError: When the existing file's markers are not exactly
             one ordered pair.
     """
-    path = (target_dir.resolve() / ".gitignore").resolve()
+    root = target_dir.resolve()
+    path = (root / ".gitignore").resolve()
     existing = path.read_bytes() if path.exists() else b""
     on_disk = managed_block_lines(existing, begin=_BEGIN, end=_END)
     current = on_disk or ()
-    shipped = tuple(dict.fromkeys(GITIGNORE_PATTERNS))
+    shipped = tuple(dict.fromkeys(target_patterns(root)))
     derived = tuple(line for line in current if line.startswith("/") and line not in shipped)
     patterns = tuple(dict.fromkeys((*shipped, *derived)))
     block = render_managed_block(begin=_BEGIN, end=_END, body_lines=patterns)
@@ -388,6 +410,7 @@ __all__ = [
     "ensure_gitignore_block",
     "plan_gitignore_block",
     "refresh_gitignore_block",
+    "target_patterns",
     "unenumerated_paths",
     "write_gitignore",
 ]

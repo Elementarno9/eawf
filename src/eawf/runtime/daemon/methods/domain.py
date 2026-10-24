@@ -55,6 +55,16 @@ revision, and an acceptance is refused on any bundle older than the one
 the open review names, so a seal given in the earlier review accepts
 nothing.
 
+``domain.milestone.reopen`` takes an accepted Milestone back to ``ACTIVE``
+so a fix can land in it. Only an operator principal may, with a recorded
+reason, and only while no release record and no pushed release tag names
+the Milestone. An accepted Milestone has left the document for its ledger,
+so the verb reads it from there and re-admits it before the edge runs
+(:mod:`eawf.runtime.daemon.milestone_readmit`); the acceptance line stays in
+the ledger as history. The edge clears ``accepted_binding``, and the next
+review must name the revision after the newest filed bundle, so the
+approval the acceptance was taken on accepts nothing again.
+
 Task completion is the other verb with a requirement of its own. The
 integrated binding a completed Task records is derived, never presented:
 ``domain.task.complete`` runs the completion assessment the caller's
@@ -167,6 +177,7 @@ from eawf.runtime.daemon.methods.legacy_retire import (
     retire_legacy_task,
 )
 from eawf.runtime.daemon.methods.milestone_maintenance import cancel_with_cascade
+from eawf.runtime.daemon.milestone_readmit import readmit_milestone, standing_milestone
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 from eawf.runtime.daemon.record_append import RecordAppendRequest, append_record
 from eawf.runtime.daemon.run_capture_updates import bind_run_capture
@@ -269,6 +280,8 @@ class LifecycleVerb:
             binding from a passing completion assessment before the move.
         cascades: Whether the move takes the record's open work with it in
             the same commit.
+        readmits: Whether the record the verb moves may sit in its ledger,
+            and is brought back into the document before the move.
     """
 
     method: str
@@ -278,6 +291,7 @@ class LifecycleVerb:
     approval_required: bool = False
     binds_integration: bool = False
     cascades: bool = False
+    readmits: bool = False
 
 
 #: Every registered per-entity verb, in registration order.
@@ -323,6 +337,13 @@ DOMAIN_LIFECYCLE_VERBS: Final[tuple[LifecycleVerb, ...]] = (
         ),
         to_status=MilestoneStatus.CANCELLED,
         cascades=True,
+    ),
+    LifecycleVerb(
+        method="domain.milestone.reopen",
+        kind=EntityKind.MILESTONE,
+        from_statuses=(MilestoneStatus.COMPLETED,),
+        to_status=MilestoneStatus.ACTIVE,
+        readmits=True,
     ),
     LifecycleVerb(
         method="domain.batch.activate",
@@ -677,7 +698,11 @@ def _receipt_filed(context: Epoch2RootContext, *, key: str) -> bool:
 
 
 def _subject(
-    document: dict[str, Any], *, verb: LifecycleVerb, params: LifecycleParams
+    document: dict[str, Any],
+    *,
+    document_path: Path,
+    verb: LifecycleVerb,
+    params: LifecycleParams,
 ) -> LifecycleRecord | None:
     """Return the record the preflight may judge, or ``None``.
 
@@ -685,10 +710,13 @@ def _subject(
     revision are all the transaction's refusals: it re-reads under its own
     locks and reports them against what it found there, so reporting them
     twice from a read taken earlier would only add a way for the two
-    answers to differ.
+    answers to differ. A verb that re-admits reads a record the document
+    does not hold from its standing ledger line.
 
     Args:
         document: The locked document.
+        document_path: The document's own path, which its ledgers resolve
+            against.
         verb: The verb the client asked for.
         params: The already-validated request parameters.
 
@@ -696,7 +724,11 @@ def _subject(
         The validated subject, or ``None`` when the transaction owns the
         answer.
     """
-    row = document_rows(document, ENTITY_COLLECTIONS[verb.kind]).get(params.urn.entity_key)
+    key = params.urn.entity_key
+    row = document_rows(document, ENTITY_COLLECTIONS[verb.kind]).get(key)
+    if row is None and verb.readmits:
+        line = standing_milestone(document_path, key)
+        row = None if line is None else line.payload
     if row is None:
         return None
     try:
@@ -781,7 +813,7 @@ def _preflight(
     with context.session([params.urn]) as session:
         document = session.read_document()
         document_path = session.document_path
-    record = _subject(document, verb=verb, params=params)
+    record = _subject(document, document_path=document_path, verb=verb, params=params)
     if record is None:
         return None, None
     if record.status not in verb.from_statuses:
@@ -1003,6 +1035,19 @@ async def _run_verb(
     if refused is not None:
         logger.info(f"_run_verb refused method={verb.method} code={refused.errors[0].code.value}")
         return refused.model_dump(mode="json")
+    degraded = False
+    # A judged subject only: a retry the preflight left unread replays its
+    # receipt, and must not pull a since re-accepted record back again.
+    if verb.readmits and revision is not None:
+        readmitted = await asyncio.to_thread(
+            readmit_milestone,
+            context,
+            urn=request_params.urn,
+            actor=request_params.actor,
+            now=datetime.now(UTC),
+        )
+        published = [publish_projection(ctx.bus, row) for row in readmitted]
+        degraded = not all(published)
     commit = cancel_with_cascade if verb.cascades else run_transaction
     try:
         committed = await asyncio.to_thread(
@@ -1014,7 +1059,7 @@ async def _run_verb(
     except TransactionRefusedError as refusal:
         logger.info(f"_run_verb refused method={verb.method} code={refusal.code.value}")
         return refused_envelope(refusal, operation=verb.method).model_dump(mode="json")
-    warnings: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = (PROJECTION_DEGRADED,) if degraded else ()
     # A replayed answer carries no envelope, so a retry never republishes
     # the event the original commit already fanned out.
     if committed.envelope is not None and not publish_projection(ctx.bus, committed.envelope):

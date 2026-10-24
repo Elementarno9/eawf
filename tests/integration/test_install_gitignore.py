@@ -12,7 +12,7 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.io import fallback_wal_dir
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
-from eawf.platform.install.gitignore_writer import GITIGNORE_PATTERNS, write_gitignore
+from eawf.platform.install.gitignore_writer import target_patterns, write_gitignore
 from eawf.platform.install.wizard import WizardAnswers, run_wizard_no_input
 from eawf.runtime.lock import sibling
 
@@ -157,8 +157,8 @@ def test_outside_state_paths_add_no_dynamic_or_host_patterns(tmp_path: Path) -> 
     relative_result = write_gitignore(target, state_path=Path("../external/state.json"))
     text = relative_result.path.read_text(encoding="utf-8")
 
-    assert absolute_result.patterns == GITIGNORE_PATTERNS
-    assert relative_result.patterns == GITIGNORE_PATTERNS
+    assert absolute_result.patterns == target_patterns(target.resolve())
+    assert relative_result.patterns == target_patterns(target.resolve())
     assert str(tmp_path.resolve()) not in text
     assert str(outside) not in text
 
@@ -170,7 +170,7 @@ def test_missing_state_path_keeps_static_patterns_only(tmp_path: Path) -> None:
 
     result = write_gitignore(target)
 
-    assert result.patterns == GITIGNORE_PATTERNS
+    assert result.patterns == target_patterns(target.resolve())
     assert len(result.patterns) == len(set(result.patterns))
 
 

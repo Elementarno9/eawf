@@ -887,13 +887,11 @@ def _milestone_acceptance(*, authority: RootAuthority, key: str) -> MilestoneAcc
     bundle = _sealed_bundle(
         authority=authority, urn=urn, revision=fields.get("acceptance_bundle_revision")
     )
+    respelled = () if bundle is None else _respelled_digests(authority, bundle)
     approval = (
-        None
-        if bundle is None
-        else _bound_approval(
-            document, bundle, respelled_digests=_respelled_digests(authority, bundle)
-        )
+        None if bundle is None else _bound_approval(document, bundle, respelled_digests=respelled)
     )
+    asked = frozenset() if bundle is None else frozenset({bundle.digest(), *respelled})
     binding = fields.get("accepted_binding")
     try:
         journey = _JOURNEY.validate_python(fields.get("acceptance_journey", ()))
@@ -909,7 +907,7 @@ def _milestone_acceptance(*, authority: RootAuthority, key: str) -> MilestoneAcc
         approval=approval,
         journey=journey,
         evidence=() if bundle is None else _cited_evidence(authority, bundle.evidence_keys),
-        waiting_approval_urn=_waiting_approval(document, urn),
+        waiting_approval_urn=_waiting_approval(document, urn, asked),
         accepted_binding=accepted,
     )
 
@@ -938,8 +936,13 @@ def _cited_evidence(authority: RootAuthority, keys: tuple[str, ...]) -> tuple[Ev
         ) from error
 
 
-def _waiting_approval(document: dict[str, Any], urn: str) -> str | None:
-    """Return the acceptance question asked of the Milestone *urn* that nobody answered."""
+def _waiting_approval(document: dict[str, Any], urn: str, asked: frozenset[str]) -> str | None:
+    """Return the unanswered acceptance question of *urn* bound to one of the *asked* digests.
+
+    *asked* is the bundle the Milestone's review names, in each spelling it has had, so a
+    question an earlier review left waiting on bytes the Milestone has outgrown is not
+    the one an operator is pointed at.
+    """
     for key, row in document_rows(document, Epoch2Collection.PENDING_ACTION).items():
         try:
             action = PendingAction.model_validate(row)
@@ -950,6 +953,7 @@ def _waiting_approval(document: dict[str, Any], urn: str) -> str | None:
             action.kind is PendingActionKind.PROTECTED_APPROVAL
             and action.status is not PendingActionStatus.SEALED
             and str(action.subject_ref) == urn
+            and action.bundle_digest in asked
         ):
             return str(action.urn)
     return None

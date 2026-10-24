@@ -78,6 +78,10 @@ UNNAMED_SUBJECT: Final = "unknown"
 #: exists so an oversized parameter cannot make the refusal unbuildable.
 ENTITY_REF_WIDTH: Final = 400
 
+#: How wide an error row's message may be. A refusal that names many
+#: findings is shortened to fit by its producer, never by this model.
+MESSAGE_WIDTH: Final = 1000
+
 
 class DomainStatus(StrEnum):
     """Whether the daemon committed the mutation or refused it."""
@@ -161,7 +165,7 @@ class DomainError(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     code: DomainErrorCode
-    message: Annotated[str, StringConstraints(strict=True, min_length=1, max_length=1000)]
+    message: Annotated[str, StringConstraints(strict=True, min_length=1, max_length=MESSAGE_WIDTH)]
     entity_ref: Annotated[
         str, StringConstraints(strict=True, min_length=1, max_length=ENTITY_REF_WIDTH)
     ]
@@ -418,6 +422,7 @@ __all__ = [
     "DOMAIN_TRANSITION_METHOD",
     "ENTITY_REF_WIDTH",
     "ENVELOPE_SCHEMA_VERSION",
+    "MESSAGE_WIDTH",
     "REFUSAL_ERROR_CODES",
     "UNNAMED_SUBJECT",
     "DomainEnvelope",

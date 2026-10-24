@@ -1,7 +1,7 @@
 """``eawf why`` provenance surface.
 
-Explains one native decision of the tree's selected generation: what was
-decided and why, the scope it governs, the evidence and questions it cites
+Explains one decision of the tree's selected generation, native or imported
+from epoch 1: what was decided and why, the scope it governs, the evidence and questions it cites
 and its supersession links. An epoch-1 tree selects no generation, so it is
 refused as needing migration.
 """
@@ -28,9 +28,13 @@ def why_cmd(
         typer.Argument(help="Decision key, or an address ending in /decision/<key>."),
     ],
 ) -> None:
-    """Explain why a native decision stands as it does."""
+    """Explain why a decision stands as it does."""
     from eawf.kernel.state.epoch2.authority import resolve_authority
-    from eawf.observability.reflect.decisions import explain_decision, read_native_decisions
+    from eawf.observability.reflect.decisions import (
+        explain_decision,
+        read_imported_decisions,
+        read_native_decisions,
+    )
     from eawf.surfaces.cli.flag_day_gate import MIGRATION_REQUIRED_KIND, MIGRATION_VERB
 
     flags: GlobalFlags = ctx.obj
@@ -42,7 +46,7 @@ def why_cmd(
                 f"epoch-2 generation; migrate it with `{MIGRATION_VERB} --plan` then `--apply`",
                 kind=MIGRATION_REQUIRED_KIND,
             )
-        result = explain_decision(read_native_decisions(tree), urn)
+        result = explain_decision(read_native_decisions(tree), read_imported_decisions(tree), urn)
     except FileNotFoundError as exc:
         cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
     except cli_errors.CliError as exc:

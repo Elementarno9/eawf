@@ -62,7 +62,10 @@ def _born_generation_document(root: Path) -> dict[str, Any]:
     )
     result = run_wizard_no_input(answers, root)
     generation_id = bear_epoch2_tree(
-        result.state_path.parent, project_code=result.project_code, born_at=datetime.now(UTC)
+        result.state_path.parent,
+        project_code=result.project_code,
+        project_title=result.project_title,
+        born_at=datetime.now(UTC),
     )
     authority = require_native_authority(root / ".ea")
     assert authority.target is not None and authority.generation_id == generation_id

@@ -57,7 +57,7 @@ from eawf.platform.install.steps import (
 )
 from eawf.platform.profiles.compose import compose
 from eawf.platform.profiles.loader import list_profiles, load_profile
-from eawf.platform.rules.render import refresh_rule_projections, rule_source_present
+from eawf.platform.rules.render import rule_source_present
 from eawf.runtime.lock import portalock
 from eawf.surfaces.cli.errors import UserError
 from eawf.surfaces.render.agents_md import render_agents_md
@@ -233,6 +233,7 @@ class WizardResult(BaseModel):
     gitignore_path: Path
     profiles_enabled: list[str]
     project_code: str
+    project_title: str
     gitignore_patterns: list[str]
     auto_installed_plugins: list[str]
 
@@ -401,7 +402,10 @@ def run_wizard_no_input(
        lock.
     4. Compose the selected profiles, render ``AGENTS.md``, persist the
        manifest, then write the ``CLAUDE.md`` shim. Manifest path is
-       ``<target_dir>/.ea/indexes/generated.json``.
+       ``<target_dir>/.ea/indexes/generated.json``. A repository that
+       authors ``.ea/rules.yaml`` skips this step: its rule projections
+       render from the project row, so the caller renders them once the
+       tree is born.
 
     **Failure semantics.** This function is **not transactional**. The
     write order is ``config.yaml`` → ``AGENTS.md`` → manifest →
@@ -453,11 +457,10 @@ def run_wizard_no_input(
     agents_md_path = (target_dir / "AGENTS.md").resolve()
     claude_md_path = (target_dir / "CLAUDE.md").resolve()
     manifest_path = (ea_dir / "indexes" / "generated.json").resolve()
-    if rule_source_present(target_dir):
-        # A repository authoring .ea/rules.yaml has switched: its legacy
-        # render blocks are migration input only, so the rule graph renders.
-        refresh_rule_projections(target_dir)
-    else:
+    # A repository authoring .ea/rules.yaml has switched: its legacy render
+    # blocks are migration input only, so the rule graph renders, and only
+    # once the tree is born, because the brief reads the born project row.
+    if not rule_source_present(target_dir):
         # Render AGENTS.md (composed body) + manifest + CLAUDE.md shim.
         composed = compose([load_profile(p) for p in answers.profiles])
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -495,6 +498,7 @@ def run_wizard_no_input(
         gitignore_path=gitignore_result.path,
         profiles_enabled=list(answers.profiles),
         project_code=answers.project_code,
+        project_title=answers.project_title,
         gitignore_patterns=list(gitignore_result.patterns),
         auto_installed_plugins=auto_installed_plugins,
     )

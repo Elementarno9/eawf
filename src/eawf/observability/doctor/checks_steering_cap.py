@@ -143,9 +143,10 @@ def check_agents_override_byte_cap(*, workspace: Path | None) -> CheckResult:
     - No workspace anchor, or no AGENTS.override.md at the anchor → ``ok``
       (nothing to measure; most repositories never compose a workspace
       layer).
-    - No reader of the policy file has a certified cap → ``ok`` (nothing to
-      hold the file to; the render transaction itself already refuses to
-      publish an uncapped policy file, so this is unreachable in practice).
+    - No reader of the policy file has a certified byte cap → ``ok``
+      (nothing to hold the file to: either no reader is certified, which
+      the render transaction already refuses, or every certified reader is
+      uncapped and only the context window bounds the file).
     - AGENTS.override.md within the cap → ``ok`` with the measured byte size.
     - AGENTS.override.md over the cap → **blocking** ``fail`` naming the
       dropped render blocks, mirroring :func:`check_agents_md_byte_cap`.
@@ -165,23 +166,24 @@ def check_agents_override_byte_cap(*, workspace: Path | None) -> CheckResult:
     if not doc_path.is_file():
         return CheckResult(name=name, status="ok", detail=f"no {POLICY_TARGET} at {doc_path}")
     cap = smallest_certified_cap(load_host_facts(), "policy")
-    if cap is None:
+    if cap is None or cap.cap_bytes is None:
         return CheckResult(
             name=name,
             status="ok",
-            detail=f"no certified cap among {POLICY_TARGET}'s readers",
+            detail=f"no certified byte cap among {POLICY_TARGET}'s readers",
         )
+    cap_bytes = cap.cap_bytes
     text = doc_path.read_text(encoding="utf-8")
     try:
-        report = measure_agents_md_byte_cap(text, cap=cap.cap_bytes)
+        report = measure_agents_md_byte_cap(text, cap=cap_bytes)
     except RegionParseError as exc:
         total = len(text.encode("utf-8"))
-        over = total > cap.cap_bytes
+        over = total > cap_bytes
         return CheckResult(
             name=name,
             status="fail" if over else "ok",
             detail=(
-                f"{POLICY_TARGET} {total}B vs {cap.cap_bytes}B cap certified for "
+                f"{POLICY_TARGET} {total}B vs {cap_bytes}B cap certified for "
                 f"{cap.runtime}; blocks unnameable (malformed markers: {exc})"
             ),
         )

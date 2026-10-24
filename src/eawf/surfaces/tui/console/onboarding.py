@@ -21,15 +21,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Protocol
 
-from pydantic import ValidationError
-
-from eawf.kernel.migration.v1_state import State
 from eawf.platform.registry import (
     Registry,
     WorkspaceRecord,
     project_codes_at_root,
     read_registry,
 )
+from eawf.platform.rules.render import RuleProjectionError, load_project_brief
 from eawf.surfaces.tui.console.chrome import EntryState
 
 logger = logging.getLogger(__name__)
@@ -86,19 +84,19 @@ class FirstRun:
         }
 
 
-def project_code(state_path: Path) -> str | None:
-    """Return the project code the tree's state records, or ``None`` when it records none.
+def project_code(repo_root: Path) -> str | None:
+    """Return the project code the tree's selected generation records, or ``None``.
 
-    A document that does not validate records no code to register the tree under.
+    A tree that selects no generation, holds no project row, or whose row
+    does not read records no code to register the tree under.
 
     Args:
-        state_path: The tree's ``state.json``.
+        repo_root: The repository root the console was launched in.
     """
     try:
-        project = State.model_validate_json(state_path.read_bytes()).project
-    except OSError, ValidationError:
+        return load_project_brief(repo_root).code
+    except RuleProjectionError:
         return None
-    return project.code if project is not None else None
 
 
 def _registry(path: Path) -> Registry:

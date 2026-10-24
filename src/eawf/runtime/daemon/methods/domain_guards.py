@@ -25,7 +25,9 @@ from typing import Any, Final
 
 from pydantic import ValidationError
 
+from eawf.kernel.delivery.acceptance import BUNDLE_KEY_PREFIX
 from eawf.kernel.identity import EntityKind, IdentityError, parse_qualified_urn
+from eawf.kernel.state.epoch2.base import OPERATOR_PRINCIPAL_PREFIX
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch, holds_head_proof
 from eawf.kernel.state.epoch2.lifecycle import LifecycleRecord
 from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
@@ -38,11 +40,14 @@ from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.ledger import LedgerError, effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.daemon.epoch2_recovery import TREE_ANCHOR_FILENAME
 from eawf.workflow.integration.reconcile import (
     RECONCILIATION_KEY_PREFIX,
     MergeOutcome,
     MergeReconciliation,
 )
+from eawf.workflow.release.pipeline import tagged_versions_of
+from eawf.workflow.release.records import releases_citing
 
 logger = logging.getLogger(__name__)
 
@@ -567,6 +572,66 @@ def _reason_recorded(inputs: GuardInputs) -> bool:
     return inputs.reason_code is not None
 
 
+def _operator_principal(inputs: GuardInputs) -> bool:
+    """Return whether an operator principal asked, which taking an acceptance back needs."""
+    return inputs.actor.startswith(OPERATOR_PRINCIPAL_PREFIX)
+
+
+def _no_release_cites(inputs: GuardInputs) -> bool:
+    """Return whether no release names the Milestone, so its acceptance can be taken back.
+
+    Two records say a release shipped a Milestone: a release record whose
+    membership names one of its acceptance bundles, and a release pipeline
+    journal that pinned the Milestone and pushed the tag. The document sits
+    at ``<tree_root>/generations/<generation>/state.json``, so the tree root
+    is three levels up and the checkout one more. A record that cannot be
+    read answers nothing, which shuts the edge.
+    """
+    if not isinstance(inputs.record, Milestone):
+        return False
+    tree_root = inputs.document_path.parents[2]
+    try:
+        cited = releases_citing(tree_root / TREE_ANCHOR_FILENAME, str(inputs.record.urn))
+        tagged = tagged_versions_of(tree_root.parent, inputs.record.key)
+    except OSError, ValueError:
+        logger.warning(f"_no_release_cites unreadable milestone={inputs.record.key}")
+        return False
+    if cited or tagged:
+        logger.info(
+            f"_no_release_cites milestone={inputs.record.key} records={cited} tags={tagged}"
+        )
+    return not cited and not tagged
+
+
+def _bundle_revision_next(inputs: GuardInputs) -> bool:
+    """Return whether review opens on the revision after the newest filed bundle.
+
+    Pinning it is what keeps an earlier review's seal from accepting: a
+    review reopened and opened again on a revision already filed would ask
+    about bytes an earlier approval was given to. A request naming no
+    revision is left to the reducer, which refuses the missing field.
+    """
+    revision = inputs.updates.get("acceptance_bundle_revision")
+    if revision is None:
+        return True
+    if not isinstance(inputs.record, Milestone):
+        return False
+    wanted = str(inputs.record.urn)
+    try:
+        lines = read_ledger_records(ledger_path(inputs.document_path, Epoch2Collection.MILESTONE))
+    except LedgerError, OSError, ValueError:
+        logger.warning(f"_bundle_revision_next unreadable milestone={inputs.record.key}")
+        return False
+    filed = [
+        item.payload.get("revision")
+        for item in effective_records(lines)
+        if item.record_key.startswith(BUNDLE_KEY_PREFIX)
+        and item.payload.get("milestone_ref") == wanted
+    ]
+    head = max((value for value in filed if isinstance(value, int)), default=0)
+    return bool(revision == head + 1)
+
+
 #: Which guards this preflight can answer from the document and the
 #: request. A guard absent from this map is left to the reducer, which
 #: either requires an observation for it or defaults it to satisfied.
@@ -582,6 +647,9 @@ GUARD_COMPUTERS: Final[Mapping[TransitionGuard, GuardComputer]] = {
     TransitionGuard.PROMOTION_CONTRACT_COMPLETE: _promotion_contract_complete,
     TransitionGuard.RUN_BOUND: _run_bound,
     TransitionGuard.REASON_RECORDED: _reason_recorded,
+    TransitionGuard.OPERATOR_PRINCIPAL: _operator_principal,
+    TransitionGuard.NO_RELEASE_CITES: _no_release_cites,
+    TransitionGuard.BUNDLE_REVISION_NEXT: _bundle_revision_next,
     TransitionGuard.CRITERIA_EVIDENCE_BOUND: _criteria_evidence_bound,
     TransitionGuard.HOST_MERGE_OBSERVED: _host_merge_observed,
     TransitionGuard.RECONCILIATION_MATCHED: _reconciliation_matched,

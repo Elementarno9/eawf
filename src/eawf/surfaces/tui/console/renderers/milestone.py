@@ -260,21 +260,26 @@ def _glance_rows(model: AcceptanceBundleView) -> list[str]:
 
 
 def _next_verb(model: AcceptanceBundleView, subject: RouteRecord) -> tuple[str, str]:
-    """Return the acceptance verb the Milestone's stage asks for next, and why."""
+    """Return the acceptance verb the Milestone's stage asks for next, and why.
+
+    A question or a seal counts only while the Milestone is in review: a reopened
+    Milestone still holds the ones its earlier review left, and neither accepts it.
+    """
     state, urn = status(subject), subject.urn
+    reviewing = state == MilestoneStatus.ACCEPTANCE_REVIEW.value
     if model.accepted_binding is not None:
         head, tree = model.accepted_binding.head_sha[:7], model.accepted_binding.tree_sha[:7]
         return f"accepted at head {head} · tree {tree}", "nothing is left to run to accept it"
     if state == MilestoneStatus.CANCELLED.value:
         return "cancelled", "no acceptance is owed"
-    if model.waiting_approval_urn is not None:
+    if reviewing and model.waiting_approval_urn is not None:
         return (
             f"eawf milestone seal-approval {model.waiting_approval_urn}",
             "an acceptance question was asked and waits for its answer",
         )
-    if model.approval is not None:
+    if reviewing and model.approval is not None:
         return f"eawf milestone accept {urn}", "the approval binds this bundle; accept records it"
-    if state == MilestoneStatus.ACCEPTANCE_REVIEW.value:
+    if reviewing:
         return (
             f"eawf milestone open-approval {urn}",
             "asks for acceptance on the bundle sealed for review",

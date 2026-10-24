@@ -48,7 +48,7 @@ from eawf.kernel.migration.epoch2.canary import (
     DisposableTarget,
     declaration_path,
 )
-from eawf.kernel.migration.epoch2.cutover import DOCUMENT_SCHEMA_KEY
+from eawf.kernel.migration.epoch2.cutover import DOCUMENT_SCHEMA_KEY, document_record_count
 from eawf.kernel.migration.epoch2.errors import MigrationTargetNotDisposableError
 from eawf.kernel.migration.epoch2.generation import (
     GENERATION_DOCUMENT,
@@ -65,8 +65,10 @@ from eawf.kernel.migration.epoch2.manifest_rows import TierPlacement
 from eawf.kernel.migration.epoch2.rules import rule_digest
 from eawf.kernel.state.epoch2.authority import CanaryRepositoryRef, resolve_authority
 from eawf.kernel.state.ids import is_project_code
+from eawf.kernel.state.models import Project
 from eawf.kernel.state.writer import atomic_write_json as write_json_record
-from eawf.kernel.store.compaction import write_document
+from eawf.kernel.store.compaction import read_document, write_document
+from eawf.kernel.store.tiers import Epoch2Collection, StorageTier
 from eawf.platform.registry.models import Registry, RegistryRepoEntry
 from eawf.runtime.daemon.runtime_dir import pid_path, socket_path
 
@@ -205,8 +207,10 @@ def require_fresh_root(repo_root: Path) -> None:
         )
 
 
-def write_born_generation(target: DisposableTarget, *, birth: Mapping[str, Any]) -> tuple[str, str]:
-    """Write an empty generation into a tree born at epoch 2.
+def write_born_generation(
+    target: DisposableTarget, *, birth: Mapping[str, Any], project: Project | None = None
+) -> tuple[str, str]:
+    """Write a generation holding at most its project row into a tree born at epoch 2.
 
     The generation is named by a digest over what it was born from, the
     same way a migrated generation is named by its manifest digest, so
@@ -215,11 +219,15 @@ def write_born_generation(target: DisposableTarget, *, birth: Mapping[str, Any])
     Args:
         target: The fence-cleared tree.
         birth: What the tree was born from; it reaches only the digest.
+        project: The project row an initialised tree is born with, keyed by
+            its code; ``None`` for a canary, whose generation stays empty.
 
     Returns:
         ``(generation_id, birth_digest)``.
     """
-    document = {DOCUMENT_SCHEMA_KEY: MANIFEST_SCHEMA_VERSION}
+    document: dict[str, Any] = {DOCUMENT_SCHEMA_KEY: MANIFEST_SCHEMA_VERSION}
+    if project is not None:
+        document[Epoch2Collection.PROJECT.value] = {project.code: project.model_dump(mode="json")}
     birth_digest = rule_digest({**birth, "document": document})
     generation_id = generation_id_for(birth_digest)
     state_path = target.generation_path(generation_id) / GENERATION_DOCUMENT
@@ -244,9 +252,10 @@ def activate_born_generation(
         activated_at: When the tree is activated.
     """
     state_path = target.generation_path(generation_id) / GENERATION_DOCUMENT
+    born_records = document_record_count(read_document(state_path))
     placement = TierPlacement.of(
-        records_by_tier={},
-        document_record_count=0,
+        records_by_tier={StorageTier.DOCUMENT: born_records},
+        document_record_count=born_records,
         document_byte_length=state_path.stat().st_size,
         ledger_byte_length=0,
         indexed_collections=(),

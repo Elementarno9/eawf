@@ -315,7 +315,7 @@ def test_policy_check_no_certified_reader_is_ok(
 
     result = checks.check_agents_override_byte_cap(workspace=tmp_path)
     assert result.status == "ok"
-    assert "no certified cap" in (result.detail or "")
+    assert "no certified byte cap" in (result.detail or "")
 
 
 def test_policy_check_malformed_markers_over_cap_still_fails(

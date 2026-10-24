@@ -84,6 +84,9 @@ MetricId = Annotated[str, StringConstraints(strict=True, pattern=r"^MET-[A-Z0-9]
 #: refused: an address is a contact route that changes, not an identity.
 PrincipalKey = Annotated[str, StringConstraints(strict=True, pattern=r"^[A-Z][A-Z0-9-]{1,31}$")]
 
+#: The key prefix of an operator principal; a runtime or agent actor never carries it.
+OPERATOR_PRINCIPAL_PREFIX: Final = "OP-"
+
 #: A step of a Milestone acceptance journey. The zero-padded ordinal is
 #: part of the grammar so lexical order and step order agree.
 AcceptanceStepId = Annotated[str, StringConstraints(strict=True, pattern=r"^AS-\d{2,}$")]
@@ -185,6 +188,7 @@ def reject_normalized_duplicates(values: Iterable[str], *, field: str) -> None:
 
 
 __all__ = [
+    "OPERATOR_PRINCIPAL_PREFIX",
     "AcceptanceStepId",
     "BatchKey",
     "BranchName",

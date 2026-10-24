@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from datetime import UTC, date, datetime, timedelta
 from importlib.resources import files
 from pathlib import Path
@@ -13,11 +14,14 @@ import yaml
 from pydantic import ValidationError
 
 from eawf.kernel.runtime.certification import (
+    UNCAPPED,
     CapabilityCertification,
     CertificationFailureCode,
     CertifiedRuntimeFacts,
     ConformanceStageRecord,
+    LocalFactOverride,
 )
+from eawf.platform.lint.tools import agents_md_budget
 from eawf.platform.rules import render
 from eawf.platform.rules.carriers import builtin_carrier_roles, carrier_target
 from eawf.platform.rules.host_facts import (
@@ -49,6 +53,7 @@ from eawf.runtime.runtimes.conformance import (
     RuntimeTuple,
 )
 from eawf.surfaces.cli.commands import sync
+from eawf.workflow.evidence.provider_certification import CanaryEvidence
 from tests import _provider_helpers as fx
 
 _CONSTITUTION = "Keep the release notes in the changelog under the version heading."
@@ -143,15 +148,15 @@ def test_plan_rule_projections_one_byte_over_the_smallest_certified_cap_fails(
 def test_plan_rule_projections_records_and_reports_uncertified_readers(repo: Path) -> None:
     plan = plan_rule_projections(repo)
     records = {p.record.target: p.record for p in plan.projections}
-    assert records[POLICY_TARGET].uncertified_readers == ("claude",)
+    assert records[POLICY_TARGET].uncertified_readers == ()
     assert records[POLICY_TARGET].cap_runtime == "codex"
     assert records[CARD_TARGET].uncertified_readers == ("opencode",)
     warnings = plan.manifest.host_fact_warnings
+    assert not any(w.startswith(POLICY_TARGET) for w in warnings)
     assert any(
-        w.startswith(f"{POLICY_TARGET} is read by claude with no certified") and "for codex" in w
+        w.startswith(f"{CARD_TARGET} is read by opencode with no certified") and "for codex" in w
         for w in warnings
     )
-    assert any(w.startswith(f"{CARD_TARGET} is read by opencode") for w in warnings)
 
 
 def test_rule_projections_sync_reports_uncertified_readers_to_the_operator(
@@ -159,12 +164,12 @@ def test_rule_projections_sync_reports_uncertified_readers_to_the_operator(
 ) -> None:
     changed, warnings, _added = sync._rule_projections(repo, write=True, rules=True, mode="local")
     assert POLICY_TARGET in changed
-    assert any("claude with no certified project-document cap" in w for w in warnings)
+    assert any("opencode with no certified project-document cap" in w for w in warnings)
     written = render.ProjectionManifest.model_validate_json(
         (repo / render.PROJECTION_MANIFEST_PATH).read_bytes()
     )
-    assert {r.target: r.uncertified_readers for r in written.projections}[POLICY_TARGET] == (
-        "claude",
+    assert {r.target: r.uncertified_readers for r in written.projections}[CARD_TARGET] == (
+        "opencode",
     )
     payload = {
         "mode": "write",
@@ -306,7 +311,8 @@ def test_load_host_facts_ships_one_record_per_runtime() -> None:
     registry = load_host_facts()
     assert tuple(record.runtime for record in registry.records) == HOST_RUNTIMES
     assert registry.codex.project_document_cap_bytes.default_value == 32768
-    assert registry.claude.project_document_cap_bytes.status == "uncertified"
+    assert registry.claude.project_document_cap_bytes.status == "certified"
+    assert registry.claude.project_document_cap_bytes.uncapped is True
     assert registry.opencode.project_document_cap_bytes.status == "uncertified"
     assert registry.claude.import_shim == "CLAUDE.md"
     assert registry.codex.import_shim is None
@@ -323,7 +329,11 @@ def test_load_host_facts_records_unmeasured_facts_as_uncertified() -> None:
 
 def test_certified_document_cap_refuses_an_uncertified_runtime() -> None:
     assert certified_document_cap("codex") == 32768
-    with pytest.raises(HostFactEvidenceError, match="claude project-document cap is uncertified"):
+    with pytest.raises(HostFactEvidenceError, match="opencode project-document cap is uncertified"):
+        certified_document_cap("opencode")
+    with pytest.raises(
+        HostFactEvidenceError, match="claude project document is certified uncapped"
+    ):
         certified_document_cap("claude")
 
 
@@ -629,7 +639,7 @@ def test_certify_carries_the_runtime_facts_of_the_host_fact_record() -> None:
 
 
 def test_certify_refuses_a_runtime_whose_record_certifies_nothing() -> None:
-    request = CertificationRequest.model_validate(_certify_request(runtime="claude"))
+    request = CertificationRequest.model_validate(_certify_request(runtime="opencode"))
     result = _runner_past_canary().certify(request)
     assert result.certification is None
     assert result.record.reason_code is CertificationFailureCode.RUNTIME_FACTS_UNCERTIFIED
@@ -683,3 +693,232 @@ def test_host_fact_reads_holds_each_projection_to_the_cap_on_its_own(repo: Path)
     policy_rules = {span.rule_id for span in projections["policy"].rule_spans}
     assert card_rules <= policy_rules
     assert all(p.byte_count <= p.cap_bytes for p in projections.values())
+
+
+# ---- an uncapped project document -----------------------------------------
+
+
+_CLAUDE_EVIDENCE = (
+    ".ea/artifacts/evidence/2026-10-24-rc3-claude-host-facts/claude-project-document-cap.json"
+)
+_CLAUDE_EVIDENCE_DIGEST = (
+    "beaf5db81685ba0fc6bef8eed25b5abf26b271d73be0309fbbe5383760501ca2"  # pragma: allowlist secret
+)
+
+
+def _uncapped(runtime: str) -> dict[str, Any]:
+    return {
+        "status": "certified",
+        "measured_on": runtime,
+        "uncapped": True,
+        "evidence": f"no byte boundary on {runtime}",
+        "measured_at": date.today(),
+        "remeasure_after_days": 30,
+    }
+
+
+def _with_uncapped(*runtimes: str) -> HostFactRegistry:
+    document = _document()
+    for runtime in runtimes:
+        document[runtime]["project_document_cap_bytes"] = _uncapped(runtime)
+        document[runtime]["project_document_cap_scope"] = "context_window"
+    return parse_host_facts(document)
+
+
+def test_load_host_facts_ships_claude_document_cap_certified_uncapped() -> None:
+    fact = load_host_facts().claude.project_document_cap_bytes
+    assert (fact.status, fact.uncapped, fact.default_value) == ("certified", True, None)
+    assert fact.measured_at == date(2026, 10, 24)
+    assert (
+        fact.remeasure_after_days
+        == load_host_facts().codex.project_document_cap_bytes.remeasure_after_days
+    )
+    assert fact.evidence is not None and _CLAUDE_EVIDENCE in fact.evidence
+    assert f"sha256:{_CLAUDE_EVIDENCE_DIGEST}" in fact.evidence
+    assert load_host_facts().claude.project_document_cap_scope == "context_window"
+    for name in (
+        "context_window_tokens",
+        "auto_compaction_threshold_tokens",
+        "tool_output_cap_tokens",
+    ):
+        assert load_host_facts().claude.fact(name).status == "uncertified"
+
+
+@pytest.mark.parametrize(
+    ("mutate", "match"),
+    [
+        (lambda f: f.update({"default_value": 32768}), "carries no default_value"),
+        (lambda f: f.pop("evidence"), "needs a default_value and the evidence"),
+        (lambda f: f.pop("measured_at"), "measured_at date"),
+        (
+            lambda f: f.update(
+                {
+                    "status": "uncertified",
+                    "reason": "x",
+                    "evidence": None,
+                    "measured_at": None,
+                    "remeasure_after_days": None,
+                }
+            ),
+            "uncertified host fact carries no",
+        ),
+    ],
+    ids=["with-a-value", "no-evidence", "no-date", "uncertified-uncapped"],
+)
+def test_host_fact_uncapped_refuses_a_misstated_measurement(mutate: Any, match: str) -> None:
+    fact = _uncapped("claude")
+    mutate(fact)
+    with pytest.raises(HostFactEvidenceError, match=match):
+        HostFact.model_validate(fact)
+
+
+def test_host_fact_uncapped_must_be_strictly_boolean() -> None:
+    fact = _uncapped("claude")
+    fact["uncapped"] = "yes"
+    with pytest.raises(ValidationError):
+        HostFact.model_validate(fact)
+
+
+@pytest.mark.parametrize("scope", ["combined", "per_file", None])
+def test_parse_host_facts_refuses_an_uncapped_cap_under_a_byte_scope(scope: str | None) -> None:
+    document = _document()
+    document["claude"]["project_document_cap_scope"] = scope
+    with pytest.raises(HostFactEvidenceError, match=r"project_document_cap_scope|context_window"):
+        parse_host_facts(document)
+
+
+def test_parse_host_facts_refuses_the_context_window_scope_on_a_byte_cap() -> None:
+    document = _document()
+    document["codex"]["project_document_cap_scope"] = "context_window"
+    with pytest.raises(HostFactEvidenceError, match="context_window scope"):
+        parse_host_facts(document)
+
+
+def test_parse_host_facts_refuses_an_uncapped_fact_other_than_the_document_cap() -> None:
+    document = _document()
+    document["claude"]["tool_output_cap_tokens"] = _uncapped("claude")
+    with pytest.raises(HostFactEvidenceError, match="tool_output_cap_tokens is uncapped"):
+        parse_host_facts(document)
+
+
+def test_from_host_facts_reads_an_uncapped_cap_as_a_measured_fact() -> None:
+    facts = CertifiedRuntimeFacts.from_host_facts(load_host_facts().claude)
+    assert facts is not None
+    assert facts.project_document_cap_bytes == UNCAPPED
+    assert facts.certified_cap("project_document_cap_bytes") == UNCAPPED
+    assert facts.measured_at == datetime(2026, 10, 24, tzinfo=UTC)
+    assert facts.context_window_tokens is None
+
+
+def test_runtime_facts_round_trip_the_uncapped_value_unambiguously() -> None:
+    facts = CertifiedRuntimeFacts.from_host_facts(load_host_facts().claude)
+    assert facts is not None
+    dumped = facts.model_dump(mode="json")
+    assert dumped["project_document_cap_bytes"] == "uncapped"
+    assert CertifiedRuntimeFacts.model_validate(dumped) == facts
+    dumped["project_document_cap_bytes"] = "unbounded"
+    with pytest.raises(ValidationError):
+        CertifiedRuntimeFacts.model_validate(dumped)
+
+
+def test_canary_export_reads_back_an_uncapped_runtime_fact() -> None:
+    root = Path(__file__).resolve().parents[4]
+    path = root / ".ea/artifacts/evidence/2026-10-08-rc2-cross-provider/native-canary-evidence.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["certifications"][0]["certification"]["runtime_facts"][
+        "project_document_cap_bytes"
+    ] = "uncapped"
+    evidence = CanaryEvidence.model_validate(document)
+    facts = evidence.certifications[0].certification.runtime_facts
+    assert facts.project_document_cap_bytes == UNCAPPED
+
+
+@pytest.mark.parametrize(("configured", "expected"), [(1, 1), (10_000_000, 10_000_000)])
+def test_effective_cap_of_an_uncapped_fact_is_the_local_override(
+    configured: int, expected: int
+) -> None:
+    facts = CertifiedRuntimeFacts.from_host_facts(load_host_facts().claude)
+    assert facts is not None
+    override = LocalFactOverride(
+        fact="project_document_cap_bytes",
+        configured_value=configured,
+        source_ref="config://claude/settings",
+    )
+    assert facts.effective_cap(override) == expected
+
+
+def test_effective_cap_of_the_codex_byte_cap_is_unchanged() -> None:
+    facts = CertifiedRuntimeFacts.from_host_facts(load_host_facts().codex)
+    assert facts is not None
+    lower = LocalFactOverride(
+        fact="project_document_cap_bytes", configured_value=1000, source_ref="config://codex/x"
+    )
+    higher = lower.model_copy(update={"configured_value": 65536})
+    assert (facts.effective_cap(lower), facts.effective_cap(higher)) == (1000, 32768)
+
+
+def test_certify_passes_a_runtime_whose_only_certified_fact_is_uncapped() -> None:
+    request = CertificationRequest.model_validate(_certify_request(runtime="claude"))
+    result = _runner_past_canary().certify(request)
+    assert result.record.reason_code is None
+    assert result.certification is not None
+    assert result.certification.runtime_facts.project_document_cap_bytes == UNCAPPED
+
+
+def test_smallest_certified_cap_counts_an_uncapped_reader_as_certified() -> None:
+    policy = smallest_certified_cap(load_host_facts(), "policy")
+    assert policy is not None
+    assert (policy.runtime, policy.cap_bytes, policy.scope) == ("codex", 32768, "combined")
+    assert policy.readers == ("claude", "codex")
+    assert policy.uncertified == ()
+
+
+def test_smallest_certified_cap_with_only_uncapped_readers_has_no_byte_cap() -> None:
+    policy = smallest_certified_cap(_with_uncapped("claude", "codex"), "policy")
+    assert policy is not None
+    assert (policy.runtime, policy.cap_bytes, policy.scope) == ("claude", None, "context_window")
+    assert policy.uncertified == ()
+
+
+def test_plan_rule_projections_renders_under_uncapped_readers_only(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use(monkeypatch, _with_uncapped("claude", "codex"))
+    plan = plan_rule_projections(repo)
+    records = {p.record.target: p.record for p in plan.projections}
+    assert (records[POLICY_TARGET].cap_bytes, records[POLICY_TARGET].headroom_bytes) == (None, None)
+    assert records[POLICY_TARGET].cap_scope == "context_window"
+    assert records[CARD_TARGET].uncertified_readers == ("opencode",)
+    assert any(
+        w.startswith(f"{CARD_TARGET} is read by opencode")
+        and "uncapped cap certified for codex" in w
+        for w in plan.manifest.host_fact_warnings
+    )
+    assert render.ProjectionManifest.model_validate_json(plan.manifest.model_dump_json()) == (
+        plan.manifest
+    )
+
+
+def test_plan_rule_projections_holds_a_mixed_chain_to_the_byte_cap(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An uncapped reader never relaxes a capped reader's limit: one byte over still fails."""
+    policy = {
+        p.record.target: p.record.byte_count for p in plan_rule_projections(repo).projections
+    }[POLICY_TARGET]
+    document = _document()
+    document["codex"]["project_document_cap_bytes"] = _certified("codex", policy - 1, "codex probe")
+    _use(monkeypatch, parse_host_facts(document))
+    with pytest.raises(RuleProjectionBudgetError, match=f"{policy - 1}-byte project-document cap"):
+        plan_rule_projections(repo)
+
+
+def test_rendered_projection_budget_skips_a_projection_with_no_byte_cap(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    registry = _with_uncapped("claude", "codex")
+    _use(monkeypatch, registry)
+    render_rule_projections(repo)
+    monkeypatch.setattr(agents_md_budget, "load_host_facts", lambda: registry)
+    report = agents_md_budget.check_rendered_projection_budget(repo)
+    assert report.entries == ()

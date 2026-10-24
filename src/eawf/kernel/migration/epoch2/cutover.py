@@ -54,7 +54,7 @@ from eawf.kernel.migration.epoch2.scrub import (
 from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot, digest_bytes
 from eawf.kernel.migration.epoch2.validation import LIFECYCLE_ENTITY_KINDS, run_source_address
 from eawf.kernel.state.epoch2.task import TERMINAL_TASK_STATUSES
-from eawf.kernel.state.epoch2.transitions import TERMINAL_STATUSES, LifecycleEntity
+from eawf.kernel.state.epoch2.transitions import SETTLED_STATUSES, LifecycleEntity
 from eawf.kernel.store.compaction import document_rows, read_document, write_document
 from eawf.kernel.store.index import regenerate_indexes
 from eawf.kernel.store.ledger import (
@@ -97,13 +97,13 @@ HISTORY_RECORD_STATUS: Final = "imported"
 
 #: The statuses that move a record of a split collection out of the
 #: document. A Task's set is the compaction-admitting set rather than the
-#: transition table's terminal set, because ``DROPPED`` is terminal yet
+#: transition table's settled set, because ``DROPPED`` is terminal yet
 #: never entered delivery, so it carries no history a ledger line would
 #: preserve -- and the writer and the gate have to agree on that or a
 #: dropped Task would red the gate that placed it.
 COMPACTING_STATUSES: Final[Mapping[Epoch2Collection, frozenset[str]]] = {
-    Epoch2Collection.MILESTONE: TERMINAL_STATUSES[LifecycleEntity.MILESTONE],
-    Epoch2Collection.BATCH: TERMINAL_STATUSES[LifecycleEntity.DELIVERY_BATCH],
+    Epoch2Collection.MILESTONE: SETTLED_STATUSES[LifecycleEntity.MILESTONE],
+    Epoch2Collection.BATCH: SETTLED_STATUSES[LifecycleEntity.DELIVERY_BATCH],
     Epoch2Collection.TASK: frozenset(status.value for status in TERMINAL_TASK_STATUSES),
 }
 

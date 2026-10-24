@@ -94,8 +94,8 @@ def test_ui_053_a_range_with_only_a_maximum_reads_at_most() -> None:
 @pytest.mark.parametrize(
     ("key", "requirement", "state"),
     [
-        ("runtime.models.claude", "claude runtime", "runtime_facts_uncertified"),
-        ("runtime.claude.stall_interval_s", "claude runtime", "runtime_facts_uncertified"),
+        ("runtime.models.claude", "claude runtime", "runtime facts certified"),
+        ("runtime.claude.stall_interval_s", "claude runtime", "runtime facts certified"),
         ("runtime.models.codex", "codex runtime", "runtime facts certified"),
         ("runtime.opencode.stall_interval_s", "opencode runtime", "runtime_facts_uncertified"),
     ],

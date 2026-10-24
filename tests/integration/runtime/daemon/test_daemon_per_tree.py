@@ -129,8 +129,12 @@ def _wait_gone(pid: int, timeout: float) -> bool:
 @pytest.fixture
 def sandbox() -> Iterator[Sandbox]:
     # Rooted at /tmp: ``<home>/.eawfd/trees/<key>/eawfd.sock`` under the macOS
-    # per-user temp dir runs past the 104-byte AF_UNIX path cap.
-    home = Path(tempfile.mkdtemp(prefix="eawf-h-", dir="/tmp"))
+    # per-user temp dir runs past the 104-byte AF_UNIX path cap. HOME is a
+    # symlink, as /tmp is on macOS: a client's working directory, and so the
+    # tree its daemon binds, is the physical path, never the symlinked one.
+    real_home = Path(tempfile.mkdtemp(prefix="eawf-h-", dir="/tmp"))
+    home = real_home.with_name(f"{real_home.name}-l")
+    home.symlink_to(real_home, target_is_directory=True)
     box = Sandbox(
         home=home,
         tree_a=_write_tree(home / "ta", "TA"),
@@ -142,7 +146,8 @@ def sandbox() -> Iterator[Sandbox]:
     finally:
         for runtime in box.runtimes:
             _stop(runtime)
-        shutil.rmtree(home, ignore_errors=True)
+        home.unlink()
+        shutil.rmtree(real_home, ignore_errors=True)
 
 
 @pytest.fixture
@@ -171,8 +176,8 @@ def test_client_of_each_tree_reaches_its_own_tree_daemon(sandbox: Sandbox) -> No
     first_a = sandbox.client(sandbox.tree_a)
     first_b = sandbox.client(sandbox.tree_b)
 
-    assert first_a.tree == sandbox.tree_a
-    assert first_b.tree == sandbox.tree_b
+    assert first_a.tree == sandbox.tree_a.resolve()
+    assert first_b.tree == sandbox.tree_b.resolve()
     assert first_a.pid != first_b.pid
     assert first_a.runtime != first_b.runtime
     assert {first_a.runtime.parent, first_b.runtime.parent} == {sandbox.home / ".eawfd" / "trees"}
@@ -187,7 +192,7 @@ def test_repeat_client_of_one_tree_reuses_its_daemon(sandbox: Sandbox) -> None:
 
     assert again.pid == first.pid
     assert again.runtime == first.runtime
-    assert again.tree == sandbox.tree_a
+    assert again.tree == sandbox.tree_a.resolve()
 
 
 def test_daemon_on_the_per_user_address_is_bypassed_then_listed(
@@ -202,7 +207,7 @@ def test_daemon_on_the_per_user_address_is_bypassed_then_listed(
     fresh = host_view.client(host_view.tree_a)
 
     assert fresh.pid != legacy.pid
-    assert fresh.tree == host_view.tree_a
+    assert fresh.tree == host_view.tree_a.resolve()
     assert daemon_pid_if_ready(legacy_dir) == legacy.pid
     _scan_only(monkeypatch, {legacy.pid, fresh.pid})
     strays = daemon_strays.find_stray_daemons()

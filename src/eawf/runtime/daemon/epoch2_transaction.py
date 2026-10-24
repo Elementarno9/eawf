@@ -115,7 +115,7 @@ from eawf.kernel.state.epoch2.transitions import (
     LifecycleStatus,
     ObservedFact,
     TransitionGuard,
-    is_terminal,
+    is_settled,
 )
 from eawf.kernel.state.epoch2.urns import AnyEntityUrn
 from eawf.kernel.state.io import state_version
@@ -929,11 +929,12 @@ def _terminal_ledger_record(
 
     Returns:
         The line to append, or ``None`` when the record stays in the
-        document. A record whose status still has an outgoing edge is
-        work in flight, and a collection declared anywhere but the ledger
-        tier has no append-only file to move into.
+        document. A record whose status still has an outgoing edge other
+        than an operator's reopen is work in flight, and a collection
+        declared anywhere but the ledger tier has no append-only file to
+        move into.
     """
-    if not is_terminal(entity, successor.status):
+    if not is_settled(entity, successor.status):
         return None
     if tier_for(collection) is not StorageTier.LEDGER:
         return None

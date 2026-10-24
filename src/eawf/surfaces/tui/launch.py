@@ -442,11 +442,12 @@ def _first_run(state: EntryState, state_path: Path) -> FirstRun | None:
     """
     from eawf.surfaces.cli._daemon_client import DaemonClient
 
-    code = project_code(state_path)
+    repo_root = state_path.parent.parent
+    code = project_code(repo_root)
     if state.id != ONBOARDING or code is None:
         return None
     return FirstRun(
-        repo_root=state_path.parent.parent,
+        repo_root=repo_root,
         code=code,
         registry_path=default_registry_path(),
         client=DaemonClient,

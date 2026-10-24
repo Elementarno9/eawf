@@ -161,6 +161,11 @@ def test_glance_without_a_journey_keeps_the_sealed_criteria() -> None:
             f"accepted at head {'a' * 7} · tree {'b' * 7}",
         ),
         ("CANCELLED", {}, "cancelled"),
+        (
+            "ACTIVE",
+            {"bundle": _bundle(), "approval": _approval(), "waiting_approval_urn": QUESTION_URN},
+            f"eawf milestone open-review {MILESTONE_URN}",
+        ),
     ],
 )
 def test_try_names_the_verb_the_stage_asks_for_next(
@@ -314,10 +319,22 @@ def test_the_daemon_names_only_an_unanswered_question_of_this_milestone() -> Non
     )
     other = f"{CONTAINER}/milestone/MLS-0031"
     find = projection_methods._waiting_approval
-    assert find({"pending_action": {"ACT-0009": waiting}}, MILESTONE_URN) == QUESTION_URN
-    assert find({"pending_action": {"ACT-0009": waiting}}, other) is None
-    assert find({"pending_action": {"ACT-0009": _action()}}, MILESTONE_URN) is None
-    assert find({}, MILESTONE_URN) is None
+    asked = frozenset({waiting["bundle_digest"]})
+    assert find({"pending_action": {"ACT-0009": waiting}}, MILESTONE_URN, asked) == QUESTION_URN
+    assert find({"pending_action": {"ACT-0009": waiting}}, other, asked) is None
+    assert find({"pending_action": {"ACT-0009": _action()}}, MILESTONE_URN, asked) is None
+    assert find({}, MILESTONE_URN, asked) is None
+
+
+def test_a_question_asked_in_an_earlier_review_is_not_named() -> None:
+    """A question bound to a bundle the open review has outgrown is not the one to answer."""
+    waiting = _action(
+        status="WAITING", resolution_actor=None, selected_option_id=None, receipt_ref=None
+    )
+    held = {"pending_action": {"ACT-0009": waiting}}
+    find = projection_methods._waiting_approval
+    assert find(held, MILESTONE_URN, frozenset({f"sha256:{'e' * 64}"})) is None
+    assert find(held, MILESTONE_URN, frozenset()) is None
 
 
 def test_a_journey_that_does_not_read_back_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -30,7 +30,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from eawf.kernel.errors.lifecycle import WAIVER_MODE_DISABLED
 from eawf.kernel.spec.common import CriterionGrounding
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
+from eawf.kernel.state.epoch2.base import (
+    OPERATOR_PRINCIPAL_PREFIX,
+    PrincipalKey,
+    StrictPositiveInt,
+)
 from eawf.kernel.state.epoch2.decision import DecisionKey
 from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.kernel.state.epoch2.transitions import DenialCode
@@ -62,9 +66,6 @@ DELIVERY_WAIVE_CRITERION_METHOD: Final = "runtime.delivery.waive_criterion"
 
 #: The firehose name of a committed waiver.
 CRITERION_WAIVED_EVENT: Final = "domain.task.criterion_waived"
-
-#: The key prefix of an operator principal; a runtime or agent actor never carries it.
-OPERATOR_PRINCIPAL_PREFIX: Final = "OP-"
 
 #: The statuses a Task's criterion may be waived in: promoted, and not yet terminal.
 WAIVABLE_STATUSES: Final = frozenset(

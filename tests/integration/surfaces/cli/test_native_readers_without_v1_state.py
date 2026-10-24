@@ -10,13 +10,16 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
 from typer.testing import CliRunner
 
+from eawf.kernel.migration.epoch2.cutover import HISTORY_RECORD_STATUS
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.migration.epoch2.native_records import NativeRecordCollection, map_native_record
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.epoch2.decision import Decision, ratify
 from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record
@@ -128,3 +131,57 @@ def test_why_names_a_key_the_generation_does_not_hold(
     result = runner.invoke(app, ["--json", "why", "D99"])
     assert result.exit_code == exit_codes.USER_ERROR, result.output
     assert "D99" in result.stdout
+
+
+def _file_imported_decision(tree: Path, key: str) -> None:
+    """Append one epoch-1 decision to the decision ledger the way the cutover imports it."""
+    authority = resolve_authority(tree)
+    assert authority.target is not None and authority.generation_id is not None
+    document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    record = map_native_record(
+        collection=NativeRecordCollection.DECISIONS,
+        record_key=key,
+        row={
+            "id": key,
+            "scope_id": "P01-I01-W01",
+            "title": "Keep the frozen decisions explainable",
+            "rationale": "A migrated tree still cites them.",
+            "status": "superseded",
+            "superseded_by": "D08",
+            "created_at": "2026-06-01T00:00:00Z",
+        },
+        project_code="DEMO",
+        source_schema_version="1.20",
+    )
+    append_ledger_record(
+        ledger_path(document, Epoch2Collection.DECISION),
+        LedgerRecord(
+            collection=Epoch2Collection.DECISION,
+            record_key=key,
+            status=HISTORY_RECORD_STATUS,
+            recorded_at=datetime(2026, 9, 26, tzinfo=UTC),
+            payload=record.model_dump(mode="json"),
+        ),
+    )
+
+
+def test_why_explains_a_decision_imported_from_epoch_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tree = _born_tree(tmp_path, monkeypatch)
+    _file_imported_decision(tree, "D07")
+    result = runner.invoke(app, ["--json", "why", "D07"])
+    assert result.exit_code == exit_codes.OK, result.output
+    why = json.loads(result.stdout)
+    assert (why["id"], why["title"], why["status"]) == (
+        "D07",
+        "Keep the frozen decisions explainable",
+        "superseded",
+    )
+    assert why["summary"] == (
+        "Keep the frozen decisions explainable Rationale: A migrated tree still cites them."
+    )
+    assert why["refs"] == [
+        {"ref": "P01-I01-W01", "kind": "scope"},
+        {"ref": "D08", "kind": "superseded_by"},
+    ]

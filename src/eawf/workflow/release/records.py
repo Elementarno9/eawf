@@ -172,6 +172,32 @@ def read_release_record(state_path: Path, key: str) -> Release | None:
     return read_release_records(state_path).get(key)
 
 
+def releases_citing(state_path: Path, milestone_ref: str) -> tuple[str, ...]:
+    """Return the key of every release whose current record names *milestone_ref* a member.
+
+    A membership reference is a Milestone URN with its acceptance bundle
+    as the fragment, so the URN before the ``#`` is what names the
+    Milestone, whichever of its bundle revisions the release took.
+
+    Args:
+        state_path: Path to ``state.json``.
+        milestone_ref: The Milestone's canonical URN.
+
+    Returns:
+        The citing release keys, sorted; empty when none cites it.
+
+    Raises:
+        ValueError: When the collection is corrupt.
+    """
+    return tuple(
+        sorted(
+            key
+            for key, release in read_release_records(state_path).items()
+            if any(ref.partition("#")[0] == milestone_ref for ref in release.membership_refs)
+        )
+    )
+
+
 def _record(line: str, path: Path, number: int) -> Release:
     """Return the release record carried by the envelope on *line*.
 
@@ -212,4 +238,5 @@ __all__ = [
     "record_envelope_id",
     "record_release",
     "release_records_path",
+    "releases_citing",
 ]

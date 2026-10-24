@@ -12,6 +12,7 @@ generated projection fails validation.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, get_args
 
@@ -19,6 +20,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from eawf.platform.install.epoch2_birth import bear_epoch2_tree
 from eawf.platform.install.wizard import WizardAnswers, run_wizard_no_input
 from eawf.platform.profiles.models import ProfileBody
 from eawf.platform.rules import migration
@@ -38,6 +40,7 @@ from eawf.platform.rules.render import (
     RuleProjectionHandEditError,
     classify_projection,
     plan_rule_projections,
+    refresh_rule_projections,
     render_rule_projections,
 )
 from eawf.surfaces.render import regions
@@ -309,6 +312,7 @@ def test_rule_094_a_switched_render_never_writes_a_legacy_block(repo: Path) -> N
 
 
 def test_rule_094_init_on_a_switched_repository_renders_the_rule_graph(repo: Path) -> None:
+    """The wizard leaves a switched repository's card to the render after the tree is born."""
     answers = WizardAnswers(
         state_path=".ea/state.json",
         project_code="DEMO",
@@ -319,7 +323,15 @@ def test_rule_094_init_on_a_switched_repository_renders_the_rule_graph(repo: Pat
         plugins=(),
         mcp=(),
     )
-    run_wizard_no_input(answers, repo, force=True)
+    result = run_wizard_no_input(answers, repo, force=True)
+    assert not (repo / CARD_TARGET).exists()
+    bear_epoch2_tree(
+        result.state_path.parent,
+        project_code=result.project_code,
+        project_title=result.project_title,
+        born_at=datetime.now(UTC),
+    )
+    refresh_rule_projections(repo)
     assert classify_projection(repo / CARD_TARGET) == "generated"
     assert "What this repo runs on" not in (repo / CARD_TARGET).read_text(encoding="utf-8")
 

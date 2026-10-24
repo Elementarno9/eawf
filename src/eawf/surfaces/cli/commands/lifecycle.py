@@ -63,7 +63,7 @@ milestone_app = typer.Typer(
     name="milestone",
     help=(
         "Milestone lifecycle (activate, open-review, reopen-review, open-approval, accept, "
-        "cancel, set-target)."
+        "cancel, reopen, set-target)."
     ),
     no_args_is_help=True,
 )

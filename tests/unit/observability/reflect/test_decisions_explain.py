@@ -1,4 +1,4 @@
-"""``explain_decision`` answers ``eawf why`` from the native decisions alone."""
+"""``explain_decision`` answers ``eawf why`` from the native and imported decisions."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def _decision(key: str, **overrides: Any) -> Decision:
 
 
 def test_explains_a_decision_by_key_with_its_scope_and_evidence() -> None:
-    result = explain_decision([_decision("D01")], "D01")
+    result = explain_decision([_decision("D01")], (), "D01")
     assert (result.kind, result.id, result.title, result.status) == (
         "decision",
         "D01",
@@ -52,7 +52,7 @@ def test_explains_a_decision_by_key_with_its_scope_and_evidence() -> None:
 
 def test_an_address_ending_in_the_decision_key_resolves_it() -> None:
     decisions = [_decision("D01"), _decision("D02")]
-    result = explain_decision(decisions, "eawf://WSP-MAIN/PRJ-QR/REP-QR/decision/D02")
+    result = explain_decision(decisions, (), "eawf://WSP-MAIN/PRJ-QR/REP-QR/decision/D02")
     assert result.id == "D02"
 
 
@@ -60,16 +60,16 @@ def test_a_superseded_decision_names_its_successor() -> None:
     old = _decision("D01")
     new = _decision("D02", supersedes="D01")
     retired = supersede(old, new)
-    result = explain_decision([retired, new], "D01")
+    result = explain_decision([retired, new], (), "D01")
     assert result.status == "superseded"
     assert WhyReference(ref="D02", kind="superseded_by") in result.refs
-    assert WhyReference(ref="D01", kind="supersedes") in explain_decision([new], "D02").refs
+    assert WhyReference(ref="D01", kind="supersedes") in explain_decision([new], (), "D02").refs
 
 
 @pytest.mark.parametrize("decisions", [[], [_decision("D01")]], ids=["empty", "other-key"])
 def test_an_unknown_key_raises_naming_it(decisions: list[Decision]) -> None:
     with pytest.raises(KeyError, match="D99"):
-        explain_decision(decisions, "D99")
+        explain_decision(decisions, (), "D99")
 
 
 def test_the_result_refuses_an_unknown_reference_kind() -> None:

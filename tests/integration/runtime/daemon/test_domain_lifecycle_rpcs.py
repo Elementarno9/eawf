@@ -21,11 +21,13 @@ import asyncio
 import json
 import tempfile
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from eawf.kernel.spec.release import ReleaseChannel
 from eawf.kernel.state.epoch2.domain_events import DOMAIN_EVENT_NAMES
 from eawf.kernel.store.compaction import read_document
 from eawf.kernel.store.envelope import Envelope
@@ -37,6 +39,8 @@ from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods.domain import DOMAIN_LIFECYCLE_METHODS
 from eawf.runtime.daemon.methods.domain_envelope import DomainErrorCode
 from eawf.runtime.daemon.wal import list_records
+from eawf.workflow.release.records import record_release
+from tests._release_helpers import release_record
 from tests.integration.runtime.daemon._delivery_verb_fixtures import (
     BRANCH,
     ENDED_AT,
@@ -66,6 +70,8 @@ from tests.integration.workflow.delivery import _completion_fixtures as world
 
 ACTOR = "OP-0001"
 KEY = "req-lifecycle-0001"
+REOPEN_METHOD = "domain.milestone.reopen"
+AT = datetime(2026, 10, 24, 12, 0, tzinfo=UTC)
 TRACK_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/track/TRK-RUNTIME"
 
 _BINDING = seed_row("milestone", "COMPLETED")["accepted_binding"]
@@ -174,6 +180,13 @@ COMMITTED_CASES: tuple[Case, ...] = (
         urn=MILESTONE_URN,
         params={"reason_code": "operator-cancelled"},
         event_name="domain.milestone.cancelled",
+    ),
+    Case(
+        method=REOPEN_METHOD,
+        rows={"milestone": {"MLS-0030": seed_row("milestone", "COMPLETED")}},
+        urn=MILESTONE_URN,
+        params={"reason_code": "fix-appended"},
+        event_name="domain.milestone.acceptance_revoked",
     ),
     Case(
         method="domain.batch.activate",
@@ -366,6 +379,13 @@ REFUSED_CASES: tuple[Case, ...] = (
     Case(
         method="domain.milestone.cancel",
         rows={"milestone": {"MLS-0030": seed_row("milestone", "PLANNED")}},
+        urn=MILESTONE_URN,
+        code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
+        guard="reason_recorded",
+    ),
+    Case(
+        method=REOPEN_METHOD,
+        rows={"milestone": {"MLS-0030": seed_row("milestone", "COMPLETED")}},
         urn=MILESTONE_URN,
         code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
         guard="reason_recorded",
@@ -698,6 +718,107 @@ def test_reopened_milestone_is_active_and_keeps_its_reviewed_revision(tmp_path: 
     row = read_document(document_path(canary))["milestone"]["MLS-0030"]
     assert (row["status"], row["revision"]) == ("ACTIVE", 2)
     assert row["acceptance_bundle_revision"] == 1
+
+
+def _reopen_case(**params: Any) -> Case:
+    """Return the committed reopen of the accepted MLS-0030, with *params* applied."""
+    case = next(case for case in COMMITTED_CASES if case.method == REOPEN_METHOD)
+    return Case(method=case.method, rows=case.rows, urn=case.urn, params={**case.params, **params})
+
+
+def _assert_refused_untouched(
+    answer: dict[str, Any], canary: CanaryProvision, before: bytes, *, guard: str
+) -> None:
+    """Assert *answer* is a guard refusal naming *guard* that wrote nothing."""
+    assert answer["status"] == "error", answer
+    assert answer["errors"][0]["code"] == DomainErrorCode.TRANSITION_GUARD_FAILED.value
+    assert answer["errors"][0]["guard"] == guard
+    assert answer["revision_before"] == answer["revision_after"] == 1
+    assert document_path(canary).read_bytes() == before
+    assert _firehose_rows(canary) == []
+
+
+def test_reopened_accepted_milestone_is_active_and_no_longer_accepted(tmp_path: Path) -> None:
+    """The accepted binding leaves the live row; the reviewed revision stays on it."""
+    canary = _seeded(_reopen_case(), tmp_path, code="REVOKEOK")
+
+    answer = _drive(_reopen_case(), canary, tmp_path)
+
+    assert answer["status"] == "ok", answer
+    row = read_document(document_path(canary))["milestone"]["MLS-0030"]
+    assert (row["status"], row["revision"]) == ("ACTIVE", 2)
+    assert row.get("accepted_binding") is None
+    assert row["acceptance_bundle_revision"] == 1
+
+
+def test_reopening_an_accepted_milestone_needs_an_operator(tmp_path: Path) -> None:
+    """Error path: a runtime principal cannot take an acceptance back."""
+    case = _reopen_case(actor="SKILL-VERIFY")
+    canary = _seeded(case, tmp_path, code="REVOKEAGT")
+    before = document_path(canary).read_bytes()
+
+    answer = _drive(case, canary, tmp_path)
+
+    _assert_refused_untouched(answer, canary, before, guard="operator_principal")
+
+
+def test_reopening_refuses_a_milestone_a_release_record_cites(tmp_path: Path) -> None:
+    """A release record naming the Milestone's bundle freezes the acceptance."""
+    case = _reopen_case()
+    canary = _seeded(case, tmp_path, code="REVOKEREL")
+    cited = release_record(
+        key="REL-0.7.0rc9",
+        version="0.7.0rc9",
+        channel=ReleaseChannel.RC,
+        authority_epoch=2,
+        membership_refs=(f"{MILESTONE_URN}#MAB-0001-MLS-0030",),
+    )
+    record_release(tree_root(canary) / "state.json", cited, recorded_at=AT, summary="cites it")
+    before = document_path(canary).read_bytes()
+
+    answer = _drive(case, canary, tmp_path)
+
+    _assert_refused_untouched(answer, canary, before, guard="no_release_cites")
+
+
+def _journal(canary: CanaryProvision, version: str, *steps: tuple[str, dict[str, str]]) -> None:
+    """Write a release pipeline journal for *version* holding *steps*."""
+    path = canary.root / ".ea" / "local" / "release-pipeline" / version / "journal.jsonl"
+    path.parent.mkdir(parents=True)
+    rows = [
+        {"version": version, "step": name, "completed_at": AT.isoformat(), "facts": facts}
+        for name, facts in steps
+    ]
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+
+def test_reopening_refuses_a_milestone_whose_release_tag_was_pushed(tmp_path: Path) -> None:
+    """A pipeline that pinned the Milestone and pushed its tag released it."""
+    case = _reopen_case()
+    canary = _seeded(case, tmp_path, code="REVOKETAG")
+    _journal(
+        canary,
+        "0.7.0rc9",
+        ("pin_source", {"source_sha": "a" * 40, "milestone": "MLS-0030"}),
+        ("build_receipts", {"channel": "rc"}),
+        ("tag", {"tag": "v0.7.0rc9", "pushed": "now"}),
+    )
+    before = document_path(canary).read_bytes()
+
+    answer = _drive(case, canary, tmp_path)
+
+    _assert_refused_untouched(answer, canary, before, guard="no_release_cites")
+
+
+def test_reopening_admits_a_milestone_whose_release_never_tagged(tmp_path: Path) -> None:
+    """Boundary: a pipeline pinned to the Milestone that stopped before the tag released nothing."""
+    case = _reopen_case()
+    canary = _seeded(case, tmp_path, code="REVOKEPIN")
+    _journal(canary, "0.7.0rc9", ("pin_source", {"source_sha": "a" * 40, "milestone": "MLS-0030"}))
+
+    answer = _drive(case, canary, tmp_path)
+
+    assert answer["status"] == "ok", answer
 
 
 def test_verb_refuses_a_urn_addressing_another_entity(tmp_path: Path) -> None:

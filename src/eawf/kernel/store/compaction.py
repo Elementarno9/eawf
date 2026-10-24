@@ -627,6 +627,10 @@ def locate_record(
 ) -> RecordLocation:
     """Return the one canonical tier holding *record_key*.
 
+    A ledger line a later line supersedes no longer holds its record: a
+    Milestone reopened after its acceptance was compacted is back in the
+    document, and its superseded line is history rather than a second home.
+
     Args:
         state_path: Path to the tree's ``state.json``.
         collection: The collection to look in.
@@ -644,7 +648,7 @@ def locate_record(
     in_document = record_key in document_rows(read_document(state_path), collection)
     in_ledger = any(
         item.record_key == record_key
-        for item in read_ledger_records(ledger_path(state_path, collection))
+        for item in effective_records(read_ledger_records(ledger_path(state_path, collection)))
     )
     if in_document and in_ledger:
         raise RecordInTwoPlacesError(

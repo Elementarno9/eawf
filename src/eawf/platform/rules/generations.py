@@ -108,7 +108,7 @@ def _whole_failures(plan: ProjectionPlan) -> list[str]:
         data = projection.text.encode("utf-8")
         if record.output_digest != _sha256(data) or record.byte_count != len(data):
             failures.append(f"{record.target} does not match its manifest row")
-        if record.byte_count > record.cap_bytes:
+        if record.cap_bytes is not None and record.byte_count > record.cap_bytes:
             failures.append(
                 f"{record.target} is {record.byte_count} bytes, "
                 f"over its {record.cap_bytes}-byte cap"

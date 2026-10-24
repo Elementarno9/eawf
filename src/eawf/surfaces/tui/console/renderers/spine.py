@@ -28,7 +28,7 @@ from eawf.kernel.projection.connection import staleness_target_seconds
 from eawf.kernel.projection.route_view import RouteReadModel
 from eawf.kernel.projection.spine import ROUTE_FIELDS, UNPRODUCED_REASON, SpineRow, SpineView
 from eawf.kernel.projection.truth import TruthState
-from eawf.kernel.state.epoch2.transitions import TERMINAL_STATUSES, LifecycleEntity
+from eawf.kernel.state.epoch2.transitions import SETTLED_STATUSES, LifecycleEntity
 from eawf.surfaces.tui.console.action_menu import MenuVerb, VerbWeight
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.fixture import Fixture
@@ -120,12 +120,12 @@ def finished_subject(session: Session, model: SpineView | RouteReadModel) -> Rec
 
 
 def finished(row: Record) -> bool:
-    """Return whether ``row`` is a lifecycle entity whose stored status has no way out."""
+    """Return whether ``row`` is a lifecycle entity settled in a status only a reopen leaves."""
     status = row.field("status")
     entity = next((e for e in LifecycleEntity if e.value == row.collection.value), None)
     if entity is None or status.state is not TruthState.KNOWN or status.value is None:
         return False
-    return status.value in TERMINAL_STATUSES[entity]
+    return status.value in SETTLED_STATUSES[entity]
 
 
 def finished_rows(route: str, row: Record, labelled: Callable[[str, str], str]) -> list[str]:

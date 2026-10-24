@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.platform.install.gitignore_writer import GITIGNORE_PATTERNS, ensure_gitignore_block
+from eawf.platform.install.gitignore_writer import ensure_gitignore_block, target_patterns
 from eawf.platform.install.managed_block import ManagedBlockError
 
 _BEGIN = "# BEGIN EAWF:gitignore\n"
@@ -33,7 +33,7 @@ def test_appends_a_block_to_a_file_without_one(tmp_path: Path) -> None:
     assert text.count(_BEGIN) == 1
     assert text.endswith(_END)
     assert ".ea/generations/restore/\n" in text
-    assert plan.added == tuple(dict.fromkeys(GITIGNORE_PATTERNS))
+    assert plan.added == target_patterns(tmp_path.resolve())
     assert plan.stale is False
 
 

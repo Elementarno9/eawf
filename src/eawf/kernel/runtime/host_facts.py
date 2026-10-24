@@ -26,7 +26,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import ClassVar, Final, Literal, Self
 
-from pydantic import Field, PositiveInt, model_validator
+from pydantic import Field, PositiveInt, StrictBool, model_validator
 
 from eawf.kernel.runtime.provider import RuntimeRecord
 from eawf.observability.telemetry.models import RuntimeName
@@ -54,9 +54,10 @@ HOST_FACT_NAMES: Final[tuple[HostFactName, ...]] = (
 HOST_RUNTIMES: Final[tuple[RuntimeName, ...]] = ("claude", "codex", "opencode")
 
 #: How a runtime applies its project-document cap: to each file on its own,
-#: or as one budget across the global document and every project document
-#: in the chain.
-CapScope = Literal["per_file", "combined"]
+#: as one budget across the global document and every project document in
+#: the chain, or not at all, so the model's context window is the only bound
+#: on what is delivered.
+CapScope = Literal["per_file", "combined", "context_window"]
 
 #: The facts that decide whether a delivered projection keeps governing a
 #: session, addressable by name.
@@ -108,7 +109,10 @@ class HostFact(RuntimeRecord):
     Attributes:
         status: ``certified`` when a measured default backs the value.
         measured_on: The runtime the measurement was taken on.
-        default_value: The measured default; only a certified fact has one.
+        default_value: The measured default; only a certified fact that is
+            not ``uncapped`` has one.
+        uncapped: ``True`` when the measurement found no boundary of the
+            fact's own, so a certified fact carries evidence but no value.
         evidence: How the boundary was measured; required when certified.
         measured_at: The day the boundary was measured; required when
             certified.
@@ -120,6 +124,7 @@ class HostFact(RuntimeRecord):
     status: Literal["certified", "uncertified"]
     measured_on: RuntimeName
     default_value: PositiveInt | None = None
+    uncapped: StrictBool = False
     evidence: str | None = Field(default=None, min_length=1)
     measured_at: date | None = None
     remeasure_after_days: PositiveInt | None = None
@@ -131,12 +136,18 @@ class HostFact(RuntimeRecord):
 
         Raises:
             HostFactEvidenceError: A certified fact lacks its value, evidence,
-                measurement date or re-measure age, or carries a reason; or
-                an uncertified fact carries any of them or lacks its reason.
+                measurement date or re-measure age, or carries a reason; an
+                uncapped fact carries a value; or an uncertified fact carries
+                any of them, is uncapped or lacks its reason.
         """
         measurement = (self.default_value, self.evidence, self.measured_at)
         if self.status == "certified":
-            if any(part is None for part in measurement) or self.reason is not None:
+            if self.uncapped and self.default_value is not None:
+                raise HostFactEvidenceError(
+                    "an uncapped host fact measured no boundary, so it carries no default_value"
+                )
+            value = True if self.uncapped else self.default_value
+            if any(part is None for part in (value, *measurement[1:])) or self.reason is not None:
                 raise HostFactEvidenceError(
                     "a certified host fact needs a default_value and the evidence of its "
                     "boundary with its measured_at date, and carries no reason"
@@ -148,6 +159,7 @@ class HostFact(RuntimeRecord):
                 )
         elif (
             any(part is not None for part in measurement)
+            or self.uncapped
             or self.remeasure_after_days is not None
             or self.reason is None
         ):
@@ -235,7 +247,9 @@ class RuntimeHostFacts(RuntimeRecord):
                 one it was measured on.
             HostFactEvidenceError: ``reads`` repeats a projection, the
                 certified compaction threshold exceeds the certified window,
-                or a certified project-document cap states no scope.
+                a certified project-document cap states no scope, a fact
+                other than the project-document cap is uncapped, or the
+                ``context_window`` scope and an uncapped cap disagree.
         """
         measured_on = (
             *((name, self.fact(name).measured_on) for name in HOST_FACT_NAMES),
@@ -254,6 +268,20 @@ class RuntimeHostFacts(RuntimeRecord):
             raise HostFactEvidenceError(
                 f"{self.runtime} certifies project_document_cap_bytes with no "
                 f"project_document_cap_scope; a cap without its scope certifies nothing"
+            )
+        for name in HOST_FACT_NAMES:
+            if name != "project_document_cap_bytes" and self.fact(name).uncapped:
+                raise HostFactEvidenceError(
+                    f"{self.runtime} {name} is uncapped; only project_document_cap_bytes "
+                    f"can be measured as having no boundary of its own"
+                )
+        if self.project_document_cap_bytes.uncapped != (
+            self.project_document_cap_scope == "context_window"
+        ):
+            raise HostFactEvidenceError(
+                f"{self.runtime} states project_document_cap_scope "
+                f"{self.project_document_cap_scope!r}; the context_window scope is exactly "
+                f"the scope of an uncapped project-document cap"
             )
         if len(set(self.reads)) != len(self.reads):
             raise HostFactEvidenceError(f"{self.runtime} reads repeats a projection: {self.reads}")

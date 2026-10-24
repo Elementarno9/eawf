@@ -10,18 +10,29 @@
 #
 # A certified project-document cap states its scope: per_file when the runtime
 # applies it to each file on its own, combined when it is one budget across the
-# global document and every project document in the chain. The four delivery
-# facts have no measured form yet, so each is recorded as uncertified.
+# global document and every project document in the chain, and context_window
+# when a probe found no byte boundary at all, so the fact is certified uncapped
+# and the model's context window is the only bound. The four delivery facts
+# have no measured form yet, so each is recorded as uncertified.
 schema_version: 1
 claude:
   runtime: claude
   reads: [policy]
   import_shim: CLAUDE.md
   project_document_cap_bytes:
-    status: uncertified
+    status: certified
     measured_on: claude
-    reason: no truncation boundary of the project document has been measured on this runtime
-  project_document_cap_scope: null
+    uncapped: true
+    evidence: >-
+      claude-code 2.1.310 on linux returned the end marker of a single
+      CLAUDE.md at every size up to 700000 bytes and refused the whole
+      request as too long for the model's context window from 740000 bytes,
+      cutting no byte boundary
+      (.ea/artifacts/evidence/2026-10-24-rc3-claude-host-facts/claude-project-document-cap.json,
+      sha256:beaf5db81685ba0fc6bef8eed25b5abf26b271d73be0309fbbe5383760501ca2)
+    measured_at: 2026-10-24
+    remeasure_after_days: 90
+  project_document_cap_scope: context_window
   context_window_tokens:
     status: uncertified
     measured_on: claude

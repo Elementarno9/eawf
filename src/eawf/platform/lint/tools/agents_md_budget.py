@@ -164,7 +164,7 @@ def check_rendered_projection_budget(repo_root: Path) -> RenderedProjectionBudge
         if not path.is_file():
             continue
         cap = smallest_certified_cap(registry, kind)
-        if cap is None:
+        if cap is None or cap.cap_bytes is None:
             continue
         entries.append(
             ProjectionBudgetEntry(

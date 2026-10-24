@@ -25,7 +25,7 @@ from typing import Final, Literal
 import yaml
 from pydantic import NonNegativeInt, PositiveInt
 
-from eawf.kernel.runtime.certification import CertifiedRuntimeFacts
+from eawf.kernel.runtime.certification import UNCAPPED, CertifiedRuntimeFacts, Uncapped
 from eawf.kernel.runtime.host_facts import (
     HOST_FACT_NAMES,
     HOST_RUNTIMES,
@@ -60,17 +60,19 @@ class CertifiedCap(RuleModel):
     """The cap one projection is held to, and the runtime it comes from.
 
     Attributes:
-        runtime: The runtime whose certified cap is smallest.
-        cap_bytes: That cap.
-        scope: Whether that runtime applies the cap per file or as a
-            combined budget across its document chain.
+        runtime: The runtime whose certified cap is smallest, or the first
+            reader certified uncapped when no reader has a byte cap.
+        cap_bytes: That cap; ``None`` when every certified reader is
+            uncapped, so only the context window bounds the projection.
+        scope: Whether that runtime applies the cap per file, as a
+            combined budget across its document chain, or not at all.
         readers: Every runtime that reads the projection.
         uncertified: Readers with no certified cap, which the cap does not
-            cover.
+            cover. A reader certified uncapped is certified, not listed.
     """
 
     runtime: RuntimeName
-    cap_bytes: PositiveInt
+    cap_bytes: PositiveInt | None
     scope: CapScope
     readers: tuple[RuntimeName, ...]
     uncertified: tuple[RuntimeName, ...]
@@ -129,7 +131,9 @@ def smallest_certified_cap(registry: HostFactRegistry, kind: ProjectionKind) -> 
 
     The cap is the smallest certified default among the runtimes that read
     the projection, read through the runtime-certification facts of each
-    record; a configured override on any machine is never consulted.
+    record; a configured override on any machine is never consulted. A
+    reader certified uncapped holds the projection to no byte count, so it
+    binds only when no reader has a byte cap.
 
     Args:
         registry: The host facts.
@@ -142,10 +146,15 @@ def smallest_certified_cap(registry: HostFactRegistry, kind: ProjectionKind) -> 
     """
     readers = tuple(record for record in registry.records if kind in record.reads)
     caps = tuple((record.runtime, _document_cap(record)) for record in readers)
-    certified = [(cap, runtime) for runtime, cap in caps if cap is not None]
-    if not certified:
+    byte_caps = [(cap, runtime) for runtime, cap in caps if isinstance(cap, int)]
+    uncapped = [runtime for runtime, cap in caps if cap == UNCAPPED]
+    cap_bytes: int | None
+    if byte_caps:
+        cap_bytes, runtime = min(byte_caps)
+    elif uncapped:
+        cap_bytes, runtime = None, uncapped[0]
+    else:
         return None
-    cap_bytes, runtime = min(certified)
     scope = next(r.project_document_cap_scope for r in readers if r.runtime == runtime)
     if scope is None:
         raise HostFactEvidenceError(f"{runtime} certifies a document cap with no scope")
@@ -158,14 +167,16 @@ def smallest_certified_cap(registry: HostFactRegistry, kind: ProjectionKind) -> 
     )
 
 
-def _document_cap(record: RuntimeHostFacts) -> int | None:
+def _document_cap(record: RuntimeHostFacts) -> int | Uncapped | None:
     """Return a runtime's certified project-document cap, or ``None``.
 
     Args:
         record: The runtime's host facts.
 
     Returns:
-        The cap runtime certification reads for the runtime.
+        The cap runtime certification reads for the runtime, or
+        :data:`~eawf.kernel.runtime.certification.UNCAPPED` when it was
+        measured to have none.
     """
     facts = CertifiedRuntimeFacts.from_host_facts(record)
     return None if facts is None else facts.certified_cap("project_document_cap_bytes")
@@ -224,12 +235,17 @@ def certified_document_cap(runtime: RuntimeName) -> int:
 
     Raises:
         KeyError: ``runtime`` is not a supported runtime.
-        HostFactEvidenceError: The runtime's cap is uncertified, so there is
-            no number to measure against.
+        HostFactEvidenceError: The runtime's cap is uncertified or certified
+            uncapped, so there is no number to measure against.
     """
     cap = _document_cap(load_host_facts().runtime(runtime))
     if cap is None:
         raise HostFactEvidenceError(f"the {runtime} project-document cap is uncertified")
+    if cap == UNCAPPED:
+        raise HostFactEvidenceError(
+            f"the {runtime} project document is certified uncapped; its bound is the "
+            f"context window, not a byte count"
+        )
     return cap
 
 

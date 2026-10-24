@@ -52,6 +52,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "milestone reopen-review": _mutate("domain.milestone.reopen_review"),
     "milestone accept": _mutate("domain.milestone.accept"),
     "milestone cancel": _mutate("domain.milestone.cancel"),
+    "milestone reopen": _mutate("domain.milestone.reopen"),
     "milestone create": _create("domain.milestone.create"),
     "milestone set-target": _mutate("domain.milestone.set_target"),
     "milestone edit": _mutate("domain.milestone.edit"),

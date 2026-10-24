@@ -61,6 +61,15 @@ CertificationId = ProviderRecordId
 #: fact, which :class:`CertifiedRuntimeFacts` records as ``None``.
 MeasuredCap = Annotated[StrictInt, Field(ge=1)]
 
+#: A fact measured to have no boundary of its own: the project document is
+#: delivered whole until the model's context window refuses the request.
+#: Spelled as a value rather than ``None`` so a measured absence of a cap is
+#: never read as an unmeasured fact.
+Uncapped = Literal["uncapped"]
+
+#: The one :data:`Uncapped` value.
+UNCAPPED: Final[Uncapped] = "uncapped"
+
 #: Trust in the installation, independent of evidence freshness.
 InstallTrust = Literal["managed", "observed", "quarantined", "unsupported"]
 
@@ -185,7 +194,7 @@ class CertifiedRuntimeFacts(RuntimeRecord):
 
     context_window_tokens: MeasuredCap | None
     auto_compaction_threshold_tokens: MeasuredCap | None
-    project_document_cap_bytes: MeasuredCap | None
+    project_document_cap_bytes: MeasuredCap | Uncapped | None
     tool_output_cap_tokens: MeasuredCap | None
     measured_at: UtcDatetime
     measurement_method: MeasurementMethod
@@ -228,26 +237,31 @@ class CertifiedRuntimeFacts(RuntimeRecord):
         return cls(
             context_window_tokens=record.context_window_tokens.default_value,
             auto_compaction_threshold_tokens=record.auto_compaction_threshold_tokens.default_value,
-            project_document_cap_bytes=record.project_document_cap_bytes.default_value,
+            project_document_cap_bytes=(
+                UNCAPPED
+                if record.project_document_cap_bytes.uncapped
+                else record.project_document_cap_bytes.default_value
+            ),
             tool_output_cap_tokens=record.tool_output_cap_tokens.default_value,
             measured_at=datetime.combine(min(dates), time(), tzinfo=UTC),
             measurement_method="observed",
         )
 
-    def certified_cap(self, fact: CertifiedFactName) -> int | None:
+    def certified_cap(self, fact: CertifiedFactName) -> int | Uncapped | None:
         """Return the measured value of *fact*.
 
         Args:
             fact: Name of the measured cap.
 
         Returns:
-            The measured value, or ``None`` when the runtime did not
-            report that fact.
+            The measured value, :data:`UNCAPPED` when the measurement found
+            no boundary, or ``None`` when the runtime did not report that
+            fact.
 
         Raises:
             KeyError: *fact* is not one of the measured caps.
         """
-        caps: dict[CertifiedFactName, int | None] = {
+        caps: dict[CertifiedFactName, int | Uncapped | None] = {
             "context_window_tokens": self.context_window_tokens,
             "auto_compaction_threshold_tokens": self.auto_compaction_threshold_tokens,
             "project_document_cap_bytes": self.project_document_cap_bytes,
@@ -262,7 +276,8 @@ class CertifiedRuntimeFacts(RuntimeRecord):
         value that would raise it describes one machine rather than the
         certified runtime, so it is recorded as a diagnostic fact and
         otherwise ignored. An override of a fact the runtime never
-        reported leaves it absent: an unmeasured cap is not a cap.
+        reported leaves it absent: an unmeasured cap is not a cap. An
+        override of an uncapped fact is the only bound, so it applies.
 
         Args:
             override: The locally configured cap.
@@ -278,6 +293,8 @@ class CertifiedRuntimeFacts(RuntimeRecord):
         certified = self.certified_cap(override.fact)
         if certified is None:
             return None
+        if certified == UNCAPPED:
+            return override.configured_value
         return min(certified, override.configured_value)
 
 

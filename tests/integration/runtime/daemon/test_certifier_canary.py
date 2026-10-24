@@ -369,9 +369,10 @@ def test_the_walk_journals_probe_canary_certify_in_order(tmp_path: Path) -> None
     stages = journal(canary, row)
     assert [stage for stage, _ in stages] == ["probe", "canary", "certify"]
     assert stages[:2] == [("probe", "passed"), ("canary", "passed")]
-    # The shipped host facts measure nothing of Claude Code, so the driver
-    # certification is refused while the machine row records the canary.
-    assert row.stages[1].reason_code == "runtime_facts_uncertified"
+    # The shipped host facts certify Claude Code's project document uncapped,
+    # so the certify stage passes on a measured fact rather than refusing.
+    assert row.stages[1].outcome == "passed"
+    assert row.stages[1].reason_code is None
     assert [stage.stage for stage in row.stages] == ["canary", "certify"]
 
 
