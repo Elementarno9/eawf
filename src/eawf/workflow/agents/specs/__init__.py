@@ -1,10 +1,9 @@
-"""Typed subagent-spec + role library.
+"""Typed role library.
 
 Public API:
 
-- :class:`~eawf.workflow.agents.specs.models.SubagentSpec` — typed dispatch spec
-  for one wave. :meth:`SubagentSpec.render` produces the wave prompt from
-  the typed spec rather than ad-hoc string concatenation.
+- :class:`~eawf.workflow.agents.specs.models.RoleContract` — the typed
+  projection of one role's invariants a runtime adapter accepts.
 - :class:`~eawf.workflow.agents.specs.roles.RoleSpec` + :data:`ROLE_REGISTRY` —
   the role library. Each role renders a contract block to every kept
   runtime (``claude-code`` / ``codex`` / ``opencode``)
@@ -16,15 +15,7 @@ module-level loggers.
 
 from __future__ import annotations
 
-from eawf.workflow.agents.specs.models import (
-    RoleContract,
-    SpecAudit,
-    SpecDecision,
-    SpecDependency,
-    SpecHypothesis,
-    SpecWorktree,
-    SubagentSpec,
-)
+from eawf.workflow.agents.specs.models import RoleContract
 from eawf.workflow.agents.specs.roles import (
     KEPT_RUNTIMES,
     ROLE_REGISTRY,
@@ -38,12 +29,6 @@ __all__ = [
     "ROLE_REGISTRY",
     "RoleContract",
     "RoleSpec",
-    "SpecAudit",
-    "SpecDecision",
-    "SpecDependency",
-    "SpecHypothesis",
-    "SpecWorktree",
-    "SubagentSpec",
     "get_role_spec",
     "render_role_contract",
 ]

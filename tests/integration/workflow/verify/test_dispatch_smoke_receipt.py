@@ -152,7 +152,9 @@ def test_smoke_receipt_passes_loads_as_a_closed_receipt_set(tmp_path: Path) -> N
 def test_smoke_receipt_passes_with_no_gap_for_passing_classes(tmp_path: Path) -> None:
     receipts = load_dispatch_smoke_receipts(smoke_filed(tmp_path, DEV4_KEY), DEV4_KEY)
 
-    assert dispatch_smoke_gaps(receipts, ("linux", "macos", "linux")) == ()
+    claims = (("claude-code", "linux"), ("claude-code", "macos"), ("claude-code", "linux"))
+
+    assert dispatch_smoke_gaps(receipts, claims) == ()
     assert dispatch_smoke_gaps(receipts, ()) == ()
 
 
@@ -163,7 +165,10 @@ def test_smoke_receipt_refusals_without_a_receipt_file(tmp_path: Path) -> None:
     outcome = probe_at(certified(tmp_path))
 
     assert outcome.status is ReleaseSignalStatus.FAIL
-    assert "linux: dispatch_smoke_missing; macos: dispatch_smoke_missing" in outcome.remediation
+    assert (
+        "claude-code on linux: dispatch_smoke_missing; claude-code on macos: "
+        "dispatch_smoke_missing" in outcome.remediation
+    )
     assert "EAWF_SMOKE_PROVIDER=claude" in outcome.remediation
 
 
@@ -171,7 +176,7 @@ def test_smoke_receipt_refusals_name_only_the_class_lacking_a_receipt(tmp_path: 
     outcome = probe_at(smoke_filed(certified(tmp_path), DEV4_KEY, ("linux",)))
 
     assert outcome.status is ReleaseSignalStatus.FAIL
-    assert "macos: dispatch_smoke_missing" in outcome.remediation
+    assert "claude-code on macos: dispatch_smoke_missing" in outcome.remediation
     assert "linux:" not in outcome.remediation
 
 
@@ -179,11 +184,29 @@ def test_smoke_receipt_refusals_on_a_failing_scorecard(tmp_path: Path) -> None:
     outcome = probe_at(smoke_filed(certified(tmp_path), DEV4_KEY, scorecard="fail"))
 
     assert outcome.status is ReleaseSignalStatus.FAIL
-    assert "linux: dispatch_smoke_failed; macos: dispatch_smoke_failed" in outcome.remediation
+    assert (
+        "claude-code on linux: dispatch_smoke_failed; claude-code on macos: "
+        "dispatch_smoke_failed" in outcome.remediation
+    )
 
 
-def test_smoke_receipt_refusals_when_one_runtime_fails_a_class(tmp_path: Path) -> None:
-    """A passing claude-code smoke does not clear a failing one on the same class."""
+def test_smoke_receipt_refusals_when_another_runtime_smoked_the_class(tmp_path: Path) -> None:
+    """A passing codex smoke does not back the claude-code claim on the same class."""
+    root = receipts_file(
+        certified(tmp_path, ["linux"]),
+        {"release_key": DEV4_KEY, "receipts": [receipt(runtime_id="codex")]},
+    )
+
+    outcome = probe_at(root)
+
+    assert outcome.status is ReleaseSignalStatus.FAIL
+    assert "claude-code on linux: dispatch_smoke_missing" in outcome.remediation
+
+
+def test_smoke_receipt_passes_beside_a_failing_smoke_of_an_unclaimed_runtime(
+    tmp_path: Path,
+) -> None:
+    """A failing codex smoke says nothing about the claude-code claim it does not back."""
     root = receipts_file(
         certified(tmp_path, ["linux"]),
         {
@@ -192,10 +215,7 @@ def test_smoke_receipt_refusals_when_one_runtime_fails_a_class(tmp_path: Path) -
         },
     )
 
-    outcome = probe_at(root)
-
-    assert outcome.status is ReleaseSignalStatus.FAIL
-    assert "linux: dispatch_smoke_failed" in outcome.remediation
+    assert probe_at(root).status is ReleaseSignalStatus.PASS
 
 
 def test_smoke_receipt_refusals_keep_the_certification_refs(tmp_path: Path) -> None:
@@ -220,7 +240,10 @@ def test_smoke_receipt_refusals_on_a_file_that_is_not_json(tmp_path: Path) -> No
     outcome = probe_at(receipts_file(certified(tmp_path), "{not json"))
 
     assert outcome.status is ReleaseSignalStatus.FAIL
-    assert f"the canary evidence export at {RECEIPTS} does not read back" in outcome.remediation
+    assert f"the dispatch smoke receipt file at {RECEIPTS} does not read back" in (
+        outcome.remediation
+    )
+    assert "canary evidence export" not in outcome.remediation
     assert "re-run the live dispatch smoke" in outcome.remediation
 
 
@@ -280,11 +303,25 @@ def test_smoke_receipt_refusals_name_each_gap_once_in_claim_order() -> None:
         {"release_key": DEV4_KEY, "receipts": [receipt("macos", scorecard="fail")]}
     )
 
-    assert dispatch_smoke_gaps(receipts, ("windows", "macos", "windows")) == (
-        ("windows", DispatchSmokeGap.MISSING),
-        ("macos", DispatchSmokeGap.FAILED),
+    claims = (("claude-code", "windows"), ("claude-code", "macos"), ("claude-code", "windows"))
+
+    assert dispatch_smoke_gaps(receipts, claims) == (
+        ("claude-code", "windows", DispatchSmokeGap.MISSING),
+        ("claude-code", "macos", DispatchSmokeGap.FAILED),
     )
-    assert dispatch_smoke_gaps(None, ("linux",)) == (("linux", DispatchSmokeGap.MISSING),)
+    assert dispatch_smoke_gaps(None, (("claude-code", "linux"),)) == (
+        ("claude-code", "linux", DispatchSmokeGap.MISSING),
+    )
+
+
+def test_smoke_receipt_refusals_match_the_runtime_as_well_as_the_class() -> None:
+    receipts = DispatchSmokeReceiptSet.model_validate(
+        {"release_key": DEV4_KEY, "receipts": [receipt("linux")]}
+    )
+
+    assert dispatch_smoke_gaps(receipts, (("codex", "linux"), ("claude-code", "linux"))) == (
+        ("codex", "linux", DispatchSmokeGap.MISSING),
+    )
 
 
 def test_smoke_receipt_refusals_reject_a_repeated_pair_in_the_model() -> None:

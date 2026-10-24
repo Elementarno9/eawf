@@ -46,8 +46,9 @@ from eawf.observability.doctor.models import CheckResult as CheckResult
 from eawf.observability.doctor.models import CheckStatus as CheckStatus
 from eawf.platform.install.instrument_probe import probe
 from eawf.platform.profiles.discovery import discover_profile
-from eawf.platform.profiles.loader import list_profiles
+from eawf.platform.profiles.loader import list_profiles, load_profile
 from eawf.platform.subprocess_detach import no_window_kwargs
+from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.render.drift import detect_drift
 from eawf.surfaces.render.envelope import OutputEnvelope, from_markdown, to_markdown
 from eawf.surfaces.render.manifest import Manifest
@@ -250,6 +251,15 @@ def check_config_resolves(*, workspace: Path | None) -> CheckResult:
         loc = discover_profile(pid, workspace=anchor)
         if loc.source != "builtin":
             overlays.append(f"{pid}={loc.source}")
+        # The render loads each enabled profile, so one it refuses fails `eawf sync`.
+        try:
+            load_profile(pid, workspace=anchor)
+        except cli_errors.ValidationError as exc:
+            return CheckResult(
+                name="config_resolves",
+                status="warn",
+                detail=f"enabled profile {pid} ({loc.source}) does not load: {exc}",
+            )
     overlay_note = f"; overlay: {', '.join(overlays)}" if overlays else ""
     return CheckResult(
         name="config_resolves",
@@ -283,7 +293,7 @@ def check_reserved_config_keys(*, workspace: Path | None) -> CheckResult:
             detail=f"reserved config inspection skipped: {exc}",
         )
 
-    from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS
+    from eawf.kernel.config.sections import retired_leaves_stated
 
     configured: list[tuple[str, object, str]] = []
     for key, entry in LEAF_KEY_REGISTRY.items():
@@ -295,41 +305,40 @@ def check_reserved_config_keys(*, workspace: Path | None) -> CheckResult:
         except KeyError:
             continue
         configured.append((key, value, source))
-    for key in sorted(DEPRECATED_LEAF_KEYS - set(LEAF_KEY_REGISTRY)):
-        source = sources.get(key)
-        if source is None or source == "built-in":
-            continue
-        try:
-            value = get_dotted(merged, key)
-        except KeyError:
-            continue
-        configured.append((key, value, source))
-
-    if not configured:
-        return CheckResult(
-            name="reserved_config_key",
-            status="ok",
-            detail="no reserved config keys explicitly set",
+    # A retired leaf is dropped on read, so it only warns: no value it states takes effect.
+    # A branch layer has no `config unset` scope without naming the branch.
+    retired = [
+        f"{key}={value!r} ({label} layer, {path}); remove with "
+        + (
+            "`eawf doctor --fix`"
+            if label == "branch"
+            else f"`eawf config unset {key} --scope {label}`"
         )
+        for key, value, label, path in retired_leaves_stated(repo=anchor)
+    ]
+    notes = [f"retired config leaf(s) still stated: {'; '.join(retired)}"] if retired else []
 
     rendered = ", ".join(f"{key}={value!r} ({source})" for key, value, source in configured)
     unsupported = [
         key for key, value, _source in configured if _reserved_value_is_unsupported(key, value)
     ]
     if unsupported:
+        reserved = (
+            f"unsupported auto-approval or auditor mutation setting(s): "
+            f"{', '.join(unsupported)}; reserved values have no effect; configured: {rendered}"
+        )
+        return CheckResult(
+            name="reserved_config_key", status="fail", detail="; ".join([reserved, *notes])
+        )
+    if configured:
+        notes.insert(0, f"reserved config value(s) have no effect: {rendered}")
+    if not notes:
         return CheckResult(
             name="reserved_config_key",
-            status="fail",
-            detail=(
-                f"unsupported auto-approval or auditor mutation setting(s): "
-                f"{', '.join(unsupported)}; reserved values have no effect; configured: {rendered}"
-            ),
+            status="ok",
+            detail="no reserved config keys explicitly set",
         )
-    return CheckResult(
-        name="reserved_config_key",
-        status="warn",
-        detail=f"reserved config value(s) have no effect: {rendered}",
-    )
+    return CheckResult(name="reserved_config_key", status="warn", detail="; ".join(notes))
 
 
 def check_manifest_in_sync(*, workspace: Path | None) -> CheckResult:

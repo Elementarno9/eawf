@@ -1,11 +1,11 @@
 """SURF-090: the release preflight holds every re-typed rule over the threshold to a disposition.
 
 The tag chokepoint's realization probe counts, over the window since the previous release
-tag, the instructions the operator typed again -- from the host session history and from
-the tree's root Runs -- and reds the row while any subject over the configured threshold
-has no disposition in the committed triage. The row names subjects by id and count only;
-the operator's wording goes to the local reflection collection, never into the release
-record.
+tag, the instructions the operator typed again -- the human-marked prompts of the host
+session history, never a Run's prompt, which an agent wrote -- and reds the row while any
+subject over the configured threshold has no disposition in the committed triage. The row
+names subjects by id and count only; the operator's wording goes to the local reflection
+collection, never into the release record.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from eawf.kernel.spec.release_config import ReleaseConfig, load_release_config
 from eawf.kernel.store.commit_policy import CommitPolicy, classify_path
 from eawf.observability.reflect.retyped import RETYPED_TRIAGE_PATH, load_retyped_triage
 from eawf.observability.telemetry.sources.session_history import claude_history_root
+from eawf.runtime.daemon.methods.host_subagent import HARNESS_ACTORS
 from eawf.workflow.release.train import DEV1_RELEASE_CONFIG_YAML, V07_TRAIN
 from eawf.workflow.verify.release_probes import TagPreflightInputs, build_tag_probes
 from eawf.workflow.verify.release_readiness import (
@@ -57,18 +58,19 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return root
 
 
-def _history(repo: Path, texts: list[str], *, name: str = "session") -> None:
+def _history(repo: Path, texts: list[str], *, name: str = "session", minute: int = 0) -> None:
     directory = claude_history_root(repo.resolve())
     directory.mkdir(parents=True, exist_ok=True)
+    start = T0 + timedelta(minutes=minute)
     rows = [
         {
             "type": "user",
             "isSidechain": False,
-            "timestamp": (T0 + timedelta(minutes=minute)).isoformat().replace("+00:00", "Z"),
+            "timestamp": (start + timedelta(minutes=index)).isoformat().replace("+00:00", "Z"),
             "origin": {"kind": "human"},
             "message": {"role": "user", "content": text},
         }
-        for minute, text in enumerate(texts)
+        for index, text in enumerate(texts)
     ]
     body = "".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows)
     (directory / f"{name}.jsonl").write_text(body, encoding="utf-8")
@@ -249,45 +251,44 @@ def test_surf_090_the_tag_being_cut_does_not_open_the_window(repo: Path) -> None
     assert "since the first release" in row.remediation
 
 
-def test_surf_090_a_root_runs_operator_messages_are_counted_without_a_daemon(
-    repo: Path,
+@pytest.mark.parametrize(
+    "actor",
+    [HARNESS_ACTORS["claude-code"], "OP-0001"],
+    ids=["host-subagent-adoption", "dispatched-worker"],
+)
+def test_surf_090_a_delegated_prompt_repeated_across_sessions_is_not_counted(
+    repo: Path, actor: str
 ) -> None:
-    key = "RUN-00000001"
-    messages = [
+    keys = [f"RUN-{index:08d}" for index in range(1, 5)]
+    prompts = [
         event(
             key,
-            sequence,
+            1,
             event_kind=RunEventKind.MESSAGE_SUMMARIZED,
             payload=MessageSummaryPayload(message_role="user", summary=INSTRUCTION),
+            actor=actor,
+            observed_at=T0 + timedelta(minutes=index),
         )
-        for sequence in range(1, 5)
+        for index, key in enumerate(keys)
     ]
-    native_tree(repo, [run_row(key)], messages)
+    native_tree(repo, [run_row(key) for key in keys], prompts)
+
+    row = _row(repo)
+
+    assert row.status is ReleaseSignalStatus.PASS
+    assert "retyped_rule_triage:0-over-threshold-triaged" in row.evidence_refs
+
+
+def test_surf_090_the_same_text_typed_by_the_operator_in_several_sessions_is_counted(
+    repo: Path,
+) -> None:
+    for index in range(4):
+        _history(repo, [INSTRUCTION], name=f"session-{index}", minute=index * 10)
 
     row = _row(repo)
 
     assert row.status is ReleaseSignalStatus.FAIL
     assert "x4" in row.remediation
-
-
-def test_surf_090_a_turn_in_both_the_history_and_a_run_counts_once(repo: Path) -> None:
-    key = "RUN-00000001"
-    native_tree(
-        repo,
-        [run_row(key)],
-        [
-            event(
-                key,
-                1,
-                event_kind=RunEventKind.MESSAGE_SUMMARIZED,
-                payload=MessageSummaryPayload(message_role="user", summary=INSTRUCTION),
-                observed_at=T0,
-            )
-        ],
-    )
-    _history(repo, [INSTRUCTION] * 3)
-
-    assert _row(repo).status is ReleaseSignalStatus.PASS
 
 
 _REPO_ROOT: Final = Path(__file__).resolve().parents[4]

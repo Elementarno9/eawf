@@ -1,11 +1,7 @@
-"""Verify-spine helpers: evidence rows, the deterministic gate runner, the verify block.
+"""Verify-spine helpers: the deterministic gate runner and the verify block.
 
 What this module still serves:
 
-* :func:`_read_evidence_rows` / :func:`_filter_evidence_for_scope` read the
-  :class:`~eawf.kernel.store.kinds.evidence.EvidenceRecord` rows of
-  ``<store_dir>/evidence.jsonl`` for one scope; the waiver counter in
-  :mod:`eawf.workflow.verify.hosted_close` counts over them.
 * :func:`_run_deterministic_gate` compiles one typed
   :class:`~eawf.kernel.spec.common.GateSpec` via
   :func:`eawf.workflow.verify.compile.compile_gate` and runs it through
@@ -26,8 +22,6 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-import orjson
-
 from eawf.kernel.config.schema import VerifyConfig
 from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.common import (
@@ -36,10 +30,8 @@ from eawf.kernel.spec.common import (
     GateSpec,
 )
 from eawf.kernel.spec.heuristics import is_ui_scope
-from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, StoreKind
+from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 from eawf.kernel.state.models import Wave
-from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.platform.profiles.models import VerifyBlock
 from eawf.workflow.audit_dsl.models import CheckSpec, GateFreshnessInput
 from eawf.workflow.verify.compile import compile_gate
@@ -49,65 +41,6 @@ if TYPE_CHECKING:
     from eawf.runtime.daemon.gate_execution import GateExecutionContext
 
 logger = logging.getLogger(__name__)
-
-
-def _read_evidence_rows(store_dir: Path) -> list[EvidenceRecord]:
-    """Decode + validate every row in ``<store_dir>/evidence.jsonl``.
-
-    Returns an empty list when the file does not exist (the v0.4
-    evidence store is created lazily on first ``evidence.append``).
-    Malformed rows are skipped with a debug log — a malformed
-    evidence row is an advisory failure, not a close blocker (W06's
-    whole point).
-
-    Args:
-        store_dir: ``<state_dir>/store/`` (resolved by callers via
-            :func:`eawf.kernel.store.paths.store_dir`).
-
-    Returns:
-        List of validated :class:`EvidenceRecord` rows in file order.
-    """
-    evidence_path = store_dir / f"{StoreKind.EVIDENCE.value}.jsonl"
-    if not evidence_path.exists():
-        return []
-    rows: list[EvidenceRecord] = []
-    try:
-        raw = evidence_path.read_text(encoding="utf-8")
-    except OSError as exc:
-        logger.debug(f"_read_evidence_rows status=os-error path={evidence_path!s} err={exc!s}")
-        return []
-    for line in raw.splitlines():
-        if not line.strip():
-            continue
-        try:
-            envelope = Envelope.model_validate_json(line)
-            if envelope.kind != StoreKind.EVIDENCE:
-                continue
-            record = EvidenceRecord.model_validate(envelope.payload)
-        except (orjson.JSONDecodeError, ValueError) as exc:
-            logger.debug(f"_read_evidence_rows status=row-skip err={exc!s}")
-            continue
-        rows.append(record)
-    return rows
-
-
-def _filter_evidence_for_scope(
-    rows: list[EvidenceRecord], *, scope_id: str
-) -> list[EvidenceRecord]:
-    """Return the evidence rows whose ``scope_id`` matches *scope_id*.
-
-    SHA-bound freshness is the W08 contract (compile-gate); W06 keeps
-    the filter scope-id-equal so the readiness view is deterministic
-    on the rows currently visible.
-
-    Args:
-        rows: All evidence rows read off disk.
-        scope_id: Wave id we are computing readiness for.
-
-    Returns:
-        Filtered rows in original order.
-    """
-    return [row for row in rows if row.scope_id == scope_id]
 
 
 def _run_gate_via_shared_runner(
@@ -268,9 +201,8 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     Union-merges the list-valued fields (``floor_checks`` concatenated;
     ``argv_allowlist`` / ``uiux_bands`` / ``jury_vendors`` deduplicated,
     first-occurrence order preserved), OR-folds the boolean gating bits
-    (``enforce`` / ``cross_vendor_jury`` / ``odr_blocking`` /
-    ``require_iter_audit_accepted``), and takes the last contributor's scalar
-    dials (``timeout_class_seconds``,
+    (``enforce`` / ``cross_vendor_jury`` / ``odr_blocking``), and takes the
+    last contributor's scalar dials (``timeout_class_seconds``,
     ``juror_wall_clock_seconds``, ``odr_floor``, ``jury_authority``,
     ``checkpoint``). ``waiver_mode`` is last-contributor-wins unless any
     contributor disables waivers, which is absorbing. Because the other
@@ -313,7 +245,6 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     enforce = False
     cross_vendor_jury = False
     odr_blocking = False
-    require_iter_audit_accepted = False
     for block in blocks:
         floor_checks.extend(block.floor_checks)
         for argv_head in block.argv_allowlist:
@@ -337,9 +268,6 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
         enforce = enforce or block.enforce
         cross_vendor_jury = cross_vendor_jury or block.cross_vendor_jury
         odr_blocking = odr_blocking or block.odr_blocking
-        require_iter_audit_accepted = (
-            require_iter_audit_accepted or block.require_iter_audit_accepted
-        )
     return VerifyBlock(
         floor_checks=floor_checks,
         argv_allowlist=argv_allowlist,
@@ -352,7 +280,6 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
         jury_vendors=jury_vendors,
         odr_floor=odr_floor,
         odr_blocking=odr_blocking,
-        require_iter_audit_accepted=require_iter_audit_accepted,
         jury_authority=jury_authority,
         checkpoint=checkpoint,
     )

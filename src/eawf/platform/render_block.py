@@ -42,18 +42,9 @@ RULE_REFERENCE_DIR: str = "docs/rules"
 #: target such as ``"AGENTS.md"``.
 DISPATCH_SYSTEM_PROMPT_TARGET: str = "dispatch:system_prompt"
 
-#: Default token cap for one role-tier dispatch block. The role-tier injection
-#: (W05) leaves this cap as a measurable seam; W06 wires the per-role budget
-#: gate that bounds an injected block's
-#: :func:`~eawf.platform.lint.tools.agents_md_budget.count_tokens` weight
-#: against it. Pinned to the same magnitude as the tier-0 cap so a role block
-#: stays a preamble, not a second prompt.
-DEFAULT_ROLE_TIER_TOKEN_CAP = 1200
-
 __all__ = [
     "DEFAULT_RENDER_BLOCK_PLACEMENT",
     "DEFAULT_RENDER_BLOCK_TIER",
-    "DEFAULT_ROLE_TIER_TOKEN_CAP",
     "DEFAULT_TIER0_TOKEN_CAP",
     "DISPATCH_SYSTEM_PROMPT_TARGET",
     "RULE_REFERENCE_DIR",

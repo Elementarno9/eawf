@@ -133,6 +133,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     ),
     "release tag": _mutate(),
     "release preflight": _read(),
+    "release canary-export": _read(),
     "release receipts": _create("release.produce_receipts"),
     "release advance": _mutate("release.advance_train"),
     "release bind-regime": _create("runtime.regime.bind"),

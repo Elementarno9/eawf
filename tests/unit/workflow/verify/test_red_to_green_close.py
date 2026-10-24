@@ -13,7 +13,6 @@ from eawf.kernel.store.kinds.agent_report import (
 )
 from eawf.platform.lint.kind_taxonomy import REPRO_TEST_NAME
 from eawf.surfaces.render.agents import _EXECUTOR_BODY
-from eawf.workflow.agents.specs.models import SubagentSpec
 
 _WAVE_ID = "P01-I01-W01"
 _UNIT_TEST = "tests/unit/test_x.py::test_x"
@@ -69,26 +68,6 @@ def test_executor_test_run_accepts_max_length_test_id() -> None:
     assert ExecutorTestRun.model_validate(_run("t" * 500, "red")).test_id == "t" * 500
     with pytest.raises(ValidationError):
         ExecutorTestRun.model_validate(_run("t" * 501, "red"))
-
-
-# ---- executor prompt contract ----------------------------------------------
-
-
-def test_render_headless_executor_asks_for_test_runs() -> None:
-    spec = SubagentSpec.model_validate(
-        {
-            "wave_id": _WAVE_ID,
-            "iter_id": "P01-I01",
-            "title": "Solo wave",
-            "scope_id": "QR",
-            "agent_role": "executor",
-            "file_scopes": ["src/"],
-        }
-    )
-    out = spec.render(headless=True)
-    assert '"test_runs": [{"test_id"' in out
-    assert "never ran red first" in out
-    assert f"`{REPRO_TEST_NAME.form}`" in out
 
 
 # ---- the repro naming convention -------------------------------------------

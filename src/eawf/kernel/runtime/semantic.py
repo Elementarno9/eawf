@@ -58,7 +58,7 @@ from eawf.runtime.sandbox.command_families import CommandFamilyId
 #: The version every catalog tool's input and output schema carries. One
 #: version covers the catalog because a provider binds the catalog as a
 #: whole, not one tool at a time.
-TOOL_SCHEMA_VERSION: Final[str] = "1.0.0"
+TOOL_SCHEMA_VERSION: Final[str] = "1.1.0"
 
 
 def _grammar(pattern: str, *, max_length: int = 256) -> StringConstraints:
@@ -680,8 +680,10 @@ class RepoReadOutput(SemanticToolOutputBase):
     text covers, so the next window starts at ``start_byte + byte_count``;
     ``truncated`` says the file continues past it or a line was cut.
     ``same_as_call`` names the earlier call of the Run that returned this
-    same text, in which case ``text`` is empty and every other field is
-    that call's.
+    same text, in which case ``text`` is empty and every other field but
+    ``truncated`` is that call's. The receipt ledger keeps a read that
+    carried its text the same way, naming its own call, so a ledger line
+    never holds the window inline.
     """
 
     tool_id: Literal["repo_read"]

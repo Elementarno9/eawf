@@ -1,17 +1,15 @@
-"""Golden-output regression tests for the subagent spec + role library.
+"""Golden-output regression tests for the role library.
 
 Two fixture families under ``tests/golden/subagent_spec/``:
 
-- ``full_wave.md`` — a fully-populated :class:`SubagentSpec` rendered
-  prompt that exercises every section (deps incl. a dangling one,
-  decisions, hypotheses, audits, references, worktree).
 - ``roles/<role>.<runtime>.md`` — every role's contract rendered to
   every kept runtime (8 roles x 3 runtimes = 24 fixtures).
+- ``role_surface_parity/executor.system_prompt.txt`` — the executor role
+  body every kept runtime renders byte for byte.
 
-A failure means the spec renderer, a section format, or a sourced role
-body drifted. Regenerate the fixtures deliberately and commit the new
-bytes alongside the change (see the generation snippet in the wave's
-commit body).
+A failure means a section format or a sourced role body drifted.
+Regenerate the fixtures deliberately and commit the new bytes alongside
+the change.
 """
 
 from __future__ import annotations
@@ -21,100 +19,10 @@ from pathlib import Path
 import pytest
 
 from eawf.kernel.state.enums import AgentSessionRole
-from eawf.workflow.agents.specs.models import (
-    SpecAudit,
-    SpecDecision,
-    SpecDependency,
-    SpecEstimate,
-    SpecHypothesis,
-    SpecWorktree,
-    SubagentSpec,
-)
-from eawf.workflow.agents.specs.roles import (
-    KEPT_RUNTIMES,
-    get_role_spec,
-    render_role_contract,
-)
-from eawf.workflow.dispatch.renderer import build_role_contract
+from eawf.workflow.agents.specs.roles import KEPT_RUNTIMES, render_role_contract
 
 _FIXTURE_DIR: Path = Path(__file__).parent / "subagent_spec"
 _ROLE_PARITY_FIXTURE: Path = _FIXTURE_DIR / "role_surface_parity" / "executor.system_prompt.txt"
-
-
-def _full_spec() -> SubagentSpec:
-    """Return the deterministic, fully-populated spec backing ``full_wave.md``."""
-    return SubagentSpec(
-        wave_id="P27-I03-W14",
-        iter_id="P27-I03",
-        title="Typed subagent-spec library + roles",
-        scope_id="EAWF",
-        agent_role="executor",
-        effort_bucket="XL",
-        success_criteria=[
-            "a SubagentSpec model and a role registry exist",
-            "a wave dispatch renders from a typed spec rather than an ad-hoc prompt",
-        ],
-        file_scopes=["src/eawf/agents/specs/**", "src/eawf/dispatch/renderer.py"],
-        dependencies=[
-            SpecDependency(
-                wave_id="P27-I03-W12",
-                title="Model-only code-quality skills",
-                status="closed",
-            ),
-            SpecDependency(wave_id="P27-I03-W99"),
-        ],
-        decisions=[
-            SpecDecision(
-                decision_id="D12",
-                title="v0.3 harness scope: Claude + Codex + OpenCode only",
-                rationale="Goose/Aider/Cursor/Cline deferred to v0.4 to lock scope.",
-            ),
-        ],
-        hypotheses=[
-            SpecHypothesis(
-                hypothesis_id="H27-01",
-                metric="render_drift_count",
-                confirm="drift == 0",
-                reject="drift > 0",
-                verdict="confirmed",
-            ),
-        ],
-        recent_audits=[
-            SpecAudit(audit_id="A35", kind="evaluation"),
-            SpecAudit(audit_id="A30", kind="ship-gate", verdict="minor"),
-        ],
-        references=[".ea/local/research/2026-05-23-p27-i03-subagent-spec.md"],
-        worktree=SpecWorktree(
-            branch="feature/eawf-v0.3-p27-w14",
-            path=".ea/worktrees/p27-w14",
-            base_branch="feature/eawf-v0.3-p27",
-        ),
-        estimate=SpecEstimate(
-            effort_bucket="XL",
-            expected_eu=8.0,
-            expected_minutes=240.0,
-            token_budget=32768,
-            parallel_siblings=["P27-I03-W13", "P27-I03-W15"],
-        ),
-        role_contract=build_role_contract(get_role_spec(AgentSessionRole.EXECUTOR)),
-    )
-
-
-@pytest.mark.golden
-def test_full_wave_spec_matches_golden() -> None:
-    """The fully-populated spec renders byte-identical to ``full_wave.md``."""
-    actual = _full_spec().render().encode("utf-8")
-    expected = (_FIXTURE_DIR / "full_wave.md").read_bytes()
-    assert actual == expected, (
-        "SubagentSpec render drifted from golden fixture full_wave.md. "
-        "If intentional, regenerate the fixture and commit the new bytes."
-    )
-
-
-@pytest.mark.golden
-def test_full_wave_render_is_deterministic() -> None:
-    """Two renders of the same spec produce identical bytes (no hidden state)."""
-    assert _full_spec().render() == _full_spec().render()
 
 
 @pytest.mark.golden
@@ -138,31 +46,13 @@ def _role_contract_body(runtime: str) -> str:
     return rendered[start:end]
 
 
-def _dispatch_role_contract_body() -> str:
-    role = get_role_spec(AgentSessionRole.EXECUTOR)
-    spec = SubagentSpec(
-        wave_id="P28-I03-W09",
-        iter_id="P28-I03",
-        title="Claude MCP config parity",
-        scope_id="EAWF",
-        agent_role="executor",
-        effort_bucket="M",
-        role_contract=build_role_contract(role),
-    )
-    rendered = spec.render()
-    start = rendered.index("### System prompt\n\n") + len("### System prompt\n\n")
-    end = rendered.index("\n\n## Workflow")
-    return rendered[start:end]
-
-
 @pytest.mark.golden
-def test_executor_role_body_byte_equal_across_four_surfaces() -> None:
-    """One RoleSpec body is byte-identical across three runtimes + dispatch."""
+def test_executor_role_body_byte_equal_across_the_kept_runtimes() -> None:
+    """One RoleSpec body is byte-identical across the three kept runtimes."""
     expected = _ROLE_PARITY_FIXTURE.read_text(encoding="utf-8").rstrip("\n")
     surfaces = {
         "claude-code": _role_contract_body("claude-code"),
         "codex": _role_contract_body("codex"),
         "opencode": _role_contract_body("opencode"),
-        "dispatch": _dispatch_role_contract_body(),
     }
     assert surfaces == dict.fromkeys(surfaces, expected)

@@ -23,7 +23,9 @@ from eawf.kernel.economics.governor import (
     economics_policy_from,
 )
 from eawf.kernel.identity import EntityKind, parse_qualified_urn
+from eawf.kernel.runtime.compiled import canonical_digest
 from eawf.runtime.daemon import native_dispatch
+from eawf.runtime.daemon.admission import admission_drift
 from eawf.runtime.daemon.methods import run_budget
 from eawf.runtime.runtimes.metering import InFlightMeter, UsageSample
 
@@ -145,6 +147,32 @@ def test_governor_weight_changes_the_governor_digest() -> None:
     revised = DEFAULT_GOVERNOR.model_copy(update={"cache_read_weight": 0.5})
 
     assert revised.governor_digest != DEFAULT_GOVERNOR.governor_digest
+
+
+def test_governor_weight_default_keeps_the_digest_of_a_governor_without_it() -> None:
+    """A governor at the default weight digests as it did before the weight existed."""
+    unweighted = {**GOVERNOR, "max_in_flight_cost_microusd": None}
+
+    assert InFlightGovernor.model_validate(GOVERNOR).governor_digest == canonical_digest(unweighted)
+
+
+def test_governor_weight_default_strands_no_run_admitted_before_it() -> None:
+    """A Run admitted before the weight existed resumes under the default without drift."""
+    policy = economics_policy_from({"economics": {"governor": GOVERNOR}})
+    earlier = {**GOVERNOR, "max_in_flight_cost_microusd": None}
+    receipt = SimpleNamespace(
+        prompt_budget=SimpleNamespace(policy_digest=policy.prompt_budget.policy_digest),
+        governor_digest=canonical_digest(earlier),
+    )
+
+    assert admission_drift(cast(Any, receipt), policy) is None
+
+
+def test_governor_weight_set_explicitly_to_the_default_digests_as_the_default() -> None:
+    """Naming the default weight is the same governor as leaving it out."""
+    explicit = InFlightGovernor.model_validate({**GOVERNOR, "cache_read_weight": 0.1})
+
+    assert explicit.governor_digest == InFlightGovernor.model_validate(GOVERNOR).governor_digest
 
 
 # ---------------------------------------------------------------------------

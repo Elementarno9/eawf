@@ -42,7 +42,6 @@ Type is the value shape; Layers names the layers that may write the leaf.
 | --- | --- | --- | --- | --- |
 | `profiles.enabled` | list of strings | `[core]` | global, workspace, repo, branch, local | Rule profiles enabled for this repository, rendered into its agent policy. |
 | `profiles.trusted` | mapping | `{}` | repo, branch | Profile id to the sha256 digest of the profile body last trusted. |
-| `profiles.certified` | mapping | `{}` | repo, branch | Profile id to the digest an enriched profile is certified as managed under. Not wired: its named reader has no production caller yet, so setting it changes nothing. |
 
 ### Runtime
 
@@ -78,11 +77,10 @@ Type is the value shape; Layers names the layers that may write the leaf.
 | `telemetry.enabled` | true or false | `true` | global, workspace, repo | Whether the `eawf metrics` commands open the machine-local telemetry store. |
 | `telemetry.db_kind` | literal | `sqlite` | global | Database engine of the machine-local telemetry store: `sqlite` or `duckdb`. |
 
-### Dispatch, agents and economics
+### Agents and economics
 
 | Key | Type | Default | Layers | What it does |
 | --- | --- | --- | --- | --- |
-| `dispatch.role_tier_token_cap` | int | `2400` | global, workspace, repo | Intended token ceiling per injected role-tier dispatch block. Not wired: its named reader has no production caller yet, so setting it changes nothing. |
 | `agents.extra_tools` | mapping | `{}` | global, workspace, repo | Per-role extra tool names appended to each rendered subagent's allowlist; the `*` key grants to every role. |
 | `economics.prompt_budget` | mapping | shipped policy | global, workspace, repo | Prompt budget: the input window, reserved output and per-class ceilings. |
 | `economics.governor` | mapping | shipped policy | global, workspace, repo, branch, local | In-flight governor: concurrent Runs, in-flight tokens and cost, admission. |

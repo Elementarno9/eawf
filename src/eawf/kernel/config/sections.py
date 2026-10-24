@@ -21,6 +21,7 @@ from eawf.kernel.config import layered
 from eawf.kernel.config.loader import load_yaml_layer
 from eawf.kernel.config.migration import migrate_config_payload
 from eawf.kernel.config.registry import LEAF_KEY_REGISTRY, LeafKey
+from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS
 from eawf.kernel.config.schema import (
     STALL_INTERVAL_RUNTIMES,
     AgentsConfig,
@@ -198,6 +199,19 @@ def layer_leaf_problems(body: Mapping[str, Any]) -> list[str]:
     return problems
 
 
+def _file_layers(*, repo: Path, workspace: Path | None) -> list[tuple[str, Path]]:
+    """Return each config file layer as ``(layer label, path)``, lowest precedence first."""
+    layers: list[tuple[str, Path]] = [("global", layered.global_config_path())]
+    if workspace is not None:
+        layers.append(("workspace", layered.workspace_config_path(workspace)))
+    layers.append(("repo", layered.repo_config_path(repo)))
+    branch = layered.detect_current_branch(repo)
+    if branch is not None:
+        layers.append(("branch", layered.branch_config_path(repo, branch)))
+    layers.append(("local", layered.local_config_path(repo)))
+    return layers
+
+
 def file_layer_problems(*, repo: Path, workspace: Path | None) -> list[str]:
     """Return every leaf a config file layer states that the leaf catalog refuses.
 
@@ -215,17 +229,8 @@ def file_layer_problems(*, repo: Path, workspace: Path | None) -> list[str]:
         ValidationError: A layer file is malformed YAML or states an unknown
             schema marker.
     """
-    layers: list[tuple[str, Path]] = [("global", layered.global_config_path())]
-    if workspace is not None:
-        layers.append(("workspace", layered.workspace_config_path(workspace)))
-    layers.append(("repo", layered.repo_config_path(repo)))
-    branch = layered.detect_current_branch(repo)
-    if branch is not None:
-        layers.append(("branch", layered.branch_config_path(repo, branch)))
-    layers.append(("local", layered.local_config_path(repo)))
-
     problems: list[str] = []
-    for label, path in layers:
+    for label, path in _file_layers(repo=repo, workspace=workspace):
         body = load_yaml_layer(path)
         if not body:
             continue
@@ -235,11 +240,41 @@ def file_layer_problems(*, repo: Path, workspace: Path | None) -> list[str]:
     return problems
 
 
+def retired_leaves_stated(*, repo: Path) -> list[tuple[str, Any, str, Path]]:
+    """Return each retired leaf a config file layer still states.
+
+    The merge drops a retired leaf on read, so only the layer files show that one is
+    still written down.
+
+    Args:
+        repo: Repository root anchoring the repo, branch and local layers.
+
+    Returns:
+        One ``(dotted key, value, layer label, layer path)`` per stated leaf, in layer
+        then key order.
+
+    Raises:
+        ValidationError: A layer file is malformed YAML.
+    """
+    retired = sorted(DEPRECATED_LEAF_KEYS - LEAF_KEY_REGISTRY.keys())
+    stated: list[tuple[str, Any, str, Path]] = []
+    for label, path in _file_layers(repo=repo, workspace=None):
+        body = load_yaml_layer(path)
+        for key in retired:
+            try:
+                value = layered.get_dotted(body, key)
+            except KeyError:
+                continue
+            stated.append((key, value, label, path))
+    return stated
+
+
 __all__ = [
     "SECTION_MODELS",
     "ConfigSectionError",
     "check_sections",
     "file_layer_problems",
     "layer_leaf_problems",
+    "retired_leaves_stated",
     "section_of",
 ]

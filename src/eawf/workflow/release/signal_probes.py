@@ -316,11 +316,14 @@ def _unmapped_export(release_key: str) -> str:
     return f"no canary evidence directory is mapped for {release_key} in CANARY_EVIDENCE_DIRS"
 
 
-def _unreadable_export(exc: ValueError, location: str, remedy: str) -> ReleaseSignalOutcome:
+def _unreadable_export(
+    exc: ValueError, document: str, location: str, remedy: str
+) -> ReleaseSignalOutcome:
     """Return the outcome for committed evidence that is present and does not parse.
 
     Args:
         exc: What the loader refused the document with.
+        document: What the document is, as the remediation names it.
         location: The repo-relative path of the document that was read.
         remedy: How the document is produced again.
 
@@ -332,7 +335,7 @@ def _unreadable_export(exc: ValueError, location: str, remedy: str) -> ReleaseSi
     return ReleaseSignalOutcome(
         status=ReleaseSignalStatus.FAIL,
         remediation=(
-            f"the canary evidence export at {location} does not read back: {exc}; "
+            f"the {document} at {location} does not read back: {exc}; "
             f"{remedy} rather than editing the document by hand"
         ),
     )
@@ -356,7 +359,10 @@ def _read_export(
         return load_canary_evidence(repo_root, release_key), None
     except ValueError as exc:
         return None, _unreadable_export(
-            exc, _export_location(release_key), "re-export the conformance records"
+            exc,
+            "canary evidence export",
+            _export_location(release_key),
+            "re-export the conformance records",
         )
 
 
@@ -438,17 +444,25 @@ def provider_probe(
     except ValueError as exc:
         return _unreadable_export(
             exc,
+            "dispatch smoke receipt file",
             "/".join((*CANARY_EVIDENCE_DIRS[release_key], DISPATCH_SMOKE_RECEIPTS_FILENAME)),
             "re-run the live dispatch smoke",
         )
-    claimed = tuple(os_class for claim in evidence.advertised for os_class in claim.os_classes)
+    claimed = tuple(
+        (claim.runtime_id, os_class)
+        for claim in evidence.advertised
+        for os_class in claim.os_classes
+    )
     gaps = dispatch_smoke_gaps(smoke, claimed)
     if gaps:
+        named = "; ".join(
+            f"{runtime} on {os_class}: {gap.value}" for runtime, os_class, gap in gaps
+        )
         return ReleaseSignalOutcome(
             status=ReleaseSignalStatus.FAIL,
             remediation=(
-                f"{len(gaps)} claimed os_class(es) lack a passing live dispatch smoke: "
-                f"{'; '.join(f'{os_class}: {gap.value}' for os_class, gap in gaps)}; run "
+                f"{len(gaps)} claimed runtime and os_class pair(s) lack a passing live "
+                f"dispatch smoke: {named}; run "
                 f"EAWF_SMOKE_PROVIDER=claude uv run pytest -m e2e "
                 f"tests/e2e/test_smoke_milestone.py on each class and commit its "
                 f"{DISPATCH_SMOKE_RECEIPTS_FILENAME}"

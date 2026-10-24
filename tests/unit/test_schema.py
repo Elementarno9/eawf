@@ -103,7 +103,13 @@ def test_state_schema_accepts_an_imported_row_and_an_unmodelled_collection() -> 
     schema = schema_mod.generate_state_schema()
     document = {
         DOCUMENT_SCHEMA_KEY: MANIFEST_SCHEMA_VERSION,
-        "task": {"T-1": {"status": "active", "recorded_at": "2026-05-08T00:00:00Z", "payload": {}}},
+        "task": {
+            "T-1": {
+                "status": "active",
+                "recorded_at": "2026-05-08T00:00:00Z",
+                "payload": {"origin": {"kind": "legacy"}},
+            }
+        },
         "receipt": {"R-1": {"anything": [1, 2]}},
     }
     jsonschema.validate(document, schema)
@@ -119,6 +125,14 @@ def test_state_schema_accepts_an_imported_row_and_an_unmodelled_collection() -> 
         pytest.param(
             {DOCUMENT_SCHEMA_KEY: MANIFEST_SCHEMA_VERSION, "repository": {"R": {"key": "R"}}},
             id="invalid-native-row",
+        ),
+        pytest.param(
+            {DOCUMENT_SCHEMA_KEY: MANIFEST_SCHEMA_VERSION, "task": {"T": {"payload": 1}}},
+            id="payload-row-off-the-import-shape",
+        ),
+        pytest.param(
+            {DOCUMENT_SCHEMA_KEY: MANIFEST_SCHEMA_VERSION, "run": {"R": {"garbage": True}}},
+            id="invalid-run-row",
         ),
         pytest.param(
             {DOCUMENT_SCHEMA_KEY: MANIFEST_SCHEMA_VERSION, CANONICAL_SEQUENCE_KEY: "1"},

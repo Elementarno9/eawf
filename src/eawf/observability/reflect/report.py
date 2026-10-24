@@ -585,14 +585,16 @@ def store_report(
         on: The report's date, which opens every file stem.
         out: The resolved text path the operator named, or ``None`` for the
             collection's own dated name. The machine form and the manifest land
-            beside it, so a named output leaves the collection untouched.
+            beside it, so a named output leaves the collection untouched; the
+            machine form takes the text's name with a ``.json`` suffix, or with
+            ``.report.json`` when the text is itself named ``.json``.
 
     Returns:
         The three paths written.
     """
     stem = f"{on.isoformat()}{REPORT_STEM_SUFFIX}"
     text = out if out is not None else root / f"{stem}.txt"
-    document = text.with_suffix(".json")
+    document = text.with_suffix(".report.json" if text.suffix == ".json" else ".json")
     manifest_path = text.parent / f"{on.isoformat()}{MANIFEST_STEM_SUFFIX}.json"
     _atomic_write(text, render_text(report).encode("utf-8"))
     _atomic_write(document, report.model_dump_json(indent=2).encode("utf-8"))
@@ -608,12 +610,20 @@ def latest_report(root: Path) -> Path | None:
 
 
 def load_report(path: Path) -> ReflectReport:
-    """Return the report document at ``path``.
+    """Return the report document at ``path``, upgrading one stored at schema 1.
+
+    Schema 2 only added fields with defaults -- the scope, the window, the totals,
+    the issues, the exclusions and each session's spend -- so a schema-1 document
+    reads as schema 2 with those empty, which is what its run measured.
 
     Raises:
-        pydantic.ValidationError: The file is not a report document.
+        orjson.JSONDecodeError: The file is not JSON.
+        pydantic.ValidationError: The file is not a report document of either schema.
     """
-    return ReflectReport.model_validate_json(path.read_bytes())
+    payload = orjson.loads(path.read_bytes())
+    if isinstance(payload, dict) and payload.get("schema_version") == 1:
+        payload["schema_version"] = 2
+    return ReflectReport.model_validate(payload)
 
 
 _PAGE: Final = """<!doctype html>

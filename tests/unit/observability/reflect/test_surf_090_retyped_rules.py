@@ -3,8 +3,8 @@
 SURF-090: every rule the operator re-types more than a configured threshold within a
 release is triaged into a guard, a dispatch default, a lens or a memory row, and staying
 in prose is a disposition that must be argued. These tests pin the three pieces the
-release preflight stands on: the corpus (a turn is a human-marked prompt or a root Run's
-``user`` message, scrubbed), the count (a deterministic token match against the rule
+release preflight stands on: the corpus (a turn is a human-marked prompt of the host
+history, scrubbed), the count (a deterministic token match against the rule
 graph and against earlier turns, once per turn), and the triage record's closed shape.
 """
 
@@ -13,14 +13,12 @@ from __future__ import annotations
 import json
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Final, Literal
+from typing import Any, Final
 
 import pytest
 import yaml
 from pydantic import ValidationError
 
-from eawf.kernel.runtime.events import MessageSummaryPayload, QuarantineReason, RunEventKind
-from eawf.kernel.state.epoch2.run import Run
 from eawf.observability.reflect.report import NON_QUOTABLE_MARK
 from eawf.observability.reflect.retyped import (
     EXEMPLAR_MAX_CHARS,
@@ -35,13 +33,10 @@ from eawf.observability.reflect.retyped import (
     instruction_tokens,
     load_retyped_triage,
     operator_turns_from_history,
-    operator_turns_from_runs,
     resolve_retyped_rule_threshold,
     store_retyped_rows,
 )
-from eawf.observability.reflect.runs import RunReading
 from eawf.observability.reflect.titles import REFLECTION_MARKER
-from tests.contract.surfaces.cli._reflect_tree import RUN_PREFIX, event, run_row
 
 T0: Final = datetime(2026, 9, 20, 9, 0, tzinfo=UTC)
 
@@ -87,30 +82,6 @@ def _history(tmp_path: Path, records: list[dict[str, Any] | str]) -> Path:
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
-
-
-def _message(
-    key: str,
-    sequence: int,
-    text: str,
-    *,
-    role: Literal["user", "assistant"] = "user",
-    **fields: Any,
-) -> Any:
-    return event(
-        key,
-        sequence,
-        event_kind=RunEventKind.MESSAGE_SUMMARIZED,
-        payload=MessageSummaryPayload(message_role=role, summary=text),
-        **fields,
-    )
-
-
-def _reading(key: str, events: list[Any], *, parent: str | None = None) -> RunReading:
-    row = run_row(key)
-    if parent is not None:
-        row["parent_run_ref"] = f"{RUN_PREFIX}/{parent}"
-    return RunReading(run=Run.model_validate(row), events=tuple(events), canonical_sequence=1)
 
 
 # ---- the tokens a sentence is compared in ----------------------------------------------
@@ -199,48 +170,6 @@ def test_surf_090_a_turn_is_scrubbed_before_it_is_kept(tmp_path: Path) -> None:
     assert str(Path.home()) not in turn.text
     assert "someone@corp.example" not in turn.text
     assert "<local-path>" in turn.text
-
-
-# ---- which Run messages are operator turns ---------------------------------------------
-
-
-def test_surf_090_a_root_runs_user_message_is_a_turn() -> None:
-    reading = _reading("RUN-00000001", [_message("RUN-00000001", 1, "Run the hooks first.")])
-
-    (turn,) = operator_turns_from_runs([reading])
-
-    assert turn.text == "Run the hooks first."
-    assert turn.at == T0 + timedelta(seconds=1)
-
-
-def test_surf_090_the_observed_time_wins_over_the_recorded_time() -> None:
-    observed = T0 - timedelta(hours=1)
-    reading = _reading(
-        "RUN-00000001",
-        [_message("RUN-00000001", 1, "Run the hooks first.", observed_at=observed)],
-    )
-
-    assert operator_turns_from_runs([reading])[0].at == observed
-
-
-def test_surf_090_run_messages_the_operator_did_not_type_are_no_turns() -> None:
-    root = "RUN-00000001"
-    reading = _reading(
-        root,
-        [
-            _message(root, 1, "I will run the hooks.", role="assistant"),
-            _message(root, 2, "Late line.", quarantine=QuarantineReason.LATE_AFTER_TERMINAL),
-            _message(root, 3, f"{REFLECTION_MARKER} title this"),
-            event(root, 4),
-        ],
-    )
-    child = _reading("RUN-00000002", [_message("RUN-00000002", 1, "Parent's prompt.")], parent=root)
-
-    assert operator_turns_from_runs([reading, child]) == ()
-
-
-def test_surf_090_no_runs_read_as_no_turns() -> None:
-    assert operator_turns_from_runs([]) == ()
 
 
 # ---- what "the same rule, re-typed" means ----------------------------------------------

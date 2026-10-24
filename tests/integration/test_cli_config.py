@@ -175,6 +175,34 @@ def test_unset_rejects_unknown_or_locked_leaf(repo_root: Path) -> None:
     assert "not writable from the repo" in locked.output
 
 
+@pytest.mark.parametrize(
+    ("key", "scope"),
+    [
+        ("planning.max_parallel_waves", "repo"),
+        ("verify.require_iter_audit_accepted", "repo"),
+        ("planning.max_parallel_waves", "local"),
+    ],
+)
+def test_unset_removes_a_retired_leaf_a_layer_still_states(
+    repo_root: Path, key: str, scope: str
+) -> None:
+    from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS, LEAF_KEY_REGISTRY
+
+    assert key in DEPRECATED_LEAF_KEYS - LEAF_KEY_REGISTRY.keys()
+    section, leaf = key.split(".")
+    path = layered.layer_path(scope, workspace=repo_root, repo=repo_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"{section}:\n  {leaf}: 3\naudit:\n  fix_safe: true\n")
+
+    result = runner.invoke(
+        app, ["--json", "config", "unset", key, "--scope", scope], env=_DAEMONLESS
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["result"]["removed"] is True
+    assert yaml.safe_load(path.read_text()) == {"audit": {"fix_safe": True}}
+
+
 # --- built-in is read-only --------------------------------------------------
 
 

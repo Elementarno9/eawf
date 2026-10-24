@@ -5,11 +5,13 @@ outside a migration or upgrade path that still says phase, iter or wave,
 names a retired skill or spells a ``P<NN>-I<NN>-W<NN>`` id is either code
 that must keep the epoch-1 word for now or prose that went stale. The
 census runs :data:`~eawf.workflow.skills.census.EPOCH1_NOUN_PATTERN` over
-every git-tracked ``src/`` file and holds each file that matches to a row
+every git-tracked ``src/`` file, skipping the :data:`HOMONYMS` source code
+uses, and holds each file that matches to a row
 of :data:`SRC_EPOCH1_ALLOWLIST`: a ceiling, the match count when the row
 was written, and the reason the words stay. A file that gains a match, or
-a new file that holds one, fails; lower a ceiling when a file sheds
-matches, and delete a row when its file reaches zero.
+a new file that holds one, fails; so does a file that sheds one until its
+ceiling is lowered to the new count, and a row whose file reaches zero
+until it is deleted.
 
 The reasons:
 
@@ -43,7 +45,7 @@ from typing import Final, Literal, get_args
 
 import pytest
 
-from eawf.workflow.skills.census import EPOCH1_NOUN_PATTERN, epoch1_nouns
+from eawf.workflow.skills.census import EPOCH1_NOUN_PATTERN
 
 pytestmark = pytest.mark.unit
 
@@ -51,6 +53,58 @@ REPO: Final = Path(__file__).resolve().parents[2]
 
 #: The epoch-1 lifecycle id shape: a phase and iter, with an optional wave.
 EPOCH1_ID: Final = re.compile(r"\bP\d{2,}-I\d{2,}(?:-W\d{2,})?\b")
+
+#: Identifiers built on an epoch-1 noun that name something else, matched
+#: whole and case-blind. Python's iteration protocol names its generators
+#: this way; a Run control, a tool or host call, a transcript event and an
+#: integration lock each move through typed stages, and a release version
+#: carries a pre-release segment. None of them is an epoch-1 lifecycle
+#: entity, so the src census skips them, and a call of Python's ``iter()``,
+#: instead of reporting noise. A published page is held to the full
+#: pattern: it is read as prose, where these are the epoch-1 nouns.
+HOMONYMS: Final[tuple[str, ...]] = (
+    "iter_agent_reports",
+    "iter_child_nodes",
+    "iter_modules",
+    "iter_rows",
+    "iter_subscriber_pushes",
+    "_declared_phase_dispositions",
+    "_disposition_belongs_to_the_phase",
+    "_fields_match_the_phase",
+    "_host_tool_phases",
+    "_outcome_belongs_to_the_result_phase",
+    "_payload_and_phase_match_the_kind",
+    "_payload_phases",
+    "_state_phase",
+    "_status_belongs_to_the_terminal_phase",
+    "_summary_belongs_to_the_summarized_phase",
+    "compile_phase_dispositions",
+    "compile_phase_locks",
+    "gate_phase",
+    "locked_phase",
+    "missing_phase_rows",
+    "missing_phases",
+    "phase_dispositions",
+    "phase_locks",
+    "phase_order",
+    "pre_phase",
+    "state_tool_phase",
+    "tool_phase_kinds",
+    "unlocked_phases",
+)
+
+#: The page census pattern with every :data:`HOMONYMS` identifier and a call
+#: of ``iter()`` left out.
+SRC_NOUN_PATTERN: Final[re.Pattern[str]] = re.compile(
+    rf"(?!(?:{'|'.join(HOMONYMS)})\b)(?!iter\()(?:{EPOCH1_NOUN_PATTERN.pattern})",
+    re.IGNORECASE,
+)
+
+
+def src_nouns(text: str) -> tuple[str, ...]:
+    """Return every distinct src census noun in *text*, in first-seen order."""
+    return tuple(dict.fromkeys(match.group(0) for match in SRC_NOUN_PATTERN.finditer(text)))
+
 
 #: The only nouns a ``native-phase`` row may hold.
 NATIVE_PHASE_NOUNS: Final[frozenset[str]] = frozenset({"phase", "phases"})
@@ -156,7 +210,7 @@ SRC_EPOCH1_ALLOWLIST: Final[dict[str, tuple[int, Reason]]] = {
     "src/eawf/platform/profiles/clarity.py": (7, "historic-store-kind"),
     "src/eawf/platform/profiles/data/python.yaml": (3, "historic-store-kind"),
     "src/eawf/platform/profiles/data/quality.yaml": (8, "historic-store-kind"),
-    "src/eawf/platform/profiles/models.py": (38, "historic-store-kind"),
+    "src/eawf/platform/profiles/models.py": (37, "historic-store-kind"),
     "src/eawf/platform/registry/staleness.py": (2, "keep-closure"),
     "src/eawf/platform/render_block.py": (1, "historic-store-kind"),
     "src/eawf/platform/templates/init/__init__.py": (1, "historic-store-kind"),
@@ -205,12 +259,12 @@ SRC_EPOCH1_ALLOWLIST: Final[dict[str, tuple[int, Reason]]] = {
     "src/eawf/runtime/runtimes/metering.py": (14, "historic-store-kind"),
     "src/eawf/runtime/runtimes/opencode/adapter.py": (7, "historic-store-kind"),
     "src/eawf/runtime/runtimes/transcript_items.py": (7, "native-phase"),
-    "src/eawf/runtime/sandbox/policy.py": (22, "keep-closure"),
+    "src/eawf/runtime/sandbox/policy.py": (5, "keep-closure"),
     "src/eawf/runtime/session/store.py": (4, "keep-closure"),
     "src/eawf/runtime/vcs/checkpoint.py": (7, "historic-store-kind"),
     "src/eawf/runtime/worktree/cleanup.py": (28, "keep-closure"),
     "src/eawf/runtime/worktree/merge_back.py": (25, "keep-closure"),
-    "src/eawf/schemas/state.schema.json": (6, "historic-store-kind"),
+    "src/eawf/schemas/state.schema.json": (16, "historic-store-kind"),
     "src/eawf/surfaces/cli/_mutation.py": (9, "historic-store-kind"),
     "src/eawf/surfaces/cli/commands/clone_repo.py": (4, "historic-store-kind"),
     "src/eawf/surfaces/cli/commands/hook.py": (19, "historic-store-kind"),
@@ -246,9 +300,6 @@ SRC_EPOCH1_ALLOWLIST: Final[dict[str, tuple[int, Reason]]] = {
     "src/eawf/surfaces/tui/console/renderers/track.py": (1, "flag-day-retirement"),
     "src/eawf/workflow/__init__.py": (1, "historic-store-kind"),
     "src/eawf/workflow/agent_report/rollup.py": (68, "historic-store-kind"),
-    "src/eawf/workflow/agents/specs/__init__.py": (2, "historic-store-kind"),
-    "src/eawf/workflow/agents/specs/models.py": (133, "historic-store-kind"),
-    "src/eawf/workflow/agents/specs/roles.py": (2, "historic-store-kind"),
     "src/eawf/workflow/audit_dsl/kinds/backlog_resolution.py": (42, "historic-store-kind"),
     "src/eawf/workflow/audit_dsl/kinds/criterion_in_diff.py": (5, "historic-store-kind"),
     "src/eawf/workflow/audit_dsl/kinds/jury_calibrated.py": (10, "historic-store-kind"),
@@ -257,7 +308,6 @@ SRC_EPOCH1_ALLOWLIST: Final[dict[str, tuple[int, Reason]]] = {
     "src/eawf/workflow/audit_dsl/models.py": (17, "historic-store-kind"),
     "src/eawf/workflow/audit_dsl/registry.py": (7, "historic-store-kind"),
     "src/eawf/workflow/audit_dsl/transition_tables.py": (25, "historic-store-kind"),
-    "src/eawf/workflow/dispatch/renderer.py": (13, "historic-store-kind"),
     "src/eawf/workflow/dispatch/retry.py": (2, "historic-store-kind"),
     "src/eawf/workflow/dispatch/routing.py": (11, "historic-store-kind"),
     "src/eawf/workflow/dispatch/seed.py": (1, "historic-store-kind"),
@@ -278,11 +328,11 @@ SRC_EPOCH1_ALLOWLIST: Final[dict[str, tuple[int, Reason]]] = {
     "src/eawf/workflow/skills/bodies/review.py": (3, "retired-key-message"),
     "src/eawf/workflow/skills/bodies/ship.py": (3, "retired-key-message"),
     "src/eawf/workflow/skills/catalog.py": (1, "retired-key-message"),
-    "src/eawf/workflow/skills/census.py": (12, "retired-key-message"),
+    "src/eawf/workflow/skills/census.py": (11, "retired-key-message"),
     "src/eawf/workflow/skills/engine.py": (6, "retired-key-message"),
     "src/eawf/workflow/verify/compile.py": (10, "historic-store-kind"),
     "src/eawf/workflow/verify/models.py": (6, "historic-store-kind"),
-    "src/eawf/workflow/verify/readiness.py": (81, "historic-store-kind"),
+    "src/eawf/workflow/verify/readiness.py": (73, "historic-store-kind"),
 }
 
 
@@ -335,8 +385,8 @@ def unallowed(counts: Mapping[str, int], allowlist: Mapping[str, tuple[int, str]
         allowlist: Path -> (ceiling, reason).
 
     Returns:
-        A sorted description of each unlisted file, file over its ceiling
-        and row whose reason is outside :data:`REASONS`.
+        A sorted description of each unlisted file, file over or under its
+        ceiling and row whose reason is outside :data:`REASONS`.
     """
     problems: list[str] = []
     for path, count in sorted(counts.items()):
@@ -347,6 +397,10 @@ def unallowed(counts: Mapping[str, int], allowlist: Mapping[str, tuple[int, str]
         ceiling, reason = row
         if count > ceiling:
             problems.append(f"{path}: {count} matches over the ceiling {ceiling}")
+        elif count < ceiling:
+            problems.append(
+                f"{path}: {count} matches under the ceiling {ceiling}; lower the ceiling"
+            )
         if reason not in REASONS:
             problems.append(f"{path}: reason {reason!r} is not one of {sorted(REASONS)}")
     return problems
@@ -367,9 +421,7 @@ def stray_native_phase_nouns(root: Path, allowlist: Mapping[str, tuple[int, str]
         if reason != "native-phase" or not (root / path).is_file():
             continue
         text = (root / path).read_text(encoding="utf-8")
-        stray = sorted(
-            {noun for noun in epoch1_nouns(text) if noun.lower() not in NATIVE_PHASE_NOUNS}
-        )
+        stray = sorted({noun for noun in src_nouns(text) if noun.lower() not in NATIVE_PHASE_NOUNS})
         if stray:
             problems.append(f"{path}: native-phase row holds {stray}")
     return problems
@@ -406,7 +458,7 @@ def paths() -> list[str]:
 
 @pytest.fixture(scope="module")
 def counts(paths: list[str]) -> dict[str, int]:
-    return census(REPO, paths, EPOCH1_NOUN_PATTERN)
+    return census(REPO, paths, SRC_NOUN_PATTERN)
 
 
 # ---- the gates ---------------------------------------------------------------
@@ -446,11 +498,17 @@ def test_an_unlisted_file_with_a_match_reds() -> None:
 
 
 @pytest.mark.parametrize(
-    ("count", "expected"), [(2, 0), (3, 0), (4, 1)], ids=["below", "at", "over"]
+    ("count", "expected"),
+    [
+        (2, ["src/eawf/a.py: 2 matches under the ceiling 3; lower the ceiling"]),
+        (3, []),
+        (4, ["src/eawf/a.py: 4 matches over the ceiling 3"]),
+    ],
+    ids=["below", "at", "over"],
 )
-def test_the_ceiling_is_inclusive(count: int, expected: int) -> None:
+def test_the_ceiling_is_exact(count: int, expected: list[str]) -> None:
     allowlist = {"src/eawf/a.py": (3, "native-phase")}
-    assert len(unallowed({"src/eawf/a.py": count}, allowlist)) == expected
+    assert unallowed({"src/eawf/a.py": count}, allowlist) == expected
 
 
 def test_a_reason_outside_the_set_reds() -> None:
@@ -550,8 +608,8 @@ def test_a_native_phase_row_holding_a_lifecycle_noun_reds(tmp_path: Path) -> Non
         "phase-helper",
     ],
 )
-def test_the_noun_pattern_skips_a_homonym(text: str) -> None:
-    assert epoch1_nouns(text) == ()
+def test_the_src_pattern_skips_a_homonym(text: str) -> None:
+    assert src_nouns(text) == ()
 
 
 @pytest.mark.parametrize(
@@ -569,7 +627,7 @@ def test_the_noun_pattern_skips_a_homonym(text: str) -> None:
 def test_a_lifecycle_noun_beside_a_homonym_still_matches(
     text: str, expected: tuple[str, ...]
 ) -> None:
-    assert epoch1_nouns(text) == expected
+    assert src_nouns(text) == expected
 
 
 def test_census_paths_refuses_a_directory_outside_git(tmp_path: Path) -> None:

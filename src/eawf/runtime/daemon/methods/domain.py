@@ -99,6 +99,7 @@ generation's ledger. It is thin: the locked reads and commits are in
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -146,7 +147,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
     TransitionRequest,
     run_transaction,
 )
-from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, dispatch
 
 # Imported for its registration: this module is the entry the daemon loads
 # the Track maintenance verbs through.
@@ -177,6 +178,7 @@ from eawf.runtime.daemon.methods.legacy_retire import (
     retire_legacy_task,
 )
 from eawf.runtime.daemon.methods.milestone_maintenance import cancel_with_cascade
+from eawf.runtime.daemon.methods.run import RUN_CONTROL_REQUEST_METHOD
 from eawf.runtime.daemon.milestone_readmit import readmit_milestone, standing_milestone
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 from eawf.runtime.daemon.record_append import RecordAppendRequest, append_record
@@ -973,6 +975,30 @@ def _bundle_binding(params: LifecycleParams) -> LifecycleParams:
     return params.model_copy(update={"updates": {**params.updates, "accepted_binding": binding}})
 
 
+async def _readmit(
+    ctx: MethodContext, context: Epoch2RootContext, request_params: LifecycleParams
+) -> bool:
+    """Put an accepted Milestone back in the document before it is reopened.
+
+    Args:
+        ctx: Server context, whose bus the restored rows are published on.
+        context: The per-root native context of the addressed tree.
+        request_params: The validated reopen request.
+
+    Returns:
+        ``True`` when a restored row did not reach the projection.
+    """
+    readmitted = await asyncio.to_thread(
+        readmit_milestone,
+        context,
+        urn=request_params.urn,
+        actor=request_params.actor,
+        now=datetime.now(UTC),
+    )
+    published = [publish_projection(ctx.bus, row) for row in readmitted]
+    return not all(published)
+
+
 async def _run_verb(
     ctx: MethodContext,
     params: dict[str, Any],
@@ -1035,19 +1061,13 @@ async def _run_verb(
     if refused is not None:
         logger.info(f"_run_verb refused method={verb.method} code={refused.errors[0].code.value}")
         return refused.model_dump(mode="json")
-    degraded = False
     # A judged subject only: a retry the preflight left unread replays its
     # receipt, and must not pull a since re-accepted record back again.
-    if verb.readmits and revision is not None:
-        readmitted = await asyncio.to_thread(
-            readmit_milestone,
-            context,
-            urn=request_params.urn,
-            actor=request_params.actor,
-            now=datetime.now(UTC),
-        )
-        published = [publish_projection(ctx.bus, row) for row in readmitted]
-        degraded = not all(published)
+    degraded = (
+        await _readmit(ctx, context, request_params)
+        if verb.readmits and revision is not None
+        else False
+    )
     commit = cancel_with_cascade if verb.cascades else run_transaction
     try:
         committed = await asyncio.to_thread(
@@ -1065,9 +1085,45 @@ async def _run_verb(
     if committed.envelope is not None and not publish_projection(ctx.bus, committed.envelope):
         warnings = (PROJECTION_DEGRADED,)
     warnings += await _after_commit(ctx, context, verb, request_params, committed.receipt)
+    for run in committed.stopped_runs:
+        warnings += await _ask_run_cancel(ctx, context, params, request_params, run)
     return accepted_envelope(
         committed.receipt, operation=verb.method, warnings=warnings
     ).model_dump(mode="json")
+
+
+async def _ask_run_cancel(
+    ctx: MethodContext,
+    context: Epoch2RootContext,
+    params: dict[str, Any],
+    request: LifecycleParams,
+    run: QualifiedUrn,
+) -> tuple[str, ...]:
+    """Ask one live Run of a cancelled Task to cancel, as ``eawf run cancel`` asks it.
+
+    The request is sent through the fenced control verb, so it is gated,
+    recorded and published exactly as an operator's own would be. Its
+    identity is derived from the cancel's idempotency key and the Run, so a
+    second ask is answered by the fact the first one left.
+
+    Returns:
+        Nothing when the request was recorded; otherwise the refusal, as a
+        warning, because the cancel it follows is already committed.
+    """
+    seed = f"{context.idempotency_key(request.idempotency_key)}\n{run}"
+    asked = {
+        **{key: value for key, value in params.items() if key == REPO_ROOT_PARAM},
+        "urn": str(run),
+        "control_request_ref": f"CTL-{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:32]}",
+        "control": "cancel",
+        "actor": request.actor,
+    }
+    try:
+        await dispatch(RUN_CONTROL_REQUEST_METHOD, ctx, asked)
+    except DaemonValidationError as refusal:
+        logger.warning(f"_ask_run_cancel refused run={run.entity_key!r} cause={refusal}")
+        return (f"cancel of {run.entity_key} was not asked: {refusal}",)
+    return ()
 
 
 async def _after_commit(
@@ -1188,7 +1244,9 @@ async def _drop_legacy_row(
         revision_before=receipt.revision_before,
         revision_after=receipt.revision_after,
         result=receipt.model_dump(mode="json"),
-        warnings=() if publish_projection(ctx.bus, committed.envelope) else (PROJECTION_DEGRADED,),
+        warnings=(PROJECTION_DEGRADED,)
+        if committed.envelope is not None and not publish_projection(ctx.bus, committed.envelope)
+        else (),
     ).model_dump(mode="json")
 
 

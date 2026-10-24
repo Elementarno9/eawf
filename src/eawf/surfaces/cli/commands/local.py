@@ -12,11 +12,11 @@ Verbs:
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 from typing import Annotated
 
 import typer
 
+from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.platform.local_gc import apply_local_gc, plan_local_gc
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
@@ -39,18 +39,21 @@ def local_gc(
 ) -> None:
     """Remove each ``.ea/local`` entry whose ``.retention`` date has passed."""
     flags: GlobalFlags = ctx.obj
-    repo = (flags.workspace or Path.cwd()).resolve()
+    state_path, _reason = resolve_with_reason(workspace=flags.workspace)
+    repo = state_path.parent.parent.resolve()
     plan = plan_local_gc(repo / ".ea" / "local", today=date.today())
     if not dry_run:
         apply_local_gc(plan)
     expired = [entry.relative_to(repo).as_posix() for entry in plan.expired]
+    held = [entry.relative_to(repo).as_posix() for entry in plan.held]
     unreadable = [entry.relative_to(repo).as_posix() for entry in plan.unreadable]
     verb = "would remove" if dry_run else "removed"
     lines = [f"local gc: {verb} {len(expired)} expired entr{'y' if len(expired) == 1 else 'ies'}"]
     lines += [f"  {path}" for path in expired]
+    lines += [f"  kept {path}: it holds an entry that is unexpired or unreadable" for path in held]
     lines += [f"  kept {path}: its .retention holds no YYYY-MM-DD date" for path in unreadable]
     emit_json_or_text(
-        {"dry_run": dry_run, "expired": expired, "unreadable": unreadable},
+        {"dry_run": dry_run, "expired": expired, "held": held, "unreadable": unreadable},
         "\n".join(lines),
         flags=flags,
     )

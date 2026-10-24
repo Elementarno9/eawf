@@ -41,7 +41,8 @@ formats; bodies that omit the key default to ``"1.0"``.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+import logging
+from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -273,6 +274,13 @@ class JuryAuthorityConfig(BaseModel):
     calibration: JuryCalibration = Field(default_factory=JuryCalibration)
 
 
+logger = logging.getLogger(__name__)
+
+#: ``verify`` fields a profile may still set though nothing reads them: the
+#: epoch-1 iter close they gated is gone.
+_RETIRED_VERIFY_FIELDS: Final = frozenset({"require_iter_audit_accepted"})
+
+
 class VerifyBlock(BaseModel):
     """Profile-fed verify spine configuration.
 
@@ -368,9 +376,6 @@ class VerifyBlock(BaseModel):
             profile keeps the advisory-only ODR behaviour; a profile opts
             in only after its legacy sub-floor criteria have been drained,
             otherwise every iter close would block on the un-drained floor.
-        require_iter_audit_accepted: When ``True``, iter close requires a
-            completed accepted audit row. This gate is tighten-only across
-            profile and repo composition.
         jury_authority: The trust floors a cross-vendor jury must clear to
             earn BLOCKING authority at the close gate (a
             :class:`JuryAuthorityConfig`). Until the jury's validation report
@@ -407,9 +412,28 @@ class VerifyBlock(BaseModel):
     jury_vendors: list[str] = Field(default_factory=lambda: ["claude", "codex", "opencode"])
     odr_floor: float = Field(default=0.80, ge=0.0, le=1.0)
     odr_blocking: bool = False
-    require_iter_audit_accepted: bool = False
     jury_authority: JuryAuthorityConfig = Field(default_factory=JuryAuthorityConfig)
     checkpoint: CheckpointBlock = Field(default_factory=CheckpointBlock)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_fields(cls, data: object) -> object:
+        """Drop each retired field a profile still sets, warning once per load.
+
+        The iter close the field gated is gone, so a profile that sets it
+        loads with the field ignored instead of failing on an unknown key.
+
+        Args:
+            data: The raw ``verify`` block as the loader read it.
+
+        Returns:
+            *data* without the retired fields.
+        """
+        if not isinstance(data, dict) or not _RETIRED_VERIFY_FIELDS & data.keys():
+            return data
+        for field in sorted(_RETIRED_VERIFY_FIELDS & data.keys()):
+            logger.warning(f"_drop_retired_fields status=ignored field=verify.{field} retired")
+        return {key: value for key, value in data.items() if key not in _RETIRED_VERIFY_FIELDS}
 
 
 class OutputBlock(BaseModel):
@@ -730,8 +754,7 @@ class ProfileCertification(BaseModel):
     Attributes:
         digest: ``sha256:<hex>`` of the body's canonical content without
             this block, as :func:`eawf.platform.profiles.certification.profile_digest`
-            computes it. It certifies the body only while the repository's
-            committed ``profiles.certified`` ledger pins the same digest.
+            computes it.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -894,30 +917,3 @@ class ComposedProfile(BaseModel):
             else:
                 reference.append(block)
         return tier0, reference
-
-    def role_tier_blocks(self) -> dict[str, str]:
-        """Return the role-tier dispatch blocks as an ``agent_role -> body`` map.
-
-        Walks :attr:`render_blocks` in source order, keeping only role-tier
-        blocks (those targeting
-        :data:`~eawf.platform.render_block.DISPATCH_SYSTEM_PROMPT_TARGET`), and
-        maps each block's :attr:`RenderBlock.agent_role` to its
-        :attr:`RenderBlock.body_text`. The dispatch renderer injects the
-        matching role's body into the system prompt for waves of that role; a
-        role absent from the map is a true no-op (the static
-        ``RoleSpec.system_prompt`` renders unchanged).
-
-        When two role-tier blocks bind the same role, the later one wins (the
-        same last-declared-wins rule composition already applied per
-        ``RenderBlock.id``).
-
-        Returns:
-            A mapping from ``agent_role`` value to the block body to inject.
-            Empty when the composed profile declares no role-tier block.
-        """
-        out: dict[str, str] = {}
-        for block in self.render_blocks:
-            if not block.is_role_tier or block.agent_role is None:
-                continue
-            out[block.agent_role] = block.body_text
-        return out

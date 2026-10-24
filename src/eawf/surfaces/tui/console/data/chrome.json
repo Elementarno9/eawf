@@ -850,14 +850,6 @@
      "60–3600"
     ]
    ],
-   "dispatch": [
-    [
-     "role_tier_token_cap",
-     "i",
-     2400,
-     "400–20000"
-    ]
-   ],
    "estimation": [
     [
      "eu_minutes",
@@ -1047,9 +1039,6 @@
    "daemon.proxy_enabled": [
     "route runtime calls through the daemon rather than per process"
    ],
-   "dispatch.role_tier_token_cap": [
-    "the token ceiling one role-tier block may weigh before dispatch refuses"
-   ],
    "estimation.eu_minutes": [
     "how many minutes one estimation unit is worth"
    ],
@@ -1132,7 +1121,6 @@
    [
     "EXECUTION",
     [
-     "dispatch",
      "flow",
      "research",
      "runtime",
@@ -1174,10 +1162,6 @@
   ],
   "RAIL": [
    {
-    "cat": "EXECUTION"
-   },
-   {
-    "section": "dispatch",
     "cat": "EXECUTION"
    },
    {
@@ -1246,10 +1230,6 @@
   ],
   "SECTION_ROWS": [
    {
-    "section": "dispatch",
-    "cat": "EXECUTION"
-   },
-   {
     "section": "flow",
     "cat": "EXECUTION"
    },
@@ -1299,7 +1279,6 @@
    }
   ],
   "sectionOrder": [
-   "dispatch",
    "flow",
    "research",
    "runtime",
@@ -1315,7 +1294,6 @@
   ],
   "names": [
    "daemon",
-   "dispatch",
    "estimation",
    "flow",
    "preferences",

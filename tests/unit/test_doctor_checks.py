@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from eawf.observability.doctor import checks
 from eawf.surfaces.cli.errors import UserError
@@ -112,6 +113,29 @@ def test_check_config_resolves_unknown_profile_warns(
     assert "bogus" in (result.detail or "")
 
 
+def test_check_config_resolves_warns_on_a_profile_with_a_retired_cadence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from importlib.resources import files
+
+    from eawf.platform.profiles import discovery
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    discovery._clear_cache_for_tests()
+    builtin = files("eawf.platform.profiles.data").joinpath("python.yaml").read_text("utf-8")
+    assert "cadence: every-task" in builtin
+    overlay = tmp_path / ".ea" / "profiles" / "python.yaml"
+    overlay.parent.mkdir(parents=True)
+    overlay.write_text(builtin.replace("cadence: every-task", "cadence: every-wave"), "utf-8")
+    _write_repo_layer(tmp_path, {"profiles": {"enabled": ["core", "python"]}})
+
+    result = checks.check_config_resolves(workspace=tmp_path)
+
+    assert result.status == "warn"
+    assert "python" in (result.detail or "")
+    assert "'every-wave' is retired; write 'every-task'" in (result.detail or "")
+
+
 def test_check_reserved_config_keys_without_workspace_is_ok(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -138,70 +162,87 @@ def test_check_reserved_config_keys_without_explicit_value_is_ok(
     assert "no reserved config keys explicitly set" in (result.detail or "")
 
 
-@pytest.mark.parametrize(
-    ("key", "config", "value"),
-    [
-        ("audit.fix_safe", {"audit": {"fix_safe": True}}, True),
-        ("flow.auto_accept.audit", {"flow": {"auto_accept": {"audit": True}}}, True),
-        ("flow.auto_accept.polish", {"flow": {"auto_accept": {"polish": True}}}, True),
-        ("flow.auto_accept.prep", {"flow": {"auto_accept": {"prep": True}}}, True),
-        ("flow.auto_accept.research", {"flow": {"auto_accept": {"research": True}}}, True),
-        ("flow.auto_accept.review", {"flow": {"auto_accept": {"review": True}}}, True),
-        ("flow.auto_accept.ship", {"flow": {"auto_accept": {"ship": True}}}, True),
-    ],
-)
-def test_check_reserved_config_keys_fails_unsafe_deprecated_automation_claims(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    key: str,
-    config: dict[str, object],
-    value: object,
-) -> None:
+def _sandbox_global_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "eawf.observability.doctor.checks.merge_config",
-        lambda **_: (config, {key: "repo"}),
+        "eawf.kernel.config.layered.global_config_path", lambda: tmp_path / "global.yaml"
     )
+
+
+def _write_repo_layer(repo: Path, body: dict[str, object]) -> None:
+    layer = repo / ".ea" / "config.yaml"
+    layer.parent.mkdir(parents=True, exist_ok=True)
+    layer.write_text(yaml.safe_dump(body), encoding="utf-8")
+
+
+def test_check_reserved_config_keys_fails_an_unsafe_reserved_automation_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _sandbox_global_config(tmp_path, monkeypatch)
+    _write_repo_layer(tmp_path, {"audit": {"fix_safe": True}})
 
     result = checks.check_reserved_config_keys(workspace=tmp_path)
 
     assert result.status == "fail"
-    assert key in (result.detail or "")
-    assert repr(value) in (result.detail or "")
+    assert "audit.fix_safe=True (repo)" in (result.detail or "")
     assert "have no effect" in (result.detail or "")
 
 
-def test_check_reserved_config_keys_names_a_retired_repair_cycle_value(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("stage", ["audit", "polish", "prep", "research", "review", "ship"])
+def test_check_reserved_config_keys_warns_on_a_retired_automation_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str
 ) -> None:
-    monkeypatch.setattr(
-        "eawf.observability.doctor.checks.merge_config",
-        lambda **_: (
-            {"flow": {"max_repair_cycles": 3}},
-            {"flow.max_repair_cycles": "repo"},
-        ),
-    )
+    _sandbox_global_config(tmp_path, monkeypatch)
+    _write_repo_layer(tmp_path, {"flow": {"auto_accept": {stage: True}}})
 
     result = checks.check_reserved_config_keys(workspace=tmp_path)
 
     assert result.status == "warn"
-    assert "flow.max_repair_cycles=3 (repo)" in (result.detail or "")
+    assert f"flow.auto_accept.{stage}=True (repo layer" in (result.detail or "")
+    assert f"`eawf config unset flow.auto_accept.{stage} --scope repo`" in (result.detail or "")
+
+
+@pytest.mark.parametrize(
+    ("relative", "scope", "key"),
+    [
+        (".ea/config.yaml", "repo", "flow.max_repair_cycles"),
+        (".ea/config.yaml", "repo", "planning.max_parallel_waves"),
+        (".ea/local/config.yaml", "local", "planning.max_parallel_waves"),
+    ],
+)
+def test_check_reserved_config_keys_names_a_retired_leaf_a_layer_states(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, relative: str, scope: str, key: str
+) -> None:
+    _sandbox_global_config(tmp_path, monkeypatch)
+    layer = tmp_path / relative
+    layer.parent.mkdir(parents=True, exist_ok=True)
+    section, leaf = key.split(".")
+    layer.write_text(f"{section}:\n  {leaf}: 3\n", encoding="utf-8")
+
+    result = checks.check_reserved_config_keys(workspace=tmp_path)
+
+    assert result.status == "warn"
+    detail = result.detail or ""
+    assert f"{key}=3" in detail
+    assert f"({scope} layer, {layer})" in detail
+    assert f"`eawf config unset {key} --scope {scope}`" in detail
+
+
+def test_check_reserved_config_keys_ignores_a_layer_without_retired_leaves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _sandbox_global_config(tmp_path, monkeypatch)
+    (tmp_path / ".ea").mkdir()
+    (tmp_path / ".ea" / "config.yaml").write_text("planning:\n  {}\n", encoding="utf-8")
+
+    assert checks.check_reserved_config_keys(workspace=tmp_path).status == "ok"
 
 
 def test_check_reserved_config_keys_reports_all_unsafe_repo_values(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        "eawf.observability.doctor.checks.merge_config",
-        lambda **_: (
-            {
-                "audit": {"fix_safe": True},
-                "flow": {"auto_accept": {"audit": True}},
-            },
-            {
-                "audit.fix_safe": "repo",
-                "flow.auto_accept.audit": "repo",
-            },
-        ),
+    _sandbox_global_config(tmp_path, monkeypatch)
+    _write_repo_layer(
+        tmp_path, {"audit": {"fix_safe": True}, "flow": {"auto_accept": {"audit": True}}}
     )
 
     result = checks.check_reserved_config_keys(workspace=tmp_path)

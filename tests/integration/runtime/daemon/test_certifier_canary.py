@@ -376,6 +376,32 @@ def test_the_walk_journals_probe_canary_certify_in_order(tmp_path: Path) -> None
     assert [stage.stage for stage in row.stages] == ["canary", "certify"]
 
 
+def test_the_walk_keeps_the_driver_certification_its_certify_stage_wrote(
+    tmp_path: Path,
+) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+
+    row = walk(ctx, canary, CanaryLauncher(ctx, canary))
+
+    (stored,) = [
+        item
+        for item in read_machine_certifications(canary.root / ".ea" / "state.json")
+        if item.certification is not None
+    ]
+    assert stored == row
+    certification = row.certification
+    assert certification is not None
+    assert certification.manifest_ref == f"driver://claude-code/{CLAUDE_VERSION}"
+    assert certification.overall_status == "verified"
+    assert certification.capabilities == row.capabilities
+    assert certification.stage_history[-1] == row.stages[-1]
+    journaled = runner_for(canary.root / ".ea" / "state.json").journal.records(
+        tuple_digest=row.tuple_digest
+    )
+    assert certification.stage_history == tuple(journaled)
+
+
 def test_the_canary_is_a_dispatched_run_under_the_task_left_planned(tmp_path: Path) -> None:
     canary = make_tree(tmp_path)
     ctx = method_ctx(tmp_path / "runtime")

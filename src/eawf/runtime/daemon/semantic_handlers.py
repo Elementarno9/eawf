@@ -325,6 +325,9 @@ class HandlerInputs:
         calls_so_far: How many receipts the Run already holds.
         held: The receipts the Run already holds, in ledger order.
         now: The instant the answer is stamped at.
+        launched_at: When the worker answering now was launched or
+            resumed, or ``None`` for a Run never dispatched natively. An
+            answer filed before it went to a worker that may be gone.
         lease: The Run's active workspace lease, already resolved by the
             gateway's own lease check. ``None`` for a tool the lease check
             does not gate.
@@ -337,6 +340,7 @@ class HandlerInputs:
     calls_so_far: int
     held: tuple[SemanticCallReceipt, ...]
     now: datetime
+    launched_at: datetime | None
     lease: WorkLease | None = None
 
 
@@ -661,12 +665,15 @@ def _repo_read(inputs: HandlerInputs) -> SemanticToolOutput:
     source = "".join(decoded)
     text = "\n".join(shown) if source.strip() else ""
     digest = f"sha256:{hashlib.sha256(text.encode('utf-8')).hexdigest()}"
+    truncated = cut or more or consumed < len(window)
     if not payload.reread:
-        repeat = _earlier_read(inputs.held, content_digest=digest, byte_count=consumed)
+        repeat = _earlier_read(inputs, content_digest=digest, byte_count=consumed)
         if repeat is not None:
             call_id, earlier = repeat
             logger.info(f"_repo_read run={inputs.run.key!r} same_as_call={call_id}")
-            return earlier.model_copy(update={"text": "", "same_as_call": call_id})
+            return earlier.model_copy(
+                update={"text": "", "same_as_call": call_id, "truncated": truncated}
+            )
     ref = file_content(inputs.session, run_ref=inputs.call.run_ref, text=source, now=inputs.now)
     logger.info(f"_repo_read run={inputs.run.key!r} bytes={consumed} lines={len(shown)}")
     return RepoReadOutput(
@@ -674,32 +681,44 @@ def _repo_read(inputs: HandlerInputs) -> SemanticToolOutput:
         content_ref=ref,
         content_digest=digest,
         byte_count=consumed,
-        truncated=cut or more or consumed < len(window),
+        truncated=truncated,
         text=text,
     )
 
 
 def _earlier_read(
-    held: tuple[SemanticCallReceipt, ...], *, content_digest: str, byte_count: int
+    inputs: HandlerInputs, *, content_digest: str, byte_count: int
 ) -> tuple[str, RepoReadOutput] | None:
-    """Return the latest succeeded read of *held* that returned this same text.
+    """Return the latest read of this launch that returned this same window's text.
 
-    Only a read that carried its text is named, so a worker following the
-    reference always lands on the text, never on another reference.
+    The earlier call must have named the same handle, path and window,
+    with or without ``reread``, which its payload digest covers, and must
+    have been answered since the worker was launched, which alone may hold
+    the text. Only a read that carried its text is named, so a worker
+    following the reference always lands on the text, never on another
+    reference; the ledger keeps such a read naming its own call.
 
     Args:
-        held: The Run's receipts, in ledger order.
+        inputs: The current call and the Run's receipts, in ledger order.
         content_digest: The digest of the text the current read would return.
         byte_count: How many file bytes that text covers.
 
     Returns:
-        That read's call id and output, or ``None`` when the Run holds none.
+        That read's call id and output, or ``None`` when the launch holds none.
     """
-    for receipt in reversed(held):
+    payload = inputs.call.payload
+    windows = {
+        canonical_digest(payload.model_copy(update={"reread": reread}).model_dump(mode="json"))
+        for reread in (False, True)
+    }
+    for receipt in reversed(inputs.held):
+        if inputs.launched_at is not None and receipt.recorded_at < inputs.launched_at:
+            break
         output = receipt.result.bounded_output
         if (
             isinstance(output, RepoReadOutput)
-            and output.same_as_call is None
+            and output.same_as_call in (None, receipt.call_id)
+            and receipt.payload_digest in windows
             and output.content_digest == content_digest
             and output.byte_count == byte_count
         ):

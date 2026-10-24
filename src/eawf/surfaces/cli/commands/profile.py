@@ -150,8 +150,8 @@ def profile_validate_cmd(
 ) -> None:
     """Validate a profile (or every profile) against the layered loader.
 
-    The payload's ``digests`` names the digest each enriched profile is
-    certified as managed under once it is pinned in ``profiles.certified``.
+    The payload's ``digests`` names the content digest each enriched profile
+    records in its ``certification`` block.
     """
     from eawf.platform.profiles import discovery as profiles_discovery
     from eawf.platform.profiles import trust as profiles_trust

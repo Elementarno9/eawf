@@ -238,7 +238,7 @@ def test_doctor_fix_yes_applies_without_prompt(
     assert "Apply this repair plan?" not in result.output
 
 
-def test_doctor_real_yaml_normalizes_legacy_auto_accept_in_memory(
+def test_doctor_real_yaml_names_a_retired_auto_accept_leaf_and_plans_its_repair(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
@@ -258,12 +258,13 @@ def test_doctor_real_yaml_normalizes_legacy_auto_accept_in_memory(
     assert result.exit_code == 0, result.output
     body = json.loads(result.output)
     finding = next(check for check in body["checks"] if check["name"] == "reserved_config_key")
-    assert finding["status"] == "ok"
+    assert finding["status"] == "warn"
+    assert "`eawf config unset flow.auto_accept.prep --scope repo`" in finding["detail"]
     assert body["repair"]["action_count"] >= 1
     assert body["repair"]["preview_command"].endswith("doctor --fix")
 
 
-def test_doctor_real_yaml_leaves_a_retired_repair_cycle_value_to_the_repair_plan(
+def test_doctor_real_yaml_names_a_retired_repair_cycle_value(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
@@ -279,7 +280,8 @@ def test_doctor_real_yaml_leaves_a_retired_repair_cycle_value_to_the_repair_plan
     assert result.exit_code == 0, result.output
     body = json.loads(result.output)
     finding = next(check for check in body["checks"] if check["name"] == "reserved_config_key")
-    assert finding["status"] == "ok"
+    assert finding["status"] == "warn"
+    assert "flow.max_repair_cycles=2 (repo layer" in finding["detail"]
     assert "unsupported" not in finding["detail"]
 
 

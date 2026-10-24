@@ -366,6 +366,7 @@ Tag releases and drive the release train's checkpoint records.
 | `approve` | Approve a candidate against a readiness sweep, and record it. |
 | `bind-regime` | Bind a Milestone or Batch to the steady, fast or experimental regime. |
 | `burn` | Burn the version: record the spent checkpoint as partially released. |
+| `canary-export` | Export the stored certifications of the installed runtimes for one checkpoint. |
 | `cancel` | Abandon a checkpoint that never touched a registry, or refuse. |
 | `candidate` | Freeze the manifest from the receipts and record the CANDIDATE. |
 | `changelog` | Mine the current ``CHANGELOG.md`` unreleased section. |

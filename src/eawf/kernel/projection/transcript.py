@@ -941,19 +941,30 @@ class _Turn:
 _NO_TURN: Final = _Turn(seconds=None, input_tokens=None, output_tokens=None)
 
 
-def _spent(reading: UsagePayload, before: UsagePayload | None, counter: str) -> int | None:
-    """Return one counter of what a reading adds over the reading before it.
+def _spent(
+    readings: Sequence[UsagePayload], before: UsagePayload | None, counter: str
+) -> int | None:
+    """Return one counter of what a turn's readings add over the reading before them.
 
-    A running total is less the one before it; a reading that is already a delta, or
-    one with no running total before it, stands as it is.
+    Each reading adds over the last one that reported the counter: a running total
+    adds what it gained over the running total before it, and a reading that is
+    already a delta, or one with no running total before it, adds itself whole. A
+    running total below the one before it restarted, so it opens a new series and
+    adds itself whole rather than a negative amount.
     """
-    value: int | None = getattr(reading, counter)
-    prior: int | None = None
-    if before is not None and reading.is_cumulative and before.is_cumulative:
-        prior = getattr(before, counter)
-    if value is None or prior is None:
-        return value
-    return value - prior
+    total: int | None = None
+    prior = before
+    for reading in readings:
+        value: int | None = getattr(reading, counter)
+        if value is None:
+            continue
+        last: int | None = None
+        if prior is not None and reading.is_cumulative and prior.is_cumulative:
+            last = getattr(prior, counter)
+        gained = value if last is None or value < last else value - last
+        total = gained if total is None else total + gained
+        prior = reading
+    return total
 
 
 def _turns(
@@ -965,8 +976,8 @@ def _turns(
     latest tool result handed back to it, or at the Run's first line before any. The
     turn is drawn on the block after the reading, which is the work the turn produced;
     a later line of a tool call and a usage reading open no block. Readings with no
-    block between them close one turn, so its tokens run from the reading the previous
-    turn was drawn with to the latest.
+    block between them close one turn, so its tokens are what they add, each over the
+    one before it, from the reading the previous turn was drawn with.
 
     Args:
         events: The Run's live lines in stream order.
@@ -982,23 +993,23 @@ def _turns(
         return turns
     since = events[0]
     drawn: UsagePayload | None = None
-    closed: tuple[int, UsagePayload] | None = None
+    closed: tuple[int, list[UsagePayload]] | None = None
     for event in events:
         payload = event.payload
         if isinstance(payload, UsagePayload):
-            closed = (_elapsed(since, event), payload)
+            closed = (_elapsed(since, event), [*(closed[1] if closed else ()), payload])
             continue
         folded = isinstance(payload, ToolPayload | ProviderToolPayload) and (
             calls[payload.call_ref][0] is not event
         )
         if closed is not None and not folded:
-            seconds, reading = closed
+            seconds, readings = closed
             turns[event.event_ref] = _Turn(
                 seconds=seconds,
-                input_tokens=_spent(reading, drawn, "input_tokens"),
-                output_tokens=_spent(reading, drawn, "output_tokens"),
+                input_tokens=_spent(readings, drawn, "input_tokens"),
+                output_tokens=_spent(readings, drawn, "output_tokens"),
             )
-            drawn, closed = reading, None
+            drawn, closed = readings[-1], None
         if _is_tool_result(event):
             since = event
     return turns

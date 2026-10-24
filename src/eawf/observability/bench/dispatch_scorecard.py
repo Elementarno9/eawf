@@ -155,14 +155,18 @@ class DispatchScorecard(_Frozen):
     Attributes:
         run_key: The Run scored.
         status: The Run's recorded status.
-        turns: How many usage readings the Run reported, one per model turn.
+        turns: How many model calls the Run's usage readings record. A
+            running total that raises only output is a later copy of the
+            same call, or the turn's result, so it adds no turn.
         read_truncation_rate: The share of inline repository reads whose
             window was cut; ``0`` for a Run that read nothing.
         identical_reread_rate: The share of those reads that repeat an
             earlier read's content digest and byte count.
-        billable_tokens: Input, output and cache-read tokens of the folded
-            readings, or ``None`` when the Run reported no token count.
-        cache_read_tokens: The cache-read slice of ``billable_tokens``.
+        total_tokens: Input, output and cache-read tokens of the folded
+            readings, each counted one for one, or ``None`` when the Run
+            reported no token count. The in-flight cap meters cache reads at
+            the governor's weight instead, so this is not the capped figure.
+        cache_read_tokens: The cache-read slice of ``total_tokens``.
         first_patch_seconds: Seconds from the Run's start to its first
             succeeded ``workspace_apply_patch``; ``None`` without one.
         wall_seconds: Seconds from the Run's start to its end; ``None``
@@ -174,7 +178,7 @@ class DispatchScorecard(_Frozen):
     turns: _NonNegative
     read_truncation_rate: _Rate
     identical_reread_rate: _Rate
-    billable_tokens: _NonNegative | None
+    total_tokens: _NonNegative | None
     cache_read_tokens: _NonNegative | None
     first_patch_seconds: _Seconds | None
     wall_seconds: _Seconds | None
@@ -199,7 +203,7 @@ class DispatchMetric(StrEnum):
     TURNS = "turns"
     READ_TRUNCATION_RATE = "read_truncation_rate"
     IDENTICAL_REREAD_RATE = "identical_reread_rate"
-    BILLABLE_TOKENS = "billable_tokens"
+    TOTAL_TOKENS = "total_tokens"
     FIRST_PATCH_SECONDS = "first_patch_seconds"
     WALL_SECONDS = "wall_seconds"
 
@@ -208,10 +212,10 @@ class TierThresholds(_Frozen):
     """The inclusive limits of one tier; a Run must also have COMPLETED.
 
     Attributes:
-        max_turns: Most usage readings.
+        max_turns: Most model calls.
         max_read_truncation_rate: Largest share of cut read windows.
         max_identical_reread_rate: Largest share of identical re-reads.
-        max_billable_tokens: Most billable tokens.
+        max_total_tokens: Most total tokens, cache reads counted one for one.
         max_first_patch_seconds: Longest time to the first succeeded patch.
         max_wall_seconds: Longest wall clock, or ``None`` for no limit.
     """
@@ -219,7 +223,7 @@ class TierThresholds(_Frozen):
     max_turns: _NonNegative
     max_read_truncation_rate: _Rate
     max_identical_reread_rate: _Rate
-    max_billable_tokens: _NonNegative
+    max_total_tokens: _NonNegative
     max_first_patch_seconds: _Seconds
     max_wall_seconds: _Seconds | None
 
@@ -230,7 +234,7 @@ TIER_THRESHOLDS: Final[Mapping[DispatchTier, TierThresholds]] = MappingProxyType
             max_turns=25,
             max_read_truncation_rate=Decimal("0.20"),
             max_identical_reread_rate=Decimal("0.05"),
-            max_billable_tokens=500_000,
+            max_total_tokens=500_000,
             max_first_patch_seconds=Decimal(300),
             max_wall_seconds=Decimal(600),
         ),
@@ -238,7 +242,7 @@ TIER_THRESHOLDS: Final[Mapping[DispatchTier, TierThresholds]] = MappingProxyType
             max_turns=60,
             max_read_truncation_rate=Decimal("0.30"),
             max_identical_reread_rate=Decimal("0.10"),
-            max_billable_tokens=2_000_000,
+            max_total_tokens=2_000_000,
             max_first_patch_seconds=Decimal(900),
             max_wall_seconds=None,
         ),
@@ -318,10 +322,10 @@ def score_dispatch(extract: DispatchExtract) -> DispatchScorecard:
     card = DispatchScorecard(
         run_key=extract.run_key,
         status=extract.status,
-        turns=len(extract.usage),
+        turns=_turns(extract.usage),
         read_truncation_rate=_rate(sum(bool(call.truncated) for call in reads), len(reads)),
         identical_reread_rate=_rate(rereads, len(reads)),
-        billable_tokens=totals.tokens,
+        total_tokens=totals.tokens,
         cache_read_tokens=totals.cache_tokens,
         first_patch_seconds=_seconds(extract.started_at, min(patches, default=None)),
         wall_seconds=_seconds(extract.started_at, extract.ended_at),
@@ -331,6 +335,25 @@ def score_dispatch(extract: DispatchExtract) -> DispatchScorecard:
         f"rereads={rereads} patches={len(patches)}"
     )
     return card
+
+
+def _turns(usage: Sequence[UsagePayload]) -> int:
+    """Return how many model calls *usage* records, in ledger order.
+
+    A delta reading is one call. A running total is a new call only when it
+    raises input or cache-read tokens, because every call bills its prompt,
+    while a later copy of a call and the turn's result raise only output.
+    """
+    turns = 0
+    input_tokens = cache_tokens = 0
+    for reading in usage:
+        if not reading.is_cumulative:
+            turns += 1
+            continue
+        seen_input, seen_cache = reading.input_tokens or 0, reading.cache_tokens or 0
+        turns += seen_input > input_tokens or seen_cache > cache_tokens
+        input_tokens, cache_tokens = max(input_tokens, seen_input), max(cache_tokens, seen_cache)
+    return turns
 
 
 def check_scorecard(scorecard: DispatchScorecard, tier: DispatchTier) -> DispatchCheck:
@@ -362,7 +385,7 @@ def check_scorecard(scorecard: DispatchScorecard, tier: DispatchTier) -> Dispatc
             scorecard.identical_reread_rate,
             limits.max_identical_reread_rate,
         ),
-        (DispatchMetric.BILLABLE_TOKENS, scorecard.billable_tokens, limits.max_billable_tokens),
+        (DispatchMetric.TOTAL_TOKENS, scorecard.total_tokens, limits.max_total_tokens),
         (
             DispatchMetric.FIRST_PATCH_SECONDS,
             scorecard.first_patch_seconds,

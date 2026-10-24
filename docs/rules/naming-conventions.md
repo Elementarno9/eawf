@@ -1,6 +1,6 @@
 <!-- Generated from the eawf profile render block `naming-conventions`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=naming-conventions version=1.6 hash=254e4fa8b605f02e -->
+<!-- BEGIN EAWF:managed id=naming-conventions version=1.7 hash=ab4d4c265d949e5a -->
 # `naming-conventions`
 
 Every cross-cutting concept has exactly one canonical name; rename an outlier to match the dominant form before merging instead of adding an adapter shim.
@@ -9,11 +9,11 @@ Every cross-cutting concept has exactly one canonical name; rename an outlier to
 
 To prevent drift across state models, envelopes, parameters, and log keys, every cross-cutting concept has exactly one canonical name. Outliers MUST be renamed to match the dominant form before merging, not papered over with adapter shims.
 
-**Agent role identifier** — ``agent_role`` (never ``role`` alone on a run-contract / SubagentSpec field). Applies to the compiled run contract and its capsule (:mod:`eawf.kernel.runtime.compiled`, :mod:`eawf.kernel.runtime.capsule`), ``RoleSpec.role`` (the inner enum keeps the bare name because ``RoleSpec`` already namespaces it), and dispatch envelopes. The bare ``role`` remains valid inside ``RoleSpec`` because the surrounding type disambiguates.
+**Agent role identifier** — ``agent_role`` (never ``role`` alone on a run-contract field). Applies to the compiled run contract and its capsule (:mod:`eawf.kernel.runtime.compiled`, :mod:`eawf.kernel.runtime.capsule`), ``RoleSpec.role`` (the inner enum keeps the bare name because ``RoleSpec`` already namespaces it), and dispatch envelopes. The bare ``role`` remains valid inside ``RoleSpec`` because the surrounding type disambiguates.
 
 **Effort bucket parameter** — ``effort_bucket`` (never ``size`` or ``effort_size``). Applies to planner output, telemetry rollups, and EU-projection tables. Allowed values are the closed StrEnum ``XS|S|M|L|XL``.
 
-**Evidence kind identifier** — ``evidence_kind`` (never ``kind`` alone on an EvidenceRecord field, and never ``evidence_type``). Applies to :class:`~eawf.kernel.state.models.EvidenceRecord.evidence_kind`, JSON keys, CLI flags (``--evidence-kind``), and gate-pack lookups. Bare ``kind`` remains valid on store envelopes where ``StoreKind`` already disambiguates.
+**Evidence kind identifier** — ``evidence_kind`` (never ``kind`` alone on an EvidenceRecord field, and never ``evidence_type``). Applies to :attr:`~eawf.kernel.store.kinds.evidence.EvidenceRecord.evidence_kind`, JSON keys, CLI flags (``--evidence-kind``), and gate-pack lookups. Bare ``kind`` remains valid on store envelopes where ``StoreKind`` already disambiguates.
 
 **State scope identifier** — ``scope_id`` (never bare ``scope``). Applies to Pydantic field names on ``State`` models (e.g. ``PluginInstall``), :class:`~eawf.surfaces.render.envelope.EnvelopeHeader`, function kwargs (e.g. ``add_artifact(scope_id=...)``, ``artifact_urn(scope_id, ...)``), JSON keys on the wire, and ``state.json`` field names. Bare ``scope`` is reserved for CLI argument names (``--scope``) and skill-context attributes (``SkillContext.scope``) where the caller maps onto the URN.
 

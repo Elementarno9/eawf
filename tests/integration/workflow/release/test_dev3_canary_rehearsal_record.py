@@ -1138,6 +1138,7 @@ def walked(tmp_path_factory: pytest.TempPathFactory) -> Iterator[CanaryWalk]:
         export = evidence_path(recording)
         evidence = json.loads(export.read_text(encoding="utf-8"))
         export.write_text(_dump(evidence_with(evidence, walk)), encoding="utf-8")
+        walk_path(recording).parent.mkdir(parents=True, exist_ok=True)
         walk_path(recording).write_text(_dump(walk_record(walk)), encoding="utf-8")
     yield walk
 

@@ -99,7 +99,7 @@ render_blocks:
 
   - id: naming-conventions
     target: AGENTS.md
-    version: "1.6"
+    version: "1.7"
     placement: reference
     summary: "Every cross-cutting concept has exactly one canonical name; rename an outlier to match the dominant form before merging instead of adding an adapter shim."
     body_template: |
@@ -107,11 +107,11 @@ render_blocks:
 
       To prevent drift across state models, envelopes, parameters, and log keys, every cross-cutting concept has exactly one canonical name. Outliers MUST be renamed to match the dominant form before merging, not papered over with adapter shims.
 
-      **Agent role identifier** — ``agent_role`` (never ``role`` alone on a run-contract / SubagentSpec field). Applies to the compiled run contract and its capsule (:mod:`eawf.kernel.runtime.compiled`, :mod:`eawf.kernel.runtime.capsule`), ``RoleSpec.role`` (the inner enum keeps the bare name because ``RoleSpec`` already namespaces it), and dispatch envelopes. The bare ``role`` remains valid inside ``RoleSpec`` because the surrounding type disambiguates.
+      **Agent role identifier** — ``agent_role`` (never ``role`` alone on a run-contract field). Applies to the compiled run contract and its capsule (:mod:`eawf.kernel.runtime.compiled`, :mod:`eawf.kernel.runtime.capsule`), ``RoleSpec.role`` (the inner enum keeps the bare name because ``RoleSpec`` already namespaces it), and dispatch envelopes. The bare ``role`` remains valid inside ``RoleSpec`` because the surrounding type disambiguates.
 
       **Effort bucket parameter** — ``effort_bucket`` (never ``size`` or ``effort_size``). Applies to planner output, telemetry rollups, and EU-projection tables. Allowed values are the closed StrEnum ``XS|S|M|L|XL``.
 
-      **Evidence kind identifier** — ``evidence_kind`` (never ``kind`` alone on an EvidenceRecord field, and never ``evidence_type``). Applies to :class:`~eawf.kernel.state.models.EvidenceRecord.evidence_kind`, JSON keys, CLI flags (``--evidence-kind``), and gate-pack lookups. Bare ``kind`` remains valid on store envelopes where ``StoreKind`` already disambiguates.
+      **Evidence kind identifier** — ``evidence_kind`` (never ``kind`` alone on an EvidenceRecord field, and never ``evidence_type``). Applies to :attr:`~eawf.kernel.store.kinds.evidence.EvidenceRecord.evidence_kind`, JSON keys, CLI flags (``--evidence-kind``), and gate-pack lookups. Bare ``kind`` remains valid on store envelopes where ``StoreKind`` already disambiguates.
 
       **State scope identifier** — ``scope_id`` (never bare ``scope``). Applies to Pydantic field names on ``State`` models (e.g. ``PluginInstall``), :class:`~eawf.surfaces.render.envelope.EnvelopeHeader`, function kwargs (e.g. ``add_artifact(scope_id=...)``, ``artifact_urn(scope_id, ...)``), JSON keys on the wire, and ``state.json`` field names. Bare ``scope`` is reserved for CLI argument names (``--scope``) and skill-context attributes (``SkillContext.scope``) where the caller maps onto the URN.
 
@@ -246,7 +246,7 @@ render_blocks:
 
   - id: artifact-chassis
     target: AGENTS.md
-    version: "1.3"
+    version: "1.4"
     placement: reference
     summary: "Markdown promoted out of ``.ea/local/`` uses the renderer-owned Summary / References / Provenance / Scrub chassis, with typed citations and no absolute paths."
     body_template: |
@@ -256,7 +256,7 @@ render_blocks:
 
       Citations use dense ``[N]`` markers backed by typed ``Citation`` rows. References stay repo-relative, external URL, or Eawf URN. Absolute local paths, host-local URLs, and PII must fail validation before promotion or PR text ships.
 
-      **IntentBrief + NarrativeBundle.** ``/research`` outputs a typed :class:`~eawf.kernel.spec.intent.IntentBrief` whose claims carry ``evidence_refs``; a brief is promotable iff every claim has at least one resolving + entailing reference (the ``evidence_refs`` invariant). The promoted artifact wraps the brief in a :class:`~eawf.surfaces.render.narrative.NarrativeBundle` that fixes provenance to the originating session and the ``IntentBrief`` URN — researcher prose and the typed claim graph stay in lockstep through promotion.
+      **IntentBrief.** ``/research`` outputs a typed :class:`~eawf.kernel.spec.intent.IntentBrief` whose claims carry ``evidence_refs``; a brief is promotable iff every claim has at least one resolving + entailing reference (the ``evidence_refs`` invariant).
 
   - id: planned-scope-revisability
     target: AGENTS.md

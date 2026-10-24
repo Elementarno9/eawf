@@ -3,8 +3,13 @@
 A Run's spend is read the way its own report reads it: the captured runtime when the
 stop reading measured one, the usage readings its stream carries otherwise, and
 nothing at all when the capture excluded it. A cost no reading priced stays ``None``,
-so a total sums only the priced Runs and counts the rest as unpriced instead of
-adding a zero for them.
+so a total sums only the priced Runs and counts as unpriced the Runs that reported
+tokens no reading priced, instead of adding a zero for them; a Run that reported no
+usage at all spent nothing a total could miss, so it is counted as neither.
+
+Cache tokens are prompt-cache reads whichever source counted them: the stream's
+readings carry only the provider's cache-read count, so the captured cache-creation
+counter is left out rather than added to a figure that would mean two things.
 """
 
 from __future__ import annotations
@@ -32,12 +37,6 @@ logger = logging.getLogger(__name__)
 #: How many microUSD one USD is.
 _MICROUSD_PER_USD: Final = Decimal(1_000_000)
 
-#: The captured counters a Run's cache tokens add up from.
-_CACHE_COUNTERS: Final = (
-    CounterName.CACHE_CREATION_INPUT_TOKENS,
-    CounterName.CACHE_READ_INPUT_TOKENS,
-)
-
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RunSpend:
@@ -47,7 +46,7 @@ class RunSpend:
         cost_microusd: The Run's cost, or ``None`` when no reading priced it.
         input_tokens: Its input tokens, or ``None`` when unreported.
         output_tokens: Its output tokens, or ``None`` when unreported.
-        cache_tokens: Its prompt-cache tokens, or ``None`` when unreported.
+        cache_tokens: Its prompt-cache read tokens, or ``None`` when unreported.
     """
 
     cost_microusd: int | None = None
@@ -64,11 +63,11 @@ class TotalsRow(BaseModel):
         cost_microusd: The priced sessions' cost, or ``None`` when none was priced.
         input_tokens: Their input tokens, or ``None`` when none reported any.
         output_tokens: Their output tokens, or ``None`` when none reported any.
-        cache_tokens: Their prompt-cache tokens, or ``None`` when none reported any.
+        cache_tokens: Their prompt-cache read tokens, or ``None`` when none reported any.
         priced_runs: The sessions whose cost was read.
-        unpriced_runs: The sessions whose cost no reading priced; their spend is
-            missing from ``cost_microusd``, so the cost is a floor whenever this is
-            not zero.
+        unpriced_runs: The sessions that reported tokens no reading priced; their
+            spend is missing from ``cost_microusd``, so the cost is a floor whenever
+            this is not zero. A session that reported no usage is in neither count.
         quotable: Whether the scope is the tree's own project.
     """
 
@@ -93,13 +92,11 @@ def _observed(runtime: MeasuredRuntime, name: CounterName) -> Decimal | None:
 def _captured_spend(runtime: MeasuredRuntime) -> RunSpend:
     """Return the spend a measured capture states."""
     cost = _observed(runtime, CounterName.COST_USD)
-    cache = [_observed(runtime, name) for name in _CACHE_COUNTERS]
-    known_cache = [value for value in cache if value is not None]
     return RunSpend(
         cost_microusd=None if cost is None else int(cost * _MICROUSD_PER_USD),
         input_tokens=_whole(_observed(runtime, CounterName.INPUT_TOKENS)),
         output_tokens=_whole(_observed(runtime, CounterName.OUTPUT_TOKENS)),
-        cache_tokens=int(sum(known_cache)) if known_cache else None,
+        cache_tokens=_whole(_observed(runtime, CounterName.CACHE_READ_INPUT_TOKENS)),
     )
 
 
@@ -165,6 +162,12 @@ def scope_totals(
     rows = []
     for code, members in sorted(grouped.items()):
         priced = sum(1 for _reading, spend in members if spend.cost_microusd is not None)
+        unpriced = sum(
+            1
+            for _reading, spend in members
+            if spend.cost_microusd is None
+            and (spend.input_tokens, spend.output_tokens, spend.cache_tokens) != (None, None, None)
+        )
         rows.append(
             TotalsRow(
                 scope=f"project:{code}",
@@ -173,7 +176,7 @@ def scope_totals(
                 output_tokens=_sum(spend.output_tokens for _reading, spend in members),
                 cache_tokens=_sum(spend.cache_tokens for _reading, spend in members),
                 priced_runs=priced,
-                unpriced_runs=len(members) - priced,
+                unpriced_runs=unpriced,
                 quotable=all(reading.own_project for reading, _spend in members),
             )
         )

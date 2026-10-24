@@ -2,9 +2,7 @@
 
 A :class:`SandboxPolicy` declares the tool-allow / tool-deny shape an agent
 session may use under a given scope (wave, profile, or global). The table
-is populated and queryable, and :func:`resolve_denied_tools` resolves the
-deny set the dispatcher subtracts from the rendered ``allowed_tools``
-projection so a wave with a denied tool cannot dispatch it.
+is populated and queryable.
 
 Layout mirrors :class:`~eawf.kernel.state.models.McpGrant`:
 
@@ -77,45 +75,8 @@ TOOL_UNIVERSE: frozenset[str] = frozenset(
 )
 
 
-def resolve_denied_tools(
-    policies: dict[str, SandboxPolicy] | None,
-    *,
-    wave_id: str,
-) -> set[str]:
-    """Return the set of tool names denied for *wave_id* by the policy table.
-
-    A policy applies to *wave_id* when it is wave-scoped at that exact wave
-    (``scope_kind == "wave"`` and ``scope_id == wave_id``) or global
-    (``scope_kind == "global"`` — global denials cover every wave). The
-    returned set is the union of those policies' ``denied_tools``.
-
-    Profile-scoped policies are not resolved here: the dispatcher does not
-    yet know the dispatched wave's profile, so profile deny-lists stay out
-    of the wave-dispatch projection.
-
-    Args:
-        policies: The ``state.sandbox_policies`` map, or ``None`` when no
-            policies are registered.
-        wave_id: The dispatched wave id.
-
-    Returns:
-        The union of denied tool names that apply to *wave_id*. Empty when
-        *policies* is ``None``/empty or no policy targets the wave.
-    """
-    pool = policies or {}
-    denied: set[str] = set()
-    for policy in pool.values():
-        applies = (policy.scope_kind == "wave" and policy.scope_id == wave_id) or (
-            policy.scope_kind == "global"
-        )
-        if applies:
-            denied.update(policy.denied_tools)
-    return denied
-
-
 __all__ = [
     "TOOL_UNIVERSE",
     "SandboxPolicy",
     "SandboxPolicyScopeKind",
-    "resolve_denied_tools",
 ]

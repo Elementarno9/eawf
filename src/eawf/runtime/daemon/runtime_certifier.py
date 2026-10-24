@@ -917,7 +917,8 @@ def _conclude_walk(
 
     Returns:
         The recorded row: a quarantine naming every failed attempt, or a
-        certification carrying what the canary observed.
+        certification carrying what the canary observed and, when the certify
+        stage passed, the driver certification it wrote.
     """
     runner = runner_for(state_path)
     result = runner.run_canary(
@@ -966,7 +967,7 @@ def _conclude_walk(
                 expires_at=probed.expires_at,
             ),
         )
-    certify = runner.certify(
+    certified = runner.certify(
         CertificationRequest(
             runtime_tuple=runtime_tuple,
             protocol=ProtocolFacts(
@@ -981,7 +982,8 @@ def _conclude_walk(
             evidence_bundle_ref=evidence_ref,
             expires_at=probed.expires_at,
         )
-    ).record
+    )
+    certify = certified.record
     refusal = "" if certify.reason_code is None else f" ({certify.reason_code})"
     unreported = (
         f"; its worker filed no report through {SEMANTIC_TOOLS_CAPABILITY} in "
@@ -998,6 +1000,7 @@ def _conclude_walk(
             "stages": (result.record, certify),
             "verified_at": certify.completed_at,
             "expires_at": probed.expires_at,
+            "certification": certified.certification,
             "reason": (
                 f"{named} passed the containment canary and the certify stage "
                 f"{certify.outcome}{refusal}; certified until {probed.expires_at:%Y-%m-%d}"

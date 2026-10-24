@@ -122,7 +122,6 @@ SETTINGS_CATEGORIES: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
         "execution",
         (
             "agents",
-            "dispatch",
             "economics",
             "flow",
             "research",
@@ -648,33 +647,20 @@ def _profile_members(
 
     The profiles are those discoverable from the tree now. ``profile_trust`` pins the file
     digest of every profile outside the bundled set, which is what the trust ledger holds;
-    ``profile_certification`` pins the content digest of every enriched profile, which is
-    what certification compares. A profile whose file does not validate has no digest to
-    pin and is left out; ``profiles`` lists every id with no digest.
+    ``profiles`` lists every id with no digest.
     """
-    from eawf.platform.profiles.certification import profile_digest
     from eawf.platform.profiles.discovery import discover_profile
-    from eawf.platform.profiles.loader import list_profiles, load_profile
+    from eawf.platform.profiles.loader import list_profiles
     from eawf.platform.profiles.trust import is_bundled, profile_sha256
-    from eawf.surfaces.cli.errors import UserError, ValidationError
 
     ids = list_profiles(repo=repo, workspace=workspace)
     if source == "profiles":
         return tuple((pid, "") for pid in ids)
     members: list[tuple[str, str]] = []
     for pid in ids:
-        if source == "profile_trust":
-            path = discover_profile(pid, repo=repo, workspace=workspace).path
-            if path is not None and not is_bundled(pid):
-                members.append((pid, profile_sha256(path)))
-            continue
-        try:
-            body = load_profile(pid, repo=repo, workspace=workspace)
-        except (UserError, ValidationError) as error:
-            logger.debug(f"_profile_members skipped={pid!r} reason={error}")
-            continue
-        if body.is_enriched:
-            members.append((pid, profile_digest(body)))
+        path = discover_profile(pid, repo=repo, workspace=workspace).path
+        if path is not None and not is_bundled(pid):
+            members.append((pid, profile_sha256(path)))
     return tuple(members)
 
 

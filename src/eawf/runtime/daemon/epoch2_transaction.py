@@ -391,15 +391,16 @@ class CommittedTransaction:
         receipt: What the caller answers with.
         envelope: The firehose row, held so the publish can happen after
             the locks are released. ``None`` on a replayed answer, which
-            is exactly what stops a retry from publishing the original
-            mutation's event a second time.
+            stops a retry from publishing the original event a second time.
         replayed: Whether the receipt was read from the root's receipt
             store rather than produced by a commit taken just now.
+        stopped_runs: The live Runs of the Tasks it cancelled, to ask to cancel.
     """
 
     receipt: MutationReceipt
     envelope: Envelope | None
     replayed: bool = False
+    stopped_runs: tuple[QualifiedUrn, ...] = ()
 
 
 #: Every request shape that commits through :func:`_persist`. The alias is

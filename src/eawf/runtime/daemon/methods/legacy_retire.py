@@ -40,10 +40,15 @@ from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import LedgerRecord, effective_records, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.daemon.epoch2_recovery import (
+    read_idempotency_receipt,
+    record_idempotency_receipt,
+)
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.epoch2_transaction import (
     TransactionRefusalCode,
     TransactionRefusedError,
+    _request_digest,
     commit_row_write,
 )
 
@@ -120,11 +125,12 @@ class CommittedLegacyDrop:
 
     Attributes:
         receipt: What the caller answers with.
-        envelope: The firehose row the commit appended.
+        envelope: The firehose row the commit appended, or ``None`` on a
+            retry answered from the receipt store, which publishes nothing.
     """
 
     receipt: LegacyDropReceipt
-    envelope: Envelope
+    envelope: Envelope | None
 
 
 def names_legacy_row(urn: object) -> bool:
@@ -167,6 +173,43 @@ def _project_urn(context: Epoch2RootContext) -> str:
     )
 
 
+def _replayed_drop(
+    context: Epoch2RootContext, request: LegacyTaskDropParams, *, ref: str
+) -> LegacyDropReceipt | None:
+    """Return the receipt a drop under this idempotency key already earned, if any.
+
+    Raises:
+        TransactionRefusedError: The key committed other parameters
+            (``idempotency_conflict``), or its stored receipt cannot be read
+            (``schema_validation_failed``).
+    """
+    try:
+        stored = read_idempotency_receipt(
+            context, namespaced_key=context.idempotency_key(request.idempotency_key)
+        )
+        receipt = None if stored is None else LegacyDropReceipt.model_validate(stored.receipt)
+    except ValueError as error:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
+            detail=f"the receipt stored for idempotency key {request.idempotency_key!r} "
+            "cannot be read, so whether this drop already ran is unknown",
+            entity_ref=ref,
+            remediation="Remove the unreadable receipt from the root local store and retry.",
+        ) from error
+    if stored is None or receipt is None:
+        return None
+    if stored.params_digest != _request_digest(request):
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.IDEMPOTENCY_CONFLICT,
+            detail=f"idempotency key {request.idempotency_key!r} already committed a request "
+            "with different parameters, so this one is not a retry of it",
+            entity_ref=ref,
+            remediation="Retry with the original parameters, or choose a new idempotency key.",
+            revision=receipt.revision_after,
+        )
+    return receipt
+
+
 def retire_legacy_task(
     context: Epoch2RootContext, request: LegacyTaskDropParams, *, method: str, now: datetime
 ) -> CommittedLegacyDrop:
@@ -179,10 +222,13 @@ def retire_legacy_task(
         now: When the drop happens.
 
     Returns:
-        The receipt beside the firehose row the drop wrote.
+        The receipt beside the firehose row the drop wrote. A retry of a drop
+        this root already committed returns that receipt and no row.
 
     Raises:
-        TransactionRefusedError: Nothing was written, because the key names
+        TransactionRefusedError: Nothing was written, because the
+            idempotency key committed other parameters
+            (``idempotency_conflict``), the key names
             no row (``identity_not_found``), a row the ledger already holds
             or one not in a droppable status (``legacy_edge_refused``), a row
             at another revision (``revision_conflict``), or a row that is not
@@ -193,6 +239,9 @@ def retire_legacy_task(
     """
     key, ref = request.key, entity_ref(Epoch2Collection.TASK, request.key)
     with context.session([_project_urn(context)]) as session:
+        replayed = _replayed_drop(context, request, ref=ref)
+        if replayed is not None:
+            return CommittedLegacyDrop(receipt=replayed, envelope=None)
         row = document_rows(session.read_document(), Epoch2Collection.TASK).get(key)
         if row is None:
             lines = effective_records(
@@ -278,16 +327,21 @@ def retire_legacy_task(
             ),
             now=now,
         )
-    return CommittedLegacyDrop(
-        receipt=LegacyDropReceipt(
+        receipt = LegacyDropReceipt(
             entity_ref=ref,
             revision_before=revision,
             revision_after=revision + 1,
             event_id=envelope.id,
             idempotency_key=request.idempotency_key,
-        ),
-        envelope=envelope,
-    )
+        )
+        record_idempotency_receipt(
+            context,
+            namespaced_key=context.idempotency_key(request.idempotency_key),
+            params_digest=_request_digest(request),
+            receipt=receipt.model_dump(mode="json"),
+            recorded_at=now,
+        )
+    return CommittedLegacyDrop(receipt=receipt, envelope=envelope)
 
 
 __all__ = [

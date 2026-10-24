@@ -1,11 +1,7 @@
-"""Subagent dispatch package: role contracts, routing and spawn retry.
+"""Subagent dispatch package: routing and spawn retry.
 
 Public API:
 
-- :func:`build_role_contract` — project a registered
-  :class:`~eawf.workflow.agents.specs.roles.RoleSpec` into a typed
-  :class:`~eawf.workflow.agents.specs.models.RoleContract`, splicing in a
-  profile's role-tier block under its token budget.
 - :func:`resolve_routing` — pure ``(agent_role, effort_bucket) ->
   (model, runtime)`` lookup, backed by :data:`DEFAULT_ROUTING_TABLE`.
 - :func:`spawn_with_retry` — the bounded spawn-retry loop over the CLI failure
@@ -18,8 +14,6 @@ Public API:
 
 from __future__ import annotations
 
-from eawf.workflow.agents.specs.models import RoleTierBudgetError
-from eawf.workflow.dispatch.renderer import build_role_contract
 from eawf.workflow.dispatch.retry import (
     FailureNotice,
     FailureTier,
@@ -44,10 +38,8 @@ __all__ = [
     "FailureNotice",
     "FailureTier",
     "RetryExhaustedError",
-    "RoleTierBudgetError",
     "RoutingDecision",
     "SpawnAttemptFailure",
-    "build_role_contract",
     "failure_tier_for_action",
     "model_for_runtime",
     "resolve_routing",

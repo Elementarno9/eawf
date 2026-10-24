@@ -912,20 +912,28 @@ def lease_residue(context: Epoch2RootContext, *, lease: WorkLease) -> str | None
 def removes_clean_worktrees(repo_root: Path) -> bool:
     """Return whether ``worktrees.remove_when_clean`` lets a release remove a clean worktree.
 
+    The leaf is read at the end of every Run's lease reconcile, so a layer that
+    cannot be read or that states the leaf unusably degrades with a warning
+    instead of aborting the reconcile.
+
     Args:
         repo_root: The repository the layered config is composed against.
 
     Returns:
-        The configured switch; ``False`` when a layer states something other
-        than a boolean, since keeping a worktree costs only disk.
+        The configured switch; ``False`` when a layer is malformed YAML, states
+        ``worktrees`` as something other than a mapping, or states the leaf as
+        something other than a boolean, since keeping a worktree costs only disk.
     """
-    merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
     try:
+        merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
         return TypeAdapter(StrictBool).validate_python(
             get_dotted(merged, "worktrees.remove_when_clean")
         )
-    except ValidationError:
-        logger.warning("removes_clean_worktrees leaf=worktrees.remove_when_clean usable=false")
+    except (KeyError, ValidationError, cli_errors.ValidationError) as error:
+        logger.warning(
+            "removes_clean_worktrees leaf=worktrees.remove_when_clean usable=false "
+            f"error={type(error).__name__}"
+        )
         return False
 
 

@@ -16,7 +16,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, model_validator
 
-from eawf.kernel.spec.cadence import LEGACY_CADENCE_ALIASES
+from eawf.kernel.spec.cadence import StoredCadenceRow
 from eawf.kernel.spec.criterion_evidence import (
     GATE_RUN_EVIDENCE_KINDS as GATE_RUN_EVIDENCE_KINDS,
 )
@@ -1171,7 +1171,7 @@ class CoverageReport(_StrictModel):
     uncovered: list[str] = Field(default_factory=list)
 
 
-class GateSpec(_StrictModel):
+class GateSpec(_StrictModel, StoredCadenceRow):
     """One gate row that scores a :class:`CriterionSpec` at some cadence.
 
     ``kind`` names the check family (``command_exit_zero``, ``regex_match``,
@@ -1184,6 +1184,9 @@ class GateSpec(_StrictModel):
 
     ``timeout_s`` is ``None`` by default so a kind that has a timeout-class
     default needs no override; a present value is a positive strict integer.
+
+    A stored row's epoch-1 cadence reads as its native value and is written
+    back as stored (:class:`~eawf.kernel.spec.cadence.StoredCadenceRow`).
     """
 
     id: IdStr
@@ -1196,15 +1199,6 @@ class GateSpec(_StrictModel):
     timeout_s: StrictInt | None = Field(default=None, gt=0)
     # Never serialized: it is a function of the argv, and storing it moves digests.
     command_family_ref: CommandFamilyId | None = Field(default=None, exclude=True)
-
-    @model_validator(mode="before")
-    @classmethod
-    def _read_legacy_cadence(cls, data: Any) -> Any:
-        """Read the epoch-1 cadence of a stored row, a filed proof's, as its native value."""
-        cadence = data.get("cadence") if isinstance(data, dict) else None
-        if isinstance(cadence, str) and cadence in LEGACY_CADENCE_ALIASES:
-            return {**data, "cadence": LEGACY_CADENCE_ALIASES[cadence]}
-        return data
 
     @model_validator(mode="before")
     @classmethod

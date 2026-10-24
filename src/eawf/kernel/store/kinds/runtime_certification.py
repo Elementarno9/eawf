@@ -17,6 +17,7 @@ from eawf.kernel.runtime.certification import (
     CapabilityCertification,
     CertificationFailureCode,
     ConformanceStageRecord,
+    DriverCertification,
 )
 from eawf.kernel.runtime.compiled import BoundedText
 from eawf.kernel.runtime.provider import Digest, DriverCertificationUrn, ModelId
@@ -51,6 +52,10 @@ class MachineCertification(BaseModel):
         verified_at: When the last stage completed.
         expires_at: When a certification stops being current; ``None`` for a
             quarantine, which holds until a later probe passes.
+        certification: The driver certification a passed certify stage wrote,
+            kept whole so a release's canary export copies the record rather
+            than reconstructing it; ``None`` for every other walk, and for a
+            row recorded before the record was kept.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -69,6 +74,7 @@ class MachineCertification(BaseModel):
     observed_model: ModelId | None = None
     verified_at: UtcDatetime
     expires_at: UtcDatetime | None = None
+    certification: DriverCertification | None = None
 
     @model_validator(mode="after")
     def _stages_follow_the_probe(self) -> Self:
@@ -89,6 +95,11 @@ class MachineCertification(BaseModel):
             raise ValueError("a certify stage is walked only after a passed canary")
         if walked == ("canary",) and self.outcome == "certified":
             raise ValueError("a certified walk ends in its certify stage")
+        if self.certification is not None and (
+            walked != ("canary", "certify")
+            or self.certification.stage_history[-1] != self.stages[-1]
+        ):
+            raise ValueError("a driver certification is the record of this row's certify stage")
         return self
 
     @model_validator(mode="after")

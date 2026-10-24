@@ -1,14 +1,16 @@
-"""Doctor names the gap between the committed and the live canonical sequence.
+"""Doctor names a committed canonical sequence behind its own committed tier.
 
-A caller that reads ``canonical_sequence`` from the committed generation
-document and sends it as the expected sequence is refused once the live
-cursor in the status projection has moved past it. ``eawf doctor`` reports
-the gap as ``canonical_sequence_drift`` with both values in its detail.
+A Run-only write moves the live cursor in the status projection and
+leaves the committed generation document as it is, so a committed
+sequence behind the live one is a healthy tree. ``eawf doctor`` reports
+``canonical_sequence_drift`` only when the committed change feed records
+a change the committed document never reached.
 """
 
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +19,15 @@ from typer.testing import CliRunner
 
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.store.changes import (
+    ChangeRecord,
+    ChangeTier,
+    FieldChange,
+    StoredValue,
+    append_change_record,
+)
 from eawf.kernel.store.compaction import CANONICAL_SEQUENCE_KEY, read_document, write_document
-from eawf.kernel.store.paths import status_projection_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.doctor.checks_sequence import CHECK_NAME, check_canonical_sequence_drift
 from eawf.platform.install.instrument_probe import PROBE_VERSION, ProbeReport, ProbeResult
 from eawf.surfaces.cli.app import app
@@ -98,13 +107,54 @@ def _doctor_check(repo: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]
     return check
 
 
-def test_doctor_names_sequence_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _file_committed_change(document: Path, sequence: int) -> None:
+    """File one committed change at *sequence* in the generation's change feed."""
+    append_change_record(
+        document,
+        ChangeRecord(
+            change_id=f"EVT-{sequence}:milestone:MLS-0001",
+            tier=ChangeTier.COMMITTED,
+            collection=Epoch2Collection.MILESTONE,
+            record_key="MLS-0001",
+            event_name="domain.milestone.updated",
+            revision_before=1,
+            revision_after=2,
+            canonical_sequence=sequence,
+            actor_ref=None,
+            recorded_at=datetime(2026, 10, 24, tzinfo=UTC),
+            changes=(
+                FieldChange(
+                    field="seen_at",
+                    before=StoredValue(value=sequence - 1, size=4),
+                    after=StoredValue(value=sequence, size=4),
+                ),
+            ),
+        ),
+    )
+
+
+def test_doctor_is_ok_when_only_local_writes_moved_the_live_cursor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     repo, document = _tree(tmp_path, committed=7299, live=7744)
+    _file_committed_change(document, 7299)
+
+    check = _doctor_check(repo, monkeypatch)
+
+    assert check["status"] == "ok"
+    assert "7299" in check["detail"]
+
+
+def test_doctor_names_a_committed_document_behind_its_change_feed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, document = _tree(tmp_path, committed=7299, live=7744)
+    _file_committed_change(document, 7300)
 
     behind = _doctor_check(repo, monkeypatch)
     assert behind["status"] == "warn"
     assert "7299" in behind["detail"]
-    assert "7744" in behind["detail"]
+    assert "7300" in behind["detail"]
 
     body = read_document(document)
     body["milestone"]["MLS-0001"]["seen_at"] = 7744
@@ -127,8 +177,17 @@ def test_drift_is_ok_on_an_epoch1_tree(tmp_path: Path) -> None:
     assert (result.status, result.detail) == ("ok", "no epoch-2 generation")
 
 
-def test_drift_warns_one_behind(tmp_path: Path) -> None:
+def test_drift_is_ok_before_any_committed_change(tmp_path: Path) -> None:
     repo, _document = _tree(tmp_path, committed=4, live=5)
+
+    result = check_canonical_sequence_drift(workspace=repo)
+
+    assert (result.status, result.detail) == ("ok", "no committed change recorded yet")
+
+
+def test_drift_warns_one_behind(tmp_path: Path) -> None:
+    repo, document = _tree(tmp_path, committed=4, live=5)
+    _file_committed_change(document, 5)
 
     result = check_canonical_sequence_drift(workspace=repo)
 
@@ -138,7 +197,8 @@ def test_drift_warns_one_behind(tmp_path: Path) -> None:
 
 
 def test_drift_is_ok_when_level(tmp_path: Path) -> None:
-    repo, _document = _tree(tmp_path, committed=0, live=0)
+    repo, document = _tree(tmp_path, committed=1, live=1)
+    _file_committed_change(document, 1)
 
     result = check_canonical_sequence_drift(workspace=repo)
 
@@ -147,23 +207,22 @@ def test_drift_is_ok_when_level(tmp_path: Path) -> None:
 
 def test_drift_warns_when_the_committed_copy_is_absent(tmp_path: Path) -> None:
     repo, document = _tree(tmp_path, committed=3, live=3)
+    _file_committed_change(document, 3)
     raw = json.loads(document.read_bytes())
     del raw[CANONICAL_SEQUENCE_KEY]
     document.write_text(json.dumps(raw), encoding="utf-8")
-    status_projection_path(document).write_text(
-        json.dumps({"base": "0" * 64, "status": {CANONICAL_SEQUENCE_KEY: 9}}), encoding="utf-8"
-    )
 
     result = check_canonical_sequence_drift(workspace=repo)
 
     assert result.status == "warn"
     assert result.detail is not None
-    assert "absent" in result.detail and "9" in result.detail
+    assert "absent" in result.detail and "3" in result.detail
 
 
-def test_drift_warns_on_an_unreadable_document(tmp_path: Path) -> None:
+@pytest.mark.parametrize("raw", ["[]", "{not json"])
+def test_drift_warns_on_an_unreadable_document(tmp_path: Path, raw: str) -> None:
     repo, document = _tree(tmp_path, committed=1, live=1)
-    document.write_text("[]", encoding="utf-8")
+    document.write_text(raw, encoding="utf-8")
 
     result = check_canonical_sequence_drift(workspace=repo)
 

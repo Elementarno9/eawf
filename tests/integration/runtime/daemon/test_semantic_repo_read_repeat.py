@@ -15,6 +15,7 @@ import pytest
 
 from eawf.kernel.runtime.capsule import AuthorityCapsule
 from eawf.kernel.runtime.semantic import (
+    TOOL_SCHEMA_VERSION,
     RepoReadInput,
     RepoReadOutput,
     SemanticCall,
@@ -24,9 +25,12 @@ from eawf.kernel.runtime.semantic import (
 from eawf.platform.install.canary import CanaryProvision, canary_ref, provision_canary
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.run import RUN_BIND_METHOD
+from eawf.runtime.daemon.native_dispatch import DispatchAttempt, DispatchStage, append_attempt
+from eawf.runtime.daemon.semantic_gateway import run_receipts
 from eawf.runtime.mcp.semantic_stdio import _tool_descriptor
 from eawf.runtime.workspace.lease import workspace_path
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
+    TASK_URN,
     method_context,
     root_context,
     seed,
@@ -273,6 +277,138 @@ def test_published_schema_lists_reread_and_names_both_fields() -> None:
     assert "reread" in schema["properties"]
     assert "reread" in description
     assert "same_as_call" in description
+
+
+def test_published_schema_version_moves_to_a_minor_for_the_repeat_fields() -> None:
+    assert TOOL_SCHEMA_VERSION == "1.1.0"
+
+
+# ---- the receipt ledger keeps a read by digest -----------------------------------
+
+
+def test_receipt_ledger_keeps_a_read_by_digest_not_by_text(
+    canary: CanaryProvision,
+    ctx: MethodContext,
+    capsule: AuthorityCapsule,
+    tree: Path,
+    runtime_root: Path,
+) -> None:
+    first_id, first = read(ctx, canary, capsule)
+
+    kept = held_reads(canary, runtime_root)
+
+    assert first["text"] == "alpha\nbeta\ngamma"
+    assert [(output.text, output.same_as_call) for output in kept] == [("", first_id)]
+    assert kept[0].content_digest == first["content_digest"]
+    assert kept[0].byte_count == first["byte_count"]
+
+
+def test_receipt_ledger_replay_of_a_read_names_the_call_itself(
+    canary: CanaryProvision, ctx: MethodContext, capsule: AuthorityCapsule, tree: Path
+) -> None:
+    call = seal(capsule, path=PATH)
+    first = output_of(invoke(ctx, canary, call, capsule))
+    replayed = output_of(invoke(ctx, canary, call, capsule))
+
+    assert first["text"] == "alpha\nbeta\ngamma"
+    assert (replayed["same_as_call"], replayed["text"]) == (call.call_id, "")
+    assert replayed["content_digest"] == first["content_digest"]
+
+
+def test_receipt_ledger_still_answers_a_repeat_by_reference(
+    canary: CanaryProvision, ctx: MethodContext, capsule: AuthorityCapsule, tree: Path
+) -> None:
+    first_id, _ = read(ctx, canary, capsule)
+    _, second = read(ctx, canary, capsule)
+    _, third = read(ctx, canary, capsule)
+
+    assert (second["same_as_call"], third["same_as_call"]) == (first_id, first_id)
+
+
+# ---- the repeat matches launch, path and window ----------------------------------
+
+
+def test_repeat_match_misses_another_file_with_the_same_text(
+    canary: CanaryProvision, ctx: MethodContext, capsule: AuthorityCapsule, tree: Path
+) -> None:
+    (tree / "src/twin.txt").write_text("alpha\nbeta\ngamma\n", encoding="utf-8")
+    read(ctx, canary, capsule)
+    twin = output_of(invoke(ctx, canary, seal(capsule, path="src/twin.txt"), capsule))
+
+    assert (twin["same_as_call"], twin["text"]) == (None, "alpha\nbeta\ngamma")
+
+
+def test_repeat_match_misses_a_read_of_an_earlier_launch(
+    canary: CanaryProvision,
+    ctx: MethodContext,
+    capsule: AuthorityCapsule,
+    tree: Path,
+    runtime_root: Path,
+) -> None:
+    launched(canary, runtime_root, continuity_attempts=0)
+    read(ctx, canary, capsule)
+    launched(canary, runtime_root, continuity_attempts=1)
+    _, resumed = read(ctx, canary, capsule)
+
+    assert (resumed["same_as_call"], resumed["text"]) == (None, "alpha\nbeta\ngamma")
+
+
+def test_repeat_match_holds_within_one_launch(
+    canary: CanaryProvision,
+    ctx: MethodContext,
+    capsule: AuthorityCapsule,
+    tree: Path,
+    runtime_root: Path,
+) -> None:
+    launched(canary, runtime_root, continuity_attempts=0)
+    first_id, _ = read(ctx, canary, capsule)
+    _, second = read(ctx, canary, capsule)
+
+    assert second["same_as_call"] == first_id
+
+
+def test_repeat_match_reports_the_current_truncation(
+    canary: CanaryProvision, ctx: MethodContext, capsule: AuthorityCapsule, tree: Path
+) -> None:
+    (tree / PATH).write_text("alpha\n", encoding="utf-8")
+    first_id, first = read(ctx, canary, capsule, byte_cap=6)
+    (tree / PATH).write_text("alpha\nbeta\n", encoding="utf-8")
+    _, grown = read(ctx, canary, capsule, byte_cap=6)
+
+    assert (first["text"], first["truncated"]) == ("alpha", False)
+    assert (grown["same_as_call"], grown["truncated"]) == (first_id, True)
+
+
+def held_reads(canary: CanaryProvision, runtime_root: Path) -> list[RepoReadOutput]:
+    """Return the read outputs the receipt ledger keeps for the first Run."""
+    with root_context(canary, runtime_root).session([RUN_URN]) as session:
+        receipts = run_receipts(session, RUN_URN)
+    return [
+        output
+        for receipt in receipts
+        if isinstance(output := receipt.result.bounded_output, RepoReadOutput)
+    ]
+
+
+def launched(canary: CanaryProvision, runtime_root: Path, *, continuity_attempts: int) -> None:
+    """Record that the first Run's attempt launched, or resumed, now."""
+    now = datetime.now(UTC)
+    attempt = DispatchAttempt(
+        attempt_ref=f"ATT-{'c' * 32}",
+        run_ref=RUN_URN,
+        task_ref=TASK_URN,
+        dispatch_key="dispatch-repeat",
+        stage=DispatchStage.COMPILED,
+        compiled_spec_digest=digest("d"),
+        authority_capsule_digest=digest("a"),
+        route_policy_revision=ROUTE_REVISION,
+        provider_kind="claude-code",
+        continuity_attempts=continuity_attempts,
+        started_at=now,
+        recorded_at=now,
+    )
+    with root_context(canary, runtime_root).session([RUN_URN]) as session:
+        append_attempt(session, attempt)
 
 
 def bind_other(ctx: MethodContext, canary: CanaryProvision, other: AuthorityCapsule) -> None:

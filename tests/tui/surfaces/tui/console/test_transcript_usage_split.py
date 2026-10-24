@@ -248,6 +248,45 @@ def test_turn_delta_of_readings_with_no_block_between_runs_to_the_latest() -> No
     assert blocks[2].turn_output_tokens == 20
 
 
+def test_turn_delta_of_delta_readings_with_no_block_between_sums_them() -> None:
+    """Two readings that are each a delta both count, as the Run's totals add them."""
+    events = (
+        _said(1, 0),
+        _usage(2, 10, cumulative=False, input_tokens=10, output_tokens=4),
+        _usage(3, 20, cumulative=False, input_tokens=7, output_tokens=1),
+        _said(4, 21),
+    )
+    blocks, _ = build_transcript_blocks(events)
+    assert (blocks[1].turn_input_tokens, blocks[1].turn_output_tokens) == (17, 5)
+
+
+def test_turn_delta_of_a_restarted_running_total_opens_a_new_series() -> None:
+    """A running total below the one before it restarted, so it counts whole, never negative."""
+    events = (
+        _said(1, 0),
+        _usage(2, 10, input_tokens=100),
+        _said(3, 11),
+        _usage(4, 20, input_tokens=30),
+        _said(5, 21),
+    )
+    blocks, _ = build_transcript_blocks(events)
+    assert blocks[2].turn_input_tokens == 30
+
+
+def test_turn_delta_of_a_restart_inside_one_turn_adds_both_series() -> None:
+    """Boundary: the old series' gain and the new series' total both belong to the turn."""
+    events = (
+        _said(1, 0),
+        _usage(2, 10, input_tokens=100),
+        _said(3, 11),
+        _usage(4, 20, input_tokens=120),
+        _usage(5, 30, input_tokens=15),
+        _said(6, 31),
+    )
+    blocks, _ = build_transcript_blocks(events)
+    assert blocks[2].turn_input_tokens == 35
+
+
 def test_turn_delta_leaves_out_a_counter_the_reading_did_not_report() -> None:
     events = (_said(1, 0), _usage(2, 38, output_tokens=85), _said(3, 40))
     blocks, _ = build_transcript_blocks(events)

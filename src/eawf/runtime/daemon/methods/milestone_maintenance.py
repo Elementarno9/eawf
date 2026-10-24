@@ -16,16 +16,24 @@ of its own, or are more than one move:
   cancelled, and the backlog Tasks due on it are dropped -- all in the one
   document write, so no reader ever sees a cancelled Milestone still owning
   live work. A Task the registry gives no cancel edge (one ready to
-  integrate) refuses the whole cancel, having written nothing.
+  integrate) refuses the whole cancel, having written nothing. A cancelled
+  Task's live Run is then asked to cancel through ``runtime.run.control.request``,
+  the verb ``eawf run cancel`` sends, because a Run ends only on the effect
+  its worker reports.
 - ``domain.milestone.purge`` removes a CANCELLED Milestone outright. A
   ledger is append-only because a line someone else may hold must never
   change under them; a line no pushed commit carries is held by nobody
   else, so a placeholder created and cancelled by mistake can be taken out
   instead of living in history for ever. The CANCELLED Batches filed
-  under it and their CANCELLED or DROPPED Tasks go with it, so no row is
-  left naming a record no tier holds; any other status among them refuses
-  the purge. A Milestone any remote-tracking ref of the checkout mentions
-  is refused, and so is one a ledger snapshot already seals.
+  under it and their CANCELLED or DROPPED Tasks go with it; any other
+  status among them refuses the purge. So does any row that stays, in any
+  collection's document rows or ledger, and names one of the records the
+  purge would remove -- a Run that worked one of its Tasks, a PlanRevision
+  that planned it, another Task depending on one -- because such a row
+  records work or a decision that happened, and removing what it names
+  would leave it dangling. A Milestone any remote-tracking ref of the
+  checkout mentions is refused, and so is one a ledger snapshot already
+  seals.
 
 The field edit commits through the transaction's own write step, so a retry
 under the same key replays its receipt and a stale revision is a conflict.
@@ -46,6 +54,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any, Final, Self
 
+import orjson
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -56,6 +65,7 @@ from pydantic import (
 )
 
 from eawf.kernel.identity import EntityKind, QualifiedUrn
+from eawf.kernel.runtime.control import TERMINAL_RUN_STATUSES
 from eawf.kernel.state.canonical_sequence import CanonicalSequenceAllocator
 from eawf.kernel.state.enums import EffortBucket, StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
@@ -98,7 +108,8 @@ from eawf.kernel.store.ledger import (
     read_ledger_records,
     split_ledger_lines,
 )
-from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, Epoch2Collection
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, LEDGER_COLLECTIONS, Epoch2Collection
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.epoch2_edges import edge_updates, locked_unmet
 from eawf.runtime.daemon.epoch2_recovery import (
@@ -177,6 +188,9 @@ _OPEN_TASKS: Final = frozenset(
         TaskStatus.READY_TO_INTEGRATE,
     }
 )
+
+#: The stored statuses of a Run that has stopped, which a cancel asks nothing of.
+_ENDED_RUNS: Final = frozenset(status.value for status in TERMINAL_RUN_STATUSES)
 
 #: The backlog statuses a Task due on a cancelled Milestone is dropped from.
 _BACKLOG_TASKS: Final = frozenset({TaskStatus.DRAFT, TaskStatus.DEFERRED})
@@ -680,8 +694,11 @@ def _cascade(
     document_path: Path,
     milestone: Milestone,
     now: datetime,
-) -> tuple[_Moved, ...]:
-    """Return every Batch and Task a cancel of *milestone* moves with it.
+) -> tuple[tuple[_Moved, ...], tuple[QualifiedUrn, ...]]:
+    """Return every Batch and Task a cancel of *milestone* moves with it, and the live Runs.
+
+    A live Run is the active Run of a cancelled Task that the document still
+    holds in a status it leaves; a Run that ended is compacted out of it.
 
     Raises:
         TransactionRefusedError: An owned record has no edge to where the
@@ -710,6 +727,8 @@ def _cascade(
         )
         moved.append(_Moved(LifecycleEntity.DELIVERY_BATCH, Epoch2Collection.BATCH, successor))
     cancelled_batches = {batch.key for batch in owned}
+    runs = document_rows(document, Epoch2Collection.RUN)
+    live: list[QualifiedUrn] = []
     for task in _native(document, Epoch2Collection.TASK, Task):
         in_batch = task.batch_ref is not None and task.batch_ref.entity_key in cancelled_batches
         if in_batch and task.status in _OPEN_TASKS:
@@ -728,7 +747,11 @@ def _cascade(
             now=now,
         )
         moved.append(_Moved(LifecycleEntity.TASK, Epoch2Collection.TASK, successor))
-    return tuple(moved)
+        run = task.active_run_ref
+        row = None if run is None else runs.get(run.entity_key)
+        if run is not None and row is not None and row.get("status") not in _ENDED_RUNS:
+            live.append(run)
+    return tuple(moved), tuple(live)
 
 
 def cancel_with_cascade(
@@ -749,8 +772,9 @@ def cancel_with_cascade(
         now: When the cancel happened.
 
     Returns:
-        The receipt of the Milestone's move beside the firehose row to publish;
-        a retry of a committed request returns that receipt and no row.
+        The receipt of the Milestone's move beside the firehose row to publish
+        and the live Runs of the Tasks it cancelled; a retry of a committed
+        request returns that receipt, no row and no Run.
 
     Raises:
         TransactionRefusedError: The key committed other parameters, the
@@ -790,7 +814,9 @@ def cancel_with_cascade(
         )
         if isinstance(outcome, TransitionDenied):
             raise _denied(outcome, request=request, revision=record.revision)
-        moved = _cascade(context, document, document_path=document_path, milestone=record, now=now)
+        moved, live = _cascade(
+            context, document, document_path=document_path, milestone=record, now=now
+        )
         allocator = CanonicalSequenceAllocator.recover(
             workspace_key=request.urn.workspace_key, high_water_mark=_high_water_mark(document)
         )
@@ -824,7 +850,7 @@ def cancel_with_cascade(
         f"cancel_with_cascade key={request.urn.entity_key!r} moved={len(moved)} "
         f"sequence={receipt.canonical_sequence}"
     )
-    return CommittedTransaction(receipt=receipt, envelope=plan.envelope)
+    return CommittedTransaction(receipt=receipt, envelope=plan.envelope, stopped_runs=live)
 
 
 # ---- Purge ------------------------------------------------------------------
@@ -998,6 +1024,66 @@ def _owned_keys(
     }
 
 
+#: The URN kind each purged collection's records are named under.
+_PURGED_KINDS: Final = {
+    Epoch2Collection.MILESTONE: EntityKind.MILESTONE,
+    Epoch2Collection.BATCH: EntityKind.BATCH,
+    Epoch2Collection.TASK: EntityKind.TASK,
+}
+
+
+def _refuse_dangling(
+    document: dict[str, Any],
+    *,
+    document_path: Path,
+    milestone: Milestone,
+    owned: Mapping[Epoch2Collection, frozenset[str]],
+) -> None:
+    """Refuse the purge while a row it keeps names a record it would remove.
+
+    Every collection's document rows, and the lines of every collection kept
+    at the ledger tier, are searched for the purged records' URNs, so a
+    reference is found whichever field of whichever record holds it.
+
+    Raises:
+        TransactionRefusedError: A kept row names a purged record.
+    """
+    needles = tuple(
+        f'/{_PURGED_KINDS[collection].value}/{key}"'
+        for collection in _PURGED
+        for key in owned[collection]
+    )
+    naming: set[str] = set()
+    for collection in Epoch2Collection:
+        purged = owned.get(collection, frozenset())
+        rows = [
+            *document_rows(document, collection).items(),
+            *(
+                (line.record_key, line.payload)
+                for line in (
+                    read_ledger_records(ledger_path(document_path, collection))
+                    if collection in LEDGER_COLLECTIONS
+                    else ()
+                )
+            ),
+        ]
+        for key, row in rows:
+            if key in purged:
+                continue
+            text = orjson.dumps(row).decode()
+            if any(needle in text for needle in needles):
+                naming.add(f"{collection.value}/{key}")
+    if naming:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.ILLEGAL_TRANSITION,
+            detail=f"{milestone.key} is named by records a purge would leave dangling: "
+            f"{', '.join(sorted(naming))}",
+            entity_ref=str(milestone.urn),
+            remediation="Keep the cancelled Milestone; what names its work is history.",
+            revision=milestone.revision,
+        )
+
+
 def _ledger_cut(ledger: Path, keys: frozenset[str]) -> tuple[list[str], int, bool]:
     """Return the live lines that stay, how many go, and whether the snapshot seals one.
 
@@ -1081,7 +1167,8 @@ def purge_milestone(
     Raises:
         TransactionRefusedError: The URN names another kind, the key committed
             other parameters, the Milestone is absent, stale or not CANCELLED,
-            an owned Batch or Task is in a status a purge keeps, a
+            an owned Batch or Task is in a status a purge keeps, a kept row
+            names a record the purge would remove, a
             remote-tracking ref or a ledger's sealed snapshot already holds
             it, or git could not answer. Nothing was written.
     """
@@ -1098,6 +1185,7 @@ def purge_milestone(
         ledgers = {collection: session.ledger_path(collection) for collection in _PURGED}
         milestone = _cancelled_milestone(document, ledgers[Epoch2Collection.MILESTONE], request)
         owned = _owned_keys(document, ledgers=ledgers, milestone=milestone)
+        _refuse_dangling(document, document_path=document_path, milestone=milestone, owned=owned)
         cuts = {
             collection: _ledger_cut(ledgers[collection], owned[collection])
             for collection in _PURGED

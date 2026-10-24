@@ -131,7 +131,9 @@ def tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Tree:
     return built
 
 
-def _drop(tree: _Tree, *, key: str, revision: int = 1) -> tuple[int, dict[str, Any]]:
+def _drop(
+    tree: _Tree, *, key: str, revision: int = 1, reason: str = REASON
+) -> tuple[int, dict[str, Any]]:
     """Run ``eawf task drop`` on *key* and return its exit code and envelope."""
     result = runner.invoke(
         app,
@@ -143,7 +145,7 @@ def _drop(tree: _Tree, *, key: str, revision: int = 1) -> tuple[int, dict[str, A
             "drop",
             key,
             "--reason",
-            REASON,
+            reason,
             "--expected-revision",
             str(revision),
             "--idempotency-key",
@@ -199,6 +201,32 @@ def test_a_retired_legacy_key_leaves_the_backlog_once(tree: _Tree) -> None:
     assert [row["code"] for row in refusal["errors"]] == ["legacy_edge_refused"]
     assert tree.ledger.read_bytes() == ledger_before
     assert tree.document.read_bytes() == document_before
+
+
+def test_a_retried_legacy_drop_replays_its_receipt(tree: _Tree) -> None:
+    """A retry under the same key and parameters answers the first commit's receipt."""
+    first_code, first = _drop(tree, key=LEGACY_KEY)
+    ledger_before, document_before = tree.ledger.read_bytes(), tree.document.read_bytes()
+
+    retry_code, retry = _drop(tree, key=LEGACY_KEY)
+
+    assert (first_code, retry_code) == (0, 0), retry
+    assert retry["status"] == "ok"
+    assert retry["result"] == first["result"]
+    assert tree.ledger.read_bytes() == ledger_before
+    assert tree.document.read_bytes() == document_before
+
+
+def test_a_legacy_drop_key_reused_for_other_parameters_conflicts(tree: _Tree) -> None:
+    """Error path: the same key with another reason is not a retry of the first drop."""
+    _drop(tree, key=LEGACY_KEY)
+    ledger_before = tree.ledger.read_bytes()
+
+    code, refusal = _drop(tree, key=LEGACY_KEY, reason="Another reason entirely.")
+
+    assert code != 0
+    assert [row["code"] for row in refusal["errors"]] == ["idempotency_conflict"]
+    assert tree.ledger.read_bytes() == ledger_before
 
 
 def test_a_legacy_drop_at_a_stale_revision_moves_nothing(tree: _Tree) -> None:

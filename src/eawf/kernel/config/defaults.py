@@ -95,10 +95,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # cross-references this map when a profile body changes between
         # loads — drift surfaces as a prompt.
         "trusted": {},
-        # Managed-certification ledger; key = profile id, value = the
-        # digest an enriched profile is certified under. Committed at the
-        # repo layer so certifying a profile is a reviewed change.
-        "certified": {},
     },
     "runtime": {
         # ``adapters`` is the user-facing selector list. Built-in default
@@ -184,12 +180,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     "telemetry": {
         "enabled": True,
         "db_kind": "sqlite",
-    },
-    "dispatch": {
-        # Per-block token ceiling for injected role-tier dispatch blocks.
-        # The renderer raises (never truncates) over the cap; the code
-        # fallback is DEFAULT_ROLE_TIER_TOKEN_CAP when the leaf is unset.
-        "role_tier_token_cap": 2400,
     },
     # Per-role runtime tool grants appended to each rendered subagent's
     # built-in allowlist. Empty by default so an unconfigured repo renders

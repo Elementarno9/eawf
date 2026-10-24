@@ -1,0 +1,26 @@
+{
+  "release_key": "REL-0.7.0rc3",
+  "receipts": [
+    {
+      "os_class": "linux",
+      "runtime_id": "claude-code",
+      "run_refs": [
+        "eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000002",
+        "eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000003",
+        "eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000004",
+        "eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000005",
+        "eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000006",
+        "eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000007"
+      ],
+      "scorecard": "pass",
+      "evidence_refs": [
+        "dispatch-check-RUN-00000002.json",
+        "dispatch-check-RUN-00000003.json",
+        "dispatch-check-RUN-00000004.json",
+        "dispatch-check-RUN-00000005.json",
+        "dispatch-check-RUN-00000006.json",
+        "dispatch-check-RUN-00000007.json"
+      ]
+    }
+  ]
+}

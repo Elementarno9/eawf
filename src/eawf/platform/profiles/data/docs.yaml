@@ -9,7 +9,7 @@ verify:
     - pytest
   floor_checks:
     - name: docs-render-smoke
-      cmd: ["uv", "run", "pytest", "tests/unit/test_profile_cli.py", "-q"]
+      cmd: ["uv", "run", "pytest", "tests/integration/test_profile_cli.py", "-q"]
       scope: touched
       cadence: every-batch
       policy: warn

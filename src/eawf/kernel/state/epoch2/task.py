@@ -93,11 +93,19 @@ def derived_title(intent: str) -> str:
         intent: The Task's stored intent.
 
     Returns:
-        The label, or the intent, cut to 80 characters, the bound
-        every title has.
+        The label, or the intent. One longer than 80 characters, the bound
+        every title has, is cut at the last word boundary that leaves room
+        for a closing ellipsis, or mid-word when its first word alone is
+        longer than that.
     """
     label, _, _ = intent.partition(": ")
-    return (label or intent)[:_TITLE_MAX]
+    text = label or intent
+    if len(text) <= _TITLE_MAX:
+        return text
+    cut = text[: _TITLE_MAX - 1]
+    if not text[len(cut)].isspace() and " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return f"{cut.rstrip()}…"
 
 
 class TaskCreateSpec(Epoch2Model):

@@ -26,7 +26,7 @@ A profile defined at a higher layer overrides a same-named profile at a lower la
 
 Non-bundled profiles are trust-on-first-use (Decision D19). The first time a repo activates a profile that did not ship with the wheel, eawf prompts via an interactive question and records the profile's sha256 in `.ea/config.yaml` under `profiles.trusted`. If the content hash later drifts from the recorded value, eawf re-prompts before using it. Bundled profiles are auto-trusted.
 
-A profile is *enriched* when it carries a role-tier render block (target `dispatch:system_prompt`), because that block reaches a dispatched agent's instructions. An enriched profile drives interactive dispatch as soon as it is enabled, but an unattended Run leaves it out until it is certified as managed: its body carries `certification: {digest: sha256:...}` and the repository's committed `.ea/config.yaml` pins the same digest under `profiles.certified.<id>`. `eawf profile validate <id>` reports the digest to pin under `digests`; any edit to the body changes the digest and needs a new certification.
+A profile is *enriched* when it carries a role-tier render block (target `dispatch:system_prompt`). Its body may record `certification: {digest: sha256:...}`, the digest of the body without that block, which `eawf profile validate <id>` reports under `digests`; any edit to the body changes the digest. No dispatch surface injects a role-tier block into an agent's instructions.
 
 ## Composition
 

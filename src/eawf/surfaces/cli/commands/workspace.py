@@ -314,21 +314,40 @@ def _emit_workspace_error(exc: Exception, *, code: str, flags: GlobalFlags) -> N
     )
 
 
-def _write_registry_locked(registry: Registry, target: Path) -> None:
-    """Validate and atomically write *registry* to *target* under a lock.
+def _mutate_registry_locked[ResultT](
+    target: Path, mutate: Callable[[Registry], tuple[Registry, ResultT]]
+) -> ResultT:
+    """Read *target*, apply *mutate* and write the result, all under the registry lock.
+
+    The read is taken inside the lock the daemon's registry writes take, so a
+    write the daemon lands meanwhile is never overwritten from a stale read.
+
+    Args:
+        target: The registry file.
+        mutate: The library mutation, given the registry as read; it returns the
+            registry to leave behind and what the caller reports.
+
+    Returns:
+        What *mutate* returned beside the registry.
 
     Raises:
         StateConflict: Lock contention (``kind="LockConflict"``).
+        UserError: The registry exists but does not parse or validate.
+        WorkspaceMutationError: The library refused the mutation; nothing is written.
     """
     from eawf.platform.registry import Registry as _Registry
 
     target.parent.mkdir(parents=True, exist_ok=True)
-    payload = _Registry.model_validate(registry.model_dump(mode="json")).model_dump(mode="json")
     try:
         with portalock.acquire(target, timeout=5.0):
+            updated, result = mutate(_read_registry_or_empty(target))
+            payload = _Registry.model_validate(updated.model_dump(mode="json")).model_dump(
+                mode="json"
+            )
             atomic_write_json_locked(target, payload)
     except portalock.LockTimeout as exc:
         raise cli_errors.StateConflict(str(exc), kind="LockConflict") from exc
+    return result
 
 
 def _mutate_via_daemon(method: str, params: dict[str, Any]) -> dict[str, Any] | None:
@@ -396,9 +415,12 @@ def _apply_workspace_mutation(
     result = _mutate_via_daemon(method, params)
     if result is not None:
         return _WorkspaceRecord.model_validate(result["workspace"])
-    updated = local(_read_registry_or_empty(target))
-    _write_registry_locked(updated, target)
-    return updated.workspaces[key]
+
+    def _apply(registry: Registry) -> tuple[Registry, WorkspaceRecord]:
+        updated = local(registry)
+        return updated, updated.workspaces[key]
+
+    return _mutate_registry_locked(target, _apply)
 
 
 # ---- workspace add ----------------------------------------------------------
@@ -563,7 +585,7 @@ def workspace_member_remove_cmd(
 
 
 # ---- workspace remove / rekey-repo ------------------------------------------
-# Neither verb has a ``registry.workspace.*`` RPC yet, so both write in
+# Neither verb has a ``registry.workspace.*`` RPC yet, so both read and write in
 # process under the same registry lock the daemon's writes take.
 
 
@@ -587,9 +609,10 @@ def workspace_remove_cmd(
     flags: GlobalFlags = ctx.obj
     target = _registry_target(registry_path)
     try:
-        registry = _read_registry_or_empty(target)
-        removed = get_workspace(registry, key)
-        _write_registry_locked(remove_workspace(registry, key=key), target)
+        removed = _mutate_registry_locked(
+            target,
+            lambda registry: (remove_workspace(registry, key=key), get_workspace(registry, key)),
+        )
     except WorkspaceMutationError as exc:
         _emit_workspace_error(exc, code=exc.code, flags=flags)
         return
@@ -624,17 +647,22 @@ def workspace_rekey_repo_cmd(
     flags: GlobalFlags = ctx.obj
     target = _registry_target(registry_path)
     try:
-        registry = _read_registry_or_empty(target)
-        codes = project_codes_at_root(registry, repo_root if repo_root is not None else Path.cwd())
-        updated = rekey_repository(registry, codes=codes, to_key=to)
-        _write_registry_locked(updated, target)
+        root = repo_root if repo_root is not None else Path.cwd()
+
+        def _rekey(registry: Registry) -> tuple[Registry, WorkspaceRecord]:
+            updated = rekey_repository(
+                registry, codes=project_codes_at_root(registry, root), to_key=to
+            )
+            return updated, updated.workspaces[to]
+
+        record = _mutate_registry_locked(target, _rekey)
     except WorkspaceMutationError as exc:
         _emit_workspace_error(exc, code=exc.code, flags=flags)
         return
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
-    _emit_workspace(updated.workspaces[to], target=target, flags=flags, verb="rekey-repo")
+    _emit_workspace(record, target=target, flags=flags, verb="rekey-repo")
 
 
 # ---- workspace show / list / select -----------------------------------------

@@ -42,7 +42,12 @@ from typing import TYPE_CHECKING, Any
 import orjson
 from pydantic.json_schema import models_json_schema
 
-from eawf.kernel.migration.epoch2.cutover import DOCUMENT_SCHEMA_KEY, ROW_PAYLOAD_FIELD
+from eawf.kernel.migration.epoch2.cutover import (
+    DOCUMENT_SCHEMA_KEY,
+    ROW_PAYLOAD_FIELD,
+    ROW_RECORDED_AT_FIELD,
+    ROW_STATUS_FIELD,
+)
 from eawf.kernel.migration.epoch2.manifest import MANIFEST_SCHEMA_VERSION
 from eawf.kernel.state import enums as state_enums
 from eawf.kernel.store.compaction import CANONICAL_SEQUENCE_KEY
@@ -118,10 +123,11 @@ def generate_state_schema() -> dict[str, Any]:
     canonical sequence and one object of rows per collection, keyed by the
     row's public key. A row of a modelled collection is either a record of
     that collection's native model or the wrapper the epoch-2 cutover
-    writes around an imported record, which carries a payload and no URN;
-    a row of any other collection is an object. Any other top-level key is
-    refused, as :func:`eawf.kernel.validate.epoch2.validate_generation`
-    refuses it.
+    writes around an imported record: exactly a status, a time and a
+    payload carrying its origin. A row of any other collection is an
+    object. The payload's own model and the key a row spells are checked
+    by :func:`eawf.kernel.validate.epoch2.validate_generation`, which also
+    refuses any other top-level key.
 
     Uses ``mode="serialization"`` so each row schema reflects the wire
     format the daemon writes. ``$schema`` and ``title`` are injected so
@@ -133,8 +139,13 @@ def generate_state_schema() -> dict[str, Any]:
     )
     imported_row: dict[str, Any] = {
         "type": "object",
-        "required": [ROW_PAYLOAD_FIELD],
-        "not": {"required": ["urn"]},
+        "additionalProperties": False,
+        "required": [ROW_STATUS_FIELD, ROW_RECORDED_AT_FIELD, ROW_PAYLOAD_FIELD],
+        "properties": {
+            ROW_STATUS_FIELD: {"type": "string", "minLength": 1},
+            ROW_RECORDED_AT_FIELD: {"type": "string", "format": "date-time"},
+            ROW_PAYLOAD_FIELD: {"type": "object", "required": ["origin"]},
+        },
     }
     properties: dict[str, Any] = {
         DOCUMENT_SCHEMA_KEY: {"const": MANIFEST_SCHEMA_VERSION},

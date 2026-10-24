@@ -62,6 +62,21 @@ def test_census_ignores_native_nouns_paths_and_live_skills(text: str) -> None:
     assert epoch1_nouns(text) == ()
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("next(iter(rows))", ("iter",)),
+        ("policy(gate_phase=True)", ("gate_phase",)),
+        ("PHASE_ORDER and PHASE_LOCKS", ("PHASE_ORDER", "PHASE_LOCKS")),
+    ],
+    ids=["iter-call", "gate-phase", "phase-order-locks"],
+)
+def test_the_page_census_reports_what_the_src_census_calls_a_homonym(
+    text: str, expected: tuple[str, ...]
+) -> None:
+    assert epoch1_nouns(text) == expected
+
+
 def test_census_names_every_retired_skill_invocation() -> None:
     for row in SKILL_CATALOG.retired:
         assert epoch1_nouns(f"use /{row.skill_id}.") == (f"/{row.skill_id}",)

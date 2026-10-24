@@ -9,10 +9,12 @@ Three modes, auto-detected from the file contents:
   The validator runs the §15.1 strict-mode contracts (``needs_user`` →
   ``body.user_question``; ``blocked|failed`` → ``footer.repair_commands``).
 - **Epoch-2 mode**: the file is a generation document (its
-  ``schema_version`` is the epoch-2 one). Each native row is checked
-  against its own model and each Batch and Task against the record it is
-  filed under (:mod:`eawf.kernel.validate.epoch2`); violation paths read
-  ``<collection>/<key>``.
+  ``schema_version`` is the epoch-2 one). Each imported row and each
+  native row of a modelled collection is checked against its model and
+  the key it is filed under, and each Batch and Task against the record
+  it is filed under (:mod:`eawf.kernel.validate.epoch2`); violation paths
+  read ``<collection>/<key>``. A reference a copied document cannot
+  resolve for want of a ledger is printed as a warning.
 
 Output modes:
 
@@ -144,9 +146,15 @@ def validate(
                     {"code": row.code, "path": row.path, "message": row.message}
                     for row in gen_report.violations
                 ],
+                "warnings": [
+                    {"code": row.code, "path": row.path, "message": row.message}
+                    for row in gen_report.warnings
+                ],
             }
             typer.echo(json.dumps(payload))
         else:
+            for row in gen_report.warnings:
+                typer.echo(f"warning: {row.code} at {row.path}: {row.message}")
             if gen_report.ok:
                 typer.echo("validate: ok")
             else:

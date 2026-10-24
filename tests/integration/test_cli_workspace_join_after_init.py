@@ -10,6 +10,8 @@ and ``workspace remove`` drops a workspace only one repository uses.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -165,3 +167,46 @@ def test_rekey_repo_refuses_a_shared_home_workspace(tmp_path: Path, registry_fil
     assert code == exit_codes.USER_ERROR, envelope
     assert envelope["data"]["code"] == WORKSPACE_HAS_OTHER_MEMBERS
     assert registry_file.read_bytes() == before
+
+
+def test_workspace_writers_read_the_registry_under_its_lock(
+    tmp_path: Path, registry_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every in-process registry writer reads what it rewrites while holding the lock.
+
+    A read taken before the lock lets a daemon write that lands in between be
+    overwritten by a registry built from the stale read.
+    """
+    from eawf.surfaces.cli.commands import workspace as workspace_cmd
+
+    repo = _repo(tmp_path, "game")
+    code, envelope = _init(repo, "GAME")
+    assert code == exit_codes.OK, envelope
+    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+    events: list[str] = []
+    real_acquire = workspace_cmd.portalock.acquire
+    real_read = workspace_cmd._read_registry_or_empty
+
+    @contextmanager
+    def acquire(path: Path, *, timeout: float) -> Iterator[None]:
+        with real_acquire(path, timeout=timeout):
+            events.append("locked")
+            yield
+            events.append("unlocked")
+
+    def read(target: Path) -> Registry:
+        events.append("read")
+        return real_read(target)
+
+    monkeypatch.setattr(workspace_cmd.portalock, "acquire", acquire)
+    monkeypatch.setattr(workspace_cmd, "_read_registry_or_empty", read)
+
+    for argv in (
+        ("workspace", "add", "SOLO", "--home", "SOLO"),
+        ("workspace", "remove", "SOLO"),
+        ("workspace", "rekey-repo", "--to", "ALLODS", "--repo-root", str(repo)),
+    ):
+        events.clear()
+        code, envelope = _invoke(*argv)
+        assert code == exit_codes.OK, envelope
+        assert events == ["locked", "read", "unlocked"], argv

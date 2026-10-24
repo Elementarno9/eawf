@@ -27,8 +27,7 @@ from eawf.kernel.config import layered
 from eawf.kernel.config.layered import Layer
 from eawf.kernel.config.schema import RuntimeAdapterId
 from eawf.kernel.projection.settings import LENS_LAYERS, EffectiveSettingsView, build_settings_view
-from eawf.platform.profiles.certification import profile_digest
-from eawf.platform.profiles.loader import list_profiles, load_profile
+from eawf.platform.profiles.loader import list_profiles
 from eawf.platform.profiles.trust import profile_sha256
 from eawf.platform.render_block import DISPATCH_SYSTEM_PROMPT_TARGET
 from eawf.runtime.daemon.methods.config import set_layer_values, unset_layer_value
@@ -315,8 +314,6 @@ def test_ui053_pin_records_the_trust_digest_the_console_computes(
     digest = profile_sha256(path)
     # a bundled profile is trusted by the package, so only the overlay has a pin to take
     assert view.leaf("profiles.trusted").candidates == (("house", digest),)
-    enriched = load_profile("house", repo=tree, workspace=tree)
-    assert view.leaf("profiles.certified").candidates == (("house", profile_digest(enriched)),)
 
     link = sr._Link()
     session = _on(view, "profiles.trusted")
@@ -337,10 +334,10 @@ def test_ui053_pin_records_the_trust_digest_the_console_computes(
 
 
 def test_ui053_pin_drops_a_stale_pin_the_file_still_holds(tree: Path, fixture: Fixture) -> None:
-    sr._write(tree / ".ea" / "config.yaml", "profiles:\n  certified:\n    gone: sha256:abc\n")
+    sr._write(tree / ".ea" / "config.yaml", "profiles:\n  trusted:\n    gone: abc\n")
     view = _view(tree)
     link = sr._Link()
-    session = _on(view, "profiles.certified")
+    session = _on(view, "profiles.trusted")
 
     sr._press(fixture, view, session, ["Enter", "p"])
     assert "gone has no digest to pin" in session.log[0].note
@@ -348,7 +345,7 @@ def test_ui053_pin_drops_a_stale_pin_the_file_still_holds(tree: Path, fixture: F
     assert _card(session).items[0].changes == ("gone  − abc",)  # noqa: RUF001
     sr._press(fixture, view, session, ["Enter"], send=link)
 
-    assert link.sent == [SettingRequest(target="profiles.certified", layer="repo", value={})]
+    assert link.sent == [SettingRequest(target="profiles.trusted", layer="repo", value={})]
 
 
 # ---------- CON-123: the layer offer (F) ----------

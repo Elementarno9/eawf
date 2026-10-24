@@ -328,6 +328,20 @@ def _read_tier(path: Path) -> list[ChangeRecord]:
     return records
 
 
+def committed_high_water(state_path: Path) -> int | None:
+    """Return the highest canonical sequence the committed tier of the feed records.
+
+    Args:
+        state_path: Path to the generation's ``state.json``.
+
+    Returns:
+        The ordinal of the newest committed change, or ``None`` when the
+        committed tier records none.
+    """
+    records = _read_tier(change_log_path(state_path, ChangeTier.COMMITTED))
+    return max((record.canonical_sequence for record in records), default=None)
+
+
 def read_change_page(
     state_path: Path,
     *,
@@ -387,6 +401,7 @@ __all__ = [
     "append_change_record_once",
     "change_log_path",
     "change_tier",
+    "committed_high_water",
     "document_changes",
     "field_changes",
     "read_change_page",

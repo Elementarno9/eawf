@@ -76,7 +76,9 @@ def test_a_stored_gate_row_reads_its_native_cadence(legacy: str, native: str) ->
     gate = GateSpec.model_validate(_gate(legacy))
 
     assert gate.cadence == native
-    assert gate.model_dump(mode="json")["cadence"] == native
+    # Written back as stored, so the digests a filed proof is keyed on do not move.
+    assert gate.model_dump(mode="json")["cadence"] == legacy
+    assert GateSpec.model_validate(gate.model_dump(mode="json")).cadence == native
 
 
 @pytest.mark.parametrize("cadence", _NATIVE)

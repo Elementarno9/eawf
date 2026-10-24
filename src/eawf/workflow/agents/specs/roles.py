@@ -1,10 +1,8 @@
 """Subagent role registry rendering to every kept runtime.
 
-The role registry is the typed counterpart to the dispatch
-:class:`~eawf.workflow.agents.specs.models.SubagentSpec`: where the spec carries
-the *wave-specific* prompt body, a :class:`RoleSpec` carries the
-*role-specific* contract preamble (method, output contract,
-anti-patterns) shared by every dispatch of that role.
+A :class:`RoleSpec` carries the *role-specific* contract preamble
+(method, output contract, anti-patterns) shared by every dispatch of that
+role.
 
 The canonical role contract bodies already live in
 :data:`eawf.surfaces.render.agents.AGENT_REGISTRY` (they back the static
@@ -55,15 +53,10 @@ _RUNTIME_PLACEMENT: dict[RuntimeId, str] = {
 class RoleSpec(BaseModel):
     """Typed contract for one subagent role across kept runtimes.
 
-    The model carries the role-level invariants every
-    per-role surface (Claude / Codex / OpenCode / dispatch
-    :class:`~eawf.workflow.agents.specs.models.SubagentSpec`) consumes:
-    ``system_prompt``, ``allowed_tools``, ``denied_tools``, ``model``,
-    ``memory``, ``report_schema_ref``, ``stop_conditions``. The
-    :func:`eawf.workflow.dispatch.renderer.build_role_contract` projection
-    reads these fields into a :class:`RoleContract`
-    consumed by :class:`SubagentSpec`, so the dispatch prompt's role
-    body is driven by the role registry rather than a hardcoded constant.
+    The model carries the role-level invariants every per-role surface
+    (Claude / Codex / OpenCode) consumes: ``system_prompt``,
+    ``allowed_tools``, ``denied_tools``, ``model``, ``memory``,
+    ``report_schema_ref``, ``stop_conditions``.
 
     The legacy ``body`` attribute is preserved as a read-only alias of
     :attr:`system_prompt` so callers written before the rename keep working
@@ -82,9 +75,7 @@ class RoleSpec(BaseModel):
             ``["Read", "Edit", "Bash"]``). Sourced from
             :attr:`AgentSpec.tools`.
         denied_tools: Tool names the role MUST NOT invoke. Empty by
-            default; per-wave sandbox policies tighten this list further
-            at dispatch time via
-            :func:`~eawf.runtime.sandbox.policy.resolve_denied_tools`.
+            default.
         model: Preferred model identifier (e.g. ``"opus"``), or ``None``
             when the role inherits the dispatcher's default.
         memory: Whether the role retains memory across invocations.

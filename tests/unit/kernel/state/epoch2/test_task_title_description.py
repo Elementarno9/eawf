@@ -255,8 +255,36 @@ def test_title_derives_from_intent_when_unset() -> None:
     assert title_of(Epoch2Collection.TASK, shown) == "Split the intent"
     assert title_of(Epoch2Collection.TASK, {**shown, "title": "Own title"}) == "Own title"
     assert derived_title("no separator here") == "no separator here"
-    assert derived_title("a" * 120) == "a" * 80
-    assert derived_title(f"{'b' * 90}: rest") == "b" * 80
+    assert derived_title("a" * 120) == f"{'a' * 79}…"
+    assert derived_title(f"{'b' * 90}: rest") == f"{'b' * 79}…"
     assert derived_title("a: b: c") == "a"
     assert derived_title("x") == "x"
     assert derived_title("ratio 3:4 holds") == "ratio 3:4 holds"
+
+
+def test_a_long_derived_title_is_cut_at_a_word_boundary_with_an_ellipsis() -> None:
+    intent = (
+        "Run the nightly suite on every supported platform and report the result, "
+        "catching platform regressions early"
+    )
+    title = derived_title(intent)
+    assert title == "Run the nightly suite on every supported platform and report the result,…"
+    assert len(title) <= 80
+    assert intent.startswith(title.removesuffix("…"))
+
+
+@pytest.mark.parametrize(
+    ("intent", "expected"),
+    [
+        ("w" * 80, "w" * 80),
+        (f"{'w' * 79} x", f"{'w' * 79}…"),
+        (f"{'w' * 78} xy z", f"{'w' * 78}…"),
+        (f"{'w' * 40} {'v' * 38} z", f"{'w' * 40} {'v' * 38}…"),
+    ],
+    ids=["at-the-cap", "one-over", "word-straddles-cap", "boundary-just-inside"],
+)
+def test_a_derived_title_fits_the_cap(intent: str, expected: str) -> None:
+    """Boundary: a title at the cap stands whole; one past it ends on a whole word."""
+    title = derived_title(intent)
+    assert title == expected
+    assert len(title) <= 80

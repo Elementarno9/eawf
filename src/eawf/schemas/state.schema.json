@@ -59,6 +59,46 @@
       "title": "AcceptanceStep",
       "type": "object"
     },
+    "AdoptedTargetObservation": {
+      "additionalProperties": false,
+      "description": "One target's independently observed state in an adoption.\n\nAttributes:\n    target_id: Publication target that was read back.\n    observed_status: What the read-back found. Only the two\n        ``observed_*`` states are admissible: an adoption carries\n        what an independent reader saw, never what a publisher\n        claimed, because no publisher call ran through the record to\n        do the claiming.\n    observed_at: When the read-back was taken (timezone-aware UTC).\n    evidence_ref: Locator of the read-back this row rests on.\n    detail: Non-blank prose naming what the target holds and what it\n        was built from, dense enough that a reader can tell why the\n        leg matched or diverged.",
+      "properties": {
+        "detail": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        },
+        "evidence_ref": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Evidence Ref",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "observed_status": {
+          "$ref": "#/$defs/ReleaseTargetStatus"
+        },
+        "target_id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+          "title": "Target Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_id",
+        "observed_status",
+        "observed_at",
+        "evidence_ref",
+        "detail"
+      ],
+      "title": "AdoptedTargetObservation",
+      "type": "object"
+    },
     "AgentPrincipal": {
       "additionalProperties": false,
       "description": "An agent, by immutable qualified key and the Run it acts inside.\n\nThe Run reference is required because an agent only ever acts inside\none: an agent principal with no Run is an agent nobody dispatched.",
@@ -95,6 +135,43 @@
       ],
       "title": "AnswerOutcome",
       "type": "string"
+    },
+    "BatchScope": {
+      "additionalProperties": false,
+      "description": "A Run reading one DeliveryBatch, such as an integration review.",
+      "properties": {
+        "batch_ref": {
+          "format": "eawf-urn",
+          "title": "Batch Ref",
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/$defs/RunPurpose"
+        },
+        "scope_kind": {
+          "const": "batch",
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "write_set": {
+          "default": [],
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^/\\\\][^\\\\]*$",
+            "type": "string"
+          },
+          "title": "Write Set",
+          "type": "array"
+        }
+      },
+      "required": [
+        "purpose",
+        "scope_kind",
+        "batch_ref"
+      ],
+      "title": "BatchScope",
+      "type": "object"
     },
     "BatchStatus": {
       "description": "The stored lifecycle states of a DeliveryBatch.\n\n``MERGED_PENDING_RECONCILIATION`` exists because an observed merge and\na reconciled one are different facts: the host may have integrated\nwhile the authorisation and the integration record have not yet been\nmatched against each other.",
@@ -556,6 +633,43 @@
       "title": "CampaignQuestionContext",
       "type": "object"
     },
+    "CampaignScope": {
+      "additionalProperties": false,
+      "description": "A Run reading one Campaign, such as a research round.",
+      "properties": {
+        "campaign_ref": {
+          "format": "eawf-urn",
+          "title": "Campaign Ref",
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/$defs/RunPurpose"
+        },
+        "scope_kind": {
+          "const": "campaign",
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "write_set": {
+          "default": [],
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^/\\\\][^\\\\]*$",
+            "type": "string"
+          },
+          "title": "Write Set",
+          "type": "array"
+        }
+      },
+      "required": [
+        "purpose",
+        "scope_kind",
+        "campaign_ref"
+      ],
+      "title": "CampaignScope",
+      "type": "object"
+    },
     "CampaignStatus": {
       "description": "Lifecycle of a persisted research campaign record.\n\nA staged campaign enters the store ``ACTIVE`` and stays there while it runs.\n``CONVERGED`` is the natural terminal state: a run halted on saturation or\nthe hard round cap flips the campaign to ``CONVERGED`` so it never lingers\n``ACTIVE`` forever; a converged campaign stays visible on the board as a\ncompleted campaign (its claims + rounds remain). ``CANCELLED`` is the\noperator tombstone: the operator abandons the campaign, so the record is\nmarked dead (with a cancel timestamp + reason on the payload) rather than\ndeleted, keeping the append-only store traceable; a cancelled campaign drops\noff the board's live signal.",
       "enum": [
@@ -632,6 +746,141 @@
         "template_id"
       ],
       "title": "CampaignTemplateRef",
+      "type": "object"
+    },
+    "CaptureSource": {
+      "description": "Which surface a counter reading was taken from.\n\nThe source is a measurement-quality marker in its own right: the\ntranscript is the runtime's own row-by-row record, while the sidecar\nis the last figure a statusline happened to render.",
+      "enum": [
+        "transcript",
+        "sidecar"
+      ],
+      "title": "CaptureSource",
+      "type": "string"
+    },
+    "ClaimScope": {
+      "additionalProperties": false,
+      "description": "A Run reading one claim, such as a ladder rung check.",
+      "properties": {
+        "claim_ref": {
+          "format": "eawf-urn",
+          "title": "Claim Ref",
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/$defs/RunPurpose"
+        },
+        "scope_kind": {
+          "const": "claim",
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "write_set": {
+          "default": [],
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^/\\\\][^\\\\]*$",
+            "type": "string"
+          },
+          "title": "Write Set",
+          "type": "array"
+        }
+      },
+      "required": [
+        "purpose",
+        "scope_kind",
+        "claim_ref"
+      ],
+      "title": "ClaimScope",
+      "type": "object"
+    },
+    "CounterName": {
+      "description": "The counters one reading carries, every one of them in each reading.",
+      "enum": [
+        "duration_ms",
+        "input_tokens",
+        "output_tokens",
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+        "cost_usd"
+      ],
+      "title": "CounterName",
+      "type": "string"
+    },
+    "CounterSnapshot": {
+      "additionalProperties": false,
+      "description": "One cumulative reading of a vendor session, at a Run's start or stop.\n\nAttributes:\n    captured_at: The instant the reading stands at.\n    source: The surface the reading came from.\n    harness: The runtime that counted, or ``unknown``.\n    model: The model it billed against, or ``unknown``.\n    measurement_version: The producer's definition of the counters.\n        Two readings are comparable only under the same version.\n    concurrent_run_count: How many active Runs shared the vendor\n        session when the reading was taken, this one included. It is\n        required because an absent divisor makes every later share of\n        the session unfalsifiable.\n    derived: Whether the reading is bounded rather than read: the host\n        reports a turn's usage only when the turn ends, so a Run that\n        started mid-turn is given the proportional share of that turn.\n    counters: Every counter, cumulative over the session.",
+      "properties": {
+        "captured_at": {
+          "format": "date-time",
+          "title": "Captured At",
+          "type": "string"
+        },
+        "concurrent_run_count": {
+          "exclusiveMinimum": 0,
+          "title": "Concurrent Run Count",
+          "type": "integer"
+        },
+        "counters": {
+          "additionalProperties": {
+            "discriminator": {
+              "mapping": {
+                "observed": "#/$defs/Observed",
+                "unobserved": "#/$defs/Unobserved"
+              },
+              "propertyName": "state"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Observed"
+              },
+              {
+                "$ref": "#/$defs/Unobserved"
+              }
+            ]
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/CounterName"
+          },
+          "title": "Counters",
+          "type": "object"
+        },
+        "derived": {
+          "default": false,
+          "title": "Derived",
+          "type": "boolean"
+        },
+        "harness": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Harness",
+          "type": "string"
+        },
+        "measurement_version": {
+          "exclusiveMinimum": 0,
+          "title": "Measurement Version",
+          "type": "integer"
+        },
+        "model": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/CaptureSource"
+        }
+      },
+      "required": [
+        "captured_at",
+        "source",
+        "harness",
+        "model",
+        "measurement_version",
+        "concurrent_run_count",
+        "counters"
+      ],
+      "title": "CounterSnapshot",
       "type": "object"
     },
     "CriterionGrounding": {
@@ -1105,6 +1354,43 @@
       "title": "EntityOrigin",
       "type": "object"
     },
+    "EvidenceScope": {
+      "additionalProperties": false,
+      "description": "A Run reading one evidence record, such as a re-verification.",
+      "properties": {
+        "evidence_ref": {
+          "format": "eawf-urn",
+          "title": "Evidence Ref",
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/$defs/RunPurpose"
+        },
+        "scope_kind": {
+          "const": "evidence",
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "write_set": {
+          "default": [],
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^/\\\\][^\\\\]*$",
+            "type": "string"
+          },
+          "title": "Write Set",
+          "type": "array"
+        }
+      },
+      "required": [
+        "purpose",
+        "scope_kind",
+        "evidence_ref"
+      ],
+      "title": "EvidenceScope",
+      "type": "object"
+    },
     "ExactRevisionBinding": {
       "additionalProperties": false,
       "description": "The exact tree, contract and evidence a proof was taken against.\n\nAll five members are required and none defaults, because a proof\nbound to four of them is a proof about an unspecified fifth. The model\nis frozen for the same reason: a binding that can be edited in place\nturns a stale proof into an apparently fresh one.",
@@ -1144,6 +1430,55 @@
       ],
       "title": "ExactRevisionBinding",
       "type": "object"
+    },
+    "ExcludedRuntime": {
+      "additionalProperties": false,
+      "description": "A Run whose readings exist but do not measure its work.\n\nThe exclusion is calibration signal in its own right, so it is kept\nwith its reason and both readings' versions rather than dropped.",
+      "properties": {
+        "baseline_version": {
+          "exclusiveMinimum": 0,
+          "title": "Baseline Version",
+          "type": "integer"
+        },
+        "detail": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        },
+        "outcome": {
+          "const": "excluded",
+          "default": "excluded",
+          "title": "Outcome",
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/ExclusionReason"
+        },
+        "terminal_version": {
+          "exclusiveMinimum": 0,
+          "title": "Terminal Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "reason",
+        "detail",
+        "baseline_version",
+        "terminal_version"
+      ],
+      "title": "ExcludedRuntime",
+      "type": "object"
+    },
+    "ExclusionReason": {
+      "description": "Why a Run's two readings cannot be differenced.",
+      "enum": [
+        "measurement_version_changed",
+        "source_changed",
+        "counter_reset"
+      ],
+      "title": "ExclusionReason",
+      "type": "string"
     },
     "HumanPrincipal": {
       "additionalProperties": false,
@@ -1200,6 +1535,122 @@
         "submitted_at"
       ],
       "title": "LateAnswer",
+      "type": "object"
+    },
+    "MeasuredRuntime": {
+      "additionalProperties": false,
+      "description": "A Run's own share of its vendor session, start to stop.\n\nAttributes:\n    source: The surface both readings came from.\n    harness: The runtime that counted, or ``unknown``.\n    model: The model the terminal reading billed against, or\n        ``unknown``.\n    measurement_version: The definition both readings share; rollups\n        combine only rows that agree on it.\n    divisor: How many Runs shared the session when the baseline was\n        taken. Every counter is already divided by it, so no share of\n        a shared interval is handed whole to more than one Run.\n    derived: Whether the baseline was bounded rather than read.\n    measurement_quality: ``measured`` for a sole, read baseline;\n        ``derived`` for a share of a shared session; ``estimated`` when\n        the baseline was bounded. Never ``unavailable``: a Run with no\n        reading is :class:`UncapturedRuntime`.\n    reconstruction_basis: How a share not read whole from the record\n        was obtained; present exactly when the quality is not\n        ``measured``.\n    counters: The Run's share of each counter.\n    spans: The span aggregate, or why there is none.",
+      "properties": {
+        "counters": {
+          "additionalProperties": {
+            "discriminator": {
+              "mapping": {
+                "observed": "#/$defs/Observed",
+                "unobserved": "#/$defs/Unobserved"
+              },
+              "propertyName": "state"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Observed"
+              },
+              {
+                "$ref": "#/$defs/Unobserved"
+              }
+            ]
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/CounterName"
+          },
+          "title": "Counters",
+          "type": "object"
+        },
+        "derived": {
+          "title": "Derived",
+          "type": "boolean"
+        },
+        "divisor": {
+          "exclusiveMinimum": 0,
+          "title": "Divisor",
+          "type": "integer"
+        },
+        "harness": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Harness",
+          "type": "string"
+        },
+        "measurement_quality": {
+          "enum": [
+            "measured",
+            "derived",
+            "estimated",
+            "unavailable"
+          ],
+          "title": "Measurement Quality",
+          "type": "string"
+        },
+        "measurement_version": {
+          "exclusiveMinimum": 0,
+          "title": "Measurement Version",
+          "type": "integer"
+        },
+        "model": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "outcome": {
+          "const": "measured",
+          "default": "measured",
+          "title": "Outcome",
+          "type": "string"
+        },
+        "reconstruction_basis": {
+          "anyOf": [
+            {
+              "enum": [
+                "recorded_in_transcript",
+                "version_table",
+                "read_from_disk_now"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reconstruction Basis"
+        },
+        "source": {
+          "$ref": "#/$defs/CaptureSource"
+        },
+        "spans": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpanSummary"
+            },
+            {
+              "$ref": "#/$defs/Unobserved"
+            }
+          ],
+          "title": "Spans"
+        }
+      },
+      "required": [
+        "source",
+        "harness",
+        "model",
+        "measurement_version",
+        "divisor",
+        "derived",
+        "measurement_quality",
+        "counters",
+        "spans"
+      ],
+      "title": "MeasuredRuntime",
       "type": "object"
     },
     "MetricSpec": {
@@ -1525,6 +1976,43 @@
       "title": "MilestoneKind",
       "type": "string"
     },
+    "MilestoneScope": {
+      "additionalProperties": false,
+      "description": "A Run reading one Milestone, such as an acceptance sweep.",
+      "properties": {
+        "milestone_ref": {
+          "format": "eawf-urn",
+          "title": "Milestone Ref",
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/$defs/RunPurpose"
+        },
+        "scope_kind": {
+          "const": "milestone",
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "write_set": {
+          "default": [],
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^/\\\\][^\\\\]*$",
+            "type": "string"
+          },
+          "title": "Write Set",
+          "type": "array"
+        }
+      },
+      "required": [
+        "purpose",
+        "scope_kind",
+        "milestone_ref"
+      ],
+      "title": "MilestoneScope",
+      "type": "object"
+    },
     "MilestoneStatus": {
       "description": "The stored lifecycle states of a Milestone.",
       "enum": [
@@ -1607,6 +2095,28 @@
       ],
       "title": "ObserveVerb",
       "type": "string"
+    },
+    "Observed": {
+      "additionalProperties": false,
+      "description": "A quantity the producer saw, including a genuine zero.",
+      "properties": {
+        "state": {
+          "const": "observed",
+          "default": "observed",
+          "title": "State",
+          "type": "string"
+        },
+        "value": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "Observed",
+      "type": "object"
     },
     "OpenQuestion": {
       "additionalProperties": false,
@@ -2726,6 +3236,95 @@
       "title": "PrincipalDispositionRow",
       "type": "object"
     },
+    "Project": {
+      "additionalProperties": false,
+      "description": "Repo-level project record.\n\nThe ``weekly_eu_target`` field is the operator-set weekly EU budget; when\nset, the TUI footer renders a ``weekly burn: <consumed_eu> / <target_eu>``\nrollup over the rolling 7-day window of :class:`ActualSummary.updated_at`.\nThe field is strictly optional (default ``None``) so adding it does not\nbump ``schema_version`` — projects without a target render no burn line.\n\n``track_ids`` is the Project end of the ``Project -> Track`` containment\nedge: each id names a :class:`Track` the project owns, completing the\n``Project -> Track -> Goal -> Outcome`` containment chain (the remaining\nedges live on :attr:`Track.goal_ids` and :attr:`Goal.outcome_ids`). The\nlist defaults empty so a project without any track loads unchanged and\nadding the field stays additive under ``extra=\"forbid\"``.",
+      "properties": {
+        "code": {
+          "pattern": "^[A-Z][A-Z0-9_-]{1,15}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "default_branch": {
+          "title": "Default Branch",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "domains": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Domains",
+          "type": "array"
+        },
+        "repo_urn": {
+          "pattern": "^urn:eawf:v1:(artifact|audit|blob|branch|commit|decision|event|hypothesis|iter|mcp|memory|phase|plugin|pr|principal|profile|repo|report|runtime|secret|session|spec|state|store|wave|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
+          "title": "Repo Urn",
+          "type": "string"
+        },
+        "slug": {
+          "title": "Slug",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ProjectStatus"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "track_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Track Ids",
+          "type": "array"
+        },
+        "weekly_eu_target": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Weekly Eu Target"
+        }
+      },
+      "required": [
+        "code",
+        "slug",
+        "title",
+        "domains",
+        "default_branch",
+        "status",
+        "repo_urn"
+      ],
+      "title": "Project",
+      "type": "object"
+    },
+    "ProjectStatus": {
+      "enum": [
+        "active",
+        "archived",
+        "retired"
+      ],
+      "title": "ProjectStatus",
+      "type": "string"
+    },
     "PromotionRule": {
       "additionalProperties": false,
       "description": "One rule turning Track evidence into an outcome or a projection.\n\n``produces`` is a closed pair because a rule that could produce a\nTrack status would be a third lifecycle authority beside the two\nstored states and the transition table.",
@@ -2880,6 +3479,506 @@
       "title": "QuestionReply",
       "type": "object"
     },
+    "QuestionScope": {
+      "additionalProperties": false,
+      "description": "A Run reading one open question, such as a differentiation.",
+      "properties": {
+        "purpose": {
+          "$ref": "#/$defs/RunPurpose"
+        },
+        "question_ref": {
+          "format": "eawf-urn",
+          "title": "Question Ref",
+          "type": "string"
+        },
+        "scope_kind": {
+          "const": "question",
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "write_set": {
+          "default": [],
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^/\\\\][^\\\\]*$",
+            "type": "string"
+          },
+          "title": "Write Set",
+          "type": "array"
+        }
+      },
+      "required": [
+        "purpose",
+        "scope_kind",
+        "question_ref"
+      ],
+      "title": "QuestionScope",
+      "type": "object"
+    },
+    "Release": {
+      "additionalProperties": false,
+      "description": "One immutable checkpoint record of a :class:`ReleaseTrain`.\n\nAttributes:\n    schema_version: Record schema tag. A record read from the store\n        keeps the tag its row was written under; a new record takes\n        :data:`RELEASE_SCHEMA_VERSION`.\n    uid: Stable identity across revisions of the same checkpoint.\n    key: ``REL-<version>``; agrees with :attr:`version`.\n    version: Normalized version; immutable for the record's life.\n    channel: Derived from :attr:`version`; stored so a reader need\n        not re-parse, validated so the two cannot drift.\n    authority_epoch: Epoch this checkpoint runs under; must equal\n        the train's declaration (:func:`validate_release_against_train`).\n    membership_refs: Milestone acceptance bundle references. Empty\n        at ``dev1``/``dev2``; required from ``dev3`` onward.\n    source_sha: Commit the artifacts were built from. Required from\n        :attr:`ReleaseStatus.CANDIDATE` onward.\n    source_tree_sha: Tree of that commit; required alongside it.\n    manifest_ref: Pointer to the pinned ReleaseManifest artifact.\n    manifest_digest: Digest of that manifest; the approval binds it.\n    target_statuses: Per-target publication state. The target set is\n        immutable after :attr:`ReleaseStatus.APPROVED`.\n    policy_revision: Policy generation the approval binds.\n    status: Lifecycle state (see :class:`ReleaseStatus`).\n    approval_ref: The single approval receipt; required from\n        :attr:`ReleaseStatus.APPROVED` onward.\n    publication_operation_ref: Set once external effect starts.\n    supersedes_release_ref: Correction lineage for a burned version.\n    last_invalidation: Typed record of the last return to DRAFT.\n    approved_inputs: The inputs the current approval accepted; set with\n        :attr:`approval_ref` and cleared when the approval is voided.\n    adoption: Typed record of an out-of-band publication adopted into\n        this checkpoint. Mutually exclusive with\n        :attr:`approval_ref`.\n    revision: Compare-and-swap transition revision.",
+      "properties": {
+        "adoption": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReleaseAdoption"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "approval_ref": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approval Ref"
+        },
+        "approved_inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReleaseApprovalFreeze"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "authority_epoch": {
+          "minimum": 1,
+          "title": "Authority Epoch",
+          "type": "integer"
+        },
+        "channel": {
+          "$ref": "#/$defs/ReleaseChannel"
+        },
+        "key": {
+          "pattern": "^REL-\\d+\\.\\d+\\.\\d+(?:rc\\d+|\\.dev\\d+)?$",
+          "title": "Key",
+          "type": "string"
+        },
+        "last_invalidation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReleaseInvalidation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "manifest_digest": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manifest Digest"
+        },
+        "manifest_ref": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manifest Ref"
+        },
+        "membership_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Membership Refs",
+          "type": "array"
+        },
+        "policy_revision": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Policy Revision",
+          "type": "integer"
+        },
+        "publication_operation_ref": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Publication Operation Ref"
+        },
+        "revision": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "schema_version": {
+          "default": "release/v2",
+          "enum": [
+            "release/v1",
+            "release/v2"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_sha": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Sha"
+        },
+        "source_tree_sha": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Tree Sha"
+        },
+        "status": {
+          "$ref": "#/$defs/ReleaseStatus",
+          "default": "draft"
+        },
+        "supersedes_release_ref": {
+          "anyOf": [
+            {
+              "pattern": "^REL-\\d+\\.\\d+\\.\\d+(?:rc\\d+|\\.dev\\d+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supersedes Release Ref"
+        },
+        "target_statuses": {
+          "default": {},
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,31}$": {
+              "$ref": "#/$defs/ReleaseTargetStatus"
+            }
+          },
+          "title": "Target Statuses",
+          "type": "object"
+        },
+        "uid": {
+          "format": "uuid",
+          "title": "Uid",
+          "type": "string"
+        },
+        "version": {
+          "pattern": "^\\d+\\.\\d+\\.\\d+(?:rc\\d+|\\.dev\\d+)?$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uid",
+        "key",
+        "version",
+        "channel",
+        "authority_epoch"
+      ],
+      "title": "Release",
+      "type": "object"
+    },
+    "ReleaseAdoption": {
+      "additionalProperties": false,
+      "description": "The typed record of a publication that ran outside the machinery.\n\nA governed release is approved, then published, then observed. A\npublication that happened with no record has none of those three,\nand this object is deliberately not a stand-in for them: it carries\nonly what an independent reader could still see afterwards, plus why\nthe version is being written up this way.\n\nThe distinction is enforced, not merely documented.\n:class:`Release` refuses to carry an adoption and an\n:attr:`Release.approval_ref` at once, so an adopted checkpoint can\nnever be mistaken for one that earned its approval, and the reader\nmaking the distinction does not have to interpret a free-form\nreference string to make it.\n\nAttributes:\n    adopted_at: When the adoption was recorded (timezone-aware UTC).\n    reason: Non-blank prose stating that the publication was\n        uncontrolled and why the version cannot be reused.\n    incident_ref: The incident this adoption disposes of. Required,\n        because an uncontrolled publication that no incident\n        describes has not been investigated enough to adopt.\n    observations: One independently observed state per target,\n        unique by target id and non-empty. An adoption that observed\n        nothing would assert an external effect it could not see.",
+      "properties": {
+        "adopted_at": {
+          "format": "date-time",
+          "title": "Adopted At",
+          "type": "string"
+        },
+        "incident_ref": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Incident Ref",
+          "type": "string"
+        },
+        "observations": {
+          "items": {
+            "$ref": "#/$defs/AdoptedTargetObservation"
+          },
+          "minItems": 1,
+          "title": "Observations",
+          "type": "array"
+        },
+        "reason": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "adopted_at",
+        "reason",
+        "incident_ref",
+        "observations"
+      ],
+      "title": "ReleaseAdoption",
+      "type": "object"
+    },
+    "ReleaseApprovalFreeze": {
+      "additionalProperties": false,
+      "description": "The exact inputs one release approval accepted.\n\nAn approval is a decision about these values, not about whatever the\nrecord holds later, so they are copied out at approval and compared\nagainst the live inputs before any external effect. The manifest\ndigest covers the artifact inventory, the per-target artifact claims,\nthe platform claims and the notes, so artifacts and claims are frozen\nthrough it rather than restated here.\n\nAttributes:\n    membership_refs: The accepted Milestone acceptance bundles.\n    source_sha: The commit the artifacts were built from.\n    source_tree_sha: The tree of that commit.\n    tag: The tag the release publishes under.\n    manifest_ref: Pointer to the approved manifest.\n    manifest_digest: Digest of that manifest.\n    target_ids: The publication targets, sorted.\n    policy_revision: The policy generation the approval was given under.\n    proof_digest: Digest of the exact artifact set approved.",
+      "properties": {
+        "manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Digest",
+          "type": "string"
+        },
+        "manifest_ref": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Manifest Ref",
+          "type": "string"
+        },
+        "membership_refs": {
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Membership Refs",
+          "type": "array"
+        },
+        "policy_revision": {
+          "minimum": 1,
+          "title": "Policy Revision",
+          "type": "integer"
+        },
+        "proof_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Proof Digest",
+          "type": "string"
+        },
+        "source_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Source Sha",
+          "type": "string"
+        },
+        "source_tree_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Source Tree Sha",
+          "type": "string"
+        },
+        "tag": {
+          "pattern": "^v\\d+\\.\\d+\\.\\d+(?:rc\\d+|\\.dev\\d+)?$",
+          "title": "Tag",
+          "type": "string"
+        },
+        "target_ids": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Target Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "membership_refs",
+        "source_sha",
+        "source_tree_sha",
+        "tag",
+        "manifest_ref",
+        "manifest_digest",
+        "target_ids",
+        "policy_revision",
+        "proof_digest"
+      ],
+      "title": "ReleaseApprovalFreeze",
+      "type": "object"
+    },
+    "ReleaseChannel": {
+      "description": "Distribution channel a release version maps onto.\n\nThe channel is derived, never authored independently: see\n:func:`channel_for_version`. It exists as a stored field so a\nconsumer reading a persisted record does not have to re-parse the\nversion string, and as a validated field so the two can never drift.\n\nValues:\n    DEV: A ``X.Y.Z.devN`` development checkpoint.\n    RC: A ``X.Y.ZrcN`` release candidate.\n    STABLE: A bare ``X.Y.Z`` stable release.",
+      "enum": [
+        "dev",
+        "rc",
+        "stable"
+      ],
+      "title": "ReleaseChannel",
+      "type": "string"
+    },
+    "ReleaseInvalidation": {
+      "additionalProperties": false,
+      "description": "The typed record of one return to :attr:`ReleaseStatus.DRAFT`.\n\nAttributes:\n    cause: Which of the three invalidation edges fired.\n    invalidated_at: When the edge fired (timezone-aware UTC).\n    detail: Non-blank prose naming what changed, dense enough that a\n        reader can tell which input moved.\n    prior_status: The status the record left.\n    invalidated_approval_ref: The approval the edge voided, or ``None``\n        when the record held no approval.",
+      "properties": {
+        "cause": {
+          "$ref": "#/$defs/ReleaseInvalidationCause"
+        },
+        "detail": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        },
+        "invalidated_approval_ref": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Invalidated Approval Ref"
+        },
+        "invalidated_at": {
+          "format": "date-time",
+          "title": "Invalidated At",
+          "type": "string"
+        },
+        "prior_status": {
+          "$ref": "#/$defs/ReleaseStatus"
+        }
+      },
+      "required": [
+        "cause",
+        "invalidated_at",
+        "detail",
+        "prior_status"
+      ],
+      "title": "ReleaseInvalidation",
+      "type": "object"
+    },
+    "ReleaseInvalidationCause": {
+      "description": "Why a :class:`Release` was returned to :attr:`ReleaseStatus.DRAFT`.\n\nRecorded on :attr:`Release.last_invalidation` so the return to DRAFT\nis a typed fact rather than an inference from a status history.\n\nThe first six name which approved input moved, so an invalidated\napproval says what has to be re-approved rather than only that\nsomething did.\n\nValues:\n    HEAD_MOVED: The source commit or tree differs from the approved one.\n    MEMBERSHIP_CHANGED: The accepted membership bundles differ.\n    ARTIFACT_CHANGED: The manifest or the proof digest differs.\n    NOTES_CHANGED: The release notes differ.\n    TARGETS_CHANGED: The publication target set differs.\n    POLICY_CHANGED: The policy generation differs.\n    INPUTS_REPLACED: Candidate inputs changed before any effect.\n    PREFLIGHT_FAILED: A required readiness signal came back non-pass.",
+      "enum": [
+        "head_moved",
+        "membership_changed",
+        "artifact_changed",
+        "notes_changed",
+        "targets_changed",
+        "policy_changed",
+        "inputs_replaced",
+        "preflight_failed"
+      ],
+      "title": "ReleaseInvalidationCause",
+      "type": "string"
+    },
+    "ReleaseScope": {
+      "additionalProperties": false,
+      "description": "A Run reading one Release, such as a preflight or a read-back.",
+      "properties": {
+        "purpose": {
+          "$ref": "#/$defs/RunPurpose"
+        },
+        "release_ref": {
+          "format": "eawf-urn",
+          "title": "Release Ref",
+          "type": "string"
+        },
+        "scope_kind": {
+          "const": "release",
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "write_set": {
+          "default": [],
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^/\\\\][^\\\\]*$",
+            "type": "string"
+          },
+          "title": "Write Set",
+          "type": "array"
+        }
+      },
+      "required": [
+        "purpose",
+        "scope_kind",
+        "release_ref"
+      ],
+      "title": "ReleaseScope",
+      "type": "object"
+    },
+    "ReleaseStatus": {
+      "description": "Lifecycle state of one :class:`Release` record.\n\nThe legal moves between these states live in\n:data:`eawf.workflow.release.lifecycle.RELEASE_TRANSITIONS`; this\nenum is only the vocabulary. Four states are terminal\n(:attr:`CANCELLED`, :attr:`BAKED`, :attr:`RELEASED`,\n:attr:`PARTIALLY_RELEASED`) and none of them returns to\n:attr:`DRAFT` -- a burned version is corrected by a new version\nlinked through :attr:`Release.supersedes_release_ref`.\n\nValues:\n    DRAFT: Inputs still mutable; nothing pinned.\n    CANDIDATE: Manifest pinned; preflight may run.\n    PREFLIGHT_FAILED: A required readiness signal came back non-pass.\n    APPROVED: Operator approved against an exact manifest digest.\n    CANCELLED: Abandoned before any external effect.\n    PUBLISHING: External effect in flight.\n    PUBLISH_TIMEOUT: A target's final external state is unknown.\n    VERIFYING: Every target call reported success; observation pending.\n    RECOVERING: A hard failure landed after a possible side effect.\n    BAKED: Prerelease independently observed on every required target.\n    RELEASED: Stable independently observed on every required target.\n    PARTIALLY_RELEASED: The version is spent and burned -- either\n        recovery was exhausted, or an out-of-band publication was\n        adopted into the record (see :class:`ReleaseAdoption`).",
+      "enum": [
+        "draft",
+        "candidate",
+        "preflight_failed",
+        "approved",
+        "cancelled",
+        "publishing",
+        "publish_timeout",
+        "verifying",
+        "recovering",
+        "baked",
+        "released",
+        "partially_released"
+      ],
+      "title": "ReleaseStatus",
+      "type": "string"
+    },
+    "ReleaseTargetStatus": {
+      "description": "Per-target publication state inside one :class:`Release`.\n\nThe split between a *reported* and an *observed* state is the point\nof the vocabulary: an adapter's own success report is never enough\nto bake a release. Only the observation verb, reading back from the\ntarget's declared adapter, may write :attr:`OBSERVED_SUCCESS` or\n:attr:`OBSERVED_MISMATCH`.\n\nValues:\n    NOT_STARTED: No publication operation has opened for this target.\n    QUEUED: The publication operation opened this leg.\n    IN_FLIGHT: The adapter call was dispatched.\n    REPORTED_SUCCESS: The adapter claimed success; unverified.\n    REPORTED_FAILURE: The adapter claimed failure.\n    UNKNOWN: The deadline elapsed with no final result.\n    OBSERVED_SUCCESS: Independent read-back matched the frozen digests.\n    OBSERVED_MISMATCH: Independent read-back contradicted them.",
+      "enum": [
+        "not_started",
+        "queued",
+        "in_flight",
+        "reported_success",
+        "reported_failure",
+        "unknown",
+        "observed_success",
+        "observed_mismatch"
+      ],
+      "title": "ReleaseTargetStatus",
+      "type": "string"
+    },
     "RepoTrackScope": {
       "additionalProperties": false,
       "description": "A Track integrating into exactly one registered repository.",
@@ -2967,6 +4066,43 @@
         "head_sha"
       ],
       "title": "RepositoryHeadBinding",
+      "type": "object"
+    },
+    "RepositoryScope": {
+      "additionalProperties": false,
+      "description": "A Run reading one repository as a whole, such as an inventory.",
+      "properties": {
+        "purpose": {
+          "$ref": "#/$defs/RunPurpose"
+        },
+        "repository_ref": {
+          "format": "eawf-urn",
+          "title": "Repository Ref",
+          "type": "string"
+        },
+        "scope_kind": {
+          "const": "repository",
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "write_set": {
+          "default": [],
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^/\\\\][^\\\\]*$",
+            "type": "string"
+          },
+          "title": "Write Set",
+          "type": "array"
+        }
+      },
+      "required": [
+        "purpose",
+        "scope_kind",
+        "repository_ref"
+      ],
+      "title": "RepositoryScope",
       "type": "object"
     },
     "ResearchBudget": {
@@ -3060,6 +4196,238 @@
       "title": "ResponseClause",
       "type": "object"
     },
+    "Run": {
+      "additionalProperties": false,
+      "description": "One execution episode of one agent against one scope.\n\n``vendor_session`` is the runtime's own session the episode's usage\nis counted under, distinct from the Run key and from any agent\nsession id; capture reads counters only through it.\n``counter_baseline`` is the reading taken when the Run started and\n``captured_runtime`` what the stop reading made of it.\n``parent_run_ref`` is the Run that delegated this one, which is how a\ndelegation tree is read back: lineage only, never a shared transcript.\n``runtime_tuple`` is the runtime the episode ran on; a Run recorded\nbefore any producer stated it carries ``None``.",
+      "properties": {
+        "captured_runtime": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "excluded": "#/$defs/ExcludedRuntime",
+                  "measured": "#/$defs/MeasuredRuntime",
+                  "uncaptured": "#/$defs/UncapturedRuntime"
+                },
+                "propertyName": "outcome"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/MeasuredRuntime"
+                },
+                {
+                  "$ref": "#/$defs/ExcludedRuntime"
+                },
+                {
+                  "$ref": "#/$defs/UncapturedRuntime"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Captured Runtime"
+        },
+        "counter_baseline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CounterSnapshot"
+            },
+            {
+              "$ref": "#/$defs/UncapturedRuntime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Counter Baseline"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TransitionReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/EntityOrigin"
+        },
+        "parent_run_ref": {
+          "anyOf": [
+            {
+              "format": "eawf-urn",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Run Ref"
+        },
+        "revision": {
+          "exclusiveMinimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "runtime_tuple": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunRuntimeTuple"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scope": {
+          "discriminator": {
+            "mapping": {
+              "batch": "#/$defs/BatchScope",
+              "campaign": "#/$defs/CampaignScope",
+              "claim": "#/$defs/ClaimScope",
+              "evidence": "#/$defs/EvidenceScope",
+              "milestone": "#/$defs/MilestoneScope",
+              "question": "#/$defs/QuestionScope",
+              "release": "#/$defs/ReleaseScope",
+              "repository": "#/$defs/RepositoryScope",
+              "task": "#/$defs/TaskScope",
+              "workspace": "#/$defs/WorkspaceScope"
+            },
+            "propertyName": "scope_kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/TaskScope"
+            },
+            {
+              "$ref": "#/$defs/BatchScope"
+            },
+            {
+              "$ref": "#/$defs/MilestoneScope"
+            },
+            {
+              "$ref": "#/$defs/CampaignScope"
+            },
+            {
+              "$ref": "#/$defs/ReleaseScope"
+            },
+            {
+              "$ref": "#/$defs/RepositoryScope"
+            },
+            {
+              "$ref": "#/$defs/WorkspaceScope"
+            },
+            {
+              "$ref": "#/$defs/EvidenceScope"
+            },
+            {
+              "$ref": "#/$defs/ClaimScope"
+            },
+            {
+              "$ref": "#/$defs/QuestionScope"
+            }
+          ],
+          "title": "Scope"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "status": {
+          "$ref": "#/$defs/RunStatus"
+        },
+        "suspension_reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SuspensionReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "uid": {
+          "format": "uuid",
+          "title": "Uid",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "urn": {
+          "format": "eawf-urn",
+          "title": "Urn",
+          "type": "string"
+        },
+        "vendor_session": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VendorSessionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "uid",
+        "key",
+        "urn",
+        "origin",
+        "revision",
+        "created_at",
+        "updated_at",
+        "scope",
+        "status"
+      ],
+      "title": "Run",
+      "type": "object"
+    },
     "RunPurpose": {
       "description": "What one Run is being executed to do.\n\nThe first three purposes change a repository and the rest only read\nit. The split is the whole point of the enumeration: it is what\n:class:`TaskScope` is checked against, so a run that intends to\nwrite cannot be filed under a scope that has nothing to write to.",
       "enum": [
@@ -3073,6 +4441,74 @@
         "observe"
       ],
       "title": "RunPurpose",
+      "type": "string"
+    },
+    "RunRuntimeTuple": {
+      "additionalProperties": false,
+      "description": "The runtime one Run ran on, as far as its producer observed it.\n\nOnly ``harness`` is required, because every producer knows which\nruntime it drives; the rest is what the producer actually saw, and a\nmember it could not see stays ``None`` rather than borrowing a default.\nThe vendor session is not repeated here: it is\n:attr:`Run.vendor_session`, the reference capture already reads.\n\nAttributes:\n    harness: The runtime, such as ``claude-code`` or ``codex``.\n    harness_version: The runtime's own version, the one a\n        certification is matched on.\n    provider: Who served the model, such as ``anthropic``.\n    model: The model id the runtime ran.",
+      "properties": {
+        "harness": {
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "title": "Harness",
+          "type": "string"
+        },
+        "harness_version": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Harness Version"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@\\[\\]-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider"
+        }
+      },
+      "required": [
+        "harness"
+      ],
+      "title": "RunRuntimeTuple",
+      "type": "object"
+    },
+    "RunStatus": {
+      "description": "The stored lifecycle states of a Run.\n\n``SUSPENDED`` is a first-class state rather than a flag on\n``RUNNING`` because it has its own exit condition: a suspended Run\nresumes on a named clearing fact, and a running one does not wait\nfor anything.",
+      "enum": [
+        "QUEUED",
+        "RUNNING",
+        "SUSPENDED",
+        "COMPLETED",
+        "FAILED",
+        "CANCELLED"
+      ],
+      "title": "RunStatus",
       "type": "string"
     },
     "SourceAtom": {
@@ -3107,6 +4543,63 @@
         "text"
       ],
       "title": "SourceAtom",
+      "type": "object"
+    },
+    "SpanPhase": {
+      "description": "What a measured span of a Run's time was spent on.\n\nOnly phases a producer emits are declared: a phase with no producer\nwould be a renderer row nothing can ever fill.",
+      "enum": [
+        "reasoning_request",
+        "plain_request",
+        "tool_call",
+        "idle"
+      ],
+      "title": "SpanPhase",
+      "type": "string"
+    },
+    "SpanSummary": {
+      "additionalProperties": false,
+      "description": "An aggregate over a Run's spans, with its unattributed share beside it.\n\nAttributes:\n    total_ms: Every span's duration, attributed or not.\n    attributed_ms: The duration a named producer measured.\n    unattributed_ms: The duration no producer can be named for.\n    unattributed_share: ``unattributed_ms / total_ms``; zero when the\n        spans cover no time at all.\n    phase_ms: The attributed duration per phase.",
+      "properties": {
+        "attributed_ms": {
+          "minimum": 0,
+          "title": "Attributed Ms",
+          "type": "integer"
+        },
+        "phase_ms": {
+          "additionalProperties": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/SpanPhase"
+          },
+          "title": "Phase Ms",
+          "type": "object"
+        },
+        "total_ms": {
+          "minimum": 0,
+          "title": "Total Ms",
+          "type": "integer"
+        },
+        "unattributed_ms": {
+          "minimum": 0,
+          "title": "Unattributed Ms",
+          "type": "integer"
+        },
+        "unattributed_share": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Unattributed Share",
+          "type": "string"
+        }
+      },
+      "required": [
+        "total_ms",
+        "attributed_ms",
+        "unattributed_ms",
+        "unattributed_share",
+        "phase_ms"
+      ],
+      "title": "SpanSummary",
       "type": "object"
     },
     "StepState": {
@@ -3152,6 +4645,19 @@
       ],
       "title": "SurfaceProducerRef",
       "type": "object"
+    },
+    "SuspensionReason": {
+      "description": "Why a Run is suspended, named by the fact that clears it.\n\nThe vocabulary is closed and every member is a *waiting-for*, not a\ndiagnosis: an operator answer, a permission decision, another unit\nof work finishing, a lease releasing, or provider capacity coming\nback. A reason with no clearing fact would describe a Run that can\nnever legitimately resume, which is a failure rather than a pause.",
+      "enum": [
+        "AWAITING_OPERATOR_INPUT",
+        "AWAITING_HUMAN_REVIEW",
+        "AWAITING_PERMISSION_GRANT",
+        "AWAITING_DEPENDENCY",
+        "AWAITING_LEASE",
+        "AWAITING_PROVIDER_CAPACITY"
+      ],
+      "title": "SuspensionReason",
+      "type": "string"
     },
     "Task": {
       "additionalProperties": false,
@@ -3401,6 +4907,43 @@
       ],
       "title": "TaskPriority",
       "type": "string"
+    },
+    "TaskScope": {
+      "additionalProperties": false,
+      "description": "A Run executing one Task: the only scope that may write.",
+      "properties": {
+        "purpose": {
+          "$ref": "#/$defs/RunPurpose"
+        },
+        "scope_kind": {
+          "const": "task",
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "task_ref": {
+          "format": "eawf-urn",
+          "title": "Task Ref",
+          "type": "string"
+        },
+        "write_set": {
+          "default": [],
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^/\\\\][^\\\\]*$",
+            "type": "string"
+          },
+          "title": "Write Set",
+          "type": "array"
+        }
+      },
+      "required": [
+        "purpose",
+        "scope_kind",
+        "task_ref"
+      ],
+      "title": "TaskScope",
+      "type": "object"
     },
     "TaskStatus": {
       "description": "The stored lifecycle states of a Task, draft head included.",
@@ -3706,6 +5249,59 @@
       "title": "TransitionReason",
       "type": "object"
     },
+    "UncapturedReason": {
+      "description": "Why a Run holds no captured runtime at all.",
+      "enum": [
+        "no_vendor_session",
+        "no_source",
+        "no_baseline"
+      ],
+      "title": "UncapturedReason",
+      "type": "string"
+    },
+    "UncapturedRuntime": {
+      "additionalProperties": false,
+      "description": "A Run whose vendor session yielded nothing to difference.\n\nIt is recorded rather than left null so \"capture never ran\" and\n\"capture ran and found nothing\" stay two different facts, and so a\nmissing baseline is never differenced as a zero one.",
+      "properties": {
+        "outcome": {
+          "const": "uncaptured",
+          "default": "uncaptured",
+          "title": "Outcome",
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/UncapturedReason"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "title": "UncapturedRuntime",
+      "type": "object"
+    },
+    "Unobserved": {
+      "additionalProperties": false,
+      "description": "A quantity the producer could not see, and why. Never a zero.",
+      "properties": {
+        "reason": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "state": {
+          "const": "unobserved",
+          "default": "unobserved",
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "title": "Unobserved",
+      "type": "object"
+    },
     "Urgency": {
       "description": "Shared time-pressure ladder for operator-facing pauses and questions.\n\nOne closed vocabulary feeds three surfaces that all ask \"how soon does a\nhuman need to look at this\": the ``needs_user`` pause, a research-campaign\n:class:`~eawf.kernel.state.models.OpenQuestion`, and the attention feed that\nranks open items for the operator. Defining the ladder once here (rather\nthan a per-surface copy) keeps the three rankings comparable — an attention\nfeed can sort a needs_user pause and a blocking research question on the\nsame scale.\n\nUrgency is *time pressure to surface*, deliberately distinct from\n:class:`BacklogPriority` (long-horizon backlog ranking, ``P0``-``P3``) and\n:class:`IncidentSeverity` (blast radius of a fault). The ladder runs from\nthe most deferrable to the most immediate:\n\n- :attr:`LOW` — advisory; can wait for the next operator sweep.\n- :attr:`NORMAL` — default; surfaces in the ordinary attention feed.\n- :attr:`HIGH` — should be looked at this session.\n- :attr:`URGENT` — blocks progress; raise to the operator now.",
       "enum": [
@@ -3716,6 +5312,28 @@
       ],
       "title": "Urgency",
       "type": "string"
+    },
+    "VendorSessionRef": {
+      "additionalProperties": false,
+      "description": "The vendor runtime session a Run's usage is counted under.\n\nAttributes:\n    harness: The runtime that owns the session, such as\n        ``claude-code``. Capture resolves a transcript or sidecar only\n        through a reader registered for this harness.\n    session_digest: The session id, hashed. A raw id is accepted and\n        hashed on validation, so the raw id never reaches a record.",
+      "properties": {
+        "harness": {
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "title": "Harness",
+          "type": "string"
+        },
+        "session_digest": {
+          "pattern": "^vsid-[0-9a-f]{32}$",
+          "title": "Session Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "harness",
+        "session_digest"
+      ],
+      "title": "VendorSessionRef",
+      "type": "object"
     },
     "WipPolicy": {
       "additionalProperties": false,
@@ -3737,6 +5355,43 @@
         "active_batches_per_repo"
       ],
       "title": "WipPolicy",
+      "type": "object"
+    },
+    "WorkspaceScope": {
+      "additionalProperties": false,
+      "description": "A Run reading a whole workspace, such as a cross-track plan.",
+      "properties": {
+        "purpose": {
+          "$ref": "#/$defs/RunPurpose"
+        },
+        "scope_kind": {
+          "const": "workspace",
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "workspace_ref": {
+          "format": "eawf-urn",
+          "title": "Workspace Ref",
+          "type": "string"
+        },
+        "write_set": {
+          "default": [],
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^/\\\\][^\\\\]*$",
+            "type": "string"
+          },
+          "title": "Write Set",
+          "type": "array"
+        }
+      },
+      "required": [
+        "purpose",
+        "scope_kind",
+        "workspace_ref"
+      ],
+      "title": "WorkspaceScope",
       "type": "object"
     },
     "WorkspaceTrackScope": {
@@ -3793,12 +5448,26 @@
             "$ref": "#/$defs/DeliveryBatch"
           },
           {
-            "not": {
-              "required": [
-                "urn"
-              ]
+            "additionalProperties": false,
+            "properties": {
+              "payload": {
+                "required": [
+                  "origin"
+                ],
+                "type": "object"
+              },
+              "recorded_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "minLength": 1,
+                "type": "string"
+              }
             },
             "required": [
+              "status",
+              "recorded_at",
               "payload"
             ],
             "type": "object"
@@ -3814,12 +5483,26 @@
             "$ref": "#/$defs/Campaign"
           },
           {
-            "not": {
-              "required": [
-                "urn"
-              ]
+            "additionalProperties": false,
+            "properties": {
+              "payload": {
+                "required": [
+                  "origin"
+                ],
+                "type": "object"
+              },
+              "recorded_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "minLength": 1,
+                "type": "string"
+              }
             },
             "required": [
+              "status",
+              "recorded_at",
               "payload"
             ],
             "type": "object"
@@ -3947,12 +5630,26 @@
             "$ref": "#/$defs/Milestone"
           },
           {
-            "not": {
-              "required": [
-                "urn"
-              ]
+            "additionalProperties": false,
+            "properties": {
+              "payload": {
+                "required": [
+                  "origin"
+                ],
+                "type": "object"
+              },
+              "recorded_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "minLength": 1,
+                "type": "string"
+              }
             },
             "required": [
+              "status",
+              "recorded_at",
               "payload"
             ],
             "type": "object"
@@ -3968,12 +5665,26 @@
             "$ref": "#/$defs/OpenQuestion"
           },
           {
-            "not": {
-              "required": [
-                "urn"
-              ]
+            "additionalProperties": false,
+            "properties": {
+              "payload": {
+                "required": [
+                  "origin"
+                ],
+                "type": "object"
+              },
+              "recorded_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "minLength": 1,
+                "type": "string"
+              }
             },
             "required": [
+              "status",
+              "recorded_at",
               "payload"
             ],
             "type": "object"
@@ -3989,12 +5700,26 @@
             "$ref": "#/$defs/PendingAction"
           },
           {
-            "not": {
-              "required": [
-                "urn"
-              ]
+            "additionalProperties": false,
+            "properties": {
+              "payload": {
+                "required": [
+                  "origin"
+                ],
+                "type": "object"
+              },
+              "recorded_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "minLength": 1,
+                "type": "string"
+              }
             },
             "required": [
+              "status",
+              "recorded_at",
               "payload"
             ],
             "type": "object"
@@ -4016,12 +5741,26 @@
             "$ref": "#/$defs/PlanRevision"
           },
           {
-            "not": {
-              "required": [
-                "urn"
-              ]
+            "additionalProperties": false,
+            "properties": {
+              "payload": {
+                "required": [
+                  "origin"
+                ],
+                "type": "object"
+              },
+              "recorded_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "minLength": 1,
+                "type": "string"
+              }
             },
             "required": [
+              "status",
+              "recorded_at",
               "payload"
             ],
             "type": "object"
@@ -4032,7 +5771,36 @@
     },
     "project": {
       "additionalProperties": {
-        "type": "object"
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Project"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "payload": {
+                "required": [
+                  "origin"
+                ],
+                "type": "object"
+              },
+              "recorded_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "recorded_at",
+              "payload"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "type": "object"
     },
@@ -4044,7 +5812,36 @@
     },
     "release": {
       "additionalProperties": {
-        "type": "object"
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Release"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "payload": {
+                "required": [
+                  "origin"
+                ],
+                "type": "object"
+              },
+              "recorded_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "recorded_at",
+              "payload"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "type": "object"
     },
@@ -4055,12 +5852,26 @@
             "$ref": "#/$defs/Repository"
           },
           {
-            "not": {
-              "required": [
-                "urn"
-              ]
+            "additionalProperties": false,
+            "properties": {
+              "payload": {
+                "required": [
+                  "origin"
+                ],
+                "type": "object"
+              },
+              "recorded_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "minLength": 1,
+                "type": "string"
+              }
             },
             "required": [
+              "status",
+              "recorded_at",
               "payload"
             ],
             "type": "object"
@@ -4071,7 +5882,36 @@
     },
     "run": {
       "additionalProperties": {
-        "type": "object"
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Run"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "payload": {
+                "required": [
+                  "origin"
+                ],
+                "type": "object"
+              },
+              "recorded_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "recorded_at",
+              "payload"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "type": "object"
     },
@@ -4091,12 +5931,26 @@
             "$ref": "#/$defs/Task"
           },
           {
-            "not": {
-              "required": [
-                "urn"
-              ]
+            "additionalProperties": false,
+            "properties": {
+              "payload": {
+                "required": [
+                  "origin"
+                ],
+                "type": "object"
+              },
+              "recorded_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "minLength": 1,
+                "type": "string"
+              }
             },
             "required": [
+              "status",
+              "recorded_at",
               "payload"
             ],
             "type": "object"
@@ -4124,12 +5978,26 @@
             "$ref": "#/$defs/Track"
           },
           {
-            "not": {
-              "required": [
-                "urn"
-              ]
+            "additionalProperties": false,
+            "properties": {
+              "payload": {
+                "required": [
+                  "origin"
+                ],
+                "type": "object"
+              },
+              "recorded_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "minLength": 1,
+                "type": "string"
+              }
             },
             "required": [
+              "status",
+              "recorded_at",
               "payload"
             ],
             "type": "object"

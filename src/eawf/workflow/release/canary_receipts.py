@@ -373,26 +373,34 @@ def load_dispatch_smoke_receipts(
 
 
 def dispatch_smoke_gaps(
-    receipts: DispatchSmokeReceiptSet | None, os_classes: tuple[OsClass, ...]
-) -> tuple[tuple[OsClass, DispatchSmokeGap], ...]:
-    """Return each claimed os_class a passing dispatch smoke does not back.
+    receipts: DispatchSmokeReceiptSet | None, claims: tuple[tuple[str, OsClass], ...]
+) -> tuple[tuple[str, OsClass, DispatchSmokeGap], ...]:
+    """Return each claimed runtime and os_class a passing dispatch smoke does not back.
+
+    A smoke backs only the runtime it dispatched to, so a claude-code
+    smoke on a class says nothing about a codex claim on it.
 
     Args:
         receipts: The committed set, or ``None`` when none is committed.
-        os_classes: The classes the checkpoint claims, in claim order.
+        claims: The ``(runtime_id, os_class)`` pairs the checkpoint
+            claims, in claim order.
 
     Returns:
-        One ``(os_class, gap)`` per class with no receipt or with a
-        failing one; empty when every class has only passing receipts.
+        One ``(runtime_id, os_class, gap)`` per pair with no receipt or a
+        failing one; empty when every pair has a passing receipt.
     """
     filed = receipts.receipts if receipts is not None else ()
-    gaps: list[tuple[OsClass, DispatchSmokeGap]] = []
-    for os_class in dict.fromkeys(os_classes):
-        scorecards = {receipt.scorecard for receipt in filed if receipt.os_class == os_class}
+    gaps: list[tuple[str, OsClass, DispatchSmokeGap]] = []
+    for runtime_id, os_class in dict.fromkeys(claims):
+        scorecards = {
+            receipt.scorecard
+            for receipt in filed
+            if (receipt.runtime_id, receipt.os_class) == (runtime_id, os_class)
+        }
         if not scorecards:
-            gaps.append((os_class, DispatchSmokeGap.MISSING))
+            gaps.append((runtime_id, os_class, DispatchSmokeGap.MISSING))
         elif "fail" in scorecards:
-            gaps.append((os_class, DispatchSmokeGap.FAILED))
+            gaps.append((runtime_id, os_class, DispatchSmokeGap.FAILED))
     return tuple(gaps)
 
 

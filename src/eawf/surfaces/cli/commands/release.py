@@ -20,9 +20,11 @@ The two train-walking verbs, ``receipts`` and ``advance``, live in
 ``candidate``, lives in
 :mod:`eawf.surfaces.cli.commands.release_candidate`; the local sweep
 verbs, ``tag`` and ``preflight``, live in
-:mod:`eawf.surfaces.cli.commands.release_tag`; and the post-merge walk,
+:mod:`eawf.surfaces.cli.commands.release_tag`; the local evidence
+export, ``canary-export``, lives in
+:mod:`eawf.surfaces.cli.commands.release_export`; and the post-merge walk,
 ``pipeline``, lives in :mod:`eawf.surfaces.cli.commands.release_pipeline`.
-All four attach their verbs to :data:`release_app` when this module is
+All of them attach their verbs to :data:`release_app` when this module is
 imported.
 """
 
@@ -1021,6 +1023,7 @@ def release_cancel(
 # the app carries every verb the parity map names. The imports sit after
 # every shared symbol is defined, so the siblings can import them from here.
 from eawf.surfaces.cli.commands import release_candidate as _release_candidate  # noqa: E402, F401
+from eawf.surfaces.cli.commands import release_export as _release_export  # noqa: E402, F401
 from eawf.surfaces.cli.commands import release_pipeline as _release_pipeline  # noqa: E402, F401
 from eawf.surfaces.cli.commands import release_regime as _release_regime  # noqa: E402, F401
 from eawf.surfaces.cli.commands import release_tag as _release_tag  # noqa: E402, F401

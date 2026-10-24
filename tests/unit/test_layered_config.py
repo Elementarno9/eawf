@@ -336,7 +336,6 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "agents.extra_tools": f"{_LAYERED}.resolve_agent_extra_tools",
     "daemon.idle_timeout_seconds": "eawf.runtime.daemon.main._resolve_idle_timeout",
     "daemon.proxy_enabled": "eawf.surfaces.cli._mutation._proxy_enabled",
-    "dispatch.role_tier_token_cap": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "economics.governor": _ECONOMICS,
     "economics.notice_policy": _ECONOMICS,
     "economics.prompt_budget": _ECONOMICS,
@@ -351,7 +350,6 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "preferences.auto_choose": (
         "eawf.runtime.daemon.methods.question_decision.resolved_preferences"
     ),
-    "profiles.certified": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "profiles.enabled": "eawf.platform.profiles.selection.resolve_enabled_profiles",
     "profiles.trusted": "eawf.platform.profiles.trust.load_trust_ledger",
     "research.agent_count": f"{_CAMPAIGN_RUN}.resolve_agent_count",
@@ -436,10 +434,8 @@ _PRODUCTION_TREES = ("src", "tools")
 #: of these must drop it from the set.
 _UNCALLED_CONSUMER_GAPS = frozenset(
     {
-        "dispatch.role_tier_token_cap",
         "flow.budget.enforce",
         "flow.budget.multiplier",
-        "profiles.certified",
     }
 )
 

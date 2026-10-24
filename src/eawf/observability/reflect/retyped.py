@@ -7,16 +7,16 @@ a memory row. This module finds those instructions, counts them over a release w
 and reads the committed triage that says where each one over the configured threshold
 went. Staying in prose is one of the dispositions, and it has to carry its argument.
 
-What counts as one operator turn:
-
-- a ``user`` message on a Run that nothing delegated, read off the tree without a daemon;
-- a prompt in the host's local session history for this repository that the host marks
-  as human-originated. A record without that mark is never a turn, whatever it says:
-  peer-session messages, task notifications, compaction summaries and skill preambles
-  all arrive as ``user`` records, and only the mark tells them apart. A history written
-  before the host kept the mark therefore contributes nothing. Sidechains, tool
-  results, harness-wrapped content and the reflection surface's own helper prompts are
-  never turns either.
+What counts as one operator turn: a prompt in the host's local session history for this
+repository that the host marks as human-originated. A record without that mark is never a
+turn, whatever it says: peer-session messages, task notifications, compaction summaries
+and skill preambles all arrive as ``user`` records, and only the mark tells them apart. A
+history written before the host kept the mark therefore contributes nothing. Sidechains,
+tool results, harness-wrapped content and the reflection surface's own helper prompts are
+never turns either. A Run's ``user`` messages are never turns: every line of that kind is
+the prompt a launcher handed the Run -- a host subagent's dispatch prompt and the
+coordinator's follow-ups, or the prompt eawf rendered for a worker it started -- so an
+agent wrote it, whether or not the Run records the one that delegated it.
 
 What counts as "the same rule, re-typed": each turn is scrubbed, split into sentences
 (a question is consultation, not an instruction, and is skipped), and each sentence is
@@ -51,10 +51,8 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from eawf.kernel.config.schema import VerifyConfig
-from eawf.kernel.runtime.events import MessageSummaryPayload, RunEventKind
 from eawf.kernel.state.types import UtcDatetime
 from eawf.observability.reflect.report import NON_QUOTABLE_MARK, reflect_root
-from eawf.observability.reflect.runs import RunReading, read_tree_runs
 from eawf.observability.reflect.titles import REFLECTION_MARKER
 from eawf.observability.telemetry.sources.session_history import (
     claude_history_root,
@@ -299,37 +297,6 @@ def _operator_text(text: str) -> str | None:
     return redact_text(stripped)
 
 
-def operator_turns_from_runs(readings: Sequence[RunReading]) -> tuple[OperatorTurn, ...]:
-    """Return the operator's messages on the Runs nothing delegated.
-
-    A delegated Run's ``user`` messages are the prompt its parent wrote, so only a Run
-    without a parent is read.
-
-    Args:
-        readings: The tree's Runs and their event lines.
-
-    Returns:
-        One turn per unquarantined ``user`` message summary, scrubbed.
-    """
-    turns: list[OperatorTurn] = []
-    for reading in readings:
-        if reading.run.parent_run_ref is not None:
-            continue
-        for event in reading.events:
-            payload = event.payload
-            if (
-                event.quarantine is not None
-                or event.event_kind is not RunEventKind.MESSAGE_SUMMARIZED
-                or not isinstance(payload, MessageSummaryPayload)
-                or payload.message_role != "user"
-            ):
-                continue
-            text = _operator_text(payload.summary)
-            if text is not None:
-                turns.append(OperatorTurn(at=event.observed_at or event.recorded_at, text=text))
-    return tuple(turns)
-
-
 def _record_text(record: Mapping[str, Any]) -> str | None:
     """Return the typed prompt a history record carries, or ``None`` when it is none."""
     if record.get("type") != "user" or record.get("isSidechain") or record.get("isMeta"):
@@ -397,24 +364,20 @@ def operator_turns_from_history(path: Path) -> tuple[OperatorTurn, ...]:
 
 
 def mine_operator_turns(repo_root: Path, *, since: datetime | None) -> tuple[OperatorTurn, ...]:
-    """Return every operator turn of the window, from the Runs and the host history.
+    """Return every operator turn of the window, from the host session history.
 
-    A turn both sources carry is kept once.
+    A turn two history files carry, as a resumed session copies its earlier prompts, is
+    kept once.
 
     Args:
-        repo_root: The repository root; its ``.ea`` tree holds the Runs and its path
-            names the host history directory.
+        repo_root: The repository root; its path names the host history directory.
         since: The window's start, or ``None`` for the whole history.
 
     Returns:
         The window's turns, oldest first.
-
-    Raises:
-        pydantic.ValidationError: A Run row or event line does not validate.
-        LedgerTornTailError: The run ledger ends mid-line.
     """
     root = repo_root.resolve()
-    turns = set(operator_turns_from_runs(read_tree_runs(root / ".ea")))
+    turns: set[OperatorTurn] = set()
     floor = None if since is None else since.timestamp()
     for path in discover_history(claude_history_root(root)):
         if floor is not None and path.stat().st_mtime < floor:
@@ -613,7 +576,7 @@ def triage_retyped_rules(repo_root: Path, *, since: datetime | None) -> RetypedT
     Raises:
         RuleSourceError: The rule source fails to load.
         RuleCompileError: The committed rules fail compilation.
-        pydantic.ValidationError: The config, the triage, or a Run row does not validate.
+        pydantic.ValidationError: The config or the triage does not validate.
     """
     threshold = resolve_retyped_rule_threshold(repo_root)
     turns = mine_operator_turns(repo_root, since=since)
@@ -669,7 +632,6 @@ __all__ = [
     "load_retyped_triage",
     "mine_operator_turns",
     "operator_turns_from_history",
-    "operator_turns_from_runs",
     "resolve_retyped_rule_threshold",
     "rule_vocabularies",
     "store_retyped_rows",

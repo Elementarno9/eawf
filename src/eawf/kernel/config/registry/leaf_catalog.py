@@ -81,19 +81,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         editor="pin",
         choices_from="profile_trust",
     ),
-    LeafKey(
-        key="profiles.certified",
-        domain="profiles",
-        type="mapping",
-        default={},
-        writable_layers=("repo", "branch"),
-        description=(
-            "Profile id → digest an enriched profile is certified as managed under; "
-            "no dispatch reads it yet, so setting it changes nothing."
-        ),
-        editor="pin",
-        choices_from="profile_certification",
-    ),
     # --- runtime -----------------------------------------------------------
     LeafKey(
         key="runtime.adapters",
@@ -349,18 +336,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=("global",),
         choices=("duckdb", "sqlite"),
         description="Database engine of the machine-local telemetry store.",
-    ),
-    # --- dispatch ----------------------------------------------------------
-    LeafKey(
-        key="dispatch.role_tier_token_cap",
-        domain="dispatch",
-        type="int",
-        default=2400,
-        writable_layers=_WRITABLE_GWR,
-        description=(
-            "Intended token ceiling per injected role-tier dispatch block; no "
-            "dispatch reads it yet, so setting it changes nothing."
-        ),
     ),
     # --- agents ------------------------------------------------------------
     LeafKey(
@@ -745,7 +720,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
 _CONSUMER_BY_KEY: dict[str, str] = {
     "daemon.idle_timeout_seconds": "eawf.runtime.daemon.main._resolve_idle_timeout",
     "daemon.proxy_enabled": "eawf.surfaces.cli._mutation._proxy_enabled",
-    "dispatch.role_tier_token_cap": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "estimation.eu_basis": "eawf.kernel.config.schema.EstimationConfig",
     "estimation.eu_minutes": "eawf.kernel.config.schema.EstimationConfig",
     "flow.budget.enforce": "eawf.runtime.budget.service.load_budget_config",
@@ -753,7 +727,6 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "local.scratch_root": "eawf.observability.doctor.checks_local_size.check_local_size",
     "local.size_warn_mb": "eawf.observability.doctor.checks_local_size.check_local_size",
     "preferences.auto_choose": "eawf.runtime.daemon.methods.question_decision.resolved_preferences",
-    "profiles.certified": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "profiles.enabled": "eawf.platform.profiles.selection.resolve_enabled_profiles",
     "profiles.trusted": "eawf.platform.profiles.trust.load_trust_ledger",
     "research.agent_count": "eawf.runtime.daemon.methods.campaign_run.resolve_agent_count",
@@ -865,6 +838,10 @@ _RETIRED_KEYS: frozenset[str] = frozenset(
         # closed any more
         "planning.max_parallel_waves",
         "verify.require_iter_audit_accepted",
+        # capped and certified the role-tier block a dispatch would inject; no dispatch
+        # render site injects one
+        "dispatch.role_tier_token_cap",
+        "profiles.certified",
         # retired before this catalog tracked them: renamed or never consumed
         "acceptance.lint",
         "acceptance.tests",

@@ -109,7 +109,7 @@ The CLI layer parses arguments and formats output. All domain logic lives in the
 Project codes follow ``^[A-Z][A-Z0-9_-]{1,15}$``. Task keys: ``<PROJECT>-<NNNN>`` (e.g., ``EAWF-0042``). Milestone, Batch and PlanRevision keys: ``MLS-<NNNN>``, ``BAT-<NNNN>`` and ``PRV-<NNNN>``; Run keys: ``RUN-`` and eight digits; Track keys: ``TRK-<SYMBOL>``. Hypothesis IDs: ``H<NN>-<NN>`` (e.g., ``H03-12``). The zero-padded width is part of each key's grammar, so ``RUN-0001`` is refused.
 
 <!-- END EAWF:managed id=symbol-conventions -->
-<!-- BEGIN EAWF:managed id=naming-conventions version=1.6 hash=6744ddeadba994c3 -->
+<!-- BEGIN EAWF:managed id=naming-conventions version=1.7 hash=6744ddeadba994c3 -->
 `naming-conventions` — Every cross-cutting concept has exactly one canonical name; rename an outlier to match the dominant form before merging instead of adding an adapter shim. Full text: [docs/rules/naming-conventions.md](docs/rules/naming-conventions.md)
 <!-- END EAWF:managed id=naming-conventions -->
 <!-- BEGIN EAWF:managed id=entity-title-naming version=1.2 hash=89c107c4724d2bae -->
@@ -174,7 +174,7 @@ Companion-doc references in rendered docs / commit messages / PR bodies / docstr
 Forward-fix only — once a leak lands in a published commit, history rewrite is the *last* resort because the blast radius (force-push, SHA churn, broken PR refs) is much larger than the prevention cost. Scrub locally before ``git add``; let ``pre-commit`` (``detect-secrets`` + custom path checks) catch the rest.
 
 <!-- END EAWF:managed id=secrets-hygiene -->
-<!-- BEGIN EAWF:managed id=artifact-chassis version=1.3 hash=31aec4fd9ed14687 -->
+<!-- BEGIN EAWF:managed id=artifact-chassis version=1.4 hash=31aec4fd9ed14687 -->
 `artifact-chassis` — Markdown promoted out of ``.ea/local/`` uses the renderer-owned Summary / References / Provenance / Scrub chassis, with typed citations and no absolute paths. Full text: [docs/rules/artifact-chassis.md](docs/rules/artifact-chassis.md)
 <!-- END EAWF:managed id=artifact-chassis -->
 <!-- BEGIN EAWF:managed id=planned-scope-revisability version=1.3 hash=ab0445b7964e122b -->

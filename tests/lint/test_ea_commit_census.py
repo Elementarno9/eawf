@@ -45,16 +45,19 @@ from eawf.workflow.evidence.provider_certification import (
     CANARY_EVIDENCE_DIRS,
     CANARY_EVIDENCE_FILENAME,
 )
-from eawf.workflow.release.canary_receipts import CANARY_RECEIPTS_FILENAME
+from eawf.workflow.release.canary_receipts import (
+    CANARY_RECEIPTS_FILENAME,
+    DISPATCH_SMOKE_RECEIPTS_FILENAME,
+)
 from tools.ea_commit_census import GIT_UNAVAILABLE_EXIT
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CENSUS_TOOL = _REPO_ROOT / "tools" / "ea_commit_census.py"
 
 #: The most artifacts the commit policy may promote into git: the three
-#: single-file readers, one canary export per mapped release, and the one
-#: receipt file a release reads beside its export.
-_PROMOTED_CEILING = 3 + len(CANARY_EVIDENCE_DIRS) + 1
+#: single-file readers, one canary export per mapped release, and the two
+#: receipt files a release reads beside its export.
+_PROMOTED_CEILING = 3 + len(CANARY_EVIDENCE_DIRS) + 2
 
 
 def _isolated_git_env() -> dict[str, str]:
@@ -238,6 +241,9 @@ _READERS = {
         for directory in CANARY_EVIDENCE_DIRS.values()
     },
     "/".join((*CANARY_EVIDENCE_DIRS["REL-0.7.0.dev5"], CANARY_RECEIPTS_FILENAME)): (
+        "src/eawf/workflow/release/canary_receipts.py"
+    ),
+    "/".join((*CANARY_EVIDENCE_DIRS["REL-0.7.0rc3"], DISPATCH_SMOKE_RECEIPTS_FILENAME)): (
         "src/eawf/workflow/release/canary_receipts.py"
     ),
 }

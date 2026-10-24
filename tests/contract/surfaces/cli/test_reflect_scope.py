@@ -122,11 +122,12 @@ def test_window_scope_and_format_select_runs(placed_tree: Path) -> None:
 
     milestone = _json(placed_tree, "--scope", "milestone:MLS-0104")
     assert _keys(milestone) == ["RUN-00000001", "RUN-00000005"]
-    assert [row["unpriced_runs"] for row in milestone["totals"]] == [2]
+    # no Run here reported usage, so none counts as unpriced spend
+    assert [row["unpriced_runs"] for row in milestone["totals"]] == [0]
 
     track = _json(placed_tree, "--scope", "track:TRK-EAWF-CORE")
     assert _keys(track) == ["RUN-00000001", "RUN-00000004", "RUN-00000005"]
-    assert [row["unpriced_runs"] for row in track["totals"]] == [3]
+    assert [row["unpriced_runs"] for row in track["totals"]] == [0]
 
     for refused in ("all_local", "workspace"):
         result = runner.invoke(

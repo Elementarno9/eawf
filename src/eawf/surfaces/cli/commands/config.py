@@ -432,11 +432,18 @@ def _unset_value_from_layer(
     repo_root: Path | None = None,
     also: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    """Remove *key*, and the keys in *also* in the same write, through the daemon or V1 fallback."""
+    """Remove *key*, and the keys in *also* in the same write, through the daemon or V1 fallback.
+
+    A deprecated or retired leaf is removed from any file layer that still states it,
+    since no code reads it and removal is how a stale layer is cleaned.
+    """
     from eawf.kernel.config.registry import leaf_key_lookup
+    from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS
 
     keys = [key, *also]
     for dotted in keys:
+        if dotted in DEPRECATED_LEAF_KEYS:
+            continue
         if layer not in leaf_key_lookup(dotted).writable_layers:
             raise ValueError(f"leaf {dotted!r} is not writable from the {layer} layer")
 

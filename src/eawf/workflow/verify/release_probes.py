@@ -654,8 +654,7 @@ def _probe_retyped_triage(
     Raises:
         RuleSourceError: The rule source fails to load, which the sweep converts into
             a blocked row.
-        pydantic.ValidationError: The threshold, the triage or a Run row does not
-            validate.
+        pydantic.ValidationError: The threshold or the triage does not validate.
     """
     since = _release_window_start(inputs)
     triage = triage_retyped_rules(inputs.repo_root, since=since)

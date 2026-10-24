@@ -69,6 +69,10 @@ UNREAD = ("research.auto_save",)
 #: consults a release cadence. The console prototype fixture still draws them.
 UNCALLED = ("vcs.conventions.release.cadence",)
 
+#: Leaves whose named reader had only test callers: no dispatch render site injects a
+#: role-tier block, so neither its token cap nor the managed-certification ledger is read.
+UNINJECTED = ("dispatch.role_tier_token_cap", "profiles.certified")
+
 
 def _nested(key: str, value: Any) -> dict[str, Any]:
     """Return a layer body stating ``value`` at dotted ``key``."""
@@ -129,7 +133,7 @@ def test_the_drifted_defaults_now_agree() -> None:
 # ---------- a leaf only a retired skill read is retired ----------
 
 
-@pytest.mark.parametrize("key", (*SKILL_ONLY, *UNREAD, *UNCALLED))
+@pytest.mark.parametrize("key", (*SKILL_ONLY, *UNREAD, *UNCALLED, *UNINJECTED))
 def test_a_skill_only_leaf_is_retired_everywhere_it_was_offered(key: str) -> None:
     assert key in DEPRECATED_LEAF_KEYS
     assert key not in LEAF_KEY_REGISTRY
@@ -215,6 +219,25 @@ def test_the_doctor_repair_names_each_retired_key_a_layer_still_states(repo: Pat
     assert [action.scope for action in actions] == ["workspace"]
     assert actions[0].detail == (
         "normalize deprecated configuration leaves in workspace layer: mcp.enabled, ui.bare_command"
+    )
+
+
+def test_a_layer_still_stating_a_role_tier_leaf_loads_with_it_stripped(repo: Path) -> None:
+    _write(
+        repo / ".ea" / "config.yaml",
+        "schema_version: '1.0'\ndispatch:\n  role_tier_token_cap: 900\n"
+        "profiles:\n  enabled: [core]\n  certified:\n    house: sha256:abc\n",
+    )
+    (action,) = _config_actions(repo)
+    assert action.detail.endswith(": dispatch.role_tier_token_cap, profiles.certified")
+    body = {
+        "schema_version": "1.0",
+        "dispatch": {"role_tier_token_cap": 900},
+        "profiles": {"enabled": ["core"], "certified": {"house": "sha256:abc"}},
+    }
+    assert migrate_config_payload(body) == (
+        {"schema_version": "1.0", "profiles": {"enabled": ["core"]}},
+        True,
     )
 
 

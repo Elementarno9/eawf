@@ -781,16 +781,31 @@ def test_merge_verify_blocks_preserves_the_odr_dials_and_jury_authority() -> Non
     assert merged.jury_authority == authority
 
 
-def test_merge_verify_blocks_or_folds_iter_audit_requirement() -> None:
-    merged = _merge_verify_blocks(
-        [
-            VerifyBlock(require_iter_audit_accepted=True),
-            VerifyBlock(require_iter_audit_accepted=False),
-        ]
+def test_a_profile_still_setting_the_retired_iter_audit_gate_loads_with_a_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    body = ProfileBody.model_validate(
+        {"name": "house", "verify": {"require_iter_audit_accepted": True, "enforce": True}}
     )
 
-    assert merged is not None
-    assert merged.require_iter_audit_accepted is True
+    assert body.verify == VerifyBlock(enforce=True)
+    assert "require_iter_audit_accepted" not in VerifyBlock.model_fields
+    assert "field=verify.require_iter_audit_accepted retired" in caplog.text
+
+
+def test_a_verify_block_without_the_retired_gate_loads_silently(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    assert VerifyBlock.model_validate({}) == VerifyBlock()
+    assert "retired" not in caplog.text
+
+
+@pytest.mark.parametrize("payload", [{"bogus": 1}, {"enforce": "not-a-bool"}])
+def test_a_verify_block_still_refuses_an_unknown_or_ill_typed_key(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        VerifyBlock.model_validate(payload)
 
 
 @pytest.mark.parametrize(
@@ -920,7 +935,6 @@ def test_merge_verify_blocks_covers_every_field_on_the_model() -> None:
         jury_vendors=["claude"],
         odr_floor=0.55,
         odr_blocking=True,
-        require_iter_audit_accepted=True,
         jury_authority=JuryAuthorityConfig(min_labeled_waves=42),
         checkpoint=CheckpointBlock(checkpoint_mode="barrier"),
     )

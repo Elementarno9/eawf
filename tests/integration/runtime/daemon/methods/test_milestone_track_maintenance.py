@@ -17,7 +17,7 @@ from typing import Any, Final
 import pytest
 
 from eawf.kernel.store.compaction import read_document
-from eawf.kernel.store.ledger import latest_rows
+from eawf.kernel.store.ledger import LedgerRecord, latest_rows, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.kernel.validate.epoch2 import validate_generation
@@ -27,6 +27,7 @@ from eawf.runtime.daemon.methods.domain_envelope import DomainErrorCode
 from eawf.runtime.daemon.methods.milestone_maintenance import MILESTONE_EDIT, MILESTONE_PURGE
 from eawf.runtime.daemon.methods.track_maintenance import TRACK_RENAME, TRACK_SET_POLICY
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
+    AT,
     MILESTONE_URN,
     document_path,
     firehose_path,
@@ -575,3 +576,137 @@ def test_track_maintenance_refuses_a_retired_track(tmp_path: Path) -> None:
 
     assert answer["errors"][0]["code"] == DomainErrorCode.ILLEGAL_TRANSITION.value
     assert _snapshot(canary) == before
+
+
+RUN_URN: Final = f"{_CONTAINER}/run/RUN-00000010"
+
+
+def _live_run(task_key: str) -> dict[str, Any]:
+    """Return the seeded RUNNING Run, working for Task *task_key*."""
+    run = seed_row("run", "RUNNING")
+    run["scope"]["task_ref"] = f"{_CONTAINER}/task/{task_key}"
+    return run
+
+
+def _control_facts(canary: CanaryProvision) -> list[tuple[str, str, str]]:
+    """Return every control fact the run ledger holds, as (run, control, phase)."""
+    return [
+        (line.payload["run_ref"], line.payload["control"], line.payload["phase"])
+        for line in read_ledger_records(_ledger(canary, Epoch2Collection.RUN))
+        if line.payload.get("payload_kind") == "control"
+    ]
+
+
+def test_milestone_cancel_asks_the_live_run_of_a_running_task_to_cancel(tmp_path: Path) -> None:
+    canary = _cascade_tree(tmp_path)
+    seed(canary, {"run": {"RUN-00000010": _live_run("EAWF-0043")}})
+    params: dict[str, Any] = {
+        "urn": MILESTONE_URN,
+        "idempotency_key": "req-cancel-0005",
+        "reason_code": "superseded-by-replan",
+    }
+
+    answer = _drive(canary, tmp_path, CANCEL, **params)
+
+    assert answer["status"] == "ok", answer["errors"]
+    assert latest_rows(_ledger(canary, Epoch2Collection.TASK))["EAWF-0043"]["status"] == "CANCELLED"
+    assert _control_facts(canary) == [(RUN_URN, "cancel", "requested")]
+    # a retry replays the cancel's receipt and asks nothing a second time
+    retry = _drive(canary, tmp_path, CANCEL, **params)
+    assert retry["result"] == answer["result"]
+    assert _control_facts(canary) == [(RUN_URN, "cancel", "requested")]
+
+
+def test_milestone_cancel_asks_no_run_of_a_task_whose_run_has_ended(tmp_path: Path) -> None:
+    """Boundary: a Run already compacted out of the document has nothing left to stop."""
+    canary = _cascade_tree(tmp_path)
+
+    answer = _drive(
+        canary,
+        tmp_path,
+        CANCEL,
+        urn=MILESTONE_URN,
+        idempotency_key="req-cancel-0006",
+        reason_code="superseded-by-replan",
+    )
+
+    assert answer["status"] == "ok", answer["errors"]
+    assert answer["warnings"] == []
+    assert _control_facts(canary) == []
+
+
+def _ended_run_line(canary: CanaryProvision) -> None:
+    """File a CANCELLED Run of EAWF-0043 in the run ledger, as a compaction leaves it."""
+    run = rekeyed(seed_row("run", "CANCELLED"), key="RUN-00000011")
+    run["scope"]["task_ref"] = f"{_CONTAINER}/task/EAWF-0043"
+    line = LedgerRecord(
+        collection=Epoch2Collection.RUN,
+        record_key="RUN-00000011",
+        status="CANCELLED",
+        recorded_at=AT,
+        payload=run,
+    )
+    path = _ledger(canary, Epoch2Collection.RUN)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"{line.model_dump_json()}\n")
+
+
+@pytest.mark.parametrize(
+    ("named_by", "plant"),
+    [
+        (
+            "run/RUN-00000010",
+            lambda canary: seed(canary, {"run": {"RUN-00000010": _live_run("EAWF-0043")}}),
+        ),
+        ("run/RUN-00000011", _ended_run_line),
+        (
+            "task/EAWF-0047",
+            lambda canary: seed(
+                canary,
+                {
+                    "task": {
+                        "EAWF-0047": _task(
+                            "DRAFT",
+                            "EAWF-0047",
+                            due_scope=OTHER_MILESTONE_URN,
+                            depends_on=[f"{_CONTAINER}/task/EAWF-0045"],
+                        )
+                    }
+                },
+            ),
+        ),
+    ],
+)
+def test_milestone_purge_refuses_while_a_surviving_record_names_its_work(
+    named_by: str, plant: Any, tmp_path: Path
+) -> None:
+    """A Run that worked a purged Task, or a Task depending on one, would be left dangling."""
+    canary = _cascade_tree(tmp_path)
+    plant(canary)
+    cancelled = _drive(
+        canary,
+        tmp_path,
+        CANCEL,
+        urn=MILESTONE_URN,
+        idempotency_key="req-c-0007",
+        reason_code="drop",
+    )
+    assert cancelled["status"] == "ok", cancelled["errors"]
+    before = _snapshot(canary)
+    run_ledger = _ledger_bytes(canary, Epoch2Collection.RUN)
+
+    answer = _drive(
+        canary,
+        tmp_path,
+        MILESTONE_PURGE,
+        urn=MILESTONE_URN,
+        expected_revision=2,
+        idempotency_key="req-p-0007",
+    )
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["code"] == DomainErrorCode.ILLEGAL_TRANSITION.value
+    assert named_by in answer["errors"][0]["message"]
+    assert _snapshot(canary) == before
+    assert _ledger_bytes(canary, Epoch2Collection.RUN) == run_ledger

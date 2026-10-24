@@ -73,6 +73,7 @@ from eawf.kernel.runtime.semantic import (
     CoordinationAction,
     IdempotencyKey,
     ReceiptId,
+    RepoReadOutput,
     RunScopedCommandInput,
     SemanticCall,
     SemanticResult,
@@ -1022,7 +1023,14 @@ def _serve_once(
         receipt = (
             _denied_receipt(call, check=outcome.check, error=outcome.error, now=now)
             if outcome.verdict == "refused"
-            else _served_receipt(call, session=session, inputs=inputs, held=held, now=now)
+            else _served_receipt(
+                call,
+                session=session,
+                inputs=inputs,
+                held=held,
+                launched_at=_launched_at(run_records, call.run_ref),
+                now=now,
+            )
         )
         _append_receipt(session, receipt, now=now)
         _state_phase(session, call, phase="result", now=now, result=receipt.result)
@@ -1076,6 +1084,7 @@ def _served_receipt(
     session: RootSession,
     inputs: GuardInputs,
     held: tuple[SemanticCallReceipt, ...],
+    launched_at: datetime | None,
     now: datetime,
 ) -> SemanticCallReceipt:
     """Answer an admitted call, or refuse to fabricate an answer for it.
@@ -1108,6 +1117,7 @@ def _served_receipt(
                 calls_so_far=inputs.calls_so_far,
                 held=held,
                 now=now,
+                launched_at=launched_at,
                 lease=inputs.lease,
             )
         )
@@ -1234,8 +1244,40 @@ def _append_decision(session: RootSession, decision: SandboxDecision) -> None:
     )
 
 
+def _launched_at(records: tuple[LedgerRecord, ...], urn: QualifiedUrn) -> datetime | None:
+    """Return when the Run's worker was last launched or resumed; ``None`` if never dispatched.
+
+    A resume appends an attempt line counting one more continuity attempt,
+    so the launch began at the first line carrying the standing count.
+    """
+    # Deferred: dispatch imports this module, so a top-level import would close a cycle.
+    from eawf.runtime.daemon.native_dispatch import DispatchAttempt
+
+    own = [
+        attempt
+        for item in records
+        if item.payload.get("payload_kind") == "dispatch_attempt"
+        and (attempt := DispatchAttempt.model_validate(item.payload)).run_ref == urn
+    ]
+    if not own:
+        return None
+    standing = own[-1].continuity_attempts
+    return next(item.recorded_at for item in own if item.continuity_attempts == standing)
+
+
 def _append_receipt(session: RootSession, receipt: SemanticCallReceipt, *, now: datetime) -> None:
-    """File one receipt as a line of the root's receipt ledger."""
+    """File one receipt as a line of the root's receipt ledger.
+
+    A read that carried its text is filed naming its own call, its text
+    kept by digest and reference: a window can run to a mebibyte and every
+    call reads the ledger back, so inline text makes each call cost more.
+    """
+    output = receipt.result.bounded_output
+    if isinstance(output, RepoReadOutput) and output.same_as_call is None:
+        kept = output.model_copy(update={"text": "", "same_as_call": receipt.call_id})
+        receipt = receipt.model_copy(
+            update={"result": receipt.result.model_copy(update={"bounded_output": kept})}
+        )
     commit_ledger_append(
         session,
         LedgerRecord(

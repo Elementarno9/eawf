@@ -117,7 +117,7 @@ def _scorecard(**overrides: Any) -> DispatchScorecard:
         "turns": 1,
         "read_truncation_rate": Decimal(0),
         "identical_reread_rate": Decimal(0),
-        "billable_tokens": 1,
+        "total_tokens": 1,
         "cache_read_tokens": 0,
         "first_patch_seconds": None,
         "wall_seconds": Decimal(1),
@@ -246,10 +246,42 @@ def test_scorecard_fields_of_a_run_with_reads_patches_and_usage() -> None:
     assert card.turns == 2
     assert card.read_truncation_rate == Decimal(2) / Decimal(4)
     assert card.identical_reread_rate == Decimal(1) / Decimal(4)
-    assert card.billable_tokens == 5 + 10 + 900
+    assert card.total_tokens == 5 + 10 + 900
     assert card.cache_read_tokens == 900
     assert card.first_patch_seconds == Decimal(90)
     assert card.wall_seconds == Decimal(120)
+
+
+def test_scorecard_turns_count_each_api_call_once() -> None:
+    """A later copy of one call and the result raise only output, so they add no turn."""
+    card = score_dispatch(
+        _extract(
+            usage=(
+                _usage(10, 1, 100),
+                _usage(10, 50, 100),
+                _usage(20, 52, 300),
+                _usage(20, 90, 300),
+                _usage(20, 120, 300),
+            )
+        )
+    )
+    assert card.turns == 2
+    assert card.total_tokens == 20 + 120 + 300
+
+
+def test_scorecard_turns_count_a_call_that_reads_only_from_cache() -> None:
+    card = score_dispatch(_extract(usage=(_usage(10, 1, 100), _usage(10, 2, 400))))
+    assert card.turns == 2
+
+
+def test_scorecard_turns_count_every_delta_reading() -> None:
+    delta = _usage(10, 1, 100).model_copy(update={"is_cumulative": False})
+    card = score_dispatch(_extract(usage=(delta, delta, delta)))
+    assert card.turns == 3
+
+
+def test_scorecard_turns_of_a_single_reading() -> None:
+    assert score_dispatch(_extract(usage=(_usage(1, 1, 0),))).turns == 1
 
 
 def test_scorecard_fields_of_an_empty_run() -> None:
@@ -257,7 +289,7 @@ def test_scorecard_fields_of_an_empty_run() -> None:
     assert card.turns == 0
     assert card.read_truncation_rate == Decimal(0)
     assert card.identical_reread_rate == Decimal(0)
-    assert card.billable_tokens is None
+    assert card.total_tokens is None
     assert card.cache_read_tokens is None
     assert card.first_patch_seconds is None
 
@@ -297,7 +329,7 @@ def test_scorecard_fields_from_a_ledger_tree(
     assert card.turns == 2
     assert card.read_truncation_rate == Decimal(2) / Decimal(3)
     assert card.identical_reread_rate == Decimal(1) / Decimal(3)
-    assert card.billable_tokens == 30 + 50 + 4_000
+    assert card.total_tokens == 30 + 50 + 4_000
     assert card.cache_read_tokens == 4_000
     assert card.first_patch_seconds == Decimal(50)
     assert card.wall_seconds == Decimal(200)
@@ -366,7 +398,7 @@ def test_tier_thresholds_are_the_briefs() -> None:
         fixture.max_turns,
         fixture.max_read_truncation_rate,
         fixture.max_identical_reread_rate,
-        fixture.max_billable_tokens,
+        fixture.max_total_tokens,
         fixture.max_first_patch_seconds,
         fixture.max_wall_seconds,
     ) == (25, Decimal("0.20"), Decimal("0.05"), 500_000, Decimal(300), Decimal(600))
@@ -374,7 +406,7 @@ def test_tier_thresholds_are_the_briefs() -> None:
         real.max_turns,
         real.max_read_truncation_rate,
         real.max_identical_reread_rate,
-        real.max_billable_tokens,
+        real.max_total_tokens,
         real.max_first_patch_seconds,
         real.max_wall_seconds,
     ) == (60, Decimal("0.30"), Decimal("0.10"), 2_000_000, Decimal(900), None)
@@ -387,7 +419,7 @@ def test_tier_thresholds_pass_a_run_exactly_at_every_limit(tier: DispatchTier) -
         turns=limits.max_turns,
         read_truncation_rate=limits.max_read_truncation_rate,
         identical_reread_rate=limits.max_identical_reread_rate,
-        billable_tokens=limits.max_billable_tokens,
+        total_tokens=limits.max_total_tokens,
         first_patch_seconds=limits.max_first_patch_seconds,
         wall_seconds=limits.max_wall_seconds,
     )
@@ -412,7 +444,7 @@ def test_tier_thresholds_pass_a_run_exactly_at_every_limit(tier: DispatchTier) -
             Decimal("0.0500001"),
             DispatchMetric.IDENTICAL_REREAD_RATE,
         ),
-        (DispatchTier.FIXTURE, "billable_tokens", 500_001, DispatchMetric.BILLABLE_TOKENS),
+        (DispatchTier.FIXTURE, "total_tokens", 500_001, DispatchMetric.TOTAL_TOKENS),
         (
             DispatchTier.FIXTURE,
             "first_patch_seconds",
@@ -433,7 +465,7 @@ def test_tier_thresholds_pass_a_run_exactly_at_every_limit(tier: DispatchTier) -
             Decimal("0.11"),
             DispatchMetric.IDENTICAL_REREAD_RATE,
         ),
-        (DispatchTier.REAL, "billable_tokens", 2_000_001, DispatchMetric.BILLABLE_TOKENS),
+        (DispatchTier.REAL, "total_tokens", 2_000_001, DispatchMetric.TOTAL_TOKENS),
         (
             DispatchTier.REAL,
             "first_patch_seconds",
@@ -461,7 +493,7 @@ def test_tier_thresholds_let_real_runs_take_any_wall_clock() -> None:
 
 @pytest.mark.parametrize("tier", list(DispatchTier))
 def test_tier_thresholds_let_unmeasured_values_breach_nothing(tier: DispatchTier) -> None:
-    card = _scorecard(first_patch_seconds=None, wall_seconds=None, billable_tokens=None)
+    card = _scorecard(first_patch_seconds=None, wall_seconds=None, total_tokens=None)
     assert check_scorecard(card, tier).breaches == ()
 
 
@@ -493,8 +525,9 @@ def test_extracts_score_the_verify_only_run() -> None:
     card = score_dispatch(load_extract(VERIFY_ONLY))
     assert card.run_key == "RUN-00000505"
     assert card.status is RunStatus.COMPLETED
-    assert card.turns == 27
-    assert card.billable_tokens == 1_483_560
+    # 27 readings; the last raises only output, so it is the turn's result, not a call.
+    assert card.turns == 26
+    assert card.total_tokens == 1_483_560
     assert card.cache_read_tokens == 1_463_317
     assert card.identical_reread_rate == Decimal(0)
     assert card.read_truncation_rate == Decimal(20) / Decimal(26)

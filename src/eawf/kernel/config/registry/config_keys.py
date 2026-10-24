@@ -127,15 +127,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         min_value=1,
     ),
     ConfigKey(
-        tab="planning",
-        key="dispatch.role_tier_token_cap",
-        label="Role-tier dispatch block token cap",
-        type="int",
-        default=2400,
-        description="Token ceiling per injected role-tier block; over-cap raises, never truncates.",
-        min_value=1,
-    ),
-    ConfigKey(
         tab="estimation",
         key="estimation.eu_basis",
         label="Elapsed EU basis",

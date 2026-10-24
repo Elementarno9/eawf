@@ -288,6 +288,76 @@ def test_a_nested_expired_entry_is_removed_with_its_parent(tmp_path: Path) -> No
     assert plan_local_gc(tmp_path / "local", today=date(2026, 10, 23)).expired == (outer,)
 
 
+def test_an_expired_entry_holding_a_live_entry_is_kept(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    outer = repo / ".ea" / "local" / "a"
+    live = outer / "b"
+    stale = outer / "c"
+    for entry, expiry in ((outer, "2000-01-01"), (live, "2999-01-01"), (stale, "2000-01-01")):
+        entry.mkdir(parents=True, exist_ok=True)
+        (entry / ".retention").write_text(expiry, encoding="utf-8")
+    (live / "important.txt").write_text("keep", encoding="utf-8")
+
+    applied = _gc(repo)
+
+    assert applied["expired"] == [".ea/local/a/c"]
+    assert applied["held"] == [".ea/local/a"]
+    assert (live / "important.txt").is_file()
+    assert not stale.exists()
+
+
+def test_an_expired_entry_holding_an_unreadable_entry_is_kept(tmp_path: Path) -> None:
+    from eawf.platform.local_gc import plan_local_gc
+
+    outer = tmp_path / "local" / "a"
+    inner = outer / "b"
+    inner.mkdir(parents=True)
+    (outer / ".retention").write_text("2000-01-01", encoding="utf-8")
+    (inner / ".retention").write_text("soon", encoding="utf-8")
+    plan = plan_local_gc(tmp_path / "local", today=date(2026, 10, 23))
+    assert (plan.expired, plan.held, plan.unreadable) == ((), (outer,), (inner,))
+
+
+def test_a_nested_entry_named_below_the_marker_is_removed_once(tmp_path: Path) -> None:
+    from eawf.platform.local_gc import apply_local_gc, plan_local_gc
+
+    outer = tmp_path / "local" / "a"
+    inner = outer / "!b"
+    inner.mkdir(parents=True)
+    for entry in (outer, inner):
+        (entry / ".retention").write_text("2000-01-01", encoding="utf-8")
+    plan = plan_local_gc(tmp_path / "local", today=date(2026, 10, 23))
+    assert plan.expired == (outer,)
+    apply_local_gc(plan)
+    assert not outer.exists()
+
+
+def test_a_symlinked_retention_marker_is_not_read(tmp_path: Path) -> None:
+    from eawf.platform.local_gc import plan_local_gc
+
+    target = tmp_path / "elsewhere"
+    target.write_text("2000-01-01", encoding="utf-8")
+    entry = tmp_path / "local" / "probe"
+    entry.mkdir(parents=True)
+    (entry / ".retention").symlink_to(target)
+    plan = plan_local_gc(tmp_path / "local", today=date(2026, 10, 23))
+    assert (plan.expired, plan.unreadable) == ((), ())
+
+
+def test_local_gc_resolves_the_repo_root_from_a_subdirectory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "repo"
+    research = _seed_local(repo)
+    (repo / ".ea" / "state.json").write_text("{}", encoding="utf-8")
+    monkeypatch.chdir(research)
+
+    result = runner.invoke(app, ["--json", "local", "gc", "--dry-run"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["expired"] == [".ea/local/research/tts-venv"]
+
+
 def test_local_gc_never_follows_a_link_out_of_the_local_dir(tmp_path: Path) -> None:
     from eawf.platform.local_gc import apply_local_gc, plan_local_gc
 
@@ -348,3 +418,49 @@ def test_remove_when_clean_governs_lease_cleanup(
     assert released is not None
     assert released.status is LeaseStatus.RELEASED
     assert target.is_dir() is kept
+
+
+@pytest.mark.parametrize(
+    "layer",
+    [
+        "worktrees:\n",
+        "worktrees: 5\n",
+        "worktrees: [unclosed\n",
+        "worktrees:\n  remove_when_clean: 1\n",
+    ],
+)
+def test_an_unusable_worktrees_layer_keeps_the_worktree_with_a_warning(
+    tmp_path: Path, layer: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    from eawf.runtime.workspace.lease import removes_clean_worktrees
+
+    (tmp_path / ".ea").mkdir()
+    (tmp_path / ".ea" / "config.yaml").write_text(layer, encoding="utf-8")
+
+    with caplog.at_level("WARNING", logger="eawf.runtime.workspace.lease"):
+        assert removes_clean_worktrees(tmp_path) is False
+    assert "worktrees.remove_when_clean" in caplog.text
+
+
+def test_an_unusable_worktrees_layer_does_not_abort_the_lease_reconcile(tmp_path: Path) -> None:
+    from eawf.kernel.runtime.lease import LeaseStatus
+    from eawf.runtime.workspace.lease import read_lease, reconcile_root, workspace_path
+    from tests.integration.runtime.daemon.test_worklease_recovery import (
+        JUDGED,
+        build_canary,
+        lease_the_repo,
+    )
+
+    provisioned, context = build_canary(tmp_path / "repo", code="LSW")
+    lease_id = lease_the_repo(context)
+    (provisioned.root / ".ea" / "config.yaml").write_text("worktrees:\n", encoding="utf-8")
+    issued = read_lease(context, lease_id=lease_id)
+    assert issued is not None
+
+    report = reconcile_root(context, now=JUDGED)
+
+    released = read_lease(context, lease_id=lease_id)
+    assert report.released == 1
+    assert released is not None
+    assert released.status is LeaseStatus.RELEASED
+    assert workspace_path(context, handle=issued.workspace_handle).is_dir()

@@ -492,3 +492,37 @@ def test_receipt_reuse_plan_partitions_by_disposition() -> None:
     )
     plan = ReceiptReusePlan(decisions=(reuse, rerun, unavailable))
     assert (plan.reused, plan.reruns, plan.unavailable) == ((reuse,), (rerun,), (unavailable,))
+
+
+def _rc2_gate_digest(contract: ExecutionContract) -> str:
+    """Return the gate digest as rc2 hashed it, when ``every-wave`` was a native cadence."""
+    gate = contract.gate.model_dump(mode="json")
+    assert contract.check is not None
+    return canonical_digest(
+        {
+            "gate": {**gate, "cadence": "every-wave"},
+            "check": contract.check.model_dump(mode="json"),
+            "oracle_tier": int(contract.oracle_tier),
+        }
+    )
+
+
+def test_a_stored_legacy_cadence_keeps_its_gate_digest() -> None:
+    (legacy,) = _compiled({"G-01": "deterministic"}).contracts
+    assert legacy.gate.cadence == "every-task"
+    assert legacy.gate_digest() == _rc2_gate_digest(legacy)
+    rewritten = GateSpec.model_validate(legacy.gate.model_dump(mode="json"))
+    assert rewritten.model_dump(mode="json") == legacy.gate.model_dump(mode="json")
+
+    native_gate = GateSpec.model_validate({**legacy.gate.model_dump(), "cadence": "every-task"})
+    native = legacy.model_copy(update={"gate": native_gate})
+    assert native.gate_digest() != legacy.gate_digest()
+
+
+def test_a_receipt_filed_under_a_legacy_cadence_stays_fresh() -> None:
+    leg = _single_leg()
+    rc2_key = leg.expected.model_copy(update={"gate_digest": _rc2_gate_digest(leg.contract)})
+
+    decision = decide_leg_reuse(leg, [_receipt(leg, "RCP-0001", key=rc2_key)])
+
+    assert decision.reason is ReuseReason.FRESH
