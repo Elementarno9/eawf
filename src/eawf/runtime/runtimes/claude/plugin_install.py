@@ -250,7 +250,7 @@ def _render_managed_block(timestamp: str) -> dict[str, Any]:
         "generated_at": timestamp,
         "skills": skills_payload,
         "agents": agents_payload,
-        "hooks": hooks_payload,
+        "hook_scripts": hooks_payload,
     }
     body_json = json.dumps(body, sort_keys=True, separators=(",", ":"))
     body["hash"] = hashlib.blake2b(body_json.encode("utf-8"), digest_size=8).hexdigest()

@@ -9,8 +9,10 @@ verbs are what put that row in the tree.
 Once every Batch of a Milestone in acceptance review stands on a verified
 head, the verify stage presents what the acceptance journey showed. The
 verb files that journey as revision one of the Milestone's acceptance
-bundle when the ledger holds none, resolves every ``EVD-####`` it cites,
-and opens one protected approval bound to the bundle's digest. Asking
+bundle when the ledger holds none, or as the successor of the filed head
+when a reopened review names the revision after it, resolves every
+``EVD-####`` it cites, and opens one protected approval bound to the
+bundle's digest. Asking
 again about the same bytes finds the standing question and writes
 nothing, so re-verifying the same Batches never files a duplicate.
 
@@ -120,6 +122,7 @@ from eawf.workflow.delivery.acceptance_approval import (
     acceptance_question,
     first_bundle,
     next_action_key,
+    reopened_bundle,
     require_same_bundle,
     require_verified_batches,
     seal_question,
@@ -606,9 +609,19 @@ def _bundle_to_ask_about(
             milestone, _batches(session, document, milestone_ref=str(milestone.urn))
         )
         head = _bundle_ledger(session, args.urn).head
+        reviewed = milestone.acceptance_bundle_revision
         if head is None:
             bundle = first_bundle(
                 milestone,
+                steps=args.steps,
+                accepted_binding=args.accepted_binding,
+                batch_refs=batch_refs,
+                at=now,
+            )
+        elif reviewed is not None and reviewed > head.revision:
+            bundle = reopened_bundle(
+                head,
+                reviewed_revision=reviewed,
                 steps=args.steps,
                 accepted_binding=args.accepted_binding,
                 batch_refs=batch_refs,
@@ -629,7 +642,7 @@ def _bundle_to_ask_about(
         raise DaemonValidationError(
             f"validation_failed: schema_validation_failed: check {', '.join(fields)}"
         ) from error
-    return bundle, head is None
+    return bundle, bundle is not head
 
 
 def open_acceptance_approval(

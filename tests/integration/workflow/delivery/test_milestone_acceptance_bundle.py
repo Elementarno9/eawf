@@ -97,6 +97,7 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     document_path,
     method_context,
     provision,
+    rekeyed,
     root_context,
     seed,
     seed_row,
@@ -209,6 +210,7 @@ def test_a_sealed_approval_on_the_exact_digest_clears_the_acceptance() -> None:
         bundle=bundle(),
         milestone_ref=bundle().milestone_ref,
         status=MilestoneStatus.ACCEPTANCE_REVIEW,
+        reviewed_revision=FIRST_BUNDLE_REVISION,
     )
 
     assert approval.approved_digest == bundle().digest()
@@ -225,6 +227,7 @@ def test_a_bundle_that_is_not_the_approved_one_is_refused() -> None:
             bundle=other,
             milestone_ref=other.milestone_ref,
             status=MilestoneStatus.ACCEPTANCE_REVIEW,
+            reviewed_revision=FIRST_BUNDLE_REVISION,
         )
 
     assert caught.value.code is AcceptanceRefusal.BUNDLE_SUPERSEDED
@@ -280,6 +283,7 @@ def test_an_unsealed_approval_is_refused() -> None:
             bundle=bundle(),
             milestone_ref=bundle().milestone_ref,
             status=MilestoneStatus.ACCEPTANCE_REVIEW,
+            reviewed_revision=FIRST_BUNDLE_REVISION,
         )
 
     assert caught.value.code is AcceptanceRefusal.APPROVAL_UNSEALED
@@ -294,6 +298,7 @@ def test_an_answer_that_is_not_the_approving_one_is_refused(chosen: str) -> None
             bundle=bundle(),
             milestone_ref=bundle().milestone_ref,
             status=MilestoneStatus.ACCEPTANCE_REVIEW,
+            reviewed_revision=FIRST_BUNDLE_REVISION,
         )
 
     assert caught.value.code is AcceptanceRefusal.APPROVAL_WITHHELD
@@ -307,6 +312,7 @@ def test_an_approval_of_another_milestone_is_refused() -> None:
             bundle=bundle(),
             milestone_ref=bundle().milestone_ref,
             status=MilestoneStatus.ACCEPTANCE_REVIEW,
+            reviewed_revision=FIRST_BUNDLE_REVISION,
         )
 
     assert caught.value.code is AcceptanceRefusal.APPROVAL_MISBOUND
@@ -321,6 +327,7 @@ def test_an_operator_decision_is_not_an_acceptance_approval() -> None:
             bundle=bundle(),
             milestone_ref=bundle().milestone_ref,
             status=MilestoneStatus.ACCEPTANCE_REVIEW,
+            reviewed_revision=FIRST_BUNDLE_REVISION,
         )
 
     assert caught.value.code is AcceptanceRefusal.APPROVAL_NOT_PROTECTED
@@ -336,6 +343,7 @@ def test_a_bundle_whose_journey_did_not_pass_is_refused() -> None:
             bundle=open_journey,
             milestone_ref=open_journey.milestone_ref,
             status=MilestoneStatus.ACCEPTANCE_REVIEW,
+            reviewed_revision=FIRST_BUNDLE_REVISION,
         )
 
     assert caught.value.code is AcceptanceRefusal.JOURNEY_INCOMPLETE
@@ -353,9 +361,24 @@ def test_an_acceptance_outside_review_is_refused(status: MilestoneStatus) -> Non
             bundle=bundle(),
             milestone_ref=bundle().milestone_ref,
             status=status,
+            reviewed_revision=FIRST_BUNDLE_REVISION,
         )
 
     assert caught.value.code is AcceptanceRefusal.APPROVAL_MISBOUND
+
+
+def test_a_bundle_read_in_an_earlier_review_is_refused() -> None:
+    """Off by one: review reopened on revision two, so revision one's seal is superseded."""
+    with pytest.raises(AcceptanceRefusedError) as caught:
+        require_sealed_acceptance(
+            action(),
+            bundle=bundle(),
+            milestone_ref=bundle().milestone_ref,
+            status=MilestoneStatus.ACCEPTANCE_REVIEW,
+            reviewed_revision=FIRST_BUNDLE_REVISION + 1,
+        )
+
+    assert caught.value.code is AcceptanceRefusal.BUNDLE_SUPERSEDED
 
 
 # ---------- an agent resolver is not a record that exists ----------
@@ -1018,7 +1041,12 @@ def open_approval(canary: CanaryProvision, tmp_path: Path) -> dict[str, Any]:
 
 
 def seal_approval(
-    canary: CanaryProvision, tmp_path: Path, opened: dict[str, Any], *, chosen: str = "approve"
+    canary: CanaryProvision,
+    tmp_path: Path,
+    opened: dict[str, Any],
+    *,
+    chosen: str = "approve",
+    key: str = "req-seal-0001",
 ) -> dict[str, Any]:
     """Seal the opened question with the operator's answer."""
     return call(
@@ -1027,7 +1055,7 @@ def seal_approval(
         SEAL_METHOD,
         urn=opened["action_ref"],
         expected_revision=opened["revision"],
-        idempotency_key="req-seal-0001",
+        idempotency_key=key,
         actor=ACTOR,
         resolver=dict(OPERATOR),
         option_id=chosen,
@@ -1167,6 +1195,110 @@ def test_the_question_is_not_opened_on_unheld_evidence(tmp_path: Path) -> None:
             steps=[step(evidence=unheld)],
             accepted_binding=ACCEPTED_BINDING,
         )
+
+
+# ---------- a review reopened to append work ----------
+
+REOPEN_METHOD: Final = "domain.milestone.reopen_review"
+OPEN_REVIEW_METHOD: Final = "domain.milestone.open_review"
+APPENDED_BATCH: Final = "BAT-0008"
+
+
+def move_milestone(
+    canary: CanaryProvision, tmp_path: Path, method: str, *, revision: int, key: str, **params: Any
+) -> dict[str, Any]:
+    """Dispatch one Milestone lifecycle verb at *revision* and return its envelope."""
+    return call(
+        canary,
+        tmp_path,
+        method,
+        urn=MILESTONE_URN,
+        expected_revision=revision,
+        idempotency_key=key,
+        actor=ACTOR,
+        **params,
+    )
+
+
+def review_again(canary: CanaryProvision, tmp_path: Path, *, bundle_revision: int = 2) -> None:
+    """Reopen the review, append one verified Batch, and open review on *bundle_revision*."""
+    reopened = move_milestone(
+        canary, tmp_path, REOPEN_METHOD, revision=1, key="req-reopen-0001",
+        reason_code="batch-appended",
+    )  # fmt: skip
+    assert reopened["status"] == "ok", reopened
+    appended = rekeyed(seed_row("batch", "READY_TO_MERGE"), key=APPENDED_BATCH)
+    seed(canary, {"batch": {APPENDED_BATCH: appended}})
+    reviewed = move_milestone(
+        canary, tmp_path, OPEN_REVIEW_METHOD, revision=2, key="req-review-0002",
+        updates={"acceptance_bundle_revision": bundle_revision},
+    )  # fmt: skip
+    assert reviewed["status"] == "ok", reviewed
+
+
+def accept_at(
+    canary: CanaryProvision, tmp_path: Path, opened: dict[str, Any], *, key: str
+) -> dict[str, Any]:
+    """Accept the Milestone at revision three on what *opened* answered with."""
+    return move_milestone(
+        canary, tmp_path, ACCEPT_METHOD, revision=3, key=key,
+        updates={"accepted_binding": ACCEPTED_BINDING},
+        approval_receipt_ref=opened["action_ref"],
+        acceptance_bundle=opened["acceptance_bundle"],
+    )  # fmt: skip
+
+
+def test_a_reopened_review_files_a_successor_on_the_appended_batches(tmp_path: Path) -> None:
+    """The next question binds revision two, which supersedes the reviewed bytes."""
+    canary = verified_canary(tmp_path, code="REOPEN")
+    first = open_approval(canary, tmp_path)
+    seal_approval(canary, tmp_path, first)
+    review_again(canary, tmp_path)
+
+    second = open_approval(canary, tmp_path)
+
+    assert second["created"] is True
+    assert second["action_ref"] != first["action_ref"]
+    assert second["bundle_revision"] == 2
+    filed = second["acceptance_bundle"]
+    assert filed["supersedes_revision"] == 1
+    assert filed["supersedes_digest"] == first["bundle_digest"]
+    assert filed["repair_reason"]["code"] == "review-reopened"
+    assert [ref.rsplit("/", 1)[1] for ref in filed["required_batch_refs"]] == [
+        "BAT-0007",
+        APPENDED_BATCH,
+    ]
+
+
+def test_an_approval_of_the_reopened_revision_cannot_accept(tmp_path: Path) -> None:
+    """A seal on revision one accepts nothing once review reopened on revision two."""
+    canary = verified_canary(tmp_path, code="STALESEAL")
+    first = open_approval(canary, tmp_path)
+    seal_approval(canary, tmp_path, first)
+    review_again(canary, tmp_path)
+
+    early = refusal(accept_at(canary, tmp_path, first, key="req-accept-early"))
+    second = open_approval(canary, tmp_path)
+    late = refusal(accept_at(canary, tmp_path, first, key="req-accept-late"))
+
+    for row in (early, late):
+        assert row["code"] == DomainErrorCode.PROTECTED_APPROVAL_REQUIRED.value
+        assert AcceptanceRefusal.BUNDLE_SUPERSEDED.value in row["message"]
+    seal_approval(canary, tmp_path, second, key="req-seal-0002")
+    assert accept_at(canary, tmp_path, second, key="req-accept-0002")["status"] == "ok"
+
+
+def test_a_reopened_review_skipping_a_revision_is_not_asked_about(tmp_path: Path) -> None:
+    """Review must name the revision after the filed head; a gap would break the chain."""
+    canary = verified_canary(tmp_path, code="GAP")
+    open_approval(canary, tmp_path)
+    review_again(canary, tmp_path, bundle_revision=3)
+    before = document_path(canary).read_bytes()
+
+    with pytest.raises(DaemonValidationError, match="acceptance_bundle_diverged"):
+        open_approval(canary, tmp_path)
+
+    assert document_path(canary).read_bytes() == before
 
 
 # ---------- an approval given before the URN re-key ----------

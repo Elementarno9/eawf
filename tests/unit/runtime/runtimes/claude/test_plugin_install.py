@@ -15,6 +15,7 @@ Covers:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import stat
 from pathlib import Path
@@ -413,3 +414,69 @@ def test_install_settings_hooks_preserve_user_entries_and_stay_idempotent(tmp_pa
     install_plugin(tmp_path)  # idempotent: no growth
     second = json.loads(settings_path.read_text(encoding="utf-8"))["hooks"]["SessionEnd"]
     assert second == first
+
+
+def _hooks_key_paths(node: object, path: str = "$") -> list[str]:
+    """Return the JSON path of every object key named ``hooks`` below *node*."""
+    found: list[str] = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            child = f"{path}.{key}"
+            if key == "hooks":
+                found.append(child)
+            found.extend(_hooks_key_paths(value, child))
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            found.extend(_hooks_key_paths(value, f"{path}[{index}]"))
+    return found
+
+
+def test_install_settings_declares_hooks_only_at_top_level(tmp_path: Path) -> None:
+    """Claude Code refuses the whole file when a ``hooks`` key sits under another key.
+
+    Hook entries nest a ``hooks`` command list under each event's matcher entry, which
+    is the host's own shape; every other ``hooks`` key outside the top-level block,
+    the managed namespace included, makes the host drop the file.
+    """
+    install_plugin(tmp_path)
+    parsed = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    nested_in_entries = {
+        f"$.hooks.{event}[{index}].hooks"
+        for event, entries in parsed["hooks"].items()
+        for index in range(len(entries))
+    }
+    stray = [p for p in _hooks_key_paths(parsed) if p != "$.hooks" and p not in nested_in_entries]
+    assert stray == []
+    assert "hook_scripts" in parsed["__eawf_managed"]
+
+
+def test_update_rewrites_old_managed_hooks_key_without_drift(tmp_path: Path) -> None:
+    """An rc2 tree whose managed block lists hook scripts under ``hooks`` upgrades cleanly."""
+    from eawf.runtime.runtimes.claude.plugin_doctor import doctor_plugin
+    from eawf.runtime.runtimes.claude.plugin_update import update_plugin
+    from eawf.surfaces.render.manifest import Manifest, save_atomic
+
+    install_plugin(tmp_path)
+    settings_path = tmp_path / ".claude" / "settings.json"
+    parsed = json.loads(settings_path.read_text(encoding="utf-8"))
+    managed = parsed["__eawf_managed"]
+    managed["hooks"] = managed.pop("hook_scripts")
+    old_bytes = (json.dumps(parsed, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    settings_path.write_bytes(old_bytes)
+    manifest_path = tmp_path / ".ea" / "indexes" / "generated.json"
+    manifest = Manifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+    key = f"{settings_path.resolve().as_posix()}::plugin.claude.settings"
+    manifest.generated[key] = manifest.generated[key].model_copy(
+        update={"hash": hashlib.blake2b(old_bytes, digest_size=8).hexdigest()}
+    )
+    save_atomic(manifest_path, manifest)
+    assert doctor_plugin(tmp_path).drifted == []
+
+    update_plugin(tmp_path)
+
+    rewritten = json.loads(settings_path.read_text(encoding="utf-8"))["__eawf_managed"]
+    assert "hooks" not in rewritten
+    assert {h["event_type"] for h in rewritten["hook_scripts"]} == {
+        h["event_type"] for h in managed["hooks"]
+    }
+    assert doctor_plugin(tmp_path).drifted == []

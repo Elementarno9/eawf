@@ -16,6 +16,11 @@ bundle revision it shows, offering approve, decline and repair. The same
 bundle always digests the same way, so asking twice finds the question
 already standing rather than filing a second one.
 
+Which revision. A review reopened to take on more work and opened again
+names the revision after the one it last read, and the question binds a
+successor carrying the earlier revision's digest, so a seal given in the
+earlier review stays bound to bytes the Milestone has outgrown.
+
 Whether an answer seals it. Only a waiting question at the revision the
 answer was given against is sealed. A second seal therefore refuses: the
 question is no longer waiting, and nothing leaves ``SEALED``.
@@ -48,7 +53,7 @@ from eawf.kernel.state.epoch2.pending_action import (
     TermExpansion,
 )
 from eawf.kernel.state.epoch2.urns import BatchUrn, EvidenceUrn, PendingActionUrn
-from eawf.kernel.state.epoch2.values import ExactRevisionBinding
+from eawf.kernel.state.epoch2.values import ExactRevisionBinding, TransitionReason
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +129,9 @@ _ACCEPTANCE_PREVIEWS: Final[dict[str, str]] = {
         "  after:  repair requested; bundle revision {successor} is verified next"
     ),
 }
+
+#: The repair-reason code a bundle filed for a reopened review carries.
+REVIEW_REOPENED_REASON: Final = "review-reopened"
 
 #: How many hex digits of the bundle digest name the question's
 #: idempotency key: enough that two bundles of one Milestone do not
@@ -297,6 +305,66 @@ def require_same_bundle(
     return head
 
 
+def reopened_bundle(
+    head: MilestoneAcceptanceBundle,
+    *,
+    reviewed_revision: int,
+    steps: Sequence[AcceptanceStepOutcome],
+    accepted_binding: ExactRevisionBinding,
+    batch_refs: Sequence[BatchUrn],
+    at: datetime,
+) -> MilestoneAcceptanceBundle:
+    """Return the revision a review reopened and opened again asks about.
+
+    The head is not touched: the successor is built beside it and carries
+    its digest, so the chain refuses to validate if the head an earlier
+    seal was given to is ever rewritten. Unlike a repair, the successor
+    takes the Batch set as read now, because taking on another Batch is
+    what a reopened review is for.
+
+    Args:
+        head: The newest revision the Milestone ledger holds.
+        reviewed_revision: The revision the Milestone's open review names.
+        steps: What the journey shows now.
+        accepted_binding: The exact tree the acceptance is taken on now.
+        batch_refs: The verified Batches as read now.
+        at: When the successor was sealed.
+
+    Returns:
+        The successor at ``head.revision + 1``.
+
+    Raises:
+        ApprovalRefusedError: The review names a revision other than the
+            one after the head, which the chain could not file.
+        pydantic.ValidationError: The steps break a bundle rule.
+    """
+    successor = head.revision + 1
+    if reviewed_revision != successor:
+        raise ApprovalRefusedError(
+            ApprovalRefusal.BUNDLE_DIVERGED,
+            f"review of {head.milestone_ref.entity_key} names revision {reviewed_revision}, "
+            f"and the revision after the filed head is {successor}; reopen the review and open "
+            f"it on revision {successor}",
+        )
+    reason = TransitionReason(
+        code=REVIEW_REOPENED_REASON,
+        message=f"review reopened after revision {head.revision} and opened again",
+    )
+    return MilestoneAcceptanceBundle.model_validate(
+        {
+            "milestone_ref": head.milestone_ref,
+            "revision": successor,
+            "supersedes_revision": head.revision,
+            "supersedes_digest": head.digest(),
+            "repair_reason": reason.model_dump(),
+            "accepted_binding": accepted_binding.model_dump(),
+            "required_batch_refs": [str(ref) for ref in batch_refs],
+            "steps": [item.model_dump() for item in steps],
+            "sealed_at": at,
+        }
+    )
+
+
 def approval_idempotency_key(bundle: MilestoneAcceptanceBundle) -> str:
     """Return the idempotency key the question about *bundle* is filed under.
 
@@ -468,6 +536,7 @@ def seal_question(
 __all__ = [
     "ACCEPTANCE_OPTIONS",
     "ACCEPTANCE_RATIONALE",
+    "REVIEW_REOPENED_REASON",
     "VERIFIED_BATCH_STATUSES",
     "ApprovalRefusal",
     "ApprovalRefusedError",
@@ -475,6 +544,7 @@ __all__ = [
     "approval_idempotency_key",
     "first_bundle",
     "next_action_key",
+    "reopened_bundle",
     "require_same_bundle",
     "require_verified_batches",
     "seal_question",

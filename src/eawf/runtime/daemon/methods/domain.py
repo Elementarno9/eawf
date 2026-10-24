@@ -46,6 +46,15 @@ digests differently and the acceptance is refused. Who sealed it needs no
 check at all -- the resolver slot of a PendingAction is typed to a human
 principal, so an agent-approved acceptance is a record that cannot exist.
 
+``domain.milestone.reopen_review`` takes a Milestone out of acceptance
+review and back to ``ACTIVE`` so it can take on more work, and needs a
+recorded reason to do it. It rewrites nothing: the bundle revision the
+review named stays on the row, and the filed bundle and any approval
+sealed over it stay as they are. Opening review again names the next
+revision, and an acceptance is refused on any bundle older than the one
+the open review names, so a seal given in the earlier review accepts
+nothing.
+
 Task completion is the other verb with a requirement of its own. The
 integrated binding a completed Task records is derived, never presented:
 ``domain.task.complete`` runs the completion assessment the caller's
@@ -292,6 +301,12 @@ DOMAIN_LIFECYCLE_VERBS: Final[tuple[LifecycleVerb, ...]] = (
         to_status=MilestoneStatus.ACCEPTANCE_REVIEW,
     ),
     LifecycleVerb(
+        method="domain.milestone.reopen_review",
+        kind=EntityKind.MILESTONE,
+        from_statuses=(MilestoneStatus.ACCEPTANCE_REVIEW,),
+        to_status=MilestoneStatus.ACTIVE,
+    ),
+    LifecycleVerb(
         method="domain.milestone.accept",
         kind=EntityKind.MILESTONE,
         from_statuses=(MilestoneStatus.ACCEPTANCE_REVIEW,),
@@ -532,9 +547,15 @@ def _unsealed_acceptance(
         action = PendingAction.model_validate(row)
     except ValidationError:
         return f"cannot read {ref.entity_key} as a pending action"
+    reviewed = record.acceptance_bundle_revision
+    assert reviewed is not None, "a Milestone in review always names its bundle revision"
     try:
         require_sealed_acceptance(
-            action, bundle=bundle, milestone_ref=record.urn, status=record.status
+            action,
+            bundle=bundle,
+            milestone_ref=record.urn,
+            status=record.status,
+            reviewed_revision=reviewed,
         )
     except AcceptanceRefusedError as error:
         return str(error)

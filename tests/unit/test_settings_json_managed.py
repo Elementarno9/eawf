@@ -41,7 +41,7 @@ def test_settings_managed_namespace_is_present(tmp_path: Path) -> None:
     assert managed["version"] == eawf.__version__
     assert isinstance(managed["skills"], list)
     assert isinstance(managed["agents"], list)
-    assert isinstance(managed["hooks"], list)
+    assert isinstance(managed["hook_scripts"], list)
 
 
 def test_settings_user_keys_preserved(tmp_path: Path) -> None:
@@ -110,7 +110,7 @@ def test_settings_managed_hook_listing_matches_registry(tmp_path: Path) -> None:
     parsed = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     from eawf.surfaces.render.hooks import HOOK_REGISTRY
 
-    listed = {h["event_type"] for h in parsed["__eawf_managed"]["hooks"]}
+    listed = {h["event_type"] for h in parsed["__eawf_managed"]["hook_scripts"]}
     # Only handler-backed events are installed, so the managed block lists them.
     expected = {h.event_type.value for h in HOOK_REGISTRY if h.has_handler}
     assert listed == expected

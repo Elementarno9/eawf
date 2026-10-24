@@ -26,6 +26,7 @@ This is the third release candidate of v0.7.0. The epoch-1 engine is gone from e
 - **Claude 5 models are priced** from Anthropic's published rate page, so Runs on `claude-opus-5-5` and `claude-sonnet-5` count in cost totals.
 - **Console transcript.** One row per tool call, updated in place as the call moves; each finished row shows its call and model turn seconds and a turn's input and output tokens; usage totals end the STATE row; a queued or running Run ends on a greyed row naming its wait; Page Up, Page Down and the mouse wheel move through blocks and landing on the newest block follows the tail again; and the scrollbar draws an accent thumb on a track.
 - **Doctor checks.** `canonical_sequence_drift` warns when the committed sequence lags the daemon's live one, and an advisory STE (Simplified Technical English) prose lint and an always-passing `ste-prose` hook check the rule modules, profiles and skill bodies.
+- **Reopen an acceptance review.** `eawf milestone reopen-review <URN>` returns a Milestone in acceptance review to ACTIVE with a recorded reason, so it can take an appended Batch; the next `eawf milestone open-review` files a successor acceptance bundle, and an approval sealed on the earlier bundle can no longer accept the Milestone.
 
 ### Changed
 
@@ -41,6 +42,7 @@ This is the third release candidate of v0.7.0. The epoch-1 engine is gone from e
 - **The claude-code canary is contained in the Linux bubblewrap jail:** storage masks are remounted read-only after the binds, so the write-ahead log and the workspace parent refuse writes.
 - **Render lock files are bounded.** Render targets map onto 256 fixed stripe lock files instead of one file per target path, and the daemon test harnesses remove each whole runtime directory on teardown.
 - **`eawf doctor` warns instead of crashing on a malformed config layer;** the local-size check degrades to a warning naming the merge failure.
+- **Repository settings load in current Claude Code.** The managed metadata block in `.claude/settings.json` now names its hook list `hook_scripts`: Claude Code 2.1.310 refused the whole file while that block carried its own `hooks` key, which dropped every eawf hook, the status line and the env settings of a repository install. `eawf plugin update claude` rewrites an rc2 install.
 
 ### Migration
 

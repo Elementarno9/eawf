@@ -190,6 +190,17 @@ CANONICAL_MUTATIONS: Final[tuple[CanonicalMutation, ...]] = (
         ("it does not accept the milestone", "no batch or task moves"),
     ),
     CanonicalMutation(
+        "domain.milestone.reopen_review",
+        _E.MILESTONE,
+        (MilestoneStatus.ACCEPTANCE_REVIEW,),
+        MilestoneStatus.ACTIVE,
+        "reopen review",
+        (
+            "no filed acceptance bundle or sealed approval is rewritten",
+            "no batch or task moves",
+        ),
+    ),
+    CanonicalMutation(
         "domain.milestone.accept",
         _E.MILESTONE,
         (MilestoneStatus.ACCEPTANCE_REVIEW,),

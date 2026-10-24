@@ -35,8 +35,8 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "9cdcb92f1b5e988a",
-    "hooks": [
+    "hash": "3dbf599a70e76179",
+    "hook_scripts": [
       {
         "event_type": "session_start",
         "path": ".claude/hooks/session_start.sh"

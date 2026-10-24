@@ -99,6 +99,7 @@ NATIVE_KEYS: Final[Mapping[str, str]] = MappingProxyType(
         "domain.track.retire": "r",
         "domain.milestone.activate": "t",
         "domain.milestone.open_review": "o",
+        "domain.milestone.reopen_review": "e",
         "domain.milestone.accept": "a",
         "domain.milestone.cancel": "x",
         "domain.batch.activate": "t",

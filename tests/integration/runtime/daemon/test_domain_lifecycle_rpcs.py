@@ -27,6 +27,7 @@ from typing import Any
 import pytest
 
 from eawf.kernel.state.epoch2.domain_events import DOMAIN_EVENT_NAMES
+from eawf.kernel.store.compaction import read_document
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record
 from eawf.kernel.store.paths import ledger_path
@@ -145,6 +146,13 @@ COMMITTED_CASES: tuple[Case, ...] = (
         urn=MILESTONE_URN,
         params={"updates": {"acceptance_bundle_revision": 1}},
         event_name="domain.milestone.review_opened",
+    ),
+    Case(
+        method="domain.milestone.reopen_review",
+        rows={"milestone": {"MLS-0030": seed_row("milestone", "ACCEPTANCE_REVIEW")}},
+        urn=MILESTONE_URN,
+        params={"reason_code": "batch-appended"},
+        event_name="domain.milestone.review_reopened",
     ),
     Case(
         method="domain.milestone.accept",
@@ -339,6 +347,13 @@ REFUSED_CASES: tuple[Case, ...] = (
         params={"updates": {"acceptance_bundle_revision": 1}},
         code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
         guard="required_batches_completed",
+    ),
+    Case(
+        method="domain.milestone.reopen_review",
+        rows={"milestone": {"MLS-0030": seed_row("milestone", "ACCEPTANCE_REVIEW")}},
+        urn=MILESTONE_URN,
+        code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
+        guard="reason_recorded",
     ),
     Case(
         method="domain.milestone.accept",
@@ -617,7 +632,7 @@ def test_retry_replays_the_receipt_and_publishes_nothing(tmp_path: Path) -> None
 
 
 def test_retry_with_other_parameters_is_an_idempotency_conflict(tmp_path: Path) -> None:
-    case = COMMITTED_CASES[4]
+    case = COMMITTED_CASES[5]
     canary = _seeded(case, tmp_path, code="CONFLICT")
 
     _drive(case, canary, tmp_path)
@@ -651,6 +666,38 @@ def test_verb_refuses_a_record_in_a_status_it_does_not_move(tmp_path: Path) -> N
     assert answer["errors"][0]["guard"] is None
     assert document_path(canary).read_bytes() == before
     assert _firehose_rows(canary) == []
+
+
+def test_reopening_review_refuses_a_milestone_that_is_already_active(tmp_path: Path) -> None:
+    """Reopen leaves only ACCEPTANCE_REVIEW; an ACTIVE Milestone has no review to reopen."""
+    case = Case(
+        method="domain.milestone.reopen_review",
+        rows={"milestone": {"MLS-0030": seed_row("milestone", "ACTIVE")}},
+        urn=MILESTONE_URN,
+        params={"reason_code": "batch-appended"},
+    )
+    canary = _seeded(case, tmp_path, code="REOPENACT")
+    before = document_path(canary).read_bytes()
+
+    answer = _drive(case, canary, tmp_path)
+
+    assert answer["errors"][0]["code"] == DomainErrorCode.ILLEGAL_TRANSITION.value
+    assert answer["revision_before"] == answer["revision_after"] == 1
+    assert document_path(canary).read_bytes() == before
+    assert _firehose_rows(canary) == []
+
+
+def test_reopened_milestone_is_active_and_keeps_its_reviewed_revision(tmp_path: Path) -> None:
+    """The reopened row is ACTIVE at the next revision and still names what was reviewed."""
+    case = COMMITTED_CASES[3]
+    assert case.method == "domain.milestone.reopen_review"
+    canary = _seeded(case, tmp_path, code="REOPENOK")
+
+    _drive(case, canary, tmp_path)
+
+    row = read_document(document_path(canary))["milestone"]["MLS-0030"]
+    assert (row["status"], row["revision"]) == ("ACTIVE", 2)
+    assert row["acceptance_bundle_revision"] == 1
 
 
 def test_verb_refuses_a_urn_addressing_another_entity(tmp_path: Path) -> None:

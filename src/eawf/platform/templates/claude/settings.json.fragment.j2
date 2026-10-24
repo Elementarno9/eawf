@@ -14,7 +14,7 @@
      skills:         list[dict{name, version}] of installed skills.
      agents:         list[dict{name, version}] of installed agent
                      subagents.
-     hooks:          list[dict{event_type, path}] of installed hook
+     hook_scripts:   list[dict{event_type, path}] of installed hook
                      wrappers.
      generated_at:   ISO 8601 UTC timestamp recorded on each install.
 
@@ -34,7 +34,7 @@
     {"name": "{{ agent.name }}", "version": "{{ agent.version }}"}{% if not loop.last %},{% endif %}
 {%- endfor %}
   ],
-  "hooks": [
+  "hook_scripts": [
 {%- for hook in hooks %}
     {"event_type": "{{ hook.event_type }}", "path": "{{ hook.path }}"}{% if not loop.last %},{% endif %}
 {%- endfor %}

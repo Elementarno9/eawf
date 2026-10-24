@@ -91,6 +91,12 @@ _VERB_ROWS: tuple[tuple[list[str], str, str, str], ...] = (
         _MILESTONE_URN,
     ),
     (
+        ["milestone", "reopen-review"],
+        domain_cmd.MILESTONE_REOPEN_REVIEW,
+        "--expected-milestone-revision",
+        _MILESTONE_URN,
+    ),
+    (
         ["milestone", "accept"],
         domain_cmd.MILESTONE_ACCEPT,
         "--expected-milestone-revision",
@@ -754,6 +760,7 @@ def test_operator_verb_spelling_of_each_method() -> None:
         "track retire",
         "milestone activate",
         "milestone open-review",
+        "milestone reopen-review",
         "milestone accept",
         "milestone cancel",
         "batch activate",

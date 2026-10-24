@@ -288,6 +288,7 @@ def require_sealed_acceptance(
     bundle: MilestoneAcceptanceBundle,
     milestone_ref: MilestoneUrn,
     status: MilestoneStatus,
+    reviewed_revision: int,
 ) -> AcceptanceApproval:
     """Return the approval an acceptance may proceed on, or refuse it.
 
@@ -305,6 +306,10 @@ def require_sealed_acceptance(
             so presenting it costs a caller nothing it could exploit.
         milestone_ref: The Milestone being accepted.
         status: The status the Milestone stands in.
+        reviewed_revision: The bundle revision the Milestone's open review
+            names. A review reopened and opened again names a later one,
+            so a bundle older than it was read in an earlier review and
+            describes work the Milestone has since outgrown.
 
     Returns:
         The approval, carrying who gave it and the exact digest it covers.
@@ -313,13 +318,20 @@ def require_sealed_acceptance(
         AcceptanceRefusedError: The action is not a sealed protected
             approval, its answer was not the approving one, it approves
             another Milestone or another set of bytes, the Milestone is
-            not in acceptance review, or a journey step did not pass.
+            not in acceptance review, the bundle predates the review now
+            open, or a journey step did not pass.
     """
     if status is not MilestoneStatus.ACCEPTANCE_REVIEW:
         raise AcceptanceRefusedError(
             AcceptanceRefusal.APPROVAL_MISBOUND,
             f"{milestone_ref.entity_key} is {status.value}, and an acceptance is given in "
             f"{MilestoneStatus.ACCEPTANCE_REVIEW.value}",
+        )
+    if bundle.revision < reviewed_revision:
+        raise AcceptanceRefusedError(
+            AcceptanceRefusal.BUNDLE_SUPERSEDED,
+            f"revision {bundle.revision} of {milestone_ref.entity_key} was read in an earlier "
+            f"review; the review now open is on revision {reviewed_revision}",
         )
     approval = sealed_approval(action, bundle=bundle, milestone_ref=milestone_ref)
     logger.info(

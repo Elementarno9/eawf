@@ -94,6 +94,7 @@ logger = logging.getLogger(__name__)
 TRACK_RETIRE: Final = "domain.track.retire"
 MILESTONE_ACTIVATE: Final = "domain.milestone.activate"
 MILESTONE_OPEN_REVIEW: Final = "domain.milestone.open_review"
+MILESTONE_REOPEN_REVIEW: Final = "domain.milestone.reopen_review"
 MILESTONE_ACCEPT: Final = "domain.milestone.accept"
 MILESTONE_CANCEL: Final = "domain.milestone.cancel"
 BATCH_ACTIVATE: Final = "domain.batch.activate"
@@ -121,6 +122,7 @@ DOMAIN_CLI_METHODS: Final[tuple[str, ...]] = (
     TRACK_RETIRE,
     MILESTONE_ACTIVATE,
     MILESTONE_OPEN_REVIEW,
+    MILESTONE_REOPEN_REVIEW,
     MILESTONE_ACCEPT,
     MILESTONE_CANCEL,
     BATCH_ACTIVATE,
@@ -1034,6 +1036,39 @@ def milestone_open_review_cmd(
     )
 
 
+@milestone_app.command("reopen-review")
+def milestone_reopen_review_cmd(
+    ctx: typer.Context,
+    urn: Annotated[str, typer.Argument(help=_URN_HELP)],
+    expected_revision: Annotated[
+        int,
+        typer.Option("--expected-revision", "--expected-milestone-revision", help=_REVISION_HELP),
+    ],
+    idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
+    actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
+    from_spec: Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
+) -> None:
+    """Return a Milestone in acceptance review to ACTIVE, with a recorded reason.
+
+    The spec's ``reason_code`` is required. Opening review again names the
+    next acceptance bundle revision, and an approval sealed in the earlier
+    review no longer accepts the Milestone.
+    """
+    _run_verb(
+        ctx,
+        dry_run=dry_run,
+        yes=yes,
+        method=MILESTONE_REOPEN_REVIEW,
+        urn=urn,
+        expected_revision=expected_revision,
+        idempotency_key=idempotency_key,
+        actor=actor,
+        from_spec=from_spec,
+    )
+
+
 @milestone_app.command("accept")
 def milestone_accept_cmd(
     ctx: typer.Context,
@@ -1352,6 +1387,7 @@ __all__ = [
     "milestone_cancel_cmd",
     "milestone_create_cmd",
     "milestone_open_review_cmd",
+    "milestone_reopen_review_cmd",
     "repository_create_cmd",
     "task_promote_cmd",
     "task_start_cmd",
