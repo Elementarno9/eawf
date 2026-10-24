@@ -39,6 +39,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -163,6 +164,11 @@ class _ServerHandle:
         with contextlib.suppress(FileNotFoundError):
             self._pid_file.unlink()
 
+    def close(self) -> None:
+        """Stop the server and remove its runtime dir with every lock file in it."""
+        self.stop()
+        shutil.rmtree(self.runtime_dir, ignore_errors=True)
+
     def _run(self) -> None:
         loop = asyncio.new_event_loop()
         self._loop = loop
@@ -216,7 +222,7 @@ def harness(tmp_path: Path) -> Iterator[tuple[_ServerHandle, Path, Path]]:
     try:
         yield server, repo_a, repo_b
     finally:
-        server.stop()
+        server.close()
 
 
 # ---- (a) state.read honours per-request repo_root --------------------------

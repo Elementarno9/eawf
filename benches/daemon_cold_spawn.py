@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import shutil
 import signal
 import sys
 import tempfile
@@ -97,8 +98,9 @@ def cold_runtime() -> Iterator[Path]:
             sock_path.unlink()
         with contextlib.suppress(FileNotFoundError):
             pid_file.unlink()
-        with contextlib.suppress(OSError):
-            runtime_dir.rmdir()
+        # rmtree, not rmdir: the daemon leaves its eawfd.lock and the CLI its
+        # eawfd.spawn.lock behind, so a bare rmdir always failed and leaked the dir.
+        shutil.rmtree(runtime_dir, ignore_errors=True)
 
 
 def _benchmark_disabled(benchmark: object) -> bool:

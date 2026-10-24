@@ -50,11 +50,17 @@ def check_local_size(*, workspace: Path | None) -> CheckResult:
         anchor exists; ``warn`` with the measured size, the configured
         ``local.scratch_root`` and ``eawf local gc`` once it reaches the
         threshold; ``warn`` naming the leaf when a layer states an unusable
-        ``local.size_warn_mb`` or ``local.scratch_root``.
+        ``local.size_warn_mb`` or ``local.scratch_root``; ``warn`` naming the
+        merge failure when a config layer cannot be read.
     """
     if workspace is None:
         return CheckResult(name=CHECK_NAME, status="ok", detail="no workspace anchor")
-    merged, _sources = merge_config(workspace=workspace, repo=workspace)
+    # A malformed layer must degrade to a warning like the other config checks:
+    # the doctor is the command an operator runs to diagnose that layer.
+    try:
+        merged, _sources = merge_config(workspace=workspace, repo=workspace)
+    except Exception as exc:
+        return CheckResult(name=CHECK_NAME, status="warn", detail=f"config merge failed: {exc}")
     leaf = "local.size_warn_mb"
     try:
         threshold_mb = _THRESHOLD.validate_python(get_dotted(merged, leaf))

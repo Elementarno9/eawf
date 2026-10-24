@@ -27,6 +27,30 @@ logger = logging.getLogger(__name__)
 # touching anything else.
 LOCK_TIMEOUT: float = 5.0
 
+# Number of stable lock files in the control-plane namespace. Each rendered
+# target maps onto one of these stripes by its hashed identity, so the
+# namespace holds at most this many lock files however many distinct targets
+# get written. One lock file per target leaked tens of thousands of empty
+# files per test-suite run, because every ``tmp_path`` tree is a new target.
+# Two targets sharing a stripe only serialise their millisecond-long writes.
+RENDER_LOCK_STRIPES: int = 256
+
+
+def _render_lock_stripe(target: Path) -> str:
+    """Return the stable stripe name that serialises writes to *target*.
+
+    Args:
+        target: Rendered destination whose write must be serialised.
+
+    Returns:
+        ``stripe-NNN`` with ``NNN`` below :data:`RENDER_LOCK_STRIPES`, derived
+        from the canonical target path so every process picks the same stripe.
+    """
+    canonical_target = os.fsencode(str(target.expanduser().resolve()))
+    digest = hashlib.sha256(canonical_target).digest()
+    index = int.from_bytes(digest[:4], "big") % RENDER_LOCK_STRIPES
+    return f"stripe-{index:03d}"
+
 
 def _render_lock_target(target: Path) -> Path:
     """Return the deterministic control-plane lock target for *target*.
@@ -38,9 +62,10 @@ def _render_lock_target(target: Path) -> Path:
     into those trees.
 
     Keep the stable inode in a user-scoped temporary control-plane namespace
-    instead. Both the user scope and canonical target path are hashed: callers
-    targeting the same file resolve the same lock across processes without
-    exposing a local path in the lock filename.
+    instead. The user scope is hashed and the canonical target path picks one
+    of :data:`RENDER_LOCK_STRIPES` fixed stripe names: callers targeting the
+    same file resolve the same lock across processes, no local path appears in
+    the lock filename, and the namespace never grows past the stripe count.
 
     Args:
         target: Rendered destination whose write must be serialised.
@@ -57,9 +82,7 @@ def _render_lock_target(target: Path) -> Path:
     namespace = Path(tempfile.gettempdir()) / "eawf-render-locks" / user_scope
     namespace.mkdir(mode=0o700, parents=True, exist_ok=True)
 
-    canonical_target = os.fsencode(str(target.expanduser().resolve()))
-    target_key = hashlib.sha256(canonical_target).hexdigest()
-    return namespace / target_key
+    return namespace / _render_lock_stripe(target)
 
 
 def atomic_write_text(target: Path, payload: str) -> None:

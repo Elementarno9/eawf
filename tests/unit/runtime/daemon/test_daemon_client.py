@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -84,6 +85,11 @@ class _ServerHandle:
         with contextlib.suppress(FileNotFoundError):
             self._pid_file.unlink()
 
+    def close(self) -> None:
+        """Stop the server and remove its runtime dir with every lock file in it."""
+        self.stop()
+        shutil.rmtree(self.runtime_dir, ignore_errors=True)
+
     def _run(self) -> None:
         loop = asyncio.new_event_loop()
         self._loop = loop
@@ -118,7 +124,33 @@ def server() -> Iterator[_ServerHandle]:
     try:
         yield handle
     finally:
-        handle.stop()
+        handle.close()
+
+
+def test_repeated_spawn_path_leaves_no_runtime_dirs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Driving the spawn path over and over must not grow the temp dir.
+
+    Each cycle boots a server under a fresh short runtime dir and enters
+    :class:`DaemonClient`, whose :func:`auto_spawn_daemon` takes the spawn
+    lock and probes the singleton lock. Both lock files outlive the server,
+    so the harness must remove the whole dir, not only the socket and PID
+    file, or every run strands one ``eawfd-*`` dir per test.
+    """
+    base = Path(tempfile.mkdtemp(prefix="eawfg-"))
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(base))
+    try:
+        for _ in range(5):
+            handle = _ServerHandle(_short_runtime_dir())
+            handle.start()
+            try:
+                with DaemonClient(runtime_dir=handle.runtime_dir) as client:
+                    client.call("daemon.ping")
+                assert (handle.runtime_dir / "eawfd.spawn.lock").exists()
+            finally:
+                handle.close()
+            assert list(base.iterdir()) == []
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
 
 
 def test_client_round_trips_daemon_ping(server: _ServerHandle) -> None:
@@ -233,7 +265,7 @@ def stale_server() -> Iterator[_ServerHandle]:
     try:
         yield handle
     finally:
-        handle.stop()
+        handle.close()
 
 
 @pytest.fixture
@@ -273,7 +305,7 @@ def test_client_refuses_a_newer_daemon_without_restarting(
         with pytest.raises(DaemonVersionMismatch) as excinfo:
             DaemonClient(runtime_dir=handle.runtime_dir).__enter__()
     finally:
-        handle.stop()
+        handle.close()
     message = str(excinfo.value)
     assert "99.0.0" in message
     assert __version__ in message
@@ -293,7 +325,7 @@ def test_client_refuses_an_unorderable_daemon_version(
         with pytest.raises(DaemonVersionMismatch, match="eawf daemon restart"):
             DaemonClient(runtime_dir=handle.runtime_dir).__enter__()
     finally:
-        handle.stop()
+        handle.close()
     assert restarts == []
 
 

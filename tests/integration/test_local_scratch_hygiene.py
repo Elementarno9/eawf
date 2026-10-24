@@ -183,6 +183,17 @@ def test_an_unusable_size_threshold_is_a_warning(tmp_path: Path, raw: object) ->
     assert "local.size_warn_mb" in (result.detail or "")
 
 
+def test_a_malformed_config_layer_is_a_warning(tmp_path: Path) -> None:
+    from eawf.observability.doctor.checks_local_size import check_local_size
+
+    layer = tmp_path / ".ea" / "config.yaml"
+    layer.parent.mkdir(parents=True)
+    layer.write_text("verify: [unclosed\n", encoding="utf-8")
+    result = check_local_size(workspace=tmp_path)
+    assert result.status == "warn"
+    assert "config merge failed" in (result.detail or "")
+
+
 # ---- CR-0483-3: eawf local gc -----------------------------------------------
 
 
