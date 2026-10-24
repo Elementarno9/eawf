@@ -3,9 +3,6 @@
 Exercises :class:`eawf.workflow.agents.specs.models.SubagentSpec` and its nested
 section models directly — the model layer is pure data + formatting, so
 each test builds a spec in memory and inspects the rendered Markdown.
-The :func:`eawf.workflow.dispatch.renderer.build_subagent_spec` projection from
-``State`` is covered by ``test_dispatch_renderer.py`` (byte-identity
-against the legacy output).
 """
 
 from __future__ import annotations

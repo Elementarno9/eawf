@@ -122,12 +122,16 @@ _CALLER_ROOTS = [_REPO_ROOT / "tools"]
 #: tests: ``atomic_write_state`` (the tests now call the v1 writer
 #: directly), ``compression_directive``, ``render_dispatch_envelope`` and
 #: the ``spec.sync`` verb resolver, whose daemon method was already gone.
-#: ``render_wave_prompt`` stays: the committed dispatch goldens pin its
-#: bytes and ``eawf snapshot update --kind dispatch`` regenerates them
-#: through it. 226.
+#: 226.
 #:
 #: Retiring the release cadence leaf removed its uncalled reader. 225.
-IDLE_CEILING = 225
+#:
+#: Re-measured at 194 before the epoch-1 wave prompt and narrative sweep.
+#: Deleting ``render_wave_prompt``, ``build_narrative`` and
+#: ``generated_changelog_lines`` stranded ``build_role_contract``,
+#: ``estimate_unavailable_reason`` and ``render_context``, whose only
+#: callers were the deleted wave prompt builders. 194.
+IDLE_CEILING = 194
 
 
 def _load_tool() -> Any:

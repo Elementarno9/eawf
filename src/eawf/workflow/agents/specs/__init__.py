@@ -3,10 +3,8 @@
 Public API:
 
 - :class:`~eawf.workflow.agents.specs.models.SubagentSpec` — typed dispatch spec
-  for one wave. The dispatch renderer builds it from a validated
-  :class:`~eawf.kernel.migration.v1_state.State` snapshot and calls
-  :meth:`SubagentSpec.render` to produce the wave prompt, so the prompt
-  is rendered from a typed spec rather than ad-hoc string concatenation.
+  for one wave. :meth:`SubagentSpec.render` produces the wave prompt from
+  the typed spec rather than ad-hoc string concatenation.
 - :class:`~eawf.workflow.agents.specs.roles.RoleSpec` + :data:`ROLE_REGISTRY` —
   the role library. Each role renders a contract block to every kept
   runtime (``claude-code`` / ``codex`` / ``opencode``)

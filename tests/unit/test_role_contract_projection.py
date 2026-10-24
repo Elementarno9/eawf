@@ -138,9 +138,6 @@ def test_build_role_contract_with_no_state_omits_sandbox_intersection() -> None:
     assert contract.denied_tools == []
 
 
-# ---- build_subagent_spec wires role_contract through -----------------------
-
-
 # ---- Byte-difference: non-executor role does NOT render executor body ------
 
 

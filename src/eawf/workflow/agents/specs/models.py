@@ -12,9 +12,7 @@ Every section is its own strict Pydantic model with a ``render() -> str``
 method that returns the section's Markdown body (no trailing newline).
 :meth:`SubagentSpec.render` joins the section bodies with a blank line in
 the same order the legacy renderer used, so the rendered bytes are
-unchanged. The builder that fills a ``SubagentSpec`` from ``State`` lives
-in :mod:`eawf.workflow.dispatch.renderer` (it needs the wave → iter → phase →
-scope walk); the model layer stays pure data + formatting.
+unchanged. The model layer stays pure data + formatting.
 """
 
 from __future__ import annotations
@@ -258,8 +256,7 @@ class RoleContract(_SpecModel):
 class SubagentSpec(_SpecModel):
     """Typed dispatch spec for one wave.
 
-    The renderer builds this from ``State`` and calls :meth:`render` to
-    produce the wave prompt. The field set mirrors the sections the legacy
+    :meth:`render` produces the wave prompt. The field set mirrors the sections the legacy
     ad-hoc renderer emitted, in the same order.
 
     Attributes:
