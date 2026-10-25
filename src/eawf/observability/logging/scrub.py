@@ -1,7 +1,7 @@
 """Emit-time sensitive-data scrubber for the logging pipeline.
 
 :class:`SensitiveScrubber` is a :class:`logging.Filter` that rewrites
-home-directory paths, IP addresses, email addresses, and
+home-directory and server data-root paths, IP addresses, email addresses, and
 API-key-shaped tokens out of every log record *before* the formatter
 runs. It is wired as a filter on the CLI root handler and on both of
 the daemon's logging branches (the foreground stderr stream and the
@@ -104,6 +104,11 @@ class SensitiveScrubber(logging.Filter):
         re.compile(r"/Users/[^/\s]+"),  # macOS home  # pragma: allowlist secret
         re.compile(r"[A-Za-z]:\\Users\\[^\\\s]+", re.IGNORECASE),  # Windows home
         re.compile(r"/home/[^/\s]+"),  # Linux home  # pragma: allowlist secret
+        # A server keeps checkouts and scratch under its site data root, so a
+        # path there names the machine as plainly as a home directory does.
+        # It must start the path, so ``/usr/srv/x`` or a URL's ``host/srv/x``
+        # is left alone; a separator such as grep's ``513-`` still leads one.
+        re.compile(r"(?<![\w.])/srv/[^/\s]+"),  # server data root  # pragma: allowlist secret
         # Bare ``~/`` home reference (shell-expanded path that still
         # leaks the project tree layout even without the username).
         re.compile(r"~/[^\s]+"),  # tilde home

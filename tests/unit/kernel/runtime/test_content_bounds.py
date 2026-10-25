@@ -56,6 +56,15 @@ def test_a_line_carrying_a_home_path_is_withheld_whole() -> None:
     assert "jdoe" not in "".join(bounded.lines)
 
 
+def test_a_line_carrying_a_server_checkout_path_is_withheld_whole() -> None:
+    checkout = "/" + "srv" + "/" + "checkout" + "/eawf"
+    text = f"ok\nlocked {checkout}/.ea/locks/epoch2/document.lock\ndone"
+    bounded = bound_content(text)
+    assert bounded.lines == ("ok", WITHHELD_LINE, "done")
+    assert bounded.withheld_lines == 1
+    assert "checkout" not in "".join(bounded.lines)
+
+
 def test_the_same_lines_name_the_same_digest() -> None:
     assert bound_content("a\nb").digest == bound_content("a\nb\n").digest
     assert bound_content("a\nb").digest != bound_content("a\nc").digest

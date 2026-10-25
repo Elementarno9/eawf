@@ -28,6 +28,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 MACOS_HOME = "/" + "Users" + "/" + "alice"
 WINDOWS_HOME = "C:" + "\\" + "Users" + "\\" + "alice"
 LINUX_HOME = "/" + "home" + "/" + "alice"
+SERVER_ROOT = "/" + "srv" + "/" + "work"
 LEAKED_EMAIL = "alice" + "@" + "acmecorp.io"
 
 # A key body long enough for every token shape; repeated characters keep the
@@ -47,7 +48,7 @@ def _scan(text: str) -> list[StateLeakHit]:
     return scan_state_leaks(text, allowed_emails=default_allowed_emails())
 
 
-@pytest.mark.parametrize("home", [MACOS_HOME, WINDOWS_HOME, LINUX_HOME])
+@pytest.mark.parametrize("home", [MACOS_HOME, WINDOWS_HOME, LINUX_HOME, SERVER_ROOT])
 def test_scan_state_leaks_matches_each_home_anchor(home: str) -> None:
     hits = _scan(f"outcome: worked in {home} today")
 
@@ -56,7 +57,7 @@ def test_scan_state_leaks_matches_each_home_anchor(home: str) -> None:
 
 @pytest.mark.parametrize(
     "placeholder",
-    ["/Users/<name>", "/home/<user>/x", "C:\\Users\\...", "/Users/.../repo"],
+    ["/Users/<name>", "/home/<user>/x", "C:\\Users\\...", "/Users/.../repo", "/srv/<site>/x"],
 )
 def test_scan_state_leaks_skips_home_placeholder(placeholder: str) -> None:
     assert _scan(f"never commit {placeholder}") == []
@@ -141,10 +142,21 @@ def test_scan_state_leaks_ignores_tilde_home() -> None:
     assert _scan("config lives in ~/.eawf/registry.json") == []
 
 
-def test_home_path_patterns_are_the_scrubbers_three_anchors() -> None:
+@pytest.mark.parametrize("lead", ["513-", "513:", "=", "'", "(", " "])
+def test_scan_state_leaks_matches_a_server_root_after_a_separator(lead: str) -> None:
+    hits = _scan(f"{lead}{SERVER_ROOT}/eawf/tests")
+
+    assert hits == [StateLeakHit(kind=StateLeakKind.HOME_PATH, snippet=SERVER_ROOT)]
+
+
+def test_scan_state_leaks_ignores_a_root_word_that_is_not_the_server_root() -> None:
+    assert _scan("served /srvx/a and /usr/srv/b; see the srv/ docs") == []
+
+
+def test_home_path_patterns_are_the_scrubbers_four_anchors() -> None:
     from eawf.observability.logging.scrub import SensitiveScrubber
 
-    assert len(HOME_PATH_PATTERNS) == 3
+    assert len(HOME_PATH_PATTERNS) == 4
     assert all(pattern in SensitiveScrubber.PATTERNS for pattern in HOME_PATH_PATTERNS)
 
 

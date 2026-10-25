@@ -53,6 +53,7 @@ This is the third release candidate of v0.7.0. The epoch-1 engine is gone from e
 - **Leaner Run receipts and honest totals.** A `repo_read` receipt is stored by digest instead of text, a repeat read matches only the same file and launch, dispatch scoring counts each API call once, and `eawf reflect` counts as unpriced only Runs that reported tokens without a cost.
 - **Upgrades keep work moving.** A governor written before `cache_read_weight` keeps its digest, so a Run admitted under rc2 resumes, and a gate stored with a legacy cadence keeps its digest, so its receipts stay fresh.
 - **The release re-typed-rule census counts only operator-typed prose,** not the prompts an orchestrating agent sends its subagents.
+- **Server checkout paths no longer reach committed state.** The leak scan treats a path under `/srv` like a home directory, so captured Run output withholds the line, a state write carrying one is refused and `path-leak-lint` flags it; the epoch-1 cutover scan keeps its three home anchors.
 
 ### Migration
 

@@ -7,8 +7,8 @@ which leaves the leak lints as the only scan between that text and a public
 commit. This module is the one pattern set every scanner of state text applies,
 so the shapes cannot drift between them:
 
-- the macOS, Windows and Linux home-directory anchors, selected from the
-  emit-time scrubber's own table;
+- the macOS, Windows and Linux home-directory anchors and the server
+  data-root anchor, selected from the emit-time scrubber's own table;
 - the scrubber's email pattern, minus the canonical allowlist and the reserved
   example domains; and
 - credential-shaped tokens (Anthropic, OpenAI, GitHub classic and fine-grained,
@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 HOME_PATH_PATTERNS: Final[tuple[re.Pattern[str], ...]] = tuple(
     pattern
     for pattern in SensitiveScrubber.PATTERNS
-    if "Users" in pattern.pattern or "home" in pattern.pattern
+    if "Users" in pattern.pattern or "home" in pattern.pattern or "srv" in pattern.pattern
 )
 
 EMAIL_PATTERN: Final[re.Pattern[str]] = next(

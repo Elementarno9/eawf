@@ -21466,7 +21466,6 @@
     "tests.unit.kernel.runtime.test_semantic_catalog::test_repo_read_path_stays_inside_the_repository[max-length]": 0.0,
     "tests.unit.kernel.runtime.test_semantic_catalog::test_repo_read_path_stays_inside_the_repository[over-length]": 0.0,
     "tests.unit.kernel.runtime.test_semantic_catalog::test_repo_read_path_stays_inside_the_repository[single]": 0.0,
-    "tests.unit.kernel.runtime.test_semantic_catalog::test_repo_read_refuses_a_handle_that_is_not_opaque[/srv/checkout/eawf]": 0.0,
     "tests.unit.kernel.runtime.test_semantic_catalog::test_repo_read_refuses_a_handle_that_is_not_opaque[]": 0.001,
     "tests.unit.kernel.runtime.test_semantic_catalog::test_repo_read_refuses_a_handle_that_is_not_opaque[wsh-fffffffffffffffffffffffffffffff]": 0.0,
     "tests.unit.kernel.runtime.test_semantic_catalog::test_repo_read_refuses_a_handle_that_is_not_opaque[wsh-fffffffffffffffffffffffffffffffff]": 0.0,
