@@ -278,6 +278,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "wal list": _read(),
     "wal show": _read(),
     "store compact": _mutate(),
+    "store redact-content": _mutate("runtime.store.redact_content"),
     "init": _create(),
     "clone-repo": _create(),
     "publish": _mutate("runtime.publish.bind_staged"),

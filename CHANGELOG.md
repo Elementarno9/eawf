@@ -30,6 +30,7 @@ This is the third release candidate of v0.7.0. The epoch-1 engine is gone from e
 - **Reopen an accepted Milestone.** `eawf milestone reopen <URN>` returns a COMPLETED Milestone to ACTIVE with a recorded reason, so a fix can land in it before it ships. Only an operator principal may reopen it, and a Milestone that a release record or a pushed release tag names is refused. The acceptance stays in the ledger as history, and the approval it was accepted on can never accept it again.
 - **`eawf release canary-export <version> --os-class <class>`** writes a release's native canary evidence export from the certifications `eawf runtime certify` now stores in full, copying each stored record unchanged and refusing a claimed class no stored certification covers.
 - **Claude Code certifies on Linux.** Its project document has no byte cap (the model's context window governs), measured on claude-code 2.1.310 and recorded as a certified uncapped fact, so the certify stage no longer refuses with `runtime_facts_uncertified`.
+- **`eawf store redact-content` takes a leak out before it is committed.** It compares the artifact ledger with its bytes in HEAD and withholds each line the leak scan now flags in the content rows filed since, keeping each row's reference; committed rows stay as they are.
 
 ### Changed
 

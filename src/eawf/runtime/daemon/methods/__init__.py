@@ -461,6 +461,7 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "state",
     "state_subscribe",
     "state_upkeep",
+    "store_redaction",
     "task_dispatch",
     "urn_rekey",
     "wal_admin",

@@ -11,7 +11,10 @@ The guard is structural rather than advisory.
 :func:`verify_append_only` refuses any content that is not an extension
 of what the file already holds, which catches a rewrite, a reorder and a
 removal with one check, and :func:`guarded_ledger_write` is the only
-sanctioned way to replace a ledger's bytes wholesale.
+sanctioned way to replace a ledger's bytes wholesale. The one exception is
+:func:`replace_unpublished_suffix`, which may change only lines written
+after the file's last commit, so a leak is taken out before any clone
+holds it.
 
 A ledger may be sealed once (:func:`seal_ledger_prefix`): a leading run of
 its lines moves, byte for byte, into ``snapshots/<stem>.<sha256>.jsonl``
@@ -433,6 +436,48 @@ def guarded_ledger_write(path: Path, content: bytes) -> None:
     _atomic_write(path, content)
 
 
+def replace_unpublished_suffix(
+    path: Path, *, published: bytes, expected: bytes, content: bytes, timeout: float = 5.0
+) -> None:
+    """Replace the lines of the ledger at *path* that no commit holds yet.
+
+    Append-only protects what a clone may already hold. Lines written since
+    the last commit of the file are on this machine alone, so a leak found
+    in them can still be taken out before it is published; this is the only
+    write that may change a line, and only past *published*.
+
+    Args:
+        path: The ledger file.
+        published: The file's bytes in the last commit, which must stay the
+            prefix of both *expected* and *content*.
+        expected: The file's bytes the proposal was planned from; a line
+            appended since then refuses the write rather than being dropped.
+        content: The whole proposed file.
+        timeout: Seconds to wait for the sibling lock the appender takes.
+
+    Raises:
+        LedgerAppendOnlyError: *expected* or *content* does not start with
+            *published*, or the file no longer holds exactly *expected*.
+        StateConflict: The sibling lock could not be acquired.
+    """
+    from eawf.runtime.lock import portalock
+    from eawf.surfaces.cli.errors import StateConflict
+
+    if not (expected.startswith(published) and content.startswith(published)):
+        raise LedgerAppendOnlyError("the proposal changes a line the last commit holds")
+    try:
+        with portalock.acquire(path, timeout=timeout):
+            current = path.read_bytes() if path.exists() else b""
+            if current != expected:
+                raise LedgerAppendOnlyError("the ledger changed after the proposal was planned")
+            _atomic_write(path, content)
+    except portalock.LockTimeout as exc:
+        raise StateConflict(
+            f"could not acquire append lock for {path}: {exc}", kind="LockConflict"
+        ) from exc
+    logger.info(f"replace_unpublished_suffix path={path} published_bytes={len(published)}")
+
+
 def seal_ledger_prefix(path: Path, cut: int, *, timeout: float = 5.0) -> Path:
     """Move the ledger's first *cut* bytes into a snapshot named by their sha256.
 
@@ -583,6 +628,7 @@ __all__ = [
     "read_ledger_content",
     "read_ledger_records",
     "render_ledger_line",
+    "replace_unpublished_suffix",
     "seal_ledger_prefix",
     "snapshot_digest_mismatch",
     "snapshot_name",

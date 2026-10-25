@@ -279,6 +279,12 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
         "epoch1_state",
         "rewrites the epoch-1 JSONL stores, which carry no revision",
     ),
+    _exempt(
+        "store redact-content",
+        "create_keyed",
+        "rewrites only ledger lines no commit holds, which keep no revision; the HEAD "
+        "commit's bytes anchor the rewrite",
+    ),
     _exempt("mcp add", "create_keyed", "registers a server, which has no revision to anchor yet"),
     _exempt("mcp grant", "create_keyed", "files a grant, which has no revision to anchor yet"),
     _exempt("memory add", "wire_pending", "the memory routes take no anchor yet"),

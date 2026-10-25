@@ -1,18 +1,17 @@
 """``eawf store`` — JSONL store maintenance.
 
-Currently exposes a single subcommand:
-
-- ``eawf store compact [--kind <kind>]``
-
-The command thinly wraps :func:`eawf.kernel.store.compact.compact_store`. The
-``--kind`` argument selects which JSONL file under the canonical
-``<state_dir>/store/<kind>.jsonl`` path is targeted.
+- ``eawf store compact [--kind <kind>]`` thinly wraps
+  :func:`eawf.kernel.store.compact.compact_store`; ``--kind`` selects which
+  JSONL file under ``<state_dir>/store/<kind>.jsonl`` is targeted.
+- ``eawf store redact-content`` sends ``runtime.store.redact_content``, which
+  withholds leaked lines from the artifact ledger's content rows that no
+  commit holds yet.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Final
 
 import typer
 
@@ -22,9 +21,13 @@ from eawf.surfaces.cli import errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 
+#: The daemon verb ``store redact-content`` sends, spelled here so the Typer tree
+#: builds without the daemon method registry on the path.
+STORE_REDACT_CONTENT: Final = "runtime.store.redact_content"
+
 store_app = typer.Typer(
     name="store",
-    help="JSONL store maintenance (compact, ...).",
+    help="JSONL store maintenance (compact, redact-content).",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -80,3 +83,37 @@ def compact_cmd(
         f"in={report.records_in} out={report.records_out} dedup={report.dedup_count}"
     )
     emit_json_or_text(payload, text, flags=flags)
+
+
+@store_app.command(name="redact-content")
+def redact_content_cmd(
+    ctx: typer.Context,
+    idempotency_key: Annotated[
+        str,
+        typer.Option(
+            "--idempotency-key", help="Caller's name for this request; a retry replays its receipt."
+        ),
+    ],
+    actor: Annotated[
+        str, typer.Option("--actor", help="Principal key the request is attributed to.")
+    ],
+) -> None:
+    """Withhold leaked lines from content rows that no commit holds yet.
+
+    The daemon compares the artifact ledger with its bytes in HEAD, replaces
+    every line the leak scan flags in the rows after them with the withheld
+    marker, and leaves every committed row as it is.
+    """
+    from eawf.surfaces.cli.commands.domain_integration import _answer, _send
+
+    subject = "artifact ledger"
+    answer = _send(
+        ctx,
+        STORE_REDACT_CONTENT,
+        {"actor": actor, "idempotency_key": idempotency_key},
+        urn=subject,
+        verb_text="store redact-content",
+        key=idempotency_key,
+    )
+    if answer is not None:
+        _answer(ctx, answer, operation=STORE_REDACT_CONTENT, urn=subject, revision=None)

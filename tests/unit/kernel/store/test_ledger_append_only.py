@@ -27,6 +27,7 @@ from eawf.kernel.store.ledger import (
     line_digest,
     read_ledger_records,
     render_ledger_line,
+    replace_unpublished_suffix,
     split_ledger_lines,
     truncate_torn_tail,
     verify_append_only,
@@ -165,6 +166,88 @@ def test_guarded_write_accepts_an_extension(tmp_path: Path) -> None:
     guarded_ledger_write(path, extended)
 
     assert len(read_ledger_records(path)) == 2
+
+
+def test_unpublished_suffix_replace_rewrites_only_lines_after_the_commit(tmp_path: Path) -> None:
+    """Lines no commit holds may change; the committed prefix stays byte for byte."""
+    path = _ledger(tmp_path)
+    append_ledger_record(path, _record("EAWF-0001"))
+    published = path.read_bytes()
+    append_ledger_record(path, _record("EAWF-0002"))
+    replaced = (
+        published + f"{render_ledger_line(_record('EAWF-0002', status='CANCELLED'))}\n".encode()
+    )
+
+    replace_unpublished_suffix(
+        path, published=published, expected=path.read_bytes(), content=replaced
+    )
+
+    assert path.read_bytes() == replaced
+    assert [record.status for record in read_ledger_records(path)] == ["COMPLETED", "CANCELLED"]
+
+
+def test_unpublished_suffix_replace_refuses_a_change_to_the_commit(tmp_path: Path) -> None:
+    """A proposal that edits a committed line is refused and nothing is written."""
+    path = _ledger(tmp_path)
+    append_ledger_record(path, _record("EAWF-0001"))
+    published = path.read_bytes()
+    append_ledger_record(path, _record("EAWF-0002"))
+    before = path.read_bytes()
+
+    with pytest.raises(LedgerAppendOnlyError):
+        replace_unpublished_suffix(
+            path,
+            published=published,
+            expected=before,
+            content=before.replace(b"COMPLETED", b"CANCELLED", 1),
+        )
+    assert path.read_bytes() == before
+
+
+def test_unpublished_suffix_replace_refuses_a_file_that_moved_off_its_commit(
+    tmp_path: Path,
+) -> None:
+    """A ledger that no longer starts with the committed bytes is left alone."""
+    path = _ledger(tmp_path)
+    append_ledger_record(path, _record("EAWF-0001"))
+    stale = path.read_bytes().replace(b"COMPLETED", b"CANCELLED")
+    current = path.read_bytes()
+
+    with pytest.raises(LedgerAppendOnlyError):
+        replace_unpublished_suffix(path, published=stale, expected=stale, content=stale)
+    assert path.read_bytes() == current
+
+
+def test_unpublished_suffix_replace_refuses_a_line_appended_after_planning(
+    tmp_path: Path,
+) -> None:
+    """A line written between the plan's read and the write is never dropped."""
+    path = _ledger(tmp_path)
+    append_ledger_record(path, _record("EAWF-0001"))
+    published = path.read_bytes()
+    append_ledger_record(path, _record("EAWF-0002"))
+    planned_from = path.read_bytes()
+    append_ledger_record(path, _record("EAWF-0003"))
+    current = path.read_bytes()
+
+    with pytest.raises(LedgerAppendOnlyError):
+        replace_unpublished_suffix(
+            path, published=published, expected=planned_from, content=planned_from
+        )
+    assert path.read_bytes() == current
+
+
+def test_unpublished_suffix_replace_of_an_uncommitted_ledger_takes_any_content(
+    tmp_path: Path,
+) -> None:
+    """An empty published prefix means no commit holds the file yet."""
+    path = _ledger(tmp_path)
+    append_ledger_record(path, _record("EAWF-0001"))
+    content = f"{render_ledger_line(_record('EAWF-0009'))}\n".encode()
+
+    replace_unpublished_suffix(path, published=b"", expected=path.read_bytes(), content=content)
+
+    assert [record.record_key for record in read_ledger_records(path)] == ["EAWF-0009"]
 
 
 def test_correction_appends_a_supersedes_line(tmp_path: Path) -> None:
