@@ -29,6 +29,8 @@ MACOS_HOME = "/" + "Users" + "/" + "alice"
 WINDOWS_HOME = "C:" + "\\" + "Users" + "\\" + "alice"
 LINUX_HOME = "/" + "home" + "/" + "alice"
 SERVER_ROOT = "/" + "srv" + "/" + "work"
+RUNTIME_DIR = "/" + "run" + "/" + "user" + "/" + "1001"
+PYTEST_ROOT = "pytest" + "-of-" + "alice"
 LEAKED_EMAIL = "alice" + "@" + "acmecorp.io"
 
 # A key body long enough for every token shape; repeated characters keep the
@@ -48,7 +50,9 @@ def _scan(text: str) -> list[StateLeakHit]:
     return scan_state_leaks(text, allowed_emails=default_allowed_emails())
 
 
-@pytest.mark.parametrize("home", [MACOS_HOME, WINDOWS_HOME, LINUX_HOME, SERVER_ROOT])
+@pytest.mark.parametrize(
+    "home", [MACOS_HOME, WINDOWS_HOME, LINUX_HOME, SERVER_ROOT, RUNTIME_DIR, PYTEST_ROOT]
+)
 def test_scan_state_leaks_matches_each_home_anchor(home: str) -> None:
     hits = _scan(f"outcome: worked in {home} today")
 
@@ -149,14 +153,30 @@ def test_scan_state_leaks_matches_a_server_root_after_a_separator(lead: str) -> 
     assert hits == [StateLeakHit(kind=StateLeakKind.HOME_PATH, snippet=SERVER_ROOT)]
 
 
+def test_scan_state_leaks_matches_a_pytest_root_under_any_temp_dir() -> None:
+    path = f"/var/tmp/{PYTEST_ROOT}/pytest-70/test_x0"
+
+    assert _scan(f"layer {path}") == [
+        StateLeakHit(kind=StateLeakKind.HOME_PATH, snippet=PYTEST_ROOT)
+    ]
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["see /run/user/<uid>/eawfd", "the /run/users/ dir", "mypytest-of-x", "pytest-of-<user>"],
+)
+def test_scan_state_leaks_skips_runtime_and_pytest_lookalikes(text: str) -> None:
+    assert _scan(text) == []
+
+
 def test_scan_state_leaks_ignores_a_root_word_that_is_not_the_server_root() -> None:
     assert _scan("served /srvx/a and /usr/srv/b; see the srv/ docs") == []
 
 
-def test_home_path_patterns_are_the_scrubbers_four_anchors() -> None:
+def test_home_path_patterns_are_the_scrubbers_six_anchors() -> None:
     from eawf.observability.logging.scrub import SensitiveScrubber
 
-    assert len(HOME_PATH_PATTERNS) == 4
+    assert len(HOME_PATH_PATTERNS) == 6
     assert all(pattern in SensitiveScrubber.PATTERNS for pattern in HOME_PATH_PATTERNS)
 
 

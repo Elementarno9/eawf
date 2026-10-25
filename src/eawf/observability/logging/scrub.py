@@ -109,6 +109,10 @@ class SensitiveScrubber(logging.Filter):
         # It must start the path, so ``/usr/srv/x`` or a URL's ``host/srv/x``
         # is left alone; a separator such as grep's ``513-`` still leads one.
         re.compile(r"(?<![\w.])/srv/[^/\s]+"),  # server data root  # pragma: allowlist secret
+        # A login's runtime directory names its uid, and pytest's temp root
+        # names the user, wherever the temp directory sits.
+        re.compile(r"(?<![\w.])/run/user/\d+"),  # runtime dir  # pragma: allowlist secret
+        re.compile(r"(?<![\w.])pytest-of-[^/\s]+"),  # pytest temp root  # pragma: allowlist secret
         # Bare ``~/`` home reference (shell-expanded path that still
         # leaks the project tree layout even without the username).
         re.compile(r"~/[^\s]+"),  # tilde home

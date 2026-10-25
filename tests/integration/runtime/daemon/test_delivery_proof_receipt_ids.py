@@ -236,8 +236,9 @@ def test_a_reused_leg_is_not_refused_for_the_gate_it_already_committed(
 ) -> None:
     """Only a leg that will run is checked: a passing receipt's gate runs nothing again."""
     path = _adopted(tmp_path)
-    temp = str(Path(tempfile.gettempdir()).resolve())
-    argv = ["git", "grep", "-q", "-e", "x = 2", "-e", f"{temp}/x", "--", "src/module.py"]
+    # A bare temp root trips the proof's argv guard without naming a user, which
+    # the state writer would refuse before the reuse under test is reached.
+    argv = ["git", "grep", "-q", "-e", "x = 2", "-e", "/tmp/x", "--", "src/module.py"]
     gates = _with_argv(tmp_path, argv)
     with monkeypatch.context() as patched:
         patched.setattr(delivery_proof, "_MACHINE_PATH", re.compile(r"(?!)"))
