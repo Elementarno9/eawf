@@ -12,4 +12,4 @@ stateDiagram-v2
     ACCEPTANCE_REVIEW --> ACTIVE: review_reopened [reason_recorded]
     ACCEPTANCE_REVIEW --> COMPLETED: completed [acceptance_journey_passed]
     ACCEPTANCE_REVIEW --> CANCELLED: cancelled [reason_recorded]
-    COMPLETED --> ACTIVE: acceptance_revoked [reason_recorded+operator_principal+no_release_cites]
+    COMPLETED --> ACTIVE: acceptance_revoked [track_active+reason_recorded+operator_principal+no_release_cites]

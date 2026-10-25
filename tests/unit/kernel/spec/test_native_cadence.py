@@ -81,6 +81,33 @@ def test_a_stored_gate_row_reads_its_native_cadence(legacy: str, native: str) ->
     assert GateSpec.model_validate(gate.model_dump(mode="json")).cadence == native
 
 
+@pytest.mark.parametrize("stored", ["every-wave", "bogus", ""])
+def test_a_gate_refuses_a_stored_cadence_as_input(stored: str) -> None:
+    """The stored spelling is read state: a row naming it is an unknown key."""
+    with pytest.raises(ValidationError):
+        GateSpec.model_validate({**_gate("every-task"), "stored_cadence": stored})
+
+
+@pytest.mark.parametrize(("legacy", "native"), sorted(LEGACY_CADENCE_ALIASES.items()))
+def test_a_stored_gate_row_copied_unchanged_writes_its_stored_spelling(
+    legacy: str, native: str
+) -> None:
+    gate = GateSpec.model_validate(_gate(legacy))
+
+    assert gate.model_copy().model_dump(mode="json")["cadence"] == legacy
+    assert gate.model_copy(update={"cadence": native}).model_dump(mode="json")["cadence"] == legacy
+
+
+@pytest.mark.parametrize("cadence", ["every-milestone", "ship", "manual"])
+def test_a_stored_gate_row_copied_with_a_new_cadence_writes_the_new_value(cadence: str) -> None:
+    gate = GateSpec.model_validate(_gate("every-wave"))
+
+    moved = gate.model_copy(update={"cadence": cadence})
+
+    assert moved.model_dump(mode="json")["cadence"] == cadence
+    assert GateSpec.model_validate(moved.model_dump(mode="json")).cadence == cadence
+
+
 @pytest.mark.parametrize("cadence", _NATIVE)
 def test_a_native_gate_cadence_is_kept(cadence: str) -> None:
     assert GateSpec.model_validate(_gate(cadence)).cadence == cadence

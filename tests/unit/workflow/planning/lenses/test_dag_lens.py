@@ -24,10 +24,17 @@ from typing import Any
 import pytest
 
 from eawf.kernel.state.epoch2.plan_revision import PlanBody
+from eawf.kernel.state.epoch2.transitions import REMEDIATION_WIDTH
 from eawf.runtime.daemon.methods.domain_envelope import MESSAGE_WIDTH, DomainError
 from eawf.runtime.daemon.methods.planning import refused_plan_envelope
+from eawf.workflow.planning import apply as apply_module
 from eawf.workflow.planning.apply import PlanRevisionProposal, validate_plan_proposal
-from eawf.workflow.planning.lenses import PlanFindingCode, PlanLens, run_plan_lenses
+from eawf.workflow.planning.lenses import (
+    PlanFinding,
+    PlanFindingCode,
+    PlanLens,
+    run_plan_lenses,
+)
 from eawf.workflow.planning.revision import PlanRefusal
 
 pytestmark = pytest.mark.unit
@@ -332,3 +339,51 @@ def test_lens_refusal_of_one_finding_wider_than_the_cap_is_clipped() -> None:
     assert len(row.message) == MESSAGE_WIDTH
     assert row.message == f"{finding.message[: MESSAGE_WIDTH - 3]}..."
     assert row.guard == "plan_lens_dag"
+
+
+# ---- a lens refusal whose remediations outgrow the envelope's remediation cap ----
+
+
+def _findings_with_remediations(count: int, width: int) -> tuple[PlanFinding, ...]:
+    """Return *count* blocking findings, each with its own remediation *width* wide."""
+    return tuple(
+        PlanFinding(
+            lens=PlanLens.DAG,
+            severity="blocking",
+            code=PlanFindingCode.DAG_CYCLE_DETECTED,
+            entity_refs=(),
+            message=f"finding {n}",
+            remediation=f"Repair {n}: {'x' * (width - 12)}.",
+        )
+        for n in range(count)
+    )
+
+
+@pytest.mark.parametrize("count", [1, 2, 4, 12])
+def test_lens_refusal_remediation_fits_the_envelope_cap(
+    count: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Four distinct remediations of 150 characters pass the 500-character cap."""
+    findings = _findings_with_remediations(count, 150)
+    monkeypatch.setattr(apply_module, "run_plan_lenses", lambda *_a, **_k: findings)
+
+    row = _refused_row(_unmapped_atoms(1))
+
+    assert len(row.remediation) <= REMEDIATION_WIDTH
+    shown = row.remediation.count("Repair ")
+    assert shown == min(count, 3)
+    if shown < count:
+        omitted = count - shown
+        assert row.remediation.endswith(f" and {omitted} more finding{'s' if omitted > 1 else ''}")
+
+
+def test_lens_refusal_of_one_remediation_wider_than_the_cap_is_clipped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    findings = _findings_with_remediations(1, REMEDIATION_WIDTH + 50)
+    monkeypatch.setattr(apply_module, "run_plan_lenses", lambda *_a, **_k: findings)
+
+    row = _refused_row(_unmapped_atoms(1))
+
+    assert len(row.remediation) == REMEDIATION_WIDTH
+    assert row.remediation.endswith("...")

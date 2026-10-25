@@ -46,7 +46,7 @@ from eawf.workflow.integration.reconcile import (
     MergeOutcome,
     MergeReconciliation,
 )
-from eawf.workflow.release.pipeline import tagged_versions_of
+from eawf.workflow.release.pipeline import tagged_versions_of, version_tags_containing
 from eawf.workflow.release.records import releases_citing
 
 logger = logging.getLogger(__name__)
@@ -580,27 +580,35 @@ def _operator_principal(inputs: GuardInputs) -> bool:
 def _no_release_cites(inputs: GuardInputs) -> bool:
     """Return whether no release names the Milestone, so its acceptance can be taken back.
 
-    Two records say a release shipped a Milestone: a release record whose
-    membership names one of its acceptance bundles, and a release pipeline
-    journal that pinned the Milestone and pushed the tag. The document sits
-    at ``<tree_root>/generations/<generation>/state.json``, so the tree root
+    Three records say a release shipped a Milestone: a release record whose
+    membership names one of its acceptance bundles, a release pipeline
+    journal that pinned the Milestone and pushed the tag, and a local ``v*``
+    tag whose history holds the accepted head. The first two are filled
+    only by some release paths and the journal is machine-local, so the tag
+    is what answers on a fresh clone or in CI. The document sits at
+    ``<tree_root>/generations/<generation>/state.json``, so the tree root
     is three levels up and the checkout one more. A record that cannot be
     read answers nothing, which shuts the edge.
     """
     if not isinstance(inputs.record, Milestone):
         return False
     tree_root = inputs.document_path.parents[2]
+    binding = inputs.record.accepted_binding
     try:
         cited = releases_citing(tree_root / TREE_ANCHOR_FILENAME, str(inputs.record.urn))
         tagged = tagged_versions_of(tree_root.parent, inputs.record.key)
+        holding = (
+            () if binding is None else version_tags_containing(tree_root.parent, binding.head_sha)
+        )
     except OSError, ValueError:
         logger.warning(f"_no_release_cites unreadable milestone={inputs.record.key}")
         return False
-    if cited or tagged:
+    if cited or tagged or holding:
         logger.info(
-            f"_no_release_cites milestone={inputs.record.key} records={cited} tags={tagged}"
+            f"_no_release_cites milestone={inputs.record.key} records={cited} tags={tagged} "
+            f"holding={holding}"
         )
-    return not cited and not tagged
+    return not cited and not tagged and not holding
 
 
 def _bundle_revision_next(inputs: GuardInputs) -> bool:

@@ -28,6 +28,8 @@ from pathlib import Path
 from typing import Final
 
 from eawf.kernel.identity import QualifiedUrn
+from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
+from eawf.kernel.state.epoch2.transitions import LifecycleEntity
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import (
@@ -40,7 +42,12 @@ from eawf.kernel.store.ledger import (
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
-from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append, commit_row_write
+from eawf.runtime.daemon.epoch2_transaction import (
+    _compact,
+    _terminal_ledger_record,
+    commit_ledger_append,
+    commit_row_write,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -135,10 +142,39 @@ def readmit_milestone(
     return restored, corrected
 
 
+def recompact_milestone(context: Epoch2RootContext, *, urn: QualifiedUrn, now: datetime) -> None:
+    """Move a re-admitted Milestone the reopen did not take back into its ledger.
+
+    A reopen refused after the re-admission leaves the accepted record in
+    the document; compacting it again files a fresh standing line under its
+    own key, which is where the record lives while it stays accepted. A
+    Milestone the document holds in any other status was moved, and stays.
+
+    Args:
+        context: The native context of the tree the Milestone lives in.
+        urn: The Milestone the refused reopen addressed.
+        now: When the reopen was refused.
+    """
+    with context.session([urn]) as session:
+        row = document_rows(session.read_document(), Epoch2Collection.MILESTONE).get(urn.entity_key)
+        if row is None or row.get("status") != MilestoneStatus.COMPLETED.value:
+            return
+        line = _terminal_ledger_record(
+            entity=LifecycleEntity.MILESTONE,
+            collection=Epoch2Collection.MILESTONE,
+            successor=Milestone.model_validate(row),
+            now=now,
+        )
+        assert line is not None, "an accepted Milestone is settled"
+        _compact(context, document_path=session.document_path, record=line)
+    logger.info(f"recompact_milestone milestone={urn.entity_key}")
+
+
 __all__ = [
     "MILESTONE_READMITTED_EVENT",
     "READMISSION_KEY_PREFIX",
     "READMITTED_STATUS",
     "readmit_milestone",
+    "recompact_milestone",
     "standing_milestone",
 ]

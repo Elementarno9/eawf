@@ -52,7 +52,7 @@ from typing import Any
 from eawf.kernel.config.layered import resolve_agent_extra_tools
 from eawf.runtime.harness.fan_out import unwritten_plan_keys
 from eawf.runtime.lock import portalock
-from eawf.runtime.runtimes.claude.hook_map import build_plugin_hooks_json
+from eawf.runtime.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY, build_plugin_hooks_json
 from eawf.runtime.runtimes.claude.plugin_install import (
     _HOOK_COMMAND_MARKER,
     _MANAGED_KEY,
@@ -192,6 +192,13 @@ def _settings_managed_hash_from_manifest(manifest: Manifest, settings_path: Path
 #: Clears the wiring an older install left in ``settings.json``: the
 #: re-install drops every eawf hook entry and rewrites ``__eawf_managed``.
 _UPDATE_FIX: str = "eawf plugin update claude"
+
+#: The file names of the wrappers eawf renders into ``.claude/hooks/``. A
+#: user's own script in that directory is theirs, so only these mark an
+#: eawf hook entry.
+_EAWF_WRAPPER_NAMES: frozenset[str] = frozenset(
+    f"{spec.event_type.value}.sh" for spec in PLUGIN_HOOK_REGISTRY
+)
 
 #: Clears a project install's hooks doubling the marketplace plugin's.
 _DOUBLE_LOAD_FIX: str = (
@@ -355,6 +362,12 @@ def _settings_document(settings_bytes: bytes) -> dict[str, Any]:
     return document if isinstance(document, dict) else {}
 
 
+def _runs_eawf_wrapper(command: str) -> bool:
+    """Return whether a hook *command* runs one of the wrappers eawf renders."""
+    _, marker, name = command.rpartition(_HOOK_COMMAND_MARKER)
+    return bool(marker) and name.strip("\"'") in _EAWF_WRAPPER_NAMES
+
+
 def _eawf_hook_events(document: Mapping[str, Any]) -> set[str]:
     """Return the Claude Code events whose ``hooks`` entries run an eawf wrapper."""
     hooks = document.get("hooks")
@@ -363,8 +376,7 @@ def _eawf_hook_events(document: Mapping[str, Any]) -> set[str]:
         for entry in entries if isinstance(entries, list) else ():
             commands = entry.get("hooks") if isinstance(entry, dict) else None
             if any(
-                isinstance(command, dict)
-                and _HOOK_COMMAND_MARKER in str(command.get("command", ""))
+                isinstance(command, dict) and _runs_eawf_wrapper(str(command.get("command", "")))
                 for command in (commands if isinstance(commands, list) else ())
             ):
                 events.add(event)

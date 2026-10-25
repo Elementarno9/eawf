@@ -23,6 +23,7 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.kernel.validate.epoch2 import validate_generation
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
+from eawf.runtime.daemon.methods import domain
 from eawf.runtime.daemon.methods.domain_envelope import DomainErrorCode
 from eawf.runtime.daemon.methods.milestone_maintenance import MILESTONE_EDIT, MILESTONE_PURGE
 from eawf.runtime.daemon.methods.track_maintenance import TRACK_RENAME, TRACK_SET_POLICY
@@ -613,6 +614,34 @@ def test_milestone_cancel_asks_the_live_run_of_a_running_task_to_cancel(tmp_path
     assert _control_facts(canary) == [(RUN_URN, "cancel", "requested")]
     # a retry replays the cancel's receipt and asks nothing a second time
     retry = _drive(canary, tmp_path, CANCEL, **params)
+    assert retry["result"] == answer["result"]
+    assert _control_facts(canary) == [(RUN_URN, "cancel", "requested")]
+
+
+def test_milestone_cancel_retry_asks_the_live_run_a_lost_ask_never_reached(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A daemon that died between the cancel's commit and its ask leaves the retry to ask."""
+    canary = _cascade_tree(tmp_path)
+    seed(canary, {"run": {"RUN-00000010": _live_run("EAWF-0043")}})
+    params: dict[str, Any] = {
+        "urn": MILESTONE_URN,
+        "idempotency_key": "req-cancel-0007",
+        "reason_code": "superseded-by-replan",
+    }
+    asked = domain._ask_run_cancel
+
+    async def _lost(*_args: Any, **_kwargs: Any) -> tuple[str, ...]:
+        return ()
+
+    monkeypatch.setattr(domain, "_ask_run_cancel", _lost)
+    answer = _drive(canary, tmp_path, CANCEL, **params)
+    assert answer["status"] == "ok", answer["errors"]
+    assert _control_facts(canary) == []
+
+    monkeypatch.setattr(domain, "_ask_run_cancel", asked)
+    retry = _drive(canary, tmp_path, CANCEL, **params)
+
     assert retry["result"] == answer["result"]
     assert _control_facts(canary) == [(RUN_URN, "cancel", "requested")]
 

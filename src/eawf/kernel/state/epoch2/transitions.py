@@ -325,6 +325,14 @@ GUARD_DENIALS: Final[Mapping[TransitionGuard, DenialCode]] = {
 }
 
 
+#: How wide a refusal's message may be. A refusal that names many findings
+#: is shortened to fit by its producer, never by the envelope that carries it.
+MESSAGE_WIDTH: Final = 1000
+
+#: How wide a refusal's remediation may be, shortened the same way.
+REMEDIATION_WIDTH: Final = 500
+
+
 #: One sentence per code saying what to do about it. A denial an operator
 #: cannot act on is a dead end, so this map is total over
 #: :class:`DenialCode` and the totality is a test.
@@ -528,13 +536,15 @@ _MILESTONE_ROWS: Final[tuple[TransitionRow, ...]] = (
         guards=(TransitionGuard.REASON_RECORDED,),
     ),
     # Taking an acceptance back is an operator's correction of a Milestone no
-    # release has shipped; once one has, the fix is a new Milestone.
+    # release has shipped; once one has, the fix is a new Milestone. It makes
+    # the Milestone ACTIVE again, so its Track must still be, as on activation.
     TransitionRow(
         entity=LifecycleEntity.MILESTONE,
         frm=MilestoneStatus.COMPLETED,
         to=MilestoneStatus.ACTIVE,
         verb=TransitionVerb.ACCEPTANCE_REVOKED,
         guards=(
+            TransitionGuard.TRACK_ACTIVE,
             TransitionGuard.REASON_RECORDED,
             TransitionGuard.OPERATOR_PRINCIPAL,
             TransitionGuard.NO_RELEASE_CITES,
@@ -1251,8 +1261,10 @@ __all__ = [
     "DENIAL_REMEDIATION",
     "ENTITY_STATUS_ENUM",
     "GUARD_DENIALS",
+    "MESSAGE_WIDTH",
     "OBSERVED_GUARD_FACTS",
     "RECOVERY_STATES",
+    "REMEDIATION_WIDTH",
     "REOPENING_VERBS",
     "SETTLED_STATUSES",
     "SUCCESS_TERMINALS",

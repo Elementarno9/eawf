@@ -42,6 +42,8 @@ from eawf.kernel.state.epoch2.plan_revision import (
     PlanRevisionStatus,
     plan_content_digest,
 )
+from eawf.kernel.state.epoch2.transitions import MESSAGE_WIDTH
+from eawf.runtime.daemon.methods.planning import refused_plan_envelope
 from eawf.workflow.planning.revision import (
     PlanRefusal,
     PlanRefusalCode,
@@ -469,3 +471,26 @@ def test_accepted_risk_with_a_resolving_decision_validates() -> None:
 
     assert criterion.grounding is CriterionGrounding.ACCEPTED_RISK
     assert criterion.waiver_reason is None
+
+
+# ---- a refusal naming more ungrounded criteria than one message holds ------
+
+
+@pytest.mark.parametrize("count", [1, 12, 40])
+def test_approval_refusal_of_many_ungrounded_criteria_fits_the_message_cap(count: int) -> None:
+    """Each ungrounded criterion is named until the message cap, then counted."""
+    payload = load_fixture_body()
+    criterion = payload["tasks"][0]["criteria"][0]
+    payload["tasks"][0]["criteria"] = [{**criterion, "id": f"CR-{n:02d}"} for n in range(count)]
+
+    refused = approve(PlanBody.model_validate(payload))
+
+    assert isinstance(refused, PlanRefusal)
+    assert refused.guard == "criteria_grounded_at_approval"
+    assert len(refused.detail) <= MESSAGE_WIDTH
+    assert "CR-00" in refused.detail
+    shown = refused.detail.count(" is still graded assumed")
+    if shown < count:
+        assert refused.detail.endswith(f", and {count - shown} more findings")
+    envelope = refused_plan_envelope(refused, operation="plan.approve", subject="PRV-0031")
+    assert envelope.errors[0].message == refused.detail

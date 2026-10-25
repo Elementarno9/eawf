@@ -141,6 +141,7 @@ from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.epoch2_transaction import (
     LIFECYCLE_ENTITIES,
     RECORD_CLASSES,
+    CommittedTransaction,
     MutationReceipt,
     TransactionRefusalCode,
     TransactionRefusedError,
@@ -179,7 +180,11 @@ from eawf.runtime.daemon.methods.legacy_retire import (
 )
 from eawf.runtime.daemon.methods.milestone_maintenance import cancel_with_cascade
 from eawf.runtime.daemon.methods.run import RUN_CONTROL_REQUEST_METHOD
-from eawf.runtime.daemon.milestone_readmit import readmit_milestone, standing_milestone
+from eawf.runtime.daemon.milestone_readmit import (
+    readmit_milestone,
+    recompact_milestone,
+    standing_milestone,
+)
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 from eawf.runtime.daemon.record_append import RecordAppendRequest, append_record
 from eawf.runtime.daemon.run_capture_updates import bind_run_capture
@@ -1068,14 +1073,8 @@ async def _run_verb(
         if verb.readmits and revision is not None
         else False
     )
-    commit = cancel_with_cascade if verb.cascades else run_transaction
     try:
-        committed = await asyncio.to_thread(
-            commit,
-            context=context,
-            request=_transition_request(verb, request_params),
-            now=datetime.now(UTC),
-        )
+        committed = await _commit(context, verb, request_params)
     except TransactionRefusedError as refusal:
         logger.info(f"_run_verb refused method={verb.method} code={refusal.code.value}")
         return refused_envelope(refusal, operation=verb.method).model_dump(mode="json")
@@ -1090,6 +1089,31 @@ async def _run_verb(
     return accepted_envelope(
         committed.receipt, operation=verb.method, warnings=warnings
     ).model_dump(mode="json")
+
+
+async def _commit(
+    context: Epoch2RootContext, verb: LifecycleVerb, request_params: LifecycleParams
+) -> CommittedTransaction:
+    """Commit one verb's transaction; a refused reopen puts its Milestone back in the ledger.
+
+    Raises:
+        TransactionRefusedError: The transaction refused, having written
+            nothing but the re-admitted Milestone's return to its ledger.
+    """
+    commit = cancel_with_cascade if verb.cascades else run_transaction
+    try:
+        return await asyncio.to_thread(
+            commit,
+            context=context,
+            request=_transition_request(verb, request_params),
+            now=datetime.now(UTC),
+        )
+    except TransactionRefusedError:
+        if verb.readmits:
+            await asyncio.to_thread(
+                recompact_milestone, context, urn=request_params.urn, now=datetime.now(UTC)
+            )
+        raise
 
 
 async def _ask_run_cancel(

@@ -116,10 +116,15 @@ def test_filled_from_keeps_stated_members_and_fills_only_the_gaps() -> None:
 # ---------- the gate ----------
 
 
-def test_the_committed_exports_hold_one_claude_code_certification(
+def test_the_committed_exports_hold_each_claude_code_certification_once(
     certifications: tuple[CertificationRecord, ...],
 ) -> None:
-    assert [record.runtime_id for record in certifications] == ["claude-code"]
+    """Five exports carry the 2.1.274 record and rc3 adds 2.1.310; each is read once."""
+    assert [record.certification_urn for record in certifications] == [
+        "certification://claude-code/2026-09-18",
+        "certification://claude-code/2.1.310/2026-10-24",
+    ]
+    assert {record.runtime_id for record in certifications} == {"claude-code"}
 
 
 def test_every_control_names_its_capability_or_none() -> None:

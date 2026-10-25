@@ -179,6 +179,34 @@ def test_doctor_keeps_a_user_stop_hook(tmp_path: Path) -> None:
     assert report.clean is True
 
 
+def test_doctor_keeps_a_user_hook_script_beside_the_eawf_wrappers(tmp_path: Path) -> None:
+    """A script of the operator's own under ``.claude/hooks/`` is not eawf wiring."""
+    install_plugin(tmp_path)
+
+    def _user_script(document: dict[str, Any]) -> None:
+        command = {"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/notify.sh"}
+        document["hooks"]["Stop"] = [{"matcher": "", "hooks": [command]}]
+
+    _rewrite_recorded_settings(tmp_path, _user_script)
+    report = doctor_plugin(tmp_path)
+    assert report.clean is True, report.drifted
+
+
+def test_doctor_marketplace_with_only_user_hook_scripts_is_not_double_load(tmp_path: Path) -> None:
+    """Boundary: user scripts under ``.claude/hooks/`` in eawf's events load nothing twice."""
+    install_plugin(tmp_path)
+
+    def _user_scripts(document: dict[str, Any]) -> None:
+        command = {"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/lint.sh"}
+        document["hooks"] = {
+            event: [{"matcher": "", "hooks": [command]}] for event in document["hooks"]
+        }
+
+    _rewrite_recorded_settings(tmp_path, _user_scripts)
+    report = doctor_plugin(tmp_path, marketplace_installed=True)
+    assert not any(e.region_id == "plugin.claude.hooks.double_load" for e in report.drifted)
+
+
 def test_update_clears_rc2_settings(tmp_path: Path) -> None:
     """The fix the doctor names leaves a clean report behind."""
     install_plugin(tmp_path)

@@ -37,6 +37,7 @@ import logging
 import os
 import re
 import shutil
+import subprocess
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -58,6 +59,7 @@ from eawf.kernel.spec.release import (
     semver_equivalent,
 )
 from eawf.kernel.state.types import UtcDatetime
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.lock import portalock
 from eawf.workflow.release.advance import TrainAdvanceRecord
 from eawf.workflow.release.pipeline_files import flatten_artifacts
@@ -471,6 +473,46 @@ def tagged_versions_of(repo_root: Path, milestone_key: str) -> tuple[str, ...]:
         if released and pinned is not None and pinned.facts.get("milestone") == milestone_key:
             tagged.append(pinned.version)
     return tuple(tagged)
+
+
+def version_tags_containing(repo_root: Path, sha: str) -> tuple[str, ...]:
+    """Return every local ``v*`` tag whose history holds commit *sha*.
+
+    A release tag is pushed from the checkout that cut it and fetched by
+    every other clone, so the local tags answer for a fresh clone and CI as
+    well as for the releasing machine; nothing is fetched here. A commit the
+    repository does not hold, or a directory that is no repository, is held
+    by no local tag.
+
+    Args:
+        repo_root: The checkout whose tags are read.
+        sha: The commit to look for.
+
+    Returns:
+        The containing tag names, sorted; empty when none holds *sha*.
+
+    Raises:
+        ValueError: When git cannot list the tags of a commit it holds.
+    """
+    git = ["git", "-C", str(repo_root)]
+    known = subprocess.run(
+        [*git, "cat-file", "-e", f"{sha}^{{commit}}"],
+        capture_output=True,
+        check=False,
+        **no_window_kwargs(),
+    )
+    if known.returncode != 0:
+        return ()
+    listed = subprocess.run(
+        [*git, "for-each-ref", "--contains", sha, "--format=%(refname:strip=2)", "refs/tags/v*"],
+        capture_output=True,
+        text=True,
+        check=False,
+        **no_window_kwargs(),
+    )
+    if listed.returncode != 0:
+        raise ValueError(f"git could not list the tags holding {sha}: {listed.stderr.strip()}")
+    return tuple(sorted(listed.stdout.split()))
 
 
 #: Seconds a journal mutation waits for a sibling process's lock before
@@ -1288,4 +1330,5 @@ __all__ = [
     "run_post_merge_pipeline",
     "rung_label",
     "tagged_versions_of",
+    "version_tags_containing",
 ]

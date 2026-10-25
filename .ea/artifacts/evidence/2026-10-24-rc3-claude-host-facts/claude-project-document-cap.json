@@ -1,0 +1,72 @@
+{
+  "claude_calls": 7,
+  "conclusion": "no_byte_cap_observed",
+  "fact": "project_document_cap_bytes",
+  "finding": "No byte truncation of the project document was observed. Every file up to 700000 bytes was delivered whole (start and end markers returned). From 740000 bytes up Claude Code refused the whole request with 'Prompt is too long' naming a token count against the model's 200000-token context limit (~205931 tokens at 740000 bytes, ~280332 at 1048576, ~534823 at 2097152). The boundary is the model context window in tokens, not a byte cap on the document, so neither a byte value nor a per_file/combined scope was measured.",
+  "measured_at": "2026-10-24",
+  "method": "Per probe: a fresh git repository with no eawf holding one CLAUDE.md of exactly N bytes (ASCII filler lines), a unique random start marker on line 3 as a control and a unique random end marker on the last line; run `claude -p \"Reply with only the marker strings you can see in your project instructions\" --model claude-haiku-4-5 </dev/null` under a minimal environment (only HOME, PATH, TERM; default user configuration); record whether each marker is returned.",
+  "model": "claude-haiku-4-5",
+  "os_class": "linux",
+  "probes": [
+    {
+      "bytes": 40000,
+      "end_marker_returned": true,
+      "exit": 0,
+      "outcome": "delivered_whole",
+      "output": "START-d78f8062ad62\nEND-b8ee6ca57dc4",
+      "start_marker_returned": true
+    },
+    {
+      "bytes": 200000,
+      "end_marker_returned": true,
+      "exit": 0,
+      "outcome": "delivered_whole",
+      "output": "START-a6cfdfb7f7cb\nEND-7c3394260b90",
+      "start_marker_returned": true
+    },
+    {
+      "bytes": 600000,
+      "end_marker_returned": true,
+      "exit": 0,
+      "outcome": "delivered_whole",
+      "output": "START-a90a748c11a4\nEND-841a59da2d72",
+      "start_marker_returned": true
+    },
+    {
+      "bytes": 1048576,
+      "end_marker_returned": false,
+      "exit": 1,
+      "outcome": "refused_prompt_too_long",
+      "output": "Prompt is too long \u00b7 the request is ~280332 tokens (limit 200000) and this conversation's own content is most of it. A single-exchange conversation cannot be compacted; start with less content (smaller files or pasted text).",
+      "start_marker_returned": false
+    },
+    {
+      "bytes": 2097152,
+      "end_marker_returned": false,
+      "exit": 1,
+      "outcome": "refused_prompt_too_long",
+      "output": "Prompt is too long \u00b7 the request is ~534823 tokens (limit 200000) and this conversation's own content is most of it. A single-exchange conversation cannot be compacted; start with less content (smaller files or pasted text).",
+      "start_marker_returned": false
+    },
+    {
+      "bytes": 700000,
+      "end_marker_returned": true,
+      "exit": 0,
+      "outcome": "delivered_whole",
+      "output": "START-7ae0f2742940\n\nEND-b4418d22b3c2",
+      "start_marker_returned": true
+    },
+    {
+      "bytes": 740000,
+      "end_marker_returned": false,
+      "exit": 1,
+      "outcome": "refused_prompt_too_long",
+      "output": "Prompt is too long \u00b7 the request is ~205931 tokens (limit 200000) and this conversation's own content is most of it. A single-exchange conversation cannot be compacted; start with less content (smaller files or pasted text).",
+      "start_marker_returned": false
+    }
+  ],
+  "runtime": "claude",
+  "runtime_id": "claude-code",
+  "runtime_version": "2.1.310",
+  "schema": "eawf.host_fact_probe/1"
+}

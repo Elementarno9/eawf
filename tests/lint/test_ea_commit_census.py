@@ -14,12 +14,15 @@ path force-added into the index.
 
 from __future__ import annotations
 
+import hashlib
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from eawf.kernel.store.commit_census import run_census
@@ -55,9 +58,10 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CENSUS_TOOL = _REPO_ROOT / "tools" / "ea_commit_census.py"
 
 #: The most artifacts the commit policy may promote into git: the three
-#: single-file readers, one canary export per mapped release, and the two
-#: receipt files a release reads beside its export.
-_PROMOTED_CEILING = 3 + len(CANARY_EVIDENCE_DIRS) + 2
+#: single-file readers, the one measurement the host facts cite, one canary
+#: export per mapped release, and the two receipt files a release reads
+#: beside its export.
+_PROMOTED_CEILING = 3 + 1 + len(CANARY_EVIDENCE_DIRS) + 2
 
 
 def _isolated_git_env() -> dict[str, str]:
@@ -227,6 +231,44 @@ def test_promoted_artifact_note_names_a_src_reader_of_it(row: PathClass) -> None
     assert (_REPO_ROOT / readers[0]).is_file(), readers[0]
 
 
+#: The host facts file, whose certified evidence cites measurements by path and digest.
+_HOST_FACTS = _REPO_ROOT / "src/eawf/platform/rules/data/host_facts.yaml"
+
+#: Each ``(<path>, sha256:<hex>)`` citation in a host fact's evidence prose.
+_CITATION = re.compile(r"(\.ea/artifacts/\S+?),\s+sha256:([0-9a-f]{64})")
+
+
+def _host_fact_citations() -> dict[str, str]:
+    """Return each artifact path the host facts cite, keyed to the digest cited for it."""
+    facts = yaml.safe_load(_HOST_FACTS.read_text(encoding="utf-8"))
+    cited: dict[str, str] = {}
+    for runtime in facts.values():
+        for fact in runtime.values() if isinstance(runtime, dict) else ():
+            evidence = fact.get("evidence", "") if isinstance(fact, dict) else ""
+            cited.update(_CITATION.findall(evidence))
+    return cited
+
+
+_HOST_FACT_CITATIONS = _host_fact_citations()
+
+
+def test_host_facts_cite_only_committed_artifacts_whose_digest_matches() -> None:
+    """A certified fact's evidence must reach a clone byte for byte, or it proves nothing."""
+    assert _HOST_FACT_CITATIONS, "the claude cap cites its measurement"
+    for path, digest in _HOST_FACT_CITATIONS.items():
+        assert classify_path(path).policy is CommitPolicy.COMMITTED, path
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", path],
+            cwd=_REPO_ROOT,
+            capture_output=True,
+            check=False,
+            env=_isolated_git_env(),
+        )
+        assert tracked.returncode == 0, f"{path} is not committed"
+        held = hashlib.sha256((_REPO_ROOT / path).read_bytes()).hexdigest()
+        assert held == digest, path
+
+
 #: Each promoted path, keyed to the source module whose constant names it.
 _READERS = {
     DEV1_CONFIG_DEFAULTS_BENCHMARK_PATH.as_posix(): (
@@ -246,6 +288,7 @@ _READERS = {
     "/".join((*CANARY_EVIDENCE_DIRS["REL-0.7.0rc3"], DISPATCH_SMOKE_RECEIPTS_FILENAME)): (
         "src/eawf/workflow/release/canary_receipts.py"
     ),
+    **dict.fromkeys(_HOST_FACT_CITATIONS, "src/eawf/platform/rules/data/host_facts.yaml"),
 }
 
 

@@ -9,9 +9,15 @@ refused by :func:`refuse_retired_cadence` with the value to write instead.
 
 from __future__ import annotations
 
-from typing import Any, Final
+from typing import Any, Final, Self
 
-from pydantic import BaseModel, Field, field_serializer, model_validator
+from pydantic import (
+    BaseModel,
+    ModelWrapValidatorHandler,
+    PrivateAttr,
+    field_serializer,
+    model_validator,
+)
 
 LEGACY_CADENCE_ALIASES: Final[dict[str, str]] = {
     "every-wave": "every-task",
@@ -43,28 +49,31 @@ class StoredCadenceRow(BaseModel):
 
     An epoch-1 cadence reads as its native value, and the row is written back
     with the spelling it was stored with, so the digests of a gate filed before
-    the rename, and the receipts keyed on them, do not move.
-
-    Attributes:
-        stored_cadence: The epoch-1 spelling the row was read with; never
-            serialized, since the cadence serializer writes it in place.
+    the rename, and the receipts keyed on them, do not move. The stored
+    spelling is read state, never an input: a row cannot name it, and a copy
+    whose cadence changed writes the new value.
     """
 
-    stored_cadence: str | None = Field(default=None, exclude=True, repr=False)
+    _stored_cadence: str | None = PrivateAttr(default=None)
 
-    @model_validator(mode="before")
+    @model_validator(mode="wrap")
     @classmethod
-    def _read_legacy_cadence(cls, data: Any) -> Any:
+    def _read_legacy_cadence(cls, data: Any, handler: ModelWrapValidatorHandler[Self]) -> Self:
         """Read the epoch-1 cadence of a stored row, a filed proof's, as its native value."""
         cadence = data.get("cadence") if isinstance(data, dict) else None
-        if isinstance(cadence, str) and cadence in LEGACY_CADENCE_ALIASES:
-            return {**data, "cadence": LEGACY_CADENCE_ALIASES[cadence], "stored_cadence": cadence}
-        return data
+        if not (isinstance(cadence, str) and cadence in LEGACY_CADENCE_ALIASES):
+            return handler(data)
+        row = handler({**data, "cadence": LEGACY_CADENCE_ALIASES[cadence]})
+        row._stored_cadence = cadence
+        return row
 
     @field_serializer("cadence", check_fields=False)
     def _write_stored_cadence(self, cadence: str) -> str:
-        """Write the cadence as the row stated it."""
-        return self.stored_cadence or cadence
+        """Write the cadence as the row stated it, unless it has since changed."""
+        stored = self._stored_cadence
+        if stored is not None and LEGACY_CADENCE_ALIASES[stored] == cadence:
+            return stored
+        return cadence
 
 
 __all__ = ["LEGACY_CADENCE_ALIASES", "StoredCadenceRow", "refuse_retired_cadence"]

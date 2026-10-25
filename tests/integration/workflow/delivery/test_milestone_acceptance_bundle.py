@@ -75,7 +75,9 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
+from eawf.runtime.daemon.epoch2_transaction import TransactionRefusalCode, TransactionRefusedError
 from eawf.runtime.daemon.methods import DaemonValidationError
+from eawf.runtime.daemon.methods import domain as domain_methods
 from eawf.runtime.daemon.methods import projection as projection_methods
 from eawf.runtime.daemon.methods.delivery_acceptance import (
     BUNDLE_KEY_PREFIX,
@@ -84,6 +86,7 @@ from eawf.runtime.daemon.methods.delivery_acceptance import (
 )
 from eawf.runtime.daemon.methods.domain import DOMAIN_LIFECYCLE_METHODS
 from eawf.runtime.daemon.methods.domain_envelope import DomainErrorCode
+from eawf.runtime.daemon.milestone_readmit import standing_milestone
 from eawf.workflow.delivery.acceptance import (
     AcceptanceRefusal,
     AcceptanceRefusedError,
@@ -1008,6 +1011,7 @@ def verified_canary(
     seed(
         provisioned,
         {
+            "track": {"TRK-RUNTIME": seed_row("track", "ACTIVE")},
             "milestone": {"MLS-0030": seed_row("milestone", "ACCEPTANCE_REVIEW")},
             "batch": {"BAT-0007": seed_row("batch", batch_status)},
         },
@@ -1392,6 +1396,44 @@ def test_an_accepted_milestone_reopens_and_accepts_only_on_a_fresh_approval(
     again = accept_with(canary, tmp_path, second, revision=4, key="req-accept-0002")
     assert again["status"] == "ok", again
     assert "MLS-0030" not in read_document(document_path(canary)).get("milestone", {})
+
+
+def test_a_reopen_refused_after_readmission_leaves_the_milestone_accepted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A transaction refusal after the re-admission files the acceptance back in the ledger."""
+    canary = verified_canary(tmp_path, code="REVOKEBACK")
+    first = open_approval(canary, tmp_path)
+    seal_approval(canary, tmp_path, first)
+    assert accept_with(canary, tmp_path, first, revision=1, key="req-accept-0001")["status"] == "ok"
+    run_transaction = domain_methods.run_transaction
+
+    def _raced(**_kwargs: Any) -> Any:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.REVISION_CONFLICT,
+            detail="MLS-0030 moved under the reopen",
+            entity_ref=str(MILESTONE_URN),
+            remediation="Read the Milestone again and retry.",
+            revision=2,
+        )
+
+    monkeypatch.setattr(domain_methods, "run_transaction", _raced)
+    refused = move_milestone(
+        canary, tmp_path, REVOKE_METHOD, revision=2, key="req-revoke-0001",
+        reason_code="fix-appended",
+    )  # fmt: skip
+
+    assert refused["status"] == "error", refused
+    assert "MLS-0030" not in read_document(document_path(canary)).get("milestone", {})
+    standing = standing_milestone(document_path(canary), "MLS-0030")
+    assert standing is not None
+    assert (standing.status, standing.payload["revision"]) == ("COMPLETED", 2)
+    monkeypatch.setattr(domain_methods, "run_transaction", run_transaction)
+    reopened = move_milestone(
+        canary, tmp_path, REVOKE_METHOD, revision=2, key="req-revoke-0002",
+        reason_code="fix-appended",
+    )  # fmt: skip
+    assert reopened["status"] == "ok", reopened
 
 
 # ---------- an approval given before the URN re-key ----------

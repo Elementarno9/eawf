@@ -327,7 +327,8 @@ class HandlerInputs:
         now: The instant the answer is stamped at.
         launched_at: When the worker answering now was launched or
             resumed, or ``None`` for a Run never dispatched natively. An
-            answer filed before it went to a worker that may be gone.
+            answer filed before it went to a worker that may be gone, so a
+            Run with no launch answers no read by reference.
         lease: The Run's active workspace lease, already resolved by the
             gateway's own lease check. ``None`` for a tool the lease check
             does not gate.
@@ -704,15 +705,21 @@ def _earlier_read(
         byte_count: How many file bytes that text covers.
 
     Returns:
-        That read's call id and output, or ``None`` when the launch holds none.
+        That read's call id and output, or ``None`` when the launch holds
+        none or the Run records no launch.
     """
+    if inputs.launched_at is None:
+        # A Run never dispatched natively, such as a Campaign round, records
+        # no launch to bound the match by, and an unbounded match could name
+        # text only an earlier worker saw.
+        return None
     payload = inputs.call.payload
     windows = {
         canonical_digest(payload.model_copy(update={"reread": reread}).model_dump(mode="json"))
         for reread in (False, True)
     }
     for receipt in reversed(inputs.held):
-        if inputs.launched_at is not None and receipt.recorded_at < inputs.launched_at:
+        if receipt.recorded_at < inputs.launched_at:
             break
         output = receipt.result.bounded_output
         if (

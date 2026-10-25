@@ -60,6 +60,7 @@ from eawf.kernel.state.epoch2.plan_revision import (
     plan_content_digest,
 )
 from eawf.kernel.state.epoch2.track import TrackStatus
+from eawf.kernel.state.epoch2.transitions import MESSAGE_WIDTH
 
 logger = logging.getLogger(__name__)
 
@@ -289,6 +290,39 @@ def ungrounded_approval_criteria(
     return tuple(ids)
 
 
+def fit_refusal_text(parts: tuple[str, ...], *, separator: str, width: int) -> str:
+    """Join *parts* into one refusal field no wider than *width*.
+
+    The leading parts are named whole and the rest are counted, so a plan
+    with many findings still reaches the operator as a refusal rather than
+    as the envelope's own width error.
+
+    Args:
+        parts: Every part to name, in the order they were found.
+        separator: What goes between two parts.
+        width: The widest the field may be.
+
+    Returns:
+        The parts joined by *separator*, or as many leading ones as fit
+        followed by ``"and <n> more finding(s)"``; when even the first does
+        not fit whole, that one clipped and the rest counted.
+    """
+    joined = separator.join(parts)
+    if len(joined) <= width:
+        return joined
+    for shown in range(len(parts) - 1, 0, -1):
+        omitted = len(parts) - shown
+        tail = f"and {omitted} more finding{'s' if omitted > 1 else ''}"
+        detail = separator.join((*parts[:shown], tail))
+        if len(detail) <= width:
+            return detail
+    # Not even the first part fits whole: one finding can list every
+    # offender it names, so it is clipped rather than dropped.
+    rest = len(parts) - 1
+    tail = f"{separator}and {rest} more finding{'s' if rest > 1 else ''}" if rest else ""
+    return f"{parts[0][: width - len(tail) - 3]}...{tail}"
+
+
 def _ungrounded_reason(body: PlanBody, ref: str) -> str:
     """Return why the ``<task-urn>/<criterion-id>`` pair *ref* names is ungrounded.
 
@@ -509,7 +543,11 @@ def advance_plan_revision(
             decision_is_resolvable=decision_is_resolvable,
         )
         if ungrounded:
-            reasons = ", ".join(_ungrounded_reason(revision.body, ref) for ref in ungrounded)
+            reasons = fit_refusal_text(
+                tuple(_ungrounded_reason(revision.body, ref) for ref in ungrounded),
+                separator=", ",
+                width=MESSAGE_WIDTH,
+            )
             return PlanRefusal(
                 code=PlanRefusalCode.TRANSITION_GUARD_FAILED,
                 guard="criteria_grounded_at_approval",
@@ -637,6 +675,7 @@ __all__ = [
     "approval_binds_content",
     "citations_are_uncounted",
     "detect_plan_drift",
+    "fit_refusal_text",
     "remote_ci_dependencies",
     "ungrounded_approval_criteria",
 ]

@@ -102,12 +102,19 @@ def capsule(ctx: MethodContext, canary: CanaryProvision) -> AuthorityCapsule:
     return sealed
 
 
-@pytest.fixture
-def tree(canary: CanaryProvision, runtime_root: Path, capsule: AuthorityCapsule) -> Path:
-    """The leased worktree the first Run reads, holding the file every read names."""
+def leased_tree(canary: CanaryProvision, runtime_root: Path) -> Path:
+    """Lease the first Run's worktree and write the file every read names into it."""
     seed_lease(canary, runtime_root)
     target = workspace_path(root_context(canary, runtime_root), handle=WORKSPACE_HANDLE)
     (target / PATH).write_text("alpha\nbeta\ngamma\n", encoding="utf-8")
+    return target
+
+
+@pytest.fixture
+def tree(canary: CanaryProvision, runtime_root: Path, capsule: AuthorityCapsule) -> Path:
+    """The leased worktree the first Run reads, whose worker was launched before it reads."""
+    target = leased_tree(canary, runtime_root)
+    launched(canary, runtime_root, continuity_attempts=0)
     return target
 
 
@@ -365,6 +372,17 @@ def test_repeat_match_holds_within_one_launch(
     _, second = read(ctx, canary, capsule)
 
     assert second["same_as_call"] == first_id
+
+
+def test_repeat_match_misses_every_read_of_a_run_never_launched(
+    canary: CanaryProvision, ctx: MethodContext, capsule: AuthorityCapsule, runtime_root: Path
+) -> None:
+    """A Run no native dispatch launched, a Campaign round's, has no launch to bound the match."""
+    leased_tree(canary, runtime_root)
+    read(ctx, canary, capsule)
+    _, again = read(ctx, canary, capsule)
+
+    assert (again["same_as_call"], again["text"]) == (None, "alpha\nbeta\ngamma")
 
 
 def test_repeat_match_reports_the_current_truncation(

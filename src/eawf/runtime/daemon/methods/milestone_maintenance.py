@@ -754,6 +754,69 @@ def _cascade(
     return tuple(moved), tuple(live)
 
 
+def _settled[RecordT: (DeliveryBatch, Task)](
+    document: dict[str, Any],
+    collection: Epoch2Collection,
+    model: type[RecordT],
+    *,
+    document_path: Path,
+) -> list[RecordT]:
+    """Return the native records of *collection*, ledgered and in the document.
+
+    A cancelled record compacts into its ledger once the cancel is durable,
+    and stays in the document when the daemon died before the compaction.
+    """
+    ledgered = latest_rows(ledger_path(document_path, collection))
+    rows = {**ledgered, **document_rows(document, collection)}
+    records: list[RecordT] = []
+    for row in rows.values():
+        try:
+            records.append(model.model_validate(row))
+        except ValidationError:
+            continue
+    return records
+
+
+def _stopped_runs(
+    document: dict[str, Any], *, document_path: Path, milestone_key: str
+) -> tuple[QualifiedUrn, ...]:
+    """Return the live Runs of the Tasks a committed cancel of *milestone_key* cancelled.
+
+    Args:
+        document: The locked document.
+        document_path: The document's own path, which its ledgers resolve against.
+        milestone_key: The cancelled Milestone's key.
+
+    Returns:
+        The active Run of each CANCELLED Task of a CANCELLED Batch of the
+        Milestone that the document still holds in a status it leaves.
+    """
+    cancelled = {
+        batch.key
+        for batch in _settled(
+            document, Epoch2Collection.BATCH, DeliveryBatch, document_path=document_path
+        )
+        if batch.status is BatchStatus.CANCELLED
+        and batch.milestone_ref is not None
+        and batch.milestone_ref.entity_key == milestone_key
+    }
+    runs = document_rows(document, Epoch2Collection.RUN)
+    live: list[QualifiedUrn] = []
+    for task in _settled(document, Epoch2Collection.TASK, Task, document_path=document_path):
+        run = task.active_run_ref
+        if (
+            task.status is not TaskStatus.CANCELLED
+            or task.batch_ref is None
+            or task.batch_ref.entity_key not in cancelled
+            or run is None
+        ):
+            continue
+        row = runs.get(run.entity_key)
+        if row is not None and row.get("status") not in _ENDED_RUNS:
+            live.append(run)
+    return tuple(live)
+
+
 def cancel_with_cascade(
     *, context: Epoch2RootContext, request: TransitionRequest, now: datetime
 ) -> CommittedTransaction:
@@ -786,7 +849,16 @@ def cancel_with_cascade(
     with context.session([request.urn]) as session:
         replayed = _replayed_receipt(context, request=request)
         if replayed is not None:
-            return CommittedTransaction(receipt=replayed, envelope=None, replayed=True)
+            # The daemon may have died between the commit and its asks, so a
+            # retry asks again; each ask is idempotent by its control id.
+            stopped = _stopped_runs(
+                session.read_document(),
+                document_path=session.document_path,
+                milestone_key=request.urn.entity_key,
+            )
+            return CommittedTransaction(
+                receipt=replayed, envelope=None, replayed=True, stopped_runs=stopped
+            )
         document = session.read_document()
         document_path = session.document_path
         record = _reread_record(

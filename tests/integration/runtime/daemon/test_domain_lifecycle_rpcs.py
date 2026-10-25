@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -183,7 +184,10 @@ COMMITTED_CASES: tuple[Case, ...] = (
     ),
     Case(
         method=REOPEN_METHOD,
-        rows={"milestone": {"MLS-0030": seed_row("milestone", "COMPLETED")}},
+        rows={
+            "track": {"TRK-RUNTIME": seed_row("track", "ACTIVE")},
+            "milestone": {"MLS-0030": seed_row("milestone", "COMPLETED")},
+        },
         urn=MILESTONE_URN,
         params={"reason_code": "fix-appended"},
         event_name="domain.milestone.acceptance_revoked",
@@ -385,7 +389,10 @@ REFUSED_CASES: tuple[Case, ...] = (
     ),
     Case(
         method=REOPEN_METHOD,
-        rows={"milestone": {"MLS-0030": seed_row("milestone", "COMPLETED")}},
+        rows={
+            "track": {"TRK-RUNTIME": seed_row("track", "ACTIVE")},
+            "milestone": {"MLS-0030": seed_row("milestone", "COMPLETED")},
+        },
         urn=MILESTONE_URN,
         code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
         guard="reason_recorded",
@@ -815,6 +822,89 @@ def test_reopening_admits_a_milestone_whose_release_never_tagged(tmp_path: Path)
     case = _reopen_case()
     canary = _seeded(case, tmp_path, code="REVOKEPIN")
     _journal(canary, "0.7.0rc9", ("pin_source", {"source_sha": "a" * 40, "milestone": "MLS-0030"}))
+
+    answer = _drive(case, canary, tmp_path)
+
+    assert answer["status"] == "ok", answer
+
+
+def test_reopening_refuses_a_milestone_whose_track_retired(tmp_path: Path) -> None:
+    """Error path: reopening makes the Milestone ACTIVE, which a RETIRED Track cannot hold."""
+    case = _reopen_case()
+    case = Case(
+        method=case.method,
+        rows={**case.rows, "track": {"TRK-RUNTIME": seed_row("track", "RETIRED")}},
+        urn=case.urn,
+        params=case.params,
+    )
+    canary = _seeded(case, tmp_path, code="REVOKETRK")
+    before = document_path(canary).read_bytes()
+
+    answer = _drive(case, canary, tmp_path)
+
+    _assert_refused_untouched(answer, canary, before, guard="track_active")
+
+
+def _git(root: Path, *args: str) -> str:
+    """Run one git command in *root* and return its output, failing the test when it fails."""
+    done = subprocess.run(
+        ["git", "-C", str(root), "-c", "user.name=agent", "-c", "user.email=agent@example.invalid",
+         "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    return done.stdout.strip()
+
+
+def _commit(root: Path) -> str:
+    """Commit an empty change in *root* and return its sha."""
+    _git(root, "commit", "--quiet", "--allow-empty", "-m", "work")
+    return _git(root, "rev-parse", "HEAD")
+
+
+def _accepted_at(head: str) -> Case:
+    """Return the reopen of MLS-0030 accepted at commit *head*."""
+    case = _reopen_case()
+    accepted = _milestone("COMPLETED", accepted_binding={**_BINDING, "head_sha": head})
+    return Case(
+        method=case.method,
+        rows={**case.rows, "milestone": {"MLS-0030": accepted}},
+        urn=case.urn,
+        params=case.params,
+    )
+
+
+def test_reopening_refuses_a_milestone_whose_accepted_head_a_version_tag_holds(
+    tmp_path: Path,
+) -> None:
+    """A tag cut after the acceptance holds its head; no record or journal says so."""
+    canary = provision(tmp_path / "revoketagged", code="REVOKEHELD")
+    _git(canary.root, "init", "--quiet", "--initial-branch=main")
+    head = _commit(canary.root)
+    _commit(canary.root)
+    _git(canary.root, "tag", "v0.7.0rc1")
+    case = _accepted_at(head)
+    seed(canary, case.rows)
+    before = document_path(canary).read_bytes()
+
+    answer = _drive(case, canary, tmp_path)
+
+    _assert_refused_untouched(answer, canary, before, guard="no_release_cites")
+
+
+def test_reopening_admits_a_milestone_whose_accepted_head_no_version_tag_holds(
+    tmp_path: Path,
+) -> None:
+    """Boundary: a v-tag before the head and a non-release tag on it hold no release of it."""
+    canary = provision(tmp_path / "revokeuntagged", code="REVOKEFREE")
+    _git(canary.root, "init", "--quiet", "--initial-branch=main")
+    _commit(canary.root)
+    _git(canary.root, "tag", "v0.6.0")
+    head = _commit(canary.root)
+    _git(canary.root, "tag", "nightly")
+    case = _accepted_at(head)
+    seed(canary, case.rows)
 
     answer = _drive(case, canary, tmp_path)
 

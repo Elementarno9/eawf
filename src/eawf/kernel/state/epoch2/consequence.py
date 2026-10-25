@@ -110,7 +110,7 @@ GUARD_CONDITIONS: Final[Mapping[TransitionGuard, str]] = MappingProxyType(
         TransitionGuard.NO_EXTERNAL_EFFECT: "no externally visible effect has landed",
         TransitionGuard.NEVER_CLAIMED: "the task has never been claimed",
         TransitionGuard.NO_OPEN_MILESTONES: "no milestone under the track is still open",
-        TransitionGuard.NO_RELEASE_CITES: "no release record or pushed tag names the milestone",
+        TransitionGuard.NO_RELEASE_CITES: "no release record or tag names or holds the milestone",
         TransitionGuard.OBSERVED_PRERELEASE: "the prerelease is read back from every target",
         TransitionGuard.OBSERVED_STABLE: "the stable release is read back from every target",
         TransitionGuard.OPERATOR_PRINCIPAL: "an operator principal asks for it",

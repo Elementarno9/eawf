@@ -36,7 +36,13 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, Validation
 
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import StrictPositiveInt
-from eawf.kernel.state.epoch2.transitions import DENIAL_REMEDIATION, GUARD_DENIALS, rows_from
+from eawf.kernel.state.epoch2.transitions import (
+    DENIAL_REMEDIATION,
+    GUARD_DENIALS,
+    MESSAGE_WIDTH,
+    REMEDIATION_WIDTH,
+    rows_from,
+)
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.tiers import ENTITY_COLLECTIONS
 from eawf.runtime.daemon.epoch2_recovery import (
@@ -77,10 +83,6 @@ UNNAMED_SUBJECT: Final = "unknown"
 #: How wide an error row's subject may be. A URN is far shorter; the bound
 #: exists so an oversized parameter cannot make the refusal unbuildable.
 ENTITY_REF_WIDTH: Final = 400
-
-#: How wide an error row's message may be. A refusal that names many
-#: findings is shortened to fit by its producer, never by this model.
-MESSAGE_WIDTH: Final = 1000
 
 
 class DomainStatus(StrEnum):
@@ -172,7 +174,9 @@ class DomainError(BaseModel):
     guard: Annotated[str, StringConstraints(strict=True, min_length=1, max_length=120)] | None = (
         None
     )
-    remediation: Annotated[str, StringConstraints(strict=True, min_length=1, max_length=500)]
+    remediation: Annotated[
+        str, StringConstraints(strict=True, min_length=1, max_length=REMEDIATION_WIDTH)
+    ]
 
 
 class DomainEnvelope(BaseModel):

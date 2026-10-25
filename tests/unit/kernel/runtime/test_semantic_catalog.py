@@ -131,7 +131,7 @@ def test_every_catalog_tool_carries_typed_input_and_output_models(tool_id: Seman
         assert model.model_config["extra"] == "forbid"
         assert model.model_config["frozen"] is True
         assert model.model_fields["tool_id"].annotation is not None
-    assert contract.schema_version == "1.0.0"
+    assert contract.schema_version == "1.1.0"
 
 
 @pytest.mark.parametrize("tool_id", list(SemanticToolId), ids=lambda tool: tool.value)
