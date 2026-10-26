@@ -125,6 +125,7 @@ class TransitionGuard(StrEnum):
     """
 
     ACCEPTANCE_JOURNEY_PASSED = "acceptance_journey_passed"
+    ACCEPTED_HEAD_HELD = "accepted_head_held"
     APPROVAL_FRESH = "approval_fresh"
     BATCH_WIP_ADMITS = "batch_wip_admits"
     BUNDLE_REVISION_NEXT = "bundle_revision_next"
@@ -187,6 +188,7 @@ class DenialCode(StrEnum):
     BATCH_WIP_CEILING_REACHED = "batch_wip_ceiling_reached"
     HOST_MERGE_NOT_REFUSED = "host_merge_not_refused"
     HOST_MERGE_UNOBSERVED = "host_merge_unobserved"
+    MILESTONE_ACCEPTED_HEAD_UNHELD = "milestone_accepted_head_unheld"
     MILESTONE_BATCHES_OPEN = "milestone_batches_open"
     MILESTONE_RELEASED = "milestone_released"
     MILESTONE_TRACK_RETIRED = "milestone_track_retired"
@@ -287,6 +289,7 @@ ENTITY_STATUS_ENUM: Final[Mapping[LifecycleEntity, type[StrEnum]]] = {
 #: The stable code each guard raises when its predicate is unmet.
 GUARD_DENIALS: Final[Mapping[TransitionGuard, DenialCode]] = {
     TransitionGuard.ACCEPTANCE_JOURNEY_PASSED: DenialCode.ACCEPTANCE_JOURNEY_INCOMPLETE,
+    TransitionGuard.ACCEPTED_HEAD_HELD: DenialCode.MILESTONE_ACCEPTED_HEAD_UNHELD,
     TransitionGuard.APPROVAL_FRESH: DenialCode.APPROVAL_STALE,
     TransitionGuard.BATCH_WIP_ADMITS: DenialCode.BATCH_WIP_CEILING_REACHED,
     TransitionGuard.BUNDLE_REVISION_NEXT: DenialCode.ACCEPTANCE_BUNDLE_REVISION_NOT_NEXT,
@@ -384,6 +387,11 @@ DENIAL_REMEDIATION: Final[Mapping[DenialCode, str]] = {
     ),
     DenialCode.HOST_MERGE_UNOBSERVED: (
         "Read the integration back from the host: a reported merge is not an observed one."
+    ),
+    DenialCode.MILESTONE_ACCEPTED_HEAD_UNHELD: (
+        "This checkout lacks the accepted head, so its tags cannot show whether a release "
+        "shipped it; fetch that commit and the tags (git fetch --tags, or --unshallow on a "
+        "shallow clone), then retry."
     ),
     DenialCode.MILESTONE_BATCHES_OPEN: (
         "Complete or cancel every required DeliveryBatch before opening acceptance review."
@@ -548,6 +556,7 @@ _MILESTONE_ROWS: Final[tuple[TransitionRow, ...]] = (
             TransitionGuard.REASON_RECORDED,
             TransitionGuard.OPERATOR_PRINCIPAL,
             TransitionGuard.NO_RELEASE_CITES,
+            TransitionGuard.ACCEPTED_HEAD_HELD,
         ),
         cleared_fields=("accepted_binding",),
     ),

@@ -33,6 +33,8 @@ from eawf.workflow.evidence.machine_certification import append_machine_certific
 from eawf.workflow.evidence.provider_certification import (
     CANARY_EVIDENCE_DIRS,
     CanaryEvidence,
+    CertificationRecord,
+    RuntimeRunLog,
     canary_evidence_path,
     load_canary_evidence,
     provider_findings,
@@ -45,6 +47,7 @@ VERSION: Final = "2.1.310"
 PRIOR_KEY: Final = "REL-0.7.0.dev3"
 EXPORT_KEY: Final = "REL-0.7.0.dev4"
 DIGEST: Final = f"sha256:{'e' * 64}"
+LIFETIME: Final = timedelta(days=3650)
 
 
 @pytest.fixture(scope="module")
@@ -56,9 +59,18 @@ def committed() -> CanaryEvidence:
 
 
 def driver_certification(
-    committed: CanaryEvidence, *, os_class: str = "linux", version: str = VERSION, shift: int = 0
+    committed: CanaryEvidence,
+    *,
+    os_class: str = "linux",
+    version: str = VERSION,
+    shift: int = 0,
+    lifetime: timedelta = LIFETIME,
 ) -> DriverCertification:
-    """Return a verified certification of claude-code *version* on *os_class*."""
+    """Return a verified certification of claude-code *version* on *os_class*.
+
+    The certification lasts *lifetime* from its verification, so the write
+    path, which measures expiry against the wall clock, stays live.
+    """
     document: dict[str, Any] = committed.certifications[0].certification.model_dump(mode="json")
     verified_at = committed.certifications[0].certification.verified_at + timedelta(hours=shift)
     history = document["stage_history"]
@@ -70,8 +82,41 @@ def driver_certification(
         distribution_version=version,
         sdk_or_server_version=version,
         verified_at=verified_at.isoformat(),
+        expires_at=(verified_at + lifetime).isoformat(),
     )
     return DriverCertification.model_validate(document)
+
+
+def quarantined(base: DriverCertification, *, shift: int) -> MachineCertification:
+    """Return a walk of *base*'s version whose canary failed *shift* hours after *base*."""
+    probe, canary, _certify = base.stage_history[-3:]
+    at = base.verified_at + timedelta(hours=shift)
+    failed = canary.model_copy(
+        update={
+            "outcome": "failed",
+            "reason_code": "capability_not_observed",
+            "started_at": at,
+            "completed_at": at,
+        }
+    )
+    passed = probe.model_copy(update={"started_at": at, "completed_at": at})
+    return MachineCertification.model_validate(
+        {
+            "certification_urn": (
+                f"certification://claude-code/{base.distribution_version}/{at:%Y-%m-%d}-q"
+            ),
+            "runtime_id": "claude-code",
+            "harness_version": base.distribution_version,
+            "tuple_digest": DIGEST,
+            "outcome": "quarantined",
+            "reason_code": "capability_not_observed",
+            "findings": ["the canary observed no containment"],
+            "reason": "claude-code failed the containment canary",
+            "probe": passed.model_dump(mode="json"),
+            "stages": [failed.model_dump(mode="json")],
+            "verified_at": at,
+        }
+    )
 
 
 def stored(
@@ -117,6 +162,7 @@ def export(
         rows=rows,
         installed={"claude-code": installed},
         os_classes=os_classes,
+        now=committed.certifications[0].certification.verified_at + timedelta(days=1),
     )
 
 
@@ -333,6 +379,142 @@ def test_an_advertised_runtime_not_installed_is_refused(
     with pytest.raises(ValueError, match="canary_export_not_installed"):
         write_canary_export(state_path, EXPORT_KEY, os_classes=("linux",))
     assert not canary_evidence_path(tmp_path, EXPORT_KEY).exists()
+
+
+def test_a_later_quarantine_refuses_the_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, committed: CanaryEvidence
+) -> None:
+    state_path = _stored_tree(tmp_path, committed)
+    append_machine_certification(state_path, quarantined(driver_certification(committed), shift=1))
+    _installed(monkeypatch, VERSION)
+
+    with pytest.raises(ValueError, match="canary_export_quarantined"):
+        write_canary_export(state_path, EXPORT_KEY, os_classes=("linux",))
+    assert not canary_evidence_path(tmp_path, EXPORT_KEY).exists()
+
+
+def test_an_expired_certification_refuses_the_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, committed: CanaryEvidence
+) -> None:
+    _commit_export(tmp_path, PRIOR_KEY)
+    state_path = tmp_path / ".ea" / "state.json"
+    lapsed = driver_certification(committed, lifetime=timedelta(days=1))
+    append_machine_certification(state_path, stored(lapsed, base=lapsed))
+    _installed(monkeypatch, VERSION)
+
+    with pytest.raises(ValueError, match="canary_export_expired"):
+        write_canary_export(state_path, EXPORT_KEY, os_classes=("linux",))
+    assert not canary_evidence_path(tmp_path, EXPORT_KEY).exists()
+
+
+def test_a_re_export_keeps_isolation_run_logs_and_other_os_classes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, committed: CanaryEvidence
+) -> None:
+    state_path = _stored_tree(tmp_path, committed)
+    _installed(monkeypatch, VERSION)
+    (macos,) = committed.certifications
+    replaced = CertificationRecord(
+        certification_urn="certification://claude-code/2.1.309/2026-09-20",
+        runtime_id="claude-code",
+        tuple_digest=DIGEST,
+        certification=driver_certification(committed, version="2.1.309"),
+    )
+    run_log = RuntimeRunLog(
+        runtime_id="claude-code",
+        manifest_ref=f"driver://claude-code/{VERSION}",
+        ran_at=macos.certification.verified_at,
+        exit_code=0,
+        log_ref="artifact://dev4-conformance/2026-09-26/run-log",
+    )
+    assert committed.isolation is not None
+    own = committed.model_copy(
+        update={
+            "release_key": EXPORT_KEY,
+            "certifications": (replaced, macos),
+            "run_logs": (run_log,),
+        }
+    )
+    target = canary_evidence_path(tmp_path, EXPORT_KEY)
+    target.parent.mkdir(parents=True)
+    target.write_text(json.dumps(own.model_dump(mode="json")), encoding="utf-8")
+
+    evidence = write_canary_export(state_path, EXPORT_KEY, os_classes=("linux",))
+    first = target.read_text(encoding="utf-8")
+    again = write_canary_export(state_path, EXPORT_KEY, os_classes=("linux",))
+
+    assert evidence.isolation == committed.isolation
+    assert evidence.run_logs == (run_log,)
+    assert evidence.milestones == committed.milestones
+    assert [record.certification for record in evidence.certifications] == [
+        driver_certification(committed),
+        macos.certification,
+    ]
+    assert again == evidence
+    assert target.read_text(encoding="utf-8") == first
+
+
+def test_a_quarantine_older_than_the_certification_is_shadowed(
+    committed: CanaryEvidence,
+) -> None:
+    certification = driver_certification(committed, shift=2)
+    rows = [
+        quarantined(driver_certification(committed), shift=1),
+        stored(certification, base=certification),
+    ]
+
+    assert [record.certification for record in export(committed, rows).certifications] == [
+        certification
+    ]
+
+
+def test_a_quarantine_verified_with_the_certification_wins_when_appended_later(
+    committed: CanaryEvidence,
+) -> None:
+    certification = driver_certification(committed, shift=1)
+    rows = [
+        stored(certification, base=certification),
+        quarantined(driver_certification(committed), shift=1),
+    ]
+
+    with pytest.raises(ValueError, match="canary_export_quarantined"):
+        export(committed, rows)
+
+
+def test_a_quarantine_of_another_version_does_not_refuse(committed: CanaryEvidence) -> None:
+    certification = driver_certification(committed)
+    other = driver_certification(committed, version="2.1.311")
+    rows = [stored(certification, base=certification), quarantined(other, shift=1)]
+
+    assert len(export(committed, rows).certifications) == 1
+
+
+@pytest.mark.parametrize(
+    ("lifetime", "refused"),
+    [
+        pytest.param(timedelta(days=1), True, id="expires-at-the-export"),
+        pytest.param(timedelta(days=1, seconds=1), False, id="expires-just-after"),
+    ],
+)
+def test_the_expiry_is_measured_against_the_export_time(
+    committed: CanaryEvidence, lifetime: timedelta, refused: bool
+) -> None:
+    certification = driver_certification(committed, lifetime=lifetime)
+    rows = [stored(certification, base=certification)]
+    if refused:
+        with pytest.raises(ValueError, match="canary_export_expired"):
+            export(committed, rows)
+    else:
+        assert len(export(committed, rows).certifications) == 1
+
+
+def test_another_release_s_isolation_and_run_logs_are_not_carried(
+    committed: CanaryEvidence,
+) -> None:
+    certification = driver_certification(committed)
+    evidence = export(committed, [stored(certification, base=certification)])
+    assert committed.isolation is not None
+    assert evidence.isolation is None and evidence.run_logs == ()
+    assert [record.certification for record in evidence.certifications] == [certification]
 
 
 # ---------- the verb ----------

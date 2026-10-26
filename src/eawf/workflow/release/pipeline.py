@@ -475,6 +475,41 @@ def tagged_versions_of(repo_root: Path, milestone_key: str) -> tuple[str, ...]:
     return tuple(tagged)
 
 
+def repository_lacks_commit(repo_root: Path, sha: str) -> bool:
+    """Return whether *repo_root* is a git repository that does not hold commit *sha*.
+
+    A shallow clone, or one fetched before *sha* existed, cannot say which
+    tags hold it, so an answer of "no tag" from it proves nothing. A
+    directory that is no repository has no tags to read at all and is not
+    reported here.
+
+    Args:
+        repo_root: The checkout to look in.
+        sha: The commit to look for.
+
+    Returns:
+        ``True`` when git reads *repo_root* as a repository and finds no
+        commit *sha* in it; ``False`` when it holds the commit or is no
+        repository.
+
+    Raises:
+        OSError: When git cannot be started.
+    """
+    git = ["git", "-C", str(repo_root)]
+    repository = subprocess.run(
+        [*git, "rev-parse", "--git-dir"], capture_output=True, check=False, **no_window_kwargs()
+    )
+    if repository.returncode != 0:
+        return False
+    held = subprocess.run(
+        [*git, "cat-file", "-e", f"{sha}^{{commit}}"],
+        capture_output=True,
+        check=False,
+        **no_window_kwargs(),
+    )
+    return held.returncode != 0
+
+
 def version_tags_containing(repo_root: Path, sha: str) -> tuple[str, ...]:
     """Return every local ``v*`` tag whose history holds commit *sha*.
 
@@ -1327,6 +1362,7 @@ __all__ = [
     "StepOutcome",
     "discard_journal_from",
     "read_journal",
+    "repository_lacks_commit",
     "run_post_merge_pipeline",
     "rung_label",
     "tagged_versions_of",

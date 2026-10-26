@@ -35,6 +35,7 @@ from eawf.kernel.release.gate_binding import (
 from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.spec.release import ReleaseKeyStr
 from eawf.kernel.spec.release_config import ReleaseGateName
+from eawf.kernel.state.epoch2.base import RunKey
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence.provider_certification import CANARY_EVIDENCE_DIRS, OsClass
 
@@ -272,7 +273,8 @@ class DispatchSmokeReceipt(_StrictModel):
         run_refs: The dispatched Runs the scorecard was checked over.
         scorecard: ``pass`` when every Run met the ``fixture`` tier.
         evidence_refs: The per-Run check documents filed beside the
-            receipt.
+            receipt, by file name; a passing scorecard counts only when
+            each Run's document is there and clean.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -312,16 +314,116 @@ class DispatchSmokeReceiptSet(_StrictModel):
         return self
 
 
+#: A check row's observed value or limit: a count, a status or a decimal
+#: written as a string, or ``None`` when unmeasured or unlimited.
+_CheckValue = int | str | None
+
+
+class DispatchCheckRow(_StrictModel):
+    """One metric of a filed check document beside the tier's limit.
+
+    Attributes:
+        metric: The scorecard value checked.
+        observed: What the Run measured.
+        limit: The tier's limit on it.
+        breached: Whether the value is past the limit.
+    """
+
+    metric: Annotated[str, Field(min_length=1, max_length=64)]
+    observed: _CheckValue
+    limit: _CheckValue
+    breached: bool
+
+
+class DispatchCheckScorecard(_StrictModel):
+    """The scorecard a filed check document was checked over.
+
+    Attributes:
+        run_key: The Run scored.
+        status: The Run's recorded status.
+        turns: How many model calls the Run made.
+        read_truncation_rate: Share of cut read windows, as a decimal string.
+        identical_reread_rate: Share of identical re-reads, as a decimal string.
+        total_tokens: Every token the Run billed, cache reads included.
+        billable_tokens: The name an earlier scorecard gave
+            ``total_tokens``; the committed rc3 documents carry it.
+        cache_read_tokens: The cache-read slice of the token count.
+        first_patch_seconds: Seconds to the first succeeded patch.
+        wall_seconds: Seconds from the Run's start to its end.
+    """
+
+    run_key: RunKey
+    status: Annotated[str, Field(min_length=1, max_length=32)]
+    turns: Annotated[int, Field(ge=0)]
+    read_truncation_rate: str
+    identical_reread_rate: str
+    total_tokens: Annotated[int, Field(ge=0)] | None = None
+    billable_tokens: Annotated[int, Field(ge=0)] | None = None
+    cache_read_tokens: Annotated[int, Field(ge=0)] | None
+    first_patch_seconds: str | None
+    wall_seconds: str | None
+
+
+class DispatchCheckBody(_StrictModel):
+    """A scorecard checked against one tier, as ``bench dispatch --json`` writes it.
+
+    Attributes:
+        tier: The tier checked against.
+        scorecard: The scorecard checked.
+        checks: One row per metric.
+        breaches: The metrics past their limit.
+    """
+
+    tier: Literal["fixture", "real"]
+    scorecard: DispatchCheckScorecard
+    checks: Annotated[tuple[DispatchCheckRow, ...], Field(min_length=1)]
+    breaches: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def _breaches_match_the_rows(self) -> DispatchCheckBody:
+        """Reject a document whose breach list disagrees with its rows.
+
+        Raises:
+            ValueError: When ``breaches`` is not exactly the breached
+                rows' metrics, since an emptied list would otherwise
+                clear a Run its own rows show breached.
+        """
+        breached = tuple(row.metric for row in self.checks if row.breached)
+        if self.breaches != breached:
+            raise ValueError(f"breaches {list(self.breaches)} disagree with rows {list(breached)}")
+        return self
+
+
+class DispatchCheckDocument(_StrictModel):
+    """One Run's check document, filed beside the dispatch smoke receipt.
+
+    Attributes:
+        check: The scorecard checked against its tier.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    check: DispatchCheckBody
+
+
 class DispatchSmokeGap(StrEnum):
     """Why a claimed os_class is not backed by a passing dispatch smoke.
 
     Values:
         MISSING: No receipt was filed for the class.
         FAILED: A receipt for the class carries a failing scorecard.
+        CHECK_MISSING: A passing receipt lacks a check document, beside
+            the receipt file, for one of its Runs.
+        CHECK_MISMATCHED: A passing receipt's documents do not name its
+            Runs one for one.
+        CHECK_BREACHED: A passing receipt's document records a breach.
     """
 
     MISSING = "dispatch_smoke_missing"
     FAILED = "dispatch_smoke_failed"
+    CHECK_MISSING = "dispatch_smoke_check_missing"
+    CHECK_MISMATCHED = "dispatch_smoke_check_mismatched"
+    CHECK_BREACHED = "dispatch_smoke_check_breached"
 
 
 def read_dispatch_smoke_receipts(path: Path) -> DispatchSmokeReceiptSet | None:
@@ -372,35 +474,119 @@ def load_dispatch_smoke_receipts(
     return receipts
 
 
+def read_dispatch_checks(
+    directory: Path, receipts: DispatchSmokeReceiptSet | None
+) -> dict[str, DispatchCheckDocument]:
+    """Return every check document a passing receipt names that is filed in *directory*.
+
+    Only a bare file name resolves: the smoke writes each document beside
+    the receipt file, so a reference into another directory is left out
+    and reads as missing.
+
+    Args:
+        directory: The directory the receipt file was read from.
+        receipts: The set read there, or ``None`` when none is filed.
+
+    Returns:
+        Each present document, validated, by the file name a receipt
+        cites it by.
+
+    Raises:
+        ValueError: When a present document is not valid JSON or does
+            not validate.
+    """
+    filed = receipts.receipts if receipts is not None else ()
+    names = {
+        ref
+        for receipt in filed
+        if receipt.scorecard == "pass"
+        for ref in receipt.evidence_refs
+        if "://" not in ref and Path(ref).name == ref
+    }
+    documents: dict[str, DispatchCheckDocument] = {}
+    for name in sorted(names):
+        path = directory / name
+        if not path.is_file():
+            continue
+        try:
+            documents[name] = DispatchCheckDocument.model_validate(
+                json.loads(path.read_text(encoding="utf-8"))
+            )
+        except (json.JSONDecodeError, ValidationError) as exc:
+            raise ValueError(f"{name} is invalid: {exc}") from exc
+    return documents
+
+
+def _check_gap(
+    receipt: DispatchSmokeReceipt, documents: dict[str, DispatchCheckDocument]
+) -> DispatchSmokeGap | None:
+    """Return why *receipt*'s check documents do not back its passing scorecard.
+
+    Args:
+        receipt: A receipt whose scorecard reads ``pass``.
+        documents: The documents read beside it, by file name.
+
+    Returns:
+        The first gap of missing, mismatched and breached, or ``None``
+        when each Run has exactly one clean document naming it.
+    """
+    if len(receipt.evidence_refs) != len(receipt.run_refs) or any(
+        ref not in documents for ref in receipt.evidence_refs
+    ):
+        return DispatchSmokeGap.CHECK_MISSING
+    cited = [documents[ref] for ref in receipt.evidence_refs]
+    named = sorted(document.check.scorecard.run_key for document in cited)
+    if named != sorted(ref.rsplit("/", 1)[-1] for ref in receipt.run_refs):
+        return DispatchSmokeGap.CHECK_MISMATCHED
+    if any(document.check.breaches for document in cited):
+        return DispatchSmokeGap.CHECK_BREACHED
+    return None
+
+
 def dispatch_smoke_gaps(
-    receipts: DispatchSmokeReceiptSet | None, claims: tuple[tuple[str, OsClass], ...]
+    receipts: DispatchSmokeReceiptSet | None,
+    claims: tuple[tuple[str, OsClass], ...],
+    documents: dict[str, DispatchCheckDocument],
 ) -> tuple[tuple[str, OsClass, DispatchSmokeGap], ...]:
     """Return each claimed runtime and os_class a passing dispatch smoke does not back.
 
     A smoke backs only the runtime it dispatched to, so a claude-code
-    smoke on a class says nothing about a codex claim on it.
+    smoke on a class says nothing about a codex claim on it. A passing
+    scorecard is the smoke's own word, so it backs a claim only when the
+    check documents filed beside it show every Run clean.
 
     Args:
         receipts: The committed set, or ``None`` when none is committed.
         claims: The ``(runtime_id, os_class)`` pairs the checkpoint
             claims, in claim order.
+        documents: The check documents read beside the set, by file name,
+            as :func:`read_dispatch_checks` returns them.
 
     Returns:
-        One ``(runtime_id, os_class, gap)`` per pair with no receipt or a
-        failing one; empty when every pair has a passing receipt.
+        One ``(runtime_id, os_class, gap)`` per pair with no receipt, a
+        failing one, or a passing one its documents do not back; empty
+        when every pair is backed.
     """
     filed = receipts.receipts if receipts is not None else ()
     gaps: list[tuple[str, OsClass, DispatchSmokeGap]] = []
     for runtime_id, os_class in dict.fromkeys(claims):
-        scorecards = {
-            receipt.scorecard
+        matching = [
+            receipt
             for receipt in filed
             if (receipt.runtime_id, receipt.os_class) == (runtime_id, os_class)
-        }
-        if not scorecards:
+        ]
+        if not matching:
             gaps.append((runtime_id, os_class, DispatchSmokeGap.MISSING))
-        elif "fail" in scorecards:
-            gaps.append((runtime_id, os_class, DispatchSmokeGap.FAILED))
+            continue
+        # The set refuses a repeated pair, so one receipt stands per pair.
+        (receipt,) = matching
+        gap = (
+            DispatchSmokeGap.FAILED
+            if receipt.scorecard == "fail"
+            else _check_gap(receipt, documents)
+        )
+        if gap is not None:
+            gaps.append((runtime_id, os_class, gap))
     return tuple(gaps)
 
 
@@ -411,6 +597,7 @@ __all__ = [
     "CanaryReadinessVerdict",
     "CanaryReceipt",
     "CanaryReceiptSet",
+    "DispatchCheckDocument",
     "DispatchSmokeGap",
     "DispatchSmokeReceipt",
     "DispatchSmokeReceiptSet",
@@ -421,5 +608,6 @@ __all__ = [
     "dispatch_smoke_gaps",
     "load_canary_receipts",
     "load_dispatch_smoke_receipts",
+    "read_dispatch_checks",
     "read_dispatch_smoke_receipts",
 ]

@@ -70,6 +70,46 @@ def certified_on(document: dict[str, Any], os_class: str) -> dict[str, Any]:
     return result
 
 
+def check_document(run_key: str, breaches: tuple[str, ...] = ()) -> dict[str, Any]:
+    """Return a ``bench dispatch --check --json`` document for *run_key*.
+
+    Args:
+        run_key: The Run the document's scorecard names.
+        breaches: The metrics marked past their limit.
+
+    Returns:
+        A document in the shape the live smoke files beside its receipt.
+    """
+    observed = {"status": "COMPLETED", "turns": 7, "wall_seconds": "30.5"}
+    limits = {"status": "COMPLETED", "turns": 25, "wall_seconds": "600"}
+    return {
+        "check": {
+            "breaches": list(breaches),
+            "checks": [
+                {
+                    "breached": metric in breaches,
+                    "limit": limits[metric],
+                    "metric": metric,
+                    "observed": observed[metric],
+                }
+                for metric in observed
+            ],
+            "scorecard": {
+                "cache_read_tokens": 100,
+                "first_patch_seconds": "12.5",
+                "identical_reread_rate": "0",
+                "read_truncation_rate": "0",
+                "run_key": run_key,
+                "status": "COMPLETED",
+                "total_tokens": 1000,
+                "turns": 7,
+                "wall_seconds": "30.5",
+            },
+            "tier": "fixture",
+        }
+    }
+
+
 def smoke_filed(
     root: Path,
     release_key: str,
@@ -78,6 +118,9 @@ def smoke_filed(
     scorecard: str = "pass",
 ) -> Path:
     """File a live dispatch smoke receipt per *os_classes* in *release_key*'s evidence.
+
+    Each receipt's Run gets a clean check document beside the receipt file,
+    as the live smoke writes one.
 
     Args:
         root: The staged checkout root.
@@ -90,6 +133,11 @@ def smoke_filed(
     """
     path = root.joinpath(*CANARY_EVIDENCE_DIRS[release_key], DISPATCH_SMOKE_RECEIPTS_FILENAME)
     path.parent.mkdir(parents=True, exist_ok=True)
+    for number in range(1, len(os_classes) + 1):
+        run_key = f"RUN-{number:08d}"
+        (path.parent / f"dispatch-check-{run_key}.json").write_text(
+            json.dumps(check_document(run_key)), encoding="utf-8"
+        )
     receipts = [
         {
             "os_class": os_class,

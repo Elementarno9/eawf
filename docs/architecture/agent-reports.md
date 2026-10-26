@@ -5,7 +5,7 @@ Typed agent reports are append-only JSONL records that capture the final output 
 ## Store Flow
 
 1. Runtime manifests tell every agent to emit a typed `agent_end` body.
-2. Runtime hook scripts call `eawf hook run agent_end` with the session id, base id, report body, optional artifact ids, and optional blob refs.
+2. Runtime hook scripts call `eawf hook run agent_end` with the `run_ref` of the native Run (a Run URN), the base id, report body, optional artifact ids, and optional blob refs.
 3. The hook loader validates the body against the discriminated `AgentReportBody` union.
 4. `append_report_as` files the report as the native Run the payload names, which is the authority for role and scope, then computes the next attempt for the role/base pair.
 5. The report is wrapped in a store envelope and appended to the role-specific report JSONL file.

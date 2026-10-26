@@ -74,6 +74,7 @@ DAEMON_GUARDS: Final = frozenset(
         TransitionGuard.NO_ACTIVE_RUN,
         TransitionGuard.OPERATOR_PRINCIPAL,
         TransitionGuard.NO_RELEASE_CITES,
+        TransitionGuard.ACCEPTED_HEAD_HELD,
         TransitionGuard.BUNDLE_REVISION_NEXT,
     }
 )
@@ -93,6 +94,7 @@ _REQUEST_GUARDS: Final = frozenset(
 GUARD_CONDITIONS: Final[Mapping[TransitionGuard, str]] = MappingProxyType(
     {
         TransitionGuard.ACCEPTANCE_JOURNEY_PASSED: "every acceptance step has a passing result",
+        TransitionGuard.ACCEPTED_HEAD_HELD: "the checkout holds the milestone's accepted head",
         TransitionGuard.APPROVAL_FRESH: "the approval is against the exact manifest digest",
         TransitionGuard.BATCH_WIP_ADMITS: "the track has room for another active batch here",
         TransitionGuard.BUNDLE_REVISION_NEXT: "review names the revision after the filed bundle",

@@ -32,12 +32,18 @@ from eawf.workflow.release.canary_receipts import (
     DispatchSmokeReceiptSet,
     dispatch_smoke_gaps,
     load_dispatch_smoke_receipts,
+    read_dispatch_checks,
     read_dispatch_smoke_receipts,
 )
-from eawf.workflow.release.signal_probes import build_receipt_probes, provider_probe
+from eawf.workflow.release.signal_probes import (
+    build_receipt_probes,
+    provider_probe,
+    smoke_remediation,
+)
 from eawf.workflow.verify.release_readiness import ReleaseSignalContext
 from tests.integration.workflow.verify.test_provider_os_class import (
     certified_on,
+    check_document,
     committed,
     smoke_filed,
     staged,
@@ -48,6 +54,8 @@ pytestmark = pytest.mark.integration
 REPO_ROOT: Final = Path(__file__).resolve().parents[4]
 DEV4_VERSION: Final = "0.7.0.dev4"
 DEV4_KEY: Final = f"REL-{DEV4_VERSION}"
+RC3_VERSION: Final = "0.7.0rc3"
+RC3_KEY: Final = f"REL-{RC3_VERSION}"
 
 #: Where the dev4 smoke receipts sit, relative to a checkout.
 RECEIPTS: Final = "/".join((*CANARY_EVIDENCE_DIRS[DEV4_KEY], DISPATCH_SMOKE_RECEIPTS_FILENAME))
@@ -78,6 +86,16 @@ def receipts_file(root: Path, document: dict[str, Any] | str) -> Path:
     path = root / RECEIPTS
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(document if isinstance(document, str) else json.dumps(document), "utf-8")
+    return root
+
+
+def documents_filed(root: Path, *documents: dict[str, Any]) -> Path:
+    """Write each check document beside the dev4 receipt file, named by its Run."""
+    directory = (root / RECEIPTS).parent
+    directory.mkdir(parents=True, exist_ok=True)
+    for document in documents:
+        run_key = document["check"]["scorecard"]["run_key"]
+        (directory / f"dispatch-check-{run_key}.json").write_text(json.dumps(document), "utf-8")
     return root
 
 
@@ -150,12 +168,14 @@ def test_smoke_receipt_passes_loads_as_a_closed_receipt_set(tmp_path: Path) -> N
 
 
 def test_smoke_receipt_passes_with_no_gap_for_passing_classes(tmp_path: Path) -> None:
-    receipts = load_dispatch_smoke_receipts(smoke_filed(tmp_path, DEV4_KEY), DEV4_KEY)
+    root = smoke_filed(tmp_path, DEV4_KEY)
+    receipts = load_dispatch_smoke_receipts(root, DEV4_KEY)
+    documents = read_dispatch_checks((root / RECEIPTS).parent, receipts)
 
     claims = (("claude-code", "linux"), ("claude-code", "macos"), ("claude-code", "linux"))
 
-    assert dispatch_smoke_gaps(receipts, claims) == ()
-    assert dispatch_smoke_gaps(receipts, ()) == ()
+    assert dispatch_smoke_gaps(receipts, claims, documents) == ()
+    assert dispatch_smoke_gaps(receipts, (), documents) == ()
 
 
 # --- CR-0507-2: missing, failing and unreadable receipts ----------------
@@ -208,7 +228,7 @@ def test_smoke_receipt_passes_beside_a_failing_smoke_of_an_unclaimed_runtime(
 ) -> None:
     """A failing codex smoke says nothing about the claude-code claim it does not back."""
     root = receipts_file(
-        certified(tmp_path, ["linux"]),
+        documents_filed(certified(tmp_path, ["linux"]), check_document("RUN-00000001")),
         {
             "release_key": DEV4_KEY,
             "receipts": [receipt(), receipt(runtime_id="codex", scorecard="fail")],
@@ -305,23 +325,27 @@ def test_smoke_receipt_refusals_name_each_gap_once_in_claim_order() -> None:
 
     claims = (("claude-code", "windows"), ("claude-code", "macos"), ("claude-code", "windows"))
 
-    assert dispatch_smoke_gaps(receipts, claims) == (
+    assert dispatch_smoke_gaps(receipts, claims, {}) == (
         ("claude-code", "windows", DispatchSmokeGap.MISSING),
         ("claude-code", "macos", DispatchSmokeGap.FAILED),
     )
-    assert dispatch_smoke_gaps(None, (("claude-code", "linux"),)) == (
+    assert dispatch_smoke_gaps(None, (("claude-code", "linux"),), {}) == (
         ("claude-code", "linux", DispatchSmokeGap.MISSING),
     )
 
 
-def test_smoke_receipt_refusals_match_the_runtime_as_well_as_the_class() -> None:
+def test_smoke_receipt_refusals_match_the_runtime_as_well_as_the_class(tmp_path: Path) -> None:
     receipts = DispatchSmokeReceiptSet.model_validate(
         {"release_key": DEV4_KEY, "receipts": [receipt("linux")]}
     )
 
-    assert dispatch_smoke_gaps(receipts, (("codex", "linux"), ("claude-code", "linux"))) == (
-        ("codex", "linux", DispatchSmokeGap.MISSING),
+    documents = read_dispatch_checks(
+        (documents_filed(tmp_path, check_document("RUN-00000001")) / RECEIPTS).parent, receipts
     )
+
+    assert dispatch_smoke_gaps(
+        receipts, (("codex", "linux"), ("claude-code", "linux")), documents
+    ) == (("codex", "linux", DispatchSmokeGap.MISSING),)
 
 
 def test_smoke_receipt_refusals_reject_a_repeated_pair_in_the_model() -> None:
@@ -352,7 +376,7 @@ class _BenchStub(smoke_module.Smoke):
 
 def checks(passed: dict[str, bool]) -> dict[str, tuple[bool, str]]:
     """Return a stub scorecard per Run key: its verdict beside a check document."""
-    return {key: (ok, json.dumps({"check": {"run": key}})) for key, ok in passed.items()}
+    return {key: (ok, json.dumps(check_document(key))) for key, ok in passed.items()}
 
 
 def test_smoke_budget_and_receipt_writer_budget_is_600000() -> None:
@@ -408,7 +432,7 @@ def test_smoke_budget_and_receipt_writer_files_a_passing_receipt(tmp_path: Path)
         "dispatch-check-RUN-00000002.json",
     )
     check = json.loads((out / "dispatch-check-RUN-00000002.json").read_text(encoding="utf-8"))
-    assert check == {"check": {"run": "RUN-00000002"}}
+    assert check == check_document("RUN-00000002")
 
 
 def test_smoke_budget_and_receipt_writer_fails_on_one_breached_run(tmp_path: Path) -> None:
@@ -523,3 +547,179 @@ def test_release_process_bullet_is_in_the_rendered_page() -> None:
 
     assert "id=release-process version=2.1 " in page
     assert smoke in page.splitlines()
+
+
+# --- each pass receipt is re-checked against its check documents --------
+
+
+def test_a_receipt_whose_check_documents_are_missing_fails_the_gate(tmp_path: Path) -> None:
+    """A hand-written pass receipt with no document beside it backs nothing."""
+    two_runs = [
+        "eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000001",
+        "eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000002",
+    ]
+    cases = {
+        "no-document": ((), receipt()),
+        "no-ref": ((check_document("RUN-00000001"),), receipt(evidence_refs=[])),
+        "one-of-two": (
+            (check_document("RUN-00000001"), check_document("RUN-00000002")),
+            receipt(run_refs=two_runs),
+        ),
+        "outside-the-directory": (
+            (check_document("RUN-00000001"),),
+            receipt(evidence_refs=["nested/dispatch-check-RUN-00000001.json"]),
+        ),
+    }
+    for name, (documents, row) in cases.items():
+        root = certified(tmp_path / name, ["linux"])
+        receipts_file(
+            documents_filed(root, *documents), {"release_key": DEV4_KEY, "receipts": [row]}
+        )
+
+        outcome = probe_at(root)
+
+        assert outcome.status is ReleaseSignalStatus.FAIL, name
+        assert "claude-code on linux: dispatch_smoke_check_missing" in outcome.remediation, name
+    assert DispatchSmokeGap.CHECK_MISSING.value == "dispatch_smoke_check_missing"
+
+
+def test_a_check_document_with_a_breach_fails_the_gate(tmp_path: Path) -> None:
+    breached = probe_at(
+        receipts_file(
+            documents_filed(
+                certified(tmp_path / "breach", ["linux"]),
+                check_document("RUN-00000001", breaches=("turns",)),
+            ),
+            {"release_key": DEV4_KEY, "receipts": [receipt()]},
+        )
+    )
+    other_run = certified(tmp_path / "other-run", ["linux"])
+    (other_run / RECEIPTS).with_name("dispatch-check-RUN-00000001.json").write_text(
+        json.dumps(check_document("RUN-00000009")), encoding="utf-8"
+    )
+    mismatched = probe_at(
+        receipts_file(other_run, {"release_key": DEV4_KEY, "receipts": [receipt()]})
+    )
+
+    assert breached.status is ReleaseSignalStatus.FAIL
+    assert "claude-code on linux: dispatch_smoke_check_breached" in breached.remediation
+    assert mismatched.status is ReleaseSignalStatus.FAIL
+    assert "claude-code on linux: dispatch_smoke_check_mismatched" in mismatched.remediation
+
+
+def test_a_receipt_naming_one_document_twice_is_mismatched(tmp_path: Path) -> None:
+    root = documents_filed(certified(tmp_path, ["linux"]), check_document("RUN-00000001"))
+    row = receipt(
+        run_refs=[
+            "eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000001",
+            "eawf://SMOKE/SMOKE/SMOKE/run/RUN-00000002",
+        ],
+        evidence_refs=["dispatch-check-RUN-00000001.json"] * 2,
+    )
+
+    outcome = probe_at(receipts_file(root, {"release_key": DEV4_KEY, "receipts": [row]}))
+
+    assert "claude-code on linux: dispatch_smoke_check_mismatched" in outcome.remediation
+
+
+def _invalid(document: dict[str, Any], change: str) -> dict[str, Any]:
+    """Return *document* broken in the way *change* names."""
+    body = document["check"]
+    if change == "extra-key":
+        document["extra"] = 1
+    elif change == "row-extra-key":
+        body["checks"][0]["note"] = "x"
+    elif change == "scorecard-extra-key":
+        body["scorecard"]["host"] = "x"
+    elif change == "bad-run-key":
+        body["scorecard"]["run_key"] = "RUN-1"
+    elif change == "unlisted-breach":
+        body["checks"][0]["breached"] = True
+    elif change == "missing-check":
+        del document["check"]
+    return document
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "extra-key",
+        "row-extra-key",
+        "scorecard-extra-key",
+        "bad-run-key",
+        "unlisted-breach",
+        "missing-check",
+        "not-json",
+    ],
+)
+def test_a_check_document_that_does_not_validate_fails_the_gate(
+    tmp_path: Path, change: str
+) -> None:
+    root = receipts_file(
+        certified(tmp_path, ["linux"]), {"release_key": DEV4_KEY, "receipts": [receipt()]}
+    )
+    path = (root / RECEIPTS).with_name("dispatch-check-RUN-00000001.json")
+    text = (
+        "{"
+        if change == "not-json"
+        else json.dumps(_invalid(check_document("RUN-00000001"), change))
+    )
+    path.write_text(text, encoding="utf-8")
+
+    outcome = probe_at(root)
+
+    assert outcome.status is ReleaseSignalStatus.FAIL
+    assert "does not read back" in outcome.remediation
+    assert "dispatch-check-RUN-00000001.json is invalid" in outcome.remediation
+    with pytest.raises(ValueError, match=r"dispatch-check-RUN-00000001\.json is invalid"):
+        read_dispatch_checks(path.parent, load_dispatch_smoke_receipts(root, DEV4_KEY))
+
+
+def test_check_documents_are_read_only_for_passing_receipts(tmp_path: Path) -> None:
+    """A failing receipt is already a gap, so its documents are not opened."""
+    root = receipts_file(
+        tmp_path, {"release_key": DEV4_KEY, "receipts": [receipt(scorecard="fail")]}
+    )
+    (root / RECEIPTS).with_name("dispatch-check-RUN-00000001.json").write_text("{", "utf-8")
+
+    assert read_dispatch_checks((root / RECEIPTS).parent, None) == {}
+    assert (
+        read_dispatch_checks((root / RECEIPTS).parent, load_dispatch_smoke_receipts(root, DEV4_KEY))
+        == {}
+    )
+
+
+def test_the_remediation_names_the_evidence_dir_and_provider(tmp_path: Path) -> None:
+    directory = "/".join(CANARY_EVIDENCE_DIRS[DEV4_KEY])
+    outcome = probe_at(certified(tmp_path))
+
+    assert outcome.status is ReleaseSignalStatus.FAIL
+    assert (
+        f"EAWF_SMOKE_PROVIDER=claude EAWF_SMOKE_EVIDENCE_DIR={directory} "
+        "uv run pytest -m e2e tests/e2e/test_smoke_milestone.py" in outcome.remediation
+    )
+    assert outcome.remediation.count("EAWF_SMOKE_EVIDENCE_DIR=") == 1
+    codex = smoke_remediation((("codex", "linux"), ("claude-code", "macos")), DEV4_KEY)
+    assert "no live smoke dispatches to codex" in codex
+    assert f"EAWF_SMOKE_PROVIDER=claude EAWF_SMOKE_EVIDENCE_DIR={directory} " in codex
+    assert "EAWF_SMOKE_PROVIDER=codex" not in codex
+
+
+def test_the_committed_rc3_receipts_verify() -> None:
+    """The committed rc3 receipt and its six documents back the Linux claude-code claim."""
+    directory = REPO_ROOT.joinpath(*CANARY_EVIDENCE_DIRS[RC3_KEY])
+    receipts = load_dispatch_smoke_receipts(REPO_ROOT, RC3_KEY)
+    assert receipts is not None
+    documents = read_dispatch_checks(directory, receipts)
+    (row,) = receipts.receipts
+    config = checkpoint_release_config(RC3_VERSION, repo_root=REPO_ROOT)
+
+    outcome = provider_probe(
+        ReleaseSignalContext(config, ReleaseSignalName.PROVIDER, None), repo_root=REPO_ROOT
+    )
+
+    assert (row.os_class, row.runtime_id, row.scorecard) == ("linux", "claude-code", "pass")
+    assert sorted(documents) == [f"dispatch-check-RUN-0000000{n}.json" for n in range(2, 8)]
+    assert all(not document.check.breaches for document in documents.values())
+    assert dispatch_smoke_gaps(receipts, (("claude-code", "linux"),), documents) == ()
+    assert outcome.status is ReleaseSignalStatus.PASS, outcome.remediation

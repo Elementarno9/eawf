@@ -135,8 +135,12 @@ def target_patterns(target_dir: Path) -> tuple[str, ...]:
         :data:`GITIGNORE_PATTERNS` less the re-include of every promoted
         artifact *target_dir* does not hold, in shipped order.
     """
+    # A promoted row may name a family of files, so it stays re-included
+    # while any file of the family is held.
     absent = frozenset(
-        f"!{row.pattern}" for row in PROMOTED_ARTIFACTS if not (target_dir / row.pattern).is_file()
+        f"!{row.pattern}"
+        for row in PROMOTED_ARTIFACTS
+        if not any(path.is_file() for path in target_dir.glob(row.pattern))
     )
     return tuple(line for line in GITIGNORE_PATTERNS if line not in absent)
 

@@ -911,6 +911,24 @@ def test_reopening_admits_a_milestone_whose_accepted_head_no_version_tag_holds(
     assert answer["status"] == "ok", answer
 
 
+def test_reopen_refuses_when_the_accepted_head_is_not_held_locally(tmp_path: Path) -> None:
+    """Error path: a clone lacking the accepted head cannot prove no tag holds it."""
+    canary = provision(tmp_path / "revokeunheld", code="REVOKEGONE")
+    _git(canary.root, "init", "--quiet", "--initial-branch=main")
+    _commit(canary.root)
+    _git(canary.root, "tag", "v0.7.0rc1")
+    case = _accepted_at("b" * 40)
+    seed(canary, case.rows)
+    before = document_path(canary).read_bytes()
+
+    answer = _drive(case, canary, tmp_path)
+
+    _assert_refused_untouched(answer, canary, before, guard="accepted_head_held")
+    assert "fetch" in answer["errors"][0]["remediation"]
+    row = read_document(document_path(canary))["milestone"]["MLS-0030"]
+    assert (row["status"], row["accepted_binding"]["head_sha"]) == ("COMPLETED", "b" * 40)
+
+
 def test_verb_refuses_a_urn_addressing_another_entity(tmp_path: Path) -> None:
     """Cancelling a Milestone must never cancel a Task that shares the status."""
     case = Case(

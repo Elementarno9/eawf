@@ -46,7 +46,11 @@ from eawf.workflow.integration.reconcile import (
     MergeOutcome,
     MergeReconciliation,
 )
-from eawf.workflow.release.pipeline import tagged_versions_of, version_tags_containing
+from eawf.workflow.release.pipeline import (
+    repository_lacks_commit,
+    tagged_versions_of,
+    version_tags_containing,
+)
 from eawf.workflow.release.records import releases_citing
 
 logger = logging.getLogger(__name__)
@@ -611,6 +615,34 @@ def _no_release_cites(inputs: GuardInputs) -> bool:
     return not cited and not tagged and not holding
 
 
+def _accepted_head_held(inputs: GuardInputs) -> bool:
+    """Return whether the checkout holds the accepted head, so its tags can answer for it.
+
+    A shallow clone, or one fetched before the acceptance, lists no tag
+    holding a commit it lacks, which would let a shipped Milestone reopen
+    on a missing commit; such a checkout is refused instead. A Milestone
+    with no accepted binding has no head to look for, and a directory that
+    is no repository is left to the release record and journal checks. A
+    checkout git cannot read shuts the edge.
+    """
+    if not isinstance(inputs.record, Milestone):
+        return False
+    binding = inputs.record.accepted_binding
+    if binding is None:
+        return True
+    checkout = inputs.document_path.parents[3]
+    try:
+        missing = repository_lacks_commit(checkout, binding.head_sha)
+    except OSError:
+        logger.warning(f"_accepted_head_held unreadable milestone={inputs.record.key}")
+        return False
+    if missing:
+        logger.info(
+            f"_accepted_head_held milestone={inputs.record.key} missing head={binding.head_sha}"
+        )
+    return not missing
+
+
 def _bundle_revision_next(inputs: GuardInputs) -> bool:
     """Return whether review opens on the revision after the newest filed bundle.
 
@@ -657,6 +689,7 @@ GUARD_COMPUTERS: Final[Mapping[TransitionGuard, GuardComputer]] = {
     TransitionGuard.REASON_RECORDED: _reason_recorded,
     TransitionGuard.OPERATOR_PRINCIPAL: _operator_principal,
     TransitionGuard.NO_RELEASE_CITES: _no_release_cites,
+    TransitionGuard.ACCEPTED_HEAD_HELD: _accepted_head_held,
     TransitionGuard.BUNDLE_REVISION_NEXT: _bundle_revision_next,
     TransitionGuard.CRITERIA_EVIDENCE_BOUND: _criteria_evidence_bound,
     TransitionGuard.HOST_MERGE_OBSERVED: _host_merge_observed,

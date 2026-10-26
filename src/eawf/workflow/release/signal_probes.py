@@ -77,6 +77,7 @@ from eawf.workflow.release.canary_receipts import (
     DISPATCH_SMOKE_RECEIPTS_FILENAME,
     dispatch_smoke_gaps,
     load_dispatch_smoke_receipts,
+    read_dispatch_checks,
 )
 from eawf.workflow.release.dependencies import (
     ComponentOutcome,
@@ -366,6 +367,45 @@ def _read_export(
         )
 
 
+#: The ``EAWF_SMOKE_PROVIDER`` value under which the live smoke in
+#: ``tests/e2e/test_smoke_milestone.py`` dispatches to each runtime. The
+#: smoke dispatches only to claude-code, so no other runtime has one.
+_SMOKE_PROVIDERS: Final[Mapping[str, str]] = {"claude-code": "claude"}
+
+
+def smoke_remediation(pairs: tuple[tuple[str, str], ...], release_key: str) -> str:
+    """Return how to file a passing dispatch smoke for each runtime in *pairs*.
+
+    Args:
+        pairs: The ``(runtime_id, os_class)`` pairs that lack one.
+        release_key: The checkpoint whose evidence directory receives the
+            receipt; it must be mapped in ``CANARY_EVIDENCE_DIRS``.
+
+    Returns:
+        One instruction per runtime, in first-gap order: the smoke command
+        naming the runtime's provider and the release's evidence directory,
+        or, for a runtime the smoke cannot dispatch to, that its claim
+        cannot be smoked.
+    """
+    directory = "/".join(CANARY_EVIDENCE_DIRS[release_key])
+    steps = []
+    for runtime in dict.fromkeys(runtime for runtime, _os_class in pairs):
+        provider = _SMOKE_PROVIDERS.get(runtime)
+        if provider is None:
+            steps.append(
+                f"no live smoke dispatches to {runtime}, so drop its claim or extend "
+                f"tests/e2e/test_smoke_milestone.py to it"
+            )
+            continue
+        steps.append(
+            f"run EAWF_SMOKE_PROVIDER={provider} EAWF_SMOKE_EVIDENCE_DIR={directory} "
+            f"uv run pytest -m e2e tests/e2e/test_smoke_milestone.py on each class "
+            f"lacking a {runtime} smoke and commit its {DISPATCH_SMOKE_RECEIPTS_FILENAME} "
+            f"and check documents"
+        )
+    return "; ".join(steps)
+
+
 def provider_probe(
     context: ReleaseSignalContext,
     *,
@@ -441,6 +481,9 @@ def provider_probe(
     release_key = context.config.release_key
     try:
         smoke = load_dispatch_smoke_receipts(repo_root, release_key)
+        documents = read_dispatch_checks(
+            repo_root.joinpath(*CANARY_EVIDENCE_DIRS[release_key]), smoke
+        )
     except ValueError as exc:
         return _unreadable_export(
             exc,
@@ -453,19 +496,19 @@ def provider_probe(
         for claim in evidence.advertised
         for os_class in claim.os_classes
     )
-    gaps = dispatch_smoke_gaps(smoke, claimed)
+    gaps = dispatch_smoke_gaps(smoke, claimed, documents)
     if gaps:
         named = "; ".join(
             f"{runtime} on {os_class}: {gap.value}" for runtime, os_class, gap in gaps
+        )
+        remedy = smoke_remediation(
+            tuple((runtime, os_class) for runtime, os_class, _gap in gaps), release_key
         )
         return ReleaseSignalOutcome(
             status=ReleaseSignalStatus.FAIL,
             remediation=(
                 f"{len(gaps)} claimed runtime and os_class pair(s) lack a passing live "
-                f"dispatch smoke: {named}; run "
-                f"EAWF_SMOKE_PROVIDER=claude uv run pytest -m e2e "
-                f"tests/e2e/test_smoke_milestone.py on each class and commit its "
-                f"{DISPATCH_SMOKE_RECEIPTS_FILENAME}"
+                f"dispatch smoke: {named}; {remedy}"
             ),
             evidence_refs=refs,
         )
@@ -589,4 +632,5 @@ __all__ = [
     "membership_probe",
     "platform_probe",
     "provider_probe",
+    "smoke_remediation",
 ]
