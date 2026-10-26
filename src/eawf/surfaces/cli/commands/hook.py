@@ -469,6 +469,7 @@ _JSON_SUFFIXES = (".json", ".jsonl")
 
 # A JSON string escape the leak scan must read as the text it stands for.
 _JSON_ESCAPE = re.compile(r"\\\\|\\[ntr]")
+_GENERATION_LEDGER = re.compile(r"\.ea/generations/[^/]+/(?:ledger|history)/[^/]+\.jsonl")
 
 
 def _unescape_json(match: re.Match[str]) -> str:
@@ -575,7 +576,8 @@ def _scan_leaks(
             continue
         is_state = _is_state_bookkeeping_path(rel)
         wanted = state_kinds if is_state else kinds
-        added = _staged_added_line_candidates(rel, cwd=cwd) if is_state and diff_scoped else None
+        line_scoped = is_state or _is_generation_ledger_path(rel)
+        added = _staged_added_line_candidates(rel, cwd=cwd) if line_scoped and diff_scoped else None
         for lineno, line in enumerate(lines, start=1):
             if added is not None and lineno not in added:
                 continue
@@ -740,6 +742,24 @@ def _is_state_bookkeeping_path(rel: str) -> bool:
     one file nobody scanned.
     """
     return rel.replace("\\", "/") == ".ea/state.json"
+
+
+def _is_generation_ledger_path(rel: str) -> bool:
+    """Return ``True`` for an append-only ledger or history file of a generation.
+
+    A committed line of these files can never change, so a diff-scoped scan
+    reads only the lines a commit adds to them: a whole-file pass would let a
+    row committed before a leak pattern widened fail every later commit that
+    stages the file. They keep the full leak kinds, and the typed stores under
+    ``.ea/store/`` stay scanned in full.
+
+    Args:
+        rel: The repository-relative path of a scanned file.
+
+    Returns:
+        Whether *rel* is a ``ledger/`` or ``history/`` JSONL file of a generation.
+    """
+    return _GENERATION_LEDGER.fullmatch(rel.replace("\\", "/")) is not None
 
 
 def _is_generated_markdown_fixture_path(rel: str) -> bool:

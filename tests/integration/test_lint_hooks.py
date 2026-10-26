@@ -901,3 +901,54 @@ def test_plugin_doctor_drift_still_blocks_without_marketplace(
     result = runner.invoke(app, ["-w", str(tmp_path), "hook", "plugin-doctor-drift"])
     assert result.exit_code != 0, result.output
     assert "drift detected" in result.output
+
+
+def test_path_leak_lint_scans_only_added_lines_of_a_generation_ledger(tmp_path: Path) -> None:
+    """A committed ledger row is not re-flagged; a leak the commit adds still reds.
+
+    An append-only ledger keeps every committed line forever, so a row committed
+    before a leak pattern widened used to fail every later commit staging the
+    ledger. The leak literal is assembled at runtime so this file carries none.
+    """
+    from eawf.surfaces.cli.commands.hook import _is_generation_ledger_path
+
+    leak = "/" + "Users" + "/" + "alice" + "/work"
+    ledger_rel = ".ea/generations/gen-0123456789abcdef/ledger/artifact.jsonl"
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=str(repo), check=True, capture_output=True, text=True)
+
+    git("init", "-q")
+    git("config", "user.email", "noreply@anthropic.com")
+    git("config", "user.name", "Test")
+    git("config", "core.hooksPath", str(repo / ".disabled-hooks"))
+    ledger = repo / ledger_rel
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text(json.dumps({"text": f"probe {leak}"}) + "\n", encoding="utf-8")
+    git("add", ledger_rel)
+    git("commit", "-qm", "seed")
+
+    def lint() -> tuple[int, dict[str, object]]:
+        result = runner.invoke(app, ["--json", "-w", str(repo), "hook", "path-leak-lint"])
+        return result.exit_code, json.loads(result.stdout)
+
+    with ledger.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"text": "clean"}) + "\n")
+    git("add", ledger_rel)
+    exit_code, payload = lint()
+    assert exit_code == 0, payload
+    assert payload["findings"] == []
+
+    with ledger.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"text": f"added {leak}"}) + "\n")
+    git("add", ledger_rel)
+    exit_code, payload = lint()
+    assert exit_code == 1, payload
+    assert [finding["lineno"] for finding in payload["findings"]] == [3]
+
+    assert _is_generation_ledger_path(ledger_rel)
+    assert _is_generation_ledger_path(".ea/generations/gen-0123456789abcdef/history/change.jsonl")
+    assert not _is_generation_ledger_path(".ea/generations/gen-0123456789abcdef/state.json")
+    assert not _is_generation_ledger_path(".ea/store/event.jsonl")
