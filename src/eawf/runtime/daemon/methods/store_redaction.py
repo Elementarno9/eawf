@@ -95,14 +95,18 @@ class LeakRemediation(BaseModel):
         record_key: The row's record key.
         payload_kind: The ``payload_kind`` its payload names, or ``None``.
         command: The command that removes the row, with the caller's
-            idempotency key and principal left as placeholders.
+            idempotency key and principal left as placeholders, or ``None``
+            when no verb can remove it yet.
+        refusal: The ``REDACTION_*`` code the drop answers such a row with,
+            set exactly when ``command`` is ``None``.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     record_key: str
     payload_kind: str | None
-    command: str
+    command: str | None
+    refusal: str | None = None
 
 
 class RedactContentAnswer(BaseModel):
@@ -323,9 +327,14 @@ def redact_content(
                 record_key=leak.record_key,
                 payload_kind=leak.payload_kind,
                 command=(
-                    f"{DROP_UNPUBLISHED_ROW_COMMAND} {leak.record_key} "
-                    "--idempotency-key <key> --actor <principal>"
+                    None
+                    if leak.drop_refusal is not None
+                    else (
+                        f"{DROP_UNPUBLISHED_ROW_COMMAND} {leak.record_key} "
+                        "--idempotency-key <key> --actor <principal>"
+                    )
                 ),
+                refusal=leak.drop_refusal,
             )
             for leak in plan.non_content_leaks
         ],
@@ -382,8 +391,9 @@ def drop_unpublished_row(
             ``HEAD`` cannot be read, the WAL holds an unfinished line of the
             artifact ledger, a ledger cannot be read, or the plan is refused:
             the ledger moved off its commit, a line is not canonical, the row
-            is published, missing, ambiguous, captured content or a compacted
-            record, or something else names it. Nothing was written.
+            is published, missing, ambiguous, captured content, a campaign
+            artifact revision or a compacted record, it supersedes another
+            line, or something else names it. Nothing was written.
     """
     params = args.model_dump(mode="json")
     replayed = keyed_answer(

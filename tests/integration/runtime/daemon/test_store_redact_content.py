@@ -22,12 +22,15 @@ from eawf.kernel.runtime.content_redaction import (
     REDACTION_ROW_CITED,
     REDACTION_ROW_CONTENT,
     REDACTION_ROW_PUBLISHED,
+    REDACTION_ROW_REVISION,
+    REDACTION_ROW_SUPERSEDES,
 )
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     append_ledger_record,
+    line_digest,
     read_ledger_records,
     render_ledger_line,
 )
@@ -223,6 +226,36 @@ def test_a_leaking_non_content_row_has_a_way_out(tmp_path: Path) -> None:
     assert "EVD-0002" in keys
     assert "checkout" not in _ledger(canary).read_text(encoding="utf-8").split("\n", 1)[1]
     assert drop(tmp_path, canary, "EVD-0001", "drop-1") == {**dropped, "replayed": True}
+
+
+def test_a_remediation_names_the_drop_only_for_a_droppable_row(tmp_path: Path) -> None:
+    canary, _ = make_tree(tmp_path)
+    ledger = _ledger(canary)
+    base = _evidence("EVD-0002", {"summary": "clean"})
+    append_ledger_record(ledger, base)
+    revision = {"payload_kind": "artifact_revision", "text": f"at {SERVER_PATH}"}
+    append_ledger_record(ledger, _evidence("ART-0009#r1", revision))
+    superseding = LedgerRecord(
+        collection=Epoch2Collection.ARTIFACT,
+        record_key="EVD-0003",
+        status="recorded",
+        recorded_at=AT,
+        payload={"summary": f"moved {SERVER_PATH}"},
+        supersedes=line_digest(render_ledger_line(base)),
+    )
+    append_ledger_record(ledger, superseding)
+    append_ledger_record(ledger, _evidence("EVD-0004", {"summary": f"wrote {SERVER_PATH}"}))
+
+    answer = redact(tmp_path, canary, "redact-1")
+    by_key = {item["record_key"]: item for item in answer["remediations"]}
+
+    assert answer["non_content_leak_keys"] == ["ART-0009#r1", "EVD-0003", "EVD-0004"]
+    assert by_key["ART-0009#r1"]["command"] is None
+    assert by_key["ART-0009#r1"]["refusal"] == REDACTION_ROW_REVISION
+    assert by_key["EVD-0003"]["command"] is None
+    assert by_key["EVD-0003"]["refusal"] == REDACTION_ROW_SUPERSEDES
+    assert by_key["EVD-0004"]["command"].startswith("eawf store drop-unpublished-row EVD-0004 ")
+    assert by_key["EVD-0004"]["refusal"] is None
 
 
 def test_dropping_a_committed_row_is_refused(tmp_path: Path) -> None:
