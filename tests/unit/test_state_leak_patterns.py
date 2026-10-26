@@ -6,6 +6,7 @@ file carries no literal the leak lints or detect-secrets would flag.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -171,6 +172,49 @@ def test_scan_state_leaks_skips_runtime_and_pytest_lookalikes(text: str) -> None
 
 def test_scan_state_leaks_ignores_a_root_word_that_is_not_the_server_root() -> None:
     assert _scan("served /srvx/a and /usr/srv/b; see the srv/ docs") == []
+
+
+_ESCAPED_BREAK = "\\" + "n"
+_SERVER_SHORT = "/" + "srv" + "/" + "x"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (f"{_ESCAPED_BREAK}{SERVER_ROOT}/repo", [SERVER_ROOT]),
+        (f"foo_{_SERVER_SHORT}", [_SERVER_SHORT]),
+        (f"{_ESCAPED_BREAK}{RUNTIME_DIR}", [RUNTIME_DIR]),
+        (f"{_ESCAPED_BREAK}{PYTEST_ROOT}", [PYTEST_ROOT]),
+        (f"{'\\' + 't'}{_SERVER_SHORT}", [_SERVER_SHORT]),
+        (f"{'\\' + 'r'}{_SERVER_SHORT}", [_SERVER_SHORT]),
+        ("/usr/srv/x", []),
+        ("src/srv/x", []),
+        ("https://host/srv/x", []),
+        ("./srv/x", []),
+        ("docs/rules/srv-layout.md", []),
+        (f"{_ESCAPED_BREAK}/srv/<project>/", []),
+        (f"{_ESCAPED_BREAK}pytest-of-<user>", []),
+    ],
+)
+def test_a_path_after_an_escaped_break_or_underscore_is_flagged(
+    text: str, expected: list[str]
+) -> None:
+    assert _scan(text) == [
+        StateLeakHit(kind=StateLeakKind.HOME_PATH, snippet=snippet) for snippet in expected
+    ]
+
+
+@pytest.mark.parametrize(
+    "value", [f"a\n{SERVER_ROOT}/repo", f"a{_ESCAPED_BREAK}{SERVER_ROOT}/repo"]
+)
+def test_path_leak_lint_flags_a_path_after_a_json_escaped_break(tmp_path: Path, value: str) -> None:
+    from eawf.surfaces.cli.commands.hook import _scan_path_leaks
+
+    (tmp_path / "rows.jsonl").write_text(json.dumps({"note": value}) + "\n", encoding="utf-8")
+
+    findings = _scan_path_leaks(["rows.jsonl"], cwd=tmp_path, diff_scoped=False)
+
+    assert [(finding.lineno, finding.snippet) for finding in findings] == [(1, SERVER_ROOT)]
 
 
 def test_home_path_patterns_are_the_scrubbers_six_anchors() -> None:

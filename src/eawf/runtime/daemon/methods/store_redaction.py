@@ -26,17 +26,21 @@ from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey
 from eawf.kernel.store.ledger import (
     LedgerAppendOnlyError,
+    LedgerRecord,
     LedgerTornTailError,
     replace_unpublished_suffix,
 )
+from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.logging.state_leak import default_allowed_emails
 from eawf.platform.subprocess_detach import no_window_kwargs
+from eawf.runtime.daemon.epoch2_recovery import LEDGER_LINE_KEY
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.delivery import IdempotencyKey, file_keyed_answer, keyed_answer
 from eawf.runtime.daemon.methods.doctor import project_lock_urn
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
+from eawf.runtime.daemon.wal import WalStatus, list_records, read_record
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +49,10 @@ STORE_REDACT_CONTENT_METHOD: Final = "runtime.store.redact_content"
 
 #: Refusal: the repository has no ``HEAD`` commit to tell published lines from new ones.
 REDACTION_NO_COMMIT: Final = "redaction_no_commit"
+
+#: Refusal: a WAL record not yet durable journals an artifact-ledger line the
+#: boot replay would append again by digest, undoing a redaction of it.
+REDACTION_WAL_UNFINISHED: Final = "redaction_wal_unfinished"
 
 
 class RedactContentParams(BaseModel):
@@ -70,6 +78,9 @@ class RedactContentAnswer(BaseModel):
         rows: How many content rows were rewritten.
         withheld_lines: How many kept lines were newly withheld.
         record_keys: The record key of each rewritten row, in file order.
+        non_content_leak_keys: The record key of each unpublished row that is
+            not captured content yet still leaks, in file order; the verb
+            leaves those rows as they are.
         replayed: Whether the answer is the stored one of an earlier call.
     """
 
@@ -80,6 +91,7 @@ class RedactContentAnswer(BaseModel):
     rows: int
     withheld_lines: int
     record_keys: list[str]
+    non_content_leak_keys: list[str]
     replayed: bool = False
 
 
@@ -119,6 +131,41 @@ def _published_bytes(repository: Path, relative: str) -> bytes:
     return published
 
 
+def _unfinished_ledger_records(wal_dir: Path, ledger: Path) -> list[str]:
+    """Return the id of each pending or applied WAL record journalling a line of *ledger*.
+
+    The boot replay appends such a record's line unless the ledger holds its
+    exact bytes, so rewriting that line now would bring the original back.
+    A record that cannot be read is skipped: the replay poisons it instead
+    of appending its line.
+
+    Args:
+        wal_dir: The root's WAL namespace.
+        ledger: The ledger the redaction would rewrite.
+
+    Returns:
+        The record ids, pending ones first, each in written order.
+
+    Raises:
+        ValidationError: A readable record journals a line that is not a
+            ledger record, which the replay also refuses loudly.
+    """
+    found: list[str] = []
+    for status in (WalStatus.PENDING, WalStatus.APPLIED):
+        for path in list_records(wal_dir, status=status):
+            try:
+                record = read_record(path)
+            except ValueError, OSError:
+                continue
+            line = record.envelope.payload.get(LEDGER_LINE_KEY)
+            if not isinstance(line, str) or record.state_path is None:
+                continue
+            journalled = LedgerRecord.model_validate_json(line)
+            if ledger_path(Path(record.state_path), journalled.collection) == ledger:
+                found.append(record.record_id)
+    return found
+
+
 def redact_content(
     context: Epoch2RootContext, args: RedactContentParams, *, now: datetime
 ) -> RedactContentAnswer:
@@ -134,10 +181,10 @@ def redact_content(
 
     Raises:
         DaemonValidationError: The key already answered other parameters,
-            ``HEAD`` cannot be read, or the plan is refused because the
+            ``HEAD`` cannot be read, the WAL holds an unfinished line of the
+            artifact ledger, or the plan is refused because the
             ledger moved off its commit, a line is not canonical or is torn,
-            a line that is not content leaks, or a line supersedes a row the
-            plan would change. Nothing was written.
+            or a line supersedes a row the plan would change. Nothing was written.
     """
     params = args.model_dump(mode="json")
     replayed = keyed_answer(
@@ -149,6 +196,13 @@ def redact_content(
     with context.session([project_lock_urn(context)]) as session:
         path = session.ledger_path(Epoch2Collection.ARTIFACT)
         relative = path.relative_to(repository).as_posix()
+        unfinished = _unfinished_ledger_records(context.wal_dir, path)
+        if unfinished:
+            raise _refused(
+                REDACTION_WAL_UNFINISHED,
+                f"WAL records {', '.join(unfinished)} still journal lines of {relative}; "
+                "restart the daemon so recovery finishes them, then retry",
+            )
         published = _published_bytes(repository, relative)
         live = path.read_bytes() if path.exists() else b""
         try:
@@ -167,6 +221,7 @@ def redact_content(
         rows=len(plan.record_keys),
         withheld_lines=plan.withheld_lines,
         record_keys=list(plan.record_keys),
+        non_content_leak_keys=list(plan.non_content_leak_keys),
     )
     file_keyed_answer(
         context,
@@ -177,7 +232,8 @@ def redact_content(
         at=now,
     )
     logger.info(
-        f"redact_content ledger={relative} rows={answer.rows} withheld={answer.withheld_lines}"
+        f"redact_content ledger={relative} rows={answer.rows} withheld={answer.withheld_lines} "
+        f"non_content_leaks={len(answer.non_content_leak_keys)}"
     )
     return answer
 
@@ -195,6 +251,7 @@ async def _redact_content(
 
 __all__ = [
     "REDACTION_NO_COMMIT",
+    "REDACTION_WAL_UNFINISHED",
     "STORE_REDACT_CONTENT_METHOD",
     "RedactContentAnswer",
     "RedactContentParams",

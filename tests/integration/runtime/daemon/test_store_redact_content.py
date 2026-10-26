@@ -18,20 +18,31 @@ from typing import Any, Final
 import pytest
 
 from eawf.kernel.runtime.content import CONTENT_PAYLOAD_KIND, WITHHELD_LINE, StoredContent
-from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record, read_ledger_records
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.ledger import (
+    LedgerRecord,
+    append_ledger_record,
+    read_ledger_records,
+    render_ledger_line,
+)
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
+from eawf.runtime.daemon.epoch2_recovery import LEDGER_LINE_KEY
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.methods.store_redaction import (
     REDACTION_NO_COMMIT,
+    REDACTION_WAL_UNFINISHED,
     STORE_REDACT_CONTENT_METHOD,
 )
+from eawf.runtime.daemon.wal import WalRecord, mark_applied, mark_fsynced, write_pending
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     document_path,
     method_context,
     provision,
+    root_context,
     seed,
 )
 
@@ -117,6 +128,7 @@ def test_a_leaked_line_after_the_commit_is_withheld_and_the_commit_is_kept(
     assert answer["withheld_lines"] == 1
     assert answer["unpublished_rows"] == 2
     assert answer["record_keys"] == ["artifact://content/run-00000010/bb"]
+    assert answer["non_content_leak_keys"] == []
     content = _ledger(canary).read_bytes()
     assert content.startswith(published)
     records = read_ledger_records(_ledger(canary))
@@ -141,6 +153,27 @@ def test_a_second_redaction_writes_nothing_and_a_retry_replays(tmp_path: Path) -
     assert replay == {**first, "replayed": True}
 
 
+def test_a_leaking_non_content_row_stays_and_its_key_is_answered(tmp_path: Path) -> None:
+    canary, _ = make_tree(tmp_path)
+    other = LedgerRecord(
+        collection=Epoch2Collection.ARTIFACT,
+        record_key="EVD-0001",
+        status="recorded",
+        recorded_at=AT,
+        payload={"summary": f"wrote {SERVER_PATH}"},
+    )
+    append_ledger_record(_ledger(canary), other)
+
+    answer = redact(tmp_path, canary, "redact-1")
+
+    assert answer["record_keys"] == ["artifact://content/run-00000010/bb"]
+    assert answer["non_content_leak_keys"] == ["EVD-0001"]
+    records = read_ledger_records(_ledger(canary))
+    assert records[-1] == other
+    stored = StoredContent.model_validate(records[1].payload)
+    assert stored.lines == ("start", WITHHELD_LINE, "done")
+
+
 def test_a_repository_without_a_commit_is_refused_and_nothing_is_written(
     tmp_path: Path,
 ) -> None:
@@ -155,3 +188,46 @@ def test_a_repository_without_a_commit_is_refused_and_nothing_is_written(
     with pytest.raises(DaemonValidationError, match=REDACTION_NO_COMMIT):
         redact(tmp_path, canary, "redact-1")
     assert ledger.read_bytes() == before
+
+
+def _journal_applied_line(tmp_path: Path, canary: CanaryProvision, record: LedgerRecord) -> str:
+    """Leave *record*'s append applied in the WAL, as a failed firehose write does."""
+    envelope = Envelope(
+        id="evt-0001",
+        kind=StoreKind.EVENT,
+        scope_id=None,
+        created_at=AT,
+        summary="ledger.artifact.appended",
+        payload={LEDGER_LINE_KEY: render_ledger_line(record)},
+    )
+    wal_record = WalRecord(
+        record_id="wal0001",
+        envelope=envelope,
+        written_at=AT,
+        before_state_version="before",
+        after_state_version="after",
+        state_path=str(document_path(canary)),
+    )
+    wal_dir = root_context(canary, tmp_path / "rt").wal_dir
+    write_pending(wal_dir, wal_record)
+    mark_applied(wal_dir, wal_record.record_id)
+    return wal_record.record_id
+
+
+def test_redaction_refuses_while_the_wal_holds_an_unfinished_artifact_line(
+    tmp_path: Path,
+) -> None:
+    canary, _ = make_tree(tmp_path)
+    leaked = _content("bb", "start", f"locked {SERVER_PATH}", "done")
+    record_id = _journal_applied_line(tmp_path, canary, leaked)
+    before = _ledger(canary).read_bytes()
+
+    with pytest.raises(DaemonValidationError, match=REDACTION_WAL_UNFINISHED) as refused:
+        redact(tmp_path, canary, "redact-1")
+    assert record_id in str(refused.value)
+    assert _ledger(canary).read_bytes() == before
+
+    mark_fsynced(root_context(canary, tmp_path / "rt").wal_dir, record_id)
+    answer = redact(tmp_path, canary, "redact-2")
+    assert answer["rows"] == 1
+    assert answer["record_keys"] == ["artifact://content/run-00000010/bb"]

@@ -12,7 +12,6 @@ import pytest
 
 from eawf.kernel.runtime.content import CONTENT_PAYLOAD_KIND, WITHHELD_LINE, StoredContent
 from eawf.kernel.runtime.content_redaction import (
-    REDACTION_LEAK_OUTSIDE_CONTENT,
     REDACTION_NONCANONICAL_LINE,
     REDACTION_PUBLISHED_CHANGED,
     REDACTION_ROW_CITED,
@@ -163,20 +162,52 @@ def test_a_line_that_does_not_render_back_is_refused() -> None:
     assert caught.value.code == REDACTION_NONCANONICAL_LINE
 
 
-def test_a_leak_outside_content_lines_is_refused() -> None:
-    live = _file(_other("EVD-0001", f"wrote {HOME_PATH}"))
+def test_content_rows_are_redacted_when_a_non_content_line_leaks() -> None:
+    other = _other("EVD-0001", f"wrote {HOME_PATH}")
+    live = _file(_content("aa", "start", f"locked {SERVER_PATH}"), other)
 
-    with pytest.raises(ContentRedactionError) as caught:
-        _plan(b"", live)
-    assert caught.value.code == REDACTION_LEAK_OUTSIDE_CONTENT
+    plan = _plan(b"", live)
+
+    lines = split_ledger_lines(plan.content)
+    stored = StoredContent.model_validate(LedgerRecord.model_validate_json(lines[0]).payload)
+    assert stored.lines == ("start", WITHHELD_LINE)
+    assert lines[1] == other
+    assert plan.record_keys == ("artifact://content/run-00000010/aa",)
+    assert plan.non_content_leak_keys == ("EVD-0001",)
+    assert "alice" not in "".join(plan.non_content_leak_keys)
 
 
-def test_a_leak_behind_a_json_escape_outside_content_is_refused() -> None:
+def test_a_leaking_non_content_line_alone_writes_nothing_and_is_listed() -> None:
+    live = _file(_other("EVD-0001", f"wrote {HOME_PATH}"), _other("EVD-0002", "clean"))
+
+    plan = _plan(b"", live)
+
+    assert plan.content == live
+    assert plan.record_keys == ()
+    assert plan.non_content_leak_keys == ("EVD-0001",)
+
+
+def test_a_leak_behind_a_json_escape_outside_content_is_listed() -> None:
     live = _file(_other("EVD-0003", f"first line\n{SERVER_PATH}"))
 
-    with pytest.raises(ContentRedactionError) as caught:
-        _plan(b"", live)
-    assert caught.value.code == REDACTION_LEAK_OUTSIDE_CONTENT
+    assert _plan(b"", live).non_content_leak_keys == ("EVD-0003",)
+
+
+def test_a_committed_leaking_non_content_line_is_not_listed() -> None:
+    published = _file(_other("EVD-0004", f"wrote {HOME_PATH}"))
+
+    assert _plan(published, published).non_content_leak_keys == ()
+
+
+def test_a_second_plan_over_the_redacted_ledger_changes_nothing() -> None:
+    live = _file(_content("aa", f"at {SERVER_PATH}"), _other("EVD-0001", f"wrote {HOME_PATH}"))
+    first = _plan(b"", live)
+
+    again = _plan(b"", first.content)
+
+    assert again.content == first.content
+    assert again.record_keys == ()
+    assert again.non_content_leak_keys == ("EVD-0001",)
 
 
 def test_a_grep_context_line_is_withheld() -> None:

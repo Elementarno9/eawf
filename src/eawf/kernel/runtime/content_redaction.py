@@ -5,7 +5,9 @@ so a row carries a leak only when the scan learned a shape after the row was
 written. Rows already committed stay as they are: append-only protects what a
 clone may hold. Rows past the committed prefix are on this machine alone, and
 this module plans their correction: each kept line the scan now flags becomes
-:data:`~eawf.kernel.runtime.content.WITHHELD_LINE`.
+:data:`~eawf.kernel.runtime.content.WITHHELD_LINE`. An unpublished row that is
+not captured content has no withheld marker to take, so a leak there is
+reported by record key and the row is left as it is.
 
 A row keeps its ``artifact_ref``. Receipts and transcripts cite content by that
 reference, so it keeps naming the content as first captured; the lines it
@@ -37,9 +39,6 @@ REDACTION_PUBLISHED_CHANGED: Final = "redaction_published_changed"
 
 #: Refusal: an unpublished line does not read back as the line its record renders.
 REDACTION_NONCANONICAL_LINE: Final = "redaction_noncanonical_line"
-
-#: Refusal: an unpublished line that is not captured content carries a leak shape.
-REDACTION_LEAK_OUTSIDE_CONTENT: Final = "redaction_leak_outside_content"
 
 #: Refusal: a line supersedes a content row the redaction would change.
 REDACTION_ROW_CITED: Final = "redaction_row_cited"
@@ -74,12 +73,16 @@ class ContentRedaction:
             file order.
         withheld_lines: How many kept lines the plan newly withholds.
         unpublished_rows: How many lines follow the published prefix.
+        non_content_leak_keys: The record key of each unpublished line that
+            is not captured content and still carries a leak shape, in file
+            order; the plan leaves those lines unchanged.
     """
 
     content: bytes
     record_keys: tuple[str, ...]
     withheld_lines: int
     unpublished_rows: int
+    non_content_leak_keys: tuple[str, ...]
 
 
 def plan_content_redaction(
@@ -94,12 +97,13 @@ def plan_content_redaction(
         allowed_emails: Casefolded addresses the leak scan lets through.
 
     Returns:
-        The plan; its ``content`` equals *live* when nothing is flagged.
+        The plan; its ``content`` equals *live* when no content line is
+        flagged.
 
     Raises:
         ContentRedactionError: *live* does not start with *published*, an
-            unpublished line is not canonical, a line that is not captured
-            content leaks, or a line supersedes a row the plan changes.
+            unpublished line is not canonical, or a line supersedes a row
+            the plan changes.
         LedgerTornTailError: Either byte string ends mid-line.
     """
     if not live.startswith(published):
@@ -111,6 +115,7 @@ def plan_content_redaction(
     planned: list[str] = []
     changed: dict[str, str] = {}
     withheld = 0
+    leaking: list[str] = []
     for index, line in enumerate(unpublished):
         record = LedgerRecord.model_validate_json(line)
         if render_ledger_line(record) != line:
@@ -123,10 +128,7 @@ def plan_content_redaction(
             if diff_state_leaks(
                 None, record.model_dump(mode="json"), allowed_emails=allowed_emails
             ):
-                raise ContentRedactionError(
-                    REDACTION_LEAK_OUTSIDE_CONTENT,
-                    f"unpublished line {index} ({record.record_key}) leaks outside content lines",
-                )
+                leaking.append(record.record_key)
             planned.append(line)
             continue
         stored = StoredContent.model_validate(record.payload)
@@ -158,18 +160,18 @@ def plan_content_redaction(
     content = published + "".join(f"{line}\n" for line in planned).encode("utf-8")
     logger.debug(
         f"plan_content_redaction unpublished={len(unpublished)} rows={len(changed)} "
-        f"withheld={withheld}"
+        f"withheld={withheld} non_content_leaks={len(leaking)}"
     )
     return ContentRedaction(
         content=content,
         record_keys=tuple(changed.values()),
         withheld_lines=withheld,
         unpublished_rows=len(unpublished),
+        non_content_leak_keys=tuple(leaking),
     )
 
 
 __all__ = [
-    "REDACTION_LEAK_OUTSIDE_CONTENT",
     "REDACTION_NONCANONICAL_LINE",
     "REDACTION_PUBLISHED_CHANGED",
     "REDACTION_ROW_CITED",

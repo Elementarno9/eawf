@@ -91,6 +91,14 @@ def _eawf_author_emails() -> frozenset[str]:
     return frozenset()
 
 
+# A machine-path anchor counts only where it starts a path, so ``/usr/srv/x``
+# or a URL's ``host/srv/x`` is left alone while a separator such as grep's
+# ``513-`` or an underscore still leads one. The letter of a two-character
+# escape (``\n``, ``\t``, ``\r``) left in JSON-encoded text ends the escape,
+# not a word, so it leads a path too.
+_PATH_START = r"(?:(?<![A-Za-z0-9.])|(?<=\\[nrt]))"
+
+
 class SensitiveScrubber(logging.Filter):
     """Strip path / email / API-key patterns from every log record at emit.
 
@@ -106,13 +114,12 @@ class SensitiveScrubber(logging.Filter):
         re.compile(r"/home/[^/\s]+"),  # Linux home  # pragma: allowlist secret
         # A server keeps checkouts and scratch under its site data root, so a
         # path there names the machine as plainly as a home directory does.
-        # It must start the path, so ``/usr/srv/x`` or a URL's ``host/srv/x``
-        # is left alone; a separator such as grep's ``513-`` still leads one.
-        re.compile(r"(?<![\w.])/srv/[^/\s]+"),  # server data root  # pragma: allowlist secret
+        # It must start the path (see ``_PATH_START``).
+        re.compile(rf"{_PATH_START}/srv/[^/\s]+"),  # server data root  # pragma: allowlist secret
         # A login's runtime directory names its uid, and pytest's temp root
         # names the user, wherever the temp directory sits.
-        re.compile(r"(?<![\w.])/run/user/\d+"),  # runtime dir  # pragma: allowlist secret
-        re.compile(r"(?<![\w.])pytest-of-[^/\s]+"),  # pytest temp root  # pragma: allowlist secret
+        re.compile(rf"{_PATH_START}/run/user/\d+"),  # runtime dir  # pragma: allowlist secret
+        re.compile(rf"{_PATH_START}pytest-of-[^/\s]+"),  # pytest temp  # pragma: allowlist secret
         # Bare ``~/`` home reference (shell-expanded path that still
         # leaks the project tree layout even without the username).
         re.compile(r"~/[^\s]+"),  # tilde home
