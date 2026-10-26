@@ -26,9 +26,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from eawf.kernel.runtime.content_redaction import (
+    ContentRedaction,
     ContentRedactionError,
     plan_content_redaction,
     plan_row_drop,
@@ -107,6 +108,20 @@ class LeakRemediation(BaseModel):
     payload_kind: str | None
     command: str | None
     refusal: str | None = None
+
+    @model_validator(mode="after")
+    def _one_way(self) -> LeakRemediation:
+        """Carry exactly one of a command and the refusal that rules it out.
+
+        Returns:
+            The remediation.
+
+        Raises:
+            ValueError: Both or neither are set.
+        """
+        if (self.command is None) == (self.refusal is None):
+            raise ValueError("a remediation names exactly one of a command and a refusal")
+        return self
 
 
 class RedactContentAnswer(BaseModel):
@@ -315,6 +330,10 @@ def redact_content(
             raise _refused(error.code, str(error)) from error
         except (LedgerAppendOnlyError, LedgerTornTailError) as error:
             raise _refused("redaction_ledger_refused", str(error)) from error
+        try:
+            refusals = _drop_refusals(session, published, plan)
+        except (LedgerError, ValidationError) as error:
+            raise _refused("redaction_ledger_refused", str(error)) from error
     answer = RedactContentAnswer(
         ledger=relative,
         unpublished_rows=plan.unpublished_rows,
@@ -328,13 +347,13 @@ def redact_content(
                 payload_kind=leak.payload_kind,
                 command=(
                     None
-                    if leak.drop_refusal is not None
+                    if refusals[leak.record_key] is not None
                     else (
                         f"{DROP_UNPUBLISHED_ROW_COMMAND} {leak.record_key} "
                         "--idempotency-key <key> --actor <principal>"
                     )
                 ),
-                refusal=leak.drop_refusal,
+                refusal=refusals[leak.record_key],
             )
             for leak in plan.non_content_leaks
         ],
@@ -352,6 +371,42 @@ def redact_content(
         f"non_content_leaks={len(answer.non_content_leak_keys)}"
     )
     return answer
+
+
+def _drop_refusals(
+    session: RootSession, published: bytes, plan: ContentRedaction
+) -> dict[str, str | None]:
+    """Dry-run the drop of every leaking non-content row the redaction left.
+
+    The redaction names the drop for a row only when the drop's own plan
+    would remove it, over the redacted ledger and the same outside records
+    the drop reads, so the advice never leads to a refusal.
+
+    Args:
+        session: The open root session holding the project lock.
+        published: The artifact ledger's bytes in ``HEAD``.
+        plan: The redaction just applied.
+
+    Returns:
+        Each leaking row's record key with the code its drop refuses with,
+        or ``None`` when the drop would remove it.
+
+    Raises:
+        LedgerError: Another ledger is torn or its snapshot does not match.
+        ValidationError: A record of another ledger does not validate.
+    """
+    if not plan.non_content_leaks:
+        return {}
+    elsewhere = _elsewhere(session)
+    refusals: dict[str, str | None] = {}
+    for leak in plan.non_content_leaks:
+        try:
+            plan_row_drop(published, plan.content, record_key=leak.record_key, elsewhere=elsewhere)
+        except ContentRedactionError as error:
+            refusals[leak.record_key] = error.code
+        else:
+            refusals[leak.record_key] = None
+    return refusals
 
 
 def _elsewhere(session: RootSession) -> list[object]:

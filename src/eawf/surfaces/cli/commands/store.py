@@ -143,8 +143,9 @@ def drop_unpublished_row_cmd(
     """Remove one non-content row no commit holds and nothing else names.
 
     The way out for a leaking row redact-content lists but cannot rewrite:
-    the daemon refuses a committed row, a content row, a compacted record
-    and a row another record cites, and writes nothing then.
+    the daemon refuses a committed row, a content row, a campaign artifact
+    revision, a compacted record, a row that supersedes another and a row
+    another record cites, and writes nothing then.
     """
     from eawf.surfaces.cli.commands.domain_integration import _answer, _send
 

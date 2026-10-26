@@ -101,13 +101,10 @@ class NonContentLeak:
         record_key: The row's record key.
         payload_kind: The ``payload_kind`` its payload names, or ``None``
             when it names none.
-        drop_refusal: The ``REDACTION_*`` code a drop of the row refuses
-            with whatever cites it, or ``None`` when a drop can remove it.
     """
 
     record_key: str
     payload_kind: str | None
-    drop_refusal: str | None = None
 
 
 @dataclass(frozen=True)
@@ -172,13 +169,7 @@ def plan_content_redaction(
             if diff_state_leaks(
                 None, record.model_dump(mode="json"), allowed_emails=allowed_emails
             ):
-                leaking.append(
-                    NonContentLeak(
-                        record_key=record.record_key,
-                        payload_kind=kind,
-                        drop_refusal=_drop_refusal(record, kind),
-                    )
-                )
+                leaking.append(NonContentLeak(record_key=record.record_key, payload_kind=kind))
             planned.append(line)
             continue
         stored = StoredContent.model_validate(record.payload)
@@ -351,28 +342,6 @@ def _refuse_undroppable(record: LedgerRecord, kind: str | None) -> None:
             REDACTION_ROW_SUPERSEDES,
             f"{record_key} supersedes another line, which dropping it would revive",
         )
-
-
-def _drop_refusal(record: LedgerRecord, kind: str | None) -> str | None:
-    """Return the code a drop of *record* refuses with whatever cites it, if any.
-
-    A redaction answers a leaking row with the drop only when the drop can
-    remove it; a row the drop always refuses would send the operator to a
-    command that cannot succeed.
-
-    Args:
-        record: An unpublished row that leaks.
-        kind: The ``payload_kind`` its payload names, or ``None``.
-
-    Returns:
-        The ``REDACTION_*`` code, or ``None`` when only a citation could stop
-        the drop.
-    """
-    try:
-        _refuse_undroppable(record, kind)
-    except ContentRedactionError as error:
-        return error.code
-    return None
 
 
 def _canonical_records(lines: Sequence[str]) -> list[LedgerRecord]:

@@ -45,6 +45,7 @@ from eawf.runtime.daemon.methods.store_redaction import (
     REDACTION_WAL_UNFINISHED,
     STORE_DROP_UNPUBLISHED_ROW_METHOD,
     STORE_REDACT_CONTENT_METHOD,
+    LeakRemediation,
 )
 from eawf.runtime.daemon.wal import WalRecord, mark_applied, mark_fsynced, write_pending
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
@@ -256,6 +257,35 @@ def test_a_remediation_names_the_drop_only_for_a_droppable_row(tmp_path: Path) -
     assert by_key["EVD-0003"]["refusal"] == REDACTION_ROW_SUPERSEDES
     assert by_key["EVD-0004"]["command"].startswith("eawf store drop-unpublished-row EVD-0004 ")
     assert by_key["EVD-0004"]["refusal"] is None
+
+
+def test_a_superseded_leaking_row_gets_the_drop_refusal_not_the_command(tmp_path: Path) -> None:
+    canary, _ = make_tree(tmp_path)
+    ledger = _ledger(canary)
+    leaking = _evidence("EVD-0005", {"summary": f"wrote {SERVER_PATH}"})
+    append_ledger_record(ledger, leaking)
+    append_ledger_record(
+        ledger,
+        LedgerRecord(
+            collection=Epoch2Collection.ARTIFACT,
+            record_key="EVD-0006",
+            status="recorded",
+            recorded_at=AT,
+            payload={"summary": "corrected"},
+            supersedes=line_digest(render_ledger_line(leaking)),
+        ),
+    )
+
+    answer = redact(tmp_path, canary, "redact-1")
+    [remediation] = answer["remediations"]
+
+    assert remediation["record_key"] == "EVD-0005"
+    assert remediation["command"] is None
+    assert remediation["refusal"] == REDACTION_ROW_CITED
+    with pytest.raises(ValueError, match="exactly one"):
+        LeakRemediation(record_key="EVD-0005", payload_kind=None, command=None, refusal=None)
+    with pytest.raises(ValueError, match="exactly one"):
+        LeakRemediation(record_key="EVD-0005", payload_kind=None, command="x", refusal="y")
 
 
 def test_dropping_a_committed_row_is_refused(tmp_path: Path) -> None:
