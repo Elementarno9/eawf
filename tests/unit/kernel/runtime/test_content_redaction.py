@@ -14,10 +14,17 @@ from eawf.kernel.runtime.content import CONTENT_PAYLOAD_KIND, WITHHELD_LINE, Sto
 from eawf.kernel.runtime.content_redaction import (
     REDACTION_NONCANONICAL_LINE,
     REDACTION_PUBLISHED_CHANGED,
+    REDACTION_ROW_AMBIGUOUS,
     REDACTION_ROW_CITED,
+    REDACTION_ROW_COMPACTED,
+    REDACTION_ROW_CONTENT,
+    REDACTION_ROW_NOT_FOUND,
+    REDACTION_ROW_PUBLISHED,
     ContentRedaction,
     ContentRedactionError,
+    NonContentLeak,
     plan_content_redaction,
+    plan_row_drop,
 )
 from eawf.kernel.store.ledger import (
     LedgerRecord,
@@ -75,6 +82,27 @@ def _file(*lines: str) -> bytes:
 
 def _plan(published: bytes, live: bytes) -> ContentRedaction:
     return plan_content_redaction(published, live, allowed_emails=ALLOWED)
+
+
+def _keys(plan: ContentRedaction) -> tuple[str, ...]:
+    return tuple(leak.record_key for leak in plan.non_content_leaks)
+
+
+def _row(key: str, payload: dict[str, object]) -> str:
+    record = LedgerRecord(
+        collection=Epoch2Collection.ARTIFACT,
+        record_key=key,
+        status="recorded",
+        recorded_at=AT,
+        payload=payload,
+    )
+    return render_ledger_line(record)
+
+
+def _drop_code(published: bytes, live: bytes, key: str, elsewhere: list[object]) -> str:
+    with pytest.raises(ContentRedactionError) as caught:
+        plan_row_drop(published, live, record_key=key, elsewhere=elsewhere)
+    return caught.value.code
 
 
 def test_an_empty_ledger_plans_nothing() -> None:
@@ -173,8 +201,8 @@ def test_content_rows_are_redacted_when_a_non_content_line_leaks() -> None:
     assert stored.lines == ("start", WITHHELD_LINE)
     assert lines[1] == other
     assert plan.record_keys == ("artifact://content/run-00000010/aa",)
-    assert plan.non_content_leak_keys == ("EVD-0001",)
-    assert "alice" not in "".join(plan.non_content_leak_keys)
+    assert _keys(plan) == ("EVD-0001",)
+    assert "alice" not in "".join(_keys(plan))
 
 
 def test_a_leaking_non_content_line_alone_writes_nothing_and_is_listed() -> None:
@@ -184,19 +212,19 @@ def test_a_leaking_non_content_line_alone_writes_nothing_and_is_listed() -> None
 
     assert plan.content == live
     assert plan.record_keys == ()
-    assert plan.non_content_leak_keys == ("EVD-0001",)
+    assert _keys(plan) == ("EVD-0001",)
 
 
 def test_a_leak_behind_a_json_escape_outside_content_is_listed() -> None:
     live = _file(_other("EVD-0003", f"first line\n{SERVER_PATH}"))
 
-    assert _plan(b"", live).non_content_leak_keys == ("EVD-0003",)
+    assert _keys(_plan(b"", live)) == ("EVD-0003",)
 
 
 def test_a_committed_leaking_non_content_line_is_not_listed() -> None:
     published = _file(_other("EVD-0004", f"wrote {HOME_PATH}"))
 
-    assert _plan(published, published).non_content_leak_keys == ()
+    assert _plan(published, published).non_content_leaks == ()
 
 
 def test_a_second_plan_over_the_redacted_ledger_changes_nothing() -> None:
@@ -207,7 +235,7 @@ def test_a_second_plan_over_the_redacted_ledger_changes_nothing() -> None:
 
     assert again.content == first.content
     assert again.record_keys == ()
-    assert again.non_content_leak_keys == ("EVD-0001",)
+    assert _keys(again) == ("EVD-0001",)
 
 
 def test_a_grep_context_line_is_withheld() -> None:
@@ -234,3 +262,107 @@ def test_an_allowlisted_address_is_kept() -> None:
     live = _file(_content("gg", "Co-Authored-By: Claude <noreply@anthropic.com>"))
 
     assert _plan(b"", live).content == live
+
+
+def test_a_leaking_non_content_line_names_its_payload_kind() -> None:
+    live = _file(_row("SPK-0001", {"payload_kind": "spike_report", "summary": SERVER_PATH}))
+
+    assert _plan(b"", live).non_content_leaks == (
+        NonContentLeak(record_key="SPK-0001", payload_kind="spike_report"),
+    )
+
+
+def test_a_dropped_line_leaves_every_other_line_as_it_was() -> None:
+    published = _file(_other("EVD-0000", "committed"))
+    before, after = _other("EVD-0002", "before"), _other("EVD-0003", "after")
+    live = published + _file(before, _row("EVD-0001", {"payload_kind": "x", "s": HOME_PATH}), after)
+
+    drop = plan_row_drop(published, live, record_key="EVD-0001", elsewhere=[])
+
+    assert drop.content == published + _file(before, after)
+    assert drop.record_key == "EVD-0001"
+    assert drop.payload_kind == "x"
+    assert drop.unpublished_rows == 2
+
+
+def test_dropping_the_only_unpublished_line_leaves_the_published_bytes() -> None:
+    published = _file(_other("EVD-0000", "committed"))
+    live = published + _file(_other("EVD-0001", f"wrote {HOME_PATH}"))
+
+    drop = plan_row_drop(published, live, record_key="EVD-0001", elsewhere=[])
+
+    assert drop.content == published
+    assert drop.payload_kind is None
+    assert drop.unpublished_rows == 0
+
+
+def test_dropping_from_an_empty_ledger_finds_nothing() -> None:
+    assert _drop_code(b"", b"", "EVD-0001", []) == REDACTION_ROW_NOT_FOUND
+
+
+def test_dropping_a_published_row_is_refused() -> None:
+    published = _file(_other("EVD-0001", f"wrote {HOME_PATH}"))
+    live = published + _file(_other("EVD-0001", "corrected"))
+
+    assert _drop_code(published, live, "EVD-0001", []) == REDACTION_ROW_PUBLISHED
+
+
+def test_dropping_a_key_on_two_unpublished_lines_is_refused() -> None:
+    live = _file(_other("EVD-0001", "one"), _other("EVD-0001", "two"))
+
+    assert _drop_code(b"", live, "EVD-0001", []) == REDACTION_ROW_AMBIGUOUS
+
+
+def test_dropping_a_content_row_is_refused() -> None:
+    live = _file(_content("aa", f"at {SERVER_PATH}"))
+
+    code = _drop_code(b"", live, "artifact://content/run-00000010/aa", [])
+
+    assert code == REDACTION_ROW_CONTENT
+
+
+def test_dropping_a_compacted_record_is_refused() -> None:
+    live = _file(_row("ART-0001", {"key": "ART-0001", "summary": HOME_PATH}))
+
+    assert _drop_code(b"", live, "ART-0001", []) == REDACTION_ROW_COMPACTED
+
+
+def test_dropping_a_superseded_row_is_refused() -> None:
+    leaking = _other("EVD-0001", f"wrote {HOME_PATH}")
+    live = _file(leaking, _other("EVD-0002", "fixed", supersedes=line_digest(leaking)))
+
+    assert _drop_code(b"", live, "EVD-0001", []) == REDACTION_ROW_CITED
+
+
+def test_dropping_a_row_the_document_names_is_refused() -> None:
+    live = _file(_other("EVD-0001", f"wrote {HOME_PATH}"))
+    document = {"plan_revision": {"PRV-0001": {"proposal_ref": "EVD-0001"}}}
+
+    assert _drop_code(b"", live, "EVD-0001", [document]) == REDACTION_ROW_CITED
+
+
+def test_a_key_that_only_prefixes_a_citation_does_not_refuse() -> None:
+    live = _file(_other("EVD-0001", f"wrote {HOME_PATH}"))
+
+    drop = plan_row_drop(b"", live, record_key="EVD-0001", elsewhere=[["EVD-00010"], 1, None])
+
+    assert drop.content == b""
+
+
+def test_dropping_from_a_ledger_that_moved_off_its_commit_is_refused() -> None:
+    published = _file(_other("EVD-0000", "committed"))
+
+    assert _drop_code(published, _file(_other("EVD-0001", "x")), "EVD-0001", []) == (
+        REDACTION_PUBLISHED_CHANGED
+    )
+
+
+def test_dropping_beside_a_noncanonical_line_is_refused() -> None:
+    live = _file(_other("EVD-0001", "x"), _other("EVD-0002", "y").replace('","', '", "', 1))
+
+    assert _drop_code(b"", live, "EVD-0001", []) == REDACTION_NONCANONICAL_LINE
+
+
+def test_dropping_from_a_torn_ledger_is_refused() -> None:
+    with pytest.raises(LedgerTornTailError):
+        plan_row_drop(b"", _other("EVD-0001", "x").encode(), record_key="EVD-0001", elsewhere=[])

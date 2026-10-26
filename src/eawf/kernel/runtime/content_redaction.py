@@ -6,8 +6,11 @@ written. Rows already committed stay as they are: append-only protects what a
 clone may hold. Rows past the committed prefix are on this machine alone, and
 this module plans their correction: each kept line the scan now flags becomes
 :data:`~eawf.kernel.runtime.content.WITHHELD_LINE`. An unpublished row that is
-not captured content has no withheld marker to take, so a leak there is
-reported by record key and the row is left as it is.
+not captured content has no withheld marker to take: several such kinds carry a
+digest over their own text that an approval or citation binds, so rewriting
+the text would break them. A leak there is reported by record key and kind,
+and :func:`plan_row_drop` plans removing that one line instead, while nothing
+else names it.
 
 A row keeps its ``artifact_ref``. Receipts and transcripts cite content by that
 reference, so it keeps naming the content as first captured; the lines it
@@ -20,6 +23,7 @@ the write.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
@@ -40,8 +44,25 @@ REDACTION_PUBLISHED_CHANGED: Final = "redaction_published_changed"
 #: Refusal: an unpublished line does not read back as the line its record renders.
 REDACTION_NONCANONICAL_LINE: Final = "redaction_noncanonical_line"
 
-#: Refusal: a line supersedes a content row the redaction would change.
+#: Refusal: a line supersedes a content row the redaction would change, or
+#: something else names the row a drop would remove.
 REDACTION_ROW_CITED: Final = "redaction_row_cited"
+
+#: Refusal: the row a drop names is held by the last commit.
+REDACTION_ROW_PUBLISHED: Final = "redaction_row_published"
+
+#: Refusal: no unpublished line carries the record key a drop names.
+REDACTION_ROW_NOT_FOUND: Final = "redaction_row_not_found"
+
+#: Refusal: more than one unpublished line carries the record key a drop names.
+REDACTION_ROW_AMBIGUOUS: Final = "redaction_row_ambiguous"
+
+#: Refusal: the row a drop names is captured content, which redaction corrects in place.
+REDACTION_ROW_CONTENT: Final = "redaction_row_content"
+
+#: Refusal: the row a drop names is a record compacted out of the document; readers
+#: take it as that record's standing state and the change feed holds its history.
+REDACTION_ROW_COMPACTED: Final = "redaction_row_compacted"
 
 
 class ContentRedactionError(ValueError):
@@ -63,6 +84,20 @@ class ContentRedactionError(ValueError):
 
 
 @dataclass(frozen=True)
+class NonContentLeak:
+    """One unpublished row that is not captured content and still leaks.
+
+    Attributes:
+        record_key: The row's record key.
+        payload_kind: The ``payload_kind`` its payload names, or ``None``
+            when it names none.
+    """
+
+    record_key: str
+    payload_kind: str | None
+
+
+@dataclass(frozen=True)
 class ContentRedaction:
     """The planned correction of one ledger's unpublished content rows.
 
@@ -73,16 +108,16 @@ class ContentRedaction:
             file order.
         withheld_lines: How many kept lines the plan newly withholds.
         unpublished_rows: How many lines follow the published prefix.
-        non_content_leak_keys: The record key of each unpublished line that
-            is not captured content and still carries a leak shape, in file
-            order; the plan leaves those lines unchanged.
+        non_content_leaks: Each unpublished line that is not captured
+            content and still carries a leak shape, in file order; the plan
+            leaves those lines unchanged.
     """
 
     content: bytes
     record_keys: tuple[str, ...]
     withheld_lines: int
     unpublished_rows: int
-    non_content_leak_keys: tuple[str, ...]
+    non_content_leaks: tuple[NonContentLeak, ...]
 
 
 def plan_content_redaction(
@@ -115,20 +150,16 @@ def plan_content_redaction(
     planned: list[str] = []
     changed: dict[str, str] = {}
     withheld = 0
-    leaking: list[str] = []
-    for index, line in enumerate(unpublished):
-        record = LedgerRecord.model_validate_json(line)
-        if render_ledger_line(record) != line:
-            raise ContentRedactionError(
-                REDACTION_NONCANONICAL_LINE, f"unpublished line {index} is not canonical"
-            )
-        if record.payload.get("payload_kind") != CONTENT_PAYLOAD_KIND:
+    leaking: list[NonContentLeak] = []
+    for line, record in zip(unpublished, _canonical_records(unpublished), strict=True):
+        kind = _payload_kind(record)
+        if kind != CONTENT_PAYLOAD_KIND:
             # Scanned as decoded strings: in the rendered line a JSON escape
             # such as ``\n`` hides where a path starts.
             if diff_state_leaks(
                 None, record.model_dump(mode="json"), allowed_emails=allowed_emails
             ):
-                leaking.append(record.record_key)
+                leaking.append(NonContentLeak(record_key=record.record_key, payload_kind=kind))
             planned.append(line)
             continue
         stored = StoredContent.model_validate(record.payload)
@@ -167,15 +198,160 @@ def plan_content_redaction(
         record_keys=tuple(changed.values()),
         withheld_lines=withheld,
         unpublished_rows=len(unpublished),
-        non_content_leak_keys=tuple(leaking),
+        non_content_leaks=tuple(leaking),
     )
+
+
+@dataclass(frozen=True)
+class RowDrop:
+    """The planned removal of one unpublished non-content line.
+
+    Attributes:
+        content: The whole proposed file: the published bytes unchanged,
+            then every other unpublished line as it was.
+        record_key: The record key of the line removed.
+        payload_kind: The ``payload_kind`` its payload named, or ``None``.
+        unpublished_rows: How many lines follow the published prefix after
+            the removal.
+    """
+
+    content: bytes
+    record_key: str
+    payload_kind: str | None
+    unpublished_rows: int
+
+
+def plan_row_drop(
+    published: bytes, live: bytes, *, record_key: str, elsewhere: Sequence[object]
+) -> RowDrop:
+    """Plan removing the one unpublished non-content line filed under *record_key*.
+
+    No commit holds the line, so no clone can hold it either; removing it
+    leaves the ledger as if the row had never been filed. That holds only
+    while nothing else names the row, so any line of this ledger that
+    supersedes it or carries its key, and any value in *elsewhere* that
+    carries its key, refuses the plan.
+
+    Args:
+        published: The ledger's bytes in the last commit; empty when no
+            commit holds the file.
+        live: The ledger's bytes now.
+        record_key: The record key of the line to remove.
+        elsewhere: Decoded JSON values beyond this ledger that may name the
+            row: the generation document and the other ledgers' records.
+
+    Returns:
+        The plan.
+
+    Raises:
+        ContentRedactionError: *live* does not start with *published*, an
+            unpublished line is not canonical, the key is published, absent
+            or on several unpublished lines, the row is captured content or a
+            compacted record, or something else names it.
+        LedgerTornTailError: Either byte string ends mid-line.
+    """
+    if not live.startswith(published):
+        raise ContentRedactionError(
+            REDACTION_PUBLISHED_CHANGED, "the ledger does not start with its committed bytes"
+        )
+    published_lines = split_ledger_lines(published)
+    published_records = [LedgerRecord.model_validate_json(line) for line in published_lines]
+    if any(record.record_key == record_key for record in published_records):
+        raise ContentRedactionError(
+            REDACTION_ROW_PUBLISHED, f"the last commit holds a line filed under {record_key}"
+        )
+    unpublished = split_ledger_lines(live[len(published) :])
+    records = _canonical_records(unpublished)
+    matches = [index for index, record in enumerate(records) if record.record_key == record_key]
+    if not matches:
+        raise ContentRedactionError(
+            REDACTION_ROW_NOT_FOUND, f"no unpublished line is filed under {record_key}"
+        )
+    if len(matches) > 1:
+        raise ContentRedactionError(
+            REDACTION_ROW_AMBIGUOUS,
+            f"{len(matches)} unpublished lines are filed under {record_key}",
+        )
+    [target] = matches
+    record = records[target]
+    kind = _payload_kind(record)
+    if kind == CONTENT_PAYLOAD_KIND:
+        raise ContentRedactionError(
+            REDACTION_ROW_CONTENT,
+            f"{record_key} is captured content; eawf store redact-content withholds its lines",
+        )
+    if record.payload.get("key") == record_key:
+        raise ContentRedactionError(
+            REDACTION_ROW_COMPACTED, f"{record_key} is a record compacted out of the document"
+        )
+    digest = line_digest(unpublished[target])
+    others = [*published_records, *(item for index, item in enumerate(records) if index != target)]
+    for other in others:
+        if other.supersedes == digest or _names(other.model_dump(mode="json"), record_key):
+            raise ContentRedactionError(
+                REDACTION_ROW_CITED, f"line {other.record_key} names {record_key}"
+            )
+    if any(_names(value, record_key) for value in elsewhere):
+        raise ContentRedactionError(
+            REDACTION_ROW_CITED, f"a record outside the artifact ledger names {record_key}"
+        )
+    kept = [line for index, line in enumerate(unpublished) if index != target]
+    logger.debug(f"plan_row_drop record_key={record_key} unpublished={len(unpublished)}")
+    return RowDrop(
+        content=published + "".join(f"{line}\n" for line in kept).encode("utf-8"),
+        record_key=record_key,
+        payload_kind=kind,
+        unpublished_rows=len(kept),
+    )
+
+
+def _canonical_records(lines: Sequence[str]) -> list[LedgerRecord]:
+    """Return the record of each unpublished line, refusing one that is not canonical.
+
+    Raises:
+        ContentRedactionError: A line does not read back as the line its record renders.
+    """
+    records: list[LedgerRecord] = []
+    for index, line in enumerate(lines):
+        record = LedgerRecord.model_validate_json(line)
+        if render_ledger_line(record) != line:
+            raise ContentRedactionError(
+                REDACTION_NONCANONICAL_LINE, f"unpublished line {index} is not canonical"
+            )
+        records.append(record)
+    return records
+
+
+def _payload_kind(record: LedgerRecord) -> str | None:
+    """Return the ``payload_kind`` a record's payload names, or ``None``."""
+    kind = record.payload.get("payload_kind")
+    return kind if isinstance(kind, str) else None
+
+
+def _names(value: object, record_key: str) -> bool:
+    """Return whether *value* holds *record_key* as a string or a mapping key, at any depth."""
+    if isinstance(value, str):
+        return value == record_key
+    if isinstance(value, Mapping):
+        return any(key == record_key or _names(item, record_key) for key, item in value.items())
+    if isinstance(value, list | tuple):
+        return any(_names(item, record_key) for item in value)
+    return False
 
 
 __all__ = [
     "REDACTION_NONCANONICAL_LINE",
     "REDACTION_PUBLISHED_CHANGED",
+    "REDACTION_ROW_AMBIGUOUS",
     "REDACTION_ROW_CITED",
+    "REDACTION_ROW_COMPACTED",
+    "REDACTION_ROW_CONTENT",
+    "REDACTION_ROW_NOT_FOUND",
+    "REDACTION_ROW_PUBLISHED",
     "ContentRedaction",
     "ContentRedactionError",
+    "NonContentLeak",
+    "RowDrop",
     "plan_content_redaction",
+    "plan_row_drop",
 ]

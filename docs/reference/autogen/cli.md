@@ -481,11 +481,12 @@ Golden-fixture snapshot surfaces — list and regenerate per --kind.
 
 ### `eawf store`
 
-JSONL store maintenance (compact, redact-content).
+JSONL store maintenance (compact, redact-content, drop-unpublished-row).
 
 | Verb | Summary |
 |---|---|
 | `compact` | Compact the JSONL store for *kind* and emit the dedup report. |
+| `drop-unpublished-row` | Remove one non-content row no commit holds and nothing else names. |
 | `redact-content` | Withhold leaked lines from content rows that no commit holds yet. |
 
 ### `eawf task`

@@ -6,6 +6,8 @@
 - ``eawf store redact-content`` sends ``runtime.store.redact_content``, which
   withholds leaked lines from the artifact ledger's content rows that no
   commit holds yet.
+- ``eawf store drop-unpublished-row`` sends ``runtime.store.drop_unpublished_row``,
+  which removes one artifact-ledger line no commit holds and nothing else names.
 """
 
 from __future__ import annotations
@@ -25,9 +27,12 @@ from eawf.surfaces.cli.output import emit_json_or_text
 #: builds without the daemon method registry on the path.
 STORE_REDACT_CONTENT: Final = "runtime.store.redact_content"
 
+#: The daemon verb ``store drop-unpublished-row`` sends, spelled here for the same reason.
+STORE_DROP_UNPUBLISHED_ROW: Final = "runtime.store.drop_unpublished_row"
+
 store_app = typer.Typer(
     name="store",
-    help="JSONL store maintenance (compact, redact-content).",
+    help="JSONL store maintenance (compact, redact-content, drop-unpublished-row).",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -117,3 +122,40 @@ def redact_content_cmd(
     )
     if answer is not None:
         _answer(ctx, answer, operation=STORE_REDACT_CONTENT, urn=subject, revision=None)
+
+
+@store_app.command(name="drop-unpublished-row")
+def drop_unpublished_row_cmd(
+    ctx: typer.Context,
+    record_key: Annotated[
+        str, typer.Argument(help="Record key of the artifact-ledger line to remove.")
+    ],
+    idempotency_key: Annotated[
+        str,
+        typer.Option(
+            "--idempotency-key", help="Caller's name for this request; a retry replays its receipt."
+        ),
+    ],
+    actor: Annotated[
+        str, typer.Option("--actor", help="Principal key the request is attributed to.")
+    ],
+) -> None:
+    """Remove one non-content row no commit holds and nothing else names.
+
+    The way out for a leaking row redact-content lists but cannot rewrite:
+    the daemon refuses a committed row, a content row, a compacted record
+    and a row another record cites, and writes nothing then.
+    """
+    from eawf.surfaces.cli.commands.domain_integration import _answer, _send
+
+    subject = "artifact ledger"
+    answer = _send(
+        ctx,
+        STORE_DROP_UNPUBLISHED_ROW,
+        {"actor": actor, "idempotency_key": idempotency_key, "record_key": record_key},
+        urn=subject,
+        verb_text="store drop-unpublished-row",
+        key=idempotency_key,
+    )
+    if answer is not None:
+        _answer(ctx, answer, operation=STORE_DROP_UNPUBLISHED_ROW, urn=subject, revision=None)

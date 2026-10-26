@@ -30,7 +30,8 @@ Each row is a CLI verb / group. Mutates → writes state.json, JSONL store, or r
 | `eawf estimate` / `estimate update` | scope, source, confidence | estimate record / version | yes if create | invalid rollup | `cli/commands/estimation.py` |
 | `eawf memory add` / `promote` / `list` / `compact` / `render-context` / `view` / `stale` | scope / title / body / budget | memory entries | yes for mutators | over limit, no scope | `cli/commands/memory.py` |
 | `eawf store compact` | kind / scope / budget | compacted JSONL store | yes | conflict | `cli/commands/store.py` |
-| `eawf store redact-content` | `--idempotency-key`, `--actor` | unpublished artifact content rows with leaked lines withheld | yes | no HEAD commit / ledger moved off its commit / leak outside content | `cli/commands/store.py` |
+| `eawf store redact-content` | `--idempotency-key`, `--actor` | unpublished artifact content rows with leaked lines withheld | yes | no HEAD commit / ledger moved off its commit | `cli/commands/store.py` |
+| `eawf store drop-unpublished-row` | record key, `--idempotency-key`, `--actor` | one unpublished non-content artifact row removed | yes | committed / content / compacted / cited row, no HEAD commit, unfinished WAL line | `cli/commands/store.py` |
 | `eawf render-output` | `--format markdown` \| `json` (stdin JSON) | rendered envelope | no | invalid envelope | `cli/commands/render_output.py` |
 | `eawf config profile enable` | profile id | enabled profile + materialized state keys | yes | unknown profile / conflict | `cli/commands/config.py` |
 | `eawf mcp add` / `install` / `update` / `remove` | id / command / risk / env refs; `--idempotency-key`, plus `--expected-revision` on a standing row | Eä-owned MCP config (`capability` rows, through `mcp.*` daemon verbs) | yes | non-env secret / unmanaged entry | `cli/commands/mcp.py` |

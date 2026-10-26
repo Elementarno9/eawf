@@ -204,6 +204,45 @@ def test_a_path_after_an_escaped_break_or_underscore_is_flagged(
     ]
 
 
+_BACKSLASH = "\\"
+_ESC = "\x1b"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (f"{_BACKSLASH}u000a{SERVER_ROOT}/repo", [SERVER_ROOT]),
+        (f"{_BACKSLASH}u000A{_SERVER_SHORT}", [_SERVER_SHORT]),
+        (f"{_BACKSLASH}f{SERVER_ROOT}/repo", [SERVER_ROOT]),
+        (f"{_BACKSLASH}b{SERVER_ROOT}/repo", [SERVER_ROOT]),
+        (f"{_BACKSLASH}u001b[0m{SERVER_ROOT}/repo", [SERVER_ROOT]),
+        (f"{_BACKSLASH}x1b[1;31m{SERVER_ROOT}/repo", [SERVER_ROOT]),
+        (f"{_ESC}[0m{SERVER_ROOT}/repo", [SERVER_ROOT]),
+        (f"{_ESC}[m{_SERVER_SHORT}", [_SERVER_SHORT]),
+        (f"{_ESC}[38;2;255;255;255m{_SERVER_SHORT}", [_SERVER_SHORT]),
+        (f"{_ESC}[1;32m{RUNTIME_DIR}", [RUNTIME_DIR]),
+        (f"{_BACKSLASH}u001b[0m{PYTEST_ROOT}", [PYTEST_ROOT]),
+        ("é/srv/x", []),
+        ("café/srv/x", []),
+        ("٣/srv/x", []),
+        ("am/srv/x", []),
+        ("[0m/srv/x", []),
+        ("/usr/srv/x", []),
+        ("src/srv/x", []),
+        ("https://host/srv/x", []),
+        ("./srv/x", []),
+        (f"{_ESC}[0m/srv/<project>/", []),
+        (f"{_BACKSLASH}u000a/srv/<project>/", []),
+    ],
+)
+def test_a_path_after_an_ansi_code_or_unicode_escape_is_flagged(
+    text: str, expected: list[str]
+) -> None:
+    assert _scan(text) == [
+        StateLeakHit(kind=StateLeakKind.HOME_PATH, snippet=snippet) for snippet in expected
+    ]
+
+
 @pytest.mark.parametrize(
     "value", [f"a\n{SERVER_ROOT}/repo", f"a{_ESCAPED_BREAK}{SERVER_ROOT}/repo"]
 )

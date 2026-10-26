@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import copy
 import json
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Final
 
@@ -19,6 +20,12 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.release.signals import ReleaseSignalName, ReleaseSignalStatus
+from eawf.kernel.state.epoch2.run import RunStatus
+from eawf.observability.bench.dispatch_scorecard import (
+    DispatchScorecard,
+    DispatchTier,
+    check_scorecard,
+)
 from eawf.workflow.evidence.provider_certification import (
     CANARY_EVIDENCE_DIRS,
     CanaryEvidenceGap,
@@ -70,44 +77,31 @@ def certified_on(document: dict[str, Any], os_class: str) -> dict[str, Any]:
     return result
 
 
-def check_document(run_key: str, breaches: tuple[str, ...] = ()) -> dict[str, Any]:
+def check_document(run_key: str, *, turns: int = 7) -> dict[str, Any]:
     """Return a ``bench dispatch --check --json`` document for *run_key*.
+
+    The rows come from the scorecard producer's own fixture check, as the
+    live smoke's ``bench dispatch`` writes them.
 
     Args:
         run_key: The Run the document's scorecard names.
-        breaches: The metrics marked past their limit.
+        turns: The scorecard's model calls; past 25 breaches the fixture tier.
 
     Returns:
         A document in the shape the live smoke files beside its receipt.
     """
-    observed = {"status": "COMPLETED", "turns": 7, "wall_seconds": "30.5"}
-    limits = {"status": "COMPLETED", "turns": 25, "wall_seconds": "600"}
-    return {
-        "check": {
-            "breaches": list(breaches),
-            "checks": [
-                {
-                    "breached": metric in breaches,
-                    "limit": limits[metric],
-                    "metric": metric,
-                    "observed": observed[metric],
-                }
-                for metric in observed
-            ],
-            "scorecard": {
-                "cache_read_tokens": 100,
-                "first_patch_seconds": "12.5",
-                "identical_reread_rate": "0",
-                "read_truncation_rate": "0",
-                "run_key": run_key,
-                "status": "COMPLETED",
-                "total_tokens": 1000,
-                "turns": 7,
-                "wall_seconds": "30.5",
-            },
-            "tier": "fixture",
-        }
-    }
+    scorecard = DispatchScorecard(
+        run_key=run_key,
+        status=RunStatus.COMPLETED,
+        turns=turns,
+        read_truncation_rate=Decimal(0),
+        identical_reread_rate=Decimal(0),
+        total_tokens=1000,
+        cache_read_tokens=100,
+        first_patch_seconds=Decimal("12.5"),
+        wall_seconds=Decimal("30.5"),
+    )
+    return {"check": check_scorecard(scorecard, DispatchTier.FIXTURE).model_dump(mode="json")}
 
 
 def smoke_filed(

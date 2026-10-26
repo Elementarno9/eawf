@@ -18,6 +18,11 @@ from typing import Any, Final
 import pytest
 
 from eawf.kernel.runtime.content import CONTENT_PAYLOAD_KIND, WITHHELD_LINE, StoredContent
+from eawf.kernel.runtime.content_redaction import (
+    REDACTION_ROW_CITED,
+    REDACTION_ROW_CONTENT,
+    REDACTION_ROW_PUBLISHED,
+)
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import (
@@ -35,6 +40,7 @@ from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.methods.store_redaction import (
     REDACTION_NO_COMMIT,
     REDACTION_WAL_UNFINISHED,
+    STORE_DROP_UNPUBLISHED_ROW_METHOD,
     STORE_REDACT_CONTENT_METHOD,
 )
 from eawf.runtime.daemon.wal import WalRecord, mark_applied, mark_fsynced, write_pending
@@ -117,6 +123,29 @@ def redact(tmp_path: Path, canary: CanaryProvision, key: str) -> Any:
     )
 
 
+def drop(tmp_path: Path, canary: CanaryProvision, record_key: str, key: str) -> Any:
+    """Send ``runtime.store.drop_unpublished_row`` for *record_key* and return its answer."""
+    call = {
+        "repo_root": str(canary.root),
+        "actor": ACTOR,
+        "idempotency_key": key,
+        "record_key": record_key,
+    }
+    return asyncio.run(
+        methods.dispatch(STORE_DROP_UNPUBLISHED_ROW_METHOD, method_context(tmp_path / "rt"), call)
+    )
+
+
+def _evidence(key: str, payload: dict[str, Any]) -> LedgerRecord:
+    return LedgerRecord(
+        collection=Epoch2Collection.ARTIFACT,
+        record_key=key,
+        status="recorded",
+        recorded_at=AT,
+        payload=payload,
+    )
+
+
 def test_a_leaked_line_after_the_commit_is_withheld_and_the_commit_is_kept(
     tmp_path: Path,
 ) -> None:
@@ -155,13 +184,7 @@ def test_a_second_redaction_writes_nothing_and_a_retry_replays(tmp_path: Path) -
 
 def test_a_leaking_non_content_row_stays_and_its_key_is_answered(tmp_path: Path) -> None:
     canary, _ = make_tree(tmp_path)
-    other = LedgerRecord(
-        collection=Epoch2Collection.ARTIFACT,
-        record_key="EVD-0001",
-        status="recorded",
-        recorded_at=AT,
-        payload={"summary": f"wrote {SERVER_PATH}"},
-    )
+    other = _evidence("EVD-0001", {"summary": f"wrote {SERVER_PATH}"})
     append_ledger_record(_ledger(canary), other)
 
     answer = redact(tmp_path, canary, "redact-1")
@@ -172,6 +195,77 @@ def test_a_leaking_non_content_row_stays_and_its_key_is_answered(tmp_path: Path)
     assert records[-1] == other
     stored = StoredContent.model_validate(records[1].payload)
     assert stored.lines == ("start", WITHHELD_LINE, "done")
+
+
+def test_a_leaking_non_content_row_has_a_way_out(tmp_path: Path) -> None:
+    canary, _ = make_tree(tmp_path)
+    append_ledger_record(
+        _ledger(canary),
+        _evidence("EVD-0001", {"payload_kind": "spike_report", "summary": f"at {SERVER_PATH}"}),
+    )
+    append_ledger_record(_ledger(canary), _evidence("EVD-0002", {"summary": "clean"}))
+
+    answer = redact(tmp_path, canary, "redact-1")
+    [remediation] = answer["remediations"]
+    assert remediation["record_key"] == "EVD-0001"
+    assert remediation["payload_kind"] == "spike_report"
+    assert remediation["command"].startswith("eawf store drop-unpublished-row EVD-0001 ")
+
+    dropped = drop(tmp_path, canary, "EVD-0001", "drop-1")
+    again = redact(tmp_path, canary, "redact-2")
+
+    assert dropped["record_key"] == "EVD-0001"
+    assert dropped["payload_kind"] == "spike_report"
+    assert again["non_content_leak_keys"] == []
+    assert again["remediations"] == []
+    keys = [record.record_key for record in read_ledger_records(_ledger(canary))]
+    assert "EVD-0001" not in keys
+    assert "EVD-0002" in keys
+    assert "checkout" not in _ledger(canary).read_text(encoding="utf-8").split("\n", 1)[1]
+    assert drop(tmp_path, canary, "EVD-0001", "drop-1") == {**dropped, "replayed": True}
+
+
+def test_dropping_a_committed_row_is_refused(tmp_path: Path) -> None:
+    canary, published = make_tree(tmp_path)
+
+    with pytest.raises(DaemonValidationError, match=REDACTION_ROW_PUBLISHED):
+        drop(tmp_path, canary, "artifact://content/run-00000010/aa", "drop-1")
+    assert _ledger(canary).read_bytes().startswith(published)
+
+
+def test_dropping_a_content_row_is_refused_and_points_at_redaction(tmp_path: Path) -> None:
+    canary, _ = make_tree(tmp_path)
+    before = _ledger(canary).read_bytes()
+
+    with pytest.raises(DaemonValidationError, match=REDACTION_ROW_CONTENT) as refused:
+        drop(tmp_path, canary, "artifact://content/run-00000010/bb", "drop-1")
+    assert "redact-content" in str(refused.value)
+    assert _ledger(canary).read_bytes() == before
+
+
+def test_dropping_a_row_another_row_cites_is_refused(tmp_path: Path) -> None:
+    canary, _ = make_tree(tmp_path)
+    append_ledger_record(_ledger(canary), _evidence("EVD-0001", {"summary": f"at {SERVER_PATH}"}))
+    append_ledger_record(_ledger(canary), _evidence("EVD-0002", {"cites": "EVD-0001"}))
+    before = _ledger(canary).read_bytes()
+
+    with pytest.raises(DaemonValidationError, match=REDACTION_ROW_CITED):
+        drop(tmp_path, canary, "EVD-0001", "drop-1")
+    assert _ledger(canary).read_bytes() == before
+
+
+def test_dropping_while_the_wal_holds_an_unfinished_artifact_line_is_refused(
+    tmp_path: Path,
+) -> None:
+    canary, _ = make_tree(tmp_path)
+    leaked = _evidence("EVD-0001", {"summary": f"at {SERVER_PATH}"})
+    append_ledger_record(_ledger(canary), leaked)
+    _journal_applied_line(tmp_path, canary, leaked)
+    before = _ledger(canary).read_bytes()
+
+    with pytest.raises(DaemonValidationError, match=REDACTION_WAL_UNFINISHED):
+        drop(tmp_path, canary, "EVD-0001", "drop-1")
+    assert _ledger(canary).read_bytes() == before
 
 
 def test_a_repository_without_a_commit_is_refused_and_nothing_is_written(

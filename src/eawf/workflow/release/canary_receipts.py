@@ -22,11 +22,19 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Final, Literal
 
-from pydantic import AfterValidator, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    AfterValidator,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from eawf.kernel.release.gate_binding import (
     PRODUCT_CANARY_POST_MERGE_GATES,
@@ -35,7 +43,13 @@ from eawf.kernel.release.gate_binding import (
 from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.spec.release import ReleaseKeyStr
 from eawf.kernel.spec.release_config import ReleaseGateName
-from eawf.kernel.state.epoch2.base import RunKey
+from eawf.observability.bench.dispatch_scorecard import (
+    DispatchCheck,
+    DispatchMetric,
+    DispatchScorecard,
+    DispatchTier,
+    check_scorecard,
+)
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence.provider_certification import CANARY_EVIDENCE_DIRS, OsClass
 
@@ -318,6 +332,22 @@ class DispatchSmokeReceiptSet(_StrictModel):
 #: written as a string, or ``None`` when unmeasured or unlimited.
 _CheckValue = int | str | None
 
+#: The name an earlier scorecard gave ``total_tokens``; the committed rc3
+#: documents carry it as a scorecard field and as a check row's metric.
+_EARLIER_TOTAL_TOKENS: Final[str] = "billable_tokens"
+
+
+def _current_metric(value: object) -> object:
+    """Return *value* with the earlier ``billable_tokens`` name read as ``total_tokens``.
+
+    Args:
+        value: A metric name as filed.
+
+    Returns:
+        ``total_tokens`` for the earlier name, else *value* unchanged.
+    """
+    return DispatchMetric.TOTAL_TOKENS.value if value == _EARLIER_TOTAL_TOKENS else value
+
 
 class DispatchCheckRow(_StrictModel):
     """One metric of a filed check document beside the tier's limit.
@@ -329,39 +359,23 @@ class DispatchCheckRow(_StrictModel):
         breached: Whether the value is past the limit.
     """
 
-    metric: Annotated[str, Field(min_length=1, max_length=64)]
+    metric: DispatchMetric
     observed: _CheckValue
     limit: _CheckValue
     breached: bool
 
+    @field_validator("metric", mode="before")
+    @classmethod
+    def _reads_the_earlier_token_name(cls, value: object) -> object:
+        """Read the earlier ``billable_tokens`` metric as ``total_tokens``.
 
-class DispatchCheckScorecard(_StrictModel):
-    """The scorecard a filed check document was checked over.
+        Args:
+            value: The metric as filed.
 
-    Attributes:
-        run_key: The Run scored.
-        status: The Run's recorded status.
-        turns: How many model calls the Run made.
-        read_truncation_rate: Share of cut read windows, as a decimal string.
-        identical_reread_rate: Share of identical re-reads, as a decimal string.
-        total_tokens: Every token the Run billed, cache reads included.
-        billable_tokens: The name an earlier scorecard gave
-            ``total_tokens``; the committed rc3 documents carry it.
-        cache_read_tokens: The cache-read slice of the token count.
-        first_patch_seconds: Seconds to the first succeeded patch.
-        wall_seconds: Seconds from the Run's start to its end.
-    """
-
-    run_key: RunKey
-    status: Annotated[str, Field(min_length=1, max_length=32)]
-    turns: Annotated[int, Field(ge=0)]
-    read_truncation_rate: str
-    identical_reread_rate: str
-    total_tokens: Annotated[int, Field(ge=0)] | None = None
-    billable_tokens: Annotated[int, Field(ge=0)] | None = None
-    cache_read_tokens: Annotated[int, Field(ge=0)] | None
-    first_patch_seconds: str | None
-    wall_seconds: str | None
+        Returns:
+            ``total_tokens`` for the earlier name, else *value* unchanged.
+        """
+        return _current_metric(value)
 
 
 class DispatchCheckBody(_StrictModel):
@@ -369,15 +383,51 @@ class DispatchCheckBody(_StrictModel):
 
     Attributes:
         tier: The tier checked against.
-        scorecard: The scorecard checked.
+        scorecard: The scorecard checked, in the producer's own model so
+            the gate can check it again.
         checks: One row per metric.
         breaches: The metrics past their limit.
     """
 
-    tier: Literal["fixture", "real"]
-    scorecard: DispatchCheckScorecard
+    tier: DispatchTier
+    scorecard: DispatchScorecard
     checks: Annotated[tuple[DispatchCheckRow, ...], Field(min_length=1)]
-    breaches: tuple[str, ...]
+    breaches: tuple[DispatchMetric, ...]
+
+    @field_validator("scorecard", mode="before")
+    @classmethod
+    def _reads_the_earlier_token_field(cls, value: object) -> object:
+        """Read an earlier scorecard's ``billable_tokens`` as ``total_tokens``.
+
+        Args:
+            value: The scorecard as filed.
+
+        Returns:
+            The scorecard with ``billable_tokens`` renamed when it carries
+            that field instead of ``total_tokens``, else *value* unchanged.
+        """
+        if (
+            isinstance(value, dict)
+            and _EARLIER_TOTAL_TOKENS in value
+            and "total_tokens" not in value
+        ):
+            renamed = {key: item for key, item in value.items() if key != _EARLIER_TOTAL_TOKENS}
+            return {**renamed, "total_tokens": value[_EARLIER_TOTAL_TOKENS]}
+        return value
+
+    @field_validator("breaches", mode="before")
+    @classmethod
+    def _reads_the_earlier_breach_name(cls, value: object) -> object:
+        """Read an earlier ``billable_tokens`` breach as ``total_tokens``.
+
+        Args:
+            value: The breach list as filed.
+
+        Returns:
+            The list with each earlier name renamed, or *value* unchanged
+            when it is not a list.
+        """
+        return [_current_metric(item) for item in value] if isinstance(value, list) else value
 
     @model_validator(mode="after")
     def _breaches_match_the_rows(self) -> DispatchCheckBody:
@@ -390,7 +440,10 @@ class DispatchCheckBody(_StrictModel):
         """
         breached = tuple(row.metric for row in self.checks if row.breached)
         if self.breaches != breached:
-            raise ValueError(f"breaches {list(self.breaches)} disagree with rows {list(breached)}")
+            raise ValueError(
+                f"breaches {[m.value for m in self.breaches]} disagree with rows "
+                f"{[m.value for m in breached]}"
+            )
         return self
 
 
@@ -416,13 +469,18 @@ class DispatchSmokeGap(StrEnum):
             the receipt file, for one of its Runs.
         CHECK_MISMATCHED: A passing receipt's documents do not name its
             Runs one for one.
-        CHECK_BREACHED: A passing receipt's document records a breach.
+        CHECK_FORGED: A passing receipt's document was not checked on the
+            fixture tier, or its rows differ from the checks its own
+            scorecard recomputes to there.
+        CHECK_BREACHED: A passing receipt's scorecard breaches a fixture
+            limit.
     """
 
     MISSING = "dispatch_smoke_missing"
     FAILED = "dispatch_smoke_failed"
     CHECK_MISSING = "dispatch_smoke_check_missing"
     CHECK_MISMATCHED = "dispatch_smoke_check_mismatched"
+    CHECK_FORGED = "dispatch_smoke_check_forged"
     CHECK_BREACHED = "dispatch_smoke_check_breached"
 
 
@@ -517,18 +575,66 @@ def read_dispatch_checks(
     return documents
 
 
+def _same_value(filed: _CheckValue, recomputed: Decimal | int | str | None) -> bool:
+    """Return whether a filed row value equals the value recomputed for it.
+
+    A document writes a decimal as a string (``"0.20"``) and a count as a
+    number, so a numeric value is compared as a ``Decimal``.
+
+    Args:
+        filed: The value the document carries.
+        recomputed: The value :func:`check_scorecard` gives.
+
+    Returns:
+        Whether the two are the same value.
+    """
+    if filed is None or recomputed is None:
+        return filed is recomputed
+    if isinstance(recomputed, str):
+        return filed == recomputed
+    try:
+        return Decimal(str(filed)) == recomputed
+    except InvalidOperation:
+        return False
+
+
+def _rows_recompute(body: DispatchCheckBody, recomputed: DispatchCheck) -> bool:
+    """Return whether *body*'s rows are exactly the rows *recomputed* holds.
+
+    Args:
+        body: A filed check.
+        recomputed: Its scorecard checked again on the fixture tier.
+
+    Returns:
+        Whether every metric is present once, in order, with the observed
+        value, limit and breach the recomputation gives it.
+    """
+    return len(body.checks) == len(recomputed.checks) and all(
+        filed.metric is row.metric
+        and filed.breached is row.breached
+        and _same_value(filed.observed, row.observed)
+        and _same_value(filed.limit, row.limit)
+        for filed, row in zip(body.checks, recomputed.checks, strict=True)
+    )
+
+
 def _check_gap(
     receipt: DispatchSmokeReceipt, documents: dict[str, DispatchCheckDocument]
 ) -> DispatchSmokeGap | None:
     """Return why *receipt*'s check documents do not back its passing scorecard.
+
+    A document's rows and breach list are its writer's word, so each
+    scorecard is checked again on the fixture tier with the producer's own
+    :func:`check_scorecard`; a document backs its Run only when its rows
+    are that recomputation and it finds no breach.
 
     Args:
         receipt: A receipt whose scorecard reads ``pass``.
         documents: The documents read beside it, by file name.
 
     Returns:
-        The first gap of missing, mismatched and breached, or ``None``
-        when each Run has exactly one clean document naming it.
+        The first gap of missing, mismatched, forged and breached, or
+        ``None`` when each Run has exactly one clean document naming it.
     """
     if len(receipt.evidence_refs) != len(receipt.run_refs) or any(
         ref not in documents for ref in receipt.evidence_refs
@@ -538,7 +644,16 @@ def _check_gap(
     named = sorted(document.check.scorecard.run_key for document in cited)
     if named != sorted(ref.rsplit("/", 1)[-1] for ref in receipt.run_refs):
         return DispatchSmokeGap.CHECK_MISMATCHED
-    if any(document.check.breaches for document in cited):
+    recomputed = [
+        check_scorecard(document.check.scorecard, DispatchTier.FIXTURE) for document in cited
+    ]
+    if any(
+        document.check.tier is not DispatchTier.FIXTURE
+        or not _rows_recompute(document.check, check)
+        for document, check in zip(cited, recomputed, strict=True)
+    ):
+        return DispatchSmokeGap.CHECK_FORGED
+    if any(check.breaches for check in recomputed):
         return DispatchSmokeGap.CHECK_BREACHED
     return None
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Final
 
@@ -572,3 +572,88 @@ def test_the_verb_needs_a_class(tmp_path: Path) -> None:
         app, ["-w", str(tmp_path), "release", "canary-export", "0.7.0.dev4"]
     )
     assert result.exit_code != 0
+
+
+# ---------- the kept classes of a re-export ----------
+
+
+def _re_export(
+    prior: CanaryEvidence,
+    rows: list[MachineCertification],
+    os_class: Any,
+    *,
+    now: datetime,
+) -> CanaryEvidence:
+    return build_canary_export(
+        EXPORT_KEY,
+        prior=prior,
+        rows=rows,
+        installed={"claude-code": VERSION},
+        os_classes=(os_class,),
+        now=now,
+    )
+
+
+def test_a_re_export_claims_the_kept_os_classes(committed: CanaryEvidence) -> None:
+    start = committed.certifications[0].certification.verified_at
+    macos = driver_certification(committed, os_class="macos")
+    linux = driver_certification(committed, shift=1)
+    on_mac = _re_export(
+        committed, [stored(macos, base=macos)], "macos", now=start + timedelta(days=1)
+    )
+    assert on_mac.advertised[0].os_classes == ("macos",)
+
+    on_linux = _re_export(
+        on_mac, [stored(linux, base=linux)], "linux", now=start + timedelta(days=1)
+    )
+
+    (claim,) = on_linux.advertised
+    assert claim.os_classes == ("linux", "macos")
+    assert [record.certification for record in on_linux.certifications] == [linux, macos]
+    assert provider_findings(on_linux) == ()
+    assert (
+        _re_export(on_mac, [stored(linux, base=linux)], "linux", now=start + timedelta(days=1))
+        == on_linux
+    )
+
+    lapsing = driver_certification(committed, os_class="macos", lifetime=timedelta(days=2))
+    short_lived = _re_export(
+        committed, [stored(lapsing, base=lapsing)], "macos", now=start + timedelta(days=1)
+    )
+    lasting = driver_certification(committed, shift=72)
+    with pytest.raises(ValueError, match=r"canary_export_expired: .*'macos'"):
+        _re_export(
+            short_lived, [stored(lasting, base=lasting)], "linux", now=start + timedelta(days=3)
+        )
+
+
+def test_a_newer_local_quarantine_refuses_a_kept_class(committed: CanaryEvidence) -> None:
+    start = committed.certifications[0].certification.verified_at
+    macos = driver_certification(committed, os_class="macos")
+    linux = driver_certification(committed, shift=2)
+    on_mac = _re_export(
+        committed, [stored(macos, base=macos)], "macos", now=start + timedelta(days=1)
+    )
+    newer = [quarantined(macos, shift=1), stored(linux, base=linux)]
+    with pytest.raises(ValueError, match="canary_export_quarantined"):
+        _re_export(on_mac, newer, "linux", now=start + timedelta(days=1))
+
+    older = [quarantined(macos, shift=-1), stored(linux, base=linux)]
+    assert _re_export(on_mac, older, "linux", now=start + timedelta(days=1)).advertised[
+        0
+    ].os_classes == ("linux", "macos")
+
+
+def test_a_kept_class_of_another_version_is_kept_but_not_claimed(
+    committed: CanaryEvidence,
+) -> None:
+    (macos,) = committed.certifications
+    own = committed.model_copy(update={"release_key": EXPORT_KEY})
+    linux = driver_certification(committed)
+
+    evidence = _re_export(
+        own, [stored(linux, base=linux)], "linux", now=macos.certification.expires_at
+    )
+
+    assert evidence.advertised[0].os_classes == ("linux",)
+    assert evidence.certifications[-1] == macos

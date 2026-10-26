@@ -165,6 +165,53 @@ def _claimed_record(
     )
 
 
+def _check_kept_record(
+    rows: Sequence[MachineCertification], record: CertificationRecord, *, now: datetime
+) -> None:
+    """Refuse a kept certification a claim would ship on that is no longer live.
+
+    A kept record was taken on another machine, so its own walk history is
+    not in *rows*; only a walk this machine recorded for the same runtime,
+    version and class at or after the kept verification can shadow it.
+    When there is none the record stays, because the absence of local
+    walks says nothing about the machine that took it.
+
+    Args:
+        rows: This machine's stored certification rows, in append order.
+        record: The prior export's certification of a class not claimed now.
+        now: The export time an expiry is measured against.
+
+    Raises:
+        ValueError: ``canary_export_quarantined`` when this machine's newest
+            bearing walk is a quarantine no older than the kept
+            certification, and ``canary_export_expired`` when the kept
+            certification expired at or before *now*.
+    """
+    certification = record.certification
+    os_class = certification.os_class
+    row = _latest_walk(rows, record.runtime_id, certification.distribution_version, os_class)
+    if (
+        row is not None
+        and row.outcome == "quarantined"
+        and row.verified_at >= certification.verified_at
+    ):
+        raise ValueError(
+            f"canary_export_quarantined: {row.certification_urn} quarantined "
+            f"{record.runtime_id} {certification.distribution_version} after the kept "
+            f"certification {record.certification_urn} on {os_class!r}; run `eawf runtime "
+            f"certify {record.runtime_id} --task <key> --actor <key>` once the version "
+            f"passes again"
+        )
+    if certification.expires_at <= now:
+        raise ValueError(
+            f"canary_export_expired: the kept {record.certification_urn} certified "
+            f"{record.runtime_id} {certification.distribution_version} on {os_class!r} until "
+            f"{certification.expires_at:%Y-%m-%d}; run `eawf runtime certify "
+            f"{record.runtime_id} --task <key> --actor <key>` on a {os_class} machine and "
+            f"export {os_class!r} again"
+        )
+
+
 def build_canary_export(
     release_key: str,
     *,
@@ -182,24 +229,37 @@ def build_canary_export(
             capabilities and the declared canaries are carried from.
         rows: This machine's stored certification rows, in append order.
         installed: The installed version of each runtime *prior* advertises.
-        os_classes: The operating-system classes every claim ships on.
+        os_classes: The operating-system classes this run exports.
         now: The export time an expiry is measured against.
 
     Returns:
         The export: one claim per runtime *prior* advertises, addressed by
         the manifest its stored certification names, and that certification
-        copied unchanged for each claimed class. When *prior* is this
+        copied unchanged for each exported class. When *prior* is this
         release's own export, its isolation pair, run logs, Milestones and
-        the certifications of every class not claimed now are kept after
-        the new records, since another machine took them.
+        the certifications of every class not exported now are kept after
+        the new records, since another machine took them, and each claim
+        also ships on every kept class certified for its manifest.
 
     Raises:
-        ValueError: When a claimed class has no stored driver certification
-            of an advertised runtime at its installed version, the newest
-            walk of that version is a quarantine, or its certification has
-            expired.
+        ValueError: When an exported class has no stored driver
+            certification of an advertised runtime at its installed version,
+            the newest walk of that version is a quarantine, or its
+            certification has expired; and when a kept certification a
+            claim ships on has expired or a newer walk on this machine
+            quarantined it.
     """
     claimed = tuple(dict.fromkeys(os_classes))
+    own = prior.release_key == release_key
+    kept = (
+        tuple(
+            record
+            for record in prior.certifications
+            if record.certification.os_class not in claimed
+        )
+        if own
+        else ()
+    )
     advertised: list[RuntimeClaim] = []
     certifications: list[CertificationRecord] = []
     for claim in prior.advertised:
@@ -208,17 +268,30 @@ def build_canary_export(
             _claimed_record(rows, claim.runtime_id, version, os_class, now=now)
             for os_class in claimed
         ]
+        manifest_ref = records[0].certification.manifest_ref
+        # A kept class joins the claim only when its record certifies the
+        # manifest claimed now, since the provider gate matches on it.
+        joined = [
+            record
+            for record in kept
+            if record.runtime_id == claim.runtime_id
+            and record.certification.manifest_ref == manifest_ref
+        ]
+        for record in joined:
+            _check_kept_record(rows, record, now=now)
         advertised.append(
             RuntimeClaim(
                 runtime_id=claim.runtime_id,
-                manifest_ref=records[0].certification.manifest_ref,
+                manifest_ref=manifest_ref,
                 manifest_digest=records[0].certification.manifest_digest,
                 required_capabilities=claim.required_capabilities,
-                os_classes=claimed,
+                os_classes=tuple(
+                    dict.fromkeys((*claimed, *(record.certification.os_class for record in joined)))
+                ),
             )
         )
         certifications.extend(records)
-    if prior.release_key != release_key:
+    if not own:
         return CanaryEvidence(
             schema_version="native-canary-evidence/v1",
             release_key=release_key,
@@ -226,9 +299,6 @@ def build_canary_export(
             advertised=tuple(advertised),
             certifications=tuple(certifications),
         )
-    kept = (
-        record for record in prior.certifications if record.certification.os_class not in claimed
-    )
     return CanaryEvidence(
         schema_version="native-canary-evidence/v1",
         release_key=release_key,
@@ -266,7 +336,7 @@ def write_canary_export(
         state_path: The tree's ``state.json``; its machine-local store holds
             the certifications and its checkout receives the export.
         release_key: The checkpoint being exported.
-        os_classes: The operating-system classes every claim ships on.
+        os_classes: The operating-system classes this run exports.
 
     Returns:
         The export as written.

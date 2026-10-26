@@ -285,6 +285,12 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
         "rewrites only ledger lines no commit holds, which keep no revision; the HEAD "
         "commit's bytes anchor the rewrite",
     ),
+    _exempt(
+        "store drop-unpublished-row",
+        "create_keyed",
+        "removes only a ledger line no commit holds, which keeps no revision; the HEAD "
+        "commit's bytes anchor the removal",
+    ),
     _exempt("mcp add", "create_keyed", "registers a server, which has no revision to anchor yet"),
     _exempt("mcp grant", "create_keyed", "files a grant, which has no revision to anchor yet"),
     _exempt("memory add", "wire_pending", "the memory routes take no anchor yet"),

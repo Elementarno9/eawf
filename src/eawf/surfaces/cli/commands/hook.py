@@ -561,10 +561,10 @@ def _scan_leaks(
 
     Returns:
         One finding per hit, in file, line and pattern order. On a
-        diff-scoped scan the state file contributes only the lines the staged
-        diff adds: its offsets churn on every mutation and its older rows
-        predate this scan, so a whole-file pass would re-flag text the commit
-        never touched.
+        diff-scoped scan the state file and each generation ledger contribute
+        only the lines the staged diff adds: their older rows predate this
+        scan, so a whole-file pass would re-flag text the commit never
+        touched. When the staged diff cannot be read they are scanned in full.
     """
     from eawf.observability.logging.state_leak import default_allowed_emails, scan_state_leaks
 
@@ -683,7 +683,7 @@ def _staged_diff_pathspec(rel: str, *, cwd: Path) -> list[str]:
     return [rel]
 
 
-def _staged_added_line_candidates(rel: str, *, cwd: Path) -> set[int]:
+def _staged_added_line_candidates(rel: str, *, cwd: Path) -> set[int] | None:
     """Return 1-based new-file lines added by the staged diff.
 
     ``--find-renames`` (``-M``) keeps a relocation from masquerading as a brand
@@ -692,6 +692,16 @@ def _staged_added_line_candidates(rel: str, *, cwd: Path) -> set[int]:
     pre-existing body to the diff-scoped chassis lints. With rename detection a
     pure move yields zero added-line candidates and a move-with-edit surfaces
     only the lines the edit actually touched.
+
+    Args:
+        rel: The repository-relative path of the staged file.
+        cwd: Repository root the diff runs in.
+
+    Returns:
+        The added line numbers, an empty set when the diff adds none, or
+        ``None`` when ``git diff`` fails. ``None`` means the added lines are
+        unknown, so a caller scans the whole file: reading an empty set there
+        would skip every line and let a failed diff pass the gate.
     """
     pathspec = _staged_diff_pathspec(rel, cwd=cwd)
     proc = subprocess.run(
@@ -704,7 +714,7 @@ def _staged_added_line_candidates(rel: str, *, cwd: Path) -> set[int]:
         **no_window_kwargs(),
     )
     if proc.returncode != 0:
-        return set()
+        return None
     candidates: set[int] = set()
     new_lineno: int | None = None
     for line in proc.stdout.splitlines():

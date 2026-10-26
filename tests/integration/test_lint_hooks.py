@@ -952,3 +952,49 @@ def test_path_leak_lint_scans_only_added_lines_of_a_generation_ledger(tmp_path: 
     assert _is_generation_ledger_path(".ea/generations/gen-0123456789abcdef/history/change.jsonl")
     assert not _is_generation_ledger_path(".ea/generations/gen-0123456789abcdef/state.json")
     assert not _is_generation_ledger_path(".ea/store/event.jsonl")
+
+
+def test_path_leak_lint_scans_a_ledger_in_full_when_the_diff_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unreadable staged diff makes the ledger scan read every line, not none.
+
+    The added-line diff is forced to exit non-zero, as a corrupt index or a
+    pathspec error would; the committed leaking row must still be flagged. The
+    leak literal is assembled at runtime so this file carries none.
+    """
+    leak = "/" + "Users" + "/" + "alice" + "/work"
+    ledger_rel = ".ea/generations/gen-0123456789abcdef/ledger/artifact.jsonl"
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=str(repo), check=True, capture_output=True, text=True)
+
+    git("init", "-q")
+    git("config", "user.email", "noreply@anthropic.com")
+    git("config", "user.name", "Test")
+    git("config", "core.hooksPath", str(repo / ".disabled-hooks"))
+    ledger = repo / ledger_rel
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text(json.dumps({"text": f"probe {leak}"}) + "\n", encoding="utf-8")
+    git("add", ledger_rel)
+    git("commit", "-qm", "seed")
+    with ledger.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"text": "clean"}) + "\n")
+    git("add", ledger_rel)
+
+    real_run = subprocess.run
+
+    def failing_added_line_diff(
+        cmd: list[str], *args: object, **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        if "--unified=0" in cmd:
+            return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="fatal: index")
+        return real_run(cmd, *args, **kwargs)  # type: ignore[call-overload, no-any-return]
+
+    monkeypatch.setattr(subprocess, "run", failing_added_line_diff)
+    result = runner.invoke(app, ["--json", "-w", str(repo), "hook", "path-leak-lint"])
+    payload = json.loads(result.stdout)
+    assert result.exit_code == 1, payload
+    assert [finding["lineno"] for finding in payload["findings"]] == [1]

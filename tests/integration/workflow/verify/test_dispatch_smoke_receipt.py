@@ -24,7 +24,7 @@ from pydantic import ValidationError
 
 import tests.e2e.test_smoke_milestone as smoke_module
 from eawf.kernel.release.signals import ReleaseSignalName, ReleaseSignalStatus
-from eawf.workflow.evidence.provider_certification import CANARY_EVIDENCE_DIRS
+from eawf.workflow.evidence.provider_certification import CANARY_EVIDENCE_DIRS, OsClass
 from eawf.workflow.release.admission import checkpoint_release_config
 from eawf.workflow.release.canary_receipts import (
     DISPATCH_SMOKE_RECEIPTS_FILENAME,
@@ -588,7 +588,7 @@ def test_a_check_document_with_a_breach_fails_the_gate(tmp_path: Path) -> None:
         receipts_file(
             documents_filed(
                 certified(tmp_path / "breach", ["linux"]),
-                check_document("RUN-00000001", breaches=("turns",)),
+                check_document("RUN-00000001", turns=26),
             ),
             {"release_key": DEV4_KEY, "receipts": [receipt()]},
         )
@@ -723,3 +723,93 @@ def test_the_committed_rc3_receipts_verify() -> None:
     assert all(not document.check.breaches for document in documents.values())
     assert dispatch_smoke_gaps(receipts, (("claude-code", "linux"),), documents) == ()
     assert outcome.status is ReleaseSignalStatus.PASS, outcome.remediation
+
+
+def _forged(change: str) -> dict[str, Any]:
+    """Return the committed rc3 RUN-00000002 document altered as *change* names.
+
+    Each alteration keeps the breach list in step with the rows, so the
+    document validates and only recomputing its checks can refuse it.
+    """
+    directory = REPO_ROOT.joinpath(*CANARY_EVIDENCE_DIRS[RC3_KEY])
+    document: dict[str, Any] = json.loads(
+        (directory / "dispatch-check-RUN-00000002.json").read_text(encoding="utf-8")
+    )
+    body = document["check"]
+    rows = {row["metric"]: row for row in body["checks"]}
+    if change == "hidden-breach":
+        body["scorecard"]["turns"] = 999
+        rows["turns"]["observed"] = 999
+    elif change == "rows-disagree-with-scorecard":
+        body["scorecard"]["turns"] = 999
+    elif change == "reviewer-forge":
+        body["tier"] = "real"
+        body["scorecard"]["status"] = "FAILED"
+        body["scorecard"]["turns"] = 999
+        body["checks"] = [{"metric": "turns", "observed": 999, "limit": 25, "breached": False}]
+    elif change == "real-tier":
+        body["tier"] = "real"
+    elif change == "status-failed":
+        body["scorecard"]["status"] = "FAILED"
+        rows["status"].update(observed="FAILED", breached=True)
+        body["breaches"] = ["status"]
+    elif change == "status-failed-row-says-completed":
+        body["scorecard"]["status"] = "FAILED"
+    elif change == "missing-metric":
+        body["checks"] = [row for row in body["checks"] if row["metric"] != "wall_seconds"]
+    elif change == "loosened-limit":
+        body["scorecard"]["turns"] = 30
+        rows["turns"].update(observed=30, limit=1000)
+    elif change == "loosened-rate-limit":
+        body["scorecard"]["read_truncation_rate"] = "0.5"
+        rows["read_truncation_rate"].update(observed="0.5", limit="0.90")
+    return document
+
+
+@pytest.mark.parametrize(
+    ("change", "gap"),
+    [
+        pytest.param("hidden-breach", DispatchSmokeGap.CHECK_FORGED, id="hidden-breach"),
+        pytest.param(
+            "rows-disagree-with-scorecard", DispatchSmokeGap.CHECK_FORGED, id="observed-mismatch"
+        ),
+        pytest.param("reviewer-forge", DispatchSmokeGap.CHECK_FORGED, id="reviewer-forge"),
+        pytest.param("real-tier", DispatchSmokeGap.CHECK_FORGED, id="non-fixture-tier"),
+        pytest.param("status-failed", DispatchSmokeGap.CHECK_BREACHED, id="not-completed"),
+        pytest.param(
+            "status-failed-row-says-completed",
+            DispatchSmokeGap.CHECK_FORGED,
+            id="not-completed-row-hidden",
+        ),
+        pytest.param("missing-metric", DispatchSmokeGap.CHECK_FORGED, id="missing-metric"),
+        pytest.param("loosened-limit", DispatchSmokeGap.CHECK_FORGED, id="loosened-limit"),
+        pytest.param(
+            "loosened-rate-limit", DispatchSmokeGap.CHECK_FORGED, id="loosened-decimal-limit"
+        ),
+    ],
+)
+def test_a_document_whose_rows_hide_a_breach_fails_the_gate(
+    tmp_path: Path, change: str, gap: DispatchSmokeGap
+) -> None:
+    """A pass receipt counts only when its checks recompute clean on the fixture tier."""
+    row = receipt(
+        run_refs=["eawf://EAWF/EAWF/EAWF/run/RUN-00000002"],
+        evidence_refs=["dispatch-check-RUN-00000002.json"],
+    )
+    receipts = DispatchSmokeReceiptSet.model_validate({"release_key": RC3_KEY, "receipts": [row]})
+    claims: tuple[tuple[str, OsClass], ...] = (("claude-code", "linux"),)
+    clean = tmp_path / "clean"
+    clean.mkdir()
+    (clean / "dispatch-check-RUN-00000002.json").write_text(
+        json.dumps(_forged("none")), encoding="utf-8"
+    )
+    (tmp_path / "dispatch-check-RUN-00000002.json").write_text(
+        json.dumps(_forged(change)), encoding="utf-8"
+    )
+
+    clean_gaps = dispatch_smoke_gaps(receipts, claims, read_dispatch_checks(clean, receipts))
+    gaps = dispatch_smoke_gaps(receipts, claims, read_dispatch_checks(tmp_path, receipts))
+
+    assert clean_gaps == ()
+    assert gaps == (("claude-code", "linux", gap),)
+    assert DispatchSmokeGap.CHECK_FORGED.value == "dispatch_smoke_check_forged"

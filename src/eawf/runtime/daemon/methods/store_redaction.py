@@ -8,6 +8,13 @@ replaces only the lines after them. Committed rows stay as they are.
 
 A second call finds nothing left to withhold and writes nothing; a retry under
 the same idempotency key replays the first answer.
+
+A leaking unpublished row that is not captured content is left as it is and
+answered with a remediation naming ``runtime.store.drop_unpublished_row``,
+which removes that one line under the same guards while nothing else names it.
+A ledger append files no change-feed row, so the generation's history holds
+nothing of such a line; a record compacted out of the document does have
+history there, and the drop refuses it.
 """
 
 from __future__ import annotations
@@ -19,23 +26,29 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from eawf.kernel.runtime.content_redaction import ContentRedactionError, plan_content_redaction
+from eawf.kernel.runtime.content_redaction import (
+    ContentRedactionError,
+    plan_content_redaction,
+    plan_row_drop,
+)
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey
 from eawf.kernel.store.ledger import (
     LedgerAppendOnlyError,
+    LedgerError,
     LedgerRecord,
     LedgerTornTailError,
+    read_ledger_records,
     replace_unpublished_suffix,
 )
 from eawf.kernel.store.paths import ledger_path
-from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, Epoch2Collection
 from eawf.observability.logging.state_leak import default_allowed_emails
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.epoch2_recovery import LEDGER_LINE_KEY
-from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
+from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.delivery import IdempotencyKey, file_keyed_answer, keyed_answer
 from eawf.runtime.daemon.methods.doctor import project_lock_urn
@@ -46,6 +59,12 @@ logger = logging.getLogger(__name__)
 
 #: The verb that withholds leaked lines from the artifact ledger's unpublished content rows.
 STORE_REDACT_CONTENT_METHOD: Final = "runtime.store.redact_content"
+
+#: The verb that removes one unpublished non-content line from the artifact ledger.
+STORE_DROP_UNPUBLISHED_ROW_METHOD: Final = "runtime.store.drop_unpublished_row"
+
+#: The command a remediation names, with the caller's own key and principal left to fill.
+DROP_UNPUBLISHED_ROW_COMMAND: Final = "eawf store drop-unpublished-row"
 
 #: Refusal: the repository has no ``HEAD`` commit to tell published lines from new ones.
 REDACTION_NO_COMMIT: Final = "redaction_no_commit"
@@ -69,6 +88,23 @@ class RedactContentParams(BaseModel):
     idempotency_key: IdempotencyKey
 
 
+class LeakRemediation(BaseModel):
+    """The step that clears one leaking unpublished row redaction left as it is.
+
+    Attributes:
+        record_key: The row's record key.
+        payload_kind: The ``payload_kind`` its payload names, or ``None``.
+        command: The command that removes the row, with the caller's
+            idempotency key and principal left as placeholders.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    record_key: str
+    payload_kind: str | None
+    command: str
+
+
 class RedactContentAnswer(BaseModel):
     """What one redaction answers with.
 
@@ -81,6 +117,8 @@ class RedactContentAnswer(BaseModel):
         non_content_leak_keys: The record key of each unpublished row that is
             not captured content yet still leaks, in file order; the verb
             leaves those rows as they are.
+        remediations: One step per entry of ``non_content_leak_keys``, in
+            the same order.
         replayed: Whether the answer is the stored one of an earlier call.
     """
 
@@ -92,6 +130,43 @@ class RedactContentAnswer(BaseModel):
     withheld_lines: int
     record_keys: list[str]
     non_content_leak_keys: list[str]
+    remediations: list[LeakRemediation]
+    replayed: bool = False
+
+
+class DropUnpublishedRowParams(BaseModel):
+    """Params of :data:`STORE_DROP_UNPUBLISHED_ROW_METHOD`.
+
+    Attributes:
+        actor: Who asked.
+        idempotency_key: The client's name for this request.
+        record_key: The record key of the artifact-ledger line to remove.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    actor: PrincipalKey
+    idempotency_key: IdempotencyKey
+    record_key: str = Field(min_length=1, max_length=128)
+
+
+class DropUnpublishedRowAnswer(BaseModel):
+    """What one drop answers with.
+
+    Attributes:
+        ledger: The artifact ledger, relative to the repository root.
+        record_key: The record key of the line removed.
+        payload_kind: The ``payload_kind`` its payload named, or ``None``.
+        unpublished_rows: How many of its lines no commit holds, after the removal.
+        replayed: Whether the answer is the stored one of an earlier call.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    ledger: str
+    record_key: str
+    payload_kind: str | None
+    unpublished_rows: int
     replayed: bool = False
 
 
@@ -166,6 +241,35 @@ def _unfinished_ledger_records(wal_dir: Path, ledger: Path) -> list[str]:
     return found
 
 
+def _rewritable_bytes(
+    context: Epoch2RootContext, repository: Path, path: Path, relative: str
+) -> tuple[bytes, bytes]:
+    """Return the artifact ledger's bytes in ``HEAD`` and now, once a rewrite is safe.
+
+    Args:
+        context: The native context whose WAL is checked.
+        repository: The repository root.
+        path: The artifact ledger.
+        relative: *path* relative to *repository*.
+
+    Returns:
+        The published bytes, then the live bytes.
+
+    Raises:
+        DaemonValidationError: The WAL holds an unfinished line of the
+            ledger, or ``HEAD`` cannot be read.
+    """
+    unfinished = _unfinished_ledger_records(context.wal_dir, path)
+    if unfinished:
+        raise _refused(
+            REDACTION_WAL_UNFINISHED,
+            f"WAL records {', '.join(unfinished)} still journal lines of {relative}; "
+            "restart the daemon so recovery finishes them, then retry",
+        )
+    published = _published_bytes(repository, relative)
+    return published, path.read_bytes() if path.exists() else b""
+
+
 def redact_content(
     context: Epoch2RootContext, args: RedactContentParams, *, now: datetime
 ) -> RedactContentAnswer:
@@ -196,15 +300,7 @@ def redact_content(
     with context.session([project_lock_urn(context)]) as session:
         path = session.ledger_path(Epoch2Collection.ARTIFACT)
         relative = path.relative_to(repository).as_posix()
-        unfinished = _unfinished_ledger_records(context.wal_dir, path)
-        if unfinished:
-            raise _refused(
-                REDACTION_WAL_UNFINISHED,
-                f"WAL records {', '.join(unfinished)} still journal lines of {relative}; "
-                "restart the daemon so recovery finishes them, then retry",
-            )
-        published = _published_bytes(repository, relative)
-        live = path.read_bytes() if path.exists() else b""
+        published, live = _rewritable_bytes(context, repository, path, relative)
         try:
             plan = plan_content_redaction(published, live, allowed_emails=default_allowed_emails())
             if plan.record_keys:
@@ -221,7 +317,18 @@ def redact_content(
         rows=len(plan.record_keys),
         withheld_lines=plan.withheld_lines,
         record_keys=list(plan.record_keys),
-        non_content_leak_keys=list(plan.non_content_leak_keys),
+        non_content_leak_keys=[leak.record_key for leak in plan.non_content_leaks],
+        remediations=[
+            LeakRemediation(
+                record_key=leak.record_key,
+                payload_kind=leak.payload_kind,
+                command=(
+                    f"{DROP_UNPUBLISHED_ROW_COMMAND} {leak.record_key} "
+                    "--idempotency-key <key> --actor <principal>"
+                ),
+            )
+            for leak in plan.non_content_leaks
+        ],
     )
     file_keyed_answer(
         context,
@@ -238,6 +345,100 @@ def redact_content(
     return answer
 
 
+def _elsewhere(session: RootSession) -> list[object]:
+    """Return what beyond the artifact ledger may name one of its rows.
+
+    That is the generation document and every record of the other ledgers,
+    each as decoded JSON.
+
+    Raises:
+        LedgerError: Another ledger is torn or its snapshot does not match.
+        ValidationError: A line of another ledger is not a ledger record.
+    """
+    found: list[object] = [session.read_document()]
+    for collection in LEDGER_COLLECTIONS:
+        if collection is Epoch2Collection.ARTIFACT:
+            continue
+        records = read_ledger_records(ledger_path(session.document_path, collection))
+        found.extend(record.model_dump(mode="json") for record in records)
+    return found
+
+
+def drop_unpublished_row(
+    context: Epoch2RootContext, args: DropUnpublishedRowParams, *, now: datetime
+) -> DropUnpublishedRowAnswer:
+    """Remove the one unpublished non-content line filed under ``args.record_key``.
+
+    Args:
+        context: The native context of the tree whose artifact ledger is changed.
+        args: The validated request.
+        now: The instant the keyed answer records.
+
+    Returns:
+        The line removed.
+
+    Raises:
+        DaemonValidationError: The key already answered other parameters,
+            ``HEAD`` cannot be read, the WAL holds an unfinished line of the
+            artifact ledger, a ledger cannot be read, or the plan is refused:
+            the ledger moved off its commit, a line is not canonical, the row
+            is published, missing, ambiguous, captured content or a compacted
+            record, or something else names it. Nothing was written.
+    """
+    params = args.model_dump(mode="json")
+    replayed = keyed_answer(
+        context, method=STORE_DROP_UNPUBLISHED_ROW_METHOD, key=args.idempotency_key, params=params
+    )
+    if replayed is not None:
+        return DropUnpublishedRowAnswer.model_validate({**replayed, "replayed": True})
+    repository = context.identity.tree_root.parent
+    with context.session([project_lock_urn(context)]) as session:
+        path = session.ledger_path(Epoch2Collection.ARTIFACT)
+        relative = path.relative_to(repository).as_posix()
+        published, live = _rewritable_bytes(context, repository, path, relative)
+        try:
+            plan = plan_row_drop(
+                published, live, record_key=args.record_key, elsewhere=_elsewhere(session)
+            )
+            replace_unpublished_suffix(
+                path, published=published, expected=live, content=plan.content
+            )
+        except ContentRedactionError as error:
+            raise _refused(error.code, str(error)) from error
+        except (LedgerError, ValidationError) as error:
+            raise _refused("redaction_ledger_refused", str(error)) from error
+    answer = DropUnpublishedRowAnswer(
+        ledger=relative,
+        record_key=plan.record_key,
+        payload_kind=plan.payload_kind,
+        unpublished_rows=plan.unpublished_rows,
+    )
+    file_keyed_answer(
+        context,
+        method=STORE_DROP_UNPUBLISHED_ROW_METHOD,
+        key=args.idempotency_key,
+        params=params,
+        answer=answer.model_dump(mode="json"),
+        at=now,
+    )
+    logger.info(
+        f"drop_unpublished_row ledger={relative} record_key={answer.record_key!r} "
+        f"unpublished={answer.unpublished_rows}"
+    )
+    return answer
+
+
+@native_mutator(STORE_DROP_UNPUBLISHED_ROW_METHOD)
+async def _drop_unpublished_row(
+    ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
+) -> dict[str, Any]:
+    """Remove one unpublished non-content line from the artifact ledger."""
+    args = native_params(DropUnpublishedRowParams, params)
+    context = ctx.native_root_context(authority.root)
+    answer = await asyncio.to_thread(drop_unpublished_row, context, args, now=datetime.now(UTC))
+    return answer.model_dump(mode="json")
+
+
 @native_mutator(STORE_REDACT_CONTENT_METHOD)
 async def _redact_content(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
@@ -250,10 +451,16 @@ async def _redact_content(
 
 
 __all__ = [
+    "DROP_UNPUBLISHED_ROW_COMMAND",
     "REDACTION_NO_COMMIT",
     "REDACTION_WAL_UNFINISHED",
+    "STORE_DROP_UNPUBLISHED_ROW_METHOD",
     "STORE_REDACT_CONTENT_METHOD",
+    "DropUnpublishedRowAnswer",
+    "DropUnpublishedRowParams",
+    "LeakRemediation",
     "RedactContentAnswer",
     "RedactContentParams",
+    "drop_unpublished_row",
     "redact_content",
 ]

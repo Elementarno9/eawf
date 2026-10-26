@@ -91,12 +91,28 @@ def _eawf_author_emails() -> frozenset[str]:
     return frozenset()
 
 
-# A machine-path anchor counts only where it starts a path, so ``/usr/srv/x``
-# or a URL's ``host/srv/x`` is left alone while a separator such as grep's
-# ``513-`` or an underscore still leads one. The letter of a two-character
-# escape (``\n``, ``\t``, ``\r``) left in JSON-encoded text ends the escape,
-# not a word, so it leads a path too.
-_PATH_START = r"(?:(?<![A-Za-z0-9.])|(?<=\\[nrt]))"
+# A machine-path anchor counts only where it starts a path, so a letter or
+# digit in any script, or a dot, right before it (``/usr/srv/x``, a URL's
+# ``host/srv/x``, ``./srv``) leaves it alone while a separator such as grep's
+# ``513-`` or an underscore still leads one. The last character of a JSON
+# escape (``\n``, ``\f``, ``\u000a``) or of an ANSI CSI sequence (``ESC[0m``,
+# raw or spelt ``\u001b[`` / ``\x1b[`` in encoded text) ends that code, not a
+# word, so it leads a path too. ``re`` only takes fixed-width lookbehinds, so
+# the CSI parameter run is spelt out once per length up to the longest
+# truecolor SGR (``38;2;255;255;255``); the one-character guard in front keeps
+# those lookbehinds from running after every letter of ordinary prose.
+_CSI_INTRODUCERS = ("\x1b", r"\\u001b", r"\\x1b")
+_CSI_MAX_PARAMS = 16
+_CSI_END = (
+    r"(?<=[0-9;\[][A-Za-z])(?:"
+    + "|".join(
+        rf"(?<={introducer}\[[0-9;]{{{count}}}[A-Za-z])"
+        for introducer in _CSI_INTRODUCERS
+        for count in range(_CSI_MAX_PARAMS + 1)
+    )
+    + ")"
+)
+_PATH_START = rf"(?:(?<![^\W_])(?<!\.)|(?<=\\[nrtfb])|(?<=\\u[0-9a-fA-F]{{4}})|{_CSI_END})"
 
 
 class SensitiveScrubber(logging.Filter):
