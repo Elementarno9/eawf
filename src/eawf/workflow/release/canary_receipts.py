@@ -472,6 +472,8 @@ class DispatchSmokeGap(StrEnum):
         CHECK_FORGED: A passing receipt's document was not checked on the
             fixture tier, or its rows differ from the checks its own
             scorecard recomputes to there.
+        CHECK_INCOMPLETE: A passing receipt's scorecard leaves a metric
+            the fixture tier limits unset.
         CHECK_BREACHED: A passing receipt's scorecard breaches a fixture
             limit.
     """
@@ -481,6 +483,7 @@ class DispatchSmokeGap(StrEnum):
     CHECK_MISSING = "dispatch_smoke_check_missing"
     CHECK_MISMATCHED = "dispatch_smoke_check_mismatched"
     CHECK_FORGED = "dispatch_smoke_check_forged"
+    CHECK_INCOMPLETE = "dispatch_smoke_check_incomplete"
     CHECK_BREACHED = "dispatch_smoke_check_breached"
 
 
@@ -626,14 +629,16 @@ def _check_gap(
     A document's rows and breach list are its writer's word, so each
     scorecard is checked again on the fixture tier with the producer's own
     :func:`check_scorecard`; a document backs its Run only when its rows
-    are that recomputation and it finds no breach.
+    are that recomputation, it leaves no fixture-limited metric unset and
+    it finds no breach.
 
     Args:
         receipt: A receipt whose scorecard reads ``pass``.
         documents: The documents read beside it, by file name.
 
     Returns:
-        The first gap of missing, mismatched, forged and breached, or
+        The first gap of missing, mismatched, forged, incomplete and
+        breached, or
         ``None`` when each Run has exactly one clean document naming it.
     """
     if len(receipt.evidence_refs) != len(receipt.run_refs) or any(
@@ -653,6 +658,15 @@ def _check_gap(
         for document, check in zip(cited, recomputed, strict=True)
     ):
         return DispatchSmokeGap.CHECK_FORGED
+    # check_scorecard never breaches an unset metric, and the smoke Runs
+    # live in a throwaway tree the gate cannot re-score, so a null under a
+    # fixture limit would otherwise pass unmeasured.
+    if any(
+        row.limit is not None and row.observed is None
+        for check in recomputed
+        for row in check.checks
+    ):
+        return DispatchSmokeGap.CHECK_INCOMPLETE
     if any(check.breaches for check in recomputed):
         return DispatchSmokeGap.CHECK_BREACHED
     return None

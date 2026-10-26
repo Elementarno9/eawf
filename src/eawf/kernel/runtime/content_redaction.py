@@ -23,11 +23,13 @@ the write.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
 from eawf.kernel.runtime.content import CONTENT_PAYLOAD_KIND, StoredContent, scrub_line
+from eawf.kernel.state.epoch2.artifact_revision import ARTIFACT_REVISION_PAYLOAD_KIND
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     line_digest,
@@ -63,6 +65,14 @@ REDACTION_ROW_CONTENT: Final = "redaction_row_content"
 #: Refusal: the row a drop names is a record compacted out of the document; readers
 #: take it as that record's standing state and the change feed holds its history.
 REDACTION_ROW_COMPACTED: Final = "redaction_row_compacted"
+
+#: Refusal: the row a drop names is a campaign artifact revision. A later revision
+#: reuses the highest artifact key, so a reference to a dropped one would resolve
+#: to different content.
+REDACTION_ROW_REVISION: Final = "redaction_row_revision"
+
+#: Refusal: the row a drop names supersedes another line, which removing it would revive.
+REDACTION_ROW_SUPERSEDES: Final = "redaction_row_supersedes"
 
 
 class ContentRedactionError(ValueError):
@@ -228,9 +238,10 @@ def plan_row_drop(
 
     No commit holds the line, so no clone can hold it either; removing it
     leaves the ledger as if the row had never been filed. That holds only
-    while nothing else names the row, so any line of this ledger that
-    supersedes it or carries its key, and any value in *elsewhere* that
-    carries its key, refuses the plan.
+    while nothing else names the row and the row replaces nothing, so any
+    line of this ledger that supersedes it or carries its key as a whole
+    token, any value in *elsewhere* that does, a row that itself supersedes
+    a line, and a campaign artifact revision refuse the plan.
 
     Args:
         published: The ledger's bytes in the last commit; empty when no
@@ -246,8 +257,9 @@ def plan_row_drop(
     Raises:
         ContentRedactionError: *live* does not start with *published*, an
             unpublished line is not canonical, the key is published, absent
-            or on several unpublished lines, the row is captured content or a
-            compacted record, or something else names it.
+            or on several unpublished lines, the row is captured content, a
+            campaign artifact revision or a compacted record, it supersedes
+            another line, or something else names it.
         LedgerTornTailError: Either byte string ends mid-line.
     """
     if not live.startswith(published):
@@ -275,23 +287,16 @@ def plan_row_drop(
     [target] = matches
     record = records[target]
     kind = _payload_kind(record)
-    if kind == CONTENT_PAYLOAD_KIND:
-        raise ContentRedactionError(
-            REDACTION_ROW_CONTENT,
-            f"{record_key} is captured content; eawf store redact-content withholds its lines",
-        )
-    if record.payload.get("key") == record_key:
-        raise ContentRedactionError(
-            REDACTION_ROW_COMPACTED, f"{record_key} is a record compacted out of the document"
-        )
+    _refuse_undroppable(record, kind)
     digest = line_digest(unpublished[target])
+    token = _token_pattern(record_key)
     others = [*published_records, *(item for index, item in enumerate(records) if index != target)]
     for other in others:
-        if other.supersedes == digest or _names(other.model_dump(mode="json"), record_key):
+        if other.supersedes == digest or _names(other.model_dump(mode="json"), token):
             raise ContentRedactionError(
                 REDACTION_ROW_CITED, f"line {other.record_key} names {record_key}"
             )
-    if any(_names(value, record_key) for value in elsewhere):
+    if any(_names(value, token) for value in elsewhere):
         raise ContentRedactionError(
             REDACTION_ROW_CITED, f"a record outside the artifact ledger names {record_key}"
         )
@@ -303,6 +308,40 @@ def plan_row_drop(
         payload_kind=kind,
         unpublished_rows=len(kept),
     )
+
+
+def _refuse_undroppable(record: LedgerRecord, kind: str | None) -> None:
+    """Refuse a drop whose target row cannot leave the ledger whatever cites it.
+
+    Args:
+        record: The unpublished row a drop names.
+        kind: The ``payload_kind`` its payload names, or ``None``.
+
+    Raises:
+        ContentRedactionError: The row is captured content, a campaign
+            artifact revision or a compacted record, or it supersedes
+            another line.
+    """
+    record_key = record.record_key
+    if kind == CONTENT_PAYLOAD_KIND:
+        raise ContentRedactionError(
+            REDACTION_ROW_CONTENT,
+            f"{record_key} is captured content; eawf store redact-content withholds its lines",
+        )
+    if kind == ARTIFACT_REVISION_PAYLOAD_KIND:
+        raise ContentRedactionError(
+            REDACTION_ROW_REVISION,
+            f"{record_key} is a campaign artifact revision; its key would be filed again",
+        )
+    if record.payload.get("key") == record_key:
+        raise ContentRedactionError(
+            REDACTION_ROW_COMPACTED, f"{record_key} is a record compacted out of the document"
+        )
+    if record.supersedes is not None:
+        raise ContentRedactionError(
+            REDACTION_ROW_SUPERSEDES,
+            f"{record_key} supersedes another line, which dropping it would revive",
+        )
 
 
 def _canonical_records(lines: Sequence[str]) -> list[LedgerRecord]:
@@ -328,14 +367,43 @@ def _payload_kind(record: LedgerRecord) -> str | None:
     return kind if isinstance(kind, str) else None
 
 
-def _names(value: object, record_key: str) -> bool:
-    """Return whether *value* holds *record_key* as a string or a mapping key, at any depth."""
+def _token_pattern(record_key: str) -> re.Pattern[str]:
+    """Return the pattern matching *record_key* as a whole token inside a string.
+
+    References carry a key inside a longer string, such as an artifact URN
+    ending in the key, so an exact match misses them. The key must start the
+    string or follow a character that is not alphanumeric, and must end it or
+    precede a character that cannot continue a key, so ``EVD-0001`` is not
+    found inside ``EVD-00010``.
+
+    Args:
+        record_key: The record key to find.
+
+    Returns:
+        The compiled pattern.
+    """
+    return re.compile(rf"(?<![A-Za-z0-9]){re.escape(record_key)}(?![A-Za-z0-9_-])")
+
+
+def _names(value: object, token: re.Pattern[str]) -> bool:
+    """Return whether *value* holds *token* in a string or a mapping key, at any depth.
+
+    Args:
+        value: A decoded JSON value.
+        token: The pattern from :func:`_token_pattern`.
+
+    Returns:
+        ``True`` when some string or mapping key contains the token.
+    """
     if isinstance(value, str):
-        return value == record_key
+        return token.search(value) is not None
     if isinstance(value, Mapping):
-        return any(key == record_key or _names(item, record_key) for key, item in value.items())
+        return any(
+            (isinstance(key, str) and token.search(key) is not None) or _names(item, token)
+            for key, item in value.items()
+        )
     if isinstance(value, list | tuple):
-        return any(_names(item, record_key) for item in value)
+        return any(_names(item, token) for item in value)
     return False
 
 
@@ -348,6 +416,8 @@ __all__ = [
     "REDACTION_ROW_CONTENT",
     "REDACTION_ROW_NOT_FOUND",
     "REDACTION_ROW_PUBLISHED",
+    "REDACTION_ROW_REVISION",
+    "REDACTION_ROW_SUPERSEDES",
     "ContentRedaction",
     "ContentRedactionError",
     "NonContentLeak",

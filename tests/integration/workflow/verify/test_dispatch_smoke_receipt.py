@@ -813,3 +813,49 @@ def test_a_document_whose_rows_hide_a_breach_fails_the_gate(
     assert clean_gaps == ()
     assert gaps == (("claude-code", "linux", gap),)
     assert DispatchSmokeGap.CHECK_FORGED.value == "dispatch_smoke_check_forged"
+
+
+@pytest.mark.parametrize(
+    ("scorecard_key", "metric", "nullable"),
+    [
+        pytest.param("turns", "turns", False, id="turns"),
+        pytest.param("read_truncation_rate", "read_truncation_rate", False, id="truncation"),
+        pytest.param("identical_reread_rate", "identical_reread_rate", False, id="reread"),
+        pytest.param("billable_tokens", "billable_tokens", True, id="total-tokens"),
+        pytest.param("first_patch_seconds", "first_patch_seconds", True, id="first-patch"),
+        pytest.param("wall_seconds", "wall_seconds", True, id="wall-seconds"),
+    ],
+)
+def test_a_document_with_a_null_fixture_metric_fails_the_gate(
+    tmp_path: Path, scorecard_key: str, metric: str, nullable: bool
+) -> None:
+    """A document that leaves a fixture-limited metric null backs no Run.
+
+    The row is nulled with the scorecard, so the rows still recompute and
+    no breach shows; only the completeness check can refuse it. A metric
+    the scorecard model never allows null is refused when it is read.
+    """
+    row = receipt(
+        run_refs=["eawf://EAWF/EAWF/EAWF/run/RUN-00000002"],
+        evidence_refs=["dispatch-check-RUN-00000002.json"],
+    )
+    receipts = DispatchSmokeReceiptSet.model_validate({"release_key": RC3_KEY, "receipts": [row]})
+    document = _forged("none")
+    body = document["check"]
+    body["scorecard"][scorecard_key] = None
+    (filed,) = [check for check in body["checks"] if check["metric"] == metric]
+    filed["observed"] = None
+    (tmp_path / "dispatch-check-RUN-00000002.json").write_text(
+        json.dumps(document), encoding="utf-8"
+    )
+
+    if not nullable:
+        with pytest.raises(ValueError, match=r"dispatch-check-RUN-00000002\.json is invalid"):
+            read_dispatch_checks(tmp_path, receipts)
+        return
+    gaps = dispatch_smoke_gaps(
+        receipts, (("claude-code", "linux"),), read_dispatch_checks(tmp_path, receipts)
+    )
+
+    assert gaps == (("claude-code", "linux", DispatchSmokeGap.CHECK_INCOMPLETE),)
+    assert DispatchSmokeGap.CHECK_INCOMPLETE.value == "dispatch_smoke_check_incomplete"

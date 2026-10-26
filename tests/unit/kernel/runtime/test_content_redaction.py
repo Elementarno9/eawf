@@ -20,6 +20,8 @@ from eawf.kernel.runtime.content_redaction import (
     REDACTION_ROW_CONTENT,
     REDACTION_ROW_NOT_FOUND,
     REDACTION_ROW_PUBLISHED,
+    REDACTION_ROW_REVISION,
+    REDACTION_ROW_SUPERSEDES,
     ContentRedaction,
     ContentRedactionError,
     NonContentLeak,
@@ -347,6 +349,63 @@ def test_a_key_that_only_prefixes_a_citation_does_not_refuse() -> None:
     drop = plan_row_drop(b"", live, record_key="EVD-0001", elsewhere=[["EVD-00010"], 1, None])
 
     assert drop.content == b""
+
+
+_URN = "urn:eawf:v1:artifact:PRJ-EAWF/"
+
+
+@pytest.mark.parametrize(
+    ("target", "line", "elsewhere", "code"),
+    [
+        pytest.param(
+            "ART-0001#r1",
+            _row("ART-0001#r1", {"summary": HOME_PATH}),
+            [{"plan_steps": [{"produced": [f"{_URN}ART-0001#r1"]}]}],
+            REDACTION_ROW_CITED,
+            id="urn-cites-revision-key",
+        ),
+        pytest.param(
+            "ART-0002#r1",
+            _row("ART-0002#r1", {"payload_kind": "artifact_revision", "text": HOME_PATH}),
+            [],
+            REDACTION_ROW_REVISION,
+            id="artifact-revision-row",
+        ),
+        pytest.param(
+            "EVD-0002",
+            _other("EVD-0002", "fixed", supersedes="sha256:" + "a" * 64),
+            [],
+            REDACTION_ROW_SUPERSEDES,
+            id="row-supersedes-another",
+        ),
+        pytest.param(
+            "EVD-0001",
+            _other("EVD-0001", f"wrote {HOME_PATH}"),
+            [{"refs": ["see EVD-00010", f"{_URN}EVD-00010#r1"], "EVD-00010": 1}],
+            None,
+            id="longer-key-does-not-cite",
+        ),
+        pytest.param(
+            "EVD-0001",
+            _other("EVD-0001", f"wrote {HOME_PATH}"),
+            [],
+            None,
+            id="uncited-row",
+        ),
+    ],
+)
+def test_a_drop_refuses_a_row_a_urn_cites_or_that_supersedes_another(
+    target: str, line: str, elsewhere: list[object], code: str | None
+) -> None:
+    published = _file(_other("EVD-0000", "committed"))
+    live = published + _file(line)
+
+    if code is None:
+        assert plan_row_drop(published, live, record_key=target, elsewhere=elsewhere).content == (
+            published
+        )
+    else:
+        assert _drop_code(published, live, target, elsewhere) == code
 
 
 def test_dropping_from_a_ledger_that_moved_off_its_commit_is_refused() -> None:
