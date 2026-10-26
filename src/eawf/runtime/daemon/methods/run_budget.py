@@ -74,6 +74,7 @@ from eawf.runtime.budget.policy import (
 )
 from eawf.runtime.budget.service import TerminationResult, emit_termination_notice
 from eawf.runtime.control.reducer import decide_control_lease, reduce_run_control
+from eawf.runtime.daemon.admission import EconomicsPolicyError, load_economics
 from eawf.runtime.daemon.budget_interlock import InFlightBudgetOutcome, guard_in_flight_budget
 from eawf.runtime.daemon.epoch2_recovery import PROJECTION_DEGRADED, publish_projection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
@@ -554,12 +555,23 @@ def _meter(
 ) -> tuple[RunBudgetAnswer, tuple[Envelope, ...]]:
     """Meter the turn so far and terminate the Run if it crossed its cap.
 
+    Cache reads are weighted by the governor of the root's economics
+    policy, the one native dispatch meters the same Run with, so the verb
+    and the dispatch agree on which side of the cap a turn lands.
+
     Raises:
-        DaemonValidationError: The Run has no record, or the reading is
-            not classifiable against the supplied cap.
+        DaemonValidationError: The Run has no record, the root's economics
+            configuration does not validate, or the reading is not
+            classifiable against the supplied cap.
         TransactionRefusedError: The canonical transition was refused.
     """
-    reading = meter_stream(args.samples)
+    try:
+        economics = load_economics(context.identity.tree_root.parent)
+    except EconomicsPolicyError as error:
+        raise DaemonValidationError(
+            f"validation_failed: schema_validation_failed: {error}"
+        ) from error
+    reading = meter_stream(args.samples, cache_read_weight=economics.governor.cache_read_weight)
     ledger = _BudgetLedger(context, args, now=now)
     try:
         outcome = guard_in_flight_budget(

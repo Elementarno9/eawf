@@ -253,18 +253,20 @@ class InFlightMeter:
         return self._reading
 
 
-def meter_stream(samples: Iterable[UsageSample]) -> MeterReading:
+def meter_stream(samples: Iterable[UsageSample], *, cache_read_weight: float = 1.0) -> MeterReading:
     """Fold *samples* in arrival order into the reading a cap is tested against.
 
     Args:
         samples: The turn's cumulative usage readings, oldest first. An
             empty stream is a turn that disclosed nothing.
+        cache_read_weight: What one cache-read token counts as against the
+            cap; the default counts it one for one.
 
     Returns:
         The fold. An empty stream meters zero, which no positive cap
         crosses.
     """
-    meter = InFlightMeter()
+    meter = InFlightMeter(cache_read_weight)
     for sample in samples:
         meter.observe(sample)
     return meter.reading
