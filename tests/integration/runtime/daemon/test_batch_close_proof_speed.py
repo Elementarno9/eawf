@@ -51,16 +51,23 @@ pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("uv_shim")]
 
 #: How many criteria the concurrency test proves, each taking one second.
 CRITERIA: Final = 4
+# Long enough for a loaded host to start every criterion, short enough to fail fast.
+BARRIER_TIMEOUT_SECONDS: Final = 30.0
 
 
 class Runner:
     """A stand-in for the gate runner that counts its calls and can take its time."""
 
     def __init__(
-        self, *, seconds: float = 0.0, real: Callable[..., CheckResult] | None = None
+        self,
+        *,
+        seconds: float = 0.0,
+        real: Callable[..., CheckResult] | None = None,
+        barrier: threading.Barrier | None = None,
     ) -> None:
         self.seconds = seconds
         self.real = real
+        self.barrier = barrier
         self.calls = 0
         self.cwds: list[Path] = []
         self._lock = threading.Lock()
@@ -74,6 +81,10 @@ class Runner:
         if self.real is not None:
             return self.real(leg, cwd=cwd, gate_context=gate_context)
         started = datetime.now(UTC)
+        if self.barrier is not None:
+            # Every stand-in waits for all the others, so a proof that runs its
+            # criteria one after another breaks the barrier instead of passing.
+            self.barrier.wait()
         time.sleep(self.seconds)
         return CheckResult(
             name=leg.contract.gate_id,
@@ -160,7 +171,8 @@ def test_a_plain_ask_answers_the_settled_failure_without_proving_again(
 def test_criteria_run_at_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, provers: None
 ) -> None:
-    runner = Runner(seconds=1.0)
+    barrier = threading.Barrier(CRITERIA, timeout=BARRIER_TIMEOUT_SECONDS)
+    runner = Runner(barrier=barrier)
     monkeypatch.setattr(batch_proof, "run_leg", runner)
     canary, _repo = make_tree(
         tmp_path,
@@ -168,13 +180,11 @@ def test_criteria_run_at_once(
         tasks={"EAWF-0042": proved_task("EAWF-0042", *[PASSING] * CRITERIA)},
     )
 
-    started = time.monotonic()
     closure = settle(canary, tmp_path)
-    took = time.monotonic() - started
 
     assert closure.closed, closure.reason
     assert runner.calls == CRITERIA
-    assert took < CRITERIA - 1.0, f"{CRITERIA} one-second criteria took {took:.2f}s"
+    assert not barrier.broken
 
 
 def close_landed(tmp_path: Path, repo_root: Path, *, rerun_failed: bool = False) -> dict[str, Any]:
