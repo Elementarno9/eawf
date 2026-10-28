@@ -117,6 +117,30 @@ def test_dev1_binds_exactly_three_proof_commands() -> None:
     assert all(proof.source_sha == SOURCE_SHA for proof in proofs)
 
 
+@pytest.mark.parametrize(
+    "profile",
+    [
+        ReleaseGateProfile.DEV1,
+        ReleaseGateProfile.DEV2,
+        ReleaseGateProfile.NATIVE_CANARY,
+        ReleaseGateProfile.PRODUCT_CANARY,
+        ReleaseGateProfile.FLAG_DAY,
+        ReleaseGateProfile.CROSS_PROVIDER,
+    ],
+)
+def test_authored_stabilization_proof_uses_two_workers_without_changing_its_contract(
+    profile: ReleaseGateProfile,
+) -> None:
+    binding = gate_bindings_for(profile)[ReleaseGateName.EPOCH1_STABILIZATION]
+
+    resolved = binding.resolve_proof(SOURCE_SHA)
+
+    assert resolved.argv == ("uv", "run", "pytest", "tests", "-q", "-n", "2")
+    assert resolved.command_id == "epoch1_stabilization_suite"
+    assert resolved.timeout_seconds == 3600
+    assert resolved.source_sha == SOURCE_SHA
+
+
 def test_readiness_projection_is_derived_from_the_authored_table() -> None:
     bindings = gate_bindings_for(ReleaseGateProfile.DEV1)
     projected = {gate: binding.required_signal for gate, binding in bindings.items()}

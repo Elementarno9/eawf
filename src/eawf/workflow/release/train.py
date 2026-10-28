@@ -403,7 +403,7 @@ bindings:
     kind: proof_command
     proof:
       command_id: epoch1_stabilization_suite
-      argv: [uv, run, pytest, tests, -q]
+      argv: [uv, run, pytest, tests, -q, -n, "2"]
       timeout_seconds: 3600
   - gate: telemetry_producer
     kind: proof_command
