@@ -615,12 +615,17 @@ def test_run_post_merge_pipeline_refuses_a_head_off_main(world: World) -> None:
     assert "git checkout --detach origin/main" in refused.value.remedy
 
 
-def test_run_post_merge_pipeline_refuses_a_missing_uvx(world: World) -> None:
-    world.host.missing_programs = frozenset({"uvx"})
+@pytest.mark.parametrize("program", ["uvx", "just"])
+def test_run_post_merge_pipeline_refuses_a_missing_proof_program(
+    world: World, program: str
+) -> None:
+    world.host.missing_programs = frozenset({program})
     with pytest.raises(PipelineRefusal) as refused:
         world.run()
     assert refused.value.code is PipelineRefusalCode.PROOF_TOOLCHAIN_MISSING
-    assert "uvx" in refused.value.detail
+    assert program in refused.value.detail
+    assert refused.value.step is PipelineStep.PIN_SOURCE
+    assert "host.push_tag" not in world.calls
 
 
 def test_run_post_merge_pipeline_flattens_nested_build_receipts(world: World) -> None:
@@ -979,7 +984,7 @@ def test_flatten_artifacts_rejects_an_ambiguous_download(tmp_path: Path) -> None
 def test_isolated_proof_path_hides_codex_and_keeps_the_toolchain(tmp_path: Path) -> None:
     shared = tmp_path / "shared"
     shared.mkdir()
-    for program in ("codex", "uv", "uvx", "git"):
+    for program in ("codex", "uv", "uvx", "git", "just"):
         tool = shared / program
         tool.write_text("#!/bin/sh\n", encoding="utf-8")
         tool.chmod(0o755)
@@ -988,9 +993,16 @@ def test_isolated_proof_path_hides_codex_and_keeps_the_toolchain(tmp_path: Path)
     shim = tmp_path / "shim"
     path = isolated_proof_path(f"{shared}:{plain}", shim_dir=shim)
     assert path.split(":") == [str(shim), str(plain)]
-    assert sorted(p.name for p in shim.iterdir()) == ["git", "uv", "uvx"]
+    assert sorted(p.name for p in shim.iterdir()) == ["git", "just", "uv", "uvx"]
 
 
-def test_isolated_proof_path_refuses_a_missing_tool(tmp_path: Path) -> None:
-    with pytest.raises(PipelineHostError, match="not on PATH"):
+@pytest.mark.parametrize(("programs", "missing"), [((), "git"), (("git", "uv", "uvx"), "just")])
+def test_isolated_proof_path_refuses_a_missing_tool(
+    tmp_path: Path, programs: tuple[str, ...], missing: str
+) -> None:
+    for program in programs:
+        tool = tmp_path / program
+        tool.write_text("#!/bin/sh\n", encoding="utf-8")
+        tool.chmod(0o755)
+    with pytest.raises(PipelineHostError, match=f"{missing} is not on PATH"):
         isolated_proof_path(str(tmp_path), shim_dir=tmp_path / "shim")

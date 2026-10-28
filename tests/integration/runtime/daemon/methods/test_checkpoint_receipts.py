@@ -514,7 +514,7 @@ def test_produce_checkpoint_receipts_pins_every_proof_to_the_record_source() -> 
     ]
     assert [command.command_id for command in runner.ran] == authored
     assert {command.source_sha for command in runner.ran} == {SOURCE_SHA}
-    assert runner.ran[0].argv == ("uv", "run", "pytest", "tests", "-q", "-n", "2")
+    assert runner.ran[0].argv == ("just", "test-all")
 
 
 def test_produce_checkpoint_receipts_refuses_only_the_failing_proof() -> None:

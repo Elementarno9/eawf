@@ -1099,7 +1099,16 @@ def test_ci_test_leg_runs_timing_suites_serially() -> None:
 def test_just_test_all_runs_timing_suites_serially() -> None:
     """``just test-all``, which twice-green runs, times its budgets serially."""
     recipe = _just_recipe(_JUSTFILE.read_text(encoding="utf-8"), "test-all")
-    assert timing_suite_violations(_pytest_commands(recipe)) == []
+    migration = (
+        "tests/integration/kernel/migration/test_v07_rehearsal.py::"
+        "test_largest_supported_state_applies_inside_its_declared_budget"
+    )
+    assert _pytest_commands(recipe) == [
+        "uv run pytest -n 2 --ignore=tests/snapshots/tui --ignore=tests/e2e "
+        f"--ignore=tests/perf --deselect={migration}",
+        "uv run pytest -n 4 tests/snapshots/tui",
+        f"uv run pytest -n0 tests/e2e tests/perf {migration}",
+    ]
 
 
 def test_timing_suite_gate_reds_on_a_parallel_cold_import_budget() -> None:
