@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 HIDDEN_PROGRAMS: Final[tuple[str, ...]] = ("codex",)
 
 #: Programs the gate proofs run, linked back onto the isolated PATH.
-PROOF_TOOLCHAIN: Final[tuple[str, ...]] = ("git", "uv", "uvx")
+PROOF_TOOLCHAIN: Final[tuple[str, ...]] = ("git", "uv", "uvx", "just")
 
 #: How long a forge run may take before the wait gives up. The dry run
 #: builds twice and the publish runs wait on registries.

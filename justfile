@@ -77,16 +77,16 @@ test mode="fast" base="origin/main":
 
 # Use before pushing a phase PR so the CI test gates surface locally.
 
-# Full CI mirror: parallel core (incl e2e) + serial TUI snapshots + perf.
+# Full suite: parallel core and TUI snapshots, then serial e2e and timing checks.
 test-all:
     #!/usr/bin/env sh
     set -eu
     EAWF_RUNTIME_DIR="$(mktemp -d "${TMPDIR:-/tmp}/eawf-rt.XXXXXX")"
     export EAWF_RUNTIME_DIR
     trap 'rm -rf "$EAWF_RUNTIME_DIR"' EXIT
-    uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli
+    uv run pytest -n 2 --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf --deselect=tests/integration/kernel/migration/test_v07_rehearsal.py::test_largest_supported_state_applies_inside_its_declared_budget
     uv run pytest -n 4 tests/snapshots/tui
-    uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli
+    uv run pytest -n0 tests/e2e tests/perf tests/integration/kernel/migration/test_v07_rehearsal.py::test_largest_supported_state_applies_inside_its_declared_budget
 
 # TUI render snapshots (4 workers) + perf timing budget (serial: it measures
 # latency, so a contended machine changes the number under test).

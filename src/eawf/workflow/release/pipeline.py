@@ -330,9 +330,9 @@ EVIDENCE_DIGEST_FACT_PREFIX: Final[str] = "sha256:"
 #: publication receipt per target.
 PUBLISH_WORKFLOWS: Final[tuple[str, ...]] = ("release.yaml", "plugin-release.yaml")
 
-#: The programs the pipeline shells out to. The gate proofs run ``uv``
-#: and ``uvx`` inside a runtime whose PATH hides other agent CLIs.
-REQUIRED_PROGRAMS: Final[tuple[str, ...]] = ("git", "gh", "uv", "uvx")
+#: The programs the pipeline shells out to. The gate proofs run ``just``,
+#: ``uv`` and ``uvx`` inside a runtime whose PATH hides other agent CLIs.
+REQUIRED_PROGRAMS: Final[tuple[str, ...]] = ("git", "gh", "uv", "uvx", "just")
 
 #: Record statuses of the happy path, in the order the walk reaches them.
 #: A status outside this map is a record that needs a human verb.
@@ -818,7 +818,7 @@ class _PipelineRun:
                 step,
                 PipelineRefusalCode.PROOF_TOOLCHAIN_MISSING,
                 detail=f"not on PATH: {', '.join(missing)}",
-                remedy="install them; the gate proofs run uv and uvx",
+                remedy="install them; the gate proofs run just, uv and uvx",
             )
         run_date = self.now().date().isoformat()
         return {
