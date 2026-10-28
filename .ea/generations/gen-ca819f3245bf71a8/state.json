@@ -213,6 +213,34 @@
       "uid": "6397fa0a-1df4-5d24-9e6d-fa1a6f58dd46",
       "updated_at": "2026-10-28T13:47:57.334018Z",
       "urn": "eawf://EAWF/batch/BAT-0355"
+    },
+    "BAT-0356": {
+      "created_at": "2026-10-28T14:08:30.421136Z",
+      "current_head_binding": null,
+      "failure": null,
+      "key": "BAT-0356",
+      "milestone_ref": "eawf://EAWF/milestone/MLS-0104",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "repository_ref": "eawf://EAWF/repository/EAWF",
+      "revision": 2,
+      "status": "ACTIVE",
+      "target_branch": "feature/eawf-v0.7-rc3",
+      "task_refs": [
+        "eawf://EAWF/task/EAWF-0591"
+      ],
+      "title": "Retain existing CI contracts around serial render probes",
+      "uid": "d1f7fe85-55f8-51b5-9571-89db6b2d377f",
+      "updated_at": "2026-10-28T14:08:33.468362Z",
+      "urn": "eawf://EAWF/batch/BAT-0356"
     }
   },
   "campaign": {
@@ -1215,7 +1243,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 28818,
+  "canonical_sequence": 28831,
   "milestone": {
     "MLS-0103": {
       "acceptance_bundle_revision": null,
@@ -266262,6 +266290,70 @@
         "tests/integration/workflow/delivery/test_milestone_acceptance_bundle.py",
         "tests/unit/surfaces/cli/test_version_display.py",
         "tests/integration/platform/install/test_rule_projection_ignore_block.py"
+      ]
+    },
+    "EAWF-0591": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/batch/BAT-0356",
+      "contract_revision": 1,
+      "created_at": "2026-10-28T14:07:57.510201Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-0591-1"
+          ],
+          "grounding": "measured",
+          "id": "CR-0591-1",
+          "kind": "behavioral",
+          "measurable_signal": "`uv run pytest -q tests/lint/test_ci_workflow_shape.py tests/lint/test_phase_ci_gates.py tests/platform/lint/test_test_placement.py tests/perf/surfaces/tui/console/test_task_frame_budget.py` exits 0.",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": "0",
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "exit 0 of the workflow, placement and probe checks",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Console timing probes have one owning test subject; pull-request probes run serially while the named release performance step preserves its existing workflow contract, cases and budgets.",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/milestone/MLS-0104",
+      "effort": "S",
+      "integrated_binding": null,
+      "intent": "Correct the observed whole-tree placement and workflow-shape CI failures without changing timing cases, budgets or existing release performance coverage.",
+      "key": "EAWF-0591",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "role": "executor",
+      "status": "PLANNED",
+      "title": "Preserve the serial CI and test placement contracts",
+      "uid": "8fbdc8ce-a32b-5cba-8044-215fc61aebea",
+      "updated_at": "2026-10-28T14:08:31.993212Z",
+      "urn": "eawf://EAWF/task/EAWF-0591",
+      "write_claims": [
+        ".github/workflows/ci.yaml",
+        "tests/perf/surfaces/tui/console/test_task_progress.py",
+        "tests/perf/surfaces/tui/console/test_task_frame_budget.py",
+        "tests/lint/test_ci_workflow_shape.py"
       ]
     }
   },
