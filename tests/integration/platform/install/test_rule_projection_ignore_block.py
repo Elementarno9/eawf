@@ -14,6 +14,7 @@ machine-local workspace layer it composes in.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -29,7 +30,7 @@ _GENERATED_PROJECTION_PATHS: tuple[str, ...] = (
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["git", *args],
+        ["git", "-c", f"core.excludesFile={os.devnull}", *args],
         cwd=repo,
         check=False,
         capture_output=True,
