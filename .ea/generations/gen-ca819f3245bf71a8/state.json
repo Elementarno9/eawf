@@ -185,6 +185,34 @@
       "uid": "7c35243e-bdaa-5b73-a0d1-425b47d5864e",
       "updated_at": "2026-09-26T22:44:59.432404Z",
       "urn": "eawf://EAWF/batch/BAT-0303"
+    },
+    "BAT-0360": {
+      "created_at": "2026-10-28T17:39:52.911282Z",
+      "current_head_binding": null,
+      "failure": null,
+      "key": "BAT-0360",
+      "milestone_ref": "eawf://EAWF/milestone/MLS-0104",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "repository_ref": "eawf://EAWF/repository/EAWF",
+      "revision": 2,
+      "status": "ACTIVE",
+      "target_branch": "feature/eawf-v0.7-rc3",
+      "task_refs": [
+        "eawf://EAWF/task/EAWF-0595"
+      ],
+      "title": "Preserve receipt integration contract after worker change",
+      "uid": "3496ca33-2f62-594a-a80b-920f9f5a63d1",
+      "updated_at": "2026-10-28T17:40:06.330228Z",
+      "urn": "eawf://EAWF/batch/BAT-0360"
     }
   },
   "campaign": {
@@ -1187,7 +1215,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 29004,
+  "canonical_sequence": 29008,
   "milestone": {
     "MLS-0103": {
       "acceptance_bundle_revision": null,
@@ -266172,6 +266200,67 @@
       "uid": "01a242da-c323-589d-a868-cf46026471f9",
       "updated_at": "2026-10-26T13:08:29.948718Z",
       "urn": "eawf://EAWF/task/EAWF-0587"
+    },
+    "EAWF-0595": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/batch/BAT-0360",
+      "contract_revision": 1,
+      "created_at": "2026-10-28T17:38:12.846417Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-0595-1"
+          ],
+          "grounding": "measured",
+          "id": "CR-0595-1",
+          "kind": "behavioral",
+          "measurable_signal": "`uv run pytest -q tests/integration/runtime/daemon/methods/test_checkpoint_receipts.py` exits 0.",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": "0",
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "exit 0 of checkpoint receipt integration tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Checkpoint receipt integration checks expect the declared two-worker full-suite argv while retaining exact source pinning, all proof calls and all existing assertions.",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/milestone/MLS-0104",
+      "effort": "S",
+      "integrated_binding": null,
+      "intent": "Align the checkpoint receipt integration expectation with the explicit two-worker full-suite contract, retaining exact source pinning and every other check.",
+      "key": "EAWF-0595",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "role": "executor",
+      "status": "PLANNED",
+      "title": "Align pinned-proof worker expectation",
+      "uid": "a8d23dfb-7a65-5606-9d48-33956c423033",
+      "updated_at": "2026-10-28T17:39:59.891782Z",
+      "urn": "eawf://EAWF/task/EAWF-0595",
+      "write_claims": [
+        "tests/integration/runtime/daemon/methods/test_checkpoint_receipts.py"
+      ]
     }
   },
   "track": {
