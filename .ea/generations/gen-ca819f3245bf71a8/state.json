@@ -203,15 +203,16 @@
         "source_urn": null
       },
       "repository_ref": "eawf://EAWF/repository/EAWF",
-      "revision": 2,
+      "revision": 3,
       "status": "ACTIVE",
       "target_branch": "feature/eawf-v0.7-rc3",
       "task_refs": [
-        "eawf://EAWF/task/EAWF-0596"
+        "eawf://EAWF/task/EAWF-0596",
+        "eawf://EAWF/task/EAWF-0597"
       ],
       "title": "Preserve full proof coverage with serial timing suites",
       "uid": "9ac9b380-2410-53ac-b22b-3f853c7f47de",
-      "updated_at": "2026-10-28T18:21:40.216300Z",
+      "updated_at": "2026-10-28T18:28:12.942186Z",
       "urn": "eawf://EAWF/batch/BAT-0361"
     }
   },
@@ -1215,7 +1216,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 29040,
+  "canonical_sequence": 29046,
   "milestone": {
     "MLS-0103": {
       "acceptance_bundle_revision": null,
@@ -266267,6 +266268,67 @@
         "tests/integration/runtime/daemon/methods/test_checkpoint_receipts.py",
         "tests/integration/workflow/release/test_post_merge_pipeline.py",
         "tests/lint/test_phase_ci_gates.py"
+      ]
+    },
+    "EAWF-0597": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/batch/BAT-0361",
+      "contract_revision": 1,
+      "created_at": "2026-10-28T18:28:10.855723Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-0597-1"
+          ],
+          "grounding": "measured",
+          "id": "CR-0597-1",
+          "kind": "behavioral",
+          "measurable_signal": "`uv run pytest -q tests/unit/kernel/release/test_gate_binding.py` exits 0.",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": "0",
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "exit 0 of shared stabilization binding tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "All six shared stabilization profiles invoke the existing just test-all runner with the existing gate identifier and3600-second budget; historical receipt fixtures and all other gate bindings remain unchanged.",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/milestone/MLS-0104",
+      "effort": "S",
+      "integrated_binding": null,
+      "intent": "The coordinator admitted a nonexistent kernel/release/train.py claim without resolving its source path. Preserve the started Task and Run unchanged; append this corrective Task to the same ACTIVE Batch with the actual workflow/release/train.py claim. Its independent one-file candidate combines with0596 tests and runner before Batch verification.",
+      "key": "EAWF-0597",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "role": "executor",
+      "status": "PLANNED",
+      "title": "Bind full release proof to the complete composite runner",
+      "uid": "44232aa1-eaea-5d30-8c41-ce0ead745799",
+      "updated_at": "2026-10-28T18:28:12.942186Z",
+      "urn": "eawf://EAWF/task/EAWF-0597",
+      "write_claims": [
+        "src/eawf/workflow/release/train.py"
       ]
     }
   },
