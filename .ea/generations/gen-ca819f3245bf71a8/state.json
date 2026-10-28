@@ -185,6 +185,34 @@
       "uid": "7c35243e-bdaa-5b73-a0d1-425b47d5864e",
       "updated_at": "2026-09-26T22:44:59.432404Z",
       "urn": "eawf://EAWF/batch/BAT-0303"
+    },
+    "BAT-0353": {
+      "created_at": "2026-10-28T10:45:26.573227Z",
+      "current_head_binding": null,
+      "failure": null,
+      "key": "BAT-0353",
+      "milestone_ref": "eawf://EAWF/milestone/MLS-0104",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "repository_ref": "eawf://EAWF/repository/EAWF",
+      "revision": 2,
+      "status": "ACTIVE",
+      "target_branch": "feature/eawf-v0.7-rc3",
+      "task_refs": [
+        "eawf://EAWF/task/EAWF-0588"
+      ],
+      "title": "Clear the rc3 dependency security gate",
+      "uid": "d8cb8fed-3c6f-5703-aa50-9c3a5c9e6919",
+      "updated_at": "2026-10-28T10:46:30.721328Z",
+      "urn": "eawf://EAWF/batch/BAT-0353"
     }
   },
   "campaign": {
@@ -1187,7 +1215,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 28696,
+  "canonical_sequence": 28703,
   "milestone": {
     "MLS-0103": {
       "acceptance_bundle_revision": null,
@@ -1246,6 +1274,177 @@
       "uid": "7358605e-255e-5241-8977-fc17c38a4984",
       "updated_at": "2026-10-02T20:35:18.625435Z",
       "urn": "eawf://EAWF/milestone/MLS-0103"
+    },
+    "MLS-0104": {
+      "acceptance_bundle_revision": 3,
+      "acceptance_journey": [
+        {
+          "action": "run eawf init and eawf status in a fresh temporary repository",
+          "actor": "operator",
+          "evidence_kinds": [
+            "artifact"
+          ],
+          "expected_observation": "no .ea/state.json is written or read and status lists the native scope",
+          "required": true,
+          "step_id": "AS-01"
+        },
+        {
+          "action": "run the v1 state reader lint and the src epoch-1 census lint (tests/lint/test_src_epoch1_census.py) over the tree",
+          "actor": "operator",
+          "evidence_kinds": [
+            "artifact"
+          ],
+          "expected_observation": "no live module outside the migration and upgrade path reads v1 state, no src/ file outside those paths spells a P##-I##-W## id, and every remaining phase, iter or wave word in src/ is in a file the allowlist names with a reason and a ceiling (5,140 matches in 351 files on 2026-10-22)",
+          "required": true,
+          "step_id": "AS-02"
+        },
+        {
+          "action": "install the packaged eawf plugin in Claude Code and run /reload-plugins, then end a session",
+          "actor": "operator",
+          "evidence_kinds": [
+            "artifact"
+          ],
+          "expected_observation": "Claude Code reports the eawf hooks loaded from hooks/hooks.json, and session_end fires once when the session ends, not on every turn",
+          "required": true,
+          "step_id": "AS-03"
+        },
+        {
+          "action": "create a Milestone with eawf milestone create, then submit, approve and apply its first plan",
+          "actor": "operator",
+          "evidence_kinds": [
+            "artifact"
+          ],
+          "expected_observation": "the apply commits with no plan_keys_unclaimed refusal and the Milestone keeps its key",
+          "required": true,
+          "step_id": "AS-04"
+        },
+        {
+          "action": "edit a PLANNED Milestone's title and contract, cancel a Milestone that owns Batches, and rename a Track and set its WIP policy",
+          "actor": "operator",
+          "evidence_kinds": [
+            "artifact"
+          ],
+          "expected_observation": "each change lands through an eawf verb, the cancel leaves no open Batch or Task under the Milestone, and no state file is edited by hand",
+          "required": true,
+          "step_id": "AS-05"
+        },
+        {
+          "action": "run task, milestone, plan, decision and action list and show with --json",
+          "actor": "operator",
+          "evidence_kinds": [
+            "artifact"
+          ],
+          "expected_observation": "each verb prints the records as JSON, Tasks with their title and description, without reading .ea/state.json",
+          "required": true,
+          "step_id": "AS-06"
+        },
+        {
+          "action": "run eawf init --workspace <KEY> in a second repository of an existing workspace",
+          "actor": "operator",
+          "evidence_kinds": [
+            "artifact"
+          ],
+          "expected_observation": "the repository joins the workspace with no cross_workspace_mutation_forbidden refusal and no hand edit of the workspace registry",
+          "required": true,
+          "step_id": "AS-07"
+        },
+        {
+          "action": "run eawf doctor and eawf local gc --dry-run on a tree whose .ea/local exceeds the size threshold",
+          "actor": "operator",
+          "evidence_kinds": [
+            "artifact"
+          ],
+          "expected_observation": "doctor warns with the measured size and gc lists only entries whose retention has expired",
+          "required": true,
+          "step_id": "AS-08"
+        },
+        {
+          "action": "run eawf reflect run --local-only --scope project --format json on this repository",
+          "actor": "operator",
+          "evidence_kinds": [
+            "artifact"
+          ],
+          "expected_observation": "every finished Run is listed, the report carries money and token totals with unpriced spend marked unpriced, typed highlighted issues and an excluded-rows section, and no file lands in .ea/local/reflect when --out is given",
+          "required": true,
+          "step_id": "AS-09"
+        },
+        {
+          "action": "run eawf validate on the selected generation document and eawf doctor on a fresh checkout",
+          "actor": "operator",
+          "evidence_kinds": [
+            "artifact"
+          ],
+          "expected_observation": "validate accepts the epoch-2 document and doctor reports no canonical sequence drift between the committed document and the daemon",
+          "required": true,
+          "step_id": "AS-10"
+        }
+      ],
+      "accepted_binding": null,
+      "appetite": "XL",
+      "contributing_track_refs": [],
+      "created_at": "2026-10-11T18:31:11.350360Z",
+      "description": "Child of PRV-0305 (APPLIED) that re-plans the still-PLANNED MLS-0104. Operator decision of 2026-10-22 (Claude Code session, recorded in .ea/local/research/2026-10-22-rc3-widening-2.md 'Operator decisions'): fix reflect and pull its totals, issues list and selection flags into rc3; take every remaining legacy item into rc3 (wiring gaps of EAWF-0468..0476, unclaimed epoch-1 residue, profile cadence migration, non-epoch-1 test-only dead code); make AS-02 passable, port the hook v1 reads, fix the state cursor lag, add Claude 5 pricing rows and make eawf validate epoch-2. Promotes drafts EAWF-0461, 0462 and 0485..0491 and adds Batches BAT-0326..0328. The first widening (EAWF-0477..0484) is approved by operator evidence eawf://EAWF/evidence/EVD-0040. Original scope: EAWF-0464..0476 (.ea/local/2026-10-11-backlog-review/mls-rc3.json).",
+      "exclusions": [
+        "the 0.6.8 upgrade and migration readers, flag-day retirement messages and the sealed legacy snapshot, which stay as compatibility",
+        "the multi-project aggregate console route EAWF-0452, which ships in 0.7.1",
+        "the Allods issues 3, 9, 10, 11 and 13 to 17 of the 2026-10-22 state review section 2, and the Allods .ea disk use, which the operator left as is",
+        "a full STE rewrite of rule, skill and prompt prose; only an advisory lint ships",
+        "reflect --cohort, estimate-versus-actual variance, the all_local and workspace reflect scopes and the first-pass verification manifest, which ship in 0.7.1"
+      ],
+      "key": "MLS-0104",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "outcome": "A fresh tree is born native and no live surface, daemon loop, rule, agent page or test reads or teaches the epoch-1 phase, iter and wave model; only the migration and upgrade path still reads v1 state, and every epoch-1 word left in src/ sits in a reasoned census allowlist. The eawf Claude Code hooks load and their report hooks run on a native tree, a Milestone made with milestone create takes its first plan, and an operator or agent can edit, cancel and rename Milestones and Tracks, list and show every entity as JSON, give a Task a title and a description, join a workspace after init, keep heavy scratch out of .ea/local, read a reflect report of every finished Run with money and token totals, and validate an epoch-2 tree, all without editing state by hand.",
+      "primary_track_ref": "eawf://EAWF/track/TRK-EAWF-CORE",
+      "required_batch_refs": [
+        "eawf://EAWF/batch/BAT-0321",
+        "eawf://EAWF/batch/BAT-0322",
+        "eawf://EAWF/batch/BAT-0323",
+        "eawf://EAWF/batch/BAT-0324",
+        "eawf://EAWF/batch/BAT-0325",
+        "eawf://EAWF/batch/BAT-0326",
+        "eawf://EAWF/batch/BAT-0327",
+        "eawf://EAWF/batch/BAT-0328",
+        "eawf://EAWF/batch/BAT-0329",
+        "eawf://EAWF/batch/BAT-0330",
+        "eawf://EAWF/batch/BAT-0331",
+        "eawf://EAWF/batch/BAT-0332",
+        "eawf://EAWF/batch/BAT-0333",
+        "eawf://EAWF/batch/BAT-0334",
+        "eawf://EAWF/batch/BAT-0335",
+        "eawf://EAWF/batch/BAT-0336",
+        "eawf://EAWF/batch/BAT-0337",
+        "eawf://EAWF/batch/BAT-0338",
+        "eawf://EAWF/batch/BAT-0339",
+        "eawf://EAWF/batch/BAT-0340",
+        "eawf://EAWF/batch/BAT-0341",
+        "eawf://EAWF/batch/BAT-0342",
+        "eawf://EAWF/batch/BAT-0343",
+        "eawf://EAWF/batch/BAT-0344",
+        "eawf://EAWF/batch/BAT-0345",
+        "eawf://EAWF/batch/BAT-0346",
+        "eawf://EAWF/batch/BAT-0347",
+        "eawf://EAWF/batch/BAT-0348",
+        "eawf://EAWF/batch/BAT-0349",
+        "eawf://EAWF/batch/BAT-0350",
+        "eawf://EAWF/batch/BAT-0351",
+        "eawf://EAWF/batch/BAT-0352"
+      ],
+      "revision": 32,
+      "status": "ACTIVE",
+      "target_date": null,
+      "title": "Cut 0.7.0rc3: remove the epoch-1 engine, fix reflect, close operator gaps",
+      "uid": "d2696085-b402-51a5-8192-3a4bda0f5417",
+      "updated_at": "2026-10-28T10:41:46.300471Z",
+      "urn": "eawf://EAWF/milestone/MLS-0104"
     }
   },
   "open_question": {
@@ -266001,6 +266200,67 @@
       "uid": "01a242da-c323-589d-a868-cf46026471f9",
       "updated_at": "2026-10-26T13:08:29.948718Z",
       "urn": "eawf://EAWF/task/EAWF-0587"
+    },
+    "EAWF-0588": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/batch/BAT-0353",
+      "contract_revision": 1,
+      "created_at": "2026-10-28T10:44:53.696722Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-0588-1"
+          ],
+          "grounding": "measured",
+          "id": "CR-0588-1",
+          "kind": "behavioral",
+          "measurable_signal": "`uv run pytest -q tests/unit/kernel/release/test_dependency_inventory.py tests/unit/kernel/release/test_vulnerability_report.py` exits 0.",
+          "oracle_tier": null,
+          "quality_dimension": "security",
+          "required": true,
+          "response": {
+            "expected": "0",
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "exit 0 of the dependency inventory and vulnerability report tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The refreshed dependency lock remains compatible with the release dependency-inventory and vulnerability-report contracts.",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/milestone/MLS-0104",
+      "effort": "S",
+      "integrated_binding": null,
+      "intent": "Refresh the rc3 lock onto fixed dependency versions and remove all blocking security advisories without acknowledging or waiving any finding.",
+      "key": "EAWF-0588",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "role": "executor",
+      "status": "PLANNED",
+      "title": "Refresh vulnerable rc3 dependencies",
+      "uid": "905efd59-1136-5a85-b3ff-1bcf5888170b",
+      "updated_at": "2026-10-28T10:46:15.905544Z",
+      "urn": "eawf://EAWF/task/EAWF-0588",
+      "write_claims": [
+        "uv.lock"
+      ]
     }
   },
   "track": {
