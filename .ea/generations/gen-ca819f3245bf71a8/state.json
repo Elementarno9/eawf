@@ -185,6 +185,34 @@
       "uid": "7c35243e-bdaa-5b73-a0d1-425b47d5864e",
       "updated_at": "2026-09-26T22:44:59.432404Z",
       "urn": "eawf://EAWF/batch/BAT-0303"
+    },
+    "BAT-0359": {
+      "created_at": "2026-10-28T17:03:06.273997Z",
+      "current_head_binding": null,
+      "failure": null,
+      "key": "BAT-0359",
+      "milestone_ref": "eawf://EAWF/milestone/MLS-0104",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "repository_ref": "eawf://EAWF/repository/EAWF",
+      "revision": 2,
+      "status": "ACTIVE",
+      "target_branch": "feature/eawf-v0.7-rc3",
+      "task_refs": [
+        "eawf://EAWF/task/EAWF-0594"
+      ],
+      "title": "Complete stabilization inside its existing deadline",
+      "uid": "669accbd-970f-5e8b-8e8d-fda13c387efc",
+      "updated_at": "2026-10-28T17:03:11.108037Z",
+      "urn": "eawf://EAWF/batch/BAT-0359"
     }
   },
   "campaign": {
@@ -1187,7 +1215,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 28971,
+  "canonical_sequence": 28976,
   "milestone": {
     "MLS-0103": {
       "acceptance_bundle_revision": null,
@@ -266172,6 +266200,68 @@
       "uid": "01a242da-c323-589d-a868-cf46026471f9",
       "updated_at": "2026-10-26T13:08:29.948718Z",
       "urn": "eawf://EAWF/task/EAWF-0587"
+    },
+    "EAWF-0594": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/batch/BAT-0359",
+      "contract_revision": 1,
+      "created_at": "2026-10-28T17:03:02.797409Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-0594-1"
+          ],
+          "grounding": "measured",
+          "id": "CR-0594-1",
+          "kind": "behavioral",
+          "measurable_signal": "`uv run pytest -q tests/unit/kernel/release/test_gate_binding.py tests/unit/kernel/spec/test_gate_argv_policy.py` exits 0; the regression rejects the actual serial binding.",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": "0",
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "exit 0 of gate binding and lowest-level argv policy suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Every authored stabilization binding runs the same complete pytest scope with two explicit workers, preserving command identity, source pin, default selection and the 3600-second deadline.",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/milestone/MLS-0104",
+      "effort": "S",
+      "integrated_binding": null,
+      "intent": "Run the complete checkpoint pytest proof with two explicit workers so the existing one-hour gate can finish; preserve every test, assertion, source binding and deadline.",
+      "key": "EAWF-0594",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "role": "executor",
+      "status": "PLANNED",
+      "title": "Bound full-suite proof workers explicitly",
+      "uid": "fb768ec3-e3bb-5f53-a19d-ac7e39178e62",
+      "updated_at": "2026-10-28T17:03:08.848087Z",
+      "urn": "eawf://EAWF/task/EAWF-0594",
+      "write_claims": [
+        "src/eawf/workflow/release/train.py",
+        "tests/unit/kernel/release/test_gate_binding.py"
+      ]
     }
   },
   "track": {
