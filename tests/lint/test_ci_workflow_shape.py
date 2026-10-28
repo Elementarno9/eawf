@@ -242,6 +242,36 @@ def test_serial_perf_step_skips_only_on_a_pull_request(event: str) -> None:
     assert bool(_evaluate(condition, _context(event))) is (event != "pull_request")
 
 
+@pytest.mark.parametrize("event", _EVENTS)
+@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
+@pytest.mark.parametrize("shard", ["1", "2", "3"])
+def test_serial_render_probe_runs_only_on_pull_request_shard_one(
+    event: str, os: str, shard: str
+) -> None:
+    condition = _step("test", "Pytest (serial render probe)")["if"]
+    assert bool(_evaluate(condition, _context(event, os=os, shard=shard))) is (
+        event == "pull_request" and shard == "1"
+    )
+
+
+@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
+def test_serial_render_probe_keeps_only_the_frame_budget_blocking(os: str) -> None:
+    step = _step("test", "Pytest (serial render probe)")
+    argv = shlex.split(_render(str(step["run"]), _context("pull_request", os=os)))
+    expected = [
+        "uv",
+        "run",
+        "pytest",
+        "-n0",
+        "tests/perf/surfaces/tui/console/test_task_frame_budget.py",
+    ]
+    if os.startswith("ubuntu-"):
+        expected.extend(["--cov=eawf", "--cov-append", "--cov-report=", "--cov-fail-under=0"])
+    assert argv == expected
+    assert not step.get("continue-on-error", False)
+    assert not _jobs()["test"].get("continue-on-error", False)
+
+
 # --- the green-tree record without twice-green -------------------------------
 
 
