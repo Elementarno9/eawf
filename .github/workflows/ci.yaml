@@ -163,8 +163,9 @@ jobs:
         # (e2e, perf), the slow marker and the live console tests wait for
         # the push and nightly runs, which keep the full set. The -m given
         # here replaces the default "not eval" one, so tests/eval is ignored
-        # by path; the skill-eval job runs it.
-        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --junitxml=pytest-junit.xml ${{ startsWith(matrix.os, 'ubuntu-') && format('--cov=eawf --cov-report= --cov-fail-under=0 --splits 3 --group {0} --splitting-algorithm least_duration --durations-path split-durations.json', matrix.shard) || '' }} ${{ github.event_name == 'pull_request' && '-m "not slow and not e2e and not perf" --ignore=tests/eval --ignore-glob="tests/tui/surfaces/tui/console/test_console_live_*.py"' || '' }}
+        # by path; the skill-eval job runs it. The migration timing node
+        # runs serially below on every event to avoid worker contention.
+        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --deselect=tests/integration/kernel/migration/test_v07_rehearsal.py::test_largest_supported_state_applies_inside_its_declared_budget --junitxml=pytest-junit.xml ${{ startsWith(matrix.os, 'ubuntu-') && format('--cov=eawf --cov-report= --cov-fail-under=0 --splits 3 --group {0} --splitting-algorithm least_duration --durations-path split-durations.json', matrix.shard) || '' }} ${{ github.event_name == 'pull_request' && '-m "not slow and not e2e and not perf" --ignore=tests/eval --ignore-glob="tests/tui/surfaces/tui/console/test_console_live_*.py"' || '' }}
       - name: Duration budget (advisory)
         # Diffs every test's wall time in the parallel leg against the
         # committed baseline: a test past twice its baseline, or a fast-tier
@@ -202,6 +203,11 @@ jobs:
         # Frame budgets stay blocking on each platform's pull-request leg.
         if: github.event_name == 'pull_request' && matrix.shard == '1'
         run: uv run pytest -n0 tests/perf/surfaces/tui/console/test_task_frame_budget.py ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
+
+      - name: Pytest (serial migration timing)
+        # The largest-state apply keeps its timing budget on each platform.
+        if: matrix.shard == '1'
+        run: uv run pytest -n0 tests/integration/kernel/migration/test_v07_rehearsal.py::test_largest_supported_state_applies_inside_its_declared_budget ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
 
       - name: Upload coverage data
         if: startsWith(matrix.os, 'ubuntu-')

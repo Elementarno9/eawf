@@ -40,6 +40,10 @@ _DURATION_TOOL_PATH = _REPO_ROOT / "tools" / "duration_budget_gate.py"
 _BASELINE = _REPO_ROOT / "tests" / "duration-baseline.json"
 
 _LIVE_CONSOLE_GLOB = "tests/tui/surfaces/tui/console/test_console_live_*.py"
+_SERIAL_MIGRATION_NODE = (
+    "tests/integration/kernel/migration/test_v07_rehearsal.py::"
+    "test_largest_supported_state_applies_inside_its_declared_budget"
+)
 _LINT_COMMANDS = ("pre-commit run --all-files", "deptry .", "mypy src/")
 _EVENTS = ("push", "pull_request", "schedule", "workflow_dispatch")
 _SHA = "a" * 40
@@ -270,6 +274,40 @@ def test_serial_render_probe_keeps_only_the_frame_budget_blocking(os: str) -> No
     assert argv == expected
     assert not step.get("continue-on-error", False)
     assert not _jobs()["test"].get("continue-on-error", False)
+
+
+@pytest.mark.parametrize("event", _EVENTS)
+@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
+@pytest.mark.parametrize("shard", ["1", "2", "3"])
+def test_parallel_legs_deselect_only_the_serial_migration_timing_node(
+    event: str, os: str, shard: str
+) -> None:
+    assert _option(_leg_argv(os, shard, event), "--deselect") == [_SERIAL_MIGRATION_NODE]
+
+
+@pytest.mark.parametrize("event", _EVENTS)
+@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
+@pytest.mark.parametrize("shard", ["1", "2", "3"])
+def test_serial_migration_timing_runs_only_on_shard_one(event: str, os: str, shard: str) -> None:
+    assert _runs_on("Pytest (serial migration timing)", os, shard, event) is (shard == "1")
+
+
+@pytest.mark.parametrize("event", _EVENTS)
+@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
+def test_serial_migration_timing_keeps_only_the_exact_node_blocking(event: str, os: str) -> None:
+    step = _step("test", "Pytest (serial migration timing)")
+    argv = shlex.split(_render(str(step["run"]), _context(event, os=os)))
+    expected = ["uv", "run", "pytest", "-n0", _SERIAL_MIGRATION_NODE]
+    if os.startswith("ubuntu-"):
+        expected.extend(["--cov=eawf", "--cov-append", "--cov-report=", "--cov-fail-under=0"])
+    assert argv == expected
+    assert not step.get("continue-on-error", False)
+    assert not _jobs()["test"].get("continue-on-error", False)
+
+
+def test_serial_migration_timing_finishes_before_coverage_is_uploaded() -> None:
+    names = [step.get("name") for step in _jobs()["test"]["steps"]]
+    assert names.index("Pytest (serial migration timing)") < names.index("Upload coverage data")
 
 
 # --- the green-tree record without twice-green -------------------------------
