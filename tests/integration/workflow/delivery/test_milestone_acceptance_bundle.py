@@ -608,16 +608,18 @@ def no_writes(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
             raise WroteAFileError(f"os.open({path!r}) would write a file")
         return real_os_open(path, flags, *args, **kwargs)
 
-    monkeypatch.setattr(builtins, "open", guarded_open)
-    monkeypatch.setattr(io, "open", guarded_open)
-    monkeypatch.setattr(os, "open", guarded_os_open)
-    for name in _PATH_WRITERS:
-        monkeypatch.setattr(Path, name, refuse(f"Path.{name}"))
-    for name in _OS_WRITERS:
-        monkeypatch.setattr(os, name, refuse(f"os.{name}"))
-    for name in _SHUTIL_WRITERS:
-        monkeypatch.setattr(shutil, name, refuse(f"shutil.{name}"))
-    yield
+    # Restore writers before tmp_path teardown removes its directories.
+    with monkeypatch.context() as guard:
+        guard.setattr(builtins, "open", guarded_open)
+        guard.setattr(io, "open", guarded_open)
+        guard.setattr(os, "open", guarded_os_open)
+        for name in _PATH_WRITERS:
+            guard.setattr(Path, name, refuse(f"Path.{name}"))
+        for name in _OS_WRITERS:
+            guard.setattr(os, name, refuse(f"os.{name}"))
+        for name in _SHUTIL_WRITERS:
+            guard.setattr(shutil, name, refuse(f"shutil.{name}"))
+        yield
 
 
 def evidence_rows() -> list[dict[str, Any]]:
