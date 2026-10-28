@@ -25,7 +25,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.kernel.delivery.acceptance import MilestoneAcceptanceBundle
-from eawf.kernel.store.compaction import compact_terminal_record
+from eawf.kernel.store.compaction import compact_terminal_record, read_document
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     append_ledger_record,
@@ -40,6 +40,7 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.methods import DaemonValidationError
+from eawf.runtime.daemon.methods.delivery_acceptance import DELIVERY_RECORD_EVIDENCE_METHOD
 from eawf.runtime.daemon.methods.delivery_rebind import (
     DELIVERY_REBIND_SQUASHED_METHOD,
     REBIND_HEAD_MOVED,
@@ -61,6 +62,7 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     seed_row,
 )
 from tests.integration.runtime.daemon.test_delivery_landed_loop import cli
+from tests.integration.workflow.planning._v07_plans import seal_plan_approval
 
 pytestmark = pytest.mark.integration
 
@@ -271,6 +273,60 @@ def test_rebind_supersedes_every_row_naming_a_source_commit(tmp_path: Path) -> N
         "tree_sha": git(repo, "rev-parse", f"{shas[1]}^{{tree}}"),
     }
     assert not _effective_shas(canary) & set(shas)
+
+
+def test_rebound_evidence_can_be_recorded_and_used_to_seal_approval(tmp_path: Path) -> None:
+    canary, repo, base, shas = make_tree(tmp_path)
+    ledger = _ledger(canary, Epoch2Collection.EVIDENCE)
+    append_ledger_record(
+        ledger,
+        LedgerRecord(
+            collection=Epoch2Collection.EVIDENCE,
+            record_key="EVD-0001",
+            status="recorded",
+            recorded_at=AT,
+            payload={
+                "id": "EVD-0001",
+                "kind": "decision",
+                "summary": f"verified source commit {shas[2]}",
+                "recorded_at": AT.isoformat(),
+            },
+        ),
+    )
+    squash_map = _squash_and_point(repo, base)
+    rebind(tmp_path, canary, squash_map, "rebind-evidence")
+    history = read_ledger_records(ledger)
+    summary = f"verified source commit {squash_map.batches['BAT-0007']}"
+    assert len(history) == 2
+    assert history[0].payload["summary"] == f"verified source commit {shas[2]}"
+    assert history[1].payload["summary"] == summary
+    assert history[1].supersedes == line_digest(render_ledger_line(history[0]))
+    milestone = seed_row("milestone", "ACTIVE")["urn"]
+
+    recorded = asyncio.run(
+        methods.dispatch(
+            DELIVERY_RECORD_EVIDENCE_METHOD,
+            method_context(tmp_path / "rt"),
+            {
+                "repo_root": str(canary.root),
+                "urn": milestone,
+                "actor": ACTOR,
+                "idempotency_key": "record-rebound-evidence",
+                "kind": "decision",
+                "summary": summary,
+            },
+        )
+    )
+
+    assert recorded == {
+        "evidence_ref": f"{milestone.rsplit('/', 2)[0]}/evidence/EVD-0001",
+        "created": False,
+    }
+    action_ref = seal_plan_approval(
+        canary.root, tmp_path / "rt", subject=milestone, tag="rebound-evidence"
+    )
+    action = read_document(document_path(canary))["pending_action"][action_ref.rsplit("/", 1)[1]]
+    assert action["status"] == "SEALED"
 
 
 def _accept(canary: CanaryProvision, head: str, tree: str) -> str:

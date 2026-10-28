@@ -434,7 +434,9 @@ def _evidence(session: RootSession) -> EvidenceView:
     """
     payloads = [
         item.payload
-        for item in read_ledger_records(session.ledger_path(Epoch2Collection.EVIDENCE))
+        for item in effective_records(
+            read_ledger_records(session.ledger_path(Epoch2Collection.EVIDENCE))
+        )
         if item.record_key.startswith("EVD-")
     ]
     try:

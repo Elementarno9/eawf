@@ -513,7 +513,9 @@ def _read_evidence(path: Path) -> EvidenceView:
             for fewer keys than the tree holds.
     """
     payloads = [
-        item.payload for item in read_ledger_records(path) if item.record_key.startswith("EVD-")
+        item.payload
+        for item in effective_records(read_ledger_records(path))
+        if item.record_key.startswith("EVD-")
     ]
     try:
         return evidence_view(payloads)
