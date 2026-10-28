@@ -193,11 +193,15 @@ jobs:
       - name: Pytest (serial perf timing)
         # Stays serial on purpose: these assert p99 latency and a cold-import
         # wall-time ceiling, so a contended machine changes the number being
-        # measured. The render probe also stays blocking on pull requests;
-        # release runs keep the complete performance selection.
+        # measured. Perf is a release-tier kind, so a pull request skips it.
         # It runs once per leg, on shard 1, appending to that shard's data.
-        if: matrix.shard == '1'
-        run: uv run pytest -n0 ${{ github.event_name == 'pull_request' && 'tests/perf/surfaces/tui/console/test_task_progress.py' || 'tests/perf/surfaces/tui tests/perf/surfaces/cli' }} ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
+        if: github.event_name != 'pull_request' && matrix.shard == '1'
+        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
+
+      - name: Pytest (serial render probe)
+        # Frame budgets stay blocking on each platform's pull-request leg.
+        if: github.event_name == 'pull_request' && matrix.shard == '1'
+        run: uv run pytest -n0 tests/perf/surfaces/tui/console/test_task_frame_budget.py ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
 
       - name: Upload coverage data
         if: startsWith(matrix.os, 'ubuntu-')
