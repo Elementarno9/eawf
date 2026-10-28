@@ -108,6 +108,7 @@ def test_is_editable_install_package_not_found_no_git(
     """PackageNotFoundError with no reachable .git returns False."""
     _patch_missing_distribution(monkeypatch)
     _patch_import_root(monkeypatch, tmp_path)
+    monkeypatch.setattr(_version_display, "_has_git_ancestor", lambda _root: False)
 
     assert is_editable_install() is False
 
@@ -189,6 +190,7 @@ def test_is_editable_install_dir_info_not_a_mapping_git_fallback(
     """A non-mapping dir_info is ignored; the .git fallback decides."""
     _patch_distribution(monkeypatch, body='{"dir_info": "editable"}')
     _patch_import_root(monkeypatch, tmp_path)
+    monkeypatch.setattr(_version_display, "_has_git_ancestor", lambda _root: False)
 
     assert is_editable_install() is False
 
