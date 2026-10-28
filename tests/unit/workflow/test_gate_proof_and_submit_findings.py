@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -40,10 +41,23 @@ def test_prove_gates_hands_the_proof_path_to_the_serving_daemon(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """One ``release receipts`` call, no private runtime dir, no daemon stop."""
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    for program in ("git", "uv", "uvx", "just", "codex"):
+        executable = tools / program
+        executable.write_text("#!/bin/sh\n", encoding="utf-8")
+        executable.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tools))
     calls: list[tuple[list[str], dict[str, str] | None]] = []
 
     def fake_run(argv: list[str], **kwargs: Any) -> SimpleNamespace:
         calls.append((list(argv), kwargs.get("env")))
+        assert argv[-2] == "--proof-path"
+        proof_path = argv[-1]
+        assert str(tools) not in proof_path.split(os.pathsep)
+        assert shutil.which("codex", path=proof_path) is None
+        for program in ("git", "uv", "uvx", "just"):
+            assert shutil.which(program, path=proof_path) is not None
         envelope = {
             "schema_version": "1",
             "status": "ok",
@@ -83,6 +97,14 @@ def test_prove_gates_hands_the_proof_path_to_the_serving_daemon(
 def test_prove_gates_refuses_an_answer_that_is_not_a_domain_envelope(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stdout: str
 ) -> None:
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    for program in ("git", "uv", "uvx", "just", "codex"):
+        executable = tools / program
+        executable.write_text("#!/bin/sh\n", encoding="utf-8")
+        executable.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tools))
+
     def fake_run(argv: list[str], **kwargs: Any) -> SimpleNamespace:
         return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
 

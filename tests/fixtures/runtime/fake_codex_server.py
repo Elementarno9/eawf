@@ -41,6 +41,18 @@ import sys
 from pathlib import Path
 from typing import Any, Final
 
+from pydantic import BaseModel, ConfigDict, JsonValue
+
+
+class _ServerRequestReply(BaseModel):
+    """A client reply to a scripted server request, with an opaque result."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    id: int | str
+    result: dict[str, JsonValue]
+
+
 #: The file a test writes the turn's script to, in the fake's working directory.
 SCRIPT_FILENAME: Final = "fake-codex-script.json"
 
@@ -218,9 +230,19 @@ def _thread_result(params: dict[str, Any], thread_id: str) -> dict[str, Any]:
 
 
 def _play(lines: list[Any], script: dict[str, Any]) -> None:
-    """Print *lines*, then the stderr and exit the script asks for."""
+    """Print *lines*, recording server-request replies before the next event.
+
+    Then write stderr and exit as the script asks, so completion cannot
+    race the durable receipt of a reply already flushed by the client.
+    """
     for line in lines:
         _emit(line)
+        if isinstance(line, dict) and "method" in line and "id" in line:
+            reply = _ServerRequestReply.model_validate_json(sys.stdin.readline())
+            if reply.id != line["id"]:
+                raise ValueError(f"Expected reply to server request {line['id']}, got {reply.id}")
+            with (Path.cwd() / "received.jsonl").open("a", encoding="utf-8") as handle:
+                handle.write(f"{reply.model_dump_json()}\n")
     if "stderr" in script:
         sys.stderr.write(str(script["stderr"]) + "\n")
         sys.stderr.flush()
