@@ -185,6 +185,35 @@
       "uid": "7c35243e-bdaa-5b73-a0d1-425b47d5864e",
       "updated_at": "2026-09-26T22:44:59.432404Z",
       "urn": "eawf://EAWF/batch/BAT-0303"
+    },
+    "BAT-0362": {
+      "created_at": "2026-10-28T19:03:42.988578Z",
+      "current_head_binding": null,
+      "failure": null,
+      "key": "BAT-0362",
+      "milestone_ref": "eawf://EAWF/milestone/MLS-0104",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "repository_ref": "eawf://EAWF/repository/EAWF",
+      "revision": 2,
+      "status": "ACTIVE",
+      "target_branch": "feature/eawf-v0.7-rc3",
+      "task_refs": [
+        "eawf://EAWF/task/EAWF-0598",
+        "eawf://EAWF/task/EAWF-0599"
+      ],
+      "title": "Make proof and server fixtures independent of host timing",
+      "uid": "30a5e5bb-506b-592c-8a49-e9eb7fd5b753",
+      "updated_at": "2026-10-28T19:03:52.934951Z",
+      "urn": "eawf://EAWF/batch/BAT-0362"
     }
   },
   "campaign": {
@@ -1187,7 +1216,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 29083,
+  "canonical_sequence": 29089,
   "milestone": {
     "MLS-0103": {
       "acceptance_bundle_revision": null,
@@ -266172,6 +266201,128 @@
       "uid": "01a242da-c323-589d-a868-cf46026471f9",
       "updated_at": "2026-10-26T13:08:29.948718Z",
       "urn": "eawf://EAWF/task/EAWF-0587"
+    },
+    "EAWF-0598": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/batch/BAT-0362",
+      "contract_revision": 1,
+      "created_at": "2026-10-28T19:03:36.817595Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-0598-1"
+          ],
+          "grounding": "measured",
+          "id": "CR-0598-1",
+          "kind": "behavioral",
+          "measurable_signal": "`uv run pytest -q tests/unit/workflow/test_gate_proof_and_submit_findings.py` exits 0.",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": "0",
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "exit 0 of the unchanged fixture behavioral assertions",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The proof RPC tests provide their complete fake git, uv, uvx, just and hidden codex toolchain, exercise real PATH isolation, and retain every RPC-shape and malformed-envelope refusal assertion.",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/milestone/MLS-0104",
+      "effort": "S",
+      "integrated_binding": null,
+      "intent": "CI40748365566 Linux shards1/2 show four existing tests relying on host just. Only test setup changes; retain real isolation and closed-envelope validation.",
+      "key": "EAWF-0598",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "role": "executor",
+      "status": "PLANNED",
+      "title": "Isolate proof RPC tests from installed host tools",
+      "uid": "3bfbef4f-32b7-5cf9-9b0e-7c5b5edff2e7",
+      "updated_at": "2026-10-28T19:03:48.119970Z",
+      "urn": "eawf://EAWF/task/EAWF-0598",
+      "write_claims": [
+        "tests/unit/workflow/test_gate_proof_and_submit_findings.py"
+      ]
+    },
+    "EAWF-0599": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/batch/BAT-0362",
+      "contract_revision": 1,
+      "created_at": "2026-10-28T19:03:40.060022Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-0599-1"
+          ],
+          "grounding": "measured",
+          "id": "CR-0599-1",
+          "kind": "behavioral",
+          "measurable_signal": "`uv run pytest -q tests/unit/runtime/runtimes/codex/test_official_launcher.py -k \"server_request_is_refused or prompt_starts_the_turn or interrupted_turn_resolves\"` exits 0.",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": "0",
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "exit 0 of the unchanged fixture behavioral assertions",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The existing fake server reads, validates and records each scripted server-request reply before emitting its next event; the unchanged launcher test observes exactly one decline and a completed turn without sleeps or production changes.",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/milestone/MLS-0104",
+      "effort": "S",
+      "integrated_binding": null,
+      "intent": "CI40748365566 Linux shard3 observed an absent fake-child receipt. Deterministic scratch probe reproduced child termination before reading an already-flushed correct SDK decline; a request/response barrier fixes observability while preserving the original assertions.",
+      "key": "EAWF-0599",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "role": "executor",
+      "status": "PLANNED",
+      "title": "Wait for fake server request responses before completion",
+      "uid": "efd362c1-3a02-5d8b-9fcd-a7459e57aa0e",
+      "updated_at": "2026-10-28T19:03:50.888136Z",
+      "urn": "eawf://EAWF/task/EAWF-0599",
+      "write_claims": [
+        "tests/fixtures/runtime/fake_codex_server.py"
+      ]
     }
   },
   "track": {
