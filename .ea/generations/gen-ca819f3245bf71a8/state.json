@@ -185,6 +185,34 @@
       "uid": "7c35243e-bdaa-5b73-a0d1-425b47d5864e",
       "updated_at": "2026-09-26T22:44:59.432404Z",
       "urn": "eawf://EAWF/batch/BAT-0303"
+    },
+    "BAT-0357": {
+      "created_at": "2026-10-28T15:33:51.873346Z",
+      "current_head_binding": null,
+      "failure": null,
+      "key": "BAT-0357",
+      "milestone_ref": "eawf://EAWF/milestone/MLS-0104",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "repository_ref": "eawf://EAWF/repository/EAWF",
+      "revision": 2,
+      "status": "ACTIVE",
+      "target_branch": "feature/eawf-v0.7-rc3",
+      "task_refs": [
+        "eawf://EAWF/task/EAWF-0592"
+      ],
+      "title": "Preserve acceptance across evidence supersession",
+      "uid": "c0b20a31-1e00-52f0-8983-35ff5f37da63",
+      "updated_at": "2026-10-28T15:34:04.830172Z",
+      "urn": "eawf://EAWF/batch/BAT-0357"
     }
   },
   "campaign": {
@@ -1187,7 +1215,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 28906,
+  "canonical_sequence": 28910,
   "milestone": {
     "MLS-0103": {
       "acceptance_bundle_revision": null,
@@ -266172,6 +266200,69 @@
       "uid": "01a242da-c323-589d-a868-cf46026471f9",
       "updated_at": "2026-10-26T13:08:29.948718Z",
       "urn": "eawf://EAWF/task/EAWF-0587"
+    },
+    "EAWF-0592": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/batch/BAT-0357",
+      "contract_revision": 1,
+      "created_at": "2026-10-28T15:33:30.078339Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-0592-1"
+          ],
+          "grounding": "measured",
+          "id": "CR-0592-1",
+          "kind": "behavioral",
+          "measurable_signal": "`uv run pytest -q tests/integration/runtime/daemon/test_batch_squash_rebind.py tests/integration/workflow/delivery/test_milestone_acceptance_bundle.py` exits 0; regression rejects pre-fix readers after real native rebind.",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": "0",
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "exit 0 of acceptance and roadmap suites with effective evidence regression",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Acceptance and evidence filing consume effective append-only evidence rows after native rebinding, preserving refusals for unsuperseded duplicate IDs and malformed evidence.",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/milestone/MLS-0104",
+      "effort": "S",
+      "integrated_binding": null,
+      "intent": "Restore native acceptance and evidence filing after append-only native rebinds by consuming only effective evidence records; retain all schema and duplicate checks.",
+      "key": "EAWF-0592",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "role": "executor",
+      "status": "PLANNED",
+      "title": "Read effective evidence after native rebinding",
+      "uid": "d4f10bb3-31c4-578a-8d10-6eb969c2e251",
+      "updated_at": "2026-10-28T15:34:01.979806Z",
+      "urn": "eawf://EAWF/task/EAWF-0592",
+      "write_claims": [
+        "src/eawf/runtime/daemon/methods/delivery_acceptance.py",
+        "src/eawf/runtime/daemon/methods/delivery_approval.py",
+        "tests/integration/runtime/daemon/test_batch_squash_rebind.py"
+      ]
     }
   },
   "track": {
