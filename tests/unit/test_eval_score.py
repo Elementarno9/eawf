@@ -272,3 +272,27 @@ def test_eval_score_is_frozen() -> None:
     score = score_envelope(_envelope(), _golden())
     with pytest.raises(ValidationError):
         score.total = 0.0  # type: ignore[misc]
+
+
+@pytest.mark.parametrize("missing_key", ("body_keys", "warnings_count", "repair_commands_count"))
+def test_score_envelope_missing_optional_dimension_has_no_penalty(missing_key: str) -> None:
+    """An omitted optional comparison supplies no mismatch signal."""
+    golden = _golden()
+    golden.pop(missing_key)
+
+    score = score_envelope(_envelope(), golden)
+
+    assert score.total == pytest.approx(1.0)
+    assert all(value == pytest.approx(1.0) for value in score.per_dim.values())
+
+
+@pytest.mark.parametrize("mutation", ("", "$", ".", "$."))
+def test_score_envelope_empty_mutation_kind_matches_empty_kind(mutation: str) -> None:
+    """Empty or prefix-only mutation strings have the documented empty kind."""
+    score = score_envelope(
+        _envelope(state_mutations=[mutation]),
+        _golden(state_mutation_kinds=[""]),
+    )
+
+    assert score.per_dim["state_mutation_kinds"] == pytest.approx(1.0)
+    assert score.total == pytest.approx(1.0)

@@ -1,6 +1,6 @@
 """The v0.7.0 release train and its ``dev1`` checkpoint configuration.
 
-This module is *data*, not schema. The nine checkpoints below are this
+This module is *data*, not schema. The ten checkpoints below are this
 project's plan for one target version; they bind no other release, no
 other project and no other repository. A different train is a different
 :class:`~eawf.kernel.spec.release.ReleaseTrain` value built the same
@@ -46,10 +46,10 @@ logger = logging.getLogger(__name__)
 #: Stable version the v0.7.0 train walks toward.
 V07_TARGET_VERSION: Final[str] = "0.7.0"
 
-#: The nine rungs of the v0.7.0 train, in order. Epochs and profiles
+#: The ten rungs of the v0.7.0 train, in order. Epochs and profiles
 #: come from the train table: ``dev1``/``dev2`` stabilize and migrate on
 #: epoch-1 authority, ``dev3``/``dev4`` run epoch 2 in disposable canary
-#: repositories, ``dev5`` is the opted-in product canary, and the three
+#: repositories, ``dev5`` is the opted-in product canary, and the four
 #: release candidates plus stable run epoch 2 only. Membership bundles
 #: start at ``dev3`` because an epoch-2 Milestone acceptance bundle
 #: cannot exist before then. ``dev4`` repeats the native-canary profile
@@ -102,6 +102,12 @@ V07_CHECKPOINTS: Final[tuple[ReleaseCheckpoint, ...]] = (
     ),
     ReleaseCheckpoint(
         release_key=release_key("0.7.0rc3"),
+        authority_epoch=2,
+        gate_profile=ReleaseGateProfile.CROSS_PROVIDER,
+        requires_membership=True,
+    ),
+    ReleaseCheckpoint(
+        release_key=release_key("0.7.0rc4"),
         authority_epoch=2,
         gate_profile=ReleaseGateProfile.CROSS_PROVIDER,
         requires_membership=True,
@@ -346,6 +352,12 @@ RC3_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
     template=V07_CONFIG_TEMPLATE,
 )
 
+#: The fourth candidate retains the cross-provider evidence and publication bar.
+RC4_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
+    rung=V07_TRAIN.checkpoint_for_version("0.7.0rc4"),
+    template=V07_CONFIG_TEMPLATE,
+)
+
 #: Checkpoint configurations by version. ``dev1`` is authored -- it was
 #: cut before the template existed and its file is the one the burned
 #: checkpoint was swept against -- and every later rung is rendered, so
@@ -359,6 +371,7 @@ CHECKPOINT_CONFIGS: Final[dict[str, str]] = {
     "0.7.0rc1": RC1_RELEASE_CONFIG_YAML,
     "0.7.0rc2": RC2_RELEASE_CONFIG_YAML,
     "0.7.0rc3": RC3_RELEASE_CONFIG_YAML,
+    "0.7.0rc4": RC4_RELEASE_CONFIG_YAML,
 }
 
 #: What each of the eight ``dev1`` gates reads.

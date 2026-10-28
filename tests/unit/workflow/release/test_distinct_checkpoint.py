@@ -133,7 +133,10 @@ def test_every_checkpoint_row_carries_a_status() -> None:
     rows = render_train_ladder(V07_TRAIN)["checkpoints"]
 
     assert len(rows) == len(V07_TRAIN.checkpoints)
-    assert [row["status"] for row in rows] == ["open", *["pending"] * 8]
+    assert [row["status"] for row in rows] == [
+        "open",
+        *["pending"] * (len(V07_TRAIN.checkpoints) - 1),
+    ]
     assert [row["release_key"] for row in rows] == [
         rung.release_key for rung in V07_TRAIN.checkpoints
     ]
@@ -148,7 +151,7 @@ def test_the_advanced_ladder_marks_the_prior_rung_passed() -> None:
     assert [row["status"] for row in payload["checkpoints"]] == [
         "passed",
         "open",
-        *["pending"] * 7,
+        *["pending"] * (len(V07_TRAIN.checkpoints) - 2),
     ]
 
 
@@ -187,7 +190,7 @@ def test_ladder_status_reads_the_open_index(index: int, expected: CheckpointLadd
     assert ladder_status(V07_TRAIN, index) is expected
 
 
-@pytest.mark.parametrize("index", [-1, 9])
+@pytest.mark.parametrize("index", [-1, len(V07_TRAIN.checkpoints)])
 def test_ladder_status_refuses_an_index_off_the_ladder(index: int) -> None:
     """One past either end is an error, not a silent pending."""
     with pytest.raises(IndexError, match="off a ladder"):

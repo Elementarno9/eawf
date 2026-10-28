@@ -62,7 +62,7 @@ _CENSUS_TOOL = _REPO_ROOT / "tools" / "ea_commit_census.py"
 #: export per mapped release, the two receipt files a release reads
 #: beside its export, and the family of check documents the dispatch
 #: smoke receipt is re-checked against.
-_PROMOTED_CEILING = 3 + 1 + len(CANARY_EVIDENCE_DIRS) + 2 + 1
+_PROMOTED_CEILING = 3 + 1 + len(CANARY_EVIDENCE_DIRS) + 4 + 1
 
 
 def _isolated_git_env() -> dict[str, str]:
@@ -290,6 +290,12 @@ _READERS = {
         "src/eawf/workflow/release/canary_receipts.py"
     ),
     "/".join((*CANARY_EVIDENCE_DIRS["REL-0.7.0rc3"], "dispatch-check-RUN-*.json")): (
+        "src/eawf/workflow/release/canary_receipts.py"
+    ),
+    "/".join((*CANARY_EVIDENCE_DIRS["REL-0.7.0rc4"], DISPATCH_SMOKE_RECEIPTS_FILENAME)): (
+        "src/eawf/workflow/release/canary_receipts.py"
+    ),
+    "/".join((*CANARY_EVIDENCE_DIRS["REL-0.7.0rc4"], "dispatch-check-RUN-*.json")): (
         "src/eawf/workflow/release/canary_receipts.py"
     ),
     **dict.fromkeys(_HOST_FACT_CITATIONS, "src/eawf/platform/rules/data/host_facts.yaml"),

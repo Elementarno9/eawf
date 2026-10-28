@@ -1,0 +1,235 @@
+{
+  "schema_version": "canary-acceptance-walk/v1",
+  "walked_on": "2026-10-28",
+  "canary": {
+    "project_code": "W37CANARY",
+    "repository": "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/repository/REP-W37CANARY",
+    "generation_id": "gen-b0dfffda09950ad5",
+    "epoch": 2,
+    "runtime_dir": "fresh, allocated by the provisioning and named nowhere in this record"
+  },
+  "milestone": {
+    "urn": "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/milestone/MLS-0001",
+    "key": "MLS-0001",
+    "status": "COMPLETED",
+    "reference": "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/milestone/MLS-0001#MAB-0001-MLS-0001",
+    "approval_ref": "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/pending-action/ACT-0001"
+  },
+  "bundle_digest": "sha256:dc182963e42d877a5e7c90ee1c105e192dd1e6b59dcfdd145af2cbfba4322be4",
+  "acceptance_bundle": {
+    "milestone_ref": "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/milestone/MLS-0001",
+    "revision": 1,
+    "supersedes_revision": null,
+    "supersedes_digest": null,
+    "repair_reason": null,
+    "accepted_binding": {
+      "head_sha": "c2ee006b6358d2d3dd5d320de2b78833b880220e",
+      "tree_sha": "0e681e69764e84e385b86b7774a5a80e1550eccd",
+      "contract_digest": "sha256:9b73cbd61729ac23087baea4ac19418709a22de9915ab455e008856dd9ee557e",
+      "policy_revision": 1,
+      "evidence_digest": "sha256:38289371edf4fcc6629140705fa3ee6127bf501dc7a3ded134006311f71e6eff"
+    },
+    "required_batch_refs": [
+      "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/batch/BAT-0001"
+    ],
+    "steps": [
+      {
+        "step_id": "AS-01",
+        "passed": true,
+        "observation": "the delivered module assigns the new value",
+        "evidence_kinds": [
+          "artifact"
+        ],
+        "evidence_refs": [
+          "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/evidence/EVD-0002"
+        ]
+      }
+    ],
+    "sealed_at": "2026-10-28T23:14:01.408351Z"
+  },
+  "delivery": {
+    "generation_ids": [
+      "ING-000002"
+    ],
+    "delivered_head": "c2ee006b6358d2d3dd5d320de2b78833b880220e"
+  },
+  "steps": [
+    {
+      "step": "create track TRK-CANARY",
+      "surface": "domain.track.create",
+      "through": "verb",
+      "outcome": "created",
+      "note": "no skill admits records"
+    },
+    {
+      "step": "create milestone MLS-0001",
+      "surface": "domain.milestone.create",
+      "through": "verb",
+      "outcome": "created",
+      "note": "no skill admits records"
+    },
+    {
+      "step": "create batch BAT-0001",
+      "surface": "domain.batch.create",
+      "through": "verb",
+      "outcome": "created",
+      "note": "no skill admits records"
+    },
+    {
+      "step": "create task W37CANARY-0001",
+      "surface": "domain.task.create",
+      "through": "verb",
+      "outcome": "created",
+      "note": "no skill admits records"
+    },
+    {
+      "step": "create task W37CANARY-0002",
+      "surface": "domain.task.create",
+      "through": "verb",
+      "outcome": "created",
+      "note": "no skill admits records"
+    },
+    {
+      "step": "create run RUN-00000001",
+      "surface": "domain.run.create",
+      "through": "verb",
+      "outcome": "created",
+      "note": "no skill admits records"
+    },
+    {
+      "step": "milestone.activate MLS-0001",
+      "surface": "domain.milestone.activate",
+      "through": "verb",
+      "outcome": "moved",
+      "note": "the Milestone opens under its Track"
+    },
+    {
+      "step": "batch.activate BAT-0001",
+      "surface": "domain.batch.activate",
+      "through": "verb",
+      "outcome": "moved",
+      "note": "the Batch pins the branch it integrates into"
+    },
+    {
+      "step": "task.promote W37CANARY-0001",
+      "surface": "domain.task.promote",
+      "through": "verb",
+      "outcome": "moved",
+      "note": "the Task is placed in the Batch with its criterion"
+    },
+    {
+      "step": "dispatch the Task's Run",
+      "surface": "/dispatch --task --run --run-request",
+      "through": "skill",
+      "outcome": "frontier_empty",
+      "note": "the skill read the Run and sent the operator-compiled request to runtime.run.dispatch"
+    },
+    {
+      "step": "move W37CANARY-0001 to CLAIMED",
+      "surface": "domain.transition.apply",
+      "through": "verb",
+      "outcome": "moved",
+      "note": "the dispatched Run holds the Task's lease"
+    },
+    {
+      "step": "task.start W37CANARY-0001",
+      "surface": "domain.task.start",
+      "through": "verb",
+      "outcome": "moved",
+      "note": "the Task runs under the dispatched Run"
+    },
+    {
+      "step": "submit the candidate",
+      "surface": "runtime.candidate.submit",
+      "through": "verb",
+      "outcome": "submitted",
+      "note": "the worker submits from inside its lease; no skill acts as the worker"
+    },
+    {
+      "step": "bind the Run's report and seal the candidate",
+      "surface": "runtime.candidate.report.bind",
+      "through": "verb",
+      "outcome": "sealed",
+      "note": "the /integrate seal branch still stops on candidate_report_unbound"
+    },
+    {
+      "step": "move W37CANARY-0001 to READY_TO_INTEGRATE",
+      "surface": "domain.transition.apply",
+      "through": "verb",
+      "outcome": "moved",
+      "note": "the Run's report is bound, so the Task's work is ready to integrate"
+    },
+    {
+      "step": "file evidence EVD-0001",
+      "surface": "epoch2_transaction.commit_ledger_append",
+      "through": "transaction",
+      "outcome": "filed",
+      "note": "no verb mints an evidence row, so it is committed through the transaction"
+    },
+    {
+      "step": "integrate the Batch",
+      "surface": "/integrate apply --base --exit --diagnostic",
+      "through": "skill",
+      "outcome": "integrated",
+      "note": "the skill asked runtime.delivery.assemble for the request and sent it to runtime.delivery.integrate"
+    },
+    {
+      "step": "verify the Batch on its delivered head",
+      "surface": "/verify --mode all",
+      "through": "skill",
+      "outcome": "passed",
+      "note": "the skill walked runtime.delivery.verify_batch to ready_to_merge"
+    },
+    {
+      "step": "batch.ready BAT-0001",
+      "surface": "domain.batch.ready",
+      "through": "verb",
+      "outcome": "moved",
+      "note": "the Batch records the verified head it is ready to merge at"
+    },
+    {
+      "step": "milestone.open_review MLS-0001",
+      "surface": "domain.milestone.open_review",
+      "through": "verb",
+      "outcome": "moved",
+      "note": "every Batch of the Milestone stands verified"
+    },
+    {
+      "step": "file evidence EVD-0002",
+      "surface": "epoch2_transaction.commit_ledger_append",
+      "through": "transaction",
+      "outcome": "filed",
+      "note": "no verb mints an evidence row, so it is committed through the transaction"
+    },
+    {
+      "step": "ask the operator to accept the Milestone",
+      "surface": "/verify --mode all --milestone --journey --accepted-binding --requested-by",
+      "through": "skill",
+      "outcome": "passed",
+      "note": "the skill opened runtime.delivery.open_acceptance_approval once the Batch cleared"
+    },
+    {
+      "step": "file evidence EVD-0003",
+      "surface": "epoch2_transaction.commit_ledger_append",
+      "through": "transaction",
+      "outcome": "filed",
+      "note": "no verb mints an evidence row, so it is committed through the transaction"
+    },
+    {
+      "step": "seal the operator's answer",
+      "surface": "runtime.delivery.seal_acceptance_approval",
+      "through": "verb",
+      "outcome": "sealed",
+      "note": "the answer is a person's, so no skill seals it"
+    },
+    {
+      "step": "accept the Milestone on the sealed approval",
+      "surface": "domain.milestone.accept",
+      "through": "verb",
+      "outcome": "accepted",
+      "note": "acceptance is the operator's move, taken on the bundle the approval covers"
+    }
+  ],
+  "launcher": "an in-process stand-in answered the worker handshake; no provider process was started",
+  "provider_processes_started": 0
+}

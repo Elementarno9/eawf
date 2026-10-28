@@ -1,0 +1,61 @@
+{
+  "check": {
+    "breaches": [],
+    "checks": [
+      {
+        "breached": false,
+        "limit": "COMPLETED",
+        "metric": "status",
+        "observed": "COMPLETED"
+      },
+      {
+        "breached": false,
+        "limit": 25,
+        "metric": "turns",
+        "observed": 8
+      },
+      {
+        "breached": false,
+        "limit": "0.20",
+        "metric": "read_truncation_rate",
+        "observed": "0"
+      },
+      {
+        "breached": false,
+        "limit": "0.05",
+        "metric": "identical_reread_rate",
+        "observed": "0"
+      },
+      {
+        "breached": false,
+        "limit": 500000,
+        "metric": "total_tokens",
+        "observed": 146771
+      },
+      {
+        "breached": false,
+        "limit": "300",
+        "metric": "first_patch_seconds",
+        "observed": "22.848217"
+      },
+      {
+        "breached": false,
+        "limit": "600",
+        "metric": "wall_seconds",
+        "observed": "33.804863"
+      }
+    ],
+    "scorecard": {
+      "cache_read_tokens": 144524,
+      "first_patch_seconds": "22.848217",
+      "identical_reread_rate": "0",
+      "read_truncation_rate": "0",
+      "run_key": "RUN-00000003",
+      "status": "COMPLETED",
+      "total_tokens": 146771,
+      "turns": 8,
+      "wall_seconds": "33.804863"
+    },
+    "tier": "fixture"
+  }
+}
