@@ -185,6 +185,34 @@
       "uid": "7c35243e-bdaa-5b73-a0d1-425b47d5864e",
       "updated_at": "2026-09-26T22:44:59.432404Z",
       "urn": "eawf://EAWF/batch/BAT-0303"
+    },
+    "BAT-0354": {
+      "created_at": "2026-10-28T12:58:00.673644Z",
+      "current_head_binding": null,
+      "failure": null,
+      "key": "BAT-0354",
+      "milestone_ref": "eawf://EAWF/milestone/MLS-0104",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "repository_ref": "eawf://EAWF/repository/EAWF",
+      "revision": 2,
+      "status": "ACTIVE",
+      "target_branch": "feature/eawf-v0.7-rc3",
+      "task_refs": [
+        "eawf://EAWF/task/EAWF-0589"
+      ],
+      "title": "Remove worker contention from the render timing gate",
+      "uid": "839ba7bb-d451-5ac0-81cf-7b88d59432e9",
+      "updated_at": "2026-10-28T12:58:10.433897Z",
+      "urn": "eawf://EAWF/batch/BAT-0354"
     }
   },
   "campaign": {
@@ -1187,7 +1215,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 28770,
+  "canonical_sequence": 28774,
   "milestone": {
     "MLS-0103": {
       "acceptance_bundle_revision": null,
@@ -266172,6 +266200,69 @@
       "uid": "01a242da-c323-589d-a868-cf46026471f9",
       "updated_at": "2026-10-26T13:08:29.948718Z",
       "urn": "eawf://EAWF/task/EAWF-0587"
+    },
+    "EAWF-0589": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/batch/BAT-0354",
+      "contract_revision": 1,
+      "created_at": "2026-10-28T12:57:14.192693Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-0589-1"
+          ],
+          "grounding": "measured",
+          "id": "CR-0589-1",
+          "kind": "behavioral",
+          "measurable_signal": "`uv run pytest -n 0 -q tests/perf/surfaces/tui/console/test_task_progress.py` exits 0; a source-preservation audit confirms unchanged probes and blocking platform selection.",
+          "oracle_tier": null,
+          "quality_dimension": "performance_efficiency",
+          "required": true,
+          "response": {
+            "expected": "0",
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "exit 0 of the serial console render timing probes",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Both console rendering timing probes retain their existing input sizes and numeric limits, run in serial, and remain blocking on Linux and macOS pull requests.",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/milestone/MLS-0104",
+      "effort": "S",
+      "integrated_binding": null,
+      "intent": "Remove parallel-worker contention from the existing render timing gate without changing its cases, budgets or blocking platform coverage.",
+      "key": "EAWF-0589",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "role": "executor",
+      "status": "PLANNED",
+      "title": "Run console frame timing in the serial CI lane",
+      "uid": "0cd8f0b7-53a6-52ca-9fea-d60e38ebe6ae",
+      "updated_at": "2026-10-28T12:58:05.221056Z",
+      "urn": "eawf://EAWF/task/EAWF-0589",
+      "write_claims": [
+        "tests/tui/surfaces/tui/console/test_task_progress.py",
+        "tests/perf/surfaces/tui/console/test_task_progress.py",
+        ".github/workflows/ci.yaml"
+      ]
     }
   },
   "track": {
