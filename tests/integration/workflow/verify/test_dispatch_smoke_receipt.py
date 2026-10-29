@@ -705,14 +705,16 @@ def test_the_remediation_names_the_evidence_dir_and_provider(tmp_path: Path) -> 
     assert "EAWF_SMOKE_PROVIDER=codex" not in codex
 
 
-def test_the_committed_rc3_receipts_verify() -> None:
-    """The committed rc3 receipt and its six documents back the Linux claude-code claim."""
-    directory = REPO_ROOT.joinpath(*CANARY_EVIDENCE_DIRS[RC3_KEY])
-    receipts = load_dispatch_smoke_receipts(REPO_ROOT, RC3_KEY)
+@pytest.mark.parametrize("version", ("0.7.0rc3", "0.7.0rc4"))
+def test_the_committed_candidate_receipts_verify(version: str) -> None:
+    """Each candidate's own receipt backs its Linux Claude Code claim."""
+    key = f"REL-{version}"
+    directory = REPO_ROOT.joinpath(*CANARY_EVIDENCE_DIRS[key])
+    receipts = load_dispatch_smoke_receipts(REPO_ROOT, key)
     assert receipts is not None
     documents = read_dispatch_checks(directory, receipts)
     (row,) = receipts.receipts
-    config = checkpoint_release_config(RC3_VERSION, repo_root=REPO_ROOT)
+    config = checkpoint_release_config(version, repo_root=REPO_ROOT)
 
     outcome = provider_probe(
         ReleaseSignalContext(config, ReleaseSignalName.PROVIDER, None), repo_root=REPO_ROOT

@@ -31,10 +31,10 @@ RC3_VERSION: Final = "0.7.0rc3"
 PROFILE: Final = ReleaseGateProfile.CROSS_PROVIDER
 
 
-def test_rc3_sits_between_rc2_and_stable() -> None:
+def test_rc3_sits_between_rc2_and_rc4() -> None:
     keys = [rung.release_key for rung in V07_TRAIN.checkpoints]
 
-    assert keys[-3:] == ["REL-0.7.0rc2", "REL-0.7.0rc3", "REL-0.7.0"]
+    assert keys[-4:-1] == ["REL-0.7.0rc2", "REL-0.7.0rc3", "REL-0.7.0rc4"]
 
 
 def test_rc3_runs_epoch_2_under_cross_provider_with_membership() -> None:
@@ -75,7 +75,7 @@ def test_rc3_declares_the_rc2_targets_and_platform_claims() -> None:
     assert [c.platform_id for c in rc3.platform_claims] == ["linux-x86_64", "windows-x86_64"]
 
 
-def test_a_rung_past_rc3_has_no_config() -> None:
-    """The off-by-one boundary: no fourth candidate is declared."""
+def test_a_rung_past_rc4_has_no_config() -> None:
+    """The off-by-one boundary: no fifth candidate is declared."""
     with pytest.raises(KeyError):
-        V07_TRAIN.checkpoint_for_version("0.7.0rc4")
+        V07_TRAIN.checkpoint_for_version("0.7.0rc5")
