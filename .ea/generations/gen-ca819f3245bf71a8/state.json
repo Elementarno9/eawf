@@ -203,7 +203,7 @@
         "source_urn": null
       },
       "repository_ref": "eawf://EAWF/repository/EAWF",
-      "revision": 5,
+      "revision": 6,
       "status": "ACTIVE",
       "target_branch": "feature/eawf-v0.7-rc4",
       "task_refs": [
@@ -211,11 +211,12 @@
         "eawf://EAWF/task/EAWF-0601",
         "eawf://EAWF/task/EAWF-0602",
         "eawf://EAWF/task/EAWF-0603",
-        "eawf://EAWF/task/EAWF-0604"
+        "eawf://EAWF/task/EAWF-0604",
+        "eawf://EAWF/task/EAWF-0605"
       ],
       "title": "Restore coverage and prepare the rc4 checkpoint",
       "uid": "cc8fcc1b-5b82-549d-b3bd-ec611f70c2b0",
-      "updated_at": "2026-10-29T00:17:10.106687Z",
+      "updated_at": "2026-10-29T00:40:09.483798Z",
       "urn": "eawf://EAWF/batch/BAT-0363"
     }
   },
@@ -1219,7 +1220,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 29649,
+  "canonical_sequence": 29729,
   "milestone": {
     "MLS-0103": {
       "acceptance_bundle_revision": null,
@@ -266490,6 +266491,67 @@
       "urn": "eawf://EAWF/task/EAWF-0604",
       "write_claims": [
         "tests/integration/workflow/release/test_train_ladder_surface.py"
+      ]
+    },
+    "EAWF-0605": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/batch/BAT-0363",
+      "contract_revision": 1,
+      "created_at": "2026-10-29T00:40:05.760627Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-0605-1"
+          ],
+          "grounding": "measured",
+          "id": "CR-0605-1",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest -q tests/unit/workflow/evidence/test_run_certification.py exits0.",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": "0",
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "exit0 of certification inventory and runtime controls",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Append the genuine rc4 Claude certification identifier to the exact committed certification inventory expectation and update its obsolete description. Preserve all historical identifiers, uniqueness and runtime assertions; no production or gate changes.",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/milestone/MLS-0105",
+      "effort": "S",
+      "integrated_binding": null,
+      "intent": "Append the genuine rc4 Claude certification identifier to the exact committed certification inventory expectation and update its obsolete description. Preserve all historical identifiers, uniqueness and runtime assertions; no production or gate changes.",
+      "key": "EAWF-0605",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "role": "executor",
+      "status": "PLANNED",
+      "title": "Include the rc4 certification in its exact inventory",
+      "uid": "52d9eb2b-3c0f-5ffb-bf46-879edb99244b",
+      "updated_at": "2026-10-29T00:40:09.483798Z",
+      "urn": "eawf://EAWF/task/EAWF-0605",
+      "write_claims": [
+        "tests/unit/workflow/evidence/test_run_certification.py"
       ]
     }
   },
