@@ -185,40 +185,6 @@
       "uid": "7c35243e-bdaa-5b73-a0d1-425b47d5864e",
       "updated_at": "2026-09-26T22:44:59.432404Z",
       "urn": "eawf://EAWF/batch/BAT-0303"
-    },
-    "BAT-0363": {
-      "created_at": "2026-10-28T23:00:44.481723Z",
-      "current_head_binding": null,
-      "failure": null,
-      "key": "BAT-0363",
-      "milestone_ref": "eawf://EAWF/milestone/MLS-0105",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "repository_ref": "eawf://EAWF/repository/EAWF",
-      "revision": 7,
-      "status": "ACTIVE",
-      "target_branch": "feature/eawf-v0.7-rc4",
-      "task_refs": [
-        "eawf://EAWF/task/EAWF-0600",
-        "eawf://EAWF/task/EAWF-0601",
-        "eawf://EAWF/task/EAWF-0602",
-        "eawf://EAWF/task/EAWF-0603",
-        "eawf://EAWF/task/EAWF-0604",
-        "eawf://EAWF/task/EAWF-0605",
-        "eawf://EAWF/task/EAWF-0606"
-      ],
-      "title": "Restore coverage and prepare the rc4 checkpoint",
-      "uid": "cc8fcc1b-5b82-549d-b3bd-ec611f70c2b0",
-      "updated_at": "2026-10-29T01:38:34.999498Z",
-      "urn": "eawf://EAWF/batch/BAT-0363"
     }
   },
   "campaign": {
@@ -1221,7 +1187,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 29754,
+  "canonical_sequence": 29806,
   "milestone": {
     "MLS-0103": {
       "acceptance_bundle_revision": null,
@@ -1280,72 +1246,6 @@
       "uid": "7358605e-255e-5241-8977-fc17c38a4984",
       "updated_at": "2026-10-02T20:35:18.625435Z",
       "urn": "eawf://EAWF/milestone/MLS-0103"
-    },
-    "MLS-0105": {
-      "acceptance_bundle_revision": null,
-      "acceptance_journey": [
-        {
-          "action": "run the scoring boundary tests and unchanged coverage gate against recorded CI data plus actual new test execution",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "all26 scoring tests pass and evaluation line/branch rates clear93/80 without lowered thresholds",
-          "required": true,
-          "step_id": "AS-01"
-        },
-        {
-          "action": "run rc4 train, version, evidence registration and fixture regressions",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "rc3 remains historical, rc4 precedes stable with identical24 gates/four targets/current claims, and all focused coupling and census tests pass",
-          "required": true,
-          "step_id": "AS-02"
-        },
-        {
-          "action": "generate fresh rc4 native canary acceptance evidence and run live Claude Code Linux dispatch smoke",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "fresh native membership and a genuine rc4-bound Linux smoke pass; valid existing driver certification is reused only through its supported export",
-          "required": true,
-          "step_id": "AS-03"
-        }
-      ],
-      "accepted_binding": null,
-      "appetite": "S",
-      "contributing_track_refs": [],
-      "created_at": "2026-10-28T22:59:48.157172Z",
-      "description": "Corrective successor to immutable accepted MLS-0104, authorized by eawf://EAWF/evidence/EVD-0181. The rc3 tag freezes reopening, so retain its acceptance and use direct native admission for the already approved bounded repair. No new PlanRevision is proposed. Preserve the existing cross-provider release bar and current advertised runtime/platform claims.",
-      "exclusions": [
-        "production scoring logic changes or lowered coverage floors",
-        "rewriting the public rc3 tag or accepted MLS-0104",
-        "new runtime or operating-system claims"
-      ],
-      "key": "MLS-0105",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "outcome": "The evaluation package clears its unchanged93%line and80%branch gates through real scoring boundary tests; rc4 is declared with the same24-gate bar, four publication targets and current claims, backed by genuine native canary membership and live Claude Code Linux dispatch evidence, ready for merged-source CI and release.",
-      "primary_track_ref": "eawf://EAWF/track/TRK-EAWF-CORE",
-      "required_batch_refs": [],
-      "revision": 2,
-      "status": "ACTIVE",
-      "target_date": null,
-      "title": "Restore coverage and cut release candidate 4",
-      "uid": "526d2eb4-dae6-5851-b8bd-ce46eae682c6",
-      "updated_at": "2026-10-28T22:59:53.140667Z",
-      "urn": "eawf://EAWF/milestone/MLS-0105"
     }
   },
   "open_question": {
@@ -9251,6 +9151,77 @@
       ],
       "updated_at": "2026-10-28T21:21:52.423976Z",
       "urn": "eawf://EAWF/pending-action/ACT-0037"
+    },
+    "ACT-0038": {
+      "assignee_ref": null,
+      "bundle_digest": "sha256:4d6fa4c8cb4def719a69e6f8579455a59109e4d7f316b3dc5d87bee18efcbc19",
+      "created_at": "2026-10-29T02:39:44.046816Z",
+      "default_on_timeout": null,
+      "default_policy": null,
+      "dispositions": [
+        {
+          "acted_at": "2026-10-29T11:22:46.077873Z",
+          "option_id": "approve",
+          "outcome": "sealed",
+          "principal_id": "OP-0001",
+          "snoozed_until": null
+        }
+      ],
+      "id": "ACT-0038",
+      "idempotency_key": "accept-MLS-0105-4d6fa4c8cb4def71",
+      "kind": "protected_approval",
+      "options": [
+        {
+          "consequence": "The Milestone is recorded as accepted on exactly this bundle. A later change needs a new acceptance.",
+          "cost": "Any change after acceptance needs a new bundle and a new acceptance.",
+          "effect": "approve",
+          "label": "Accept the Milestone",
+          "option_id": "approve",
+          "preview": "Milestone MLS-0105\n  before: in acceptance review\n  after:  accepted on bundle revision 1"
+        },
+        {
+          "consequence": "The Milestone stays in review and is not accepted. Nothing else changes.",
+          "cost": "Verified work waits unaccepted, and nothing says what would make it acceptable.",
+          "effect": "decline",
+          "label": "Do not accept it",
+          "option_id": "decline",
+          "preview": "Milestone MLS-0105\n  before: in acceptance review\n  after:  in acceptance review, not accepted"
+        },
+        {
+          "consequence": "The Milestone stays in review and a repair is requested. The next bundle revision is verified and asked about again.",
+          "cost": "Delivery waits for another verified revision and another question.",
+          "effect": "request_repair",
+          "label": "Ask for changes",
+          "option_id": "repair",
+          "preview": "Milestone MLS-0105\n  before: bundle revision 1 awaits acceptance\n  after:  repair requested; bundle revision 2 is verified next"
+        }
+      ],
+      "override_until": null,
+      "question": "Accept MLS-0105 on revision 1 of its acceptance bundle?",
+      "receipt_ref": "eawf://EAWF/evidence/EVD-0201",
+      "recommendation_rationale": "Every Batch stands on a verified head and the journey passed, so accepting records what the evidence already shows.",
+      "recommended_option_id": "approve",
+      "requested_by": {
+        "principal_id": "CODEX-ORCH",
+        "principal_kind": "agent",
+        "run_ref": "eawf://EAWF/run/RUN-00001949"
+      },
+      "resolution_actor": {
+        "principal_id": "OP-0001",
+        "principal_kind": "human"
+      },
+      "revision": 2,
+      "selected_option_id": "approve",
+      "status": "SEALED",
+      "subject_ref": "eawf://EAWF/milestone/MLS-0105",
+      "terms": [
+        {
+          "expansion": "the Milestone, a planned delivery goal, you are asked to accept",
+          "term": "MLS-0105"
+        }
+      ],
+      "updated_at": "2026-10-29T11:22:46.077873Z",
+      "urn": "eawf://EAWF/pending-action/ACT-0038"
     }
   },
   "plan_revision": {
@@ -266172,449 +266143,6 @@
       "uid": "01a242da-c323-589d-a868-cf46026471f9",
       "updated_at": "2026-10-26T13:08:29.948718Z",
       "urn": "eawf://EAWF/task/EAWF-0587"
-    },
-    "EAWF-0600": {
-      "active_run_ref": null,
-      "batch_ref": "eawf://EAWF/batch/BAT-0363",
-      "contract_revision": 1,
-      "created_at": "2026-10-28T23:00:40.782398Z",
-      "criteria": [
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-0600-1"
-          ],
-          "grounding": "measured",
-          "id": "CR-0600-1",
-          "kind": "behavioral",
-          "measurable_signal": "`uv run pytest -q tests/unit/test_eval_score.py` exits0; all scoped evidence requirements pass.",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "exit0 of scoped behavioral assertions and evidence verification",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "Append exactly the seven proved boundary cases through public score_envelope, preserve production code and all existing assertions, and clear the unchanged evaluation coverage floors with actual new test coverage.",
-          "waiver_reason": null
-        }
-      ],
-      "due_scope": "eawf://EAWF/milestone/MLS-0105",
-      "effort": "S",
-      "integrated_binding": null,
-      "intent": "Append exactly the seven proved boundary cases through public score_envelope, preserve production code and all existing assertions, and clear the unchanged evaluation coverage floors with actual new test coverage.",
-      "key": "EAWF-0600",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P1",
-      "revision": 2,
-      "role": "executor",
-      "status": "PLANNED",
-      "title": "Cover optional scoring dimensions and empty mutation kinds",
-      "uid": "8436933d-e400-5c16-b550-bc6b97ba2072",
-      "updated_at": "2026-10-28T23:00:47.423241Z",
-      "urn": "eawf://EAWF/task/EAWF-0600",
-      "write_claims": [
-        "tests/unit/test_eval_score.py"
-      ]
-    },
-    "EAWF-0601": {
-      "active_run_ref": null,
-      "batch_ref": "eawf://EAWF/batch/BAT-0363",
-      "contract_revision": 1,
-      "created_at": "2026-10-28T23:00:42.588058Z",
-      "criteria": [
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-0601-1"
-          ],
-          "grounding": "measured",
-          "id": "CR-0601-1",
-          "kind": "behavioral",
-          "measurable_signal": "`uv run pytest -q tests/unit/kernel/spec/test_release_models.py tests/integration/workflow/release/test_rc4_config_render.py` exits0; all scoped evidence requirements pass.",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "exit0 of scoped behavioral assertions and evidence verification",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "Declare rc4 before stable with the same24-gate/four-target/platform/runtime bar, update coupled version/rendered fixtures, and file fresh native membership plus genuine live Linux Claude dispatch evidence; never relabel rc3 observations.",
-          "waiver_reason": null
-        }
-      ],
-      "due_scope": "eawf://EAWF/milestone/MLS-0105",
-      "effort": "M",
-      "integrated_binding": null,
-      "intent": "Declare rc4 before stable with the same24-gate/four-target/platform/runtime bar, update coupled version/rendered fixtures, and file fresh native membership plus genuine live Linux Claude dispatch evidence; never relabel rc3 observations.",
-      "key": "EAWF-0601",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P1",
-      "revision": 2,
-      "role": "executor",
-      "status": "PLANNED",
-      "title": "Declare rc4 and prove its existing provider claim",
-      "uid": "c8782f69-6448-5734-95bb-c52d1537cb64",
-      "updated_at": "2026-10-28T23:02:25.897532Z",
-      "urn": "eawf://EAWF/task/EAWF-0601",
-      "write_claims": [
-        "src/eawf/workflow/release/train.py",
-        "src/eawf/_version.py",
-        "CHANGELOG.md",
-        "src/eawf/workflow/evidence/provider_certification.py",
-        "src/eawf/kernel/store/commit_policy.py",
-        "tests/unit/kernel/spec/test_release_models.py",
-        "tests/integration/workflow/release/test_rc3_config_render.py",
-        "tests/integration/workflow/release/test_rc4_config_render.py",
-        "tests/lint/test_ea_commit_census.py",
-        "tests/golden/plugin_install/claude/settings.json",
-        "tests/golden/plugin_install/opencode/plugins/eawf.js.golden",
-        "tests/integration/workflow/verify/test_dispatch_smoke_receipt.py",
-        ".ea/artifacts/evidence/2026-10-29-rc4-native-linux",
-        "tests/fixtures/artifacts/2026-10-29-rc4-native-linux/canary-acceptance-walk.json"
-      ]
-    },
-    "EAWF-0602": {
-      "active_run_ref": null,
-      "batch_ref": "eawf://EAWF/batch/BAT-0363",
-      "contract_revision": 1,
-      "created_at": "2026-10-28T23:31:26.044441Z",
-      "criteria": [
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-0602-1"
-          ],
-          "grounding": "measured",
-          "id": "CR-0602-1",
-          "kind": "behavioral",
-          "measurable_signal": "uv run pytest -q tests/unit/workflow/release/test_distinct_checkpoint.py tests/unit/workflow/release/test_open_rung.py exits0.",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "exit0 of checkpoint-reader assertions",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "Generic checkpoint reader tests derive their row counts and first invalid index from the declared ladder, retain all status/error assertions, and pass for the existing and rc4-extended ladders; the separate declaration test continues to pin exactly ten rungs.",
-          "waiver_reason": null
-        }
-      ],
-      "due_scope": "eawf://EAWF/milestone/MLS-0105",
-      "effort": "S",
-      "integrated_binding": null,
-      "intent": "Generic checkpoint reader tests derive their row counts and first invalid index from the declared ladder, retain all status/error assertions, and pass for the existing and rc4-extended ladders; the separate declaration test continues to pin exactly ten rungs.",
-      "key": "EAWF-0602",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P1",
-      "revision": 2,
-      "role": "executor",
-      "status": "PLANNED",
-      "title": "Align checkpoint reader fixtures with the declared ladder",
-      "uid": "46cf07b2-451f-56c4-8de0-64e710092e62",
-      "updated_at": "2026-10-28T23:31:29.714160Z",
-      "urn": "eawf://EAWF/task/EAWF-0602",
-      "write_claims": [
-        "tests/unit/workflow/release/test_distinct_checkpoint.py",
-        "tests/unit/workflow/release/test_open_rung.py"
-      ]
-    },
-    "EAWF-0603": {
-      "active_run_ref": null,
-      "batch_ref": "eawf://EAWF/batch/BAT-0363",
-      "contract_revision": 1,
-      "created_at": "2026-10-28T23:52:20.308502Z",
-      "criteria": [
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-0603-1"
-          ],
-          "grounding": "measured",
-          "id": "CR-0603-1",
-          "kind": "behavioral",
-          "measurable_signal": "Normal pre-commit hooks exit0; managed projection matches production renderer; exactly two new public-object acknowledgements are verified.",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "exit0 of exact projection and public-hash verification",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "Generate the managed ignore projection from the frozen rc4 authority and actual produced artifacts; acknowledge only the two verified disposable Git commit/tree hashes in the secret baseline and update its hash comment, preserving all scanner plugins, filters, gates and other acknowledgements.",
-          "waiver_reason": null
-        }
-      ],
-      "due_scope": "eawf://EAWF/milestone/MLS-0105",
-      "effort": "S",
-      "integrated_binding": null,
-      "intent": "Generate the managed ignore projection from the frozen rc4 authority and actual produced artifacts; acknowledge only the two verified disposable Git commit/tree hashes in the secret baseline and update its hash comment, preserving all scanner plugins, filters, gates and other acknowledgements.",
-      "key": "EAWF-0603",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P1",
-      "revision": 2,
-      "role": "executor",
-      "status": "PLANNED",
-      "title": "Align rc4 ignore projection and public hash acknowledgements",
-      "uid": "41a70473-e0fe-5a99-8a5b-ababb3b6fb35",
-      "updated_at": "2026-10-28T23:52:23.280566Z",
-      "urn": "eawf://EAWF/task/EAWF-0603",
-      "write_claims": [
-        ".gitignore",
-        ".secrets.baseline",
-        ".pre-commit-config.yaml"
-      ]
-    },
-    "EAWF-0604": {
-      "active_run_ref": null,
-      "batch_ref": "eawf://EAWF/batch/BAT-0363",
-      "contract_revision": 1,
-      "created_at": "2026-10-29T00:17:03.545771Z",
-      "criteria": [
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-0604-1"
-          ],
-          "grounding": "measured",
-          "id": "CR-0604-1",
-          "kind": "behavioral",
-          "measurable_signal": "uv run pytest -q tests/integration/workflow/release/test_train_ladder_surface.py exits0.",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "exit0 of full train-ladder surface integration assertions",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "Derive the two generic train-show pending row counts from the declared release ladder, preserve every status/current checkpoint assertion, and pass the full train-ladder surface integration file on rc4. No production logic or release gate changes.",
-          "waiver_reason": null
-        }
-      ],
-      "due_scope": "eawf://EAWF/milestone/MLS-0105",
-      "effort": "S",
-      "integrated_binding": null,
-      "intent": "Derive the two generic train-show pending row counts from the declared release ladder, preserve every status/current checkpoint assertion, and pass the full train-ladder surface integration file on rc4. No production logic or release gate changes.",
-      "key": "EAWF-0604",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P1",
-      "revision": 2,
-      "role": "executor",
-      "status": "PLANNED",
-      "title": "Align train surface fixtures with the declared ladder",
-      "uid": "b7ea7725-95b1-5193-a668-8b06d3c623ac",
-      "updated_at": "2026-10-29T00:17:10.106687Z",
-      "urn": "eawf://EAWF/task/EAWF-0604",
-      "write_claims": [
-        "tests/integration/workflow/release/test_train_ladder_surface.py"
-      ]
-    },
-    "EAWF-0605": {
-      "active_run_ref": null,
-      "batch_ref": "eawf://EAWF/batch/BAT-0363",
-      "contract_revision": 1,
-      "created_at": "2026-10-29T00:40:05.760627Z",
-      "criteria": [
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-0605-1"
-          ],
-          "grounding": "measured",
-          "id": "CR-0605-1",
-          "kind": "behavioral",
-          "measurable_signal": "uv run pytest -q tests/unit/workflow/evidence/test_run_certification.py exits0.",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "exit0 of certification inventory and runtime controls",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "Append the genuine rc4 Claude certification identifier to the exact committed certification inventory expectation and update its obsolete description. Preserve all historical identifiers, uniqueness and runtime assertions; no production or gate changes.",
-          "waiver_reason": null
-        }
-      ],
-      "due_scope": "eawf://EAWF/milestone/MLS-0105",
-      "effort": "S",
-      "integrated_binding": null,
-      "intent": "Append the genuine rc4 Claude certification identifier to the exact committed certification inventory expectation and update its obsolete description. Preserve all historical identifiers, uniqueness and runtime assertions; no production or gate changes.",
-      "key": "EAWF-0605",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P1",
-      "revision": 2,
-      "role": "executor",
-      "status": "PLANNED",
-      "title": "Include the rc4 certification in its exact inventory",
-      "uid": "52d9eb2b-3c0f-5ffb-bf46-879edb99244b",
-      "updated_at": "2026-10-29T00:40:09.483798Z",
-      "urn": "eawf://EAWF/task/EAWF-0605",
-      "write_claims": [
-        "tests/unit/workflow/evidence/test_run_certification.py"
-      ]
-    },
-    "EAWF-0606": {
-      "active_run_ref": null,
-      "batch_ref": "eawf://EAWF/batch/BAT-0363",
-      "contract_revision": 1,
-      "created_at": "2026-10-29T01:38:31.855539Z",
-      "criteria": [
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-0606-1"
-          ],
-          "grounding": "measured",
-          "id": "CR-0606-1",
-          "kind": "behavioral",
-          "measurable_signal": "uv run pytest -q tests/tui/surfaces/tui/console/test_console_live_keys.py::test_live_climbs_and_jumps_land_on_real_records exits0.",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "exit0 of real-record navigation wrap assertions",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "Update only the live navigation wrap expectation from historical Milestone MLS-0104 to the actually held newest Milestone MLS-0105. Preserve every navigation and held-record assertion; no production or release gate changes.",
-          "waiver_reason": null
-        }
-      ],
-      "due_scope": "eawf://EAWF/milestone/MLS-0105",
-      "effort": "S",
-      "integrated_binding": null,
-      "intent": "Update only the live navigation wrap expectation from historical Milestone MLS-0104 to the actually held newest Milestone MLS-0105. Preserve every navigation and held-record assertion; no production or release gate changes.",
-      "key": "EAWF-0606",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P1",
-      "revision": 2,
-      "role": "executor",
-      "status": "PLANNED",
-      "title": "Align the live navigation wrap with the current Milestone",
-      "uid": "01fd741c-af47-54f5-a4b6-6c533ff2d35a",
-      "updated_at": "2026-10-29T01:38:34.999498Z",
-      "urn": "eawf://EAWF/task/EAWF-0606",
-      "write_claims": [
-        "tests/tui/surfaces/tui/console/test_console_live_keys.py"
-      ]
     }
   },
   "track": {
