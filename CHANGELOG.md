@@ -8,6 +8,8 @@ The format is based on Keep a Changelog [1], and this project adheres to Semanti
 
 This release candidate supersedes the blocked rc3 checkpoint without changing its public tag. It retains the same cross-provider proof, publication targets and platform claims.
 
+No additional migration is required from rc3; upgrades from epoch 1 still follow the migration procedure documented in the rc3 section below.
+
 ### Fixed
 
 - Cover absent optional scoring dimensions and empty mutation kinds through the public envelope scorer, restoring the unchanged evaluation coverage floors.

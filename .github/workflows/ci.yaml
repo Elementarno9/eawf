@@ -165,7 +165,8 @@ jobs:
         # here replaces the default "not eval" one, so tests/eval is ignored
         # by path; the skill-eval job runs it. The migration timing node
         # runs serially below on every event to avoid worker contention.
-        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --deselect=tests/integration/kernel/migration/test_v07_rehearsal.py::test_largest_supported_state_applies_inside_its_declared_budget --junitxml=pytest-junit.xml ${{ startsWith(matrix.os, 'ubuntu-') && format('--cov=eawf --cov-report= --cov-fail-under=0 --splits 3 --group {0} --splitting-algorithm least_duration --durations-path split-durations.json', matrix.shard) || '' }} ${{ github.event_name == 'pull_request' && '-m "not slow and not e2e and not perf" --ignore=tests/eval --ignore-glob="tests/tui/surfaces/tui/console/test_console_live_*.py"' || '' }}
+        # End-to-end console latency is measured outside the worker pool too.
+        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --deselect=tests/integration/kernel/migration/test_v07_rehearsal.py::test_largest_supported_state_applies_inside_its_declared_budget --junitxml=pytest-junit.xml ${{ startsWith(matrix.os, 'ubuntu-') && format('--cov=eawf --cov-report= --cov-fail-under=0 --splits 3 --group {0} --splitting-algorithm least_duration --durations-path split-durations.json', matrix.shard) || '' }} ${{ github.event_name == 'pull_request' && '-m "not slow and not e2e and not perf" --ignore=tests/eval --ignore-glob="tests/tui/surfaces/tui/console/test_console_live_*.py"' || '' }}
       - name: Duration budget (advisory)
         # Diffs every test's wall time in the parallel leg against the
         # committed baseline: a test past twice its baseline, or a fast-tier
@@ -191,6 +192,11 @@ jobs:
         # clean whatever they did, so a known flake never reds the build.
         if: startsWith(matrix.os, 'ubuntu-') && matrix.shard == '1'
         run: uv run pytest -n0 --quarantine-lane
+      - name: Pytest (serial e2e timing)
+        # Console latency must be measured without competing pytest workers.
+        if: github.event_name != 'pull_request' && matrix.shard == '1'
+        run: uv run pytest -n0 tests/e2e ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
+
       - name: Pytest (serial perf timing)
         # Stays serial on purpose: these assert p99 latency and a cold-import
         # wall-time ceiling, so a contended machine changes the number being

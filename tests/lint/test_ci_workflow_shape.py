@@ -249,6 +249,27 @@ def test_serial_perf_step_skips_only_on_a_pull_request(event: str) -> None:
 @pytest.mark.parametrize("event", _EVENTS)
 @pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
 @pytest.mark.parametrize("shard", ["1", "2", "3"])
+def test_end_to_end_suite_runs_serially_once_per_release_tier_leg(
+    event: str, os: str, shard: str
+) -> None:
+    assert _option(_parallel_argv(event, os), "--ignore").count("tests/e2e") == 1
+    step = _step("test", "Pytest (serial e2e timing)")
+    context = _context(event, os=os, shard=shard)
+    assert bool(_evaluate(str(step["if"]), context)) is (event != "pull_request" and shard == "1")
+    argv = shlex.split(_render(str(step["run"]), context))
+    expected = ["uv", "run", "pytest", "-n0", "tests/e2e"]
+    if os.startswith("ubuntu-"):
+        expected.extend(["--cov=eawf", "--cov-append", "--cov-report=", "--cov-fail-under=0"])
+    assert argv == expected
+    assert not step.get("continue-on-error", False)
+    assert not _jobs()["test"].get("continue-on-error", False)
+    steps = _jobs()["test"]["steps"]
+    assert steps.index(step) < steps.index(_step("test", "Upload coverage data"))
+
+
+@pytest.mark.parametrize("event", _EVENTS)
+@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
+@pytest.mark.parametrize("shard", ["1", "2", "3"])
 def test_serial_render_probe_runs_only_on_pull_request_shard_one(
     event: str, os: str, shard: str
 ) -> None:
