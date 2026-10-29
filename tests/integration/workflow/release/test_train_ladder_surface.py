@@ -27,7 +27,7 @@ from eawf.runtime.daemon.methods.release_receipts import advance
 from eawf.surfaces.cli.app import app
 from eawf.workflow.release.advance import CheckpointGateReceipt
 from eawf.workflow.release.records import record_release
-from eawf.workflow.release.train import DEV1_RELEASE_CONFIG_YAML
+from eawf.workflow.release.train import DEV1_RELEASE_CONFIG_YAML, V07_TRAIN
 from eawf.workflow.release.train_store import record_checkpoint_receipt
 
 #: uid for the dev2 record staged by the "derives from records" test. Distinct
@@ -153,7 +153,10 @@ def test_train_show_json_emits_the_ladder_index_and_statuses(
     payload = json.loads(result.stdout)["result"]
     assert payload["train_id"] == "TRAIN-0.7.0"
     assert payload["current_checkpoint_index"] == 0
-    assert [row["status"] for row in payload["checkpoints"]] == ["open", *["pending"] * 8]
+    assert [row["status"] for row in payload["checkpoints"]] == [
+        "open",
+        *["pending"] * (len(V07_TRAIN.checkpoints) - 1),
+    ]
 
 
 def test_train_show_honours_the_global_json_flag(
@@ -212,7 +215,11 @@ def test_train_show_derives_the_open_rung_from_release_records(
     assert payload["current_checkpoint_index"] == 1
     assert payload["current_checkpoint"] == "REL-0.7.0.dev2"
     statuses = [row["status"] for row in payload["checkpoints"]]
-    assert statuses == ["passed", "open", *["pending"] * 7]
+    assert statuses == [
+        "passed",
+        "open",
+        *["pending"] * (len(V07_TRAIN.checkpoints) - 2),
+    ]
 
 
 def test_train_without_a_subcommand_lists_show() -> None:
