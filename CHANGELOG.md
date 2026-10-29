@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.7.0rc4]
+
+This release candidate supersedes the blocked rc3 checkpoint without changing its public tag. It retains the same cross-provider proof, publication targets and platform claims.
+
+### Fixed
+
+- Cover absent optional scoring dimensions and empty mutation kinds through the public envelope scorer, restoring the unchanged evaluation coverage floors.
+- Declare the rc4 checkpoint and its fresh native canary membership and live Claude Code Linux dispatch evidence before stable.
+
 ## [0.7.0rc3]
 
 This is the third release candidate of v0.7.0. The epoch-1 engine is gone from every live surface: `eawf init` bears a tree native at epoch 2, and no verb, daemon loop, rule, agent page or test reads or teaches the phase, iter and wave model any more, leaving only the migration and upgrade path to read v1 state. The Claude Code hooks load and report on a native tree; operators can edit, cancel, purge and rename Milestones and Tracks, list and show every entity, title a Task, join a workspace after init and reclaim heavy scratch, all without editing state by hand; and `eawf reflect run` reports every finished Run with money and token totals. Read the Changed and Migration sections before upgrading.
