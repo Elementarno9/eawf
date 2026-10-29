@@ -203,18 +203,19 @@
         "source_urn": null
       },
       "repository_ref": "eawf://EAWF/repository/EAWF",
-      "revision": 4,
+      "revision": 5,
       "status": "ACTIVE",
       "target_branch": "feature/eawf-v0.7-rc4",
       "task_refs": [
         "eawf://EAWF/task/EAWF-0600",
         "eawf://EAWF/task/EAWF-0601",
         "eawf://EAWF/task/EAWF-0602",
-        "eawf://EAWF/task/EAWF-0603"
+        "eawf://EAWF/task/EAWF-0603",
+        "eawf://EAWF/task/EAWF-0604"
       ],
       "title": "Restore coverage and prepare the rc4 checkpoint",
       "uid": "cc8fcc1b-5b82-549d-b3bd-ec611f70c2b0",
-      "updated_at": "2026-10-28T23:52:23.280566Z",
+      "updated_at": "2026-10-29T00:17:10.106687Z",
       "urn": "eawf://EAWF/batch/BAT-0363"
     }
   },
@@ -1218,7 +1219,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 29626,
+  "canonical_sequence": 29649,
   "milestone": {
     "MLS-0103": {
       "acceptance_bundle_revision": null,
@@ -266428,6 +266429,67 @@
         ".gitignore",
         ".secrets.baseline",
         ".pre-commit-config.yaml"
+      ]
+    },
+    "EAWF-0604": {
+      "active_run_ref": null,
+      "batch_ref": "eawf://EAWF/batch/BAT-0363",
+      "contract_revision": 1,
+      "created_at": "2026-10-29T00:17:03.545771Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-0604-1"
+          ],
+          "grounding": "measured",
+          "id": "CR-0604-1",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest -q tests/integration/workflow/release/test_train_ladder_surface.py exits0.",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": "0",
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "exit0 of full train-ladder surface integration assertions",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Derive the two generic train-show pending row counts from the declared release ladder, preserve every status/current checkpoint assertion, and pass the full train-ladder surface integration file on rc4. No production logic or release gate changes.",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/milestone/MLS-0105",
+      "effort": "S",
+      "integrated_binding": null,
+      "intent": "Derive the two generic train-show pending row counts from the declared release ladder, preserve every status/current checkpoint assertion, and pass the full train-ladder surface integration file on rc4. No production logic or release gate changes.",
+      "key": "EAWF-0604",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 2,
+      "role": "executor",
+      "status": "PLANNED",
+      "title": "Align train surface fixtures with the declared ladder",
+      "uid": "b7ea7725-95b1-5193-a668-8b06d3c623ac",
+      "updated_at": "2026-10-29T00:17:10.106687Z",
+      "urn": "eawf://EAWF/task/EAWF-0604",
+      "write_claims": [
+        "tests/integration/workflow/release/test_train_ladder_surface.py"
       ]
     }
   },
