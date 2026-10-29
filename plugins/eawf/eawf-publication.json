@@ -1,9 +1,9 @@
 {
-  "bundle": "sha256:84f01c60d3ea05906476e301edd6fd946057d1562e68924aeb527fa21ea4c441",
-  "catalog": "sha256:75df290e66b033119f405cd71a128b75431a70c30b14721c5ecc5d4e8cb9e485",
+  "bundle": "sha256:c41ccac39c5869499176928aa114a9ed859d8418e1d7397d608a6feb3d0f8846",
+  "catalog": "sha256:d3c5c07a341b0152e0bd87f038746e9bab6ce0a2a124179a5659cc43849062c7",
   "files": [
     {
-      "digest": "sha256:762a5e2db3c54cc367875caaf52ab98c32662eb624e47d8abc9466456b8df063",
+      "digest": "sha256:27929323569b3353d361ef382210c5f77ad1b3b69395893c429a291b13899277",
       "kind": "manifest",
       "path": ".codex-plugin/plugin.json"
     },
@@ -98,7 +98,7 @@
       "path": "skills/refactor/SKILL.md"
     },
     {
-      "digest": "sha256:2759f8350dc1e64c1ffdffbebb3b10ab7049c64c8f6f9120635e53d68b7381e7",
+      "digest": "sha256:9f205eaf724503a838c8ba95f2fc1ae3d503f986c5a6e1884da8320e7cf55ee4",
       "kind": "skill",
       "path": "skills/reflect/SKILL.md"
     },
@@ -224,10 +224,10 @@
       "skill_id": "refactor"
     },
     {
-      "arguments": "sha256:992ba1ae3853a94d61bba123572a349b01efde33bbaeed20dd5920383eb16507",
+      "arguments": "sha256:cf43d34e4487c22b834b0a6d1d4171a3ed9329b658d90c7bf7920910a5a0464b",
       "output_schema": "sha256:1dd8b83ff0050998651a3ef729b54788f0da61f838bbf3039e0edaa3d042d991",
-      "prompt": "sha256:bc3e8d0fe6c744854789f9f258f934d82b583f2998971d629d30da5f6b4a7d0e",
-      "rpc_allowlist": "sha256:274c0ae7eef75291976accf1fdd16bbe6f77b66f924ab68467731be9113cba8a",
+      "prompt": "sha256:e4f34e961de9e820a06ef0a14f4326b45a80c8e9cec5703192339b4bf5358206",
+      "rpc_allowlist": "sha256:10633d8703935c821d7656b44f54da8de712b1129f6e5d6540ec17d8596fb961",
       "skill_id": "reflect"
     },
     {
@@ -281,5 +281,5 @@
     }
   ],
   "target_epoch": 2,
-  "verb_catalog": "sha256:64aa178b82f372d6eaf80920f373ea4cab2ad314bf7f1827d0906efcc64cd008"
+  "verb_catalog": "sha256:e0e1217e84b4735b36cd1bb27e0d5b7a39d669c40a54442c65f3528d39c411eb"
 }
