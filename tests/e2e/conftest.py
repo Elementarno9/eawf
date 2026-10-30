@@ -32,7 +32,6 @@ import json
 import os
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 import tempfile
@@ -45,6 +44,7 @@ from typing import Literal
 
 import pytest
 
+from eawf.runtime.daemon.spawn import daemon_pid_if_ready
 from tests._epoch2_helpers import lay_epoch2_tree
 
 #: The committed empty-repo state fixture, seeded into each E2E temp repo
@@ -55,12 +55,13 @@ _EMPTY_REPO_STATE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
 )
 
-#: Wall-clock budget for the daemon to expose its socket after spawn.
-#: Mirrors :data:`eawf.runtime.daemon.spawn.SPAWN_POLL_TIMEOUT_SECONDS` with a
-#: little extra headroom for a cold interpreter start under ``uv run``.
-_DAEMON_READY_TIMEOUT_S: float = 8.0
+#: Ceiling for a spawned daemon that stays alive but never becomes ready. It
+#: is not a boot budget: readiness is the daemon's own listener identifying
+#: the spawned child, and a child that exits fails at once. A cold boot on a loaded macOS runner
+#: has outlasted 8 seconds before writing its log.
+_DAEMON_HANG_CEILING_S: float = 60.0
 
-#: Poll cadence while waiting for the socket / PID file to appear.
+#: Poll cadence while waiting for the daemon to become ready.
 _POLL_INTERVAL_S: float = 0.05
 
 #: Grace period for a SIGTERM'd daemon to exit before we escalate to
@@ -272,49 +273,70 @@ def epoch1_e2e_env() -> Iterator[E2EEnv]:
         yield sandbox
 
 
-def _wait_for_socket(sandbox: E2EEnv, deadline: float) -> bool:
-    """Poll until the daemon socket accepts a connection or *deadline* passes."""
-    while time.monotonic() < deadline:
-        if sandbox.sock_file.exists():
-            try:
-                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
-                    probe.settimeout(0.2)
-                    probe.connect(str(sandbox.sock_file))
-                    return True
-            except OSError:
-                pass
+def _spawn_ready(sandbox: E2EEnv) -> None:
+    """Spawn a real ``eawfd`` in *sandbox* and wait until its listener is up.
+
+    Ready means a ``daemon.ping`` probe connects to the socket and resolves
+    to the spawned child's PID: from the ping answer, or, when the connect
+    succeeds but the answer times out, from the live PID file the daemon
+    writes before it binds. A connected but slow daemon therefore counts as
+    ready without having answered; its later requests wait on it. A cold
+    boot on a loaded runner only waits longer, and a child that exits fails
+    at once instead of at a wall-clock budget.
+
+    Raises:
+        AssertionError: When the child exits before it answers, or is
+            still silent at :data:`_DAEMON_HANG_CEILING_S`; the captured log
+            tail is surfaced to aid diagnosis.
+    """
+    proc = sandbox.spawn_daemon()
+    deadline = time.monotonic() + _DAEMON_HANG_CEILING_S
+    while daemon_pid_if_ready(sandbox.runtime_dir) != proc.pid:
+        if proc.poll() is not None:
+            reason = f"exited with status {proc.returncode} before it answered daemon.ping"
+            break
+        if time.monotonic() >= deadline:
+            reason = f"is alive but did not answer daemon.ping within {_DAEMON_HANG_CEILING_S}s"
+            break
         time.sleep(_POLL_INTERVAL_S)
-    return False
+    else:
+        return
+    log_tail = (
+        sandbox.log_file.read_text(encoding="utf-8", errors="replace")
+        if sandbox.log_file.exists()
+        else "(no log file written)"
+    )
+    raise AssertionError(
+        f"daemon {reason} "
+        f"(sock={sandbox.sock_file.exists()} pid={sandbox.pid_file.exists()})\n"
+        f"--- eawfd.log ---\n{log_tail}"
+    )
 
 
 @pytest.fixture
 def running_daemon(e2e_env: E2EEnv) -> Iterator[E2EEnv]:
-    """Yield a sandbox with a live real ``eawfd`` already accepting connections.
+    """Yield a sandbox of the test's own with a live real ``eawfd`` accepting connections.
 
-    Spawns the daemon as a detached subprocess, waits for the socket +
-    PID file, and hands back the same :class:`E2EEnv`. Teardown is owned
-    by :func:`e2e_env`'s finalizer, which reaps the child unconditionally.
-
-    Raises:
-        AssertionError: When the daemon never exposes its socket / PID
-            file within :data:`_DAEMON_READY_TIMEOUT_S`; the captured log
-            tail is surfaced to aid diagnosis.
+    For a test that stops, restarts or writes through the daemon. Teardown
+    is owned by :func:`e2e_env`'s finalizer, which reaps the child
+    unconditionally.
     """
-    e2e_env.spawn_daemon()
-    deadline = time.monotonic() + _DAEMON_READY_TIMEOUT_S
-    ready = _wait_for_socket(e2e_env, deadline)
-    if not ready or not e2e_env.pid_file.exists():
-        log_tail = (
-            e2e_env.log_file.read_text(encoding="utf-8", errors="replace")
-            if e2e_env.log_file.exists()
-            else "(no log file written)"
-        )
-        raise AssertionError(
-            f"daemon did not become ready within {_DAEMON_READY_TIMEOUT_S}s "
-            f"(sock={e2e_env.sock_file.exists()} pid={e2e_env.pid_file.exists()})\n"
-            f"--- eawfd.log ---\n{log_tail}"
-        )
+    _spawn_ready(e2e_env)
     yield e2e_env
+
+
+@pytest.fixture(scope="module")
+def shared_daemon() -> Iterator[E2EEnv]:
+    """Yield one live ``eawfd`` sandbox shared by a module's read-only tests.
+
+    A test on it may only read the daemon's status, files and log; one that
+    stops, restarts or writes takes :func:`running_daemon`, so no test sees
+    another's effect. Module scope keeps the daemon inside its idle timeout,
+    since a module's tests run back to back.
+    """
+    with _sandbox(epoch=2) as sandbox:
+        _spawn_ready(sandbox)
+        yield sandbox
 
 
 def daemon_socket_path_fits_afunix(runtime_dir: Path) -> bool:

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import tempfile
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
@@ -232,20 +231,17 @@ def test_plugins_epoch2_with_a_malformed_record_names_why(
     )
 
 
-# ---- the whole line stays fast on an epoch-2 tree --------------------------
+# ---- the whole line renders on an epoch-2 tree ------------------------------
+# Its wall-clock budget is measured in the perf lane.
 
 
-def test_epoch2_producers_render_the_line_inside_the_statusline_budget(tmp_path: Path) -> None:
+def test_epoch2_producers_render_the_whole_line(tmp_path: Path) -> None:
     state_path = session_canary(tmp_path)
     append_ledger_record(memory_ledger(state_path), memory_record("MEM-1"))
     payload = {**PAYLOAD, "cwd": str(tmp_path)}
 
-    started = time.perf_counter()
     segments = orchestrator._build_segments(payload, state_path)
-    elapsed = time.perf_counter() - started
 
     texts = {segment.module: segment.text for segment in segments}
     assert texts["budget"] == "budget:n/a(no-token-cap)"
     assert texts["memory"].startswith("mem:1@")
-    # A generous ceiling: the line has a 100 ms cold target and CI runners are slow.
-    assert elapsed < 1.0

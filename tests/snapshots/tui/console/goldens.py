@@ -7,9 +7,10 @@ walking up to the ``tests`` directory rather than by counting parents.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
-from eawf.surfaces.tui.console.harness import GoldenLayout
+from eawf.surfaces.tui.console.harness import Contract, GoldenLayout
 
 
 def _tests_root() -> Path:
@@ -31,3 +32,35 @@ GOLDEN_ROOT: Path = _tests_root() / "fixtures" / "console" / "golden"
 
 #: Where the console's own golden harness finds each part of the contract.
 LAYOUT: GoldenLayout = GoldenLayout.under(GOLDEN_ROOT)
+
+#: The routes whose frames a native binding must leave exactly where it found them, at
+#: every width.
+ACCEPTANCE_FRAME_ROUTES: tuple[str, ...] = ("milestone", "release", "receipt", "export")
+
+#: Whether this process is a pytest-xdist worker. The variable is set before collection,
+#: so every worker parametrises the same cases.
+SHARDED: bool = "PYTEST_XDIST_WORKER" in os.environ
+
+
+def replayed_frame_ids(contract: Contract, *, sharded: bool) -> tuple[str, ...]:
+    """Return the frame ids one replay covers, in the order the pack files carry them.
+
+    A single-process run replays every frame. Under xdist every worker that draws a
+    replay case replays on its own, so a sharded run replays a fixed subset instead: each
+    frame at 80 columns, each frame with no width, and the acceptance routes at every
+    width, which keeps every frame kind and every route and still reaches 120 and 160
+    columns. The console-replay workflow replays the whole contract in one process.
+
+    Args:
+        contract: The tracked contract.
+        sharded: Whether the replay runs inside an xdist worker.
+    """
+    ids = tuple(state.id for state in contract.states)
+    if not sharded:
+        return ids
+    return tuple(
+        frame_id
+        for frame_id in ids
+        if not frame_id.endswith(("@120", "@160"))
+        or any(route in frame_id for route in ACCEPTANCE_FRAME_ROUTES)
+    )

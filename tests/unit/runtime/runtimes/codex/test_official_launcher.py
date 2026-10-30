@@ -15,7 +15,6 @@ import os
 import shutil
 import sys
 import threading
-import time
 import tomllib
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -28,7 +27,7 @@ from openai_codex.generated.v2_all import AgentMessageThreadItem
 from eawf.kernel.runtime.compiled import CompiledRunSpec
 from eawf.kernel.runtime.events import MessageSummaryPayload, TranscriptItem
 from eawf.kernel.state.epoch2.run import RunRuntimeTuple
-from eawf.runtime.budget.service import DEFAULT_GRACE_SECONDS
+from eawf.runtime.budget.service import TerminationResult
 from eawf.runtime.daemon.native_dispatch import CapsuleRequest, seal_capsule
 from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME, RUN_TMP_DIRNAME, RUN_TMP_ENV_KEYS
@@ -673,8 +672,22 @@ def test_a_message_of_exactly_the_limit_is_not_truncated() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _ladder_results(monkeypatch: pytest.MonkeyPatch) -> list[TerminationResult]:
+    """Record what every kill ladder run ended with, and still run it."""
+    results: list[TerminationResult] = []
+    ladder = cancel.cancel_with_grace
+
+    def recording(pgid: int, *args: Any, **kwargs: Any) -> TerminationResult:
+        result = ladder(pgid, *args, **kwargs)
+        results.append(result)
+        return result
+
+    monkeypatch.setattr(cancel, "cancel_with_grace", recording)
+    return results
+
+
 def test_budget_crossing_interrupts_reaps_and_resolves_budget_terminated(
-    workspace: Path,
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     seen: list[tuple[int, int | None]] = []
 
@@ -683,9 +696,8 @@ def test_budget_crossing_interrupts_reaps_and_resolves_budget_terminated(
         seen.append((total, pgid))
         return total >= _CAP_TOKENS
 
-    started = time.monotonic()
+    ladders = _ladder_results(monkeypatch)
     outcome, turn = _run(workspace, {"lines": [token_usage(80, 40)]}, usage_sink=sink)
-    elapsed = time.monotonic() - started
 
     pgid = _fake_pgid(workspace)
     (interrupt,) = [m for m in _received(workspace) if m.get("method") == "turn/interrupt"]
@@ -695,13 +707,14 @@ def test_budget_crossing_interrupts_reaps_and_resolves_budget_terminated(
     assert seen == [(120, pgid)]
     assert interrupt["params"] == {"threadId": THREAD_ID, "turnId": TURN_ID}
     assert outcome.subprocess_pid == pgid
-    assert elapsed < DEFAULT_GRACE_SECONDS
+    # the group left on the soft signal, so the ladder never waited out its grace
+    assert [(r.sigkill_sent, r.exited_on_term) for r in ladders] == [(False, True)]
     with pytest.raises(ProcessLookupError):
         os.killpg(pgid, 0)
 
 
 def test_a_crossing_after_the_server_exited_does_not_wait_on_the_interrupt(
-    workspace: Path,
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     async def sink(sample: UsageSample, pgid: int | None) -> bool:
         # Hold the crossing until the server has exited, without reaping it,
@@ -711,11 +724,26 @@ def test_a_crossing_after_the_server_exited_does_not_wait_on_the_interrupt(
             await asyncio.sleep(0.01)
         return True
 
-    started = time.monotonic()
+    interrupts: list[str] = []
+    interrupt = CodexClient.turn_interrupt
+
+    def recording(self: CodexClient, *args: Any, **kwargs: Any) -> Any:
+        try:
+            answer = interrupt(self, *args, **kwargs)
+        except BaseException:
+            interrupts.append("raised")
+            raise
+        interrupts.append("answered")
+        return answer
+
+    monkeypatch.setattr(CodexClient, "turn_interrupt", recording)
+    ladders = _ladder_results(monkeypatch)
     _, turn = _run(workspace, {"lines": [token_usage(80, 40)], "exit_code": 0}, usage_sink=sink)
 
     assert turn.exit_kind == "budget_terminated"
-    assert time.monotonic() - started < DEFAULT_GRACE_SECONDS
+    # the closed pipe failed the interrupt outright rather than leaving it to time out
+    assert interrupts == ["raised"]
+    assert [r.sigkill_sent for r in ladders] == [False]
 
 
 def test_a_terminated_sink_is_not_handed_later_readings(workspace: Path) -> None:

@@ -46,7 +46,9 @@ from tests.tui.surfaces.tui.console.test_chrome_sweeps import GOLDEN_ROOT, RENDE
 
 WIDTHS = [w for w, _h in SIZES]
 SCOPE = "eawf-core"
-CHASSIS = "tests.snapshots.tui.console.console_chassis.chassis"
+SHIPPED_HEADERS = (
+    Path(__file__).resolve().parents[4] / "fixtures" / "console" / "header-shipped-rows.json"
+)
 SEQUENCES = Path(__file__).resolve().parents[4] / "fixtures" / "console" / "golden" / "sequences"
 _SLOT = re.compile(r"(?:!\d[\d,]* NEEDS YOU  )?(\S) ([A-Z][A-Z /]*[A-Z])$")
 _SIZED = re.compile(r"^(?P<base>.+)@(?P<w>\d+)$")
@@ -291,38 +293,37 @@ def test_header_slot_is_identical_across_sizes_on_every_golden_state() -> None:
     assert {base: found for base, found in slots.items() if len(found) != 1} == {}
 
 
-def test_header_row_matches_the_test_only_chassis() -> None:
-    # parity holds only while both copies exist; the skip marks the chassis' removal
-    frame = pytest.importorskip(f"{CHASSIS}.frame", exc_type=ModuleNotFoundError)
-    chassis_session = pytest.importorskip(f"{CHASSIS}.session", exc_type=ModuleNotFoundError)
-    fixture_mod = pytest.importorskip(f"{CHASSIS}.fixture", exc_type=ModuleNotFoundError)
-    attention = pytest.importorskip(f"{CHASSIS}.attention", exc_type=ModuleNotFoundError)
-    fixture = fixture_mod.load_fixture()
-    needs = attention.open_count(fixture)
-    compared = 0
-    for conn in sorted(CONNECTION):
-        for history in HISTORIES[:4]:
-            for crumb in CRUMBS[:6]:
-                theirs = chassis_session.Session(route="run.detail", conn=conn)
-                for step_route, subj in history:
-                    theirs.back.push(step_route, 0, subj)
-                ours = _session("run.detail", conn=conn, history=history)
-                for w in WIDTHS:
-                    expected = frame.header_row(theirs, fixture, crumb, w)
-                    got = header_row(ours, crumb=crumb, scope=fixture.scope, needs=needs, w=w)
-                    assert got == expected, (conn, history, crumb, w)
-                    compared += 1
-    for index, state in enumerate(fixture.proto.entry):
-        theirs = chassis_session.Session(route="entry", entry_sel=index)
+def _shipped_headers() -> list[str]:
+    """Return the header rows the run.detail sweep and the entry states draw."""
+    rows = [
+        header_row(
+            _session("run.detail", conn=conn, history=history),
+            crumb=crumb,
+            scope=SCOPE,
+            needs=4,
+            w=w,
+        )
+        for conn in sorted(CONNECTION)
+        for history in HISTORIES[:4]
+        for crumb in CRUMBS[:6]
+        for w in WIDTHS
+    ]
+    for state in load_fixture(GOLDEN_ROOT / "fixture").proto.entry:
         process = ProcessValue(glyph=state.glyph, label=state.state)
         for w in WIDTHS:
-            expected = frame.header_row(theirs, fixture, f" {BRAND}", w)
-            got = header_row(
-                _session("entry"), crumb=f" {BRAND}", scope=SCOPE, needs=0, w=w, process=process
+            rows.append(
+                header_row(
+                    _session("entry"), crumb=f" {BRAND}", scope=SCOPE, needs=0, w=w, process=process
+                )
             )
-            assert got == expected
-            compared += 1
-    assert compared == len(CONNECTION) * 4 * 6 * 3 + len(fixture.proto.entry) * 3
+    return rows
+
+
+def test_header_row_matches_its_shipped_rows() -> None:
+    # the chassis this was once compared with is gone, so the fixture freezes shipped behaviour
+    shipped = json.loads(SHIPPED_HEADERS.read_text(encoding="utf-8"))
+    assert _shipped_headers() == shipped
+    assert len(shipped) == len(CONNECTION) * 4 * 6 * 3 + 8 * 3
 
 
 # ---------- CON-086: the breadcrumb's grammar, styling and links ----------

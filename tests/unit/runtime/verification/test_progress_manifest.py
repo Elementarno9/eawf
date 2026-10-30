@@ -483,18 +483,24 @@ def test_progress_event_rejects_half_obligation() -> None:
 def test_read_progress_manifest_never_waits_on_the_writer_lock(
     state_path: Path,
     make_publisher: Callable[..., ProgressPublisher],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A reader takes no lock, so a writer holding one cannot stall it."""
     published = make_publisher(channel_dir=None).open()
     target = progress_manifest_path(state_path, _KEY)
+    acquired: list[object] = []
+    real_acquire = portalock.acquire
 
-    with portalock.acquire(target, timeout=1.0):
-        started = time.monotonic()
+    def _counting_acquire(*args: Any, **kwargs: Any) -> Any:
+        acquired.append(args)
+        return real_acquire(*args, **kwargs)
+
+    with portalock.acquire(target, timeout=1.0), monkeypatch.context() as patch:
+        patch.setattr(portalock, "acquire", _counting_acquire)
         seen = read_progress_manifest(state_path, _KEY)
-        waited = time.monotonic() - started
 
     assert seen == published
-    assert waited < 1.0
+    assert acquired == []
 
 
 def test_read_progress_manifest_returns_none_for_unreadable_file(state_path: Path) -> None:

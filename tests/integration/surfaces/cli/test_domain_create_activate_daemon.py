@@ -107,8 +107,8 @@ def _reap(proc: subprocess.Popen[bytes]) -> None:
             proc.wait(timeout=_TERM_GRACE_S)
 
 
-@pytest.fixture
-def sandbox() -> Iterator[_Sandbox]:
+@contextlib.contextmanager
+def _served_canary() -> Iterator[_Sandbox]:
     """Yield a canary served by a real daemon; reap the daemon and the dirs.
 
     Everything sits directly under the system temp directory rather than
@@ -158,6 +158,33 @@ def sandbox() -> Iterator[_Sandbox]:
     finally:
         _reap(daemon)
         shutil.rmtree(scratch, ignore_errors=True)
+
+
+@pytest.fixture
+def sandbox() -> Iterator[_Sandbox]:
+    """Yield a daemon-served canary of the test's own, for a test that writes to it."""
+    with _served_canary() as served:
+        yield served
+
+
+@dataclass(frozen=True)
+class _Admitted:
+    """A shared daemon-served canary already holding the Milestone ``MLS-0001``."""
+
+    sandbox: _Sandbox
+    milestone_urn: str
+
+
+@pytest.fixture(scope="module")
+def admitted() -> Iterator[_Admitted]:
+    """Yield one daemon and one admitted Milestone for the tests that only get refused.
+
+    Every test on it is refused, by the daemon or before the wire, and asserts the
+    record is unchanged, so they share the daemon and the two creates instead of
+    paying for them each.
+    """
+    with _served_canary() as served:
+        yield _Admitted(sandbox=served, milestone_urn=_create_milestone(served))
 
 
 def _json(result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
@@ -291,11 +318,11 @@ def test_refused_activate_exits_state_conflict(sandbox: _Sandbox) -> None:
     assert all(row["entity_ref"] == milestone_urn for row in payload["errors"])
 
 
-def test_activate_of_an_absent_milestone_exits_state_conflict(sandbox: _Sandbox) -> None:
+def test_activate_of_an_absent_milestone_exits_state_conflict(admitted: _Admitted) -> None:
     """Error path: a verb addressed at no record is refused, not crashed."""
-    absent = sandbox.urn("milestone", "MLS-0404")
+    absent = admitted.sandbox.urn("milestone", "MLS-0404")
 
-    refused = _activate(sandbox, absent, revision=1, key="activate-absent")
+    refused = _activate(admitted.sandbox, absent, revision=1, key="activate-absent")
 
     assert refused.returncode == 3, refused.stdout + refused.stderr
     assert _json(refused)["status"] == "error"
@@ -351,10 +378,12 @@ def test_milestone_create_with_date_then_set_target_and_clear(sandbox: _Sandbox)
     assert _stored_target(sandbox, "MLS-0001") is None
 
 
-def test_set_target_on_a_stale_revision_exits_state_conflict(sandbox: _Sandbox) -> None:
-    urn = _create_milestone(sandbox)
+def test_set_target_on_a_stale_revision_exits_state_conflict(admitted: _Admitted) -> None:
+    sandbox = admitted.sandbox
 
-    refused = _set_target(sandbox, urn, "2026-10-09", revision=2, key="target-stale")
+    refused = _set_target(
+        sandbox, admitted.milestone_urn, "2026-10-09", revision=2, key="target-stale"
+    )
 
     assert refused.returncode == exit_codes.STATE_CONFLICT, refused.stdout + refused.stderr
     assert _json(refused)["errors"][0]["code"] == "revision_conflict"
@@ -363,11 +392,11 @@ def test_set_target_on_a_stale_revision_exits_state_conflict(sandbox: _Sandbox) 
 
 @pytest.mark.parametrize("args", [("2026-02-30",), ("2026-W41-5",), (), ("2026-10-09", "--clear")])
 def test_set_target_refuses_a_malformed_request_before_the_wire(
-    sandbox: _Sandbox, args: tuple[str, ...]
+    admitted: _Admitted, args: tuple[str, ...]
 ) -> None:
-    urn = _create_milestone(sandbox)
+    sandbox = admitted.sandbox
 
-    refused = _set_target(sandbox, urn, *args, revision=1, key="target-bad")
+    refused = _set_target(sandbox, admitted.milestone_urn, *args, revision=1, key="target-bad")
 
     assert refused.returncode == exit_codes.USER_ERROR, refused.stdout + refused.stderr
     assert _stored_target(sandbox, "MLS-0001") is None

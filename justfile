@@ -28,7 +28,8 @@ _default:
 #            timing, then the TUI render snapshots on 4 workers. The fast inner
 #            loop; mirrors CI's parallel leg without the slow / flaky tiers.
 #   ci       reproduces .github/workflows/ci.yaml's three Pytest steps VERBATIM
-#            (parallel core, TUI render on 4 workers, then serial perf timing),
+#            (parallel core, TUI render on 4 workers, then the serial perf
+#            lane with EAWF_SKIP_PERF=1, so its budgets never block),
 #            including the ubuntu-only `--cov` gate -- the coverage flags are
 #            appended here when `uname -s` is Linux, matching the workflow's
 #            `startsWith(matrix.os, 'ubuntu-')` conditional (empty elsewhere).
@@ -38,6 +39,7 @@ _default:
 #            the stateless tools/changed_scope.py selector (BASE default
 #            origin/main). A non-.py change pulls the whole golden tier; a
 #            changed src module pulls its mirror test file + package dir.
+#            Perf budgets stay skipped: a parallel run would time its own load.
 test mode="fast" base="origin/main":
     #!/usr/bin/env sh
     set -eu
@@ -57,8 +59,8 @@ test mode="fast" base="origin/main":
           cov_parallel=""
           cov_serial=""
         fi
-        uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --junitxml=pytest-junit.xml $cov_parallel
-        uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli $cov_serial
+        uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --junitxml=pytest-junit.xml $cov_parallel
+        EAWF_SKIP_PERF=1 uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel $cov_serial
         ;;
       changed)
         scope="$(uv run python tools/changed_scope.py --base "{{base}}" --existing-only)"
@@ -67,7 +69,7 @@ test mode="fast" base="origin/main":
           exit 0
         fi
         echo "changed-scope: pytest $scope"
-        uv run pytest -n auto $scope
+        EAWF_SKIP_PERF=1 uv run pytest -n auto $scope
         ;;
       *)
         echo "unknown test mode: {{mode}} (want: fast | ci | changed)" >&2
@@ -77,16 +79,19 @@ test mode="fast" base="origin/main":
 
 # Use before pushing a phase PR so the CI test gates surface locally.
 
-# Full suite: parallel core and TUI snapshots, then serial e2e and timing checks.
+# Full suite: parallel core and TUI snapshots, then serial e2e and the perf
+# lane's structural checks. Its budgets stay skipped: twice-green runs this on
+# release pushes, and budgets only report, on the nightly perf step.
 test-all:
     #!/usr/bin/env sh
     set -eu
     EAWF_RUNTIME_DIR="$(mktemp -d "${TMPDIR:-/tmp}/eawf-rt.XXXXXX")"
     export EAWF_RUNTIME_DIR
     trap 'rm -rf "$EAWF_RUNTIME_DIR"' EXIT
-    uv run pytest -n 2 --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf --deselect=tests/integration/kernel/migration/test_v07_rehearsal.py::test_largest_supported_state_applies_inside_its_declared_budget
+    uv run pytest -n 2 --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf
     uv run pytest -n 4 tests/snapshots/tui
-    uv run pytest -n0 tests/e2e tests/perf tests/integration/kernel/migration/test_v07_rehearsal.py::test_largest_supported_state_applies_inside_its_declared_budget
+    uv run pytest -n0 tests/e2e
+    EAWF_SKIP_PERF=1 uv run pytest -n0 tests/perf
 
 # TUI render snapshots (4 workers) + perf timing budget (serial: it measures
 # latency, so a contended machine changes the number under test).

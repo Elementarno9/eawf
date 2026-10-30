@@ -161,8 +161,9 @@ def test_run_051_no_decision_inside_the_wait_leaves_the_host_prompt_to_decide(
     code, stdout, elapsed = run_hook(repo, daemon, monkeypatch)
 
     assert (code, stdout) == (0, "")
-    assert WAIT_S <= elapsed < WAIT_S + SLACK_S
-    # a short poll interval, not a spin: roughly one read per interval over the wait
+    assert elapsed >= WAIT_S
+    # a short poll interval, not a spin: roughly one read per interval over the wait,
+    # and the hook gave up rather than reading on past it
     assert 2 <= daemon.calls.count(READ) <= WAIT_S / 0.05 + 2
 
 
@@ -181,22 +182,28 @@ def test_run_051_a_decision_after_the_wait_is_recorded_but_never_handed_back(
 def test_run_051_an_expiry_is_never_handed_back_as_a_denial(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    code, stdout, elapsed = run_hook(repo, _Daemon(decision="expired"), monkeypatch)
+    daemon = _Daemon(decision="expired")
+
+    code, stdout, _elapsed = run_hook(repo, daemon, monkeypatch)
 
     assert (code, stdout) == (0, "")
-    assert elapsed < WAIT_S
+    # the record came back already resolved, so the hook never read it again
+    assert daemon.calls == [REQUEST]
 
 
 def test_run_051_a_daemon_that_is_down_falls_through_at_once(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    attempts: list[str] = []
+
     def down() -> Any:
+        attempts.append("connect")
         raise ConnectionRefusedError("no daemon")
 
-    code, stdout, elapsed = run_hook(repo, down, monkeypatch)
+    code, stdout, _elapsed = run_hook(repo, down, monkeypatch)
 
     assert (code, stdout) == (0, "")
-    assert elapsed < SLACK_S
+    assert attempts == ["connect"]
 
 
 def test_run_051_a_daemon_error_mid_wait_falls_through_at_once(
@@ -205,10 +212,9 @@ def test_run_051_a_daemon_error_mid_wait_falls_through_at_once(
     daemon = _Daemon()
     daemon.read_error = TimeoutError("daemon call exceeded timeout")
 
-    code, stdout, elapsed = run_hook(repo, daemon, monkeypatch)
+    code, stdout, _elapsed = run_hook(repo, daemon, monkeypatch)
 
     assert (code, stdout) == (0, "")
-    assert elapsed < SLACK_S
     assert daemon.calls == [REQUEST, READ]
 
 

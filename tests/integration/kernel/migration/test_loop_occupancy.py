@@ -9,9 +9,11 @@ budget and reports the daemon absent.
 
 The two cases below are the same ``state.read`` call over the same socket,
 differing only in whether ``state.read`` is in
-:data:`eawf.runtime.daemon.server.OFFLOADED_METHODS`. The inline case pins
-the defect (a concurrent ping stalls for the whole hold); the offloaded case
-pins the fix (the ping answers inside the readiness budget).
+:data:`eawf.runtime.daemon.server.OFFLOADED_METHODS`. The read is held on an
+event the test controls, so each case is judged by ordering rather than by
+the clock: inline, the ping is answered only after the held read finished;
+offloaded, the ping is answered while the read is still held. The ping's
+latency against the readiness budget is measured in the perf lane.
 
 The daemon runs on its own thread with its own loop, and the clients are
 plain blocking sockets on the main thread — a single-loop harness cannot
@@ -27,7 +29,6 @@ import os
 import socket
 import tempfile
 import threading
-import time
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -39,7 +40,6 @@ import pytest
 import eawf.runtime.daemon.methods.state as state_mod
 import eawf.runtime.daemon.server as server_mod
 from eawf.kernel.migration.v1_state import State
-from eawf.runtime.daemon.limits import READINESS_BUDGET_SECONDS
 from eawf.runtime.daemon.methods import MethodContext, MethodNotFoundError
 from eawf.runtime.daemon.server import handle_connection
 from tests.fixtures.migration.epoch1_daemon_tree import write_state
@@ -47,10 +47,9 @@ from tests.integration.runtime.daemon._method_context import build_ctx
 
 pytestmark = pytest.mark.integration
 
-#: Synchronous hold injected into ``state.read``. Long enough that a stall
-#: cannot be confused with scheduling jitter and that a concurrent probe
-#: would blow through :data:`READINESS_BUDGET_SECONDS` several times over.
-HOLD_SECONDS = 2.0
+#: How long the inline case keeps the read held after sending the ping, so the
+#: ping is queued behind the hold rather than answered before it began.
+INLINE_HOLD_SECONDS = 0.5
 
 #: Ceiling on any client socket operation, so a regression fails the test
 #: instead of hanging the suite.
@@ -154,46 +153,63 @@ def read_response(conn: socket.socket) -> dict[str, Any]:
 def install_read_hold(
     monkeypatch: pytest.MonkeyPatch,
     started: threading.Event,
-    *,
-    hold_seconds: float = HOLD_SECONDS,
+    release: threading.Event,
+    finished: threading.Event,
 ) -> None:
-    """Make ``state.read`` hold synchronously for *hold_seconds*.
+    """Make ``state.read`` block synchronously until *release* is set.
 
     Stands in for the blocking IO + Pydantic validation the real handler
-    does, scaled up so the stall is unambiguous.
+    does. *started* is set when the hold begins and *finished* when it ends,
+    so a caller can tell whether an answer arrived during the hold.
     """
     real_read_state = state_mod.read_state
 
     def _held_read_state(state_path: Path) -> tuple[State, dict[str, Any]]:
         started.set()
-        time.sleep(hold_seconds)
+        release.wait(timeout=CLIENT_TIMEOUT_SECONDS)
+        finished.set()
         return real_read_state(state_path)
 
     monkeypatch.setattr(state_mod, "read_state", _held_read_state)
 
 
-def _ping_latency_during_hold(
+def _ping_during_hold(
     ctx: MethodContext,
     monkeypatch: pytest.MonkeyPatch,
     tag: str,
-) -> tuple[float, dict[str, Any]]:
-    """Time a ``daemon.ping`` issued while a ``state.read`` hold is running.
+    *,
+    release_after: float | None,
+) -> tuple[bool, dict[str, Any]]:
+    """Send a ``daemon.ping`` while a ``state.read`` hold is running.
+
+    Args:
+        ctx: Server context.
+        monkeypatch: Installs the hold.
+        tag: Socket name tag.
+        release_after: Seconds after the ping is sent to end the hold, or
+            ``None`` to hold until the ping is answered.
 
     Returns:
-        ``(ping_latency_seconds, state_read_response)``.
+        ``(answered_during_hold, state_read_response)``.
     """
-    started = threading.Event()
-    install_read_hold(monkeypatch, started)
+    started, release, finished = threading.Event(), threading.Event(), threading.Event()
+    install_read_hold(monkeypatch, started, release, finished)
+    timer = threading.Timer(release_after or 0.0, release.set)
     with serve_on_thread(ctx, short_socket_path(tag)) as sock_path, client(sock_path) as holder:
-        holder.sendall(request_frame("state.read"))
-        assert started.wait(timeout=CLIENT_TIMEOUT_SECONDS), "the held read never started"
-        with client(sock_path) as prober:
-            before = time.monotonic()
-            prober.sendall(request_frame("daemon.ping"))
-            ping_response = read_response(prober)
-            latency = time.monotonic() - before
+        try:
+            holder.sendall(request_frame("state.read"))
+            assert started.wait(timeout=CLIENT_TIMEOUT_SECONDS), "the held read never started"
+            with client(sock_path) as prober:
+                prober.sendall(request_frame("daemon.ping"))
+                if release_after is not None:
+                    timer.start()
+                ping_response = read_response(prober)
+                answered_during_hold = not finished.is_set()
+        finally:
+            timer.cancel()
+            release.set()
         assert "result" in ping_response, ping_response
-        return latency, read_response(holder)
+        return answered_during_hold, read_response(holder)
 
 
 def test_inline_handler_stalls_an_unrelated_ping(
@@ -208,13 +224,14 @@ def test_inline_handler_stalls_an_unrelated_ping(
     ctx = build_ctx(tmp_path, state_path)
     monkeypatch.setattr(server_mod, "OFFLOADED_METHODS", frozenset())
 
-    latency, read_response_payload = _ping_latency_during_hold(ctx, monkeypatch, "occ-inline")
-
-    assert latency > READINESS_BUDGET_SECONDS, (
-        f"ping answered in {latency:.3f}s with the loop held — the harness is not "
-        f"reproducing head-of-line blocking, so the offloaded case proves nothing"
+    during_hold, read_response_payload = _ping_during_hold(
+        ctx, monkeypatch, "occ-inline", release_after=INLINE_HOLD_SECONDS
     )
-    assert latency >= HOLD_SECONDS / 2
+
+    assert during_hold is False, (
+        "ping answered while the loop was held — the harness is not reproducing "
+        "head-of-line blocking, so the offloaded case proves nothing"
+    )
     assert "result" in read_response_payload, read_response_payload
 
 
@@ -222,19 +239,18 @@ def test_offloaded_handler_leaves_the_ping_within_budget(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CR RUN-054: the same two-second hold, offloaded, no longer stalls the
-    ping — it answers inside the shared readiness budget."""
+    """CR RUN-054: the same hold, offloaded, no longer stalls the ping — it
+    answers while the read is still held."""
     state_path = tmp_path / ".ea" / "state.json"
     write_state(state_path)
     ctx = build_ctx(tmp_path, state_path)
     assert "state.read" in server_mod.OFFLOADED_METHODS
 
-    latency, read_response_payload = _ping_latency_during_hold(ctx, monkeypatch, "occ-offload")
-
-    assert latency < READINESS_BUDGET_SECONDS, (
-        f"ping took {latency:.3f}s while an offloaded read was in flight — "
-        f"something is still holding the loop"
+    during_hold, read_response_payload = _ping_during_hold(
+        ctx, monkeypatch, "occ-offload", release_after=None
     )
+
+    assert during_hold is True, "the ping waited for the offloaded read: something holds the loop"
     assert "result" in read_response_payload, read_response_payload
 
 

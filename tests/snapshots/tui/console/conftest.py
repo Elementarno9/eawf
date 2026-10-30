@@ -19,7 +19,7 @@ import pytest
 from eawf.surfaces.tui.console import harness
 from eawf.surfaces.tui.console.harness import Contract, Result, load_contract
 
-from .goldens import LAYOUT
+from .goldens import LAYOUT, SHARDED, replayed_frame_ids
 
 
 @pytest.fixture(scope="session")
@@ -29,9 +29,14 @@ def contract() -> Contract:
 
 
 @pytest.fixture(scope="session")
-def replay() -> dict[str, Result]:
-    """Return one replay result per journey id and per frame id."""
-    return {result.id: result for result in asyncio.run(harness.replay(LAYOUT))}
+def replay(contract: Contract) -> dict[str, Result]:
+    """Return one replay result per journey id and per replayed frame id."""
+    if not SHARDED:
+        return {result.id: result for result in asyncio.run(harness.replay(LAYOUT))}
+    journeys = [journey.id for journey in contract.journeys]
+    frames = replayed_frame_ids(contract, sharded=True)
+    results = asyncio.run(harness.replay(LAYOUT, frame_globs=frames, journey_ids=journeys))
+    return {result.id: result for result in results}
 
 
 @pytest.fixture(scope="session")

@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import BaseModel, ConfigDict
 
 from eawf.surfaces.tui.console.action_menu import (
     ACTIONS_OVERLAY,
@@ -91,9 +92,8 @@ from tests.tui.surfaces.tui.console import test_native_route_bodies as bodies
 from .overlay_support import frame_of, press, prototype, session_on
 
 WIDTHS = [w for w, _h in SIZES]
-CHASSIS = "tests.snapshots.tui.console.console_chassis.chassis"
 PROTO = Path(__file__).resolve().parents[4] / "fixtures" / "console" / "golden" / "fixture"
-_MORE = re.compile(r"^   \.\.\. \((\d+) more\)\s*$")
+CHASSIS_MENUS = PROTO.parents[1] / "action-menu-chassis-parity.json"
 
 
 def _verb(row: Sequence[str]) -> MenuVerb:
@@ -459,70 +459,104 @@ def test_palette_rows_height_without_a_window_raises_value_error() -> None:
         palette_rows(Session(), _entity_hits(1), w=80, h=CHROME_ROWS)
 
 
-def _port_markers(rows: Sequence[str], w: int) -> list[str]:
-    """Rewrite the pack's ``... (N more)`` rows into the port's edge markers."""
-    out: list[str] = []
-    for index, row in enumerate(rows):
-        more = _MORE.match(row)
-        if more is None:
-            out.append(row)
-            continue
-        edge = "above" if index == 3 else "below"
-        out.append(f"   … {int(more.group(1)):,} {edge}".ljust(w))
-    return out
+# The chassis these frames were once compared with is gone, so the fixture freezes the
+# palette as it ships, at each width and query and at the selections where the window
+# turns: the first two rows, the middle, the last and the two past the end.
+class _ShippedPaletteFrame(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    w: int
+    query: str
+    sel: int
+    sel_after: int
+    pscroll_after: int
+    rows: list[str]
 
 
-def test_palette_matches_the_test_only_chassis_under_the_port_markers() -> None:
-    # parity holds only while both copies exist; the skip marks the chassis' removal
-    palette = pytest.importorskip(f"{CHASSIS}.overlays.palette", exc_type=ModuleNotFoundError)
-    sessions = pytest.importorskip(f"{CHASSIS}.session", exc_type=ModuleNotFoundError)
-    fixtures = pytest.importorskip(f"{CHASSIS}.fixture", exc_type=ModuleNotFoundError)
-    attention = pytest.importorskip(f"{CHASSIS}.attention", exc_type=ModuleNotFoundError)
-    fixture = fixtures.load_fixture()
-    entities = [
-        PaletteEntity(id=e["id"], route=e["to"], what=e["what"]) for e in palette.entities(fixture)
+class _ShippedPalette(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scope: str
+    needs: int
+    entities: list[PaletteEntity]
+    frames: list[_ShippedPaletteFrame]
+
+
+SHIPPED_PALETTE = _ShippedPalette.model_validate_json(
+    (PROTO.parents[1] / "palette-shipped-frames.json").read_text(encoding="utf-8")
+)
+PALETTE_QUERIES = ("", "r", "run-5", "home", "zzz")
+
+
+def _palette_selections(query: str) -> list[int]:
+    total = len(hits(query, SHIPPED_PALETTE.entities))
+    return list(dict.fromkeys([0, 1, total // 2, total - 1, total, total + 1]))
+
+
+def _palette_frame(w: int, query: str, sel: int) -> tuple[list[str], Session]:
+    session = Session(route="activity", overlay="palette", pq=query)
+    session.sel = sel
+    palette = SHIPPED_PALETTE
+    rows = [
+        header_row(session, crumb=CRUMB, scope=palette.scope, needs=palette.needs, w=w),
+        *palette_rows(session, hits(query, palette.entities), w=w, h=dict(SIZES)[w]),
     ]
-    needs = attention.open_count(fixture)
-    compared = 0
-    for w, h in SIZES:
-        for query in ("", "r", "run-5", "home", "zzz"):
-            theirs = sessions.Session(route="activity", overlay="palette", pq=query)
-            ours = Session(route="activity", overlay="palette", pq=query)
-            total = len(palette.hits(theirs, fixture))
-            for sel in [*range(total + 2), total // 2, 0]:
-                theirs.sel = ours.sel = sel
-                expected = _port_markers(palette.render(theirs, fixture, w, h), w)
-                got = [
-                    header_row(ours, crumb=CRUMB, scope=fixture.scope, needs=needs, w=w),
-                    *palette_rows(ours, hits(query, entities), w=w, h=h),
-                ]
-                got += [" " * w] * (h - 1 - len(got))
-                got.append(keybar(PALETTE_PAIRS, w))
-                assert got == expected, (w, query, sel)
-                assert (ours.sel, ours.pscroll) == (theirs.sel, theirs.pscroll)
-                compared += 1
-    assert compared > 0
+    return [row.rstrip() for row in rows], session
 
 
-def test_menu_rows_match_the_test_only_chassis_drawer() -> None:
-    # parity holds only while both copies exist; the skip marks the chassis' removal
-    drawer = pytest.importorskip(f"{CHASSIS}.drawers.actions", exc_type=ModuleNotFoundError)
-    sessions = pytest.importorskip(f"{CHASSIS}.session", exc_type=ModuleNotFoundError)
-    fixtures = pytest.importorskip(f"{CHASSIS}.fixture", exc_type=ModuleNotFoundError)
-    attention = pytest.importorskip(f"{CHASSIS}.attention", exc_type=ModuleNotFoundError)
-    fixture = fixtures.load_fixture()
-    for conn in ("LIVE", "OFFLINE SNAPSHOT"):
-        for route, rows in ROWS.items():
-            theirs = sessions.Session(route=route, conn=conn)
-            by_key = {row[0]: tuple(row) for row in rows}
+@pytest.mark.parametrize(
+    "frame", SHIPPED_PALETTE.frames, ids=lambda f: f"{f.w}-{f.query or 'empty'}-{f.sel}"
+)
+def test_palette_matches_its_shipped_frames(frame: _ShippedPaletteFrame) -> None:
+    rows, session = _palette_frame(frame.w, frame.query, frame.sel)
+    assert rows == frame.rows
+    assert (session.sel, session.pscroll) == (frame.sel_after, frame.pscroll_after)
 
-            def guard(verb: MenuVerb, _s: Any = theirs, _rows: Any = by_key) -> Availability:
-                ok, why = attention.verb_available(_s, fixture, _rows[verb.key])
-                return Availability(ok, why)
 
-            for w, h in SIZES:
-                expected = [row.ljust(w) for row in drawer.render(theirs, fixture, w, h)]
-                assert menu_rows(MENUS.verbs(route), guard=guard, w=w) == expected, (route, w)
+def test_shipped_palette_frames_cover_every_size_query_and_turning_selection() -> None:
+    frozen = {(f.w, f.query, f.sel) for f in SHIPPED_PALETTE.frames}
+    expected = {
+        (w, q, sel) for w in WIDTHS for q in PALETTE_QUERIES for sel in _palette_selections(q)
+    }
+    assert frozen == expected
+
+
+class _ChassisMenu(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    conn: str
+    route: str
+    availability: dict[str, tuple[bool, str]]
+    rows: dict[int, list[str]]
+
+
+class _ChassisMenus(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    menus: list[_ChassisMenu]
+
+
+def _chassis_menus() -> list[_ChassisMenu]:
+    return _ChassisMenus.model_validate_json(CHASSIS_MENUS.read_text(encoding="utf-8")).menus
+
+
+@pytest.mark.parametrize("menu", _chassis_menus(), ids=lambda menu: f"{menu.conn}-{menu.route}")
+def test_menu_rows_match_the_test_only_chassis_drawer(menu: _ChassisMenu) -> None:
+    # the drawer rows and the verb availability were frozen from the removed chassis
+    def guard(verb: MenuVerb) -> Availability:
+        ok, why = menu.availability[verb.key]
+        return Availability(ok, why)
+
+    assert sorted(menu.rows) == WIDTHS
+    assert set(menu.availability) == {row[0] for row in ROWS[menu.route]}
+    for w, rows in menu.rows.items():
+        expected = [row.ljust(w) for row in rows]
+        assert menu_rows(MENUS.verbs(menu.route), guard=guard, w=w) == expected, (menu.route, w)
+
+
+def test_chassis_menus_cover_every_route_on_both_connections() -> None:
+    covered = {(menu.conn, menu.route) for menu in _chassis_menus()}
+    assert covered == {(conn, route) for conn in ("LIVE", "OFFLINE SNAPSHOT") for route in ROWS}
 
 
 # ---------- CON-143: a surface holding no authority offers no verb ----------

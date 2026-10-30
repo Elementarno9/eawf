@@ -19,9 +19,9 @@ The changes gate guards the cost cut that skips the heavy jobs on a
 state-only push: the skip must hinge on the classifier's verdict alone,
 and the jobs outside it must keep running on every push.
 
-The twice-green gate pins when the rerun happens as well as how: on
-release pushes plus nightly and manual runs, never on a pull request or a
-main push.
+The twice-green gate pins when the second green run happens as well as
+how: once, on release pushes plus nightly and manual runs, never on a pull
+request or a main push.
 """
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ import yaml
 from eawf.workflow.release.pipeline_receipts import RECEIPT_FILENAMES
 from eawf.workflow.release.publication_receipt import receipt_filename
 from eawf.workflow.release.source_host_assets import source_host_assets
+from tests.lint.test_no_wall_clock_budget_asserts import PERF_LANE
 
 pytestmark = pytest.mark.unit
 
@@ -523,10 +524,12 @@ def _is_nightly(cron: str) -> bool:
 def twice_green_violations(workflow: dict[Any, Any]) -> list[str]:
     """Report every way *workflow* could stop proving the suite is twice-green.
 
-    A suite that passes once but not twice in a row is not green, it is
-    lucky: the second run inherits whatever the first left on disk, which
-    is where the shared-runtime-dir and stale-lock flakes lived. The
-    ``test`` matrix runs the suite once and cannot see that class at all.
+    A suite that passes once but not twice is not green, it is lucky. The
+    ``test`` matrix supplies the first green run on every event this job
+    runs on, so the job supplies the second: ``just test-all`` once on a
+    fresh checkout, unsharded. A second step re-running it on the same
+    checkout doubled the job without catching a defect, so the gate pins
+    exactly one run and reds on two as well as on none.
 
     Cadence: the REL-026 proof runs on release pushes plus nightly and
     manual runs. A pull request or a main push never runs it: there the
@@ -543,8 +546,8 @@ def twice_green_violations(workflow: dict[Any, Any]) -> list[str]:
     Returns:
         One human-readable problem per violation; empty when a fresh
         ubuntu-24.04 job carrying exactly the cadence condition checks the
-        tree out and runs ``just test-all`` exactly twice with neither exit
-        code swallowed, and the workflow's triggers and concurrency group
+        tree out and runs ``just test-all`` exactly once with its exit code
+        not swallowed, and the workflow's triggers and concurrency group
         deliver that cadence.
     """
     problems: list[str] = []
@@ -562,8 +565,8 @@ def twice_green_violations(workflow: dict[Any, Any]) -> list[str]:
         problems.append("the twice-green job checks out no fresh tree")
 
     runs = _just_test_all_steps(job)
-    if len(runs) != 2:
-        problems.append(f"the twice-green job runs 'just test-all' {len(runs)} time(s), not twice")
+    if len(runs) != 1:
+        problems.append(f"the twice-green job runs 'just test-all' {len(runs)} time(s), not once")
     if any(step.get("continue-on-error") for step in runs):
         problems.append("a 'just test-all' step is continue-on-error, so a red run reads as green")
     return problems + _cadence_violations(workflow)
@@ -618,17 +621,16 @@ def _job_comment(source: str, job_name: str) -> str | None:
 
 
 def test_ci_runs_the_full_suite_twice_green() -> None:
-    """The live CI workflow runs ``just test-all`` twice on a fresh checkout."""
+    """The live CI workflow runs ``just test-all`` once more on a fresh checkout."""
     assert twice_green_violations(_load_ci()) == []
 
 
-def test_twice_green_gate_reds_on_a_single_run() -> None:
-    """The gate fires on the real defect: one run, so a rerun-only flake hides.
+def test_twice_green_gate_reds_on_a_swallowed_run() -> None:
+    """The gate fires on the real defect: a run whose red reads as green.
 
-    The synthetic job also swallows the exit code, pins the wrong runner
-    and runs on pull requests, and the workflow keeps none of the cadence
-    triggers, which are the other ways a job can look like this gate's
-    subject while proving nothing.
+    The synthetic job also pins the wrong runner and runs on pull requests,
+    and the workflow keeps none of the cadence triggers, which are the other
+    ways a job can look like this gate's subject while proving nothing.
     """
     defective = yaml.safe_load(
         """
@@ -647,7 +649,6 @@ def test_twice_green_gate_reds_on_a_single_run() -> None:
     assert twice_green_violations(defective) == [
         "the twice-green job does not run on ubuntu-24.04",
         _TWICE_GREEN_CONDITION_PROBLEM,
-        "the twice-green job runs 'just test-all' 1 time(s), not twice",
         "a 'just test-all' step is continue-on-error, so a red run reads as green",
         _PUSH_PROBLEM,
         _NIGHTLY_PROBLEM,
@@ -680,9 +681,7 @@ def _twice_green_workflow(condition: str | None = _TWICE_GREEN_CONDITION) -> dic
             steps:
               - name: Checkout
                 uses: actions/checkout@v4
-              - name: Pytest (run 1)
-                run: just test-all
-              - name: Pytest (run 2)
+              - name: Pytest
                 run: just test-all
         """
     )
@@ -692,10 +691,21 @@ def _twice_green_workflow(condition: str | None = _TWICE_GREEN_CONDITION) -> dic
 
 
 def test_twice_green_gate_reds_on_a_checkoutless_job() -> None:
-    """Two runs over a tree nobody checked out are not two FRESH runs."""
+    """A run over a tree nobody checked out is not a FRESH run."""
     defective = _twice_green_workflow()
     defective["jobs"]["twice-green"]["steps"].pop(0)
     assert twice_green_violations(defective) == ["the twice-green job checks out no fresh tree"]
+
+
+@pytest.mark.parametrize("runs", [0, 2])
+def test_twice_green_gate_reds_on_any_run_count_but_one(runs: int) -> None:
+    """No run proves nothing; a second back-to-back run doubles the job for no defect."""
+    defective = _twice_green_workflow()
+    steps = defective["jobs"]["twice-green"]["steps"]
+    steps[1:] = [{"name": f"Pytest {n}", "run": "just test-all"} for n in range(runs)]
+    assert twice_green_violations(defective) == [
+        f"the twice-green job runs 'just test-all' {runs} time(s), not once"
+    ]
 
 
 def test_twice_green_gate_reds_on_a_missing_job() -> None:
@@ -1041,11 +1051,11 @@ def test_changes_gate_reds_on_a_missing_job() -> None:
 
 # --- wall-clock budgets run serially -----------------------------------------
 
-#: Test trees that assert a wall-clock budget. Inside a parallel worker pool
-#: the pool's own load becomes part of what they measure: the cold-import
-#: ceiling tripped at 777 ms against 750 ms in a twice-green run while the
-#: same import takes about 300 ms on an idle host.
-_TIMING_SUITES = ("tests/perf/surfaces/tui", "tests/perf/surfaces/cli")
+#: Test trees that assert a wall-clock budget: the perf lane. Inside a parallel
+#: worker pool the pool's own load becomes part of what they measure: the
+#: cold-import ceiling tripped at 777 ms against 750 ms in a twice-green run
+#: while the same import takes about 300 ms on an idle host.
+_TIMING_SUITES = PERF_LANE
 
 _JUSTFILE = _REPO_ROOT / "justfile"
 
@@ -1058,7 +1068,8 @@ def _pytest_commands(text: str) -> list[str]:
 def _just_recipe(text: str, name: str) -> str:
     """Return the body of the justfile recipe *name* (its indented lines)."""
     lines = text.splitlines()
-    start = next(i for i, line in enumerate(lines) if line.startswith(f"{name}:"))
+    header = re.compile(rf"{re.escape(name)}( [^:]*)?:")
+    start = next(i for i, line in enumerate(lines) if header.match(line))
     body: list[str] = []
     for line in lines[start + 1 :]:
         if line and not line[0].isspace():
@@ -1099,23 +1110,89 @@ def test_ci_test_leg_runs_timing_suites_serially() -> None:
 def test_just_test_all_runs_timing_suites_serially() -> None:
     """``just test-all``, which twice-green runs, times its budgets serially."""
     recipe = _just_recipe(_JUSTFILE.read_text(encoding="utf-8"), "test-all")
-    migration = (
-        "tests/integration/kernel/migration/test_v07_rehearsal.py::"
-        "test_largest_supported_state_applies_inside_its_declared_budget"
-    )
     assert _pytest_commands(recipe) == [
-        "uv run pytest -n 2 --ignore=tests/snapshots/tui --ignore=tests/e2e "
-        f"--ignore=tests/perf --deselect={migration}",
+        "uv run pytest -n 2 --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf",
         "uv run pytest -n 4 tests/snapshots/tui",
-        f"uv run pytest -n0 tests/e2e tests/perf {migration}",
+        "uv run pytest -n0 tests/e2e",
+        "EAWF_SKIP_PERF=1 uv run pytest -n0 tests/perf",
+    ]
+
+
+def _collects(command: list[str], suite: str) -> bool:
+    """Return whether a pytest command line may collect *suite*."""
+
+    def covers(outer: str, inner: str) -> bool:
+        return inner == outer or inner.startswith(f"{outer}/")
+
+    ignored = [
+        token.removeprefix("--ignore=") for token in command if token.startswith("--ignore=")
+    ]
+    if any(covers(path, suite) for path in ignored):
+        return False
+    paths = [token for token in command if token.startswith(("tests", "$"))]
+    return not [token for token in paths if token.startswith("tests")] or any(
+        token.startswith("$") or covers(token, suite) or covers(suite, token) for token in paths
+    )
+
+
+def unskipped_perf_runs(commands: list[str]) -> list[str]:
+    """Return each command that may collect a perf-lane budget with its budgets armed.
+
+    A shell variable among the arguments may name any path, so it counts as
+    collecting every suite.
+
+    Args:
+        commands: The ``uv run pytest`` command lines of one recipe.
+
+    Returns:
+        Every command that may collect a :data:`PERF_LANE` suite without
+        ``EAWF_SKIP_PERF=1`` in its environment; empty when none does.
+    """
+    unskipped: list[str] = []
+    for command in commands:
+        tokens = command.split()
+        armed = "EAWF_SKIP_PERF=1" not in tokens[: tokens.index("uv")]
+        if armed and any(_collects(tokens, suite) for suite in _TIMING_SUITES):
+            unskipped.append(command)
+    return unskipped
+
+
+def test_just_test_recipes_never_arm_a_perf_budget() -> None:
+    """twice-green blocks a release on ``just test-all``; budgets only report, nightly."""
+    text = _JUSTFILE.read_text(encoding="utf-8")
+    commands = [
+        command
+        for recipe in ("test", "test-all")
+        for command in _pytest_commands(_just_recipe(text, recipe))
+    ]
+    assert unskipped_perf_runs(commands) == []
+
+
+def test_unskipped_perf_gate_reds_on_the_release_blocking_layout() -> None:
+    """The gate fires on the test-all line that armed budgets in twice-green."""
+    commands = [
+        "uv run pytest -n 2 --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf",
+        "uv run pytest -n 4 tests/snapshots/tui",
+        "uv run pytest -n0 tests/e2e tests/perf",
+        "uv run pytest -n auto $scope",
+        "uv run pytest -n auto --ignore=tests/perf/surfaces/tui",
+        "EAWF_SKIP_PERF=1 uv run pytest -n0 tests/perf/kernel/migration",
+        "uv run pytest",
+    ]
+    assert unskipped_perf_runs(commands) == [
+        "uv run pytest -n0 tests/e2e tests/perf",
+        "uv run pytest -n auto $scope",
+        "uv run pytest -n auto --ignore=tests/perf/surfaces/tui",
+        "uv run pytest",
     ]
 
 
 def test_timing_suite_gate_reds_on_a_parallel_cold_import_budget() -> None:
     """The gate fires on the layout that let the cold-import ceiling trip."""
     commands = [
-        "uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui",
-        "uv run pytest -n0 tests/perf/surfaces/tui",
+        "uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui "
+        "--ignore=tests/perf/runtime --ignore=tests/perf/kernel",
+        "uv run pytest -n0 tests/perf/surfaces/tui tests/perf/runtime tests/perf/kernel",
     ]
     assert timing_suite_violations(commands) == [
         "a parallel run includes the timing suite tests/perf/surfaces/cli",

@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import BaseModel, ConfigDict
 
 from eawf.surfaces.tui.console.app import compose_frame
 from eawf.surfaces.tui.console.fixture import load_fixture
@@ -47,8 +48,9 @@ from eawf.surfaces.tui.console.width import assert_known_width, cell_len
 
 WIDTHS = [w for w, _h in SIZES]
 ROUTES = sorted(ROUTE_KEYS)
-CHASSIS = "tests.snapshots.tui.console.console_chassis.chassis"
-SEQUENCES = Path(__file__).resolve().parents[4] / "fixtures" / "console" / "golden" / "sequences"
+FIXTURES = Path(__file__).resolve().parents[4] / "fixtures" / "console"
+SEQUENCES = FIXTURES / "golden" / "sequences"
+CHASSIS_BARS = FIXTURES / "keybar-chassis-parity.json"
 
 
 def _pairs(route: str) -> list[tuple[str, str]]:
@@ -379,19 +381,44 @@ def test_keybar_budget_holds_on_every_golden_bar(frame_id: str, w: int, bar: str
     assert _used(bar) <= budget(w), frame_id
 
 
-def test_keybar_matches_the_test_only_chassis_on_every_table() -> None:
-    # parity holds only while both copies exist; the skip marks the chassis' removal
-    frame = pytest.importorskip(f"{CHASSIS}.frame", exc_type=ModuleNotFoundError)
-    keys = pytest.importorskip(f"{CHASSIS}.keys", exc_type=ModuleNotFoundError)
-    tables = [[entry.pair() for entry in table] for table in keys.ROUTE_KEYS.values()]
-    tables += [list(pairs) for pairs in keys.OVERLAY_PAIRS.values()]
-    tables += [list(pairs) for pairs in keys.DRAWER_PAIRS.values()]
-    full = {"PgUp PgDn": KEY["page"].token}
-    compared = 0
-    for table in tables:
-        pairs = [(full.get(token, token), label) for token, label in table]
-        for w in WIDTHS:
-            theirs = frame.keybar(pairs, w)
-            assert keybar(pairs, w) == theirs
-            compared += 1
-    assert compared == len(tables) * len(WIDTHS)
+class _ChassisTable(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    table: str
+    pairs: list[tuple[str, str]]
+    bars: dict[int, str]
+
+
+class _ChassisBars(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    tables: list[_ChassisTable]
+
+
+def _chassis_tables() -> list[_ChassisTable]:
+    return _ChassisBars.model_validate_json(CHASSIS_BARS.read_text(encoding="utf-8")).tables
+
+
+# The prototype drops trailing pairs; the fixed global drop order drops ". actions" before
+# "Esc back", which only the attention route at 80 columns is wide enough to reach.
+CHASSIS_DIVERGENCE = {
+    ("route:attention", 80): (
+        " \u2191\u2193 row   Tab buckets   a answer   x deny   z snooze   v resolve   Esc back     "
+    ),
+}
+
+
+@pytest.mark.parametrize("table", _chassis_tables(), ids=lambda table: table.table)
+def test_keybar_matches_the_test_only_chassis_on_every_table(table: _ChassisTable) -> None:
+    # the bars were frozen from the removed chassis, so parity outlives its copy
+    assert sorted(table.bars) == WIDTHS
+    for w, theirs in table.bars.items():
+        expected = CHASSIS_DIVERGENCE.get((table.table, w), theirs)
+        assert keybar(table.pairs, w) == expected, (table.table, w)
+
+
+def test_chassis_bars_cover_every_route_table_and_the_divergence_is_live() -> None:
+    tables = {table.table: table for table in _chassis_tables()}
+    assert {f"route:{route}" for route in ROUTES} <= set(tables)
+    for (name, w), ours in CHASSIS_DIVERGENCE.items():
+        assert tables[name].bars[w] != ours

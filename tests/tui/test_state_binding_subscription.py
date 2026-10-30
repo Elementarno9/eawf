@@ -22,7 +22,6 @@ import contextlib
 import os
 import socket
 import threading
-import time
 from typing import TYPE_CHECKING, Any, cast
 
 import orjson
@@ -247,7 +246,7 @@ def _blocking_binding(client: _BlockingClient) -> tuple[StateBinding, threading.
 
 @pytest.mark.skipif(os.name == "nt", reason="the POSIX socket read; Windows uses CancelIoEx")
 def test_disconnect_wakes_a_read_that_blocks_indefinitely() -> None:
-    """``disconnect`` returns in under a second and the subscription thread has exited."""
+    """``disconnect`` wakes the parked read: the subscription thread has exited when it returns."""
     client = _BlockingClient()
 
     async def body() -> None:
@@ -258,11 +257,9 @@ def test_disconnect_wakes_a_read_that_blocks_indefinitely() -> None:
             await asyncio.sleep(0.05)  # let the thread park in readline()
             assert not exited.is_set()
 
-            started = time.monotonic()
             await binding.disconnect()
-            elapsed = time.monotonic() - started
 
-            assert elapsed < 1.0
+            # The client is still open here, so only the woken read lets the thread exit.
             assert exited.is_set()
             assert binding._subscription_sock is None
             assert binding._subscribe_task is None
@@ -273,17 +270,25 @@ def test_disconnect_wakes_a_read_that_blocks_indefinitely() -> None:
     asyncio.run(body())
 
 
-def test_disconnect_without_subscription_has_no_socket_to_shut() -> None:
+def test_disconnect_without_subscription_has_no_socket_to_shut(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """With no subscription running, there is no socket and nothing to wait on."""
+    waits: list[object] = []
+    real_wait = asyncio.wait
+
+    async def _counting_wait(*args: Any, **kwargs: Any) -> Any:
+        waits.append(args)
+        return await real_wait(*args, **kwargs)
 
     async def body() -> None:
         binding = _binding()
         assert binding._shutdown_subscription_sock() is False
-        started = time.monotonic()
+        monkeypatch.setattr(asyncio, "wait", _counting_wait)
         await binding.disconnect()
-        assert time.monotonic() - started < 0.5
 
     asyncio.run(body())
+    assert waits == []
 
 
 def test_shutdown_tolerates_a_socket_the_thread_already_closed() -> None:

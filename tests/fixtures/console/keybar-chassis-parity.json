@@ -1,0 +1,1182 @@
+{
+  "tables": [
+    {
+      "table": "route:scope.home",
+      "pairs": [
+        [
+          "↑↓",
+          "tree"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "Tab",
+          "list"
+        ],
+        [
+          "g",
+          "go"
+        ],
+        [
+          ".",
+          "actions"
+        ],
+        [
+          "?",
+          "help"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ tree   Enter drill   Tab list   g go   . actions   ? help                   ",
+        "120": " ↑↓ tree   Enter drill   Tab list   g go   . actions   ? help                                                           ",
+        "160": " ↑↓ tree   Enter drill   Tab list   g go   . actions   ? help                                                                                                   "
+      }
+    },
+    {
+      "table": "route:activity",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "PageUp PageDown",
+          "page"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "Tab",
+          "buckets"
+        ],
+        [
+          "\\",
+          "filter"
+        ],
+        [
+          ".",
+          "actions"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   PageUp PageDown page   Enter drill   Tab buckets   \\ filter           ",
+        "120": " ↑↓ row   PageUp PageDown page   Enter drill   Tab buckets   \\ filter   . actions                                       ",
+        "160": " ↑↓ row   PageUp PageDown page   Enter drill   Tab buckets   \\ filter   . actions                                                                               "
+      }
+    },
+    {
+      "table": "route:run.detail",
+      "pairs": [
+        [
+          "↑↓",
+          "event"
+        ],
+        [
+          ".",
+          "actions"
+        ],
+        [
+          "r",
+          "raw"
+        ],
+        [
+          "i",
+          "inspect"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ event   . actions   r raw   i inspect   Esc back                            ",
+        "120": " ↑↓ event   . actions   r raw   i inspect   Esc back                                                                    ",
+        "160": " ↑↓ event   . actions   r raw   i inspect   Esc back                                                                                                            "
+      }
+    },
+    {
+      "table": "route:attention",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Tab",
+          "buckets"
+        ],
+        [
+          "a",
+          "answer"
+        ],
+        [
+          "x",
+          "deny"
+        ],
+        [
+          "z",
+          "snooze"
+        ],
+        [
+          "v",
+          "resolve"
+        ],
+        [
+          ".",
+          "actions"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Tab buckets   a answer   x deny   z snooze   v resolve   . actions    ",
+        "120": " ↑↓ row   Tab buckets   a answer   x deny   z snooze   v resolve   . actions   Esc back                                 ",
+        "160": " ↑↓ row   Tab buckets   a answer   x deny   z snooze   v resolve   . actions   Esc back                                                                         "
+      }
+    },
+    {
+      "table": "route:batch.detail",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          ".",
+          "actions"
+        ],
+        [
+          "i",
+          "inspect"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   . actions   i inspect   Esc back                        ",
+        "120": " ↑↓ row   Enter drill   . actions   i inspect   Esc back                                                                ",
+        "160": " ↑↓ row   Enter drill   . actions   i inspect   Esc back                                                                                                        "
+      }
+    },
+    {
+      "table": "route:milestone",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "Tab",
+          "section"
+        ],
+        [
+          ".",
+          "actions"
+        ],
+        [
+          "y",
+          "copy digest"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   Tab section   . actions   y copy digest   Esc back      ",
+        "120": " ↑↓ row   Enter drill   Tab section   . actions   y copy digest   Esc back                                              ",
+        "160": " ↑↓ row   Enter drill   Tab section   . actions   y copy digest   Esc back                                                                                      "
+      }
+    },
+    {
+      "table": "route:track",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Tab",
+          "group"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          ".",
+          "actions"
+        ],
+        [
+          "i",
+          "inspect"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Tab group   Enter drill   . actions   i inspect   Esc back            ",
+        "120": " ↑↓ row   Tab group   Enter drill   . actions   i inspect   Esc back                                                    ",
+        "160": " ↑↓ row   Tab group   Enter drill   . actions   i inspect   Esc back                                                                                            "
+      }
+    },
+    {
+      "table": "route:task.detail",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          ".",
+          "actions"
+        ],
+        [
+          "i",
+          "inspect"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   . actions   i inspect   Esc back                        ",
+        "120": " ↑↓ row   Enter drill   . actions   i inspect   Esc back                                                                ",
+        "160": " ↑↓ row   Enter drill   . actions   i inspect   Esc back                                                                                                        "
+      }
+    },
+    {
+      "table": "route:release",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Tab",
+          "section"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "m",
+          "readiness"
+        ],
+        [
+          ".",
+          "actions"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Tab section   Enter drill   m readiness   . actions   Esc back        ",
+        "120": " ↑↓ row   Tab section   Enter drill   m readiness   . actions   Esc back                                                ",
+        "160": " ↑↓ row   Tab section   Enter drill   m readiness   . actions   Esc back                                                                                        "
+      }
+    },
+    {
+      "table": "route:timeline",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "←→",
+          "marker"
+        ],
+        [
+          "Tab",
+          "section"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          ".",
+          "actions"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   ←→ marker   Tab section   Enter drill   . actions   Esc back          ",
+        "120": " ↑↓ row   ←→ marker   Tab section   Enter drill   . actions   Esc back                                                  ",
+        "160": " ↑↓ row   ←→ marker   Tab section   Enter drill   . actions   Esc back                                                                                          "
+      }
+    },
+    {
+      "table": "route:backlog",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   Esc back                                                ",
+        "120": " ↑↓ row   Enter drill   Esc back                                                                                        ",
+        "160": " ↑↓ row   Enter drill   Esc back                                                                                                                                "
+      }
+    },
+    {
+      "table": "route:campaign",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Tab",
+          "section"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          ".",
+          "actions"
+        ],
+        [
+          "i",
+          "inspect"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Tab section   Enter drill   . actions   i inspect   Esc back          ",
+        "120": " ↑↓ row   Tab section   Enter drill   . actions   i inspect   Esc back                                                  ",
+        "160": " ↑↓ row   Tab section   Enter drill   . actions   i inspect   Esc back                                                                                          "
+      }
+    },
+    {
+      "table": "route:history",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "\\",
+          "filter"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "y",
+          "copy"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   \\ filter   Enter drill   y copy   Esc back                            ",
+        "120": " ↑↓ row   \\ filter   Enter drill   y copy   Esc back                                                                    ",
+        "160": " ↑↓ row   \\ filter   Enter drill   y copy   Esc back                                                                                                            "
+      }
+    },
+    {
+      "table": "route:settings",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "\\",
+          "filter"
+        ],
+        [
+          "i",
+          "inspect"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   \\ filter   i inspect   Esc back                         ",
+        "120": " ↑↓ row   Enter drill   \\ filter   i inspect   Esc back                                                                 ",
+        "160": " ↑↓ row   Enter drill   \\ filter   i inspect   Esc back                                                                                                         "
+      }
+    },
+    {
+      "table": "route:trust",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          ".",
+          "actions"
+        ],
+        [
+          "i",
+          "inspect"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   . actions   i inspect   Esc back                        ",
+        "120": " ↑↓ row   Enter drill   . actions   i inspect   Esc back                                                                ",
+        "160": " ↑↓ row   Enter drill   . actions   i inspect   Esc back                                                                                                        "
+      }
+    },
+    {
+      "table": "route:evidence",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "y",
+          "copy"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   y copy   Esc back                                       ",
+        "120": " ↑↓ row   Enter drill   y copy   Esc back                                                                               ",
+        "160": " ↑↓ row   Enter drill   y copy   Esc back                                                                                                                       "
+      }
+    },
+    {
+      "table": "route:evidence.digest",
+      "pairs": [
+        [
+          "y",
+          "copy"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " y copy   Esc back                                                              ",
+        "120": " y copy   Esc back                                                                                                      ",
+        "160": " y copy   Esc back                                                                                                                                              "
+      }
+    },
+    {
+      "table": "route:health",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "\\",
+          "filter"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   \\ filter   Esc back                                     ",
+        "120": " ↑↓ row   Enter drill   \\ filter   Esc back                                                                             ",
+        "160": " ↑↓ row   Enter drill   \\ filter   Esc back                                                                                                                     "
+      }
+    },
+    {
+      "table": "route:sandbox.log",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "\\",
+          "filter"
+        ],
+        [
+          "p",
+          "None"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   \\ filter   p None   Esc back                            ",
+        "120": " ↑↓ row   Enter drill   \\ filter   p None   Esc back                                                                    ",
+        "160": " ↑↓ row   Enter drill   \\ filter   p None   Esc back                                                                                                            "
+      }
+    },
+    {
+      "table": "route:unattended",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   Esc back                                                ",
+        "120": " ↑↓ row   Enter drill   Esc back                                                                                        ",
+        "160": " ↑↓ row   Enter drill   Esc back                                                                                                                                "
+      }
+    },
+    {
+      "table": "route:search",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "\\",
+          "filter"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   \\ filter   Esc back                                     ",
+        "120": " ↑↓ row   Enter drill   \\ filter   Esc back                                                                             ",
+        "160": " ↑↓ row   Enter drill   \\ filter   Esc back                                                                                                                     "
+      }
+    },
+    {
+      "table": "route:transcript",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "f",
+          "None"
+        ],
+        [
+          "y",
+          "copy"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   f None   y copy   Esc back                              ",
+        "120": " ↑↓ row   Enter drill   f None   y copy   Esc back                                                                      ",
+        "160": " ↑↓ row   Enter drill   f None   y copy   Esc back                                                                                                              "
+      }
+    },
+    {
+      "table": "route:receipt",
+      "pairs": [
+        [
+          "y",
+          "copy"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " y copy   Esc back                                                              ",
+        "120": " y copy   Esc back                                                                                                      ",
+        "160": " y copy   Esc back                                                                                                                                              "
+      }
+    },
+    {
+      "table": "route:cost.ceiling",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   Esc back                                                ",
+        "120": " ↑↓ row   Enter drill   Esc back                                                                                        ",
+        "160": " ↑↓ row   Enter drill   Esc back                                                                                                                                "
+      }
+    },
+    {
+      "table": "route:crash.recovery",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "i",
+          "inspect"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   i inspect   Esc back                                    ",
+        "120": " ↑↓ row   Enter drill   i inspect   Esc back                                                                            ",
+        "160": " ↑↓ row   Enter drill   i inspect   Esc back                                                                                                                    "
+      }
+    },
+    {
+      "table": "route:git.pr",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "y",
+          "copy"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   y copy   Esc back                                       ",
+        "120": " ↑↓ row   Enter drill   y copy   Esc back                                                                               ",
+        "160": " ↑↓ row   Enter drill   y copy   Esc back                                                                                                                       "
+      }
+    },
+    {
+      "table": "route:history.diff",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   Esc back                                                ",
+        "120": " ↑↓ row   Enter drill   Esc back                                                                                        ",
+        "160": " ↑↓ row   Enter drill   Esc back                                                                                                                                "
+      }
+    },
+    {
+      "table": "route:settings.stack",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Esc back                                                              ",
+        "120": " ↑↓ row   Esc back                                                                                                      ",
+        "160": " ↑↓ row   Esc back                                                                                                                                              "
+      }
+    },
+    {
+      "table": "route:notifications",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Esc back                                                              ",
+        "120": " ↑↓ row   Esc back                                                                                                      ",
+        "160": " ↑↓ row   Esc back                                                                                                                                              "
+      }
+    },
+    {
+      "table": "route:merge.conflict",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "y",
+          "copy"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   y copy   Esc back                                                     ",
+        "120": " ↑↓ row   y copy   Esc back                                                                                             ",
+        "160": " ↑↓ row   y copy   Esc back                                                                                                                                     "
+      }
+    },
+    {
+      "table": "route:export",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   Esc back                                                ",
+        "120": " ↑↓ row   Enter drill   Esc back                                                                                        ",
+        "160": " ↑↓ row   Enter drill   Esc back                                                                                                                                "
+      }
+    },
+    {
+      "table": "route:campaign.step",
+      "pairs": [
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "drill"
+        ],
+        [
+          "y",
+          "copy"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ row   Enter drill   y copy   Esc back                                       ",
+        "120": " ↑↓ row   Enter drill   y copy   Esc back                                                                               ",
+        "160": " ↑↓ row   Enter drill   y copy   Esc back                                                                                                                       "
+      }
+    },
+    {
+      "table": "route:campaign.artifact",
+      "pairs": [
+        [
+          "↑↓",
+          "scroll"
+        ],
+        [
+          "y",
+          "copy"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ scroll   y copy   Esc back                                                  ",
+        "120": " ↑↓ scroll   y copy   Esc back                                                                                          ",
+        "160": " ↑↓ scroll   y copy   Esc back                                                                                                                                  "
+      }
+    },
+    {
+      "table": "overlay:help",
+      "pairs": [
+        [
+          "Esc",
+          "close"
+        ]
+      ],
+      "bars": {
+        "80": " Esc close                                                                      ",
+        "120": " Esc close                                                                                                              ",
+        "160": " Esc close                                                                                                                                                      "
+      }
+    },
+    {
+      "table": "overlay:palette",
+      "pairs": [
+        [
+          "type",
+          "search"
+        ],
+        [
+          "↑↓",
+          "row"
+        ],
+        [
+          "Enter",
+          "go"
+        ],
+        [
+          "Esc",
+          "close"
+        ]
+      ],
+      "bars": {
+        "80": " type search   ↑↓ row   Enter go   Esc close                                    ",
+        "120": " type search   ↑↓ row   Enter go   Esc close                                                                            ",
+        "160": " type search   ↑↓ row   Enter go   Esc close                                                                                                                    "
+      }
+    },
+    {
+      "table": "overlay:consequence",
+      "pairs": [
+        [
+          "Enter",
+          "confirm"
+        ],
+        [
+          "Esc",
+          "cancel"
+        ]
+      ],
+      "bars": {
+        "80": " Enter confirm   Esc cancel                                                     ",
+        "120": " Enter confirm   Esc cancel                                                                                             ",
+        "160": " Enter confirm   Esc cancel                                                                                                                                     "
+      }
+    },
+    {
+      "table": "overlay:question",
+      "pairs": [
+        [
+          "1 2 3",
+          "pick an answer"
+        ],
+        [
+          "x",
+          "decline"
+        ],
+        [
+          "Esc",
+          "back — it stays open"
+        ]
+      ],
+      "bars": {
+        "80": " 1 2 3 pick an answer   x decline   Esc back — it stays open                    ",
+        "120": " 1 2 3 pick an answer   x decline   Esc back — it stays open                                                            ",
+        "160": " 1 2 3 pick an answer   x decline   Esc back — it stays open                                                                                                    "
+      }
+    },
+    {
+      "table": "overlay:pause",
+      "pairs": [
+        [
+          "n",
+          "reconcile"
+        ],
+        [
+          "c",
+          "cancel"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " n reconcile   c cancel   Esc back                                              ",
+        "120": " n reconcile   c cancel   Esc back                                                                                      ",
+        "160": " n reconcile   c cancel   Esc back                                                                                                                              "
+      }
+    },
+    {
+      "table": "overlay:evidence",
+      "pairs": [
+        [
+          "↑↓",
+          "receipt"
+        ],
+        [
+          "y",
+          "copy"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ receipt   y copy   Esc back                                                 ",
+        "120": " ↑↓ receipt   y copy   Esc back                                                                                         ",
+        "160": " ↑↓ receipt   y copy   Esc back                                                                                                                                 "
+      }
+    },
+    {
+      "table": "overlay:readiness",
+      "pairs": [
+        [
+          "↑↓",
+          "signal"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ signal   Esc back                                                           ",
+        "120": " ↑↓ signal   Esc back                                                                                                   ",
+        "160": " ↑↓ signal   Esc back                                                                                                                                           "
+      }
+    },
+    {
+      "table": "overlay:resolution",
+      "pairs": [
+        [
+          "Y",
+          "copy URN"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " Y copy URN   Esc back                                                          ",
+        "120": " Y copy URN   Esc back                                                                                                  ",
+        "160": " Y copy URN   Esc back                                                                                                                                          "
+      }
+    },
+    {
+      "table": "overlay:draft",
+      "pairs": [
+        [
+          "↑↓",
+          "field"
+        ],
+        [
+          "Enter",
+          "set"
+        ],
+        [
+          "p",
+          "promote"
+        ],
+        [
+          "x",
+          "defer"
+        ],
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " ↑↓ field   Enter set   p promote   x defer   Esc back                          ",
+        "120": " ↑↓ field   Enter set   p promote   x defer   Esc back                                                                  ",
+        "160": " ↑↓ field   Enter set   p promote   x defer   Esc back                                                                                                          "
+      }
+    },
+    {
+      "table": "overlay:marker",
+      "pairs": [
+        [
+          "Esc",
+          "back"
+        ]
+      ],
+      "bars": {
+        "80": " Esc back                                                                       ",
+        "120": " Esc back                                                                                                               ",
+        "160": " Esc back                                                                                                                                                       "
+      }
+    },
+    {
+      "table": "drawer:go",
+      "pairs": [
+        [
+          "g …",
+          "destination"
+        ],
+        [
+          "Esc",
+          "cancel"
+        ]
+      ],
+      "bars": {
+        "80": " g … destination   Esc cancel                                                   ",
+        "120": " g … destination   Esc cancel                                                                                           ",
+        "160": " g … destination   Esc cancel                                                                                                                                   "
+      }
+    },
+    {
+      "table": "drawer:actions",
+      "pairs": [
+        [
+          "key",
+          "run · consequence first"
+        ],
+        [
+          "Esc",
+          "close"
+        ]
+      ],
+      "bars": {
+        "80": " key run · consequence first   Esc close                                        ",
+        "120": " key run · consequence first   Esc close                                                                                ",
+        "160": " key run · consequence first   Esc close                                                                                                                        "
+      }
+    },
+    {
+      "table": "drawer:inspect",
+      "pairs": [
+        [
+          "y",
+          "copy"
+        ],
+        [
+          "Esc",
+          "close"
+        ]
+      ],
+      "bars": {
+        "80": " y copy   Esc close                                                             ",
+        "120": " y copy   Esc close                                                                                                     ",
+        "160": " y copy   Esc close                                                                                                                                             "
+      }
+    },
+    {
+      "table": "drawer:raw",
+      "pairs": [
+        [
+          "y",
+          "copy"
+        ],
+        [
+          "Esc",
+          "close"
+        ]
+      ],
+      "bars": {
+        "80": " y copy   Esc close                                                             ",
+        "120": " y copy   Esc close                                                                                                     ",
+        "160": " y copy   Esc close                                                                                                                                             "
+      }
+    }
+  ]
+}

@@ -213,6 +213,9 @@ def test_residue_imports_raises_on_invalid_python(tmp_path: Path) -> None:
         ),
         ("tools/rasterize_svg_to_png\n", []),
     ],
+    # The default ids repeat the text, so the recorded duration baseline would
+    # name the deleted tools and fail the scan above.
+    ids=["empty", "one-tool", "two-tools", "longer-name"],
 )
 def test_tool_mentions_matches_each_tool_file_name(text: str, expected: list[str]) -> None:
     assert _tool_mentions(text) == expected

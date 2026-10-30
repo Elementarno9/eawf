@@ -31,6 +31,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.e2e import conftest as e2e_conftest
 from tests.e2e.conftest import (
     E2EEnv,
     daemon_socket_path_fits_afunix,
@@ -169,23 +170,64 @@ def test_restart_turns_over_pid_and_remains_ready(e2e_env: E2EEnv) -> None:
         e2e_env.run_eawf("daemon", "stop")
 
 
-def test_status_reports_zero_counters_on_warm_daemon(running_daemon: E2EEnv) -> None:
+def test_spawn_ready_waits_out_a_slow_boot_for_the_ping(
+    e2e_env: E2EEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A daemon that boots slowly is waited for, then answers with its own PID."""
+    boot = (
+        "import time, runpy; time.sleep(1); "
+        "runpy.run_module('eawf.runtime.daemon.main', run_name='__main__')"
+    )
+    monkeypatch.setattr(e2e_conftest, "_eawfd_argv", lambda: [sys.executable, "-c", boot])
+
+    e2e_conftest._spawn_ready(e2e_env)
+
+    assert _read_pidfile_pid(e2e_env.pid_file) == e2e_env.daemon_proc.pid
+
+
+def test_spawn_ready_fails_at_once_when_the_child_exits(
+    e2e_env: E2EEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A child that dies is reported with its status instead of waited on."""
+    monkeypatch.setattr(e2e_conftest, "_DAEMON_HANG_CEILING_S", 3600.0)
+    monkeypatch.setattr(
+        e2e_conftest, "_eawfd_argv", lambda: [sys.executable, "-c", "raise SystemExit(3)"]
+    )
+
+    with pytest.raises(AssertionError, match="exited with status 3 before it answered"):
+        e2e_conftest._spawn_ready(e2e_env)
+
+
+def test_spawn_ready_gives_up_on_a_live_child_that_never_answers(
+    e2e_env: E2EEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A child that stays alive without binding hits the hang ceiling."""
+    monkeypatch.setattr(e2e_conftest, "_DAEMON_HANG_CEILING_S", 0.2)
+    monkeypatch.setattr(
+        e2e_conftest, "_eawfd_argv", lambda: [sys.executable, "-c", "import time; time.sleep(30)"]
+    )
+
+    with pytest.raises(AssertionError, match=r"is alive but did not answer daemon\.ping"):
+        e2e_conftest._spawn_ready(e2e_env)
+
+
+def test_status_reports_zero_counters_on_warm_daemon(shared_daemon: E2EEnv) -> None:
     """``daemon status`` against a warm daemon prints zeroed counters."""
-    result = running_daemon.run_eawf("daemon", "status")
+    result = shared_daemon.run_eawf("daemon", "status")
     assert result.returncode == 0, result.stderr
     assert "subs=0" in result.stdout
     assert "in_flight=0" in result.stdout
-    assert f"pid={_read_pidfile_pid(running_daemon.pid_file)}" in result.stdout
+    assert f"pid={_read_pidfile_pid(shared_daemon.pid_file)}" in result.stdout
 
 
-def test_status_json_emits_parseable_object(running_daemon: E2EEnv) -> None:
+def test_status_json_emits_parseable_object(shared_daemon: E2EEnv) -> None:
     """``eawf --json daemon status`` emits a JSON object with daemon counters."""
     import json
 
-    result = running_daemon.run_eawf("--json", "daemon", "status")
+    result = shared_daemon.run_eawf("--json", "daemon", "status")
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)["result"]
-    assert payload["pid"] == _read_pidfile_pid(running_daemon.pid_file)
+    assert payload["pid"] == _read_pidfile_pid(shared_daemon.pid_file)
     assert payload["active_subscriptions"] == 0
     assert payload["in_flight_mutations"] == 0
     assert payload["protocol_version"] == "2"
@@ -196,18 +238,18 @@ def test_status_json_emits_parseable_object(running_daemon: E2EEnv) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_spawn_writes_pidfile_socket_and_log(running_daemon: E2EEnv) -> None:
+def test_spawn_writes_pidfile_socket_and_log(shared_daemon: E2EEnv) -> None:
     """A live daemon materialises its pidfile, socket node, and log file."""
-    assert running_daemon.pid_file.exists()
-    assert running_daemon.sock_file.exists()
-    assert running_daemon.log_file.exists()
+    assert shared_daemon.pid_file.exists()
+    assert shared_daemon.sock_file.exists()
+    assert shared_daemon.log_file.exists()
     # The pidfile names a process that is genuinely alive.
-    assert _proc_alive(_read_pidfile_pid(running_daemon.pid_file))
+    assert _proc_alive(_read_pidfile_pid(shared_daemon.pid_file))
 
 
-def test_pidfile_records_protocol_and_timestamp(running_daemon: E2EEnv) -> None:
+def test_pidfile_records_protocol_and_timestamp(shared_daemon: E2EEnv) -> None:
     """The pidfile carries ``<pid>\\n<protocol>\\n<started_at>``."""
-    lines = running_daemon.pid_file.read_text(encoding="utf-8").splitlines()
+    lines = shared_daemon.pid_file.read_text(encoding="utf-8").splitlines()
     assert len(lines) >= 3
     assert lines[0].strip().isdigit()
     assert lines[1].strip() == "2"  # PROTOCOL_VERSION
@@ -215,20 +257,20 @@ def test_pidfile_records_protocol_and_timestamp(running_daemon: E2EEnv) -> None:
     assert lines[2].strip().startswith("20")
 
 
-def test_bound_socket_is_a_socket_node(running_daemon: E2EEnv) -> None:
+def test_bound_socket_is_a_socket_node(shared_daemon: E2EEnv) -> None:
     """The bound path is a real AF_UNIX socket that accepts a connection."""
-    assert stat.S_ISSOCK(os.stat(running_daemon.sock_file).st_mode)
+    assert stat.S_ISSOCK(os.stat(shared_daemon.sock_file).st_mode)
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
         probe.settimeout(2.0)
-        probe.connect(str(running_daemon.sock_file))  # raises on refusal
+        probe.connect(str(shared_daemon.sock_file))  # raises on refusal
 
 
-def test_bound_socket_is_owner_only(running_daemon: E2EEnv) -> None:
+def test_bound_socket_is_owner_only(shared_daemon: E2EEnv) -> None:
     """The Unix socket node is chmod'd to ``0o600`` (no group/other access)."""
-    assert _imode(running_daemon.sock_file) == 0o600
+    assert _imode(shared_daemon.sock_file) == 0o600
 
 
-def test_runtime_dir_is_owner_only_after_boot(running_daemon: E2EEnv) -> None:
+def test_runtime_dir_is_owner_only_after_boot(shared_daemon: E2EEnv) -> None:
     """The live daemon retightens its runtime dir to ``0o700`` on boot.
 
     The harness pre-creates the runtime dir under the prevailing umask, so
@@ -239,7 +281,7 @@ def test_runtime_dir_is_owner_only_after_boot(running_daemon: E2EEnv) -> None:
     operator's cwd / state paths — so it must not be listable by other
     local users.
     """
-    assert _imode(running_daemon.runtime_dir) == 0o700
+    assert _imode(shared_daemon.runtime_dir) == 0o700
 
 
 def test_stop_kills_daemon_and_removes_pidfile_and_socket(running_daemon: E2EEnv) -> None:
@@ -265,17 +307,17 @@ def test_stop_kills_daemon_and_removes_pidfile_and_socket(running_daemon: E2EEnv
 # --------------------------------------------------------------------------- #
 
 
-def test_log_records_boot_line_with_pid_and_version(running_daemon: E2EEnv) -> None:
+def test_log_records_boot_line_with_pid_and_version(shared_daemon: E2EEnv) -> None:
     """The daemon log captures the boot line naming the live PID + version."""
-    log_text = running_daemon.log_file.read_text(encoding="utf-8")
-    pid = _read_pidfile_pid(running_daemon.pid_file)
+    log_text = shared_daemon.log_file.read_text(encoding="utf-8")
+    pid = _read_pidfile_pid(shared_daemon.pid_file)
     assert f"run boot pid={pid}" in log_text
     assert "version=" in log_text
 
 
-def test_logs_cmd_streams_log_tail(running_daemon: E2EEnv) -> None:
+def test_logs_cmd_streams_log_tail(shared_daemon: E2EEnv) -> None:
     """``daemon logs --tail`` prints the real on-disk log lines."""
-    result = running_daemon.run_eawf("daemon", "logs", "--tail", "50")
+    result = shared_daemon.run_eawf("daemon", "logs", "--tail", "50")
     assert result.returncode == 0, result.stderr
     assert "run boot pid=" in result.stdout
 
@@ -367,12 +409,12 @@ def test_log_scrubs_home_shaped_paths() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_runtime_dir_override_keeps_daemon_inside_sandbox(running_daemon: E2EEnv) -> None:
+def test_runtime_dir_override_keeps_daemon_inside_sandbox(shared_daemon: E2EEnv) -> None:
     """The spawned daemon binds inside the sandbox, not the real ``~/.eawfd``."""
     real_runtime = Path.home() / ".eawfd"
     # The sandbox runtime dir is the one carrying live artifacts.
-    assert running_daemon.sock_file.exists()
-    assert running_daemon.sock_file.is_relative_to(running_daemon.runtime_dir)
-    assert not running_daemon.runtime_dir.is_relative_to(real_runtime)
+    assert shared_daemon.sock_file.exists()
+    assert shared_daemon.sock_file.is_relative_to(shared_daemon.runtime_dir)
+    assert not shared_daemon.runtime_dir.is_relative_to(real_runtime)
     # The pidfile PID is owned by us and lives only in the sandbox.
-    assert _proc_alive(_read_pidfile_pid(running_daemon.pid_file))
+    assert _proc_alive(_read_pidfile_pid(shared_daemon.pid_file))

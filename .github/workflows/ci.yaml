@@ -91,7 +91,7 @@ jobs:
         run: uv run mypy src/
 
   test:
-    name: ${{ matrix.os }} / py${{ matrix.python }}${{ startsWith(matrix.os, 'ubuntu-') && format(' / shard {0}', matrix.shard) || '' }}
+    name: ${{ matrix.os }} / py${{ matrix.python }} / shard ${{ matrix.shard }}
     needs: changes
     # Skipped only when the changes job concluded successfully and proved
     # the code tree is the one the last green run tested; !cancelled() keeps
@@ -103,21 +103,25 @@ jobs:
       !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    env:
+      # CI tool manifest pin for the svg_pixel_diff audit-DSL kind. resvg
+      # renders bit-identically across hosts once fonts are vendored and
+      # system fonts disabled, so the golden PNGs under
+      # tests/snapshots/svg/golden/ are compared by exact bytes. A version
+      # bump here is a GOLDEN-REFRESH event: regenerate the committed
+      # goldens (eawf vfl approve) whenever this pin moves. The pin also
+      # keys the resvg build cache, so a bump rebuilds once.
+      RESVG_VERSION: "0.45.1"
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-26]
         python: ["3.14"]
-        # The ubuntu leg carries coverage and is the slow one, so it runs as
-        # three pytest-split shards balanced by the committed durations;
-        # the macOS leg keeps the whole suite in one job as shard 1. Steps
-        # that must run once per leg, not once per shard, key on shard 1.
+        # Each leg runs as three pytest-split shards balanced by the
+        # committed durations, so neither OS holds the push critical path
+        # with one whole-suite job. Steps that must run once per leg, not
+        # once per shard, key on shard 1.
         shard: ["1", "2", "3"]
-        exclude:
-          - os: macos-26
-            shard: "2"
-          - os: macos-26
-            shard: "3"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -133,36 +137,40 @@ jobs:
       - name: Sync (frozen)
         run: uv sync --frozen
 
+      - name: Restore resvg (cached by pinned version)
+        # Building resvg from source costs minutes per shard; the binary is
+        # restored by its pinned version and runner, and saved after the job
+        # on a miss.
+        id: resvg-cache
+        if: startsWith(matrix.os, 'ubuntu-')
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/resvg
+          key: resvg-${{ env.RESVG_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+
       - name: Install resvg (pinned, T5 SVG pixel-diff oracle)
         # Ubuntu-only: coverage + the T5 svg_pixel_diff pixel-diff leg run on
         # the ubuntu leg alone, so the pinned renderer is installed there. On
         # the macOS leg the ~8 resvg-oracle tests skip cleanly via their
         # ``shutil.which("resvg")`` guards (tests/snapshots/svg/*.py).
-        if: startsWith(matrix.os, 'ubuntu-')
-        # CI tool manifest pin for the svg_pixel_diff audit-DSL kind.
-        # resvg renders bit-identically across hosts once fonts are
-        # vendored + system fonts disabled, so the golden PNGs under
-        # tests/snapshots/svg/golden/ are compared by exact bytes. A
-        # version bump here is a GOLDEN-REFRESH event: regenerate the
-        # committed goldens (eawf vfl approve) whenever this pin moves.
-        run: cargo install resvg --version 0.45.1 --locked
+        if: startsWith(matrix.os, 'ubuntu-') && steps.resvg-cache.outputs.cache-hit != 'true'
+        run: cargo install resvg --version "$RESVG_VERSION" --locked
 
       - name: Shard durations
         # pytest-split weighs tests by node id, while the committed baseline
         # is keyed the way the JUnit report names tests; this re-keys it.
-        if: startsWith(matrix.os, 'ubuntu-')
         run: uv run python tools/duration_budget_gate.py split tests/duration-baseline.json split-durations.json
 
       - name: Pytest (parallel)
         # Coverage is collected on the ubuntu leg only: the ${{ }} expression
-        # appends the --cov and shard flags on ubuntu and an empty string on
-        # macOS, so the macOS leg runs the identical suite whole and without
-        # coverage. The shards write raw coverage data only; the coverage job
+        # appends the --cov flags on ubuntu and an empty string on macOS, so
+        # the macOS shards run the identical selection without coverage. The
+        # ubuntu shards write raw coverage data only; the coverage job
         # combines them and judges the floors once. Every event runs this
         # same selection, so a merge is never the first full run. The
-        # migration timing node, end-to-end console latency and perf run
-        # serially below to avoid worker contention.
-        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --deselect=tests/integration/kernel/migration/test_v07_rehearsal.py::test_largest_supported_state_applies_inside_its_declared_budget --junitxml=pytest-junit.xml ${{ startsWith(matrix.os, 'ubuntu-') && format('--cov=eawf --cov-report= --cov-fail-under=0 --splits 3 --group {0} --splitting-algorithm least_duration --durations-path split-durations.json', matrix.shard) || '' }}
+        # end-to-end suite and the perf lane run serially below to avoid
+        # worker contention.
+        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --junitxml=pytest-junit.xml --splits 3 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
       - name: Duration budget (advisory)
         # Diffs every test's wall time in the parallel leg against the
         # committed baseline: a test past twice its baseline, or a fast-tier
@@ -193,17 +201,23 @@ jobs:
         if: matrix.shard == '1'
         run: uv run pytest -n0 tests/e2e ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
 
-      - name: Pytest (serial perf timing)
-        # Stays serial on purpose: these assert p99 latency and a cold-import
-        # wall-time ceiling, so a contended machine changes the number being
-        # measured. It runs once per leg, on shard 1, appending to that shard's data.
+      - name: Pytest (serial perf structure)
+        # The perf lane's import-graph and harness checks block on every
+        # event; EAWF_SKIP_PERF skips its wall-clock budgets, which a loaded
+        # runner can red with nothing broken. It runs once per leg, on shard
+        # 1, appending to that shard's data.
         if: matrix.shard == '1'
-        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
+        env:
+          EAWF_SKIP_PERF: "1"
+        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
 
-      - name: Pytest (serial migration timing)
-        # The largest-state apply keeps its timing budget on each platform.
-        if: matrix.shard == '1'
-        run: uv run pytest -n0 tests/integration/kernel/migration/test_v07_rehearsal.py::test_largest_supported_state_applies_inside_its_declared_budget ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
+      - name: Perf lane (nightly, reports, never blocks)
+        # The same lane with its wall-clock budgets, serial and on the
+        # nightly or hand-started run only. A breach shows as a failed step
+        # on an otherwise green job, so it reports without blocking.
+        if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && matrix.shard == '1'
+        continue-on-error: true
+        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel
 
       - name: Upload coverage data
         if: startsWith(matrix.os, 'ubuntu-')
@@ -480,15 +494,15 @@ jobs:
           tests/unit/runtime/sandbox/test_env_scrub.py
 
   twice-green:
-    name: Full suite green twice from a fresh checkout
-    # The `test` matrix runs the suite ONCE, so a test that only fails when
-    # it inherits state from an earlier run -- a leaked runtime dir, a
-    # cached daemon socket, a lockfile another run left behind -- is
-    # invisible there. This job runs `just test-all` twice back to back on
-    # one fresh checkout and requires both to exit 0, which is what REL-026
-    # means by reproducibly green. The two runs are separate steps on
-    # purpose: GitHub fails the job on the first non-zero step, so each
-    # run's exit code is asserted independently.
+    name: Full suite green a second time from a fresh checkout
+    # The `test` matrix runs the suite once on every event this job runs
+    # on, so this job supplies the second green run REL-026 means by
+    # reproducibly green: `just test-all` once more, on its own fresh
+    # checkout, unsharded and with the console goldens and the serial
+    # tiers in it. A third run, back to back on this checkout, never caught
+    # a defect the first two missed; the state one run leaves for the next
+    # -- a leaked runtime dir, a live daemon socket -- is named by the
+    # suite's daemon leak witness at session end instead.
     # Cadence: the REL-026 proof runs on release pushes plus nightly and
     # manual runs, never on a pull request or a main push. Its half hour
     # on every main push bounded CI wall-clock while its second run never
@@ -529,10 +543,7 @@ jobs:
         # needs no cargo toolchain and no apt universe pin to get it.
         run: uv tool install rust-just
 
-      - name: Pytest via just test-all (run 1 of 2)
-        run: just test-all
-
-      - name: Pytest via just test-all (run 2 of 2)
+      - name: Pytest via just test-all
         run: just test-all
 
   prose-gate:

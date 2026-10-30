@@ -24,12 +24,15 @@ from eawf.surfaces.tui.console.harness import (
 )
 from eawf.surfaces.tui.console.session import SIZES
 
-from .goldens import LAYOUT
+from .goldens import ACCEPTANCE_FRAME_ROUTES, LAYOUT, SHARDED, replayed_frame_ids
 
 _CONTRACT = load_contract(LAYOUT.sequences)
 
 #: Every frame id of the tracked contract, in the order the pack files carry them.
 FRAME_IDS: tuple[str, ...] = tuple(state.id for state in _CONTRACT.states)
+
+#: The frame ids this run replays: all of them in one process, a fixed subset under xdist.
+REPLAYED_FRAME_IDS: tuple[str, ...] = replayed_frame_ids(_CONTRACT, sharded=SHARDED)
 
 #: Every journey id, whose steps carry their own settle-cycle counts.
 JOURNEY_IDS: tuple[str, ...] = tuple(journey.id for journey in _CONTRACT.journeys)
@@ -45,7 +48,7 @@ def test_tracked_contract_carries_the_whole_census() -> None:
     assert len(set(FRAME_IDS)) == EXPECTED_FRAMES
 
 
-@pytest.mark.parametrize("frame_id", FRAME_IDS)
+@pytest.mark.parametrize("frame_id", REPLAYED_FRAME_IDS)
 def test_golden_frame_matches_whole(frame_id: str, replay: dict[str, Result]) -> None:
     result = replay[frame_id]
     assert result.ok, (
@@ -55,18 +58,15 @@ def test_golden_frame_matches_whole(frame_id: str, replay: dict[str, Result]) ->
     )
 
 
-@pytest.mark.parametrize("frame_id", FRAME_IDS)
+@pytest.mark.parametrize("frame_id", REPLAYED_FRAME_IDS)
 def test_golden_frame_settles_in_one_cycle(frame_id: str, replay: dict[str, Result]) -> None:
     result = replay[frame_id]
     assert result.settle_cycles == 1, f"{frame_id}: settle needed {result.settle_cycles} cycles"
 
 
-#: The routes whose frames a native binding must leave exactly where it found them. The
-#: tracked contract replays the epoch-1 mode, so binding a route to a read model the
-#: replay never holds may not move one row of it.
-ACCEPTANCE_FRAME_ROUTES: tuple[str, ...] = ("milestone", "release", "receipt", "export")
-
-#: Every tracked frame of those routes, at all three widths.
+#: Every tracked frame of the acceptance routes, at all three widths. The tracked contract
+#: replays the epoch-1 mode, so binding one of them to a read model the replay never holds
+#: may not move one row of it.
 ACCEPTANCE_FRAME_IDS: tuple[str, ...] = tuple(
     frame_id
     for frame_id in FRAME_IDS
@@ -94,6 +94,19 @@ def test_journey_step_settles_in_one_cycle(journey_id: str, replay: dict[str, Re
     result = replay[journey_id]
     noisy = [step for step in result.steps if step.get("cycles", 1) != 1]
     assert not noisy, f"{journey_id}: steps needed more than one settle cycle: {noisy}"
+
+
+def test_the_sharded_sample_keeps_every_frame_kind_and_route() -> None:
+    """The sample drops only wider copies, so no kind, route or width goes unreplayed."""
+    sample = replayed_frame_ids(_CONTRACT, sharded=True)
+    assert replayed_frame_ids(_CONTRACT, sharded=False) == FRAME_IDS
+    assert set(ACCEPTANCE_FRAME_IDS) <= set(sample) < set(FRAME_IDS)
+    assert {_unsized(frame_id) for frame_id in sample} == {_unsized(f) for f in FRAME_IDS}
+    assert {frame_id.rpartition("@")[2] for frame_id in sample} >= {"80", "120", "160"}
+
+
+def _unsized(frame_id: str) -> str:
+    return frame_id.rpartition("@")[0] or frame_id
 
 
 @pytest.mark.parametrize("size", SIZES)

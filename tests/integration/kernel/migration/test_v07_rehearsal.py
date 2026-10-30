@@ -940,24 +940,20 @@ def test_largest_supported_state_stays_under_the_recorded_multiplier_ceiling(
     )
 
 
-def test_largest_supported_state_applies_inside_its_declared_budget(
+def test_largest_supported_state_applies_and_leaves_a_small_residual_document(
     largest_pin: LiveCorpusPin, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
 ) -> None:
-    """One apply finishes in time and leaves a residual document a reader can hold.
+    """One apply publishes and leaves a residual document a reader can hold.
 
-    Both numbers are budgets rather than observations. The apply has to
-    fit inside the wall clock an operator is asked to hold a maintenance
-    window open for, and the document left hot after the terminal records
-    move to their ledgers has to stay small enough that a reader does not
-    pay for history it is not looking at.
+    The ceiling is a budget rather than an observation: the document left
+    hot after the terminal records move to their ledgers has to stay small
+    enough that a reader does not pay for history it is not looking at. The
+    apply's wall clock against ``apply_timeout_budget_s`` is measured in the
+    perf lane.
     """
     record = rehearsed(LARGEST_FIXTURE)
     assert record.apply is not None
     assert record.apply.applied is True
-    assert record.apply.wall_clock_s <= largest_pin.apply_timeout_budget_s, (
-        f"the apply took {record.apply.wall_clock_s}s, over the "
-        f"{largest_pin.apply_timeout_budget_s}s budget the pin records"
-    )
     assert record.apply.residual_document_bytes < largest_pin.residual_document_ceiling_bytes, (
         f"the residual document is {record.apply.residual_document_bytes} bytes, over the "
         f"{largest_pin.residual_document_ceiling_bytes}-byte ceiling; compaction is no longer "

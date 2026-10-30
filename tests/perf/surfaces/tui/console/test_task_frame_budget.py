@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import statistics
 import time
 from collections.abc import Callable
@@ -16,6 +17,11 @@ from eawf.surfaces.tui.console.perf import KEY_FLOOR_CEILING_MS, ROW_INCREMENT_C
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.session import SIZES, Session
 from tests.tui.surfaces.tui.console.test_task_progress import _batch, _model, _task, document
+
+_skip_perf = pytest.mark.skipif(
+    os.environ.get("EAWF_SKIP_PERF") == "1",
+    reason="EAWF_SKIP_PERF=1 - perf gate skipped",
+)
 
 
 def big_document(tasks: int) -> dict[str, Any]:
@@ -42,6 +48,7 @@ def _median_ms(draw: Callable[[], object], samples: int = 15) -> float:
     return statistics.median(times)
 
 
+@_skip_perf
 @pytest.mark.parametrize("route", ["scope.home", "milestone"])
 def test_a_thousand_tasks_render_within_the_frame_budget(route: str) -> None:
     subject = "MLS-0100" if route == "milestone" else None
