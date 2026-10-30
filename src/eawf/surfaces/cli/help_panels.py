@@ -123,6 +123,7 @@ COMMAND_PANELS: dict[str, str] = {
     "milestone": "planning",
     "plan": "planning",
     "question": "planning",
+    "research": "planning",
     "run": "planning",
     "session": "planning",
     "task": "planning",

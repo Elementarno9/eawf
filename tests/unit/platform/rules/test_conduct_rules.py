@@ -26,7 +26,7 @@ from eawf.platform.rules import (
     registered_projection_readers,
 )
 
-CONDUCT_OBLIGATION_COUNT = 47
+CONDUCT_OBLIGATION_COUNT = 31
 
 ACTIVITIES = frozenset(
     {

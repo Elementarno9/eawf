@@ -11,8 +11,8 @@ Explain the provenance of an entity; read-only.
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
 - Operates on: any canonical entity, through `projection.history.read`, `projection.evidence.read`, `semantic.result.read`, `runtime.run.events.read`.
 - Effects: Read-only provenance queries.
-- Allowed RPCs: `projection.history.read`, `projection.evidence.read`, `semantic.result.read`, `runtime.run.events.read`. Any other RPC is denied before it reaches a handler.
-- Run tools: `eawf_state_query`.
+- Allowed RPCs: `projection.history.read`, `projection.evidence.read`, `semantic.result.read`, `runtime.run.events.read`. Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
+- Run tools: `eawf_state_query`. These exist only inside a native Run eawf dispatches; a host session has none of them and uses the `eawf` commands above instead.
 - Canonical state: never mutated by this skill.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -49,9 +49,20 @@ No rule in the effective rule graph is scoped to this skill, which selects no ac
 
 ## 6. Output
 
-Output one WhyReport containing answer, subject revision, provenance path, nodes, active-versus-historical distinctions, gaps, references, coverage, and stop reason.
+Output one WhyReport. Its `summary` states the answer, subject revision, provenance path, nodes, active-versus-historical distinctions, gaps, references, and stop reason.
 
-The report validates against `WhyReport`, and its terminal outcome is exactly one of `explained`, `partial`, `not_found`, `blocked`. It carries a `coverage` block listing what the pass covered and, with a reason each, what it did not. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /why` before returning it.
+The report validates against `WhyReport`, and its terminal outcome is exactly one of `explained`, `partial`, `not_found`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /why` before returning it. It carries these fields and no other; a nested field is written under its parent.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skill_id` | `"why"` | yes | The id of the skill that produced the report. |
+| `outcome` | one of `"explained"`, `"partial"`, `"not_found"`, `"blocked"` | yes | How the invocation ended; the result. |
+| `summary` | string | no | Explanation of the outcome and what supports it; never the result. |
+| `coverage` | object | yes | What the pass covered and did not. |
+| `coverage.covered` | list of string | yes | What the pass covered. |
+| `coverage.not_covered` | list of object | yes | What the pass did not cover, with a reason each. |
+| `coverage.not_covered[].item` | string | yes | What the pass did not reach. |
+| `coverage.not_covered[].reason` | string | yes | Why it was not reached. |
 
 <!-- argument hint: <subject-ref> [--at <revision-or-time>] [--depth <summary|chain|full>] [--include <decisions|events|evidence|receipts>...] [--format <text|graph|json>] [--verify-links] -->
 ARGUMENTS: $ARGUMENTS

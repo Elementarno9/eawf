@@ -1,8 +1,9 @@
-"""The campaign and question entity groups.
+"""The research, campaign and question groups.
 
-``campaign`` and ``question`` are mounted at the CLI root by the command
-registry. The ``question`` group files operator decisions, the pending
-actions an agent raises when it reaches a choice it may not take.
+``research``, ``campaign`` and ``question`` are mounted at the CLI root by the
+command registry. ``research check`` judges one local research brief without a
+daemon. The ``question`` group files operator decisions, the pending actions
+an agent raises when it reaches a choice it may not take.
 """
 
 from __future__ import annotations
@@ -32,6 +33,12 @@ logger = logging.getLogger(__name__)
 campaign_app = typer.Typer(
     name="campaign",
     help="Plan, drive and cancel research Campaigns.",
+    no_args_is_help=True,
+)
+
+research_app = typer.Typer(
+    name="research",
+    help="Check the local briefs the research skill writes.",
     no_args_is_help=True,
 )
 
@@ -130,6 +137,41 @@ def _questions_file(path: Path) -> list[dict[str, Any]]:
             kind="InvalidInput",
         ) from exc
     return [item.model_dump(mode="json") for item in items]
+
+
+@research_app.command("check")
+def research_check(
+    ctx: typer.Context,
+    brief: Annotated[Path, typer.Argument(help="The brief's markdown file.")],
+) -> None:
+    """Check that a research brief holds every section, in order, with sound References.
+
+    The brief needs an H1 title and exactly the sections Question, Findings,
+    Alternatives, Recommendation, Open gaps and References. References is a
+    numbered table of repo-relative paths, URLs or Eawf URNs, each cited in
+    the prose as ``[N]``. Exits non-zero naming every defect.
+    """
+    from eawf.workflow.skills.research_brief import check_research_brief
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        text = brief.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        errors.emit_error(
+            errors.UserError(f"brief {brief} cannot be read: {exc}", kind="InvalidInput"),
+            flags=flags,
+        )
+    verdict = check_research_brief(text)
+    if not verdict.ok:
+        errors.emit_error(
+            errors.ValidationError(
+                f"brief {brief} is refused: {'; '.join(verdict.errors)}",
+                kind="ResearchBriefRefused",
+            ),
+            flags=flags,
+            data={"violations": list(verdict.errors)},
+        )
+    emit_json_or_text(verdict.model_dump(mode="json"), f"brief {brief} passes", flags=flags)
 
 
 @campaign_app.command("new")

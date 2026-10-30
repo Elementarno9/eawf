@@ -158,6 +158,7 @@ ROOT_ENTRY_EXCEPTIONS: Final[tuple[RootEntryException, ...]] = (
     _entry("schema", "tooling", "dumps the JSON Schemas of the canonical models"),
     _entry("sync", "tooling", "re-renders the managed instruction assets"),
     _entry("rules", "tooling", "reads and migrates the rendered rule set"),
+    _entry("research", "tooling", "checks the local briefs the research skill writes"),
     _entry("profile", "tooling", "scaffolds and validates rule profiles"),
     _entry("coauthor", "tooling", "resolves the commit trailer policy"),
     _entry("render-output", "tooling", "converts an output envelope between forms"),

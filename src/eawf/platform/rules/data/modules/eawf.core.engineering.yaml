@@ -8,13 +8,13 @@ when_to_use: designing or reviewing any change that adds a helper, a parameter, 
 rules:
   - rule_id: eawf.core.engineering.simplicity
     obligation_id: engineering.simplicity
-    revision: 1
+    revision: 2
     title: Build the simplest design that meets the present need
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      Choose the simplest design that meets the present need: add no helper, parameter or configuration knob without a caller today, and no handling for states the real call paths cannot reach.
+      Choose the simplest design that meets the present need.
     rationale: >-
       Speculative flexibility is the main source of accidental complexity; an abstraction waiting for a caller costs reading effort on every later edit and pays back nothing.
     verification:

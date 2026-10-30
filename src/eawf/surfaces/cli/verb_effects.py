@@ -296,6 +296,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "schema dump": _mutate(),
     "sync": _mutate(),
     "rules view": _read(),
+    "research check": _read(),
     "rules migrate": _read(),
     "rules rollback": _mutate(),
     "profile new": _create(),

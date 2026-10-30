@@ -30,7 +30,7 @@ Parallel implementation is allowed only when:
 
 | Skill | Purpose |
 |---|---|
-| `/research` | Answer one question with a swift one-page investigation; no Campaign. |
+| `/research` | Answer one question as a one-page local brief, swift or in rounds; no Campaign. |
 | `/spike` | Build, test, independently verify and present a local proof of concept. |
 | `/campaign` | Run a complete Campaign from definition through terminal synthesis. |
 | `/backlog` | Add or list draft Tasks and propose their promotion through a plan. |

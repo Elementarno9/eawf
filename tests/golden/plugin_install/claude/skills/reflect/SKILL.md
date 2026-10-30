@@ -59,6 +59,12 @@ No rule in the effective rule graph is scoped to this skill, which selects no ac
 
 ## 6. Output
 
-Output one ReflectReport listing every Run of the selected scope and window, live or finished, with its status, runtime, model family, wall hours, model steps, tool work, subagents, cost and tokens, title and title source, and its quotability mark; the money and token totals per project, with unpriced Runs counted apart; the highlighted issues, each naming its subject and the Run rows that show it; and the excluded sessions with their reasons, beside the fill manifest of the titles. Emit it in a form an agent can consume without re-deriving it: the machine-readable report document beside the plain-text report.
+Write the reflect report listing every Run of the selected scope and window, live or finished, with its status, runtime, model family, wall hours, model steps, tool work, subagents, cost and tokens, title and title source, and its quotability mark; the money and token totals per project, with unpriced Runs counted apart; the highlighted issues, each naming its subject and the Run rows that show it; and the excluded sessions with their reasons, beside the fill manifest of the titles. Write it in a form an agent can consume without re-deriving it: the machine-readable report document beside the plain-text report. Then output one ReflectReport whose `summary` names the path of each.
 
-The report validates against `ReflectReport`, and its terminal outcome is exactly one of `reported`, `partial`, `unavailable`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /reflect` before returning it.
+The report validates against `ReflectReport`, and its terminal outcome is exactly one of `reported`, `partial`, `unavailable`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /reflect` before returning it. It carries these fields and no other; a nested field is written under its parent.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skill_id` | `"reflect"` | yes | The id of the skill that produced the report. |
+| `outcome` | one of `"reported"`, `"partial"`, `"unavailable"`, `"blocked"` | yes | How the invocation ended; the result. |
+| `summary` | string | no | Explanation of the outcome and what supports it; never the result. |

@@ -175,6 +175,7 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("mcp", "eawf.surfaces.cli.commands.mcp", "mcp_app"),
     GroupRow("plan", "eawf.surfaces.cli.commands.plan", "plan_app"),
     # The campaign and question entity groups, beside the research reads.
+    GroupRow("research", "eawf.surfaces.cli.commands.research", "research_app"),
     GroupRow("campaign", "eawf.surfaces.cli.commands.research", "campaign_app"),
     GroupRow("question", "eawf.surfaces.cli.commands.research", "question_app"),
     # The action entity group: what the Attention register asks a principal about.

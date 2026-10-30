@@ -458,7 +458,7 @@ def test_surf_092_sweep_reports_carry_a_covered_and_not_covered_block(skill_id: 
             entry.validate_report({**bare, "coverage": {"covered": [], "not_covered": []}})
         report = entry.validate_report({**bare, "coverage": block})
         assert report.model_dump()["coverage"]["covered"] == ("src/eawf",)
-        assert "`coverage` block" in _SPECS[skill_id].body
+        assert "| `coverage` | object | yes |" in _SPECS[skill_id].body
     else:
         entry.validate_report(bare)
 

@@ -81,9 +81,9 @@ def test_surf_080_campaign_and_question_are_root_entity_groups(group: str, verbs
     assert set(_group(group).commands) == verbs
 
 
-def test_surf_080_the_research_group_is_gone() -> None:
-    """The flag day retired the research reads, so no ``research`` group is left."""
-    assert "research" not in _root().commands
+def test_surf_080_the_research_group_holds_only_the_brief_check() -> None:
+    """The flag day retired the research reads; the group is back only to check a brief."""
+    assert set(_group("research").commands) == {"check"}
 
 
 def test_surf_080_ui_is_the_root_launch_verb_and_tui_is_gone() -> None:

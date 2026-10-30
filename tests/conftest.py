@@ -370,6 +370,24 @@ def host_session_isolation() -> Iterator[None]:
 
 
 @pytest.fixture(scope="session", autouse=True)
+def marketplace_plugin_isolation() -> Iterator[None]:
+    """Keep the operator's installed eawf Claude plugin out of every project install.
+
+    The Claude installer renders no agent file while the marketplace plugin
+    is installed for the user, so a test would pass or fail by what the
+    machine has installed. A test that patches the seam itself still wins.
+    """
+    from eawf.runtime.runtimes.claude import plugin_install
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(plugin_install, "detect_marketplace_install", lambda: None)
+    try:
+        yield
+    finally:
+        monkeypatch.undo()
+
+
+@pytest.fixture(scope="session", autouse=True)
 def runtime_certification_isolation() -> Iterator[Callable[..., Any]]:
     """Keep the daemon's background runtime probe off every Run a test starts.
 

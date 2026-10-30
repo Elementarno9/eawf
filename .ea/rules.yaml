@@ -26,13 +26,13 @@ rules:
       method: review
   - rule_id: repo.strict-config-validation
     obligation_id: config.strict-validation
-    revision: 1
+    revision: 2
     title: Validate every YAML and JSON input with a closed model
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Parse every YAML or JSON input through a Pydantic v2 model configured with extra="forbid" inside its loader, and hand downstream code only the validated typed object.
+      Parse every YAML or JSON input through a Pydantic v2 model configured with extra="forbid" inside its loader.
     rationale: >-
       An open model lets a misspelt key pass silently and the setting it meant to change never takes effect.
     verification:
@@ -67,13 +67,13 @@ rules:
     procedure_ref: docs/rules/agent-driven-milestone-equals-release.md
   - rule_id: repo.large-milestone-pr
     obligation_id: delivery.milestone-pr-size
-    revision: 7
+    revision: 8
     title: Keep one pull request per Milestone regardless of size
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      Deliver each Milestone as one pull request however large it grows, keeping every Batch commit buildable so bisect stays sharp and fast-forwarding main to the reviewed commit so each survives; never split a Milestone to chase a line count; main and tags are never rewritten.
+      Never split a Milestone's pull request to chase a line count; keep every Batch commit buildable so bisect stays sharp, and fast-forward main to the reviewed commit so each survives.
     rationale: >-
       The review bottleneck here is coherent deliveries rather than line count, and per-Batch commits already give per-change history inside the pull request.
     verification:
@@ -81,13 +81,13 @@ rules:
     procedure_ref: docs/rules/agent-driven-large-milestone-pr.md
   - rule_id: repo.cadence-decisions
     obligation_id: delivery.cadence-provenance
-    revision: 6
+    revision: 7
     title: Cite the ratifying decision when the cadence is questioned
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      When a review questions the one-pull-request-per-Milestone cadence or the commit-history regime, cite decision D88 in the decision ledger, proposed to supersede D87 and pending operator ratification; reverse it only by superseding D88 with a new one; main and tags are never rewritten.
+      When a review questions the one-pull-request-per-Milestone cadence or the commit-history regime, cite decision D88 in the decision ledger, proposed to supersede D87 and pending operator ratification; reverse it only by superseding D88 with a new one.
     rationale: >-
       The cadence departs from small-change practice on purpose; without the decision trail it reads as an oversight and gets reverted.
     verification:

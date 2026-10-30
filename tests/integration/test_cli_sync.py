@@ -12,6 +12,7 @@ multi-call interaction with the manifest writer.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -373,3 +374,27 @@ def test_sync_refreshes_an_outdated_ignore_block_without_a_rule_source(tmp_path:
     again = runner.invoke(app, ["--json", "sync", "--check", "--target", str(tmp_path)])
     assert again.exit_code == 0, again.output
     assert gitignore.read_bytes() == refreshed
+
+
+def _snapshot_ea(target: Path) -> dict[str, str]:
+    """Map every file under ``.ea`` to its sha256 so new and changed files both show."""
+    root = target / ".ea"
+    return {
+        path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def test_sync_dry_run_leaves_ea_tree_byte_identical(tmp_path: Path) -> None:
+    """Dry-run writes nothing under ``.ea``, while a real sync does write there."""
+    _init_rules(tmp_path)
+    before = _snapshot_ea(tmp_path)
+
+    res = runner.invoke(app, ["sync", "--target", str(tmp_path), "--dry-run"])
+    assert res.exit_code == 0, res.output
+    assert _snapshot_ea(tmp_path) == before
+
+    res = runner.invoke(app, ["sync", "--target", str(tmp_path)])
+    assert res.exit_code == 0, res.output
+    assert _snapshot_ea(tmp_path) != before

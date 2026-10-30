@@ -404,6 +404,14 @@ Repository rows a plan binds its head to (create).
 |---|---|
 | `create` | Admit a repository row at the head its git history holds now. |
 
+### `eawf research`
+
+Check the local briefs the research skill writes.
+
+| Verb | Summary |
+|---|---|
+| `check` | Check that a research brief holds every section, in order, with sound References. |
+
 ### `eawf rules`
 
 Read, migrate and roll back the projections rendered from .ea/rules.yaml.

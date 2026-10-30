@@ -20,8 +20,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.platform.rules.records import SelectorToken
 from eawf.workflow.planning.orchestration import ORCHESTRATION_STATEMENT
+from eawf.workflow.skills.research_brief import BRIEF_SECTIONS
 
 logger = logging.getLogger(__name__)
+
+#: The brief sections the research page names, in order.
+_BRIEF_HEADINGS: Final = ", ".join(BRIEF_SECTIONS)
 
 
 class SkillPrompt(BaseModel):
@@ -96,8 +100,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " waiver, ambiguous membership, or missing operator authority.",
         ),
         output=(
-            "Output one AcceptanceSkillReport with bundle digest, per-requirement verdicts,"
-            " evidence links, decision receipt or PendingAction, repair scope, and blockers."
+            "Output one AcceptanceSkillReport. Its `summary` states the bundle digest, "
+            "per-requirement verdicts, evidence links, decision receipt or PendingAction, repair "
+            "scope, and blockers."
         ),
         activities=("review",),
     ),
@@ -135,8 +140,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             "If an item has no consequence either way, close it rather than asking.",
         ),
         output=(
-            "A prepared attention set: per item, its kind, subject, exact revision, options with"
-            " consequences, evidence, recommendation, and what happens on no answer."
+            "Output one report whose `summary` gives the prepared attention set: per item, its "
+            "kind, subject, exact revision, options with consequences, evidence, recommendation, "
+            "and what happens on no answer."
         ),
         activities=("operate",),
     ),
@@ -168,8 +174,8 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " is not understood yet.",
         ),
         output=(
-            "The queue after your changes, plus the overdue set and the longest-waiting set"
-            " called out by name."
+            "Output one report whose `summary` gives the queue after your changes, plus the "
+            "overdue set and the longest-waiting set called out by name."
         ),
         activities=("plan",),
     ),
@@ -187,11 +193,13 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             "Validate the brief: title, owning Track, the questions to work (the Campaign's own"
             " first), depth, fan-out width and budget. An incomplete brief raises one prepared"
             " operator question instead of creating a shell Campaign.",
-            "Show the plan `runtime.campaign.start` would approve -- one step per question and"
+            "Show the plan `eawf campaign new` (`runtime.campaign.start`) would approve -- one"
+            " step per question and"
             " method the depth names, then one synthesis step -- and approve it only on the"
             " operator's protected approval. The daemon files each question and approves the"
             " exact plan; never select approval yourself.",
-            "`runtime.campaign.run` drives the approved plan in the daemon: each round it starts"
+            "`eawf campaign run` (`runtime.campaign.run`) drives the approved plan in the"
+            " daemon: each round it starts"
             " every ready step, up to the fan-out width, on a Run of its own, and the research"
             " agent works that step's question read-only.",
             "Each round checkpoints in the daemon: the accountant charges the round's spend to"
@@ -202,12 +210,12 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " stop so it never reads as converged on its own; widening the budget, the questions"
             " or the steps is a plan revision (`runtime.campaign.plan.revise`) the operator"
             " approves, which keeps every started step unchanged.",
-            "A failed round returns its step to pending and pauses the drive; `campaign run`"
+            "A failed round returns its step to pending and pauses the drive; `eawf campaign run`"
             " resumes it on a new Run. Read progress through `projection.campaign.view` and each"
             " checkpoint through `projection.campaign.artifact`.",
             "The drive converges the Campaign once every step is done, or once a budget stop"
-            " leaves nothing running; `runtime.campaign.close` cancels it with the operator's"
-            " reason. A pause is resumable, never false completion.",
+            " leaves nothing running; `eawf campaign cancel` (`runtime.campaign.close`) cancels"
+            " it with the operator's reason. A pause is resumable, never false completion.",
         ),
         constraints=(
             "Only the operator approves a plan or its revision, and only the operator cancels;"
@@ -216,9 +224,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " cannot name it is not dispatched.",
         ),
         output=(
-            "Output one CampaignRunReport containing the Campaign and plan revisions, the steps"
-            " with their Runs and outcomes, the artifact revisions, the promoted findings, the"
-            " budget spend and stop, and the final disposition."
+            "Output one CampaignRunReport. Its `summary` states the Campaign and plan revisions, "
+            "the steps with their Runs and outcomes, the artifact revisions, the promoted "
+            "findings, the budget spend and stop, and the final disposition."
         ),
         activities=("research",),
         roles=("researcher",),
@@ -246,8 +254,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " active Decision, or missing operator authority.",
         ),
         output=(
-            "Output one DecisionSkillReport with before/after references, option table, evidence"
-            " chain, consequences, receipt or Attention reference, and blockers."
+            "Output one DecisionSkillReport. Its `summary` states the before/after references, "
+            "option table, evidence chain, consequences, receipt or Attention reference, and "
+            "blockers."
         ),
         activities=("design",),
     ),
@@ -292,9 +301,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " governor's ceiling, which queues what a stage holds beyond it.",
         ),
         output=(
-            "A typed coordination report: the concurrency plan you computed, every Run you"
-            " dispatched with its Task and outcome, the frontier remaining, and every condition"
-            " you stopped on."
+            "Output one report whose `summary` gives the coordination record: the concurrency "
+            "plan you computed, every Run you dispatched with its Task and outcome, the frontier "
+            "remaining, and every condition you stopped on."
         ),
         activities=("implement",),
     ),
@@ -332,9 +341,8 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             "Never resolve conflicts by editing a candidate inside this skill.",
         ),
         output=(
-            "Output one IntegrationSkillReport containing candidates considered, selection"
-            " reasons, exact bindings, generation, conflicts, verification receipts, and terminal"
-            " outcome."
+            "Output one IntegrationSkillReport. Its `summary` states the candidates considered, "
+            "selection reasons, exact bindings, generation, conflicts, and verification receipts."
         ),
         activities=("integrate",),
     ),
@@ -366,8 +374,8 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " evidence, or injection-budget overflow.",
         ),
         output=(
-            "Output one MemorySkillReport containing results or changed row, freshness, evidence,"
-            " dedup disposition, receipt, and blockers."
+            "Output one MemorySkillReport. Its `summary` states the results or changed row, "
+            "freshness, evidence, dedup disposition, receipt, and blockers."
         ),
     ),
     SkillPrompt(
@@ -399,8 +407,8 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " descendant disposition, authority failure, or need for an operator scope decision.",
         ),
         output=(
-            "Output one MilestoneSkillReport with action, contract summary, before/after"
-            " revisions, descendant effects, receipt, acceptance gaps, and blockers."
+            "Output one MilestoneSkillReport. Its `summary` states the action, contract summary, "
+            "before/after revisions, descendant effects, receipt, acceptance gaps, and blockers."
         ),
         activities=("plan",),
     ),
@@ -430,8 +438,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " or need for product mutation outside a Task.",
         ),
         output=(
-            "Output one MockupReport with artifact references, comparison matrix, state/journey"
-            " coverage, recommendation, Attention reference where needed, and terminal outcome."
+            "Output one MockupReport. Its `summary` states the artifact references, comparison "
+            "matrix, state/journey coverage, recommendation, and Attention reference where "
+            "needed."
         ),
         activities=("design",),
     ),
@@ -468,8 +477,19 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             "Check your own plan against the deterministic lenses before submitting: every atom"
             " mapped or dropped, every outcome reachable, no dependency cycle, no concurrent"
             " write overlap, every criterion covered by a gate.",
-            "Submit. The daemon validates and either rejects with findings or marks the revision"
-            " valid. Approval and apply are separate operator acts.",
+            "Submit with `eawf plan submit --from-spec <proposal.json> --idempotency-key <key>"
+            " --actor <your-principal>`. The JSON file carries the proposal's key, author, body"
+            " and parent_key; the actor is your own principal key, never an `OP-` operator key."
+            " The daemon validates and either rejects with findings or records the revision as"
+            " VALIDATED.",
+            "Approval and apply are the operator's acts, not yours. File the approval as a typed"
+            " question with `eawf question open-decision --from-spec <decision.json> --actor"
+            " <your-principal>`, show the bound question it returns, and stop. The operator"
+            " answers it and then runs `eawf plan approve <PRV-KEY> --expected-revision <N>"
+            " --action-ref <action-urn> --approved-by <operator> --idempotency-key <key> --actor"
+            " <operator>` and `eawf plan apply <PRV-KEY> --expected-revision <N>"
+            " --idempotency-key <key> --actor <operator>`. Never run either yourself: the daemon"
+            " refuses an operator key named from an agent session.",
         ),
         constraints=(
             "An acceptance-mapped criterion still at assumed blocks APPROVE. There are exactly"
@@ -484,9 +504,10 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " that as a question rather than widening scope.",
         ),
         output=(
-            "One strict PlanRevision proposal, plus the atom-to-criterion coverage table, every"
-            " atom you dropped with its reason, and the uncertainty register from step 0 with"
-            " each unknown either resolved to a cited contract or named as unmeasured."
+            "Output one report whose `summary` gives the strict PlanRevision proposal by key, "
+            "plus the atom-to-criterion coverage table, every atom you dropped with its reason, "
+            "and the uncertainty register from step 0 with each unknown either resolved to a "
+            "cited contract or named as unmeasured."
         ),
         activities=("plan",),
         roles=("planner",),
@@ -518,9 +539,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " that needs new behavior belongs to a Task, not to this skill.",
         ),
         output=(
-            "Output one RefactorReport containing baseline, invariant, chosen pattern, files,"
-            " declared contract changes, verification receipts, residual risks, and terminal"
-            " outcome."
+            "Output one RefactorReport. Its `summary` states the baseline, invariant, chosen "
+            "pattern, files, declared contract changes, verification receipts, and residual "
+            "risks."
         ),
         activities=("implement",),
     ),
@@ -581,15 +602,15 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " does not make this skill agent-invocable.",
         ),
         output=(
-            "Output one ReflectReport listing every Run of the selected scope and window, live"
-            " or finished, with its status, runtime, model family, wall hours, model steps,"
-            " tool work, subagents, cost and tokens, title and title source, and its"
-            " quotability mark; the money and token totals per project, with unpriced Runs"
-            " counted apart; the highlighted issues, each naming its subject and the Run rows"
-            " that show it; and the excluded sessions with their reasons, beside the fill"
-            " manifest of the titles. Emit it in a form an agent can consume without"
-            " re-deriving it: the machine-readable report document beside the plain-text"
-            " report."
+            "Write the reflect report listing every Run of the selected scope and window, live or"
+            " finished, with its status, runtime, model family, wall hours, model steps, tool "
+            "work, subagents, cost and tokens, title and title source, and its quotability mark; "
+            "the money and token totals per project, with unpriced Runs counted apart; the "
+            "highlighted issues, each naming its subject and the Run rows that show it; and the "
+            "excluded sessions with their reasons, beside the fill manifest of the titles. Write "
+            "it in a form an agent can consume without re-deriving it: the machine-readable "
+            "report document beside the plain-text report. Then output one ReflectReport whose "
+            "`summary` names the path of each."
         ),
     ),
     SkillPrompt(
@@ -631,48 +652,61 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " unsupported target capability.",
         ),
         output=(
-            "Output one ReleaseSkillReport with frozen manifest digest, readiness matrix,"
-            " approvals, per-target attempts/effects/observations, recovery state, terminal"
-            " release truth, and, once released, the path of the reflect report."
+            "Output one ReleaseSkillReport. Its `summary` states the frozen manifest digest, "
+            "readiness matrix, approvals, per-target attempts/effects/observations, recovery "
+            "state, terminal release truth, and, once released, the path of the reflect report."
         ),
         activities=("release",),
     ),
     SkillPrompt(
         skill_id="research",
         task=(
-            "Answer one bounded question quickly in at most one rendered page. You do not create,"
-            " own, resume, or mutate a Campaign."
+            "Answer one bounded question in one markdown brief of at most one rendered page. You"
+            " do not create, own, resume, or mutate a Campaign."
         ),
         context=(
             "The question named by `<topic...>` and `--question`, within the scope and the"
-            " sources this invocation declares."
+            " sources this invocation declares. The mode is swift unless `--rounds <N>` is given,"
+            " which selects rounds mode with at most N rounds; `--depth` sets the survey budget."
         ),
         method=(
             "State the exact question and the decision or next action it informs. Narrow an"
             " over-broad topic before reading.",
             "Inspect supplied and repository-local primary sources first. Fetch external sources"
             " only under the resolved source policy.",
-            "Run one survey pass. Independent parallel slices are allowed within the agent"
-            " ceiling, but recursion and additional rounds are forbidden.",
+            "Swift mode: run one survey pass and ask the operator nothing. Independent parallel"
+            " slices are allowed within the agent ceiling, but recursion and additional rounds"
+            " are forbidden.",
+            "Rounds mode: after the first survey pass, each further round may ask the operator"
+            " one preference question through the host's structured question tool, with one"
+            " option per path and a recommended option, then run one more survey pass shaped by"
+            " the answer. Ask only a question whose answer changes the recommendation, and stop"
+            " at N rounds even with questions left; record the rest under Open gaps.",
             "Reconcile evidence once. Distinguish implementation fact, document claim, external"
             " claim, and inference. Resolve every citation used by the verdict.",
             "Compare plausible alternatives with their main advantage and cost. Give a verdict,"
             " confidence, and material open gaps.",
             "If evidence cannot decide, recommend the cheapest discriminating next step. Do not"
             " turn the invocation into a Campaign or Spike implicitly: a question that needs"
-            " several rounds is recommended as a Campaign, which the operator plans with"
-            " `eawf campaign new` (`runtime.campaign.start`) and the daemon drives step by step"
-            " with `eawf campaign run` (`runtime.campaign.run`).",
-            "Stop at one pass, one rendered page, or the first hard budget cap. Saving writes"
-            " only the same report to the declared gitignored local path.",
+            " more than the rounds allow is recommended as a Campaign, which the operator plans"
+            " with `eawf campaign new` (`runtime.campaign.start`) and the daemon drives step by"
+            " step with `eawf campaign run` (`runtime.campaign.run`).",
+            "Write the brief to the `--save` path under `.ea/local/research/`, by default"
+            " `<date>-<slug>.md` there: an H1 title, then exactly"
+            f" the sections {_BRIEF_HEADINGS} in that order. References is a numbered table with"
+            " the columns `#` and `Reference`, one repo-relative path, URL or Eawf URN per row,"
+            " each cited in the prose as `[N]`.",
+            "Run `eawf research check <brief>` and fix every error it names before returning."
+            " Stop at the last pass, one rendered page, or the first hard budget cap.",
         ),
         constraints=(
             "Every parallel slice declares what its result would rule out; a slice that cannot"
             " name it is not dispatched.",
+            "A brief that `eawf research check` refuses is not a result.",
         ),
         output=(
-            "Output one SwiftResearchReport containing question, scope, findings, alternatives,"
-            " verdict, confidence, open gaps, references, coverage, and stop reason."
+            "Output one SwiftResearchReport. Its `summary` states the mode, the rounds used, the"
+            " brief's path, the verdict, its confidence and the stop reason."
         ),
         activities=("research",),
         roles=("researcher",),
@@ -723,9 +757,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " cannot commit, publish, or move the prototype into product source.",
         ),
         output=(
-            "Output one SpikeReport containing folder, hypothesis, commands, observations,"
-            " contracts, verdict, limitations, independent verifier result, operator demo,"
-            " retention, and stop reason."
+            "Output one SpikeReport. Its `summary` states the folder, hypothesis, commands, "
+            "observations, contracts, verdict, limitations, independent verifier result, operator"
+            " demo, retention, and stop reason."
         ),
         activities=("research", "test"),
     ),
@@ -756,8 +790,8 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " cannot be controlled, or any request to weaken/delete a valid existing test.",
         ),
         output=(
-            "Output one TestSkillReport containing strategy, kind, oracle, files, red/green"
-            " receipts where applicable, covered cases, unverified cases, commands, and outcome."
+            "Output one TestSkillReport. Its `summary` states the strategy, kind, oracle, files, "
+            "red/green receipts where applicable, covered cases, unverified cases, and commands."
         ),
         activities=("test",),
     ),
@@ -787,8 +821,8 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " guards fail, or requested work belongs to a Milestone or PlanRevision.",
         ),
         output=(
-            "Output one TrackSkillReport containing action, before/after revisions, affected"
-            " references, receipt, warnings, and blockers."
+            "Output one TrackSkillReport. Its `summary` states the action, before/after "
+            "revisions, affected references, receipt, warnings, and blockers."
         ),
         activities=("plan",),
     ),
@@ -828,9 +862,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " that blocks, and it should.",
         ),
         output=(
-            "A typed audit or review result: per-criterion verdicts with the falsifier attempted,"
-            " or stable findings with severity and evidence. Aggregate verdicts are derived from"
-            " rows, never asserted."
+            "Output one report whose `summary` gives the audit or review result: per-criterion "
+            "verdicts with the falsifier attempted, or stable findings with severity and "
+            "evidence. Aggregate verdicts are derived from rows, never asserted."
         ),
         activities=("review", "test"),
         roles=("auditor",),
@@ -853,8 +887,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             "Stop at the root cause, requested depth, unresolved reference, cycle, or cap.",
         ),
         output=(
-            "Output one WhyReport containing answer, subject revision, provenance path, nodes,"
-            " active-versus-historical distinctions, gaps, references, coverage, and stop reason."
+            "Output one WhyReport. Its `summary` states the answer, subject revision, provenance "
+            "path, nodes, active-versus-historical distinctions, gaps, references, and stop "
+            "reason."
         ),
     ),
 )

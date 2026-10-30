@@ -21,7 +21,7 @@ from typer.testing import CliRunner
 from eawf.runtime.hooks.event import HookEvent, HookEventType
 from eawf.runtime.hooks.host_lane import HOST_SKILL_HOOK, judge_host_skill_invocation
 from eawf.surfaces.cli.app import app
-from eawf.workflow.skills.arguments import InvocationRefusedError, parse_host_arguments
+from eawf.workflow.skills.arguments import parse_host_arguments
 from eawf.workflow.skills.catalog import SKILL_CATALOG
 
 runner = CliRunner()
@@ -86,9 +86,11 @@ def test_surf_112_empty_text_is_no_arguments() -> None:
     assert parse_host_arguments(_entry("research"), "") == {}
 
 
-def test_surf_112_text_that_does_not_split_is_refused() -> None:
-    with pytest.raises(InvocationRefusedError, match="unparseable_arguments"):
-        parse_host_arguments(_entry("research"), '"unterminated')
+def test_surf_112_text_that_does_not_split_is_read_word_by_word() -> None:
+    assert parse_host_arguments(_entry("research"), '"unterminated --depth deep') == {
+        "topic": ['"unterminated'],
+        "depth": "deep",
+    }
 
 
 @pytest.mark.parametrize(
