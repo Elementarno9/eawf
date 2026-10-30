@@ -12,12 +12,19 @@ record the caret was on, and none reaches a prototype record.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.store.compaction import document_rows
+from eawf.kernel.store.ledger import read_ledger_records
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.daemon.methods.projection import document_path
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.harness import settle
 from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
@@ -294,17 +301,51 @@ _RUN_CLIMB: _Walk = (
     ),
 )
 
-_WALKS: tuple[_Walk, ...] = (
-    (
+#: The Track whose Milestones the sibling walk steps through.
+WALKED_TRACK = "TRK-EAWF-CORE"
+
+
+def _track_milestones(root: Path, track: str) -> list[str]:
+    """Return the keys of every Milestone ``root``'s tree files under ``track``, in id order.
+
+    Read from the state document and the Milestone ledger directly, not through the
+    console, so the walk is checked against what the tree holds. A cancelled Milestone
+    is still a sibling: it stays a record under its Track.
+    """
+    state = document_path(resolve_authority(root / ".ea"))
+    rows = document_rows(json.loads(state.read_bytes()), Epoch2Collection.MILESTONE)
+    payloads = [*rows.values()]
+    payloads += [
+        {"key": r.record_key, **r.payload}
+        for r in read_ledger_records(ledger_path(state, Epoch2Collection.MILESTONE))
+        if r.record_key.startswith("MLS-")
+    ]
+    suffix = f"/track/{track}"
+    return sorted(
+        {p["key"] for p in payloads if str(p.get("primary_track_ref", "")).endswith(suffix)}
+    )
+
+
+def _sibling_walk(root: Path) -> _Walk:
+    """Return the ``[ ]`` walk over the Milestones of :data:`WALKED_TRACK` on ``root``.
+
+    The walk starts on the first Milestone, steps forward to the second, back to the
+    first, then back once more, which wraps to the last; Esc then climbs to the Track.
+    """
+    first, second, *_, last = _track_milestones(root, WALKED_TRACK)
+    return (
         "[ ] walk the Milestones of one Track; Esc with no history climbs to it",
-        SessionSetup(route="milestone", size=SIZE, subjId="MLS-0100"),
+        SessionSetup(route="milestone", size=SIZE, subjId=first),
         (
-            ("]", ("milestone", "MLS-0101")),
-            ("[", ("milestone", "MLS-0100")),
-            ("[", ("milestone", "MLS-0105")),
-            ("Escape", ("track", "TRK-EAWF-CORE")),
+            ("]", ("milestone", second)),
+            ("[", ("milestone", first)),
+            ("[", ("milestone", last)),
+            ("Escape", ("track", WALKED_TRACK)),
         ),
-    ),
+    )
+
+
+_WALKS: tuple[_Walk, ...] = (
     (
         "a light verb opens on its Run and u climbs back to that Run",
         SessionSetup(route="run.detail", size=SIZE, subjId="RUN-00000005"),
@@ -354,7 +395,8 @@ def test_live_climbs_and_jumps_land_on_real_records(tmp_path: Path) -> None:
             live_console(root, tmp_path / "runtime", launched=True) as (app, _seam),
             app.run_test(size=SIZES[SIZE]) as pilot,
         ):
-            wrong = await _walked(app, pilot, _WALKS, _unheld_prototypes(root))
+            walks = (_sibling_walk(root), *_WALKS)
+            wrong = await _walked(app, pilot, walks, _unheld_prototypes(root))
             for route in ("evidence", "campaign"):
                 await render_setup(app, pilot, SessionSetup(route=route, size=SIZE))
                 app.press_key("Escape")

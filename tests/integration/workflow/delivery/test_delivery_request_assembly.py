@@ -23,18 +23,29 @@ from typing import Any, Final
 import pytest
 
 from eawf.kernel.delivery.integration import ConflictExitKind
+from eawf.kernel.delivery.receipts import canonical_digest
+from eawf.kernel.identity import parse_qualified_urn
+from eawf.kernel.runtime.candidate import CandidateBundle, candidate_identity
 from eawf.kernel.store.compaction import read_document, write_document
 from eawf.kernel.store.ledger import LedgerRecord
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
-from eawf.runtime.daemon.methods.delivery import integrate_delivery
+from eawf.runtime.daemon.methods.delivery import (
+    DeliveryIntegrateParams,
+    integrate_delivery,
+    read_generation_ledger,
+    undelivered_bundles,
+)
 from eawf.runtime.daemon.methods.delivery_assembly import (
     DELIVERY_ASSEMBLE_METHOD,
     DeliveryAssembleParams,
     assemble_delivery,
 )
+from eawf.runtime.integration.apply import ApplyDisposition, CandidateApplication
+from eawf.runtime.integration.commit_policy import DeliveryCommit
+from eawf.runtime.integration.recovery import DeliveredRevision
 from eawf.workflow.delivery.request_assembly import (
     AssemblyRefusal,
     AssemblyRefusedError,
@@ -418,3 +429,257 @@ def test_assemble_params_refuse_an_empty_exit_map() -> None:
     """Error path: a request naming no exit is a schema failure at the boundary."""
     with pytest.raises(ValueError, match="exit_refs"):
         assemble_params(exit_refs={})
+
+
+class _TreeWorkspace:
+    """Apply sealed trees while recording the exact base and candidate used."""
+
+    def __init__(self) -> None:
+        self.base = ""
+        self.tree_digest = ""
+        self.applied: list[str] = []
+        self.commits = 0
+
+    def materialize(self, *, base_commit: str) -> str:
+        self.base = base_commit
+        return base_commit
+
+    def apply(self, bundle: CandidateBundle) -> CandidateApplication:
+        self.applied.append(bundle.candidate_ref)
+        self.tree_digest = bundle.resulting_tree_digest
+        return CandidateApplication(
+            candidate_ref=bundle.candidate_ref, disposition=ApplyDisposition.APPLIED
+        )
+
+    def commit(self, delivery: DeliveryCommit) -> DeliveredRevision:
+        self.commits += 1
+        return DeliveredRevision(
+            head_sha=f"{self.commits:02d}" * 20,
+            tree_sha=world.TREE,
+            parent_sha=self.base,
+            patch_digest=world.DIGEST,
+            diff_digest=world.DIGEST,
+            tree_digest=self.tree_digest,
+        )
+
+
+def _tree_bundle(task_ref: str = world.TASK) -> CandidateBundle:
+    digest = canonical_digest({"git_tree": world.TREE})
+    return CandidateBundle.model_validate(
+        {
+            **world.bundle_row(task_ref=task_ref),
+            "candidate_ref": candidate_identity(task_ref=task_ref, resulting_tree_digest=digest),
+            "resulting_tree_digest": digest,
+        }
+    )
+
+
+def test_integrate_delivery_sequential_tasks_use_the_current_base(tmp_path: Path) -> None:
+    context = seeded(
+        tmp_path, batch=batch_row(task_refs=(world.TASK, world.OTHER_TASK)), seal=False
+    )
+    first_bundle = _tree_bundle()
+    world.seed_lines(context, world.TASK, [world.bundle_line(first_bundle.model_dump(mode="json"))])
+    world.seed_task(context, world.task_row(urn=world.OTHER_TASK))
+    workspace = _TreeWorkspace()
+    first = integrate_delivery(
+        context,
+        assemble_integrate_request(resolve_batch_plan(context, references()), actor=ACTOR),
+        workspace=workspace,
+        now=world.AT,
+    )
+    assert first.delivered
+    with context.session([world.BATCH]) as session:
+        ledger = read_generation_ledger(
+            session.ledger_path(Epoch2Collection.BATCH), references().batch_ref
+        )
+    assert ledger.head is not None
+    current = ledger.head.integrated_revision
+    second_bundle = _tree_bundle(task_ref=world.OTHER_TASK).model_copy(
+        update={
+            "base_commit": current.head_sha,
+            "run_ref": parse_qualified_urn(f"{world.CONTAINER}/run/RUN-00000011"),
+        }
+    )
+    run = run_row(task_ref=world.OTHER_TASK)
+    run.update(_head(str(second_bundle.run_ref)))
+    seed_row(context, Epoch2Collection.RUN, run)
+    world.seed_lines(
+        context, world.OTHER_TASK, [world.bundle_line(second_bundle.model_dump(mode="json"))]
+    )
+    resolved = resolve_batch_plan(context, references(base=current))
+    assert resolved.bundles == (second_bundle,)
+    second = integrate_delivery(
+        context,
+        assemble_integrate_request(resolved, actor=ACTOR),
+        workspace=workspace,
+        now=world.AT,
+    )
+    assert second.delivered
+    assert second.candidates == (second_bundle.candidate_ref,)
+    assert workspace.applied == [first_bundle.candidate_ref, second_bundle.candidate_ref]
+    assert workspace.base == current.head_sha
+
+
+@pytest.mark.parametrize(
+    "mismatch",
+    [
+        "no-generation",
+        "stale-head",
+        "stale-tree",
+        "wrong-tree",
+        "other-task",
+        "other-source",
+        "foreign-batch",
+        "multiple-tasks",
+        "wrong-parent",
+        "inconsistent-digest",
+    ],
+)
+def test_undelivered_bundles_preserves_unproven_seals(mismatch: str) -> None:
+    bundle = _tree_bundle()
+    generation = world.delivering_generation().model_copy(
+        update={
+            "tree_digest": bundle.resulting_tree_digest,
+            "integrated_revision": world.delivering_generation().integrated_revision.model_copy(
+                update={"parent_sha": world.BASE_COMMIT}
+            ),
+        }
+    )
+    base = generation.integrated_revision
+    if mismatch == "wrong-tree":
+        generation = generation.model_copy(update={"tree_digest": world.DIGEST})
+    elif mismatch == "other-task":
+        generation = generation.model_copy(
+            update={"affected_task_refs": (parse_qualified_urn(world.OTHER_TASK),)}
+        )
+    elif mismatch == "other-source":
+        bundle = bundle.model_copy(update={"base_commit": "fe" * 20})
+    elif mismatch == "stale-head":
+        base = base.model_copy(update={"head_sha": "fe" * 20})
+    elif mismatch == "stale-tree":
+        base = base.model_copy(update={"tree_sha": "fe" * 20})
+    elif mismatch == "foreign-batch":
+        base = base.model_copy(update={"batch_ref": parse_qualified_urn(world.OTHER_BATCH)})
+    elif mismatch == "multiple-tasks":
+        generation = generation.model_copy(
+            update={
+                "affected_task_refs": (
+                    parse_qualified_urn(world.TASK),
+                    parse_qualified_urn(world.OTHER_TASK),
+                )
+            }
+        )
+    elif mismatch == "wrong-parent":
+        generation = generation.model_copy(
+            update={
+                "integrated_revision": generation.integrated_revision.model_copy(
+                    update={"parent_sha": "fe" * 20}
+                )
+            }
+        )
+    elif mismatch == "inconsistent-digest":
+        generation = generation.model_copy(update={"tree_digest": "sha256:" + "fe" * 32})
+        bundle = bundle.model_copy(update={"resulting_tree_digest": generation.tree_digest})
+    ledger = world.ledger() if mismatch == "no-generation" else world.ledger(generation)
+    assert undelivered_bundles((bundle,), ledger=ledger, base=base) == (bundle,)
+
+
+def test_undelivered_bundles_keeps_seals_when_commit_ancestry_is_discontinuous() -> None:
+    bundle = _tree_bundle()
+    previous = world.delivering_generation().model_copy(
+        update={
+            "tree_digest": bundle.resulting_tree_digest,
+            "integrated_revision": world.delivering_generation().integrated_revision.model_copy(
+                update={"parent_sha": world.BASE_COMMIT}
+            ),
+        }
+    )
+    following = world.following_generation().model_copy(
+        update={
+            "target_base": previous.integrated_revision.model_copy(update={"head_sha": "fe" * 20})
+        }
+    )
+    ledger = world.ledger(previous, following)
+    assert undelivered_bundles((bundle,), ledger=ledger, base=following.integrated_revision) == (
+        bundle,
+    )
+    assert undelivered_bundles((), ledger=ledger, base=following.integrated_revision) == ()
+
+
+def _resealed(tmp_path: Path, *, older_base: str, newer_base: str) -> Epoch2RootContext:
+    """Return a world whose one Task sealed twice and was never integrated."""
+    context = seeded(tmp_path, seal=False)
+    older = world.bundle(tree="c").model_copy(update={"base_commit": older_base})
+    newer = _tree_bundle().model_copy(update={"base_commit": newer_base})
+    world.seed_lines(
+        context,
+        world.TASK,
+        [
+            world.bundle_line(older.model_dump(mode="json")),
+            world.bundle_line(newer.model_dump(mode="json")),
+        ],
+    )
+    return context
+
+
+def _run_ledger_bytes(context: Epoch2RootContext) -> bytes:
+    with context.session([world.TASK]) as session:
+        return session.ledger_path(Epoch2Collection.RUN).read_bytes()
+
+
+def test_integrate_delivery_takes_the_newest_seal_over_an_unintegrated_older_one(
+    tmp_path: Path,
+) -> None:
+    """Assembly and integration select the same newest seal; the old one stays recorded."""
+    context = _resealed(tmp_path, older_base=world.LOSING_HEAD, newer_base=world.BASE_COMMIT)
+    newest = _tree_bundle()
+    ledger_before = _run_ledger_bytes(context)
+    resolved = resolve_batch_plan(context, references())
+    assert resolved.bundles == (newest,)
+    workspace = _TreeWorkspace()
+
+    request = assemble_integrate_request(resolved, actor=ACTOR)
+    answer = integrate_delivery(context, request, workspace=workspace, now=world.AT)
+
+    assert answer.delivered
+    assert answer.candidates == (newest.candidate_ref,)
+    assert workspace.applied == [newest.candidate_ref]
+    assert _run_ledger_bytes(context) == ledger_before
+
+
+def test_integrate_delivery_refuses_a_newest_seal_on_the_wrong_base(tmp_path: Path) -> None:
+    """The older seal on the right base does not rescue a newest seal on another one."""
+    context = _resealed(tmp_path, older_base=world.BASE_COMMIT, newer_base=world.LOSING_HEAD)
+    newest = _tree_bundle().model_copy(update={"base_commit": world.LOSING_HEAD})
+    subjects = {newest.candidate_ref: "Publish the wheel to the index"}
+    request = DeliveryIntegrateParams.model_validate(
+        {
+            "urn": world.BATCH,
+            "actor": ACTOR,
+            "idempotency_key": "integrate-wrong-base",
+            "base": world.BASE.model_dump(mode="json"),
+            "branch": BRANCH,
+            "subject": "Deliver BAT-0007 (1 task(s))",
+            "subjects": subjects,
+            "affected_criterion_ids": ["CR-01"],
+            "exit_refs": {"repair_task": REPAIR_TASK},
+            "diagnostic_ref": EVIDENCE,
+        }
+    )
+    with pytest.raises(DaemonValidationError, match="integration_base_divergent"):
+        integrate_delivery(context, request, workspace=_TreeWorkspace(), now=world.AT)
+    with pytest.raises(AssemblyRefusedError) as caught:
+        resolve_batch_plan(context, references())
+    assert caught.value.code is AssemblyRefusal.BASE_UNBOUND
+
+
+def test_resolve_batch_plan_refuses_a_stale_seal_despite_a_task_named_in_history(
+    tmp_path: Path,
+) -> None:
+    context = seeded(tmp_path)
+    generation = world.delivering_generation()
+    world.seed_lines(context, world.BATCH, [world.generation_line(generation)])
+    with pytest.raises(AssemblyRefusedError, match="produced from another commit") as caught:
+        resolve_batch_plan(context, references(base=generation.integrated_revision))
+    assert caught.value.code is AssemblyRefusal.BASE_UNBOUND

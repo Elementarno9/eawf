@@ -67,6 +67,8 @@ _COMMAND_EXIT_ZERO_PASSTHROUGH_KEYS: tuple[str, ...] = (
     "scope",
     "wave_id",
     "wave_file_scopes",
+    "fixture_inputs",
+    "dotnet_counts",
 )
 
 

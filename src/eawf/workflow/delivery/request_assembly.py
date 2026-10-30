@@ -41,7 +41,12 @@ from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, LEDGER_COLLECTIONS, Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
-from eawf.runtime.daemon.methods.delivery import DeliveryIntegrateParams
+from eawf.runtime.daemon.methods.delivery import (
+    DeliveryIntegrateParams,
+    latest_sealed_bundles,
+    read_generation_ledger,
+    undelivered_bundles,
+)
 from eawf.runtime.integration.commit_policy import MAX_SUBJECT_LENGTH
 
 logger = logging.getLogger(__name__)
@@ -224,12 +229,7 @@ def _resolve_bundles(
         AssemblyRefusedError: A candidate's Run does not resolve, or the
             Run was not scoped to the Task the candidate claims.
     """
-    lines = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
-    newest: dict[str, CandidateBundle] = {}
-    for item in lines:
-        if item.payload.get("payload_kind") == "candidate_bundle":
-            bundle = CandidateBundle.model_validate(item.payload)
-            newest[str(bundle.task_ref)] = bundle
+    newest = latest_sealed_bundles(read_ledger_records(session.ledger_path(Epoch2Collection.RUN)))
     bundles = tuple(newest[str(task.urn)] for task in tasks if str(task.urn) in newest)
     runs: dict[str, Run] = {}
     for bundle in bundles:
@@ -315,6 +315,9 @@ def resolve_batch_plan(context: Epoch2RootContext, references: DeliveryReference
         tasks = _resolve_tasks(session, batch)
         bundles, runs = _resolve_bundles(session, tasks)
         _check_references(session, batch, references)
+        ledger = read_generation_ledger(session.ledger_path(Epoch2Collection.BATCH), batch_ref)
+        bundles = undelivered_bundles(bundles, ledger=ledger, base=references.base)
+        runs = {bundle.candidate_ref: runs[bundle.candidate_ref] for bundle in bundles}
     divergent = sorted(
         item.candidate_ref for item in bundles if item.base_commit != references.base.head_sha
     )

@@ -6,13 +6,13 @@ executable it runs, the argv shape a gate may hand it and that the shape
 only observes and reports. The project's own CLI is admissible here as a
 family scoped to its read-only forms, not as an unscoped head.
 
-This module is pure data: :mod:`eawf.runtime.sandbox.argv_policy` applies
-a family's shape wherever its head is admitted and resolves a gate argv to
-the family it runs.
+:mod:`eawf.runtime.sandbox.argv_policy` applies a family's shape wherever
+its head is admitted and resolves a gate argv to the family it runs.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Annotated, Final, Literal
 
@@ -55,7 +55,9 @@ class CommandFamily(BaseModel):
         family_id: The id a gate names in ``command_family_ref``.
         head: The executable the family runs, looked up on ``PATH``.
         read_only: Always true: a family is registrable only when every
-            form its shape admits observes and reports, never writes state.
+            form its shape admits observes and reports without editing
+            canonical project configuration. Test caches and build outputs
+            are permitted.
         verbs: Admitted first arguments after the head; ``None`` admits
             any first argument not in :attr:`mutating_verbs` (a test
             runner taking paths).
@@ -110,8 +112,44 @@ class CommandFamily(BaseModel):
         return None
 
 
+class _DotnetTestFamily(CommandFamily):
+    """Admit project tests without exposing arbitrary MSBuild switches.
+
+    Build outputs and test caches are permitted, as for pytest; read-only
+    means the command does not edit canonical project configuration.
+    """
+
+    def shape_violation(self, argv: list[str]) -> str | None:
+        """Return a reason unless argv names a target and supported test flags."""
+        violation = super().shape_violation(argv)
+        if violation is not None:
+            return violation
+        if (
+            len(argv) < 3
+            or re.fullmatch(
+                r"[A-Za-z0-9_][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_][A-Za-z0-9_.-]*)*", argv[2]
+            )
+            is None
+        ):
+            return "dotnet test requires a relative project directory or csproj target"
+        remaining = iter(argv[3:])
+        for token in remaining:
+            if token in {"--no-restore", "-m:1"}:
+                continue
+            if token == "--filter":
+                value = next(remaining, "")
+                if re.fullmatch(r"[A-Za-z0-9_.~!=]+", value) is not None:
+                    continue
+                return "dotnet test --filter requires a simple test expression"
+            return f"dotnet test argument {token!r} is not in the test allow set"
+        return None
+
+
 _FAMILIES: Final[tuple[CommandFamily, ...]] = (
     CommandFamily(family_id="pytest", head="pytest", read_only=True),
+    _DotnetTestFamily(
+        family_id="dotnet-test", head="dotnet", read_only=True, verbs=frozenset({"test"})
+    ),
     CommandFamily(family_id="mypy", head="mypy", read_only=True),
     CommandFamily(
         family_id="ruff",

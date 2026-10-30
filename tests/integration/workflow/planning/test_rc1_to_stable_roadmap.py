@@ -6,7 +6,8 @@ three committed proposals would create is removed from the copy first, so the
 suite reads the same before and after the operator applies them live. The
 proposals are then applied through the daemon's own plan verbs, and the trace
 reads the result the way CI does. Every id must come out owned,
-deferred or satisfied, and ``check --require-owned`` must exit zero.
+deferred or satisfied, except exactly the ids a re-plan dropped, which
+hold ``check --require-owned`` red until a deferral accounts for them.
 
 The gate-fire proof leaves one plan unapplied: exactly that plan's ids come
 back unowned and the same check exits nonzero.
@@ -19,7 +20,9 @@ import re
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -160,12 +163,35 @@ def _planned_ids(name: str) -> set[str]:
     The trace owns an id by citation, so a Task citing an id beside its atoms
     (or another plan's atom) owns that id too.
     """
-    tasks = load_proposal(name)["body"]["tasks"]
+    return _proposal_ids(load_proposal(name))
+
+
+def _proposal_ids(proposal: dict[str, Any]) -> set[str]:
+    body = proposal["body"]
     text = " ".join(
         " ".join([task["intent"], *(criterion["text"] for criterion in task["criteria"])])
-        for task in tasks
+        for task in body["tasks"]
     )
-    return _atom_ids(name) | set(_ID_RE.findall(text))
+    return {atom["atom_id"] for atom in body["source_atoms"]} | set(_ID_RE.findall(text))
+
+
+def _replaced_ids(applied: Sequence[str]) -> set[str]:
+    """Return the ids the parents of the applied re-plans had their Tasks own.
+
+    A re-plan that drops atoms leaves the ids only its parent's Tasks cited
+    with no owner, and the catalog records no deferral for them yet.
+    """
+    return set().union(*(_proposal_ids(load_parent(name)) for name in applied if name in PARENTS))
+
+
+def _replaced_tasks(applied: Sequence[str]) -> set[str]:
+    """Return the parent Task keys the applied re-plans no longer plan."""
+    return {
+        task["urn"].rsplit("/", 1)[1]
+        for name in applied
+        if name in PARENTS
+        for task in load_parent(name)["body"]["tasks"]
+    } - set().union(*(_task_keys(name) for name in applied))
 
 
 def _unowned(root: Path) -> set[str]:
@@ -210,7 +236,20 @@ def test_after_the_three_plans_apply_every_id_is_accounted_for(tmp_path: Path) -
     assert main(["--repo-root", str(root), "write"]) == 0
 
     catalog = load_catalog(root / CATALOG_PATH)
-    assert catalog.summary.unowned == 0
+    known = {row.id for row in catalog.requirements}
+    dropped = {
+        atom["atom_ref"]
+        for name in PLAN_NAMES
+        for atom in load_proposal(name)["body"].get("dropped_atoms", [])
+    }
+    assert dropped, "the stable re-plan drops atoms"
+    assert dropped <= _replaced_ids(PLAN_NAMES)
+    orphaned = (_replaced_ids(PLAN_NAMES) & known) - _accounted_without(
+        root, _replaced_tasks(PLAN_NAMES)
+    )
+    assert orphaned, "the dropped atoms leave ids no Task owns"
+    assert _unowned(root) == orphaned
+    assert catalog.summary.unowned == len(orphaned)
     assert catalog.summary.satisfied == sum(len(s.ids) for s in catalog.satisfactions)
     # A later follow-up Task may cite an rc1 id too, so each id needs one rc1
     # Task among its owners rather than rc1 Tasks alone.
@@ -219,7 +258,8 @@ def test_after_the_three_plans_apply_every_id_is_accounted_for(tmp_path: Path) -
     assert rc1_rows, "the rc1 ids are in the catalog"
     assert [row.id for row in rc1_rows if not rc1_tasks & set(row.owners)] == []
     assert load_state_view(root).phases["P35"].closed
-    assert main(["--repo-root", str(root), "check", "--require-owned"]) == 0
+    # The dropped ids hold the gate red until a deferral records where they went.
+    assert main(["--repo-root", str(root), "check", "--require-owned"]) == 1
 
 
 @pytest.mark.parametrize("left_out", PLAN_NAMES)
@@ -232,6 +272,8 @@ def test_leaving_one_plan_unapplied_returns_its_ids_unowned(tmp_path: Path, left
     assert main(["--repo-root", str(root), "write"]) == 0
 
     known = {row.id for row in load_catalog(root / CATALOG_PATH).requirements}
-    expected = _planned_ids(left_out) & known
-    assert _unowned(root) == expected - _accounted_without(root, _task_keys(left_out))
+    applied = [name for name in PLAN_NAMES if name != left_out]
+    expected = (_planned_ids(left_out) | _replaced_ids(applied)) & known
+    absent = _task_keys(left_out) | _replaced_tasks(applied)
+    assert _unowned(root) == expected - _accounted_without(root, absent)
     assert main(["--repo-root", str(root), "check", "--require-owned"]) == 1

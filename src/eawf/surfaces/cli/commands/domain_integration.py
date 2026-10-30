@@ -413,6 +413,10 @@ def task_prove_cmd(
     idempotency_key: _Key,
     actor: _Actor,
     gates: Annotated[Path | None, typer.Option("--gates", help=_GATES_HELP)] = None,
+    fixture_bindings: Annotated[
+        Path | None,
+        typer.Option("--fixture-bindings", help="Local JSON fixture directory bindings."),
+    ] = None,
     wait: _Wait = False,
 ) -> None:
     """Run a Task's gates at the generation each leg binds and file the receipts.
@@ -431,6 +435,13 @@ def task_prove_cmd(
         if document is None:
             return
         params["gates"] = document.get("gates", [])
+    if fixture_bindings is not None:
+        document = _document(ctx, fixture_bindings)
+        if document is None:
+            return
+        bindings = document.get("fixture_bindings", [])
+        if bindings != []:
+            params["fixture_bindings"] = bindings
     answer = _send(
         ctx,
         DELIVERY_PROVE,
