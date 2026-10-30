@@ -429,7 +429,7 @@ def test_a_crash_before_the_tag_push_leaves_no_tag_on_the_remote(
     work, bare = tagged_repo
     push_crash.when = "before"
     with pytest.raises(SimulatedCrashError, match="before the tag reaches"):
-        _create_and_push_tag(tag=TAG, remote="origin", push=True, force=False)
+        _create_and_push_tag(tag=TAG, remote="origin", push=True)
     assert push_crash.pushes == 0
     assert remote_tags(bare) == []
     assert _git(["tag", "-l"], work).split() == [TAG]
@@ -441,22 +441,23 @@ def test_a_crash_after_the_tag_push_leaves_exactly_one_tag(
     _work, bare = tagged_repo
     push_crash.when = "after"
     with pytest.raises(SimulatedCrashError, match="after the tag reached"):
-        _create_and_push_tag(tag=TAG, remote="origin", push=True, force=False)
+        _create_and_push_tag(tag=TAG, remote="origin", push=True)
     assert push_crash.pushes == 1
     assert remote_tags(bare) == [TAG]
 
 
-def test_resuming_the_tag_push_leaves_the_remote_with_exactly_one_tag(
+def test_retrying_the_tag_push_after_a_crash_is_refused_and_leaves_one_tag(
     tagged_repo: tuple[Path, Path], push_crash: PushCrasher
 ) -> None:
     _work, bare = tagged_repo
     push_crash.when = "after"
     with pytest.raises(SimulatedCrashError):
-        _create_and_push_tag(tag=TAG, remote="origin", push=True, force=False)
+        _create_and_push_tag(tag=TAG, remote="origin", push=True)
 
     push_crash.when = None
-    assert _create_and_push_tag(tag=TAG, remote="origin", push=True, force=True) is True
-    assert push_crash.pushes == 2
+    with pytest.raises(subprocess.CalledProcessError):
+        _create_and_push_tag(tag=TAG, remote="origin", push=True)
+    assert push_crash.pushes == 1
     assert remote_tags(bare) == [TAG]
 
 
@@ -464,18 +465,18 @@ def test_a_tag_that_is_never_pushed_leaves_the_remote_empty(
     tagged_repo: tuple[Path, Path], push_crash: PushCrasher
 ) -> None:
     work, bare = tagged_repo
-    assert _create_and_push_tag(tag=TAG, remote="origin", push=False, force=False) is False
+    assert _create_and_push_tag(tag=TAG, remote="origin", push=False) is False
     assert push_crash.pushes == 0
     assert remote_tags(bare) == []
     assert _git(["tag", "-l"], work).split() == [TAG]
 
 
-def test_re_creating_an_existing_tag_without_force_is_refused(
+def test_re_creating_an_existing_tag_is_refused(
     tagged_repo: tuple[Path, Path], push_crash: PushCrasher
 ) -> None:
     _work, bare = tagged_repo
-    _create_and_push_tag(tag=TAG, remote="origin", push=True, force=False)
+    _create_and_push_tag(tag=TAG, remote="origin", push=True)
     with pytest.raises(subprocess.CalledProcessError):
-        _create_and_push_tag(tag=TAG, remote="origin", push=True, force=False)
+        _create_and_push_tag(tag=TAG, remote="origin", push=True)
     assert push_crash.pushes == 1
     assert remote_tags(bare) == [TAG]

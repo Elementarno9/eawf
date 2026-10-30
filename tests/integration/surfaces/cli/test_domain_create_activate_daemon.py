@@ -35,6 +35,7 @@ import pytest
 
 from eawf.kernel.store.compaction import read_document
 from eawf.platform.install.canary import CanaryProvision, canary_ref, provision_canary
+from eawf.runtime.daemon.operator_identity import AGENT_SESSION_ENV_MARKERS
 from eawf.surfaces.cli import exit_codes
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import document_path
 
@@ -126,8 +127,14 @@ def sandbox() -> Iterator[_Sandbox]:
     canary = provision_canary(
         repo_root=scratch / "repo", ref=canary_ref(_CANARY_CODE), provisioned_at=datetime.now(UTC)
     )
-    env = {key: value for key, value in os.environ.items() if key != "EAWF_DAEMONLESS"}
-    env.pop("EAWF_VERBOSE", None)
+    # The CLI acts as the operator here, so it must run as an operator terminal
+    # even when the suite itself runs inside an agent session.
+    markers = {variable for variable, _runtime in AGENT_SESSION_ENV_MARKERS}
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in markers and key not in {"EAWF_DAEMONLESS", "EAWF_VERBOSE"}
+    }
     env["EAWF_RUNTIME_DIR"] = str(runtime_dir)
     env["EA_STATE"] = str(state_path)
     env["EAWF_DAEMON_IDLE_TIMEOUT"] = "120"

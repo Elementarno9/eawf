@@ -259,12 +259,14 @@ jobs:
         run: uv run eawf hook eawf027-citation-scope
 
       - name: eawf release preflight for the pushed tag
+        # --skip-ci-runs: require-green-ci proves CI on this commit, also
+        # over an identical tree, and this job holds no forge token.
         env:
           TAG: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          uv run eawf release preflight "${TAG#v}" --source "${SHA}"
+          uv run eawf release preflight "${TAG#v}" --source "${SHA}" --skip-ci-runs
 
   install-smoke:
     name: Install-smoke (uv tool install from wheel)

@@ -59,6 +59,7 @@ from eawf.runtime.daemon.methods.state_subscribe import (
     PROJECTION_SUBSCRIBE_METHOD,
     SUBSCRIBE_METHODS,
 )
+from eawf.runtime.daemon.operator_identity import admit_operator_identity
 
 logger = logging.getLogger(__name__)
 
@@ -343,6 +344,7 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     if method not in SUBSCRIBE_METHODS:
         ctx.touch_activity()
     try:
+        params = admit_operator_identity(method, params)
         result = await _dispatch_method(method, ctx, params)
     except MethodNotFoundError:
         return _error(req_id, METHOD_NOT_FOUND, f"method not found: {method!r}")

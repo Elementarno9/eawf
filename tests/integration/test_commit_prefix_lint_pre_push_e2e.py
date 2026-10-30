@@ -195,8 +195,9 @@ def test_pre_push_lint_boundaries(epoch2_scratch: tuple[Path, str], lint: Any) -
     tip = _git(root, "rev-parse", "HEAD")
 
     assert lint.check_pushed_commits({}, repo_root=root) == (0, "")
+    # A deletion adds nothing.
     assert lint.check_pushed_commits(
-        {"PRE_COMMIT_FROM_REF": "0" * 40, "PRE_COMMIT_TO_REF": tip}, repo_root=root
+        {"PRE_COMMIT_FROM_REF": tip, "PRE_COMMIT_TO_REF": "0" * 40}, repo_root=root
     ) == (0, "")
     # An empty range adds nothing.
     assert lint.check_pushed_commits(
@@ -213,6 +214,40 @@ def test_pre_push_lint_boundaries(epoch2_scratch: tuple[Path, str], lint: Any) -
     )
     assert code == 1
     assert "cannot read the commits" in diag
+
+
+def test_pre_push_lint_reads_a_new_branch_from_what_no_remote_holds(
+    epoch2_scratch: tuple[Path, str], lint: Any
+) -> None:
+    root, base = epoch2_scratch
+    _git(root, "update-ref", "refs/remotes/origin/main", base)
+    created = {"PRE_COMMIT_FROM_REF": "0" * 40}
+
+    code, diag = lint.check_pushed_commits(
+        {**created, "PRE_COMMIT_TO_REF": _git(root, "rev-parse", "HEAD")}, repo_root=root
+    )
+
+    assert code == 1
+    assert diag.count("subject is not '<type>: <summary>'") == 3
+    published = _publish(root, base, "Task: EAWF-0331")
+    assert lint.check_pushed_commits(
+        {**created, "PRE_COMMIT_TO_REF": published}, repo_root=root
+    ) == (0, "")
+
+
+def test_pre_push_lint_reads_a_whole_new_branch_when_no_remote_is_known(
+    epoch2_scratch: tuple[Path, str], lint: Any
+) -> None:
+    root, _base = epoch2_scratch
+
+    code, diag = lint.check_pushed_commits(
+        {"PRE_COMMIT_FROM_REF": "0" * 40, "PRE_COMMIT_TO_REF": _git(root, "rev-parse", "HEAD")},
+        repo_root=root,
+    )
+
+    assert code == 1
+    assert diag.count("carries no Task trailers") == 1
+    assert diag.count("subject is not") == 3
 
 
 def test_pre_push_lint_refuses_an_unreadable_generation(

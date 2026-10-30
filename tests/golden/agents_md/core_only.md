@@ -153,7 +153,7 @@ Before opening or resuming a Milestone, Batch, or Task, verify the current branc
 If the working tree is dirty, preserve the dirty/untracked work before rebasing. If the branch intentionally remains behind or forked, record the reason in the plan or handoff before dispatching worktrees or starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=2.4 hash=227fbceccefc9007 -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=2.5 hash=227fbceccefc9007 -->
 `commit-prefix` — A Batch commit is ``<type>: <summary>`` with one ``Batch:`` trailer and a ``Task:`` trailer per Task it delivers; each push ends with one ``state:`` commit. Full text: [docs/rules/commit-prefix.md](docs/rules/commit-prefix.md)
 <!-- END EAWF:managed id=commit-prefix -->
 <!-- BEGIN EAWF:managed id=branch-naming version=1.1 hash=9848cd8623da04b5 -->
@@ -222,8 +222,8 @@ The ~72-column wrap convention is reserved for **commit messages** (subject + bo
 <!-- BEGIN EAWF:managed id=release-process version=2.1 hash=e8a3b534cfd81643 -->
 `release-process` — A release-train repo tags a merged Milestone only after ``eawf release preflight`` passes, via ``eawf release pipeline --milestone``; other repos keep their own tag flow. Full text: [docs/rules/release-process.md](docs/rules/release-process.md)
 <!-- END EAWF:managed id=release-process -->
-<!-- BEGIN EAWF:managed id=ship-process version=1.9 hash=37dd04d0ac8a855f -->
-`ship-process` — Ship a Milestone through one PR: pass CI, address review by appending Batches, then merge so each Batch commit survives; main and tags are never rewritten. Full text: [docs/rules/ship-process.md](docs/rules/ship-process.md)
+<!-- BEGIN EAWF:managed id=ship-process version=2.0 hash=509a60e4b4858b4b -->
+`ship-process` — Ship a Milestone through one PR: squash to one commit per Batch before review, fix review findings by appending Batches, accept last, then fast-forward main to the reviewed commit. Full text: [docs/rules/ship-process.md](docs/rules/ship-process.md)
 <!-- END EAWF:managed id=ship-process -->
 <!-- BEGIN EAWF:managed id=agent-report-contract version=1.0 hash=600b85c26e27f28b -->
 ### Agent report contract
@@ -235,7 +235,7 @@ Reports are append-only. Never overwrite or "fix" an earlier report attempt; ret
 Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``, ``pass-with-followups``, ``fail``, or ``blocked``. Report store URNs use the role-specific ``StoreKind`` such as ``executor_report`` or ``reviewer_report``.
 
 <!-- END EAWF:managed id=agent-report-contract -->
-<!-- BEGIN EAWF:managed id=workflow-lifecycle version=1.2 hash=9be4d100ccbb9db2 -->
+<!-- BEGIN EAWF:managed id=workflow-lifecycle version=1.3 hash=9be4d100ccbb9db2 -->
 `workflow-lifecycle` — The lifecycle runs research, plan, dispatch Tasks, cherry-pick, ship the Milestone, with a branch-currency check before opening or resuming any scope. Full text: [docs/rules/workflow-lifecycle.md](docs/rules/workflow-lifecycle.md)
 <!-- END EAWF:managed id=workflow-lifecycle -->
 <!-- BEGIN EAWF:managed id=pr-template version=1.1 hash=53ffbc1a5e53e4d1 -->
@@ -267,8 +267,8 @@ Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``, ``pass-with-followup
 <!-- BEGIN EAWF:managed id=gate-fire-proof-sunset version=1.1 hash=81a182623bee3388 -->
 `gate-fire-proof-sunset` — A new gate ships with a test proving it reds on a real defect, and sunsets at Milestone acceptance if it never fired. Full text: [docs/rules/gate-fire-proof-sunset.md](docs/rules/gate-fire-proof-sunset.md)
 <!-- END EAWF:managed id=gate-fire-proof-sunset -->
-<!-- BEGIN EAWF:managed id=commit-granularity version=1.7 hash=0b34ce900665e070 -->
-`commit-granularity` — One commit per Batch, or a few for a large Batch, squashed before the push; each push ends with one ``state:`` commit, and the bindings a squash replaced are rebound by superseding rows. Full text: [docs/rules/commit-granularity.md](docs/rules/commit-granularity.md)
+<!-- BEGIN EAWF:managed id=commit-granularity version=1.8 hash=b50086221d58768d -->
+`commit-granularity` — One commit per Batch, squashed before review opens; after review each fix lands as an appended Batch; each push ends with one ``state:`` commit; a squash rebinds by superseding rows. Full text: [docs/rules/commit-granularity.md](docs/rules/commit-granularity.md)
 <!-- END EAWF:managed id=commit-granularity -->
 <!-- BEGIN EAWF:managed id=anti-patterns version=1.3 hash=08565b9ac6767889 -->
 ## Anti-patterns

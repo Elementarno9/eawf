@@ -5,11 +5,11 @@ stateDiagram-v2
     ACCEPTANCE_REVIEW
     COMPLETED
     CANCELLED
-    PLANNED --> ACTIVE: activated [track_active]
+    PLANNED --> ACTIVE: activated [track_active+milestone_wip_admits]
     PLANNED --> CANCELLED: cancelled [reason_recorded]
     ACTIVE --> ACCEPTANCE_REVIEW: review_opened [required_batches_completed+bundle_revision_next]
     ACTIVE --> CANCELLED: cancelled [reason_recorded]
-    ACCEPTANCE_REVIEW --> ACTIVE: review_reopened [reason_recorded]
+    ACCEPTANCE_REVIEW --> ACTIVE: review_reopened [reason_recorded+milestone_wip_admits]
     ACCEPTANCE_REVIEW --> COMPLETED: completed [acceptance_journey_passed]
     ACCEPTANCE_REVIEW --> CANCELLED: cancelled [reason_recorded]
-    COMPLETED --> ACTIVE: acceptance_revoked [track_active+reason_recorded+operator_principal+no_release_cites+accepted_head_held]
+    COMPLETED --> ACTIVE: acceptance_revoked [track_active+milestone_wip_admits+reason_recorded+operator_principal+no_release_cites+accepted_head_held]

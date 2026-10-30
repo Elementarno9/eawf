@@ -47,6 +47,7 @@ from eawf.surfaces.cli.commands import release_pipeline as cli_module
 from eawf.workflow.release import pipeline as pipeline_module
 from eawf.workflow.release import pipeline_host as host_module
 from eawf.workflow.release.advance import TrainAdvanceRecord
+from eawf.workflow.release.ci_runs import CiRun
 from eawf.workflow.release.pipeline import (
     EVIDENCE_DIGEST_FACT_PREFIX,
     PIPELINE_STEPS,
@@ -90,6 +91,18 @@ BATCH = "BAT-0035"
 NOW = datetime(2026, 9, 25, 12, 0, tzinfo=UTC)
 
 
+def _green_push_run(sha: str) -> CiRun:
+    return CiRun.model_validate(
+        {
+            "databaseId": 11,
+            "event": "push",
+            "headSha": sha,
+            "status": "completed",
+            "conclusion": "success",
+        }
+    )
+
+
 @dataclass
 class FakeHost:
     """Git, the forge and the isolated proofs, recorded instead of run."""
@@ -128,6 +141,10 @@ class FakeHost:
 
     def target_ids(self, version: str) -> tuple[str, ...]:
         return TARGETS
+
+    def ci_runs(self, sha: str) -> tuple[CiRun, ...]:
+        self.calls.append("host.ci_runs")
+        return (_green_push_run(sha),)
 
     def preflight(self, version: str, *, source: str) -> str | None:
         self.calls.append("host.preflight")
@@ -363,7 +380,7 @@ def test_run_post_merge_pipeline_refuses_the_push_without_the_publish_flag(world
     assert refused.value.code is PipelineRefusalCode.PUBLISH_FLAG_MISSING
     assert world.host.pushes == []
     assert "host.push_tag" not in world.calls
-    assert world.journal_steps() == [PipelineStep.PIN_SOURCE, PipelineStep.BUILD_RECEIPTS]
+    assert world.journal_steps() == list(PIPELINE_STEPS[: PIPELINE_STEPS.index(PipelineStep.TAG)])
     assert [o.step for o in refused.value.outcomes] == world.journal_steps()
 
 
@@ -651,7 +668,9 @@ def test_run_post_merge_pipeline_refuses_bad_publication_receipts(
         world.run()
     assert refused.value.code is PipelineRefusalCode.PUBLICATION_RECEIPT_INVALID
     assert needle in refused.value.detail
-    assert "release.create" not in world.calls
+    # The record opened before the tag; a bad receipt only stops the pin.
+    assert world.calls.index("release.create") < world.calls.index("host.push_tag")
+    assert "release.candidate" not in world.calls
 
 
 def test_run_post_merge_pipeline_refuses_refused_gate_receipts(world: World) -> None:
@@ -719,8 +738,13 @@ def test_discard_journal_from_drops_the_step_and_later_rows(world: World) -> Non
     assert discard_journal_from(journal, PipelineStep.TAG) == ()
     assert discard_journal_from(journal, PipelineStep.BUILD_RECEIPTS) == (
         PipelineStep.BUILD_RECEIPTS,
+        PipelineStep.PREFLIGHT,
     )
-    assert world.journal_steps() == [PipelineStep.PIN_SOURCE]
+    assert world.journal_steps() == [
+        PipelineStep.PIN_SOURCE,
+        PipelineStep.CI_GREEN,
+        PipelineStep.CREATE,
+    ]
 
 
 def test_append_journal_leaves_no_temp_file_behind(world: World) -> None:
@@ -769,9 +793,9 @@ class _StopAfterCandidateHost:
     would pass every test here and only red in production. PIN_SOURCE,
     BUILD_RECEIPTS and PUBLISH_WAIT are pre-satisfied (a real commit, real
     build receipts, real publication receipts) so those steps never call
-    this host at all; TAG is answered as already pushed for the same
-    reason. Only RECEIPTS reaches the host, and it refuses on purpose so
-    the walk stops right after CANDIDATE runs for real.
+    this host at all; CI_GREEN and PREFLIGHT are answered green and TAG as
+    already pushed for the same reason. RECEIPTS refuses on purpose so the
+    walk stops right after CANDIDATE runs for real.
     """
 
     def __init__(self, root: Path, source: str) -> None:
@@ -797,8 +821,11 @@ class _StopAfterCandidateHost:
     def target_ids(self, version: str) -> tuple[str, ...]:
         return ("pypi", "npm", "github")
 
+    def ci_runs(self, sha: str) -> tuple[CiRun, ...]:
+        return (_green_push_run(sha),)
+
     def preflight(self, version: str, *, source: str) -> str | None:
-        raise AssertionError("preflight must not run: the tag is already pushed")
+        return None
 
     def remote_tag(self, tag: str) -> str | None:
         return self.source
@@ -934,10 +961,12 @@ def test_run_post_merge_pipeline_drives_the_real_daemon_through_create_and_candi
     journal = PipelineLayout(repo, version).journal
     assert [row.step for row in read_journal(journal)] == [
         PipelineStep.PIN_SOURCE,
+        PipelineStep.CI_GREEN,
+        PipelineStep.CREATE,
         PipelineStep.BUILD_RECEIPTS,
+        PipelineStep.PREFLIGHT,
         PipelineStep.TAG,
         PipelineStep.PUBLISH_WAIT,
-        PipelineStep.CREATE,
         PipelineStep.CANDIDATE,
     ]
 

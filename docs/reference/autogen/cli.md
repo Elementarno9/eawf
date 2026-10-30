@@ -529,7 +529,7 @@ Track lifecycle (create, retire).
 | `create` | Admit a new Track's create document into the addressed tree. |
 | `rename` | Give an ACTIVE Track a new title; its status does not move. |
 | `retire` | Retire an ACTIVE Track once no Milestone under it is open. |
-| `set-policy` | Set how many ACTIVE Milestones an ACTIVE Track advises at most. |
+| `set-policy` | Set how many ACTIVE Milestones an ACTIVE Track admits at most. |
 
 ### `eawf vfl`
 

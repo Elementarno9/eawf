@@ -56,7 +56,8 @@ Enforces:
    ``pre-push``-stage hook, lints every commit in the pushed range with
    :func:`pushed_commit_error`: every non-``state`` commit names at least
    one Task by ``Task:`` trailer and, when it names several, the one Batch
-   they all belong to by ``Batch:`` trailer; a ``state:`` commit is
+   they all belong to by ``Batch:`` trailer, both in the final trailer
+   block ``git interpret-trailers`` parses; a ``state:`` commit is
    confined to committed state paths. Commits stay free locally,
    so scratch history is refused only when it is pushed.
 
@@ -370,7 +371,10 @@ def pushed_commit_error(
     generation by ``Task: <KEY>`` trailer. A commit naming one Task may omit
     the ``Batch: BAT-<NNNN>`` trailer; a commit naming several carries
     exactly one, and every Task it names belongs to that Batch, which may be
-    in any status. No per-Task commit cap applies.
+    in any status. No per-Task commit cap applies. Only the final trailer
+    block git parses counts: a ``Batch`` or ``Task`` line outside it is
+    refused, since a blank line before a later trailer paragraph hides it
+    from git.
 
     Args:
         message: The full commit message.
@@ -388,8 +392,12 @@ def pushed_commit_error(
     if conventional.group("type") == "state":
         strays = _state_strays(list(paths), epoch2=records is not None)
         return None if not strays else f"state commit touches non-state paths: {strays}"
-    task_keys = [match.group("key") for match in _TASK_TRAILER_RE.finditer(message)]
-    batch_keys = [match.group("key") for match in _BATCH_TRAILER_RE.finditer(message)]
+    trailers = _final_trailer_block(message)
+    detached = detached_trailer_error(message, trailers)
+    if detached is not None:
+        return detached
+    task_keys = [match.group("key") for match in _TASK_TRAILER_RE.finditer(trailers)]
+    batch_keys = [match.group("key") for match in _BATCH_TRAILER_RE.finditer(trailers)]
     if not task_keys:
         return f"carries no {_TASK_TRAILER_NAME} trailers; a commit names at least one Task"
     if len(task_keys) > 1 and not batch_keys:
@@ -412,6 +420,58 @@ def pushed_commit_error(
                 f"{_TASK_TRAILER_NAME} trailer {task!r} names no Task of the canonical generation"
             )
     return _batch_trailer_error(batch_keys, task_keys, records)
+
+
+def _final_trailer_block(message: str) -> str:
+    # Git alone decides which paragraph is the trailer block (the last one,
+    # with its own percentage and continuation rules), and the integration
+    # reads trailers through git, so the lint asks git rather than guessing.
+    parsed = subprocess.run(
+        ["git", "interpret-trailers", "--parse"],
+        input=message,
+        capture_output=True,
+        text=True,
+        timeout=_GIT_TIMEOUT_SECONDS,
+        check=True,
+    )
+    return parsed.stdout
+
+
+def _detached_trailer(message: str, trailers: str) -> str | None:
+    # A Batch or Task line git does not parse as a trailer is one a reader of
+    # the message takes for a trailer while every tool skips it.
+    lifecycle = ((_BATCH_TRAILER_NAME, _BATCH_TRAILER_RE), (_TASK_TRAILER_NAME, _TASK_TRAILER_RE))
+    parsed = {
+        (name, match.group("key"))
+        for name, pattern in lifecycle
+        for match in pattern.finditer(trailers)
+    }
+    for name, pattern in lifecycle:
+        for match in pattern.finditer(message):
+            if (name, match.group("key")) not in parsed:
+                return match.group(0).strip()
+    return None
+
+
+def detached_trailer_error(message: str, trailers: str) -> str | None:
+    """Return why a ``Batch`` or ``Task`` line sits outside the trailer block, or ``None``.
+
+    Args:
+        message: The full commit message.
+        trailers: The final trailer block git parses from *message*.
+
+    Returns:
+        A diagnostic naming the first detached line, or ``None`` when every
+        ``Batch`` and ``Task`` line is a trailer git reads.
+    """
+    detached = _detached_trailer(message, trailers)
+    if detached is None:
+        return None
+    return (
+        f"{detached!r} is not in the final trailer block git parses; a blank line "
+        "separates it from the trailers after it, so git and the integration never read "
+        "it. Join the Batch, Task and co-author trailers into one last paragraph"
+    )
 
 
 def _batch_trailer_error(
@@ -984,7 +1044,9 @@ def check_pushed_commits(
     The pushed range is ``PRE_COMMIT_FROM_REF..PRE_COMMIT_TO_REF``; for a new
     branch pre-commit sets the first variable to the parent of the oldest
     commit no remote holds, so the range is still exactly what the push adds.
-    A deletion, or a run without the variables, adds nothing and passes. The
+    A hook that passes the all-zero old SHA of a created ref instead is read
+    as every commit no remote-tracking ref holds, the same set. A deletion,
+    or a run without the variables, adds nothing and passes. The
     Batch and Task records are read from the canonical main-worktree
     generation, so a worktree cannot prove a commit against a stale copy.
 
@@ -998,10 +1060,11 @@ def check_pushed_commits(
     """
     old = env.get("PRE_COMMIT_FROM_REF", "")
     new = env.get("PRE_COMMIT_TO_REF", "")
-    if not old.strip(_ZERO_SHA_CHAR) or not new.strip(_ZERO_SHA_CHAR):
+    if not old or not new.strip(_ZERO_SHA_CHAR):
         return 0, ""
+    pushed = [f"{old}..{new}"] if old.strip(_ZERO_SHA_CHAR) else [new, "--not", "--remotes"]
     log = _git(
-        ["log", "--no-merges", "--format=%H%x00%B%x1e", f"{old}..{new}", "--"],
+        ["log", "--no-merges", "--format=%H%x00%B%x1e", *pushed, "--"],
         repo_root=repo_root,
     )
     if log.returncode != 0:

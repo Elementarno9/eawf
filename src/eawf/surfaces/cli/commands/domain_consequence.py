@@ -69,7 +69,7 @@ WRITE_CONSEQUENCES: Final[Mapping[str, tuple[tuple[str, ...], tuple[str, ...]]]]
             ("its status does not move", "no milestone under it changes"),
         ),
         "domain.track.set_policy": (
-            ("the track's advisory active-milestone limit is set, one policy revision on",),
+            ("the track's active-milestone limit is set, one policy revision on",),
             ("its status does not move", "nothing is refused or activated by it"),
         ),
         "domain.batch.set_title": (

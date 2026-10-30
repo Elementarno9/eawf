@@ -434,6 +434,53 @@ def test_daemon_restart_replaces_an_older_daemon(
         assert client.call("daemon.ping")["version"] == __version__
 
 
+@pytest.fixture
+def pre_marker_daemon(
+    daemon_cli_env: _ServerHandle, monkeypatch: pytest.MonkeyPatch
+) -> _ServerHandle:
+    """The older daemon as a release before the session marker serves it.
+
+    That release strips nothing off the params, so its closed ``daemon.*``
+    params models see whatever the client sent. The client runs in a Claude
+    Code session, as the CLI an agent drives does.
+    """
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.server.admit_operator_identity", lambda _method, params: dict(params)
+    )
+    monkeypatch.setenv("CLAUDECODE", "1")
+    return daemon_cli_env
+
+
+def test_agent_session_gets_the_version_mismatch_from_a_pre_marker_daemon(
+    pre_marker_daemon: _ServerHandle, restarts: list[dict[str, Any]]
+) -> None:
+    """The version ping carries no marker, so the strict PingParams admits it."""
+    with pytest.raises(DaemonVersionMismatch, match="eawf daemon restart"):
+        DaemonClient(runtime_dir=pre_marker_daemon.runtime_dir).__enter__()
+    assert restarts == []
+
+
+def test_agent_session_stops_a_pre_marker_daemon(pre_marker_daemon: _ServerHandle) -> None:
+    """``daemon.shutdown`` through the client carries no marker, so ShutdownParams admits it."""
+    from eawf.surfaces.cli.commands.daemon import _rpc_call_pipe
+
+    response = _rpc_call_pipe("daemon.shutdown", {"drain": False, "timeout_seconds": 1}, spawn=True)
+    assert "error" not in response, response
+    assert "shutdown_at" in response["result"]
+
+
+def test_agent_session_marks_a_request_naming_an_actor(
+    server: _ServerHandle, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A request naming an actor still carries the marker the daemon refuses on."""
+    monkeypatch.setenv("CLAUDECODE", "1")
+    with (
+        DaemonClient(runtime_dir=server.runtime_dir) as client,
+        pytest.raises(DaemonRpcError, match="operator_identity_refused"),
+    ):
+        client.call("domain.milestone.accept", {"actor": "OP-0001"})
+
+
 @pytest.mark.parametrize(
     ("daemon", "client", "order"),
     [

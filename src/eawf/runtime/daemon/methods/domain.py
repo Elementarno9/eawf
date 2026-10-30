@@ -171,7 +171,7 @@ from eawf.runtime.daemon.methods.domain_envelope import (
 from eawf.runtime.daemon.methods.domain_guards import (
     GUARD_COMPUTERS,
     GuardInputs,
-    milestone_watchlist,
+    milestone_activation_refusal,
 )
 from eawf.runtime.daemon.methods.legacy_retire import (
     LegacyTaskDropParams,
@@ -651,6 +651,7 @@ def _guard_refusal(
     params: LifecycleParams,
     record: LifecycleRecord,
     guard: TransitionGuard,
+    finding: str | None,
 ) -> DomainEnvelope:
     """Return the refusal one unmet computable predicate decides.
 
@@ -663,16 +664,19 @@ def _guard_refusal(
         params: The already-validated request parameters.
         record: The subject as the document holds it.
         guard: The first guard of the edge that does not hold.
+        finding: What the guard found, when the operator needs it to act,
+            such as the records holding a limit.
 
     Returns:
         An ``error`` envelope carrying ``transition_guard_failed``.
     """
     entity = LIFECYCLE_ENTITIES[verb.kind]
+    found = "" if finding is None else f": {finding}"
     refusal = TransactionRefusedError(
         code=TransactionRefusalCode.TRANSITION_GUARD_FAILED,
         detail=(
             f"{entity.value} {record.status!s} -> {verb.to_status!s} blocked by guard "
-            f"{guard.value!r}"
+            f"{guard.value!r}{found}"
         ),
         entity_ref=str(params.urn),
         guard=guard.value,
@@ -835,7 +839,11 @@ def _preflight(
     )
     if guard is None:
         return None, record.revision
-    return _guard_refusal(verb, params=params, record=record, guard=guard), record.revision
+    finding = None
+    if guard is TransitionGuard.MILESTONE_WIP_ADMITS and isinstance(record, Milestone):
+        finding = milestone_activation_refusal(document, record)
+    refusal = _guard_refusal(verb, params=params, record=record, guard=guard, finding=finding)
+    return refusal, record.revision
 
 
 def _integration_refusal(
@@ -1159,16 +1167,14 @@ async def _after_commit(
 ) -> tuple[str, ...]:
     """Do what one committed verb owes after its commit, and return its warnings.
 
-    An activated Milestone reads its advisory WIP signals. A released Task
-    files its release record -- on a replay too, because a daemon that died
-    between the commit and the append left the release without its record.
+    A released Task files its release record -- on a replay too, because a
+    daemon that died between the commit and the append left the release
+    without its record.
 
     Returns:
-        The watchlist lines, or ``projection_degraded`` when a filed release
-        record's row did not reach the projection; empty otherwise.
+        ``projection_degraded`` when a filed release record's row did not
+        reach the projection; empty otherwise.
     """
-    if verb.to_status is MilestoneStatus.ACTIVE:
-        return await asyncio.to_thread(_activation_watchlist, context, params.urn)
     if verb.method != TASK_RELEASE_METHOD:
         return ()
     filed = await asyncio.to_thread(
@@ -1180,29 +1186,6 @@ async def _after_commit(
         receipt=receipt,
     )
     return () if filed is None or publish_projection(ctx.bus, filed) else (PROJECTION_DEGRADED,)
-
-
-def _activation_watchlist(context: Epoch2RootContext, urn: QualifiedUrn) -> tuple[str, ...]:
-    """Return the advisory WIP signals a just-activated Milestone raises.
-
-    Read after the commit, so the count includes the activation itself.
-
-    Args:
-        context: The native context of the addressed root.
-        urn: The activated Milestone.
-
-    Returns:
-        The watchlist lines, or nothing when the Milestone row is not
-        readable or its Track is within its advisory ceiling.
-    """
-    with context.session([urn]) as session:
-        document = session.read_document()
-    row = document_rows(document, Epoch2Collection.MILESTONE).get(urn.entity_key)
-    try:
-        milestone = Milestone.model_validate(row)
-    except ValidationError:
-        return ()
-    return milestone_watchlist(document, milestone)
 
 
 def _register_verb(verb: LifecycleVerb) -> None:

@@ -139,6 +139,7 @@ class TransitionGuard(StrEnum):
     INTEGRATED_BINDING_PINNED = "integrated_binding_pinned"
     LEASE_HELD = "lease_held"
     MANIFEST_COMPLETE = "manifest_complete"
+    MILESTONE_WIP_ADMITS = "milestone_wip_admits"
     NEVER_CLAIMED = "never_claimed"
     NO_ACTIVE_RUN = "no_active_run"
     NO_EXTERNAL_EFFECT = "no_external_effect"
@@ -192,6 +193,7 @@ class DenialCode(StrEnum):
     MILESTONE_BATCHES_OPEN = "milestone_batches_open"
     MILESTONE_RELEASED = "milestone_released"
     MILESTONE_TRACK_RETIRED = "milestone_track_retired"
+    MILESTONE_WIP_CEILING_REACHED = "milestone_wip_ceiling_reached"
     OPERATOR_PRINCIPAL_REQUIRED = "operator_principal_required"
     PUBLICATION_NOT_OBSERVED = "publication_not_observed"
     RECOVERY_BUDGET_AVAILABLE = "recovery_budget_available"
@@ -303,6 +305,7 @@ GUARD_DENIALS: Final[Mapping[TransitionGuard, DenialCode]] = {
     TransitionGuard.INTEGRATED_BINDING_PINNED: DenialCode.TASK_INTEGRATION_UNPROVEN,
     TransitionGuard.LEASE_HELD: DenialCode.TASK_LEASE_UNHELD,
     TransitionGuard.MANIFEST_COMPLETE: DenialCode.RELEASE_MANIFEST_INCOMPLETE,
+    TransitionGuard.MILESTONE_WIP_ADMITS: DenialCode.MILESTONE_WIP_CEILING_REACHED,
     TransitionGuard.NEVER_CLAIMED: DenialCode.TASK_ALREADY_CLAIMED,
     TransitionGuard.NO_ACTIVE_RUN: DenialCode.TASK_RUN_ACTIVE,
     TransitionGuard.NO_EXTERNAL_EFFECT: DenialCode.RELEASE_EFFECT_ALREADY_STARTED,
@@ -403,6 +406,10 @@ DENIAL_REMEDIATION: Final[Mapping[DenialCode, str]] = {
     DenialCode.MILESTONE_TRACK_RETIRED: (
         "Move the Milestone to a live Track, or reopen work under an active one."
     ),
+    DenialCode.MILESTONE_WIP_CEILING_REACHED: (
+        "Append the follow-up Batches and Tasks to the named ACTIVE Milestone, or complete or "
+        "cancel it, before activating another."
+    ),
     DenialCode.OPERATOR_PRINCIPAL_REQUIRED: (
         "Only an operator takes an acceptance back: retry with --actor set to an operator "
         "principal (OP- followed by digits, such as OP-0001)."
@@ -497,7 +504,7 @@ _MILESTONE_ROWS: Final[tuple[TransitionRow, ...]] = (
         frm=MilestoneStatus.PLANNED,
         to=MilestoneStatus.ACTIVE,
         verb=TransitionVerb.ACTIVATED,
-        guards=(TransitionGuard.TRACK_ACTIVE,),
+        guards=(TransitionGuard.TRACK_ACTIVE, TransitionGuard.MILESTONE_WIP_ADMITS),
     ),
     TransitionRow(
         entity=LifecycleEntity.MILESTONE,
@@ -526,7 +533,7 @@ _MILESTONE_ROWS: Final[tuple[TransitionRow, ...]] = (
         frm=MilestoneStatus.ACCEPTANCE_REVIEW,
         to=MilestoneStatus.ACTIVE,
         verb=TransitionVerb.REVIEW_REOPENED,
-        guards=(TransitionGuard.REASON_RECORDED,),
+        guards=(TransitionGuard.REASON_RECORDED, TransitionGuard.MILESTONE_WIP_ADMITS),
     ),
     TransitionRow(
         entity=LifecycleEntity.MILESTONE,
@@ -545,7 +552,8 @@ _MILESTONE_ROWS: Final[tuple[TransitionRow, ...]] = (
     ),
     # Taking an acceptance back is an operator's correction of a Milestone no
     # release has shipped; once one has, the fix is a new Milestone. It makes
-    # the Milestone ACTIVE again, so its Track must still be, as on activation.
+    # the Milestone ACTIVE again, so its Track must still be active and have
+    # room, as on activation.
     TransitionRow(
         entity=LifecycleEntity.MILESTONE,
         frm=MilestoneStatus.COMPLETED,
@@ -553,6 +561,7 @@ _MILESTONE_ROWS: Final[tuple[TransitionRow, ...]] = (
         verb=TransitionVerb.ACCEPTANCE_REVOKED,
         guards=(
             TransitionGuard.TRACK_ACTIVE,
+            TransitionGuard.MILESTONE_WIP_ADMITS,
             TransitionGuard.REASON_RECORDED,
             TransitionGuard.OPERATOR_PRINCIPAL,
             TransitionGuard.NO_RELEASE_CITES,

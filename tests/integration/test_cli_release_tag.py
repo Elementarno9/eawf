@@ -19,6 +19,7 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
+import click
 import pytest
 import yaml
 from typer.testing import CliRunner
@@ -205,15 +206,13 @@ def test_release_tag_creates_annotated_tag(tmp_path: Path, monkeypatch: pytest.M
     assert "v9.9.9" in _git(["tag", "--list"], tmp_path)
 
 
-def test_release_tag_existing_tag_without_force_errors(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_release_tag_existing_tag_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _init_repo(tmp_path)
     _git(["tag", "v9.9.9"], tmp_path)
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["release", "tag", "9.9.9"])
-    assert result.exit_code != 0
-    assert "already exists" in (result.stdout + str(result.exception or ""))
+    output = result.stdout + str(result.exception or "")
+    assert "already exists" in output and "never re-tagged" in output
 
 
 # --- dirty tree: refusal, waiver, and the waiver's reach --------------------
@@ -232,17 +231,17 @@ def test_release_tag_dirty_tree_without_a_waiver_errors(
     assert _git(["tag", "--list"], tmp_path).strip() == ""
 
 
-def test_release_tag_force_no_longer_admits_a_dirty_tree(
+def test_release_tag_refuses_a_force_option(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``--force`` overwrites a tag; it does not admit uncommitted work."""
+    """No option overwrites a tag: a published version is never re-tagged."""
     _init_repo(tmp_path)
-    (tmp_path / "dirty.txt").write_text("uncommitted\n", encoding="utf-8")
+    _git(["tag", "v9.9.9"], tmp_path)
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["release", "tag", "9.9.9", "--force"])
-    assert result.exit_code != 0
-    assert "dirty_release_tree" in (result.stdout + str(result.exception or ""))
-    assert _git(["tag", "--list"], tmp_path).strip() == ""
+    assert result.exit_code == 2
+    assert "No such option" in click.unstyle(result.output)
+    assert _git(["tag", "--list"], tmp_path).strip() == "v9.9.9"
 
 
 def test_release_tag_dirty_tree_waiver_records_the_reason(

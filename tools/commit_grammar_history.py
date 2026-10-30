@@ -9,7 +9,9 @@ longer lists, and is accepted without a warning. A commit after the
 switch is held to the grammar the commit-msg hook enforces today, plus
 the bracket-wave and bare phase or iter forms it accepted until the wave
 lifecycle was retired, and a ``Task`` trailer in its fixed place. The
-bracket-wave and task-prefix forms warn there.
+bracket-wave and task-prefix forms warn there. A commit written after the
+lint first refused it also keeps its ``Batch`` and ``Task`` lines inside
+the final trailer block git parses.
 
 Only the message is read. State is not: a Task that was live when its
 commit landed has long since completed, so proving it again here would
@@ -32,6 +34,7 @@ from commit_prefix_lint import (
     _SUBJECT_TASK_PREFIX_RE,
     _TYPES,
     _extract_subject,
+    detached_trailer_error,
     task_trailer_position_error,
 )
 
@@ -49,6 +52,11 @@ _SUBJECT_WAVE_RE = re.compile(
     r"^\[P\d{2,}(-I(?!00)\d{2,})?-W(?!00)\d{2,}\]\s+" rf"(?P<type>{_TYPES}):\s+\S.*$"
 )
 _SUBJECT_BARE_RE = re.compile(r"^\[P\d{2,}(-I(?!00)\d{2,})?\]\s+(?P<type>state|docs):\s+\S.*$")
+
+#: The lint and the check whose first commit is when trailer blocks began to
+#: be refused; commits before it were written without the rule.
+TRAILER_RULE_PATH = "tools/commit_prefix_lint.py"
+TRAILER_RULE_SYMBOL = "_detached_trailer"
 
 _GIT_TIMEOUT_SECONDS = 60.0
 # The separators the ``--format`` below spells as ``%x1e`` and ``%x00``.
@@ -125,6 +133,21 @@ def pre_switch_commits(repo_root: Path | None) -> frozenset[str]:
     return frozenset(_git(repo_root, "rev-list", switch).split()) - {switch}
 
 
+def pre_trailer_rule_commits(repo_root: Path | None) -> frozenset[str]:
+    """Return every commit written before trailer blocks were checked, or none when never.
+
+    Raises:
+        subprocess.CalledProcessError: git cannot read the history.
+    """
+    added = _git(
+        repo_root, "log", f"-S{TRAILER_RULE_SYMBOL}", "--format=%H", "--", TRAILER_RULE_PATH
+    ).split()
+    if not added:
+        return frozenset()
+    rule = added[-1]
+    return frozenset(_git(repo_root, "rev-list", rule).split()) - {rule}
+
+
 def check_history(rev_range: str, *, repo_root: Path | None = None) -> tuple[int, str]:
     """Lint the grammar of every non-merge commit in *rev_range*.
 
@@ -139,16 +162,27 @@ def check_history(rev_range: str, *, repo_root: Path | None = None) -> tuple[int
     """
     try:
         early = pre_switch_commits(repo_root)
-        log = _git(repo_root, "log", "--no-merges", "--format=%H%x00%B%x1e", rev_range)
+        untrailed = pre_trailer_rule_commits(repo_root)
+        log = _git(
+            repo_root,
+            "log",
+            "--no-merges",
+            "--format=%H%x00%B%x00%(trailers:only,unfold)%x1e",
+            rev_range,
+        )
     except (OSError, subprocess.SubprocessError) as exc:
         return 1, f"commit history unreadable for {rev_range!r}: {exc}"
     rejected: list[str] = []
     warned: list[str] = []
     for record in log.split(_RECORD_SEP):
-        sha, _, message = record.strip("\n").partition(_FIELD_SEP)
+        sha, _, fields = record.strip("\n").partition(_FIELD_SEP)
         if not sha:
             continue
+        message, _, trailers = fields.rpartition(_FIELD_SEP)
         code, diag = history_verdict(message, predates_switch=sha in early)
+        detached = None if code or sha in untrailed else detached_trailer_error(message, trailers)
+        if detached is not None:
+            code, diag = 1, detached
         if diag:
             (rejected if code else warned).append(f"{sha[:12]} {diag.splitlines()[0]}")
     lines = [f"rejected: {line}" for line in rejected] + [f"warning: {line}" for line in warned]

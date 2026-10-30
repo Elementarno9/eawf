@@ -48,7 +48,7 @@ _EDIT_SPEC_HELP: Final = (
     "JSON object carrying any of title, description, outcome, appetite, exclusions and "
     "acceptance_journey."
 )
-_ACTIVE_MILESTONES_HELP: Final = "How many ACTIVE Milestones the Track advises at most."
+_ACTIVE_MILESTONES_HELP: Final = "How many ACTIVE Milestones the Track admits at most."
 
 
 def _send(
@@ -221,7 +221,7 @@ def track_set_policy_cmd(
     dry_run: DryRun = False,
     yes: Yes = False,
 ) -> None:
-    """Set how many ACTIVE Milestones an ACTIVE Track advises at most."""
+    """Set how many ACTIVE Milestones an ACTIVE Track admits at most."""
     _send(
         ctx,
         method=TRACK_SET_POLICY,

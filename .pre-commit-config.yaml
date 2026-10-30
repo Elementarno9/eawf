@@ -114,6 +114,15 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: branch-name-lint
+        name: branch-name-lint
+        entry: python3 tools/branch_name_lint.py
+        # Task worktree branches are never pushed, so the commit stage is
+        # their only check; the push stage checks the pushed ref names.
+        stages: [pre-commit, pre-push]
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: ledger-history
         name: ledger-history
         entry: uv run eawf hook ledger-history --range origin/main..HEAD

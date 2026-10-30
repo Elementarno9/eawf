@@ -1,4 +1,4 @@
-"""The verbs that rename a Track and set its advisory Milestone limit.
+"""The verbs that rename a Track and set its active-Milestone limit.
 
 Neither is a lifecycle move: the Track stays ACTIVE, so each commits a
 same-status edit through
@@ -60,7 +60,7 @@ class TrackPolicyRequest(RecordEditRequest):
     """The strict parameters of :data:`TRACK_SET_POLICY`.
 
     Attributes:
-        active_milestones: How many ACTIVE Milestones the Track advises at most.
+        active_milestones: How many ACTIVE Milestones the Track admits at most.
     """
 
     active_milestones: StrictNonNegativeInt
@@ -87,7 +87,7 @@ def rename_track(
 
 
 def _policy_fields(track: Track, active_milestones: int) -> dict[str, Any]:
-    """Return *track*'s policy with the new advisory limit, one policy revision on."""
+    """Return *track*'s policy with the new active-Milestone limit, one policy revision on."""
     policy = track.policy.model_dump(mode="json")
     policy["wip"]["active_milestones"] = active_milestones
     policy["revision"] = track.policy.revision + 1
@@ -133,7 +133,7 @@ async def _track_rename(
 async def _track_set_policy(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
-    """Set how many ACTIVE Milestones one ACTIVE Track advises at most."""
+    """Set how many ACTIVE Milestones one ACTIVE Track admits at most."""
     return await run_record_edit(
         ctx,
         params,

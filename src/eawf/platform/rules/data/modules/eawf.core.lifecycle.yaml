@@ -87,15 +87,15 @@ rules:
     procedure_ref: docs/rules/release-process.md
   - rule_id: eawf.core.lifecycle.ship-process
     obligation_id: lifecycle.ship-process
-    revision: 4
+    revision: 5
     title: Ship a Milestone from one pull request
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Ship each Milestone through one pull request: pass its CI gates, address review by appending Batches, then merge so each Batch commit survives; main and tags are never rewritten.
+      Ship each Milestone through one pull request: squash to one commit per Batch before review, fix review findings by appending Batches, accept the Milestone last once CI is green, then fast-forward main to the reviewed commit; main and tags are never rewritten.
     rationale: >-
-      A merge that re-creates or folds Batch commits discards the per-Batch history that review and bisect read and orphans the head each landed Batch bound, and rewriting main or a tag breaks every published binding.
+      A squash or force-push after review, or a merge that re-creates or folds Batch commits, makes the merged commits differ from the reviewed ones and orphans the head each landed Batch bound, and rewriting main or a tag breaks every published binding.
     verification:
       method: review
     procedure_ref: docs/rules/ship-process.md

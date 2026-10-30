@@ -95,10 +95,11 @@ def release_pipeline(
     """Take a merged checkpoint from tag to BAKED and the train advance.
 
     Run it from a clean checkout of the merge on ``main``, naming the
-    released Milestone with ``--milestone``. It pins that commit,
-    fetches the dry run's build receipts, sweeps readiness, tags and
+    released Milestone with ``--milestone``. It pins that commit, waits
+    for a successful push-event CI run on exactly it, opens the record,
+    fetches the dry run's build receipts, sweeps preflight, tags and
     pushes, waits for the publish runs and downloads their receipts,
-    then opens, pins, proves, approves, publishes,
+    then pins, proves, approves, publishes,
     reconciles and observes the record until it bakes, advances the
     train, checks that ``main`` carries exactly the commits of each
     completed Batch's work, found by their ``Task:`` and ``Batch:``

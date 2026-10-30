@@ -6,7 +6,7 @@ which runs it selects. These tests evaluate the expressions the workflow
 actually carries against each event, ref and runner, and pin the outcome:
 twice-green on the release train, nightly and manual runs only; one lint
 job instead of a lint pass inside every test leg; a pull request that runs
-the wave and iter tiers only; a green-tree record that still lands on a
+the same tests, serial steps and coverage gate as a push; a green-tree record that still lands on a
 main push now that twice-green skips there; and an ubuntu leg split into
 three pytest-split shards whose union is the unsharded suite, each leg
 uploading its JUnit report, with one coverage job judging the combined
@@ -29,8 +29,6 @@ from typing import Any
 import pytest
 import yaml
 
-from eawf.platform.lint.kind_taxonomy import KIND_GATE_TIERS, GateTier
-
 pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -39,7 +37,6 @@ _TOOL_PATH = _REPO_ROOT / "tools" / "ci_green_tree.py"
 _DURATION_TOOL_PATH = _REPO_ROOT / "tools" / "duration_budget_gate.py"
 _BASELINE = _REPO_ROOT / "tests" / "duration-baseline.json"
 
-_LIVE_CONSOLE_GLOB = "tests/tui/surfaces/tui/console/test_console_live_*.py"
 _SERIAL_MIGRATION_NODE = (
     "tests/integration/kernel/migration/test_v07_rehearsal.py::"
     "test_largest_supported_state_applies_inside_its_declared_budget"
@@ -200,17 +197,17 @@ def test_green_tree_needs_the_lint_job() -> None:
     assert "lint" in _jobs()["green-tree"]["needs"]
 
 
-# --- pull-request tier selection ---------------------------------------------
+# --- one test shape on every event -------------------------------------------
 
 
-def _pr_marker() -> str:
-    release = [kind.value for kind, tier in KIND_GATE_TIERS.items() if tier is GateTier.RELEASE]
-    return " and ".join(f"not {marker}" for marker in ["slow", *release])
+_OS = ("ubuntu-24.04", "macos-26")
+_SERIAL_PREFIX = "Pytest (serial "
+_EXCLUDE_FLAGS = ("--exclude", "--omit", "--ignore", "--deselect", "-m")
 
 
-def _parallel_argv(event: str, os: str = "ubuntu-24.04") -> list[str]:
+def _parallel_argv(event: str, os: str = "ubuntu-24.04", shard: str = "1") -> list[str]:
     run = str(_step("test", "Pytest (parallel)")["run"])
-    return shlex.split(_render(run, _context(event, os=os)))
+    return shlex.split(_render(run, _context(event, os=os, shard=shard)))
 
 
 def _option(argv: list[str], flag: str) -> list[str]:
@@ -219,35 +216,70 @@ def _option(argv: list[str], flag: str) -> list[str]:
     ]
 
 
-def test_pr_marker_is_the_documented_tier_selection() -> None:
-    assert _pr_marker() == "not slow and not e2e and not perf"
+def _serial_steps_run(event: str, os: str, shard: str) -> list[str]:
+    context = _context(event, os=os, shard=shard)
+    return [
+        str(step["name"])
+        for step in _jobs()["test"]["steps"]
+        if str(step.get("name", "")).startswith(_SERIAL_PREFIX)
+        and bool(_evaluate(str(step.get("if", "true")), context))
+    ]
 
 
-@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
-def test_pull_request_leg_deselects_release_tiers_slow_and_live_console(os: str) -> None:
-    argv = _parallel_argv("pull_request", os)
-    assert _option(argv, "-m") == [_pr_marker()]
-    assert _option(argv, "--ignore-glob") == [_LIVE_CONSOLE_GLOB]
-    assert "tests/eval" in _option(argv, "--ignore")
-    assert sorted(_REPO_ROOT.glob(_LIVE_CONSOLE_GLOB))
+def _coverage_gate_argv(event: str) -> list[str]:
+    step = next(
+        step
+        for step in _jobs()["coverage"]["steps"]
+        if "tools/coverage_gate.py" in str(step.get("run", ""))
+    )
+    return shlex.split(_render(str(step["run"]), _context(event)))
 
 
-@pytest.mark.parametrize("event", ["push", "schedule", "workflow_dispatch"])
-def test_push_and_nightly_legs_keep_the_full_set(event: str) -> None:
-    argv = _parallel_argv(event)
-    assert _option(argv, "-m") == []
-    assert _option(argv, "--ignore-glob") == []
-    assert "tests/eval" not in _option(argv, "--ignore")
+@pytest.mark.parametrize("os", _OS)
+@pytest.mark.parametrize("shard", ["1", "2", "3"])
+def test_pull_request_and_push_select_the_same_parallel_tests(os: str, shard: str) -> None:
+    pull_request = _parallel_argv("pull_request", os, shard)
+    assert pull_request == _parallel_argv("push", os, shard)
+    assert _option(pull_request, "-m") == []
+    assert _option(pull_request, "--ignore-glob") == []
+    assert "tests/eval" not in _option(pull_request, "--ignore")
 
 
 @pytest.mark.parametrize("event", _EVENTS)
-def test_serial_perf_step_skips_only_on_a_pull_request(event: str) -> None:
-    condition = _step("test", "Pytest (serial perf timing)")["if"]
-    assert bool(_evaluate(condition, _context(event))) is (event != "pull_request")
+def test_every_event_keeps_the_default_marker_selection(event: str) -> None:
+    assert _option(_parallel_argv(event), "-m") == []
+
+
+@pytest.mark.parametrize("os", _OS)
+@pytest.mark.parametrize("shard", ["1", "2", "3"])
+def test_pull_request_and_push_run_the_same_serial_steps(os: str, shard: str) -> None:
+    assert _serial_steps_run("pull_request", os, shard) == _serial_steps_run("push", os, shard)
 
 
 @pytest.mark.parametrize("event", _EVENTS)
-@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
+@pytest.mark.parametrize("os", _OS)
+def test_serial_e2e_and_perf_steps_run_on_shard_one_of_every_event(event: str, os: str) -> None:
+    assert _serial_steps_run(event, os, "1") == [
+        "Pytest (serial e2e timing)",
+        "Pytest (serial perf timing)",
+        "Pytest (serial migration timing)",
+    ]
+    assert _serial_steps_run(event, os, "2") == []
+
+
+@pytest.mark.parametrize("event", _EVENTS)
+def test_coverage_gate_passes_no_exclude_flag(event: str) -> None:
+    argv = _coverage_gate_argv(event)
+    assert argv == ["uv", "run", "python", "tools/coverage_gate.py"]
+    assert not [arg for arg in argv if arg.split("=", 1)[0] in _EXCLUDE_FLAGS]
+
+
+def test_coverage_gate_is_the_same_on_pull_request_and_push() -> None:
+    assert _coverage_gate_argv("pull_request") == _coverage_gate_argv("push")
+
+
+@pytest.mark.parametrize("event", _EVENTS)
+@pytest.mark.parametrize("os", _OS)
 @pytest.mark.parametrize("shard", ["1", "2", "3"])
 def test_end_to_end_suite_runs_serially_once_per_release_tier_leg(
     event: str, os: str, shard: str
@@ -255,7 +287,7 @@ def test_end_to_end_suite_runs_serially_once_per_release_tier_leg(
     assert _option(_parallel_argv(event, os), "--ignore").count("tests/e2e") == 1
     step = _step("test", "Pytest (serial e2e timing)")
     context = _context(event, os=os, shard=shard)
-    assert bool(_evaluate(str(step["if"]), context)) is (event != "pull_request" and shard == "1")
+    assert bool(_evaluate(str(step["if"]), context)) is (shard == "1")
     argv = shlex.split(_render(str(step["run"]), context))
     expected = ["uv", "run", "pytest", "-n0", "tests/e2e"]
     if os.startswith("ubuntu-"):
@@ -265,36 +297,6 @@ def test_end_to_end_suite_runs_serially_once_per_release_tier_leg(
     assert not _jobs()["test"].get("continue-on-error", False)
     steps = _jobs()["test"]["steps"]
     assert steps.index(step) < steps.index(_step("test", "Upload coverage data"))
-
-
-@pytest.mark.parametrize("event", _EVENTS)
-@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
-@pytest.mark.parametrize("shard", ["1", "2", "3"])
-def test_serial_render_probe_runs_only_on_pull_request_shard_one(
-    event: str, os: str, shard: str
-) -> None:
-    condition = _step("test", "Pytest (serial render probe)")["if"]
-    assert bool(_evaluate(condition, _context(event, os=os, shard=shard))) is (
-        event == "pull_request" and shard == "1"
-    )
-
-
-@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
-def test_serial_render_probe_keeps_only_the_frame_budget_blocking(os: str) -> None:
-    step = _step("test", "Pytest (serial render probe)")
-    argv = shlex.split(_render(str(step["run"]), _context("pull_request", os=os)))
-    expected = [
-        "uv",
-        "run",
-        "pytest",
-        "-n0",
-        "tests/perf/surfaces/tui/console/test_task_frame_budget.py",
-    ]
-    if os.startswith("ubuntu-"):
-        expected.extend(["--cov=eawf", "--cov-append", "--cov-report=", "--cov-fail-under=0"])
-    assert argv == expected
-    assert not step.get("continue-on-error", False)
-    assert not _jobs()["test"].get("continue-on-error", False)
 
 
 @pytest.mark.parametrize("event", _EVENTS)
@@ -522,10 +524,7 @@ def test_coverage_job_combines_the_shards_then_runs_the_gate_once() -> None:
     combine = commands.index("uv run coverage combine coverage-data/*/.coverage")
     assert commands[combine + 1 :] == [
         "uv run coverage xml",
-        (
-            "uv run python tools/coverage_gate.py"
-            " ${{ github.event_name == 'pull_request' && '--exclude eval' || '' }}"
-        ),
+        "uv run python tools/coverage_gate.py",
         "uv run coverage report",
     ]
 

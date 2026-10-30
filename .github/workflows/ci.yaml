@@ -158,15 +158,11 @@ jobs:
         # appends the --cov and shard flags on ubuntu and an empty string on
         # macOS, so the macOS leg runs the identical suite whole and without
         # coverage. The shards write raw coverage data only; the coverage job
-        # combines them and judges the floors once. A pull
-        # request runs the wave and iter tiers only: the release-tier kinds
-        # (e2e, perf), the slow marker and the live console tests wait for
-        # the push and nightly runs, which keep the full set. The -m given
-        # here replaces the default "not eval" one, so tests/eval is ignored
-        # by path; the skill-eval job runs it. The migration timing node
-        # runs serially below on every event to avoid worker contention.
-        # End-to-end console latency is measured outside the worker pool too.
-        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --deselect=tests/integration/kernel/migration/test_v07_rehearsal.py::test_largest_supported_state_applies_inside_its_declared_budget --junitxml=pytest-junit.xml ${{ startsWith(matrix.os, 'ubuntu-') && format('--cov=eawf --cov-report= --cov-fail-under=0 --splits 3 --group {0} --splitting-algorithm least_duration --durations-path split-durations.json', matrix.shard) || '' }} ${{ github.event_name == 'pull_request' && '-m "not slow and not e2e and not perf" --ignore=tests/eval --ignore-glob="tests/tui/surfaces/tui/console/test_console_live_*.py"' || '' }}
+        # combines them and judges the floors once. Every event runs this
+        # same selection, so a merge is never the first full run. The
+        # migration timing node, end-to-end console latency and perf run
+        # serially below to avoid worker contention.
+        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --deselect=tests/integration/kernel/migration/test_v07_rehearsal.py::test_largest_supported_state_applies_inside_its_declared_budget --junitxml=pytest-junit.xml ${{ startsWith(matrix.os, 'ubuntu-') && format('--cov=eawf --cov-report= --cov-fail-under=0 --splits 3 --group {0} --splitting-algorithm least_duration --durations-path split-durations.json', matrix.shard) || '' }}
       - name: Duration budget (advisory)
         # Diffs every test's wall time in the parallel leg against the
         # committed baseline: a test past twice its baseline, or a fast-tier
@@ -194,21 +190,15 @@ jobs:
         run: uv run pytest -n0 --quarantine-lane
       - name: Pytest (serial e2e timing)
         # Console latency must be measured without competing pytest workers.
-        if: github.event_name != 'pull_request' && matrix.shard == '1'
+        if: matrix.shard == '1'
         run: uv run pytest -n0 tests/e2e ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
 
       - name: Pytest (serial perf timing)
         # Stays serial on purpose: these assert p99 latency and a cold-import
         # wall-time ceiling, so a contended machine changes the number being
-        # measured. Perf is a release-tier kind, so a pull request skips it.
-        # It runs once per leg, on shard 1, appending to that shard's data.
-        if: github.event_name != 'pull_request' && matrix.shard == '1'
+        # measured. It runs once per leg, on shard 1, appending to that shard's data.
+        if: matrix.shard == '1'
         run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
-
-      - name: Pytest (serial render probe)
-        # Frame budgets stay blocking on each platform's pull-request leg.
-        if: github.event_name == 'pull_request' && matrix.shard == '1'
-        run: uv run pytest -n0 tests/perf/surfaces/tui/console/test_task_frame_budget.py ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
 
       - name: Pytest (serial migration timing)
         # The largest-state apply keeps its timing budget on each platform.
@@ -284,9 +274,7 @@ jobs:
         # floor live in tools/coverage_gate.py, driven by
         # ``[tool.eawf.coverage]``; the overall fail_under floor is enforced
         # by the next step.
-        # A pull request runs without tests/eval (see the pytest step), so its
-        # eval package is under-measured by design; push and nightly runs judge it.
-        run: uv run python tools/coverage_gate.py ${{ github.event_name == 'pull_request' && '--exclude eval' || '' }}
+        run: uv run python tools/coverage_gate.py
 
       - name: Coverage floor (overall >=60)
         run: uv run coverage report

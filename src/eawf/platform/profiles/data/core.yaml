@@ -207,13 +207,13 @@ render_blocks:
 
   - id: commit-prefix
     target: AGENTS.md
-    version: "2.4"
+    version: "2.5"
     placement: reference
     summary: "A Batch commit is ``<type>: <summary>`` with one ``Batch:`` trailer and a ``Task:`` trailer per Task it delivers; each push ends with one ``state:`` commit."
     body_template: |
       ### Commit prefix
 
-      A commit names the Batch and the Tasks it delivers in body trailers, under decision D87, which superseded D85. Conventional-commit types, in every form below: ``feat``, ``fix``, ``chore``, ``docs``, ``refactor``, ``test``, ``build``, ``perf``, ``ci``, ``revert``, ``state``.
+      A commit names the Batch and the Tasks it delivers in body trailers, under decision D88, proposed to supersede D87 and pending operator ratification. Conventional-commit types, in every form below: ``feat``, ``fix``, ``chore``, ``docs``, ``refactor``, ``test``, ``build``, ``perf``, ``ci``, ``revert``, ``state``.
 
       - **Batch commit** — ``<type>: <summary>`` with no bracket prefix, exactly one ``Batch: BAT-<NNNN>`` trailer and one ``Task: <KEY>`` trailer for every Task it delivers, each a Task of that Batch. A commit delivering a single Task may carry its ``Task:`` trailer alone. The pre-push ``commit-prefix-lint`` hook refuses a pushed commit naming no Task, several Tasks without a ``Batch`` trailer, a Task twice, two ``Batch`` trailers, or a Task of another Batch.
       - **Trailing state commit** — ``state: <summary>``, one per push, touching only committed state paths.
@@ -401,20 +401,21 @@ render_blocks:
 
   - id: ship-process
     target: AGENTS.md
-    version: "1.9"
+    version: "2.0"
     placement: reference
-    summary: "Ship a Milestone through one PR: pass CI, address review by appending Batches, then merge so each Batch commit survives; main and tags are never rewritten."
+    summary: "Ship a Milestone through one PR: squash to one commit per Batch before review, fix review findings by appending Batches, accept last, then fast-forward main to the reviewed commit."
     body_template: |
       ### Ship process
 
-      Ship is the Milestone's terminal pass, under decision D87, which superseded D85. The ordered steps from landed Batches to a merged, tagged Milestone:
+      Ship is the Milestone's terminal pass, under decision D88, proposed to supersede D87 and pending operator ratification. The ordered steps from landed Batches to a merged, tagged Milestone:
 
-      1. **Open the Milestone PR.** One PR per Milestone, body per the ``pr-template``. The PR head is the long-running feature branch, squashed before each push to one commit per Batch (a few for a large Batch) carrying its ``Batch:`` and ``Task:`` trailers, plus one trailing ``state:`` commit per push. Each Batch already closed when it landed: the daemon bound the Milestone branch head and walked the Batch and its Tasks to COMPLETED.
-      2. **Pass CI gates.** Beyond the per-commit lint + test gauntlet, two gates fire only on the Milestone PR and so are easy to miss locally: the per-package **coverage gate** (CI parses ``coverage.xml`` against the ``[tool.eawf.coverage]`` thresholds) and the **snapshot-pairing gate** (``tools/snapshot_pairing_gate.py`` over the PR base..head range, which rejects a managed golden-surface mutation whose commit names no Batch or Task of the generation). Run both locally before pushing the PR so they do not surface late.
-      3. **Pass the review.** ``/verify --mode review`` runs the review pass over each Batch. Address feedback by appending Batches to the Milestone, not by opening a second PR.
-      4. **Rewrite only under lease.** ``eawf batch squash`` writes the per-Batch history on a new branch and proves its tree equals the source tip's; once the branch points at it, ``eawf batch rebind`` appends a superseding row for every binding that named a source commit. A pushed branch is rewritten only with ``--force-with-lease``, after writing an archive ref of the old head. Ledgers stay append-only: a correction is an appended superseding row.
-      5. **Merge.** Once CI is green on the pushed head and review passes, merge so each Batch commit survives: fast-forward ``main`` to the reviewed head, never folding Batches together. main and tags are never rewritten, and old history is not rewritten.
-      6. **Release at merge.** The Milestone is release-ready at merge: the release verbs check it before anything is tagged (see ``release-process``), and nothing after the merge is Milestone work. A repo that releases through an eawf release train then runs ``eawf release pipeline <version> --milestone <MLS-NNNN> --publish`` from a clean checkout of the merge commit: one journaled, resumable walk that tags and pushes only with ``--publish``, waits for the publish runs, pins, proves, approves and observes the checkpoint to BAKED, advances the train, checks each completed Batch's commits on ``main`` by their ``Task:`` and ``Batch:`` trailers, and stages the evidence for one ``state:`` commit. A refused step names its reason and a rerun resumes there, so the next Milestone carries no release Tasks; every other repo keeps its own tag flow. Nothing publishes until the tag is pushed.
+      1. **Squash before review.** Before review opens, ``eawf batch squash`` writes the long-running feature branch again as one commit per Batch (a few for a large Batch), each carrying its ``Batch:`` and ``Task:`` trailers, plus one trailing ``state:`` commit, and proves its tree equals the source tip's. Once the branch points at it, ``eawf batch rebind`` appends a superseding row for every binding that named a source commit. Each Batch already closed when it landed: the daemon bound the Milestone branch head and walked the Batch and its Tasks to COMPLETED. A pushed branch is rewritten only before review opens, only with ``--force-with-lease``, and only after writing an archive ref of the old head.
+      2. **Open the Milestone PR.** One PR per Milestone, body per the ``pr-template``. From this point the commits on the branch are fixed: every commit a reviewer reads is the commit that merges.
+      3. **Pass CI gates.** Beyond the per-commit lint + test gauntlet, two gates fire only on the Milestone PR and so are easy to miss locally: the per-package **coverage gate** (CI parses ``coverage.xml`` against the ``[tool.eawf.coverage]`` thresholds) and the **snapshot-pairing gate** (``tools/snapshot_pairing_gate.py`` over the PR base..head range, which rejects a managed golden-surface mutation whose commit names no Batch or Task of the generation). Run both locally before pushing the PR so they do not surface late.
+      4. **Append after review.** ``/verify --mode review`` runs the review pass over each Batch. Fix each finding by appending a new Batch to the Milestone, with its own commit and one trailing ``state:`` commit per push. After review opens, do not squash, amend, rebase or force-push the branch, and do not open a second PR. Ledgers stay append-only: a correction is an appended superseding row.
+      5. **Accept last.** Accept the Milestone only when CI is green on the pushed head and the review has no open findings. The acceptance and its version bump ride the last ``state:`` commit on the branch; no commit lands on the branch after it.
+      6. **Merge by fast-forward only.** Fast-forward ``main`` to the reviewed, accepted head, so each Batch commit lands on ``main`` with its reviewed SHA and every binding stays valid. Do not make a merge commit, a squash merge or a rebase merge. When ``main`` has moved past the branch base, the fast-forward fails: stop and ask the operator. main and tags are never rewritten.
+      7. **Release at merge.** The Milestone is release-ready at merge: the release verbs check it before anything is tagged (see ``release-process``), and nothing after the merge is Milestone work. A repo that releases through an eawf release train then runs ``eawf release pipeline <version> --milestone <MLS-NNNN> --publish`` from a clean checkout of the merge commit: one journaled, resumable walk that tags and pushes only with ``--publish``, waits for the publish runs, pins, proves, approves and observes the checkpoint to BAKED, advances the train, checks each completed Batch's commits on ``main`` by their ``Task:`` and ``Batch:`` trailers, and stages the evidence for one ``state:`` commit. A refused step names its reason and a rerun resumes there, so the next Milestone carries no release Tasks; every other repo keeps its own tag flow. Nothing publishes until the tag is pushed.
 
   - id: agent-report-contract
     target: AGENTS.md
@@ -430,7 +431,7 @@ render_blocks:
 
   - id: workflow-lifecycle
     target: AGENTS.md
-    version: "1.2"
+    version: "1.3"
     placement: reference
     summary: "The lifecycle runs research, plan, dispatch Tasks, cherry-pick, ship the Milestone, with a branch-currency check before opening or resuming any scope."
     body_template: |
@@ -447,7 +448,7 @@ render_blocks:
       - **Plan** = propose a PlanRevision for the Milestone: its Delivery Batches, their Tasks, dependencies and per-Task success criteria; the operator approves and applies it.
       - **Dispatch** = run each ready Task of a Batch in its own Run, one lease and one workspace per Task. Tasks the dependency graph and write claims leave independent run side by side; a dependent Task waits for the proof it needs.
       - **Cherry-pick** = bring worktree commits into the long-running Milestone branch. Never merge.
-      - **Ship** = open the Milestone PR, run CI, address review by appending Batches, merge.
+      - **Ship** = squash the branch to one commit per Batch, open the Milestone PR, run CI, fix review findings by appending Batches, accept the Milestone last, then fast-forward main to the reviewed commit.
 
   - id: pr-template
     target: AGENTS.md
@@ -543,21 +544,23 @@ render_blocks:
 
   - id: commit-granularity
     target: AGENTS.md
-    version: "1.7"
+    version: "1.8"
     placement: reference
-    summary: "One commit per Batch, or a few for a large Batch, squashed before the push; each push ends with one ``state:`` commit, and the bindings a squash replaced are rebound by superseding rows."
+    summary: "One commit per Batch, squashed before review opens; after review each fix lands as an appended Batch; each push ends with one ``state:`` commit; a squash rebinds by superseding rows."
     rationale: |
       Commit count is not progress. A deliverable split across a dozen commits — code here, its test there, the golden it invalidated three commits later — cannot be reviewed as a unit or reverted as one, and ``git bisect`` lands mid-change on a tree that never worked. The opposite failure, one commit for an entire Milestone, is equally unreadable. The unit that builds, passes its tests and is reviewed is the Batch. One past delivery made the cost concrete: 1,036 commits for 525 units of work, 385 of them state-only bookkeeping — a reviewer opening the PR read twice as much bookkeeping as delivery.
     mechanism: |
-      Decision D87 sets the regime, superseding D85. Scratch and per-Task commits are free while a Batch is in flight; before the push, ``eawf batch squash`` writes the branch again as one commit per Batch holding its code and tests, ordered by each Batch's last commit, carrying one ``Batch:`` trailer and a ``Task:`` trailer per Task, and checks every rewritten commit builds. A large Batch may land as a few buildable commits; two Batches whose work cannot be separated share one commit, and the squash says so.
+      Decision D88, proposed to supersede D87 and pending operator ratification, sets the regime. Scratch and per-Task commits are free while a Batch is in flight; before review opens, ``eawf batch squash`` writes the branch again as one commit per Batch holding its code and tests, ordered by each Batch's last commit, carrying one ``Batch:`` trailer and a ``Task:`` trailer per Task, and checks every rewritten commit builds. A large Batch may land as a few buildable commits; two Batches whose work cannot be separated share one commit, and the squash says so.
 
-      **One state commit per push.** State changes made while the Tasks ran ride a single trailing ``state:`` commit at the end of the push, touching only committed state paths. Never interleave state commits between Batch commits.
+      **No squash after review.** Once the Milestone PR is open for review, its commits are fixed. Fix a review finding with a new Batch appended on top, with its own commit and the push's trailing ``state:`` commit. After review opens, never squash, amend, rebase or force-push the branch. ``main`` then fast-forwards to the reviewed head, so each commit a reviewer read lands with the same SHA.
 
-      **A Batch binds when it lands.** A Batch closes as soon as every Task in it is ready and its commits are on the Milestone branch: the daemon binds the Milestone branch head and walks the Batch and its Tasks to COMPLETED. The squash replaces the commits those bindings name, so once the branch points at the squashed tip, ``eawf batch rebind`` appends a superseding row for every ledger line naming a replaced commit, bound to the commit now carrying its Batch; no row is edited. A branch the remote already has is rewritten only with ``--force-with-lease``, after an archive ref.
+      **One state commit per push.** State changes made while the Tasks ran ride a single trailing ``state:`` commit at the end of the push, touching only committed state paths. Never interleave state commits between the Batch commits of one push.
+
+      **A Batch binds when it lands.** A Batch closes as soon as every Task in it is ready and its commits are on the Milestone branch: the daemon binds the Milestone branch head and walks the Batch and its Tasks to COMPLETED. The squash replaces the commits those bindings name, so once the branch points at the squashed tip, ``eawf batch rebind`` appends a superseding row for every ledger line naming a replaced commit, bound to the commit now carrying its Batch; no row is edited. A branch the remote already has is rewritten only before review opens, only with ``--force-with-lease``, and only after an archive ref.
 
       The one exception is a golden-only ``test:`` commit: every path it stages is a non-``.py`` file under a **managed golden surface** (the ``eawf snapshot list`` inventory). The snapshot-pairing gate requires those bytes to land under a ``test:`` subject, so a golden refresh rides its own paired ``test:`` commit immediately after the change that caused it — named for that cause, never as a bare "refresh goldens".
     verification: |
-      Read the commit list for a push: each Batch appears as one commit, or a few, containing its tests and carrying its ``Batch:`` and ``Task:`` trailers, followed by one ``state:`` commit. A ``test:`` golden refresh names the change it follows. Every commit in the range builds, so ``git bisect`` never lands on a broken intermediate, and every head a landed Batch bound is an ancestor of the pushed head.
+      Read the commit list of the Milestone PR: up to the start of review, each Batch appears as one commit, or a few, containing its tests and carrying its ``Batch:`` and ``Task:`` trailers, followed by one ``state:`` commit; after it, each review fix appears as an appended Batch commit followed by its push's ``state:`` commit, and no reviewed commit was rewritten. A ``test:`` golden refresh names the change it follows. Every commit in the range builds, so ``git bisect`` never lands on a broken intermediate, and every head a landed Batch bound is an ancestor of the pushed head.
 
   - id: anti-patterns
     target: AGENTS.md
