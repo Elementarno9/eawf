@@ -472,7 +472,8 @@ async def _attach_bound_tree(ctx: MethodContext) -> None:
 
     A daemon started over an epoch-1 tree, or over none, attaches nothing here.
     Once attached, the proof checkouts a stopped daemon left in the repository are
-    removed and the tree's Runs that no worker is left to end are reaped.
+    removed, the transcript index is back-filled for Runs it does not name yet, and
+    the tree's Runs that no worker is left to end are reaped.
     """
     if ctx.state_path is None or not epoch_marker_present(Path(ctx.state_path).parent):
         return
@@ -487,11 +488,16 @@ async def _attach_bound_tree(ctx: MethodContext) -> None:
     from eawf.runtime.daemon.methods.permission import DAEMON_ACTOR
     from eawf.runtime.daemon.run_reaper import reap_lost_runs
     from eawf.runtime.daemon.run_supervisor import supervisor_of
+    from eawf.runtime.daemon.transcript_backfill import backfill_root_transcripts
 
     try:
         await asyncio.to_thread(prune_orphan_checkouts, context.identity.tree_root.parent)
     except Exception as exc:
         logger.warning(f"_attach_bound_tree proof prune skipped error={exc!r}")
+    try:
+        await asyncio.to_thread(backfill_root_transcripts, context, now=datetime.now(UTC))
+    except Exception as exc:
+        logger.warning(f"_attach_bound_tree transcript back-fill skipped error={exc!r}")
     try:
         envelopes = await asyncio.to_thread(
             reap_lost_runs,

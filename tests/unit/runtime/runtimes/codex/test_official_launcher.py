@@ -268,6 +268,7 @@ def test_launch_opens_one_thread_and_the_turn_resolves_completed(workspace: Path
 
     assert outcome.provider_session_ref == THREAD_ID
     assert outcome.hello.provider_session_ref == THREAD_ID
+    assert outcome.transcript_path == f"{workspace}/rollout-{THREAD_ID}.jsonl"
     assert turn == TurnOutcome(
         exit_kind="completed", answer_text="done", runtime_tuple=_observed(spec)
     )

@@ -139,5 +139,5 @@ def test_hook_runs_at_commit_and_push_stages() -> None:
     hooks = {hook["id"]: hook for repo in config["repos"] for hook in repo["hooks"]}
 
     hook = hooks["branch-name-lint"]
-    assert hook["entry"] == "python3 tools/branch_name_lint.py"
+    assert hook["entry"] == "uv run python tools/branch_name_lint.py"
     assert set(hook["stages"]) == {"pre-commit", "pre-push"}

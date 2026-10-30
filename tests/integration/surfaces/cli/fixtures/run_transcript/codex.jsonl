@@ -1,0 +1,10 @@
+{"timestamp": "2026-09-20T09:00:00Z", "type": "session_meta", "payload": {"id": "thread-1"}}
+{"timestamp": "2026-09-20T09:00:01Z", "type": "response_item", "payload": {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "DEVELOPER-PROMPT"}]}}
+{"timestamp": "2026-09-20T09:00:01Z", "type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Count the tests."}]}}
+{"timestamp": "2026-09-20T09:00:02Z", "type": "response_item", "payload": {"type": "reasoning", "summary": [{"type": "summary_text", "text": "HIDDEN-REASONING"}]}}
+{"timestamp": "2026-09-20T09:00:03Z", "type": "response_item", "payload": {"type": "function_call", "name": "shell", "arguments": "{\"command\":[\"ls\",\"tests\"]}", "call_id": "call_1"}}
+{"timestamp": "2026-09-20T09:00:04Z", "type": "response_item", "payload": {"type": "function_call_output", "call_id": "call_1", "output": "test_a.py\ntest_b.py"}}
+{"timestamp": "2026-09-20T09:00:05Z", "type": "response_item", "payload": {"type": "custom_tool_call", "name": "apply_patch", "input": "*** Begin Patch\n*** Add File: notes.txt\n+two tests\n*** End Patch", "call_id": "call_2"}}
+{"timestamp": "2026-09-20T09:00:06Z", "type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "call_2", "output": "Success. Updated the following files:\nA notes.txt"}}
+{"timestamp": "2026-09-20T09:00:07Z", "type": "event_msg", "payload": {"type": "agent_message", "message": "EVENT-DUPLICATE"}}
+{"timestamp": "2026-09-20T09:00:07Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Two tests."}]}}

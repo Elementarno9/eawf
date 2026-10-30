@@ -100,6 +100,8 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "run finish": _mutate("domain.run.finish"),
     "run fail": _mutate("domain.run.fail"),
     "run report": _read(),
+    "run transcript": _read(),
+    "session bind": _mutate(),
     "run interrupt": _create("runtime.run.control.request"),
     "run cancel": _create("runtime.run.control.request"),
     "run reconcile": _create("runtime.run.control.request"),

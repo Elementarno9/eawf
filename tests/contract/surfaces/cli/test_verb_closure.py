@@ -471,7 +471,7 @@ _RETIRED_LEGACY: Final = (
 
 def test_surf_081_the_exemptions_hold_their_pinned_count() -> None:
     verbs = {row.verb for row in verb_closure.ANCHOR_EXEMPTIONS}
-    assert len(verb_closure.ANCHOR_EXEMPTIONS) == 89
+    assert len(verb_closure.ANCHOR_EXEMPTIONS) == 90
     assert "record append" in verbs
     assert "store redact-content" in verbs
     assert "store drop-unpublished-row" in verbs

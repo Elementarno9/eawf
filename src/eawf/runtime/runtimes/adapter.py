@@ -660,6 +660,9 @@ class NativeLaunchOutcome(BaseModel):
         runtime_tuple: The runtime as the provider reported itself by the
             announcement, which is what the Run's start records; ``None``
             when the launcher observed nothing of it.
+        transcript_path: The file the provider writes the session's
+            transcript to, a path on this machine and so never dumped;
+            ``None`` when the provider did not name one.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
@@ -669,6 +672,7 @@ class NativeLaunchOutcome(BaseModel):
     hello: WorkerHello
     turn: asyncio.Task[TurnOutcome] | None = Field(default=None, exclude=True)
     runtime_tuple: RunRuntimeTuple | None = None
+    transcript_path: str | None = Field(default=None, exclude=True)
 
 
 @runtime_checkable

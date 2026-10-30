@@ -15,11 +15,13 @@ the console names any read itself.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Final, Protocol
 
@@ -45,6 +47,7 @@ from eawf.kernel.runtime.events import ChildRunPayload, QuestionActionPayload, R
 from eawf.kernel.state.epoch2.transitions import AmbiguityLabel
 from eawf.kernel.store.changes import ChangePage
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.daemon.native_guard import EA_DIRNAME
 from eawf.runtime.daemon.read_contract import (
     BOOT_RECOVERY_READ_METHOD,
     CAMPAIGN_ARTIFACT_METHOD,
@@ -74,6 +77,13 @@ from eawf.runtime.daemon.read_contract import (
     RunEventsAnswer,
     RunStallsAnswer,
     TargetResolution,
+)
+from eawf.runtime.runtimes.run_transcript import (
+    TranscriptEntry,
+    TranscriptReader,
+    TranscriptSource,
+    runs_ended,
+    select_transcripts,
 )
 from eawf.runtime.vcs.repository_read import RepositoryAnswer
 from eawf.surfaces.tui.console.decisions import ArtifactRecord, DecisionRecords, campaign_records
@@ -112,6 +122,11 @@ class LiveReadHost(Protocol):
     @property
     def operator(self) -> Operator | None:
         """Return who the console acts as, or ``None`` when it acts as nobody."""
+        ...
+
+    @property
+    def repo_root(self) -> Path | None:
+        """Return the repository the console was launched in; ``None`` when it names none."""
         ...
 
     @property
@@ -386,6 +401,96 @@ async def _follow_transcript(host: LiveReadHost, urn: str, held: HeldTranscript)
 
 #: The read the transcript route draws its blocks from.
 TRANSCRIPT_READ: Final = RUN_EVENTS_READ_METHOD
+
+#: The read the transcript route draws the runtime's own transcript files from. It is
+#: no daemon method: the files and their index are machine-local, so it reads the tree
+#: the console was launched in.
+RAW_TRANSCRIPT_READ: Final = "console.transcript.raw"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class HeldRawTranscript:
+    """The entries of the transcript files indexed for one Run, as last read.
+
+    Attributes:
+        entries: Every entry read so far with the file it came from, in read order:
+            each file whole on the first read, then what each pass found appended.
+        unindexed: Why nothing could be read, such as no transcript being indexed for
+            the Run; ``None`` once its files were selected.
+        readers: One reader per file, each holding how far it has read, so the next
+            read takes only what was appended. They take no part in equality, so a
+            read that found nothing new repaints nothing.
+    """
+
+    entries: tuple[tuple[TranscriptSource, TranscriptEntry], ...] = ()
+    unindexed: str | None = None
+    readers: tuple[TranscriptReader, ...] = field(default=(), compare=False)
+
+
+def _raw_transcript_address(host: LiveReadHost) -> str | None:
+    """Return the key of the Run the transcript is about, while a local tree is read."""
+    held = host.projection_for(TRANSCRIPT_ROUTE)
+    if host.route != TRANSCRIPT_ROUTE or host.repo_root is None or held is None:
+        return None
+    return host.subject or next((row.key for row in held.rows), None)
+
+
+def read_raw_transcript(
+    tree_root: Path, key: str, held: HeldRawTranscript | None
+) -> HeldRawTranscript:
+    """Grow *held* by what Run *key*'s transcript files gained, or read them whole.
+
+    The files are selected again on every read, so a subagent indexed after the
+    transcript opened joins it; a file already held keeps its reader and is read past
+    its offset. A line still being written is left for the next read until the Run
+    has ended, when the final read takes it.
+
+    Args:
+        tree_root: The tree's ``.ea`` directory.
+        key: The Run the transcript is about.
+        held: The answer last read for *key*, or ``None`` for a first read.
+
+    Returns:
+        The grown answer; *held*'s equal when nothing was appended, and an answer
+        saying why when no transcript is indexed for the Run.
+
+    Raises:
+        pydantic.ValidationError: A Run row or an index line does not validate.
+        LedgerTornTailError: The run ledger ends mid-line.
+    """
+    try:
+        selection = select_transcripts(tree_root, key)
+    except LookupError as exc:
+        return HeldRawTranscript(unindexed=str(exc))
+    kept = {(r.source.runtime, r.source.path): r for r in (held.readers if held else ())}
+    readers = tuple(
+        kept.get((source.runtime, source.path)) or TranscriptReader(source)
+        for source in selection.sources
+    )
+    final = runs_ended(tree_root, selection.run_keys)
+    new = tuple((reader.source, entry) for reader in readers for entry in reader.read(final=final))
+    logger.debug(f"read_raw_transcript key={key} files={len(readers)} new={len(new)}")
+    return HeldRawTranscript(entries=(*(held.entries if held else ()), *new), readers=readers)
+
+
+async def _fetch_raw_transcript(host: LiveReadHost, key: str) -> HeldRawTranscript:
+    """Read Run *key*'s transcript files past what is held, off the console's loop."""
+    root = host.repo_root
+    assert root is not None, "only addressed while a local tree is read"
+    held = host.live(RAW_TRANSCRIPT_READ)
+    return await asyncio.to_thread(
+        read_raw_transcript,
+        root / EA_DIRNAME,
+        key,
+        held if isinstance(held, HeldRawTranscript) else None,
+    )
+
+
+def held_raw_transcript(live: Mapping[str, object]) -> HeldRawTranscript | None:
+    """Return the raw transcript among a frame's live answers, or ``None`` before its read."""
+    held = live.get(RAW_TRANSCRIPT_READ)
+    return held if isinstance(held, HeldRawTranscript) else None
+
 
 #: The read the Campaign route and its step card draw the plan from.
 CAMPAIGN_READ: Final = CAMPAIGN_VIEW_METHOD
@@ -865,6 +970,11 @@ LIVE_READS: Final[Mapping[str, LiveRead]] = MappingProxyType(
             fetch=_fetch_transcript,
             follow=_follow_transcript,
         ),
+        RAW_TRANSCRIPT_READ: LiveRead(
+            routes=frozenset({TRANSCRIPT_ROUTE}),
+            address=_raw_transcript_address,
+            fetch=_fetch_raw_transcript,
+        ),
         CAMPAIGN_READ: LiveRead(
             routes=CAMPAIGN_ROUTES, address=_campaign_address, fetch=_fetch_campaign
         ),
@@ -958,6 +1068,7 @@ __all__ = [
     "LIVENESS_READ",
     "LIVENESS_ROUTES",
     "LIVE_READS",
+    "RAW_TRANSCRIPT_READ",
     "RECEIPTS_READ",
     "REPOSITORY_READ",
     "RESOLUTION_READ",
@@ -969,6 +1080,7 @@ __all__ = [
     "HeldArtifact",
     "HeldBranchReviews",
     "HeldCampaign",
+    "HeldRawTranscript",
     "HeldTranscript",
     "LiveRead",
     "LiveReadHost",
@@ -976,6 +1088,8 @@ __all__ = [
     "diff_subject",
     "held_changes",
     "held_queue",
+    "held_raw_transcript",
     "held_records",
     "held_usage",
+    "read_raw_transcript",
 ]

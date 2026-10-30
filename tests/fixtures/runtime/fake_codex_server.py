@@ -218,6 +218,7 @@ def _thread_result(params: dict[str, Any], thread_id: str) -> dict[str, Any]:
             "ephemeral": False,
             "id": thread_id,
             "modelProvider": "openai",
+            "path": f"{cwd}/rollout-{thread_id}.jsonl",
             "preview": "",
             "projectId": None,
             "sessionId": thread_id,

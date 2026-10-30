@@ -430,6 +430,7 @@ Run lifecycle (create, start, finish, fail).
 | `report` | Write the plain-text report of one Run; no record moves. |
 | `resume-dispatch` | Ask the scheduler to admit queued Runs again after a pause or a drain. |
 | `start` | Start a QUEUED Run; the payload's updates carry started_at. |
+| `transcript` | Print a Run's or a Task's transcripts in full; no record moves. |
 
 ### `eawf runtime`
 
@@ -446,6 +447,14 @@ Dump JSON Schema + reference pages for the canonical models.
 | Verb | Summary |
 |---|---|
 | `dump` | Dump JSON Schema (and reference pages) for the canonical models. |
+
+### `eawf session`
+
+Host sessions: bind one to the Task it serves.
+
+| Verb | Summary |
+|---|---|
+| `bind` | Bind a host session to a Task, superseding its earlier binding. |
 
 ### `eawf skill`
 

@@ -106,6 +106,7 @@ DIRTY: dict[str, Any] = {
     "tr_held_from": 3,
     "tr_page": 7,
     "tr_fold": {1: True},
+    "tr_raw": True,
     "tr_t0": 99.0,
     "rec_at": 98.0,
     "rec_seen": {"RUN-1": 1},

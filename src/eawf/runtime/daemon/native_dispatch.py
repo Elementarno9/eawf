@@ -118,6 +118,7 @@ from eawf.runtime.daemon.run_events import (
     hello_facts_of,
     next_hello_sequence,
 )
+from eawf.runtime.hooks.event import HOST_HARNESSES
 from eawf.runtime.mcp.grant import intersect_run_tools
 from eawf.runtime.runtimes.adapter import (
     NativeLaunchOutcome,
@@ -127,12 +128,14 @@ from eawf.runtime.runtimes.adapter import (
 )
 from eawf.runtime.runtimes.claude.adapter import ClaudeNativeLauncher
 from eawf.runtime.runtimes.codex.adapter import CodexNativeLauncher
+from eawf.runtime.session.transcript_index import record_transcript
 from eawf.runtime.workspace.lease import (
     LeaseRefusedError,
     issue_lease,
     root_leases,
     workspace_path,
 )
+from eawf.surfaces.cli.errors import StateConflict
 from eawf.workflow.runtime.compile import RunCompileError, compile_run_spec
 
 logger = logging.getLogger(__name__)
@@ -1151,6 +1154,20 @@ async def launch_worker(
     )
     with context.session([args.urn]) as session:
         append_attempt(session, moved)
+    if outcome.transcript_path is not None:
+        # The index only points at the transcript; failing to write it must
+        # not fail a worker that is already running.
+        try:
+            record_transcript(
+                context.identity.tree_root,
+                runtime=HOST_HARNESSES[attempt.provider_kind],
+                session_id=outcome.provider_session_ref,
+                transcript_path=outcome.transcript_path,
+                now=now,
+                run_ref=str(args.urn),
+            )
+        except (StateConflict, OSError) as error:
+            logger.warning(f"launch_worker transcript index unwritten error={error!r}")
     return moved, outcome
 
 

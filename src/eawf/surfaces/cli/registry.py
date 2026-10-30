@@ -113,6 +113,8 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("claim", "eawf.surfaces.cli.commands.claim", "claim_app"),
     # Memory.
     GroupRow("memory", "eawf.surfaces.cli.commands.memory", "memory_app"),
+    # Host sessions: re-scoping one to the Task it serves.
+    GroupRow("session", "eawf.surfaces.cli.commands.session", "session_app"),
     # Status command + state / store groups.
     CommandRow(
         "status",
@@ -186,6 +188,8 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     SideEffectRow("eawf.surfaces.cli.commands.entity_read", "action"),
     # The plain-text report of one Run, attached onto the mounted run group.
     SideEffectRow("eawf.surfaces.cli.commands.run_report", "run"),
+    # The full transcripts of a Run or of a Task's Runs, attached onto the run group.
+    SideEffectRow("eawf.surfaces.cli.commands.run_transcript", "run"),
     # The Run controls, attached onto the mounted run group.
     SideEffectRow("eawf.surfaces.cli.commands.run_control", "run"),
     # Dispatching one Task as a new Run, attached onto the mounted run group.

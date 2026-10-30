@@ -1,0 +1,2 @@
+{"type": "user", "isSidechain": true, "message": {"role": "user", "content": "Check beta."}}
+{"type": "assistant", "isSidechain": true, "message": {"role": "assistant", "content": [{"type": "text", "text": "Beta is fine."}]}}

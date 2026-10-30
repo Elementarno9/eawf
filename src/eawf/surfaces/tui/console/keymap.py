@@ -208,8 +208,10 @@ def route_keys(
 #: The keys a route's native frame serves beyond its table: scope home's inspect opens the
 #: scope drawer, which names the project, its root id and the tree's URN -- facts only a
 #: tree read through a daemon link states, so the prototype replay's bar never shows it.
+#: The transcript's raw key swaps its blocks for the runtime's own transcript files,
+#: which only a console launched in the tree that indexed them can read.
 NATIVE_SERVED: Mapping[str, tuple[KeyEntry, ...]] = MappingProxyType(
-    {"scope.home": (KEY["inspect"],)}
+    {"scope.home": (KEY["inspect"],), "transcript": (KEY["raw"],)}
 )
 
 #: Entries a route's native frame binds more keys to than the design pack's entry of the
@@ -303,5 +305,6 @@ def allowlist(session: Session, fixture: Fixture) -> frozenset[str]:
     if not fixture.prototype:
         # the design pack bound no quit letter, so only a console over the chrome has one
         keys.update(KEY["quit"].keys)
+        keys.update(key for entry in NATIVE_SERVED.get(session.route, ()) for key in entry.keys)
     keys.update(alias for alias, key in ALIASES.items() if key in keys)
     return frozenset(keys)

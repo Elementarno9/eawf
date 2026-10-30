@@ -82,6 +82,7 @@ from eawf.runtime.runtimes.adapter import (
 )
 from eawf.runtime.runtimes.claude import adapter as claude_adapter
 from eawf.runtime.runtimes.claude.managed_run import prepare_managed_isolation
+from eawf.runtime.runtimes.claude.transcript_counters import project_slug
 from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.runtimes.transcript_items import ClaudeTranscriptItems
 from eawf.runtime.sandbox.env_scrub import build_child_env, resolve_binary_dir
@@ -761,6 +762,14 @@ async def launch_claude_run(
         ),
         turn=asyncio.create_task(turn.run(), name=f"claude-turn-{spec.run_ref}"),
         runtime_tuple=turn.runtime,
+        # The child writes its transcript under its own configuration home, in
+        # the project directory named after the working directory it resolved.
+        transcript_path=str(
+            isolation.config_dir
+            / "projects"
+            / project_slug(request.workspace.resolve())
+            / f"{session}.jsonl"
+        ),
     )
 
 

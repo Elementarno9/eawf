@@ -58,6 +58,7 @@ from eawf.runtime.runtimes.claude.sdk_launcher import (
     _lane_options,
     _UsageFold,
 )
+from eawf.runtime.runtimes.claude.transcript_counters import project_slug
 from eawf.runtime.runtimes.host_transcript import SUMMARY_LIMIT, WITHHELD_TEXT
 from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.sandbox.env_scrub import build_child_env, resolve_binary_dir
@@ -220,9 +221,18 @@ def test_launch_announces_the_session_and_the_turn_resolves_completed(workspace:
     assert outcome.provider_session_ref == "sess-fake-claude"
     assert outcome.hello.provider_session_ref == "sess-fake-claude"
     assert outcome.subprocess_pid == pgid
+    assert outcome.transcript_path == str(
+        workspace
+        / MCP_ARTIFACT_DIRNAME
+        / MANAGED_CONFIG_DIRNAME
+        / "projects"
+        / project_slug(workspace.resolve())
+        / "sess-fake-claude.jsonl"
+    )
     assert turn == TurnOutcome(exit_kind="completed", answer_text="done", runtime_tuple=_OBSERVED)
     assert said == ["done"]
     assert "turn" not in outcome.model_dump()
+    assert "transcript_path" not in outcome.model_dump()
 
 
 def test_launch_returns_before_the_turn_ends(workspace: Path) -> None:

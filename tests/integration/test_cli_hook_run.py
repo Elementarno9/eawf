@@ -73,7 +73,7 @@ def test_hook_run_session_end_with_no_live_session_is_nonblocking(tmp_path: Path
     assert env.body["blocked"] is False
     assert [row["name"] for row in env.body["results"]] == ["session.end_stamp"]
     assert env.body["results"][0]["output"] == (
-        "session.end_stamp skipped: no live session resolved"
+        "session.end_stamp skipped: generic names no transcript"
     )
 
 

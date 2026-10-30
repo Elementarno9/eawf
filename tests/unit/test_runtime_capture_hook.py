@@ -183,7 +183,7 @@ def test_session_end_only_stamps_and_calls_no_daemon_method(runtime: str, tmp_pa
 
     assert [result.name for result in results] == ["session.end_stamp"]
     assert results[0].block is False
-    assert results[0].output == "session.end_stamp skipped: no live session resolved"
+    assert results[0].output == "session.end_stamp skipped: no session transcript named"
     assert client.calls == []
 
 

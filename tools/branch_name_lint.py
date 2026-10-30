@@ -6,7 +6,9 @@ is ``feature/<symbol>-v<X.Y>-<task-key>``, the Task key in lower case
 like one of them (``-final``, ``-ready``, ``-rc4-fix``) is refused, because
 the integration and the release verbs find a Milestone's work by these exact
 names. A branch that does not start ``feature/<name>-v<digit>`` is not a
-Milestone or Task branch and is left alone.
+Milestone or Task branch and is left alone. The grammar lives in
+:mod:`eawf.runtime.vcs.branch_name`, which also binds a host session to the
+Task its branch names.
 
 At the ``pre-push`` stage the lint reads the local and remote branch names
 pre-commit exports; at the ``pre-commit`` stage, where Task branches that are
@@ -21,40 +23,15 @@ Exit codes:
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import sys
 from collections.abc import Mapping
 
-# Mirrors the project-code grammar (one letter, then 1 to 15 letters, digits,
-# underscores or hyphens) in lower case; the Task key repeats the symbol.
-_CANONICAL_RE = re.compile(
-    r"^feature/(?P<symbol>[a-z][a-z0-9_-]{1,15})-v\d+\.\d+(?:-(?P=symbol)-\d{4})?$"
-)
-_IN_SCOPE_RE = re.compile(r"^feature/[A-Za-z][^/]*-v\d")
+from eawf.runtime.vcs.branch_name import branch_name_error
+
 _PUSH_BRANCH_VARS = ("PRE_COMMIT_LOCAL_BRANCH", "PRE_COMMIT_REMOTE_BRANCH")
 _HEADS_PREFIX = "refs/heads/"
 _GIT_TIMEOUT_SECONDS = 20.0
-
-
-def branch_name_error(branch: str) -> str | None:
-    """Return why *branch* breaks the Milestone and Task naming, or ``None``.
-
-    Args:
-        branch: A short branch name, such as ``feature/eawf-v0.7``.
-
-    Returns:
-        A diagnostic for a branch that looks like a Milestone or Task branch
-        but is not in canonical form; ``None`` for a canonical branch or one
-        out of scope.
-    """
-    if not _IN_SCOPE_RE.match(branch) or _CANONICAL_RE.match(branch):
-        return None
-    return (
-        f"branch {branch!r} is not a canonical Milestone or Task branch: name a Milestone "
-        "branch feature/<symbol>-v<X.Y> and a Task branch feature/<symbol>-v<X.Y>-<task-key> "
-        "with the Task key in lower case (feature/eawf-v0.7-eawf-0628); no other suffix"
-    )
 
 
 def _current_branch() -> str | None:
