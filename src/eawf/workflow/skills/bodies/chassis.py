@@ -34,7 +34,7 @@ from eawf.surfaces.cli.verb_effects import CLI_VERB_EFFECTS
 from eawf.workflow.skills.arguments import UNIVERSAL_OPTIONS
 from eawf.workflow.skills.bodies.prompts import SkillPrompt, skill_prompt
 from eawf.workflow.skills.catalog import SKILL_CATALOG, SkillCatalogEntry, skill_lanes
-from eawf.workflow.skills.census import epoch1_nouns
+from eawf.workflow.skills.census import retired_nouns
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +201,7 @@ def chassis_findings(page: str, entry: SkillCatalogEntry) -> tuple[str, ...]:
         f"placeholder {match.group(0)!r} is on the page"
         for match in PLACEHOLDER_PATTERN.finditer(page)
     )
-    findings.extend(f"epoch-1 noun {noun!r} is on the page" for noun in epoch1_nouns(page))
+    findings.extend(f"epoch-1 noun {noun!r} is on the page" for noun in retired_nouns(page))
     prose = _without_rules_slot(page)
     for row in SKILL_CATALOG.retired:
         if re.search(rf"(?<![\w./-])/{re.escape(row.skill_id)}(?![\w-])", prose):

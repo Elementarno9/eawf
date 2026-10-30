@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
 
 from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
-from eawf.kernel.state.models import Wave
 from eawf.observability.telemetry.cost_class import (
     ROLE_COST_CLASS,
     CostClass,
@@ -18,23 +16,17 @@ from eawf.observability.telemetry.models import PriceSourceKind
 from eawf.observability.telemetry.turn_cost import (
     CompletedUnitRun,
     TurnCostRecord,
+    WorkUnit,
     build_turn_cost_record,
 )
 
 pytestmark = pytest.mark.unit
 
-_TS = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
 _PRICED = PriceSourceKind.LIST_RECONSTRUCTED
 
 
-def _closed_wave(wave_id: str) -> Wave:
-    return Wave(
-        id=wave_id,
-        iter_id="P31-I01",
-        title=f"Completed unit {wave_id}",
-        status=WaveStatus.CLOSED,
-        opened_at=_TS,
-    )
+def _closed_wave(wave_id: str) -> WorkUnit:
+    return WorkUnit(id=wave_id, status=WaveStatus.CLOSED)
 
 
 def _run(

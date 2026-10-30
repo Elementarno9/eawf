@@ -174,8 +174,7 @@ def _book(flags: GlobalFlags) -> tuple[dict[str, StandingServer], dict[str, Stan
     document_path = _generation_document(flags)
     if document_path is None:
         raise cli_errors.UserError(
-            "this tree answers in epoch 1, whose MCP registry is frozen; run "
-            "`eawf migrate` to import it before changing it",
+            "this tree selects no epoch-2 generation, so it has no MCP registry to change",
             kind="InvalidInput",
         )
     document = read_document(document_path)

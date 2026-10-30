@@ -2,12 +2,9 @@
 
 The digest answers one question a newcomer (or a returning operator) asks at
 the start of a session: *what is in flight right now, what just closed, and
-what was recently decided* — without opening ``state.json`` or replaying a
-store. It is a **pure projection** of the loaded :class:`State`: it reads the
-current pointers, the most-recently-closed iters, and the most-recent
-decisions, and renders them as a glance-clear standup. It writes nothing, so
-``state.json``, ``memory.jsonl``, and ``event.jsonl`` are byte-equal before
-and after a digest call.
+what was recently decided* — without replaying a store. It is a **pure
+projection** of the native decisions the tree's selected generation holds,
+newest first, rendered as a glance-clear standup. It writes nothing.
 
 Why a derived digest rather than a remembered one: status is *queried*, not
 memorized (see the memory-hygiene convention in ``AGENTS.md``). A digest that
@@ -25,8 +22,7 @@ Public API::
 
     DigestEntry          # one glossed id + title + optional detail row
     MemoryDigest         # typed projection (current / recently_closed / decisions)
-    build_digest(state) -> MemoryDigest
-    build_native_digest(decisions) -> MemoryDigest   # a tree born at epoch 2
+    build_native_digest(decisions) -> MemoryDigest
     render_digest_md(digest) -> str   # pure markdown, prose-lint clean
 """
 
@@ -36,8 +32,6 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from eawf.kernel.migration.v1_state import State
-from eawf.kernel.state.enums import IterStatus
 from eawf.kernel.state.epoch2.decision import Decision
 
 logger = logging.getLogger(__name__)
@@ -87,118 +81,11 @@ class MemoryDigest:
     recent_decisions: list[DigestEntry] = field(default_factory=list)
 
 
-def _current_phase_entry(state: State) -> DigestEntry | None:
-    """Project the current phase pointer into a glossed entry, or ``None``."""
-    phase_id = state.current.phase_id
-    if phase_id is None:
-        return None
-    phase = state.phases.get(phase_id)
-    if phase is None:
-        return DigestEntry(ref_id=phase_id, title="(phase record missing)")
-    return DigestEntry(ref_id=phase.id, title=phase.title, detail=phase.status.value)
-
-
-def _current_iter_entry(state: State) -> DigestEntry | None:
-    """Project the current iter pointer into a glossed entry, or ``None``."""
-    iter_id = state.current.iter_id
-    if iter_id is None:
-        return None
-    iter_rec = state.iters.get(iter_id)
-    if iter_rec is None:
-        return DigestEntry(ref_id=iter_id, title="(iter record missing)")
-    return DigestEntry(ref_id=iter_rec.id, title=iter_rec.title, detail=iter_rec.status.value)
-
-
-def _verdict_for(state: State, audit_id: str | None) -> str:
-    """Return the audit verdict string for *audit_id*, or ``""`` when absent."""
-    if audit_id is None or state.audits is None:
-        return ""
-    audit = state.audits.get(audit_id)
-    if audit is None or audit.verdict is None:
-        return ""
-    return f"audit {audit.verdict.value}"
-
-
-def _recently_closed_iters(state: State, limit: int) -> list[DigestEntry]:
-    """Return up to *limit* most-recently-closed iters, newest first.
-
-    Sorted by ``closed_at`` descending with the id as a stable tiebreaker so
-    two iters closed in the same instant order deterministically. Each entry's
-    detail carries the linked audit verdict when one is recorded.
-    """
-    pairs = [
-        (iter_rec.closed_at, iter_rec.id, iter_rec)
-        for iter_rec in state.iters.values()
-        if iter_rec.status == IterStatus.CLOSED and iter_rec.closed_at is not None
-    ]
-    pairs.sort(key=lambda p: (p[0], p[1]), reverse=True)
-    return [
-        DigestEntry(
-            ref_id=iter_rec.id,
-            title=iter_rec.title,
-            detail=_verdict_for(state, iter_rec.audit_id),
-        )
-        for _, _, iter_rec in pairs[:limit]
-    ]
-
-
-def _recent_decisions(state: State, limit: int) -> list[DigestEntry]:
-    """Return up to *limit* most-recent decisions, newest first.
-
-    Sorted by ``created_at`` descending with the id as a stable tiebreaker.
-    Each entry's detail carries the lifecycle status so a superseded decision
-    reads as historical at a glance.
-    """
-    pairs = [(d.created_at, d.id, d) for d in state.decisions.values()]
-    pairs.sort(key=lambda p: (p[0], p[1]), reverse=True)
-    return [
-        DigestEntry(ref_id=d.id, title=d.title, detail=d.status.value) for _, _, d in pairs[:limit]
-    ]
-
-
-def build_digest(
-    state: State,
-    *,
-    closed_limit: int = _DEFAULT_CLOSED_LIMIT,
-    decision_limit: int = _DEFAULT_DECISION_LIMIT,
-) -> MemoryDigest:
-    """Build the typed standup digest from *state* (pure; no I/O, no mutation).
-
-    Args:
-        state: The loaded, already-validated :class:`State`.
-        closed_limit: Cap on the recently-closed-iter list (must be >= 0).
-        decision_limit: Cap on the recent-decision list (must be >= 0).
-
-    Returns:
-        A :class:`MemoryDigest` projecting the current pointers, the most-
-        recently-closed iters, and the most-recent decisions.
-
-    Raises:
-        ValueError: when *closed_limit* or *decision_limit* is negative.
-    """
-    if closed_limit < 0:
-        raise ValueError(f"closed_limit must be >= 0; got {closed_limit!r}")
-    if decision_limit < 0:
-        raise ValueError(f"decision_limit must be >= 0; got {decision_limit!r}")
-    digest = MemoryDigest(
-        phase=_current_phase_entry(state),
-        iter=_current_iter_entry(state),
-        recently_closed=_recently_closed_iters(state, closed_limit),
-        recent_decisions=_recent_decisions(state, decision_limit),
-    )
-    logger.info(
-        f"build_digest phase={digest.phase.ref_id if digest.phase else None} "
-        f"iter={digest.iter.ref_id if digest.iter else None} "
-        f"closed={len(digest.recently_closed)} decisions={len(digest.recent_decisions)}"
-    )
-    return digest
-
-
 def build_native_digest(decisions: Sequence[Decision]) -> MemoryDigest:
     """Build the standup digest of a tree born at epoch 2 (pure; no I/O).
 
     Such a tree has no phase or iter pointer, so only its native decisions
-    are projected, newest first like :func:`_recent_decisions`.
+    are projected, newest first.
 
     Args:
         decisions: The native decisions the tree's selected generation holds.
@@ -278,7 +165,6 @@ def render_digest_md(digest: MemoryDigest) -> str:
 __all__ = [
     "DigestEntry",
     "MemoryDigest",
-    "build_digest",
     "build_native_digest",
     "render_digest_md",
 ]

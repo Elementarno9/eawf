@@ -28,6 +28,7 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.release.gate_binding import (
+    PROFILE_GATES,
     GateBinding,
     GateBindingError,
     GateBindingRejection,
@@ -41,7 +42,11 @@ from eawf.kernel.release.gate_binding import (
 from eawf.kernel.release.signals import ReleaseSignalName
 from eawf.kernel.spec.release import ReleaseGateProfile
 from eawf.kernel.spec.release_config import ReleaseGateName
-from eawf.workflow.release.train import DEV1_GATE_BINDINGS_YAML, gate_bindings_for
+from eawf.workflow.release.train import (
+    DEV1_GATE_BINDINGS_YAML,
+    STABLE_GATE_BINDINGS_YAML,
+    gate_bindings_for,
+)
 from eawf.workflow.verify.release_readiness import GATE_SIGNAL_BINDINGS
 from tests._release_helpers import SOURCE_SHA, dev1_binding_rows
 
@@ -149,8 +154,11 @@ def test_readiness_projection_is_derived_from_the_authored_table() -> None:
 
 
 def test_readiness_projection_covers_every_authored_profile() -> None:
-    bindings = gate_bindings_for(ReleaseGateProfile.CROSS_PROVIDER)
-    projected = {gate: binding.required_signal for gate, binding in bindings.items()}
+    projected = {
+        gate: binding.required_signal
+        for profile in (ReleaseGateProfile.CROSS_PROVIDER, ReleaseGateProfile.STABLE)
+        for gate, binding in gate_bindings_for(profile).items()
+    }
     assert projected == GATE_SIGNAL_BINDINGS
 
 
@@ -179,16 +187,24 @@ def test_load_rejects_a_duplicate_gate_binding() -> None:
     assert excinfo.value.code is GateBindingRejection.DUPLICATE_BINDING
 
 
-def test_load_rejects_an_undeclared_profile() -> None:
+def test_load_rejects_an_undeclared_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delitem(PROFILE_GATES, ReleaseGateProfile.STABLE)
     with pytest.raises(GateBindingError) as excinfo:
-        load_gate_bindings(DEV1_GATE_BINDINGS_YAML, profile=ReleaseGateProfile.STABLE)
+        load_gate_bindings(STABLE_GATE_BINDINGS_YAML, profile=ReleaseGateProfile.STABLE)
     assert excinfo.value.code is GateBindingRejection.UNDECLARED_PROFILE
 
 
-def test_profile_gates_rejects_an_undeclared_profile() -> None:
+def test_profile_gates_rejects_an_undeclared_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delitem(PROFILE_GATES, ReleaseGateProfile.STABLE)
     with pytest.raises(GateBindingError) as excinfo:
         profile_gates(ReleaseGateProfile.STABLE)
     assert excinfo.value.code is GateBindingRejection.UNDECLARED_PROFILE
+
+
+def test_dev1_table_is_refused_under_the_stable_profile() -> None:
+    with pytest.raises(GateBindingError) as excinfo:
+        load_gate_bindings(DEV1_GATE_BINDINGS_YAML, profile=ReleaseGateProfile.STABLE)
+    assert excinfo.value.code is GateBindingRejection.UNBOUND_GATE_OUTSIDE_PROFILE
 
 
 # --- unknown evidence ------------------------------------------------

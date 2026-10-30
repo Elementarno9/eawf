@@ -92,7 +92,6 @@ from eawf.runtime.sandbox.env_scrub import (
 )
 from eawf.runtime.sandbox.test_fixtures import test_fixture_environment
 from eawf.runtime.vcs.diff_base import derive_diff_base
-from eawf.workflow.audit_dsl.kinds.backlog_resolution import BACKLOG_RESOLUTION_KIND
 from eawf.workflow.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
 from eawf.workflow.audit_dsl.kinds.journal_chain import check_journal_chain
 from eawf.workflow.audit_dsl.kinds.jury_calibrated import JURY_CALIBRATED_KIND
@@ -101,7 +100,6 @@ from eawf.workflow.audit_dsl.kinds.schema_validate import check_schema_validate
 from eawf.workflow.audit_dsl.kinds.svg_pixel_diff import check_svg_pixel_diff
 from eawf.workflow.audit_dsl.kinds.svg_well_formed import check_svg_well_formed
 from eawf.workflow.audit_dsl.kinds.transition_coverage import check_transition_coverage
-from eawf.workflow.audit_dsl.kinds.verify_implements import check_verify_implements
 from eawf.workflow.audit_dsl.models import (
     OUTPUT_TAIL_MAX_CHARS,
     CheckResult,
@@ -1068,7 +1066,6 @@ CHECK_REGISTRY: dict[str, CheckFn] = {
     "regex_in_file": _check_regex_in_file,
     "state_field_equals": _check_state_field_equals,
     "command_exit_zero": _check_command_exit_zero,
-    "verify_implements": check_verify_implements,
     "criterion_in_diff": check_criterion_in_diff,
     "citation_resolves": _check_citation_resolves,
     "schema_validate": check_schema_validate,
@@ -1117,16 +1114,12 @@ def execute_check(
 #: -- the union of :data:`CHECK_REGISTRY` and this set -- so a close-gate
 #: kind cannot ship registered-but-idle either.
 #:
-#: ``backlog_resolution`` reads the wave-linked backlog items off state
-#: and is driven from the close-readiness compute when ``verify.enforce``
-#: is active (see :func:`eawf.workflow.verify.readiness.compute`).
-#:
 #: ``jury_calibrated`` reads the I09 jury-validation metrics
 #: (:class:`eawf.observability.eval.jury_validation.JuryValidationReport`)
 #: plus the scope's Oracle-Determinism-Ratio and gates the cross-vendor
 #: jury's blocking authority on them (see
 #: :func:`eawf.workflow.audit_dsl.kinds.jury_calibrated.check_jury_calibrated`).
-CLOSE_GATE_KINDS: frozenset[str] = frozenset({BACKLOG_RESOLUTION_KIND, JURY_CALIBRATED_KIND})
+CLOSE_GATE_KINDS: frozenset[str] = frozenset({JURY_CALIBRATED_KIND})
 
 
 def registered_audit_dsl_kinds() -> frozenset[str]:

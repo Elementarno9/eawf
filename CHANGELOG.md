@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [Unreleased]
+
+### Removed
+
+- **The epoch-1 migration stack and the `eawf migrate` verbs.** This release no longer reads or cuts over a 0.6 tree. On a 0.6 tree each writing verb of a contract group (`track`, `milestone`, `batch`, `task`, `run`, `release`, `campaign`, `question`, `action`, `decision`, `workspace`, `config`, `daemon`, `memory` and `reflect`), the console (`eawf ui`) and a bare `eawf` refuse with `MigrationRequired` (exit 4) and name the upgrade path. `eawf daemon stop` and `eawf daemon restart` still run, so a user can stop an older daemon; read verbs still answer.
+- **The `eawf session` and `eawf worktree` groups and `eawf memory compact`.** They served only 0.6 state; typing one ends with `No such command`.
+
+### Migration
+
+- 0.7.0rc4 is the last release that migrates a 0.6 tree. Install it (`eawf==0.7.0rc4` from PyPI or `@elementarno/eawf@0.7.0-rc.4` from npm), run its `eawf migrate epoch2 --plan` and then `--apply`, then upgrade to this release. `docs/help/upgrade-from-0.6.md` (`eawf help upgrade-from-0.6`) gives every step.
+
 ## [0.7.0rc4]
 
 This release candidate supersedes the blocked rc3 checkpoint without changing its public tag. It retains the same cross-provider proof, publication targets and platform claims.

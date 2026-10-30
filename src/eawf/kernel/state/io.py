@@ -1,53 +1,25 @@
-"""Library-level state-write primitives for the in-process fallback path.
+"""Epoch markers, the legacy-write fence and the state digest.
 
-These helpers used to live in :mod:`eawf.surfaces.cli.commands.lifecycle`, violating
-the "CLI is dispatch; library implements" rule — atomic state writes, event
-envelope construction, and the crash-safe commit sequence are domain logic,
-not argument parsing. They now live here so the CLI layer composes them as a
-thin dispatcher and the daemon-down fallback path is reusable from any caller
-holding the sibling lock.
-
-The functions split into three concerns:
-
-- :func:`write_state_unlocked` — atomic ``state.json`` persist (no lock
-  acquisition; the caller holds the transaction-level
-  :func:`eawf.runtime.lock.portalock.acquire` lock for the whole read-modify-write).
-- :func:`state_version` / :func:`build_event_envelope` / :func:`append_event`
-  — the event-side primitives: a stable payload digest, the canonical
-  ``EVENT``-kind envelope, and the routed append.
-- :func:`commit_mutation` — the in-process WAL-backed transaction (the V1
-  carve-out: CI / one-shot / recovery shell). The canonical writer is the
-  daemon (rule 4); this path runs only when the daemon is unavailable and
-  mirrors the daemon's outcome-WAL ordering so the *same*
-  :func:`eawf.runtime.daemon.recovery.replay_wal` reconciles a crash.
-
-Validation rejections raise :class:`StateValidationError` (a stdlib
-:class:`ValueError` subclass) rather than a CLI-layer error type, keeping
-this module free of the ``eawf.surfaces.cli`` import that would otherwise invert the
-layering. The CLI maps it onto its canonical
-:class:`eawf.surfaces.cli.errors.ValidationError` exit code at the boundary.
+- :func:`epoch_marker_present` says whether a tree carries the epoch-2
+  marker, so its generation, not ``state.json``, is the authority.
+- :func:`refuse_legacy_write` is the fence every remaining ``state.json``
+  writer calls first; a marked tree refuses the write.
+- :func:`state_version` is the stable digest the daemon's transaction and
+  recovery paths stamp on a document.
+- :func:`fallback_wal_dir` names the repo-local write-ahead log directory
+  the install helpers keep out of git.
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
-import os
-import secrets
-import uuid
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Final
+from typing import Any, ClassVar, Final
 
 import orjson
 
-from eawf.kernel.fsync import fsync_parent_dir
 from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
-from eawf.kernel.state.enums import StoreKind
-
-if TYPE_CHECKING:
-    from eawf.kernel.migration.v1_state import State
-    from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 
@@ -57,22 +29,12 @@ LEGACY_OPERATION_REMOVED: Final = "legacy_operation_removed"
 #: The epoch-1 authority document's file name; only a write to it is fenced.
 STATE_FILENAME: Final = "state.json"
 
-#: Process-level timestamp (wall-clock seconds) of the last opportunistic
-#: fallback-WAL GC sweep, or ``None`` when this process has never swept. The
-#: daemon owns a background sweep loop; the daemonless fallback path has no
-#: loop, so it piggybacks the sweep onto a write -- but throttled to at most
-#: once per interval per process so a burst of CI mutations does not re-scan
-#: the WAL on every call. Reset to ``None`` only by tests.
-_LAST_FALLBACK_WAL_GC_AT: float | None = None
-
 
 class StateValidationError(ValueError):
-    """Candidate ``state.json`` payload failed strict invariant validation.
+    """A ``state.json`` write was refused.
 
-    Raised by :func:`commit_mutation` when the post-apply payload does not
-    pass :func:`eawf.kernel.validate.strict.validate_state`. Subclasses
-    :class:`ValueError` so callers that have no CLI-error context can still
-    catch it; the CLI boundary maps it onto
+    Subclasses :class:`ValueError` so callers that have no CLI-error context
+    can still catch it; the CLI boundary maps it onto
     :class:`eawf.surfaces.cli.errors.ValidationError` (exit code 2).
     """
 
@@ -145,62 +107,8 @@ def refuse_legacy_write(state_path: Path) -> None:
     raise LegacyOperationRemovedError(ea_dir=path.parent)
 
 
-def write_state_unlocked(path: Path, data: dict[str, Any]) -> None:
-    """Refuse a leaking payload, else write *data* to *path* atomically.
-
-    This is the one place every ``state.json`` write -- the daemon-down
-    fallback (:func:`commit_mutation`) and the direct read-modify-write
-    helpers scattered across the CLI, migrations and daemon methods --
-    funnels through, so it is the chokepoint that runs
-    :func:`eawf.observability.logging.state_leak.state_leak_refusal`
-    between validation and persistence. The "before" side of the diff is
-    read fresh from *path* under the caller's held lock, so callers never
-    need to thread their own pre-mutation payload through.
-
-    Does NOT acquire the sibling lock. The caller must already hold it via
-    :func:`eawf.runtime.lock.portalock.acquire`. The locked variant lives in
-    :mod:`eawf.kernel.state.writer`; this unlocked variant is needed because the
-    transaction-level lock is held for the entire handler.
-
-    Args:
-        path: Destination ``state.json`` path (parent dirs are created).
-        data: JSON-serialisable payload to persist.
-
-    Raises:
-        StateValidationError: When a string *data* adds or changes relative
-            to the on-disk payload at *path* carries a leak shape (home
-            path, email, or credential token). Nothing is written.
-        LegacyOperationRemovedError: When *path* is a ``state.json`` whose
-            tree carries the epoch marker. Nothing is read or written.
-    """
-    from eawf.observability.logging.state_leak import state_leak_refusal
-
-    refuse_legacy_write(path)
-    old = orjson.loads(path.read_bytes()) if path.exists() else {}
-    if (leak_refusal := state_leak_refusal(old, data)) is not None:
-        raise StateValidationError(leak_refusal)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    suffix = secrets.token_hex(4)
-    tmp = path.with_name(f"{path.name}.tmp.{suffix}")
-    payload = orjson.dumps(dict(data), option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS)
-    try:
-        with tmp.open("wb") as fh:
-            fh.write(payload)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, path)
-        fsync_parent_dir(path)
-    finally:
-        tmp.unlink(missing_ok=True)
-
-
 def state_version(payload: dict[str, Any]) -> str:
     """Return a stable 16-hex-char digest of a state payload.
-
-    Used as the ``before_state_version`` / ``after_state_version`` pointer on
-    the event row. Mirrors
-    :func:`eawf.runtime.daemon.methods.state._state_version` so the digests stay
-    comparable across the in-process and daemon-proxy paths.
 
     Args:
         payload: JSON-mode state payload.
@@ -210,111 +118,6 @@ def state_version(payload: dict[str, Any]) -> str:
     """
     raw = orjson.dumps(payload, option=orjson.OPT_SORT_KEYS)
     return hashlib.sha256(raw).hexdigest()[:16]
-
-
-def build_event_envelope(
-    *,
-    command: str,
-    args: dict[str, Any],
-    scope_id: str,
-    before_version: str,
-    after_version: str,
-    summary: str,
-    extras: dict[str, str | int | float | bool] | None = None,
-) -> Envelope:
-    """Build (but do not append) the canonical ``EVENT``-kind envelope.
-
-    Split out of :func:`append_event` so the WAL-backed commit path can
-    capture the post-apply envelope in the ``.pending`` record before the
-    state write, then append the *same* envelope after the state lands. The
-    envelope shape mirrors
-    :func:`eawf.runtime.daemon.methods.state._build_event_envelope` so the in-process
-    fallback and the daemon-proxy path converge on identical on-disk rows.
-
-    Args:
-        command: Verb name recorded as ``event_type`` and ``command``.
-        args: Verb args; hashed into ``args_hash``.
-        scope_id: Scope the event is attributed to.
-        before_version: State digest before the mutation.
-        after_version: State digest after the mutation.
-        summary: Human-readable one-line summary.
-        extras: Optional advisory metrics folded onto the event's
-            :attr:`EventPayload.extras` map. The daemonless fallback close
-            path passes ``close_mechanism`` here so its event carries the same
-            stamp the daemon close event writes. ``None`` keeps the historical
-            empty-extras shape for every non-close mutation.
-
-    Returns:
-        An unsaved :class:`~eawf.kernel.store.envelope.Envelope`.
-    """
-    from eawf.kernel.store.envelope import Envelope
-    from eawf.kernel.store.kinds.event import EventPayload
-
-    args_blob = orjson.dumps(args, option=orjson.OPT_SORT_KEYS)
-    args_hash = hashlib.sha256(args_blob).hexdigest()[:16]
-    now = datetime.now(UTC)
-    return Envelope(
-        schema_version="1.0",
-        id=f"EV-{uuid.uuid4().hex[:12]}",
-        kind=StoreKind.EVENT,
-        scope_id=scope_id,
-        created_at=now,
-        updated_at=None,
-        summary=summary,
-        payload=EventPayload(
-            timestamp=now,
-            event_type=command,
-            actor="cli",
-            command=command,
-            args_hash=args_hash,
-            before_state_version=before_version,
-            after_state_version=after_version,
-            status="ok",
-            message=summary,
-            extras=dict(extras) if extras else {},
-        ).model_dump(mode="json"),
-        blob_refs=[],
-        artifact_ids=[],
-    )
-
-
-def append_event(
-    events_path: Path,
-    *,
-    command: str,
-    args: dict[str, Any],
-    scope_id: str,
-    before_version: str,
-    after_version: str,
-    summary: str,
-) -> None:
-    """Append one ``EVENT``-kind envelope to *events_path*.
-
-    Builds the envelope via :func:`build_event_envelope` and routes the write
-    through :func:`eawf.kernel.store.append.append_envelope`. The caller already
-    holds the state-side sibling lock; the events store uses its own sibling
-    lock so concurrent appends from unrelated callers stay safe.
-
-    Args:
-        events_path: Destination ``event.jsonl`` path.
-        command: Verb name recorded on the envelope.
-        args: Verb args; hashed into ``args_hash``.
-        scope_id: Scope the event is attributed to.
-        before_version: State digest before the mutation.
-        after_version: State digest after the mutation.
-        summary: Human-readable one-line summary.
-    """
-    from eawf.kernel.store.append import append_envelope
-
-    envelope = build_event_envelope(
-        command=command,
-        args=args,
-        scope_id=scope_id,
-        before_version=before_version,
-        after_version=after_version,
-        summary=summary,
-    )
-    append_envelope(events_path, envelope)
 
 
 def fallback_wal_dir(state_path: Path) -> Path:
@@ -334,251 +137,3 @@ def fallback_wal_dir(state_path: Path) -> Path:
         The repo-local ``locks/wal`` directory beside the state file.
     """
     return state_path.parent / "locks" / "wal"
-
-
-def _maybe_gc_fallback_wal(
-    wal_dir: Path,
-    *,
-    now: datetime | None = None,
-    interval_seconds: int | None = None,
-    retention_seconds: int | None = None,
-) -> list[Path]:
-    """Opportunistically GC the repo-local fallback WAL, throttled per process.
-
-    The daemon runs a background sweep loop
-    (:func:`eawf.runtime.daemon.wal.run_wal_gc_loop`) that retires aged
-    ``.fsynced.json`` records. The daemonless fallback path (the V1 carve-out:
-    CI / one-shot / recovery shell) has no such loop, so the repo-local WAL
-    under ``.ea/locks/wal/`` would accrete unbounded. This helper piggybacks a
-    single :func:`eawf.runtime.daemon.wal.gc_done_records` sweep onto a fallback
-    write, but a process-level sentinel
-    (:data:`_LAST_FALLBACK_WAL_GC_AT`) throttles it to at most once per
-    *interval_seconds*: a burst of mutations in one process sweeps once, not on
-    every call.
-
-    The throttle is best-effort and never raises -- a sweep failure must not
-    sink the mutation that triggered it, since GC is a janitor, not part of the
-    durable write. Both the interval and the retention window default to the
-    daemon's resolved values so the fallback path matches daemon behaviour.
-
-    Args:
-        wal_dir: The repo-local fallback WAL directory (from
-            :func:`fallback_wal_dir`). A missing directory is a no-op.
-        now: Reference clock for the throttle check and the sweep cutoff.
-            Injected by tests to drive the interval boundary deterministically;
-            defaults to ``datetime.now(UTC)``.
-        interval_seconds: Minimum seconds between sweeps in this process.
-            Defaults to the daemon-resolved WAL-GC interval.
-        retention_seconds: Records whose mtime is older than this are swept.
-            Defaults to the daemon-resolved retention window.
-
-    Returns:
-        Paths unlinked by the sweep, or an empty list when the throttle
-        suppressed the sweep, the directory is missing, or the sweep failed.
-    """
-    global _LAST_FALLBACK_WAL_GC_AT
-
-    from eawf.runtime.daemon.wal import (
-        gc_done_records,
-        resolve_wal_gc_interval_seconds,
-        resolve_wal_retention_seconds,
-    )
-
-    reference = (now or datetime.now(UTC)).timestamp()
-    if interval_seconds is not None:
-        interval = interval_seconds
-    else:
-        interval = resolve_wal_gc_interval_seconds()
-    last = _LAST_FALLBACK_WAL_GC_AT
-    if last is not None and reference - last < interval:
-        logger.debug(
-            f"_maybe_gc_fallback_wal throttled wal_dir={str(wal_dir)!r} "
-            f"since_last={reference - last:.0f} interval={interval}"
-        )
-        return []
-
-    # Claim the throttle slot BEFORE sweeping so a sweep failure still arms the
-    # interval -- a persistently failing sweep must not re-fire on every write.
-    _LAST_FALLBACK_WAL_GC_AT = reference
-    retention = (
-        retention_seconds if retention_seconds is not None else resolve_wal_retention_seconds()
-    )
-    try:
-        removed = gc_done_records(wal_dir, max_age_seconds=retention, now=now)
-    except OSError:
-        logger.warning(f"_maybe_gc_fallback_wal sweep failed wal_dir={str(wal_dir)!r}")
-        return []
-    logger.info(
-        f"_maybe_gc_fallback_wal swept wal_dir={str(wal_dir)!r} "
-        f"removed={len(removed)} retention={retention}"
-    )
-    return removed
-
-
-def commit_mutation(
-    state_path: Path,
-    *,
-    candidate: State,
-    before_version: str,
-    command: str,
-    args: dict[str, Any],
-    scope_id: str,
-    summary: str,
-    extras: dict[str, str | int | float | bool] | None = None,
-) -> dict[str, Any]:
-    """Validate + WAL-pending + persist state + append event, crash-safely.
-
-    This is the in-process fallback writer (the V1 carve-out: CI / one-shot /
-    recovery shell). The canonical writer is the daemon (rule 4); this path
-    runs only when the daemon is unavailable, and it mirrors the daemon's
-    outcome-WAL ordering so the *same*
-    :func:`eawf.runtime.daemon.recovery.replay_wal` reconciles a crash.
-
-    Order (state-first, WAL-backed):
-
-    1. ``replay_wal`` over the fallback WAL to finish/roll-forward any record
-       a prior crashed fallback left behind (idempotent no-op on a clean
-       WAL).
-    2. Build the post-apply event envelope in memory.
-    3. ``write_pending`` the envelope to the WAL — the durable capture that
-       lets replay re-issue the event row verbatim.
-    4. :func:`write_state_unlocked` persists ``state.json`` (fsynced) — the
-       point of no return.
-    5. ``mark_applied`` retires the WAL record to ``.applied`` **before** the
-       event append.
-    6. ``append_envelope`` lands the event row in ``event.jsonl``, then
-       ``mark_fsynced`` completes the record.
-
-    The invariant this buys: the event row is appended **only after**
-    ``state.json`` is durably written, so a crash never leaves a phantom
-    event (an event whose state change did not commit). Because
-    ``mark_applied`` fires before the event append, a crash in the
-    state-write→event-append window leaves an ``.applied`` record, and the
-    next startup's :func:`eawf.runtime.daemon.recovery.replay_wal` re-issues the
-    captured envelope (idempotent on envelope id) so state and the event log
-    stay in sync. ``replay_wal`` only re-issues APPLIED records; a PENDING
-    record (crash before the state write landed) is POISONED and its mutator
-    is never re-run — which is why ``mark_applied`` must precede the append,
-    not follow it.
-
-    Args:
-        state_path: Path to the active ``state.json``.
-        candidate: The mutated, typed state to persist.
-        before_version: State digest captured before the mutation.
-        command: Verb name recorded on the event row.
-        args: Verb args; hashed into the event ``args_hash``.
-        scope_id: Scope the event is attributed to.
-        summary: Human-readable one-line summary.
-        extras: Optional advisory metrics folded onto the event envelope's
-            :attr:`EventPayload.extras` map. The daemonless wave-close path
-            passes ``close_mechanism`` here so the fallback close event carries
-            the same stamp the daemon close event writes; ``None`` keeps the
-            historical empty-extras shape for every other mutation.
-
-    Returns:
-        The candidate payload (already JSON-mode-dumped) so the caller can
-        compute its own envelope without a second ``model_dump``.
-
-    Raises:
-        StateValidationError: When the post-apply payload fails strict
-            invariant validation, or a string it adds or changes carries a
-            leak shape (home path, email, or credential token).
-        LegacyOperationRemovedError: When the tree carries the epoch
-            marker. Raised before the WAL replay, so neither the WAL nor
-            the event log is touched either.
-    """
-    from eawf.kernel.store.append import append_envelope
-    from eawf.kernel.store.paths import store_path
-    from eawf.observability.logging.state_leak import state_leak_refusal
-    from eawf.runtime.daemon import wal
-    from eawf.runtime.daemon.recovery import replay_wal
-    from eawf.runtime.daemon.wal import WalRecord
-
-    refuse_legacy_write(state_path)
-    payload = candidate.model_dump(mode="json")
-    # validate the payload that will actually go to disk
-    _validate_or_raise(payload)
-    after_version = state_version(payload)
-    events_path = store_path(state_path, StoreKind.EVENT)
-    wal_dir = fallback_wal_dir(state_path)
-
-    # Roll forward any record a prior crashed fallback left behind so the
-    # log never carries an event whose state change is missing, and so a
-    # half-applied prior write completes before this one starts.
-    replay_wal(wal_dir, state_path=state_path, event_path=events_path)
-
-    # Refuse BEFORE the WAL-pending record lands -- mirrors the daemon's own
-    # ``state.mutate`` ordering (leak check, then WAL) so a refused mutation
-    # leaves no orphaned PENDING record for the next replay to skip over.
-    # ``write_state_unlocked`` repeats this check as the chokepoint every
-    # other fallback writer relies on; here it is a cheap defense-in-depth
-    # second pass over an already-clean payload.
-    old_payload = orjson.loads(state_path.read_bytes()) if state_path.exists() else {}
-    if (leak_refusal := state_leak_refusal(old_payload, payload)) is not None:
-        raise StateValidationError(leak_refusal)
-
-    envelope = build_event_envelope(
-        command=command,
-        args=args,
-        scope_id=scope_id,
-        before_version=before_version,
-        after_version=after_version,
-        summary=summary,
-        extras=extras,
-    )
-    record_id = uuid.uuid4().hex
-    record = WalRecord(
-        record_id=record_id,
-        envelope=envelope,
-        idempotency_key=None,
-        written_at=datetime.now(UTC),
-        before_state_version=before_version,
-        after_state_version=after_version,
-        state_path=str(state_path),
-    )
-    wal.write_pending(wal_dir, record)
-    # ``write_state_unlocked`` fsyncs state.json — the point of no return.
-    # Mark APPLIED before the event append so a crash in the
-    # state-write→event-append window leaves an APPLIED record that replay
-    # re-issues, not a PENDING one that replay poisons (which would silently
-    # drop the event row). Mirrors the daemon mutator.
-    write_state_unlocked(state_path, payload)
-    wal.mark_applied(wal_dir, record_id)
-    append_envelope(events_path, envelope)
-    wal.mark_fsynced(wal_dir, record_id)
-    logger.info(
-        f"commit_mutation command={command!r} scope_id={scope_id!r} "
-        f"before={before_version} after={after_version} record={record_id!r}"
-    )
-    # The daemon's background sweep loop never runs on the fallback path, so
-    # piggyback an opportunistic GC of aged fsynced records here. Throttled to
-    # once per interval per process; never raises (GC is a janitor, not part of
-    # the durable write).
-    _maybe_gc_fallback_wal(wal_dir)
-    return payload
-
-
-def _validate_or_raise(payload: dict[str, Any]) -> State:
-    """Validate the candidate payload; raise on schema / invariant failure.
-
-    Args:
-        payload: JSON-mode candidate state payload.
-
-    Returns:
-        The validated typed :class:`~eawf.kernel.migration.v1_state.State`.
-
-    Raises:
-        StateValidationError: When schema validation or any cross-entity
-            invariant check fails. The message is the ``"; "``-joined list
-            of schema errors followed by ``"<code>@<path>: <message>"`` for
-            each invariant violation.
-    """
-    from eawf.kernel.validate.strict import validate_state
-
-    report = validate_state(payload, strict_optional=False)
-    if not report.ok:
-        msgs = list(report.schema_errors)
-        msgs.extend(f"{v.code}@{v.path}: {v.message}" for v in report.violations)
-        raise StateValidationError("; ".join(msgs))
-    assert report.state is not None  # ok==True guarantees this
-    return report.state

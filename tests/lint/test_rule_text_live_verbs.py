@@ -13,7 +13,6 @@ import click
 import typer
 
 from eawf.surfaces.cli.app import app
-from eawf.surfaces.cli.flag_day import RETIRED_VERBS
 
 _DATA = Path(__file__).resolve().parents[2] / "src" / "eawf" / "platform"
 _SOURCES = (
@@ -22,17 +21,31 @@ _SOURCES = (
 )
 _MENTION = re.compile(r"\beawf ([a-z][a-z0-9-]*)\b")
 
+#: The root words of every verb the 0.7 train retired, as its retired-verb
+#: table and the migration verbs named them before they left the tree.
+_RETIRED_ROOTS = frozenset(
+    {
+        "actual", "agent-report", "artifact", "audit", "backfill", "backlog", "batch",
+        "calibrate", "close", "decision", "dispatch", "draft", "estimate", "evidence",
+        "flow", "goal", "hypothesis", "impact", "incident", "iter", "jury", "migrate",
+        "milestone", "operator", "outcome", "phase", "plan", "pr", "project", "question",
+        "repo", "research", "roadmap", "session", "skill", "spec", "state", "task",
+        "track", "tui", "wave", "wiki", "workspace", "worktree",
+    }
+)  # fmt: skip
+
 
 def _retired_groups() -> frozenset[str]:
     """Return the root words of retired verbs that no live root command carries."""
     root = typer.main.get_command(app)
     assert isinstance(root, click.Group)
     live = set(root.list_commands(click.Context(root)))
-    return frozenset(path.split()[0] for path in RETIRED_VERBS) - live
+    return _RETIRED_ROOTS - live
 
 
 def test_the_retired_state_group_is_detected() -> None:
     assert "state" in _retired_groups()
+    assert "migrate" in _retired_groups()
     assert "task" not in _retired_groups()
 
 

@@ -1,11 +1,11 @@
-"""Shared building blocks for PhaseSpec / IterSpec / WaveSpec models.
+"""Shared building blocks for the PhaseSpec / IterSpec spec models.
 
-These types are imported by :mod:`eawf.kernel.spec.phase`, :mod:`eawf.kernel.spec.iter`,
-:mod:`eawf.kernel.spec.wave` and (later) the research / hypothesis / decision /
-audit spec modules. Defining them once here avoids drift between the
-seven spec models and keeps the cross-spec citation contract (verdict
-ids, brief paths, test refs, file scopes, evidence refs) in a single
-authoritative place.
+These types are imported by :mod:`eawf.kernel.spec.phase`,
+:mod:`eawf.kernel.spec.iter` and (later) the research / hypothesis /
+decision / audit spec modules. Defining them once here avoids drift
+between the spec models and keeps the cross-spec citation contract
+(verdict ids, brief paths, test refs, file scopes, evidence refs) in a
+single authoritative place.
 """
 
 from __future__ import annotations
@@ -160,7 +160,7 @@ FileScopeRef = Annotated[
 class VerdictCitation(_StrictModel):
     """One verdict citation tying a spec back to a research brief.
 
-    Used by PhaseSpec / IterSpec / WaveSpec / DecisionSpec to record
+    Used by PhaseSpec / IterSpec / DecisionSpec to record
     which prior verdict, decision, recommendation, or hypothesis the
     spec implements. The pair ``(verdict_id, brief)`` is the addressable
     unit; ``line`` and ``note`` are optional annotations.
@@ -368,7 +368,6 @@ _GATE_KIND_TIER: dict[str, OracleTier] = {
     "tui_flow": OracleTier.T2_STRUCTURAL,
     "journal_chain": OracleTier.T2_STRUCTURAL,
     "command_exit_zero": OracleTier.T4_CONTRACT,
-    "verify_implements": OracleTier.T4_CONTRACT,
     "svg_pixel_diff": OracleTier.T5_GOLDEN,
     "mockup_golden_diff": OracleTier.T5_GOLDEN,
 }
@@ -414,7 +413,6 @@ _GATE_KIND_RESPONSE: dict[str, tuple[ObserveVerb, ProofLocus]] = {
     "tui_flow": (ObserveVerb.TRIGGERS_ACTION, ProofLocus.TUI_PILOT),
     "journal_chain": (ObserveVerb.EMITS, ProofLocus.LOG_CAPTURE),
     "command_exit_zero": (ObserveVerb.EXITS, ProofLocus.PYTEST),
-    "verify_implements": (ObserveVerb.RETURNS, ProofLocus.PYTEST),
     "svg_pixel_diff": (ObserveVerb.FILE_MATCHES, ProofLocus.GOLDEN),
     "mockup_golden_diff": (ObserveVerb.FILE_MATCHES, ProofLocus.GOLDEN),
 }
@@ -852,40 +850,6 @@ GRANDFATHERED_KIND = "legacy"
 #: 20-char floor. Lets a one-word legacy criterion grandfather without
 #: failing the :class:`CriterionSpec` ``measurable_signal`` bound.
 GRANDFATHERED_SIGNAL = "grandfathered legacy criterion"
-
-
-def grandfather_criterion(text: str, *, index: int) -> CriterionSpec:
-    """Build a grandfathered :class:`CriterionSpec` from a legacy string.
-
-    The producer chain (CLI ``wave plan --success``, daemon ``add_wave``,
-    ``roadmap revise --add-wave``) accepts free-form operator strings; this
-    helper wraps each into the typed criterion shape so the typed
-    ``Wave.success_criteria`` field can accept it. The same shape is mirrored
-    by the ``1.6 -> 1.7`` state migration so a migrated on-disk criterion and a
-    freshly-planned one are indistinguishable.
-
-    The id is ``CR-<index>`` zero-padded to two digits (e.g. ``CR-01``). The
-    ``measurable_signal`` is the text truncated to the 300-char cap when it
-    already clears the 20-char floor, else the :data:`GRANDFATHERED_SIGNAL`
-    fallback so a short legacy string still validates.
-
-    Args:
-        text: The legacy success-criterion string (1-500 chars).
-        index: 1-based position of the criterion within its wave.
-
-    Returns:
-        A :class:`CriterionSpec` with ``kind == GRANDFATHERED_KIND``.
-    """
-    measurable_signal = text[:300] if len(text) >= 20 else GRANDFATHERED_SIGNAL
-    return CriterionSpec(
-        id=f"CR-{index:02d}",
-        text=text,
-        kind=GRANDFATHERED_KIND,
-        acceptance_style="binary",
-        evidence_kind="attested",
-        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
-        measurable_signal=measurable_signal,
-    )
 
 
 #: ``kind`` stamped on a criterion the legacy-to-typed converter promotes out of
@@ -1360,31 +1324,3 @@ def validate_criterion_gate_refs(
             raise ValueError(
                 f"deterministic gate {gate.id!r} for criterion {owner.id!r} does not compile"
             )
-
-
-def _rebuild_state_models() -> None:
-    """Resolve the ``list[CriterionSpec]`` + ``list[GateSpec]`` forward refs on :class:`Wave`.
-
-    :attr:`eawf.kernel.state.models.Wave.success_criteria` annotates
-    ``list[CriterionSpec]`` and :attr:`eawf.kernel.state.models.Wave.gates`
-    annotates ``list[GateSpec]``, but ``state.models`` cannot import either
-    type (this module imports ``IdStr`` from ``state.models``, so a top-level
-    import there would be a cycle). The forward references are therefore
-    resolved here, after both :class:`CriterionSpec` and :class:`GateSpec` are
-    defined: the function injects the types into the ``state.models`` namespace
-    and rebuilds :class:`Wave` so Pydantic can compile the field schemas.
-    Running it from this module (rather than the bottom of ``state.models``) is
-    cycle-safe regardless of which module the import chain enters first, because
-    by the time this runs both modules are fully defined.
-    """
-    from eawf.kernel.state import models as _state_models
-
-    _state_models.CriterionSpec = CriterionSpec  # type: ignore[attr-defined]
-    _state_models.GateSpec = GateSpec  # type: ignore[attr-defined]
-    _state_models.Wave.model_rebuild()
-
-
-# Resolve the Wave forward reference eagerly on import of this module. The
-# call is idempotent (a second rebuild is a no-op) so it is safe even when
-# ``state.models`` has already triggered it.
-_rebuild_state_models()

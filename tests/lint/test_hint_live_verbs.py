@@ -12,7 +12,6 @@ on purpose, so neither is scanned.
 from __future__ import annotations
 
 import ast
-import json
 import re
 from collections.abc import Iterator
 from pathlib import Path
@@ -20,22 +19,32 @@ from pathlib import Path
 import click
 import pytest
 import typer
-from typer.testing import CliRunner
 
 from eawf.surfaces.cli.app import app
 
 _ROOT = Path(__file__).resolve().parents[2]
 _SRC = _ROOT / "src" / "eawf"
 
-#: The retired-verb table names every retired verb by design.
-_SKIPPED_SOURCES = frozenset({_SRC / "surfaces" / "cli" / "flag_day.py"})
+
+#: Operator docs that describe the cutover verbs of 0.7.0rc4, the last release
+#: that migrates a 0.6 tree, which this release no longer carries.
+_HISTORICAL_DOCS = frozenset(
+    {
+        _ROOT / "docs" / "help" / "upgrade-from-0.6.md",
+        _ROOT / "docs" / "reference" / "epoch2-cutover.md",
+    }
+)
 
 #: The operator-facing docs; the architecture notes record design history.
-_DOCS = (
-    _ROOT / "docs" / "README.md",
-    *sorted((_ROOT / "docs" / "help").rglob("*.md")),
-    *sorted((_ROOT / "docs" / "reference").rglob("*.md")),
-    *sorted((_ROOT / "docs" / "rules").rglob("*.md")),
+_DOCS = tuple(
+    path
+    for path in (
+        _ROOT / "docs" / "README.md",
+        *sorted((_ROOT / "docs" / "help").rglob("*.md")),
+        *sorted((_ROOT / "docs" / "reference").rglob("*.md")),
+        *sorted((_ROOT / "docs" / "rules").rglob("*.md")),
+    )
+    if path not in _HISTORICAL_DOCS
 )
 
 _SPAN = re.compile(r"`eawf ([^`]*)`")
@@ -125,11 +134,7 @@ def _doc_commands(path: Path) -> Iterator[tuple[int, str]]:
 def _dead(root: click.Group) -> list[str]:
     """Return ``file:line: eawf <path>`` for every command naming a verb the tree lacks."""
     hits: list[str] = []
-    sources = [
-        (path, _source_commands(path))
-        for path in sorted(_SRC.rglob("*.py"))
-        if path not in _SKIPPED_SOURCES
-    ]
+    sources = [(path, _source_commands(path)) for path in sorted(_SRC.rglob("*.py"))]
     docs = [(path, _doc_commands(path)) for path in _DOCS]
     for path, commands in (*sources, *docs):
         relpath = path.relative_to(_ROOT).as_posix()
@@ -155,7 +160,7 @@ def test_a_retired_or_unbuilt_verb_is_reported() -> None:
     assert _unknown("prep -i", root) == "prep"
     assert _unknown("roadmap", root) == "roadmap"
     assert _unknown("wave list", root) == "wave"
-    assert _unknown("memory compact --scope P01", root) is None
+    assert _unknown("memory digest --scope P01", root) is None
     assert _unknown("milestone try MS-01", root) == "milestone try"
     assert _unknown("help upgrade-from-0.6", root) is None
     assert _unknown("config get <path>", root) is None
@@ -188,85 +193,22 @@ def test_the_milestone_try_section_names_a_live_verb() -> None:
     assert _unknown(command, _root()) is None
 
 
-# --- Migration hints run on the tree they are shown for ---------------------
-
-_HINT_SOURCES = (
-    _SRC / "surfaces" / "cli" / "errors.py",
-    _SRC / "surfaces" / "cli" / "flag_day.py",
-)
+# --- The upgrade hint names a release, not a verb of this one ---------------
 
 
-def _migration_hint_commands() -> list[str]:
-    """Return every command the migration hints name, without the leading ``eawf``."""
+def test_the_migration_required_hint_names_the_last_migrating_release() -> None:
     from eawf.surfaces.cli import errors
-    from eawf.surfaces.cli.flag_day import RETIRED_VERBS, replacement_guidance
 
-    unreplaced = next(verb for verb, replacement in RETIRED_VERBS.items() if replacement is None)
-    hints = [
-        errors._DEFAULT_HINTS["MigrationRequired"],
-        errors._KIND_HINTS[errors.MIGRATION_REFUSED_KIND],
-        replacement_guidance(unreplaced),
-    ]
-    commands = {match.group(1) for hint in hints for match in _SPAN.finditer(hint)}
-    # the guidance quotes the retired verb it answers; that one is named, not advised
-    return sorted(commands - {unreplaced})
-
-
-def test_the_migration_hints_name_the_status_verb_and_the_upgrade_guide() -> None:
-    assert _migration_hint_commands() == ["help upgrade-from-0.6", "migrate status"]
-
-
-def test_no_hint_source_names_the_plan_mode_that_needs_a_snapshot_root() -> None:
-    for path in _HINT_SOURCES:
-        assert "migrate epoch2 --plan" not in path.read_text(encoding="utf-8"), path
-
-
-@pytest.fixture
-def epoch1_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A plain epoch-1 tree the CLI addresses through ``EA_STATE`` and the working directory."""
-    root = tmp_path / "repo"
-    state_path = root / ".ea" / "state.json"
-    state_path.parent.mkdir(parents=True)
-    state_path.write_text(json.dumps({"schema_version": "1.0", "scope_kind": "repo"}))
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    monkeypatch.setenv("EAWF_REGISTRY_PATH", str(tmp_path / "registry.json"))
-    monkeypatch.chdir(root)
-    return root
-
-
-@pytest.mark.parametrize("command", _migration_hint_commands())
-def test_every_migration_hint_command_exits_zero_on_an_epoch1_tree(
-    epoch1_tree: Path, command: str
-) -> None:
-    before = (epoch1_tree / ".ea" / "state.json").read_bytes()
-    result = CliRunner().invoke(app, command.split())
-    assert result.exit_code == 0, result.output
-    assert (epoch1_tree / ".ea" / "state.json").read_bytes() == before
+    hint = errors._DEFAULT_HINTS["MigrationRequired"]
+    assert "0.7.0rc4" in hint
+    assert _SPAN.search(hint) is None
 
 
 @pytest.mark.parametrize(
     "message",
-    [
-        "migration_count_mismatch: a source row reached no arm",
-        "validation_failed: migration_plan_digest_stale: the plan is stale",
-        "workspace_not_registered: no workspace",
-    ],
+    ["", "x", "schema mismatch: field missing", "migration_count_mismatch: a row reached no arm"],
 )
-def test_a_migration_refusal_carries_the_migration_kind_and_hint(message: str) -> None:
-    from eawf.surfaces.cli import errors
-
-    envelope = errors.build_envelope(errors.ValidationError(message))
-    assert envelope.data["kind"] == errors.MIGRATION_REFUSED_KIND
-    assert envelope.suggested_next_step is not None
-    assert "eawf validate" not in envelope.suggested_next_step
-    assert "`eawf migrate status`" in envelope.suggested_next_step
-    assert "`eawf help upgrade-from-0.6`" in envelope.suggested_next_step
-
-
-@pytest.mark.parametrize("message", ["", "x", "schema mismatch: field missing"])
-def test_a_validation_error_naming_no_migration_rule_keeps_the_validate_hint(
-    message: str,
-) -> None:
+def test_a_validation_error_keeps_the_validate_hint(message: str) -> None:
     from eawf.surfaces.cli import errors
 
     envelope = errors.build_envelope(errors.ValidationError(message))

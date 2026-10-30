@@ -32,7 +32,6 @@ from eawf.kernel.spec.measured_contract import (
 )
 from eawf.kernel.state.enums import StoreKind
 from eawf.surfaces.cli.errors import UserError
-from eawf.workflow.evidence._io import load_state
 from eawf.workflow.evidence.measured_contract import (
     LOCAL_SPIKE_ROOT,
     PREFLIGHT_CHECKPOINT_BANDS,
@@ -41,6 +40,7 @@ from eawf.workflow.evidence.measured_contract import (
     promote_measured_contract,
     resolve_contract_citation,
 )
+from tests._contract_view import contract_view
 
 
 def _expect_plan_reference_missing(state: object, citation: str) -> str:
@@ -131,7 +131,7 @@ def test_the_corpus_importer_contract_points_at_a_committed_observation() -> Non
 def test_promotion_goes_through_the_shared_artifact_mutator(state_path: Path) -> None:
     """The promotion reuses ``add_artifact``, so it inherits its URN
     minting and its duplicate-id guard rather than writing rows itself."""
-    state = load_state(state_path)
+    state = contract_view(state_path)
     contract = PREFLIGHT_CONTRACTS[DAEMON_CONTRACT_ID]
     promotion = promote_measured_contract(
         state, contract=contract, scope_id=SCOPE, required_band=ScaleBand.DEV
@@ -148,7 +148,7 @@ def test_promotion_goes_through_the_shared_artifact_mutator(state_path: Path) ->
 
 
 def test_promotion_refuses_a_contract_below_its_checkpoint_band(state_path: Path) -> None:
-    state = load_state(state_path)
+    state = contract_view(state_path)
     contract = PREFLIGHT_CONTRACTS[DAEMON_CONTRACT_ID]
     with pytest.raises(UserError, match="asserts over") as excinfo:
         promote_measured_contract(
@@ -172,14 +172,14 @@ def test_promotion_refuses_a_contract_below_its_checkpoint_band(state_path: Path
 def test_local_spike_citation_raises_plan_reference_missing(
     state_path: Path, citation: str
 ) -> None:
-    message = _expect_plan_reference_missing(load_state(state_path), citation)
+    message = _expect_plan_reference_missing(contract_view(state_path), citation)
     assert PROMOTION_GAP in message
 
 
 def test_plan_reference_missing_names_the_promotion_command_for_each_spike(
     state_path: Path,
 ) -> None:
-    state = load_state(state_path)
+    state = contract_view(state_path)
     for contract_id in SPIKE_CONTRACT_IDS:
         contract = PREFLIGHT_CONTRACTS[contract_id]
         message = _expect_plan_reference_missing(state, contract.observed_at_ref)
@@ -190,7 +190,7 @@ def test_unknown_spike_citation_names_a_placeholder_promotion_command(
     state_path: Path,
 ) -> None:
     message = _expect_plan_reference_missing(
-        load_state(state_path), ".ea/local/spikes/2027-01-01-unknown/observations.json"
+        contract_view(state_path), ".ea/local/spikes/2027-01-01-unknown/observations.json"
     )
     assert PROMOTION_GAP in message
 
@@ -202,7 +202,7 @@ def test_unknown_spike_citation_names_a_placeholder_promotion_command(
 def test_non_spike_citations_are_not_flagged_as_unpromoted(state_path: Path, citation: str) -> None:
     """A neighbouring local path (research, not spikes) is a plain lookup
     miss, not a missing promotion."""
-    state = load_state(state_path)
+    state = contract_view(state_path)
     with pytest.raises(UserError) as excinfo:
         resolve_contract_citation(state, citation)
     assert excinfo.value.kind != "plan_reference_missing"
@@ -210,7 +210,7 @@ def test_non_spike_citations_are_not_flagged_as_unpromoted(state_path: Path, cit
 
 def test_local_spike_root_prefix_is_recognised(state_path: Path) -> None:
     _expect_plan_reference_missing(
-        load_state(state_path), f"{LOCAL_SPIKE_ROOT}anything/at/all.json"
+        contract_view(state_path), f"{LOCAL_SPIKE_ROOT}anything/at/all.json"
     )
 
 
@@ -218,7 +218,7 @@ def test_local_spike_root_prefix_is_recognised(state_path: Path) -> None:
 
 
 def test_resolve_contract_citation_unknown_id_raises_not_found(state_path: Path) -> None:
-    state = load_state(state_path)
+    state = contract_view(state_path)
     with pytest.raises(UserError) as excinfo:
         resolve_contract_citation(state, "MCT-99999999")
     assert excinfo.value.kind == "NotFound"
@@ -227,7 +227,7 @@ def test_resolve_contract_citation_unknown_id_raises_not_found(state_path: Path)
 def test_resolve_contract_citation_malformed_urn_raises_invalid_input(
     state_path: Path,
 ) -> None:
-    state = load_state(state_path)
+    state = contract_view(state_path)
     with pytest.raises(UserError) as excinfo:
         resolve_contract_citation(state, "urn:eawf:v1:artifact:")
     assert excinfo.value.kind == "InvalidInput"
@@ -236,7 +236,7 @@ def test_resolve_contract_citation_malformed_urn_raises_invalid_input(
 def test_resolve_contract_citation_urn_without_id_raises_invalid_input(
     state_path: Path,
 ) -> None:
-    state = load_state(state_path)
+    state = contract_view(state_path)
     with pytest.raises(UserError) as excinfo:
         resolve_contract_citation(state, f"urn:eawf:v1:artifact:{SCOPE}")
     assert excinfo.value.kind == "InvalidInput"

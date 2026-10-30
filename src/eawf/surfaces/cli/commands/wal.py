@@ -2,7 +2,7 @@
 
 The daemon persists the post-apply envelope of every state mutation as a
 WAL record under ``<runtime_dir>/wal/`` and replays the log on startup
-(see :mod:`eawf.runtime.daemon.wal` + :mod:`eawf.runtime.daemon.recovery`).
+(see :mod:`eawf.runtime.daemon.wal` + :mod:`eawf.runtime.daemon.epoch2_recovery`).
 This group is the operator-facing window onto that log: it reads the WAL
 directory directly so the verbs work when the daemon is down (the
 post-crash forensic flow), and it is strictly READ-ONLY.

@@ -26,11 +26,8 @@ from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     BacklogPriority,
     BacklogStatus,
-    IterStatus,
-    PhaseStatus,
-    WaveStatus,
 )
-from eawf.kernel.state.models import BacklogItem, Iter, Phase, Wave
+from eawf.kernel.state.models import BacklogItem
 from eawf.surfaces.render.agents_md import render_intent_line
 
 
@@ -218,52 +215,6 @@ def test_intent_brief_rejects_over_cap_priority_rationale() -> None:
 
 def _now() -> datetime:
     return datetime.now(UTC)
-
-
-def test_wave_intent_default_none() -> None:
-    wave = Wave(
-        id="P01-I01-W01",
-        iter_id="P01-I01",
-        title="t",
-        status=WaveStatus.PENDING,
-        opened_at=_now(),
-    )
-    assert wave.intent is None
-
-
-def test_wave_accepts_intent() -> None:
-    wave = Wave(
-        id="P01-I01-W01",
-        iter_id="P01-I01",
-        title="t",
-        status=WaveStatus.PENDING,
-        opened_at=_now(),
-        intent=_minimal_brief(),
-    )
-    assert wave.intent is not None
-    assert wave.intent.problem == "executors lack structured intent"
-
-
-def test_iter_intent_default_none() -> None:
-    it = Iter(
-        id="P01-I01",
-        phase_id="P01",
-        title="t",
-        status=IterStatus.PLANNED,
-        opened_at=_now(),
-    )
-    assert it.intent is None
-
-
-def test_phase_intent_default_none() -> None:
-    phase = Phase(
-        id="P01",
-        scope_id="QR",
-        title="t",
-        status=PhaseStatus.PLANNED,
-        opened_at=_now(),
-    )
-    assert phase.intent is None
 
 
 def test_backlog_intent_default_none() -> None:

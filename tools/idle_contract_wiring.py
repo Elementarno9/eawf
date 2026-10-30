@@ -111,26 +111,6 @@ _EAWF023_GOOD_PATH = ".ea/artifacts/audits/2026-06-12-idle-contract.md"
 #: :func:`check_artifact_path`.
 _EAWF023_BAD_PATH = ".ea/artifacts/notakind/2026-06-12-idle-contract.md"
 
-#: The daemon research module that will carry the live campaign producer class
-#: when P30-I20-W06 lands. W05's guard is class-scoped so it can ship before W06:
-#: no class means there is no class seam to judge yet; once a class lands, a
-#: ``NotImplementedError`` / ``pass`` / ellipsis body reds immediately.
-_CAMPAIGN_PRODUCER_MODULE = "src/eawf/runtime/daemon/methods/research.py"
-
-#: Campaign producer classes are named with both ``Campaign`` and ``Producer``
-#: in the class symbol, e.g. ``LiveCampaignAgentEndProducer``.
-_CAMPAIGN_PRODUCER_CLASS_RE = re.compile(
-    r"^class\s+(?P<name>[A-Za-z0-9_]*Campaign[A-Za-z0-9_]*Producer[A-Za-z0-9_]*)\b"
-    r"(?P<body>.*?)(?=^class\s|^def\s|\Z)",
-    flags=re.MULTILINE | re.DOTALL,
-)
-
-#: Stub markers forbidden inside a campaign producer class seam.
-_PRODUCER_STUB_RE = re.compile(
-    r"\bNotImplementedError\b|^\s*(?:pass|\.\.\.)\s*(?:#.*)?$",
-    flags=re.MULTILINE,
-)
-
 
 def check_eawf023_artifact_placement_wired(
     *,
@@ -439,48 +419,6 @@ def check_coverage_gate_helpers_wired(*, gate_module: ModuleType | None = None) 
             "package under a 90% floor and main must refuse a coverage.xml older "
             "than its sources while passing a fresh one"
         ),
-    )
-
-
-def check_campaign_producer_class_non_stub(
-    *,
-    module_text: str | None = None,
-    module_path: str = _CAMPAIGN_PRODUCER_MODULE,
-) -> GateResult:
-    """Assert campaign producer classes do not ship stubbed.
-
-    P30-I20-W06 owns wiring the live campaign producer. This W05 guard is scoped
-    to the producer *class* seam: if the class is absent (current pre-W06 tree),
-    there is nothing to judge; once a ``*Campaign*Producer*`` class lands, any
-    ``NotImplementedError`` / ``pass`` / ellipsis marker inside its class body
-    fails this always-on gate before the stub can close a phase.
-
-    Args:
-        module_text: Optional injected research module source.
-        module_path: Repo-relative research module path to scan.
-
-    Returns:
-        A :class:`GateResult` that fails only when a campaign producer class
-        contains an obvious stub marker.
-    """
-    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
-    stubbed: list[str] = []
-    for match in _CAMPAIGN_PRODUCER_CLASS_RE.finditer(text):
-        if _PRODUCER_STUB_RE.search(match.group("body")) is not None:
-            stubbed.append(match.group("name"))
-    if stubbed:
-        return GateResult(
-            passed=False,
-            failure=GateFailure.CAMPAIGN_PRODUCER_STUB_IDLE,
-            message=(
-                "campaign producer class seam is stubbed: "
-                f"{', '.join(stubbed)} contains pass/ellipsis/NotImplementedError"
-            ),
-        )
-    return GateResult(
-        passed=True,
-        failure=None,
-        message=("idle-contract gate: ok (campaign producer class seams carry no stub markers)"),
     )
 
 

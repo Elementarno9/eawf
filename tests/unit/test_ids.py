@@ -21,31 +21,6 @@ def test_project_code_rejects(code: str) -> None:
     assert not ids.is_project_code(code)
 
 
-def test_phase_id_format() -> None:
-    assert ids.is_phase_id("P01")
-    assert ids.is_phase_id("P13")
-    # 3-digit ids accepted per the AGENTS ``\d{2,}`` widening so the queue
-    # can grow past P99 without re-fitting the grammar.
-    assert ids.is_phase_id("P100")
-    assert not ids.is_phase_id("P1")
-    assert not ids.is_phase_id("P13-I04")
-
-
-def test_iter_id_format() -> None:
-    assert ids.is_iter_id("P13-I04")
-    assert ids.is_iter_id("P100-I100")
-    assert not ids.is_iter_id("P13")
-    assert not ids.is_iter_id("P13-I04-W01")
-
-
-def test_wave_id_format() -> None:
-    assert ids.is_wave_id("P13-I04-W01")
-    assert ids.is_wave_id("P01-I02-W99")
-    assert ids.is_wave_id("P100-I100-W100")
-    assert not ids.is_wave_id("P13-I04")
-    assert not ids.is_wave_id("P13-I04-W1")
-
-
 def test_hypothesis_id_format() -> None:
     assert ids.is_hypothesis_id("H03-12")
     assert ids.is_hypothesis_id("H01-01")
@@ -54,24 +29,6 @@ def test_hypothesis_id_format() -> None:
     assert not ids.is_hypothesis_id("H1-01")
     assert not ids.is_hypothesis_id("H03-1")
     assert not ids.is_hypothesis_id("H03_12")
-
-
-def test_parents_of_phase_is_empty() -> None:
-    assert ids.parents_of("P03") == ()
-
-
-def test_parents_of_iter() -> None:
-    assert ids.parents_of("P03-I02") == ("P03",)
-
-
-def test_parents_of_wave() -> None:
-    parents = ids.parents_of("P13-I04-W01")
-    assert parents == ("P13", "P13-I04")
-
-
-def test_parents_of_invalid_raises() -> None:
-    with pytest.raises(ValueError):
-        ids.parents_of("not-an-id")
 
 
 def test_natural_key_orders_phases_numerically() -> None:

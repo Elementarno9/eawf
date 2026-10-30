@@ -51,10 +51,7 @@ RC1_KEY: Final = f"REL-{RC1_VERSION}"
 PROFILE: Final = ReleaseGateProfile.FLAG_DAY
 
 #: The test files the flag-day proof runs.
-FLAG_DAY_PROOF_FILES: Final = (
-    "tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py",
-    "tests/contract/surfaces/cli/test_rel_021_flag_day_census.py",
-)
+FLAG_DAY_PROOF_FILES: Final = ("tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py",)
 
 
 def binding_rows() -> list[dict[str, Any]]:

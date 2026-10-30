@@ -30,9 +30,7 @@ rather than reimplementing them:
 * dense ``[N]`` marker — :func:`citation_numbers_in_text` (the prose
   ``[N]`` scanner backing :func:`validate_dense_citation_refs`).
 * URN grammar — :func:`eawf.kernel.state.urn.parse` (shape-only parse).
-* disk-exists — ``(project_root / ref).is_file()`` (the same
-  ``Path.is_file`` lookup :func:`eawf.kernel.spec.heuristics.missing_test_paths`
-  performs against a project root).
+* disk-exists — ``(project_root / ref).is_file()``.
 
 Deferred (open question OQ-R)
 -----------------------------
@@ -261,8 +259,7 @@ def _check_disk_exists(ref: str, *, project_root: Path) -> ResolveResult:
     """Confirm *ref* resolves to an existing regular file under *project_root*.
 
     Strips an optional trailing ``:<line>`` anchor before the
-    ``Path.is_file`` lookup (the same lookup
-    :func:`eawf.kernel.spec.heuristics.missing_test_paths` performs). When an
+    ``Path.is_file`` lookup. When an
     anchor was present, :attr:`DeferredAspect.FILE_LINE_ANCHOR` is
     attached because line-existence is not verified this wave (OQ-R).
 

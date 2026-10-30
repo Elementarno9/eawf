@@ -43,7 +43,6 @@ from uuid import UUID
 
 import pytest
 
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.release.waiver import ReleaseWaiver, WaiverDisposition
 from eawf.kernel.spec.release import (
     Release,
@@ -53,7 +52,7 @@ from eawf.kernel.spec.release import (
 from eawf.kernel.spec.release_config import ReleaseConfig, ReleaseGateName, load_release_config
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import approve, create
-from eawf.workflow.evidence._io import load_state
+from eawf.workflow.evidence._io import ContractView
 from eawf.workflow.evidence.measured_contract import (
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -93,6 +92,7 @@ from eawf.workflow.verify.release_readiness import (
     WaiverAcknowledgement,
     compute_readiness,
 )
+from tests._contract_view import contract_view
 from tests._epoch2_helpers import lay_contract_tree
 from tests._release_helpers import dev1_adoption, dev1_config, dev1_draft
 
@@ -255,9 +255,9 @@ def cut_tree(tmp_path: Path) -> Path:
     return repo
 
 
-def _admitting_state() -> State:
+def _admitting_state() -> ContractView:
     """Return the fixture state with every dev2 measured contract promoted."""
-    state = load_state(_EMPTY_STATE)
+    state = contract_view(_EMPTY_STATE)
     for contract_id in required_contract_ids(DEV2_VERSION):
         promote_measured_contract(
             state,

@@ -47,7 +47,6 @@ from eawf.runtime.daemon.epoch2_root import (
     canonical_entity_urn,
 )
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.state_context import resolve_mutator_paths
 from eawf.runtime.daemon.wal import WalRecord, list_records, write_pending
 from eawf.runtime.lock.portalock import LockTimeout
 
@@ -247,30 +246,6 @@ def test_one_root_through_two_spellings_shares_one_context(
     aliased = ctx.native_root_context(alias / ".ea")
     assert aliased is direct
     assert len(ctx.native_roots) == 1
-
-
-def test_native_roots_leave_epoch1_resolution_unchanged(tmp_path: Path, twins: Twins) -> None:
-    production = tmp_path / "production"
-    (production / ".ea").mkdir(parents=True)
-    state_path = production / ".ea" / "state.json"
-    state_path.write_text('{"schema_version": "1.20"}\n', encoding="utf-8")
-    wal_dir = tmp_path / "runtime" / "wal"
-    ctx = MethodContext(
-        started_at="2026-01-01T00:00:00+00:00",
-        pid=1,
-        protocol_version="1",
-        version="test",
-        state_path=state_path,
-        wal_dir=wal_dir,
-    )
-    bound_before = resolve_mutator_paths(repo_root=None, ctx=ctx)
-    routed_before = resolve_mutator_paths(repo_root=str(production), ctx=ctx)
-    ctx.native_root_context(twins.first_tree)
-    ctx.native_root_context(twins.second_tree)
-    assert resolve_mutator_paths(repo_root=None, ctx=ctx) == bound_before
-    assert resolve_mutator_paths(repo_root=str(production), ctx=ctx) == routed_before
-    assert bound_before == (state_path, state_path.parent / "store" / "event.jsonl", wal_dir)
-    assert (ctx.state_path, ctx.wal_dir, ctx.idempotency_cache) == (state_path, wal_dir, None)
 
 
 def _leak_entity_locks(tree: Path, count: int) -> list[Path]:

@@ -3,12 +3,9 @@
 A PhaseSpec is the durable intent document for a phase: outcome
 statement, KPI targets, success/failure modes, ship-criteria gates,
 effort envelope, iter membership, and cross-cites to the verdicts the
-phase implements. The companion runtime state row
-(:class:`eawf.kernel.state.models.Phase`) tracks reality (status, claim/close
-times, agent attempts); the spec describes intent.
-
-The spec validators (PSV-01..PSV-06) live in the loader and the
-``eawf phase spec validate`` CLI; this module ships only the schema
+phase implements. The epoch-1 runtime row tracked reality (status,
+claim/close times, agent attempts) and survives only as an imported
+record; the spec describes intent. This module ships only the schema
 shape + structural invariants enforceable inside Pydantic.
 """
 

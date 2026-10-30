@@ -9,29 +9,23 @@ What this module still serves:
   in a child bound to a throwaway sandbox rather than in this process.
 * :func:`load_active_verify_block` resolves the ``verify`` block the enabled
   profiles and the repository's ``verify.*`` leaves declare.
-* :func:`resolve_wave_verify_block` bands one wave's verify block, and
-  :func:`legacy_criterion_count` counts its grandfathered criteria; the
-  idle-contract and measurable-criterion tools call both.
+* :func:`legacy_criterion_count` counts the grandfathered criteria of a
+  criterion list.
 * :func:`wired_audit_dsl_kinds` names every audit-DSL kind a gate can run.
 """
 
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from eawf.kernel.config.schema import VerifyConfig
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.common import (
     GRANDFATHERED_KIND,
     CriterionSpec,
     GateSpec,
 )
-from eawf.kernel.spec.heuristics import is_ui_scope
-from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
-from eawf.kernel.state.models import Wave
 from eawf.platform.profiles.models import VerifyBlock
 from eawf.workflow.audit_dsl.models import CheckSpec, GateFreshnessInput
 from eawf.workflow.verify.compile import compile_gate
@@ -199,7 +193,7 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     """Merge active profile verify blocks into one effective block.
 
     Union-merges the list-valued fields (``floor_checks`` concatenated;
-    ``argv_allowlist`` / ``uiux_bands`` / ``jury_vendors`` deduplicated,
+    ``argv_allowlist`` / ``jury_vendors`` deduplicated,
     first-occurrence order preserved), OR-folds the boolean gating bits
     (``enforce`` / ``cross_vendor_jury`` / ``odr_blocking``), and takes the
     last contributor's scalar dials (``timeout_class_seconds``,
@@ -209,9 +203,7 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     scalar dials are last-contributor-wins, a
     downstream profile that sets ``checkpoint.checkpoint_mode: barrier`` overrides
     an upstream ``optimistic`` block. The merged ``enforce`` is the *fleet*
-    opt-in; band-conditional resolution (:func:`resolve_wave_verify_block`)
-    narrows it per wave at the close seam so a single enforcing profile does
-    not gate every wave.
+    opt-in.
 
     The merge rebuilds the block field by field, so EVERY field the model carries
     has to be listed here: one left out is silently reset to its default, and a
@@ -227,8 +219,6 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     floor_checks = []
     argv_allowlist: list[str] = []
     seen_argv: set[str] = set()
-    uiux_bands: list[str] = []
-    seen_bands: set[str] = set()
     jury_vendors: list[str] = []
     seen_vendors: set[str] = set()
     timeout_class_seconds: dict[Literal["quick", "standard", "slow", "very_slow"], int] = {}
@@ -252,11 +242,6 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
                 continue
             argv_allowlist.append(argv_head)
             seen_argv.add(argv_head)
-        for band in block.uiux_bands:
-            if band in seen_bands:
-                continue
-            uiux_bands.append(band)
-            seen_bands.add(band)
         for vendor in block.jury_vendors:
             if vendor in seen_vendors:
                 continue
@@ -276,7 +261,6 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
         enforce=enforce,
         cross_vendor_jury=cross_vendor_jury,
         juror_wall_clock_seconds=juror_wall_clock_seconds,
-        uiux_bands=uiux_bands,
         jury_vendors=jury_vendors,
         odr_floor=odr_floor,
         odr_blocking=odr_blocking,
@@ -322,8 +306,6 @@ def _enabled_profile_ids(
 
 
 def _load_active_verify_block(
-    scope_id: str,
-    state: State | None,
     *,
     repo_root: Path,
     config_root: Path | None = None,
@@ -336,10 +318,6 @@ def _load_active_verify_block(
     folds the present ``verify`` leaves into one effective block.
 
     Args:
-        scope_id: Wave / iter / phase URN. Reserved for future per-scope
-            profile attachments.
-        state: Validated state model. Reserved for future per-scope
-            profile attachments.
         repo_root: Repository root used when no separate config root is
             supplied.
         config_root: Optional config/profile-discovery anchor. Close
@@ -351,7 +329,6 @@ def _load_active_verify_block(
         Merged :class:`VerifyBlock`, or ``None`` when no enabled
         profile contributes one.
     """
-    del scope_id, state  # reserved for scoped profile attachments
     from eawf.kernel.config.layered import merge_config
     from eawf.platform.profiles.loader import load_profile
 
@@ -467,16 +444,12 @@ def _overlay_repo_verify_leaves(
 
 
 def load_active_verify_block(
-    scope_id: str,
-    state: State | None,
     *,
     repo_root: Path,
     config_root: Path | None = None,
 ) -> VerifyBlock | None:
     """Return the active merged verify block through strict config loading."""
     return _load_active_verify_block(
-        scope_id,
-        state,
         repo_root=repo_root,
         config_root=config_root,
         strict_config=True,
@@ -494,186 +467,6 @@ def load_active_verify_block(
 #: T2 structural) so :func:`assign_oracle_tier` is total over them; the seam is
 #: now empty because every registered kind has a canonical tier.
 _SUPPLEMENTAL_GATE_KIND_TIERS: dict[str, str] = {}
-
-
-#: Gate kinds whose ground truth needs a jury: a cross-vendor jury vote, or a
-#: UI / visual surface whose final oracle is the visual jury. A wave carrying
-#: one keeps enforcement outside a UI band.
-_JURY_GATE_KINDS: frozenset[str] = frozenset(
-    {
-        "jury_verdict",
-        "cross_vendor_jury",
-        "tui_flow",
-        "svg_well_formed",
-        "svg_pixel_diff",
-        "mockup_golden_diff",
-        "affordance_parity",
-        "transition_coverage",
-    }
-)
-
-
-#: Effort buckets large enough that a fresh auditor verdict is mandatory.
-_HIGH_RISK_EFFORT: frozenset[EffortBucket] = frozenset({EffortBucket.L, EffortBucket.XL})
-
-
-#: Roles whose output is a judgment artifact a fresh auditor must confirm,
-#: not a mechanical edit.
-_JUDGMENT_ROLES: frozenset[AgentSessionRole] = frozenset(
-    {
-        AgentSessionRole.AUDITOR,
-        AgentSessionRole.REVIEWER,
-        AgentSessionRole.PLANNER,
-        AgentSessionRole.RESEARCHER,
-        AgentSessionRole.DOMAIN_SPECIALIST,
-        AgentSessionRole.OPERATOR,
-    }
-)
-
-
-#: Keywords that make a wave security-scoped when its title or a success
-#: criterion names one as a whole word.
-_SECURITY_KEYWORDS: tuple[str, ...] = (
-    "security",
-    "sandbox",
-    "auth",
-    "egress",
-    "secret",
-    "jail",
-    "scrub",
-)
-
-
-def _wave_in_uiux_band(wave: Wave, bands: list[str]) -> bool:
-    """Return whether *wave* is in a UI/UX band.
-
-    A wave is banded when its ``file_scopes`` are UI surface, or when a token
-    in *bands* matches a whole word of the wave id or title, case-insensitively.
-    The whole-word match keeps ``"ui"`` from arming on ``"build"`` or ``"quiz"``.
-
-    Args:
-        wave: The wave being closed.
-        bands: The band tokens; an empty token never matches.
-
-    Returns:
-        ``True`` when either arm matches.
-    """
-    if is_ui_scope(wave.file_scopes):
-        return True
-    corpus = f"{wave.id}\n{wave.title}".lower()
-    return any(token and re.search(rf"\b{re.escape(token.lower())}\b", corpus) for token in bands)
-
-
-def _verdict_always_required(wave: Wave) -> bool:
-    """Return whether *wave* needs a fresh auditor verdict unconditionally.
-
-    A large effort bucket, a judgment-heavy role, or a security keyword in the
-    title or success criteria makes the verdict mandatory. A hyphen counts as
-    part of a word, so a wave code such as ``"AUTH-3"`` does not arm ``"auth"``.
-
-    Args:
-        wave: The wave being closed.
-
-    Returns:
-        ``True`` when any high-risk signal is present.
-    """
-    if wave.effort_bucket in _HIGH_RISK_EFFORT or wave.agent_role in _JUDGMENT_ROLES:
-        return True
-    corpus = "\n".join([wave.title, *(c.text for c in wave.success_criteria)]).lower()
-    return any(
-        re.search(rf"(?<![\w-]){re.escape(keyword)}(?![\w-])", corpus)
-        for keyword in _SECURITY_KEYWORDS
-    )
-
-
-def resolve_wave_verify_block(
-    verify_block: VerifyBlock | None,
-    wave: Wave,
-) -> VerifyBlock | None:
-    """Resolve the merged verify block to its band-conditional form for *wave*.
-
-    A profile opts into **band-scoped** enforcement by declaring a non-empty
-    :attr:`~eawf.platform.profiles.models.VerifyBlock.uiux_bands`. For such a
-    block, verify enforcement is conditional on the wave's UI/UX band rather
-    than a fleet-wide flip: the merged block records the *intent*
-    (``enforce: true`` + ``cross_vendor_jury: true``), and this resolver
-    turns it on or off per wave:
-
-    * a **band** wave (UI-surface ``file_scopes`` OR a ``uiux_bands`` token
-      match, per :func:`_wave_in_uiux_band`)
-      keeps the merged block's enforcement bits as authored -- so a
-      band-scoped profile resolves to ``enforce=True`` +
-      ``cross_vendor_jury=True`` and the close routes through the gate;
-    * a **fleet high-risk** wave (it carries a jury / cross-vendor /
-      visual-band gate, per :data:`_JURY_GATE_KINDS`) ALSO keeps enforcement
-      on even when it is NOT in a UI band: a jury-gated wave's ground truth
-      needs the jury, so narrowing its ``enforce`` to advisory-only would let
-      a high-risk close slip the gate. The band narrowing is for low-risk
-      non-band waves, never for a wave whose own gate set demands a jury;
-    * a **verdict-always** wave (per :func:`_verdict_always_required`:
-      a large effort bucket, a judgment-heavy ``agent_role``, or a
-      security-scoped surface) ALSO keeps enforcement on even when it is
-      neither in a UI band nor gate-classified high-risk: a fresh auditor
-      verdict is mandatory for such a wave, so narrowing its ``enforce`` to
-      advisory-only would de-scope the very gate that produces that verdict.
-      This is the third preservation arm -- the band narrowing must never
-      down-grade a wave whose verdict is required unconditionally;
-    * a **non-band, non-high-risk, non-verdict-always** wave resolves to
-      ``enforce=False`` and no jury. The close gate still scores such a wave's
-      decisive deterministic gates and holds it to the receipt floor, because
-      the merged block enforces; the narrowing withdraws only the auditor and
-      the jury.
-
-    A block that does NOT declare ``uiux_bands`` is a whole-fleet enforce
-    profile (the pre-W06 shape) and is returned untouched: its operator
-    deliberately gates every wave, so there is no band to narrow to. A
-    ``None`` input (no active profile contributes a verify block) and a
-    fleet-advisory block (``enforce=False``) likewise pass through unchanged.
-
-    The list-valued config (``uiux_bands`` / ``jury_vendors`` /
-    ``floor_checks`` / ``argv_allowlist``) and the ``waiver_mode`` /
-    ``timeout_class_seconds`` overrides are carried through untouched; only
-    the two gating booleans are wave-conditional.
-
-    Args:
-        verify_block: The fleet-merged active verify block, or ``None``.
-        wave: The wave being closed -- read for ``file_scopes`` / ``id`` /
-            ``title`` band membership only.
-
-    Returns:
-        The band-conditional :class:`VerifyBlock` for *wave*, or ``None``
-        when the input was ``None``.
-    """
-    if verify_block is None or not verify_block.enforce:
-        return verify_block
-    if not verify_block.uiux_bands:
-        # Not band-scoped -- a whole-fleet enforce profile gates every wave.
-        return verify_block
-    if _wave_in_uiux_band(wave, verify_block.uiux_bands):
-        return verify_block
-    # Band check failed -- but a wave whose OWN gate set needs a jury must
-    # keep enforcement even outside a UI band: narrowing it to advisory would
-    # let a high-risk close slip the gate.
-    if any(gate.kind in _JURY_GATE_KINDS for gate in wave.gates):
-        logger.debug(
-            f"resolve_wave_verify_block wave={wave.id!r} band=False jury_gate=True enforce=True"
-        )
-        return verify_block
-    # A wave that needs a fresh auditor verdict unconditionally keeps
-    # enforcement too: narrowing it would de-scope the gate that produces
-    # that verdict. Only mechanical non-band waves fall through to advisory.
-    if _verdict_always_required(wave):
-        logger.debug(
-            f"resolve_wave_verify_block wave={wave.id!r} band=False "
-            f"verdict_always=True enforce=True"
-        )
-        return verify_block
-    narrowed = verify_block.model_copy(update={"enforce": False, "cross_vendor_jury": False})
-    logger.debug(
-        f"resolve_wave_verify_block wave={wave.id!r} band=False "
-        f"enforce={narrowed.enforce} cross_vendor_jury={narrowed.cross_vendor_jury}"
-    )
-    return narrowed
 
 
 def legacy_criterion_count(criteria: list[CriterionSpec]) -> int:
@@ -715,8 +508,7 @@ def wired_audit_dsl_kinds() -> frozenset[str]:
       name (``tui_flow``);
     * membership in
       :data:`eawf.workflow.audit_dsl.registry.CLOSE_GATE_KINDS` -- a
-      state-scoring close gate this module drives directly
-      (``backlog_resolution``, run by :func:`_build_backlog_resolution_view`).
+      state-scoring close gate the close path drives directly.
 
     The BIND-1 idle-contract meta-gate compares this wired set against
     the full registered set: any registered kind absent here ships
@@ -735,6 +527,5 @@ def wired_audit_dsl_kinds() -> frozenset[str]:
 __all__ = [
     "legacy_criterion_count",
     "load_active_verify_block",
-    "resolve_wave_verify_block",
     "wired_audit_dsl_kinds",
 ]

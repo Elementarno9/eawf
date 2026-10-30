@@ -279,8 +279,6 @@ Allowed v0.1 behavior:
 - ask before overwriting any generated target,
 - preserve all existing reports, briefs, incidents, milestones, data manifests, run links, and domain docs.
 
-Deferred: all `eawf migrate *` commands.
-
 Decision: do not implement non-Eä migration commands until enough real Eä usage exposes stable patterns.
 
 ## Cross-references

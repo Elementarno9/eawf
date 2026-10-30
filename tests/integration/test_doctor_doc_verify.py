@@ -185,4 +185,4 @@ def test_doc_verify_cli_refuses_an_epoch1_tree(tmp_path: Path) -> None:
     (repo / ".ea" / "state.json").write_text("{}", encoding="utf-8")
     result = CliRunner().invoke(app, ["-w", str(repo), "doc", "verify"])
     assert result.exit_code == 4, result.output
-    assert "epoch-1 tree" in result.output
+    assert "holds no epoch-2 generation" in result.output

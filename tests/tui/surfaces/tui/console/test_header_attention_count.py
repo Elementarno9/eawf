@@ -501,7 +501,7 @@ def test_native_route_rows_hold_no_batch_when_the_ledger_is_empty(tmp_path: Path
 def test_stuck_migration_entry_shows_the_repair_command(tmp_path: Path) -> None:
     """The entry layer draws from the chrome, so a live console shows the command."""
     chrome = load_chrome()
-    state = interrupted_state(chrome, tmp_path, (), why="the epoch marker does not parse")
+    state = interrupted_state(chrome, (), why="the epoch marker does not parse")
     chrome = with_entry_state(chrome, state)
     session = Session()
     session.route = "entry"
@@ -511,16 +511,8 @@ def test_stuck_migration_entry_shows_the_repair_command(tmp_path: Path) -> None:
     rows = render_route(view)
 
     assert not any("NOT HELD" in row for row in rows)
-    assert state.commands[0] == f"eawf migrate epoch2 --recover --target-root {tmp_path}"
+    assert state.commands[0] == "eawf help upgrade-from-0.6"
     assert "MIGRATION REQUIRED" in rows[0]
-
-
-def test_repair_commands_quote_a_target_root_holding_a_space(tmp_path: Path) -> None:
-    """A path the shell would split is quoted, so the shown command runs as printed."""
-    root = tmp_path / "a tree"
-    state = interrupted_state(load_chrome(), root, (), why="stopped")
-    assert state.commands[0].endswith(f"--recover --target-root '{root}'")
-    assert state.commands[-1].endswith(f"--rollback --target-root '{root}'")
 
 
 def test_with_entry_state_refuses_an_unknown_entry_state() -> None:

@@ -22,15 +22,13 @@ import os
 import re
 import shutil
 import sys
-import uuid
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from eawf.kernel.state.models import SessionAttempt, Wave
+from eawf.kernel.state.models import SessionAttempt
 from eawf.platform.process_liveness import (
     hold_process_handle,
     process_group_id,
@@ -47,7 +45,6 @@ from eawf.runtime.runtimes.adapter import (
     acquire_spawn_slot,
     release_spawn_slot,
 )
-from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.selector import runtime_supports
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.runtime.sandbox.egress_proxy import (
@@ -57,9 +54,6 @@ from eawf.runtime.sandbox.egress_proxy import (
 )
 from eawf.runtime.sandbox.env_scrub import build_child_env, resolve_binary_dir
 from eawf.runtime.sandbox.jail import jail_command, jail_supported
-
-if TYPE_CHECKING:
-    from eawf.workflow.agents.specs.models import RoleContract
 
 logger = logging.getLogger(__name__)
 
@@ -585,62 +579,6 @@ class OpenCodeAdapter:
         "RUNTIME_AUTH_ERROR",
     )
 
-    async def open_session(
-        self,
-        wave: Wave,
-        prompt: str,
-        *,
-        cache_prefix: str | None = None,
-        model_hint: str | None = None,
-        role_contract: RoleContract | None = None,
-    ) -> SessionAttempt:
-        """Construct a fresh-session :class:`SessionAttempt` row.
-
-        ``cache_prefix`` is routed through
-        :func:`~eawf.runtime.runtimes.cache_control.inject_cache_control` for
-        boundary parity, but OpenCode is a **no-op path**: the bundled
-        ``@ai-sdk/anthropic`` provider injects ``cache_control``
-        internally and the OAuth-Claude path strips any caller-side
-        marker (upstream ``#17910``), so the eawf adapter has no
-        caller-side knob and returns the prefix unchanged.
-
-        The optional *role_contract* keyword carries the typed
-        :class:`~eawf.workflow.agents.specs.models.RoleContract`
-        projection of the dispatched wave's role. When present the
-        spawn seam reads its ``system_prompt`` / ``allowed_tools`` /
-        ``model`` fields rather than a hardcoded executor preamble;
-        today the adapter only debug-logs the attach so callers can
-        observe the seam wire-up, and the live ``opencode run`` spawn
-        in P26-SURFACES consumes the contract to materialise the
-        per-session ``.opencode/agent/<role>.md`` linkage. ``None``
-        (the default) keeps the spawn byte-equivalent to the pre-W13
-        surface.
-        """
-
-        injected_prefix = inject_cache_control(
-            runtime_id=self.id,
-            cache_prefix=cache_prefix,
-        )
-        if injected_prefix is not None:
-            logger.debug(f"open_session runtime={self.id!r} cache_control=no_op")
-        if role_contract is not None:
-            logger.debug(
-                f"open_session runtime={self.id!r} role={role_contract.role!r} "
-                f"allowed_tools={len(role_contract.allowed_tools)} "
-                f"denied_tools={len(role_contract.denied_tools)} "
-                f"model={role_contract.model!r}"
-            )
-        session_id = str(uuid.uuid4())
-        attempts = sorted(wave.sessions)
-        next_attempt = (max(attempts) + 1) if attempts else 1
-        return SessionAttempt(
-            attempt=next_attempt,
-            runtime=self.id,
-            session_id=session_id,
-            session_log_handle=self.session_log_handle(session_id),
-            started_at=datetime.now(UTC),
-        )
-
     async def spawn_session(
         self,
         prompt: str,
@@ -869,7 +807,7 @@ class OpenCodeAdapter:
         Per :attr:`accepts_continue` = ``False`` the daemon does not
         normally invoke this path; if it does the adapter raises
         :class:`SessionResumeFailedError` so the caller falls back to
-        :meth:`open_session`.
+        a fresh spawn.
 
         Raises:
             SessionResumeFailedError: OpenCode adapter does not support

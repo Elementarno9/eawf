@@ -165,7 +165,11 @@ class ReleaseGateName(StrEnum):
         DEPENDENCY_INVENTORY: The lock-derived dependency inventory.
         ARTIFACT_REPRODUCIBILITY: Digest equality across clean builds.
         SECURITY_REVIEW: The vulnerability report and its blocking flag.
-        EPOCH1_STABILIZATION: The epoch-1 stabilization proof command.
+        EPOCH1_STABILIZATION: The whole-suite proof command under the
+            name the dev1 to rc4 rungs settled it by. Kept so their
+            configurations and stored receipts still load; the stable
+            profile runs :attr:`FULL_SUITE` instead.
+        FULL_SUITE: The whole-suite proof command of the stable profile.
         TELEMETRY_PRODUCER: The telemetry-producer proof command.
         FRONT_DOOR_JOURNEY: The install-smoke journey proof command.
         MIGRATION: The four-leg cutover rehearsal over the whole corpus set.
@@ -205,6 +209,7 @@ class ReleaseGateName(StrEnum):
     ARTIFACT_REPRODUCIBILITY = "artifact_reproducibility"
     SECURITY_REVIEW = "security_review"
     EPOCH1_STABILIZATION = "epoch1_stabilization"
+    FULL_SUITE = "full_suite"
     TELEMETRY_PRODUCER = "telemetry_producer"
     FRONT_DOOR_JOURNEY = "front_door_journey"
     MIGRATION = "migration"

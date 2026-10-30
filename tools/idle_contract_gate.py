@@ -1,18 +1,13 @@
-"""Deterministic idle-contract gate for the band-scoped verify block.
+"""Deterministic idle-contract gate.
 
 This repo has a history of building a verifier and then leaving it IDLE
 forever -- a dead gate that never runs (tracked as the B091 idle-verifier
-regression). The band-conditional resolver
-(:func:`eawf.workflow.verify.readiness.resolve_wave_verify_block`) and the
-shipped ``quality`` profile turn verify enforcement on for a non-empty UI/UX
-band. This gate makes "wired + band-scoped, not idle, not global" a CHECKED
-invariant rather than a hope.
+regression). This gate makes "wired, not idle" a CHECKED invariant rather
+than a hope.
 
-Four gates run from :func:`main`, in precedence order, and any failing
+The gates below run from :func:`main`, in precedence order, and any failing
 exits non-zero:
 
-- :func:`check_idle_contract` -- the original single B091 band contract
-  described below.
 - :func:`check_skill_body_binding` -- a *binding-proof* probe that drives a
   deliberately drifted dict body through ``run_skill`` and asserts the emit
   path RAISES ``pydantic.ValidationError``. The drift is an extra-forbid key
@@ -47,37 +42,14 @@ exits non-zero:
   spot behind EU capture passing while writing no rows. A jury-gated contract
   (the ballot) is skipped until the jury has convened at least once.
 
-Three independent contracts are asserted, in precedence order:
+The body-binding probe is a pure in-process object -- the gate never mutates
+state, never writes a file, never runs a mutating ``eawf`` command.
+:func:`check_skill_body_binding` takes the ``run_skill`` callable (defaulting
+to the live production value) so the failure mode is testable without editing
+the engine. Each check returns a typed :class:`GateResult` and the thin
+:func:`main` CLI maps them onto an exit code.
 
-- **not-idle** -- at least one shipped profile enables a verify band via a
-  non-empty :attr:`~eawf.platform.profiles.models.VerifyBlock.uiux_bands`
-  with :attr:`~eawf.platform.profiles.models.VerifyBlock.enforce` true. Band
-  enforcement that no profile wires on is idle-forever; this contract fails on
-  exactly that.
-- **band-scoped (not global)** -- for that band-enabling profile,
-  :func:`resolve_wave_verify_block` resolves to ``enforce=True`` for a UI-scope
-  probe wave (``file_scopes`` under ``src/eawf/surfaces/tui/`` or
-  ``.../render/``) AND to ``enforce=False`` for a non-UI probe wave (e.g.
-  ``src/eawf/kernel/...``). A profile that flips enforcement on fleet-wide
-  fails this contract because it would gate every wave, not just the band.
-- **emit-validation not-idle** -- a drifted dict body (an extra-forbid key on a
-  registered body model) driven through ``run_skill`` RAISES
-  ``pydantic.ValidationError`` before the envelope is built. A regression that
-  drops the emit-time body-validation chokepoint would emit the drift silently;
-  this contract (:func:`check_skill_body_binding`) fails on exactly that.
-
-Both band-probe waves and the body-binding probe are pure in-process objects --
-the gate never mutates state, never writes a file, never runs a mutating
-``eawf`` command.
-
-The checks are injectable: :func:`check_idle_contract` takes the candidate
-profile list and the resolver as parameters, and
-:func:`check_skill_body_binding` takes the ``run_skill`` callable (each
-defaulting to the live production value) so the failure modes are testable
-without editing shipped profiles or the engine. Each returns a typed
-:class:`GateResult` and the thin :func:`main` CLI maps them onto an exit code.
-
-This module keeps the band contract, the dynamic-exercise leg, and :func:`main`;
+This module keeps the dynamic-exercise leg and :func:`main`;
 the other checks live in sibling modules it re-exports: ``idle_contract_probes``
 (in-process binding probes), ``idle_contract_wiring`` (source-scan and liveness
 checks), ``idle_contract_meta`` (the meta-gate), and ``idle_contract_common``
@@ -88,10 +60,8 @@ Invocation:
     uv run tools/idle_contract_gate.py
 
 Exit codes:
-- ``0`` -- a profile enables verify enforcement for a non-empty band that
-  resolves band-scoped (not global), AND the emit-time body validation rejects
-  a drifted body, AND all I03 probes fire, AND no newly-defined contract in the
-  staged diff ships idle.
+- ``0`` -- the emit-time body validation rejects a drifted body, AND all I03
+  probes fire, AND no newly-defined contract in the staged diff ships idle.
 - ``1`` -- a contract failed (the failure is named on stderr).
 """
 
@@ -108,17 +78,10 @@ from eawf.kernel.spec.common import _tier_for_gate_kind
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
     ReportSource,
-    WaveStatus,
 )
-from eawf.kernel.state.models import Wave
-from eawf.platform.profiles.loader import list_profiles, load_profile
-from eawf.platform.profiles.models import ProfileBody, VerifyBlock
 from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY, registered_audit_dsl_kinds
 from eawf.workflow.skills.engine import run_skill as _run_skill
-from eawf.workflow.verify.readiness import (
-    resolve_wave_verify_block,
-    wired_audit_dsl_kinds,
-)
+from eawf.workflow.verify.readiness import wired_audit_dsl_kinds
 
 # The sibling modules below live beside this file, not in an installed package;
 # a caller that imports this gate as ``tools.idle_contract_gate`` or by file path
@@ -128,13 +91,10 @@ if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 
 from idle_contract_common import (  # noqa: E402
-    _NON_UI_SCOPE,
-    _PROBE_OPENED_AT,
     _REPO_ROOT,
-    _UI_SCOPE,
-    GateFailure,
     GateResult,
 )
+from idle_contract_common import GateFailure as GateFailure  # noqa: E402
 from idle_contract_meta import (  # noqa: E402
     IdleContractFinding,
     MissingDischarge,
@@ -167,7 +127,6 @@ from idle_contract_wiring import (  # noqa: E402
 )
 from idle_contract_wiring import (  # noqa: E402
     check_audit_dsl_kinds_wired,
-    check_campaign_producer_class_non_stub,
     check_console_app_construction_wired,
     check_coverage_gate_helpers_wired,
     check_eawf023_artifact_placement_wired,
@@ -176,150 +135,6 @@ from idle_contract_wiring import (  # noqa: E402
     check_runtime_gate_is_not_idle,
     check_validate_jury_cli_wired,
 )
-
-#: A resolver with the shape of
-#: :func:`eawf.workflow.verify.readiness.resolve_wave_verify_block`. Injected so
-#: the global-flip failure mode is testable with a stub resolver that returns
-#: an always-enforcing block.
-type ResolveFn = Callable[[VerifyBlock | None, Wave], VerifyBlock | None]
-
-
-def _make_probe_wave(*, scope: str) -> Wave:
-    """Build a pure in-process probe :class:`Wave` whose only varying axis is *scope*.
-
-    The wave is never persisted and never mutated; it exists only so
-    :func:`resolve_wave_verify_block` can be asked how it bands a given file
-    scope. The id / title are deliberately neutral (no ``uiux_bands`` token
-    substring) so band membership is decided by the structural ``file_scopes``
-    arm alone -- the gate can then assert the UI / non-UI split unambiguously.
-
-    Args:
-        scope: The single repo-relative file scope the probe wave declares.
-
-    Returns:
-        A validated :class:`Wave` with ``file_scopes=[scope]``.
-    """
-    return Wave(
-        id="P00-I01-W01",
-        iter_id="P00-I01",
-        title="idle-contract probe wave",
-        status=WaveStatus.PENDING,
-        file_scopes=[scope],
-        opened_at=_PROBE_OPENED_AT,
-    )
-
-
-def _band_enabling_profiles(profiles: Sequence[ProfileBody]) -> list[ProfileBody]:
-    """Return the profiles that enable verify enforcement for a real band.
-
-    A profile enables a band when its ``verify`` block declares a
-    non-empty :attr:`~eawf.platform.profiles.models.VerifyBlock.uiux_bands`
-    AND :attr:`~eawf.platform.profiles.models.VerifyBlock.enforce` is true: the
-    band list is the structural opt-in and ``enforce`` is the gating bit the
-    resolver narrows per wave. A profile with an empty band list (or
-    ``enforce=False``, or no verify block at all) leaves band enforcement idle.
-
-    Args:
-        profiles: The candidate profile bodies to scan.
-
-    Returns:
-        The subset of *profiles* whose verify block enables a non-empty band
-        with enforcement on.
-    """
-    return [
-        profile
-        for profile in profiles
-        if profile.verify is not None and profile.verify.enforce and profile.verify.uiux_bands
-    ]
-
-
-def _load_shipped_profiles() -> list[ProfileBody]:
-    """Load every shipped (built-in) profile body.
-
-    Returns:
-        The validated :class:`ProfileBody` for each id from
-        :func:`eawf.platform.profiles.loader.list_profiles`, in id order.
-    """
-    return [load_profile(profile_id) for profile_id in list_profiles()]
-
-
-def check_idle_contract(
-    *,
-    profiles: Sequence[ProfileBody] | None = None,
-    resolve_fn: ResolveFn = resolve_wave_verify_block,
-) -> GateResult:
-    """Assert a profile enables a verify band and that it resolves band-scoped.
-
-    The two contracts are checked in precedence order:
-
-    1. **not-idle** -- at least one of *profiles* enables a verify band via a
-       non-empty ``uiux_bands`` with ``enforce=True`` (see
-       :func:`_band_enabling_profiles`). When no profile does, band
-       enforcement is idle-forever and the gate fails
-       :attr:`GateFailure.PRODUCER_IDLE`.
-    2. **band-scoped** -- for a band-enabling profile, *resolve_fn* resolves to
-       ``enforce=True`` for a UI-scope probe wave AND ``enforce=False`` for a
-       non-UI probe wave. A profile that resolves to ``enforce=True`` for the
-       non-UI probe enforces fleet-wide (it would gate every wave) and the gate
-       fails :attr:`GateFailure.BAND_ENFORCES_GLOBALLY`.
-
-    Args:
-        profiles: Candidate profile bodies. ``None`` loads the shipped
-            built-in profiles via :func:`_load_shipped_profiles`. Tests inject
-            a synthetic list to exercise the idle / global failure modes
-            without editing shipped profiles.
-        resolve_fn: The band-conditional resolver under test. Defaults to
-            :func:`eawf.workflow.verify.readiness.resolve_wave_verify_block`;
-            tests inject a stub to force the global-flip path.
-
-    Returns:
-        A :class:`GateResult` whose ``passed`` is ``True`` only when a
-        profile enables a non-empty band AND that band profile
-        resolves band-scoped (UI enforces, non-UI does not); otherwise
-        ``failure`` names the first violated contract.
-    """
-    candidate = list(profiles) if profiles is not None else _load_shipped_profiles()
-
-    band_profiles = _band_enabling_profiles(candidate)
-    if not band_profiles:
-        return GateResult(
-            passed=False,
-            failure=GateFailure.PRODUCER_IDLE,
-            message=(
-                "band enforcement is idle: no shipped profile enables a verify band "
-                "(a non-empty 'uiux_bands' with 'enforce: true')"
-            ),
-        )
-
-    ui_wave = _make_probe_wave(scope=_UI_SCOPE)
-    non_ui_wave = _make_probe_wave(scope=_NON_UI_SCOPE)
-    for profile in band_profiles:
-        ui_resolved = resolve_fn(profile.verify, ui_wave)
-        non_ui_resolved = resolve_fn(profile.verify, non_ui_wave)
-        ui_enforces = ui_resolved is not None and ui_resolved.enforce
-        non_ui_enforces = non_ui_resolved is not None and non_ui_resolved.enforce
-        if not ui_enforces or non_ui_enforces:
-            return GateResult(
-                passed=False,
-                failure=GateFailure.BAND_ENFORCES_GLOBALLY,
-                message=(
-                    f"band profile {profile.name!r} enforces globally, not band-scoped: "
-                    f"ui_scope enforce={ui_enforces} (expected True), "
-                    f"non_ui_scope enforce={non_ui_enforces} (expected False); "
-                    "a band profile must gate only UI/UX waves, never the whole fleet"
-                ),
-            )
-
-    band_names = ", ".join(sorted(profile.name for profile in band_profiles))
-    return GateResult(
-        passed=True,
-        failure=None,
-        message=(
-            f"idle-contract gate: ok (spec-jury producer wired on by [{band_names}]; "
-            "band resolves enforce=True for UI, enforce=False for non-UI)"
-        ),
-    )
-
 
 # =========================================================================== #
 # Dynamic-exercise leg: a bound contract must produce runtime output per phase.
@@ -630,9 +445,8 @@ def _resolve_diff_range(argv: list[str]) -> str:
 def main(argv: list[str]) -> int:
     """Run all idle-contract gates over the staged diff and current tree.
 
-    The original B091 single-contract check (:func:`check_idle_contract`) runs
-    first, then the emit-validation binding-proof probe
-    (:func:`check_skill_body_binding`), then the I03 contract probe
+    The emit-validation binding-proof probe
+    (:func:`check_skill_body_binding`) runs first, then the I03 contract probe
     (:func:`check_i03_contracts`), then the I09 jury-validation CLI
     binding probe (:func:`check_validate_jury_cli_wired`), then the runtime-gate binding
     check (:func:`check_runtime_gate_is_not_idle`), then the
@@ -664,8 +478,6 @@ def main(argv: list[str]) -> int:
     diff_range = _resolve_diff_range([arg for arg in argv if arg != "--phase-close"])
 
     failed = False
-    failed |= _report_result(check_idle_contract())
-
     # Pass the module-level run_skill explicitly so a test (or a future caller)
     # can patch it via attribute assignment -- a default-bound parameter would
     # snapshot the unpatched function at def time (see the same pattern below
@@ -683,14 +495,7 @@ def main(argv: list[str]) -> int:
     # working tree (not the monkeypatchable _default_read, so it stays immune
     # to the meta-gate's reader stub). A re-idle fails its row and reds the
     # gate.
-    #
-    # The P30-I20 campaign producer class seam is checked opportunistically: W06
-    # owns adding the class, and this row reds it if it lands as a stub.
-    for source_scan_check in (
-        check_validate_jury_cli_wired(),
-        check_campaign_producer_class_non_stub(),
-    ):
-        failed |= _report_result(source_scan_check)
+    failed |= _report_result(check_validate_jury_cli_wired())
 
     # P30-I20 honest-close rows: close the meta-gate holes for EAWF023's
     # single-path helper and the coverage-gate private matcher/runner. EAWF025

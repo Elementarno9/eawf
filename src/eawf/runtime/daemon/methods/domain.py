@@ -81,10 +81,6 @@ queued or working against the Task, and each release files a
 and actor, so an operator abort and a routine replan read differently
 afterwards.
 
-``domain.task.drop`` addressed by an epoch-1 key rather than a URN drops
-the backlog row the cutover imported under that key; the decision and the
-commit are in :mod:`eawf.runtime.daemon.methods.legacy_retire`.
-
 ``domain.milestone.cancel`` takes the Milestone's open work down with it in
 the same commit; the cascade is in
 :mod:`eawf.runtime.daemon.methods.milestone_maintenance`, beside the edit and
@@ -172,11 +168,6 @@ from eawf.runtime.daemon.methods.domain_guards import (
     GUARD_COMPUTERS,
     GuardInputs,
     milestone_activation_refusal,
-)
-from eawf.runtime.daemon.methods.legacy_retire import (
-    LegacyTaskDropParams,
-    names_legacy_row,
-    retire_legacy_task,
 )
 from eawf.runtime.daemon.methods.milestone_maintenance import cancel_with_cascade
 from eawf.runtime.daemon.methods.run import RUN_CONTROL_REQUEST_METHOD
@@ -1201,60 +1192,11 @@ def _register_verb(verb: LifecycleVerb) -> None:
     async def handler(
         ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
     ) -> dict[str, Any]:
-        if verb.method == TASK_DROP_METHOD and names_legacy_row(params.get("urn")):
-            return await _drop_legacy_row(ctx, params, authority)
         return await _run_verb(ctx, params, authority, verb=verb)
 
     handler.__name__ = verb.method.replace(".", "_")
     handler.__doc__ = f"Commit the {verb.method} edge on the addressed epoch-2 tree."
     native_mutator(verb.method)(handler)
-
-
-async def _drop_legacy_row(
-    ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
-) -> dict[str, Any]:
-    """Drop a backlog row the cutover imported, which has no native URN to address.
-
-    Args:
-        ctx: Server context, which owns the per-root native contexts and
-            the subscription bus.
-        params: The request parameters, less the routing key the fence
-            already consumed.
-        authority: The epoch-2 answer the fence resolved for the tree.
-
-    Returns:
-        The machine envelope, as a JSON-mode mapping, carrying the drop's
-        receipt on success and ``projection_degraded`` when its firehose
-        row did not reach the projection.
-    """
-    try:
-        request = LegacyTaskDropParams.model_validate(
-            {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
-        )
-    except ValidationError as error:
-        return schema_refusal(error, params=params, operation=TASK_DROP_METHOD).model_dump(
-            mode="json"
-        )
-    context = ctx.native_root_context(authority.root)
-    try:
-        committed = await asyncio.to_thread(
-            retire_legacy_task, context, request, method=TASK_DROP_METHOD, now=datetime.now(UTC)
-        )
-    except TransactionRefusedError as refusal:
-        logger.info(f"_drop_legacy_row refused code={refusal.code.value}")
-        return refused_envelope(refusal, operation=TASK_DROP_METHOD).model_dump(mode="json")
-    receipt = committed.receipt
-    return DomainEnvelope(
-        schema_version=ENVELOPE_SCHEMA_VERSION,
-        status=DomainStatus.OK,
-        operation=TASK_DROP_METHOD,
-        revision_before=receipt.revision_before,
-        revision_after=receipt.revision_after,
-        result=receipt.model_dump(mode="json"),
-        warnings=(PROJECTION_DEGRADED,)
-        if committed.envelope is not None and not publish_projection(ctx.bus, committed.envelope)
-        else (),
-    ).model_dump(mode="json")
 
 
 for _verb in DOMAIN_LIFECYCLE_VERBS:

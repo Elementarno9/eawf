@@ -84,9 +84,9 @@ def test_surf_080_an_undeclared_root_group_fails_the_census() -> None:
     assert _undeclared_roots(widened) == ["phase"]
 
 
-def test_surf_080_the_cross_cutting_exceptions_are_the_declared_five_plus_ui_and_reflect() -> None:
+def test_surf_080_the_cross_cutting_exceptions_are_the_declared_four_plus_ui_and_reflect() -> None:
     cross = {r.name for r in verb_closure.ROOT_ENTRY_EXCEPTIONS if r.kind == "cross_cutting"}
-    assert cross == {"config", "memory", "workspace", "daemon", "migrate", "ui", "reflect"}
+    assert cross == {"config", "memory", "workspace", "daemon", "ui", "reflect"}
     assert set(CROSS_CUTTING_GROUPS) == cross
 
 
@@ -471,7 +471,7 @@ _RETIRED_LEGACY: Final = (
 
 def test_surf_081_the_exemptions_hold_their_pinned_count() -> None:
     verbs = {row.verb for row in verb_closure.ANCHOR_EXEMPTIONS}
-    assert len(verb_closure.ANCHOR_EXEMPTIONS) == 98
+    assert len(verb_closure.ANCHOR_EXEMPTIONS) == 89
     assert "record append" in verbs
     assert "store redact-content" in verbs
     assert "store drop-unpublished-row" in verbs
@@ -587,6 +587,4 @@ def test_a_retired_legacy_verb_exits_two(
     assert " ".join(argv[:2]) not in leaves
     result = CliRunner().invoke(app, ["--json", *argv, "--actor", "OPERATOR", "--reason", "done"])
     assert result.exit_code == 2, result.output
-    envelope = orjson.loads(result.stdout)
-    assert envelope["data"]["kind"] == "LegacyOperationRemoved"
-    assert "eawf help upgrade-from-0.6" in envelope["message"]
+    assert "No such command" in result.output

@@ -141,7 +141,7 @@ def test_known_gate_kinds_covers_registered_and_gatespec_kinds() -> None:
     # A registered audit-DSL CheckKind.
     assert "command_exit_zero" in known
     # The state-scoring close-gate kind.
-    assert "backlog_resolution" in known
+    assert "jury_calibrated" in known
     # A GateSpec / supplemental kind.
     assert "tui_flow" in known
     # And nothing fabricated leaks in.

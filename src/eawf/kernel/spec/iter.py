@@ -4,9 +4,8 @@ An iter is the unit of delivery sitting between a phase and its waves.
 The IterSpec records the iter's sub-goal, the rationale for the
 ordering of waves within it, optional wave groupings (narrative
 labels over disjoint subsets of waves), and the audit-DSL cadence
-that fires on iter close or phase close. The runtime row
-(:class:`eawf.kernel.state.models.Iter`) tracks status; the spec describes
-intent.
+that fires on iter close or phase close. The epoch-1 runtime row tracked
+status and survives only as an imported record; the spec describes intent.
 """
 
 from __future__ import annotations

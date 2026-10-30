@@ -37,13 +37,12 @@ from uuid import UUID
 
 import pytest
 
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.measured_contract import ScaleBand
 from eawf.kernel.spec.release import Release, ReleaseStatus
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import create
 from eawf.surfaces.cli.errors import UserError
-from eawf.workflow.evidence._io import load_state
+from eawf.workflow.evidence._io import ContractView
 from eawf.workflow.evidence.measured_contract import (
     IMPORTER_CORPUS_MAGNITUDE,
     LOCAL_SPIKE_ROOT,
@@ -66,6 +65,7 @@ from eawf.workflow.release.publication import burn_release
 from eawf.workflow.release.records import read_release_record, record_release
 from eawf.workflow.release.train import V07_TRAIN
 from eawf.workflow.release.train_store import record_train_advance
+from tests._contract_view import contract_view
 from tests._epoch2_helpers import lay_contract_tree
 from tests._release_helpers import (
     NOW,
@@ -106,9 +106,9 @@ DEV3_MEMBERSHIP = ["milestone://epoch2/native-canary"]
 CORPUS_PIN = _REPO_ROOT / "tests" / "fixtures" / "migration" / "live-cutover" / "corpus-pin.json"
 
 
-def state_with(contract_ids: Sequence[str]) -> State:
+def state_with(contract_ids: Sequence[str]) -> ContractView:
     """Return the fixture state with exactly *contract_ids* promoted."""
-    state = load_state(_EMPTY_STATE)
+    state = contract_view(_EMPTY_STATE)
     for contract_id in contract_ids:
         promote_measured_contract(
             state,
@@ -119,12 +119,12 @@ def state_with(contract_ids: Sequence[str]) -> State:
     return state
 
 
-def create_dev2(state: State) -> Release:
+def create_dev2(state: ContractView) -> Release:
     """Open the dev2 checkpoint against *state*."""
     return create_checkpoint_release(state, train=V07_TRAIN, version=DEV2, uid=DEV2_UID)
 
 
-def create_dev3(state: State) -> Release:
+def create_dev3(state: ContractView) -> Release:
     """Open the dev3 checkpoint against *state*."""
     return create_checkpoint_release(
         state,
@@ -360,7 +360,7 @@ def test_a_malformed_version_is_refused() -> None:
 # --- the RPC the operator actually calls -------------------------------------
 
 
-def _context(tmp_path: Path, state: State) -> MethodContext:
+def _context(tmp_path: Path, state: ContractView) -> MethodContext:
     """Write *state* under *tmp_path* and return a context bound to it.
 
     The burned dev1 record is written alongside it because ``dev2``
@@ -419,7 +419,7 @@ def test_release_create_rpc_refuses_without_an_on_disk_state() -> None:
         asyncio.run(create(ctx, {"version": DEV2}))
 
 
-def _dev3_context(tmp_path: Path, state: State, *, advanced: bool) -> MethodContext:
+def _dev3_context(tmp_path: Path, state: ContractView, *, advanced: bool) -> MethodContext:
     """Return a context whose stores hold burned dev1 and baked dev2.
 
     The checkout carries a canary export accepting the dev3 bundle, so

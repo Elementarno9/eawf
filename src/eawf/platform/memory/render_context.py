@@ -17,9 +17,7 @@ import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import Confidence, MemoryStatus
 from eawf.kernel.store.kinds.memory import MemoryNote
 
@@ -80,72 +78,6 @@ class RenderContextResult:
     budget: int
 
 
-def render_context(
-    *,
-    state: State,
-    memory_path: Path,
-    anchor_scope: str | None = None,
-    budget: int = DEFAULT_BUDGET,
-    now: datetime | None = None,
-    include_superseded: bool = False,
-    max_entries: int | None = None,
-    heading_level: int = 2,
-) -> RenderContextResult:
-    """Walk memory entries, render until *budget* exhausted.
-
-    Determinism contract (W03 hardening):
-
-    - Given identical (``state``, ``memory.jsonl``, ``anchor_scope``,
-      ``budget``, ``now``, ``include_superseded``, ``max_entries``) inputs the
-      function returns byte-identical ``text`` and identical ``included_ids``
-      ordering. Sort key is the tuple ``(-score, id)`` — score ties break on
-      ascending memory ID.
-    - ``tokens_used <= budget`` ALWAYS. When the very first block already
-      exceeds the budget, the function emits zero blocks rather than overflow.
-      :class:`~eawf.kernel.state.enums.MemoryStatus.PRUNED` entries are unconditionally
-      excluded; :class:`~eawf.kernel.state.enums.MemoryStatus.SUPERSEDED` entries are
-      excluded by default and admitted only when ``include_superseded=True``.
-    - ``included_ids`` and ``skipped_ids`` are disjoint; their union covers
-      every entry the active/superseded filter admitted.
-
-    Args:
-        state: Loaded :class:`State` carrying ``memory_index``.
-        memory_path: Path to ``memory.jsonl`` for full-body lookup.
-        anchor_scope: Optional anchor scope ID; entries closer to it rank higher.
-        budget: Token budget (HARD; result never exceeds it). Defaults to
-            ``DEFAULT_BUDGET`` (4096).
-        now: Override for the current time (for tests). Defaults to UTC now.
-        include_superseded: When ``True``, entries with
-            :class:`~eawf.kernel.state.enums.MemoryStatus.SUPERSEDED` are also
-            considered. ``PRUNED`` is never admitted.
-        max_entries: Optional cap on the count of included entries. The
-            budget still wins on either side: an entry that would exceed
-            ``budget`` is skipped even when ``len(included_ids) < max_entries``.
-        heading_level: Markdown heading depth used for each emitted entry.
-            Defaults to ``2`` to preserve the standalone CLI view; dispatch
-            prompts pass ``3`` so entries nest under their own ``## Memory``
-            section.
-
-    Returns:
-        :class:`RenderContextResult` with the rendered Markdown body and the
-        IDs of included vs skipped entries. ``tokens_used <= budget`` always.
-
-    Raises:
-        ValueError: when ``heading_level`` is less than 1.
-    """
-    from eawf.platform.memory.book import notes_from_state
-
-    return render_notes(
-        notes_from_state(state, memory_path).values(),
-        anchor_scope=anchor_scope,
-        budget=budget,
-        now=now,
-        include_superseded=include_superseded,
-        max_entries=max_entries,
-        heading_level=heading_level,
-    )
-
-
 def render_notes(
     notes: Iterable[MemoryNote],
     *,
@@ -168,8 +100,8 @@ def render_notes(
         heading_level: Markdown heading depth used for each emitted entry.
 
     Returns:
-        The rendered body and the included and skipped IDs, under the
-        determinism contract :func:`render_context` states.
+        The rendered body and the included and skipped IDs; the same
+        notes, budget and clock always render the same text.
 
     Raises:
         ValueError: when ``heading_level`` is less than 1.

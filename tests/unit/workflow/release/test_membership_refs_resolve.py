@@ -18,12 +18,11 @@ from uuid import UUID
 
 import pytest
 
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.release import Release, ReleaseStatus
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import create
 from eawf.surfaces.cli.errors import UserError
-from eawf.workflow.evidence._io import load_state
+from eawf.workflow.evidence._io import ContractView
 from eawf.workflow.evidence.measured_contract import (
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -41,6 +40,7 @@ from eawf.workflow.release.publication import burn_release
 from eawf.workflow.release.records import read_release_record, record_release
 from eawf.workflow.release.train import V07_TRAIN
 from eawf.workflow.release.train_store import record_train_advance
+from tests._contract_view import contract_view
 from tests._epoch2_helpers import lay_contract_tree
 from tests._release_helpers import (
     DEV3_MEMBERSHIP_REF,
@@ -82,9 +82,9 @@ def no_milestones() -> CanaryEvidence:
     return CanaryEvidence.model_validate(document)
 
 
-def dev3_state() -> State:
+def dev3_state() -> ContractView:
     """Return the fixture state with both dev3 contracts promoted."""
-    state = load_state(_EMPTY_STATE)
+    state = contract_view(_EMPTY_STATE)
     for contract_id in required_contract_ids(DEV3):
         promote_measured_contract(
             state,
@@ -172,7 +172,7 @@ def test_create_checkpoint_release_keeps_the_empty_membership_refusal() -> None:
 
 
 def test_create_checkpoint_release_skips_resolution_on_a_rung_without_membership() -> None:
-    state = load_state(_EMPTY_STATE)
+    state = contract_view(_EMPTY_STATE)
     for contract_id in required_contract_ids(DEV2):
         promote_measured_contract(
             state,

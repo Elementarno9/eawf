@@ -1,7 +1,7 @@
-"""Lifecycle hooks: exit stamp and subagent adoption.
+"""Lifecycle hooks: session end and subagent adoption.
 
-A host session's lifecycle events reach eawf only through its hooks. The exit hook stamps
-the ending session's ``ended_at``, and a harness-spawned subagent is adopted as a Run. A
+A host session's lifecycle events reach eawf only through its hooks. The exit hook answers
+without writing, and a harness-spawned subagent is adopted as a Run. A
 Run's runtime counters are not forwarded from here: the measurement producer reads them
 through the Run's vendor session. Neither hook blocks the host: every failure degrades to a
 non-blocking :class:`~eawf.runtime.hooks.runner.HookResult` that names why.
@@ -17,62 +17,23 @@ from eawf.runtime.hooks.event import HOST_HARNESSES, HookEvent, HookEventType
 from eawf.runtime.hooks.runner import DaemonClientFactory, HookResult
 
 
-def stamp_session_end_on_exit(
-    event: HookEvent,
-    *,
-    repo_root: Path | None = None,
-) -> HookResult:
-    """Stamp the exiting session's ``ended_at`` from a SESSION_END / AGENT_END event.
+def answer_session_end(event: HookEvent) -> HookResult:
+    """Answer a SESSION_END or AGENT_END event without writing anything.
 
-    The exit hook is the only place that knows the true end instant. Before
-    this seam ``ended_at`` was written by the daemon-boot orphan reconcile, so a
-    session that ended at 14:02 was recorded as ending whenever the daemon next
-    restarted and every derived duration was fiction. Stamping here also means
-    the reconcile finds nothing left to flip on a clean exit.
-
-    Never blocks the source runtime: an unresolvable repo root, an absent
-    ``state.json``, or an ambiguous session all degrade to a non-blocking
-    no-op result, matching how the sibling ``runtime.host_subagent`` hook fails.
+    No native record is stamped on exit, so the answer is the no-op a tree
+    without a live session always got.
 
     Args:
-        event: The SESSION_END or AGENT_END hook event.
-        repo_root: Repo root whose ``.ea/state.json`` owns the session rows;
-            defaults to the process working directory.
+        event: The SESSION_END or AGENT_END hook event; the runner's handler
+            contract passes it, and nothing in it changes the answer.
 
     Returns:
-        A non-blocking :class:`HookResult` naming the stamped session id, or
-        the reason no row was stamped.
+        A non-blocking :class:`HookResult` saying no session row was stamped.
     """
-    from eawf.kernel.state.enums import StoreKind
-    from eawf.kernel.store.paths import store_path
-    from eawf.runtime.session.store import stamp_session_end_at_exit
-
-    root = repo_root if repo_root is not None else Path.cwd()
-    state_path = root / ".ea" / "state.json"
-    payload = runner._session_end_payload(event)
-    raw_session_id = payload.get("session_id")
-    runtime_session_id = raw_session_id if isinstance(raw_session_id, str) else None
-    try:
-        stamped = stamp_session_end_at_exit(
-            state_path,
-            store_path(state_path, StoreKind.EVENT),
-            runtime_session_id=runtime_session_id or None,
-            scope_id=event.scope_id or None,
-            summary=f"stamped at process exit ({event.event_type.value})",
-            now=event.occurred_at,
-        )
-    except Exception as exc:
-        return HookResult(name="session.end_stamp", block=False, output=repr(exc))
-    if stamped is None:
-        return HookResult(
-            name="session.end_stamp",
-            block=False,
-            output="session.end_stamp skipped: no live session resolved",
-        )
     return HookResult(
         name="session.end_stamp",
         block=False,
-        output=f"session.end_stamp ok id={stamped}",
+        output="session.end_stamp skipped: no live session resolved",
     )
 
 
@@ -143,5 +104,5 @@ def adopt_host_subagent(
 __all__ = [
     "HOST_SUBAGENT_METHODS",
     "adopt_host_subagent",
-    "stamp_session_end_on_exit",
+    "answer_session_end",
 ]

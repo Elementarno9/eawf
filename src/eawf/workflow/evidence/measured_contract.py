@@ -44,7 +44,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final
 
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.runtime.compiled import canonical_digest
 from eawf.kernel.spec.measured_contract import (
     MeasuredContract,
@@ -655,7 +654,7 @@ def _require_measured_band(contract: MeasuredContract, *, required_band: ScaleBa
 
 
 def promote_measured_contract(
-    state: State,
+    state: _io.ContractView,
     *,
     contract: MeasuredContract,
     scope_id: str,
@@ -749,7 +748,7 @@ def promote_measured_contract(
 
 
 def submit_evidence(
-    state: State, *, report: SpikeReport, scope_id: str
+    state: _io.ContractView, *, report: SpikeReport, scope_id: str
 ) -> tuple[ContractPromotion, ...]:
     """Promote every contract of a verified :class:`SpikeReport`, mutating *state* in place.
 
@@ -810,7 +809,7 @@ def submit_evidence(
 
 
 def refresh_contract_metadata(
-    state: State,
+    state: _io.ContractView,
     *,
     contract: MeasuredContract,
     required_band: ScaleBand,
@@ -905,7 +904,7 @@ def refresh_contract_metadata(
 
 
 def _require_citable_here(
-    state: State, artifact: Artifact, *, provider_tuple: tuple[str, ...] | None
+    state: _io.ContractView, artifact: Artifact, *, provider_tuple: tuple[str, ...] | None
 ) -> None:
     """Refuse *artifact* when its measurement does not bind this repository.
 
@@ -922,7 +921,7 @@ def _require_citable_here(
     ``probe_command`` here.
 
     Args:
-        state: State the citation was resolved against.
+        state: View the citation was resolved against.
         artifact: The resolved artifact row.
         provider_tuple: The providers the citing plan's Runs dispatch to,
             or ``None`` when the citation is read outside any plan and so
@@ -957,24 +956,24 @@ def _require_citable_here(
             f"measurement transfers only on an exact provider match, so {reprobe}",
             kind="contract_environment_incompatible",
         )
-    if state.project is None:
+    if state.project_code is None:
         return
     measured_in = environment.get("repository")
-    if measured_in is not None and measured_in != state.project.code:
+    if measured_in is not None and measured_in != state.project_code:
         logger.warning(
             f"resolve_contract_citation environment_refused artifact_id={artifact.id!r} "
-            f"measured_in={measured_in!r} repository={state.project.code!r}"
+            f"measured_in={measured_in!r} repository={state.project_code!r}"
         )
         raise UserError(
             f"contract {artifact.id} was measured in repository {measured_in!r}, not "
-            f"{state.project.code!r}; a measurement does not transfer across repositories, "
+            f"{state.project_code!r}; a measurement does not transfer across repositories, "
             f"so {reprobe}",
             kind="contract_environment_incompatible",
         )
 
 
 def resolve_contract_citation(
-    state: State, citation: str, *, provider_tuple: tuple[str, ...] | None = None
+    state: _io.ContractView, citation: str, *, provider_tuple: tuple[str, ...] | None = None
 ) -> Artifact:
     """Resolve *citation* to a promoted artifact row.
 
@@ -988,7 +987,7 @@ def resolve_contract_citation(
     :func:`_require_citable_here`.
 
     Args:
-        state: State to resolve against.
+        state: View to resolve against.
         citation: Artifact id, artifact URN, or a raw spike path.
         provider_tuple: The providers the citing plan's Runs dispatch to;
             ``None`` when the citation is read outside any plan.

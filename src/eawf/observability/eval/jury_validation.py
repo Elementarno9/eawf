@@ -143,9 +143,7 @@ class ValidationCohort(BaseModel):
     Attributes:
         silver: One :class:`LabeledVerdict` per observed verdict outcome whose
             wave is NOT overridden by a gold label, carrying the cheap
-            held-outcome-derived ground truth. Ordered as
-            :func:`~eawf.observability.eval.reputation.build_verdict_outcomes`
-            returns the outcomes.
+            held-outcome-derived ground truth, in outcome order.
         gold: One :class:`LabeledVerdict` per observed verdict outcome whose wave
             IS overridden by a gold label, carrying the operator ground truth.
             Same ordering as *silver*.

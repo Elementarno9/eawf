@@ -2,38 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from pathlib import Path
-
-from eawf.kernel.state.enums import Confidence, StoreKind
-from eawf.kernel.store.append import append_envelope
-from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.memory import MemoryPayload
-from eawf.platform.memory.store import content_hash, read_envelopes, summary_text
-
-
-def test_read_envelopes_empty_file(tmp_path: Path) -> None:
-    memory_path = tmp_path / "memory.jsonl"
-    memory_path.write_text("", encoding="utf-8")
-    assert read_envelopes(memory_path) == []
-
-
-def test_read_envelopes_skips_blank_lines(tmp_path: Path) -> None:
-    memory_path = tmp_path / "memory.jsonl"
-    append_envelope(
-        memory_path,
-        Envelope(
-            id="MEM-20260508-01",
-            kind=StoreKind.MEMORY,
-            scope_id="QR",
-            created_at=datetime(2026, 5, 8, tzinfo=UTC),
-            summary=summary_text("t", "b"),
-            payload=MemoryPayload(body="b", confidence=Confidence.MEDIUM).model_dump(mode="json"),
-        ),
-    )
-    text = memory_path.read_text(encoding="utf-8")
-    memory_path.write_text(text + "\n\n\n", encoding="utf-8")
-    assert len(read_envelopes(memory_path)) == 1
+from eawf.platform.memory.store import content_hash, summary_text
 
 
 def test_content_hash_is_stable() -> None:

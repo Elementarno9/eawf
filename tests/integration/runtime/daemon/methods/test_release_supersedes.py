@@ -26,12 +26,11 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.release import Release, ReleaseStatus, release_key
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.release import _superseding, create
 from eawf.runtime.daemon.methods.release_candidate import candidate
-from eawf.workflow.evidence._io import load_state
+from eawf.workflow.evidence._io import ContractView
 from eawf.workflow.evidence.measured_contract import (
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -41,6 +40,7 @@ from eawf.workflow.release.admission import required_contract_ids
 from eawf.workflow.release.adoption import adopt_publication
 from eawf.workflow.release.publication import burn_release
 from eawf.workflow.release.records import read_release_record, record_release
+from tests._contract_view import contract_view
 from tests._epoch2_helpers import lay_contract_tree
 from tests._release_helpers import dev1_adoption, dev1_config, dev1_draft
 
@@ -97,9 +97,9 @@ def git(repo_root: Path, *args: str) -> str:
     return done.stdout.strip()
 
 
-def state_with(versions: Sequence[str]) -> State:
+def state_with(versions: Sequence[str]) -> ContractView:
     """Return the fixture state with every contract *versions* require promoted."""
-    state = load_state(_EMPTY_STATE)
+    state = contract_view(_EMPTY_STATE)
     for version in versions:
         for contract_id in required_contract_ids(version):
             promote_measured_contract(
@@ -118,7 +118,9 @@ def burned_dev1() -> Release:
     return burned
 
 
-def context(tmp_path: Path, *, state: State, records: Sequence[Release] = ()) -> MethodContext:
+def context(
+    tmp_path: Path, *, state: ContractView, records: Sequence[Release] = ()
+) -> MethodContext:
     """Return a context bound to a git checkout holding *state* and *records*."""
     repo_root = tmp_path / "repo"
     repo_root.mkdir(parents=True)

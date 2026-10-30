@@ -8,65 +8,17 @@ per-consumer budget literals:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import pytest
 from pydantic import ValidationError
 
-from eawf.kernel.state.enums import AuditRequirement, CloseAttemptStatus
 from eawf.kernel.state.models import (
     CLOSE_BUDGET_AXES,
     CLOSE_BUDGET_RECEIPT_PREFIX,
     DEFAULT_CLOSE_INFRASTRUCTURE_RETRY_BUDGET,
     DEFAULT_CLOSE_REPAIR_BUDGET,
-    CloseAttempt,
     CloseBudget,
     resolve_close_budget,
 )
-
-_T0 = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
-_WAVE = "P01-I01-W01"
-_SHA = "a" * 40
-_DIGEST = "b" * 64
-
-
-def _attempt(
-    *,
-    attempt_id: str = "CA-01",
-    wave_id: str = _WAVE,
-    generation: int = 1,
-    repair: int = 1,
-    infrastructure_retry: int = 1,
-) -> CloseAttempt:
-    """Build a queued close attempt carrying the given remaining budgets."""
-    return CloseAttempt(
-        id=attempt_id,
-        wave_id=wave_id,
-        outcome="close submitted",
-        tokens_consumed=None,
-        generation=generation,
-        supersedes_id=None,
-        status=CloseAttemptStatus.QUEUED,
-        integration_id="WI-01",
-        candidate_sha=_SHA,
-        integrated_sha=_SHA,
-        tree_sha=_SHA,
-        wave_revision_digest=_DIGEST,
-        spec_digest=_DIGEST,
-        criteria_digest=_DIGEST,
-        gate_manifest_digest=_DIGEST,
-        policy_digest=_DIGEST,
-        runner_environment_digest=_DIGEST,
-        dependency_binding_digest=_DIGEST,
-        audit_requirement=AuditRequirement.NONE,
-        no_runtime_waiver=False,
-        repair_budget_remaining=repair,
-        infrastructure_retry_budget_remaining=infrastructure_retry,
-        requested_at=_T0,
-        updated_at=_T0,
-        idempotency_key=f"close:{wave_id}:{generation}",
-    )
-
 
 # --------------------------------------------------------------------------
 # resolve_close_budget
@@ -80,17 +32,10 @@ def test_resolve_close_budget_without_attempt_returns_the_seed_budget() -> None:
     assert budget.infrastructure_retry == DEFAULT_CLOSE_INFRASTRUCTURE_RETRY_BUDGET
 
 
-def test_resolve_close_budget_reads_a_live_attempt_remaining_budget() -> None:
-    """A live attempt yields its own remaining counters, not the seed."""
-    budget = resolve_close_budget(attempt=_attempt(repair=0, infrastructure_retry=5))
-    assert budget.repair == 0
-    assert budget.infrastructure_retry == 5
-
-
-def test_resolve_close_budget_rejects_a_non_attempt() -> None:
-    """A wrong-typed argument fails fast instead of silently seeding a default."""
-    with pytest.raises(TypeError, match="attempt must be a CloseAttempt or None"):
-        resolve_close_budget(attempt="CA-01")  # type: ignore[arg-type]
+def test_resolve_close_budget_takes_no_attempt() -> None:
+    """The resolver reads no live attempt, so passing one fails fast."""
+    with pytest.raises(TypeError, match="attempt"):
+        resolve_close_budget(attempt="CA-01")  # type: ignore[call-arg]
 
 
 # --------------------------------------------------------------------------

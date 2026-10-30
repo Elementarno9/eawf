@@ -42,15 +42,13 @@ mutating verbs there before they dispatch.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import orjson
 import typer
 
-from eawf.kernel.state.enums import Confidence, MemoryStatus, StoreKind
+from eawf.kernel.state.enums import Confidence, MemoryStatus
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 
@@ -81,20 +79,6 @@ _CONFIDENCE_FROM_FLAG: dict[str, Confidence] = {
 }
 
 
-def _memory_path_for(state_path: Path) -> Path:
-    """Return the canonical memory-store JSONL location next to ``state.json``."""
-    from eawf.kernel.store.paths import store_path
-
-    return store_path(state_path, StoreKind.MEMORY)
-
-
-def _events_path_for(state_path: Path) -> Path:
-    """Return the canonical events-store JSONL location next to ``state.json``."""
-    from eawf.kernel.store.paths import store_path
-
-    return store_path(state_path, StoreKind.EVENT)
-
-
 def _load_notes(state_path: Path) -> dict[str, MemoryNote]:
     """Return the notes the selected generation of the tree holding *state_path* stands at.
 
@@ -103,13 +87,13 @@ def _load_notes(state_path: Path) -> dict[str, MemoryNote]:
             generation to read the notes from.
     """
     from eawf.platform.memory.book import generation_memory_ledger, read_book
-    from eawf.surfaces.cli.flag_day_gate import MIGRATION_REQUIRED_KIND, MIGRATION_VERB
+    from eawf.surfaces.cli.upgrade_refusal import MIGRATION_REQUIRED_KIND, UPGRADE_STEPS
 
     ledger = generation_memory_ledger(state_path.parent)
     if ledger is None:
         raise cli_errors.MigrationRequired(
-            f"{state_path.parent} is an epoch-1 tree and memory reads only an epoch-2 "
-            f"generation; migrate it with `{MIGRATION_VERB} --plan` then `--apply`",
+            f"{state_path.parent} holds no epoch-2 generation and memory reads only an epoch-2 "
+            f"generation; {UPGRADE_STEPS}",
             kind=MIGRATION_REQUIRED_KIND,
         )
     return {mid: standing.note for mid, standing in read_book(ledger).items()}
@@ -164,10 +148,6 @@ def _resolve_status(raw: str | None) -> MemoryStatus | None:
             f"--status must be one of {[s.value for s in MemoryStatus]}; got {raw!r}",
             kind="InvalidInput",
         ) from exc
-
-
-def _args_hash(args: dict[str, object]) -> str:
-    return hashlib.sha256(orjson.dumps(args, option=orjson.OPT_SORT_KEYS)).hexdigest()
 
 
 # ---- command registration ---------------------------------------------------

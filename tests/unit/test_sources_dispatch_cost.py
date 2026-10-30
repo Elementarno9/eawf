@@ -10,7 +10,6 @@ events carry no ``session_id`` and so do not map 1:1 onto
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -19,8 +18,7 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.state.enums import StoreKind, WaveStatus
-from eawf.kernel.state.models import SessionAttempt, Wave
+from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.events.dispatch_cost import DispatchCostPayload
 from eawf.kernel.store.paths import store_path
@@ -464,46 +462,3 @@ def test_spike_dispatch_cost_payload_has_no_session_id_field() -> None:
     fields = set(DispatchCostPayload.model_fields)
     assert "session_id" not in fields
     assert {"wave_id", "attempt_id"} <= fields
-
-
-def test_spike_session_attempt_carries_session_id_dispatch_cost_lacks() -> None:
-    # Wave.sessions values are SessionAttempt rows keyed by session_id; the
-    # dispatch_cost row keys on the source envelope id because the event has
-    # no session_id to join on. This pins the asymmetry the spike found.
-    now = datetime(2026, 5, 30, 12, 0, tzinfo=UTC)
-    wave = Wave(
-        id="P29-I01-W02",
-        iter_id="P29-I01",
-        title="add dispatch cost session source",
-        status=WaveStatus.CLAIMED,
-        opened_at=now,
-        sessions={
-            1: SessionAttempt(
-                attempt=1,
-                runtime="claude",
-                session_id="sess-uuid-1",
-                session_log_handle="urn:eawf:v1:session-log:claude:sess-uuid-1",
-                started_at=now,
-            )
-        },
-    )
-    session_ids = {att.session_id for att in wave.sessions.values()}
-    assert session_ids == {"sess-uuid-1"}
-    # The dispatch_cost payload offers attempt_id (a per-dispatch UUID), not a
-    # session_id; there is no field on the payload that equals "sess-uuid-1".
-    payload = DispatchCostPayload(
-        timestamp=now,
-        wave_id="P29-I01-W02",
-        attempt_id="attempt-uuid-xyz",
-        runtime="claude",
-        model="claude-opus-4-8",
-        input_tokens=1,
-        output_tokens=1,
-        cache_creation_input_tokens=0,
-        cache_read_input_tokens=0,
-        cost_usd=Decimal("0.1"),
-        pricing_version="v1",
-    )
-    dumped = json.loads(payload.model_dump_json())
-    assert "session_id" not in dumped
-    assert dumped["attempt_id"] not in session_ids

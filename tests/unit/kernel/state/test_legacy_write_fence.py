@@ -18,7 +18,6 @@ from eawf.kernel.state.io import (
     StateValidationError,
     epoch_marker_present,
     refuse_legacy_write,
-    write_state_unlocked,
 )
 from eawf.kernel.state.writer import atomic_write_json, atomic_write_json_locked
 from eawf.kernel.store.paths import store_path
@@ -100,20 +99,6 @@ def test_refuse_legacy_write_ignores_a_nested_generation_state(ea_dir: Path) -> 
     """A ``state.json`` below ``generations/`` is not the tree's epoch-1 document."""
     _mark(ea_dir)
     refuse_legacy_write(ea_dir / GENERATIONS_DIRNAME / "G-1" / "state.json")
-
-
-def test_write_state_unlocked_refused_leaves_state_byte_identical(ea_dir: Path) -> None:
-    _mark(ea_dir)
-    before = (ea_dir / "state.json").read_bytes()
-    with pytest.raises(LegacyOperationRemovedError):
-        write_state_unlocked(ea_dir / "state.json", {"a": 2})
-    assert (ea_dir / "state.json").read_bytes() == before
-    assert sorted(p.name for p in ea_dir.iterdir()) == [GENERATIONS_DIRNAME, "state.json"]
-
-
-def test_write_state_unlocked_writes_an_unmarked_tree(ea_dir: Path) -> None:
-    write_state_unlocked(ea_dir / "state.json", {"a": 2})
-    assert orjson.loads((ea_dir / "state.json").read_bytes()) == {"a": 2}
 
 
 @pytest.mark.parametrize("writer", [atomic_write_json, atomic_write_json_locked])

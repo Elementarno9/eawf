@@ -32,7 +32,7 @@ from eawf.kernel.migration.epoch2.errors import (
     MigrationSourceUnreadableError,
     MigrationStagingRefusedError,
 )
-from eawf.kernel.migration.epoch2.rows import with_epoch1_defaults
+from eawf.kernel.migration.epoch2.rows import with_source_defaults
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel, rule_digest
 from eawf.kernel.store.commit_policy import (
     CommitPolicy,
@@ -347,7 +347,7 @@ class SourceSnapshot(StrictMigrationModel):
                 surfaces=surfaces,
                 snapshot_digest=rule_digest([[row.locator, row.digest] for row in surfaces]),
             ),
-            document=with_epoch1_defaults(
+            document=with_source_defaults(
                 _parse_document(document_bytes, locator=DOCUMENT_LOCATOR)
             ),
             ledgers=ledgers,
@@ -745,19 +745,3 @@ def stage_committed_corpus(
     _write_staged_json(destination / TELEMETRY_LOCATOR, STAGED_TELEMETRY_BODY)
     logger.debug(f"stage_committed_corpus revision={revision} sources={len(sources)}")
     return StagedCorpus(root=destination, revision=revision, sources=sources)
-
-
-def staged_envelope(corpus: StagedCorpus) -> dict[str, Any]:
-    """Return the envelope one staging is reported as.
-
-    Args:
-        corpus: The staged corpus.
-
-    Returns:
-        The snapshot root, the revision, and each staged locator.
-    """
-    return {
-        "staged_to": str(corpus.root),
-        "revision": corpus.revision,
-        "sources": [source.locator for source in corpus.sources],
-    }

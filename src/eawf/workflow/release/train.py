@@ -393,7 +393,17 @@ CHECKPOINT_CONFIGS: Final[dict[str, str]] = {
 #: deliberately does NOT bind the ``platform`` row: a platform claim is
 #: proven by its own real-host receipt, and reading it here would let a
 #: green platform row stand in for an install that was never attempted.
-DEV1_GATE_BINDINGS_YAML: Final[str] = """\
+_EPOCH1_STABILIZATION_BINDING: Final[str] = """\
+  - gate: epoch1_stabilization
+    kind: proof_command
+    proof:
+      command_id: epoch1_stabilization_suite
+      argv: [just, test-all]
+      timeout_seconds: 3600
+"""
+
+DEV1_GATE_BINDINGS_YAML: Final[str] = (
+    """\
 bindings:
   - gate: version_consistency
     kind: signal
@@ -412,12 +422,9 @@ bindings:
     kind: signal_component
     signal: dependencies
     component: vulnerability
-  - gate: epoch1_stabilization
-    kind: proof_command
-    proof:
-      command_id: epoch1_stabilization_suite
-      argv: [just, test-all]
-      timeout_seconds: 3600
+"""
+    + _EPOCH1_STABILIZATION_BINDING
+    + """\
   - gate: telemetry_producer
     kind: proof_command
     proof:
@@ -431,6 +438,7 @@ bindings:
       argv: [uvx, eawf, --version]
       timeout_seconds: 900
 """
+)
 
 #: What each of the four gates ``dev2`` adds on top of ``dev1`` reads.
 #:
@@ -451,12 +459,16 @@ bindings:
 #: ``waiver_count`` reads the waiver block. It is the gate that makes
 #: the other eleven honest: a checkpoint can reach green by proving its
 #: gates or by waiving them, and only this row says which happened.
-DEV2_GATE_BINDINGS_YAML: Final[str] = (
-    DEV1_GATE_BINDINGS_YAML
-    + """\
+_MIGRATION_BINDING: Final[str] = """\
   - gate: migration
     kind: signal
     signal: migration
+"""
+
+DEV2_GATE_BINDINGS_YAML: Final[str] = (
+    DEV1_GATE_BINDINGS_YAML
+    + _MIGRATION_BINDING
+    + """\
   - gate: hosted_gate_runner
     kind: proof_command
     proof:
@@ -586,10 +598,9 @@ PRODUCT_CANARY_GATE_BINDINGS_YAML: Final[str] = (
 #:
 #: ``epoch1_refusal`` is a proof command because the refusal is a
 #: property of the command tree the pinned source builds, not of any
-#: checkout: the first suite drives every refused verb against a plain
-#: epoch-1 tree and checks the tree did not move, and the second is the
-#: census that gives every epoch-1 verb exactly one disposition, so a
-#: verb added later without one reddens the gate.
+#: checkout: the suite drives every root verb against a plain epoch-1
+#: tree and checks each is refused with the upgrade path and the tree
+#: did not move.
 FLAG_DAY_GATE_BINDINGS_YAML: Final[str] = (
     PRODUCT_CANARY_GATE_BINDINGS_YAML
     + """\
@@ -598,8 +609,7 @@ FLAG_DAY_GATE_BINDINGS_YAML: Final[str] = (
     proof:
       command_id: epoch1_tree_refuses_every_mutating_verb
       argv: [uv, run, pytest,
-        tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py,
-        tests/contract/surfaces/cli/test_rel_021_flag_day_census.py, -q]
+        tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py, -q]
       timeout_seconds: 900
 """
 )
@@ -621,9 +631,28 @@ CROSS_PROVIDER_GATE_BINDINGS_YAML: Final[str] = (
 """
 )
 
-#: Authored gate binding tables by profile. ``dev1`` through
-#: ``cross_provider`` are authored; the later profiles land with the Tasks
-#: that build their producers.
+#: What the ``stable`` profile's gates read: the rc4 table with the
+#: ``migration`` row left out and the suite row renamed.
+#:
+#: ``full_suite`` runs the same whole-tree suite ``epoch1_stabilization``
+#: ran, the same ``just test-all`` CI's twice-green job runs. Only the
+#: name changes: the dev1 to rc4 tables keep the old one so the receipts
+#: they issued stay bound to a gate their profile admits.
+STABLE_GATE_BINDINGS_YAML: Final[str] = CROSS_PROVIDER_GATE_BINDINGS_YAML.replace(
+    _MIGRATION_BINDING, ""
+).replace(
+    _EPOCH1_STABILIZATION_BINDING,
+    """\
+  - gate: full_suite
+    kind: proof_command
+    proof:
+      command_id: full_suite
+      argv: [just, test-all]
+      timeout_seconds: 3600
+""",
+)
+
+#: Authored gate binding tables by profile.
 PROFILE_GATE_BINDINGS: Final[dict[ReleaseGateProfile, str]] = {
     ReleaseGateProfile.DEV1: DEV1_GATE_BINDINGS_YAML,
     ReleaseGateProfile.DEV2: DEV2_GATE_BINDINGS_YAML,
@@ -631,6 +660,7 @@ PROFILE_GATE_BINDINGS: Final[dict[ReleaseGateProfile, str]] = {
     ReleaseGateProfile.PRODUCT_CANARY: PRODUCT_CANARY_GATE_BINDINGS_YAML,
     ReleaseGateProfile.FLAG_DAY: FLAG_DAY_GATE_BINDINGS_YAML,
     ReleaseGateProfile.CROSS_PROVIDER: CROSS_PROVIDER_GATE_BINDINGS_YAML,
+    ReleaseGateProfile.STABLE: STABLE_GATE_BINDINGS_YAML,
 }
 
 
@@ -714,6 +744,7 @@ __all__ = [
     "RC1_RELEASE_CONFIG_YAML",
     "RC2_RELEASE_CONFIG_YAML",
     "RC3_RELEASE_CONFIG_YAML",
+    "STABLE_GATE_BINDINGS_YAML",
     "V07_CHECKPOINTS",
     "V07_CONFIG_TEMPLATE",
     "V07_TARGET_VERSION",

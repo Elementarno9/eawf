@@ -9,7 +9,7 @@ Every event in :data:`CODEX_HOOK_EVENT_NAMES` genuinely has a runner
 callable under the Codex runtime, registered by ``register_runtime_capture_hooks``:
 SESSION_START restates a resumed Run's context through ``runtime.host_context``, the
 two subagent events adopt the subagent as a Run through ``runtime.host_subagent``,
-SESSION_END stamps the session through ``session.end_stamp``, and PRE_TOOL_USE runs the data-loss
+SESSION_END is answered by ``session.end_stamp``, and PRE_TOOL_USE runs the data-loss
 guard, which refuses a call before Codex runs it. A module-level boot guard
 verifies this against the real runner registrations rather than trusting
 this dict by inspection, so an event added here with no registered

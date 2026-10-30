@@ -100,19 +100,3 @@ def seed_repo_with_state(workdir: Path, *, on_main: bool = False) -> tuple[Path,
     }
     state_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS))
     return workdir, state_path
-
-
-def create_wave_worktree(repo: Path, state_path: Path, wave_id: str) -> Path:
-    """Create the worktree for ``wave_id`` and return its path.
-
-    The CLI ``worktree create`` verb retired at the flag day, but the exempt
-    ``worktree merge-back`` and ``worktree cleanup`` verbs still need a
-    worktree row to act on, so tests lay one down the way the verb did.
-    """
-    from eawf.runtime.worktree import worktree_registry_lock
-    from eawf.surfaces.cli._mutation import state_transaction
-    from tests.fixtures.migration.worktree_create import create_worktree
-
-    with worktree_registry_lock(repo, timeout=5.0), state_transaction(state_path) as state:
-        record = create_worktree(state, repo_root=repo, wave_id=wave_id)
-    return repo / record.path

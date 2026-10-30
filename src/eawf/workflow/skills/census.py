@@ -32,7 +32,7 @@ _RETIRED_IDS: Final[str] = "|".join(
 #: identifier, while a longer word (``phaseless``) and a path segment
 #: (``docs/prep``) do not. The slash branch comes first so ``/wave-spec``
 #: reports whole.
-EPOCH1_NOUN_PATTERN: Final[re.Pattern[str]] = re.compile(
+RETIRED_NOUN_PATTERN: Final[re.Pattern[str]] = re.compile(
     rf"(?<![\w./-])/(?:{_RETIRED_IDS})(?![\w-])"
     r"|\b(?:\w+_)?(?:phases?|iters?|waves?)(?:_\w+)?\b"
     r"|\bP\d{2,}-I\d{2,}(?:-W\d{2,})?\b",
@@ -56,7 +56,7 @@ class CensusHit(BaseModel):
     noun: str
 
 
-def epoch1_nouns(text: str) -> tuple[str, ...]:
+def retired_nouns(text: str) -> tuple[str, ...]:
     """Return every distinct epoch-1 noun in *text*, in first-seen order.
 
     Args:
@@ -65,7 +65,7 @@ def epoch1_nouns(text: str) -> tuple[str, ...]:
     Returns:
         The matched spellings, deduplicated; empty when there are none.
     """
-    return tuple(dict.fromkeys(match.group(0) for match in EPOCH1_NOUN_PATTERN.finditer(text)))
+    return tuple(dict.fromkeys(match.group(0) for match in RETIRED_NOUN_PATTERN.finditer(text)))
 
 
 def bundle_census(root: Path) -> tuple[CensusHit, ...]:
@@ -88,10 +88,10 @@ def bundle_census(root: Path) -> tuple[CensusHit, ...]:
         for number, line in enumerate(text.splitlines(), start=1):
             hits.extend(
                 CensusHit(path=relative, line=number, noun=match.group(0))
-                for match in EPOCH1_NOUN_PATTERN.finditer(line)
+                for match in RETIRED_NOUN_PATTERN.finditer(line)
             )
     logger.debug(f"bundle_census root={root.name} hits={len(hits)}")
     return tuple(hits)
 
 
-__all__ = ["EPOCH1_NOUN_PATTERN", "CensusHit", "bundle_census", "epoch1_nouns"]
+__all__ = ["RETIRED_NOUN_PATTERN", "CensusHit", "bundle_census", "retired_nouns"]

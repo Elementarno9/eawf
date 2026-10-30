@@ -173,17 +173,6 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit]
-      - id: epoch1-keep-closure
-        name: epoch1-keep-closure
-        entry: uv run python -m eawf.platform.lint.epoch1_keep_closure
-        language: system
-        # A module outside the epoch-1 migration keep closure may not import
-        # a migration-only module or one the epoch-1 sweep deleted, so the
-        # sweep cannot regrow. Scans the whole src tree against the closure
-        # file whenever either changes.
-        files: '^(src/eawf/.*\.py|tests/fixtures/epoch1-keep-closure\.json)$'
-        pass_filenames: false
-        stages: [pre-commit]
       - id: eawf002-log-key
         name: eawf002-log-key
         entry: uv run eawf hook eawf002-log-key
@@ -331,14 +320,10 @@ repos:
         name: idle-contract-gate
         entry: uv run python tools/idle_contract_gate.py --cached
         language: system
-        # Guards the B091 idle-verifier regression: fails when no shipped
-        # profile enables a verify band via a non-empty uiux_bands + enforce
-        # (idle-forever), OR
-        # when the band profile would enforce fleet-wide for a non-UI wave
-        # instead of band-scoped (global flip). Also proves the W08 runtime
-        # zero-EU close gate remains bound to this always-run hook. Reads the
-        # shipped profile set + the real resolver, builds two pure probe waves
-        # in-process, and mutates nothing — so always-run with no file filter.
+        # Guards the B091 idle-verifier regression: fails when a verifier
+        # ships with no live caller. Also proves the runtime close gate
+        # remains bound to this always-run hook. Mutates nothing -- so
+        # always-run with no file filter.
         pass_filenames: false
         always_run: true
         stages: [pre-commit]

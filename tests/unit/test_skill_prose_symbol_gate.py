@@ -141,7 +141,7 @@ def test_scan_body_resolving_references_produce_no_findings(mod: ModuleType) -> 
     """Real slash / dotted / module-file references all resolve cleanly."""
     body = (
         "See `kernel/spec/intent.IntentBrief`, "
-        "`workflow/verify/readiness.resolve_wave_verify_block`, "
+        "`workflow/verify/readiness.load_active_verify_block`, "
         "`kernel/spec/math.py`, `eawf.surfaces.render.skills.render`, and "
         "`platform/lint/eawf021_measurable_criterion`.\n"
     )

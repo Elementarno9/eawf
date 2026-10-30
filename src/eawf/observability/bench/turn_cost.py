@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING, Final
@@ -39,11 +38,11 @@ import orjson
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
-from eawf.kernel.state.models import Wave
 from eawf.observability.telemetry.models import PriceSourceKind, RuntimeName
 from eawf.observability.telemetry.turn_cost import (
     CompletedUnitRun,
     TurnCostRecord,
+    WorkUnit,
     build_turn_cost_record,
 )
 
@@ -84,9 +83,8 @@ TURN_COST_FIXTURE_IDS: Final[tuple[str, ...]] = (_SMALL_FIXTURE_ID,)
 """Every seeded fixture id :func:`seed_turn_cost_corpus` accepts."""
 
 _FIXTURE_PHASE_ID: Final[str] = "P00"
-# The fixture seeds epoch-1 Wave rows, whose id grammar is P<NN>-I<NN>-W<NN>.
+# The fixture unit ids keep the P<NN>-I<NN>-W<NN> shape the seeded corpus has always used.
 _FIXTURE_ITER_ID: Final[str] = f"{_FIXTURE_PHASE_ID}-I00"
-_FIXTURE_OPENED_AT: Final[datetime] = datetime(2026, 1, 1, tzinfo=UTC)
 _FIXTURE_UNIT_COUNT: Final[int] = 10
 _FIXTURE_RUNTIME: Final[RuntimeName] = "claude"
 _FIXTURE_MODEL: Final[str] = "fixture-model-v1"
@@ -193,7 +191,7 @@ class TurnCostCorpus:
     fixture_id: str
     runtime: RuntimeName
     model: str
-    waves: tuple[Wave, ...]
+    waves: tuple[WorkUnit, ...]
     runs: tuple[CompletedUnitRun, ...]
 
 
@@ -442,15 +440,9 @@ def _regressed(*, baseline: Decimal, candidate: Decimal, threshold: Decimal) -> 
     return candidate >= baseline * (Decimal(1) + threshold)
 
 
-def _fixture_wave(index: int) -> Wave:
-    """Return the *index*-th closed fixture wave."""
-    return Wave(
-        id=f"{_FIXTURE_ITER_ID}-W{index:02d}",
-        iter_id=_FIXTURE_ITER_ID,
-        title=f"Turn-cost fixture unit {index:02d}",
-        status=WaveStatus.CLOSED,
-        opened_at=_FIXTURE_OPENED_AT,
-    )
+def _fixture_wave(index: int) -> WorkUnit:
+    """Return the *index*-th closed fixture unit."""
+    return WorkUnit(id=f"{_FIXTURE_ITER_ID}-W{index:02d}", status=WaveStatus.CLOSED)
 
 
 def _fixture_run(

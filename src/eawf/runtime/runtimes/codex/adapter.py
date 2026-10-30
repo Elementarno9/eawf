@@ -22,13 +22,10 @@ import os
 import re
 import shutil
 import sys
-import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from eawf.kernel.state.models import SessionAttempt, Wave
+from eawf.kernel.state.models import SessionAttempt
 from eawf.runtime.runtimes.adapter import (
     ConcurrentSpawnCapError,
     ErrorClass,
@@ -37,7 +34,6 @@ from eawf.runtime.runtimes.adapter import (
     NativeRunLauncher,
     RuntimeAdapter,
 )
-from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.selector import runtime_supports
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.runtime.sandbox.egress_proxy import (
@@ -46,9 +42,6 @@ from eawf.runtime.sandbox.egress_proxy import (
     make_enforcement_event,
 )
 from eawf.runtime.sandbox.jail import jail_command, jail_supported
-
-if TYPE_CHECKING:
-    from eawf.workflow.agents.specs.models import RoleContract
 
 logger = logging.getLogger(__name__)
 
@@ -319,60 +312,6 @@ class CodexAdapter:
         "RUNTIME_API_ERROR",
         "RUNTIME_AUTH_ERROR",
     )
-
-    async def open_session(
-        self,
-        wave: Wave,
-        prompt: str,
-        *,
-        cache_prefix: str | None = None,
-        model_hint: str | None = None,
-        role_contract: RoleContract | None = None,
-    ) -> SessionAttempt:
-        """Construct a fresh-session :class:`SessionAttempt` row.
-
-        ``cache_prefix`` is routed through
-        :func:`~eawf.runtime.runtimes.cache_control.inject_cache_control` for
-        boundary parity, but Codex is a **no-op path**: OpenAI prompt
-        caching is automatic at the ≥1024-token threshold and there is
-        no caller-side marker surface, so the prefix is returned
-        unchanged.
-
-        The optional *role_contract* keyword carries the typed
-        :class:`~eawf.workflow.agents.specs.models.RoleContract`
-        projection of the dispatched wave's role. When present the
-        spawn seam reads its ``system_prompt`` / ``allowed_tools`` /
-        ``model`` fields rather than a hardcoded executor preamble;
-        today the adapter only debug-logs the attach so callers can
-        observe the seam wire-up, and the live ``codex exec`` spawn in
-        P26-SURFACES consumes the contract to materialise the
-        per-session system prompt. ``None`` (the default) keeps the
-        spawn byte-equivalent to the pre-W13 surface.
-        """
-
-        injected_prefix = inject_cache_control(
-            runtime_id=self.id,
-            cache_prefix=cache_prefix,
-        )
-        if injected_prefix is not None:
-            logger.debug(f"open_session runtime={self.id!r} cache_control=no_op")
-        if role_contract is not None:
-            logger.debug(
-                f"open_session runtime={self.id!r} role={role_contract.role!r} "
-                f"allowed_tools={len(role_contract.allowed_tools)} "
-                f"denied_tools={len(role_contract.denied_tools)} "
-                f"model={role_contract.model!r}"
-            )
-        session_id = str(uuid.uuid4())
-        attempts = sorted(wave.sessions)
-        next_attempt = (max(attempts) + 1) if attempts else 1
-        return SessionAttempt(
-            attempt=next_attempt,
-            runtime=self.id,
-            session_id=session_id,
-            session_log_handle=self.session_log_handle(session_id),
-            started_at=datetime.now(UTC),
-        )
 
     async def continue_session(
         self,

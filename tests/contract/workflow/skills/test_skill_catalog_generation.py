@@ -59,7 +59,7 @@ from eawf.workflow.skills.catalog import (
     skills_for_lane,
 )
 from eawf.workflow.skills.catalog_join import join_findings, require_joined
-from eawf.workflow.skills.census import bundle_census, epoch1_nouns
+from eawf.workflow.skills.census import bundle_census, retired_nouns
 from eawf.workflow.skills.engine import SkillContext
 from eawf.workflow.skills.publication import (
     BUNDLE_TARGET_EPOCH,
@@ -264,7 +264,7 @@ def test_surf_100_every_page_names_its_epoch2_subject_and_route(skill_id: str) -
         assert f"through `{(entry.effects.rpcs or entry.effects.verbs)[0]}" in body or any(
             f"`eawf {verb}`" in body for verb in entry.effects.verbs
         )
-    assert epoch1_nouns(body) == ()
+    assert retired_nouns(body) == ()
 
 
 def test_surf_100_a_page_naming_an_epoch1_noun_is_refused() -> None:
@@ -324,7 +324,7 @@ def test_surf_109_a_mismatched_epoch_refuses_with_migration_guidance(tmp_path: P
     )
     assert result.exit_code == 0
     assert "targets schema epoch 2 but the repository is at epoch 1" in result.stderr
-    assert "eawf migrate status" in result.stderr
+    assert "eawf help upgrade-from-0.6" in result.stderr
     assert result.stdout == ""
 
 

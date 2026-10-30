@@ -1,33 +1,11 @@
-"""Service layer for per-wave token budgets.
-
-Two concerns live here:
-
-* **State mutation** — :func:`set_budget`, :func:`record_consumption`,
-  and :func:`check_budget` operate on a live
-  :class:`~eawf.kernel.migration.v1_state.State` and mutate the targeted
-  :class:`~eawf.kernel.state.models.Wave` in place. They do **not** touch
-  ``state.json`` directly — persistence is the CLI / daemon handler's
-  job (it wraps the call in the locked transaction).
+"""Service layer for token budgets.
 
 * **Process termination ladder** — :func:`terminate_with_grace`
   implements the SIGTERM -> grace-window -> SIGKILL escalation the
-  ``hard`` budget-enforce mode (and the daemon wave-wall-clock cap) use
-  to stop a runaway wave subprocess. SIGTERM is sent first; SIGKILL only
-  fires after the grace window elapses *and* the process is still alive.
-  The clock and sleep are injectable so the ladder is deterministically
-  testable against a fake process.
-
-Contract (state mutation):
-
-* :func:`set_budget` — assign or revise a wave's budget. Negative
-  budgets are rejected with :class:`ValueError`. Unknown waves raise
-  :class:`KeyError`.
-* :func:`record_consumption` — add positive ``tokens`` to
-  ``Wave.tokens_consumed`` and return the wave plus its post-add policy
-  classification. Negative deltas are :class:`ValueError`. Unknown
-  waves raise :class:`KeyError`.
-* :func:`check_budget` — read-only classify the wave against
-  :mod:`eawf.runtime.budget.policy`.
+  ``hard`` budget-enforce mode uses to stop a runaway subprocess. SIGTERM
+  is sent first; SIGKILL only fires after the grace window elapses *and*
+  the process is still alive. The clock and sleep are injectable so the
+  ladder is deterministically testable against a fake process.
 * :func:`emit_budget_notice` — upsert a running Run's non-blocking notice
   once its consumption reached its hard ceiling. Nothing opens below the
   ceiling or under a soft one: the observed fraction stays readable in the
@@ -37,8 +15,6 @@ Contract (state mutation):
   work it describes.
 * :func:`load_budget_config` — read and validate the repo's ``flow.budget``
   table, the one source every ceiling is derived from.
-* :func:`consume_against_ceiling` — accumulate a consumption and decide it
-  against the wave's one ceiling, the verdict every consume path acts on.
 * :func:`emit_termination_notice` — fold a Run's budget-termination receipt
   into the notice ledger, so a Run's crossing is the same one notice row a
   wave's crossing is rather than a second kind of notice.
@@ -59,9 +35,7 @@ from pydantic import ValidationError
 
 from eawf.kernel.config.layered import merge_config
 from eawf.kernel.economics.notice_policy import DEFAULT_NOTICE_POLICY
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.runtime.budget_notice import BudgetNotice
-from eawf.kernel.state.models import Wave
 from eawf.runtime.budget.notices import (
     LOCAL_OPERATOR,
     BudgetCrossing,
@@ -70,11 +44,8 @@ from eawf.runtime.budget.notices import (
 )
 from eawf.runtime.budget.policy import (
     BudgetConfig,
-    BudgetDecision,
     PromptBudgetCeiling,
     budget_config_from,
-    classify,
-    classify_enforcement,
 )
 from eawf.runtime.lock.portalock import LockTimeout
 
@@ -88,78 +59,6 @@ DEFAULT_GRACE_SECONDS: float = 15.0
 #: waiting out the grace window. Kept small so a process that exits early
 #: is reaped promptly rather than blocking for the whole window.
 _POLL_INTERVAL_SECONDS: float = 0.1
-
-
-def _get_wave_or_raise(state: State, wave_id: str) -> Wave:
-    wave = state.waves.get(wave_id)
-    if wave is None:
-        raise KeyError(f"unknown wave: {wave_id!r}")
-    return wave
-
-
-def set_budget(state: State, wave_id: str, budget: int) -> Wave:
-    """Set ``Wave.token_budget`` for *wave_id*.
-
-    Args:
-        state: Live state. Mutated in place.
-        wave_id: Wave to update.
-        budget: Non-negative token cap. ``0`` is permitted (instantly
-            "over-budget" once any consumption is recorded).
-
-    Raises:
-        KeyError: Wave does not exist.
-        ValueError: ``budget`` is negative.
-    """
-    if budget < 0:
-        raise ValueError(f"budget must be non-negative; got {budget}")
-    wave = _get_wave_or_raise(state, wave_id)
-    wave.token_budget = budget
-    logger.info(f"set_budget wave={wave_id} budget={budget}")
-    return wave
-
-
-def record_consumption(
-    state: State,
-    wave_id: str,
-    tokens: int,
-) -> tuple[Wave, str | None]:
-    """Accumulate *tokens* into ``Wave.tokens_consumed`` and classify.
-
-    Args:
-        state: Live state. Mutated in place.
-        wave_id: Wave to update.
-        tokens: Non-negative consumption delta. ``0`` is a no-op for the
-            counter; the classification is still re-evaluated.
-
-    Returns:
-        Tuple of the mutated :class:`Wave` and the classification
-        string from :func:`eawf.runtime.budget.policy.classify` after the
-        increment (``None`` when no budget configured).
-
-    Raises:
-        KeyError: Wave does not exist.
-        ValueError: ``tokens`` is negative.
-    """
-    if tokens < 0:
-        raise ValueError(f"tokens must be non-negative; got {tokens}")
-    wave = _get_wave_or_raise(state, wave_id)
-    wave.tokens_consumed += tokens
-    tag = classify(wave.tokens_consumed, wave.token_budget)
-    logger.info(
-        f"record_consumption wave={wave_id} delta={tokens} "
-        f"consumed={wave.tokens_consumed} budget={wave.token_budget} tag={tag}"
-    )
-    return wave, tag
-
-
-def check_budget(state: State, wave_id: str) -> str | None:
-    """Return the policy classification for *wave_id* without mutation.
-
-    Raises:
-        KeyError: Wave does not exist.
-    """
-    wave = _get_wave_or_raise(state, wave_id)
-    return classify(wave.tokens_consumed, wave.token_budget)
 
 
 def load_budget_config(repo: Path) -> BudgetConfig:
@@ -238,55 +137,6 @@ def emit_budget_notice(
     except (OSError, LockTimeout, ValidationError) as exc:
         logger.warning(f"emit_budget_notice scope={scope_id} failed={exc!r}")
         return None
-
-
-@dataclass(frozen=True, slots=True)
-class ConsumeOutcome:
-    """A consumption recorded on a wave and decided against its one ceiling.
-
-    Attributes:
-        wave: The wave after the consumption was added.
-        tokens_before: The wave's consumption before the addition.
-        ceiling: The wave's one ceiling, or ``None`` when it has no budget.
-        decision: The verdict of the post-add consumption against *ceiling*.
-    """
-
-    wave: Wave
-    tokens_before: int
-    ceiling: PromptBudgetCeiling | None
-    decision: BudgetDecision
-
-
-def consume_against_ceiling(
-    state: State, wave_id: str, tokens: int, *, budget: BudgetConfig
-) -> ConsumeOutcome:
-    """Add *tokens* to *wave_id* and decide the total against its one ceiling.
-
-    Args:
-        state: Live state. Mutated in place.
-        wave_id: Wave to update.
-        tokens: Non-negative consumption delta.
-        budget: The validated ``flow.budget`` table the ceiling derives from.
-
-    Returns:
-        The :class:`ConsumeOutcome`; its decision halts only under ``hard``
-        enforce at or over the ceiling.
-
-    Raises:
-        KeyError: Wave does not exist.
-        ValueError: ``tokens`` is negative.
-    """
-    tokens_before = _get_wave_or_raise(state, wave_id).tokens_consumed
-    wave, _tag = record_consumption(state, wave_id, tokens)
-    ceiling = budget.ceiling(wave.token_budget)
-    decision = (
-        ceiling.decide(wave.tokens_consumed)
-        if ceiling is not None
-        else classify_enforcement(wave.tokens_consumed, None, enforce=budget.enforce)
-    )
-    return ConsumeOutcome(
-        wave=wave, tokens_before=tokens_before, ceiling=ceiling, decision=decision
-    )
 
 
 def emit_termination_notice(

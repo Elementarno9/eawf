@@ -160,7 +160,7 @@ def test_auth_041_the_calibrate_command_group_is_retired() -> None:
     """No CLI group re-fits or applies per-label centroids."""
     groups = {row.name for row in COMMAND_REGISTRY if isinstance(row, GroupRow)}
 
-    assert "migrate" in groups
+    assert "backup" in groups
     assert "calibrate" not in groups
 
 

@@ -25,7 +25,6 @@ from eawf.kernel.spec.common import (
     ResponseClause,
 )
 from eawf.kernel.spec.intent import IntentBrief
-from eawf.kernel.state.models import CriteriaFloorWaiver
 from eawf.platform.lint.flake_quarantine import LaneReport, load_quarantine, partition
 from eawf.platform.lint.kind_taxonomy import kind_for_test_path, marker_conflict
 from eawf.runtime.daemon.churn import SUITE_SESSION_ENV, RuntimeDirSnapshot, snapshot_runtime_dir
@@ -765,19 +764,3 @@ def tmp_repo(tmp_path: Path) -> Path:
     eawf.platform.install. For now it returns a bare temp directory.
     """
     return tmp_path
-
-
-def make_floor_waiver() -> CriteriaFloorWaiver:
-    """Build a typed criteria-floor waiver for legacy-criterion fixtures.
-
-    The plan-time typed-criteria floor rejects a wave
-    authored with grandfathered legacy rows; fixtures that deliberately
-    model migration-era legacy waves attach this waiver so the modelled
-    state stays constructible while the floor stays on for real authoring.
-    """
-    from datetime import UTC, datetime
-
-    return CriteriaFloorWaiver(
-        reason="test fixture models a migration-era legacy wave",
-        waived_at=datetime(2026, 7, 2, tzinfo=UTC),
-    )

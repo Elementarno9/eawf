@@ -209,7 +209,7 @@ def register_runtime_capture_hooks(
     from eawf.runtime.hooks.lifecycle_capture import (
         HOST_SUBAGENT_METHODS,
         adopt_host_subagent,
-        stamp_session_end_on_exit,
+        answer_session_end,
     )
 
     def _host_subagent_hook(event: HookEvent) -> HookResult:
@@ -229,11 +229,9 @@ def register_runtime_capture_hooks(
         HookEventType.PERMISSION_REQUEST, _host_permission_hook, name="runtime.host_permission"
     )
 
-    def _end_stamp_hook(event: HookEvent) -> HookResult:
-        return stamp_session_end_on_exit(event, repo_root=repo_root)
-
+    # SessionEnd stays wired because the session transcript index records on session end.
     for exit_event_type in (HookEventType.SESSION_END, HookEventType.AGENT_END):
-        runner.register(exit_event_type, _end_stamp_hook, name="session.end_stamp")
+        runner.register(exit_event_type, answer_session_end, name="session.end_stamp")
     register_host_tool_hooks(
         runner, daemon_client_factory=daemon_client_factory, repo_root=repo_root
     )

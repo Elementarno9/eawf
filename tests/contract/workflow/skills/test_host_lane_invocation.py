@@ -147,7 +147,7 @@ def test_surf_109_a_stale_bundle_refuses_an_eawf_skill_with_migration_guidance(
     document = json.loads(result.stdout)
     assert document["decision"] == "block"
     assert "targets schema epoch 2 but the repository is at epoch 1" in document["reason"]
-    assert "eawf migrate status" in document["reason"]
+    assert "eawf help upgrade-from-0.6" in document["reason"]
 
 
 def test_surf_109_a_stale_bundle_refuses_a_model_skill_call_through_the_tool_hook(
@@ -170,7 +170,7 @@ def test_surf_109_a_stale_bundle_refuses_a_model_skill_call_through_the_tool_hoo
     assert result.exit_code == 0
     decision = json.loads(result.stdout)["hookSpecificOutput"]
     assert decision["permissionDecision"] == "deny"
-    assert "eawf migrate status" in decision["permissionDecisionReason"]
+    assert "eawf help upgrade-from-0.6" in decision["permissionDecisionReason"]
 
 
 def test_surf_109_a_stale_bundle_stands_down_on_a_prompt_that_invokes_no_eawf_skill(
@@ -179,4 +179,4 @@ def test_surf_109_a_stale_bundle_stands_down_on_a_prompt_that_invokes_no_eawf_sk
     result = _prompt_hook(tmp_path, "hello", target_epoch=2)
     assert result.exit_code == 0
     assert result.stdout == ""
-    assert "eawf migrate status" in result.stderr
+    assert "eawf help upgrade-from-0.6" in result.stderr

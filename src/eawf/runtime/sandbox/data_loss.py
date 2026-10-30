@@ -415,7 +415,9 @@ def _removal_denial(path: Path, shell: _Shell, *, verb: str) -> DataLossDenial |
     return _deny(
         DataLossPattern.FOREIGN_WORKTREE_MUTATION,
         f"{verb} a managed worktree outside Eawf is refused; "
-        "remove it with eawf worktree cleanup once its work has landed",
+        "the daemon removes a Run's clean worktree when the Run ends "
+        "if worktrees.remove_when_clean is set, "
+        "and the operator removes any other from their own shell once its work has landed",
     )
 
 
@@ -915,7 +917,9 @@ def _judge_git_worktree(args: list[str], where: Path, shell: _Shell) -> DataLoss
         return _deny(
             DataLossPattern.FOREIGN_WORKTREE_MUTATION,
             f"{verb} a managed worktree with git is refused; "
-            "remove it with eawf worktree cleanup once its work has landed",
+            "the daemon removes a Run's clean worktree when the Run ends "
+            "if worktrees.remove_when_clean is set, "
+            "and the operator removes any other from their own shell once its work has landed",
         )
     return None
 

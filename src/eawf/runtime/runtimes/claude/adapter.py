@@ -1,6 +1,6 @@
 """Claude Code adapter — implements :class:`RuntimeAdapter`.
 
-The :meth:`open_session` / :meth:`continue_session` methods return
+The :meth:`continue_session` method returns
 fully-typed :class:`~eawf.kernel.state.models.SessionAttempt` rows. In
 v0.3-v0.5 the live subprocess spawn lives in the daemon dispatch
 router; the adapter's role here is to construct the typed row + parse
@@ -14,12 +14,9 @@ import os
 import re
 import shutil
 import sys
-import uuid
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from eawf.kernel.state.models import SessionAttempt, Wave
+from eawf.kernel.state.models import SessionAttempt
 from eawf.runtime.runtimes.adapter import (
     ConcurrentSpawnCapError,
     ErrorClass,
@@ -28,7 +25,6 @@ from eawf.runtime.runtimes.adapter import (
     NativeRunLauncher,
     RuntimeAdapter,
 )
-from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.selector import runtime_supports
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.runtime.sandbox.egress_proxy import (
@@ -37,9 +33,6 @@ from eawf.runtime.sandbox.egress_proxy import (
     make_enforcement_event,
 )
 from eawf.runtime.sandbox.jail import jail_command, jail_supported
-
-if TYPE_CHECKING:
-    from eawf.workflow.agents.specs.models import RoleContract
 
 logger = logging.getLogger(__name__)
 
@@ -209,66 +202,6 @@ class ClaudeAdapter:
         "RUNTIME_API_ERROR",
         "RUNTIME_AUTH_ERROR",
     )
-
-    async def open_session(
-        self,
-        wave: Wave,
-        prompt: str,
-        *,
-        cache_prefix: str | None = None,
-        model_hint: str | None = None,
-        role_contract: RoleContract | None = None,
-    ) -> SessionAttempt:
-        """Construct a fresh-session :class:`SessionAttempt` row.
-
-        Live subprocess spawn lands in P26-SURFACES; the v0.3 wave
-        ships the typed contract. The returned row carries an
-        adapter-allocated ``session_id`` UUID and the opaque
-        ``session_log_handle`` per rule 16.
-
-        The caller-side ``cache_prefix`` is routed through
-        :func:`~eawf.runtime.runtimes.cache_control.inject_cache_control`, which
-        appends the Claude ``<cache_control type="ephemeral" />``
-        breakpoint (``claude-code`` is the only runtime that accepts a
-        caller-side marker). The injected prefix feeds the live
-        subprocess spawn.
-
-        The optional *role_contract* keyword carries the typed
-        :class:`~eawf.workflow.agents.specs.models.RoleContract`
-        projection of the dispatched wave's role. When present its
-        ``system_prompt`` / ``allowed_tools`` / ``denied_tools`` /
-        ``model`` fields feed the spawn seam directly rather than the
-        renderer-embedded copy; today the adapter only debug-logs the
-        attach so callers can observe the seam wire-up, and the live
-        ``claude -p`` spawn in P26-SURFACES consumes the contract to
-        materialise the per-session ``--system-prompt`` /
-        ``--allowed-tools`` flags. ``None`` (the default) keeps the
-        spawn byte-equivalent to the pre-W13 surface.
-        """
-
-        injected_prefix = inject_cache_control(
-            runtime_id=self.id,
-            cache_prefix=cache_prefix,
-        )
-        if injected_prefix is not None:
-            logger.debug(f"open_session runtime={self.id!r} cache_control=injected")
-        if role_contract is not None:
-            logger.debug(
-                f"open_session runtime={self.id!r} role={role_contract.role!r} "
-                f"allowed_tools={len(role_contract.allowed_tools)} "
-                f"denied_tools={len(role_contract.denied_tools)} "
-                f"model={role_contract.model!r}"
-            )
-        session_id = str(uuid.uuid4())
-        attempts = sorted(wave.sessions)
-        next_attempt = (max(attempts) + 1) if attempts else 1
-        return SessionAttempt(
-            attempt=next_attempt,
-            runtime=self.id,
-            session_id=session_id,
-            session_log_handle=self.session_log_handle(session_id),
-            started_at=datetime.now(UTC),
-        )
 
     @staticmethod
     def _record_env_scrub(

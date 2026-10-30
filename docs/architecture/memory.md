@@ -38,9 +38,6 @@ eawf memory promote --from-session SES-... --scope urn:eawf:v1:state:QR/COLLAR
 eawf memory list --scope current
 # Show memory entries relevant to active project / subproject / profile.
 
-eawf memory compact
-# Rewrite memory into concise canonical form with review diff. Purpose: keep memory small and useful.
-
 eawf memory stale
 # List memory entries not reviewed recently or contradicted by state / docs.
 

@@ -1,11 +1,9 @@
 """Validation of an epoch-2 generation document.
 
 A generation document is keyed by collection, then by public key, and
-each native row is one record of that collection's own model. The
-epoch-1 :class:`~eawf.kernel.migration.v1_state.State` model knows none of
-those collections, so it cannot judge the document; this module checks
-every native row against its model and every Batch and Task against the
-record it is filed under.
+each native row is one record of that collection's own model. This
+module checks every native row against its model and every Batch and
+Task against the record it is filed under.
 
 A row the epoch-2 cutover imported is the status, time and payload the
 cutover writes around the epoch-1 record, so it is recognised by that

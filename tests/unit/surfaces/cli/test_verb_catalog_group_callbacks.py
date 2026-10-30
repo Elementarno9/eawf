@@ -1,6 +1,6 @@
 """A group that runs its own callback is a verb the catalog lists.
 
-``eawf doctor --fix`` and ``eawf migrate --to`` run without naming a subcommand, so a
+``eawf doctor --fix`` and ``eawf cc statusline`` run without naming a subcommand, so a
 catalog that lists only leaves hides them from ``eawf verbs`` and from the skill join.
 """
 
@@ -25,8 +25,6 @@ def _root() -> click.Group:
     ("verb", "effect_class"),
     [
         ("doctor", "mutate"),
-        ("migrate", "mutate"),
-        ("migrate epoch2", "mutate"),
         ("cc statusline", "read"),
         ("cc statusline install", "mutate"),
         ("help", "read"),

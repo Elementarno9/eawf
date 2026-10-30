@@ -18,12 +18,6 @@ The check kinds frozen for v0.3:
   TimeoutClass = "standard", timeout_s: int | None = None, scope:
   Scope = "changed", wave_id: str | None = None, wave_file_scopes:
   list[str] = []}``.
-* ``verify_implements`` — ``args = {phase_id: str, diff_base: str,
-  cadence: str, current_trigger: str}``. Walks closed WaveSpecs
-  under ``.ea/specs/<phase_id>/`` and greps the diff against
-  ``diff_base`` for verdict-id markers under each wave's
-  ``file_scopes``; short-circuits when ``cadence`` does not match
-  ``current_trigger``.
 * ``criterion_in_diff`` — ``args = {criterion: str, pattern: str,
   file_scopes: list[str]}``. Greps a single wave success-criterion's
   verification ``pattern`` across the current content of its
@@ -108,7 +102,6 @@ CheckKind = Literal[
     "regex_in_file",
     "state_field_equals",
     "command_exit_zero",
-    "verify_implements",
     "criterion_in_diff",
     "citation_resolves",
     "schema_validate",

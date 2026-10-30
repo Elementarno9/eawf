@@ -30,7 +30,7 @@ from typing import Any, Final
 
 import pytest
 
-from eawf.kernel.state.models import Wave
+from eawf.kernel.state.enums import AgentSessionRole
 from eawf.observability.bench.turn_cost import (
     TURN_COST_HARNESS_REVISION,
     TurnCostBaseline,
@@ -41,6 +41,7 @@ from eawf.observability.telemetry.models import PriceSourceKind
 from eawf.observability.telemetry.turn_cost import (
     CompletedUnitRun,
     TurnCostRecord,
+    WorkUnit,
     build_turn_cost_record,
 )
 
@@ -74,13 +75,15 @@ def _one(payloads: list[dict[str, Any]], *, key: str) -> dict[str, Any]:
     return matches[0]
 
 
-def _run_from_row(*, scope_id: str, wave: Wave, row: dict[str, Any]) -> CompletedUnitRun:
+def _run_from_row(
+    *, scope_id: str, role: AgentSessionRole | None, row: dict[str, Any]
+) -> CompletedUnitRun:
     """Return the completed-unit run one priced ``state.actuals`` row contributes."""
     api_duration_ms = Decimal(str(row["elapsed_eu"])) * _EU_MILLISECONDS
     return CompletedUnitRun(
         run_id=row["id"],
         wave_id=scope_id,
-        role=wave.agent_role,
+        role=role,
         runtime="claude",
         model=row["model"],
         wall_clock_ms=int(api_duration_ms.to_integral_value()),
@@ -93,12 +96,13 @@ def _run_from_row(*, scope_id: str, wave: Wave, row: dict[str, Any]) -> Complete
 def _recompute_record(sample: dict[str, Any]) -> TurnCostRecord:
     """Rebuild the record from the state rows the artifact's roster names."""
     state = json.loads(_STATE_PATH.read_bytes())
-    waves: list[Wave] = []
+    waves: list[WorkUnit] = []
     runs: list[CompletedUnitRun] = []
     for scope_id in sample["corpus_scope_ids"]:
-        wave = Wave.model_validate(state["waves"][scope_id])
-        waves.append(wave)
-        runs.append(_run_from_row(scope_id=scope_id, wave=wave, row=state["actuals"][scope_id]))
+        row = state["waves"][scope_id]
+        waves.append(WorkUnit(id=row["id"], status=row["status"]))
+        role = AgentSessionRole(row["agent_role"]) if row.get("agent_role") else None
+        runs.append(_run_from_row(scope_id=scope_id, role=role, row=state["actuals"][scope_id]))
     return build_turn_cost_record(
         waves=waves,
         runs=runs,

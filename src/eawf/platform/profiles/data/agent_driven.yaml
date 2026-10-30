@@ -77,8 +77,7 @@ render_blocks:
 # gate instead of an advisory one (see :mod:`eawf.workflow.verify.readiness`).
 # ``cross_vendor_jury`` stays ``false`` so a high-risk verdict needs a single
 # fresh-context auditor, not the three-vendor jury; the jury is a deferred
-# calibration opt-in. No ``uiux_bands`` here -- this is a whole-fleet enforce
-# profile, not a UI/UX-token band.
+# calibration opt-in.
 verify:
   enforce: true
   cross_vendor_jury: false

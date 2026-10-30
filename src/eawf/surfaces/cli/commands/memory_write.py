@@ -28,10 +28,7 @@ from pydantic import TypeAdapter
 from eawf.kernel.state.enums import MemoryStatus, StoreKind
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.commands.memory import (
-    _args_hash,
-    _events_path_for,
     _load_notes,
-    _memory_path_for,
     _memory_rpc,
     _resolve_confidence,
     memory_app,
@@ -222,51 +219,6 @@ def _promote_to_artifact(
         text=f"memory promoted to artifact: {answer['id']} -> {artifact_id} (decision)",
         flags=flags,
     )
-
-
-@memory_app.command("compact")
-def memory_compact(ctx: typer.Context) -> None:
-    """Compact ``memory.jsonl`` (dedup by content; idempotent)."""
-    from eawf.kernel.store.compact import compact_store
-    from eawf.runtime.session.store import append_event
-
-    flags: GlobalFlags = ctx.obj
-    try:
-        state_path = resolve_state_path(flags.workspace)
-        memory_path = _memory_path_for(state_path)
-        events_path = _events_path_for(state_path)
-        report = compact_store(memory_path)
-        append_event(
-            events_path=events_path,
-            event_id=f"memory-compact-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
-            event_type="memory.compact",
-            actor="cli",
-            command="memory compact",
-            args_hash=_args_hash({}),
-            status="ok",
-            message=(
-                f"compacted memory.jsonl: in={report.records_in} "
-                f"out={report.records_out} dedup={report.dedup_count}"
-            ),
-            scope_id=None,
-            occurred_at=datetime.now(UTC),
-        )
-        emit_json_or_text(
-            payload={
-                "records_in": report.records_in,
-                "records_out": report.records_out,
-                "dedup_count": report.dedup_count,
-            },
-            text=(
-                f"memory.jsonl compacted: in={report.records_in} "
-                f"out={report.records_out} dedup={report.dedup_count}"
-            ),
-            flags=flags,
-        )
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 _ISO_DURATION_RE: re.Pattern[str] = re.compile(

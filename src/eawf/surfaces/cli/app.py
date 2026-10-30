@@ -109,13 +109,6 @@ def _root(
         daemonless=daemonless,
         debug=debug,
     )
-    # Record the --daemonless flag process-wide so the shared
-    # state_transaction chokepoint can reject mutating verbs without
-    # each command threading the flag through. Always set (incl. False)
-    # so the record reflects only this invocation.
-    from eawf.surfaces.cli._mutation import set_daemonless_flag
-
-    set_daemonless_flag(daemonless)
     # Every daemon client, spawn and probe of this invocation dials the
     # named tree's daemon, whatever the working directory; the pin is
     # released when the command ends so in-process callers do not inherit it.

@@ -141,8 +141,7 @@ def test_jury_label_verb_is_gone(tmp_path: Path) -> None:
     assert "No such command 'jury'" in group.output
     label = runner.invoke(app, ["--workspace", str(tmp_path), "jury", "label", "W-X", "--good"])
     assert label.exit_code == 2
-    assert "`eawf jury label` is retired" in label.output
-    assert "`eawf batch label`" in label.output
+    assert "No such command 'jury'" in label.output
     assert [row for row in COMMAND_REGISTRY if getattr(row, "name", None) == "jury"] == []
     assert "jury" not in _METHOD_MODULES
     assert [path for path in JURY_FILES if (REPO / path).exists()] == []

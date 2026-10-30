@@ -38,7 +38,6 @@ from eawf.kernel.migration.epoch2.status_map import (
     PRIORITY_DEFAULT_ANNOTATION,
     SourceLifecycle,
 )
-from eawf.kernel.state.models import BacklogItem, Iter, Phase, Wave
 from tests.unit.kernel.migration.conftest import ALLOWLIST_PATH, EPOCH1_FULL_SNAPSHOT
 
 SOURCE_SCHEMA_VERSION = "1.19"
@@ -250,19 +249,6 @@ def test_lifecycle_import_plan_record_for_rejects_an_unimported_id(
 ) -> None:
     with pytest.raises(KeyError):
         full_lifecycle_plan.record_for("P99")
-
-
-def test_lifecycle_field_routes_are_total_over_the_source_models() -> None:
-    """A field added to an epoch-1 model has to be routed before it can import."""
-    declared = {
-        SourceLifecycle.PHASE: set(Phase.model_fields),
-        SourceLifecycle.ITER: set(Iter.model_fields),
-        SourceLifecycle.WAVE: set(Wave.model_fields),
-        SourceLifecycle.BACKLOG: set(BacklogItem.model_fields),
-    }
-
-    for lifecycle, fields in declared.items():
-        assert set(LIFECYCLE_FIELD_ROUTES[lifecycle]) == fields
 
 
 def test_lifecycle_field_routes_give_every_collection_one_identity_field() -> None:

@@ -34,7 +34,6 @@ from typer.testing import CliRunner
 
 from eawf.kernel.spec.measured_contract import ScaleBand
 from eawf.surfaces.cli.errors import UserError
-from eawf.workflow.evidence._io import load_state
 from eawf.workflow.evidence.measured_contract import (
     IMPORTER_CORPUS_MAGNITUDE,
     PREFLIGHT_CHECKPOINT_BANDS,
@@ -42,6 +41,7 @@ from eawf.workflow.evidence.measured_contract import (
     promote_measured_contract,
     refresh_contract_metadata,
 )
+from tests._contract_view import contract_view
 from tests.integration.kernel.migration._live_corpus import (
     PIN_FILENAME,
     CorpusMagnitude,
@@ -138,7 +138,7 @@ def test_the_two_vocabularies_share_no_member_value() -> None:
 
 def test_refresh_contract_metadata_raises_not_found_before_it_mutates(state_path: Path) -> None:
     """The library refuses an unregistered contract without touching state."""
-    state = load_state(state_path)
+    state = contract_view(state_path)
     promote_measured_contract(
         state,
         contract=PREFLIGHT_CONTRACTS[DAEMON_CONTRACT_ID],

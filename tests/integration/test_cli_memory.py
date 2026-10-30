@@ -1,6 +1,6 @@
 """End-to-end CLI tests for ``eawf memory ...`` on an epoch-2 tree.
 
-Drives the full path: add → list → render-context → view → stale → compact,
+Drives the full path: add → list → render-context → view → stale,
 with the writers reaching the daemon's native ``memory.*`` verbs in process
 and every note landing on the selected generation's memory ledger.
 """
@@ -106,19 +106,6 @@ def test_memory_stale_lists_low_confidence_aged(tmp_state: Path) -> None:
     assert payload["count"] >= 1
 
 
-def test_memory_compact_idempotent(tmp_state: Path) -> None:
-    _add("--scope", "QR", "--title", "title", "--body", "body")
-    a = runner.invoke(app, ["--json", "memory", "compact"])
-    b = runner.invoke(app, ["--json", "memory", "compact"])
-    assert a.exit_code == 0, a.output
-    assert b.exit_code == 0, b.output
-    pa = json.loads(a.output)["result"]
-    pb = json.loads(b.output)["result"]
-    # Second compaction should report 0 dedup (idempotent).
-    assert pb["dedup_count"] == 0
-    assert pa["records_in"] == pb["records_in"] or pa["records_out"] == pb["records_in"]
-
-
 def test_memory_add_invalid_confidence_returns_invalid_input(tmp_state: Path) -> None:
     result = runner.invoke(
         app,
@@ -129,7 +116,7 @@ def test_memory_add_invalid_confidence_returns_invalid_input(tmp_state: Path) ->
 
 
 def test_memory_full_pipeline_add_list_render_view_stale_compact(tmp_state: Path) -> None:
-    """End-to-end: add → list → render-context → view → stale → compact."""
+    """End-to-end: add → list → render-context → view → stale."""
     mem_id = _add("--scope", "QR", "--title", "entry", "--body", "body")["id"]
 
     listed = runner.invoke(app, ["--json", "memory", "list"])
@@ -146,9 +133,6 @@ def test_memory_full_pipeline_add_list_render_view_stale_compact(tmp_state: Path
 
     stale = runner.invoke(app, ["--json", "memory", "stale", "--age", "0"])
     assert stale.exit_code == 0
-
-    compact = runner.invoke(app, ["--json", "memory", "compact"])
-    assert compact.exit_code == 0
 
 
 def test_memory_prune_gc_and_tier_revise_the_ledger(tmp_state: Path) -> None:

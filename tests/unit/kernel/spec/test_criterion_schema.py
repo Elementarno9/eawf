@@ -35,8 +35,7 @@ from eawf.kernel.spec.common import (
     ResponseClause,
     _claims_universal_scope,
 )
-from eawf.kernel.spec.wave import QualityDimension as WaveQualityDimension
-from eawf.kernel.spec.wave import WaveBehavior
+from eawf.kernel.spec.visual import WaveBehavior
 
 # A measurable_signal string of exactly 20 characters (the min_length floor).
 _SIGNAL_20 = "x" * 20
@@ -191,11 +190,6 @@ def test_wave_behavior_operability_dimension_still_validates() -> None:
         quality_dimension=QualityDimension.OPERABILITY,
     )
     assert behavior.quality_dimension is QualityDimension.OPERABILITY
-
-
-def test_wave_behavior_imports_relocated_dimension() -> None:
-    """wave.QualityDimension is the same object relocated into common."""
-    assert WaveQualityDimension is QualityDimension
 
 
 # --------------------------------------------------------------------------- #

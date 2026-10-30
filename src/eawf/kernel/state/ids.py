@@ -89,44 +89,6 @@ def is_project_code(s: str) -> bool:
     return bool(RE_PROJECT_CODE.fullmatch(s))
 
 
-def is_phase_id(s: str) -> bool:
-    """Return ``True`` if ``s`` is a valid phase ID (e.g., ``P01``)."""
-    return bool(RE_PHASE.fullmatch(s))
-
-
-def is_iter_id(s: str) -> bool:
-    """Return ``True`` if ``s`` is a valid iter ID (e.g., ``P<NN>-I<NN>``)."""
-    return bool(RE_ITER.fullmatch(s))
-
-
-def is_wave_id(s: str) -> bool:
-    """Return ``True`` if ``s`` is a valid wave ID (e.g., ``P<NN>-I<NN>-W<NN>``)."""
-    return bool(RE_WAVE.fullmatch(s))
-
-
 def is_hypothesis_id(s: str) -> bool:
     """Return ``True`` if ``s`` is a valid hypothesis ID, optionally track-prefixed."""
     return bool(RE_HYPOTHESIS.fullmatch(s) or RE_HYPOTHESIS_SCOPED.fullmatch(s))
-
-
-def parents_of(lifecycle_id: str) -> tuple[str, ...]:
-    """Return the chain of parent IDs for a lifecycle ID.
-
-    - Phase ID ``P03`` → ``()``.
-    - Iter ID ``P<NN>-I<NN>`` → its phase id alone.
-    - Wave ID ``P<NN>-I<NN>-W<NN>`` → its phase id, then its iter id.
-
-    Raises:
-        ValueError: ``lifecycle_id`` does not match any lifecycle pattern.
-    """
-    if is_phase_id(lifecycle_id):
-        return ()
-    if is_iter_id(lifecycle_id):
-        phase_id = lifecycle_id.split("-", 1)[0]
-        return (phase_id,)
-    if is_wave_id(lifecycle_id):
-        parts = lifecycle_id.split("-")
-        phase_id = parts[0]
-        iter_id = f"{parts[0]}-{parts[1]}"
-        return (phase_id, iter_id)
-    raise ValueError(f"not a recognised lifecycle id: {lifecycle_id!r}")

@@ -54,7 +54,6 @@ import os
 import shutil
 import subprocess
 import tempfile
-from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Final
@@ -73,11 +72,7 @@ from eawf.kernel.migration.epoch2.snapshot import (
     require_committed,
     stage_committed_corpus,
 )
-from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.store.paths import store_path
 from eawf.platform.registry import Registry, WorkspaceRecord, create_workspace
-from eawf.runtime.worktree import worktree_registry_lock
-from eawf.runtime.worktree.reconcile import reconcile_stale_rows
 from tests.integration.kernel.migration._corpus_shapes import (
     DEFAULT_TRACK_KEY,
     PROJECT_KEY,
@@ -345,24 +340,6 @@ def clone_at_revision(*, repo_root: Path, destination: Path, revision: str) -> s
     return revision
 
 
-def pre_cutover_revision(repo_root: Path) -> str:
-    """Return the frozen revision this repository's live cutover was taken at.
-
-    The repository is on epoch 2 now, so its HEAD carries a selected
-    generation whose restore point is machine-local and never committed; a
-    clone of HEAD cannot be cut over again. The live cut recorded the
-    epoch-1 revision it froze, which is the corpus a rehearsal reproduces.
-
-    Args:
-        repo_root: The repository's root directory.
-
-    Returns:
-        The 40-character revision named in the cutover record fixture.
-    """
-    record = repo_root / "tests" / "fixtures" / "artifacts" / "2026-09-dev5-live-cutover"
-    return str(json.loads((record / "live-cutover.json").read_text(encoding="utf-8"))["revision"])
-
-
 def _git_quiet(args: list[str]) -> None:
     """Run one git command with user-wide hooks disabled."""
     subprocess.run(
@@ -370,35 +347,6 @@ def _git_quiet(args: list[str]) -> None:
         check=True,
         capture_output=True,
     )
-
-
-def quiesce_clone(clone: Path, *, booted_at: datetime) -> int:
-    """Retire every holder the clone inherited from the committed document.
-
-    A committed document still names the sessions and worktrees that were
-    live when it was committed, and a fresh clone has none of those
-    checkouts. This runs exactly what the daemon's reconcile verb runs --
-    the worktree registry lock around the stale-row retirement -- with the
-    daemon's boot instant, so a session that predates it retires too.
-
-    Args:
-        clone: The clone's repository root.
-        booted_at: The boot instant the retirement measures sessions
-            against.
-
-    Returns:
-        How many rows were retired.
-    """
-    state = clone / ".ea" / "state.json"
-    with worktree_registry_lock(clone):
-        result = reconcile_stale_rows(
-            state,
-            store_path(state, StoreKind.EVENT),
-            repo_root=clone,
-            booted_at=booted_at,
-            dry_run=False,
-        )
-    return len(result.rows)
 
 
 def commit_live_state(clone: Path) -> str:
@@ -502,7 +450,6 @@ __all__ = [
     "frozen_corpus_root",
     "is_committed",
     "magnitude_for",
-    "quiesce_clone",
     "register_live_workspace",
     "require_committed",
     "stage_live_corpus",

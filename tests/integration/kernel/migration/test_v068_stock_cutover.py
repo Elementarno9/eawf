@@ -42,15 +42,10 @@ from eawf.kernel.store.ledger import read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.backup import create_backup, snapshot_digest
-from eawf.surfaces.cli.app import app
-from tests.integration.kernel.migration._corpus_shapes import DEFAULT_TRACK_KEY
 from tests.integration.kernel.migration._cutover_harness import (
     ALLOWLIST,
     APPLIED_AT,
     BACKED_UP_AT,
-    PROJECT_KEY,
-    REPOSITORY_KEY,
-    WORKSPACE_KEY,
     apply_request_for,
     plan_request_for,
     write_opt_in,
@@ -189,41 +184,11 @@ def test_v068_apply_refuses_a_live_session_and_names_the_close_verb(
         )
 
     assert "active_session=1" in str(caught.value)
-    assert "eawf session close <session id>" in str(caught.value)
+    assert "0.7.0rc4 session close verb" in str(caught.value)
 
 
 def test_v068_shipped_allowlist_is_the_pinned_one() -> None:
     assert DEFAULT_ALLOWLIST_PATH.read_bytes() == ALLOWLIST.read_bytes()
-
-
-def test_cli_plan_without_allowlist_reads_the_shipped_one(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    result = runner.invoke(
-        app,
-        [
-            "--json",
-            "migrate",
-            "epoch2",
-            "--plan",
-            "--snapshot-root",
-            str(FRESH),
-            "--workspace-key",
-            WORKSPACE_KEY,
-            "--project-key",
-            PROJECT_KEY,
-            "--repository-key",
-            REPOSITORY_KEY,
-            "--default-track-key",
-            DEFAULT_TRACK_KEY,
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)["result"]
-    expected = plan_cutover(plan_request_for(FRESH), sealed_at=APPLIED_AT)
-    assert payload["manifest_digest"] == expected.manifest.manifest_digest
 
 
 def _apply_used(tmp_path: Path, home: Path) -> tuple[Path, CutoverResult]:

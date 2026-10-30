@@ -17,7 +17,6 @@ and the regression exit code.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -26,8 +25,6 @@ import yaml
 from pydantic import ValidationError as PydanticValidationError
 from typer.testing import CliRunner
 
-from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
-from eawf.kernel.state.models import Wave
 from eawf.observability.bench.harness import (
     HARNESS_CATALOG,
     BenchResult,
@@ -339,22 +336,6 @@ def test_cli_bench_compare_missing_file_exits_user_error(tmp_path: Path) -> None
 def _turn_cost_record() -> TurnCostRecord:
     """Build the record for the committed deterministic fixture."""
     return build_corpus_record(seed_turn_cost_corpus(_TURN_COST_FIXTURE))
-
-
-def _live_wave(
-    wave_id: str,
-    *,
-    status: WaveStatus = WaveStatus.CLOSED,
-    role: AgentSessionRole | None = AgentSessionRole.EXECUTOR,
-) -> Wave:
-    return Wave(
-        id=wave_id,
-        iter_id=wave_id.rsplit("-", 1)[0],
-        title=f"Live unit {wave_id}",
-        status=status,
-        agent_role=role,
-        opened_at=datetime(2026, 1, 1, tzinfo=UTC),
-    )
 
 
 def test_seed_turn_cost_corpus_is_the_documented_fixture_shape() -> None:

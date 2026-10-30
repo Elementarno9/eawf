@@ -58,7 +58,6 @@ from eawf.runtime.daemon.limits import (
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.native_guard import EA_DIRNAME
 from eawf.runtime.daemon.permission_expiry import run_expiry_loop as run_permission_expiry_loop
-from eawf.runtime.daemon.recovery import replay_wal
 from eawf.runtime.daemon.runtime_dir import (
     ensure_runtime_dir,
     harden_runtime_dir,
@@ -1016,39 +1015,6 @@ def run(*, foreground: bool = True) -> int:
             daemon_wal_dir = rt_dir / "wal"
             daemon_wal_dir.mkdir(parents=True, exist_ok=True)
 
-            # Startup WAL replay: walk the WAL once before the listener starts
-            # accepting connections so any post-apply outcome record from a
-            # prior unclean exit (SIGKILL between event-append and fsync-rename)
-            # gets reconciled against the event log. Idempotent on subsequent
-            # boots — fully-replayed records rename to ``.fsynced.json`` and
-            # the next pass is a no-op.
-            #
-            # A tree carrying the epoch marker has frozen its epoch-1 surfaces,
-            # so this epoch-1 replay leaves it alone; the native passes still
-            # run. On an unmarked tree the replay may run: it reads the
-            # document and appends only to the uncommitted event log.
-            legacy_frozen = epoch_marker_present(project_state_path.parent)
-            if legacy_frozen:
-                logger.info("run epoch1-boot-sweep skipped reason=epoch_marker_present")
-            else:
-                replay_report = replay_wal(
-                    daemon_wal_dir,
-                    state_path=project_state_path,
-                    event_path=project_event_path,
-                )
-                logger.info(
-                    f"run wal-replay pending={replay_report.pending_count} "
-                    f"applied={replay_report.applied_count} "
-                    f"fsynced={replay_report.fsynced_count} "
-                    f"poisoned={replay_report.poisoned_count} "
-                    f"replayed={replay_report.replayed_event_count}"
-                )
-                if replay_report.poisoned_count > 0:
-                    logger.warning(
-                        f"run wal-replay poisoned-present count={replay_report.poisoned_count}; "
-                        f"operator should run 'eawf daemon replay-wal --inspect'"
-                    )
-
             # Torn ledger tails: a ledger killed mid-append refuses every
             # read, the native replay's own included, and the WAL record
             # that would name its tree may already be swept. Cut each torn
@@ -1067,8 +1033,9 @@ def run(*, foreground: bool = True) -> int:
             )
 
             # Native replay: epoch-2 roots keep their WAL records in a
-            # namespace per root under the same directory, which the pass
-            # above never lists. Each native record carries the document it
+            # namespace per root under the daemon WAL directory; records an
+            # epoch-1 daemon left at its top level are not replayed, so a 0.6
+            # tree is never written. Each native record carries the document it
             # wrote and the digests either side of that write, so this pass
             # asks each tree which side of the write its crash fell on and
             # either finishes the mutation or abandons the intent.

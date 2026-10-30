@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 from pathlib import Path
 
 import pytest
 
-from eawf.kernel.state.enums import StoreKind
 from eawf.surfaces.cli import errors as cli_errors
-from eawf.surfaces.cli._mutation import state_transaction
-from eawf.workflow.evidence import _io, artifact
+from eawf.workflow.evidence import artifact
+from tests._contract_view import contract_view
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
@@ -26,7 +24,7 @@ def _state_path(tmp_path: Path) -> Path:
 
 def test_add_artifact_happy(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
-    state = _io.load_state(state_path)
+    state = contract_view(state_path)
     event = artifact.add_artifact(
         state,
         artifact_id="ART-001",
@@ -46,7 +44,7 @@ def test_add_artifact_happy(tmp_path: Path) -> None:
 
 def test_add_artifact_duplicate_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
-    state = _io.load_state(state_path)
+    state = contract_view(state_path)
     artifact.add_artifact(
         state, artifact_id="ART-001", kind="audit_report", uri="repo:foo.md", scope_id="QR"
     )
@@ -66,7 +64,7 @@ def test_add_artifact_duplicate_raises(tmp_path: Path) -> None:
 )
 def test_add_artifact_rejects_local_uri(tmp_path: Path, uri: str) -> None:
     state_path = _state_path(tmp_path)
-    state = _io.load_state(state_path)
+    state = contract_view(state_path)
     with pytest.raises(cli_errors.UserError, match="uri must not"):
         artifact.add_artifact(
             state,
@@ -86,23 +84,6 @@ def test_artifact_model_has_no_local_path_field() -> None:
 
 def test_show_artifact_unknown_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
-    state = _io.load_state(state_path)
+    state = contract_view(state_path)
     with pytest.raises(cli_errors.UserError, match="ART-999"):
         artifact.show_artifact(state, "ART-999")
-
-
-def test_state_transaction_persists_add_artifact(tmp_path: Path) -> None:
-    state_path = _state_path(tmp_path)
-    paths = _io.store_paths(state_path)
-    with state_transaction(state_path) as state:
-        event = artifact.add_artifact(
-            state, artifact_id="ART-001", kind="audit_report", uri="repo:foo.md", scope_id="QR"
-        )
-        _io.append_jsonl(paths[StoreKind.EVENT], event)
-    body = json.loads(state_path.read_text())
-    assert body["artifacts"]["ART-001"]["urn"] == "urn:eawf:v1:artifact:QR/ART-001"
-    event_lines = paths[StoreKind.EVENT].read_text().splitlines()
-    assert len(event_lines) == 1
-    payload = json.loads(event_lines[0])
-    assert payload["payload"]["event_type"] == "artifact.add"
-    assert payload["artifact_ids"] == ["ART-001"]

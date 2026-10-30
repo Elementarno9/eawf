@@ -35,15 +35,15 @@ def why_cmd(
         read_imported_decisions,
         read_native_decisions,
     )
-    from eawf.surfaces.cli.flag_day_gate import MIGRATION_REQUIRED_KIND, MIGRATION_VERB
+    from eawf.surfaces.cli.upgrade_refusal import MIGRATION_REQUIRED_KIND, UPGRADE_STEPS
 
     flags: GlobalFlags = ctx.obj
     try:
         tree = resolve_state_path(flags.workspace).parent
         if resolve_authority(tree).epoch != 2:
             raise cli_errors.MigrationRequired(
-                f"{tree} is an epoch-1 tree and why explains only the decisions of an "
-                f"epoch-2 generation; migrate it with `{MIGRATION_VERB} --plan` then `--apply`",
+                f"{tree} holds no epoch-2 generation and why explains only the decisions of an "
+                f"epoch-2 generation; {UPGRADE_STEPS}",
                 kind=MIGRATION_REQUIRED_KIND,
             )
         result = explain_decision(read_native_decisions(tree), read_imported_decisions(tree), urn)

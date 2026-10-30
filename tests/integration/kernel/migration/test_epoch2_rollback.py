@@ -96,7 +96,6 @@ from eawf.kernel.migration.epoch2.restore import (
 )
 from eawf.platform.backup import snapshot_digest
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, attach_root_context
-from eawf.surfaces.cli.app import app
 from tests.integration.kernel.migration._cutover_harness import (
     APPLIED_AT,
     PROJECT_KEY,
@@ -547,66 +546,6 @@ def test_surface_snapshot_parse_marks_the_registry_unrestorable() -> None:
     assert surface.was_present is True
 
 
-def test_rollback_through_the_cli_refuses_the_crossed_boundary(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The operator surface reports the code, not prose, and changes nothing."""
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    crashed = applied_tree(tmp_path)
-    target = DisposableTarget.require(crashed.target_root)
-    _mutate_the_generation(target, generation_id=crashed.generation_id)
-    before = content_digests(target.root)
-
-    result = runner.invoke(
-        app, ["migrate", "epoch2", "--rollback", "--target-root", str(target.root)]
-    )
-
-    assert result.exit_code != 0
-    assert "rollback_boundary_crossed" in result.output
-    assert content_digests(target.root) == before
-
-
-def test_rollback_through_the_cli_restores_a_post_select_crash(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The operator route drives the same restore the library does."""
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    crashed = crashed_after_select(tmp_path)
-    target = DisposableTarget.require(crashed.target_root)
-
-    result = runner.invoke(
-        app,
-        [
-            "--json",
-            "migrate",
-            "epoch2",
-            "--rollback",
-            "--target-root",
-            str(target.root),
-            "--manifest",
-            str(target.restore_manifest_path),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)["result"]
-    assert payload["status"] == "surfaces_restored"
-    assert payload["authority"]["epoch"] == 1
-    assert generation_ids(target) == ()
-
-
-def test_rollback_through_the_cli_requires_a_target_root(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """There is no default tree to roll back, so the verb refuses without one."""
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-
-    result = runner.invoke(app, ["migrate", "epoch2", "--rollback"])
-
-    assert result.exit_code != 0
-    assert "--rollback requires --target-root" in result.output
-
-
 # --- the opt-in declaration and its backup ----------------------------------
 
 #: The entity a native session locks while it mutates the generation.
@@ -920,73 +859,6 @@ def test_rollback_boundary_report_has_no_canary_window_for_a_disposable_tree(
     assert report.canary_reversible_window.state is WindowState.NOT_APPLICABLE
     assert report.canary_reversible_window.remedy is None
     assert report.simple_rollback_window.state is WindowState.OPEN
-
-
-def test_rollback_boundary_through_the_cli_reports_two_separate_windows(
-    tmp_path: Path, backup_home: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The operator query is read-only and never merges the windows."""
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    target = opted_in_applied(tmp_path, home=backup_home)
-    mutate_natively(native_context(target, tmp_path))
-    before = content_digests(target.root)
-
-    result = runner.invoke(
-        app,
-        ["--json", "migrate", "epoch2", "--rollback-boundary", "--target-root", str(target.root)],
-    )
-
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)["result"]
-    assert payload["simple_rollback_window"]["remedy"] == "forward_repair"
-    assert payload["simple_rollback_window"]["state"] == "closed"
-    assert payload["canary_reversible_window"]["state"] == "open"
-    assert payload["activation"]["effective_epoch"] == 2
-    assert content_digests(target.root) == before
-
-
-def test_rollback_boundary_through_the_cli_renders_text(
-    tmp_path: Path, backup_home: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The terminal rendering names each window on its own line."""
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    target = opted_in_applied(tmp_path, home=backup_home)
-
-    result = runner.invoke(
-        app, ["migrate", "epoch2", "--rollback-boundary", "--target-root", str(target.root)]
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "simple rollback window:   open, remedy restore" in result.output
-    assert "canary reversible window: open, remedy restore" in result.output
-
-
-def test_rollback_boundary_through_the_cli_requires_a_target_root(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Error path: there is no default tree to report on."""
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-
-    result = runner.invoke(app, ["migrate", "epoch2", "--rollback-boundary"])
-
-    assert result.exit_code != 0
-    assert "--rollback-boundary requires --target-root" in result.output
-
-
-def test_rollback_boundary_through_the_cli_refuses_an_undeclared_tree(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Error path: a tree with no declaration has no boundary to report."""
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    root = tmp_path / ".ea"
-    root.mkdir()
-
-    result = runner.invoke(
-        app, ["migrate", "epoch2", "--rollback-boundary", "--target-root", str(root)]
-    )
-
-    assert result.exit_code != 0
-    assert "migration_target_not_disposable" in result.output
 
 
 def test_classify_path_commits_the_opt_in_declaration() -> None:

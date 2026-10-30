@@ -10,9 +10,6 @@ from it, and the cutover imports it.
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
-
-from eawf.kernel.store.envelope import Envelope
 
 
 def summary_text(title: str, body: str) -> str:
@@ -34,17 +31,3 @@ def content_hash(scope_id: str, title: str, body: str) -> str:
     h.update(b"\x1f")
     h.update(body.encode("utf-8"))
     return h.hexdigest()
-
-
-def read_envelopes(memory_path: Path) -> list[Envelope]:
-    """Read every record from ``memory.jsonl`` (returns []
-    when the file is missing).
-    """
-    if not memory_path.exists():
-        return []
-    out: list[Envelope] = []
-    for line in memory_path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        out.append(Envelope.model_validate_json(line))
-    return out

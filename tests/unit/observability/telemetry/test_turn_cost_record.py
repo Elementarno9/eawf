@@ -8,7 +8,6 @@ and no run is excluded for token accounting.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -16,17 +15,16 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
-from eawf.kernel.state.models import Wave
 from eawf.observability.telemetry.models import PriceSourceKind, RuntimeName
 from eawf.observability.telemetry.turn_cost import (
     CompletedUnitRun,
     TurnCostRecord,
+    WorkUnit,
     build_turn_cost_record,
 )
 
 pytestmark = pytest.mark.unit
 
-_TS = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
 _SNAPSHOT = PriceSourceKind.LIST_RECONSTRUCTED
 
 
@@ -241,13 +239,7 @@ def _run_on(
 
 
 def _build(runs: list[CompletedUnitRun]) -> TurnCostRecord:
-    wave = Wave(
-        id="P31-I01-W01",
-        iter_id="P31-I01",
-        title="Completed unit P31-I01-W01",
-        status=WaveStatus.CLOSED,
-        opened_at=_TS,
-    )
+    wave = WorkUnit(id="P31-I01-W01", status=WaveStatus.CLOSED)
     return build_turn_cost_record(
         waves=[wave],
         runs=runs,
@@ -304,3 +296,63 @@ def test_an_unpriced_row_still_falls_to_the_unpriced_bucket() -> None:
     assert record.unpriced_run_count == 1
     assert record.reasoning_summand_unsettled_run_count == 0
     assert record.execution_cost_usd == Decimal("0")
+
+
+# ---- WorkUnit ---------------------------------------------------------------
+
+
+def test_work_unit_holds_its_id_and_status() -> None:
+    unit = WorkUnit(id="U", status=WaveStatus.CLOSED)
+
+    assert (unit.id, unit.status) == ("U", WaveStatus.CLOSED)
+
+
+def test_work_unit_rejects_an_empty_id() -> None:
+    with pytest.raises(ValidationError, match="id"):
+        WorkUnit(id="", status=WaveStatus.CLOSED)
+
+
+def test_work_unit_rejects_an_unknown_status() -> None:
+    with pytest.raises(ValidationError, match="status"):
+        WorkUnit.model_validate({"id": "U", "status": "finished"})
+
+
+def test_work_unit_rejects_a_missing_status() -> None:
+    with pytest.raises(ValidationError, match="status"):
+        WorkUnit.model_validate({"id": "U"})
+
+
+def test_work_unit_rejects_a_wrong_typed_id() -> None:
+    with pytest.raises(ValidationError, match="id"):
+        WorkUnit.model_validate({"id": 7, "status": "closed"})
+
+
+def test_work_unit_forbids_unknown_keys() -> None:
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        WorkUnit.model_validate({"id": "U", "status": "closed", "title": "t"})
+
+
+def test_work_unit_is_frozen() -> None:
+    unit = WorkUnit(id="U", status=WaveStatus.CLOSED)
+
+    with pytest.raises(ValidationError, match="frozen"):
+        unit.id = "V"  # type: ignore[misc]
+
+
+def test_only_a_closed_unit_counts() -> None:
+    open_run = _run_on("run-b", runtime="codex").model_copy(update={"wave_id": "P31-I01-W02"})
+    runs = [_run_on("run-a", runtime="codex"), open_run]
+
+    record = build_turn_cost_record(
+        waves=[
+            WorkUnit(id="P31-I01-W01", status=WaveStatus.CLOSED),
+            WorkUnit(id="P31-I01-W02", status=WaveStatus.IN_PROGRESS),
+        ],
+        runs=runs,
+        fixture_id="turn-cost-v1",
+        harness_revision="rev-a1b2c3",
+        runtime="codex",
+        model="gpt-5-codex",
+    )
+
+    assert record.unit_count == 1

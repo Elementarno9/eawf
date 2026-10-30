@@ -1,47 +1,10 @@
 # Migration
 
-Per-cluster migration steps for moving an eawf-managed repo across schema and surface bumps. Run `eawf doctor` after any migration to confirm the state / config / registry are consistent.
+Steps for moving an eawf-managed repo across schema and surface bumps. Run `eawf doctor` after any of them to confirm the state, config and registry are consistent.
 
-## State-version bumps
+## Upgrading a 0.6 tree
 
-`state.json` carries a `schema_version`. When a release bumps it, the daemon migrates the on-disk state on first write and re-stamps the version. To migrate explicitly:
-
-```text
-eawf daemon start       # ensure the canonical mutator is running
-eawf validate           # confirm the current state validates
-```
-
-If a migration validator rejects the state (`2 VALIDATION_ERROR`), the violation list names the offending fields — fix them through the owning domain verb, never by hand-editing `state.json`.
-
-### v0.5.0: `schema_version` 1.1 -> 1.2
-
-v0.5.0 bumped `state.json` `schema_version` from `1.1` to `1.2`. The 1.1 -> 1.2 step backfills the additive `Iter.trigger` field (an idempotent `setdefault("trigger", "none")` on each iter row) so the planned-vs-reactive metric classifies waves by intent instead of the `I##` id suffix. Backfilled historical iters carry `trigger="none"` and drop out of the reactive-share denominator. The step is a lossless round-trip and re-running it is a no-op.
-
-### v0.5.0: `schema_version` 1.2 -> 1.3
-
-v0.5.0 also bumped `state.json` `schema_version` from `1.2` to `1.3`. The 1.2 -> 1.3 step adds the additive `Wave.claimed_at` work-start timestamp and backfills each wave's value from its `wave_claimed` event in the sibling event store (the latest claim event per wave wins).
-
-Before this bump the elapsed-clock consumers (the TUI roadmap time-burn bar and the daemon wave-elapsed publisher) anchored on `opened_at`, which is plan/creation time, so a wave planned hours before it was claimed inflated its elapsed clock; both now anchor on `claimed_at` and render no clock at all while it is unset. A wave with no `wave_claimed` event (never claimed, or its events were pruned) keeps `claimed_at` unset. The backfill is an idempotent `setdefault` that never overwrites an existing value, and a state written before the bump re-loads unchanged because the field is optional. Migrate either bump explicitly with:
-
-```text
-eawf migrate            # auto-detect from + to; run the chain
-eawf migrate status     # show current schema_version + chain
-```
-
-## Epoch-2 cutover rehearsal
-
-Upgrading a live 0.6.8 repository rather than rehearsing on a throwaway copy: follow [Upgrading from 0.6.8](upgrade-from-0.6.md) (`eawf help upgrade-from-0.6`), which adds the opt-in, quiescence and post-cutover steps.
-
-Stage the committed corpus, register the workspace the apply mints under, then plan and apply. `--apply` refuses with `workspace_not_registered` until `eawf workspace add` files the key in `~/.eawf/registry.json` (or `--registry-path` names another registry).
-
-```text
-eawf migrate epoch2 --stage-to ../eawf-stage --workspace-key EAWF --project-key EAWF
-eawf workspace add EAWF --home EAWF --title "eawf"   # then: eawf workspace show EAWF
-eawf migrate epoch2 --plan --snapshot-root ../eawf-stage ...   # note the approval digest
-eawf migrate epoch2 --apply --plan-digest <d> --workspace-key EAWF ...
-```
-
-`--stage-to` reads git objects at HEAD, never the working tree, and refuses a non-empty directory or one inside `.ea/`. A malformed key exits `2 VALIDATION_ERROR`. Full guide: `docs/reference/epoch2-cutover.md`.
+A 0.6 tree keeps its records in `.ea/state.json`; 0.7.0 reads it but does not write it, and carries no command that migrates it. The schema-version chain and the epoch-2 cutover shipped last in 0.7.0rc4. Follow `eawf help upgrade-from-0.6`, which installs 0.7.0rc4, cuts the tree over with it and then upgrades to 0.7.0.
 
 ## Exit-code surface (v0.3, BREAKING)
 

@@ -35,8 +35,8 @@ from typing import Any
 import click
 import typer
 
-from eawf.surfaces.cli.flag_day_gate import FlagDayTyperGroup
 from eawf.surfaces.cli.help_panels import panel_for
+from eawf.surfaces.cli.upgrade_refusal import UpgradeRefusalTyperGroup
 
 logger = logging.getLogger(__name__)
 
@@ -111,9 +111,8 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("record", "eawf.surfaces.cli.commands.record", "record_app"),
     # The checks behind a filed claim's evidence rungs.
     GroupRow("claim", "eawf.surfaces.cli.commands.claim", "claim_app"),
-    # Memory + session.
+    # Memory.
     GroupRow("memory", "eawf.surfaces.cli.commands.memory", "memory_app"),
-    GroupRow("session", "eawf.surfaces.cli.commands.session", "session_app"),
     # Status command + state / store groups.
     CommandRow(
         "status",
@@ -169,8 +168,6 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("cc", "eawf.surfaces.cli.commands.cc", "cc_app"),
     GroupRow("runtime", "eawf.surfaces.cli.commands.runtime", "runtime_app"),
     GroupRow("skill", "eawf.surfaces.cli.commands.skill", "skill_app"),
-    # Worktree dispatch + flow loop + headless dispatch pause/resume.
-    GroupRow("worktree", "eawf.surfaces.cli.commands.worktree", "worktree_app"),
     # MCP servers and plan revisions.
     GroupRow("mcp", "eawf.surfaces.cli.commands.mcp", "mcp_app"),
     GroupRow("plan", "eawf.surfaces.cli.commands.plan", "plan_app"),
@@ -201,8 +198,8 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
         "eawf.surfaces.cli.commands.metrics",
         "metrics_cmd",
         (
-            "Show rolling workflow metrics — EU variance, audit pass rate, "
-            "wave elapsed, and planned vs reactive split."
+            "Show workflow metrics — the estimation roll-up, plus telemetry, "
+            "variance, jury-validation and conduct sub-verbs."
         ),
     ),
     CommandRow(
@@ -217,7 +214,7 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
         "verbs_cmd",
         "List every verb with its entity, parameters, typed errors and effect class.",
     ),
-    # Daemon + bench + telemetry + snapshot + migrate + backup.
+    # Daemon + bench + telemetry + snapshot + backup.
     GroupRow("daemon", "eawf.surfaces.cli.commands.daemon", "daemon_app"),
     # Streams any submitted operation, whichever entity verb submitted it.
     CommandRow("follow", "eawf.surfaces.cli.commands.operation", "follow_cmd", None),
@@ -226,7 +223,6 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("reflect", "eawf.surfaces.cli.commands.reflect", "reflect_app"),
     GroupRow("snapshot", "eawf.surfaces.cli.commands.snapshot", "snapshot_app"),
     GroupRow("vfl", "eawf.surfaces.cli.commands.vfl", "vfl_app"),
-    GroupRow("migrate", "eawf.surfaces.cli.commands.migrate", "migrate_app"),
     GroupRow("backup", "eawf.surfaces.cli.commands.backup", "backup_app"),
     GroupRow("local", "eawf.surfaces.cli.commands.local", "local_app"),
     # Completion + prose help topics.
@@ -271,7 +267,7 @@ def mount(rows: Iterable[GroupRow | CommandRow | SideEffectRow]) -> typer.Typer:
     return host
 
 
-class LazyCommandGroup(FlagDayTyperGroup):
+class LazyCommandGroup(UpgradeRefusalTyperGroup):
     """The root ``eawf`` group: mounts a registry row the first time it is asked for.
 
     Resolving one command name mounts that row alone, with the side-effect rows that

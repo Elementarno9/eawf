@@ -536,3 +536,20 @@ def test_surf_050_the_isolated_subagent_denial_says_where_to_create_the_worktree
     )
     assert denial is not None
     assert "git worktree add .ea/worktrees/<name>" in denial.reason
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rm -rf .ea/worktrees/w1",
+        "git worktree remove .ea/worktrees/w1",
+        "git worktree move .ea/worktrees/w1 ../w2",
+    ],
+    ids=["rm", "git-remove", "git-move"],
+)
+def test_a_worktree_removal_denial_names_who_removes_it(tree: _Tree, command: str) -> None:
+    denial = judge_tool_call("Bash", {"command": command}, cwd=tree.main, anchor=tree.main)
+    assert denial is not None and denial.pattern is FOREIGN
+    assert "removes a Run's clean worktree when the Run ends" in denial.reason
+    assert "from their own shell once its work has landed" in denial.reason
+    assert "eawf worktree" not in denial.reason

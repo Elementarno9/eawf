@@ -7,9 +7,9 @@ after the session ended. State keeps a one-way digest instead. The digest is
 still an exact key: a later capture that carries the raw id hashes to the same
 value, so session matching keeps working without the raw id being written.
 
-Hashing is idempotent. An already-hashed id passes through unchanged, which is
-what lets a row that still carries a raw id compare equal to a hashed capture
-through :func:`same_vendor_session`.
+Hashing is idempotent. An already-hashed id passes through unchanged, so
+hashing both sides lets a row that still carries a raw id match a hashed
+capture.
 """
 
 from __future__ import annotations
@@ -53,23 +53,4 @@ def hash_vendor_session_id(session_id: str) -> str:
     return f"{_PREFIX}{digest[:_DIGEST_HEX_CHARS]}"
 
 
-def same_vendor_session(stored: str | None, incoming: str | None) -> bool:
-    """Report whether two vendor session ids name the same session.
-
-    Either side may be raw or hashed, so a row that still carries a raw id
-    matches a capture that arrives hashed.
-
-    Args:
-        stored: The id a state row carries, or ``None`` when it has none.
-        incoming: The id a capture or lifecycle event carries, or ``None``.
-
-    Returns:
-        ``True`` only when both ids are non-empty and hash to the same digest.
-        A missing id matches nothing, not even another missing id.
-    """
-    if not stored or not incoming:
-        return False
-    return hash_vendor_session_id(stored) == hash_vendor_session_id(incoming)
-
-
-__all__ = ["hash_vendor_session_id", "same_vendor_session"]
+__all__ = ["hash_vendor_session_id"]

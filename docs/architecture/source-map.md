@@ -21,7 +21,7 @@ For the narrative architecture, read `overview.md`; for the CLI surface, `cli-su
 | `config` | Layered configuration subsystem (built-in / global / workspace / repo / local). |
 | `validate` | Schema layer + invariant layer over `state.json`. |
 | `spec` | Typed spec models for releases, research, audits and criteria. |
-| `migrations` | State-schema migration chain runner + steps (`eawf migrate`). |
+| `migration` | Readers of the generation format and of the rows the 0.7.0rc4 cutover imported; no verb runs the cutover. |
 
 ## Workflow — lifecycle, evidence, skills, dispatch
 

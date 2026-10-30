@@ -75,6 +75,6 @@ def test_validate_subcommand_still_registered() -> None:
     result = runner.invoke(app, ["validate", "--help"])
     assert result.exit_code == 0
     # Phase 4 W01 narrowed the help to mention envelope mode too;
-    # check for the stable ``Validate a state`` substring that
+    # check for the stable ``Validate a generation`` substring that
     # survives the narrowing.
-    assert "Validate a state" in result.stdout
+    assert "Validate a generation" in result.stdout

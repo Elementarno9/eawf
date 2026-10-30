@@ -1,13 +1,8 @@
 """Evidence-area domain package: goals, outcomes, hypotheses, audits, decisions,
 incidents, artifacts, backlog.
 
-Each module exposes pure mutator functions that take an in-memory
-:class:`~eawf.kernel.migration.v1_state.State` plus arguments and return a tuple of
-``(updated_state, jsonl_record, event_record)`` so the CLI handler layer can
-serialise them under the sibling lock without leaking I/O concerns into the
-business logic. The audit-evidence invariant from
-:mod:`eawf.kernel.validate.invariants` (``check_audit_evidence``) is the source of
-truth for verdict-bearing rules.
+Each module exposes pure functions over typed in-memory views, so callers
+serialise their results without leaking I/O concerns into the business logic.
 """
 
 from __future__ import annotations

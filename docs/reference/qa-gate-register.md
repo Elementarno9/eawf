@@ -33,7 +33,6 @@ The verdict-calibration domain: the cross-vendor jury, its earned authority, and
 | The cross-vendor jury blocks a UI/UX criterion only when its calibration clears the trust band | `command_exit_zero` | The jury-calibration gate reads the κ / Brier / ECE / Wilson-LB report and broadens the block band only when the four conditions hold. |
 | An un-calibrated jury stays advisory rather than fabricating block authority | `state_field_equals` | The honest-negative path: with no scored report, the jury band stays advisory; the gate asserts it does not block on absent metrics. |
 | A jury verdict's evidence chain resolves from state alone | `citation_resolves` | The verdict's cited audit / artifact rows resolve to typed citation rows; a dangling cite fails the citation gate. |
-| The verifier is enforced (not idle) on the close path | `verify_implements` | The cadence-binding proof asserts `verify.enforce` reaches the close-readiness compute, so a criterion's gate actually fires at close. |
 
 ## Cadence
 
@@ -43,7 +42,6 @@ The lifecycle-discipline domain: the legacy-to-typed gate conversion, the wired-
 |---|---|---|
 | Every Task success criterion has a real falsifying gate, never a grandfathered no-op | `criterion_in_diff` | The converted criterion's verification pattern is greppable across its file scopes; a vacuous criterion fails the diff gate. |
 | No registered audit-DSL kind ships registered-but-idle | `command_exit_zero` | The BIND-1 idle-contract meta-gate compares `wired_audit_dsl_kinds()` against the full registered set; an idle kind reds. |
-| A linked backlog item is closed on land with resolution, commit, and audit | `backlog_resolution` | The state-scoring close gate reads the linked backlog items; a dangling item blocks close. |
 | A commit prefix matches the canonical lifecycle grammar | `command_exit_zero` | The commit-prefix lint runs over the subject; a malformed prefix exits non-zero. |
 | A schema migration carries a migration note when the document `schema_version` advances | `regex_in_file` | The release pre-flight greps for a migration note; its absence fails the gate. |
 

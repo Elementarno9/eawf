@@ -4,8 +4,7 @@ A thin end-to-end sweep over the C04 + C05 surface deliverables (waves
 W02-W14) that asserts each contract boundary still holds: the CLI help
 surface, the daemonless ``config validate`` deprecation-clean output, the
 0..5 exit-code surface, the ``ErrorEnvelope`` strict shape, the catalog-backed
-skill registry, the ``SkillManifest`` invariants (BOT-06), the per-runtime
-cache-control injection gate.
+skill registry and the ``SkillManifest`` invariants (BOT-06).
 
 Each assertion exercises the real symbol path (no mocks of the unit
 under test) so a regression in any surface fails here fast, independent
@@ -38,7 +37,6 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.kernel.config import layered
-from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
@@ -208,22 +206,6 @@ def test_skill_manifest_target_dir_rejected_use_output_dir() -> None:
             output_envelope_kind="probe_result",
             target_dir="/tmp/x",
         )
-
-
-# --- assertion 7: per-runtime cache-control injection gate -----------
-
-
-def test_inject_cache_control_claude_appends_marker() -> None:
-    out = inject_cache_control(runtime_id="claude-code", cache_prefix="HEAD")
-    assert out is not None
-    assert out.startswith("HEAD")
-    assert out != "HEAD"
-    assert "cache_control" in out
-
-
-@pytest.mark.parametrize("runtime_id", ["opencode", "codex"])
-def test_inject_cache_control_no_op_runtimes_unchanged(runtime_id: str) -> None:
-    assert inject_cache_control(runtime_id=runtime_id, cache_prefix="HEAD") == "HEAD"
 
 
 # --- assertion 9: daemonless rejection breadth -----------------------

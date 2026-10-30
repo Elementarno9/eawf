@@ -17,12 +17,11 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.release import Release, ReleaseStatus, release_key
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import burn, create
 from eawf.runtime.daemon.methods.release_disposition import adopt
-from eawf.workflow.evidence._io import load_state
+from eawf.workflow.evidence._io import ContractView
 from eawf.workflow.evidence.measured_contract import (
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -31,6 +30,7 @@ from eawf.workflow.evidence.measured_contract import (
 from eawf.workflow.release.admission import required_contract_ids
 from eawf.workflow.release.records import read_release_record, record_release
 from eawf.workflow.verify import checkpoint_succession
+from tests._contract_view import contract_view
 from tests._epoch2_helpers import lay_contract_tree
 from tests._release_helpers import dev1_adoption, release_record
 
@@ -47,9 +47,9 @@ DEV2 = "0.7.0.dev2"
 DEV2_KEY = release_key(DEV2)
 
 
-def dev2_admitted_state() -> State:
+def dev2_admitted_state() -> ContractView:
     """Return the fixture state with every contract dev2 requires promoted."""
-    state = load_state(_EMPTY_STATE)
+    state = contract_view(_EMPTY_STATE)
     for contract_id in required_contract_ids(DEV2):
         promote_measured_contract(
             state,

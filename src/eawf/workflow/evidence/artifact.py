@@ -5,8 +5,8 @@ field is built from the project scope plus artifact id so the artifact has a
 canonical ``urn:eawf:v1:artifact:<scope>/<id>`` identity even when the local
 ``uri`` varies across machines.
 
-Mutators take a typed :class:`State` and mutate it in place; the CLI handler
-runs them inside :func:`eawf.surfaces.cli._mutation.state_transaction`.
+Mutators take a :class:`~eawf.workflow.evidence._io.ContractView` and
+mutate it in place.
 """
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import urlsplit
 
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.models import Artifact
 from eawf.kernel.store.envelope import Envelope
 from eawf.surfaces.cli.errors import UserError
@@ -37,7 +36,7 @@ def _validate_artifact_location(uri: str) -> None:
 
 
 def add_artifact(
-    state: State,
+    state: _io.ContractView,
     *,
     artifact_id: str,
     kind: str,
@@ -86,7 +85,7 @@ def add_artifact(
     )
 
 
-def show_artifact(state: State, artifact_id: str) -> Artifact:
+def show_artifact(state: _io.ContractView, artifact_id: str) -> Artifact:
     """Read-only lookup."""
     if artifact_id not in state.artifacts:
         raise UserError(f"artifact {artifact_id!r} not found", kind="NotFound")

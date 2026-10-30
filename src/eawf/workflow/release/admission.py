@@ -42,7 +42,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 from uuid import UUID
 
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.release import (
     Release,
     ReleaseGateProfile,
@@ -52,6 +51,7 @@ from eawf.kernel.spec.release import (
 from eawf.kernel.state.epoch2.milestone import MilestoneStatus
 from eawf.kernel.state.models import Artifact
 from eawf.surfaces.cli.errors import UserError
+from eawf.workflow.evidence._io import ContractView
 from eawf.workflow.evidence.measured_contract import PROMOTION_GAP as PROMOTION_GAP_TEXT
 from eawf.workflow.evidence.measured_contract import resolve_contract_citation
 from eawf.workflow.evidence.provider_certification import (
@@ -130,7 +130,7 @@ def _missing_clause(contract_id: str) -> str:
     return f"{contract_id} ({label}), unpromoted: {PROMOTION_GAP}"
 
 
-def assert_measured_contracts(state: State, version: str) -> tuple[Artifact, ...]:
+def assert_measured_contracts(state: ContractView, version: str) -> tuple[Artifact, ...]:
     """Return the promoted contracts backing *version*, or refuse.
 
     Every required contract is resolved before the refusal is raised, so
@@ -140,7 +140,7 @@ def assert_measured_contracts(state: State, version: str) -> tuple[Artifact, ...
     round-trip the per-contract naming exists to remove.
 
     Args:
-        state: State the citations resolve against.
+        state: The contract view the citations resolve against.
         version: Normalized checkpoint version.
 
     Returns:
@@ -310,7 +310,7 @@ def checkpoint_release_config(version: str, *, repo_root: Path) -> ReleaseConfig
 
 
 def create_checkpoint_release(
-    state: State,
+    state: ContractView,
     *,
     train: ReleaseTrain,
     version: str,
@@ -326,7 +326,7 @@ def create_checkpoint_release(
     find and mistake for an admitted one.
 
     Args:
-        state: State the measured-contract citations resolve against.
+        state: The contract view the measured-contract citations resolve against.
         train: Train that declares the rung.
         version: Normalized checkpoint version to open.
         uid: Identity for the new record.

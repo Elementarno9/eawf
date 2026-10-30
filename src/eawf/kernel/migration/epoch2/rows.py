@@ -253,7 +253,7 @@ EPOCH1_OMITTED_DEFAULTS: Final[Mapping[str, Any]] = MappingProxyType(
 )
 
 
-def with_epoch1_defaults(document: Mapping[str, Any]) -> dict[str, Any]:
+def with_source_defaults(document: Mapping[str, Any]) -> dict[str, Any]:
     """Return ``document`` with every omitted defaulted key filled in.
 
     Args:

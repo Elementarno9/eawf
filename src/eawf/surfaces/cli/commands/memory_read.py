@@ -237,7 +237,7 @@ def memory_digest(
     from eawf.kernel.state.epoch2.authority import resolve_authority
     from eawf.observability.reflect.decisions import read_native_decisions
     from eawf.platform.memory.digest import build_native_digest, render_digest_md
-    from eawf.surfaces.cli.flag_day_gate import MIGRATION_REQUIRED_KIND, MIGRATION_VERB
+    from eawf.surfaces.cli.upgrade_refusal import MIGRATION_REQUIRED_KIND, UPGRADE_STEPS
 
     flags: GlobalFlags = ctx.obj
     fmt_norm = fmt.strip().lower()
@@ -257,8 +257,8 @@ def memory_digest(
         state_path = resolve_state_path(flags.workspace)
         if resolve_authority(state_path.parent).epoch != 2:
             raise cli_errors.MigrationRequired(
-                f"{state_path.parent} is an epoch-1 tree and the digest reads only an "
-                f"epoch-2 generation; migrate it with `{MIGRATION_VERB} --plan` then `--apply`",
+                f"{state_path.parent} holds no epoch-2 generation and the digest reads only an "
+                f"epoch-2 generation; {UPGRADE_STEPS}",
                 kind=MIGRATION_REQUIRED_KIND,
             )
         digest = build_native_digest(read_native_decisions(state_path.parent))
